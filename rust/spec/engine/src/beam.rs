@@ -70,12 +70,17 @@ pub struct Grid {
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub hit_asks_at: u32,
+    /// The samples the walk over the observed pyramid alone left (pxl-render
+    /// sample_hit.wgsl) for the walk that asks the world: their count, then
+    /// each, `left_word`.
+    pub lefts_at: u32,
 }
 
 /// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `radius`,
 /// `radius_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
 /// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`, then
-/// `lattice` (`GRID_LATTICE`) and three words no reader reads: whole vec4s.
+/// `lattice` (`GRID_LATTICE`), `lefts_at` and two words no reader reads: whole
+/// vec4s.
 pub const GRID_WORDS: usize = 20;
 pub const GRID_LATTICE: usize = 16;
 
@@ -115,6 +120,7 @@ impl Grid {
             asks_at: 0,
             hits_at: 0,
             hit_asks_at: 0,
+            lefts_at: 0,
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
@@ -123,6 +129,7 @@ impl Grid {
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
         g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
+        g.lefts_at = g.hit_asks_at + HITS * ASK_WORDS;
         g
     }
 
@@ -147,7 +154,7 @@ impl Grid {
             self.hits_at,
             self.hit_asks_at,
             self.lattice,
-            0,
+            self.lefts_at,
             0,
             0,
         ]
@@ -172,6 +179,7 @@ impl Grid {
             asks_at: w[13],
             hits_at: w[14],
             hit_asks_at: w[15],
+            lefts_at: w[17],
         }
     }
 
@@ -316,7 +324,7 @@ impl Grid {
     /// hits, the boxes' asks and the missed pixels' hits and theirs, as
     /// many as the grid lays, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
-        self.hit_asks_at + HITS * ASK_WORDS
+        self.lefts_at + 1 + self.samples[0] * self.samples[1]
     }
 }
 
@@ -383,9 +391,6 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
-/// A sample's `SAMPLE_VISITS` where the walk over the observed pyramid alone
-/// (pxl-render sample_hit.wgsl) left it for the walk that asks the world.
-pub const SAMPLE_LEFT: u32 = u32::MAX;
 
 /// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among

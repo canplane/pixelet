@@ -539,9 +539,6 @@ pub trait Query {
     type At: Copy;
     /// A root of zoom 0, `node` the world's.
     fn root(&mut self, node: [i32; 3]) -> Self::At;
-    /// What the node `node` at `zoom` is handed with none of its ancestors'
-    /// to hand on: where a walk's stack (`Stack`) no longer holds its parent.
-    fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> Self::At;
     /// The child `node` at `zoom` of the node `at` was handed for, with what
     /// that one found handed down.
     fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At;
@@ -598,49 +595,6 @@ pub struct Trace<A> {
 /// leaves that child follow from the node's place by the slab test, so no
 /// entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
-
-/// The entries of a walk's stack where nothing reads it after: the last so
-/// many zooms it went down. A stack indexed at run time past what a phone's
-/// driver keeps in registers costs a visit 20 ns on the S23, 8 entries none
-/// (doc/experiment/20261103-the-walk-on-a-phone). What it no longer holds is
-/// found again (`Query::anew`).
-pub const SHORT: usize = 8;
-
-/// What a walk holds of the nodes over it, by zoom: every zoom's, or the last
-/// `SHORT`'s, each entry a zoom's modulo its length.
-pub trait Stack<A: Copy>: Copy {
-    /// How many zooms it holds.
-    const SIZE: u32;
-    fn filled(a: A) -> Self;
-    fn put(&mut self, zoom: Zoom, a: A);
-    fn get(&self, zoom: Zoom) -> A;
-}
-
-impl<A: Copy> Stack<A> for [A; DEPTH] {
-    const SIZE: u32 = DEPTH as u32;
-    fn filled(a: A) -> Self {
-        [a; DEPTH]
-    }
-    fn put(&mut self, zoom: Zoom, a: A) {
-        self[zoom as usize] = a;
-    }
-    fn get(&self, zoom: Zoom) -> A {
-        self[zoom as usize]
-    }
-}
-
-impl<A: Copy> Stack<A> for [A; SHORT] {
-    const SIZE: u32 = SHORT as u32;
-    fn filled(a: A) -> Self {
-        [a; SHORT]
-    }
-    fn put(&mut self, zoom: Zoom, a: A) {
-        self[zoom as usize % SHORT] = a;
-    }
-    fn get(&self, zoom: Zoom) -> A {
-        self[zoom as usize % SHORT]
-    }
-}
 
 /// A node's farthest and nearest distances from the walk's origin, squared,
 /// its planes `lo` and `hi` units from the origin on each axis: its corner
@@ -738,17 +692,14 @@ pub trait Keep<A: Copy> {
     /// Whether it reads the line, so the walk's stack is whole where it
     /// ends.
     const LINE: bool = true;
-    /// The stack the walk holds for it.
-    type Stack: Stack<A>;
 
-    fn keep(&mut self, met: &Trace<A>, stack: &Self::Stack);
+    fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]);
 }
 
 impl<A: Copy> Keep<A> for () {
     const LINE: bool = false;
-    type Stack = [A; SHORT];
 
-    fn keep(&mut self, _: &Trace<A>, _: &[A; SHORT]) {}
+    fn keep(&mut self, _: &Trace<A>, _: &[A; DEPTH]) {}
 }
 
 /// The first cell `ray` meets within its interval that `until` stops at, at
@@ -780,7 +731,7 @@ impl<A: Copy> Keep<A> for () {
     clippy::too_many_arguments,
     reason = "the walk's query, origin, ray, detail, stop and start, the line over its start and what keeps its own, each its own (Laine & Karras 2010)"
 )]
-pub fn walk<Q: Query, K: Keep<Q::At>>(
+pub fn walk<Q: Query>(
     q: &mut Q,
     o: [i32; 3],
     ray: &Ray,
@@ -788,7 +739,7 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
     until: Until,
     from: (Node, Q::At, f32),
     over: &impl Over<Q::At>,
-    keep: &mut K,
+    keep: &mut impl Keep<Q::At>,
 ) -> Trace<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
@@ -796,10 +747,8 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
     // over it (`stack`, its own from `low` down, `over`'s above), and its
     // visits.
     let (mut n, mut at, mut t) = from;
-    let mut stack = K::Stack::filled(at);
-    // `floor`, the coarsest zoom it holds: at `low`, until it goes further
-    // down than it has entries.
-    let (mut low, mut floor, mut visits) = (n.zoom, n.zoom, 0);
+    let mut stack = [at; DEPTH];
+    let (mut low, mut visits) = (n.zoom, 0);
     loop {
         let u = under(n.zoom);
         let (lo, hi) = bounds(&n, og);
@@ -968,10 +917,7 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
                 past(ray.dir[1], ray.inverse[1], mid[1], t0),
                 past(ray.dir[2], ray.inverse[2], mid[2], t0),
             ];
-            stack.put(n.zoom, at);
-            if n.zoom - floor >= K::Stack::SIZE {
-                floor = n.zoom + 1 - K::Stack::SIZE;
-            }
+            stack[n.zoom as usize] = at;
             let side = |k: bool, c: u32| if k { c | half } else { c };
             n = Node {
                 corner: [
@@ -1025,7 +971,7 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
                     n.roots[1] + (e == 1) as i32 * by,
                     n.roots[2] + (e == 2) as i32 * by,
                 ];
-                (n.corner, n.zoom, low, floor) = ([0; 3], 0, 0, 0);
+                (n.corner, n.zoom, low) = ([0; 3], 0, 0);
                 (at, true)
             } else {
                 // POP: the child, at `l`, of the nearest ancestor holding the next
@@ -1043,22 +989,10 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
                 // What was handed the parent: its stack entry, the walk's
                 // own from where it started down or `over`'s over it.
                 n.zoom = l;
-                let parent = if l <= low {
-                    floor = l;
-                    over.over(l - 1)
-                } else if l > floor {
-                    stack.get(l - 1)
+                let parent = if l > low {
+                    stack[(l - 1) as usize]
                 } else {
-                    // Further up than it holds: found again, and what it
-                    // holds from here is what it goes down to next.
-                    floor = l;
-                    let up = !under(l - 1);
-                    let parent = Node {
-                        corner: [n.corner[0] & up, n.corner[1] & up, n.corner[2] & up],
-                        zoom: l - 1,
-                        ..n
-                    };
-                    q.anew(l - 1, parent.idx(o))
+                    over.over(l - 1)
                 };
                 low = low.min(l);
                 (parent, false)
@@ -1079,14 +1013,14 @@ pub fn walk<Q: Query, K: Keep<Q::At>>(
 fn leave<A: Copy, K: Keep<A>>(
     keep: &mut K,
     met: &Trace<A>,
-    stack: &mut K::Stack,
+    stack: &mut [A; DEPTH],
     low: Zoom,
     over: &impl Over<A>,
 ) {
     if K::LINE {
         let mut z = 0;
         while z < low {
-            stack.put(z, over.over(z));
+            stack[z as usize] = over.over(z);
             z += 1;
         }
     }
@@ -1145,7 +1079,6 @@ mod tests {
     impl Query for One {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
-        fn anew(&mut self, _: Zoom, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
         fn node(
             &mut self,
@@ -1223,7 +1156,6 @@ mod tests {
     impl Query for BoxQuery {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
-        fn anew(&mut self, _: Zoom, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
         fn node(
             &mut self,
@@ -1346,88 +1278,5 @@ mod tests {
         assert_eq!(met.ends, End::Miss);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Hit);
-    }
-
-    /// A walk through splits to zoom `CELLS`, its cells air: what each node is
-    /// handed checked against its parent, and how often it was found again.
-    struct Deep {
-        anew: u32,
-    }
-
-    const CELLS: Zoom = 14;
-    const DETAIL: Detail = Detail {
-        range: [CELLS, CELLS],
-        spacing: Spacing::NONE,
-    };
-
-    impl Query for Deep {
-        type At = (Zoom, [i32; 3]);
-        fn root(&mut self, node: [i32; 3]) -> Self::At {
-            (0, node)
-        }
-        fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            self.anew += 1;
-            (zoom, node)
-        }
-        fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            assert_eq!(at.0 + 1, zoom, "handed {node:?} at {zoom} {at:?}");
-            assert_eq!(
-                [at.1[1], at.1[2]],
-                [node[1] >> 1, node[2] >> 1],
-                "handed {node:?} at {zoom}"
-            );
-            (zoom, node)
-        }
-        fn node(
-            &mut self,
-            _: &mut Self::At,
-            zoom: Zoom,
-            _: [i32; 3],
-            _: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            if zoom < CELLS {
-                In {
-                    kind: Kind::Split,
-                    asset: BOX_WHOLE,
-                }
-            } else {
-                In {
-                    kind: Kind::Cell,
-                    asset: [AIR, 0],
-                }
-            }
-        }
-    }
-
-    /// Keeps the line, so its walk holds every zoom.
-    struct Whole;
-
-    impl Keep<(Zoom, [i32; 3])> for Whole {
-        type Stack = [(Zoom, [i32; 3]); DEPTH];
-
-        fn keep(&mut self, _: &Trace<(Zoom, [i32; 3])>, _: &Self::Stack) {}
-    }
-
-    /// A short stack walks what a whole one does, its parents found again
-    /// where it went further up than it holds.
-    #[test]
-    fn short_stack_walks_as_whole() {
-        // Just under a plane high in the pyramid, so the step over it climbs
-        // past the entries it holds.
-        let o = [(1 << 30) - 5, (1 << 29) - 3, -7];
-        let ray = Ray::new([1.0, 0.5, 0.25], 4096.0);
-        let whole = walk_from_root(
-            &mut Deep { anew: 0 },
-            o,
-            &ray,
-            DETAIL,
-            Until::Opaque,
-            &mut Whole,
-        );
-        let mut q = Deep { anew: 0 };
-        let short = walk_from_root(&mut q, o, &ray, DETAIL, Until::Opaque, &mut ());
-        assert_eq!(short, whole);
-        assert!(q.anew > 0, "it never went further up than it holds");
     }
 }

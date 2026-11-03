@@ -243,4 +243,16 @@ impl Observer for Eye {
     fn take<W: Words + ?Sized>(&self, _: &W, _: Level, id: [u32; 2]) -> [u32; 2] {
         id
     }
+
+    /// The one the walk over the observed pyramid alone left at the thread's
+    /// place among them (pxl-render sample_hit.wgsl), workgroups in a row.
+    fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        let at = grid(self).lefts_at;
+        let place = (id[0] / 8) * 64 + (id[1] % 8) * 8 + id[0] % 8;
+        if place >= w.word(at) {
+            return [u32::MAX; 2];
+        }
+        let s = w.word(at + 1 + place);
+        [s & 0xffff, s >> 16]
+    }
 }

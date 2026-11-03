@@ -372,7 +372,6 @@ fn walk_word() -> String {
         ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
-        ("SAMPLE_LEFT", beam::SAMPLE_LEFT),
         ("ENTRIES", pyramid::ENTRIES),
         ("ENTRIES_AT", pyramid::ENTRIES_AT),
         ("ENTRY_WORDS", pyramid::ENTRY_WORDS),

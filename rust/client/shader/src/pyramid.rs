@@ -161,10 +161,6 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
         Query::root(&mut self.world, node)
     }
 
-    fn anew(&mut self, zoom: u32, node: [i32; 3]) -> Inheritance {
-        Query::anew(&mut self.world, zoom, node)
-    }
-
     fn child(&mut self, parent: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         Query::child(&mut self.world, parent, zoom, node)
     }

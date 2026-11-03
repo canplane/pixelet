@@ -94,6 +94,8 @@ pub(super) struct CastBuffers {
     /// The samples' walk over the pyramid alone, ahead of `sample_built`.
     sample_hit_built: Pipeline,
     sample_hit_group: u32,
+    /// `SAMPLE_LEFT_START`'s words, as the pass leaves them.
+    sample_left: u32,
     /// The same passes for the shadow map, an entry each (pxl-shader
     /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
     light_beam_built: Pipeline,
@@ -320,9 +322,11 @@ pub(super) const HEAD_BINDING: u32 = 11;
 /// light's own bind its world and its clipmap (`LIGHT_GROUP`), past the floor's
 /// storage buffers were they one group; the pixels' (`cast_cs`) read the
 /// visibility buffer and no world (`px_group`).
-const SAMPLE_HIT_GROUP: [u32; 9] = [
-    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE,
+const SAMPLE_HIT_GROUP: [u32; 12] = [
+    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
 ];
+/// The samples `sample_hit_cs` left: `sample_cs`'s dispatch, then their count.
+const SAMPLE_LEFT_START: [u32; 4] = [0, 1, 1, 0];
 const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
     let mut g = [0; compute::MISS_GROUP.len() + 3];
     let mut k = 0;
@@ -473,6 +477,10 @@ impl RaysPass {
             refold: false,
             group: 0,
             sample_hit_group: 0,
+            sample_left: g.buf(
+                word_bytes(SAMPLE_LEFT_START.len()),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
             bindings: [0; 11],
             eye: buf(
                 word_bytes(eye::WORDS),
@@ -995,6 +1003,7 @@ impl RaysPass {
                     buf_entry(0, c.eye),
                     buf_entry(8, c.beams),
                     buf_entry(9, c.pyramid),
+                    buf_entry(10, c.sample_left),
                 ],
             );
             c.bindings = bindings;
@@ -1213,6 +1222,15 @@ impl RaysPass {
                 let mut group = c.group;
                 if span == GpuSpanName::sample_hit {
                     group = c.sample_hit_group;
+                    g.write_buf(c.sample_left, 0, bytes(&SAMPLE_LEFT_START));
+                }
+                if span == GpuSpanName::sample {
+                    g.copy_buf(
+                        encoder,
+                        (c.sample_left, word_bytes(3)),
+                        (c.beams, word_bytes(c.grid.lefts_at as usize)),
+                        4,
+                    );
                 }
                 if span == GpuSpanName::px {
                     let gated = c.gated.then_some(claimed);
@@ -1222,7 +1240,11 @@ impl RaysPass {
                 let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
                 g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, pipeline.id);
-                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                if span == GpuSpanName::sample {
+                    g.dispatch_indirect(pass, c.sample_left, 0);
+                } else {
+                    g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                }
                 g.end(pass);
             }
             // The marked pixels' count where their walk reads it, then that

@@ -3,13 +3,15 @@
 // The samples' walk over what the observed pyramid keeps, by hand: no stack, no
 // atomics and no query of the world, so a thread holds little across its loop
 // (doc/experiment/20261103-the-walk-on-a-phone). A sample whose walk meets a node
-// no slot keeps is left for `sample_cs`, which walks it again whole; one that ends
-// here is put as `sample_cs` puts it (pxl-shader beam.rs `sample_put`), and one left
-// says so in its visits (`SAMPLE_LEFT`). What it reads no thread of it writes.
+// no slot keeps is listed for `sample_cs`, which walks it again whole; one that ends
+// here is put as `sample_cs` puts it (pxl-shader beam.rs `sample_put`). What it
+// reads no thread of it writes.
 
 @group(0) @binding(0) var<uniform> eye: array<vec4<u32>, EYE_VEC4S>;
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(9) var<storage, read> pyramid: array<u32>;
+/// `sample_cs`'s dispatch, then how many are listed: only the list's own atomics.
+@group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 4>;
 
 fn eye_word(k: u32) -> u32 {
   return eye[k / 4u][k % 4u];
@@ -347,7 +349,11 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
   }
   if (ends == 0u || ends == 4u) {
-    beams[base + SAMPLE_VISITS] = SAMPLE_LEFT;
+    let place = atomicAdd(&left[3], 1u);
+    if (place % 64u == 0u) {
+      atomicAdd(&left[0], 1u);
+    }
+    beams[eye_word(GRID + 17u) + 1u + place] = id.x | (id.y << 16u);
     return;
   }
   // As `sample_put` puts it.

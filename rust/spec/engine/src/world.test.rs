@@ -132,9 +132,6 @@ impl Query for Counter<'_> {
     fn root(&mut self, node: [i32; 3]) -> Inheritance {
         Inheritance::of(&Nothing, (0, node))
     }
-    fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        Inheritance::of(&Nothing, (zoom, node))
-    }
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
         at.child(&Nothing, &Nothing, (zoom, node))
     }

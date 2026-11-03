@@ -52,10 +52,6 @@ impl Query for Ground<'_, '_> {
         Inheritance::UNPLACED
     }
 
-    fn anew(&mut self, _: u32, _: [i32; 3]) -> Inheritance {
-        Inheritance::UNPLACED
-    }
-
     fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         at.child(&*self.world, &self.world.pool, (zoom, node))
     }

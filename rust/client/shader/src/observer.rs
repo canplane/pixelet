@@ -124,6 +124,11 @@ pub(crate) trait Observer {
     /// off its words `w`: none past the lattice's end. The one place a pass
     /// is told which thread takes which.
     fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2];
+    /// The sample the thread at `id` of `sample_cs` walks: none past those it
+    /// has.
+    fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        self.take(w, Level::Sample, id)
+    }
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.
@@ -262,10 +267,6 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
             o.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM,
             beam::SAMPLE_NONE,
         );
-        return;
-    }
-    // The eye's walk over the pyramid alone ended it (pxl-render sample_hit.wgsl).
-    if o.tally() == tally::EYE && w.word(o.sample_at(s) + beam::SAMPLE_VISITS) != beam::SAMPLE_LEFT {
         return;
     }
     let aim = o.aim(o.point(s));

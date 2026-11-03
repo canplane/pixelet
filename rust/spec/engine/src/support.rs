@@ -67,8 +67,6 @@ impl<A: Copy> ColumnSurface<A> {
 }
 
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
-    type Stack = [A; DEPTH];
-
     fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]) {
         self.line = Line::of_walk(self.origin, &met.hit.node, met.hit.at, stack);
     }
@@ -333,9 +331,6 @@ mod tests {
         fn root(&mut self, node: [i32; 3]) -> Self::At {
             (0, node)
         }
-        fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            (zoom, node)
-        }
         fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
             let up = ancestor_at(zoom, node, 1);
             assert_eq!((at.0 + 1, at.1), (zoom, up), "a child of another node");
@@ -431,8 +426,6 @@ mod tests {
     struct LineCollector(Option<Line<At>>, [i32; 3]);
 
     impl Keep<At> for LineCollector {
-        type Stack = [At; DEPTH];
-
         fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
             self.0 = Some(Line::of_walk(self.1, &met.hit.node, met.hit.at, stack));
         }

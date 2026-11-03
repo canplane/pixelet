@@ -336,8 +336,6 @@ fn beam_by<O: Observer, L: PaletteWords>(
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
 impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
-    type Stack = [Inheritance; cast::DEPTH];
-
     fn keep(&mut self, met: &Trace<Inheritance>, stack: &[Inheritance; cast::DEPTH]) {
         let (n, live) = (&met.hit.node, met.hit.at);
         let base = self.1;
@@ -465,7 +463,7 @@ fn sample_by<O: Observer, L: PaletteWords>(
     beams: &mut Beams,
 ) {
     let [across, down] = o.samples();
-    let s = o.take(&*beams, Level::Sample, [id.x, id.y]);
+    let s = o.sample_walked(&*beams, [id.x, id.y]);
     if s[0] >= across || s[1] >= down {
         return;
     }
