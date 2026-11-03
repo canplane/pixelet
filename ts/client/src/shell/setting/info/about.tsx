@@ -23,10 +23,10 @@ function envLabel(): string {
 }
 
 /** Each bake a line, as the source declares where it is read from. */
-function bakeLines(
-  source: readonly { kind: string; version: string }[],
-): string[] {
-  return source.map((s) => `${s.kind}/${s.version}`);
+function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
+  return Object.entries(source ?? {}).map(
+    ([kind, version]) => `${kind}/${version}`,
+  );
 }
 
 /** The objects one has placed, kept a shard at a time: the format this build reads them in. */

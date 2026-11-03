@@ -105,7 +105,6 @@ export function declaration(text: string): Declaration | null {
 
 let state: Source = SOURCE_ASKING;
 let cur_declaration: Declaration | null = null;
-let versions: readonly { kind: BaseLayer; version: string }[] = [];
 const listeners = new Listeners();
 
 function set(next: Source): void {
@@ -122,12 +121,9 @@ export function source_declaration(): Declaration | null {
   return cur_declaration;
 }
 
-/** Each kind's own version as declared, empty until then. */
-export function source_versions(): readonly {
-  kind: BaseLayer;
-  version: string;
-}[] {
-  return versions;
+/** Each kind's own version as declared; none until then. */
+export function source_versions(): Declaration["version"] | null {
+  return cur_declaration?.version ?? null;
 }
 
 export const watch_source = listeners.watch;
@@ -219,6 +215,5 @@ export async function declare_source(
     set(SOURCE_REFUSED);
     return;
   }
-  versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(SOURCE_DECLARED);
 }

@@ -15,6 +15,9 @@ import {
   type Storage,
 } from "./storage.ts";
 
+/** The settings' path below STORAGE. */
+const SETTINGS = String(slots.SETTINGS);
+
 function storage(
   entries: Record<string, string> = {},
   refuses = false,
@@ -32,7 +35,7 @@ test("set_aside - a refused file is copied, read back, then its slot emptied", (
     "pxl:settings": "AAAA",
     "pxl:settings:aside:7": "older",
   });
-  assert.deepStrictEqual(set_aside(s, slots.SETTINGS, 7), true);
+  assert.deepStrictEqual(set_aside(s, SETTINGS, 7), true);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "");
   assert.deepStrictEqual(s.map.get("pxl:settings:aside:7"), "older");
   assert.deepStrictEqual(s.map.get("pxl:settings:aside:7-1"), "AAAA");
@@ -40,26 +43,23 @@ test("set_aside - a refused file is copied, read back, then its slot emptied", (
 
 test("set_aside - storage that refuses the copy keeps the slot as it was", () => {
   const s = storage({ "pxl:settings": "AAAA" }, true);
-  assert.deepStrictEqual(set_aside(s, slots.SETTINGS, 7), false);
+  assert.deepStrictEqual(set_aside(s, SETTINGS, 7), false);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "AAAA");
-  assert.deepStrictEqual(set_aside(storage(), 99, 7), false);
+  assert.deepStrictEqual(set_aside(storage(), "99", 7), false);
 });
 
 test("open_storage - a file's bytes read back as committed, kept as text", () => {
   const s = storage();
-  commit_storage(BigInt(slots.SETTINGS), new Uint8Array([1, 0, 255]), s);
+  commit_storage(SETTINGS, new Uint8Array([1, 0, 255]), s);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "AQD_");
-  assert.deepStrictEqual(
-    [...open_storage(BigInt(slots.SETTINGS), s)],
-    [1, 0, 255],
-  );
+  assert.deepStrictEqual([...open_storage(SETTINGS, s)], [1, 0, 255]);
 });
 
 test("open_storage - text that keeps no bytes is no file of bytes", () => {
   const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   let errnum: number | undefined;
   try {
-    open_storage(BigInt(slots.SETTINGS), s);
+    open_storage(SETTINGS, s);
   } catch (err) {
     errnum = err instanceof FileError ? err.errnum : undefined;
   }
@@ -69,7 +69,7 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
 test("follow_refused_files - each refused file is set aside and emptied once", async () => {
   const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   const told: string[] = [];
-  const settings = { root: root.STORAGE, path: String(slots.SETTINGS) };
+  const settings = { root: root.STORAGE, path: SETTINGS };
   const tell = (f: { root: number; path: string }): void =>
     void told.push(`${f.root}/${f.path}`);
   follow_refused_files([settings], tell, set_aside_by_root(s));

@@ -915,11 +915,11 @@ objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its id
 (`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
-a platform that keeps text keeps their base64url (`namespace/storage.ts`
-`text_of`), and `OBJECT`'s database keeps the bytes. A storage file begins with
-its slot's format byte, and each file below `OBJECT` with its own (`file.json`
-`format`); the kernel refuses one of another format, one its backend cannot read
-as bytes, or one that does not decode, as a driver refuses a superblock it does
+a platform that keeps text keeps their base64url (`namespace/storage.ts`), and
+`OBJECT`'s database keeps the bytes. A storage file begins with its slot's
+format byte, and each file below `OBJECT` with its own (`file.json` `format`);
+the kernel refuses one of another format, one its backend cannot read as bytes,
+or one that does not decode, as a driver refuses a superblock it does
 not know, and never writes over it. It names each refused file in the snapshot
 (`refused_files`); the client sets it aside, empties it and says so
 (`FS_TRUNCATED`, `namespace/refusal.ts`), and the kernel reads it again. A shard

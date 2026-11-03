@@ -37,7 +37,7 @@ export function set_aside_by_root(s: Storage): SetAside {
   return (r, path, now_ms) => {
     switch (r) {
       case root.STORAGE:
-        return set_aside(s, Number(path), now_ms);
+        return set_aside(s, path, now_ms);
       case root.OBJECT:
         return OBJECTS.set_aside(path, now_ms);
       default:

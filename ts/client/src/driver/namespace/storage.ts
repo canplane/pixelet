@@ -4,7 +4,7 @@
  * STORAGE's backend: the kernel's storage files (file.json `storage`), the
  * settings, in the platform's storage. The kernel hands and takes a file's
  * bytes; the platform keeps text, so each is kept as its bytes' base64url
- * (`kept`, `bytes_of`), and text that is none is no file of bytes
+ * (`bytes_of`), and text that is none is no file of bytes
  * (EBADMSG), which the kernel refuses. The kernel refuses a file not of its
  * slot's format and writes nothing over it; here is decided each slot's key
  * and what becomes of a refused file. Nothing kept is dropped: a refused file
@@ -12,7 +12,6 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
 import {
   b64url_to_bytes,
   bytes_to_b64url,
@@ -36,12 +35,7 @@ export const STORAGE: Storage = {
   set: (key, value) => bracket.storage.set(key, value),
 };
 
-/** A file's bytes as storage keeps them, as text. */
-function text_of(bytes: U8Array): string {
-  return bytes_to_b64url(bytes);
-}
-
-/** The bytes `text` keeps (`kept`); EBADMSG for text that keeps none. */
+/** The bytes `text` keeps; EBADMSG for text that keeps none. */
 function bytes_of(text: string): U8Array {
   if (!is_b64url(text)) throw new FileError(Errno.EBADMSG);
   try {
@@ -51,14 +45,10 @@ function bytes_of(text: string): U8Array {
   }
 }
 
-const KEYS: ReadonlyMap<u32, string> = new Map([
-  [storage.SETTINGS, "pxl:settings"],
+/** Each storage file's key, by its path below STORAGE: its slot in decimal. */
+const KEYS: ReadonlyMap<string, string> = new Map([
+  [String(storage.SETTINGS), "pxl:settings"],
 ]);
-
-/** A slot's storage key; none for one the kernel does not keep. */
-export function storage_key(slot: u32): string | undefined {
-  return KEYS.get(slot);
-}
 
 /** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.
  * False, the key as it was, where the copy did not read back: storage that
@@ -77,32 +67,32 @@ function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   return true;
 }
 
-/** Sets a refused slot's file aside and empties the slot (`set_aside_key`);
- * false for a slot the kernel does not keep. */
-export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
-  const key = KEYS.get(slot);
+/** Sets the refused file `path` aside and empties its slot (`set_aside_key`);
+ * false for one the kernel does not keep. */
+export function set_aside(s: Storage, path: string, now_ms: number): boolean {
+  const key = KEYS.get(path);
   return key !== undefined && set_aside_key(s, key, now_ms);
 }
 
-/** The slot `id` is a storage file, under the key `storage_key` gives it. */
-function key_of(id: bigint): string {
-  const key = id <= 0xffff_ffffn ? storage_key(Number(id)) : undefined;
+/** The key the file `path` is kept under; ENOENT for one the kernel does not keep. */
+function key_of(path: string): string {
+  const key = KEYS.get(path);
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
-/** The slot `id`'s file, whole; ENOENT where nothing is kept. */
-export function open_storage(id: bigint, s: Storage = STORAGE): U8Array {
-  const text = s.get(key_of(id));
+/** The file `path`, whole; ENOENT where nothing is kept. */
+export function open_storage(path: string, s: Storage = STORAGE): U8Array {
+  const text = s.get(key_of(path));
   if (text === null) throw new FileError(Errno.ENOENT);
   return bytes_of(text);
 }
 
-/** What the kernel wrote to the slot `id`, kept whole. */
+/** What the kernel wrote to the file `path`, kept whole. */
 export function commit_storage(
-  id: bigint,
+  path: string,
   bytes: U8Array,
   s: Storage = STORAGE,
 ): void {
-  s.set(key_of(id), text_of(bytes));
+  s.set(key_of(path), bytes_to_b64url(bytes));
 }

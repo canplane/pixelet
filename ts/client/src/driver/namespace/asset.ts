@@ -17,15 +17,17 @@ import { ASSET_FILES } from "@/driver/namespace/ingest.spec.ts";
 import { asset_url } from "@/driver/namespace/route.ts";
 import { get } from "@/driver/namespace/read.ts";
 
-/** A load's id: the catalog's, or a file's row in the ingest's table from 1. */
+/** A load's id in decimal, `path`: the catalog's, or a file's row in the
+ * ingest's table from 1. */
 export function read_asset(
-  load: bigint,
+  path: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  if (load === BigInt(CATALOG)) {
+  if (path === String(CATALOG)) {
     return Promise.resolve(hex_to_bytes(CATALOG_HEX));
   }
-  const key = ASSET_FILES[Number(load) - 1]?.key;
+  const row = Number(path);
+  const key = String(row) === path ? ASSET_FILES[row - 1]?.key : undefined;
   if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
-  return get(asset_url(key), key, signal);
+  return get(asset_url(key), signal);
 }

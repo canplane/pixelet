@@ -3,27 +3,26 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { type BaseLayer, TILE_SPHERE } from "./publication.spec.ts";
-import { tile_url } from "@/driver/namespace/route.ts";
+import { type BaseLayer, TILE_SPHERE, tileObject } from "./publication.spec.ts";
 import { declaration } from "./source.ts";
-import { tile_object } from "./tile.ts";
+import { version_of } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
 const DECLARATION = declaration(JSON.stringify(FIXTURE.source))!;
 
-test("tile_object - each kind's tile at each zoom, a shard's own version or not, is the URL the kernel made", () => {
+test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the kernel made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
     const k = kind as BaseLayer;
     const name = object.split("/")[1]!;
     assert.deepStrictEqual(
-      tile_url(k, tile_object(DECLARATION, k, name)),
-      tile_url(k, object),
+      tileObject(version_of(DECLARATION, k, name), name),
+      object,
       `${kind} ${name}`,
     );
   }
   assert.deepStrictEqual(
-    tile_url("earth", tile_object(DECLARATION, "earth", TILE_SPHERE)),
-    tile_url("earth", FIXTURE.sphere),
+    tileObject(version_of(DECLARATION, "earth", TILE_SPHERE), TILE_SPHERE),
+    FIXTURE.sphere,
   );
 });
 
