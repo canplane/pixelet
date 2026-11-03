@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use pxl_engine::answer::{In, Kind, AIR, BOX_WHOLE, FILL_SHIFT};
+use pxl_engine::answer::{In, Kind, AIR, FILL_SHIFT};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{
     self, Detail, End, Keep, Node, Query, Ray, Root, Spacing, Trace, Until, DEPTH,
@@ -35,6 +35,31 @@ fn box_words(first: [u32; 3], past: [u32; 3]) -> [u32; 2] {
     ]
 }
 
+/// The box a split of `zoom` at `c` says its content lies in: short of its node only
+/// where one lies among the ground's nodes.
+fn box_of(zoom: Zoom, c: [i32; 3]) -> ([u32; 3], [u32; 3]) {
+    match if zoom < 16 { 3 } else { mix(zoom, c) % 4 } {
+        0 => ([0, 0, 0], [1024, 1024, 512]),
+        1 => ([64, 32, 0], [1024, 1000, 1024]),
+        _ => ([0, 0, 0], [1024, 1024, 1024]),
+    }
+}
+
+/// Whether a box over `c` does not hold it whole: then it holds nothing, as a box says.
+fn outside_a_box(zoom: Zoom, c: [i32; 3]) -> bool {
+    (16..zoom).any(|z| {
+        let d = zoom - z;
+        let over = c.map(|v| v >> d);
+        let (first, past) = box_of(z, over);
+        (0..3).any(|a| {
+            let low = (c[a] - (over[a] << d)) as i64;
+            // A cell not wholly in it: a box holds all it says fills.
+            let (s0, s1) = (low * 1024 >> d, ((low + 1) * 1024 + (1 << d) - 1) >> d);
+            s0 < first[a] as i64 || s1 > past[a] as i64
+        })
+    })
+}
+
 /// The made-up world, every answer it gave kept for the pyramid.
 #[derive(Default)]
 struct World {
@@ -49,6 +74,12 @@ impl World {
             return In {
                 kind: Kind::Lacks,
                 asset: [0, 0],
+            };
+        }
+        if outside_a_box(zoom, c) {
+            return In {
+                kind: Kind::Cell,
+                asset: AIR,
             };
         }
         // Where it lies, in units: zooms past the unit's are its unit's.
@@ -80,12 +111,8 @@ impl World {
                 asset: AIR,
             };
         }
-        // A box short of its node only where one lies among the ground's nodes.
-        let asset = match if zoom < 16 { 3 } else { h % 4 } {
-            0 => box_words([0, 0, 0], [1024, 1024, 512]),
-            1 => box_words([64, 32, 0], [1024, 1000, 1024]),
-            _ => BOX_WHOLE,
-        };
+        let (first, past) = box_of(zoom, c);
+        let asset = box_words(first, past);
         In {
             kind: Kind::Split,
             asset,
@@ -333,6 +360,53 @@ fn hand_walk_answers_as_cast_walk() {
         }
     }
 
+    // The table as an eye a little away left it, its nodes asked at other zooms, each
+    // kept beside what this eye asked: what a held split at other zooms lets the walk
+    // go on through must end where this eye's own answers do.
+    let mut earlier = World::default();
+    let away = [origin[0] - (40 << 8), origin[1] + (25 << 8), origin[2] + (9 << 8)];
+    for j in (0..grid.samples[1]).step_by(3) {
+        for i in (0..grid.samples[0]).step_by(3) {
+            let ray = aim(grid.sample([i, j]));
+            cast::first(&mut earlier, away, &ray, detail, Until::Opaque);
+        }
+    }
+    let only_earlier: Vec<_> = earlier
+        .asked
+        .iter()
+        .filter(|(k, a)| {
+            matches!(a.kind, Kind::Split) && !world.asked.keys().any(|h| h.0 == k.0 && h.1 == k.1)
+        })
+        .map(|(k, a)| (*k, *a))
+        .collect();
+    let stale = only_earlier.len();
+    world.asked.extend(only_earlier);
+    let dropped_cells: Vec<_> = {
+        // This eye's own splits dropped at random, so a walk meets them only at the
+        // earlier eye's zooms where those were kept.
+        let keys: Vec<_> = world
+            .asked
+            .keys()
+            .filter(|k| {
+                matches!(world.asked[*k].kind, Kind::Split)
+                    && earlier.asked.keys().any(|h| h.0 == k.0 && h.1 == k.1 && h.2 != k.2)
+            })
+            .copied()
+            .collect();
+        keys
+    };
+    let reasked = dropped_cells.len();
+    for k in &dropped_cells {
+        let h = earlier
+            .asked
+            .keys()
+            .find(|h| h.0 == k.0 && h.1 == k.1 && h.2 != k.2)
+            .copied()
+            .unwrap();
+        let a = world.asked.remove(k).unwrap();
+        world.asked.insert(h, a);
+    }
+    eprintln!("{stale} splits only the earlier eye asked, {reasked} held at its zooms alone");
     let (table, dropped) = pyramid_of(&world);
     use wgpu::util::DeviceExt as _;
     let buffer = |words: &[u32], usage: wgpu::BufferUsages| {
@@ -420,7 +494,8 @@ fn hand_walk_answers_as_cast_walk() {
                 lines[k + beam::NODE_CORNER as usize + a] == n.corner[a]
                     && lines[k + beam::NODE_ROOTS as usize + a] == n.roots[a] as u32
             })
-            && lines[Grid::line(idx as u32) as usize + beam::LINE_VISITS as usize] == met.visits
+            // More where it went in a split whose box it took no word of.
+            && lines[Grid::line(idx as u32) as usize + beam::LINE_VISITS as usize] >= met.visits
             && (hand - want).abs() <= want.abs() * 1e-3 + 1e-3;
         if ok {
             beam_same += 1;

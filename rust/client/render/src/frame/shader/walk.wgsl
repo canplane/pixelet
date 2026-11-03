@@ -98,6 +98,30 @@ fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
   return NONE;
 }
 
+/// The word of a slot that holds the node as a split, at any zooms; `NONE` where none
+/// does. Asked finer than itself the node is a split or air (`world::node`): a walk
+/// that goes in, taking no box of it, meets what its children answer either way. So
+/// one node over the eye whose corner crosses a zoom's distance does not send every
+/// ray to the world.
+fn split_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
+  if (zoom >= near || !keeps(zoom, c)) {
+    return NONE;
+  }
+  let first = bucket_of(zoom, c);
+  for (var k = 0u; k < BUCKET; k += 1u) {
+    let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
+    let held = pyramid[w];
+    if (held != 0u && held != CLAIMED && pyramid[w + W_KIND] == KIND_SPLIT
+      && pyramid[w + W_NODE] == zoom
+      && pyramid[w + W_NODE + 1u] == u32(c.x)
+      && pyramid[w + W_NODE + 2u] == u32(c.y)
+      && pyramid[w + W_NODE + 3u] == u32(c.z)) {
+      return w;
+    }
+  }
+  return NONE;
+}
+
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
   let x2 = r2 / (ZOOM_SPLIT * ZOOM_SPLIT);
@@ -252,6 +276,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = 0.0;
+  var blind = false;
   for (var step = 0u; step < STEPS_MOST && ends == 0u; step += 1u) {
     let u = under(zoom);
     let lo = units(corner, og, roots);
@@ -268,7 +293,11 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       let asked_far = zoom_at(dot(far_v, far_v), range);
       let asked_near = zoom_at(dot(near_v, near_v), range);
       let c = idx_of(corner, zoom, roots, r0);
-      let w = slot_of(zoom, c, asked_far, asked_near);
+      var w = slot_of(zoom, c, asked_far, asked_near);
+      let other_zooms = w == NONE;
+      if (other_zooms) {
+        w = split_at_other_zooms(zoom, c, asked_near);
+      }
       if (w == NONE) {
         ends = 4u;
         break;
@@ -285,7 +314,18 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       let kind = pyramid[w + W_KIND];
       asset = vec2<u32>(pyramid[w + W_ASSET], pyramid[w + W_ASSET + 1u]);
       var near_at = s.near;
-      if (kind == KIND_SPLIT) {
+      if (other_zooms) {
+        // No box of it read. A beam ray stops at a split too narrow to share, which
+        // a box would decide: left.
+        let width = eye_f32(GRID) * length(far_v);
+        let side_w = hi.x - lo.x;
+        if (beam && side_w * side_w < NARROW * NARROW * width * width) {
+          ends = 4u;
+          break;
+        }
+        into = true;
+        blind = true;
+      } else if (kind == KIND_SPLIT) {
         // Whether its span meets the box its content lies in (`meets_box`).
         let m = BOX_STEPS - 1u;
         let first = vec3<u32>(asset.x & m, (asset.x >> (2u * BOX_BITS)) & m, (asset.y >> BOX_BITS) & m);
@@ -330,7 +370,9 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
           }
         }
       } else {
-        ends = 2u;
+        // Under a split it took no box of, a walk that read the box may have passed
+        // this: left.
+        ends = select(2u, 4u, blind);
       }
       if (ends != 0u) {
         axis = crossing(dir, near_at, true);
