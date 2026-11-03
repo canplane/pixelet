@@ -84,6 +84,16 @@ against 5.3. So the count of nodes does not tell the phone from the Mac, though 
 adds 50–70 ms to `sample` and gains the frame nothing; Auto, both knobs at their
 floor, holds 6–8 fps.
 
+**What a visit pays** ([the same record](../experiment/20261103-the-walk-on-a-phone/README.md),
+synthetic, no renderer): on the S23 a visit of 13 plain loads takes 0.53 ns, the
+keys alone atomic 1.42, all atomic 9–29, a 33-entry stack at a run-time index 20
+(8 entries, none), and locals that never run go from 1.09 at 125 to 434 at 500,
+against the Mac's 0.30 to 0.61. Only the last reaches the real 111 ns, and it was
+not measured in `sample`. Every read of the pyramid in `sample.gen.wgsl` is an
+`atomicLoad`, 13 on a hit at the first slot, its buffer being
+`array<atomic<u32>>`. One variant, 500 locals and all atomic, read back 0 hits of
+14 on the S23, once, not traced.
+
 Not measured: the distribution of a ray's steps, the native app, any hand-written
 entry.
 
@@ -160,17 +170,21 @@ C dissolves the question: the world is defined in Rust alone and the GPU's walk
 is a few hundred lines. It reverses that the GPU generates the world
 ([the GPU casts a ray a pixel](./20261014-the-gpu-casts-a-ray-a-pixel.md)).
 
-**Recommended next**, no renderer touched, on the S23 and the Mac through
-`probe.html`. The two visit about the same nodes, so what is left to tell apart
-is a visit's cost.
+**Recommended next**, each on the real frame in a worktree, `sample` on the S23
+against its 111 ns a node. The stack, the atomics and the cold code all cost past
+a cliff, not by the step, which reads as a shader outgrowing what the driver keeps
+in registers; that is a reading, not measured.
 
-1. **A microbench of one visit's costs**: the bucket probe by `atomicLoad` against
-   a plain load, and the 33-entry stack indexed at run time against none. A
-   gap names the cost to remove, within rust-gpu or not.
-2. **A's traversal kernel by hand**: time a node well down says the code's shape
-   and gives grounds for A, then B or C. About the same says the visit's cost
-   lies in what the hardware does with it, and the question is one of fewer
-   visits and a smaller one, C's compact structure.
+1. **A short stack and the keys apart, within rust-gpu.** `cast::walk` keeps a few
+   entries and, past them, finds what was handed a node again from the top
+   (`Inheritance::of`), which draws the same; the keys take their own atomic buffer
+   and the rest a read-only binding. No contract moves. What stays of the 111 ns is
+   then the cold code's.
+2. **The miss apart, within rust-gpu.** The kernel apart of the proposal, as Rust:
+   a hit's loop in an entry of its own and `world::node` in another. It removes the
+   cold code with one source kept for all but the walk's shape.
+3. **The same kernel by hand**, against step 2: what is left between them is what
+   rust-gpu and naga's shape costs, the measure A, B and C wait on.
 
 ### What it touches
 
@@ -194,12 +208,12 @@ source; this asks whether the hot path needs one.
   give the code, the visit's atomics, or Adreno itself on such a loop. No
   evidence yet blames rust-gpu's run time; what inlining every entry cost a frame
   is unmeasured, as the S23 ran nothing before it.
-- What a visit's atomics cost on Adreno. `sample` reaches `world::node` by
-  `observer::sample`, `resume_walk`, `cast::walk` over `Writing`
-  (pxl-shader `pyramid.rs`): each visit loads its bucket's keys atomically, and on
-  a miss asks `world::node` and claims a slot. The simple passes do none of it. Not
-  measured apart. A `sample` node, mostly a hit, costs the Mac a third of a `beam`
-  node and the S23 four fifths, which points at what a visit pays before it asks.
+- How much of `sample`'s 111 ns is its stack, its atomics and its cold code. It
+  reaches `world::node` by `observer::sample`, `resume_walk`, `cast::walk` over
+  `Writing` (pxl-shader `pyramid.rs`), and on a miss asks it and claims a slot. How
+  many of its 2,208 locals are live across the loop is unmeasured, and how far
+  `split_phis` and inlining every entry, made to pass Adreno's pipeline, raised them.
+- Whether the S23 answers wrong past the cliff: the 0 hits of 14 above.
 - Web against app on the S23, the same WGSL.
 - `doc/tip/shaders-phones-take.md`'s 5.5 MB is stale; the count above is the
   present one.

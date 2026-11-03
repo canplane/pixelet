@@ -76,7 +76,64 @@ frame. The S23's are 111–260 ns.
 On the Mac a `sample` node costs a third of a `beam` node; on the S23, four fifths.
 `sample` reads what `beam` already wrote to the pyramid, so its visits mostly hit.
 A reading: what a visit costs before it asks anything, which a hit does not avoid,
-is what the S23 pays for. A reading, not measured apart.
+is what the S23 pays for. A reading, measured apart below.
+
+## What a visit pays
+
+A synthetic pass (`tools/visit.mjs`, a page of its own, no renderer): the real
+pass's size, workgroup 8×8, dispatch 28×49, 14 steps, 1.23 million visits, over a
+table of 2^19 entries of 12 words, 25 MB, read at a hash of the coarse pixel and
+the step, so neighbours share nodes. A visit hits at its first slot in 13 loads, as
+`sample.gen.wgsl` does, where every read of the pyramid is an `atomicLoad`. Each
+thread's hits are read back. Each variant is warmed for a second and timed by the
+pass's timestamps, 3 rounds of 12, ns a visit. Wall clock agrees (`reports/visit-*.json`).
+
+| Variant | S23 | Mac |
+| --- | --- | --- |
+| Plain loads, a read-only binding | 0.53 | 0.03 |
+| Every load atomic, as now | 8.85 | 0.03 |
+| The keys atomic in their own buffer, the rest plain | 1.42 | 0.03 |
+| Plain, every address random | 8.36 | 0.46 |
+| Every load atomic, every address random | 22.50 | 1.03 |
+| Plain, the 33-entry stack, read and written at a run-time index | 21.56 | 0.18 |
+| The same, index only, no fill | 19.35 | 0.15 |
+| The same, fill only | 0.53 | 0.03 |
+| The same, a stack of 8 | 0.59 | 0.04 |
+| Keys atomic, the 33-entry stack | 19.94 | 0.18 |
+| Keys atomic, a stack of 8 | 1.40 | 0.04 |
+
+Locals that never run, behind a uniform that is 0, each assigned in the loop and
+read only after it, on a dispatch of 7×12, as the full dispatch lost the S23's
+device at 2,000 of them:
+
+| Locals | S23 | Mac |
+| --- | --- | --- |
+| 0 | 0.61 | 0.26 |
+| 125 | 1.09 | 0.30 |
+| 500 | 434 | 0.61 |
+| 1,000 | 610 | 1.09 |
+| 2,000 | 4,998 | 2.13 |
+
+- **Code that never runs is the largest cost seen.** On the Mac it grows with the
+  locals, near zero-init's shape. On the S23 it falls off a cliff between 125 and
+  500, 400 times, for code no thread enters. A reading: past what fits in registers
+  the driver keeps them in memory. `sample.gen.wgsl` holds 2,208 function-scope
+  `var`, every entry inlined for Adreno. The Mac's 2.13 ns at 2,000 is near the real
+  `sample`'s 1.8 ns a node; the S23's 434 is past its 111, so these locals, all live
+  across the loop, are no model of those in `sample`.
+- **The 33-entry stack costs 20 ns; 8 entries cost none.** The indexing, not the
+  fill, and it does not grow step by step. It is the same on the keys' split.
+- **All-atomic loads are 6–19 times keys-only.** It moved between runs: 8.85 here,
+  28.63 and, unwarmed, 10.3 in the runs before (`reports/visit-s23-first.json`), so
+  it is no figure to hold, only its order. The two rows of random addresses are of
+  that earlier run, the rest of the last.
+- **Nothing here reaches 111 ns but the cold code.** These do not add: atomic with
+  the 33-entry stack took 17.4 where plain with it took 21.4.
+- **One variant answered wrong.** With 500 locals and every load atomic, every
+  thread of the S23's read-back counted 0 hits of 14; the Mac's counted 14, and so
+  did every other S23 variant. It was read once. Not traced: a driver's fault or
+  something of this shader's. [What the S23 computes](../20261103-shaders-on-two-phones/README.md)
+  is already open.
 
 ## What runs by what
 
@@ -144,6 +201,10 @@ long task (`tools/raf.mjs`).
 - `main` past `d25f5b631`: at `69ff22b9a` the Mac's page drew nothing, its
   `FS_MOUNT` refused with `EINVAL`. That commit changes `spec/spec/bake/publication.json`,
   so the delivery data may lag it. The cause was not traced.
+- The S23 loses its device on a pass too long, with no shader error. `visit.mjs`
+  sizes each variant's pass to about 50 ms from its first run.
+- The S23's GPU clock climbs under load: one dispatch from idle read up to 3 times
+  the warmed time. Warm it first.
 
 ## Static reach
 
@@ -156,8 +217,10 @@ no run-time count.
 
 ## Not measured
 
-- What of a node's time is the visit's atomics (each loads up to `pyramid::BUCKET`,
-  4, keys), the WGSL's shape or the driver and Chrome's path.
+- Any of "What a visit pays" in the real `sample`: the frame with its atomics, its
+  stack or its cold code changed.
+- The real locals' share: which of `sample`'s 2,208 `var` are live across its loop.
+- What of a node's time is the driver and Chrome's path.
 - The same WGSL in the S23's native app.
 - A hand-written walk.
 - The distribution of a ray's nodes: only the mean a cast.
