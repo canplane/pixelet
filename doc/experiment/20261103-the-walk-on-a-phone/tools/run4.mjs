@@ -1,0 +1,53 @@
+// node run4.mjs s23|mac : one device's page on the worktree, the same camera path and CSS viewport.
+import {client,ev} from './cdp.mjs';
+import {execSync,spawn} from 'node:child_process';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+const D=process.argv[2];const PORT=D==='s23'?9333:9222;
+const O='http://localhost:5174';const W=process.cwd()+'/wt/ts/client/src';
+const A=process.env.HOME+'/Library/Android/sdk/platform-tools/adb';
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const out={device:D,log:[]};const file=`run4-${D}.json`;const log=(k,v)=>{out.log.push([k,v]);console.log(k,typeof v==='string'?v.slice(0,160):JSON.stringify(v).slice(0,160));fs.writeFileSync(file,JSON.stringify(out,null,1))};
+const therm=()=>D!=='s23'?'mac':execSync(`${A} shell dumpsys thermalservice`).toString().split('\n').filter(l=>/Thermal Status|mName=(AP|SKIN)\b/.test(l)).slice(0,3).map(s=>s.trim().replace(/Temperature\{mValue=|, mType=\d+|mName=|\}|, mStatus=\d/g,'')).join(' | ');
+let chrome,dir;
+if(D==='s23'){execSync(`${A} reverse tcp:5174 tcp:5174`);execSync(`${A} forward tcp:9333 localabstract:chrome_devtools_remote`);execSync(`${A} shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank`)}
+else{dir=fs.mkdtempSync(path.join(os.tmpdir(),'pxl-mac-'));chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[`--user-data-dir=${dir}`,'--remote-debugging-port=9222','--lang=ko','--no-first-run','--no-default-browser-check','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding','--disable-background-timer-throttling','about:blank'],{stdio:'ignore'})}
+let tabs;for(let i=0;i<30;i++){await wait(1000);try{tabs=await (await fetch(`http://localhost:${PORT}/json`)).json();if(tabs.some(x=>x.type==='page'))break}catch{}}
+const t=D==='s23'?(tabs.find(x=>x.type==='page'&&x.url==='about:blank')??tabs.find(x=>x.type==='page'&&x.url.startsWith(O))):tabs.find(x=>x.type==='page');
+if(!t)throw new Error('no blank tab');
+const v=await (await fetch(`http://localhost:${PORT}/json/version`)).json();const b=client(v.webSocketDebuggerUrl);await b.open;await b.call('Browser.grantPermissions',{origin:O,permissions:['geolocation']});b.close();
+const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');
+if(D==='mac')await c.call('Emulation.setDeviceMetricsOverride',{width:540,height:984,deviceScaleFactor:0,mobile:false});
+await c.call('Emulation.setGeolocationOverride',{latitude:38.1193,longitude:128.4656,accuracy:10});
+await c.call('Page.bringToFront');await c.call('Page.navigate',{url:O+'/'});
+await wait(1500);await c.call('Page.bringToFront');log('hidden',await ev(c,'document.hidden',5000));
+await ev(c,`navigator.wakeLock.request('screen').then(l=>{window.__wl0=l;return 1}).catch(e=>String(e))`,5000).then(v=>log('wake lock',v));
+const t0=Date.now();const T=()=>Math.round((Date.now()-t0)/1000);log('therm0',therm());
+let first=null;
+for(let i=0;i<360;i++){await wait(1000);let s;try{s=await ev(c,`({p:typeof pxl,c:!!document.querySelector('canvas'),l:document.body.innerText.includes('공간을 불러오고')})`,5000)}catch(e){continue}
+ if(s.p==='object'&&s.c&&!s.l){first=T();break}}
+log('world shown s',first);
+if(first===null){c.close();chrome?.kill();process.exit(1)}
+await wait(15000);
+const P='/@fs'+W;
+log('page',await ev(c,`(async()=>{window.__wl=await navigator.wakeLock.request('screen').catch(()=>0);const S=await import('${P}/port/setting.ts');const Q=await import('${P}/shell/setting/schema.ts');const F=await import('${P}/port/perf.ts');window.__m={set:S.kernel_setting,SET:Q.SETTING,start:F.kernel_perf_start};const cv=document.querySelector('canvas');const a=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});return {vw:innerWidth,vh:innerHeight,dpr:devicePixelRatio,cv:[cv.width,cv.height],gpu:[a.info.vendor,a.info.architecture],ts:a.features.has('timestamp-query')}})()`));
+await ev(c,`__m.set(__m.SET.perf.key,1)`);await wait(1000);await ev(c,`__m.start()`);await wait(5000);
+const live=await ev(c,`(()=>{const f=pxl.perf.read().frames||{};return {read:f.gpu_read,n:f.n}})()`);log('renderer live',live);
+if(!(live.read>0)){log('invalid','no GPU read: the world is not drawn');c.close();chrome?.kill();process.exit(2)}
+const motion=`(async(secs,turn)=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();const [x,y]=[r.left+r.width/2,r.top+r.height/2];const p=(t,a,b)=>cv.dispatchEvent(new PointerEvent(t,{pointerId:1,pointerType:'mouse',isPrimary:true,clientX:a[0],clientY:a[1],buttons:b,button:2,bubbles:true,cancelable:true}));const on=a=>[x+100*Math.cos(a),y+100*Math.sin(a)];p('pointerdown',on(-Math.PI/2),2);const t0=performance.now();const s=setInterval(()=>p('pointermove',on(-Math.PI/2+(performance.now()-t0)/1000/turn*2*Math.PI),2),16);await new Promise(r=>setTimeout(r,secs*1000));clearInterval(s);p('pointerup',on(-Math.PI/2),0);return 1})`;
+const set=(k,val)=>ev(c,`__m.set(__m.SET.${k}.key,${val})`);
+await set('perf',1);await set('ray_counts',0);await set('shadows',0);await set('res','__m.SET.res.options.fixed');await wait(4000);
+const window_=async(name,secs)=>{await ev(c,`__m.start()`);await ev(c,motion+`(${secs},6)`,240000);log(name,await ev(c,`pxl.perf.report()`));log('therm '+name,therm())};
+await window_('eye fixed time',25);
+await set('ray_counts',1);await wait(2000);
+await window_('eye fixed counts',15);
+await set('ray_counts',0);await wait(2000);
+await window_('eye fixed time again',25);
+if(D==='s23'){await set('res','__m.SET.res.options.auto');await wait(2000);
+ for(let k=0;k<7;k++)await window_('auto long '+k,25);
+ await set('res','__m.SET.res.options.fixed');await wait(2000)}
+log('drive time',await ev(c,`pxl.perf.drive(25)`,240000));log('therm drive',therm());
+await set('ray_counts',1);await wait(2000);
+await ev(c,`__m.start()`);await ev(c,motion+`(15,4)`,240000);log('drive pose counts',await ev(c,`pxl.perf.report()`));
+await set('ray_counts',0);
+log('done',T());
+if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();for(const x of (await (await fetch(`http://localhost:${PORT}/json`)).json()).filter(x=>x.type==='page'&&x.url==='about:blank'&&x.id!==t.id)){await fetch(`http://localhost:${PORT}/json/close/${x.id}`);log('closed a blank tab',1)}execSync(`${A} reverse --remove tcp:5174`);execSync(`${A} forward --remove tcp:9333`)}
+else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}
