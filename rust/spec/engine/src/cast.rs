@@ -674,7 +674,7 @@ pub trait Over<A: Copy> {
 /// Over a walk from the roots, nothing: no node is over a root, so it is
 /// never read.
 #[derive(Clone, Copy)]
-pub(crate) struct Root<A>(pub A);
+pub struct Root<A>(pub A);
 
 impl<A: Copy> Over<A> for Root<A> {
     fn over(&self, _: Zoom) -> A {
