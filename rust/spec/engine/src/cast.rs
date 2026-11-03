@@ -283,8 +283,8 @@ impl Node {
 }
 
 /// Y's Q3 steps from the world's south edge to 0, and Z's from its floor.
-const Y_START: u32 = 1 << 31;
-const Z_START: u32 = 1 << (HEIGHT_BITS - 1 + FRAC_W);
+pub const Y_START: u32 = 1 << 31;
+pub const Z_START: u32 = 1 << (HEIGHT_BITS - 1 + FRAC_W);
 
 /// The origin `o` on the finest grid within its root: modulo the root's side,
 /// 2^32, X the Q3 itself, Y and Z from the world's edge (`overwrite::path`), so
