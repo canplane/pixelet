@@ -23,8 +23,8 @@ fn mix(zoom: Zoom, c: [i32; 3]) -> u32 {
 
 /// Rolling ground: its top, in units, at the column at `[x, y]` units.
 fn top(x: i32, y: i32) -> i32 {
-    let wave = |v: i32| (v.rem_euclid(300) - 150).abs() as f32 / 75.0 - 1.0;
-    ((wave(x) + wave(y)) * 6.0 + 16.0) as i32
+    let at = |v: i32| v as f32 * 0.02;
+    ((libm::sinf(at(x)) + libm::cosf(at(y))) * 6.0 + 16.0) as i32
 }
 
 /// A box's words, `first` and `past` its steps on each axis (`answer::box_word`).
