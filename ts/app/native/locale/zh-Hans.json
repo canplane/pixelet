@@ -1,0 +1,5 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "pixelet 会显示你在世界中的位置，你搭建的东西也会立在那里。"
+  }
+}

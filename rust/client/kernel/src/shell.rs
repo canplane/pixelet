@@ -16,8 +16,8 @@ use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
-    CompanionState, DivisionPart, GroundStatus, LangName, LocationState, LonLat, Message,
-    OrientationState, PivotState, RefusedFile, Snapshot, ToolState,
+    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
+    PivotState, RefusedFile, Snapshot, ToolState,
 };
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::{tool, Tool};
@@ -44,22 +44,15 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
-/// The pivot's division and each above it, broad to narrow. Every language
-/// is sent. A name
+/// The pivot's division and each above it, broad to narrow. A name
 /// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
 /// the zoom it shows from (`Division::shown_from`).
 fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
     each_division(at, |part| {
-        let names = |each: &mut dyn FnMut(&LangName<'_>)| {
-            for (lang, name) in &part.names {
-                each(&LangName { lang, name });
-            }
-        };
         each(&DivisionPart {
             subtype: part.subtype as u8,
             name: &part.name,
-            names: &names,
             shown: u_per_px <= units(part.shown_from()),
             area: part.area,
         });

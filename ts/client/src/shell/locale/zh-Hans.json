@@ -1,0 +1,253 @@
+{
+  "close": "关闭",
+  "settings": {
+    "title": "设置",
+    "trigger_aria_label": "设置",
+    "tabs": {
+      "options": "选项",
+      "info": "信息"
+    },
+    "language": {
+      "section_title": "语言"
+    },
+    "cost_legend": "LOW / MED / HIGH 表示性能开销。画面卡顿时，请先调整 HIGH 项。",
+    "display": {
+      "section_title": "显示",
+      "section_caption": "设置画面绘制的内容和分辨率。",
+      "decor": {
+        "label": "装饰",
+        "description": "显示地形上自动摆放的树木、车辆等装饰。不影响你自己放置的物体。"
+      },
+      "clouds": {
+        "label": "云",
+        "description": "显示天空中的积云和其上方的薄云层。相机升高时会逐渐变淡并消失。"
+      },
+      "textures": {
+        "label": "纹理",
+        "description": "在方块表面显示纹理，而不是纯色。"
+      },
+      "res": {
+        "label": "分辨率",
+        "auto": {
+          "label": "自动",
+          "description": "按设备分辨率绘制，卡顿时暂时降低，有余量时恢复。"
+        },
+        "fixed": {
+          "label": "固定",
+          "description": "始终按设备分辨率绘制。最清晰，但在性能较低的设备上可能卡顿。"
+        },
+        "low": {
+          "label": "低分辨率",
+          "description": "以较低分辨率绘制，减少耗电和发热。画面会略显模糊。"
+        }
+      }
+    },
+    "camera": {
+      "section_title": "相机",
+      "section_caption": "设置画面移动和旋转的方式。",
+      "tilt_lock": {
+        "label": "锁定倾斜",
+        "description": "固定倾斜角度，只能左右旋转。"
+      }
+    },
+    "lighting": {
+      "section_title": "光照与阴影",
+      "section_caption": "设置光照和阴影的效果。",
+      "edge_shade": {
+        "label": "方块轮廓",
+        "description": "只加深与空气相接的边，让平地平滑相连，只在高度变化处显示线条。"
+      },
+      "ao": {
+        "label": "阴影细节",
+        "off": {
+          "label": "无",
+          "description": "对所有表面使用相同的环境光。"
+        },
+        "corner": {
+          "label": "边角",
+          "description": "加深方块与地面的接触处和内角，让方块看起来落在地上。开销较小。"
+        },
+        "screen": {
+          "label": "全部 (SSAO)",
+          "description": "除边角外，还为装饰、角色和较宽的缝隙加上柔和的阴影，增强立体感。需要处理整个画面，开销最大。"
+        }
+      },
+      "shadows": {
+        "label": "阴影",
+        "description": "地形、物体和角色在阳光下向地面投下阴影。"
+      },
+      "rim_light": {
+        "label": "边缘光",
+        "description": "在方块、装饰和角色的轮廓上添加柔和的高光，使其从背景中清晰分离。"
+      }
+    },
+    "debug": {
+      "section_title": "调试",
+      "section_caption": "用于查看画面绘制情况的诊断工具。",
+      "view": {
+        "label": "视图",
+        "description": "在画面上显示相机和指针的位置，可查看相机的距离和角度，以及指针所指位置的坐标。"
+      },
+      "perf": {
+        "label": "性能",
+        "description": "显示每帧耗时以及 GPU、网络和内存的使用量，开启期间会持续记录。"
+      },
+      "world_gizmo": {
+        "label": "世界辅助线",
+        "description": "绘制标示画面中心和方向的圆环，并在地面上按状态用颜色标示已加载地形的范围。颜色含义见一同显示的图例。"
+      },
+      "camera_gizmo": {
+        "label": "相机辅助线",
+        "description": "叠加显示环绕画面中心的环形网格，并将方块在画面上的大小与网格单元比较，用颜色标示。颜色含义见一同显示的图例。"
+      },
+      "ray_steps": {
+        "label": "光线步数",
+        "description": "用颜色标示绘制画面上每个点的开销。借用附近点结果的点，显示查找该结果的开销。颜色含义见一同显示的图例。"
+      }
+    },
+    "disclaimer": {
+      "section_title": "注意事项",
+      "demo_notice": "本服务为演示版本，数据可能被删除，服务也可能中止，恕不另行通知。",
+      "coverage_notice": "目前仅支持韩国，其他地区显示为海洋。",
+      "storage_notice": "你放置的物体不会保存到服务器，只保留在当前设备上。",
+      "location_notice": "我们不收集也不存储你的位置信息。",
+      "character_notice": "角色和装饰使用 CC0 许可的 Kenney 素材包。"
+    },
+    "attribution": {
+      "section_title": "来源"
+    },
+    "about": {
+      "section_title": "关于",
+      "tagline": "以现实世界为画布，堆叠方块。"
+    }
+  },
+  "drawer": {
+    "title": "抽屉",
+    "tabs": {
+      "cube": "方块",
+      "decor": "装饰",
+      "marker": "标记",
+      "character": "角色"
+    },
+    "sections": {
+      "cube": {
+        "colors": "颜色",
+        "landcover": "土地",
+        "water": "水",
+        "water_features": "水边设施",
+        "buildings": "建筑",
+        "roads": "道路",
+        "aeroways": "机场",
+        "underground": "地下"
+      },
+      "decor": {
+        "nature": "自然",
+        "vehicle": "交通工具"
+      },
+      "pin": "图钉"
+    },
+    "character": {
+      "person_label": "角色",
+      "female_label": "女性",
+      "male_label": "男性",
+      "pet_label": "宠物"
+    }
+  },
+  "device": {
+    "orientation": {
+      "permission_denied": "请允许使用方向传感器。",
+      "permission_error": "无法使用方向传感器。",
+      "signal_lost": "无法确定方向。"
+    },
+    "geolocation": {
+      "unsupported": "当前环境无法使用位置信息。",
+      "permission_denied": "请允许使用位置信息。",
+      "generic_error": "无法确定当前位置。",
+      "timeout": "未能确定位置，请重试。"
+    }
+  },
+  "toast": {
+    "server_unstable": "服务器连接不稳定。",
+    "source_refused": "此版本无法读取世界数据，请刷新试试。",
+    "location_checking": "正在确定当前位置。",
+    "world_loading": "正在加载空间。",
+    "world_ready": "空间已加载。",
+    "companion_loading": "正在准备同伴。",
+    "outside": "不支持此地区。",
+    "network_unstable": "网络连接不稳定。",
+    "gpu_unstable": "WebGPU 连接不稳定。"
+  },
+  "world": {
+    "dock": {
+      "pointer": "指针",
+      "eraser": "橡皮擦",
+      "message_placeholder": "输入消息",
+      "pin_placeholder": "输入图钉消息",
+      "send": "发送",
+      "pin_done": "立起图钉",
+      "drawer_tooltip": "打开抽屉",
+      "object_size": "大小 {{n}}"
+    },
+    "controls": {
+      "reset_orientation": "朝向北方",
+      "move_to_location": "前往我的位置",
+      "start_compass_mode": "打开指南针",
+      "exit_compass_mode": "关闭指南针",
+      "first_person": "第一人称视角",
+      "third_person": "第三人称视角",
+      "show_places": "显示地点",
+      "hide_places": "隐藏地点"
+    },
+    "sensors": {
+      "label": "使用我的位置",
+      "turn_on": "打开"
+    },
+    "search": {
+      "trigger_aria_label": "搜索地点",
+      "placeholder": "搜索地点",
+      "clear_aria_label": "清除搜索内容",
+      "loading": "正在搜索…",
+      "locating": "正在定位…",
+      "no_results": "没有搜索结果。",
+      "section_elsewhere": "其他",
+      "pivot": "当前位置"
+    }
+  },
+  "halt": {
+    "web": {
+      "webgpu": {
+        "title": "无法使用 WebGPU。",
+        "body": "请将浏览器更新到最新版本，或使用其他浏览器打开。"
+      },
+      "insecure": {
+        "title": "需要 HTTPS 连接。",
+        "body": "请通过 https:// 地址重新访问。"
+      },
+      "gpu": {
+        "title": "无法启动 WebGPU。",
+        "body": "请检查浏览器或设备设置。"
+      }
+    },
+    "boot": {
+      "title": "发生临时错误。",
+      "body": "请稍后重试。"
+    },
+    "kernel_panic": {
+      "title": "应用已停止。",
+      "body": "请刷新页面。"
+    },
+    "server_failed": {
+      "title": "服务器连接失败。",
+      "body": "请稍后重试。"
+    },
+    "gpu_failed": {
+      "title": "WebGPU 连接失败。",
+      "body": "请稍后重试。"
+    },
+    "gpu_lost": {
+      "title": "WebGPU 连接已断开。",
+      "body": "请刷新页面。"
+    },
+    "stop_code": "停止代码：{{code}}"
+  }
+}

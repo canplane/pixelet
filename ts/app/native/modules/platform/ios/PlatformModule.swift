@@ -118,6 +118,10 @@ public class PlatformModule: Module {
 
     // ---- text (src/text.ts, Text.swift) ----
 
+    Function("textLanguage") { (tag: String) in
+      setTextLanguage(tag)
+    }
+
     Function("textWidth") { (weight: Double, px: Double, text: String) -> Double in
       textWidth(text, weight, px)
     }

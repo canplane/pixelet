@@ -22,9 +22,34 @@ function float(bits: u32): number {
   return word.getFloat32(0, true);
 }
 
-/** Greedy by words; a word too wide alone (Korean typed without spaces)
- * breaks between characters. A space stays at the next line's head for the
- * kernel to trim. */
+/** What no line starts with: closing marks, and in Japanese the small kana and
+ * the marks that lean on the character before. */
+const NO_LINE_START =
+  /[、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)\]}]/;
+
+/** What no line ends with: opening marks. */
+const NO_LINE_END = /[（［｛〔〈《「『【“‘(\[{]/;
+
+/** The break at `at` moved back past a mark the rules keep with its neighbor,
+ * no further than the line's first character. */
+function kept_break(text: string, line: number, at: number): number {
+  while (
+    at - 1 > line &&
+    (NO_LINE_START.test(text[at]) || NO_LINE_END.test(text[at - 1])) &&
+    !isSurrogate(text.charCodeAt(at - 1))
+  ) {
+    at -= 1;
+  }
+  return at;
+}
+
+function isSurrogate(unit: number): boolean {
+  return unit >= 0xd800 && unit <= 0xdfff;
+}
+
+/** Greedy by words; a word too wide alone (Korean, Japanese or Chinese typed
+ * without spaces) breaks between characters. A space stays at the next line's
+ * head for the kernel to trim. */
 function line_ends(
   text: string,
   max_width: number,
@@ -53,8 +78,8 @@ function line_ends(
       for (let i = s; i < e;) {
         const next = i + (text.codePointAt(i)! > 0xffff ? 2 : 1);
         if (i > chunk && width(text.slice(chunk, next)) > max_width) {
-          ends.push(i);
-          chunk = i;
+          chunk = kept_break(text, chunk, i);
+          ends.push(chunk);
         }
         i = next;
       }

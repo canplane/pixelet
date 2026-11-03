@@ -40,12 +40,7 @@ import { Glyph } from "@/shell/ui/glyph.tsx";
 import { FILL, SYMBOL } from "./place_theme.spec.ts";
 import { PLACE_SYMBOLS, type PlaceSymbol } from "./place-symbol.ts";
 import { SEARCH_KIND } from "./search.spec.ts";
-import {
-  assembleLabel,
-  localName,
-  type Name,
-  primaryLanguage,
-} from "@/shell/division/label.ts";
+import { assembleLabel } from "@/shell/division/label.ts";
 import {
   useDivisionLabel,
   usePivotCoordinates,
@@ -68,19 +63,17 @@ function formatDistance(m: f64): string {
  * The country is its section's title, so the row leaves it out. */
 function ResultRow({
   result,
-  lang,
   distance,
   onPress,
 }: {
   result: SearchResult;
-  lang: string;
   distance: string | null;
   onPress: () => void;
 }) {
   const within = result.context.filter(
     (p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY,
   );
-  const where = within.length > 0 ? assembleLabel(within, lang) : "";
+  const where = within.length > 0 ? assembleLabel(within) : "";
   const theme =
     result.kind === SEARCH_KIND.PLACE ? placeTheme(result.category) : null;
   const symbol = theme?.symbol;
@@ -110,7 +103,7 @@ function ResultRow({
       )}
       <View style={styles.rowText}>
         <Text numberOfLines={1} style={styles.name}>
-          {localName({ name: result.name, names: result.common }, lang)}
+          {result.name}
         </Text>
         {(where !== "" || distance !== null) && (
           <View style={styles.subtitle}>
@@ -128,24 +121,25 @@ function ResultRow({
 }
 
 /** The country a result is in, or is; null for one no country holds, at sea or past the divisions. */
-function countryOf(result: SearchResult): Name | null {
+function countryOf(result: SearchResult): string | null {
   if (
     result.kind === SEARCH_KIND.DIVISION &&
     result.category === DIVISION_SUBTYPE.COUNTRY
   ) {
-    return { name: result.name, names: result.common };
+    return result.name;
   }
   return (
-    result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY) ?? null
+    result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)?.name ??
+    null
   );
 }
 
 interface CountrySection {
-  country: Name | null;
+  country: string | null;
   rows: SearchResult[];
 }
 
-/** By country, a country by the provider's own name: the pivot's first, as
+/** By country: the pivot's first, as
  * the API ranks it, then each where its best result ranked, none last. */
 function byCountry(
   results: SearchResult[],
@@ -154,13 +148,12 @@ function byCountry(
   const sections = new Map<string | null, CountrySection>();
   for (const result of results) {
     const country = countryOf(result);
-    const key = country?.name ?? null;
-    const section = sections.get(key) ?? { country, rows: [] };
+    const section = sections.get(country) ?? { country, rows: [] };
     section.rows.push(result);
-    sections.set(key, section);
+    sections.set(country, section);
   }
   const rank = ({ country }: CountrySection) =>
-    country === null ? 2 : country.name === home ? 0 : 1;
+    country === null ? 2 : country === home ? 0 : 1;
   return [...sections.values()].sort((a, b) => rank(a) - rank(b));
 }
 
@@ -240,8 +233,7 @@ interface Found {
 
 /** Forward search, always live: nothing is baked for it. */
 export function SearchModal({ onClose }: { onClose: () => void }) {
-  const { t, i18n } = useTranslation();
-  const lang = primaryLanguage(i18n.language);
+  const { t } = useTranslation();
 
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found>({
@@ -347,17 +339,16 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           )}
 
           {byCountry(results, found.home).map(({ country, rows }) => (
-            <View key={country?.name ?? ""}>
+            <View key={country ?? ""}>
               <SectionTitle style={styles.sectionHeader}>
                 {country === null
                   ? t("world.search.section_elsewhere")
-                  : localName(country, lang)}
+                  : country}
               </SectionTitle>
               {rows.map((r) => (
                 <ResultRow
                   key={r.gers_id}
                   result={r}
-                  lang={lang}
                   distance={distanceOf(r)}
                   onPress={() => select(r)}
                 />

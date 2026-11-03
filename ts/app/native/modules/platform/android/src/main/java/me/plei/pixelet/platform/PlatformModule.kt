@@ -91,6 +91,8 @@ class PlatformModule : Module() {
 
     // ---- text (src/text.ts, Text.kt) ----
 
+    Function("textLanguage") { tag: String -> setTextLanguage(tag) }
+
     Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
 
     /** The line starting at `x` with the middle of its em box on the middle

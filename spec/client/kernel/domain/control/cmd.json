@@ -1640,11 +1640,7 @@
     },
     {
       "name": "DivisionPart",
-      "$doc": [
-        "One division of the name, in every language the provider had rather than one resolved",
-        "name: the reader's language is the page's, and switching it re-reads a label already",
-        "sent."
-      ],
+      "$doc": ["One division of the name, in its own name."],
       "fields": [
         {
           "name": "subtype",
@@ -1656,11 +1652,6 @@
         {
           "name": "name",
           "type": "str"
-        },
-        {
-          "name": "names",
-          "type": "LangName",
-          "list": true
         },
         {
           "name": "shown",
@@ -1692,19 +1683,6 @@
           "name": "path",
           "type": "str",
           "$doc": ["Its number below the root in decimal."]
-        }
-      ]
-    },
-    {
-      "name": "LangName",
-      "fields": [
-        {
-          "name": "lang",
-          "type": "str"
-        },
-        {
-          "name": "name",
-          "type": "str"
         }
       ]
     }

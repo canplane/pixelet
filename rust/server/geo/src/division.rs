@@ -21,7 +21,6 @@ async fn lineage(client: &Client, ids: &[String]) -> Result<FnvHashMap<String, D
                 r.get("gers_id"),
                 r.get::<_, &str>("subtype"),
                 r.get("name"),
-                r.get("names_common"),
                 r.get("parent"),
             )
         })

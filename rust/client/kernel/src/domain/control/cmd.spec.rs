@@ -947,14 +947,11 @@ impl OrientationState {
     }
 }
 
-/// One division of the name, in every language the provider had rather than one resolved
-/// name: the reader's language is the page's, and switching it re-reads a label already
-/// sent.
+/// One division of the name, in its own name.
 pub struct DivisionPart<'a> {
     /// Overture's subtype, broadest first (spec/spec/division.json).
     pub subtype: u8,
     pub name: &'a dyn Display,
-    pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
     /// The view is in far enough for its name to show: as far as Overture's own tiles
     /// show it from (pxl-spec bake/tile/division.rs `Division::shown_from`).
     pub shown: bool,
@@ -964,18 +961,11 @@ pub struct DivisionPart<'a> {
 
 impl DivisionPart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 5;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u8(Some(self.subtype));
         w.str_display(self.name);
-        let mut n = 0;
-        (self.names)(&mut |_| n += 1);
-        w.branch(n, |w| {
-            (self.names)(&mut |item| {
-                w.branch(LangName::FIELDS, |w| item.write(w));
-            });
-        });
         w.bool(Some(self.shown));
         w.bool(Some(self.area));
     }
@@ -996,21 +986,6 @@ impl RefusedFile<'_> {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.root));
         w.str_display(self.path);
-    }
-}
-
-pub struct LangName<'a> {
-    pub lang: &'a dyn Display,
-    pub name: &'a dyn Display,
-}
-
-impl LangName<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.str_display(self.lang);
-        w.str_display(self.name);
     }
 }
 

@@ -1,0 +1,61 @@
+{
+  "settings": {
+    "camera": {
+      "surface_follow": {
+        "label": "表面に沿う",
+        "description": "ドラッグすると画面の中心が地形とオブジェクトの表面に沿って動きます。オフにすると今の高さを保ったまま障害物を通り抜けます。"
+      },
+      "orbit_obstacle": {
+        "label": "三人称カメラの衝突",
+        "through": {
+          "label": "通り抜ける",
+          "description": "障害物を無視して通り抜けます。"
+        },
+        "stop": {
+          "label": "止まる",
+          "description": "障害物に当たる直前でカメラ操作を止めます。壁や天井には 1 マスまでめり込むことがあります。"
+        },
+        "climb": {
+          "label": "乗り越える",
+          "description": "障害物に遮られるとカメラを起こして乗り越えます。"
+        },
+        "description": "ズーム・回転・傾きでカメラを動かすときに、地形やオブジェクトに遮られた場合の動作を設定します。"
+      }
+    },
+    "debug": {
+      "sky_time": {
+        "label": "空の時刻",
+        "description": "空と太陽を描く時刻を固定します。今見ている場所の太陽時が基準で、雲と保存データの時刻はそのままです。再読み込みすると実際の時刻に戻ります。",
+        "real": {
+          "label": "実際の時刻",
+          "description": "デバイスの時計に従います。"
+        },
+        "dawn": {
+          "label": "明け方 7 時",
+          "description": "太陽が低く、影が長く伸びます。"
+        },
+        "morning": {
+          "label": "朝 9 時",
+          "description": "太陽が斜めに昇っています。"
+        },
+        "noon": {
+          "label": "正午",
+          "description": "太陽が最も高く、影が最も短くなります。"
+        },
+        "afternoon": {
+          "label": "午後 3 時",
+          "description": "太陽が西に傾き始めます。"
+        },
+        "dusk": {
+          "label": "夕方 5 時",
+          "description": "太陽が低く、影が長く伸びます。"
+        }
+      }
+    }
+  },
+  "world": {
+    "chat": {
+      "self_label": "自分"
+    }
+  }
+}

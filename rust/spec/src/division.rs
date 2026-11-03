@@ -6,8 +6,6 @@
 //! ancestors, broad to narrow; the client picks the depth, the order and the
 //! language. A provider maps its own areas onto these subtypes in its adapter.
 
-use std::collections::BTreeMap;
-
 use crate::division_spec::DIVISION_SUBTYPE;
 
 /// Overture's subtypes, broadest first: spec/spec/division.json's numbers,
@@ -95,14 +93,8 @@ impl<'de> serde::Deserialize<'de> for Subtype {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DivisionPart {
     pub subtype: Subtype,
-    /// The provider's own name, shown when `names` lacks the reader's language.
+    /// The division's own name, `names.primary`, whatever the reader's language.
     pub name: String,
-    /// By language tag; empty rather than absent.
-    #[cfg_attr(
-        feature = "serde",
-        serde(default, skip_serializing_if = "BTreeMap::is_empty")
-    )]
-    pub names: BTreeMap<String, String>,
     /// The division nearest the point rather than one containing it.
     #[cfg_attr(
         feature = "serde",

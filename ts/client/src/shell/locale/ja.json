@@ -1,0 +1,253 @@
+{
+  "close": "閉じる",
+  "settings": {
+    "title": "設定",
+    "trigger_aria_label": "設定",
+    "tabs": {
+      "options": "オプション",
+      "info": "情報"
+    },
+    "language": {
+      "section_title": "言語"
+    },
+    "cost_legend": "LOW / MED / HIGH は処理負荷の目安です。動きがカクつくときは HIGH の項目から調整してください。",
+    "display": {
+      "section_title": "画面",
+      "section_caption": "画面に描く要素と解像度を設定します。",
+      "decor": {
+        "label": "デコ",
+        "description": "地形に自動で置かれる木や車などの装飾を表示します。自分で置いたオブジェクトには影響しません。"
+      },
+      "clouds": {
+        "label": "雲",
+        "description": "空に浮かぶ積雲とその上の薄い雲の層を表示します。カメラが高く上がるにつれて薄くなり、消えていきます。"
+      },
+      "textures": {
+        "label": "テクスチャ",
+        "description": "キューブの面を単色ではなくテクスチャで表示します。"
+      },
+      "res": {
+        "label": "解像度",
+        "auto": {
+          "label": "自動",
+          "description": "デバイスの解像度で描き、カクつくと一時的に下げ、余裕ができると元に戻します。"
+        },
+        "fixed": {
+          "label": "固定",
+          "description": "常にデバイスの解像度で描きます。最も鮮明ですが、性能の低いデバイスではカクつくことがあります。"
+        },
+        "low": {
+          "label": "低解像度",
+          "description": "低い解像度で描き、バッテリー消費と発熱を抑えます。少しぼやけて見えます。"
+        }
+      }
+    },
+    "camera": {
+      "section_title": "カメラ",
+      "section_caption": "画面の移動と回転の方法を設定します。",
+      "tilt_lock": {
+        "label": "傾きを固定",
+        "description": "傾きを固定し、左右にのみ回転します。"
+      }
+    },
+    "lighting": {
+      "section_title": "光と影",
+      "section_caption": "光と影の表現を設定します。",
+      "edge_shade": {
+        "label": "キューブの輪郭",
+        "description": "空気に接する辺だけを暗くし、平地はなめらかにつなげて、高さが変わる場所だけを線で見せます。"
+      },
+      "ao": {
+        "label": "陰影",
+        "off": {
+          "label": "なし",
+          "description": "すべての面に同じ環境光を当てます。"
+        },
+        "corner": {
+          "label": "角",
+          "description": "キューブが地面に接する部分と内側の角を暗くし、地面に置かれているように見せます。負荷は軽めです。"
+        },
+        "screen": {
+          "label": "全体 (SSAO)",
+          "description": "角に加えてデコ、キャラクター、広いすき間にもやわらかい陰影を付け、立体感を高めます。画面全体を処理するため、負荷が最も高くなります。"
+        }
+      },
+      "shadows": {
+        "label": "影",
+        "description": "地形、オブジェクト、キャラクターが日光を受けて地面に影を落とします。"
+      },
+      "rim_light": {
+        "label": "リムライト",
+        "description": "キューブ、デコ、キャラクターの輪郭に控えめなハイライトを加え、背景からはっきり分けます。"
+      }
+    },
+    "debug": {
+      "section_title": "デバッグ",
+      "section_caption": "画面がどのように描かれているかを調べる診断ツールです。",
+      "view": {
+        "label": "ビュー",
+        "description": "カメラとポインターの位置を画面に表示します。カメラの距離と角度、ポインターが指す地点の座標を確認できます。"
+      },
+      "perf": {
+        "label": "パフォーマンス",
+        "description": "フレームごとの所要時間と GPU・ネットワーク・メモリの使用量を表示し、オンの間は記録します。"
+      },
+      "world_gizmo": {
+        "label": "ワールドギズモ",
+        "description": "画面の中心と方向を示す円を描き、地形を読み込んだ範囲を状態ごとの色で地面に表示します。色の意味は一緒に表示される凡例で確認できます。"
+      },
+      "camera_gizmo": {
+        "label": "カメラギズモ",
+        "description": "画面の中心を囲むリング状のグリッドを重ねて表示し、キューブの画面上の大きさをグリッドのマスと比べて色で示します。色の意味は一緒に表示される凡例で確認できます。"
+      },
+      "ray_steps": {
+        "label": "レイステップ",
+        "description": "画面の各点を描くのにかかったコストを色で示します。周囲の点の結果を借りた点は、その結果を探すのにかかったコストで示します。色の意味は一緒に表示される凡例で確認できます。"
+      }
+    },
+    "disclaimer": {
+      "section_title": "ご注意",
+      "demo_notice": "本サービスはデモとして提供されており、予告なくデータの削除やサービスの中止が行われる場合があります。",
+      "coverage_notice": "現在は韓国のみに対応しており、それ以外の地域は海として表示されます。",
+      "storage_notice": "自分で置いたオブジェクトはサーバーに保存されず、このデバイスにのみ保管されます。",
+      "location_notice": "位置情報の収集や保存は行いません。",
+      "character_notice": "キャラクターとデコには CC0 ライセンスの Kenney アセットパックを使用しています。"
+    },
+    "attribution": {
+      "section_title": "出典"
+    },
+    "about": {
+      "section_title": "情報",
+      "tagline": "現実世界をキャンバスにしてブロックを積み上げます。"
+    }
+  },
+  "drawer": {
+    "title": "引き出し",
+    "tabs": {
+      "cube": "キューブ",
+      "decor": "デコ",
+      "marker": "マーカー",
+      "character": "キャラクター"
+    },
+    "sections": {
+      "cube": {
+        "colors": "色",
+        "landcover": "土地",
+        "water": "水",
+        "water_features": "水辺の施設",
+        "buildings": "建物",
+        "roads": "道路",
+        "aeroways": "空港",
+        "underground": "地下"
+      },
+      "decor": {
+        "nature": "自然",
+        "vehicle": "乗り物"
+      },
+      "pin": "ピン"
+    },
+    "character": {
+      "person_label": "キャラクター",
+      "female_label": "女性",
+      "male_label": "男性",
+      "pet_label": "ペット"
+    }
+  },
+  "device": {
+    "orientation": {
+      "permission_denied": "方位センサーの使用を許可してください。",
+      "permission_error": "方位センサーを使用できません。",
+      "signal_lost": "方位を確認できません。"
+    },
+    "geolocation": {
+      "unsupported": "この環境では位置情報を使用できません。",
+      "permission_denied": "位置情報の使用を許可してください。",
+      "generic_error": "現在地を確認できません。",
+      "timeout": "現在地を確認できませんでした。もう一度お試しください。"
+    }
+  },
+  "toast": {
+    "server_unstable": "サーバーへの接続が不安定です。",
+    "source_refused": "このバージョンでは世界データを読み込めません。再読み込みしてください。",
+    "location_checking": "現在地を確認しています。",
+    "world_loading": "空間を読み込んでいます。",
+    "world_ready": "空間を読み込みました。",
+    "companion_loading": "仲間を準備しています。",
+    "outside": "対応していない地域です。",
+    "network_unstable": "ネットワーク接続が不安定です。",
+    "gpu_unstable": "WebGPU への接続が不安定です。"
+  },
+  "world": {
+    "dock": {
+      "pointer": "ポインター",
+      "eraser": "消しゴム",
+      "message_placeholder": "メッセージを入力",
+      "pin_placeholder": "ピンのメッセージを入力",
+      "send": "送信",
+      "pin_done": "ピンを立てる",
+      "drawer_tooltip": "引き出しを開く",
+      "object_size": "サイズ {{n}}"
+    },
+    "controls": {
+      "reset_orientation": "北に合わせる",
+      "move_to_location": "現在地へ",
+      "start_compass_mode": "コンパスをオン",
+      "exit_compass_mode": "コンパスをオフ",
+      "first_person": "一人称で見る",
+      "third_person": "三人称で見る",
+      "show_places": "場所を表示",
+      "hide_places": "場所を隠す"
+    },
+    "sensors": {
+      "label": "現在地を使用",
+      "turn_on": "オンにする"
+    },
+    "search": {
+      "trigger_aria_label": "場所を検索",
+      "placeholder": "場所を検索",
+      "clear_aria_label": "検索語を消去",
+      "loading": "検索中…",
+      "locating": "現在地を確認中…",
+      "no_results": "検索結果がありません。",
+      "section_elsewhere": "その他",
+      "pivot": "現在地"
+    }
+  },
+  "halt": {
+    "web": {
+      "webgpu": {
+        "title": "WebGPU を使用できません。",
+        "body": "ブラウザを最新版に更新するか、別のブラウザで開いてください。"
+      },
+      "insecure": {
+        "title": "HTTPS 接続が必要です。",
+        "body": "https:// のアドレスで開き直してください。"
+      },
+      "gpu": {
+        "title": "WebGPU を開始できませんでした。",
+        "body": "ブラウザまたはデバイスの設定を確認してください。"
+      }
+    },
+    "boot": {
+      "title": "一時的なエラーが発生しました。",
+      "body": "しばらくしてからもう一度お試しください。"
+    },
+    "kernel_panic": {
+      "title": "アプリが停止しました。",
+      "body": "ページを再読み込みしてください。"
+    },
+    "server_failed": {
+      "title": "サーバーへの接続に失敗しました。",
+      "body": "しばらくしてからもう一度お試しください。"
+    },
+    "gpu_failed": {
+      "title": "WebGPU への接続に失敗しました。",
+      "body": "しばらくしてからもう一度お試しください。"
+    },
+    "gpu_lost": {
+      "title": "WebGPU への接続が切れました。",
+      "body": "ページを再読み込みしてください。"
+    },
+    "stop_code": "停止コード: {{code}}"
+  }
+}

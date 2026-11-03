@@ -23,11 +23,9 @@ agenda, its minutes and its reports beside its rules.
   change, a file a lesson: what to keep clear of and how to check it, each
   pointing at the experiment that showed it.
 
-An adopted decision is checked for its scope, and for whether a later adopted
-decision replaced it; minutes that replace an earlier one say which. One that
-changes a contract is carried into the document that states that contract, and
-its reasoning stays here. The user's explicit word now applies within its scope
-before the documents catch up.
+An adopted decision that changes a contract is carried into the document that
+states that contract, and its reasoning stays here. The user's explicit word now
+applies within its scope before the documents catch up.
 
 Where the code and a stated contract disagree, these records and the history
 tell debt, an outdated document and an unfinished transition apart; neither

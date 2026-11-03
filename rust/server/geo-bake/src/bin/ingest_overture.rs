@@ -70,6 +70,11 @@ const NAME: (&str, &str) = (
     "name",
     "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED",
 );
+/// A division's name in every language Overture gives it, for search alone.
+const NAMES: (&str, &str) = (
+    "names",
+    "TEXT GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '') || ' ' || COALESCE(jsonb_path_query_array(properties->'names'->'common', '$.*')::text, '')) STORED",
+);
 
 const TYPES: &[Type] = &[
     Type {
@@ -104,8 +109,8 @@ const TYPES: &[Type] = &[
     Type {
         overture: "division",
         table: "overture_divisions",
-        columns: &[SUBTYPE, NAME],
-        indexes: &["subtype"],
+        columns: &[SUBTYPE, NAME, NAMES],
+        indexes: &["subtype", "USING GIN (names gin_trgm_ops)"],
     },
     // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
     Type {

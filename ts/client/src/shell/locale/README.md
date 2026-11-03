@@ -12,13 +12,17 @@ is drawn as.
 | **terrain** | the ground, water and buildings | trees and vehicles it generates | the places it names        |
 | **object**  | cubes you placed                | decor you placed                | markers you put up         |
 
-| en      | ko       | means                                                           |
-| ------- | -------- | --------------------------------------------------------------- |
-| terrain | 지형     | what came from the real world's data                            |
-| object  | 오브젝트 | what a user placed, of any kind                                 |
-| cube    | 큐브     | the box the ground and placed cubes are drawn as                |
-| decor   | 데코     | a model drawn from a glTF, on the terrain or placed             |
-| marker  | 마커     | a design drawn flat at a place: a place's name, or a pin put up |
+| en      | ko       | ja           | zh-Hans | zh-Hant | means                                                           |
+| ------- | -------- | ------------ | ------- | ------- | --------------------------------------------------------------- |
+| terrain | 지형     | 地形         | 地形    | 地形    | what came from the real world's data                            |
+| object  | 오브젝트 | オブジェクト | 物体    | 物件    | what a user placed, of any kind                                 |
+| cube    | 큐브     | キューブ     | 方块    | 方塊    | the box the ground and placed cubes are drawn as                |
+| decor   | 데코     | デコ         | 装饰    | 裝飾    | a model drawn from a glTF, on the terrain or placed             |
+| marker  | 마커     | マーカー     | 标记    | 標記    | a design drawn flat at a place: a place's name, or a pin put up |
+
+Chinese is two catalogs by script, Taiwan's words in Traditional, and a system
+tag reads the one its script or region names (`i18n.ts`). A division's or a
+place's name is its own in every locale.
 
 An item — each cube, decor, marker and pet — has one name, the English one, in
 every locale, so it is no locale's string: it is written beside the item in its

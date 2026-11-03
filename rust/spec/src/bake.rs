@@ -7,7 +7,6 @@ use xpute_kit::status::error::MarshalError;
 
 pub mod constant;
 pub mod fold;
-pub mod name;
 #[path = "bake/object.spec.rs"]
 pub mod object;
 #[path = "bake/place_theme.spec.rs"]

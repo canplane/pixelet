@@ -5,13 +5,7 @@ use super::*;
 fn division(id: &str, subtype: &str, name: &str, parent: Option<&str>) -> (String, Division) {
     (
         id.to_string(),
-        Division::new(
-            id.into(),
-            subtype,
-            name.into(),
-            None,
-            parent.map(String::from),
-        ),
+        Division::new(id.into(), subtype, name.into(), parent.map(String::from)),
     )
 }
 
@@ -74,20 +68,5 @@ fn unknown_subtype_skipped() {
             .map(|p| p.name.as_str())
             .collect::<Vec<_>>(),
         ["France"]
-    );
-}
-
-#[test]
-fn non_name_is_none() {
-    assert!(names_of(None).is_empty());
-    assert!(
-        names_of(Some(serde_json::json!("Montmartre"))).is_empty(),
-        "a bare string names no language"
-    );
-    assert!(names_of(Some(serde_json::json!([1, 2]))).is_empty());
-    assert_eq!(
-        names_of(Some(serde_json::json!({"en": "Montmartre", "fr": 3}))).len(),
-        1,
-        "the readable half is kept"
     );
 }

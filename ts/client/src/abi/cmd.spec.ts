@@ -314,14 +314,11 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
   };
 }
 
-/** One division of the name, in every language the provider had rather than one resolved
- * name: the reader's language is the page's, and switching it re-reads a label already
- * sent. */
+/** One division of the name, in its own name. */
 export interface DivisionPart {
   /** Overture's subtype, broadest first (spec/spec/division.json). */
   subtype: u8;
   name: string;
-  names: LangName[];
   /** The view is in far enough for its name to show: as far as Overture's own tiles
    * show it from (pxl-spec bake/tile/division.rs `Division::shown_from`). */
   shown: boolean;
@@ -333,9 +330,8 @@ export function read_division_part(b: BranchCursor): DivisionPart {
   return {
     subtype: b.at(0).get<u8>(),
     name: b.at(1).get<string>(),
-    names: list(b.at_branch(2), read_lang_name),
-    shown: b.at(3).get<boolean>(),
-    area: b.at(4).get<boolean>(),
+    shown: b.at(2).get<boolean>(),
+    area: b.at(3).get<boolean>(),
   };
 }
 
@@ -349,15 +345,6 @@ export interface RefusedFile {
 
 export function read_refused_file(b: BranchCursor): RefusedFile {
   return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
-}
-
-export interface LangName {
-  lang: string;
-  name: string;
-}
-
-export function read_lang_name(b: BranchCursor): LangName {
-  return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
 }
 
 /** Command.SENSOR_START's event. */
