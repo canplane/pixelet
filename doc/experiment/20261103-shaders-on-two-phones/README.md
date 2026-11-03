@@ -124,6 +124,9 @@ Drafts; not sent.
 > in `bool` locals (`break if`). Changing that one local to `vec2<u32>`
 > (`adreno-taken.wgsl`) makes the pipeline succeed. Struct-typed locals and
 > functions returning arrays or structs fail the same way in the full shaders.
+> So does a render pipeline whose vertex stage reads a
+> `const array<vec3f, 72>` at an index computed at run time (`vkCreateGraphicsPipelines`);
+> the same table packed into `array<u32, 8>` succeeds.
 >
 > **Device.** SM-S911N, Android (Chrome reports `Android 10; K`), Chrome
 > 156.0.8078.73, `adapter.info`: vendor `qualcomm`, architecture `adreno-7xx`.
@@ -148,10 +151,35 @@ Drafts; not sent.
 > `S` (or `remove_address_space_t<decltype(compare)>`), not from
 > `decltype` of the parameter.
 
+## What made them take it
+
+Each step on main, the S23 checked over USB, Safari and Chrome on the Mac
+after it:
+
+| commit | change | the S23 refuses after it |
+|---|---|---|
+| `10fe6a7e5` | no compare-and-swap (`pyramid_claim`, `pop`) | — (Safari takes every module) |
+| `64b6734ea` | `decor` in two passes (footing, pose); every entry inlined | beam, cell, light_propagate, sample_box; the raster |
+| `f94b0017b` | an entry a pass's observer (`light_beam_cs`, …; `PassObserver` gone); naga's `phi_*` composites split, small arrays vectors (rewrite.rs) | the raster |
+| `4a74a51f2` | the raster's corner table as bits (`raster_corner`) | none |
+
+After `4a74a51f2` the S23 makes all 35 compute pipelines and every render
+one, and draws the page: the ground, the decor, the companion and the
+chrome. Chrome and Safari on the Mac run it with no GPU error. The render
+pipeline was found by opening the page on the S23 with a hook that keeps the
+WGSL of each refused pipeline (`tools/catch_render.mjs`), then cutting that
+module's suspects one at a time (`tools/cdp.mjs` with `RENDER=1`).
+
+What a shader keeps clear of, learned here, is
+[shaders the phones take](../../tip/shaders-phones-take.md).
+
 ## Open
 
-- The `vs+fs` render pipeline the S23 refuses, not yet named (the page
-  composes it from hand-written modules at run time).
+- Whether what the S23 draws is what the Mac draws, pixel for pixel, and
+  the shadows in particular, cast now by the `light_*` entries.
+- What the larger generated WGSL costs: the first load's pipeline making on
+  a phone, and a frame's time on the Mac and the phones.
+- The iPhone itself, after `10fe6a7e5`; Safari on the Mac stood in for it.
 - Whether a module the S23 takes computes what the Mac computes: an earlier
   S23 read buffers laid out differently and drew wrong without an error
   (archived minutes of 2026-09-23 and 2026-09-27, on `origin/original`).

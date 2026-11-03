@@ -1,7 +1,7 @@
 # Shaders the phones take
 
-**2026-11-03.** What a compute shader keeps clear of so the phones' browsers
-compile it, learned on a Galaxy S23 (Adreno 740, Chrome) and an iPhone 13
+**2026-11-03.** What a shader keeps clear of so the phones' browsers compile
+it, learned on a Galaxy S23 (Adreno 740, Chrome) and an iPhone 13
 mini (Safari 27), with Safari on the Mac failing as the iPhone does. The
 evidence, the reduced cases and the tools are
 [the shaders on two phones](../experiment/20261103-shaders-on-two-phones/).
@@ -33,10 +33,34 @@ own Vulkan driver. Each is a different compiler with its own faults.
   `VK_ERROR_UNKNOWN`; a `vec2`/`vec3`/`vec4` in place of a small array, or
   the value split into its scalars, is taken. naga writes a Rust `[u32; 2]`
   or a small struct carried through an `if` as exactly such a local.
+  pxl-shader-build takes care of what it can see (below); what it cannot is
+  the next two.
+- **A choice made as the shader runs between two implementations that
+  answer in tuples or structs.** `PassObserver` chose `Eye` or `Map` in every
+  method by the pass's head, so every answer of `Observer` came through a
+  branch. A pass both take is now an entry each over a function generic in
+  its observer (`beam_cs` and `light_beam_cs`, …): choose at the entry, not
+  inside.
+- **A table of vectors read at a place found as it runs.** The raster's
+  `const array<vec3f, 72>` of box corners, indexed by its axis and vertex,
+  was refused (Tint holds such a table as a local; a `var<private>` copy was
+  refused too). Packed into `array<u32, 8>`, three bits a corner, and read
+  back by a function (`raster_corner`, render build.rs), it is taken.
 - **One shader too large.** A query as large as the world's walk asked from
   two places in one entry is written twice by a driver that inlines; split
   the entry into passes at a clean seam, as `decor` splits at
   `generation::placement`'s halves (footing, then pose).
+
+## What pxl-shader-build does for the phones
+
+Every entry is read inlined, no function of it called (`wgsl_of`), so no
+array or struct crosses a call. naga's WGSL is then rewritten
+(client/shader/build rewrite.rs): `i32::MIN` a call; each array- or
+struct-typed `phi_*` local split into a local a leaf (`split_phis`); every
+small array of a 32-bit scalar outside what a binding lays out a vector
+(`small_arrays_as_vectors`). None of it changes what a shader computes. The
+generated WGSL is about twice what it was, 5.5 MB; the S23 takes 2–5 s to make
+each of the largest pipelines.
 
 ## What the host and a shader share
 
@@ -69,8 +93,12 @@ The generated shaders' blocks break the rule today (a `vec2<f32>` and a
 
 ## Check
 
-- `ts/app/web/probe.html` on the dev server compiles every module on the
-  device it is opened on; `?src=` a shader under `doc/experiment/`.
+- `ts/app/web/probe.html` on the dev server compiles every generated module
+  on the device it is opened on; `?src=` a shader under `doc/experiment/`.
+  A render shader is composed at run time from hand-written parts, so the
+  probe does not reach it; the experiment's `tools/catch_render.mjs` opens
+  the page on the S23 with a hook that keeps the WGSL of each render
+  pipeline the device refuses.
 - Safari on the Mac stands in for the iPhone.
 - The S23 over USB: `adb forward tcp:9333 localabstract:chrome_devtools_remote`
   and `adb reverse tcp:5173 tcp:5173`, then the experiment's `tools/cdp.mjs`

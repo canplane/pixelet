@@ -28,7 +28,7 @@ function client(url) {
   };
 }
 
-const COMPILE = `async (code, label) => {
+const COMPILE_COMPUTE = `async (code, label) => {
   if (!window.__dev || window.__lost) {
     const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     window.__dev = await a.requestDevice(); window.__lost = false; window.__dev.lost.then(() => (window.__lost = true));
@@ -46,6 +46,29 @@ const COMPILE = `async (code, label) => {
   return said + " (" + Math.round(performance.now() - t0) + " ms)";
 }`;
 
+const COMPILE_RENDER = `async (code, label) => {
+  if (!window.__dev || window.__lost) {
+    const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+    window.__dev = await a.requestDevice({ requiredFeatures: ["depth32float-stencil8"] }); window.__lost = false; window.__dev.lost.then(() => (window.__lost = true));
+  }
+  const d = window.__dev;
+  const t0 = performance.now();
+  d.pushErrorScope("validation");
+  const m = d.createShaderModule({ label, code });
+  const fs = /@fragment[^]*?\\bfn\\s+(\\w+)/.exec(code)?.[1];
+  let said = "ok";
+  try {
+    await d.createRenderPipelineAsync({ label, layout: "auto",
+      vertex: { module: m, entryPoint: /@vertex[^]*?\\bfn\\s+(\\w+)/.exec(code)[1] },
+      fragment: fs ? { module: m, entryPoint: fs, targets: [{ format: process_format }] } : undefined,
+      depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+      primitive: { topology: "triangle-list" } });
+  } catch (e) { said = (e.reason ?? "error") + ": " + e.message.split("\\n")[0]; }
+  const v = await d.popErrorScope();
+  if (v) said += " | validation: " + v.message.split("\\n")[0];
+  return said + " (" + Math.round(performance.now() - t0) + " ms)";
+}`.replace("process_format", JSON.stringify(process.env.FORMAT ?? "r32uint"));
+const COMPILE = process.env.RENDER ? COMPILE_RENDER : COMPILE_COMPUTE;
 const { t, fresh } = await target();
 const c = client(t.webSocketDebuggerUrl);
 await c.open;
