@@ -338,7 +338,7 @@ fn compute(dir: &Path) -> String {
 /// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
-    use pxl_engine::{answer, beam, eye, param, pyramid, value};
+    use pxl_engine::{answer, beam, eye, face, param, pyramid, ray, value};
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
@@ -393,6 +393,23 @@ fn walk_word() -> String {
         ("BOX_BITS", answer::BOX_BITS),
         ("BOX_STEPS", answer::BOX_STEPS),
         ("STEPS_MOST", 4096),
+        ("JITTER", eye::JITTER as u32),
+        ("MISS_ACROSS", ray::MISS_ACROSS),
+        ("MISS_LANES", ray::MISS_LANES),
+        ("MARKS", pyramid::MARKS),
+        ("MARKS_AT", pyramid::MARKS_AT),
+        ("MARKS_CNT", pyramid::MARKS_CNT),
+        ("HITS", beam::HITS),
+        ("HIT_LANES", beam::HIT_LANES),
+        ("HIT_WORDS", beam::HIT_WORDS),
+        ("HIT_NODE", beam::HIT_NODE),
+        ("HIT_FACE", beam::HIT_FACE),
+        ("HIT_PX", beam::HIT_PX),
+        ("HIT_WAITS", beam::HIT_WAITS),
+        ("FACE_BOX", face::BOX),
+        ("RAY_FACE_SHIFT", ray::FACE_SHIFT),
+        ("RAY_ZOOM_SHIFT", ray::ZOOM_SHIFT),
+        ("RAY_FILL_SHIFT", ray::FILL_SHIFT),
     ];
     let mut out = format!(
         "const ZOOM_SPLIT: f32 = {:?};\n",

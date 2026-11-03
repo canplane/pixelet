@@ -188,7 +188,10 @@ pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 80;
 /// The samples' walk over the observed pyramid alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
 pub const SHADER_SAMPLE_HIT: u32 = 81;
-pub const SHADERS: u32 = 82;
+/// The missed pixels' walk over the observed pyramid alone, by hand: what it does
+/// not end `SHADER_MISS_LIST` walks again.
+pub const SHADER_MISS_HIT: u32 = 82;
+pub const SHADERS: u32 = 83;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -474,5 +477,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_SAMPLE_BOX
     &["light_sample_box.gen"],
     // SHADER_SAMPLE_HIT
-    &["walk_word", "sample_hit"],
+    &["walk_word", "walk", "sample_hit"],
+    // SHADER_MISS_HIT
+    &["walk_word", "walk", "miss_hit"],
 ];

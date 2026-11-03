@@ -382,11 +382,11 @@ pub fn miss_list_cs(
 ) {
     let clipmap: &[IVec4] = clipmap;
     let k = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES + lane.x;
-    let cnt = pyramid_at(pyramid, pyramid::MARKS_CNT);
-    if k >= cnt || k >= pyramid::MARKS {
+    let at = grid(eye).misses_at;
+    if k >= beams.word(at) {
         return;
     }
-    let listed = pyramid_at(pyramid, pyramid::MARKS_AT + k);
+    let listed = beams.word(at + 1 + k);
     let id = UVec3::new(listed & 0xffff, listed >> 16, 0);
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
