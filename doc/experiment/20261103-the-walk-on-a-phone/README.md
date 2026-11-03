@@ -352,6 +352,130 @@ what is left (`reports/s23-miss-by-hand.json`). The S23, a 6 s turn, four window
 - **The frame is still bimodal**: an interval's p50 is 20–21 ms and its p95 over
   217. `beam` and `sample` hold the frames that run them.
 
+### `beam` by hand
+
+`8ac7315b1`: `beam_hit_cs` over the pyramid read-only, each node's `Inheritance` written
+straight to its line, no stack. What it leaves `beam_cs` walks by indirect dispatch,
+with the 33 entries, the atomics and every write to the pyramid. The span `beam` covers
+both, and `ray_counts`' lane what is left (`reports/s23-beam-by-hand.json`). The S23, a
+6 s turn, four windows:
+
+| | `e7757099f` | `8ac7315b1` |
+| --- | --- | --- |
+| fps | 15.5–16.7 | 18.2–21.5 |
+| interval p50, ms | 20–21 | 17–18 |
+| interval p95, ms | 217–257 | 186–233 |
+| GPU p50, ms | 50.6–55.7 | 29.8–39.1 |
+| GPU p95, ms | 107–129 | 107–129 |
+| `beam` p95 | 38.9–41.4 | 43.3–46.9 |
+| `beam` left, nodes a cast | 308,592–319,008 (all) | 123,299–154,405 |
+| `sample` p95 | 29.0–39.1 | 26.5–33.8 |
+| `sample` left | 74,777–80,726 | 52,815–65,051 |
+| `miss` p95 | 21.2–23.4 | 22.9–29.3 |
+| `face` p95 | 4.5–4.7 | 12.9–14.1 |
+
+- **The median frame gains, the worst does not.** GPU p50 falls by a third, p95 stands.
+  `beam`'s p95 rose: 39–48% of its nodes are left, every write to the pyramid is in that
+  pass, and a frame that meets many new nodes pays both passes.
+- **`face` went from 4.6 to 13.** Not traced.
+- **It draws**; no view moved unasked in these windows (16 u, polar 60).
+
+The picture against `d25f5b631`, on the S23, at rest, sky fixed, two runs of each
+(`tools/shotcmp.py`, the companion left out):
+
+| | Differ | Over 2 | Over 8 | Over 32 | Mean |
+| --- | --- | --- | --- | --- | --- |
+| One run, two frames | 0.027% | 0.027% | 0.025% | 0.019% | 0.023 |
+| `8ac7315b1`, run a / run b | 37.6% | 1.86% | 0.15% | 0.010% | 0.48 |
+| `d25f5b631` b / `8ac7315b1` b | 36.2% | 1.90% | 0.10% | 0.013% | 0.48 |
+| `d25f5b631` a / `d25f5b631` b | 33.4% | 4.47% | 3.78% | 3.05% | 3.89 |
+| `d25f5b631` a / `8ac7315b1` a | 42.0% | 5.90% | 3.83% | 3.04% | 4.02 |
+
+`d25f5b631`'s run b differs from the hand build as little as the hand build's two runs
+differ from each other. Its run a differs from everything by the same amount, over the
+top of the picture: not the hand walk's, and not traced. At one place, shadows off.
+Ray by ray is still unchecked.
+
+### Why rays are left
+
+`8ac7315b1`, instrumented in a scratch tree (`tools/left-instrument.patch`, none of it
+on the branch): at the node a ray first stopped on, the hand pass records the node and
+why no slot served it. `tools/left.mjs` reads that and the pyramid on two consecutive
+frames, while the camera circles: 10 frames on the S23, 6 on the Mac
+(`reports/left-*.json`). The copies are 25 MB and slow what they read; only counts are
+taken from them.
+
+| | Left rays | Distinct first stops, summed by frame | Rays a node | Other zooms | Absent, room in the bucket | Absent, bucket full |
+| --- | --- | --- | --- | --- | --- | --- |
+| S23 `beam` | 10,495 | 366 | 28.7 | 5,281 | 5,207 | 7 |
+| S23 `sample` | 9,341 | 958 | 9.8 | 444 | 8,790 | 107 |
+| S23 `miss` | 1,894 | 131 | 14.5 | 72 | 1,802 | 20 |
+| Mac `beam` | 1,547 | 144 | 10.7 | 1,365 | 182 | 0 |
+| Mac `sample` | 1,239 | 181 | 6.8 | 51 | 1,183 | 5 |
+| Mac `miss` | 617 | 44 | 14.0 | 24 | 593 | 0 |
+
+- **Few nodes hold many rays**: 10 to 29 a node. Asking each once is worth weighing.
+  These are first stops only: a ray served at one may stop again deeper, so this bounds
+  one round of a queue, not all of them.
+- **`beam` is half zooms changed.** The node is kept, but at other asked zooms: half of
+  the left beams on the S23, 88% on the Mac, mostly at zooms 22–24, the nodes near the
+  eye. `sample` and `miss` are nearly all nodes never asked.
+- **Neither forgetting nor eviction.** Of 15,933 absent on the S23, 98 were held the
+  frame before, under any zooms, and 134 met a full bucket.
+- **The rays come in bursts.** On the S23 one frame of the ten left 5,122 beams to 115
+  nodes, and two left none. No reasons were read for a frame's GPU time against its
+  count, so the tail's tie to these bursts is a reading.
+
+`face` at `8ac7315b1`: `boxes a cast` is 4,216–4,467 against `e7757099f`'s 4,587–5,209,
+so its cost of 13 against 4.6 ms is not more boxes. Its hits and asks were not counted.
+
+### A coarser `far` taken for the same `near`
+
+`2a9b235f3`: the hand walk takes a slot held from a coarser `far` to the same `near`;
+`beam_cs` keeps the exact key (`reports/s23-rekey.json`). The S23, a 6 s turn, four
+windows, against `8ac7315b1`:
+
+| | `8ac7315b1` | `2a9b235f3` |
+| --- | --- | --- |
+| `beam` left, nodes a cast | 123,299–154,405 | 121,105–135,362 |
+| `beam` p95 | 43.3–46.9 | 43.2–48.8 |
+| `face` p95 | 12.9–14.1 | 4.6–5.6 |
+| fps | 18.2–21.5 | 18.4–21.2 |
+| GPU p50, ms | 29.8–39.1 | 32.4–40.3 |
+| GPU p95, ms | 107–129 | 95–129 |
+| interval p95, ms | 186–233 | 175–225 |
+| `world` p95 | 8.7 | 10.0–11.5 |
+
+- **`beam` did not move.** How many of the "other zooms" differ in `far` alone was not
+  counted.
+- **`face` is back at its old value**, with no fewer left beams. Not traced.
+
+The picture, on the S23, at rest, sky fixed, the origin's storage cleared before each
+load and the camera logged, at the default view and two views zoomed out (93 u, 541 u),
+two runs of each commit. Mean difference of a pixel, the companion left out:
+
+| | Default | 93 u | 541 u |
+| --- | --- | --- | --- |
+| `d25f5b631`, run a / run b | 1.68 | 4.13 | 2.08 |
+| `8ac7315b1`, run a / run b | 6.69 | 5.00 | 4.60 |
+| `d25f5b631` a / `2a9b235f3` a | 1.87 | 0.66 | 0.42 |
+| `d25f5b631` b / `2a9b235f3` a | 0.66 | 4.06 | 2.14 |
+| `8ac7315b1` b / `2a9b235f3` a | 2.27 | 1.13 | 1.31 |
+
+The commits differ no more than a commit differs from itself between runs. That
+noise is large, from what is still arriving, the toast and the companion, and would
+hide a small change. By eye the three are the same, with no darker or bluer picture.
+Not compared: a moving view at a boundary of detail, or `2a9b235f3`'s run b.
+
+**A camera moved with no input.** `2a9b235f3`'s run b opened at 20.2 u, polar 56.3,
+azimuth -15.5, its storage cleared, where the five others opened at 16 u, 60, 0. The
+Mac at `8ac7315b1` once did the like (40.2 u, polar 27). Not traced; not seen at
+`d25f5b631` in 2 runs, too few to say.
+
+Stored state had spoiled the runs before it: a view is kept by origin, and a run opens
+where the last left. Two of those six sat on `pivot -` for 180 s, one each at
+`2a9b235f3` and `d25f5b631`; none of the six from cleared storage did.
+
 ## What runs by what
 
 `beam` and `sample` dispatch on `Grid::corners` and `Grid::samples`
@@ -418,6 +542,8 @@ long task (`tools/raf.mjs`).
 - `main` past `d25f5b631`: at `69ff22b9a` the Mac's page drew nothing, its
   `FS_MOUNT` refused with `EINVAL`. That commit changes `spec/spec/bake/publication.json`,
   so the delivery data may lag it. The cause was not traced.
+- Clear the origin's storage before a load and log the camera: a view is kept by
+  origin. Compare pictures only where the views match.
 - A grant by `Browser.grantPermissions` ends with the session that made it: closed,
   the page sits on "Locating…", `stood`, `pivot -`, with no error. Keep it open.
 - The S23 loses its device on a pass too long, with no shader error. `visit.mjs`

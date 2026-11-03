@@ -1,0 +1,100 @@
+diff --git a/rust/client/render/src/frame/shader/beam_hit.wgsl b/rust/client/render/src/frame/shader/beam_hit.wgsl
+index 24a9f2f02..e03514125 100644
+--- a/rust/client/render/src/frame/shader/beam_hit.wgsl
++++ b/rust/client/render/src/frame/shader/beam_hit.wgsl
+@@ -21,6 +21,8 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+   let base = idx * LINE_WORDS;
+   let w = walk(vec2<f32>(tx, ty), vec2<u32>(0u), base);
+   if (w.ends == 0u || w.ends == 4u) {
++    if (w.ends == 0u) { dbg[4] = 6u; }
++    dbg_put(idx);
+     let place = atomicAdd(&left[3], 1u);
+     if (place % 64u == 0u) {
+       atomicAdd(&left[0], 1u);
+diff --git a/rust/client/render/src/frame/shader/miss_hit.wgsl b/rust/client/render/src/frame/shader/miss_hit.wgsl
+index 6438523b1..992a7cefe 100644
+--- a/rust/client/render/src/frame/shader/miss_hit.wgsl
++++ b/rust/client/render/src/frame/shader/miss_hit.wgsl
+@@ -59,6 +59,8 @@ fn miss_hit_cs(
+   );
+   let w = walk(tan_at, cell, NONE);
+   if (w.ends == 0u || w.ends == 4u) {
++    if (w.ends == 0u) { dbg[4] = 6u; }
++    if (k < 213000u) { dbg_put(120000u + k); }
+     let place = atomicAdd(&left[3], 1u);
+     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
+       atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);
+diff --git a/rust/client/render/src/frame/shader/sample_hit.wgsl b/rust/client/render/src/frame/shader/sample_hit.wgsl
+index 08fbb1e43..fb3b8d715 100644
+--- a/rust/client/render/src/frame/shader/sample_hit.wgsl
++++ b/rust/client/render/src/frame/shader/sample_hit.wgsl
+@@ -24,6 +24,8 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+   );
+   let w = walk(vec2<f32>(tx, ty), cell, NONE);
+   if (w.ends == 0u || w.ends == 4u) {
++    if (w.ends == 0u) { dbg[4] = 6u; }
++    dbg_put(20000u + id.y * samples.x + id.x);
+     let place = atomicAdd(&left[3], 1u);
+     if (place % 64u == 0u) {
+       atomicAdd(&left[0], 1u);
+diff --git a/rust/client/render/src/frame/shader/walk.wgsl b/rust/client/render/src/frame/shader/walk.wgsl
+index 2cb522015..e84193aa6 100644
+--- a/rust/client/render/src/frame/shader/walk.wgsl
++++ b/rust/client/render/src/frame/shader/walk.wgsl
+@@ -78,6 +78,34 @@ fn keeps(zoom: u32, c: vec3<i32>) -> bool {
+ }
+ 
+ /// The word of the slot holding the node at the zooms asked; `NONE` where none does.
++var<private> dbg: array<u32, 7>;
++const DBG_WORDS = 2000000u;
++fn dbg_reason(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
++  if (!keeps(zoom, c)) { return 1u; }
++  let first = bucket_of(zoom, c);
++  var full = true; var claimed = false; var same = false;
++  for (var k = 0u; k < BUCKET; k += 1u) {
++    let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
++    let held = pyramid[w];
++    if (held == 0u) { full = false; }
++    else if (held == CLAIMED) { claimed = true; }
++    else if (pyramid[w + W_NODE] == zoom && pyramid[w + W_NODE + 1u] == u32(c.x)
++      && pyramid[w + W_NODE + 2u] == u32(c.y) && pyramid[w + W_NODE + 3u] == u32(c.z)) { same = true; }
++  }
++  if (same) { return 3u; }
++  if (claimed) { return 5u; }
++  if (full) { return 4u; }
++  return 2u;
++}
++fn dbg_put(i: u32) {
++  let n = arrayLength(&beams);
++  let k = n - DBG_WORDS + i * 6u;
++  beams[k] = pyramid[0] + 1u;
++  beams[k + 1u] = dbg[0]; beams[k + 2u] = dbg[1]; beams[k + 3u] = dbg[2]; beams[k + 4u] = dbg[3];
++  beams[k + 5u] = dbg[4] | (dbg[5] << 8u) | (dbg[6] << 16u);
++  beams[n - 1u] = 0xDB6DB6DBu;
++}
++
+ fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
+   if (!keeps(zoom, c)) {
+     return NONE;
+@@ -271,6 +299,8 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
+       let w = slot_of(zoom, c, asked_far, asked_near);
+       if (w == NONE) {
+         ends = 4u;
++        dbg[0] = zoom; dbg[1] = u32(c.x); dbg[2] = u32(c.y); dbg[3] = u32(c.z);
++        dbg[4] = dbg_reason(zoom, c, asked_far, asked_near); dbg[5] = asked_far; dbg[6] = asked_near;
+         break;
+       }
+       visits += 1u;
+diff --git a/rust/client/render/src/gpu/ray/cast.rs b/rust/client/render/src/gpu/ray/cast.rs
+index 9dd679844..08dee462a 100644
+--- a/rust/client/render/src/gpu/ray/cast.rs
++++ b/rust/client/render/src/gpu/ray/cast.rs
+@@ -663,7 +663,7 @@ impl RaysPass {
+         c.size = rays.1;
+         // The room for the grid's words, made again only where they outgrow
+         // it.
+-        let need = c.grid.size();
++        let need = c.grid.size() + 2_000_000;
+         if need > c.beam_room {
+             if c.beams != 0 {
+                 release(c.beams);
