@@ -116,7 +116,7 @@ fn main() {
                     c.iter().all(|&v| v == 0 || v == 1),
                     "a corner's a 0 or a 1 a lane"
                 );
-                c[0] as u32 | (c[1] as u32) << 1 | (c[2] as u32) << 2
+                c[0] | c[1] << 1 | c[2] << 2
             })
             .collect();
         let corners: Vec<String> = bits
