@@ -5,9 +5,17 @@
 
 import { create } from "zustand";
 
-import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { ground, object } from "@/shell/catalog/asset/cube.spec.ts";
-import { allCubes, type Cube, decorIds } from "@/shell/catalog/asset/mod.ts";
+import { KIND } from "@/shell/catalog/asset/id.spec.ts";
+import {
+  allCubes,
+  type AssetId,
+  type Cube,
+  decorIds,
+  kindOf,
+  MARKER,
+} from "@/shell/catalog/asset/mod.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_snapshot } from "@/port/shell.ts";
 import { kernel_tool } from "@/port/edit.ts";
@@ -25,41 +33,27 @@ interface ChatLine {
 const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
-// The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-export type RecentPick =
-  | { tool: typeof ActiveTool.Cube; cube: Cube }
-  | {
-      tool: typeof ActiveTool.Decor;
-      kind: u16;
-    }
-  | { tool: typeof ActiveTool.Marker };
-
-function isSamePick(a: RecentPick, b: RecentPick): boolean {
-  if (a.tool === ActiveTool.Cube) {
-    return b.tool === ActiveTool.Cube && a.cube === b.cube;
+/** The tool that places it. */
+export function toolOf(id: AssetId): ActiveTool {
+  switch (kindOf(id)) {
+    case KIND.decor:
+      return ActiveTool.Decor;
+    case KIND.marker:
+      return ActiveTool.Marker;
+    default:
+      return ActiveTool.Cube;
   }
-  if (a.tool === ActiveTool.Decor) {
-    return b.tool === ActiveTool.Decor && a.kind === b.kind;
-  }
-  return b.tool === ActiveTool.Marker;
 }
 
 // A stored pick may name something the catalog no longer gives out.
-function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Cube) return allCubes.includes(pick.cube);
-  if (pick.tool === ActiveTool.Decor) return decorIds.includes(pick.kind);
-  return pick.tool === ActiveTool.Marker;
+function isKnownPick(id: AssetId): boolean {
+  return id === MARKER || decorIds.includes(id) || allCubes.includes(id);
 }
 
 // Only a new pick joins, at the front.
-function touchRecent(
-  recentPicks: readonly RecentPick[],
-  pick: RecentPick,
-): RecentPick[] {
-  if (recentPicks.some((p) => isSamePick(p, pick))) {
-    return recentPicks as RecentPick[];
-  }
-  return [pick, ...recentPicks].slice(0, RECENT_PICKS);
+function touchRecent(recentPicks: readonly AssetId[], id: AssetId): AssetId[] {
+  if (recentPicks.includes(id)) return recentPicks as AssetId[];
+  return [id, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
 /** One of DockMode's. */
@@ -68,8 +62,8 @@ export { DockMode };
 
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface DockState {
-  // Advanced only by selectCube/selectDecor/selectMarker, which also switch the tool.
-  recentPicks: RecentPick[];
+  // The hotbar's MRU list; advanced only by selectAsset, which also switches the tool.
+  recentPicks: AssetId[];
   chatLines: ChatLine[];
   /** What the dock is for: picking, at rest, or typing, which the keyboard follows. */
   dockMode: DockMode;
@@ -85,15 +79,15 @@ interface SwatchFlash {
 }
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
-const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Cube, cube: object.white },
-  { tool: ActiveTool.Cube, cube: ground.land },
-  { tool: ActiveTool.Cube, cube: ground.water },
-  { tool: ActiveTool.Cube, cube: ground.building },
-  { tool: ActiveTool.Cube, cube: ground.residential_road },
-  { tool: ActiveTool.Cube, cube: object.red },
-  { tool: ActiveTool.Cube, cube: object.blue },
-  { tool: ActiveTool.Decor, kind: decorIds[0] },
+const SEED: readonly AssetId[] = [
+  object.white,
+  ground.land,
+  ground.water,
+  ground.building,
+  ground.residential_road,
+  object.red,
+  object.blue,
+  decorIds[0],
 ];
 
 /** The hotbar's slots, always full: the seed fills it, and a new pick pushes the last out. */
@@ -103,7 +97,7 @@ export const RECENT_PICKS = SEED.length;
 const STORAGE_KEY = "pxl:ui";
 
 interface Stored {
-  hotbar: RecentPick[];
+  hotbar: AssetId[];
 }
 
 function load(): Stored {
@@ -115,13 +109,13 @@ function load(): Stored {
   }
   const picks = Array.isArray(stored?.hotbar)
     ? stored.hotbar
-        .filter((p) => typeof p === "object" && p !== null && isKnownPick(p))
+        .filter((p) => typeof p === "number" && isKnownPick(p))
         .slice(0, RECENT_PICKS)
     : [];
   // Padded from the seed.
   for (const seed of SEED) {
     if (picks.length >= RECENT_PICKS) break;
-    if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
+    if (!picks.includes(seed)) picks.push(seed);
   }
   return { hotbar: picks };
 }
@@ -158,7 +152,7 @@ store.subscribe((s, prev) => {
   if (s.recentPicks !== prev.recentPicks) save(s);
 });
 
-export function useRecentPicks(): readonly RecentPick[] {
+export function useRecentPicks(): readonly AssetId[] {
   return store((s) => s.recentPicks);
 }
 
@@ -175,7 +169,7 @@ export function useSwatchFlash(): SwatchFlash {
 }
 
 /** The hotbar's pick in `slot`, as it is now. */
-export function recentPick(slot: number): RecentPick {
+export function recentPick(slot: number): AssetId {
   return store.getState().recentPicks[slot];
 }
 
@@ -193,23 +187,10 @@ export function watchDockMode(
   });
 }
 
-function touch(pick: RecentPick): void {
-  store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, pick) }));
-}
-
-export function selectCube(cube: Cube): void {
-  kernel_tool(ActiveTool.Cube, cube, kernel_snapshot().tool.tier);
-  touch({ tool: ActiveTool.Cube, cube });
-}
-
-export function selectDecor(kind: u16): void {
-  kernel_tool(ActiveTool.Decor, kind, kernel_snapshot().tool.tier);
-  touch({ tool: ActiveTool.Decor, kind });
-}
-
-export function selectMarker(): void {
-  selectTool(ActiveTool.Marker);
-  touch({ tool: ActiveTool.Marker });
+/** Holds it, the tool that places it with it, and puts it on the hotbar. */
+export function selectAsset(id: AssetId): void {
+  kernel_tool(toolOf(id), id, kernel_snapshot().tool.tier);
+  store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
 }
 
 export function setDockMode(mode: DockMode): void {
@@ -245,14 +226,17 @@ export function appendChatLine(text: string): void {
   kernel_chat(text);
 }
 
-export function useInHand(pick: RecentPick): boolean {
+export function useInHand(id: AssetId): boolean {
   return useKernel(({ tool: h }) => {
-    if (pick.tool === ActiveTool.Cube) {
-      return h.active === ActiveTool.Cube && h.cube === pick.cube;
+    switch (h.active) {
+      case ActiveTool.Cube:
+        return h.cube === id;
+      case ActiveTool.Decor:
+        return h.decor === id;
+      case ActiveTool.Marker:
+        return id === MARKER;
+      default:
+        return false;
     }
-    if (pick.tool === ActiveTool.Decor) {
-      return h.active === ActiveTool.Decor && h.decor === pick.kind;
-    }
-    return h.active === ActiveTool.Marker;
   });
 }

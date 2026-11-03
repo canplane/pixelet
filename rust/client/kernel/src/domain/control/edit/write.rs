@@ -259,8 +259,8 @@ pub fn pending_step() -> RenderEdits {
     let hovered = hover.coord;
     let active_tool = ui.active_tool;
     let world = World::now();
-    let object = hover.object_at.and_then(|at| world.entry_at(at));
-    let scattered = hover.scattered_decor.is_some();
+    let object = hover.object_at().and_then(|at| world.entry_at(at));
+    let scattered = hover.scattered_decor().is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
     let asset = ui.asset();
     let zoom = match (asset, &object) {
@@ -298,7 +298,7 @@ pub fn pending_step() -> RenderEdits {
             .filter(|_| digging)
             .map(|h| EntryAt::holding(zoom, &h)),
         scattered_cell: hover
-            .scattered_decor
+            .scattered_decor()
             .filter(|_| active_tool == ActiveTool::Eraser)
             .and_then(|s| s.generated_in()),
     };

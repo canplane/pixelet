@@ -27,15 +27,20 @@ import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import {
   selectTool,
-  selectCube,
-  selectDecor,
-  selectMarker,
+  selectAsset,
+  toolOf,
   useInHand,
   useRecentPicks,
   useSwatchFlash,
 } from "./store.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { type Cube, cubeLabel, decorLabel } from "@/shell/catalog/asset/mod.ts";
+import {
+  type AssetId,
+  type Cube,
+  cubeLabel,
+  decorLabel,
+  MARKER,
+} from "@/shell/catalog/asset/mod.ts";
 import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 import {
   CubeSwatch,
@@ -138,7 +143,7 @@ function SwatchButton({
   cube: Cube;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  const selected = useInHand({ tool: ActiveTool.Cube, cube });
+  const selected = useInHand(cube);
   const ref = useRef<View | null>(null);
   const swatchFlash = useSwatchFlash();
   useEffect(() => {
@@ -149,9 +154,9 @@ function SwatchButton({
 
   const handlers = useSizeGesture(ref, {
     ...gesture,
-    press: () => selectCube(cube),
+    press: () => selectAsset(cube),
     longPress: () => {
-      selectCube(cube);
+      selectAsset(cube);
       gesture.longPress();
     },
   });
@@ -177,11 +182,11 @@ function SwatchButton({
 }
 
 function DecorIconButton({ kind }: { kind: u8 }) {
-  const active = useInHand({ tool: ActiveTool.Decor, kind });
+  const active = useInHand(kind);
 
   return (
     <Pressable
-      onPress={() => selectDecor(kind)}
+      onPress={() => selectAsset(kind)}
       accessibilityRole="button"
       accessibilityLabel={decorLabel(kind)}
       style={styles.slot}
@@ -204,12 +209,30 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
+/** A hotbar slot: the button of what it holds. */
+function PickButton({
+  id,
+  gesture,
+}: {
+  id: AssetId;
+  gesture: Omit<SizeGesture, "press">;
+}) {
+  switch (toolOf(id)) {
+    case ActiveTool.Decor:
+      return <DecorIconButton kind={id} />;
+    case ActiveTool.Marker:
+      return <MarkerButton />;
+    default:
+      return <SwatchButton cube={id} gesture={gesture} />;
+  }
+}
+
 function MarkerButton() {
-  const active = useInHand({ tool: ActiveTool.Marker });
+  const active = useInHand(MARKER);
 
   return (
     <Pressable
-      onPress={selectMarker}
+      onPress={() => selectAsset(MARKER)}
       accessibilityRole="button"
       accessibilityLabel={PIN_LABEL}
       style={styles.slot}
@@ -306,15 +329,9 @@ export function Strip({
         style={styles.picks}
         contentContainerStyle={styles.picksContent}
       >
-        {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Cube ? (
-            <SwatchButton key={pick.cube} cube={pick.cube} gesture={gesture} />
-          ) : pick.tool === ActiveTool.Decor ? (
-            <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-          ) : (
-            <MarkerButton key="marker" />
-          ),
-        )}
+        {recentPicks.map((id) => (
+          <PickButton key={id} id={id} gesture={gesture} />
+        ))}
       </ScrollView>
 
       <View style={styles.divider} />

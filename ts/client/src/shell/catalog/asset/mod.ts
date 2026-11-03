@@ -15,6 +15,18 @@ import {
   type CubeSection,
 } from "./cube.spec.ts";
 import { decor, DECOR_LABEL, DECORS } from "./decor.spec.ts";
+import { KIND, SHAPE_BITS } from "./id.spec.ts";
+
+/** An asset by its number in the catalog's one value space: `kind << SHAPE_BITS | shape`. */
+export type AssetId = u16;
+
+/** The one marker a placement puts up. */
+export const MARKER: AssetId = KIND.marker << SHAPE_BITS;
+
+/** An asset's kind, as its number says. */
+export function kindOf(id: AssetId): number {
+  return id >> SHAPE_BITS;
+}
 
 /** A cube by its number in the catalog's one value space: a ground palette entry or a placed color. */
 export type Cube = u16;

@@ -21,9 +21,8 @@ import {
   selectTool,
   RECENT_PICKS,
   recentPick,
-  selectCube,
-  selectDecor,
-  selectMarker,
+  selectAsset,
+  toolOf,
   setDockMode,
   stepSize,
   switchDockMode,
@@ -66,11 +65,9 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const pick = recentPick(slot);
-  if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
-  if (pick.tool === ActiveTool.Marker) return selectMarker();
-  selectCube(pick.cube);
-  flashSwatch(pick.cube, false);
+  const id = recentPick(slot);
+  selectAsset(id);
+  if (toolOf(id) === ActiveTool.Cube) flashSwatch(id, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */

@@ -6,22 +6,18 @@ import { StyleSheet, View } from "react-native";
 import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import {
   allCubes,
+  type AssetId,
   type Cube,
   cubeLabel,
   cubeSection,
   decorIds,
   decorLabel,
   decorSection,
+  MARKER,
 } from "@/shell/catalog/asset/mod.ts";
 import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 
-import {
-  selectCube,
-  selectDecor,
-  selectMarker,
-  useInHand,
-} from "@/shell/world/dock/store.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
+import { selectAsset, useInHand } from "@/shell/world/dock/store.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
 import { Tabbed } from "@/shell/ui/tabbed.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
@@ -30,7 +26,6 @@ import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPicker } from "@/shell/drawer/character/picker.tsx";
 import { CubeSwatch, decorGlyph } from "@/shell/catalog/asset/swatch.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { useKernel } from "@/shell/store/watch.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 
@@ -63,7 +58,7 @@ function CubeItem({
   cell: f64;
   onPick: (cube: Cube) => void;
 }) {
-  const active = useInHand({ tool: ActiveTool.Cube, cube });
+  const active = useInHand(cube);
 
   return (
     <Item
@@ -91,7 +86,7 @@ function DecorItem({
   cell: f64;
   onPick: (kind: u8) => void;
 }) {
-  const active = useInHand({ tool: ActiveTool.Decor, kind });
+  const active = useInHand(kind);
 
   return (
     <Item
@@ -119,7 +114,7 @@ function DecorItem({
 
 /** A temporary way in: one marker, its words not kept yet. */
 function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
-  const active = useKernel(({ tool: h }) => h.active === ActiveTool.Marker);
+  const active = useInHand(MARKER);
 
   return (
     <Item label={PIN_LABEL} active={active} cell={cell} onPress={onPick}>
@@ -136,27 +131,17 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   );
 }
 
-const CUBE = 0;
-const DECOR = 1;
-const MARKER = 2;
-const CHARACTER = 3;
+const CUBE_TAB = 0;
+const DECOR_TAB = 1;
+const MARKER_TAB = 2;
+const CHARACTER_TAB = 3;
 
 /** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 
-  function pickCube(cube: Cube): void {
-    selectCube(cube);
-    onClose();
-  }
-
-  function pickDecor(kind: u8): void {
-    selectDecor(kind);
-    onClose();
-  }
-
-  function pickMarker(): void {
-    selectMarker();
+  function pick(id: AssetId): void {
+    selectAsset(id);
     onClose();
   }
 
@@ -166,15 +151,15 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
         <Tabbed
           onClose={onClose}
           tabs={[
-            { value: CUBE, label: t("drawer.tabs.cube") },
-            { value: DECOR, label: t("drawer.tabs.decor") },
-            { value: MARKER, label: t("drawer.tabs.marker") },
-            { value: CHARACTER, label: t("drawer.tabs.character") },
+            { value: CUBE_TAB, label: t("drawer.tabs.cube") },
+            { value: DECOR_TAB, label: t("drawer.tabs.decor") },
+            { value: MARKER_TAB, label: t("drawer.tabs.marker") },
+            { value: CHARACTER_TAB, label: t("drawer.tabs.character") },
           ]}
         >
           {(tab) => (
             <>
-              {tab === CUBE &&
+              {tab === CUBE_TAB &&
                 [...SECTIONS].map(([section, cubes]) => (
                   <Grid
                     key={section}
@@ -190,14 +175,14 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                           key={cube}
                           cube={cube}
                           cell={cell}
-                          onPick={pickCube}
+                          onPick={pick}
                         />
                       ))
                     }
                   </Grid>
                 ))}
 
-              {tab === DECOR &&
+              {tab === DECOR_TAB &&
                 [...DECOR_SECTIONS].map(([section, kinds]) => (
                   <Grid
                     key={section}
@@ -213,21 +198,23 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                           key={kind}
                           kind={kind}
                           cell={cell}
-                          onPick={pickDecor}
+                          onPick={pick}
                         />
                       ))
                     }
                   </Grid>
                 ))}
-              {tab === MARKER && (
+              {tab === MARKER_TAB && (
                 <Grid
                   head={<SectionTitle>{t("drawer.sections.pin")}</SectionTitle>}
                 >
-                  {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
+                  {(cell) => (
+                    <MarkerItem cell={cell} onPick={() => pick(MARKER)} />
+                  )}
                 </Grid>
               )}
 
-              {tab === CHARACTER && <CharacterPicker />}
+              {tab === CHARACTER_TAB && <CharacterPicker />}
             </>
           )}
         </Tabbed>

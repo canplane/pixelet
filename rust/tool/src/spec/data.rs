@@ -86,7 +86,7 @@ const DATA_SPECS: [DataSpec; 23] = [
     DataSpec {
         json: "spec/spec/asset/id.json",
         uses: &[],
-        ts: None,
+        ts: Some("ts/client/src/shell/catalog/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         rs_also: &[],
         module: Some("id"),
