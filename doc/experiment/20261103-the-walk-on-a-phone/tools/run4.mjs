@@ -13,9 +13,9 @@ else{dir=fs.mkdtempSync(path.join(os.tmpdir(),'pxl-mac-'));chrome=spawn('/Applic
 let tabs;for(let i=0;i<30;i++){await wait(1000);try{tabs=await (await fetch(`http://localhost:${PORT}/json`)).json();if(tabs.some(x=>x.type==='page'))break}catch{}}
 const t=D==='s23'?(tabs.find(x=>x.type==='page'&&x.url==='about:blank')??tabs.find(x=>x.type==='page'&&x.url.startsWith(O))):tabs.find(x=>x.type==='page');
 if(!t)throw new Error('no blank tab');
-const v=await (await fetch(`http://localhost:${PORT}/json/version`)).json();const b=client(v.webSocketDebuggerUrl);await b.open;await b.call('Browser.grantPermissions',{origin:O,permissions:['geolocation']});b.close();
+const v=await (await fetch(`http://localhost:${PORT}/json/version`)).json();const b=client(v.webSocketDebuggerUrl);await b.open;const gr=await b.call('Browser.grantPermissions',{origin:O,permissions:['geolocation']});log('grant',gr.error||'ok');
 const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');
-if(D==='mac')await c.call('Emulation.setDeviceMetricsOverride',{width:540,height:984,deviceScaleFactor:0,mobile:false});
+if(D==='mac'){const dpr=await ev(c,'devicePixelRatio',5000);await c.call('Emulation.setDeviceMetricsOverride',{width:Math.round(1080/dpr),height:Math.round(1968/dpr),deviceScaleFactor:0,mobile:false});log('mac dpr',dpr)}
 await c.call('Emulation.setGeolocationOverride',{latitude:38.1193,longitude:128.4656,accuracy:10});
 await c.call('Page.bringToFront');await c.call('Page.navigate',{url:O+'/'});
 await wait(1500);await c.call('Page.bringToFront');log('hidden',await ev(c,'document.hidden',5000));
@@ -30,8 +30,9 @@ await wait(15000);
 const P='/@fs'+W;
 log('page',await ev(c,`(async()=>{window.__wl=await navigator.wakeLock.request('screen').catch(()=>0);const S=await import('${P}/port/setting.ts');const Q=await import('${P}/shell/setting/schema.ts');const F=await import('${P}/port/perf.ts');window.__m={set:S.kernel_setting,SET:Q.SETTING,start:F.kernel_perf_start};const cv=document.querySelector('canvas');const a=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});return {vw:innerWidth,vh:innerHeight,dpr:devicePixelRatio,cv:[cv.width,cv.height],gpu:[a.info.vendor,a.info.architecture],ts:a.features.has('timestamp-query')}})()`));
 await ev(c,`__m.set(__m.SET.perf.key,1)`);await wait(1000);await ev(c,`__m.start()`);await wait(5000);
-const live=await ev(c,`(()=>{const f=pxl.perf.read().frames||{};return {read:f.gpu_read,n:f.n}})()`);log('renderer live',live);
-if(!(live.read>0)){log('invalid','no GPU read: the world is not drawn');c.close();chrome?.kill();process.exit(2)}
+let live;const t1=Date.now();for(let i=0;i<Number(process.env.WAIT||180);i++){live=await ev(c,`(()=>{const r=pxl.perf.report();const v=(r.match(/view +pivot ([^ ]+)/)||[])[1];const f=pxl.perf.read().frames||{};return {read:f.gpu_read,n:f.n,pivot:v||'-'}})()`);if(live.read>0&&live.pivot!=='-')break;if(i%30===0)await ev(c,`__m.start()`);await wait(1000)}
+log('renderer live',{...live,waited_s:Math.round((Date.now()-t1)/1000)});
+if(!(live.read>0&&live.pivot!=='-')){log('geo',await ev(c,`(async()=>{const st=(await navigator.permissions.query({name:'geolocation'})).state;const r=await new Promise(res=>navigator.geolocation.getCurrentPosition(p=>res(['ok',p.coords.latitude]),e=>res(['err',e.code,e.message]),{timeout:6000}));return {st,r}})()`,12000));log('invalid',await ev(c,`JSON.stringify({text:document.body.innerText.slice(0,200),bad:performance.getEntriesByType('resource').filter(e=>e.responseStatus>=400||e.responseStatus===0).slice(-12).map(e=>[new URL(e.name).pathname.slice(-70),e.responseStatus]),n:performance.getEntriesByType('resource').length})`));c.close();chrome?.kill();process.exit(2)}
 const motion=`(async(secs,turn)=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();const [x,y]=[r.left+r.width/2,r.top+r.height/2];const p=(t,a,b)=>cv.dispatchEvent(new PointerEvent(t,{pointerId:1,pointerType:'mouse',isPrimary:true,clientX:a[0],clientY:a[1],buttons:b,button:2,bubbles:true,cancelable:true}));const on=a=>[x+100*Math.cos(a),y+100*Math.sin(a)];p('pointerdown',on(-Math.PI/2),2);const t0=performance.now();const s=setInterval(()=>p('pointermove',on(-Math.PI/2+(performance.now()-t0)/1000/turn*2*Math.PI),2),16);await new Promise(r=>setTimeout(r,secs*1000));clearInterval(s);p('pointerup',on(-Math.PI/2),0);return 1})`;
 const set=(k,val)=>ev(c,`__m.set(__m.SET.${k}.key,${val})`);
 await set('perf',1);await set('ray_counts',0);await set('shadows',0);await set('res','__m.SET.res.options.fixed');await wait(4000);
@@ -48,6 +49,6 @@ log('drive time',await ev(c,`pxl.perf.drive(25)`,240000));log('therm drive',ther
 await set('ray_counts',1);await wait(2000);
 await ev(c,`__m.start()`);await ev(c,motion+`(15,4)`,240000);log('drive pose counts',await ev(c,`pxl.perf.report()`));
 await set('ray_counts',0);
-log('done',T());
+log('done',T());b.close();
 if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();for(const x of (await (await fetch(`http://localhost:${PORT}/json`)).json()).filter(x=>x.type==='page'&&x.url==='about:blank'&&x.id!==t.id)){await fetch(`http://localhost:${PORT}/json/close/${x.id}`);log('closed a blank tab',1)}execSync(`${A} reverse --remove tcp:5174`);execSync(`${A} forward --remove tcp:9333`)}
 else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}

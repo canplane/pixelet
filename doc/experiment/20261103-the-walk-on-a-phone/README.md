@@ -114,26 +114,119 @@ device at 2,000 of them:
 | 1,000 | 610 | 1.09 |
 | 2,000 | 4,998 | 2.13 |
 
-- **Code that never runs is the largest cost seen.** On the Mac it grows with the
-  locals, near zero-init's shape. On the S23 it falls off a cliff between 125 and
-  500, 400 times, for code no thread enters. A reading: past what fits in registers
-  the driver keeps them in memory. `sample.gen.wgsl` holds 2,208 function-scope
-  `var`, every entry inlined for Adreno. The Mac's 2.13 ns at 2,000 is near the real
-  `sample`'s 1.8 ns a node; the S23's 434 is past its 111, so these locals, all live
-  across the loop, are no model of those in `sample`.
 - **The 33-entry stack costs 20 ns; 8 entries cost none.** The indexing, not the
-  fill, and it does not grow step by step. It is the same on the keys' split.
+  fill.
 - **All-atomic loads are 6–19 times keys-only.** It moved between runs: 8.85 here,
   28.63 and, unwarmed, 10.3 in the runs before (`reports/visit-s23-first.json`), so
   it is no figure to hold, only its order. The two rows of random addresses are of
   that earlier run, the rest of the last.
-- **Nothing here reaches 111 ns but the cold code.** These do not add: atomic with
-  the 33-entry stack took 17.4 where plain with it took 21.4.
-- **One variant answered wrong.** With 500 locals and every load atomic, every
-  thread of the S23's read-back counted 0 hits of 14; the Mac's counted 14, and so
-  did every other S23 variant. It was read once. Not traced: a driver's fault or
-  something of this shader's. [What the S23 computes](../20261103-shaders-on-two-phones/README.md)
-  is already open.
+- These do not add: atomic with the 33-entry stack took 17.4 where plain with it
+  took 21.4.
+
+### Live words, not locals
+
+The locals above are live across the loop, each assigned in it and read after it;
+`sample`'s are not. `tools/live.py`, a structured backward liveness over the
+generated WGSL, counts function_1 at `d25f5b631`:
+
+| | Vars | At the walk's head | Peak, vars and lets |
+| --- | --- | --- | --- |
+| `sample` | 1,584 | 16 vars, 150 words (132 the stack), 83 lets | 301 words, line 8461 |
+| `miss` | 1,601 | 16 vars, 150 words, 86 lets | 304 words |
+| `beam` | 1,460 | 17 vars, 151 words, 85 lets | 327 words |
+
+A let counts a word here, whatever its type, so the words are a lower bound.
+
+The pass again, on a dispatch of 7×12, ns a visit, S23 and Mac
+(`reports/visit-*-ladder.json`), with locals of `sample`'s shape beside them: declared
+at the function's top, assigned and read inside the block that never runs, so none
+is live across anything:
+
+| Locals, live across the loop | S23 | Mac |
+| --- | --- | --- |
+| 50 | 0.65 | 0.57 |
+| 100 | 1.04 | 0.48 |
+| 125 | 1.09 | 0.48 |
+| 150 | 1.13 | 0.57 |
+| 175 | 4.88 | 0.52 |
+| 200 | refused: `VK_ERROR_UNKNOWN` | 0.52 |
+| 250 | 81–150 | 0.61 |
+| 300 | 102.5 | 0.57 |
+| 400 | 164.6 | 0.65 |
+| 500 | 242 | 0.70 |
+
+| Locals scoped to the block | S23 | Mac |
+| --- | --- | --- |
+| 100 | 0.48 | 0.39 |
+| 500 | 0.61 | 0.44 |
+| 1,500 | 0.65 | 0.35 |
+| 3,000 | 0.65 | 0.35 |
+| 6,000 | 0.65 | 0.35 |
+
+- **The count of locals costs nothing; live words do.** 6,000 scoped locals cost the
+  S23 nothing. Live across the loop, it holds to 150, rises at 175, refuses a
+  pipeline at 200 and is at 80–240 ns past it. A reading: what fits in registers.
+- **`sample`'s peak of 301 words lies past that cliff, and the synthetic at 300 takes
+  102.5 ns against the real 111.** A likeness, not a proof: the peak is one point in
+  the code, not the whole loop, and a let may hold more than a word.
+- **The same driver error as the shaders.** `VK_ERROR_UNKNOWN` in
+  `vkCreateComputePipelines` at 200 live words is what
+  [the shaders on two phones](../20261103-shaders-on-two-phones/README.md) met, there
+  without a cause in the WGSL.
+
+### What the S23 did to its table
+
+With every load atomic on a read-write binding, and 250 or more locals live, the
+S23's pass left the table changed, though the shader only loads. The whole table
+read back after `atomic_rw live 250`: 279 words of 6.3 million differ from what was
+written, none of them 0, the first at word 103,352. The Mac's table is untouched.
+
+From that pass on, in that device, every pass answers as if the table were empty,
+plain and read-only ones too: every thread's hits 0, its `a` 0. 279 words cannot
+do that, and the copy of the table still reads the rest whole. A word written by
+the queue reads back, so the read is sound. No error, the device not lost,
+timestamps running as before. It took a new device to come back.
+
+| | S23 | Mac |
+| --- | --- | --- |
+| Atomic, 125 live | right | right |
+| Atomic, 250, 500 or 1,000 live | wrong, and everything after | right |
+| Plain read-only, up to 500 live | right | right |
+| Atomic, up to 6,000 scoped | not read apart: they ran after the fault | right |
+
+Seen on each of the 6 runs that reached it. A plain read-write binding past
+the cliff, and whether the real page does this, were not tried. `sample` is an atomic
+read-write binding with a peak past that count, and that the page draws says no more
+than that its reads are not all lost. Not reported to anyone.
+
+## Step 1a: the short stack
+
+`05e8ae4a5` on the branch `walk-visit`: a walk with no line holds 8 entries where it
+held 33. `sample.gen.wgsl`: 2,201 `var`, peak 207 words where it was 301, 58 words at
+the walk's head where it was 150; `beam`, which keeps its 33, 311.
+
+The matched circle on the S23, the same dev build's profile, a cooler phone at the
+start (`reports/s23-step-1a.json`, against `reports/s23-matched.json`):
+
+| | `d25f5b631` | `05e8ae4a5` |
+| --- | --- | --- |
+| fps | 6.9, 7.0 | 8.0, 8.3 |
+| GPU p50, ms | 133.5, 129.2 | 106.0, 101.6 |
+| `sample` p95 | 121.8, 120.6 | 120.8, 118.6 |
+| `miss` p95 | 67.6, 68.7 | 49.1, 56.4 |
+| `beam` p95 | 46.1, 42.9 | 38.6, 34.7 |
+| `generate` p95 | 40.8, 26.3 | 34.7, 10.9 |
+| nodes a cast: `sample` | 1,120,897 | 1,130,461 |
+| nodes a cast: `beam` | 318,922 | 320,848 |
+| nodes a cast: `miss` | 265,428 | 239,126 |
+| `sample`, ns a node | 111 | 111 |
+
+- **`sample` did not move**, at 207 words, still past the synthetic's 175.
+- `beam` should not have moved and fell 15–20%, so the frame's gain is not all the
+  stack's. `miss`, also a walk with no line, may have gained; `sample` did not.
+- It draws on both, and the S23 makes its pipelines. The picture was not compared.
+- A Mac delta is not given: the two Mac runs were on different displays (a device
+  pixel ratio of 2 at 120 Hz, then 1 at 60 Hz), and `beam` moved there too.
 
 ## What runs by what
 
@@ -201,6 +294,8 @@ long task (`tools/raf.mjs`).
 - `main` past `d25f5b631`: at `69ff22b9a` the Mac's page drew nothing, its
   `FS_MOUNT` refused with `EINVAL`. That commit changes `spec/spec/bake/publication.json`,
   so the delivery data may lag it. The cause was not traced.
+- A grant by `Browser.grantPermissions` ends with the session that made it: closed,
+  the page sits on "Locating…", `stood`, `pivot -`, with no error. Keep it open.
 - The S23 loses its device on a pass too long, with no shader error. `visit.mjs`
   sizes each variant's pass to about 50 ms from its first run.
 - The S23's GPU clock climbs under load: one dispatch from idle read up to 3 times
@@ -217,9 +312,10 @@ no run-time count.
 
 ## Not measured
 
-- Any of "What a visit pays" in the real `sample`: the frame with its atomics, its
-  stack or its cold code changed.
-- The real locals' share: which of `sample`'s 2,208 `var` are live across its loop.
+- The real `sample` with its live words under the cliff: only a hand-written walk or
+  a changed build says.
+- Whether the real page changes its pyramid as the synthetic changed its table.
+- The picture of step 1a against `d25f5b631`.
 - What of a node's time is the driver and Chrome's path.
 - The same WGSL in the S23's native app.
 - A hand-written walk.

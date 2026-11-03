@@ -5,8 +5,8 @@
 import {client,ev} from './cdp.mjs';
 import {execSync,spawn} from 'node:child_process';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';
 const ENTRIES=1<<19,ENTRY=12,STEPS=14,GROUPS=[28,49];
-function wgsl({mem,addr,stack,cold}){
-  const COLD=cold||0;const SIZE=stack==='small'?8:33;
+function wgsl({mem,addr,stack,cold,scoped}){
+  const COLD=cold||0;const SC=scoped||0;const SIZE=stack==='small'?8:33;
   const load={none:()=>`0u`,atomic_rw:w=>`atomicLoad(&t.v[${w}])`,plain_rw:w=>`t.v[${w}]`,plain_ro:w=>`t.v[${w}]`,keys_atomic:w=>`t.v[${w}]`}[mem];
   const key=mem==='keys_atomic'?e=>`atomicLoad(&k.v[${e}])`:e=>load(`${e} * ${ENTRY}u`);
   const decl={none:``,
@@ -42,6 +42,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   var a = 0u;
   var hits = 0u;
 ${coldVars}
+${SC?Array.from({length:SC},(_,i)=>`  var q${i}: u32;`).join('\n'):''}
 ${stack?`  var stack: array<Handed, ${SIZE}>;\n  let first = Handed(c.x, c.y, c.z, 1u);\n${stack==='idx'?'':Array.from({length:SIZE},(_,i)=>`  stack[${i}u] = first;`).join('\n')}`:''}
   var step = 0u;
   loop {
@@ -53,6 +54,7 @@ ${visit}
 ${stack&&stack!=='fill'?`    stack[(step + (inh & 3u)) & ${SIZE===8?7:31}u] = Handed(inh, h, a, step);\n    let over = stack[(h >> 7u) & ${SIZE===8?7:31}u];\n    a ^= over.b;`:''}
     c = vec3u(c.x + (inh & 1u), c.y + ((inh >> 1u) & 1u), c.z + 1u);
 ${coldLoop}
+${SC?`    if u.cold != 0u {\n      q0 = a ^ h;\n${Array.from({length:SC-1},(_,i)=>`      q${i+1} = q${i} * 3u + (a ^ ${i%2?'step':'h'});`).join('\n')}\n      a ^= q${SC-1};\n    }`:''}
     step += 1u;
   }
 ${coldEnd}
@@ -63,22 +65,24 @@ ${coldEnd}
 `}
 const base={addr:'coarse',stack:false,cold:0};const SMALL=[7,12];
 const V=[['plain_ro',{mem:'plain_ro'}],['atomic_rw',{mem:'atomic_rw'}],['keys_atomic',{mem:'keys_atomic'}],
- ['plain_ro stack',{mem:'plain_ro',stack:'full'}],['plain_ro stack fill only',{mem:'plain_ro',stack:'fill'}],['plain_ro stack index only',{mem:'plain_ro',stack:'idx'}],['plain_ro stack of 8',{mem:'plain_ro',stack:'small'}],
- ['keys_atomic stack',{mem:'keys_atomic',stack:'full'}],['keys_atomic stack of 8',{mem:'keys_atomic',stack:'small'}],
- ['small plain_ro',{mem:'plain_ro',g:SMALL}],['small plain_ro cold 125',{mem:'plain_ro',cold:125,g:SMALL}],['small plain_ro cold 500',{mem:'plain_ro',cold:500,g:SMALL}],['small plain_ro cold 1000',{mem:'plain_ro',cold:1000,g:SMALL}],['small plain_ro cold 2000',{mem:'plain_ro',cold:2000,g:SMALL}],
- ['small atomic_rw',{mem:'atomic_rw',g:SMALL}],['small atomic_rw cold 500',{mem:'atomic_rw',cold:500,g:SMALL}]].map(([n,o])=>({name:n,mem:o.mem,g:o.g||GROUPS,code:wgsl({...base,...o})}));
+ ...[50,100,125,150,175,200,250,300,400,500].map(n=>[`plain_ro live ${n}`,{mem:'plain_ro',cold:n}]),
+ ...[125,250,500,1000].map(n=>[`atomic_rw live ${n}`,{mem:'atomic_rw',cold:n}]),
+ ['atomic_rw live 500 again',{mem:'atomic_rw',cold:500}],
+ ...[100,500,1500,3000,6000].map(n=>[`plain_ro scoped ${n}`,{mem:'plain_ro',scoped:n}]),
+ ...[1500,6000].map(n=>[`atomic_rw scoped ${n}`,{mem:'atomic_rw',scoped:n}])].map(([n,o])=>({name:n,mem:o.mem,g:SMALL,code:wgsl({...base,...o})}));
+if(process.env.ONLY){const k=process.env.ONLY.split(',');const o=k.map(n=>V.find(v=>v.name===n)).filter(Boolean);V.length=0;V.push(...o)}
 if(process.argv[3]==='--dump'){const d=process.argv[4];fs.mkdirSync(d,{recursive:true});for(const v of V)fs.writeFileSync(path.join(d,v.name.replaceAll(' ','-')+'.wgsl'),v.code);console.log(V.length,'written');process.exit(0)}
 const page=`async (V,ROUNDS,REPS,DISPATCHES)=>{
  const a=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});const d=await a.requestDevice({requiredFeatures:['timestamp-query'],requiredLimits:{maxStorageBufferBindingSize:a.limits.maxStorageBufferBindingSize}});
  let lost=null;d.lost.then(i=>lost=i.message);
  const E=${ENTRIES},W=${ENTRY};
  const word=w=>{let x=Math.imul(w+1,2654435761)>>>0;x^=x>>>15;x=Math.imul(x,2246822519)>>>0;x^=x>>>13;return (x|1)>>>0};
- const tb=d.createBuffer({size:E*W*4,usage:GPUBufferUsage.STORAGE,mappedAtCreation:true});const m=new Uint32Array(tb.getMappedRange());
+ const tb=d.createBuffer({size:E*W*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC,mappedAtCreation:true});const tc=d.createBuffer({size:E*W*4,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const m=new Uint32Array(tb.getMappedRange());
  for(let i=0;i<m.length;i++)m[i]=word(i);tb.unmap();
  const kb=d.createBuffer({size:E*4,usage:GPUBufferUsage.STORAGE,mappedAtCreation:true});const km=new Uint32Array(kb.getMappedRange());for(let e=0;e<E;e++)km[e]=word(e*W);kb.unmap();
  const ub=d.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM,mappedAtCreation:true});ub.unmap();
  const N=${GROUPS[0]*8}*${GROUPS[1]*8};
- const sb=d.createBuffer({size:N*8,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+ const sb=d.createBuffer({size:N*8,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
  const rb=d.createBuffer({size:N*8,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
  const qs=d.createQuerySet({type:'timestamp',count:2});const qb=d.createBuffer({size:16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});const qr=d.createBuffer({size:16,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
  const P=[];
@@ -87,8 +91,13 @@ const page=`async (V,ROUNDS,REPS,DISPATCHES)=>{
   P.push({name:v.name,pipe,group,ms:Math.round(ms),err,g:v.g,t:[],wall:[],hits:null,d:1,lost:false})}
  const run=async(p,read)=>{const w0=performance.now();const en=d.createCommandEncoder();const pass=en.beginComputePass({timestampWrites:{querySet:qs,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1}});pass.setPipeline(p.pipe);pass.setBindGroup(0,p.group);for(let n=0;n<p.d;n++)pass.dispatchWorkgroups(p.g[0],p.g[1],1);pass.end();en.resolveQuerySet(qs,0,2,qb,0);en.copyBufferToBuffer(qb,0,qr,0,16);if(read)en.copyBufferToBuffer(sb,0,rb,0,N*8);d.queue.submit([en.finish()]);await d.queue.onSubmittedWorkDone();await qr.mapAsync(GPUMapMode.READ);const q=new BigUint64Array(qr.getMappedRange());const ns=Number(q[1]-q[0]);qr.unmap();p.wall.push((performance.now()-w0)/p.d);return ns/p.d};
  for(let r=0;r<ROUNDS;r++)for(const p of P){if(!p.pipe)continue;try{const t1=await run(p,false);p.d=Math.max(1,Math.min(DISPATCHES,Math.round(50e6/Math.max(t1,1e4))));const w=performance.now();while(performance.now()-w<1000)await run(p,false);p.wall.length=0;for(let k=0;k<REPS;k++){p.t.push(await run(p,false));p.allwall=(p.allwall||[]).concat(p.wall.splice(0))}}catch(e){p.lost=String(e.message).slice(0,120);return JSON.stringify({lost:lost||p.lost,adapter:[a.info.vendor,a.info.architecture],stopped:p.name,res:P.map(p=>({name:p.name,compile_ms:p.ms,err:p.err,hits:p.hits,d:p.d,g:p.g,lostHere:p.lost,t:p.t,wall:p.allwall||[]}))})}
-  if(r===0){await run(p,true);await rb.mapAsync(GPUMapMode.READ);const h=new Uint32Array(rb.getMappedRange());let lo=1e9,hi=0;const used=p.g[0]*8;for(let y=0;y<p.g[1]*8;y++)for(let x=0;x<used;x++){const i=(y*${GROUPS[0]*8}+x)*2+1;if(h[i]<lo)lo=h[i];if(h[i]>hi)hi=h[i]}rb.unmap();p.hits=[lo,hi]}}
- return JSON.stringify({lost,adapter:[a.info.vendor,a.info.architecture],res:P.map(p=>({name:p.name,compile_ms:p.ms,err:p.err,hits:p.hits,d:p.d,g:p.g,t:p.t,wall:p.allwall||[]}))})
+  {await run(p,true);await rb.mapAsync(GPUMapMode.READ);const h=new Uint32Array(rb.getMappedRange());let lo=1e9,hi=0,sum=2166136261;const used=p.g[0]*8;for(let y=0;y<p.g[1]*8;y++)for(let x=0;x<used;x++){const i=(y*${GROUPS[0]*8}+x)*2;if(h[i+1]<lo)lo=h[i+1];if(h[i+1]>hi)hi=h[i+1];sum=Math.imul(sum^h[i],16777619)>>>0}rb.unmap();p.hits=[lo,hi];(p.sums=p.sums||[]).push(sum.toString(16));(p.hitsAll=p.hitsAll||[]).push(lo+'-'+hi);
+  /* what the read itself gives: a known word written by the queue, copied and mapped, no shader */
+  const mark=new Uint32Array([0xABCD0123,r+1]);d.queue.writeBuffer(sb,0,mark);const e2=d.createCommandEncoder();e2.copyBufferToBuffer(sb,0,rb,0,16);d.queue.submit([e2.finish()]);await rb.mapAsync(GPUMapMode.READ);const q2=new Uint32Array(rb.getMappedRange().slice(0,8));rb.unmap();(p.path=p.path||[]).push(q2[0]===0xABCD0123?'ok':q2[0].toString(16));
+  /* the table itself, read back whole: what differs from what was written */
+  {const e3=d.createCommandEncoder();e3.copyBufferToBuffer(tb,0,tc,0,E*W*4);d.queue.submit([e3.finish()]);await tc.mapAsync(GPUMapMode.READ);const c=new Uint32Array(tc.getMappedRange());let diff=0,zero=0,first=-1;for(let i=0;i<c.length;i+=1){if(c[i]!==word(i)){diff++;if(c[i]===0)zero++;if(first<0)first=i}}tc.unmap();(p.table=p.table||[]).push(diff+'/'+zero+'@'+first)}
+}}
+ return JSON.stringify({lost,adapter:[a.info.vendor,a.info.architecture],res:P.map(p=>({name:p.name,compile_ms:p.ms,err:p.err,hits:p.hits,d:p.d,g:p.g,t:p.t,wall:p.allwall||[],sums:p.sums,hitsAll:p.hitsAll,path:p.path,table:p.table}))})
 }`;
 const DISP=Number(process.env.DISP||20);const D=process.argv[2];const PORT=D==='s23'?9333:9222;const A=process.env.HOME+'/Library/Android/sdk/platform-tools/adb';const wait=ms=>new Promise(r=>setTimeout(r,ms));const PAGE=5175;
 const server=http.createServer((_,res)=>{res.writeHead(200,{'content-type':'text/html'});res.end('<!doctype html><title>visit</title><body>visit</body>')}).listen(PAGE);
@@ -105,6 +114,6 @@ while(left.length){const o=JSON.parse(await ev(c,`(${page})(${JSON.stringify(lef
  await c.call('Page.reload',{});await wait(3000);await ev(c,`navigator.wakeLock.request('screen').then(l=>{window.__w=l;return 1}).catch(()=>0)`,8000)}fs.writeFileSync(`visit-${D}.json`,JSON.stringify(r,null,1));
 const med=a=>{if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y);return s[(s.length-1)>>1]};const visitsOf=p=>p.g[0]*8*p.g[1]*8*STEPS;
 console.log(r.adapter,'lostAt',r.lostAt,'');
-for(const p of r.res){const visits=visitsOf(p);console.log(p.name.padEnd(27),p.err?'ERR '+p.err:`gpu ${(med(p.t)/visits).toFixed(2).padStart(7)} ns/visit  wall ${(med(p.wall)*1e6/visits).toFixed(2).padStart(7)}  ms ${(med(p.t)/1e6).toFixed(1).padStart(8)}  rounds ${(med(p.t.slice(0,p.t.length/3))/visits).toFixed(2)} ${(med(p.t.slice(p.t.length/3,2*p.t.length/3))/visits).toFixed(2)} ${(med(p.t.slice(-p.t.length/3))/visits).toFixed(2)}  hits ${p.hits}  d ${p.d}  compile ${p.compile_ms} ms`)};
+for(const p of r.res){const visits=visitsOf(p);console.log(p.name.padEnd(27),p.err?'ERR '+p.err:`gpu ${(med(p.t)/visits).toFixed(2).padStart(7)} ns/visit  wall ${(med(p.wall)*1e6/visits).toFixed(2).padStart(7)}  ms ${(med(p.t)/1e6).toFixed(1).padStart(8)}  rounds ${(med(p.t.slice(0,p.t.length/3))/visits).toFixed(2)} ${(med(p.t.slice(p.t.length/3,2*p.t.length/3))/visits).toFixed(2)} ${(med(p.t.slice(-p.t.length/3))/visits).toFixed(2)}  hits ${p.hitsAll}  sum ${[...new Set(p.sums)]}  read ${p.path}  table ${p.table}  d ${p.d}  c ${p.compile_ms}`)};
 if(D==='s23'){try{await c.call('Page.navigate',{url:'about:blank'})}catch{};c.close();execSync(`${A} reverse --remove tcp:${PAGE}`);execSync(`${A} forward --remove tcp:9333`)}else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}
 server.close();process.exit(0);
