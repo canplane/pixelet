@@ -16,31 +16,29 @@ export const turns = 5 as number;
 
 export const busy_ms = 6 as number;
 
-export const over_ms = 7 as number;
+export const budget_ms = 7 as number;
 
-export const budget_ms = 8 as number;
+export const effects_ms = 8 as number;
 
-export const effects_ms = 9 as number;
+export const tick_ms = 9 as number;
 
-export const tick_ms = 10 as number;
+export const phases = 10 as number;
 
-export const phases = 11 as number;
+export const stage_ms = 15 as number;
 
-export const stage_ms = 16 as number;
+export const tasks_ms = 16 as number;
 
-export const tasks_ms = 17 as number;
+export const perf_ms = 17 as number;
 
-export const perf_ms = 18 as number;
+export const effects = 18 as number;
 
-export const effects = 19 as number;
+export const kind_name = 27 as number;
 
-export const kind_name = 28 as number;
+export const wake_name = 28 as number;
 
-export const wake_name = 29 as number;
+export const gpu_read = 29 as number;
 
-export const gpu_read = 30 as number;
-
-export const gpu_spans = 31 as number;
+export const gpu_spans = 30 as number;
 
 export const gpu_busy_ms = 62 as number;
 

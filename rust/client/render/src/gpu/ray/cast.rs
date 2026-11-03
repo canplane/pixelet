@@ -18,7 +18,8 @@ use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET,
     SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
     SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE,
-    SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
+    SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE,
+    SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -90,6 +91,9 @@ pub(super) struct CastBuffers {
     beam_built: Pipeline,
     cells_built: Pipeline,
     sample_built: Pipeline,
+    /// The samples' walk over the pyramid alone, ahead of `sample_built`.
+    sample_hit_built: Pipeline,
+    sample_hit_group: u32,
     /// The same passes for the shadow map, an entry each (pxl-shader
     /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
     light_beam_built: Pipeline,
@@ -316,6 +320,9 @@ pub(super) const HEAD_BINDING: u32 = 11;
 /// light's own bind its world and its clipmap (`LIGHT_GROUP`), past the floor's
 /// storage buffers were they one group; the pixels' (`cast_cs`) read the
 /// visibility buffer and no world (`px_group`).
+const SAMPLE_HIT_GROUP: [u32; 9] = [
+    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE,
+];
 const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
     let mut g = [0; compute::MISS_GROUP.len() + 3];
     let mut k = 0;
@@ -355,6 +362,7 @@ impl RaysPass {
         let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
         let cells_built = pipelines.build_compute(g, SHADER_CELL, group);
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
+        let sample_hit_built = pipelines.build_compute(g, SHADER_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
         let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, group);
         let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
         let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, group);
@@ -385,6 +393,7 @@ impl RaysPass {
             beam_built,
             cells_built,
             sample_built,
+            sample_hit_built,
             light_beam_built,
             light_cells_built,
             light_sample_built,
@@ -463,6 +472,7 @@ impl RaysPass {
             light_footprint_owed: false,
             refold: false,
             group: 0,
+            sample_hit_group: 0,
             bindings: [0; 11],
             eye: buf(
                 word_bytes(eye::WORDS),
@@ -978,6 +988,15 @@ impl RaysPass {
         if bindings != c.bindings {
             release(c.group);
             c.group = cast_group(g, &c.miss_built, bindings);
+            release(c.sample_hit_group);
+            c.sample_hit_group = g.bind_group(
+                c.sample_hit_built.layouts[0],
+                &[
+                    buf_entry(0, c.eye),
+                    buf_entry(8, c.beams),
+                    buf_entry(9, c.pyramid),
+                ],
+            );
             c.bindings = bindings;
         }
         if casts {
@@ -1170,6 +1189,12 @@ impl RaysPass {
                     compute::CELL_WORKGROUP,
                 ),
                 (
+                    GpuSpanName::sample_hit,
+                    &c.sample_hit_built,
+                    c.grid.samples,
+                    compute::SAMPLE_WORKGROUP,
+                ),
+                (
                     GpuSpanName::sample,
                     &c.sample_built,
                     c.grid.samples,
@@ -1186,6 +1211,9 @@ impl RaysPass {
                     continue;
                 }
                 let mut group = c.group;
+                if span == GpuSpanName::sample_hit {
+                    group = c.sample_hit_group;
+                }
                 if span == GpuSpanName::px {
                     let gated = c.gated.then_some(claimed);
                     c.raster.draw(ctx, &c.grid, kind == FrameKind::cast, gated);

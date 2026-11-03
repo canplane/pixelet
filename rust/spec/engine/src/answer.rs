@@ -73,9 +73,9 @@ pub(crate) fn bound_of(w: i32) -> [i32; 2] {
 /// a box wider only splits more. A ray through the node outside it meets
 /// nothing there (pxl-engine cast). The world asks no axis apart.
 pub(crate) type BoxWords = [u32; 2];
-pub(crate) const BOX_BITS: u32 = 10;
+pub const BOX_BITS: u32 = 10;
 /// The steps of a box's axis: its node's side over them, `2^BOX_BITS`.
-pub(crate) const BOX_STEPS: u32 = 1 << BOX_BITS;
+pub const BOX_STEPS: u32 = 1 << BOX_BITS;
 pub const BOX_WHOLE: BoxWords = box_word([0; 3], [BOX_STEPS; 3]);
 /// No box: nothing lies in the node, as a join of boxes starts. No
 /// `box_word` sets a bit past `3 · BOX_BITS` of a word.

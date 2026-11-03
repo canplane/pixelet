@@ -27,6 +27,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_CELL => "light_cell_cs",
         SHADER_LIGHT_SAMPLE => "light_sample_cs",
         SHADER_LIGHT_SAMPLE_BOX => "light_sample_box_cs",
+        SHADER_SAMPLE_HIT => "sample_hit_cs",
         SHADER_GENERATION => "decor_cs",
         SHADER_GENERATION_CNT => "decor_cnt_cs",
         SHADER_GENERATION_ARGS => "decor_args_cs",

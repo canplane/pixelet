@@ -264,6 +264,10 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         );
         return;
     }
+    // The eye's walk over the pyramid alone ended it (pxl-render sample_hit.wgsl).
+    if o.tally() == tally::EYE && w.word(o.sample_at(s) + beam::SAMPLE_VISITS) != beam::SAMPLE_LEFT {
+        return;
+    }
     let aim = o.aim(o.point(s));
     let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[1]);
     let (met, before) = resume(

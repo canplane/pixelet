@@ -57,6 +57,7 @@ fn main() {
         lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
+    std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -334,6 +335,76 @@ fn compute(dir: &Path) -> String {
 /// uniform's `claimed_for`. The one rule the screen's and the light's passes
 /// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
 /// the Rust itself.
+/// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
+/// pxl-engine, whose layouts they are.
+fn walk_word() -> String {
+    use pxl_engine::{answer, beam, eye, param, pyramid, value};
+    let words: &[(&str, u32)] = &[
+        ("EYE_VEC4S", eye::WORDS as u32 / 4),
+        ("ORIGIN", eye::ORIGIN as u32),
+        ("FORWARD", eye::FORWARD as u32),
+        ("FAR", eye::FAR as u32),
+        ("RIGHT", eye::RIGHT as u32),
+        ("UP", eye::UP as u32),
+        ("TAN", eye::TAN as u32),
+        ("RANGE", eye::RANGE as u32),
+        ("GRID", eye::GRID as u32),
+        ("FRAC_W", pxl_engine::FRAC_W),
+        ("UNIT_ZOOM", pxl_engine::UNIT_ZOOM),
+        ("FINEST_ZOOM", pxl_engine::FINEST_ZOOM),
+        ("ZOOM_BITS", pxl_engine::ZOOM_BITS),
+        ("SAMPLE", param::beam::SAMPLE),
+        ("NEAR_SAMPLES", param::beam::NEAR),
+        ("CELL_T", beam::CELL_T),
+        ("CELL_CORNER", beam::CELL_CORNER),
+        ("CELL_RESUMES", beam::CELL_RESUMES),
+        ("CELL_WORDS", beam::CELL_WORDS),
+        ("LINE_VISITS", beam::LINE_VISITS),
+        ("LINE_NODE", beam::LINE_NODE),
+        ("LINE_WORDS", beam::LINE_WORDS),
+        ("NODE_ZOOM", beam::NODE_ZOOM),
+        ("NODE_CORNER", beam::NODE_CORNER),
+        ("NODE_ROOTS", beam::NODE_ROOTS),
+        ("SAMPLE_NODE", beam::SAMPLE_NODE),
+        ("SAMPLE_ASSET", beam::SAMPLE_ASSET),
+        ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
+        ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
+        ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
+        ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
+        ("SAMPLE_NONE", beam::SAMPLE_NONE),
+        ("SAMPLE_LEFT", beam::SAMPLE_LEFT),
+        ("ENTRIES", pyramid::ENTRIES),
+        ("ENTRIES_AT", pyramid::ENTRIES_AT),
+        ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
+        ("BUCKET", pyramid::BUCKET),
+        ("W_KIND", pyramid::W_KIND),
+        ("W_ASSET", pyramid::W_ASSET),
+        ("W_NODE", pyramid::W_NODE),
+        ("NONE", pyramid::NONE),
+        ("CLAIMED", pyramid::CLAIMED),
+        ("TAG_BITS", pyramid::TAG_BITS),
+        ("KEY_ZOOMS", !((1u32 << pyramid::TAG_BITS) - 1)),
+        ("KIND_SPLIT", answer::Kind::Split as u32),
+        ("KIND_CELL", answer::Kind::Cell as u32),
+        ("VAL_MASK", answer::PLACED_ASSET - 1),
+        ("VALUE_VOID", value::VOID),
+        ("VALUE_AIR", value::AIR),
+        ("FILL_SHIFT", answer::FILL_SHIFT),
+        ("EIGHTHS", answer::EIGHTHS),
+        ("BOX_BITS", answer::BOX_BITS),
+        ("BOX_STEPS", answer::BOX_STEPS),
+        ("STEPS_MOST", 4096),
+    ];
+    let mut out = format!(
+        "const ZOOM_SPLIT: f32 = {:?};\n",
+        grid::CELLS_A_RAD / grid::SPANS
+    );
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    out
+}
+
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.

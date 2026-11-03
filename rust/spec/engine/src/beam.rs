@@ -383,6 +383,9 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
+/// A sample's `SAMPLE_VISITS` where the walk over the observed pyramid alone
+/// (pxl-render sample_hit.wgsl) left it for the walk that asks the world.
+pub const SAMPLE_LEFT: u32 = u32::MAX;
 
 /// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among

@@ -85,19 +85,18 @@ pub mod FRAME {
     pub const settled: u32 = 4;
     pub const turns: u32 = 5;
     pub const busy_ms: u32 = 6;
-    pub const over_ms: u32 = 7;
-    pub const budget_ms: u32 = 8;
-    pub const effects_ms: u32 = 9;
-    pub const tick_ms: u32 = 10;
-    pub const phases: u32 = 11;
-    pub const stage_ms: u32 = 16;
-    pub const tasks_ms: u32 = 17;
-    pub const perf_ms: u32 = 18;
-    pub const effects: u32 = 19;
-    pub const kind_name: u32 = 28;
-    pub const wake_name: u32 = 29;
-    pub const gpu_read: u32 = 30;
-    pub const gpu_spans: u32 = 31;
+    pub const budget_ms: u32 = 7;
+    pub const effects_ms: u32 = 8;
+    pub const tick_ms: u32 = 9;
+    pub const phases: u32 = 10;
+    pub const stage_ms: u32 = 15;
+    pub const tasks_ms: u32 = 16;
+    pub const perf_ms: u32 = 17;
+    pub const effects: u32 = 18;
+    pub const kind_name: u32 = 27;
+    pub const wake_name: u32 = 28;
+    pub const gpu_read: u32 = 29;
+    pub const gpu_spans: u32 = 30;
     pub const gpu_busy_ms: u32 = 62;
     pub const gpu_px: u32 = 63;
     pub const scale: u32 = 64;
@@ -135,7 +134,7 @@ pub mod FRAME {
 
 /// FRAME's columns in groups, every column in one (column.test.ts), in the order a reader asks in turn — where the time went, what was drawn and cast, what landed, and what it holds. The trace prints every column by its group's order, so a column the kernel adds is printed without a word written for it; the panel shows some groups, a few rows each, and the report its own lines. The `rays` group's columns lie in FRAME in its order, which the window's sums of them (STAT.frames.rays) keep.
 pub mod FRAME_GROUP {
-    pub const time: usize = 9;
+    pub const time: usize = 8;
     pub const turn: usize = 7;
     pub const frame: usize = 2;
     pub const gpu: usize = 11;
@@ -145,24 +144,24 @@ pub mod FRAME_GROUP {
     pub const heap: usize = 1;
 }
 
-/// One settled task (perf/task.rs TaskRow). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
+/// One settled task (perf/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
 pub mod TASK {
     pub const stream: u32 = 0;
-    pub const path: u32 = 1;
-    pub const priority: u32 = 4;
-    pub const enqueue_ms: u32 = 5;
-    pub const start_ms: u32 = 6;
-    pub const end_ms: u32 = 7;
-    pub const outcome: u32 = 8;
-    pub const fail: u32 = 9;
-    pub const detail: u32 = 10;
-    pub const at_file: u32 = 11;
-    pub const at_file_bytes: u32 = 12;
-    pub const at_line: u32 = 13;
-    pub const phase_cnt: u32 = 14;
-    pub const phase_ids: u32 = 15;
-    pub const phase_vals: u32 = 21;
-    pub const WORDS: u32 = 27;
+    pub const subject: u32 = 1;
+    pub const priority: u32 = 2;
+    pub const enqueue_ms: u32 = 3;
+    pub const start_ms: u32 = 4;
+    pub const end_ms: u32 = 5;
+    pub const outcome: u32 = 6;
+    pub const fail: u32 = 7;
+    pub const detail: u32 = 8;
+    pub const at_file: u32 = 9;
+    pub const at_file_bytes: u32 = 10;
+    pub const at_line: u32 = 11;
+    pub const phase_cnt: u32 = 12;
+    pub const phase_ids: u32 = 13;
+    pub const phase_vals: u32 = 19;
+    pub const WORDS: u32 = 25;
 }
 
 /// One of the worst moving frames since the recording started, by its interval, and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them.
@@ -235,29 +234,29 @@ pub mod STAT {
         pub const gpu_busy_kinds: u32 = 46;
         pub const phases_p95: u32 = 76;
         pub const gpu_spans_p95: u32 = 81;
-        pub const gpu_spans_cnt: u32 = 112;
-        pub const kinds: u32 = 143;
-        pub const wakes: u32 = 153;
-        pub const gpu_px: u32 = 156;
-        pub const rays: u32 = 157;
-        pub const first: u32 = 175;
-        pub const last: u32 = 269;
-        pub const WORDS: u32 = 363;
+        pub const gpu_spans_cnt: u32 = 113;
+        pub const kinds: u32 = 145;
+        pub const wakes: u32 = 155;
+        pub const gpu_px: u32 = 158;
+        pub const rays: u32 = 159;
+        pub const first: u32 = 177;
+        pub const last: u32 = 271;
+        pub const WORDS: u32 = 365;
     }
     pub mod tasks {
-        pub const AT: u32 = 363;
+        pub const AT: u32 = 365;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 144;
     }
     pub mod steps {
-        pub const AT: u32 = 507;
+        pub const AT: u32 = 509;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
     /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_left_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded.
     pub mod recording {
-        pub const AT: u32 = 668;
+        pub const AT: u32 = 670;
         pub const frames: u32 = 0;
         pub const heap_live_max_bytes: u32 = 1;
         pub const heap_run_max_bytes: u32 = 2;
@@ -272,7 +271,7 @@ pub mod STAT {
         pub const cap_terrain_refused: u32 = 11;
         pub const WORDS: u32 = 12;
     }
-    pub const WORDS: u32 = 680;
+    pub const WORDS: u32 = 682;
 }
 
 /// What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.

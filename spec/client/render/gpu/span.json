@@ -19,6 +19,7 @@
     { "name": "cast", "per_px": false, "per_cell": false },
     { "name": "beam", "per_px": false, "per_cell": true },
     { "name": "cell", "per_px": false, "per_cell": true },
+    { "name": "sample_hit", "per_px": false, "per_cell": false },
     { "name": "sample", "per_px": false, "per_cell": false },
     { "name": "sample_box", "per_px": false, "per_cell": false },
     { "name": "sraster", "per_px": true, "per_cell": false },

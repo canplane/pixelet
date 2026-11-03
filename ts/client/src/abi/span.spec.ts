@@ -21,6 +21,7 @@ export const GPU_SPAN_NAMES = [
   "cast",
   "beam",
   "cell",
+  "sample_hit",
   "sample",
   "sample_box",
   "sraster",
