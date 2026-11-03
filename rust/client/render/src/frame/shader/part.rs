@@ -95,7 +95,8 @@ pub const SHADER_SAMPLE: u32 = 43;
 /// from pxl-engine's `light`: every slot taking the visible sample, a
 /// workgroup a tile, a compute entry; that depth laid into the map
 /// (light_map.wgsl, gpu/shadow.rs); and the slots that took none walked
-/// apart (pxl-engine `light::misses_at`), a compute entry of its own.
+/// apart (pxl-engine `light::misses_at`), by hand (light_miss.wgsl), a compute
+/// entry of its own.
 pub const SHADER_LIGHT: u32 = 44;
 pub const SHADER_LIGHT_MAP: u32 = 45;
 pub const SHADER_LIGHT_MISS: u32 = 46;
@@ -394,7 +395,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MAP
     &["light_word", "light_lay", "light_map"],
     // SHADER_LIGHT_MISS
-    &["light_miss.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "world",
+        "light_aim",
+        "light_miss",
+    ],
     // SHADER_AO_APPLY
     &["tile_word", "screen_tiles", "effect", "ao_view", "ao_apply"],
     // SHADER_CAMERA_GRID
@@ -483,11 +491,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_SAMPLE_BOX
     &["light_sample_box.gen"],
     // SHADER_SAMPLE_HIT
-    &["walk_word", "walk", "sample_hit"],
+    &["walk_word", "walk_node", "walk", "sample_hit"],
     // SHADER_MISS_HIT
-    &["walk_word", "walk", "miss_hit"],
+    &["walk_word", "walk_node", "walk", "miss_hit"],
     // SHADER_BEAM_HIT
-    &["walk_word", "walk", "beam_hit"],
+    &["walk_word", "walk_node", "walk", "beam_hit"],
     // SHADER_LIGHT_MISS_HIT
-    &["walk_word", "walk", "light_miss_hit"],
+    &[
+        "walk_word",
+        "walk_node",
+        "walk",
+        "light_aim",
+        "light_miss_hit",
+    ],
 ];

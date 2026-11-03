@@ -181,7 +181,7 @@ fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
         } else {
             key
         };
-        w[s + pyramid::W_KIND as usize] = pyramid::kind_word(a.kind);
+        w[s + pyramid::W_KIND as usize] = pyramid::stamped(a.kind, key, a.asset, [0; 4], zoom, c);
         w[s + pyramid::W_ASSET as usize] = a.asset[0];
         w[s + pyramid::W_ASSET as usize + 1] = a.asset[1];
         let n = s + pyramid::W_NODE as usize;
@@ -448,9 +448,10 @@ fn hand_walk_answers_as_cast_walk() {
     let beams_buf = buffer(&beams_gpu, wgpu::BufferUsages::STORAGE);
     let pyramid_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
     let left = buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
-    let source = |parts: [&str; 3]| parts.join("\n");
+    let source = |parts: [&str; 4]| parts.join("\n");
     let sample_src = source([
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/sample_hit.wgsl")),
     ]);
@@ -482,6 +483,7 @@ fn hand_walk_answers_as_cast_walk() {
     );
     let beam_src = source([
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/beam_hit.wgsl")),
     ]);
@@ -534,6 +536,8 @@ fn hand_walk_answers_as_cast_walk() {
     }
     eprintln!("beams: {beam_same} alike, {beam_differ} differ, {beams_left} left");
     assert!(beam_same > 500, "too few beams to say: {beam_same}");
+    // Air held at other zooms asked again, one ray in `REVISIT_ONE_IN`: left, not gone past.
+    assert!(beams_left > 800, "too few left: {beams_left}");
     assert_eq!(beam_differ, 0, "first: {beam_first:?}");
 
     let (mut same, mut differ, mut first) = (0u32, 0u32, None);
@@ -584,6 +588,7 @@ fn hand_walk_answers_as_cast_walk() {
         world.asked.len()
     );
     assert!(same > 1000, "the walk ended too few to say: {same}");
+    assert!(left_words[3] > 3500, "too few left: {}", left_words[3]);
     let hits = samples_cpu.iter().filter(|m| m.ends == End::Hit).count();
     assert!(hits > 1000, "too few hits to say: {hits}");
     assert_eq!(differ, 0, "first: {first:?}");
@@ -727,7 +732,9 @@ fn hand_light_walk_answers_as_cast_walk() {
     });
     let source = [
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/light_aim.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/light_miss_hit.wgsl")),
     ]
     .join("\n");
@@ -784,12 +791,12 @@ fn hand_light_walk_answers_as_cast_walk() {
         .map(|b| u32::from_le_bytes(*b))
         .collect();
     let after = read(&device, &queue, &list_buf);
-    let (mut same, mut differ, mut left_n, mut hits) = (0, 0, 0, 0);
+    let (mut same, mut differ, mut slots_left, mut hits) = (0, 0, 0, 0);
     let mut steps_over = 0;
     let mut first = None;
     for k in 0..(SIZE * SIZE) as usize {
-        if after[k + 1] != light::MISS_DONE {
-            left_n += 1;
+        if after[k + 1] != light::MISS_STRUCK {
+            slots_left += 1;
             assert_eq!(got[k], 0, "a slot left wrote its word");
             continue;
         }
@@ -823,15 +830,16 @@ fn hand_light_walk_answers_as_cast_walk() {
         }
     }
     eprintln!(
-        "light: {same} alike ({hits} hits), {differ} differ, {left_n} left, {stopped} stopped"
+        "light: {same} alike ({hits} hits), {differ} differ, {slots_left} left, {stopped} stopped"
     );
     eprintln!("{steps_over} ended as a start a Q3 step over ends");
     assert!(steps_over < 32, "too many a step over: {steps_over}");
-    assert!(left_n < SIZE * SIZE / 4, "too many left: {left_n}");
+    assert!(slots_left < SIZE * SIZE / 4, "too many left: {slots_left}");
+    assert!(slots_left > 13_000, "too few left: {slots_left}");
     assert!(same > 30_000, "too few slots to say: {same}");
     assert!(hits > 10_000, "too few hits to say: {hits}");
     // Air another band left held, gone past: at the band asked it may be what a ray
-    // stops at (`held_at_other_zooms`), until `revisits` asks again.
+    // stops at (`slot_at_other_zooms`), until `revisits` asks again.
     assert!(
         differ * 1000 < same,
         "too many differ: {differ}, first: {first:?}"

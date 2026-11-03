@@ -589,6 +589,11 @@ pub struct Trace<A> {
     pub visits: u32,
 }
 
+/// The most steps a walk by hand takes (pxl-render walk.wgsl, light_miss.wgsl): a float gone
+/// wrong ends there, on a phone where a walk that does not end loses the device. Far more
+/// than a ray takes.
+pub const STEPS_MOST: u32 = 4096;
+
 /// The descent's stack, a zoom an entry, every zoom's: what the query
 /// handed the node there (`Query::At`), the one thing the node's parent
 /// cannot work out again without asking the world from the top. Where the ray is in the node, the child it is in and where the ray

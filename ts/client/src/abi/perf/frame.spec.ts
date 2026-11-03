@@ -70,40 +70,44 @@ export const eye_sample = 75 as number;
 
 export const eye_miss = 76 as number;
 
-export const eye_took = 77 as number;
+export const eye_asked = 77 as number;
 
-export const eye_walked = 78 as number;
+export const eye_took = 78 as number;
 
-export const eye_sky = 79 as number;
+export const eye_walked = 79 as number;
 
-export const eye_boxes = 80 as number;
+export const eye_sky = 80 as number;
 
-export const light_cast = 81 as number;
+export const eye_boxes = 81 as number;
 
-export const light_rays = 82 as number;
+export const light_cast = 82 as number;
 
-export const light_beam = 83 as number;
+export const light_rays = 83 as number;
 
-export const light_sample = 84 as number;
+export const light_beam = 84 as number;
 
-export const light_miss = 85 as number;
+export const light_sample = 85 as number;
 
-export const light_took = 86 as number;
+export const light_miss = 86 as number;
 
-export const light_walked = 87 as number;
+export const light_asked = 87 as number;
 
-export const light_sky = 88 as number;
+export const light_took = 88 as number;
 
-export const light_boxes = 89 as number;
+export const light_walked = 89 as number;
 
-export const terrain_landed = 90 as number;
+export const light_sky = 90 as number;
 
-export const uploads = 91 as number;
+export const light_boxes = 91 as number;
 
-export const uploads_bytes = 92 as number;
+export const terrain_landed = 92 as number;
 
-export const pack_bytes = 93 as number;
+export const uploads = 93 as number;
 
-export const heap_used_bytes = 94 as number;
+export const uploads_bytes = 94 as number;
 
-export const WORDS = 95 as number;
+export const pack_bytes = 95 as number;
+
+export const heap_used_bytes = 96 as number;
+
+export const WORDS = 97 as number;

@@ -17,7 +17,7 @@ import { useKernel } from "@/shell/store/watch.ts";
 import * as scene from "@/port/scene.ts";
 
 const PREVIEW = surface_driver(surface_role.PREVIEW);
-const BG = parseInt(color.preview.slice(1), 16);
+const BACKDROP = parseInt(color.backdrop.slice(1), 16);
 
 interface CharacterPreviewProps {
   character: Character;
@@ -40,7 +40,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
             setSurface(surface);
-            scene.preview_open(surface, character.group, character.number, BG);
+            scene.preview_open(surface, character.group, character.number, BACKDROP);
             return () => scene.preview_close(surface);
           }}
         />

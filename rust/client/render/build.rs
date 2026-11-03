@@ -11,10 +11,6 @@ use pxl_engine::param::light;
 use pxl_engine::screen;
 use std::path::Path;
 
-// The caves' and the strata's settings, which world.wgsl reads (`world_word`).
-#[path = "../../spec/content/src/param.rs"]
-#[expect(dead_code, reason = "the build reads the caves' and the strata's")]
-mod content_param;
 #[path = "src/frame/shader/debug_look.spec.rs"]
 mod debug_look;
 #[path = "src/param.rs"]
@@ -347,7 +343,7 @@ fn walk_word() -> String {
     use pxl_engine::clipmap::Lookup;
     use pxl_engine::overwrite::NodeSlot;
     use pxl_engine::{
-        answer, beam, cast, eye, face, light, param, pyramid, ray, value, SHARD_ZOOM,
+        answer, beam, cast, eye, face, light, param, pyramid, ray, tally, value, SHARD_ZOOM,
     };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
@@ -387,6 +383,7 @@ fn walk_word() -> String {
         ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
         ("BUCKET", pyramid::BUCKET),
         ("W_KIND", pyramid::W_KIND),
+        ("KIND_MASK", pyramid::KIND_MASK),
         ("W_ASSET", pyramid::W_ASSET),
         ("W_NODE", pyramid::W_NODE),
         ("NONE", pyramid::NONE),
@@ -402,9 +399,9 @@ fn walk_word() -> String {
         ("EIGHTHS", answer::EIGHTHS),
         ("BOX_BITS", answer::BOX_BITS),
         ("BOX_STEPS", answer::BOX_STEPS),
-        ("STEPS_MOST", 4096),
+        ("STEPS_MOST", cast::STEPS_MOST),
         ("JITTER", eye::JITTER as u32),
-        ("REVISIT", 16),
+        ("REVISIT_ONE_IN", 16),
         ("LIGHT", eye::LIGHT as u32),
         ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
@@ -412,7 +409,34 @@ fn walk_word() -> String {
         ("LIGHT_ANCHOR", light::ANCHOR as u32),
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
-        ("LIGHT_MISS_DONE", light::MISS_DONE),
+        ("LIGHT_MISS_STRUCK", light::MISS_STRUCK),
+        ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
+        ("LIGHT_MISSED_PASS", pyramid::LIGHT_MISSED_PASS),
+        (
+            "LIGHT_ASKED_TALLY",
+            pyramid::tally_at(tally::LIGHT, tally::ASKED),
+        ),
+        ("LIGHT_T_MAX", light::W_T_MAX as u32),
+        ("LIGHT_ACROSS", light::W_ACROSS as u32),
+        ("LIGHT_DOWN", light::W_DOWN as u32),
+        ("LIGHT_DIR", light::W_DIR as u32),
+        ("LIGHT_BIAS", light::W_BIAS as u32),
+        ("LIGHT_CORNER_X", light::CORNER[0] as u32),
+        ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
+        ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
+        ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
+        ("STARTS_DOWN", light::STARTS_DOWN as u32),
+        ("STARTS_ANCHORS", light::STARTS_ANCHORS as u32),
+        ("STARTS_FRACS", light::STARTS_FRACS as u32),
+        (
+            "LIGHT_MISS_TALLY",
+            pyramid::tally_at(tally::LIGHT, tally::MISS),
+        ),
+        ("CARVE", eye::CARVE as u32),
+        ("HIDE", eye::HIDE as u32),
+        ("FRAME", pyramid::FRAME),
+        ("PASSES", pyramid::PASSES),
+        ("TALLY_ON", pyramid::TALLY_ON),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),
@@ -451,36 +475,17 @@ fn walk_word() -> String {
 }
 
 /// What the world's one query by hand reads (world.wgsl), from pxl-engine and
-/// pxl-content, whose layouts and rules they are; a pxl-content constant kept
-/// private is read off its source's text.
+/// pxl-content, whose layouts and rules they are.
 fn world_word() -> String {
-    use content_param::{cave, strata};
-    use pxl_content::cave::{PIPE, ROOT};
+    use pxl_content::cave::{
+        BLOCK, BLOCKS, CELL_BLOCKS, CROSS, PIPE, ROOT, ROOT_BLOCKS, SPAWN, SPLIT, WALK,
+    };
     use pxl_content::cube::ground as palette;
+    use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
     use pxl_engine::overwrite::{self, Cut};
     use pxl_engine::way::tree;
     use pxl_engine::{area, seed, value};
-    let cave_source = include_str!("../../spec/content/src/cave.rs");
-    let tag = |text: &str, name: &str| -> u32 {
-        let start = format!("const {name}: u32 = ");
-        let line = text
-            .lines()
-            .find_map(|l| l.strip_prefix(start.as_str()))
-            .unwrap_or_else(|| panic!("{name} in its source"));
-        let digits = line.trim_end_matches(';').replace('_', "");
-        match digits.strip_prefix("0x") {
-            Some(hex) => u32::from_str_radix(hex, 16),
-            None => digits.parse(),
-        }
-        .unwrap_or_else(|e| panic!("{name}: {e}"))
-    };
-    let cell_blocks = tag(cave_source, "CELL_BLOCKS");
-    let root_blocks: u32 = cave::ROOT_TUNNELS
-        .iter()
-        .zip(cave::BLOCKS_A_TUNNEL)
-        .map(|(n, b)| n * b)
-        .sum();
     let words: &[(&str, u32)] = &[
         ("LEAF_CELL", pxl_engine::LEAF_CELL),
         ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
@@ -536,15 +541,15 @@ fn world_word() -> String {
         ("STRATA_STONE", palette::stone as u32),
         ("CAVE_ROOT", ROOT),
         ("CAVE_PIPE", PIPE),
-        ("CAVE_BLOCK", PIPE + cell_blocks.trailing_zeros() / 3),
-        ("CELL_BLOCKS", cell_blocks),
-        ("ROOT_BLOCKS", root_blocks),
+        ("CAVE_BLOCK", BLOCK),
+        ("CELL_BLOCKS", CELL_BLOCKS),
+        ("ROOT_BLOCKS", ROOT_BLOCKS),
         ("CAVE_NUDGE", cave::NUDGE),
-        ("CAVE_SPAWN", tag(cave_source, "SPAWN")),
-        ("CAVE_WALK", tag(cave_source, "WALK")),
-        ("CAVE_CROSS", tag(cave_source, "CROSS")),
-        ("CAVE_SPLIT", tag(cave_source, "SPLIT")),
-        ("CAVE_BLOCKS", tag(cave_source, "BLOCKS")),
+        ("CAVE_TAG_SPAWN", SPAWN),
+        ("CAVE_TAG_WALK", WALK),
+        ("CAVE_TAG_CROSS", CROSS),
+        ("CAVE_TAG_SPLIT", SPLIT),
+        ("CAVE_TAG_BLOCKS", BLOCKS),
         ("MASTER_SEED", seed::MASTER_SEED),
         ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
     ];
@@ -746,6 +751,39 @@ fn accessors(text: &str) -> String {
     out
 }
 
+/// `text` with only the module's constants something in it reads.
+fn read_consts(text: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let name_of = |line: &str| {
+        let rest = line.strip_prefix("const ")?;
+        rest.find(|c: char| !is_word(c))
+            .map(|end| rest[..end].to_string())
+    };
+    let mut lines: Vec<&str> = text.lines().collect();
+    loop {
+        let mut names = std::collections::BTreeMap::<&str, u32>::new();
+        for w in lines.iter().flat_map(|l| l.split(|c: char| !is_word(c))) {
+            *names.entry(w).or_default() += 1;
+        }
+        let (mut read, mut unread) = (Vec::with_capacity(lines.len()), false);
+        let mut through = false;
+        for l in &lines {
+            if through {
+                through = !l.contains(';');
+            } else if name_of(l).is_some_and(|name| names[name.as_str()] == 1) {
+                through = !l.contains(';');
+                unread = true;
+            } else {
+                read.push(*l);
+            }
+        }
+        lines = read;
+        if !unread {
+            return lines.join("\n") + "\n";
+        }
+    }
+}
+
 /// Every shader assembled from its parts (part.rs `PARTS`), validated as
 /// WebGPU takes it, every capability off; written where record.rs `source`
 /// includes it; and which stages read each of its bindings, read off its
@@ -770,6 +808,9 @@ fn assemble(out: &Path) {
         for part in parts.iter() {
             text += &read(part);
             text += "\n";
+        }
+        if !generated {
+            text = read_consts(&text);
         }
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -829,6 +870,18 @@ fn assemble(out: &Path) {
         stages += &format!("    &[{}],\n", entries.join(", "));
     }
     assert!(rastered, "no shader holds raster.wgsl's `Raster`");
+    // The world's query asked word for word, as the test and Tint take it, in no shader.
+    let asked = ["walk_word", "world_word", "world", "world_asked"]
+        .map(read)
+        .join("\n");
+    let asked = read_consts(&asked);
+    let module = wgsl::parse_str(&asked)
+        .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
+    Validator::new(ValidationFlags::all(), Capabilities::empty())
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
+    std::fs::write(out.join("assembled").join("world_asked.wgsl"), asked)
+        .expect("the world's asked shader");
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),

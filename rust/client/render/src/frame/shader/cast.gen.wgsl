@@ -1306,7 +1306,7 @@ fn function_() {
                             }
                         }
                         if _e916 {
-                            global_2.member[(6291576u + _e915)] = ((_e70.y << bitcast<u32>(16i)) | _e70.x);
+                            global_2.member[(6291578u + _e915)] = ((_e70.y << bitcast<u32>(16i)) | _e70.x);
                         }
                     }
                 }

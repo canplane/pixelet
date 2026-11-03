@@ -62,6 +62,13 @@ pub fn compute_entry(kind: u32) -> &'static str {
 
 include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
+/// The world's one query asked word for word, as tests/world.rs and Tint take it
+/// (world_asked.wgsl), in no shader the page runs.
+pub const WORLD_ASKED: &str = include_str!(concat!(
+    env!("OUT_DIR"),
+    "/shader/assembled/world_asked.wgsl"
+));
+
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIP: u32 = 11;

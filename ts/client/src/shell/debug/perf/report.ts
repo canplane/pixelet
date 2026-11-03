@@ -40,7 +40,7 @@ type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
 /** The `ray_counts` setting's counts over the window, the kernel's sums of
  * its frames' (perf.json FRAME's rays columns): an observer's line each where
  * it cast — the nodes its beam rays, its samples and its walk again asked a
- * cast, its pixels or slots cast again, those that took the visible sample,
+ * cast, those of the last asked of the world, its pixels or slots cast again, those that took the visible sample,
  * that walked and that took the sky, each as a share of its pixels or its
  * map's slots, the nodes its walk again asked a walking one, and the boxes
  * it drew a cast. */
@@ -59,7 +59,7 @@ const raysText = (f: RayCounts) => {
         at("beam"),
       )}  sample ${perCast(at("sample"))}  miss ${perCast(
         at("miss"),
-      )}   cast again ${part(again)}: took ${part(at("took"))}  walked ${part(
+      )} (${perCast(at("asked"))} asked of the world)   cast again ${part(again)}: took ${part(at("took"))}  walked ${part(
         at("walked"),
       )} (${n1(
         at("miss") / Math.max(1, at("walked")),

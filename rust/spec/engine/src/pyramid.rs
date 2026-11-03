@@ -34,9 +34,9 @@
 //! `CLAIMED` and found to be the one it read, and writes the key last; a
 //! walk that found another put back what it took (pxl-shader pyramid.rs
 //! `pyramid_claim`), the slot claimed in between; a writing
-//! walk that read a slot reads its key again after, and takes what it read
-//! only where the key stood, as another walk may have taken the slot over
-//! in between.
+//! walk that read a slot takes what it read only where it hashes to the
+//! entry's stamp (`stamped`), as another walk may be taking the slot over as
+//! it reads.
 
 use crate::answer::Kind;
 use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
@@ -164,9 +164,9 @@ pub const fn entry_at(i: u32) -> u32 {
 }
 
 /// Whether a slot may keep the node `node` of `zoom`: one under the
-/// world's roots, X's one (`wrap_idx` at zoom 0) and on Y and Z the root
-/// over a Q3's sign, 0 or −1 (`cast::Node::index`). Past them, off the
-/// world, none is kept.
+/// world's roots, on each axis the root over a Q3's sign, 0 or −1, X as the world
+/// names it about the meridian (`wrap_idx`, negative in the west), and Y and Z
+/// (`cast::Node::index`). Past them, off the world, none is kept.
 pub fn keeps(zoom: Zoom, node: [i32; 3]) -> bool {
     // A node past `UNIT_ZOOM` is finer than any walk asks; an i32 shifted by
     // 32 would read as unshifted.
@@ -174,7 +174,7 @@ pub fn keeps(zoom: Zoom, node: [i32; 3]) -> bool {
         return false;
     }
     let (x, y, z) = (node[0] >> zoom, node[1] >> zoom, node[2] >> zoom);
-    x == 0 && (y == 0 || y == -1) && (z == 0 || z == -1)
+    (x == 0 || x == -1) && (y == 0 || y == -1) && (z == 0 || z == -1)
 }
 
 /// The slots a bucket holds: a node is kept in any of its bucket's, so two
@@ -230,6 +230,49 @@ pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
         && key >> (TAG_BITS + ZOOM_BITS) == near
 }
 
+/// An entry's kind word (`W_KIND`): its kind, under 30 bits that hash what a walk takes of
+/// it, the zooms of its key, its answer, what was handed it and its node. A walk that reads a
+/// slot while another may write it takes it only where the words it read hash to the stamp
+/// it read (`stamp_holds`): atomics hold no order between words, so a key read again would
+/// not say they are one entry's. Words that hash alike but for one word never do; any others
+/// one time in 2^30. A slot written over with the same words passes, and they are its answer.
+/// A walk that reads where nothing writes masks the kind (`KIND_MASK`).
+pub fn stamped(
+    kind: Kind,
+    key: u32,
+    asset: [u32; 2],
+    handed: [u32; 4],
+    zoom: Zoom,
+    c: [i32; 3],
+) -> u32 {
+    stamp(kind_word(kind), key, asset, handed, zoom, c) | kind_word(kind)
+}
+
+/// Whether the entry's words read are one write's (`stamped`).
+pub fn stamp_holds(
+    word: u32,
+    key: u32,
+    asset: [u32; 2],
+    handed: [u32; 4],
+    zoom: Zoom,
+    c: [i32; 3],
+) -> bool {
+    word & !KIND_MASK == stamp(word & KIND_MASK, key, asset, handed, zoom, c)
+}
+
+fn stamp(kind: u32, key: u32, asset: [u32; 2], handed: [u32; 4], zoom: Zoom, c: [i32; 3]) -> u32 {
+    let mut h = hash(zoom, c);
+    h = mix(h, key >> TAG_BITS);
+    h = mix(h, kind);
+    h = mix(h, asset[0]);
+    h = mix(h, asset[1]);
+    h = mix(h, handed[0]);
+    h = mix(h, handed[1]);
+    h = mix(h, handed[2]);
+    h = mix(h, handed[3]);
+    (h ^ h >> 16) & !KIND_MASK
+}
+
 /// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
 /// so the walk that asks the world asks again, and is no empty slot, so the walk over
 /// the pyramid alone (pxl-render walk.wgsl) still goes through it, taking none of what
@@ -241,12 +284,21 @@ pub const fn forgotten_split(key: u32) -> u32 {
         | ((1 << ZOOM_BITS) - 1) << (TAG_BITS + ZOOM_BITS)
 }
 
-/// A kind as a word, and back.
+/// A kind as a word, under an entry's stamp in its kind word (`stamped`), and back.
 pub const fn kind_word(kind: Kind) -> u32 {
     kind as u32
 }
 
+pub const KIND_MASK: u32 = 3;
+const _: () = assert!(
+    Kind::Split as u32 <= KIND_MASK
+        && Kind::Cell as u32 <= KIND_MASK
+        && Kind::Lacks as u32 <= KIND_MASK,
+    "a kind fits under the stamp"
+);
+
 pub const fn kind_of(w: u32) -> Kind {
+    let w = w & KIND_MASK;
     if w == Kind::Split as u32 {
         Kind::Split
     } else if w == Kind::Cell as u32 {
@@ -379,6 +431,19 @@ const _: () = assert!(
 mod tests {
     use super::*;
 
+    /// What the world names on every side of the meridian is kept; past its roots, none.
+    #[test]
+    fn keeps_about_the_meridian() {
+        assert!(keeps(0, [0, 0, 0]));
+        assert!(keeps(24, [(1 << 23) - 1, -(1 << 23), -1]));
+        assert!(keeps(24, [-(1 << 23), (1 << 23) - 1, 0]));
+        assert!(keeps(1, [-1, -1, -1]));
+        assert!(!keeps(24, [1 << 24, 0, 0]));
+        assert!(!keeps(24, [0, 1 << 24, 0]));
+        assert!(!keeps(24, [-(1 << 24) - 1, 0, 0]));
+        assert!(!keeps(32, [0, 0, 0]));
+    }
+
     /// A node stands over a box where their columns meet, X round the
     /// world, and not beside it.
     #[test]
@@ -412,6 +477,33 @@ mod tests {
         assert!(!reads_written(held(40 + CHILDREN), 40));
         assert!(!reads_written(held(39), 40));
         assert!(!reads_written(NodeSlot::NOTHING.word(), 0));
+    }
+
+    /// West of X = 0, a node's X negative as the world names it: forgotten over the entry
+    /// its brick names, its neighbour past the brick not, one bit of the mask that entry's.
+    #[test]
+    fn node_forgets_west_of_the_meridian() {
+        let w = 2;
+        let cell = eye_cell(w);
+        let side = 1i32 << BRICK_SHIFT;
+        for x in [-1, -37, -(1 << 12) - 3, -(1 << (cell - 1))] {
+            let y = 5 * side + 2;
+            let q = [x >> BRICK_SHIFT, y >> BRICK_SHIFT];
+            let e = clipmap::entry(q);
+            let mut moved = [0u32; MOVED_WORDS as usize];
+            let k = w * clipmap::ENTRIES + e;
+            moved[(k / 32) as usize] |= 1 << (k % 32);
+            assert!(forgets(&moved, cell, [x, y]), "{x} over its brick");
+            let past = wrap_idx(cell, x + side);
+            assert!(!forgets(&moved, cell, [past, y]), "{x}'s neighbour {past}");
+            let mask = entries_of(q, q);
+            assert_eq!(mask[(e / 32) as usize], 1 << (e % 32), "{x}'s entry");
+            assert_eq!(
+                mask.iter().map(|m| m.count_ones()).sum::<u32>(),
+                1,
+                "{x}'s one bit"
+            );
+        }
     }
 
     /// A node forgets where a brick it reads moved, entry by entry as its

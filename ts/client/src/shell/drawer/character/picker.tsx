@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: color.preview,
+    backgroundColor: color.backdrop,
   },
   chipColumn: {
     flexShrink: 1,
