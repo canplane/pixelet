@@ -15,6 +15,10 @@ The contract that changes is one source: `README.md`, and `ARCHITECTURE.md`'s
 descent "by one function the CPU and the GPU compile alike". The word applies now;
 those documents are changed once what replaces it is settled.
 
+**The web build stays.** The user will not give it up: an app has to be installed,
+which is a barrier to entering. So what replaces rust-gpu has to run well through
+WebGPU in a browser, whatever the native app might do besides.
+
 ## What stood behind it
 
 The user's doubt of the same day: rust-gpu kept to agree three entries, giving up
