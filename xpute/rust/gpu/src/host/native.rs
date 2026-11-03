@@ -92,7 +92,7 @@ pub const SLOT_TAKEN: i32 = -4;
 /// open, or what refused it.
 pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
     let _ = GUEST.set(guest);
-    guest.run(move || {
+    let opened = guest.turn(move || {
         if device().is_some() {
             return Ok(());
         }
@@ -105,7 +105,8 @@ pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
         let host = GpuHost::new(adapter, device, queue, cfg, wake);
         DEVICE.set(Some(Device { instance, host }));
         Ok(())
-    })
+    });
+    opened.unwrap_or(Err(OpenError::Stopped))
 }
 
 /// Binds the guest's surface `handle` to `window`, which `target` makes a
@@ -126,7 +127,7 @@ pub unsafe fn bind(
     target: fn(NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe,
 ) -> i32 {
     let at = window.as_ptr().expose_provenance();
-    guest.run(move || {
+    let bound = guest.turn(move || {
         let Some(d) = device() else { return NOT_OPEN };
         let Some(window) = NonNull::new(core::ptr::with_exposed_provenance_mut(at)) else {
             return NO_SURFACE;
@@ -139,13 +140,15 @@ pub unsafe fn bind(
             return SLOT_TAKEN;
         }
         0
-    })
+    });
+    bound.unwrap_or(NOT_OPEN)
 }
 
 /// Lets `handle`'s window go, if it is still the one bound under its slot
-/// (`GpuHost::unbind`).
+/// (`GpuHost::unbind`). A stopped guest's thread keeps what it held, the window
+/// among it, as the process goes on.
 pub fn unbind(guest: Guest, handle: u32) {
-    guest.run(move || {
+    let _ = guest.turn(move || {
         if let Some(h) = host() {
             h.unbind(handle);
         }

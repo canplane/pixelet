@@ -90,9 +90,18 @@ of the cache.
 
 ## Open
 
-- A kernel stopped on a device aborts the process, so no panic screen shows there.
 - On iOS the location prompt is the system's: the app is inactive under it, so the
   5 s holds nothing open and the prompt must be answered.
+
+## A stop on a device
+
+A kernel that stopped on a device took the process with it, so no panic screen
+showed there. **The contract changed**: stop tells a form last (`Stop::End`), a native
+host ends the guest's thread there, parked as it stands, and the process goes on;
+`xpute_run` answers NaN, which the app's guest throws as a module traps. The doorbell
+throws a trap at no one: it tells `stopped`, and a call answers `-ENOTRECOVERABLE`.
+Forced on the iOS simulator and on the page, both show the blue screen with the stop
+code. No phone has run this.
 
 ## On a device
 

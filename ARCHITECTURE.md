@@ -926,12 +926,12 @@ detail and the source location (`sys/io/failure.rs` `Ended`): a failed fetch is
 asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
-(`ts/client/src/shell/layout.tsx` `endedOf`). A broken invariant is a **bug**,
-and it ends the module (`xpute_guest::stop`, its record the kernel's host
-stream's): on a device the process dies with
-the kernel and its panic hook says why, and in a page the shell shows the blue
-screen with the errno and place as its stop code, as it does for a GPU lost for
-good. Memory pressure is neither; the memory map says how each range meets it.
+(`ts/client/src/shell/cover.ts` `coverOf`). A broken invariant is a **bug**,
+and it ends the kernel (`xpute_guest::stop`, its record the kernel's host
+stream's), and the shell shows the blue screen with the errno and place as its
+stop code, as it does for a GPU lost for good: a page's module traps, and on a
+device the panic hook says why and the kernel's thread stops there, the process
+going on. Memory pressure is neither; the memory map says how each range meets it.
 
 ## The turn
 

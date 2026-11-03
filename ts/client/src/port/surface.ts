@@ -17,7 +17,7 @@ function surface_open(role: u32): u32 {
     port.SHELL,
     Command.SURFACE_OPEN,
     encode_surface_open(HOST.doorbell, role),
-    (result) => result >>> 0,
+    (result) => Math.max(0, result),
   );
 }
 

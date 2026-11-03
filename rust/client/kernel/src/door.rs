@@ -154,9 +154,9 @@ fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
 /// its GPU host's admission): a turn applies waiting submissions, polls tasks
 /// on the quota, and returns when to wake next, in ms (0 for the next frame,
 /// NO_WAKE for none). The first turn boots, on what its host's form hands it
-/// (`boot_info`). `panic_hook` is where a bracket whose process dies with the
-/// kernel reports why: no host is left to run the record, and a panic's text
-/// is not in its numbers. None where the host outlives the kernel (a page).
+/// (`boot_info`). `panic_hook` is where a bracket sharing its process with the
+/// kernel says why, a panic's text not being in the record's numbers, and ends
+/// the kernel's thread without the process. None where the host is apart (a page).
 pub fn run(
     quota_ms: f64,
     boot_info: fn() -> BootInfo,

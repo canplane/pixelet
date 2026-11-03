@@ -15,7 +15,12 @@ export function open(): Promise<Guest> {
   PLATFORM.run(0);
   return Promise.resolve({
     mem,
-    run: (quota_ms: f64) => PLATFORM.run(quota_ms),
+    // NaN: the kernel stopped, as a module's trap throws on a page.
+    run: (quota_ms: f64) => {
+      const wake = PLATFORM.run(quota_ms);
+      if (Number.isNaN(wake)) throw new Error("the kernel stopped");
+      return wake;
+    },
     answer_with: (answer) => PLATFORM.hostcallOn(answer),
   });
 }

@@ -154,7 +154,7 @@ fn pause_keeps_windows() {
     assert_eq!((k.step, k.probing), (0, true));
 }
 
-/// Timed, a window over its budget steps the scale down to `SCALE_MIN`
+/// Timed, a window over its budget steps the scale down to `RES_MIN`
 /// first, then the lattice to `LATTICE_MAX`, a knob a step, each change
 /// followed by its settling windows, and past both holds.
 #[test]
@@ -232,14 +232,14 @@ fn predicted_by_part() {
     let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
     assert!(near(k.predicted(s, w, (k.step, k.lattice)), 0.6));
     assert!(near(k.predicted(s, w, (k.step, 1)), 0.3 + 0.2 + 0.4));
-    let px = 1.0 / (param::SCALE_MIN * param::SCALE_MIN);
+    let px = 1.0 / (param::RES_MIN * param::RES_MIN);
     assert!(near(
         k.predicted(s, w, (0, k.lattice)),
         0.3 + 0.2 * px + 0.1
     ));
 }
 
-/// Untimed, the scale alone moves: past `SCALE_MIN` a window over holds,
+/// Untimed, the scale alone moves: past `RES_MIN` a window over holds,
 /// and the lattice stays the cell's own.
 #[test]
 fn untimed_scale_alone() {
