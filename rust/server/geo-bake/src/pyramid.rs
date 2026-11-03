@@ -14,7 +14,7 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::quadrant::{quad_at, quad_rows, Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, LEAF_ZOOM};
 
 use crate::util;
 use crate::util::{pack, unpack, write_atomic, Level};
@@ -239,6 +239,7 @@ pub(crate) fn fold_parent<'a, L: Base>(
     })
 }
 
+#[cfg(feature = "serve")]
 pub(crate) fn fold_stored<L: Base>(
     set: &TileSet,
     parent: Quadrant,
@@ -427,7 +428,7 @@ fn readers<L: Base>(below: &[Quadrant]) -> Vec<Quadrant> {
             if !quad_rows(q.zoom).contains(&(y + dy)) {
                 continue;
             }
-            let p = quad_at(q.zoom, [x + dx, y + dy]);
+            let p = Quadrant::new(q.zoom, [x + dx, y + dy]);
             if L::sources(p).contains(&c) {
                 out.insert((y + dy, p.at[0], p));
             }

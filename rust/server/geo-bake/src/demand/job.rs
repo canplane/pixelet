@@ -35,7 +35,7 @@ impl Default for Limits {
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
-    Quadrant {
+    Tile {
         kind: super::Kind,
         id: u64,
         cache: PathBuf,
@@ -231,7 +231,7 @@ pub fn connect(
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
-        Job::Quadrant { kind, key, cache } => {
+        Job::Tile { kind, id, cache } => {
             let p = Quadrant::of_id(id);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),

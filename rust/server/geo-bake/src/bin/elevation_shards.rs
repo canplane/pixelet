@@ -14,6 +14,7 @@
 //!
 //!   ./infra/geo/elevation/ingest.sh   # reads it
 
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::process::ExitCode;
 
 use pxl_geo_bake::coverage::{Coverage, SHARD_APRON};
@@ -21,7 +22,7 @@ use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
 use pxl_spec::bake::constant::TILE_ELE_SPAN;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::quadrant::{quad_at, quad_rows, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {
@@ -47,7 +48,7 @@ fn run() -> Result<(), String> {
         let ring = ring as i32;
         for y in (y0 - ring..=y1 + ring).filter(|y| quad_rows(BLOCK_ZOOM).contains(y)) {
             for x in x0 - ring..=x1 + ring {
-                let tile = quad_at(BLOCK_ZOOM, [x, y]);
+                let tile = Quadrant::new(BLOCK_ZOOM, [x, y]);
                 let (west, south, side) = tile.rect();
                 let (w, n) = (merc_from_u(west), merc_from_u(south + side));
                 // A block is the tile: its side is the block's, or the grid is not the pyramid's.

@@ -34,7 +34,6 @@ use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
-use pxl_spec::space::layer::quadrant;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
@@ -256,7 +255,7 @@ fn ray_across_antimeridian() {
             Default::default(),
         )
     };
-    let tile = |x: i32| quadrant::quad_at(LEAF_ZOOM, [x, 0]);
+    let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
     let seam = world::ROUND / 2.0;
     let tile_cache = resident(
         [seam, 100.5],

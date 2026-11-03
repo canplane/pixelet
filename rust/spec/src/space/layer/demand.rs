@@ -7,7 +7,7 @@
 //! (`pxl-kernel domain/layer/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
-use super::quadrant::{quad_at, quad_rows, Quadrant, LEAF_ZOOM};
+use super::quadrant::{quad_rows, Quadrant, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_dist;
 use crate::space::coord::zoom::{units, Zoom};
@@ -52,7 +52,7 @@ pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item
     let ys = quad_rows(zoom);
     squares_within(zoom, at, radius)
         .filter(move |&[_, y]| ys.contains(&y))
-        .map(move |xy| quad_at(zoom, xy))
+        .map(move |xy| Quadrant::new(zoom, xy))
 }
 
 /// `tiles_within` before X wraps.

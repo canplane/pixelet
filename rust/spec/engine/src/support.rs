@@ -332,7 +332,7 @@ mod tests {
             (0, node)
         }
         fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            let up = crate::overwrite::ancestor_at(zoom, node, 1);
+            let up = ancestor_at(zoom, node, 1);
             assert_eq!((at.0 + 1, at.1), (zoom, up), "a child of another node");
             (zoom, node)
         }

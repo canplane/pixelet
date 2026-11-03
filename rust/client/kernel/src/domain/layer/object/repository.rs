@@ -34,7 +34,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
-use pxl_spec::space::layer::quadrant::{quad_at, Quadrant};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
@@ -104,7 +104,7 @@ fn state() -> &'static mut State {
 fn shard_of(key: u128) -> Quadrant {
     let (zoom, at) = node_of::<3>(key);
     let (zoom, at) = shard_over(zoom, [at[0], at[1]]);
-    quad_at(zoom, at)
+    Quadrant::new(zoom, at)
 }
 
 /// Whether every shard under `space` was read, so a write there stands
@@ -116,7 +116,7 @@ pub fn holds(space: &Aabb) -> bool {
         first..=((space.max[k] / side).ceil() as i32 - 1).max(first)
     };
     let st = state();
-    span(1).all(|y| span(0).all(|x| st.is_read(quad_at(SHARD_ZOOM, [x, y]).id())))
+    span(1).all(|y| span(0).all(|x| st.is_read(Quadrant::new(SHARD_ZOOM, [x, y]).id())))
 }
 
 /// The shards the view asks for (domain/view/demand.rs `object_step`), each

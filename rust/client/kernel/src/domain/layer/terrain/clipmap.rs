@@ -25,7 +25,7 @@ use pxl_spec::bake::tile::terrain::{
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::quadrant::{quad_at, Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_guest::global::Global;
 use xpute_guest::mem::off_of_slice;
 use xpute_kit::collection::list::List;
@@ -225,7 +225,7 @@ fn entry_brick(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
 pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
     let zoom = cell - GROUND.tile_cell_shamt();
-    let t = quad_at(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
+    let t = Quadrant::new(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
     (
         t,
         [q[0].rem_euclid(per) as u32, q[1].rem_euclid(per) as u32],
@@ -328,7 +328,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let cell = match (center, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Center::Destination, Some(p)) => {
-                let leaf = quad_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
+                let leaf = Quadrant::new(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
                 terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
             _ => laid,

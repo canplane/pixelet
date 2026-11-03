@@ -2,6 +2,7 @@
 
 use pxl_spec::asset::cube::Object;
 use pxl_spec::space::coord::zoom::UNIT_ZOOM;
+use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
@@ -16,7 +17,7 @@ use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
 fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
-    pxl_spec::space::hierarchy::morton::key_of::<3>(zoom, at)
+    key_of::<3>(zoom, at)
 }
 
 #[test]

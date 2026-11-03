@@ -8,6 +8,8 @@ use crate::answer::{
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
+use crate::overwrite::{ancestor_at, y_start, z_start};
+use crate::HEIGHT_BITS;
 use crate::{wrap_idx, Zoom, FRAC_W, TOP_ZOOM, UNIT_ZOOM};
 use std::vec::Vec;
 
@@ -120,7 +122,7 @@ impl Query for Stand {
         (0, node)
     }
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
-        let parent = crate::overwrite::ancestor_at(zoom, node, 1);
+        let parent = ancestor_at(zoom, node, 1);
         let parent = [wrap_idx(zoom - 1, parent[0]), parent[1], parent[2]];
         assert_eq!(*at, (zoom - 1, parent), "handed {node:?} at {zoom}");
         (zoom, node)
@@ -138,10 +140,8 @@ impl Query for Stand {
         // Y and Z from the world's edge (`overwrite::path`).
         let lo = [
             c[0] as f32 * side,
-            (c[1] + crate::overwrite::y_start(zoom)) as f32 * side
-                - (1u32 << (UNIT_ZOOM - 1)) as f32,
-            (c[2] + crate::overwrite::z_start(zoom)) as f32 * side
-                - (1u32 << (crate::HEIGHT_BITS - 1)) as f32,
+            (c[1] + y_start(zoom)) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
+            (c[2] + z_start(zoom)) as f32 * side - (1u32 << (HEIGHT_BITS - 1)) as f32,
         ];
         let hi = lo.map(|v| v + side);
         if zoom >= near {

@@ -87,7 +87,10 @@ fn point_wrap_x_clamp_y() {
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
     for zoom in [TOP_ZOOM, LEAF_ZOOM] {
         let n = 1i32 << zoom;
-        assert_eq!(quad_at(zoom, [n / 2, 0]), quad_at(zoom, [-n / 2, 0]));
+        assert_eq!(
+            Quadrant::new(zoom, [n / 2, 0]),
+            Quadrant::new(zoom, [-n / 2, 0])
+        );
         assert!(!quad_rows(zoom).contains(&(n / 2)));
     }
 }

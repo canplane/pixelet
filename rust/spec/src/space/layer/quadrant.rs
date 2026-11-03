@@ -37,8 +37,13 @@ pub struct Quadrant {
 }
 
 impl Quadrant {
-    pub fn new(zoom: Zoom, at: [i32; 2]) -> Quadrant {
-        Quadrant { zoom, at }
+    /// The node of `zoom` at `at`, named as `wrap_idx` names its X, so one has
+    /// one name.
+    pub fn new(zoom: Zoom, [x, y]: [i32; 2]) -> Quadrant {
+        Quadrant {
+            zoom,
+            at: [wrap_idx(zoom, x), y],
+        }
     }
 
     /// The tile at `z` the leaf `leaf` lies under.
@@ -73,7 +78,7 @@ impl Quadrant {
         let (zoom, at) = node_of::<2>(morton::key_of_name::<2>(key)?);
         (TOP_ZOOM..=LEAF_ZOOM)
             .contains(&zoom)
-            .then(|| quad_at(zoom, at))
+            .then(|| Quadrant::new(zoom, at))
     }
 
     /// Its place among its parent's `children`.
@@ -130,7 +135,7 @@ pub fn neighborhood(p: Quadrant) -> [Quadrant; 16] {
     let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i32 - 1, (k / 4) as i32 - 1);
-        quad_at(p.zoom + 1, [x + qx, y + qy])
+        Quadrant::new(p.zoom + 1, [x + qx, y + qy])
     })
 }
 
@@ -144,11 +149,6 @@ pub(crate) const fn neighbor_idx(qx: i32, qy: i32) -> usize {
 pub fn quad_rows(zoom: Zoom) -> std::ops::Range<i32> {
     let n = 1 << zoom;
     -n / 2..n / 2
-}
-
-/// The tile at `z` at (x, y), X wrapped around the world.
-pub fn quad_at(zoom: Zoom, [x, y]: [i32; 2]) -> Quadrant {
-    Quadrant::new(zoom, [wrap_idx(zoom, x), y])
 }
 
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.

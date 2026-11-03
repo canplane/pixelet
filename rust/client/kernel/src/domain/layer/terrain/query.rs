@@ -14,7 +14,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{quad_at, Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
@@ -125,7 +125,7 @@ impl TileCache<TerrainTile> {
 /// finest one tile holding it.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Quadrant {
     let read = GROUND.read_zoom(cell).min(zoom);
-    quad_at(read, ancestor_of([at[0], at[1]], zoom - read))
+    Quadrant::new(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
 /// `v`, read off the clip level at `from` (`here`, else none held): exact where

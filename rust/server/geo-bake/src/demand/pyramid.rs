@@ -30,7 +30,7 @@ pub(super) async fn resolve(
         return Ok(None);
     }
     bake_missing(data, runner, kind, p, true).await?;
-    Ok(Some(p.name()))
+    Ok(Some(p.key()))
 }
 
 fn bake_missing(
@@ -43,9 +43,9 @@ fn bake_missing(
     Box::pin(async move {
         let d = data.clone();
         data.cache
-            .once(p.name(), asked, move |lease| async move {
+            .once(p.key(), asked, move |lease| async move {
                 if !d.coverage.meets(p.zoom, p.at) {
-                    return d.cache.publish(&p.name(), None).map_err(Failure::from);
+                    return d.cache.publish(&p.key(), None).map_err(Failure::from);
                 }
                 if p.zoom < kind.leaf() {
                     for below in (d.sources)(p) {
@@ -57,12 +57,12 @@ fn bake_missing(
                         .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
                 }
-                let job = Job::Quadrant {
+                let job = Job::Tile {
                     kind,
-                    id: p.key(),
+                    id: p.id(),
                     cache: d.cache.root.clone(),
                 };
-                runner.run(job, d.clone(), lease, p.name()).await
+                runner.run(job, d.clone(), lease, p.key()).await
             })
             .await
     })
@@ -83,7 +83,7 @@ pub(super) fn execute<L: Base>(
     let pkt = tile
         .map(|tile| {
             pack(
-                &tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?,
+                &tile.encode(p).map_err(|e| format!("{}: {e}", p.key()))?,
                 Level::Live,
             )
             .map_err(|e| e.to_string())

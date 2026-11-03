@@ -3,7 +3,7 @@
 //! A layer's lattice: how many cells its tile holds a side, the same at
 //! every zoom, and its scale on the camera grid's cells.
 
-use super::quadrant::{quad_at, Cell, Quadrant};
+use super::quadrant::{Cell, Quadrant};
 use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
@@ -52,7 +52,7 @@ pub trait Cells {
 impl Cells for Lattice {
     fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell: Zoom) -> Quadrant {
         let z = self.read_zoom(cell);
-        quad_at(z, ancestor_of(column, zoom - z))
+        Quadrant::new(z, ancestor_of(column, zoom - z))
     }
 
     /// The tile whose records fold into the grid's cell at `r2`, a distance
