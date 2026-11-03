@@ -1,13 +1,13 @@
 // pxl-spec/asset/cube.test.rs
 
 use super::*;
-use crate::asset::{decor_num_id, DECOR_IDS};
+use crate::asset::decor::DECORS;
 
 #[test]
 fn cube_round_trip() {
-    for &cube in ALL_CUBES.iter() {
-        assert_eq!(cube_of(cube_id(cube)), Some(cube));
-        assert!(cube_rgb(cube).is_some(), "{cube:?}");
+    for &id in ALL_CUBES.iter() {
+        assert_eq!(cube_of(id), Some(id));
+        assert!(cube_rgb(id).is_some(), "{id}");
     }
 }
 
@@ -20,7 +20,7 @@ fn non_cubes() {
     ] {
         assert_eq!(cube_of(val), None, "{val}");
     }
-    for &id in DECOR_IDS.iter() {
-        assert_eq!(cube_of(decor_num_id(id)), None, "{id:?}");
+    for d in DECORS.iter() {
+        assert_eq!(cube_of(d.id), None, "{}", d.id);
     }
 }

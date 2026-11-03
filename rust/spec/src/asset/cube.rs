@@ -11,52 +11,31 @@ pub use pxl_content::cube::*;
 use crate::asset::color;
 use crate::asset::id::AssetId;
 
-/// A cube of the catalog (`asset/cube.json`) by its number, the shell's too: a
-/// palette entry of the ground's, a byte, or past a byte one that is only ever
-/// placed; a player may place either.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Cube(u16);
-
-impl Cube {
-    pub const fn ground(g: Ground) -> Cube {
-        Cube(g as u16)
-    }
-
-    pub const fn object(o: Object) -> Cube {
-        Cube(o as u16)
-    }
+/// A cube of the catalog (`asset/cube.json`) is its id: a palette entry of the
+/// ground's, a byte, or past a byte one that is only ever placed; a player may
+/// place either. None for VOID, UNKNOWN, AIR or a decor kind.
+pub fn cube_of(id: AssetId) -> Option<AssetId> {
+    let known = match u8::try_from(id) {
+        Ok(byte) => Ground::of(byte).is_some(),
+        Err(_) => u16::try_from(id).ok().and_then(Object::of).is_some(),
+    };
+    known.then_some(id)
 }
 
-/// The asset id a placement stores.
-pub fn cube_id(cube: Cube) -> AssetId {
-    u32::from(cube.0)
-}
-
-/// None for VOID, UNKNOWN, AIR or a decor kind.
-pub fn cube_of(num_id: AssetId) -> Option<Cube> {
-    match u8::try_from(num_id) {
-        Ok(byte) => Ground::of(byte).map(Cube::ground),
-        Err(_) => u16::try_from(num_id)
-            .ok()
-            .and_then(Object::of)
-            .map(Cube::object),
-    }
-}
-
-pub fn cube_rgb(cube: Cube) -> Option<u32> {
-    match u8::try_from(cube.0) {
+pub fn cube_rgb(id: AssetId) -> Option<u32> {
+    match u8::try_from(id) {
         Ok(byte) => color::ground(byte),
-        Err(_) => color::object(cube.0),
+        Err(_) => color::object(u16::try_from(id).ok()?),
     }
     .map(|s| s.rgb)
 }
 
 /// The placed colors first, then the palette in paint order.
-pub static ALL_CUBES: LazyLock<Vec<Cube>> = LazyLock::new(|| {
+pub static ALL_CUBES: LazyLock<Vec<AssetId>> = LazyLock::new(|| {
     Object::ALL
         .into_iter()
-        .map(Cube::object)
-        .chain(Ground::ALL.into_iter().map(Cube::ground))
+        .map(|o| o as AssetId)
+        .chain(Ground::ALL.into_iter().map(|g| g as AssetId))
         .collect()
 });
 

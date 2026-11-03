@@ -5,9 +5,10 @@
 
 use pxl_spec::asset::color;
 use pxl_spec::asset::cube::cube_rgb;
-use pxl_spec::asset::cube::{sentinel, Cube, ALL_CUBES};
+use pxl_spec::asset::cube::{sentinel, ALL_CUBES};
 use pxl_spec::asset::cube::{Ground, Object};
 use pxl_spec::asset::ingest::CubeFace;
+use pxl_spec::asset::AssetId;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 
@@ -24,11 +25,11 @@ pub fn sentinel_layer(s: u8) -> Option<u32> {
     Some((ALL_CUBES.len() + k) as u32)
 }
 
-pub fn palette() -> impl Iterator<Item = Cube> {
+pub fn palette() -> impl Iterator<Item = AssetId> {
     ALL_CUBES.iter().copied()
 }
 
-pub fn layer_idx(cube: Cube) -> u32 {
+pub fn layer_idx(cube: AssetId) -> u32 {
     palette()
         .position(|c| c == cube)
         .expect("a cube of the catalog") as u32

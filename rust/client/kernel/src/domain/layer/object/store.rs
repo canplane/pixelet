@@ -15,8 +15,7 @@
 
 use xpute_guest::global::Global;
 
-use pxl_spec::asset::cube::{cube_of, Cube};
-use pxl_spec::asset::{cube, decor_id_from_num, AssetId, DecorId};
+use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::object::{is_decor, is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
@@ -39,8 +38,8 @@ use pxl_spec::object::volume::fold;
 /// The asset a placed cell holds, by its kind.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Asset {
-    Cube { cube: Cube },
-    Decor { decor_id: DecorId },
+    Cube { id: AssetId },
+    Decor { id: AssetId },
     Marker,
 }
 
@@ -76,14 +75,10 @@ impl Entry {
         if is_marker(self.state) {
             Asset::Marker
         } else if is_decor(self.state) {
-            Asset::Decor {
-                decor_id: decor_id_from_num(self.state),
-            }
+            Asset::Decor { id: self.state }
         } else {
-            Asset::Cube {
-                // Every value the store writes is one the catalog gives out.
-                cube: cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
-            }
+            // Every value the store writes is one the catalog gives out.
+            Asset::Cube { id: self.state }
         }
     }
 }

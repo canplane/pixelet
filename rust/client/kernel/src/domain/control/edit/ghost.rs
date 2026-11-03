@@ -7,9 +7,9 @@
 //! texture and what stands in for a decor not yet loaded, is the scene's
 //! (`domain/scene/indicator/ghost.rs`).
 
-use pxl_spec::asset::cube::{cube_of, Cube};
+use pxl_spec::asset::cube::cube_of;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::asset::DecorId;
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
@@ -28,7 +28,7 @@ use xpute_guest::global::Global;
 
 /// The palette entry of the ground the eraser would carve, of the hovered point:
 /// asked again only where the hover moved or a change touched its column.
-static CARVE_CUBE: Global<Memo<Q3, Option<Cube>>> = Global::new();
+static CARVE_CUBE: Global<Memo<Q3, Option<AssetId>>> = Global::new();
 
 pub fn ghost() -> Ghost {
     let hover = hover();
@@ -58,7 +58,7 @@ pub fn ghost() -> Ghost {
     carved.forget_touched();
     // The cell being carved as the world answers it, whichever source fills
     // it: the ground, a way, a bore's wall.
-    let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
+    let carved_style_cube: Option<AssetId> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             cube_of(
                 w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
@@ -69,19 +69,19 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
 
-    let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.asset())) {
+    let cube: Option<AssetId> = match (active_tool, hovered_object.map(|o| o.asset())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(Asset::Cube { cube })) => Some(cube),
+        (_, Some(Asset::Cube { id })) => Some(id),
         (ActiveTool::Cube, _) => Some(ui.cube),
         _ => carved_style_cube,
     };
 
-    let decor_id = match (active_tool, hovered_object.map(|o| o.asset())) {
-        (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(Asset::Decor { decor_id })) => Some(decor_id),
+    let id = match (active_tool, hovered_object.map(|o| o.asset())) {
+        (ActiveTool::Decor, _) => Some(ui.decor),
+        (_, Some(Asset::Decor { id })) => Some(id),
         _ => None,
     };
-    let decor = decor_id.map(Decor::of);
+    let decor = id.map(Decor::of);
 
     let decor_corner = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered,
@@ -91,7 +91,7 @@ pub fn ghost() -> Ghost {
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, ui.decor_id),
+        (ActiveTool::Decor, Some(h)) => restores_scattered(h, ui.decor),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -108,7 +108,7 @@ pub fn ghost() -> Ghost {
         .scattered_decor
         .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
         .and_then(|s| {
-            let (m, decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
+            let (m, decor) = (s.meta, Decor::find(u32::from(s.id))?);
             Some(Ghost::Decor {
                 at: s.at,
                 decor,

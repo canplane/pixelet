@@ -4,7 +4,8 @@ use super::*;
 use crate::domain::layer::object::store::{Store, AIR};
 use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
-use pxl_spec::asset::cube::{self, cube_id, Cube};
+use pxl_spec::asset::cube::{self};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 
 fn height(at: &Q3) -> f64 {
@@ -33,7 +34,7 @@ fn the_pivot_follows_its_floor() {
     assert!(height(&on(&dug)) < over(5.0), "{}", height(&on(&dug)));
 
     let mut built = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(
         &mut built,
         [ground[0], ground[1], 5.0],

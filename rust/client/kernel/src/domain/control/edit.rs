@@ -8,8 +8,8 @@ pub mod ghost;
 pub mod pick;
 pub mod write;
 
-use pxl_spec::asset::cube::Cube;
-use pxl_spec::asset::{cube, DecorId};
+use pxl_spec::asset::decor::tree;
+use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
@@ -41,20 +41,20 @@ use xpute_guest::global::Global;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tool {
     pub active_tool: ActiveTool,
-    /// A placed color or a ground palette entry.
-    pub cube: Cube,
+    /// A cube's id, the catalog's (`cube_of`).
+    pub cube: AssetId,
     /// The object size by its tier (`object_zoom_of`).
     pub tier: u32,
-    pub decor_id: DecorId,
+    pub decor: AssetId,
 }
 
 impl Default for Tool {
     fn default() -> Tool {
         Tool {
             active_tool: ActiveTool::Pointer,
-            cube: Cube::object(cube::Object::red),
+            cube: cube::Object::red as AssetId,
             tier: 0,
-            decor_id: DecorId::tree,
+            decor: tree as AssetId,
         }
     }
 }

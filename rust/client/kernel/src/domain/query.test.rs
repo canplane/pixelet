@@ -4,7 +4,7 @@
 // parent as the bake folds them, and objects written into a store.
 
 use pxl_spec::asset::cube::{self, ground, sentinel};
-use pxl_spec::asset::cube::{cube_id, Cube};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::space::layer::lattice::{Cells, GROUND, TILE_CELLS};
@@ -30,7 +30,6 @@ use crate::sys::serial;
 use pxl_engine::area::{self, Area};
 use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::asset::DecorId;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -182,7 +181,7 @@ fn no_surface_placed_stands() {
     );
 
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(
         &mut store,
         [x0 + 10.0, y0 + 10.0, 5.0],
@@ -277,7 +276,7 @@ fn ray_across_antimeridian() {
         .top;
 
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
 
@@ -412,7 +411,7 @@ fn half_cube_met() {
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
     let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
@@ -436,7 +435,7 @@ fn half_cube_met() {
 fn walker_stands_any_tier() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
         let (cell, side) = (units(GROUND.cell()), units(zoom));
         let mut store = Store::default();
@@ -464,7 +463,7 @@ fn stack_gap_floored() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for z in [5.0, 7.0] {
         write(&mut store, [x, y, z], OBJECT_COARSEST, red);
     }
@@ -486,7 +485,7 @@ fn coarse_cell_floored_as_drawn() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
     write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
     let access = World::new(&tile_cache, &store);
@@ -516,7 +515,7 @@ fn walker_climbs_or_slides() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // A wall three cubes high in the column east of the walker's.
     for z in [5.0, 6.0, 7.0] {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
@@ -567,7 +566,7 @@ fn height_nearest_floor() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // A deck a cube thick, its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
@@ -792,7 +791,7 @@ fn generated_decor_stays() {
     let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
     let mut store = Store::default();
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, column(6), OBJECT_COARSEST, red);
     assert_eq!(near(&store), bare, "a cube over it moves nothing");
 
@@ -819,7 +818,7 @@ fn generated_decor_edit_removes() {
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();
-        (Decor::of(DecorId::of(tree.id).unwrap()), [cx, cy, cz])
+        (Decor::of(u32::from(tree.id)), [cx, cy, cz])
     };
     let generates_on = |store: &Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = World::new(&tile_cache, store);
@@ -834,7 +833,7 @@ fn generated_decor_edit_removes() {
         .find(|(d, c)| generates_on(&Store::default(), d, *c) == Some(true))
         .expect("a decor generates about the eye");
     let generates = |store: &Store| generates_on(store, decor, [cx, cy, cz]);
-    let red = cube_id(Cube::object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for (dz, val, what, kept) in [
         (0, AIR, "air in its box", false),
         (0, red, "a cube in its box", false),

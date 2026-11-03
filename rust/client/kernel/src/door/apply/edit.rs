@@ -20,7 +20,7 @@ pub(super) fn apply(
     match cmd {
         Command::EDIT_TOOL => {
             use pxl_spec::asset::cube::cube_of;
-            use pxl_spec::asset::DecorId;
+            use pxl_spec::asset::decor::Decor;
             let p = abi::EditTool::read(given(pkt)?)?;
             let mut tool = tool();
             tool.active_tool = p.tool;
@@ -30,10 +30,7 @@ pub(super) fn apply(
                     tool.cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
-                    tool.decor_id = or_refuse(
-                        u16::try_from(p.val).ok().and_then(DecorId::of),
-                        Errno::EINVAL,
-                    )?;
+                    tool.decor = or_refuse(Decor::find(p.val), Errno::EINVAL)?.id;
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
             }

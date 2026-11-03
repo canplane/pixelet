@@ -2,7 +2,7 @@
 
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::id::{kind_of, Kind};
-use pxl_spec::asset::DecorId;
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -23,7 +23,7 @@ pub enum Placeable {
     /// A cube at its tier's zoom.
     Cube(Zoom),
     /// Its box, of the variant and turns its corner draws.
-    Decor(DecorId),
+    Decor(AssetId),
     /// One cell.
     Marker,
 }
@@ -33,7 +33,7 @@ impl Placeable {
     pub fn of(ui: &Tool) -> Option<Placeable> {
         match ui.active_tool {
             ActiveTool::Cube => Some(Placeable::Cube(object_zoom_of(ui.tier))),
-            ActiveTool::Decor => Some(Placeable::Decor(ui.decor_id)),
+            ActiveTool::Decor => Some(Placeable::Decor(ui.decor)),
             ActiveTool::Marker => Some(Placeable::Marker),
             ActiveTool::Pointer | ActiveTool::Eraser => None,
         }

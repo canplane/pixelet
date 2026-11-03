@@ -4,8 +4,6 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::domain::layer::Base as _;
-use pxl_spec::asset::cube::cube_id;
-use pxl_spec::asset::decor_num_id;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
@@ -208,8 +206,8 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         },
         tool: ToolState {
             active: tool.active_tool,
-            cube: cube_id(tool.cube),
-            decor: decor_num_id(tool.decor_id),
+            cube: tool.cube,
+            decor: tool.decor,
             tier: tool.tier,
             draft: write::marker_draft(),
         },

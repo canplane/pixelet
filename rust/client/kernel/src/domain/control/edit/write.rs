@@ -9,11 +9,9 @@ use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
 use pxl_engine::answer::PLACED_ASSET;
-use pxl_spec::asset::cube::{cube_id, Cube};
-use pxl_spec::asset::decor_num_id;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
-use pxl_spec::asset::{cube, DecorId};
+use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::object::is_marker;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -61,7 +59,7 @@ fn submit(write: Write) {
 
 /// Whether a whole-cell pick only undoes a carve: the cell holds an AIR leaf, and
 /// the ground there without it is that cube, its stratum's at that depth.
-fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: Cube) -> bool {
+fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
     if zoom > GROUND.cell() || !is_carved(&world, at) {
         return false;
     }
@@ -71,7 +69,7 @@ fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: Cube) -> bool
         .previewing(Some(entry), None)
         .asset_of(&middle(entry))
         .exact();
-    ground == Some(cube_id(cube))
+    ground == Some(cube)
 }
 
 /// The middle of the cube `at` names.
@@ -88,30 +86,30 @@ pub(super) fn middle(at: EntryAt) -> Q3 {
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
+pub fn place(at: &Q3, zoom: Zoom, cube: AssetId) {
     let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
         VOID
     } else {
-        cube_id(cube)
+        cube
     };
     write_object_val(EntryAt::holding(zoom, at), val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Q3, decor_id: DecorId) {
-    let val = if restores_scattered(at, decor_id).is_some() {
+pub fn place_decor(at: &Q3, id: AssetId) {
+    let val = if restores_scattered(at, id).is_some() {
         VOID
     } else {
-        decor_num_id(decor_id)
+        id
     };
-    write_object_val(EntryAt::holding(Placeable::Decor(decor_id).zoom(), at), val);
+    write_object_val(EntryAt::holding(Placeable::Decor(id).zoom(), at), val);
 }
 
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (Placeable::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
-        .then(|| World::now().generated_instance(Decor::of(decor_id), at))?
+pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
+    (Placeable::Decor(id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
+        .then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: a draft

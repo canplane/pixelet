@@ -6,8 +6,8 @@
 //! with the text it has so far.
 
 use crate::sys::sched::edge::request_world_tick;
-use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
@@ -73,7 +73,7 @@ pub enum Ghost {
 pub struct GhostBox {
     pub at: V3,
     pub size: f64,
-    pub cube: Option<Cube>,
+    pub cube: Option<AssetId>,
     pub erase: bool,
 }
 
