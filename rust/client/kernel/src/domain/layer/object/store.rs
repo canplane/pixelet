@@ -15,9 +15,8 @@
 
 use xpute_guest::global::Global;
 
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::{cube, Asset, AssetId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
-use pxl_spec::object::{is_decor, is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
@@ -34,14 +33,6 @@ use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::overwrite::{self, path, NodeSlot};
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
-
-/// The asset a placed cell holds, by its kind.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Asset {
-    Cube { id: AssetId },
-    Decor { id: AssetId },
-    Marker,
-}
 
 /// A leaf as an asker meets it: its cube, X in the asker's frame, and the
 /// handle of its record in its class's pool.
@@ -70,16 +61,9 @@ impl Entry {
         cube(self.zoom, self.at)
     }
 
-    /// What it is, by its kind; not for air, which is the eraser's mark.
+    /// What it is, as `Asset::of` reads what it holds.
     pub fn asset(&self) -> Asset {
-        if is_marker(self.state) {
-            Asset::Marker
-        } else if is_decor(self.state) {
-            Asset::Decor { id: self.state }
-        } else {
-            // Every value the store writes is one the catalog gives out.
-            Asset::Cube { id: self.state }
-        }
+        Asset::of(self.state)
     }
 }
 

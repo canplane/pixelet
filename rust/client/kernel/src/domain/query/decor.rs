@@ -16,6 +16,7 @@ pub mod intersect;
 use pxl_spec::space::layer::lattice::Cells;
 
 use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::Asset;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
@@ -423,7 +424,7 @@ impl<'a> World<'a> {
 
 /// The box a decor thing claims.
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
-    Some(Decor::find(u32::from(i.id))?.claim(i.at, &i.meta))
+    Some(Asset::of(u32::from(i.id)).decor()?.claim(i.at, &i.meta))
 }
 
 fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {

@@ -11,8 +11,7 @@ use crate::domain::layer::object::size::MARKER_ZOOM;
 use pxl_engine::answer::PLACED_ASSET;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
-use pxl_spec::asset::{cube, AssetId};
-use pxl_spec::object::is_marker;
+use pxl_spec::asset::{cube, Asset, AssetId};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -165,7 +164,7 @@ pub fn commit_draft() {
     };
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().entry_at(at) {
-        Some(e) => is_marker(e.state),
+        Some(e) => e.asset() == Asset::Marker,
         None => !is_placement_blocked(Placeable::Marker, &base_of(zoom, cell)),
     };
     if stands && !text.is_empty() {

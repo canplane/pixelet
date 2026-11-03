@@ -17,8 +17,8 @@ use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
+use pxl_spec::asset::Asset;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::object::is_marker;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -96,7 +96,7 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
 pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
     world.placed_in(columns, &mut |e| {
-        if !is_marker(e.state) {
+        if e.asset() != Asset::Marker {
             return;
         }
         let (stands, base) = pin_at(e.id());

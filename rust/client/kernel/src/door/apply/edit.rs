@@ -19,20 +19,21 @@ pub(super) fn apply(
 ) -> Result<Option<i32>, MarshalError> {
     match cmd {
         Command::EDIT_TOOL => {
-            use pxl_spec::asset::cube::cube_of;
-            use pxl_spec::asset::decor::Decor;
+            use pxl_spec::asset::Asset;
             let p = abi::EditTool::read(given(pkt)?)?;
             let mut tool = tool();
             tool.active_tool = p.tool;
             tool.tier = p.tier;
-            match p.tool {
-                abi::ActiveTool::Cube => {
-                    tool.cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
+            match (p.tool, Asset::of(p.val)) {
+                (abi::ActiveTool::Cube, Asset::Cube(id)) => tool.cube = id,
+                (abi::ActiveTool::Decor, Asset::Decor(d)) => tool.decor = d.id,
+                (abi::ActiveTool::Cube | abi::ActiveTool::Decor, _) => {
+                    return Err(MarshalError::new(Errno::EINVAL));
                 }
-                abi::ActiveTool::Decor => {
-                    tool.decor = or_refuse(Decor::find(p.val), Errno::EINVAL)?.id;
-                }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
+                (
+                    abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker,
+                    _,
+                ) => {}
             }
             set_tool(tool);
             camera_rehover();

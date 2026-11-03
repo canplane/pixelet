@@ -74,7 +74,6 @@ use pxl_render::gpu::renderer;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
-use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
 
@@ -326,7 +325,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         let hide = edits.hide.filter(|&at| {
             crate::domain::query::World::now()
                 .entry_at(at)
-                .is_some_and(|e| object::is_decor(e.state))
+                .is_some_and(|e| e.asset().decor().is_some())
         });
         gpu::step(frame.eye, hide, edits.scattered_cell);
         cloud::step(draw_list(), &frame, &ctx.pass);

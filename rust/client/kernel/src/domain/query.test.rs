@@ -908,3 +908,23 @@ fn area_edge_leaf_cell_thick() {
     assert_eq!(column(0.0), (false, false), "the wall's column");
     assert_eq!(column(-1.0), (false, false), "past the wall");
 }
+
+/// A decor of another version's catalog, read from a saved file, is unknown: no
+/// instance, and the kernel does not stop.
+#[test]
+fn stored_decor_past_the_catalog_is_unknown() {
+    use crate::domain::layer::object::meta::decor_instance;
+    use pxl_spec::asset::id::SHAPE_BITS;
+    use pxl_spec::asset::Asset;
+    use pxl_spec::bake::constant::EntryAt;
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let past: AssetId = (1 << SHAPE_BITS) | ((1 << SHAPE_BITS) - 1);
+    let mut store = Store::default();
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
+    let at = EntryAt::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
+    let entry = World::new(&tile_cache, &store).entry_at(at).unwrap();
+    assert_eq!(entry.state, past);
+    assert_eq!(entry.asset(), Asset::Unknown);
+    assert!(decor_instance(&entry).is_none());
+}
