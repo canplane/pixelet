@@ -34,10 +34,9 @@
   repeated, is no reason to keep it, and an asymmetry is not by itself debt.
 - The records under `doc/` recover intent, scope and limits. A record that
   attributes a decision to the user explicitly makes it an adopted decision;
-  check its scope, and whether a later adopted decision replaced it. A
-  proposal, an attempt or a measurement is no decision, however recent. The
-  user's explicit word now applies within its scope before the documents
-  catch up.
+  check its scope. A proposal, an attempt or a measurement is no decision,
+  however recent. The user's explicit word now applies within its scope before
+  the documents catch up.
 - Keep an established symmetry by role and contract, not by matching module
   lists. A local gain alone does not weaken one or cross a boundary. A
   contract changed on purpose is named as such, with what keeps or replaces

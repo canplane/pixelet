@@ -39,6 +39,11 @@ description: Recommendations for naming in pixelet — short, plain names read w
   | what the shell asks of the kernel | a command | |
   | a guest's call into its host, run now or after the turn | a hostcall | system call, hypercall |
   | the number a frame names at the guest's far side, 0 the host | a port | endpoint, worker id |
+  | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
+  | a node under a shard, through the height as well | `Octant` | EntryAt |
+  | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
+  | a node's name as text, a quadkey or an octkey | its `key` | |
+  | a node's name as a number, its morton code | its `id` | subject, morton |
 
   `at` is where a thing is, `to` where it is going.
 - Keep WebGPU's words in xpute's `gpu/`.
