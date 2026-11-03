@@ -23,10 +23,14 @@ optimization and leaning on a black box
 it was measured slow: no hand-written shader has been compared, and that remained
 so at the decision. What was seen is control. A cut of the stack from 33 entries
 to 8 left `sample.gen.wgsl` with 2,201 function-scope variables of its 2,208, whose
-shape is naga's to choose, on a phone where, in a synthetic pass, 500 variables
-live across the loop in code that never runs cost 400 times what 125 do. How many
-of `sample`'s are live is counted (16 at the walk's head, 301 words at the peak);
-what variables of its shape cost on the S23 is not yet measured.
+shape is naga's to choose. Later that day the S23 said what counts: not the count
+of locals, 6,000 of them scoped to code that never runs costing nothing, but the
+words live across the loop. It holds to 150, rises at 175, refuses a pipeline at
+200 and takes 80 to 240 ns a visit past that, in a synthetic pass. `sample` peaks at
+301 at `d25f5b631` and at 207 with the 8 entries, its 111 ns a node unmoved
+([the record](../experiment/20261103-the-walk-on-a-phone/README.md)). So the shape
+that matters is what stays live, which naga and the inlining made for Adreno both
+bear on; rust-gpu's share of it is not measured.
 
 ## What is proposed, and not decided
 
