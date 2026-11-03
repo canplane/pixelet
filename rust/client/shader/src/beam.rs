@@ -336,6 +336,8 @@ fn beam_by<O: Observer, L: PaletteWords>(
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
 impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
+    type Stack = [Inheritance; cast::DEPTH];
+
     fn keep(&mut self, met: &Trace<Inheritance>, stack: &[Inheritance; cast::DEPTH]) {
         let (n, live) = (&met.hit.node, met.hit.at);
         let base = self.1;

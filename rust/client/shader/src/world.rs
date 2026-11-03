@@ -225,6 +225,10 @@ impl<L: PaletteWords> Query for World<'_, L> {
         Inheritance::of(self, (0, node))
     }
 
+    fn anew(&mut self, zoom: u32, node: [i32; 3]) -> Inheritance {
+        Inheritance::of(self, (zoom, node))
+    }
+
     fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         at.child(self, &self.pool, (zoom, node))
     }

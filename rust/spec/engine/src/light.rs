@@ -1136,6 +1136,7 @@ mod tests {
     impl cast::Query for Bumps {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
+        fn anew(&mut self, _: Zoom, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
         fn node(
             &mut self,

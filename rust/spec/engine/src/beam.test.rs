@@ -121,6 +121,9 @@ impl Query for Stand {
     fn root(&mut self, node: [i32; 3]) -> At {
         (0, node)
     }
+    fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> At {
+        (zoom, node)
+    }
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
         let parent = ancestor_at(zoom, node, 1);
         let parent = [wrap_idx(zoom - 1, parent[0]), parent[1], parent[2]];
@@ -202,6 +205,8 @@ struct Line {
 }
 
 impl cast::Keep<At> for Line {
+    type Stack = [At; DEPTH];
+
     fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
         let z = met.hit.node.zoom as usize;
         self.node = met.hit.node;

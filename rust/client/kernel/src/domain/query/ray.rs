@@ -137,6 +137,10 @@ impl<'a> Query for Walker<'_, 'a> {
         self.world.start((0, node))
     }
 
+    fn anew(&mut self, zoom: Zoom, node: [i32; 3]) -> At {
+        self.world.start((zoom, node))
+    }
+
     /// The child is the one its place in the tree's cut names (`overwrite::path`).
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
         let p = overwrite::path(zoom, node);
