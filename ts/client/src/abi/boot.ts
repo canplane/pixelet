@@ -17,7 +17,12 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
-import { Command, encode_sys_boot } from "@/abi/cmd.spec.ts";
+import {
+  Command,
+  encode_sys_boot,
+  GroundStatus,
+  type Snapshot,
+} from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused_files } from "@/driver/namespace/refusal.ts";
@@ -38,7 +43,7 @@ import { submit_frame } from "@/driver/frame.ts";
 import { abort } from "@/driver/stop.ts";
 import { text_call } from "@/driver/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
-import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
+import { GPU_STATE, gpu_present, set_gpu } from "@/driver/gpu.ts";
 import { world_visible } from "@/driver/sys.ts";
 import { Boot } from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
@@ -66,10 +71,21 @@ const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
     follow_refused_files(kernel_snapshot().refused_files);
+    if (state === Boot.Loading && loaded(kernel_snapshot())) set(Boot.Started);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
 };
+
+/** Whether the world has come, or nothing will show of it: every pipeline made,
+ * and the view drawn or past the service area. A failed location draws the view
+ * at its default. */
+function loaded(s: Snapshot): boolean {
+  return (
+    s.renderer_progress === 1 &&
+    (s.pivot.status === GroundStatus.Success || s.pivot.outside)
+  );
+}
 
 function heard(_tag: u32, cmd: u32, f: BranchCursor | null): void {
   const take = HEARS[cmd as Command];
@@ -85,23 +101,19 @@ export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;
   open().then(
-    () => {
-      console.info("[boot] the kernel started");
-      // Its turns end with it.
-      HOST.doorbell.stopped = () => {
-        HOST.strobe.stop();
-        set(Boot.Stopped);
-      };
-      set(Boot.Started);
+    (declared) => {
+      if (declared && state === Boot.Starting) set(Boot.Loading);
     },
     (err) => {
-      console.error("[boot] the kernel did not start:", err);
-      set(Boot.Failed);
+      console.error("[boot] the client did not start:", err);
+      if (state === Boot.Starting) set(Boot.Failed);
     },
   );
 }
 
-async function open(): Promise<void> {
+/** Whether the client can run: settled once the kernel runs, a GPU has answered
+ * and the world's source is declared; never where no GPU answers. */
+async function open(): Promise<boolean> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
@@ -150,6 +162,13 @@ async function open(): Promise<void> {
   );
   if (booted < 0)
     throw new Error(`the kernel refused its boot: ${strerror(booted)}`);
-  // Not awaited: a dev tile server may answer late.
-  void declare_source();
+  console.info("[boot] the kernel started");
+  // Its turns end with it.
+  HOST.doorbell.stopped = () => {
+    HOST.strobe.stop();
+    set(Boot.Stopped);
+  };
+  const declared = declare_source();
+  await gpu_present();
+  return declared;
 }

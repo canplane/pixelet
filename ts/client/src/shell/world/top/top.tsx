@@ -14,7 +14,6 @@ import { chrome, color, layer } from "@/shell/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorIcons } from "./sensor-icons.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
-import { ProgressBar } from "./progress-bar.tsx";
 import { LocationStack } from "./location-stack.tsx";
 import { ViewButtons } from "./view-buttons.tsx";
 import { BusyDim } from "@/shell/world/busy-dim.tsx";
@@ -103,13 +102,10 @@ export function TopOverlays() {
 }
 
 /** One of the strip's modes at a time, inside the dim with the buttons: the
- * progress bar while the renderer loads, else the scale while zooming, else
- * the address. */
+ * scale while zooming, else the address. */
 function SearchStrip() {
   const { t } = useTranslation();
-  const mode = useKernel((s) =>
-    s.renderer_progress < 1 ? "progress" : s.zooming ? "scale" : "address",
-  );
+  const zooming = useKernel((s) => s.zooming);
   const dim = useDim(1, SNAP);
   return (
     <Motion {...dim.motion} style={styles.fill}>
@@ -120,7 +116,7 @@ function SearchStrip() {
         style={styles.strip}
       >
         <Presence
-          show={mode === "address"}
+          show={!zooming}
           from={{ opacity: 0 }}
           exit={{ opacity: 0 }}
           transition={SETTLE}
@@ -141,10 +137,7 @@ function SearchStrip() {
           </View>
         </Presence>
         <View style={styles.scale}>
-          <MapScaleBar show={mode === "scale"} />
-        </View>
-        <View style={styles.scale}>
-          <ProgressBar show={mode === "progress"} />
+          <MapScaleBar show={zooming} />
         </View>
       </Pressable>
     </Motion>

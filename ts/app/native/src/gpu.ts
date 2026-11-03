@@ -14,5 +14,6 @@ export function boot(heard: GpuHeard): void {
   // A completion the device's host learns of between turns asks the turn
   // that reads it.
   PLATFORM.addListener("onWake", () => heard.wake());
+  heard.state("present");
   heard.ready();
 }

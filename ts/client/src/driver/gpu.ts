@@ -14,7 +14,7 @@ export const GPU_STATE: Readonly<
   lost: Gpu.Lost,
 };
 
-let state = Gpu.Present;
+let state = Gpu.Asking;
 const listeners = new Listeners();
 
 export function gpu(): Gpu {
@@ -27,3 +27,15 @@ export function set_gpu(gpu: Gpu): void {
 }
 
 export const watch_gpu = listeners.watch;
+
+/** Settled once a GPU has answered; never where none does. */
+export function gpu_present(): Promise<void> {
+  return new Promise((resolve) => {
+    if (state === Gpu.Present) return resolve();
+    const stop = watch_gpu(() => {
+      if (state !== Gpu.Present) return;
+      stop();
+      resolve();
+    });
+  });
+}

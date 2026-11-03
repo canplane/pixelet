@@ -141,7 +141,8 @@ async function ask_declaration(): Promise<string | null> {
 }
 
 /** Hands the kernel its part of the declaration (FS_MOUNT); false where
- * it is more than a command carries. */
+ * it is more than a command carries or the kernel refuses it, a format this
+ * build does not read among what it refuses. */
 export type SendSource = (
   top_zoom: number,
   formats: number[],
@@ -155,13 +156,18 @@ function send_source(
 ): boolean {
   const pkt = encode_fs_mount(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(port.SHELL, Command.FS_MOUNT, pkt);
-  return true;
+  return HOST.doorbell.call(
+    port.SHELL,
+    Command.FS_MOUNT,
+    pkt,
+    (result) => result >= 0,
+  );
 }
 
+/** Whether the source was declared; false where it never will be. */
 export async function declare_source(
   send: SendSource = send_source,
-): Promise<void> {
+): Promise<boolean> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
@@ -180,7 +186,7 @@ export async function declare_source(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
     );
     set(Source.Refused);
-    return;
+    return false;
   }
   const shards = Object.keys(read.shard);
   if (
@@ -191,12 +197,13 @@ export async function declare_source(
     )
   ) {
     console.error(
-      `[source] the declaration's ${shards.length} shards are more than a command carries`,
+      `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
     set(Source.Refused);
-    return;
+    return false;
   }
   cur_declaration = read;
   versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(Source.Declared);
+  return true;
 }

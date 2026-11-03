@@ -13,7 +13,7 @@ import * as locale from "@pxl/client/shell/locale/i18n.ts";
 import { boot } from "@pxl/client/abi/boot.ts";
 import { AppLayout } from "@pxl/client/shell/layout.tsx";
 import WorldPage from "@pxl/client/shell/world/page.tsx";
-import { Halt } from "@pxl/client/shell/halt.tsx";
+import { Failed } from "@pxl/client/shell/screens.tsx";
 import { page } from "./bracket.ts";
 import * as webgpu from "./webgpu.ts";
 import "./document.css";
@@ -23,7 +23,7 @@ if (import.meta.env.DEV) (await import("./remote-console.ts")).install();
 bracket.set(page);
 
 try {
-  // The shell's words first: whatever it shows, a halt among it, is in them.
+  // The shell's words first: whatever it shows, a failure among it, is in them.
   locale.boot();
   const missing = await webgpu.missing();
   // The client, bottom up, where there is a GPU to boot it on; the shell
@@ -35,7 +35,7 @@ try {
   createRoot(root).render(
     <StrictMode>
       {missing ? (
-        <Halt of={`halt.${missing}`} />
+        <Failed of={`failed.${missing}`} />
       ) : (
         <AppLayout>
           <WorldPage />

@@ -69,8 +69,8 @@ format exactly (pxl-kernel `sys/io/source.rs`, `reads_every`), and
 lets through a format no deployed client reads. A version in a new format is
 uploaded with `upload` and served with `serve` when the client that reads it
 is out. Under that exact match, whichever goes first, the clients of the other
-format refuse `source` until they are replaced: the switch interrupts one
-side. Whether that is taken, or avoided some other way, is the user's call.
+format refuse `source` until they are replaced, and a page refused says to
+update (`halt.source_refused`): the switch interrupts one side. Whether that is taken, or avoided some other way, is the user's call.
 
 ### Earth
 

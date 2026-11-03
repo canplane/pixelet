@@ -168,7 +168,6 @@
   },
   "toast": {
     "server_unstable": "伺服器連線不穩定。",
-    "source_refused": "此版本無法讀取世界資料，請重新整理試試。",
     "location_checking": "正在確定目前位置。",
     "world_loading": "正在載入空間。",
     "world_ready": "空間已載入。",
@@ -213,7 +212,14 @@
       "pivot": "目前位置"
     }
   },
-  "halt": {
+  "progress": {
+    "gpu": "正在連線 WebGPU。",
+    "offline": "正在等待網路連線。",
+    "server": "正在等待伺服器連線。",
+    "source": "正在確認世界資料。",
+    "shaders": "正在產生著色器。"
+  },
+  "failed": {
     "web": {
       "webgpu": {
         "title": "無法使用 WebGPU。",
@@ -232,21 +238,27 @@
       "title": "發生暫時性錯誤。",
       "body": "請稍後再試。"
     },
-    "kernel_panic": {
-      "title": "應用程式已停止。",
-      "body": "請重新整理頁面。"
-    },
-    "server_failed": {
-      "title": "伺服器連線失敗。",
-      "body": "請稍後再試。"
-    },
-    "gpu_failed": {
+    "gpu": {
       "title": "WebGPU 連線失敗。",
       "body": "請稍後再試。"
     },
-    "gpu_lost": {
+    "source": {
+      "title": "請更新至最新版本。",
+      "body": "此版本無法讀取世界資料。請重新整理頁面或更新應用程式。"
+    }
+  },
+  "panic": {
+    "kernel": {
+      "title": "應用程式已停止。",
+      "body": "請重新整理頁面。"
+    },
+    "gpu": {
       "title": "WebGPU 連線已中斷。",
       "body": "請重新整理頁面。"
+    },
+    "server": {
+      "title": "伺服器連線失敗。",
+      "body": "請稍後再試。"
     },
     "stop_code": "停止代碼：{{code}}"
   }

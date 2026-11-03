@@ -13,7 +13,7 @@ export function useBoot(): Boot {
   const boot = useSyncExternalStore(watch_boot, boot_state);
   // A developer's console over the kernel, once it runs.
   useEffect(() => {
-    if (__IS_DEV__ && boot === Boot.Started) installConsole();
+    if (__IS_DEV__ && boot === Boot.Loading) installConsole();
   }, [boot]);
   return boot;
 }
