@@ -23,7 +23,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
-import { format, object, top, write } from "@/abi/host.spec.ts";
+import { format, object } from "@/abi/host.spec.ts";
 import {
   lay,
   shard_of,
@@ -73,12 +73,9 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
 
 /** The writes a file of `fmt` holds (host.json `write`), in order. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
-  const b = new TreeReader(packet(fmt, bytes)).read_branch();
-  const hi = b.at(write.KEY_HI).get<U64Array>();
-  const lo = b.at(write.KEY_LO).get<U64Array>();
-  const id = b.at(write.ID).get<U32Array>();
-  const rows = b.at(write.TEXT_ROW).get<U32Array>();
-  const texts = b.at(write.TEXT).get<string[]>();
+  const [hi, lo, id, rows, texts] = new TreeReader(packet(fmt, bytes))
+    .read_branch()
+    .get<[U64Array, U64Array, U32Array, U32Array, string[]]>();
   if (hi.length !== lo.length || hi.length !== id.length) {
     throw new FileError(Errno.EINVAL);
   }
@@ -122,10 +119,9 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
 
 /** The top's rows (host.json `top`). */
 export function decode_top(bytes: U8Array): TopRow[] {
-  const b = new TreeReader(packet(format.OBJECT_TOP, bytes)).read_branch();
-  const shard = b.at(top.SHARD).get<U64Array>();
-  const z = b.at(top.Z).get<I32Array>();
-  const fold = b.at(top.FOLD).get<U32Array>();
+  const [shard, z, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
+    .read_branch()
+    .get<[U64Array, I32Array, U32Array]>();
   if (shard.length !== z.length || shard.length !== fold.length) {
     throw new FileError(Errno.EINVAL);
   }

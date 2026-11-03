@@ -6,7 +6,7 @@
 use xpute_kit::status::error::MarshalError;
 
 use crate::bake::malformed;
-use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
+use xpute_kit::wire::xtp::Strs;
 
 pub(crate) struct NameColumns<'a> {
     /// Where each place's pairs start; one longer than the places.
@@ -35,10 +35,9 @@ impl<'a> NameColumns<'a> {
         columns
     }
 
-    pub fn write(&'a self, b: &mut BranchViewImpl<'a>) {
-        b.u32_array(Some(&self.starts))
-            .strs(Some(&self.names))
-            .strs(Some(&self.langs));
+    /// Its three leaves.
+    pub fn leaves(&self) -> (&[u32], &[&'a str], &[&'a str]) {
+        (&self.starts, &self.names, &self.langs)
     }
 }
 
@@ -51,16 +50,17 @@ pub(crate) struct NamesView<'a> {
 }
 
 impl<'a> NamesView<'a> {
-    /// `len` places' names from leaf `at`.
-    pub fn read(
-        root: &BranchCursor<'a>,
-        at: u32,
+    /// `len` places' names from their three leaves.
+    pub fn of(
+        starts: &'a [u32],
+        names: Strs<'a>,
+        langs: Strs<'a>,
         len: usize,
     ) -> Result<NamesView<'a>, MarshalError> {
         let view = NamesView {
-            starts: root.at(at)?.get_array::<u32>()?,
-            names: root.at(at + 1)?.get_strs()?,
-            langs: root.at(at + 2)?.get_strs()?,
+            starts,
+            names,
+            langs,
         };
         let pairs = view.langs.len() as usize;
         let ordered =

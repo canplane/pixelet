@@ -656,7 +656,7 @@ impl<'a> BranchCursor<'a> {
     }
 }
 
-fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
+pub(super) fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
     // SAFETY: the elements are the packet's own bytes, read back as bytes.
     unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) }
 }

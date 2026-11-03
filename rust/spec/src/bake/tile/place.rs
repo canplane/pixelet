@@ -19,7 +19,7 @@ use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
 use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::shape;
 
 use crate::bake::malformed;
 use crate::param::place::SPREAD_STEPS;
@@ -66,6 +66,10 @@ const _: () = assert!(
 
 /// The most a packet takes, a tile past it failing its bake (`encode`).
 pub(crate) const MAX_PKT_BYTES: usize = 1 << 20;
+
+/// Per place its offset (two half-words), its category, the zoom it is shown
+/// from, the source's id and its name; the occupancy.
+type Packet = (Vec<u16>, Vec<u16>, Vec<u8>, Vec<String>, Vec<String>, u8);
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis.
@@ -301,40 +305,27 @@ fn cut_name(name: &str) -> String {
     }
 }
 
-/// One branch: per place its offset (two half-words), its category, the zoom it
-/// is shown from, the source's id and its name; the occupancy.
 pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     validate(tile)?;
     let at: Vec<u16> = tile.at.iter().flatten().copied().collect();
     let ids: Vec<&str> = (0..tile.len()).map(|i| tile.ids.get(i)).collect();
     let names: Vec<&str> = (0..tile.len()).map(|i| tile.names.get(i)).collect();
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u16_array(Some(&at))
-            .u16_array(Some(&tile.categories))
-            .u8_array(Some(&tile.from))
-            .strs(Some(&ids))
-            .strs(Some(&names))
-            .u8(Some(tile.occupancy.bits()));
-    }));
-    encoder().encode(
-        &t,
-        TreeEncoderOptions {
-            init_cap: super::ENCODE_FROM,
-            max_cap: Some(MAX_PKT_BYTES as u32),
-        },
+    shape::encode::<Packet>(
+        (
+            &at,
+            &tile.categories,
+            &tile.from,
+            &ids,
+            &names,
+            tile.occupancy.bits(),
+        ),
+        MAX_PKT_BYTES as u32,
     )
 }
 
 pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
-    let root = TreeReader::new(bytes)?.read_branch()?;
-    let (at, categories, from) = (
-        root.at(0)?.get_array::<u16>()?,
-        root.at(1)?.get_array::<u16>()?,
-        root.at(2)?.get_array::<u8>()?,
-    );
-    let (ids, names) = (root.at(3)?.get_strs()?, root.at(4)?.get_strs()?);
-    let occupancy = occupancy_of(root.at(5)?.get_number()?)?;
+    let (at, categories, from, ids, names, occupancy) = shape::get_deep::<Packet>(bytes)?;
+    let occupancy = occupancy_of(occupancy)?;
     let n = categories.len();
     if at.len() != 2 * n || from.len() != n || ids.len() as usize != n || names.len() as usize != n
     {
