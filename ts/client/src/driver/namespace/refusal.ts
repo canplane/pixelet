@@ -26,7 +26,11 @@ import {
 
 /** A file set aside by the backend `root` is bound to, by its number; false,
  * nothing changed, where it did not. */
-export type SetAside = (root: u32, number: bigint, now_ms: number) => boolean;
+export type SetAside = (
+  root: u32,
+  number: bigint,
+  now_ms: number,
+) => boolean | Promise<boolean>;
 
 /** Each root's backend's own set-aside, STORAGE's over `s`. */
 export function set_aside_by_root(s: Storage): SetAside {
@@ -73,8 +77,12 @@ export function follow_refused_files(
   for (const f of files) {
     const at = `${f.root}/${f.path}`;
     if (emptying.has(at) || !/^\d{1,20}$/.test(f.path)) continue;
-    if (!aside(f.root, BigInt(f.path), Date.now())) continue;
     emptying.add(at);
-    emptied(f);
+    void Promise.resolve(aside(f.root, BigInt(f.path), Date.now())).then(
+      (set) => {
+        if (set) emptied(f);
+        else emptying.delete(at);
+      },
+    );
   }
 }

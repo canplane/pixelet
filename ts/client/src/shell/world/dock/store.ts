@@ -101,10 +101,10 @@ const SEED: readonly RecentPick[] = [
 export const RECENT_PICKS = SEED.length;
 
 // Chat lines are not stored, nor what is held: a load starts at the pointer tool.
-const STORAGE_KEY = "pxl:ui_hotbar";
+const STORAGE_KEY = "pxl:ui";
 
 interface Stored {
-  picks: RecentPick[];
+  hotbar: RecentPick[];
 }
 
 function load(): Stored {
@@ -114,8 +114,8 @@ function load(): Stored {
   } catch {
     /* nothing stored that reads */
   }
-  const picks = Array.isArray(stored?.picks)
-    ? stored.picks
+  const picks = Array.isArray(stored?.hotbar)
+    ? stored.hotbar
         .filter((p) => typeof p === "object" && p !== null && isKnownPick(p))
         .slice(0, RECENT_PICKS)
     : [];
@@ -124,13 +124,13 @@ function load(): Stored {
     if (picks.length >= RECENT_PICKS) break;
     if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
   }
-  return { picks };
+  return { hotbar: picks };
 }
 
 function save(s: DockState): void {
   bracket.storage.set(
     STORAGE_KEY,
-    JSON.stringify({ picks: s.recentPicks } satisfies Stored),
+    JSON.stringify({ hotbar: s.recentPicks } satisfies Stored),
   );
 }
 
@@ -149,7 +149,7 @@ export function selectTier(tier: u32): void {
 }
 
 const store = create<DockState>()(() => ({
-  recentPicks: load().picks,
+  recentPicks: load().hotbar,
   chatLines: [],
   dockMode: DockMode.Palette,
   swatchFlash: { n: 0, cube: null, open: false },

@@ -37,12 +37,12 @@ export const STORAGE: Storage = {
 };
 
 /** A file's bytes as storage keeps them, as text. */
-export function text_of(bytes: U8Array): string {
+function text_of(bytes: U8Array): string {
   return bytes_to_b64url(bytes);
 }
 
 /** The bytes `text` keeps (`kept`); EBADMSG for text that keeps none. */
-export function bytes_of(text: string): U8Array {
+function bytes_of(text: string): U8Array {
   if (!is_b64url(text)) throw new FileError(Errno.EBADMSG);
   try {
     return b64url_to_bytes(text);
@@ -52,7 +52,7 @@ export function bytes_of(text: string): U8Array {
 }
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
-  [storage.SETTINGS, "pxl:storage:settings"],
+  [storage.SETTINGS, "pxl:settings"],
 ]);
 
 /** A slot's storage key; none for a number the kernel does not keep. */
@@ -63,11 +63,7 @@ export function storage_key(slot: u32): string | undefined {
 /** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.
  * False, the key as it was, where the copy did not read back: storage that
  * refuses the write must not see the file emptied. */
-export function set_aside_key(
-  s: Storage,
-  key: string,
-  now_ms: number,
-): boolean {
+function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   const text = s.get(key);
   if (text !== null && text !== "") {
     let aside = `${key}:aside:${now_ms}`;

@@ -153,7 +153,7 @@ the top's rows of the shards they reach; the kernel writes no shard and no top.
 It folds as the tree does, a rule the client's `OBJECT` backend holds again
 (`ts/client/src/driver/namespace/object_tree.ts`), held to the store by one
 record both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
-client's own storage or a server, the kernel cannot tell.
+client's own database or a server, the kernel cannot tell.
 
 **Places** are tiles named like the ground tiles under them, each holding what
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
@@ -874,7 +874,7 @@ read and its edits written:
 | each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
 | `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
 | `STORAGE`          | a storage file's number, in decimal (`storage`)                | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
-| `OBJECT`           | a shard's subject, in decimal; `object.TOP`; `object.EDITS`    | for now a loopback over the platform's storage, which applies the edits (`namespace/object.ts`)              |
+| `OBJECT`           | a shard's subject, in decimal; `object.TOP`; `object.EDITS`    | for now a loopback over the place's database, which applies the edits (`namespace/object.ts`)                |
 
 So the kernel names no URL, version, storage key or platform: a path is a
 number, and where it leads is the client's. The client reads the declaration
@@ -910,14 +910,14 @@ objects' shards, wanted as a layer's tiles are.
 `STORAGE` holds the settings, the one storage file, opened by its number
 (`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
 a platform that keeps text keeps their base64url (`namespace/storage.ts`
-`kept`). A storage file begins with its slot's format byte, and each file below
-`OBJECT` with its own (`host.json` `format`); the kernel refuses one of another
-format, one its backend cannot read as bytes, or one that does not decode, as a
-driver refuses a superblock it does not know, and never writes over it. It names
-each refused file in the snapshot (`refused_files`); the client sets it aside, empties
-it and says so (`FS_TRUNCATED`, `namespace/refusal.ts`), and the kernel reads it
-again. A shard whose file is refused stays unread meanwhile, and no edit stands
-in it.
+`text_of`), and `OBJECT`'s database keeps the bytes. A storage file begins with
+its slot's format byte, and each file below `OBJECT` with its own (`host.json`
+`format`); the kernel refuses one of another format, one its backend cannot read
+as bytes, or one that does not decode, as a driver refuses a superblock it does
+not know, and never writes over it. It names each refused file in the snapshot
+(`refused_files`); the client sets it aside, empties it and says so
+(`FS_TRUNCATED`, `namespace/refusal.ts`), and the kernel reads it again. A shard
+whose file is refused stays unread meanwhile, and no edit stands in it.
 
 ## When something goes wrong
 

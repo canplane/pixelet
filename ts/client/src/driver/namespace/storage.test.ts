@@ -29,26 +29,26 @@ function storage(
 
 test("set_aside - a refused file is copied, read back, then its slot emptied", () => {
   const s = storage({
-    "pxl:storage:settings": "AAAA",
-    "pxl:storage:settings:aside:7": "older",
+    "pxl:settings": "AAAA",
+    "pxl:settings:aside:7": "older",
   });
   assert.deepStrictEqual(set_aside(s, slots.SETTINGS, 7), true);
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings"), "");
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings:aside:7"), "older");
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings:aside:7-1"), "AAAA");
+  assert.deepStrictEqual(s.map.get("pxl:settings"), "");
+  assert.deepStrictEqual(s.map.get("pxl:settings:aside:7"), "older");
+  assert.deepStrictEqual(s.map.get("pxl:settings:aside:7-1"), "AAAA");
 });
 
 test("set_aside - storage that refuses the copy keeps the slot as it was", () => {
-  const s = storage({ "pxl:storage:settings": "AAAA" }, true);
+  const s = storage({ "pxl:settings": "AAAA" }, true);
   assert.deepStrictEqual(set_aside(s, slots.SETTINGS, 7), false);
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings"), "AAAA");
+  assert.deepStrictEqual(s.map.get("pxl:settings"), "AAAA");
   assert.deepStrictEqual(set_aside(storage(), 99, 7), false);
 });
 
 test("open_storage - a file's bytes read back as committed, kept as text", () => {
   const s = storage();
   commit_storage(BigInt(slots.SETTINGS), new Uint8Array([1, 0, 255]), s);
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings"), "AQD_");
+  assert.deepStrictEqual(s.map.get("pxl:settings"), "AQD_");
   assert.deepStrictEqual(
     [...open_storage(BigInt(slots.SETTINGS), s)],
     [1, 0, 255],
@@ -56,7 +56,7 @@ test("open_storage - a file's bytes read back as committed, kept as text", () =>
 });
 
 test("open_storage - text that keeps no bytes is no file of bytes", () => {
-  const s = storage({ "pxl:storage:settings": '{"ao":"screen"}' });
+  const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   let errnum: number | undefined;
   try {
     open_storage(BigInt(slots.SETTINGS), s);
@@ -66,16 +66,17 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
   assert.deepStrictEqual(errnum, Errno.EBADMSG);
 });
 
-test("follow_refused_files - each refused file is set aside and emptied once", () => {
-  const s = storage({ "pxl:storage:settings": '{"ao":"screen"}' });
+test("follow_refused_files - each refused file is set aside and emptied once", async () => {
+  const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   const told: string[] = [];
   const settings = { root: root.STORAGE, path: String(slots.SETTINGS) };
   const tell = (f: { root: number; path: string }): void =>
     void told.push(`${f.root}/${f.path}`);
   follow_refused_files([settings], tell, set_aside_by_root(s));
   follow_refused_files([settings], tell, set_aside_by_root(s));
+  await Promise.resolve();
   assert.deepStrictEqual(told, [`${root.STORAGE}/${slots.SETTINGS}`]);
-  assert.deepStrictEqual(s.map.get("pxl:storage:settings"), "");
+  assert.deepStrictEqual(s.map.get("pxl:settings"), "");
   follow_refused_files([], tell, set_aside_by_root(s));
   assert.deepStrictEqual(told.length, 1);
 });
