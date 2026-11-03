@@ -1,0 +1,140 @@
+{
+ "device": "s23",
+ "label": "a",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 17,
+    "read": 8,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "settled @27",
+   {
+    "frame": 63,
+    "kept": 5962,
+    "claimed": 0,
+    "zero": 518326,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 0 @40",
+   {
+    "frame": 150,
+    "kept": 50345,
+    "claimed": 0,
+    "zero": 473943,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 1 @53",
+   {
+    "frame": 235,
+    "kept": 51137,
+    "claimed": 0,
+    "zero": 473151,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 2 @65",
+   {
+    "frame": 326,
+    "kept": 52475,
+    "claimed": 0,
+    "zero": 471813,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 3 @78",
+   {
+    "frame": 413,
+    "kept": 52395,
+    "claimed": 0,
+    "zero": 471893,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "therm",
+   "Thermal Status: 0 | 45.9, AP"
+  ],
+  [
+   "drive @99",
+   {
+    "frame": 476,
+    "kept": 38978,
+    "claimed": 0,
+    "zero": 485310,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "drive turn @114",
+   {
+    "frame": 507,
+    "kept": 19262,
+    "claimed": 0,
+    "zero": 505026,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "report",
+   "frames n=79  over 29.9s  fps 2.6  moving 79  still 0   refresh 16.6 ms   paced 16.6 ms   scale 1.00   lattice  |   kinds   cast 72  px 1  gated 6   wakes next 79 |   gpu     p50 291.1  p95 756.2  max 837.6 ms busy   (over the 69 frames a read timed) | long frames n=176"
+  ],
+  [
+   "therm",
+   "Thermal Status: 0 | 44.7, AP"
+  ],
+  [
+   "done",
+   114
+  ]
+ ]
+}

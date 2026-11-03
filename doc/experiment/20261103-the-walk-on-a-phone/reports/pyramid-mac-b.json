@@ -1,0 +1,141 @@
+{
+ "device": "mac",
+ "label": "b",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "err",
+    3,
+    "Timeout expired"
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 11,
+    "read": 48,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "settled @21",
+   {
+    "frame": 638,
+    "kept": 6168,
+    "claimed": 0,
+    "zero": 518120,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 0 @33",
+   {
+    "frame": 1361,
+    "kept": 53242,
+    "claimed": 0,
+    "zero": 471046,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 1 @46",
+   {
+    "frame": 2090,
+    "kept": 53909,
+    "claimed": 0,
+    "zero": 470379,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 2 @58",
+   {
+    "frame": 2818,
+    "kept": 54365,
+    "claimed": 0,
+    "zero": 469923,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 3 @70",
+   {
+    "frame": 3545,
+    "kept": 54287,
+    "claimed": 0,
+    "zero": 470001,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "therm",
+   "mac"
+  ],
+  [
+   "drive @89",
+   {
+    "frame": 4686,
+    "kept": 533,
+    "claimed": 0,
+    "zero": 523755,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "drive turn @101",
+   {
+    "frame": 5410,
+    "kept": 533,
+    "claimed": 0,
+    "zero": 523755,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "report",
+   "frames n=1628  over 27.1s  fps 59.9  moving 1628  still 0   refresh 8.2 ms   paced 16.4 ms   scale 1.00   latt |   kinds   cast 166  px 13  gated 1449   wakes next 1522  timer 106 |   gpu     p50 6.0  p95 9.1  max 19.9 ms busy   (over the 1626 frames a read timed) | long frames n=9"
+  ],
+  [
+   "therm",
+   "mac"
+  ],
+  [
+   "done",
+   101
+  ]
+ ]
+}

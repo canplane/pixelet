@@ -1,0 +1,100 @@
+{
+ "device": "s23",
+ "label": "b",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 18,
+    "read": 6,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "settled @31",
+   {
+    "frame": 13,
+    "kept": 3670,
+    "claimed": 0,
+    "zero": 520618,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 0 @44",
+   {
+    "frame": 85,
+    "kept": 10684,
+    "claimed": 0,
+    "zero": 513604,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 1 @57",
+   {
+    "frame": 141,
+    "kept": 44126,
+    "claimed": 0,
+    "zero": 480162,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 2 @70",
+   {
+    "frame": 202,
+    "kept": 45110,
+    "claimed": 0,
+    "zero": 479178,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 3 @82",
+   {
+    "frame": 262,
+    "kept": 67277,
+    "claimed": 0,
+    "zero": 457011,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "therm",
+   "Thermal Status: 0 | 45.0, AP"
+  ]
+ ]
+}

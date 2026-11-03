@@ -228,6 +228,80 @@ start (`reports/s23-step-1a.json`, against `reports/s23-matched.json`):
 - A Mac delta is not given: the two Mac runs were on different displays (a device
   pixel ratio of 2 at 120 Hz, then 1 at 60 Hz), and `beam` moved there too.
 
+## The real page's answers
+
+Whether the page does what "What the S23 did to its table" did, at `d25f5b631`,
+through a wrapper of `createBuffer` that finds the pyramid by its size and reads it
+back between frames (`tools/pyramid.mjs`, `tools/cmp3.py`, `reports/pyramid-*.json`).
+
+**Each kept entry against the code.** Its slot in the bucket its zoom and node hash
+to, a node one under the world's roots, a kind that exists. At the default view, the
+circle, and the drive with the shadows on, 7 reads a run: about 54 thousand kept on
+the Mac, 52 thousand on the S23, none broken on either.
+
+**The same node's answer, device against device.** Kind and asset, of each node the
+two runs both kept, under one key of its zoom, its index and the zooms asked:
+
+| | Nodes in both | Answers differ |
+| --- | --- | --- |
+| At rest, the Mac / the S23 | 6,009 | 0 |
+| At rest, the S23 / the S23 | 6,011 | 2 |
+| The circle, the Mac / the Mac | 54,749 | 4 (0.01%) |
+| The circle, the S23 / the S23 | 33,758 | 2,283 (6.76%) |
+| The circle, the Mac / the S23 | 51,154–65,374 | 1,203–1,225 (1.9–2.4%) |
+
+At rest the S23 answers as the Mac does. Moving, it differs from itself by more than
+from the Mac, at the finest zooms: a slow phone's kept answers are older, of what had
+arrived by then. So no sign that the page suffers the table's fault. This reads what
+the pyramid keeps, at one place, not the pass's other buffers, and only the fault's
+effect on what is kept; `S23 / S23` lost its last reads to a run that stopped early.
+
+## The hand kernel
+
+`749560da1` on `walk-visit`: `sample_hit.wgsl`, 367 lines by hand, a pass before
+`sample_cs` over the pyramid alone, read-only, no atomics, no stack, no `world::node`.
+What it cannot end it leaves to `sample_cs`, which walks it from the start. Live words
+(`tools/livehand.py`): peak 47 in its entry, its callees' own not counted, against
+`sample`'s 301.
+
+The matched circle on the S23, two windows each (`reports/s23-hand-kernel.json`):
+
+| | `d25f5b631` | `749560da1` |
+| --- | --- | --- |
+| fps | 6.9, 7.0 | 14.6, 14.0 |
+| GPU p50, ms | 133.5, 129.2 | 48.3, 51.5 |
+| GPU p95, ms | 244.0, 241.3 | 145.1, 171.5 |
+| `sample_hit` p95 | | 2.2, 2.4 |
+| `sample` p95 | 121.8, 120.6 | 47.3, 54.2 |
+| `miss` p95 | 67.6, 68.7 | 56.6, 57.5 |
+| `beam` p95 | 46.1, 42.9 | 34.1, 35.6 |
+| `generate` p95 | 40.8, 26.3 | 13.3, 14.4 |
+
+- **It makes its pipelines and draws**, on the S23 and the Mac.
+- **The hand pass takes about 2.4 ns a node** on the S23, against the old walk's 111:
+  p95 2.4 ms over the 1.02 million nodes it would leave ended, the baseline's count
+  less what is left, so an estimate. The Mac's `sample_hit` is 1.2 ms over about 1.21
+  million, about 1.0 ns. The ratio a node falls from 62 to about 2, where the passes
+  that walk no tree stand. A reading: the cost was the shape, not the phone. It walks
+  hits alone, so a miss's cost is not in that figure.
+- **What stays is what remains in the big shader.** `ray_counts`' `sample` lane now
+  counts the left ones' walks alone: 103,494 nodes a cast on the S23, 9.2% of the
+  baseline, and 11,851 on the Mac, 1.0%. Why nine times as many are left on the
+  phone is open. 54.2 ms over those is 524 ns a node, far past the 111, so `sample`
+  either pays to be entered, by all 84,413 threads though most return at once, or
+  pays more on a left ray. These were not told apart.
+- **Auto** settles at a scale of 0.50 and a lattice of 2: 21–22 fps, `sample` 61–68,
+  `beam` 18, `miss` 28.
+- **The drive is untouched**: 1.9 fps, `light_walk` p95 1,028 ms. The light's walks
+  are by the old shader.
+- **The picture** on the Mac at rest, sky fixed, against `d25f5b631`: by eye the same;
+  58% of pixels differ, 8.7% by over 2 of 255, 0.38% by over 8 outside the companion,
+  0.0001% by over 32. A frame against itself in one run differs only on the companion.
+  What of that is run to run was not told: a second run opened on another display.
+
+Not checked: that the hand walk answers as `cast::walk` does, ray by ray. The walk is
+written twice and only this picture holds them.
+
 ## What runs by what
 
 `beam` and `sample` dispatch on `Grid::corners` and `Grid::samples`
@@ -312,9 +386,9 @@ no run-time count.
 
 ## Not measured
 
-- The real `sample` with its live words under the cliff: only a hand-written walk or
-  a changed build says.
-- Whether the real page changes its pyramid as the synthetic changed its table.
+- The whole of the walk under the cliff: `sample_hit` is the samples' hits alone.
+- The real page's other buffers, against what the synthetic did to its table.
+- `sample`'s cost apart: being entered, and walking a left ray.
 - The picture of step 1a against `d25f5b631`.
 - What of a node's time is the driver and Chrome's path.
 - The same WGSL in the S23's native app.
