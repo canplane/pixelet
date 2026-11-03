@@ -129,6 +129,10 @@ pub(crate) trait Observer {
     fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
         self.take(w, Level::Sample, id)
     }
+    /// The corner the thread at `id` of `beam_cs` walks: none past those it has.
+    fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        self.take(w, Level::Corner, id)
+    }
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.

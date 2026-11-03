@@ -113,6 +113,17 @@ pub(crate) fn grid(eye: &Eye) -> beam::Grid {
 }
 const _: () = assert!(eye::GRID_WORDS == 20, "`grid` reads the grid's five vec4s");
 
+/// What the walk over the observed pyramid alone left at the place of the thread
+/// `id`, workgroups in a row, off its count and list at word `at`: none past them.
+fn left_at<W: Words + ?Sized>(w: &W, at: u32, id: [u32; 2]) -> [u32; 2] {
+    let place = (id[0] / 8) * 64 + (id[1] % 8) * 8 + id[0] % 8;
+    if place >= w.word(at) {
+        return [u32::MAX; 2];
+    }
+    let s = w.word(at + 1 + place);
+    [s & 0xffff, s >> 16]
+}
+
 impl Observer for Eye {
     type At = [f32; 2];
 
@@ -245,14 +256,13 @@ impl Observer for Eye {
     }
 
     /// The one the walk over the observed pyramid alone left at the thread's
-    /// place among them (pxl-render sample_hit.wgsl), workgroups in a row.
+    /// place among them (pxl-render sample_hit.wgsl).
     fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
-        let at = grid(self).lefts_at;
-        let place = (id[0] / 8) * 64 + (id[1] % 8) * 8 + id[0] % 8;
-        if place >= w.word(at) {
-            return [u32::MAX; 2];
-        }
-        let s = w.word(at + 1 + place);
-        [s & 0xffff, s >> 16]
+        left_at(w, grid(self).lefts_at, id)
+    }
+
+    /// As `sample_walked` (pxl-render beam_hit.wgsl).
+    fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        left_at(w, grid(self).corners_at, id)
     }
 }

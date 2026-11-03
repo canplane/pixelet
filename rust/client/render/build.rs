@@ -394,6 +394,9 @@ fn walk_word() -> String {
         ("BOX_STEPS", answer::BOX_STEPS),
         ("STEPS_MOST", 4096),
         ("JITTER", eye::JITTER as u32),
+        ("LINE_INHERITANCE", beam::LINE_INHERITANCE),
+        ("LINE_STEP", beam::LINE_STEP),
+        ("W_INHERITANCE", pyramid::W_INHERITANCE),
         ("MISS_ACROSS", ray::MISS_ACROSS),
         ("MISS_LANES", ray::MISS_LANES),
         ("MARKS", pyramid::MARKS),
@@ -412,8 +415,9 @@ fn walk_word() -> String {
         ("RAY_FILL_SHIFT", ray::FILL_SHIFT),
     ];
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\n",
-        grid::CELLS_A_RAD / grid::SPANS
+        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\n",
+        grid::CELLS_A_RAD / grid::SPANS,
+        pxl_engine::cast::NARROW,
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");

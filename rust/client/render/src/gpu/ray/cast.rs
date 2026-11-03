@@ -15,11 +15,12 @@ use super::tally::{self, Counts, RayCounts, Tally};
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET,
-    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
-    SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE,
-    SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST,
-    SHADER_SAMPLE, SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM,
+    compute, within, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
+    SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM,
+    SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
+    SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT,
+    SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
+    UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -101,6 +102,11 @@ pub(super) struct CastBuffers {
     miss_hit_group: u32,
     /// `MISS_LEFT_START`'s words, as the pass leaves them.
     miss_left: u32,
+    /// The beam rays' walk over the pyramid alone, ahead of `beam_built`, its
+    /// group as `sample_hit_group`'s, over `beam_left`.
+    beam_hit_built: Pipeline,
+    beam_hit_group: u32,
+    beam_left: u32,
     /// The same passes for the shadow map, an entry each (pxl-shader
     /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
     light_beam_built: Pipeline,
@@ -393,6 +399,7 @@ impl RaysPass {
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
         let sample_hit_built = pipelines.build_compute(g, SHADER_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
         let miss_hit_built = pipelines.build_compute(g, SHADER_MISS_HIT, &MISS_HIT_GROUP);
+        let beam_hit_built = pipelines.build_compute(g, SHADER_BEAM_HIT, &SAMPLE_HIT_GROUP);
         let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, group);
         let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
         let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, group);
@@ -424,6 +431,7 @@ impl RaysPass {
             cells_built,
             sample_built,
             sample_hit_built,
+            beam_hit_built,
             miss_hit_built,
             light_beam_built,
             light_cells_built,
@@ -505,6 +513,11 @@ impl RaysPass {
             group: 0,
             sample_hit_group: 0,
             miss_hit_group: 0,
+            beam_hit_group: 0,
+            beam_left: g.buf(
+                word_bytes(SAMPLE_LEFT_START.len()),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
             miss_left: g.buf(
                 word_bytes(MISS_LEFT_START.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
@@ -1038,6 +1051,16 @@ impl RaysPass {
                     buf_entry(10, c.sample_left),
                 ],
             );
+            release(c.beam_hit_group);
+            c.beam_hit_group = g.bind_group(
+                c.beam_hit_built.layouts[0],
+                &[
+                    buf_entry(0, c.eye),
+                    buf_entry(8, c.beams),
+                    buf_entry(9, c.pyramid),
+                    buf_entry(10, c.beam_left),
+                ],
+            );
             release(c.miss_hit_group);
             c.miss_hit_group = g.bind_group(
                 c.miss_hit_built.layouts[0],
@@ -1230,6 +1253,12 @@ impl RaysPass {
             for (span, pipeline, [x, y], w) in [
                 (
                     GpuSpanName::beam,
+                    &c.beam_hit_built,
+                    c.grid.corners,
+                    compute::BEAM_WORKGROUP,
+                ),
+                (
+                    GpuSpanName::beam,
                     &c.beam_built,
                     c.grid.corners,
                     compute::BEAM_WORKGROUP,
@@ -1263,6 +1292,20 @@ impl RaysPass {
                     continue;
                 }
                 let mut group = c.group;
+                let beam_hit = pipeline.id == c.beam_hit_built.id;
+                let beam_left = pipeline.id == c.beam_built.id;
+                if beam_hit {
+                    group = c.beam_hit_group;
+                    g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
+                }
+                if beam_left {
+                    g.copy_buf(
+                        encoder,
+                        (c.beam_left, word_bytes(3)),
+                        (c.beams, word_bytes(c.grid.corners_at as usize)),
+                        4,
+                    );
+                }
                 if span == GpuSpanName::sample_hit {
                     group = c.sample_hit_group;
                     g.write_buf(c.sample_left, 0, bytes(&SAMPLE_LEFT_START));
@@ -1285,6 +1328,8 @@ impl RaysPass {
                 g.set_pipeline(pass, pipeline.id);
                 if span == GpuSpanName::sample {
                     g.dispatch_indirect(pass, c.sample_left, 0);
+                } else if beam_left {
+                    g.dispatch_indirect(pass, c.beam_left, 0);
                 } else {
                     g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
                 }

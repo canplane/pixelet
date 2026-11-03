@@ -191,8 +191,11 @@ struct Walked {
 }
 
 /// The ray at the tangents `tan_at`, from the start of its cell `cell` (`resume`,
-/// `resume_walk`, `cast::walk`).
-fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
+/// `resume_walk`, `cast::walk`); or, where `line` is a beam ray's line and not
+/// `NONE`, from the root (`Until::Beam`), what was handed each node it visits
+/// written there at once, in place of a stack.
+fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
+  let beam = line != NONE;
   let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
   let raw = aimed / length(aimed);
   let dir = select(raw, vec3<f32>(0.0), abs(raw) < vec3<f32>(1.17549435e-38));
@@ -206,7 +209,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
 
   // Where its cell's start hands it (`resume`, `resume_walk`).
   let at_cell = eye_word(GRID + 11u) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
-  let resumes = beams[at_cell + CELL_RESUMES] != 0u;
+  let resumes = !beam && beams[at_cell + CELL_RESUMES] != 0u;
   var t = 0.0;
   var corner = vec3<u32>(0u);
   var zoom = 0u;
@@ -257,6 +260,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
     let t0 = max(t, largest(s.near));
     let t1 = min(t_max, smallest(s.far));
     var into = false;
+    var visited = false;
     if (t1 > t0) {
       // Its farthest corner and nearest point, squared (`node_dist_sq`).
       let far_v = max(-lo, hi);
@@ -270,6 +274,14 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
         break;
       }
       visits += 1u;
+      visited = true;
+      if (beam) {
+        let held = line + LINE_INHERITANCE + LINE_STEP * zoom;
+        beams[held] = pyramid[w + W_INHERITANCE];
+        beams[held + 1u] = pyramid[w + W_INHERITANCE + 1u];
+        beams[held + 2u] = pyramid[w + W_INHERITANCE + 2u];
+        beams[held + 3u] = pyramid[w + W_INHERITANCE + 3u];
+      }
       let kind = pyramid[w + W_KIND];
       asset = vec2<u32>(pyramid[w + W_ASSET], pyramid[w + W_ASSET + 1u]);
       var near_at = s.near;
@@ -278,19 +290,33 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
         let m = BOX_STEPS - 1u;
         let first = vec3<u32>(asset.x & m, (asset.x >> (2u * BOX_BITS)) & m, (asset.y >> BOX_BITS) & m);
         let past = vec3<u32>((asset.x >> BOX_BITS) & m, asset.y & m, (asset.y >> (2u * BOX_BITS)) & m) + vec3<u32>(1u);
-        let box_lo = units(corner + box_step(first, u, 0u), og, roots);
+        // A beam ray's width at its far corner: it stops at a split it may not
+        // share with the rays about it, and clears one it clears by that.
+        let width = select(0.0, eye_f32(GRID) * length(far_v), beam);
+        let side_w = hi.x - lo.x;
+        let narrow = beam && side_w * side_w < NARROW * NARROW * width * width;
+        let grown = NARROW * width;
+        let box_lo = units(corner + box_step(first, u, 0u), og, roots) - vec3<f32>(grown);
         let box_hi = select(
           units(corner + box_step(past, u, BOX_STEPS - 1u), og, roots),
           hi,
           past >= vec3<u32>(BOX_STEPS),
-        );
+        ) + vec3<f32>(grown);
         let b = span_of(dir, inv, box_lo, box_hi, t0, t_max);
-        into = max(t0, largest(b.near)) < min(t1, smallest(b.far));
+        let meets = max(t0, largest(b.near)) < min(t1, smallest(b.far));
+        into = meets && !narrow;
+        if (meets && narrow) {
+          ends = 1u;
+        }
       } else if (kind == KIND_CELL) {
         let v = asset.x & VAL_MASK;
         let clear = v == VALUE_VOID || v == VALUE_AIR;
         let inside = all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi);
-        if (!clear && !inside) {
+        if (beam) {
+          if (!clear) {
+            ends = 1u;
+          }
+        } else if (!clear && !inside) {
           let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
           if (k == 0u) {
             ends = 1u;
@@ -326,7 +352,9 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>) -> Walked {
       t = t0;
     } else {
       if (t1 >= t_max) {
-        ends = 3u;
+        // Unvisited, what was handed it is not in the line: asked of the world.
+        ends = select(3u, 4u, beam && !visited);
+        hit_t = t1;
         break;
       }
       // ADVANCE: the corner stepped on the axis it leaves by, then POP.

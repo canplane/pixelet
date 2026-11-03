@@ -323,7 +323,7 @@ fn beam_by<O: Observer, L: PaletteWords>(
     beams: &mut Beams,
 ) {
     let [across, down] = o.corners();
-    let c = o.take(&*beams, Level::Corner, [id.x, id.y]);
+    let c = o.corner_walked(&*beams, [id.x, id.y]);
     if c[0] >= across || c[1] >= down {
         return;
     }

@@ -57,7 +57,7 @@ fn miss_hit_cs(
     vec2<u32>(max(floor(vec2<f32>(tan_at.x + tan_xy.x, tan_xy.y - tan_at.y) / s), vec2<f32>(0.0))),
     span_n - vec2<u32>(1u),
   );
-  let w = walk(tan_at, cell);
+  let w = walk(tan_at, cell, NONE);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {

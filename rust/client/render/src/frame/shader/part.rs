@@ -191,7 +191,10 @@ pub const SHADER_SAMPLE_HIT: u32 = 81;
 /// The missed pixels' walk over the observed pyramid alone, by hand: what it does
 /// not end `SHADER_MISS_LIST` walks again.
 pub const SHADER_MISS_HIT: u32 = 82;
-pub const SHADERS: u32 = 83;
+/// The beam rays' walk over the observed pyramid alone, by hand: what it does not
+/// end `SHADER_BEAM` walks again.
+pub const SHADER_BEAM_HIT: u32 = 83;
+pub const SHADERS: u32 = 84;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -480,4 +483,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["walk_word", "walk", "sample_hit"],
     // SHADER_MISS_HIT
     &["walk_word", "walk", "miss_hit"],
+    // SHADER_BEAM_HIT
+    &["walk_word", "walk", "beam_hit"],
 ];
