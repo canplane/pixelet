@@ -130,7 +130,11 @@ const TYPES: &[Type] = &[
         overture: "place",
         table: "overture_places",
         columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
-        indexes: &["USING GIN (properties)", "USING GIN (name gin_trgm_ops)"],
+        indexes: &[
+            "USING GIN (properties)",
+            "USING GIN (name gin_trgm_ops)",
+            "(name) INCLUDE (gers_id, geom)",
+        ],
     },
     Type {
         overture: "segment",
@@ -301,7 +305,11 @@ fn run() -> Result<(), String> {
             add(&mut client, ty, &shards, &release, &accessed_at)?
         };
         client
-            .batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table))
+            .batch_execute(&format!("DROP TABLE {}", staging(ty)))
+            .map_err(|e| e.to_string())?;
+        // The visibility map too, or the index on a place's name reads the rows after all.
+        client
+            .batch_execute(&format!("VACUUM (ANALYZE) {}", ty.table))
             .map_err(|e| e.to_string())?;
         println!(
             "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
