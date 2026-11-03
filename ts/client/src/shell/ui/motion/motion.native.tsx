@@ -14,7 +14,6 @@ import {
   type Pose,
   resolve,
   type SpinProps,
-  type SweepProps,
 } from "@/shell/ui/motion/pose.ts";
 import { curveAt, type Transition } from "@/shell/ui/motion/transition.ts";
 
@@ -179,39 +178,5 @@ export function Spin({ periodMs, children }: SpinProps) {
     >
       {children}
     </Animated.View>
-  );
-}
-
-export function Sweep({ fromX, toX, periodMs, style }: SweepProps) {
-  const pass = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    pass.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(pass, {
-        toValue: 1,
-        duration: periodMs,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [periodMs]);
-  return (
-    <Animated.View
-      style={[
-        style,
-        {
-          transform: [
-            {
-              translateX: pass.interpolate({
-                inputRange: [0, 1],
-                outputRange: [fromX, toX],
-              }),
-            },
-          ],
-        },
-      ]}
-    />
   );
 }

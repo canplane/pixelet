@@ -35,6 +35,7 @@ const INIT: Snapshot = {
   refused_files: [],
   stall: null,
   renderer_progress: 0,
+  area_progress: 0,
 };
 
 let snapshot: Snapshot = INIT;

@@ -10,11 +10,11 @@ import { ProgressBar } from "./progress-bar.tsx";
 
 /** Over the world while it starts: the bar, and under it what it waits on. `of`
  * is the locale key of that line. */
-function Progress({ of, made }: { of: string; made: number }) {
+function Progress({ of, share }: { of: string; share: number }) {
   const { t } = useTranslation();
   return (
     <View style={styles.cover}>
-      <ProgressBar made={made} />
+      <ProgressBar share={share} />
       <Text style={styles.line}>{t(of)}</Text>
     </View>
   );
@@ -61,7 +61,7 @@ function Panic({ of, code }: { of: string; code: string | null }) {
 export function Screen({ cover }: { cover: Cover }) {
   switch (cover.kind) {
     case "progress":
-      return <Progress of={cover.of} made={cover.made} />;
+      return <Progress of={cover.of} share={cover.share} />;
     case "failed":
       return <Failed of={cover.of} />;
     case "panic":

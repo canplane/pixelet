@@ -40,6 +40,7 @@ export function useStanding(): Standing {
     stall,
     stopCode: useSyncExternalStore(watch_boot, stop_code),
     made: useKernel((s) => s.renderer_progress),
+    area: useKernel((s) => s.area_progress),
     placed: useKernel((s) => s.pivot.status !== GroundStatus.Idle),
   };
 }

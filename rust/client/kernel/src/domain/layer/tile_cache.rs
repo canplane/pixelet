@@ -446,10 +446,32 @@ impl<L: Base> TileCache<L> {
     /// while the eye moves is.
     pub fn is_shown(&self) -> bool {
         let mut lines = Lines::default();
+        self.asked()
+            .all(|p| self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some())
+    }
+
+    /// How much of what is asked for shows, as `is_shown` asks, 0 to 1; none
+    /// where nothing is asked yet. It goes back as more is asked for.
+    pub fn shown_share(&self) -> f64 {
+        let (mut lines, mut asked, mut shown) = (Lines::default(), 0u32, 0u32);
+        for p in self.asked() {
+            asked += 1;
+            if self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some() {
+                shown += 1;
+            }
+        }
+        if asked == 0 {
+            0.0
+        } else {
+            f64::from(shown) / f64::from(asked)
+        }
+    }
+
+    fn asked(&self) -> impl Iterator<Item = Tile> + '_ {
         self.tiles
             .iter()
             .filter(|(_, e)| e.ask.is_some())
-            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some())
+            .map(|(&p, _)| p)
     }
 
     pub fn answer_above(&mut self, p: Tile) {

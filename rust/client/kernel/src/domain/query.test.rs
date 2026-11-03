@@ -928,3 +928,12 @@ fn stored_decor_past_the_catalog_is_unknown() {
     assert_eq!(entry.asset(), Asset::Unknown);
     assert!(decor_instance(&entry).is_none());
 }
+
+/// The share of the bar the ground gives: of the tiles asked for, those that show.
+#[test]
+fn shown_share_of_what_is_asked() {
+    let _g = serial();
+    let (tile_cache, _) = flat_at_five();
+    assert!(tile_cache.is_shown());
+    assert_eq!(tile_cache.shown_share(), 1.0);
+}

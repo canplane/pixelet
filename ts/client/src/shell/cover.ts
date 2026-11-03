@@ -32,6 +32,8 @@ export interface Standing {
   stopCode: string | null;
   /** How much of what the renderer makes is made, 0 to 1. */
   made: number;
+  /** How much of the view's ground shows, 0 to 1. */
+  area: number;
   /** The view has a place: the kernel has heard where, or gave up on the location. */
   placed: boolean;
 }
@@ -40,14 +42,14 @@ export interface Standing {
  * while something it waits on may yet come; failed, where it will not; a panic,
  * with the stop code a screenshot sent back needs. */
 export type Cover =
-  | { kind: "progress"; of: string; made: number }
+  | { kind: "progress"; of: string; share: number }
   | { kind: "failed"; of: string }
   | { kind: "panic"; of: string; code: string | null };
 
 const progress = (s: Standing, of: string): Cover => ({
   kind: "progress",
   of,
-  made: s.made,
+  share: (s.made + s.area) / 2,
 });
 const failed = (of: string): Cover => ({ kind: "failed", of });
 const panic = (of: string, code: string | null): Cover => ({

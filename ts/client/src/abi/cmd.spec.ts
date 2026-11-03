@@ -203,6 +203,8 @@ export interface Snapshot {
   stall: Message | null;
   /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
   renderer_progress: f64;
+  /** How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for. */
+  area_progress: f64;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -224,6 +226,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     refused_files: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
     renderer_progress: b.at(16).get<f64>(),
+    area_progress: b.at(17).get<f64>(),
   };
 }
 

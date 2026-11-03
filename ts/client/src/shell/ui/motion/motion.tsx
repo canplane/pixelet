@@ -14,7 +14,6 @@ import {
   type Pose,
   resolve,
   type SpinProps,
-  type SweepProps,
 } from "@/shell/ui/motion/pose.ts";
 import type { Transition } from "@/shell/ui/motion/transition.ts";
 
@@ -157,20 +156,4 @@ export function Spin({ periodMs, children }: SpinProps) {
     return () => turn?.cancel();
   }, [periodMs]);
   return <View ref={node}>{children}</View>;
-}
-
-export function Sweep({ fromX, toX, periodMs, style }: SweepProps) {
-  const node = useRef<View | null>(null);
-  useLayoutEffect(() => {
-    const el = node.current as unknown as HTMLElement | null;
-    const pass = el?.animate(
-      [
-        { transform: `translateX(${fromX}px)` },
-        { transform: `translateX(${toX}px)` },
-      ],
-      { duration: periodMs, iterations: Infinity, easing: "linear" },
-    );
-    return () => pass?.cancel();
-  }, [fromX, toX, periodMs]);
-  return <View ref={node} style={style} />;
 }

@@ -84,14 +84,12 @@ of the cache.
   says so (`progress.location`); then the driver reports a timeout
   (`driver/sensor.ts`, only while the prompt stands), the kernel opens at its
   fallback, and no toast calls it a failure. A later answer moves the view.
-- **The wait for the area gets a share of the bar**: the tiles asked for that show,
-  from the kernel, after the shaders' share. It may go back as more are asked for;
-  nothing holds it up. It waits for the GPU session to leave `rust/`. Until then a
-  piece passes along the full bar (`Sweep`).
+- **The wait for the area gets a share of the bar**: half the renderer's, half the tiles
+  asked for that show, from the kernel (`area_progress`). It may go back as more are
+  asked for; nothing holds it up, the user having said no ad hoc is wanted for it.
 
 ## Open
 
-- The bar's share of the tiles.
 - A kernel stopped on a device aborts the process, so no panic screen shows there.
 - On iOS the location prompt is the system's: the app is inactive under it, so the
   5 s holds nothing open and the prompt must be answered.

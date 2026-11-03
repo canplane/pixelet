@@ -32,6 +32,7 @@ const running: Standing = {
   stall: null,
   stopCode: null,
   made: 1,
+  area: 1,
   placed: true,
 };
 const starting: Standing = {
@@ -61,7 +62,11 @@ test("coverOf - before it ran: failed where it will not, progress while it waits
     [{ source: SOURCE_FAILING }, "progress.server"],
     [{ gpu: GPU_PRESENT }, "progress.source"],
   ] as const) {
-    expect(of(s)).toEqual({ kind: "progress", of: key, made: expect.any(Number) });
+    expect(of(s)).toEqual({
+      kind: "progress",
+      of: key,
+      share: expect.any(Number),
+    });
   }
 });
 
@@ -76,10 +81,16 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
     [{ stall: Message.WorldReadFailing }, "progress.server"],
     [{ gpu: GPU_WAITING }, "progress.gpu"],
   ] as const) {
-    expect(of(s)).toEqual({ kind: "progress", of: key, made: expect.any(Number) });
+    expect(of(s)).toEqual({
+      kind: "progress",
+      of: key,
+      share: expect.any(Number),
+    });
   }
   expect(of({ gpu: GPU_LOST })).toMatchObject({ kind: "panic" });
-  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({ kind: "panic" });
+  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
+    kind: "panic",
+  });
 });
 
 test("coverOf - once it shows, a panic or nothing", () => {
@@ -101,4 +112,13 @@ test("coverOf - once it shows, a panic or nothing", () => {
     of: "panic.app",
     code: "X",
   });
+});
+
+test("coverOf - the bar's share: half what the renderer makes, half what shows", () => {
+  const share = (made: number, area: number) =>
+    coverOf({ ...loading, made, area, placed: true });
+  expect(share(0, 0)).toMatchObject({ share: 0 });
+  expect(share(1, 0)).toMatchObject({ share: 0.5 });
+  expect(share(1, 0.5)).toMatchObject({ share: 0.75 });
+  expect(share(1, 1)).toMatchObject({ share: 1 });
 });
