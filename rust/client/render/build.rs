@@ -112,7 +112,10 @@ fn main() {
         let bits: Vec<u32> = (0..2 * n)
             .map(|k| corner(k % n, k >= n))
             .map(|c| {
-                assert!(c.iter().all(|&v| v == 0 || v == 1), "a corner's a 0 or a 1 a lane");
+                assert!(
+                    c.iter().all(|&v| v == 0 || v == 1),
+                    "a corner's a 0 or a 1 a lane"
+                );
                 c[0] as u32 | (c[1] as u32) << 1 | (c[2] as u32) << 2
             })
             .collect();
