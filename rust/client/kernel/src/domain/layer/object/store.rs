@@ -15,7 +15,8 @@
 
 use xpute_guest::global::Global;
 
-use pxl_spec::asset::{cube, Asset, AssetId};
+use crate::domain::layer::object::asset::Asset;
+use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;

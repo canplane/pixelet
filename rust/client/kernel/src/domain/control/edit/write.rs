@@ -3,15 +3,16 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the world's query and written to the store.
 
-use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads, Placeable};
+use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads};
 use crate::domain::control::edit::{hover, tool, ActiveTool};
+use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
 use pxl_engine::answer::PLACED_ASSET;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
-use pxl_spec::asset::{cube, Asset, AssetId};
+use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -84,8 +85,21 @@ pub(super) fn middle(at: EntryAt) -> Q3 {
     )
 }
 
+impl Asset {
+    /// What a tap with it held does at `at`, its cube at `zoom`.
+    pub fn place(self, at: &Q3, zoom: Zoom) {
+        match self {
+            Asset::Cube(id) => place_cube(at, zoom, id),
+            Asset::Decor(id) => place_decor(at, zoom, id),
+            // A draft opens there, its text the shell's to write.
+            Asset::Marker => draft_new(at),
+            Asset::Unknown => {}
+        }
+    }
+}
+
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Q3, zoom: Zoom, cube: AssetId) {
+fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
     let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
         VOID
     } else {
@@ -96,18 +110,18 @@ pub fn place(at: &Q3, zoom: Zoom, cube: AssetId) {
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Q3, id: AssetId) {
+fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
     let val = if restores_scattered(at, id).is_some() {
         VOID
     } else {
         id
     };
-    write_object_val(EntryAt::holding(Placeable::Decor(id).zoom(), at), val);
+    write_object_val(EntryAt::holding(zoom, at), val);
 }
 
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
-    (Placeable::Decor(id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
+    (Decor::of(id).row.cell_zoom() <= GROUND.cell() && is_carved(&World::now(), at))
         .then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
@@ -165,7 +179,7 @@ pub fn commit_draft() {
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().entry_at(at) {
         Some(e) => e.asset() == Asset::Marker,
-        None => !is_placement_blocked(Placeable::Marker, &base_of(zoom, cell)),
+        None => !is_placement_blocked(Asset::Marker, zoom, &base_of(zoom, cell)),
     };
     if stands && !text.is_empty() {
         submit(Write {
@@ -229,7 +243,7 @@ pub struct Pending {
     /// corner and the store's revision. Asked again only where one moved or
     /// a change touched the columns it reads (`placement_reads`,
     /// `changes::within`), as a step each frame turn sees each change once.
-    blocked_key: Option<(Placeable, Q3, u32)>,
+    blocked_key: Option<(Asset, Zoom, Q3, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -248,25 +262,25 @@ pub fn pending_step() -> RenderEdits {
     let object = hover.object_at.and_then(|at| world.entry_at(at));
     let scattered = hover.scattered_decor.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
-    let placeable = Placeable::of(&ui);
-    let zoom = match (placeable, &object) {
-        (Some(placeable), _) => placeable.zoom(),
+    let asset = ui.asset();
+    let zoom = match (asset, &object) {
+        (Some(asset), _) => asset.zoom(ui.tier),
         (None, Some(o)) => o.zoom,
         // A terrain carve is a whole cell: the scan emits nothing for a zero
         // material whatever its sub-cell bytes, so the cell goes whole anyway.
         (None, None) => GROUND.cell(),
     };
-    let (blocked, blocked_key) = match (&hovered, placeable) {
-        (Some(h), Some(placeable)) => {
-            let blocked_key = Some((placeable, *h, world.revision()));
+    let (blocked, blocked_key) = match (&hovered, asset) {
+        (Some(h), Some(asset)) => {
+            let blocked_key = Some((asset, zoom, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
             let same = was.blocked_key == blocked_key
-                && !changes::within(placement_reads(placeable, h), &[]);
+                && !changes::within(placement_reads(asset, zoom, h), &[]);
             (
                 if same {
                     was.blocked
                 } else {
-                    is_placement_blocked(placeable, h)
+                    is_placement_blocked(asset, zoom, h)
                 },
                 blocked_key,
             )

@@ -134,11 +134,11 @@ impl decor::Decor {
     }
 
     /// The decor an id names, or none for an id the catalog does not give out.
-    fn find(id: AssetId) -> Option<&'static decor::Decor> {
+    pub fn find(id: AssetId) -> Option<&'static decor::Decor> {
         decor::DECORS.iter().find(|d| d.id == id)
     }
 
-    /// The decor of an id already read (`Asset::of`), as a tool holds it.
+    /// The decor of an id known to be one, as a tool holds it.
     pub fn of(id: AssetId) -> &'static decor::Decor {
         use xpute_kit::status::bug::OrBug;
         decor::Decor::find(id).or_bug(Errno::ENOTRECOVERABLE)
@@ -213,43 +213,6 @@ pub fn shipped_sentinel_tile(sentinel: u8) -> Option<TileOrigin> {
     sentinel_tile_of(sentinel).map(origin)
 }
 
-/// What an id names, the one reading of one, stored or handed in: a cube, a decor
-/// or a marker the catalog gives out. Anything else is `Unknown`, of another
-/// version's catalog among them: taken for nothing here, drawn as the catalog's
-/// `unknown`, and left as it is where it is stored.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Asset {
-    Cube(AssetId),
-    Decor(&'static decor::Decor),
-    Marker,
-    Unknown,
-}
-
-impl Asset {
-    pub fn of(id: AssetId) -> Asset {
-        match id::kind_of(id) {
-            Some(id::Kind::cube) => cube::cube_of(id).map_or(Asset::Unknown, Asset::Cube),
-            Some(id::Kind::decor) => decor::Decor::find(id).map_or(Asset::Unknown, Asset::Decor),
-            Some(id::Kind::marker) => Asset::Marker,
-            _ => Asset::Unknown,
-        }
-    }
-
-    pub fn cube(self) -> Option<AssetId> {
-        match self {
-            Asset::Cube(id) => Some(id),
-            _ => None,
-        }
-    }
-
-    pub fn decor(self) -> Option<&'static decor::Decor> {
-        match self {
-            Asset::Decor(d) => Some(d),
-            _ => None,
-        }
-    }
-}
-
 /// The width and height a PNG's or a WebP's header gives; none for any other file.
 pub fn image_size(file: &[u8]) -> Option<(u32, u32)> {
     let be = |at: usize| Some(u32::from_be_bytes(file.get(at..at + 4)?.try_into().ok()?));
@@ -285,7 +248,3 @@ pub fn image_size(file: &[u8]) -> Option<(u32, u32)> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-#[path = "asset.test.rs"]
-mod test;

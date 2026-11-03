@@ -15,8 +15,8 @@ pub mod intersect;
 
 use pxl_spec::space::layer::lattice::Cells;
 
+use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
-use pxl_spec::asset::Asset;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};

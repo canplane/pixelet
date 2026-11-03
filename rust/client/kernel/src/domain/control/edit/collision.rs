@@ -1,80 +1,31 @@
 // pxl-kernel/domain/control/edit/collision.rs
 
-use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::id::{kind_of, Kind};
-use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::control::edit::{ActiveTool, Tool};
+use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
-use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query::decor::intersect;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 
-/// What a placing tool puts down, each in the cube of its zoom.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Placeable {
-    /// A cube at its tier's zoom.
-    Cube(Zoom),
-    /// Its box, of the variant and turns its corner draws.
-    Decor(AssetId),
-    /// One cell.
-    Marker,
-}
-
-impl Placeable {
-    /// What `ui` holds, where it places; none for the pointer or the eraser.
-    pub fn of(ui: &Tool) -> Option<Placeable> {
-        match ui.active_tool {
-            ActiveTool::Cube => Some(Placeable::Cube(object_zoom_of(ui.tier))),
-            ActiveTool::Decor => Some(Placeable::Decor(ui.decor)),
-            ActiveTool::Marker => Some(Placeable::Marker),
-            ActiveTool::Pointer | ActiveTool::Eraser => None,
+impl Asset {
+    /// The room it takes at `corner`, in units, its cube at `zoom`.
+    fn room(self, zoom: Zoom, corner: &Q3) -> Aabb {
+        let cell = cube(zoom, idx_of(zoom, corner));
+        match self.decor() {
+            Some(decor) => {
+                let (variant, turn) = user_decor_pick(corner, decor);
+                let (at, m) = decor.stand(cell.min, variant, turn, 1.0);
+                decor.claim(at, &m)
+            }
+            None => cell,
         }
-    }
-
-    /// The kind of what it places.
-    pub fn kind(self) -> Kind {
-        match self {
-            Placeable::Cube(_) => Kind::cube,
-            Placeable::Decor(_) => Kind::decor,
-            Placeable::Marker => Kind::marker,
-        }
-    }
-
-    /// The zoom of the cube it places in.
-    pub fn zoom(self) -> Zoom {
-        match self {
-            Placeable::Cube(zoom) => zoom,
-            Placeable::Decor(id) => Decor::of(id).row.cell_zoom(),
-            Placeable::Marker => MARKER_ZOOM,
-        }
-    }
-
-    /// The side of the cube it places in, in units.
-    pub fn size(self) -> f64 {
-        units(self.zoom())
-    }
-}
-
-/// The room a placement at `corner` takes, in units.
-fn room(placeable: Placeable, corner: &Q3) -> Aabb {
-    let zoom = placeable.zoom();
-    let cell = cube(zoom, idx_of(zoom, corner));
-    match placeable {
-        Placeable::Decor(id) => {
-            let decor = Decor::of(id);
-            let (variant, turn) = user_decor_pick(corner, decor);
-            let (at, m) = decor.stand(cell.min, variant, turn, 1.0);
-            decor.claim(at, &m)
-        }
-        Placeable::Cube(_) | Placeable::Marker => cell,
     }
 }
 
@@ -82,8 +33,8 @@ fn room(placeable: Placeable, corner: &Q3) -> Aabb {
 /// Y, lowest then highest: its room's, and about it a placed decor's extent
 /// past it, as `World::placed_occupying` reads them, and the room's own
 /// width again, where `World::editable` bounds it by the nodes about it.
-pub fn placement_reads(placeable: Placeable, corner: &Q3) -> [[f64; 2]; 2] {
-    let room = room(placeable, corner);
+pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
+    let room = asset.room(zoom, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
     let pad = intersect::box_extent() + width;
     [
@@ -103,14 +54,16 @@ fn goes_on(kind: Kind, under: Kind) -> bool {
 /// shares the room its kind occupies (`World::placed_occupying`), which
 /// holds its cell, and nothing in the cell under it is one it may not stand
 /// on (`goes_on`), a marker, as the ground generates none.
-pub fn is_placement_blocked(placeable: Placeable, corner: &Q3) -> bool {
-    let (world, room) = (World::now(), room(placeable, corner));
+pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
+    let (world, room) = (World::now(), asset.room(zoom, corner));
     let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],
     };
-    let refuses = |e: &Entry| kind_of(e.state).is_some_and(|k| !goes_on(placeable.kind(), k));
+    let refuses = |e: &Entry| {
+        kind_of(e.state).is_some_and(|under| asset.kind().is_some_and(|k| !goes_on(k, under)))
+    };
     taken || world.placed_occupying(&under, refuses).is_some()
 }
 

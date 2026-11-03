@@ -18,15 +18,16 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 pub use crate::domain::control::cmd::ActiveTool;
+use crate::domain::control::edit::collision::is_placement_blocked;
 use crate::domain::control::edit::collision::{anchor_center, object_aabb};
-use crate::domain::control::edit::collision::{is_placement_blocked, Placeable};
 use crate::domain::control::edit::pick::{
     ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
 };
-use crate::domain::control::edit::write::{draft_new, place, place_air, place_decor, remove};
+use crate::domain::control::edit::write::{place_air, remove};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::support::stand;
 use crate::domain::layer::instance::Instance;
+use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
 use crate::domain::query::HitKind::Decor;
@@ -46,6 +47,18 @@ pub struct Tool {
     /// The object size by its tier (`object_zoom_of`).
     pub tier: u32,
     pub decor: AssetId,
+}
+
+impl Tool {
+    /// What it would place; none for the pointer or the eraser.
+    pub fn asset(&self) -> Option<Asset> {
+        match self.active_tool {
+            ActiveTool::Cube => Some(Asset::of(self.cube)),
+            ActiveTool::Decor => Some(Asset::of(self.decor)),
+            ActiveTool::Marker => Some(Asset::Marker),
+            ActiveTool::Pointer | ActiveTool::Eraser => None,
+        }
+    }
 }
 
 impl Default for Tool {
@@ -204,13 +217,13 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         return;
     };
 
-    if let Some(placeable) = Placeable::of(&ui) {
+    if let Some(asset) = ui.asset() {
         hover.object_at = None;
         hover.scattered_decor = None;
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
-            placeable.size(),
+            units(asset.zoom(ui.tier)),
             flush_against(&hit).as_ref(),
         ));
         return;
@@ -256,13 +269,14 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
     let ui = state().tool;
     let hover = state().hover;
 
-    match Placeable::of(&ui) {
-        // The slot may have filled since the last hover update.
-        Some(tool) if is_placement_blocked(tool, &hovered) => {}
-        Some(Placeable::Cube(zoom)) => place(&hovered, zoom, ui.cube),
-        Some(Placeable::Decor(id)) => place_decor(&hovered, id),
-        // A draft opens there, its text the shell's to write.
-        Some(Placeable::Marker) => draft_new(&hovered),
+    match ui.asset() {
+        Some(asset) => {
+            // The slot may have filled since the last hover update.
+            let zoom = asset.zoom(ui.tier);
+            if !is_placement_blocked(asset, zoom, &hovered) {
+                asset.place(&hovered, zoom);
+            }
+        }
         None if ui.active_tool == ActiveTool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
             let Some(approach) = hover.approach else {

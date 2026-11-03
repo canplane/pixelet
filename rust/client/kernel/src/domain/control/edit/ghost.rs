@@ -7,7 +7,8 @@
 //! texture and what stands in for a decor not yet loaded, is the scene's
 //! (`domain/scene/indicator/ghost.rs`).
 
-use pxl_spec::asset::{Asset, AssetId};
+use crate::domain::layer::object::asset::Asset;
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
@@ -40,10 +41,7 @@ pub fn ghost() -> Ghost {
         ..
     } = pending();
 
-    let use_object_style = matches!(
-        active_tool,
-        ActiveTool::Cube | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
-    ) || hovered_object.is_some();
+    let use_object_style = active_tool != ActiveTool::Pointer || hovered_object.is_some();
     let cur_scale = units(if use_object_style {
         preview_zoom
     } else {
@@ -67,24 +65,16 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
 
-    let cube: Option<AssetId> = match (active_tool, hovered_object.map(|o| o.asset())) {
-        (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(Asset::Cube(id))) => Some(id),
-        (ActiveTool::Cube, _) => Some(ui.cube),
-        _ => carved_style_cube,
-    };
-
-    let decor = match (active_tool, hovered_object.map(|o| o.asset())) {
-        (ActiveTool::Decor, _) => Asset::of(ui.decor).decor(),
-        (_, Some(Asset::Decor(d))) => Some(d),
-        _ => None,
-    };
-
-    let decor_corner = match (active_tool, &hovered_object) {
-        (ActiveTool::Decor, _) => hovered,
-        (_, Some(o)) if o.asset().decor().is_some() => Some(o.corner()),
-        _ => None,
-    };
+    // What it shows: what the tool would place; else, as a placing tool hovers
+    // no object, what the pointer or the eraser is over.
+    let shown = ui.asset().or(hovered_object.map(|o| o.asset()));
+    // The pointer shows a decor it is over, and no cube.
+    let cube = shown
+        .and_then(Asset::cube)
+        .filter(|_| active_tool != ActiveTool::Pointer)
+        .or(carved_style_cube);
+    let decor = shown.and_then(Asset::decor);
+    let decor_corner = hovered_object.map_or(hovered, |o| Some(o.corner()));
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {

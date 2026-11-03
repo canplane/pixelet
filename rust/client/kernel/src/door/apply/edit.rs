@@ -19,14 +19,14 @@ pub(super) fn apply(
 ) -> Result<Option<i32>, MarshalError> {
     match cmd {
         Command::EDIT_TOOL => {
-            use pxl_spec::asset::Asset;
+            use crate::domain::layer::object::asset::Asset;
             let p = abi::EditTool::read(given(pkt)?)?;
             let mut tool = tool();
             tool.active_tool = p.tool;
             tool.tier = p.tier;
             match (p.tool, Asset::of(p.val)) {
                 (abi::ActiveTool::Cube, Asset::Cube(id)) => tool.cube = id,
-                (abi::ActiveTool::Decor, Asset::Decor(d)) => tool.decor = d.id,
+                (abi::ActiveTool::Decor, Asset::Decor(id)) => tool.decor = id,
                 (abi::ActiveTool::Cube | abi::ActiveTool::Decor, _) => {
                     return Err(MarshalError::new(Errno::EINVAL));
                 }

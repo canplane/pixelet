@@ -913,9 +913,9 @@ fn area_edge_leaf_cell_thick() {
 /// instance, and the kernel does not stop.
 #[test]
 fn stored_decor_past_the_catalog_is_unknown() {
+    use crate::domain::layer::object::asset::Asset;
     use crate::domain::layer::object::meta::decor_instance;
     use pxl_spec::asset::id::SHAPE_BITS;
-    use pxl_spec::asset::Asset;
     use pxl_spec::bake::constant::EntryAt;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
