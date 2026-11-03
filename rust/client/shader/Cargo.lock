@@ -814,18 +814,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "pxl-engine"
-version = "0.0.0"
-dependencies = [
- "libm",
- "xpute-kit",
-]
-
-[[package]]
 name = "pxl-content"
 version = "0.0.0"
 dependencies = [
  "pxl-engine",
+ "xpute-kit",
+]
+
+[[package]]
+name = "pxl-engine"
+version = "0.0.0"
+dependencies = [
+ "libm",
  "xpute-kit",
 ]
 

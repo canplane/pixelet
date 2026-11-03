@@ -9,8 +9,9 @@
 //! observer needs alone (`Observer::needs`). An entry is a pass's call for its
 //! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
-//! observers take is one entry, its observer the one its head names
-//! (pass_observer.rs `PassObserver`).
+//! observers take is an entry each, its observer fixed by its entry, as
+//! Adreno's driver refuses one chosen as it runs
+//! (doc/experiment/20261103-shaders-on-two-phones).
 
 use pxl_engine::cast::{self, Detail, Trace, Query, Until};
 use pxl_engine::world::Inheritance;

@@ -283,13 +283,20 @@ export class GpuHost {
     r: Words,
     made: Promise<P>,
     sync: () => P,
+    label: string,
   ): void {
     const [word, ticket] = [r.u(), r.u()];
     const slot = handle_slot(id);
     this.making.set(slot, id);
     const waits = () => this.making.get(slot) === id;
     made
-      .catch(() => (waits() ? sync() : undefined))
+      .catch((e: unknown) => {
+        // Named, as the sync call's own error names no pipeline on every device.
+        console.error(
+          `[gpu] pipeline ${label} refused: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return waits() ? sync() : undefined;
+      })
       .then((p) => {
         if (p === undefined || !waits()) return;
         this.making.delete(slot);
@@ -643,7 +650,12 @@ export class GpuHost {
             return { format, blend, writeMask: r.u() };
           },
         );
+        // Named by its entries, which a device's error about it names.
         const desc: GPURenderPipelineDescriptor = {
+          label:
+            module === undefined
+              ? vertex.entryPoint
+              : `${vertex.entryPoint}+${entryPoint}`,
           layout:
             layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
           vertex,
@@ -662,8 +674,12 @@ export class GpuHost {
         if (code === op.RENDER_PIPELINE) {
           this.put(id, d.createRenderPipeline(desc));
         } else {
-          this.make_async(id, r, d.createRenderPipelineAsync(desc), () =>
-            d.createRenderPipeline(desc),
+          this.make_async(
+            id,
+            r,
+            d.createRenderPipelineAsync(desc),
+            () => d.createRenderPipeline(desc),
+            desc.label ?? "",
           );
         }
         return;
@@ -673,16 +689,23 @@ export class GpuHost {
         const id = r.u();
         const layout = r.opt();
         const module = this.get<GPUShaderModule>(r.u());
+        const entryPoint = r.text();
+        // Named by its entry, which a device's error about it names.
         const desc: GPUComputePipelineDescriptor = {
+          label: entryPoint,
           layout:
             layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
-          compute: { module, entryPoint: r.text() },
+          compute: { module, entryPoint },
         };
         if (code === op.COMPUTE_PIPELINE) {
           this.put(id, d.createComputePipeline(desc));
         } else {
-          this.make_async(id, r, d.createComputePipelineAsync(desc), () =>
-            d.createComputePipeline(desc),
+          this.make_async(
+            id,
+            r,
+            d.createComputePipelineAsync(desc),
+            () => d.createComputePipeline(desc),
+            entryPoint,
           );
         }
         return;

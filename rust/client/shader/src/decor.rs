@@ -4,7 +4,8 @@
 //! `scatter`, `generation`): the entries that generate again listed
 //! (`decor_mark_cs`), the candidates the cells under a brick hold that stand at
 //! its clip level and stand clear, a clip level cell at a time
-//! (`decor_thin_cs`), each generated (`decor_cs`), and the records counted,
+//! (`decor_thin_cs`), each stood on its footing (`decor_footing_cs`) and
+//! posed (`decor_cs`), and the records counted,
 //! laid out and compacted into their draws' instances (`decor_cnt_cs`,
 //! `decor_args_cs`, `decor_compact_cs`).
 
@@ -352,20 +353,20 @@ pub fn decor_thin_cs(
     }
 }
 
-/// The decor an entry's retained candidates generate (`decor_thin_cs`), a
-/// thread a record: `x` its place among the decor's records, `z` the entry and
-/// decor listed, as `decor_thin_cs` laid them. Each record `RETAINED` is
-/// generated on its cell (`generation::placement`), naming the entry's clip
-/// level zoom; else it is `UNGENERATED`. Of a pair listed in part, each record
-/// a box of the frame's reaches (`is_changed`) is generated again on the
-/// candidate its cell holds (`scatter::candidate_at`), the cell it keeps
-/// generated or not; the rest stand. Only a decor shown at that zoom is listed
-/// (`decor_mark_cs`). What it generates on is the clip levels' bricks and the
-/// ways over them alone, what is placed left out (`Ground`); what is placed
-/// and the eye's cuts only take it away where they hold its box
-/// (`DecorQuery::asset`, edited).
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cs"))]
-pub fn decor_cs(
+/// The footing of the decor an entry's retained candidates generate
+/// (`decor_thin_cs`), a thread a record: `x` its place among the decor's
+/// records, `z` the entry and decor listed, as `decor_thin_cs` laid them.
+/// Each record `RETAINED`, and of a pair listed in part each record a box
+/// of the frame's reaches (`is_changed`), has its column surfaces asked on its
+/// cell (`generation::footing`): one found leaves a footing word, its box's
+/// height and sink, for `decor_cs` to pose; none found, `UNGENERATED`; the
+/// rest stand. Only a decor shown at that zoom is listed (`decor_mark_cs`).
+/// What it asks is the clip levels' bricks and the ways over them alone,
+/// what is placed left out (`Ground`). Apart from the pose so that neither
+/// pass holds the world's walk twice: Adreno's driver refuses the one that
+/// did (doc/experiment/20261103-shaders-on-two-phones).
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_footing_cs"))]
+pub fn decor_footing_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &[IVec4],
@@ -389,21 +390,14 @@ pub fn decor_cs(
     }
     let cell = clipmap::eye_cell(brick / ENTRIES);
     let leaf = [out[r + 1] as i32, out[r + 2] as i32];
-    let seed = if part {
-        if !is_changed(list, cell, [leaf[0], leaf[1], leaf[0] + 1, leaf[1] + 1]) {
-            return;
-        }
-        scatter::candidate_at(&rows[j as usize], leaf).0.seed
-    } else if out[r] == generation::RETAINED {
-        out[r + 3]
+    let asked = if part {
+        is_changed(list, cell, [leaf[0], leaf[1], leaf[0] + 1, leaf[1] + 1])
     } else {
+        out[r] == generation::RETAINED
+    };
+    if !asked {
         return;
-    };
-    let c = scatter::Candidate {
-        cell: leaf,
-        draw: 0,
-        seed,
-    };
+    }
     let mut world = Generating {
         world: World {
             clipmap,
@@ -416,9 +410,87 @@ pub fn decor_cs(
         },
         rows,
     };
-    let (g, has_footing, generates) =
-        generation::placement(&mut world, &rows[j as usize], cell, &c, true);
-    if has_footing && generates {
+    let (_, ft, has_footing) = generation::footing(&mut world, cell, leaf);
+    if has_footing {
+        out[r] = generation::footing_word(ft.held, ft.base);
+        out[r + 3] = ft.g.at[2] as u32;
+        out[r + 4] = ft.g.sink;
+    } else {
+        out[r] = generation::UNGENERATED;
+    }
+}
+
+/// The decor each footing `decor_footing_cs` left generates, a thread a
+/// record as it laid them: its pose asked about its finest zoom's column
+/// surface (`generation::pose`), that surface's line rebuilt down to its top
+/// cell (`support::line`, the one its walk kept), its seed its cell's again
+/// (`scatter::candidate_at`), naming the entry's clip level zoom where it
+/// generates; else `UNGENERATED`. A record holding no footing word stands.
+/// What is placed and the eye's cuts only take it away where they hold its
+/// box (`DecorQuery::asset`, edited).
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cs"))]
+pub fn decor_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] out: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] list: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
+) {
+    let (brick, j, _) = list_entry(list, id.z);
+    let (cnt, cap) = (at(out, generation::cnt_at(brick, j)), rows[j as usize].cap());
+    if id.x >= cnt || id.x >= cap {
+        return;
+    }
+    let r = entry_word(rows, brick, j, id.x) as usize;
+    if r + 4 >= out.len() || !generation::is_footing(out[r]) {
+        return;
+    }
+    let cell = clipmap::eye_cell(brick / ENTRIES);
+    let leaf = [out[r + 1] as i32, out[r + 2] as i32];
+    let (held, base) = generation::footing_of(out[r]);
+    let mut world = Generating {
+        world: World {
+            clipmap,
+            ground,
+            palette_indices: NoPalette(0),
+            shards,
+            overwrites,
+            eye,
+            pool: way::tree::Read(pool),
+        },
+        rows,
+    };
+    let zoom = world.finest(cell, leaf);
+    let t = LEAF_CELL - zoom;
+    let line = support::line(
+        &mut Ground {
+            world: &mut world.world,
+            cuts: [Cut::NONE; 2],
+        },
+        zoom,
+        [leaf[0] >> t, leaf[1] >> t, base],
+    );
+    let ft = generation::Footing {
+        g: generation::Generated {
+            variant: 0,
+            turn: 0,
+            at: [leaf[0], leaf[1], out[r + 3] as i32],
+            sink: out[r + 4],
+        },
+        zoom,
+        base,
+        held,
+    };
+    let seed = scatter::candidate_at(&rows[j as usize], leaf).0.seed;
+    let f = support::ColumnSurface::of_line(line);
+    let (g, generates) =
+        generation::pose(&mut world, &f, &rows[j as usize], cell, seed, &ft, true);
+    if generates {
         out[r] = generation::record_word(j, g.variant, g.turn, cell);
         out[r + 1] = g.at[0] as u32;
         out[r + 2] = g.at[1] as u32;

@@ -12,10 +12,10 @@
 //!
 //! So is spirv-opt. The codegen runs it with every function inlined into
 //! its entry (SPIRV-Tools' performance passes open with `InlineExhaustive`),
-//! a body written again at each call; here a function called from more than
-//! one place and taking only what WGSL takes as a parameter keeps its
-//! boundary where a call is shorter than its body (`dont_inline`), and a
-//! module keeps those boundaries where that makes it shorter (`wgsl_of`).
+//! and every entry here is read so, no function of it called (`wgsl_of`):
+//! Adreno's driver refuses modules whose functions hand an array or a struct
+//! across a call (doc/experiment/20261103-shaders-on-two-phones), and what
+//! naga writes is rewritten for the same driver (rewrite.rs).
 //! A function a binding's pointer reaches is the codegen's clone of it for
 //! that binding, the pointer made again inside from the binding itself
 //! (rustc_codegen_spirv linker/specialize_roots.rs, vendored beside), or,
@@ -29,6 +29,8 @@ use naga::{
     Range, Span, Statement, Type, UniqueArena,
 };
 use spirv_builder::{Capability, ModuleResult, ShaderPanicStrategy, SpirvBuilder};
+
+mod rewrite;
 
 fn main() {
     let shader = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
@@ -63,27 +65,14 @@ fn main() {
     println!("built: {modules:?}");
 }
 
-/// One entry's WGSL: its SPIR-V optimized with the functions `dont_inline`
-/// marks keeping their boundaries where that is shorter in lines and in
-/// bytes than with every one inlined, as the codegen optimizes, else that. A
-/// call is the shorter only where the bodies it keeps from being written
-/// again outweigh what inlining folds away across them, which no count of a
-/// body before spirv-opt tells.
+/// One entry's WGSL: its SPIR-V optimized, every function inlined, as the
+/// codegen optimizes.
 fn wgsl_of(spv: &[u8]) -> Result<String, String> {
     let words: Vec<u32> = spv
         .chunks_exact(4)
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .collect();
-    let inlined = wgsl(&optimized(words.clone())?)?;
-    let with_calls = wgsl(&optimized(dont_inline(words))?)?;
-    Ok(
-        if with_calls.len() < inlined.len() && with_calls.lines().count() <= inlined.lines().count()
-        {
-            with_calls
-        } else {
-            inlined
-        },
-    )
+    wgsl(&optimized(words)?)
 }
 
 /// One entry's SPIR-V through spirv-opt as the codegen runs it, its
@@ -115,88 +104,6 @@ fn optimized(words: Vec<u32>) -> Result<Vec<u32>, String> {
     }
 }
 
-/// The module's words, each function marked `DontInline`, which spirv-opt
-/// keeps, where it is called from more than one place, takes only values
-/// and pointers to function or private memory, which WGSL takes as
-/// parameters, and is shorter written once and called (`call_shorter`). One
-/// called from one place, one the codegen marked `Inline` (`#[inline]`) and
-/// one taking a pointer to the workgroup's memory or to an image, which WGSL
-/// takes as no parameter, are inlined.
-fn dont_inline(mut words: Vec<u32>) -> Vec<u32> {
-    // SPIR-V's opcodes, storage classes and function controls (the SPIR-V
-    // specification, 3.32, 3.7, 3.24).
-    const TYPE_POINTER: u32 = 32;
-    const FUNCTION: u32 = 54;
-    const FUNCTION_PARAMETER: u32 = 55;
-    const FUNCTION_END: u32 = 56;
-    const FUNCTION_CALL: u32 = 57;
-    const PRIVATE: u32 = 6;
-    const FUNCTION_STORAGE: u32 = 7;
-    const INLINE: u32 = 0x1;
-    const DONT_INLINE: u32 = 0x2;
-    /// A function as `dont_inline` reads it: its control word, its
-    /// parameters, whether WGSL takes each, and the instructions of its body.
-    struct Callee {
-        control: usize,
-        params: u32,
-        wgsl_takes: bool,
-        body: u32,
-    }
-    let mut pointers = std::collections::HashMap::new();
-    let mut calls = std::collections::HashMap::<u32, u32>::new();
-    let mut functions = Vec::new();
-    let mut open: Option<(u32, Callee)> = None;
-    let mut i = 5;
-    while i < words.len() {
-        let (op, n) = (words[i] & 0xffff, (words[i] >> 16) as usize);
-        match (op, &mut open) {
-            (TYPE_POINTER, _) => {
-                pointers.insert(words[i + 1], words[i + 2]);
-            }
-            (FUNCTION, _) => {
-                let f = Callee {
-                    control: i + 3,
-                    params: 0,
-                    wgsl_takes: words[i + 3] & INLINE == 0,
-                    body: 0,
-                };
-                open = Some((words[i + 2], f));
-            }
-            (FUNCTION_PARAMETER, Some((_, f))) => {
-                let class = pointers.get(&words[i + 1]);
-                f.params += 1;
-                f.wgsl_takes &= matches!(class, None | Some(&PRIVATE) | Some(&FUNCTION_STORAGE));
-            }
-            (FUNCTION_END, Some(_)) => {
-                functions.extend(open.take());
-            }
-            (_, Some((_, f))) => {
-                f.body += 1;
-                if op == FUNCTION_CALL {
-                    *calls.entry(words[i + 3]).or_default() += 1;
-                }
-            }
-            _ => {}
-        }
-        i += n.max(1);
-    }
-    for (id, f) in functions {
-        let n = calls.get(&id).copied().unwrap_or(0);
-        if f.wgsl_takes && call_shorter(n, f.params, f.body) {
-            words[f.control] |= DONT_INLINE;
-        }
-    }
-    words
-}
-
-/// Whether a function of `body` instructions and `params` parameters,
-/// called from `calls` places, is shorter written once, its head and end
-/// (`OpFunction`, its parameters, its first label, `OpFunctionEnd`) about it,
-/// with a call and its arguments at each, than written at each call.
-fn call_shorter(calls: u32, params: u32, body: u32) -> bool {
-    body + calls * (1 + params) + params + 3 < calls * body
-}
-
 /// One entry's SPIR-V as WGSL, validated as WebGPU takes it.
 fn wgsl(spv: &[u32]) -> Result<String, String> {
     let spv = pointers_where_used(spv);
@@ -216,7 +123,33 @@ fn wgsl(spv: &[u32]) -> Result<String, String> {
     uniform_loads(&mut module, &info);
     let info = validate(&module)?;
     naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
+        .map(|text| {
+            rewrite::small_arrays_as_vectors(&rewrite::split_phis(&i32_min_called(&text)))
+        })
         .map_err(|e| e.to_string())
+}
+
+/// What naga writes for `i32::MIN`, and the function it is called through.
+const I32_MIN: &str = "i32(-2147483648)";
+const I32_MIN_FN: &str = "i32_min";
+
+/// `text` with each `i32::MIN` a call of a function that returns it.
+/// WebKit writes the constant into Metal as the bare `-2147483648`, which
+/// C++ reads as a `long`, so a `select` of it and an `int` names no one
+/// overload and the module fails to compile on Safari; a call is no
+/// constant, and its value is the function's `int`.
+fn i32_min_called(text: &str) -> String {
+    if !text.contains(I32_MIN) {
+        return text.to_owned();
+    }
+    assert!(
+        !text.contains(&format!("fn {I32_MIN_FN}(")),
+        "naga named a function {I32_MIN_FN}"
+    );
+    format!(
+        "{}\nfn {I32_MIN_FN}() -> i32 {{\n    return -2147483647i - 1i;\n}}\n",
+        text.replace(I32_MIN, &format!("{I32_MIN_FN}()"))
+    )
 }
 
 /// The module's words with each access chain a pointer is loaded, stored,

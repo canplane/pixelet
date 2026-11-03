@@ -107,7 +107,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   } else if (!(lo[a] > 0.0)) {
     return o;
   }
-  let c = RASTER_CORNERS[raster.turn.x + (2u * a + high) * 6u + vi % 6u];
+  let c = raster_corner(raster.turn.x + (2u * a + high) * 6u + vi % 6u);
   let p0 = mix(lo, hi, c);
   // Grown in its own plane, so a pixel's middle on its edge is not lost to
   // the rasterizer's rounding: its depth stays where a ray meets the face,

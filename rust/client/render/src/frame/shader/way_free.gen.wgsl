@@ -24,7 +24,7 @@ var<storage> global_4: type_4;
 var<storage, read_write> global_5: type_15;
 
 fn function_() {
-    var local: array<array<u32, 2>, 7>;
+    var local: array<vec2<u32>, 7>;
     var phi_58_: u32;
     var phi_67_: u32;
     var phi_95_: u32;
@@ -58,13 +58,13 @@ fn function_() {
     if (_e27.x == 0u) {
         if (_e51 == 0u) {
         } else {
-            local[0u] = array<u32, 2>(0u, 0u);
-            local[1u] = array<u32, 2>(0u, 0u);
-            local[2u] = array<u32, 2>(0u, 0u);
-            local[3u] = array<u32, 2>(0u, 0u);
-            local[4u] = array<u32, 2>(0u, 0u);
-            local[5u] = array<u32, 2>(0u, 0u);
-            local[6u] = array<u32, 2>(0u, 0u);
+            local[0u] = vec2<u32>(0u, 0u);
+            local[1u] = vec2<u32>(0u, 0u);
+            local[2u] = vec2<u32>(0u, 0u);
+            local[3u] = vec2<u32>(0u, 0u);
+            local[4u] = vec2<u32>(0u, 0u);
+            local[5u] = vec2<u32>(0u, 0u);
+            local[6u] = vec2<u32>(0u, 0u);
             let _e63 = (8u * (_e51 & 1048575u));
             local[0u][0u] = _e63;
             local[0u][1u] = 0u;

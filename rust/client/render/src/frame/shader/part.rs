@@ -175,7 +175,17 @@ pub const SHADER_HIT_FACES: u32 = 74;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
 pub const SHADER_BOX_ARGS: u32 = 75;
-pub const SHADERS: u32 = 76;
+/// The footing of the decor `SHADER_GENERATION` poses, asked apart from its
+/// pose (pxl-shader `decor_footing_cs`): its one compute entry.
+pub const SHADER_GENERATION_FOOTING: u32 = 76;
+/// The shadow map's beam rays, cells, samples and samples' boxes: the
+/// entries of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
+/// `SHADER_SAMPLE_BOX` for the light's map (pxl-shader `light_beam_cs`…).
+pub const SHADER_LIGHT_BEAM: u32 = 77;
+pub const SHADER_LIGHT_CELL: u32 = 78;
+pub const SHADER_LIGHT_SAMPLE: u32 = 79;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 80;
+pub const SHADERS: u32 = 81;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -450,4 +460,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["hit_faces.gen"],
     // SHADER_BOX_ARGS
     &["box_args"],
+    // SHADER_GENERATION_FOOTING
+    &["decor_footing.gen"],
+    // SHADER_LIGHT_BEAM
+    &["light_beam.gen"],
+    // SHADER_LIGHT_CELL
+    &["light_cell.gen"],
+    // SHADER_LIGHT_SAMPLE
+    &["light_sample.gen"],
+    // SHADER_LIGHT_SAMPLE_BOX
+    &["light_sample_box.gen"],
 ];

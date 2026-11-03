@@ -150,36 +150,33 @@ fn push(stack: &mut [u32], child_group: u32) {
 /// `n` child groups off the stack together for a brick that has taken `taken`:
 /// where their ids begin in it, and false where fewer are free or the
 /// brick would take more than its most (`way::tree::fits`), none taken.
-/// One exit, for the reason `add` gives.
+/// Taken by an add, then where they were not all free given back by
+/// lowering the count to where this pop found it: only pops race in a
+/// pass (pushes are `way_free_cs`'s and `way_return_cs`'s), so every pop
+/// that fits added before the first that did not, and the count comes to
+/// rest at the end of what was taken. No compare-and-swap: Safari's WGSL
+/// compiler writes Metal for one that does not compile
+/// (doc/experiment/20261103-shaders-on-two-phones). One exit, for the
+/// reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
-    // SAFETY: word `TAKEN_CNT`, the stack's first; the buffer is never empty
-    // (pxl-render gpu/ray/ground.rs makes it a word a child group of the pool's).
-    let cnt = unsafe { stack.get_unchecked_mut(TAKEN_CNT as usize) };
-    let mut gone = unsafe {
-        spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
-            cnt,
-        )
-    };
-    let (mut done, mut ok) = (false, false);
-    while !done {
-        if !tree::fits(free(len, gone), taken, n) {
-            done = true;
-        } else {
-            // SAFETY: as above.
-            let was = unsafe {
-                spirv_std::arch::atomic_compare_exchange::<
-                    u32,
-                    { Scope::QueueFamily as u32 },
-                    { Semantics::NONE.bits() },
-                    { Semantics::NONE.bits() },
-                >(cnt, gone + n, gone)
-            };
-            (done, ok) = (was == gone, was == gone);
-            if !done {
-                gone = was;
-            }
-        }
+    let past = tree::past(taken, n);
+    // Both atomics asked of every pop, a no-op where it has nothing to
+    // take or give back: an atomic in a branch of its own is a pointer naga
+    // reads out of scope.
+    let gone = add(stack, TAKEN_CNT, if past { 0 } else { n });
+    // Past the stack while another pop's add stands: none free.
+    let ok = !past && gone < len && tree::fits(free(len, gone), taken, n);
+    let back = if ok || past { u32::MAX } else { gone };
+    // SAFETY: word `TAKEN_CNT`, the stack's first; the buffer is never
+    // empty (pxl-render gpu/ray/ground.rs makes it a word a child group of
+    // the pool's).
+    unsafe {
+        spirv_std::arch::atomic_u_min::<
+            u32,
+            { Scope::QueueFamily as u32 },
+            { Semantics::NONE.bits() },
+        >(stack.get_unchecked_mut(TAKEN_CNT as usize), back);
     }
     (if ok { 1 + gone } else { 0 }, ok)
 }

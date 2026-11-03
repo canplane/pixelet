@@ -30,8 +30,10 @@
 //! answer's kind and asset, what was handed the node after it was asked
 //! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (`forgets` reads its column). A
-//! walk writes a slot only once it has claimed it, its key swapped to
-//! `CLAIMED` in one compare-and-swap, and writes the key last; a writing
+//! walk writes a slot only once it has claimed it, its key exchanged for
+//! `CLAIMED` and found to be the one it read, and writes the key last; a
+//! walk that found another put back what it took (pxl-shader pyramid.rs
+//! `pyramid_claim`), the slot claimed in between; a writing
 //! walk that read a slot reads its key again after, and takes what it read
 //! only where the key stood, as another walk may have taken the slot over
 //! in between.

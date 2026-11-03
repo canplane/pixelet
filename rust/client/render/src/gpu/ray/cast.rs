@@ -16,9 +16,9 @@ use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET,
-    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS,
-    SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_LIST,
-    SHADER_SAMPLE, UNIFORM,
+    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
+    SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE,
+    SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -90,6 +90,11 @@ pub(super) struct CastBuffers {
     beam_built: Pipeline,
     cells_built: Pipeline,
     sample_built: Pipeline,
+    /// The same passes for the shadow map, an entry each (pxl-shader
+    /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
+    light_beam_built: Pipeline,
+    light_cells_built: Pipeline,
+    light_sample_built: Pipeline,
     beams: u32,
     /// The eye's head, all zero: a head naming no map (pxl-engine
     /// `light::HEAD_SIZE`), which tells a pass both take the eye's.
@@ -350,6 +355,9 @@ impl RaysPass {
         let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
         let cells_built = pipelines.build_compute(g, SHADER_CELL, group);
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
+        let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, group);
+        let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
+        let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, group);
         let fold_built = pipelines.build_compute(g, SHADER_FOLD, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
         let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
@@ -377,6 +385,9 @@ impl RaysPass {
             beam_built,
             cells_built,
             sample_built,
+            light_beam_built,
+            light_cells_built,
+            light_sample_built,
             beams: 0,
             // Never written: a buffer is made zeroed.
             eye_head: buf(word_bytes(light::HEAD_WORDS), buffer_usage::UNIFORM),
@@ -1045,7 +1056,7 @@ impl RaysPass {
                 [
                     &c.light_built,
                     &c.miss_built,
-                    &c.raster.boxes_built,
+                    &c.raster.light_boxes_built,
                     &c.light_miss_built,
                     &c.light_mark_built,
                     &c.light_mark_draws_built,
@@ -1298,20 +1309,20 @@ impl RaysPass {
             // (`light::ARGS_WORDS`).
             let args = |w: u32| word_bytes(w as usize);
             g.set_bind_group(pass, 0, c.light_groups[1], &[]);
-            g.set_pipeline(pass, c.beam_built.id);
+            g.set_pipeline(pass, c.light_beam_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
-            g.set_pipeline(pass, c.cells_built.id);
+            g.set_pipeline(pass, c.light_cells_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
             g.end(pass);
             let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[1], &[]);
-            g.set_pipeline(pass, c.sample_built.id);
+            g.set_pipeline(pass, c.light_sample_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE));
             g.end(pass);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
             g.set_bind_group(pass, 0, c.light_groups[2], &[]);
-            g.set_pipeline(pass, c.raster.boxes_built.id);
+            g.set_pipeline(pass, c.raster.light_boxes_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE_BOX));
             g.end(pass);
             c.raster.light_draw(ctx);

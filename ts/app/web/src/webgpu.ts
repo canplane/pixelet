@@ -63,6 +63,10 @@ export async function acquire(
     powerPreference: "high-performance",
   });
   if (!adapter) return false;
+  const { vendor, architecture, device, description } = adapter.info;
+  console.info(
+    `[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`,
+  );
   // What the kernel asks for: a stencil beside the world's depth
   // (pxl-render gpu/api.rs `GATED_DEPTH`), and the timestamps its spans are
   // timed by where the adapter has them (`Device`).

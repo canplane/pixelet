@@ -17,10 +17,9 @@
 
 use pxl_engine::{beam, eye, light, raster, ray};
 
-use super::cast::HEAD_BINDING;
-
 use crate::frame::shader::record::{
-    compute, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_SAMPLE_BOX,
+    compute, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
+    SHADER_SAMPLE_BOX,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
@@ -44,6 +43,9 @@ pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (pxl-shader
     /// raster.rs `sample_box_cs`), each over its own group.
     pub(super) boxes_built: Pipeline,
+    /// The shadow map's samples' boxes (pxl-shader `light_sample_box_cs`),
+    /// the light's head bound beside what the screen's binds.
+    pub(super) light_boxes_built: Pipeline,
     faces_built: Pipeline,
     draw_built: Pipeline,
     /// The gate the boxes are drawn through in a frame not drawn whole, over
@@ -92,6 +94,11 @@ impl Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
             boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
+            light_boxes_built: pipelines.build_compute(
+                g,
+                SHADER_LIGHT_SAMPLE_BOX,
+                &compute::LIGHT_SAMPLE_BOX_GROUP,
+            ),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
@@ -245,7 +252,6 @@ impl Raster {
                     &[
                         buf_entry(0, eye),
                         buf_entry(8, beams),
-                        buf_entry(HEAD_BINDING, head),
                         buf_entry(14, self.boxes),
                         buf_entry(16, self.args),
                     ],
