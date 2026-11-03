@@ -90,8 +90,8 @@ test("object_backend - an edit batch is kept in its shard, and the top lists it"
   assert.deepStrictEqual(own, [CUBE, MARKER]);
   const rows = decode_top(await b.open(TOP));
   assert.deepStrictEqual(
-    rows.map((r) => [r.shard, r.z]),
-    [[SHARD, 0]],
+    rows.map((r) => r.shard),
+    [SHARD],
   );
   assert.ok(rows[0]!.fold >>> 16 > 0);
 });

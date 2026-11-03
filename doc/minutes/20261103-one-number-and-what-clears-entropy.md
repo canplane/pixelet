@@ -94,3 +94,18 @@ fetched and stored as one. **`key` is the text, the quadkey or the octkey, and `
 its morton code**: a number named `key` said nothing, and most of its uses packed a node to
 unpack it later. A `Write` holds its address as `at`, its `id` being the asset's. What the
 queue's `id` holds is still its stream's to say; a typed want is open.
+
+## A shard is one cube
+
+The user asked why the top held a shard and a Z, when a shard is a cube found by its quadkey
+and an octkey goes down from there. There was no reason but the tree: documents and keys
+said one node at z8, and the tree and a ray cut the world at 0 on Y and Z, into four roots,
+each z8 node half out of the world, sea level a root's edge, a ray over it starting again.
+
+**The user decided the tree follows.** Y and Z count from the world's edge (`overwrite::path`,
+`cast::grid_of`), as X counts from the round's start: one root, a shard one cube the world's
+height fills, its eight children split at sea level. A node finer than a shard is where and
+what it was, its index too, so no cell moved. The top is `<shard, fold>` (format 22). A node
+at z8 or coarser has Z 0, or above the world past it, and its box the world's height. The key
+keeps two's complement, so its first Z digit is the tree's flipped; the mock says so.
+

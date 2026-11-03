@@ -14,7 +14,7 @@
  * logged: a commit has no answer to the kernel.
  */
 
-import type { I32Array, U32Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
@@ -84,13 +84,11 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
 
 /** The top's rows (file.json `top`). */
 export function decode_top(bytes: U8Array): TopRow[] {
-  const [shard, z, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
+  const [shard, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
     .read_branch()
-    .get<[string[], I32Array, U32Array]>();
-  if (shard.length !== z.length || shard.length !== fold.length) {
-    throw new FileError(Errno.EINVAL);
-  }
-  return shard.map((s, r) => ({ shard: s, z: z[r]!, fold: fold[r]! }));
+    .get<[string[], U32Array]>();
+  if (shard.length !== fold.length) throw new FileError(Errno.EINVAL);
+  return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
 /** `rows` as the top (file.json `top`). */
@@ -100,7 +98,6 @@ export function encode_top(rows: readonly TopRow[]): U8Array {
   tree.branch((b) =>
     b
       .strs(rows.map((r) => r.shard))
-      .i32_array(Int32Array.from(rows, (r) => r.z))
       .u32_array(Uint32Array.from(rows, (r) => r.fold)),
   );
   return as_file(
@@ -109,9 +106,9 @@ export function encode_top(rows: readonly TopRow[]): U8Array {
   );
 }
 
-/** By shard, then below sea level before above. */
+/** By shard. */
 function by_shard(a: TopRow, b: TopRow): number {
-  return a.shard === b.shard ? a.z - b.z : a.shard < b.shard ? -1 : 1;
+  return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
 /** The database as the bracket gives it. */

@@ -14,7 +14,7 @@
 //! asset, whatever is under it.
 
 use crate::value;
-use crate::{Zoom, LEAF_CELL};
+use crate::{Zoom, LEAF_CELL, SHARD_ZOOM};
 
 /// A slot's child pointer when it is a branch, its child group under it.
 pub const BRANCH: u32 = 1 << 31;
@@ -215,11 +215,55 @@ impl Cut {
     };
 }
 
+/// What Y's index at `zoom` is from the world's south edge: no digit at zoom 0,
+/// the plane's half a node after.
+pub const fn y_start(zoom: Zoom) -> i32 {
+    if zoom == 0 {
+        0
+    } else {
+        (1u32 << (zoom - 1)) as i32
+    }
+}
+
+/// What Z's index at `zoom` is from the world's floor: no digit to a shard, whose
+/// cube the world's height fills, half the height's nodes under it.
+pub const fn z_start(zoom: Zoom) -> i32 {
+    if zoom <= SHARD_ZOOM {
+        0
+    } else {
+        (1u32 << (zoom - SHARD_ZOOM - 1)) as i32
+    }
+}
+
 /// The node `at` of `zoom` as the tree is cut: X counted from the round's
-/// start, so the round is the one node of zoom 0 over it and every node is
-/// its parent's index doubled, a bit more, on every axis.
+/// start, Y and Z from the world's edge, so the world is the one node of zoom 0
+/// and every node is its parent's index doubled, a bit more, on every axis.
 pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
-    [at[0] & (1u32 << zoom).wrapping_sub(1) as i32, at[1], at[2]]
+    [
+        at[0] & (1u32 << zoom).wrapping_sub(1) as i32,
+        at[1] + y_start(zoom),
+        at[2] + z_start(zoom),
+    ]
+}
+
+/// The node `at` of `zoom`'s child at `slot` (`slot_of`), X in `at`'s frame.
+pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
+    let p = path(zoom, at);
+    [
+        2 * at[0] + (slot & 1) as i32,
+        2 * p[1] + (slot >> 1 & 1) as i32 - y_start(zoom + 1),
+        2 * p[2] + (slot >> 2) as i32 - z_start(zoom + 1),
+    ]
+}
+
+/// The node `steps` over the node `at` of `zoom`, X in `at`'s frame.
+pub fn ancestor_at(zoom: Zoom, at: [i32; 3], steps: Zoom) -> [i32; 3] {
+    let p = path(zoom, at);
+    [
+        at[0] >> steps,
+        (p[1] >> steps) - y_start(zoom - steps),
+        (p[2] >> steps) - z_start(zoom - steps),
+    ]
 }
 
 /// A child group's slots, a node's children, each at its `slot_of`.

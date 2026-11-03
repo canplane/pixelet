@@ -12,6 +12,7 @@
 //! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
+use crate::overwrite::ancestor_at;
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -126,8 +127,7 @@ fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
 
 /// The node over node `c` of `zoom` at `z`, `z` no finer.
 fn over(c: [i32; 3], zoom: Zoom, z: Zoom) -> [i32; 3] {
-    let s = zoom - z;
-    [c[0] >> s, c[1] >> s, c[2] >> s]
+    ancestor_at(zoom, c, zoom - z)
 }
 
 /// Whether two nodes are one. [rust-gpu] By its words: an array's `==` is
@@ -332,7 +332,7 @@ mod tests {
             (0, node)
         }
         fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            let up = [node[0] >> 1, node[1] >> 1, node[2] >> 1];
+            let up = crate::overwrite::ancestor_at(zoom, node, 1);
             assert_eq!((at.0 + 1, at.1), (zoom, up), "a child of another node");
             (zoom, node)
         }

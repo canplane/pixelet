@@ -84,16 +84,13 @@ fn shard_file(shard: Quadrant) -> Vec<u8> {
 }
 
 /// The top holding `rows`, `<shard, z, fold>`.
-fn top_file(rows: &[(u64, i32, u32)]) -> Vec<u8> {
+fn top_file(rows: &[(u64, u32)]) -> Vec<u8> {
     let shard: Vec<String> = rows.iter().map(|r| Quadrant::of_id(r.0).key()).collect();
     let shard: Vec<&str> = shard.iter().map(String::as_str).collect();
-    let z: Vec<i32> = rows.iter().map(|r| r.1).collect();
-    let fold: Vec<u32> = rows.iter().map(|r| r.2).collect();
+    let fold: Vec<u32> = rows.iter().map(|r| r.1).collect();
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        b.strs(Some(&shard))
-            .i32_array(Some(&z))
-            .u32_array(Some(&fold));
+        b.strs(Some(&shard)).u32_array(Some(&fold));
     }));
     let pkt = encoder()
         .encode(
@@ -109,16 +106,14 @@ fn top_file(rows: &[(u64, i32, u32)]) -> Vec<u8> {
 
 /// The top's rows the store's folds make of the shards `writes` lie in, by
 /// shard and Z.
-fn top_of(writes: &[Write]) -> Vec<(u64, i32, u32)> {
+fn top_of(writes: &[Write]) -> Vec<(u64, u32)> {
     let mut shards: Vec<Quadrant> = writes.iter().map(|w| shard_of(w.at)).collect();
     shards.sort_unstable();
     shards.dedup();
     let mut rows = Vec::new();
     for shard in shards {
-        for z in SHARD_Z {
-            if let Some(word) = object().word_at([shard.at[0], shard.at[1], z]) {
-                rows.push((shard.id(), z, word));
-            }
+        if let Some(word) = object().word_at(shard.at) {
+            rows.push((shard.id(), word));
         }
     }
     rows
@@ -210,12 +205,10 @@ fn top_folds_until_shard_read() {
     fresh();
     apply(decode_shard(shard, &shard_file(shard)).unwrap());
     let rows = top_of(&written()[..3]);
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 1);
     fresh();
     admit(TOP, Some(&top_file(&rows))).unwrap();
-    for &(_, z, word) in &rows {
-        assert_eq!(object().word_at([shard.at[0], shard.at[1], z]), Some(word));
-    }
+    assert_eq!(object().word_at(shard.at), Some(rows[0].1));
     assert!(held().is_empty());
     assert!(!holds(&shard.region()) && holds(&other.region()));
     want([(shard, Ask::PLAIN), (other, Ask::PLAIN)].into_iter());
@@ -234,7 +227,7 @@ fn refused_file_named() {
     let _g = sys::serial();
     fresh();
     let shard = shard_of(leaf(0, [5, 7, 2]));
-    admit(TOP, Some(&top_file(&[(shard.id(), 0, 0)]))).unwrap();
+    admit(TOP, Some(&top_file(&[(shard.id(), 0)]))).unwrap();
     let foreign = [format::SETTINGS, 1, 2, 3];
     assert!(admit(shard.id(), Some(&foreign)).is_err());
     assert_eq!(refused_files(), &[shard.id()]);
@@ -286,8 +279,7 @@ fn top_golden() {
             let f: Vec<&str> = row.split(' ').collect();
             rows.push((
                 Quadrant::of_key(f[0]).unwrap().id(),
-                f[1].parse::<i32>().unwrap(),
-                f[2].parse::<u32>().unwrap(),
+                f[1].parse::<u32>().unwrap(),
             ));
         }
         apply(writes.clone());

@@ -145,10 +145,10 @@ impl Around {
                     lanes,
                     self.slots[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
                     zoom,
-                    n,
+                    overwrite::path(zoom, n),
                 )
             } else {
-                // Y and Z run over the two roots of zoom 0 alone; X round them.
+                // Y and Z run over the world's one root alone; X round it.
                 let inside =
                     (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
                 if inside {
@@ -233,7 +233,7 @@ impl Around {
                 a[2] + (k / 9) as i32 - 1,
             ];
             let h = slot.zoom();
-            let node = (h, overwrite::path(h, c.map(|v| v >> (zoom - h))));
+            let node = (h, overwrite::ancestor_at(zoom, c, zoom - h));
             if !out[..n].iter().any(|&(o, _)| o == node) {
                 out[n] = (node, slot);
                 n += 1;

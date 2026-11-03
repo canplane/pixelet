@@ -113,8 +113,7 @@
     "$type": "u32",
     "$doc": [
       "The children of the tree packet `object.TOP` holds after its format byte, by index:",
-      "each row a node at `SHARD_ZOOM` holding objects, which only shards' leaves are under;",
-      "a shard has two, below sea level and above."
+      "each row a shard holding objects, which only its leaves are under."
     ],
     "SHARD": {
       "$val": 0,
@@ -122,14 +121,8 @@
         "strs: the shard it is, by quadkey."
       ]
     },
-    "Z": {
-      "$val": 1,
-      "$doc": [
-        "i32[]: its index on Z, -1 below sea level and 0 above: the next bit of its keys, Z's sign."
-      ]
-    },
     "FOLD": {
-      "$val": 2,
+      "$val": 1,
       "$doc": [
         "u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine",
         "overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled."
@@ -161,7 +154,7 @@
     ],
     "SETTINGS": 1,
     "OBJECT": 19,
-    "OBJECT_TOP": 20,
+    "OBJECT_TOP": 22,
     "OBJECT_EDITS": 21
   }
 }

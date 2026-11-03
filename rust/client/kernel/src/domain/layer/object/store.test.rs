@@ -6,7 +6,6 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::domain::layer::Query;
@@ -330,7 +329,10 @@ fn eight_markers_stay() {
     let parent = [4, 4, 2];
     let writes: Vec<Write> = (0..8)
         .map(|k| Write {
-            at: id_of(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
+            at: id_of(
+                OBJECT_COARSEST + 1,
+                overwrite::child_at(OBJECT_COARSEST, parent, k),
+            ),
             id: MARKER,
             ext: marker_text(&format!("m{k}")),
         })

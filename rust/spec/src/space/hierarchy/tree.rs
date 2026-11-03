@@ -6,19 +6,22 @@
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::world::BOUNDS;
-use crate::space::coord::zoom::{units, Zoom};
+use crate::space::coord::zoom::{has_digit, units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i32; D]);
 
 /// The box a node stands for: a cube in three axes, and in fewer the column
-/// over every axis it does not name, as far as the world reaches.
+/// over every axis it does not name or has no digit of, as far as the world
+/// reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
     let mut b = BOUNDS;
     for (k, &v) in at.iter().enumerate() {
-        b.min[k] = f64::from(v) * side;
-        b.max[k] = b.min[k] + side;
+        if has_digit(k, zoom) {
+            b.min[k] = f64::from(v) * side;
+            b.max[k] = b.min[k] + side;
+        }
     }
     b
 }

@@ -5,9 +5,6 @@
 /** strs: the shard it is, by quadkey. */
 export const SHARD = 0 as number;
 
-/** i32[]: its index on Z, -1 below sea level and 0 above: the next bit of its keys, Z's sign. */
-export const Z = 1 as number;
-
 /** u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
  * overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
-export const FOLD = 2 as number;
+export const FOLD = 1 as number;

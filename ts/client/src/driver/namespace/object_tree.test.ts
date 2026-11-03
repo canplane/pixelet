@@ -40,8 +40,8 @@ test("top_of - each case's writes fold to the store's rows", () => {
     }
     const want: TopRow[] = [];
     for (let j = 0; g.has(`case.${cases}.top.${j}`); j++) {
-      const [shard, z, f] = g.get(`case.${cases}.top.${j}`)!.split(" ");
-      want.push({ shard: shard!, z: Number(z), fold: Number(f) });
+      const [shard, f] = g.get(`case.${cases}.top.${j}`)!.split(" ");
+      want.push({ shard: shard!, fold: Number(f) });
     }
     const shards = new Map<string, Map<string, Leaf>>();
     for (const w of writes) {

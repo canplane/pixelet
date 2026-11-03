@@ -120,7 +120,8 @@ impl Query for Stand {
         (0, node)
     }
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
-        let parent = [wrap_idx(zoom - 1, node[0] >> 1), node[1] >> 1, node[2] >> 1];
+        let parent = crate::overwrite::ancestor_at(zoom, node, 1);
+        let parent = [wrap_idx(zoom - 1, parent[0]), parent[1], parent[2]];
         assert_eq!(*at, (zoom - 1, parent), "handed {node:?} at {zoom}");
         (zoom, node)
     }
@@ -134,7 +135,14 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        let lo = c.map(|v| v as f32 * side);
+        // Y and Z from the world's edge (`overwrite::path`).
+        let lo = [
+            c[0] as f32 * side,
+            (c[1] + crate::overwrite::y_start(zoom)) as f32 * side
+                - (1u32 << (UNIT_ZOOM - 1)) as f32,
+            (c[2] + crate::overwrite::z_start(zoom)) as f32 * side
+                - (1u32 << (crate::HEIGHT_BITS - 1)) as f32,
+        ];
         let hi = lo.map(|v| v + side);
         if zoom >= near {
             let within = |t: &Thing| (0..3).all(|a| t.lo[a] <= lo[a] && hi[a] <= t.hi[a]);

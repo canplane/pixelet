@@ -93,7 +93,7 @@ impl Inheritance {
         (zoom, c): (Zoom, [i32; 3]),
     ) -> Inheritance {
         Inheritance {
-            object: overwrite::child(columns, self.object, zoom, c),
+            object: overwrite::child(columns, self.object, zoom, overwrite::path(zoom, c)),
             shard: self.shard,
             ground: self.ground,
             ways: overwrite::child(pool, self.ways, zoom, c),

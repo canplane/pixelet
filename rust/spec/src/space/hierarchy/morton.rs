@@ -11,7 +11,6 @@
 use super::tree::Node;
 use crate::space::coord::world::EXTENT;
 use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
-use crate::space::hierarchy::tree;
 use core::fmt;
 
 const LANES: [u32; 3] = EXTENT;
@@ -166,13 +165,6 @@ pub fn key_of_name<const D: usize>(name: &str) -> Option<u128> {
         (digits, n) = ((digits << w) | u128::from(d), n + w);
     }
     Some(ended(digits, n))
-}
-
-/// A cube's child at `slot`, its Z as Z's digits there name it: two's
-/// complement, so the first is its sign. X and Y keep the index as given.
-pub fn child_cube(zoom: Zoom, at: [i32; 3], slot: usize) -> [i32; 3] {
-    let [x, y, z] = tree::child_of(at, slot);
-    [x, y, signed(z, digits(2, zoom + 1))]
 }
 
 /// `v`'s low `width` bits as a two's complement number.

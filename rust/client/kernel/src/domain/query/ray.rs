@@ -16,6 +16,7 @@ use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
 use pxl_engine::cast::{self, Detail, End, Query, Spacing};
+use pxl_engine::overwrite;
 use pxl_engine::support;
 use pxl_engine::support::{ColumnSurface, Line};
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -136,12 +137,11 @@ impl<'a> Query for Walker<'_, 'a> {
         self.world.start((0, node))
     }
 
-    /// The child is the one its index's low bits name.
-    fn child(&mut self, at: &At, _: Zoom, node: [i32; 3]) -> At {
-        self.world.child(
-            at,
-            (node[0] & 1 | (node[1] & 1) << 1 | (node[2] & 1) << 2) as usize,
-        )
+    /// The child is the one its place in the tree's cut names (`overwrite::path`).
+    fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
+        let p = overwrite::path(zoom, node);
+        self.world
+            .child(at, (p[0] & 1 | (p[1] & 1) << 1 | (p[2] & 1) << 2) as usize)
     }
 
     /// The world's answer (`World::node`), the first lack kept; a node
@@ -345,8 +345,9 @@ impl<'a> World<'a> {
         // The corner's Q3 steps from the origin's unit cell, exact: the roots
         // apart, its place in its root, less the origin's unit cell's there.
         let n = s.node;
+        let grid = cast::grid_of(q);
         let steps = |k: usize| {
-            (i64::from(n.roots[k]) << 32) + i64::from(n.corner[k]) - i64::from(q[k] as u32 & !0xff)
+            (i64::from(n.roots[k]) << 32) + i64::from(n.corner[k]) - i64::from(grid[k] & !0xff)
         };
         let min: V3 = std::array::from_fn(|k| unit[k] + q3::to_real(steps(k)));
         let axis = s.axis as usize;

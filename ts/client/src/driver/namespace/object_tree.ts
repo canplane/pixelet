@@ -28,11 +28,10 @@ export interface Leaf {
   text: string | null;
 }
 
-/** A row of the top (file.json `top`): a node at `SHARD_ZOOM` holding
- * objects, by its shard's quadkey and its Z, and what it folds to. */
+/** A row of the top (file.json `top`): a shard holding objects, by its quadkey,
+ * and what it folds to. */
 export interface TopRow {
   shard: string;
-  z: number;
   fold: number;
 }
 
@@ -52,10 +51,11 @@ function depth(key: string): number {
 
 /** The child a leaf lies under at the `j`th zoom past the shard, from 1: its
  * digit there, Z's bit highest, the order of a node's children (pxl-spec
- * space/hierarchy/tree.rs `slot_of`). At the first, Z's bit is its sign:
- * below sea level or above. */
+ * space/hierarchy/tree.rs `slot_of`). The tree counts Z from the world's floor
+ * (pxl-engine overwrite.rs `path`), the key's first digit its sign: below sea
+ * level is the first half there. */
 function slot(key: string, j: number): number {
-  return Number(key[SHARD_ZOOM + j - 1]);
+  return Number(key[SHARD_ZOOM + j - 1]) ^ (j === 1 ? 4 : 0);
 }
 
 /** `w` laid over `leaves`, a shard's by key, none over another: its node made
@@ -138,15 +138,9 @@ function word(under: readonly Leaf[], j: number): number {
   );
 }
 
-/** The top's rows of the shard `shard` holding `leaves`: each of its two
- * nodes at `SHARD_ZOOM` holding any, below sea level (Z -1) then above (Z
- * 0), and what it folds to. */
+/** The top's row of the shard `shard` holding `leaves`, none where it holds
+ * none. */
 export function top_of(shard: string, leaves: Iterable<Leaf>): TopRow[] {
-  const below: Leaf[] = [];
-  const above: Leaf[] = [];
-  for (const l of leaves) ((slot(l.key, 1) & 4) !== 0 ? below : above).push(l);
-  const rows: TopRow[] = [];
-  if (below.length > 0) rows.push({ shard, z: -1, fold: word(below, 0) });
-  if (above.length > 0) rows.push({ shard, z: 0, fold: word(above, 0) });
-  return rows;
+  const under = [...leaves];
+  return under.length > 0 ? [{ shard, fold: word(under, 0) }] : [];
 }

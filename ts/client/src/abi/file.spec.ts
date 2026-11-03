@@ -49,8 +49,7 @@ export const SHARD_ZOOM: u32 = 8 as number;
 export { write };
 
 /** The children of the tree packet `object.TOP` holds after its format byte, by index:
- * each row a node at `SHARD_ZOOM` holding objects, which only shards' leaves are under;
- * a shard has two, below sea level and above. */
+ * each row a shard holding objects, which only its leaves are under. */
 export { top };
 
 /** The files the kernel keeps below STORAGE, by slot. What a slot holds is its

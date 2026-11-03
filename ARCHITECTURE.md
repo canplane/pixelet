@@ -90,7 +90,10 @@ same zooms, cut through the height as well, make an octree of nodes, eight under
 each, and that octree is what a ray descends (The query, the only seam). A
 **shard** is the coarsest cube, a tile as wide as the world is tall with the
 world's whole height over it (`pxl-engine lib.rs` `SHARD_ZOOM`); the world is
-ingested, baked and kept a shard at a time.
+ingested, baked and kept a shard at a time. To a shard the octree is the plane's
+quadtree, Z having no digit yet; the tree and a ray count Y and Z from the world's
+edge (`overwrite.rs` `path`, `cast.rs` `grid_of`), so the world is one root and a
+shard one cube, split at sea level under it.
 
 A position is a **`Q3`**: three `i32`, one an axis, each counting 256ths of a
 unit, so it is the same bits on every machine (`pxl-spec space/coord/q3.rs`).

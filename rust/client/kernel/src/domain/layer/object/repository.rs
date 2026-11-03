@@ -67,10 +67,6 @@ const TOP: u64 = file::TOP_ID;
 // What the source reads a shard's zoom as is this one's (file.json `SHARD_ZOOM`).
 const _: () = assert!(file_spec::SHARD_ZOOM == SHARD_ZOOM);
 
-/// A shard's nodes at `SHARD_ZOOM` on Z, below sea level and above: the
-/// world's height spans the two (pxl-spec space/coord/world.rs `EXTENT`).
-const SHARD_Z: [i32; 2] = [-1, 0];
-
 #[derive(Default)]
 struct State {
     /// The shards the top lists, by id; none until it is read.
@@ -187,15 +183,15 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
 
 /// The top read: the shards it lists, and each fold of a shard not read
 /// held in the store.
-fn on_top(rows: Vec<(u64, i32, u32)>) {
+fn on_top(rows: Vec<(u64, u32)>) {
     let st = state();
     let mut listed = FnvHashSet::default();
     let mut changed = Vec::new();
-    for (shard, z, word) in rows {
+    for (shard, word) in rows {
         listed.insert(shard);
         if !st.read.contains(&shard) {
             let at = Quadrant::of_id(shard).at;
-            changed.push(object().set_fold([at[0], at[1], z], word));
+            changed.push(object().set_fold(at, word));
         }
     }
     st.top_shards = Some(listed);
@@ -207,12 +203,8 @@ fn on_top(rows: Vec<(u64, i32, u32)>) {
 /// The shard `id` read: its folds let go and its leaves written.
 fn on_shard(id: u64, writes: Vec<Write>) {
     let at = Quadrant::of_id(id).at;
-    let changed: Vec<Aabb> = SHARD_Z
-        .iter()
-        .filter_map(|&z| object().clear_fold([at[0], at[1], z]))
-        .collect();
-    if !changed.is_empty() {
-        note_written(&changed);
+    if let Some(changed) = object().clear_fold(at) {
+        note_written(&[changed]);
     }
     apply(writes);
     state().read.insert(id);
@@ -343,18 +335,17 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
     Ok(writes)
 }
 
-/// The top's rows, `<shard, z, fold>` as file.json `top` lays them out,
-/// whole or none: each shard's a tile at `SHARD_ZOOM`, its Z one of its
-/// two, its share of its cube filled at most the whole.
-fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, i32, u32)>, MarshalError> {
+/// The top's rows, `<shard, fold>` as file.json `top` lays them out, whole or
+/// none: each shard's a tile at `SHARD_ZOOM`, its share of its cube filled at
+/// most the whole.
+fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
     let pkt = packet(format::OBJECT_TOP, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
-    let (shard, z, fold) = (
+    let (shard, fold) = (
         root.at(top::SHARD)?.get_strs()?,
-        root.at(top::Z)?.get_array::<i32>()?,
         root.at(top::FOLD)?.get_array::<u32>()?,
     );
-    if shard.len() as usize != z.len() || shard.len() as usize != fold.len() {
+    if shard.len() as usize != fold.len() {
         return Err(MarshalError::new(Errno::EINVAL));
     }
     shard
@@ -362,12 +353,8 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, i32, u32)>, MarshalError> {
         .enumerate()
         .map(|(r, quadkey)| {
             Quadrant::of_key(quadkey)
-                .filter(|t| {
-                    t.zoom == SHARD_ZOOM
-                        && SHARD_Z.contains(&z[r])
-                        && overwrite::high(fold[r]) <= FULL
-                })
-                .map(|t| (t.id(), z[r], fold[r]))
+                .filter(|t| t.zoom == SHARD_ZOOM && overwrite::high(fold[r]) <= FULL)
+                .map(|t| (t.id(), fold[r]))
                 .ok_or(MarshalError::new(Errno::EINVAL))
         })
         .collect()

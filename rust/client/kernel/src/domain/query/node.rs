@@ -49,10 +49,10 @@ use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::overwrite::{child_at, Cut};
 use pxl_engine::world;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::hierarchy::tree::{child_of, Node};
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
@@ -132,7 +132,7 @@ impl World<'_> {
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
     pub(super) fn child(&self, at: &At, k: usize) -> At {
         let (zoom, c) = at.node;
-        let node = (zoom + 1, child_of(c, k));
+        let node = (zoom + 1, child_at(zoom, c, k as u32));
         At {
             node,
             inheritance: at.inheritance.child(&self.object.columns(), pool(), node),

@@ -72,16 +72,13 @@ pub mod write {
 }
 
 /// The children of the tree packet `object.TOP` holds after its format byte, by index:
-/// each row a node at `SHARD_ZOOM` holding objects, which only shards' leaves are under;
-/// a shard has two, below sea level and above.
+/// each row a shard holding objects, which only its leaves are under.
 pub mod top {
     /// strs: the shard it is, by quadkey.
     pub const SHARD: u32 = 0;
-    /// i32[]: its index on Z, -1 below sea level and 0 above: the next bit of its keys, Z's sign.
-    pub const Z: u32 = 1;
     /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
     /// overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
-    pub const FOLD: u32 = 2;
+    pub const FOLD: u32 = 1;
 }
 
 /// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
@@ -100,6 +97,6 @@ pub mod storage {
 pub mod format {
     pub const SETTINGS: u8 = 1;
     pub const OBJECT: u8 = 19;
-    pub const OBJECT_TOP: u8 = 20;
+    pub const OBJECT_TOP: u8 = 22;
     pub const OBJECT_EDITS: u8 = 21;
 }

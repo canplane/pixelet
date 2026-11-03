@@ -2,8 +2,8 @@
 
 //! Placed objects, kept as their one record: each leaf's catalog value at its
 //! node and the handle of what it carries beyond it (`ext.rs`), in one sparse
-//! tree over the world (`space/hierarchy/sparse_tree.rs`), whose root's
-//! children are the nodes of zoom 0. A write arrives as `<key, id, ext>`
+//! tree over the world (`space/hierarchy/sparse_tree.rs`), whose root is the
+//! world, a node of zoom 0. A write arrives as `<key, id, ext>`
 //! (`morton::key_of`). What a node at any zoom holds is the pyramid's
 //! (`pyramid.rs`), each branch's slot its children folded, folded again by
 //! each write up its path, read through the layer's query (`Query::cursor`,
@@ -24,7 +24,7 @@ use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::node_of;
 use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
-use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
+use pxl_spec::space::hierarchy::tree::{region, slot_of, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -147,13 +147,6 @@ impl overwrite::Columns for Columns<'_> {
     }
 }
 
-/// The root `k` of four, a node of zoom 0: X is counted from the round's
-/// start (`overwrite::path`), so a root's X is 0, and Y and Z either side
-/// of 0.
-fn root(k: u32) -> [i32; 3] {
-    [0, -((k & 1) as i32), -((k >> 1) as i32)]
-}
-
 /// Where the node `at` of `zoom` comes in the tree's own order, the order a
 /// walk from the roots enters nodes in (`descend`): its slot a zoom
 /// (`slot_of`) from the roots down, so of two nodes neither under the other
@@ -260,9 +253,7 @@ impl Store {
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
-        for k in 0..4 {
-            self.walk(self.cursor((0, root(k)), 0), 0, root(k), about, enter);
-        }
+        self.walk(self.cursor((0, [0; 3]), 0), 0, [0; 3], about, enter);
     }
 
     /// `descend` under the node `at` of `zoom` that holds `slot`, by the step
@@ -277,7 +268,7 @@ impl Store {
             return;
         }
         for k in 0..8 {
-            let child = wrap_cell(zoom + 1, child_of(at, k));
+            let child = wrap_cell(zoom + 1, overwrite::child_at(zoom, at, k));
             self.walk(
                 self.child(&slot, (zoom + 1, child), zoom + 1),
                 zoom + 1,
@@ -310,7 +301,7 @@ impl Store {
         self.walk(
             slot,
             z,
-            at.map(|c| c >> (zoom - z)),
+            overwrite::ancestor_at(zoom, at, zoom - z),
             about(&cube(zoom, at)),
             &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
@@ -393,11 +384,12 @@ impl Store {
         }
     }
 
-    /// The node `at` at `SHARD_ZOOM` held as `word`, what its leaves fold to
+    /// The shard `at` held as `word`, what its leaves fold to
     /// (pxl-engine `overwrite::fold_word`), they not here: a branch whose
     /// children hold nothing, so it is drawn as its fold from where its zoom
     /// or a coarser one is a cell, and nothing finer is met in it. Its cube.
-    pub(crate) fn set_fold(&mut self, at: [i32; 3], word: u32) -> Aabb {
+    pub(crate) fn set_fold(&mut self, [x, y]: [i32; 2], word: u32) -> Aabb {
+        let at = [x, y, 0];
         self.tree.set_branch(
             depth(SHARD_ZOOM),
             path(SHARD_ZOOM, at),
@@ -409,9 +401,10 @@ impl Store {
         cube(SHARD_ZOOM, at)
     }
 
-    /// The node `at` at `SHARD_ZOOM` emptied where `set_fold` held it, no
-    /// leaf under it; its cube where it changed.
-    pub(crate) fn clear_fold(&mut self, at: [i32; 3]) -> Option<Aabb> {
+    /// The shard `at` emptied where `set_fold` held it, no leaf under it; its
+    /// cube where it changed.
+    pub(crate) fn clear_fold(&mut self, [x, y]: [i32; 2]) -> Option<Aabb> {
+        let at = [x, y, 0];
         let slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
         if !slot.is_folded() || slot.zoom() != SHARD_ZOOM {
             return None;
@@ -431,10 +424,11 @@ impl Store {
         Some(cube(SHARD_ZOOM, at))
     }
 
-    /// The word the node `at` at `SHARD_ZOOM` holds in the tree: a leaf's,
-    /// or what its leaves fold to; none where nothing is under it.
+    /// The word the shard `at` holds in the tree: what its leaves fold to; none
+    /// where nothing is under it.
     #[cfg(test)]
-    pub(crate) fn word_at(&self, at: [i32; 3]) -> Option<u32> {
+    pub(crate) fn word_at(&self, [x, y]: [i32; 2]) -> Option<u32> {
+        let at = [x, y, 0];
         let slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
         (slot.holds() && slot.zoom() == SHARD_ZOOM).then(|| self.tree.data()[slot.slot() as usize])
     }
@@ -511,7 +505,12 @@ impl Query for Store {
 
     fn child<const D: usize>(&self, parent: &NodeSlot, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
         match D {
-            3 => overwrite::child(&self.columns(), *parent, zoom, [at[0], at[1], at[2]]),
+            3 => overwrite::child(
+                &self.columns(),
+                *parent,
+                zoom,
+                path(zoom, [at[0], at[1], at[2]]),
+            ),
             _ => *parent,
         }
     }
@@ -633,7 +632,7 @@ impl ObjectQuery for Store {
                 continue;
             }
             let z = slot.zoom();
-            let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
+            let at = wrap_cell(z, overwrite::ancestor_at(zoom, at, zoom - z));
             self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
                 if whole.meet(*query).is_none() {
                     return false;
@@ -674,10 +673,8 @@ impl ObjectQuery for Store {
         walk.at.truncate(kept);
         walk.slots.truncate(walk.at.last().map_or(0, |s| s.end));
         let span = |z: usize, at: [i32; 3]| {
-            [
-                f64::from(at[2]) * units(z as Zoom),
-                f64::from(at[2] + 1) * units(z as Zoom),
-            ]
+            let b = cube(z as Zoom, at);
+            [b.min[2], b.max[2]]
         };
         let join = |a: Option<[f64; 2]>, b: [f64; 2]| {
             Some(a.map_or(b, |a| [a[0].min(b[0]), a[1].max(b[1])]))
@@ -695,14 +692,15 @@ impl ObjectQuery for Store {
             };
             match k.checked_sub(1) {
                 None => {
-                    for r in (0..4).map(root).filter(|r| [r[0], r[1]] == c) {
-                        met(&mut walk.slots, r, self.cursor((0, r), 0));
-                    }
+                    met(&mut walk.slots, [0; 3], self.cursor((0, [0; 3]), 0));
                 }
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
                         let (at, h) = walk.slots[i];
-                        for child in [0, 1].map(|z| [c[0], c[1], 2 * at[2] + z]) {
+                        let z = 2 * (at[2] + overwrite::z_start(k as Zoom - 1))
+                            - overwrite::z_start(k as Zoom);
+                        let y = c[1] - overwrite::y_start(k as Zoom);
+                        for child in [z, z + 1].map(|z| [c[0], y, z]) {
                             met(
                                 &mut walk.slots,
                                 child,
