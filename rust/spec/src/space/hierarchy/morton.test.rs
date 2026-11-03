@@ -18,8 +18,8 @@ fn at(p: [i32; 3], zoom: Zoom) -> [i32; 3] {
 }
 
 fn digits_of(key: u128) -> (u128, u32) {
-    let n = 126 - key.trailing_zeros();
-    (key >> (127 - n), n)
+    let n = 127 - key.trailing_zeros();
+    ((key >> (127 - n)) >> 1, n)
 }
 
 #[test]

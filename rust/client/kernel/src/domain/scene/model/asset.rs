@@ -64,7 +64,7 @@ static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 /// than `REGISTRATIONS` run at once; past them a model waits its turn here.
 pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let load = load_of(slot)?;
-    let file = load.number();
+    let file = load.id();
     let key = height_u.map(f64::to_bits);
     let registered = REGISTRY.get(Vec::new);
     let at = registered
@@ -96,7 +96,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
 /// nothing: what a reader that must not load, such as the query, finds;
 /// none while it is not registered.
 pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
-    let file = load_of(slot)?.number();
+    let file = load_of(slot)?.id();
     let key = height_u.map(f64::to_bits);
     REGISTRY
         .get(Vec::new)

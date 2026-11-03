@@ -14,7 +14,7 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_at, quad_rows, Quadrant, LEAF_ZOOM};
 
 use crate::util;
 use crate::util::{pack, unpack, write_atomic, Level};
@@ -38,22 +38,22 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// As tile `at` is published.
-    fn encode(&self, at: Tile) -> Result<Vec<u8>, String>;
+    fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
     /// As tile `at` is stored: its packet, as `encode` makes it, and what of
     /// it the set keeps beside its tiles for `fits_set` (`FITS`), where the
     /// kind keeps anything; one pass makes both.
-    fn encode_stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
+    fn encode_stored(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
         Ok((self.encode(at)?, None))
     }
     fn decode(raw: &[u8]) -> Result<Self, String>;
 
-    fn sources(p: Tile) -> Vec<Tile> {
+    fn sources(p: Quadrant) -> Vec<Quadrant> {
         p.children().to_vec()
     }
 
     /// `p` from its sources; None where a required one is not held.
-    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
+    fn fold_tile<'a>(p: Quadrant, get: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self>;
 
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
@@ -63,7 +63,10 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// anything, of what each tile's `encode_stored` kept; `workers` tiles at
     /// once. What the set will keep of its tiles (`FITS`), where the kind keeps
     /// anything; none for most kinds.
-    fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
+    fn fits_set(
+        _set: &Staged<'_>,
+        _workers: usize,
+    ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
         Ok(None)
     }
 }
@@ -71,12 +74,12 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 /// What a tile the set holds no object for is. The pyramid is correct only
 /// if a parent's is the fold of its children's, as every other tile is.
 pub trait Absent<L: Base>: Sync {
-    fn at(&self, p: Tile) -> Cow<'_, L>;
+    fn at(&self, p: Quadrant) -> Cow<'_, L>;
 }
 
 /// One tile for every absence, which folds to itself.
 impl<L: Base> Absent<L> for L {
-    fn at(&self, _p: Tile) -> Cow<'_, L> {
+    fn at(&self, _p: Quadrant) -> Cow<'_, L> {
         Cow::Borrowed(self)
     }
 }
@@ -101,23 +104,28 @@ impl TileSet {
     }
 
     /// Flat under its name, as the bucket holds it.
-    pub fn path(&self, p: Tile) -> PathBuf {
-        self.root.join(p.name())
+    pub fn path(&self, p: Quadrant) -> PathBuf {
+        self.root.join(p.key())
     }
 
-    pub fn write(&self, p: Tile, packed: &[u8]) -> Result<(), String> {
+    pub fn write(&self, p: Quadrant, packed: &[u8]) -> Result<(), String> {
         let path = self.path(p);
         fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    fn fit_path(&self, p: Tile) -> PathBuf {
-        self.root.join(format!("{}.fit", p.name()))
+    fn fit_path(&self, p: Quadrant) -> PathBuf {
+        self.root.join(format!("{}.fit", p.key()))
     }
 
     /// A tile as `Base::encode_stored` made it, and beside it what was kept, or
     /// none: the kept first, so a tile written is never beside another's.
-    pub fn write_stored(&self, p: Tile, packed: &[u8], fit: Option<&str>) -> Result<(), String> {
+    pub fn write_stored(
+        &self,
+        p: Quadrant,
+        packed: &[u8],
+        fit: Option<&str>,
+    ) -> Result<(), String> {
         fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
         let path = self.fit_path(p);
         match fit {
@@ -129,7 +137,7 @@ impl TileSet {
     }
 
     /// What was kept beside a tile (`write_stored`), none where nothing was.
-    pub fn fit(&self, p: Tile) -> Result<Option<String>, String> {
+    pub fn fit(&self, p: Quadrant) -> Result<Option<String>, String> {
         let path = self.fit_path(p);
         match fs::read_to_string(&path) {
             Ok(text) => Ok(Some(text)),
@@ -140,14 +148,14 @@ impl TileSet {
 
     /// The tile, then what was kept beside it: one gone first leaves a kept
     /// no tile reads.
-    pub fn remove(&self, p: Tile) -> Result<(), String> {
+    pub fn remove(&self, p: Quadrant) -> Result<(), String> {
         remove_file(&self.path(p))?;
         remove_file(&self.fit_path(p))
     }
 
     /// What the set keeps of its tiles (`FITS`), by tile; none for a set
     /// that keeps nothing, one baked before it kept them.
-    pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
+    pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Quadrant, String>>, String> {
         let path = self.root.join(FITS);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
@@ -157,14 +165,14 @@ impl TileSet {
         let mut out = FnvHashMap::default();
         for line in text.lines() {
             let (name, fit) = line.split_once(' ').unwrap_or((line, ""));
-            let p = Tile::of_name(name)
+            let p = Quadrant::of_key(name)
                 .ok_or_else(|| format!("{}: {name} names no tile", path.display()))?;
             out.insert(p, fit.to_string());
         }
         Ok(Some(out))
     }
 
-    pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
+    pub fn read<L: Base>(&self, p: Quadrant) -> Result<Option<L>, String> {
         let Some(raw) = self.content(p)? else {
             return Ok(None);
         };
@@ -174,7 +182,7 @@ impl TileSet {
     }
 
     /// A tile's content, unpacked.
-    pub fn content(&self, p: Tile) -> Result<Option<Vec<u8>>, String> {
+    pub fn content(&self, p: Quadrant) -> Result<Option<Vec<u8>>, String> {
         let path = self.path(p);
         if !path.exists() {
             return Ok(None);
@@ -186,14 +194,14 @@ impl TileSet {
     }
 
     /// Every tile, each zoom's sorted, from one listing: a name's length is its zoom.
-    pub fn by_zoom(&self) -> Result<BTreeMap<Zoom, Vec<Tile>>, String> {
-        let mut out: BTreeMap<Zoom, Vec<Tile>> = BTreeMap::new();
+    pub fn by_zoom(&self) -> Result<BTreeMap<Zoom, Vec<Quadrant>>, String> {
+        let mut out: BTreeMap<Zoom, Vec<Quadrant>> = BTreeMap::new();
         if self.root.exists() {
             for entry in
                 fs::read_dir(&self.root).map_err(|e| format!("{}: {e}", self.root.display()))?
             {
                 let name = entry.map_err(|e| e.to_string())?.file_name();
-                if let Some(p) = name.to_str().and_then(Tile::of_name) {
+                if let Some(p) = name.to_str().and_then(Quadrant::of_key) {
                     out.entry(p.zoom).or_default().push(p);
                 }
             }
@@ -214,14 +222,14 @@ fn remove_file(path: &Path) -> Result<(), String> {
 
 /// None where it has no child: a parent exists exactly where a child does.
 pub(crate) fn fold_parent<'a, L: Base>(
-    parent: Tile,
-    read: impl Fn(Tile) -> Option<&'a L>,
+    parent: Quadrant,
+    read: impl Fn(Quadrant) -> Option<&'a L>,
     absent: &impl Absent<L>,
 ) -> Option<L> {
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
-    let filled: FnvHashMap<Tile, Cow<'_, L>> = L::sources(parent)
+    let filled: FnvHashMap<Quadrant, Cow<'_, L>> = L::sources(parent)
         .into_iter()
         .filter(|&p| read(p).is_none())
         .map(|p| (p, absent.at(p)))
@@ -233,7 +241,7 @@ pub(crate) fn fold_parent<'a, L: Base>(
 
 pub(crate) fn fold_stored<L: Base>(
     set: &TileSet,
-    parent: Tile,
+    parent: Quadrant,
     absent: &impl Absent<L>,
 ) -> Result<Option<L>, String> {
     let mut read = FnvHashMap::default();
@@ -252,12 +260,12 @@ pub struct Staged<'a> {
     pub base: &'a TileSet,
     pub stage: &'a TileSet,
     pub leaf: Zoom,
-    pub whole: &'a FnvHashSet<Tile>,
-    pub(crate) gone: FnvHashSet<Tile>,
+    pub whole: &'a FnvHashSet<Quadrant>,
+    pub(crate) gone: FnvHashSet<Quadrant>,
 }
 
 impl Staged<'_> {
-    pub fn content(&self, p: Tile) -> Result<Option<Vec<u8>>, String> {
+    pub fn content(&self, p: Quadrant) -> Result<Option<Vec<u8>>, String> {
         if p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)) {
             if let Some(c) = self.stage.content(p)? {
                 return Ok(Some(c));
@@ -269,13 +277,13 @@ impl Staged<'_> {
         self.base.content(p)
     }
 
-    pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
+    pub fn read<L: Base>(&self, p: Quadrant) -> Result<Option<L>, String> {
         let Some(raw) = self.content(p)? else {
             return Ok(None);
         };
         L::decode(&raw)
             .map(Some)
-            .map_err(|e| format!("{}: {e}", p.name()))
+            .map_err(|e| format!("{}: {e}", p.key()))
     }
 
     /// What the set as it will be keeps of `p` (`Base::encode_stored`), as
@@ -284,8 +292,8 @@ impl Staged<'_> {
     /// keeps nothing, one baked before it did, so it is not known.
     pub fn fit_of(
         &self,
-        p: Tile,
-        base: Option<&FnvHashMap<Tile, String>>,
+        p: Quadrant,
+        base: Option<&FnvHashMap<Quadrant, String>>,
     ) -> Result<Option<Option<String>>, String> {
         if (p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)))
             && self.stage.path(p).exists()
@@ -300,7 +308,7 @@ impl Staged<'_> {
 
     /// Every tile it may hold, the set's and the stage's, each zoom's
     /// sorted; one gone or not taken up reads none (`content`).
-    pub fn tiles(&self) -> Result<BTreeMap<Zoom, Vec<Tile>>, String> {
+    pub fn tiles(&self) -> Result<BTreeMap<Zoom, Vec<Quadrant>>, String> {
         let mut all = self.base.by_zoom()?;
         for (zoom, tiles) in self.stage.by_zoom()? {
             let at = all.entry(zoom).or_default();
@@ -313,7 +321,7 @@ impl Staged<'_> {
 }
 
 /// The tile over `p` at `zoom`.
-pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
+pub fn ancestor(mut p: Quadrant, zoom: Zoom) -> Quadrant {
     while p.zoom > zoom {
         p = p.parent();
     }
@@ -327,7 +335,7 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// no object is changed when what its absence is has.
 pub fn fold<L: Base>(
     set: &mut Staged<'_>,
-    mut changed: FnvHashSet<Tile>,
+    mut changed: FnvHashSet<Quadrant>,
     absent: &impl Absent<L>,
     workers: usize,
 ) -> Result<(), String> {
@@ -335,7 +343,7 @@ pub fn fold<L: Base>(
         if changed.is_empty() {
             break;
         }
-        let below: Vec<Tile> = changed
+        let below: Vec<Quadrant> = changed
             .iter()
             .copied()
             .filter(|c| c.zoom == zoom + 1)
@@ -356,11 +364,14 @@ pub fn fold<L: Base>(
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub(crate) fn unasked_tiles<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
+pub(crate) fn unasked_tiles<L: Base>(
+    set: &TileSet,
+    top: Zoom,
+) -> Result<FnvHashSet<Quadrant>, String> {
     let mut out = FnvHashSet::default();
     let listed = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {
-        let mut parents: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
+        let mut parents: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
         for &p in listed.get(&zoom).into_iter().flatten() {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
@@ -407,16 +418,16 @@ pub fn write_manifest(
 
 /// The parents whose `sources` read any of `below`, sorted by row. A
 /// layer's sources lie under the 3 × 3 tiles around a parent.
-fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
+fn readers<L: Base>(below: &[Quadrant]) -> Vec<Quadrant> {
     let mut out = BTreeSet::new();
     for &c in below {
         let q = c.parent();
         let [x, y] = q.at;
         for (dx, dy) in (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy))) {
-            if !tile_rows(q.zoom).contains(&(y + dy)) {
+            if !quad_rows(q.zoom).contains(&(y + dy)) {
                 continue;
             }
-            let p = tile_at(q.zoom, [x + dx, y + dy]);
+            let p = quad_at(q.zoom, [x + dx, y + dy]);
             if L::sources(p).contains(&c) {
                 out.insert((y + dy, p.at[0], p));
             }
@@ -429,11 +440,11 @@ fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
 /// gone. Each worker keeps only the child rows its current parent row reads.
 fn fold_zoom<L: Base>(
     set: &Staged<'_>,
-    targets: &[Tile],
+    targets: &[Quadrant],
     absent: &impl Absent<L>,
     workers: usize,
-) -> Result<(Vec<Tile>, Vec<Tile>), String> {
-    let rows: Vec<&[Tile]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
+) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
+    let rows: Vec<&[Quadrant]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
     let band = rows.len().div_ceil(workers.max(1)).max(1);
     let bands = std::thread::scope(|scope| {
         let handles: Vec<_> = rows
@@ -456,10 +467,10 @@ fn fold_zoom<L: Base>(
 
 fn fold_band<L: Base>(
     set: &Staged<'_>,
-    rows: &[&[Tile]],
+    rows: &[&[Quadrant]],
     absent: &impl Absent<L>,
-) -> Result<(Vec<Tile>, Vec<Tile>), String> {
-    let mut held: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
+) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
+    let mut held: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
     let (mut written, mut gone) = (Vec::new(), Vec::new());
     for row in rows {
         let y = row[0].at[1];
@@ -473,7 +484,7 @@ fn fold_band<L: Base>(
             let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
                 .map(|t| {
                     t.encode_stored(parent)
-                        .map_err(|e| format!("{}: {e}", parent.name()))
+                        .map_err(|e| format!("{}: {e}", parent.key()))
                 })
                 .transpose()?;
             if set.content(parent)?.as_deref() == after.as_ref().map(|(raw, _)| raw.as_slice()) {

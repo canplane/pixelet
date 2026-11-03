@@ -47,7 +47,7 @@ use crate::sys::io::demand_spec;
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn.
 pub use crate::sys::io::demand_spec::StreamName as Stream;
-use crate::sys::io::host_spec::root;
+use crate::sys::io::file_spec::root;
 use pxl_spec::bake::tile;
 
 impl Stream {
@@ -63,8 +63,8 @@ impl Stream {
         }
     }
 
-    /// The root a want's file is opened below (host.json `root`), its
-    /// subject the path: a bake's, by its kind, or the objects' OBJECT. None
+    /// The root a want's file is opened below (file.json `root`), its
+    /// id the path: a bake's, by its kind, or the objects' OBJECT. None
     /// for an asset, which the loader opens below ASSET (sys/io/loader.rs).
     pub const fn root(self) -> Option<u32> {
         match (self, self.bake()) {

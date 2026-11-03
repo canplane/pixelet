@@ -5,9 +5,9 @@
 //! The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
 //! and the packet each carries — an XTP branch whose children are its fields, in
 //! order. A command with no fields carries no packet. The kernel is the process; the
-//! JavaScript around it is two things to it, its host, which holds the devices and
-//! the turns, and its shell, the UI. A command's major is the module it is for, and
-//! the sections say which of the two it is between.
+//! JavaScript around it is three things to it, its host, which holds the turns, its
+//! drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and
+//! the sections say which of them it is between.
 //!
 //! The same number is a command on the submission ring and an event on the
 //! completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -599,7 +599,7 @@ impl Message {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
-    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
+    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json) ----
     /// Start watching.
     SENSOR_START = 0x1201,
     /// Stop watching.
@@ -635,7 +635,7 @@ pub enum Command {
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     FS_MOUNT = 0x1301,
     /// A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
-    /// own again, what it held set aside by the host: the kernel reads it again, and writes
+    /// own again, what it held set aside by the driver: the kernel reads it again, and writes
     /// a storage file from then on.
     FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
@@ -649,7 +649,7 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
-    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut.
+    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit.
     EDIT_MARKER_TEXT = 0x1a02,
     /// The marker's draft dropped, nothing committed.
     EDIT_MARKER_CANCEL = 0x1a03,
@@ -781,7 +781,7 @@ pub struct Snapshot<'a> {
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
     /// The files the kernel refused, not of their format, not decoding, or too large for any
-    /// heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+    /// heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
     /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
     /// empty.
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
@@ -945,9 +945,9 @@ impl DivisionPart<'_> {
 
 /// A file the kernel refused, as it opened it.
 pub struct RefusedFile<'a> {
-    /// host.json's `root`.
+    /// file.json's `root`.
     pub root: u32,
-    /// Its number below the root in decimal.
+    /// Its path below the root, as the kernel opened it.
     pub path: &'a dyn Display,
 }
 
@@ -1192,9 +1192,9 @@ impl<'a> FsMount<'a> {
 /// Command::FS_TRUNCATED's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct FsTruncated<'a> {
-    /// host.json's `root`.
+    /// file.json's `root`.
     pub root: u32,
-    /// Its number below the root in decimal, as the kernel opened it.
+    /// Its path below the root, as the kernel opened it.
     pub path: &'a str,
 }
 

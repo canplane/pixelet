@@ -3,7 +3,7 @@
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::hierarchy::morton::key_of;
+use pxl_spec::space::hierarchy::morton::{key_of, key_of_name};
 use xpute_kit::golden::Golden;
 
 use super::*;
@@ -51,23 +51,23 @@ fn held() -> Vec<(u128, u32, Option<String>)> {
 fn written() -> [Write; 4] {
     [
         Write {
-            key: leaf(0, [5, 7, 2]),
+            at: leaf(0, [5, 7, 2]),
             id: 3,
             ext: None,
         },
         // Under sea level, the shard's other half of its height.
         Write {
-            key: leaf(0, [5, 8, -3]),
+            at: leaf(0, [5, 8, -3]),
             id: 4,
             ext: None,
         },
         Write {
-            key: leaf(0, [6, 9, 1]),
+            at: leaf(0, [6, 9, 1]),
             id: MARKER,
             ext: Some(Ext::MarkerText("here".to_string())),
         },
         Write {
-            key: leaf(1, [5, 7, 2]),
+            at: leaf(1, [5, 7, 2]),
             id: 3,
             ext: None,
         },
@@ -75,22 +75,23 @@ fn written() -> [Write; 4] {
 }
 
 /// The writes of `shard` among `written`, as its file holds them.
-fn shard_file(shard: Tile) -> Vec<u8> {
+fn shard_file(shard: Quadrant) -> Vec<u8> {
     let own: Vec<Write> = written()
         .into_iter()
-        .filter(|w| shard_of(w.key) == shard)
+        .filter(|w| shard_of(w.at) == shard)
         .collect();
     encode_writes(format::OBJECT, &own).unwrap()
 }
 
 /// The top holding `rows`, `<shard, z, fold>`.
 fn top_file(rows: &[(u64, i32, u32)]) -> Vec<u8> {
-    let shard: Vec<u64> = rows.iter().map(|r| r.0).collect();
+    let shard: Vec<String> = rows.iter().map(|r| Quadrant::of_id(r.0).key()).collect();
+    let shard: Vec<&str> = shard.iter().map(String::as_str).collect();
     let z: Vec<i32> = rows.iter().map(|r| r.1).collect();
     let fold: Vec<u32> = rows.iter().map(|r| r.2).collect();
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        b.u64_array(Some(&shard))
+        b.strs(Some(&shard))
             .i32_array(Some(&z))
             .u32_array(Some(&fold));
     }));
@@ -109,14 +110,14 @@ fn top_file(rows: &[(u64, i32, u32)]) -> Vec<u8> {
 /// The top's rows the store's folds make of the shards `writes` lie in, by
 /// shard and Z.
 fn top_of(writes: &[Write]) -> Vec<(u64, i32, u32)> {
-    let mut shards: Vec<Tile> = writes.iter().map(|w| shard_of(w.key)).collect();
+    let mut shards: Vec<Quadrant> = writes.iter().map(|w| shard_of(w.at)).collect();
     shards.sort_unstable();
     shards.dedup();
     let mut rows = Vec::new();
     for shard in shards {
         for z in SHARD_Z {
             if let Some(word) = object().word_at([shard.at[0], shard.at[1], z]) {
-                rows.push((shard.subject(), z, word));
+                rows.push((shard.id(), z, word));
             }
         }
     }
@@ -163,7 +164,7 @@ fn foreign_file_refused() {
 fn edit_batch_round_trip() {
     let mut writes = written().to_vec();
     writes.push(Write {
-        key: leaf(0, [5, 7, 2]),
+        at: leaf(0, [5, 7, 2]),
         id: 0,
         ext: None,
     });
@@ -174,7 +175,7 @@ fn edit_batch_round_trip() {
         w.iter()
             .map(|w| {
                 let text = w.ext.as_ref().map(|Ext::MarkerText(t)| t.clone());
-                (w.key, w.id, text)
+                (w.at, w.id, text)
             })
             .collect()
     };
@@ -219,29 +220,29 @@ fn top_folds_until_shard_read() {
     assert!(!holds(&shard.region()) && holds(&other.region()));
     want([(shard, Ask::PLAIN), (other, Ask::PLAIN)].into_iter());
     assert_eq!(state().wants.len(), 1);
-    assert_eq!(state().wants[0].0, shard.subject());
-    admit(shard.subject(), Some(&shard_file(shard))).unwrap();
+    assert_eq!(state().wants[0].0, shard.id());
+    admit(shard.id(), Some(&shard_file(shard))).unwrap();
     assert!(holds(&shard.region()));
     assert_eq!(top_of(&written()[..3]), rows);
     assert_eq!(held().len(), 3);
 }
 
 /// A file that does not decode is refused: named, not wanted, and wanted
-/// again as new once the host empties it.
+/// again as new once the driver empties it.
 #[test]
 fn refused_file_named() {
     let _g = sys::serial();
     fresh();
     let shard = shard_of(leaf(0, [5, 7, 2]));
-    admit(TOP, Some(&top_file(&[(shard.subject(), 0, 0)]))).unwrap();
+    admit(TOP, Some(&top_file(&[(shard.id(), 0, 0)]))).unwrap();
     let foreign = [format::SETTINGS, 1, 2, 3];
-    assert!(admit(shard.subject(), Some(&foreign)).is_err());
-    assert_eq!(refused_files(), &[shard.subject()]);
+    assert!(admit(shard.id(), Some(&foreign)).is_err());
+    assert_eq!(refused_files(), &[shard.id()]);
     assert!(!holds(&shard.region()));
     want([(shard, Ask::PLAIN)].into_iter());
     assert!(state().wants.is_empty());
-    assert!(on_emptied(shard.subject()));
-    assert!(refused_files().is_empty() && !on_emptied(shard.subject()));
+    assert!(on_emptied(shard.id()));
+    assert!(refused_files().is_empty() && !on_emptied(shard.id()));
     want([(shard, Ask::PLAIN)].into_iter());
     assert_eq!(state().wants.len(), 1);
 }
@@ -273,7 +274,7 @@ fn top_golden() {
         g.each(&format!("{case}.write"), |w| {
             let (key, id) = g.s(w).split_once(' ').unwrap();
             writes.push(Write {
-                key: u128::from_str_radix(key, 16).unwrap(),
+                at: key_of_name::<3>(key).unwrap(),
                 id: id.parse().unwrap(),
                 ext: None,
             });
@@ -284,7 +285,7 @@ fn top_golden() {
             let row = g.s(&format!("{case}.top.{}", rows.len()));
             let f: Vec<&str> = row.split(' ').collect();
             rows.push((
-                f[0].parse::<u64>().unwrap(),
+                Quadrant::of_key(f[0]).unwrap().id(),
                 f[1].parse::<i32>().unwrap(),
                 f[2].parse::<u32>().unwrap(),
             ));

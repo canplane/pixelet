@@ -51,11 +51,11 @@ use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::world;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
+use pxl_spec::space::layer::octant::Octant;
+use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
 
 use super::world::World;
 use crate::domain::layer::object::store::ObjectQuery as _;
@@ -122,7 +122,7 @@ impl World<'_> {
     }
 
     /// A preview's entry as pxl-engine `overwrite` takes it.
-    fn cut(&self, entry: Option<EntryAt>) -> Cut {
+    fn cut(&self, entry: Option<Octant>) -> Cut {
         entry.map_or(Cut::NONE, |e| Cut {
             zoom: e.zoom(),
             at: e.at(),
@@ -180,8 +180,8 @@ impl World<'_> {
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
-    missing: Option<Tile>,
-    coarser: Option<Tile>,
+    missing: Option<Quadrant>,
+    coarser: Option<Quadrant>,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {

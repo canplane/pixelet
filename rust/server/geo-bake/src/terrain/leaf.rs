@@ -4,7 +4,7 @@
 //! source covers it and land touches it, the coastline it is painted by; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use postgres::types::ToSql;
 use postgres::Client;

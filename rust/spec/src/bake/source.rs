@@ -6,13 +6,13 @@
 
 use crate::bake::publication::BaseLayer;
 use crate::space::coord::zoom::SHARD_ZOOM;
-use crate::space::layer::tile::Tile;
+use crate::space::layer::quadrant::Quadrant;
 
-use crate::bake::publication::VERSION_BYTES;
+use crate::bake::publication::{VERSION_BYTES, VERSION_CHARS};
 
 /// A key of its shards: a shard, or a node over shards.
-pub fn key(name: &str) -> Option<Tile> {
-    Tile::of_name(name).filter(|t| t.zoom <= SHARD_ZOOM)
+pub fn key(name: &str) -> Option<Quadrant> {
+    Quadrant::of_key(name).filter(|t| t.zoom <= SHARD_ZOOM)
 }
 
 /// A version is one segment of a URL, so a tile's name stays under it.
@@ -21,7 +21,7 @@ pub fn is_version(version: &str) -> bool {
         && version.len() <= VERSION_BYTES
         && version
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+            .all(|b| VERSION_CHARS.as_bytes().contains(&b))
 }
 
 /// Whether a kind is held a shard at a time: the pyramid's are, the Earth's

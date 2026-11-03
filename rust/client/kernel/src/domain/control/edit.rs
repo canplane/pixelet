@@ -31,8 +31,8 @@ use crate::domain::query::HitKind::Object;
 use crate::domain::query::{Hit, World};
 use crate::domain::view::frame::pose::ray_of;
 use crate::domain::view::observation;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, Zoom};
+use pxl_spec::space::layer::octant::Octant;
 use xpute_guest::global::Global;
 
 /// What the pointer holds, as the shell chose it (`EDIT_TOOL`).
@@ -122,13 +122,13 @@ pub(crate) fn clear_hover_coord() {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Target {
     /// A placed object.
-    Object(EntryAt),
+    Object(Octant),
     /// A decor the ground generated, which has no entry, in its leaf cell.
     Generated([i32; 3], Instance),
 }
 
 impl Hover {
-    pub fn object_at(&self) -> Option<EntryAt> {
+    pub fn object_at(&self) -> Option<Octant> {
         match self.target {
             Some(Target::Object(at)) => Some(at),
             _ => None,
@@ -279,10 +279,10 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
         None => {
             match hover.target {
                 Some(Target::Object(at)) => remove(at),
-                Some(Target::Generated(cell, _)) => place_air(EntryAt::new(GROUND.cell(), cell)),
+                Some(Target::Generated(cell, _)) => place_air(Octant::new(GROUND.cell(), cell)),
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier.
-                None => place_air(EntryAt::holding(GROUND.cell(), &hovered)),
+                None => place_air(Octant::holding(GROUND.cell(), &hovered)),
             }
         }
     }

@@ -1,7 +1,7 @@
 // @pxl/client/driver/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's storage files (host.json `storage`), the
+ * STORAGE's backend: the kernel's storage files (file.json `storage`), the
  * settings, in the platform's storage. The kernel hands and takes a file's
  * bytes; the platform keeps text, so each is kept as its bytes' base64url
  * (`kept`, `bytes_of`), and text that is none is no file of bytes
@@ -21,7 +21,7 @@ import {
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { storage } from "@/abi/host.spec.ts";
+import { storage } from "@/abi/file.spec.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
@@ -55,7 +55,7 @@ const KEYS: ReadonlyMap<u32, string> = new Map([
   [storage.SETTINGS, "pxl:settings"],
 ]);
 
-/** A slot's storage key; none for a number the kernel does not keep. */
+/** A slot's storage key; none for one the kernel does not keep. */
 export function storage_key(slot: u32): string | undefined {
   return KEYS.get(slot);
 }
@@ -84,25 +84,25 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
   return key !== undefined && set_aside_key(s, key, now_ms);
 }
 
-/** STORAGE's object `number` is a storage file, under the key `storage_key` gives it. */
-function key_of(number: bigint): string {
-  const key = number <= 0xffff_ffffn ? storage_key(Number(number)) : undefined;
+/** The slot `id` is a storage file, under the key `storage_key` gives it. */
+function key_of(id: bigint): string {
+  const key = id <= 0xffff_ffffn ? storage_key(Number(id)) : undefined;
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
-/** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
-export function open_storage(number: bigint, s: Storage = STORAGE): U8Array {
-  const text = s.get(key_of(number));
+/** The slot `id`'s file, whole; ENOENT where nothing is kept. */
+export function open_storage(id: bigint, s: Storage = STORAGE): U8Array {
+  const text = s.get(key_of(id));
   if (text === null) throw new FileError(Errno.ENOENT);
   return bytes_of(text);
 }
 
-/** What the kernel wrote to STORAGE's object `number`, kept whole. */
+/** What the kernel wrote to the slot `id`, kept whole. */
 export function commit_storage(
-  number: bigint,
+  id: bigint,
   bytes: U8Array,
   s: Storage = STORAGE,
 ): void {
-  s.set(key_of(number), text_of(bytes));
+  s.set(key_of(id), text_of(bytes));
 }

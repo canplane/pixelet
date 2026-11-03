@@ -6,8 +6,8 @@
 //! control name neither the other (domain.rs), so the order is kept above
 //! both.
 
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::layer::octant::Octant;
 
 use crate::domain::control::edit::{self, Tool};
 use crate::domain::control::navigation::destination;
@@ -17,8 +17,8 @@ use crate::domain::scene::marker::{self, MarkerHit};
 /// What a tap on a scene marker does with the tool held.
 enum MarkerTap {
     Go(Q3),
-    Remove(EntryAt),
-    Draft(EntryAt),
+    Remove(Octant),
+    Draft(Octant),
 }
 
 /// The scene marker at `x`, `y` a tap would act on with the tool held: the

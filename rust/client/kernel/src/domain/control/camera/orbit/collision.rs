@@ -39,7 +39,7 @@ use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 /// The pivot is part of the pose: the eye is `pivot + offset`, and a gate
 /// that read only the offset could be walked through by panning.

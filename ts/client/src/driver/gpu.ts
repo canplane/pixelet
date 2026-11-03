@@ -13,7 +13,7 @@ import {
 } from "@/abi/state.ts";
 import type { GpuHeard } from "@/bracket.tsx";
 
-/** A place's word for its GPU, as the host keeps it. */
+/** A place's word for its GPU, as the driver keeps it. */
 export const GPU_STATE: Readonly<
   Record<Parameters<GpuHeard["state"]>[0], Gpu>
 > = {

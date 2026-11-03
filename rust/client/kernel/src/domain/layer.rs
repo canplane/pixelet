@@ -7,7 +7,7 @@ mod answer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_guest::mem::heap::Block;
 
 use crate::sys::io::demand::{Phases, Stream};
@@ -80,7 +80,12 @@ pub trait Base: Clone + 'static {
     /// Its records, which it alone holds.
     fn tile_cache() -> &'static mut TileCache<Self>;
 
-    fn receive(tile: Tile, record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+    fn receive(
+        tile: Quadrant,
+        record: u32,
+        pkt: &[u8],
+        phases: &mut Phases,
+    ) -> Result<Self, Failure>;
 
     /// The packet a tile came in, once the slot `record` took the tile or
     /// none did: freed, or kept where the GPU takes the tile off it

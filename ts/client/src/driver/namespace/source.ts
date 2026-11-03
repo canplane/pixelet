@@ -15,6 +15,7 @@ import {
   BASE_LAYERS,
   type BaseLayer,
   VERSION_BYTES,
+  VERSION_CHARS,
 } from "./publication.spec.ts";
 import { Command, encode_fs_mount } from "@/abi/cmd.spec.ts";
 import {
@@ -37,8 +38,15 @@ export interface Declaration {
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
 
-/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`), `VERSION_BYTES` long at most (publication.json). */
-const VERSION = new RegExp(`^[A-Za-z0-9._-]{1,${VERSION_BYTES}}$`);
+/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec
+ * bake/source.rs `is_version`, by the same bytes and the same characters). */
+function is_version(s: string): boolean {
+  return (
+    s.length >= 1 &&
+    s.length <= VERSION_BYTES &&
+    [...s].every((c) => VERSION_CHARS.includes(c))
+  );
+}
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment, the top zoom and each kind's format are u32s, and the
@@ -59,7 +67,7 @@ export function declaration(text: string): Declaration | null {
       ([k, s]) =>
         (BASE_LAYERS as readonly string[]).includes(k) &&
         typeof s === "string" &&
-        VERSION.test(s),
+        is_version(s),
     ) &&
     (!every || BASE_LAYERS.every((k) => k in v));
   if (
@@ -195,6 +203,8 @@ export async function declare_source(
     return;
   }
   const shards = Object.keys(read.shard);
+  // Before FS_MOUNT: a frame in that call opens a tile under it.
+  cur_declaration = read;
   if (
     !send(
       read.top_zoom,
@@ -205,10 +215,10 @@ export async function declare_source(
     console.error(
       `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
+    cur_declaration = null;
     set(SOURCE_REFUSED);
     return;
   }
-  cur_declaration = read;
   versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(SOURCE_DECLARED);
 }

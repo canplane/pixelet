@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 const COVERAGE: &str = include_str!(concat!(env!("PXL_REPO"), "/infra/geo/coverage.json"));
 
@@ -118,7 +118,7 @@ impl Coverage {
     }
 
     /// These shards, each a tile at `SHARD_ZOOM`.
-    pub(crate) fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
+    pub(crate) fn of_shards(shards: impl IntoIterator<Item = Quadrant>) -> Coverage {
         Coverage {
             shards: shards.into_iter().map(|t| t.at).collect(),
         }

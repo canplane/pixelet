@@ -65,7 +65,7 @@ impl Design {
 /// its slot, none until it is asked for (`slot`).
 struct Sprite {
     size: [f64; 3],
-    /// Its text as it was laid out when sized: the host's layouts are a
+    /// Its text as it was laid out when sized: the driver's layouts are a
     /// cache it may let go.
     lines: Vec<String>,
     slot: i32,
@@ -99,7 +99,7 @@ pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
 }
 
 /// Whether it becomes ready (`ready`) with nothing else moving: its text
-/// asked of the host, answered by a later turn, or its slot given and
+/// asked of the driver, answered by a later turn, or its slot given and
 /// painted at render. One the atlas has no room for becomes ready only once
 /// a slot is let go (`retain`), so it asks no turn of its own.
 pub(super) fn coming(design: &Design) -> bool {

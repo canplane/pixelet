@@ -26,7 +26,7 @@ use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 use crate::sys::io::demand::Ask;
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner};
-use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
+use crate::sys::io::file_spec::{root, CATALOG};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind};
@@ -35,8 +35,6 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
 use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::space::hierarchy::morton;
-use pxl_spec::space::layer::tile;
 use xpute_guest::global::Global;
 use xpute_guest::sched::task;
 
@@ -93,7 +91,7 @@ fn loader() -> &'static mut Loader {
 
 static READ: Global<Option<Catalog>> = Global::new();
 
-/// The catalog the host plugs in (pxl-spec asset/catalog.rs), asked for
+/// The catalog the client plugs in (pxl-spec asset/catalog.rs), asked for
 /// when first read; none while it loads.
 pub fn catalog() -> Option<&'static Catalog> {
     if let Some(c) = READ.get(|| None).as_ref() {
@@ -129,8 +127,8 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
 pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     let entry = loader().at(LoadKind::Image, load);
     match entry {
-        Some(Entry::Image(file)) => Some((load.number(), file.as_slice())),
-        Some(Entry::Landed) => Some((load.number(), &[])),
+        Some(Entry::Image(file)) => Some((load.id(), file.as_slice())),
+        Some(Entry::Landed) => Some((load.id(), &[])),
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -140,21 +138,21 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
 }
 
 /// Kind in the high word, since one file can be wanted as more than one.
-pub fn subject_of(kind: LoadKind, load: Load) -> u64 {
-    (kind as u64) << 32 | load.number() as u64
+pub fn id_of(kind: LoadKind, load: Load) -> u64 {
+    (kind as u64) << 32 | load.id() as u64
 }
 
-pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
+pub fn of_id(id: u64) -> Option<(LoadKind, Load)> {
     let kind = [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog]
         .into_iter()
-        .find(|k| *k as u64 == subject >> 32)?;
-    Load::of(subject as u32).map(|load| (kind, load))
+        .find(|k| *k as u64 == id >> 32)?;
+    Load::of(id as u32).map(|load| (kind, load))
 }
 
 pub fn load_wants() -> &'static [(u64, Ask)] {
     let l = loader();
     l.wants.clear();
-    // By subject, as a stream's wants are said: the models, the images,
+    // By id, as a stream's wants are said: the models, the images,
     // then the catalog, each the files by number and the sphere past them.
     for kind in [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog] {
         let files = (0..l.entries[kind as usize].len() as u32).map(Load::File);
@@ -164,7 +162,7 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
                 continue;
             }
             if matches!(l.at(kind, load), Some(Entry::Pending)) {
-                l.wants.push((subject_of(kind, load), Ask::PLAIN));
+                l.wants.push((id_of(kind, load), Ask::PLAIN));
             }
         }
     }
@@ -173,21 +171,20 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
 fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
-    let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
+    let what = attempt_of(key).and_then(|(_, id)| of_id(id));
     settle(key, ended, None);
     what
 }
 
 /// A model and an image of one load are the same file; which it is read as
-/// is its attempt's subject's (`on_opened`).
+/// is its attempt's id's (`on_opened`).
 pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
-    // The sphere's number is no tile's: a subject is never 0.
-    const _: () = assert!(morton::bits::<2>(tile::LEAF_ZOOM) < 63);
-    match load {
-        Load::Sphere => file::open(credit, BaseLayer::earth as u32, u64::from(SPHERE), owner),
-        _ => file::open(credit, root::ASSET, u64::from(load.number()), owner),
+    let root = match load {
+        Load::Sphere => BaseLayer::earth as u32,
+        Load::File(_) => root::ASSET,
     };
+    file::open(credit, root, load.path(), owner);
 }
 
 pub fn cancel_asset(key: u64) -> bool {
@@ -207,7 +204,7 @@ pub fn on_opened(fd: u32, key: u64, opened: Opened) {
         on_load_rejected(key, Ended::Failed(Failure::from(opened)));
         return;
     };
-    let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {
+    let Some(what) = attempt_of(key).and_then(|(_, id)| of_id(id)) else {
         file::close(fd);
         settle(key, Ended::Ok, None);
         return;
@@ -284,7 +281,7 @@ fn arrive(kind: LoadKind, load: Load, bytes: Vec<u8>) {
     // (TASKS): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
     let spawned = task::spawn(arrival(kind, load, bytes), TaskPriority::Arrival as u8);
-    xpute_kit::ensure!(spawned, ENOSPC, load.number());
+    xpute_kit::ensure!(spawned, ENOSPC, load.id());
 }
 
 /// An asset file arrived, read whole: a model parsed, an image kept until

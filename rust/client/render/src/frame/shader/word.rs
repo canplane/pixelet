@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/word.rs
 
-//! What the host lays out and the shaders read, stated once: compiled into
+//! What the CPU lays out and the shaders read, stated once: compiled into
 //! the crate, and read by build.rs, which hands each to every shader
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
@@ -62,7 +62,7 @@ pub const fn floats(fields: &[Field]) -> usize {
     end.div_ceil(4) * 4
 }
 
-/// A uniform's fields, each a float offset the host writes at, and `FIELDS`,
+/// A uniform's fields, each a float offset the CPU writes at, and `FIELDS`,
 /// which build.rs writes each one's accessor from into the part that binds
 /// the uniform's words (`<uniform>_words`): the one statement of its layout.
 macro_rules! uniform {

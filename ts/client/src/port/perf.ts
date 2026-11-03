@@ -44,6 +44,8 @@ import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
 const WORD = 8;
+/** A task's `path` column, its bytes (perf.json `TASK`). */
+const PATH_BYTES = 3 * WORD;
 
 /** A command answered inside the call: the address of its reply in the kernel's memory. */
 function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
@@ -168,7 +170,7 @@ export interface FrameSummary {
 
 export interface TaskRecord {
   stream: string;
-  subject: string;
+  path: string;
   priority: f64;
   enqueue_ms: f64;
   start_ms: f64 | null;
@@ -422,7 +424,6 @@ export function perf_tasks(last: u32 | null = null): TaskRecord[] {
   const at = ring + from * TASK.WORDS * WORD;
   const cnt = held - from;
   const w = words(at, cnt * TASK.WORDS);
-  const subjects = new BigUint64Array(HOST.guest.mem, at, cnt * TASK.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_cnt = w[o + TASK.phase_cnt];
@@ -436,7 +437,15 @@ export function perf_tasks(last: u32 | null = null): TaskRecord[] {
     const start = w[o + TASK.start_ms];
     return {
       stream: STREAM_NAMES[w[o + TASK.stream]] ?? "?",
-      subject: subjects[o + TASK.subject].toString(),
+      path: td
+        .decode(
+          new Uint8Array(
+            HOST.guest.mem,
+            at + (o + TASK.path) * WORD,
+            PATH_BYTES,
+          ),
+        )
+        .replace(/\0+$/, ""),
       priority: w[o + TASK.priority],
       enqueue_ms: w[o + TASK.enqueue_ms],
       start_ms: Number.isNaN(start) ? null : start,

@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/kernel/domain/control/cmd.json
 
-// ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
+// ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json) ----
 
 /** Start watching. */
 export const SENSOR_START = 0x1201;
@@ -41,7 +41,7 @@ export const SYS_SLEEP = 0x1002;
  * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
 export const FS_MOUNT = 0x1301;
 /** A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
- * own again, what it held set aside by the host: the kernel reads it again, and writes
+ * own again, what it held set aside by the driver: the kernel reads it again, and writes
  * a storage file from then on. */
 export const FS_TRUNCATED = 0x1302;
 /** A permission as the shell's prompt or the browser's change reported it. */
@@ -56,7 +56,7 @@ export const GPU_READY = 0x1401;
 export const INPUT_POINTER = 0x1102;
 /** The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
-/** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut. */
+/** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit. */
 export const EDIT_MARKER_TEXT = 0x1a02;
 /** The marker's draft dropped, nothing committed. */
 export const EDIT_MARKER_CANCEL = 0x1a03;

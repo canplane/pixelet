@@ -17,7 +17,7 @@
 //! screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
-//! changed in, which the frame's marks set; the host hands the marks, and
+//! changed in, which the frame's marks set; the CPU hands the marks, and
 //! knows whether any tile gathers from what it handed. The resolve and the
 //! write-back draw the claimed tiles alone, a quad each (screen_tiles.wgsl).
 
@@ -233,7 +233,7 @@ impl Resolve {
     }
 
     /// Whether the jitter has places of its sequence left to cover in a
-    /// tile since it last changed, as far as the host knows (`Tiles::claiming`).
+    /// tile since it last changed, as far as the CPU knows (`Tiles::claiming`).
     pub fn gathering(&self) -> bool {
         self.tiles.claiming()
     }

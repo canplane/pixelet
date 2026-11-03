@@ -17,7 +17,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{BOUNDS, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
@@ -27,7 +27,7 @@ use super::world::World;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::*;
 use pxl_engine::cast::{fill_bounds, Detail};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The center's height over a floor whose top is `top`: half a cell up, as a
 /// cell's center stands over its ground.
@@ -66,7 +66,7 @@ struct CellColumns<'w, 'a> {
     side: f64,
     across: u32,
     detail: Detail,
-    lack: Option<Tile>,
+    lack: Option<Quadrant>,
     zoom: Zoom,
     lines: Lines,
 }

@@ -14,12 +14,12 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::global::Global;
 
 #[derive(Default)]
 struct Changes {
-    ground: Vec<Tile>,
+    ground: Vec<Quadrant>,
     written: Vec<Aabb>,
 }
 
@@ -53,7 +53,7 @@ pub fn written_boxes() -> &'static [Aabb] {
 /// turns waits in the tile cache and the store for the next take. So a
 /// reader asking every frame turn, in its effects or its interaction phase,
 /// sees each change exactly once.
-pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
+pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     let columns = Aabb {
         min: [xy[0][0], xy[0][1], BOUNDS.min[2]],
         max: [xy[1][0], xy[1][1], BOUNDS.max[2]],

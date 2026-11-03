@@ -122,7 +122,7 @@ function perfTraceJson(): string {
     const cat = `task,${r.outcome}`;
     events.push(
       event(
-        `${r.stream}:${r.subject}`,
+        `${r.stream}:${r.path}`,
         cat,
         "X",
         us(r.enqueue_ms),

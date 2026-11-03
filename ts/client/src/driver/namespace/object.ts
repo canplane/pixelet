@@ -3,7 +3,7 @@
 /**
  * OBJECT's backend: the placed objects' source, for now a loopback over the
  * place's database (bracket `db`). It serves what the kernel reads, a shard's
- * file by the shard's subject and the top of the tree (host.json
+ * file by the shard's quadkey and the top of the tree (file.json
  * `object.TOP`), and takes what it writes, edit batches (`object.EDITS`): it
  * lays each batch's writes over the shards they lie in, keeps them, and
  * rebuilds the top's rows of those shards (object_tree.ts), in one
@@ -14,17 +14,12 @@
  * logged: a commit has no answer to the kernel.
  */
 
-import type {
-  I32Array,
-  U32Array,
-  U64Array,
-  U8Array,
-} from "@xpute/kit/abi/array.ts";
+import type { I32Array, U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
-import { format, object } from "@/abi/host.spec.ts";
+import { format, object } from "@/abi/file.spec.ts";
 import {
   lay,
   shard_of,
@@ -33,22 +28,6 @@ import {
   type TopRow,
 } from "@/driver/namespace/object_tree.ts";
 import { bracket, type Tx } from "@/bracket.tsx";
-import { tile_name } from "@/driver/namespace/tile.ts";
-
-const TOP = BigInt(object.TOP);
-const EDITS = BigInt(object.EDITS);
-
-/** The key the top is kept under; a tile's name is digits. */
-export const TOP_KEY = "top";
-
-/** The key OBJECT's object `number` is kept under: the top's, or a shard's
- * tile's name; ENOENT for a number that is neither. */
-export function object_key(number: bigint): string {
-  if (number === TOP) return TOP_KEY;
-  const name = number === EDITS ? null : tile_name(number);
-  if (name === null) throw new FileError(Errno.ENOENT);
-  return name;
-}
 
 /** The tree packet a file of `fmt` holds past its format byte; EBADMSG for
  * one of another format. */
@@ -66,19 +45,13 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
   return out;
 }
 
-/** The writes a file of `fmt` holds (host.json `write`), in order. */
+/** The writes a file of `fmt` holds (file.json `write`), in order. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
-  const [hi, lo, id, rows, texts] = new TreeReader(packet(fmt, bytes))
+  const [keys, id, rows, texts] = new TreeReader(packet(fmt, bytes))
     .read_branch()
-    .get<[U64Array, U64Array, U32Array, U32Array, string[]]>();
-  if (hi.length !== lo.length || hi.length !== id.length) {
-    throw new FileError(Errno.EINVAL);
-  }
-  const out: Leaf[] = Array.from(id, (v, r) => ({
-    key: (hi[r]! << 64n) | lo[r]!,
-    id: v,
-    text: null,
-  }));
+    .get<[string[], U32Array, U32Array, string[]]>();
+  if (keys.length !== id.length) throw new FileError(Errno.EINVAL);
+  const out: Leaf[] = keys.map((key, r) => ({ key, id: id[r]!, text: null }));
   rows.forEach((r, k) => {
     if (out[r] === undefined || texts[k] === undefined) {
       throw new FileError(Errno.EINVAL);
@@ -88,7 +61,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   return out;
 }
 
-/** `leaves` as a file of `fmt` (host.json `write`). */
+/** `leaves` as a file of `fmt` (file.json `write`). */
 export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   const rows: number[] = [];
   const texts: string[] = [];
@@ -98,13 +71,10 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
     texts.push(l.text);
   });
   const tree = new TreeView();
-  // In host.json `write`'s order.
+  // In file.json `write`'s order.
   tree.branch((b) =>
     b
-      .u64_array(BigUint64Array.from(leaves, (l) => l.key >> 64n))
-      .u64_array(
-        BigUint64Array.from(leaves, (l) => l.key & 0xffff_ffff_ffff_ffffn),
-      )
+      .strs(leaves.map((l) => l.key))
       .u32_array(Uint32Array.from(leaves, (l) => l.id))
       .u32_array(Uint32Array.from(rows))
       .strs(texts),
@@ -112,24 +82,24 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   return as_file(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
 }
 
-/** The top's rows (host.json `top`). */
+/** The top's rows (file.json `top`). */
 export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, z, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
     .read_branch()
-    .get<[U64Array, I32Array, U32Array]>();
+    .get<[string[], I32Array, U32Array]>();
   if (shard.length !== z.length || shard.length !== fold.length) {
     throw new FileError(Errno.EINVAL);
   }
-  return Array.from(shard, (s, r) => ({ shard: s, z: z[r]!, fold: fold[r]! }));
+  return shard.map((s, r) => ({ shard: s, z: z[r]!, fold: fold[r]! }));
 }
 
-/** `rows` as the top (host.json `top`). */
+/** `rows` as the top (file.json `top`). */
 export function encode_top(rows: readonly TopRow[]): U8Array {
   const tree = new TreeView();
-  // In host.json `top`'s order.
+  // In file.json `top`'s order.
   tree.branch((b) =>
     b
-      .u64_array(BigUint64Array.from(rows, (r) => r.shard))
+      .strs(rows.map((r) => r.shard))
       .i32_array(Int32Array.from(rows, (r) => r.z))
       .u32_array(Uint32Array.from(rows, (r) => r.fold)),
   );
@@ -164,30 +134,41 @@ async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {
 
 /** The top's rows as kept; a top of another build set aside, none. */
 async function rows_of(tx: Tx): Promise<TopRow[]> {
-  const bytes = await tx.get(TOP_KEY);
+  const bytes = await tx.get(object.TOP);
   if (bytes === null) return [];
   try {
     return decode_top(bytes);
   } catch {
-    await move_aside(tx, TOP_KEY, Date.now());
+    await move_aside(tx, object.TOP, Date.now());
+    return [];
+  }
+}
+
+/** A shard's leaves as kept; a shard of another build set aside, none. */
+async function leaves_of(tx: Tx, shard: string): Promise<Leaf[]> {
+  const bytes = await tx.get(shard);
+  if (bytes === null) return [];
+  try {
+    return decode_writes(format.OBJECT, bytes);
+  } catch {
+    await move_aside(tx, shard, Date.now());
     return [];
   }
 }
 
 async function put_top(tx: Tx, rows: readonly TopRow[]): Promise<void> {
-  await tx.put(TOP_KEY, rows.length === 0 ? null : encode_top(rows));
+  await tx.put(object.TOP, rows.length === 0 ? null : encode_top(rows));
 }
 
 /** `writes`: every shard they reach read, laid over each in order, then each
- * kept with its rows of the top; nothing is kept where a shard does not read. */
+ * kept with its rows of the top. */
 async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
-  const shards = new Map<bigint, Map<bigint, Leaf>>();
+  const shards = new Map<string, Map<string, Leaf>>();
   for (const w of writes) {
     const shard = shard_of(w.key);
     let leaves = shards.get(shard);
     if (leaves === undefined) {
-      const file = await tx.get(object_key(shard));
-      const own = file === null ? [] : decode_writes(format.OBJECT, file);
+      const own = await leaves_of(tx, shard);
       leaves = new Map(own.map((l) => [l.key, l]));
       shards.set(shard, leaves);
     }
@@ -199,7 +180,7 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
       a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
     );
     await tx.put(
-      object_key(shard),
+      shard,
       own.length === 0 ? null : encode_writes(format.OBJECT, own),
     );
     others.push(...top_of(shard, own));
@@ -212,20 +193,20 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
  * after every batch committed before it; an edit batch applied in the order
  * written; a file the kernel refused set aside. */
 export function object_backend(db: Db = DB): {
-  open(number: bigint): Promise<U8Array>;
-  commit(number: bigint, bytes: U8Array): void;
-  set_aside(number: bigint, now_ms: number): Promise<boolean>;
+  open(path: string): Promise<U8Array>;
+  commit(path: string, bytes: U8Array): void;
+  set_aside(path: string, now_ms: number): Promise<boolean>;
 } {
   return {
-    open(number) {
+    open(path) {
       return db.transaction(async (tx) => {
-        const bytes = await tx.get(object_key(number));
+        const bytes = await tx.get(path);
         if (bytes === null) throw new FileError(Errno.ENOENT);
         return bytes;
       });
     },
-    commit(number, bytes) {
-      if (number !== EDITS) throw new FileError(Errno.EROFS);
+    commit(path, bytes) {
+      if (path !== object.EDITS) throw new FileError(Errno.EROFS);
       const writes = decode_writes(format.OBJECT_EDITS, bytes);
       db.transaction((tx) => apply_edits(tx, writes)).catch((err: unknown) => {
         console.error("[object] an edit batch was not kept:", err);
@@ -233,13 +214,12 @@ export function object_backend(db: Db = DB): {
     },
     /** A file the kernel refused set aside and emptied; a shard's rows of
      * the top go with it. False, nothing changed, where the database failed. */
-    set_aside(number, now_ms) {
-      const key = object_key(number);
+    set_aside(path, now_ms) {
       return db
         .transaction(async (tx) => {
-          await move_aside(tx, key, now_ms);
-          if (number !== TOP) {
-            const left = (await rows_of(tx)).filter((r) => r.shard !== number);
+          await move_aside(tx, path, now_ms);
+          if (path !== object.TOP) {
+            const left = (await rows_of(tx)).filter((r) => r.shard !== path);
             await put_top(tx, left);
           }
           return true;

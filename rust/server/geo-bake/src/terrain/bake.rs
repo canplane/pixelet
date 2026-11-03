@@ -7,7 +7,7 @@ use pxl_spec::bake::tile::terrain::{self, Ground, TerrainTile};
 use pxl_spec::bake::way::lay;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::separation::WayRange;
 use crate::terrain::pipeline::feature::{local, Feature};
@@ -25,7 +25,7 @@ pub(crate) struct Surface {
 /// then its lines those it draws (pxl-spec bake/tile/terrain.rs `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainTile {
     let mut palette_indices = surface.ground.cells.into_owned();
-    let tile = Tile::new(LEAF_ZOOM, tile);
+    let tile = Quadrant::new(LEAF_ZOOM, tile);
     lay(&lines, Frame::of(tile), &mut palette_indices);
     terrain::drawn(
         tile,

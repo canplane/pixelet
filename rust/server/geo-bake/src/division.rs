@@ -18,7 +18,7 @@ use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
@@ -245,7 +245,7 @@ impl Base for DivisionTile {
 
     const LATTICE: Lattice = GROUND;
 
-    fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
+    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         division::encode(self).map_err(|e| format!("{e:?}"))
     }
 
@@ -253,7 +253,7 @@ impl Base for DivisionTile {
         division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Quadrant, held: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
         Some(division::fold([a?, b?, c?, d?], p.zoom))
     }

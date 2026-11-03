@@ -4,32 +4,32 @@
 
 export const stream = 0 as number;
 
-export const subject = 1 as number;
+export const path = 1 as number;
 
-export const priority = 2 as number;
+export const priority = 4 as number;
 
-export const enqueue_ms = 3 as number;
+export const enqueue_ms = 5 as number;
 
-export const start_ms = 4 as number;
+export const start_ms = 6 as number;
 
-export const end_ms = 5 as number;
+export const end_ms = 7 as number;
 
-export const outcome = 6 as number;
+export const outcome = 8 as number;
 
-export const fail = 7 as number;
+export const fail = 9 as number;
 
-export const detail = 8 as number;
+export const detail = 10 as number;
 
-export const at_file = 9 as number;
+export const at_file = 11 as number;
 
-export const at_file_bytes = 10 as number;
+export const at_file_bytes = 12 as number;
 
-export const at_line = 11 as number;
+export const at_line = 13 as number;
 
-export const phase_cnt = 12 as number;
+export const phase_cnt = 14 as number;
 
-export const phase_ids = 13 as number;
+export const phase_ids = 15 as number;
 
-export const phase_vals = 19 as number;
+export const phase_vals = 21 as number;
 
-export const WORDS = 25 as number;
+export const WORDS = 27 as number;

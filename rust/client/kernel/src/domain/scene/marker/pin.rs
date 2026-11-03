@@ -18,13 +18,13 @@ use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::octant::Octant;
 
 /// A pin's cell (`marker_cell_of`): its zoom and place.
 type Cell = (Zoom, [i32; 3]);
@@ -33,7 +33,7 @@ type Cell = (Zoom, [i32; 3]);
 /// count stands for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Holder {
-    One(EntryAt),
+    One(Octant),
     Cell(Cell),
 }
 
@@ -44,7 +44,7 @@ pub(super) enum Holder {
 #[derive(Clone)]
 pub(super) struct Pin {
     pub(super) brick: Brick,
-    at: EntryAt,
+    at: Octant,
     design: Design,
     stands: Q3,
     base: V3,
@@ -82,7 +82,7 @@ fn cnt(n: usize) -> Design {
 
 /// One pin, taken to its entry, which the tool held decides what to do
 /// with.
-fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
+fn one(at: Octant, design: Design, stands: Q3) -> Instance {
     Instance {
         key: Key::Pin(Holder::One(at)),
         design,
@@ -155,7 +155,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
 
 /// The draft, as arrangement.rs `Inputs` compares it: its entry and its
 /// text by its hash, so a settled turn asks the heap for nothing.
-pub(super) fn draft_key() -> Option<(EntryAt, u64)> {
+pub(super) fn draft_key() -> Option<(Octant, u64)> {
     draft().map(|d| {
         let mut h = fnv::FnvHasher::default();
         h.write(d.text.as_bytes());
@@ -175,7 +175,7 @@ fn crowd_at((zoom, at): Cell, pin: Zoom, detail: Zoom) -> Q3 {
 
 /// A pin at its own cell's center, half a cell over the floor it stands
 /// on, where the dot under its pill is drawn, and its base.
-fn pin_at(at: EntryAt) -> (Q3, V3) {
+fn pin_at(at: Octant) -> (Q3, V3) {
     let c = cube(at.zoom(), at.at());
     let [x, y, z] = c.center();
     (point(x, y, z), [x, y, c.min[2]])

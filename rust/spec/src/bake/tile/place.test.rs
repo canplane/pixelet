@@ -4,8 +4,8 @@ use super::*;
 use crate::space::layer::lattice;
 use crate::space::layer::lattice::Cells;
 
-fn leaf() -> Tile {
-    Tile::new(LEAF_ZOOM, [6, 4])
+fn leaf() -> Quadrant {
+    Quadrant::new(LEAF_ZOOM, [6, 4])
 }
 
 /// The middle of ground leaf cell (x, y) of `leaf()`.
@@ -102,7 +102,7 @@ fn icon_kinds_ship_symbol() {
 
 #[test]
 fn no_tile_past_coarsest() {
-    use crate::space::layer::tile::TOP_ZOOM;
+    use crate::space::layer::quadrant::TOP_ZOOM;
     const {
         assert!(
             lattice::coarsest(GROUND) == TOP_ZOOM,

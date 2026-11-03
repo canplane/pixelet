@@ -22,7 +22,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};

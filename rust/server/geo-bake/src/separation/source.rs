@@ -4,7 +4,7 @@
 
 use fnv::FnvHashMap;
 use postgres::Client;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use std::path::Path;
 
 use postgres::types::ToSql;
@@ -78,7 +78,7 @@ impl TileRows {
     }
 }
 
-fn tile_rows(
+fn quad_rows(
     client: &mut Client,
     repo: &TerrainRepository,
     tile: [i32; 2],
@@ -154,7 +154,7 @@ impl Store for Walk {
         if let Some(rows) = self.tiles.get(&tile) {
             return Ok(rows.clone());
         }
-        let rows = tile_rows(client, repo, tile)?;
+        let rows = quad_rows(client, repo, tile)?;
         self.tiles.insert(tile, rows.clone());
         Ok(rows)
     }
@@ -191,7 +191,7 @@ fn memo_rows(
     tile: [i32; 2],
     memo: &Path,
 ) -> Result<TileRows, String> {
-    let file = memo.join(Tile::new(LEAF_ZOOM, tile).name());
+    let file = memo.join(Quadrant::new(LEAF_ZOOM, tile).key());
     if let Some(rows) = std::fs::read(&file)
         .ok()
         .and_then(|b| unpack(&b).ok())
@@ -199,7 +199,7 @@ fn memo_rows(
     {
         return Ok(rows);
     }
-    let rows = tile_rows(client, repo, tile)?;
+    let rows = quad_rows(client, repo, tile)?;
     let packed = pack(
         &serde_json::to_vec(&rows).map_err(|e| e.to_string())?,
         Level::Live,

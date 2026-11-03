@@ -15,8 +15,11 @@ pub mod dispatch;
 pub mod failure;
 pub mod fetch;
 pub mod file;
+/// The kernel's roots and files, generated from file.json.
+#[path = "io/file.spec.rs"]
+pub mod file_spec;
 pub mod host;
-/// The kernel's own calls, roots and files, generated from host.json.
+/// The kernel's own calls, generated from host.json.
 #[path = "io/host.spec.rs"]
 pub mod host_spec;
 pub mod loader;

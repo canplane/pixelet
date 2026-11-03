@@ -13,14 +13,14 @@ use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::idx_of;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 impl Base for PlaceTile {
     const LAYER: BaseLayer = BaseLayer::place;
 
     const LATTICE: Lattice = place::PLACE_LATTICE;
 
-    fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
+    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| e.to_string())
     }
 
@@ -28,7 +28,7 @@ impl Base for PlaceTile {
         place::decode(raw).map_err(|e| e.to_string())
     }
 
-    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Quadrant, get: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(get);
         Some(place::fold(p, [a?, b?, c?, d?]))
     }
@@ -50,8 +50,8 @@ pub const READS: [&str; 2] = [PLACES_SQL, CATEGORY_SQL];
 pub fn leaves(
     client: &mut Client,
     coverage: &Coverage,
-    within: Tile,
-) -> Result<BTreeMap<Tile, PlaceTile>, String> {
+    within: Quadrant,
+) -> Result<BTreeMap<Quadrant, PlaceTile>, String> {
     let select = PLACES_SQL.replace("{category}", CATEGORY_SQL);
     let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_tile_bbox(within.zoom, within.at);
     let rows = client
@@ -60,12 +60,12 @@ pub fn leaves(
             &[&x0, &y0, &x1, &y1],
         )
         .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<Tile, Vec<(Q3, String, u16, String)>> = BTreeMap::new();
+    let mut places: BTreeMap<Quadrant, Vec<(Q3, String, u16, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
         let [x, y, _] = idx_of(LEAF_ZOOM, &at);
-        let leaf = Tile::new(LEAF_ZOOM, [x, y]);
-        if Tile::over(within.zoom, leaf.at) != within || !coverage.contains(leaf.at) {
+        let leaf = Quadrant::new(LEAF_ZOOM, [x, y]);
+        if Quadrant::over(within.zoom, leaf.at) != within || !coverage.contains(leaf.at) {
             continue;
         }
         let category = category_of(row.get::<_, Option<&str>>(3).unwrap_or(""));

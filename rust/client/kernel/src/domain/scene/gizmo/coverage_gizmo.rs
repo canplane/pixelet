@@ -22,7 +22,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 use xpute_guest::global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
@@ -46,7 +46,7 @@ enum Mark {
     Unbuilt,
     FloorOnly,
     NoTile,
-    Tile,
+    Quadrant,
     Shard,
 }
 
@@ -59,7 +59,7 @@ impl Mark {
         Mark::Unbuilt,
         Mark::FloorOnly,
         Mark::NoTile,
-        Mark::Tile,
+        Mark::Quadrant,
         Mark::Shard,
     ];
 
@@ -76,7 +76,7 @@ impl Mark {
             Mark::Unbuilt => (unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
             Mark::FloorOnly => (floor_only::rgb, floor_only::alpha, floor_only::dashed),
             Mark::NoTile => (no_tile::rgb, no_tile::alpha, no_tile::dashed),
-            Mark::Tile => (tile::rgb, tile::alpha, tile::dashed),
+            Mark::Quadrant => (tile::rgb, tile::alpha, tile::dashed),
             Mark::Shard => (shard::rgb, shard::alpha, shard::dashed),
         }
     }
@@ -112,7 +112,7 @@ type Node2 = (Zoom, [i32; 2]);
 #[derive(Default, PartialEq)]
 struct Outline {
     bricks: Vec<(Node2, Mark)>,
-    tiles: Vec<Tile>,
+    tiles: Vec<Quadrant>,
     shards: Vec<Node2>,
 }
 
@@ -161,7 +161,7 @@ pub fn coverage_gizmo_step(show: bool) {
         lines.piece(rect(n), mark);
     }
     for t in &outline.tiles {
-        lines.brick(t.rect(), Mark::Tile);
+        lines.brick(t.rect(), Mark::Quadrant);
     }
     for &s in &outline.shards {
         lines.brick(rect(s), Mark::Shard);
@@ -212,7 +212,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     };
     let tile_cache = TerrainTile::tile_cache();
     // The floor's tiles are the top's no demand lines (domain/layer/tile_cache/floor.rs).
-    let mut lined: FnvHashSet<Tile> = FnvHashSet::default();
+    let mut lined: FnvHashSet<Quadrant> = FnvHashSet::default();
     ByEye {
         lattice: TerrainTile::LATTICE,
         top,
@@ -220,7 +220,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     .requirements(o, &mut |p| {
         lined.insert(line_top(p, top));
     });
-    let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
+    let floor_only = |p: Quadrant| p.zoom <= top && !lined.contains(&p);
     let mut out = Outline::default();
     let mut read: FnvHashSet<Node2> = FnvHashSet::default();
     for cell in (FIRST_CELL..=LEAF_CELL).rev() {
@@ -274,7 +274,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     out
 }
 
-fn line_top(mut p: Tile, top: Zoom) -> Tile {
+fn line_top(mut p: Quadrant, top: Zoom) -> Quadrant {
     while p.zoom > top {
         p = p.parent();
     }

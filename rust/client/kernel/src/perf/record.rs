@@ -12,7 +12,7 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::perf::frame::{FrameSample, WorstFrame};
+use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
 use crate::perf::report::{GpuRead, RayRead};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
@@ -259,6 +259,7 @@ pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_
     l.frame_task_ms = frame_task_ms;
     if let Some(mut f) = l.open.replace(s) {
         (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
+        f.over_ms = over_ms(&f);
         land(l, f);
     }
     // Landing it is the profiler's too, out of the frame task's time.

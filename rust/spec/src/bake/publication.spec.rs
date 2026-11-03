@@ -23,6 +23,10 @@ pub const FORMAT: Format = Format {
 /// before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`).
 pub const VERSION_BYTES: usize = 32;
 
+/// What a version is written in: one segment of a tile's URL, with no character it would
+/// have to escape.
+pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
+
 /// A kind's object in a published set, the one place its segments are
 /// ordered: the version its source declares, then the tile's name. A version
 /// is a folder its tiles go up in whole (script/publish.py), so it comes

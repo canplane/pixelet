@@ -7,7 +7,7 @@
 //! (`pxl-kernel domain/layer/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
-use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use super::quadrant::{quad_at, quad_rows, Quadrant, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_dist;
 use crate::space::coord::zoom::{units, Zoom};
@@ -48,11 +48,11 @@ pub const GROUND_DEMAND_ACROSS: u32 = demand_across(GROUND);
 pub const GROUND_DEMAND_TILES: u32 = demand_tiles(GROUND);
 
 /// Every tile at `z` with ground within `radius` of `at`.
-pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {
-    let ys = tile_rows(zoom);
+pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Quadrant> {
+    let ys = quad_rows(zoom);
     squares_within(zoom, at, radius)
         .filter(move |&[_, y]| ys.contains(&y))
-        .map(move |xy| tile_at(zoom, xy))
+        .map(move |xy| quad_at(zoom, xy))
 }
 
 /// `tiles_within` before X wraps.

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { root, storage as slots } from "@/abi/host.spec.ts";
+import { root, storage as slots } from "@/abi/file.spec.ts";
 import { follow_refused_files, set_aside_by_root } from "./refusal.ts";
 import {
   commit_storage,

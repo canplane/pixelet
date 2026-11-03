@@ -9,9 +9,9 @@
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::octant::Octant;
 
 use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
 use crate::domain::control::edit::{hover, tool, Tool};
@@ -54,7 +54,7 @@ pub fn ghost() -> Ghost {
     let carved_style_cube: Option<AssetId> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             Asset::of(
-                w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
+                w.asset_of(&middle(Octant::holding(GROUND.cell(), h)))
                     .val()
                     .map_or(0, answer::val),
             )

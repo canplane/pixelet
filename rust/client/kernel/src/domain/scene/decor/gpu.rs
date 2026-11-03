@@ -28,10 +28,10 @@ use crate::sys::io::loader::catalog;
 use pxl_content::decor;
 use pxl_engine::clipmap::FIRST_CELL;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
-use pxl_spec::space::layer::tile;
+use pxl_spec::space::layer::octant::Octant;
+use pxl_spec::space::layer::quadrant;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
 /// cell, the model's edge, an angle about the eye in radians (pxl-spec
@@ -123,7 +123,7 @@ struct Key {
 struct WalkKey {
     zoom: Zoom,
     cell: [i32; 3],
-    hide: Option<EntryAt>,
+    hide: Option<Octant>,
 }
 
 static HAND_OVER: Global<Frame> = Global::new();
@@ -151,7 +151,7 @@ fn wrap(x: i32) -> u32 {
 /// largest is an impostor's worth or the rays stop asking the leaves' cells,
 /// less the placed decor `hide` names, and the
 /// ground's decor at `scattered` left out.
-pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
+pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
     let h = hand_over();
     let anchor = eye.map(libm::floor);
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
@@ -176,7 +176,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_impostor_angle())
-    .min(lattice::draw_dist(lattice::GROUND, tile::LEAF_ZOOM));
+    .min(lattice::draw_dist(lattice::GROUND, quadrant::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < dist {
         zoom -= 1;

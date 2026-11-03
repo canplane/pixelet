@@ -17,7 +17,7 @@ use pxl_engine::way::tree::POOL_CHILD_GROUPS;
 use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::pyramid::Staged;
 use crate::terrain::unfit;
@@ -32,14 +32,14 @@ struct Tally {
     bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
     peak_group_cnt: u64,
     /// Each tile's that takes anything, as the set will keep it.
-    tiles: Vec<(Tile, String)>,
+    tiles: Vec<(Quadrant, String)>,
 }
 
 /// The set's ways' trees fit the pool, and what it will keep of each tile
 /// that takes anything; where they do not, the window that holds the most
 /// at the zoom that needs it, its first brick and its tiles named.
-pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
-    let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
+pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, String)>, String> {
+    let tiles: Vec<Quadrant> = set.tiles()?.into_values().flatten().collect();
     let base = set.base.fits()?;
     let base = base.as_ref();
     let chunk = tiles.len().div_ceil(workers.max(1)).max(1);
@@ -82,14 +82,14 @@ pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String
     let zoom = GROUND.tile_zoom(cell) as Zoom;
     let mut under: Vec<String> = (0..ACROSS as i32 * ACROSS as i32)
         .map(|k| {
-            Tile::new(
+            Quadrant::new(
                 zoom,
                 [
                     (first[0] + k % ACROSS as i32).div_euclid(SIDE as i32),
                     (first[1] + k / ACROSS as i32).div_euclid(SIDE as i32),
                 ],
             )
-            .name()
+            .key()
         })
         .collect();
     under.sort_unstable();
@@ -108,20 +108,20 @@ pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String
 /// keeps nothing (`base` none, a set baked before it did).
 fn set_bricks(
     set: &Staged<'_>,
-    base: Option<&FnvHashMap<Tile, String>>,
-    tiles: &[Tile],
+    base: Option<&FnvHashMap<Quadrant, String>>,
+    tiles: &[Quadrant],
 ) -> Result<Tally, String> {
     let mut out = Tally::default();
     for &p in tiles {
         let fit = match set.fit_of(p, base)? {
             Some(None) => continue,
-            Some(Some(line)) => of_line(&line).map_err(|e| format!("{}: {e}", p.name()))?,
+            Some(Some(line)) => of_line(&line).map_err(|e| format!("{}: {e}", p.key()))?,
             None => {
                 let Some(tile) = set.read::<TerrainTile>(p)? else {
                     continue;
                 };
                 terrain::fill_fit(p, &tile, |_, _| {})
-                    .map_err(|(at, why)| format!("{}: {}", p.name(), unfit(at, why)))?
+                    .map_err(|(at, why)| format!("{}: {}", p.key(), unfit(at, why)))?
             }
         };
         if fit == Fit::default() {

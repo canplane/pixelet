@@ -3,6 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { Doorbell } from "./doorbell.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
@@ -44,4 +45,40 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     0,
     "the refused call is not in the submission ring",
   );
+});
+
+test("doorbell - a guest that traps throws at no one: it is told, and a call answers", () => {
+  const sq_at = 8;
+  const cq_at = sq_at + ring_bytes(CAP);
+  const slots_at = cq_at + ring_bytes(CAP);
+  const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
+  Ring.init(mem, sq_at, CAP, slots_at, SLOT);
+  Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
+
+  const error = console.error;
+  console.error = () => {};
+  try {
+    let runs = 0;
+    let stopped = 0;
+    const door = new Doorbell(mem, sq_at, cq_at, () => {
+      runs++;
+      throw new Error("the guest trapped");
+    });
+    door.stopped = () => stopped++;
+    const answer = (result: number) => result;
+    // In the call that traps, and in one after it, which rings no more.
+    assert.deepStrictEqual(
+      door.call(1, 1, null, answer),
+      Errno.ENOTRECOVERABLE,
+    );
+    assert.deepStrictEqual(
+      door.call(1, 1, null, answer),
+      Errno.ENOTRECOVERABLE,
+    );
+    door.ring(0);
+    assert.deepStrictEqual(runs, 1);
+    assert.deepStrictEqual(stopped, 1);
+  } finally {
+    console.error = error;
+  }
 });

@@ -33,7 +33,7 @@ use crate::util;
 use crate::util::git_sha;
 use pxl_spec::bake::publication::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The fold's unit in the stage, and the same once its commit has begun; no
 /// shard is named so.
@@ -49,8 +49,8 @@ fn io(p: &Path, e: std::io::Error) -> String {
     format!("{}: {e}", p.display())
 }
 
-fn shard_tile(shard: Node) -> Tile {
-    Tile::new(SHARD_ZOOM, shard.at)
+fn shard_tile(shard: Node) -> Quadrant {
+    Quadrant::new(SHARD_ZOOM, shard.at)
 }
 
 impl Stage {
@@ -67,20 +67,20 @@ impl Stage {
         self.stage.root.join(format!("{unit}.done"))
     }
 
-    fn write_done(&self, unit: &str, gone: impl Iterator<Item = Tile>) -> Result<(), String> {
+    fn write_done(&self, unit: &str, gone: impl Iterator<Item = Quadrant>) -> Result<(), String> {
         let path = self.done_path(unit);
-        let names: Vec<String> = gone.map(Tile::name).collect();
+        let names: Vec<String> = gone.map(Quadrant::key).collect();
         util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
-    fn read_done(&self, unit: &str) -> Result<Vec<Tile>, String> {
+    fn read_done(&self, unit: &str) -> Result<Vec<Quadrant>, String> {
         let path = self.done_path(unit);
         match fs::read_to_string(&path) {
             Ok(text) => text
                 .lines()
                 .filter(|l| !l.is_empty())
                 .map(|l| {
-                    Tile::of_name(l).ok_or_else(|| format!("{}: {l}: no tile", path.display()))
+                    Quadrant::of_key(l).ok_or_else(|| format!("{}: {l}: no tile", path.display()))
                 })
                 .collect(),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -107,7 +107,7 @@ impl Stage {
     /// The shards the set holds once what is staged is in: those its
     /// manifest names and those staged whole. None where it holds tiles and
     /// its manifest names no shards, which nothing then knows.
-    fn will_hold(&self) -> Result<Option<BTreeSet<Tile>>, String> {
+    fn will_hold(&self) -> Result<Option<BTreeSet<Quadrant>>, String> {
         let held = match source::manifest(&self.set.root)?
             .as_ref()
             .map(source::manifest_shards)
@@ -152,7 +152,7 @@ impl Stage {
         self.not_committing()?;
         self.remove_done(&shard.name())?;
         self.clear_fold(L::LEAF)?;
-        let under = |set: &TileSet| -> Result<Vec<Tile>, String> {
+        let under = |set: &TileSet| -> Result<Vec<Quadrant>, String> {
             Ok(set
                 .by_zoom()?
                 .remove(&L::LEAF)
@@ -165,7 +165,7 @@ impl Stage {
             self.stage.remove(p)?;
         }
         fill(&self.stage)?;
-        let made: FnvHashSet<Tile> = under(&self.stage)?.into_iter().collect();
+        let made: FnvHashSet<Quadrant> = under(&self.stage)?.into_iter().collect();
         let held = under(&self.set)?;
         self.write_done(
             &shard.name(),
@@ -178,8 +178,8 @@ impl Stage {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
-        let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
-        let mut changed: FnvHashSet<Tile> = self
+        let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
+        let mut changed: FnvHashSet<Quadrant> = self
             .stage
             .by_zoom()?
             .remove(&L::LEAF)
@@ -204,7 +204,7 @@ impl Stage {
     }
 
     /// The leaves the whole shards' stages take away.
-    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Tile>, String> {
+    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Quadrant>, String> {
         let mut gone = FnvHashSet::default();
         for shard in whole {
             gone.extend(self.read_done(&shard.name())?);
@@ -225,7 +225,7 @@ impl Stage {
             }
             // The set as it will be, refused before anything moves.
             let whole = self.whole()?;
-            let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
+            let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
             let mut gone = self.leaves_gone(&whole)?;
             gone.extend(self.read_done(FOLD)?);
             let view = Staged {
@@ -243,7 +243,7 @@ impl Stage {
                 let mut manifest =
                     source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
                 manifest["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 util::write_atomic(
                     &path,
@@ -258,7 +258,7 @@ impl Stage {
             if let Some(fits) = fits {
                 let text: String = fits
                     .iter()
-                    .map(|(p, fit)| format!("{} {fit}\n", p.name()))
+                    .map(|(p, fit)| format!("{} {fit}\n", p.key()))
                     .collect();
                 let path = self.next_fits();
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
@@ -283,7 +283,7 @@ impl Stage {
     fn finish_commit<L: Base>(&self) -> Result<(), String> {
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
-        let put = |p: Tile| {
+        let put = |p: Quadrant| {
             fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e))
         };
         for shard in self.whole()? {
@@ -354,7 +354,7 @@ impl Stage {
             .flatten()
             .filter(|p| p.zoom >= L::COARSEST && !skip.contains(p))
         {
-            fs::hard_link(self.set.path(p), to.join(p.name()))
+            fs::hard_link(self.set.path(p), to.join(p.key()))
                 .map_err(|e| io(&self.set.path(p), e))?;
         }
         // What the copy is, which the set may stop being once it changes again.
@@ -467,7 +467,7 @@ impl Run {
                 .flatten()
             {
                 fields["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
             }
             write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }

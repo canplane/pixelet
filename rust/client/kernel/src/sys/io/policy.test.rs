@@ -3,7 +3,7 @@
 use super::*;
 use crate::sys::io::demand::Priority;
 
-/// The objects' subjects are files' numbers, the top's 0 no tile: it is
+/// The objects' ids are files' numbers, the top's 0 no tile: it is
 /// ranked without a tile read off it.
 #[test]
 fn object_top_ranked() {

@@ -2,33 +2,36 @@
 
 /**
  * The placed objects' tree as their source keeps it beside the kernel: a
- * leaf's shard and its digits past the shard, a write laid over a shard's
+ * leaf's octkey, its first digits its shard's quadkey, a write laid over a shard's
  * leaves, and what a node at `SHARD_ZOOM` folds to, the top of the tree.
  * The kernel's store owns the tree (pxl-kernel
  * domain/layer/object/store.rs); what is here is its rules held a second
  * time, ported, and held to the store by one record both read
- * (rust/spec/golden/object/top.tsv): the keys' layout (pxl-spec
- * space/hierarchy/morton.rs `key_of`), a write's reach (pxl-spec
+ * (rust/spec/golden/object/top.tsv): an octkey's digits (pxl-spec
+ * space/hierarchy/morton.rs `name`), a write's reach (pxl-spec
  * space/hierarchy/sparse_tree.rs `set`), and the fold (pxl-engine
  * overwrite.rs `fold`, `share`, `voxel`; answer.rs `FULL`). The values a
  * fold counts as filling are generated (abi/voxel.spec.ts).
+ *
+ * This source is a mock in the place of a server, and no second owner: leave
+ * its copy of the rules as a copy.
  */
 
-import { SHARD_ZOOM } from "@/abi/host.spec.ts";
+import { SHARD_ZOOM } from "@/abi/file.spec.ts";
 import { AIR, grounds, objects } from "@/abi/voxel.spec.ts";
 
-/** A write `<key, id, ext>` (host.json `write`), and a leaf as the write that
+/** A write `<key, id, ext>` (file.json `write`), and a leaf as the write that
  * made it; a marker's text its one record. */
 export interface Leaf {
-  key: bigint;
+  key: string;
   id: number;
   text: string | null;
 }
 
-/** A row of the top (host.json `top`): a node at `SHARD_ZOOM` holding
- * objects, by its shard's subject and its Z, and what it folds to. */
+/** A row of the top (file.json `top`): a node at `SHARD_ZOOM` holding
+ * objects, by its shard's quadkey and its Z, and what it folds to. */
 export interface TopRow {
-  shard: bigint;
+  shard: string;
   z: number;
   fold: number;
 }
@@ -37,66 +40,41 @@ export interface TopRow {
  * `cube::sentinel::void`). */
 export const VOID = 0;
 
-/** The digits a shard's key has: two a zoom, X's and Y's, to `SHARD_ZOOM`. */
-const SHARD_DIGITS = 2 * SHARD_ZOOM;
-/** Past a shard a zoom adds a digit on each of three axes. */
-const AXES = 3;
-
-/** A key's digits, before the 1 that ends them. */
-export function digits(key: bigint): number {
-  let low = 0;
-  while (((key >> BigInt(low)) & 1n) === 0n) low++;
-  return 126 - low;
-}
-
-/** `key`'s first `n` digits, as a number. */
-function prefix(key: bigint, n: number): bigint {
-  return key >> BigInt(127 - n);
-}
-
-/** The key whose digits are the `n` of `p`. */
-function key_of(p: bigint, n: number): bigint {
-  return (p << BigInt(127 - n)) | (1n << BigInt(126 - n));
-}
-
-/** The shard a leaf lies in, by subject: its key's digits to the shard and
- * the 1 after them, its high half (pxl-spec space/layer/tile.rs `subject`). */
-export function shard_of(key: bigint): bigint {
-  return key_of(prefix(key, SHARD_DIGITS), SHARD_DIGITS) >> 64n;
+/** The shard a leaf lies in: its octkey's first digits. */
+export function shard_of(key: string): string {
+  return key.slice(0, SHARD_ZOOM);
 }
 
 /** How many zooms past the shard a leaf's node is. */
-function depth(key: bigint): number {
-  return (digits(key) - SHARD_DIGITS) / AXES;
+function depth(key: string): number {
+  return key.length - SHARD_ZOOM;
 }
 
 /** The child a leaf lies under at the `j`th zoom past the shard, from 1: its
- * three digits there, Z's highest, the order of a node's children (pxl-spec
- * space/hierarchy/tree.rs `slot_of`). At the first, Z's digit is its sign:
+ * digit there, Z's bit highest, the order of a node's children (pxl-spec
+ * space/hierarchy/tree.rs `slot_of`). At the first, Z's bit is its sign:
  * below sea level or above. */
-function slot(key: bigint, j: number): number {
-  return Number(prefix(key, SHARD_DIGITS + AXES * j) & 7n);
+function slot(key: string, j: number): number {
+  return Number(key[SHARD_ZOOM + j - 1]);
 }
 
 /** `w` laid over `leaves`, a shard's by key, none over another: its node made
  * one leaf of its id, none for VOID, every leaf at it or under it gone, and
  * a leaf over it split along the path to it, each child off the path its
  * value, as the store's tree takes a write. */
-export function lay(leaves: Map<bigint, Leaf>, w: Leaf): void {
-  const n = digits(w.key);
+export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
   for (const [k, l] of leaves) {
-    const m = digits(k);
-    if (m >= n && prefix(k, n) === prefix(w.key, n)) {
+    if (k.startsWith(w.key)) {
       leaves.delete(k);
-    } else if (m < n && prefix(w.key, m) === prefix(k, m)) {
+    } else if (w.key.startsWith(k)) {
       leaves.delete(k);
-      for (let d = m + AXES; d <= n; d += AXES) {
-        const own = prefix(w.key, d);
-        for (let s = 0n; s < 8n; s++) {
-          const child = ((own >> 3n) << 3n) | s;
-          if (child === own) continue;
-          const key = key_of(child, d);
-          leaves.set(key, { key, id: l.id, text: l.text });
+      for (let d = k.length + 1; d <= w.key.length; d++) {
+        const parent = w.key.slice(0, d - 1);
+        for (let s = 0; s < 8; s++) {
+          const key = `${parent}${s}`;
+          if (key !== w.key.slice(0, d)) {
+            leaves.set(key, { key, id: l.id, text: l.text });
+          }
         }
       }
     }
@@ -163,7 +141,7 @@ function word(under: readonly Leaf[], j: number): number {
 /** The top's rows of the shard `shard` holding `leaves`: each of its two
  * nodes at `SHARD_ZOOM` holding any, below sea level (Z -1) then above (Z
  * 0), and what it folds to. */
-export function top_of(shard: bigint, leaves: Iterable<Leaf>): TopRow[] {
+export function top_of(shard: string, leaves: Iterable<Leaf>): TopRow[] {
   const below: Leaf[] = [];
   const above: Leaf[] = [];
   for (const l of leaves) ((slot(l.key, 1) & 4) !== 0 ? below : above).push(l);

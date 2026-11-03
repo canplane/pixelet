@@ -11,7 +11,7 @@ use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
 
@@ -44,7 +44,7 @@ impl Base for Earth {
     }
 
     fn receive(
-        _tile: Tile,
+        _tile: Quadrant,
         _record: u32,
         pkt: &[u8],
         _phases: &mut Phases,
@@ -97,11 +97,11 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: the tile cache as the GPU of generation `on` reads it, kept nowhere.
 pub fn earth_window(
-    floor: impl Iterator<Item = Tile> + Clone,
+    floor: impl Iterator<Item = Quadrant> + Clone,
     on: u32,
 ) -> ([i32; 2], [u32; GROUND_DEMAND_TILES as usize]) {
     let mut layers = [0; GROUND_DEMAND_TILES as usize];
-    let at = |p: Tile| p.at;
+    let at = |p: Quadrant| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else {
         return ([0; 2], layers);
     };

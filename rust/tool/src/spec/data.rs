@@ -42,7 +42,7 @@ struct DataSpec {
     ts_names: Option<&'static [&'static str]>,
 }
 
-const DATA_SPECS: [DataSpec; 23] = [
+const DATA_SPECS: [DataSpec; 24] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -182,6 +182,16 @@ const DATA_SPECS: [DataSpec; 23] = [
         module: Some("api_spec"),
         enums: Enums::None,
         ts_names: Some(&["surface_role", "stream"]),
+    },
+    DataSpec {
+        json: "spec/client/kernel/sys/io/file.json",
+        uses: &[],
+        ts: Some("ts/client/src/abi/file.spec.ts"),
+        rs: Some("rust/client/kernel/src/sys/io/file.spec.rs"),
+        rs_also: &[],
+        module: Some("file_spec"),
+        enums: Enums::None,
+        ts_names: None,
     },
     DataSpec {
         json: "spec/client/kernel/sys/io/host.json",

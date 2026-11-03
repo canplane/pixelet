@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;
@@ -106,10 +106,10 @@ fn run() -> Result<(), String> {
                             store: held,
                         };
                         let terrain = bake_leaf(reader, tile)?;
-                        let at = Tile::new(LEAF_ZOOM, tile);
+                        let at = Quadrant::new(LEAF_ZOOM, tile);
                         let (pkt, fit) = terrain
                             .encode_stored(at)
-                            .map_err(|e| format!("{}: {e}", at.name()))?;
+                            .map_err(|e| format!("{}: {e}", at.key()))?;
                         let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
                         set.write_stored(at, &packed, fit.as_deref())?;
                         Ok(Outcome::Wrote {

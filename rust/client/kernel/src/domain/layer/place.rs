@@ -13,7 +13,7 @@ use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::global::Global;
 
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
@@ -31,7 +31,7 @@ impl Base for PlaceTile {
 
     /// Small, so held on the heap; the record is only a count slot.
     fn receive(
-        _tile: Tile,
+        _tile: Quadrant,
         _record: u32,
         pkt: &[u8],
         _phases: &mut Phases,

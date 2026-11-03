@@ -13,7 +13,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_guest::global::Global;
 use xpute_guest::mem::range;
 use xpute_guest::mem::range::OwnedRange;
@@ -51,7 +51,7 @@ impl Base for DivisionTile {
     /// Its cells into its record; its divisions, a handful over the pivot,
     /// held on the heap with their names decoded.
     fn receive(
-        _tile: Tile,
+        _tile: Quadrant,
         record: u32,
         pkt: &[u8],
         _phases: &mut Phases,
@@ -63,23 +63,23 @@ impl Base for DivisionTile {
 }
 
 /// The finest tile of the pivot's line, which demand asks for with the line.
-pub fn line(pivot: Option<Q3>) -> Option<Tile> {
+pub fn line(pivot: Option<Q3>) -> Option<Quadrant> {
     pivot.map(|at| {
         let [x, y, _] = idx_of(LEAF_ZOOM, &at);
-        Tile::over(DivisionTile::LEAF, [x, y])
+        Quadrant::over(DivisionTile::LEAF, [x, y])
     })
 }
 
 /// Where the divisions of the cell `at` is in are named: the deepest tile
 /// held over it, the held parent while the tile under it is on its way, and
 /// the cell in it. A tile's identity fixes what it names.
-pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
+pub fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
     let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 
 /// The divisions named at `naming`'s cell, broad to narrow.
-pub fn each_division((from, cell): (Tile, u32), each: impl FnMut(&Division)) {
+pub fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(&Division)) {
     if let Some(tile) = DivisionTile::tile_cache().get(from) {
         tile.name_at(cell).for_each(each);
     }

@@ -5,7 +5,7 @@
 //! there, which reads it again while the tile is held.
 
 use pxl_spec::bake::tile::place::{PlaceTile, Placed};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
 use crate::domain::layer::tile_cache::Lines;
@@ -17,8 +17,8 @@ impl World<'static> {
     /// for a tile none says. Siblings' lines step from one another's.
     pub fn places_in(
         self,
-        tiles: impl IntoIterator<Item = Tile>,
-        visit: &mut dyn FnMut(Tile, u32, Placed<'static>),
+        tiles: impl IntoIterator<Item = Quadrant>,
+        visit: &mut dyn FnMut(Quadrant, u32, Placed<'static>),
     ) {
         let held: &'static _ = PlaceTile::tile_cache();
         let mut lines = Lines::default();

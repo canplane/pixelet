@@ -17,7 +17,7 @@ use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
-use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
+use crate::space::layer::quadrant::{Cell, Quadrant, LEAF_ZOOM};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 
@@ -198,7 +198,10 @@ impl PlaceTile {
     /// A leaf from the places standing in it: those of a category Carto draws,
     /// placed at every zoom from the coarsest through Carto's last, a cell
     /// an icon wide keeping its first; names cut to `NAME_CHARS`.
-    pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Q3, Place<'a>)>) -> PlaceTile {
+    pub fn leaf<'a>(
+        tile: Quadrant,
+        places: impl IntoIterator<Item = (Q3, Place<'a>)>,
+    ) -> PlaceTile {
         let names: Vec<(Cell, Zoom, String, Place<'a>)> = places
             .into_iter()
             .filter_map(|(point, place)| {
@@ -252,14 +255,14 @@ fn place_cell(stands: Cell, zoom: Zoom) -> Cell {
 }
 
 /// The ground leaf cell a place a tile holds stands in.
-pub fn stands(tile: Tile, at: [u32; 2]) -> Cell {
+pub fn stands(tile: Quadrant, at: [u32; 2]) -> Cell {
     GROUND.cell_at(tile, 0).inner_at(GROUND, LEAF_ZOOM, at)
 }
 
-/// `p` from its four children, in `Tile::children`'s order: what of theirs is
+/// `p` from its four children, in `Quadrant::children`'s order: what of theirs is
 /// shown from `p`'s zoom on. A child is a tile where it holds more, or has a
 /// child that does, so a place first shown deeper stays reachable.
-pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
+pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
     let side = 1u32 << (GROUND.cell() - p.zoom - 1);
     let mut placed = Vec::new();
     let mut kept = [false; 4];

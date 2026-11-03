@@ -6,7 +6,7 @@ use crate::coverage::Node;
 use crate::coverage::Overture;
 use crate::util;
 use postgres::Client;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -35,9 +35,9 @@ impl Default for Limits {
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
-    Tile {
+    Quadrant {
         kind: super::Kind,
-        subject: u64,
+        id: u64,
         cache: PathBuf,
     },
 }
@@ -231,12 +231,8 @@ pub fn connect(
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
-        Job::Tile {
-            kind,
-            subject,
-            cache,
-        } => {
-            let p = Tile::of_subject(subject);
+        Job::Quadrant { kind, key, cache } => {
+            let p = Quadrant::of_id(id);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
                 super::Kind::Place => super::place::execute(p, &cache, out, seconds),

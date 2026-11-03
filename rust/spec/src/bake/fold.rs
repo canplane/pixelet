@@ -11,7 +11,7 @@
 
 use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use crate::space::layer::tile::{neighbor_idx, CHILDREN};
+use crate::space::layer::quadrant::{neighbor_idx, CHILDREN};
 use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};

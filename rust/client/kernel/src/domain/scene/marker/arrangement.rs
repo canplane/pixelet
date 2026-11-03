@@ -23,8 +23,8 @@ use crate::domain::view::setting::store::settings_store;
 use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::gpu::atlas::shelf::NO_SLOT;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::layer::octant::Octant;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -45,7 +45,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::BOUNDS;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// A brick of the eye's clip levels the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does
@@ -91,7 +91,7 @@ struct Arrangement {
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
     /// (domain/query/changes.rs): a brick they touch is read again.
-    moved_places: Vec<Tile>,
+    moved_places: Vec<Quadrant>,
     /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
@@ -125,7 +125,7 @@ struct Arrangement {
 struct Inputs {
     o: Observation,
     places: bool,
-    drafted: Option<(EntryAt, u64)>,
+    drafted: Option<(Octant, u64)>,
     bubble: line::Bubble,
 }
 
@@ -138,7 +138,7 @@ struct Inputs {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {
     Pin(pin::Holder),
-    Place(Tile, u32),
+    Place(Quadrant, u32),
     Line,
 }
 
@@ -172,7 +172,7 @@ fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
-pub fn on_moved(places: &[Tile]) {
+pub fn on_moved(places: &[Quadrant]) {
     let p = ARRANGEMENT.get(Arrangement::default);
     p.moved = true;
     p.moved_places.extend_from_slice(places);
@@ -406,7 +406,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             refused = true;
         }
     }
-    // Painted at render, or laid out by the host, neither of which asks a
+    // Painted at render, or laid out by the driver, neither of which asks a
     // turn: one looks again, while a design is on its way (`design::coming`),
     // once a slot let go may make room for one that had none, or once a
     // hold let go frees the old slot.
@@ -477,7 +477,7 @@ pub fn draw(draw: &mut DrawList, eye: V3) {
 #[derive(Clone, Copy)]
 pub enum MarkerHit {
     To(Q3),
-    Pin(EntryAt, Q3),
+    Pin(Octant, Q3),
 }
 
 /// `ndc` in [−1, 1], y up. The marker that took the tap, if any.

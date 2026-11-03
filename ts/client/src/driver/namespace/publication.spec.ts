@@ -10,6 +10,10 @@ export type BaseLayer = (typeof BASE_LAYERS)[number];
 /** The longest version a declaration names: one segment of a tile's URL, before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`). */
 export const VERSION_BYTES = 32;
 
+/** What a version is written in: one segment of a tile's URL, with no character it would have to escape. */
+export const VERSION_CHARS =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
+
 /** A kind's object in a published set, the one place its segments are
  * ordered: the version its source declares, then the tile's name. A version
  * is a folder its tiles go up in whole (script/publish.py), so it comes

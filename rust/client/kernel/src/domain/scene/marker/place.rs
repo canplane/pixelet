@@ -22,7 +22,7 @@ use pxl_spec::space::coord::world::BOUNDS;
 use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Cell};
+use pxl_spec::space::layer::quadrant::{quad_at, quad_rows, Cell};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
 /// cell it stands in, the finest camera grid cell its brick draws, which
@@ -58,8 +58,8 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
         (first_descendant_of(column, t - z), 1 << (t - z))
     };
     let tiles = (y0..y0 + n)
-        .filter(|y| tile_rows(t).contains(y))
-        .flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
+        .filter(|y| quad_rows(t).contains(y))
+        .flat_map(|y| (x0..x0 + n).map(move |x| quad_at(t, [x, y])));
     // The brick as the world names it, once round the world.
     let named = [wrap_idx(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {

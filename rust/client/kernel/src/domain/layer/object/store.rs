@@ -17,14 +17,15 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::{cube, AssetId};
-use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
+use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
-use pxl_spec::space::hierarchy::morton::{key_of, node_of};
+use pxl_spec::space::hierarchy::morton::node_of;
 use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
 use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
+use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -46,8 +47,8 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn id(&self) -> EntryAt {
-        EntryAt::new(self.zoom, self.at)
+    pub fn id(&self) -> Octant {
+        Octant::new(self.zoom, self.at)
     }
 
     pub fn size(&self) -> f64 {
@@ -129,10 +130,6 @@ impl Leaf {
     }
 }
 
-pub(super) fn key(zoom: Zoom, at: [i32; 3]) -> u128 {
-    key_of::<3>(zoom, at)
-}
-
 /// Levels under the tree's root of a node at `zoom`.
 const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
@@ -174,16 +171,16 @@ pub(crate) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
 /// it carries. VOID erases.
 #[derive(Clone, Debug)]
 pub struct Write {
-    pub key: u128,
+    pub at: u128,
     pub id: AssetId,
     pub ext: Option<Ext>,
 }
 
 impl Write {
     /// `id` at the cube `at` names.
-    pub fn at(at: EntryAt, id: AssetId) -> Write {
+    pub fn at(at: Octant, id: AssetId) -> Write {
         Write {
-            key: key(at.zoom(), at.at()),
+            at: at.id(),
             id,
             ext: None,
         }
@@ -331,7 +328,7 @@ impl Store {
     /// handle leave the word as it was.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
-        for Write { key: k, id, ext } in writes {
+        for Write { at: k, id, ext } in writes {
             let (zoom, at) = node_of::<3>(k);
             xpute_kit::ensure!(
                 (CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom),

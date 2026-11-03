@@ -26,11 +26,11 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signedBytes = (b: number) =>
   `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
-/** Where the interval's turns ended: before it, by the time left, or past it,
- * by how much (the kernel's perf/frame.rs `over_ms`). */
+/** Where the interval's turns ended: past it, by how much, or before it, by the
+ * time left. */
 const pastText = (f: Frame) =>
-  f.busy_ms > f.interval_ms
-    ? `over by ${n1(f.busy_ms - f.interval_ms)}`
+  f.over_ms > 0
+    ? `over by ${n1(f.over_ms)}`
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const percentiles = (s: Percentiles) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
@@ -128,7 +128,7 @@ export function taskLine(r: TaskRecord): string {
     r.fail === 0
       ? ""
       : `  [${failText(r.fail, r.detail)}${r.at === null ? "" : ` at ${r.at}`}]`;
-  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.stream}:${r.subject}`.padEnd(
+  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.stream}:${r.path}`.padEnd(
     34,
   )}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phasesText(
     r.phases,

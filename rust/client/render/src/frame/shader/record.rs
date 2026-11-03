@@ -141,8 +141,8 @@ pub mod compute {
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }
 
-/// `group` with its uniform at `binding` taken at a dynamic offset: how a
-/// host binds it, which the shader does not say.
+/// `group` with its uniform at `binding` taken at a dynamic offset: how the
+/// CPU binds it, which the shader does not say.
 pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32; N] {
     let mut k = 0;
     while k < N {

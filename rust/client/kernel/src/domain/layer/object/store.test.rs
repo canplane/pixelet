@@ -13,8 +13,12 @@ use crate::domain::layer::Query;
 use pxl_engine::answer;
 use pxl_engine::overwrite::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
+
+fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
+    pxl_spec::space::hierarchy::morton::key_of::<3>(zoom, at)
+}
 
 #[test]
 fn write_undo_round_trip() {
@@ -22,7 +26,7 @@ fn write_undo_round_trip() {
     for at in [[8, 16, 24], [-3, 5, -7]] {
         assert!(!store
             .write([Write {
-                key: key(OBJECT_COARSEST, at),
+                at: id_of(OBJECT_COARSEST, at),
                 id: 3,
                 ext: None
             }])
@@ -51,7 +55,7 @@ fn write_undo_round_trip() {
             }]
         );
         store.write([Write {
-            key: key(OBJECT_COARSEST, at),
+            at: id_of(OBJECT_COARSEST, at),
             id: VOID,
             ext: None,
         }]);
@@ -61,7 +65,7 @@ fn write_undo_round_trip() {
         assert!(
             store
                 .write([Write {
-                    key: key(OBJECT_COARSEST, at),
+                    at: id_of(OBJECT_COARSEST, at),
                     id: VOID,
                     ext: None,
                 }])
@@ -104,7 +108,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
-        key: key(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
+        at: id_of(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
         id: state,
         ext: None,
     }));
@@ -179,7 +183,7 @@ fn air_folds_as_val() {
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
-    store.write([Write::at(EntryAt::new(UNIT_ZOOM, [x, y, z]), state)]);
+    store.write([Write::at(Octant::new(UNIT_ZOOM, [x, y, z]), state)]);
 }
 
 #[test]
@@ -277,21 +281,21 @@ fn leaf_words_freed_on_erase() {
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: MARKER,
         ext: marker_text("cafe"),
     }]);
     let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: VOID,
         ext: None,
     }]);
     assert!(store.read((zoom, at)).entry().is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: MARKER,
         ext: marker_text("bar"),
     }]);
@@ -307,7 +311,7 @@ fn marker_text_change_cube() {
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     let put = |store: &mut Store, text: &str| {
         store.write([Write {
-            key: key(zoom, at),
+            at: id_of(zoom, at),
             id: MARKER,
             ext: marker_text(text),
         }])
@@ -326,7 +330,7 @@ fn eight_markers_stay() {
     let parent = [4, 4, 2];
     let writes: Vec<Write> = (0..8)
         .map(|k| Write {
-            key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
+            at: id_of(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
             id: MARKER,
             ext: marker_text(&format!("m{k}")),
         })
@@ -345,7 +349,7 @@ fn whole_shard_meets_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
     store.write([Write {
-        key: key(OBJECT_COARSEST, at),
+        at: id_of(OBJECT_COARSEST, at),
         id: 3,
         ext: None,
     }]);

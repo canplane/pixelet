@@ -3,7 +3,7 @@
 //! A layer's lattice: how many cells its tile holds a side, the same at
 //! every zoom, and its scale on the camera grid's cells.
 
-use super::tile::{tile_at, Cell, Tile};
+use super::quadrant::{quad_at, Cell, Quadrant};
 use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
@@ -20,7 +20,7 @@ pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no
 /// reader asks for, so the bake folds no coarser.
 pub const fn coarsest(lattice: Lattice) -> Zoom {
-    lattice.read_zoom(GROUND.cell_zoom(super::tile::TOP_ZOOM))
+    lattice.read_zoom(GROUND.cell_zoom(super::quadrant::TOP_ZOOM))
 }
 
 /// How far from the eye the view draws with `zoom` its coarsest:
@@ -41,18 +41,18 @@ pub const fn demand_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 /// A lattice placed in the world: the tiles and cells a node, a point or an
 /// index names.
 pub trait Cells {
-    fn read_tile(self, node: (Zoom, [i32; 2]), cell: Zoom) -> Tile;
+    fn read_tile(self, node: (Zoom, [i32; 2]), cell: Zoom) -> Quadrant;
     fn z_at(self, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
-    fn cell_at(self, tile: Tile, idx: u32) -> Cell;
+    fn cell_at(self, tile: Quadrant, idx: u32) -> Cell;
     fn parent_cell(self, q: usize, idx: u32) -> u32;
     fn child_cells(self, idx: u32) -> (usize, [u32; 4]);
 }
 
 impl Cells for Lattice {
-    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell: Zoom) -> Tile {
+    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell: Zoom) -> Quadrant {
         let z = self.read_zoom(cell);
-        tile_at(z, ancestor_of(column, zoom - z))
+        quad_at(z, ancestor_of(column, zoom - z))
     }
 
     /// The tile whose records fold into the grid's cell at `r2`, a distance
@@ -72,7 +72,7 @@ impl Cells for Lattice {
         }
     }
 
-    fn cell_at(self, tile: Tile, idx: u32) -> Cell {
+    fn cell_at(self, tile: Quadrant, idx: u32) -> Cell {
         xpute_kit::ensure!(idx < self.tile_cells() * self.tile_cells(), ENOTRECOVERABLE);
         let (zoom, at) = tile.node();
         let [x0, y0] = first_descendant_of(at, self.tile_cell_shamt());

@@ -8,7 +8,7 @@ use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Absent, Base, TileSet};
 use crate::util::{pack, Level};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -22,7 +22,7 @@ pub(super) async fn resolve(
     name: &str,
     top: Zoom,
 ) -> Result<Option<String>, Failure> {
-    let p = Tile::of_name(name).ok_or(Failure::BadName)?;
+    let p = Quadrant::of_key(name).ok_or(Failure::BadName)?;
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
@@ -37,7 +37,7 @@ fn bake_missing(
     data: Arc<Dataset>,
     runner: Arc<Runner>,
     kind: Kind,
-    p: Tile,
+    p: Quadrant,
     asked: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
@@ -57,9 +57,9 @@ fn bake_missing(
                         .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
                 }
-                let job = Job::Tile {
+                let job = Job::Quadrant {
                     kind,
-                    subject: p.subject(),
+                    id: p.key(),
                     cache: d.cache.root.clone(),
                 };
                 runner.run(job, d.clone(), lease, p.name()).await
@@ -69,7 +69,7 @@ fn bake_missing(
 }
 
 pub(super) fn execute<L: Base>(
-    p: Tile,
+    p: Quadrant,
     cache: &Path,
     out: &Path,
     leaf: impl FnOnce() -> Result<Option<L>, String>,

@@ -7,15 +7,13 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 
-import { format, object } from "@/abi/host.spec.ts";
+import { format, object } from "@/abi/file.spec.ts";
 import type { Tx } from "@/bracket.tsx";
 import {
   decode_top,
   decode_writes,
   encode_writes,
   object_backend,
-  object_key,
-  TOP_KEY,
   type Db,
 } from "./object.ts";
 import type { Leaf } from "./object_tree.ts";
@@ -47,22 +45,19 @@ function database(refuses = false): Db & { map: Map<string, U8Array> } {
   };
 }
 
-/** The tile "01", at z2: its digits two a zoom from bit 62 down, then a 1. */
-const TILE = (1n << 59n) | (1n << 58n);
-/** Shard 0 at `SHARD_ZOOM`, by subject. */
-const SHARD = 70368744177664n;
-const EDITS = BigInt(object.EDITS);
-const TOP = BigInt(object.TOP);
+/** Shard 0 at `SHARD_ZOOM`. */
+const SHARD = "00000000";
+const { EDITS, TOP } = object;
 
 /** A cube at the first zoom past shard 0, of the palette's third entry; a
  * marker at a finer zoom beside it. */
 const CUBE: Leaf = {
-  key: 0x00000800000000000000000000000000n,
+  key: "000000000",
   id: 3,
   text: null,
 };
 const MARKER: Leaf = {
-  key: 0x00001100000000000000000000000000n,
+  key: "0000000010",
   id: 2048,
   text: "here",
 };
@@ -75,12 +70,6 @@ async function errno(f: () => unknown): Promise<number | undefined> {
   }
   return undefined;
 }
-
-test("object_key - a shard's file under its tile's name, the top under its own", async () => {
-  assert.deepStrictEqual(object_key(TILE), "01");
-  assert.deepStrictEqual(object_key(TOP), TOP_KEY);
-  assert.deepStrictEqual(await errno(() => object_key(EDITS)), Errno.ENOENT);
-});
 
 test("encode_writes - a batch reads back as written, in order, texts and all", async () => {
   const writes = [CUBE, MARKER, { ...CUBE, id: 0 }];
@@ -137,13 +126,26 @@ test("object_backend - only an edit batch is written", async () => {
   );
 });
 
+test("object_backend - an edit over a shard of another build sets it aside and is kept", async () => {
+  const db = database();
+  const b = object_backend(db);
+  const old = new Uint8Array([format.OBJECT - 1, 0, 0, 0]);
+  db.map.set(SHARD, old);
+  b.commit(EDITS, encode_writes(format.OBJECT_EDITS, [CUBE]));
+  const own = decode_writes(format.OBJECT, await b.open(SHARD));
+  assert.deepStrictEqual(own, [CUBE]);
+  assert.ok(
+    [...db.map].some(([k, v]) => k.startsWith(`${SHARD}:aside:`) && v === old),
+  );
+});
+
 test("object_backend - a refused shard is set aside, its rows of the top with it", async () => {
   const db = database();
   const b = object_backend(db);
   b.commit(EDITS, encode_writes(format.OBJECT_EDITS, [CUBE]));
   const file = await b.open(SHARD);
   assert.ok(await b.set_aside(SHARD, 7));
-  assert.deepStrictEqual(db.map.get(`${object_key(SHARD)}:aside:7`), file);
+  assert.deepStrictEqual(db.map.get(`${SHARD}:aside:7`), file);
   assert.deepStrictEqual(await errno(() => b.open(SHARD)), Errno.ENOENT);
   assert.deepStrictEqual(await errno(() => b.open(TOP)), Errno.ENOENT);
 });

@@ -29,7 +29,7 @@ use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPH
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -123,7 +123,7 @@ fn declaration(app: &App) -> Result<String, String> {
 const EARTH: &str = "earth";
 
 async fn earth(app: &App, name: &str) -> Response {
-    if Tile::of_name(name).is_none() && name != TILE_SPHERE {
+    if Quadrant::of_key(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
     match fs::read(app.out.join(EARTH).join(name)).await {
@@ -188,7 +188,7 @@ async fn tile(
 
 async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
     // Only a tile's name reaches the disk; a set's tiles lie flat under them.
-    if Tile::of_name(name).is_none() {
+    if Quadrant::of_key(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
     let set = dir.join(kind.name());

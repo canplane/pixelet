@@ -45,6 +45,7 @@
     "settled": 1,
     "turns": 1,
     "busy_ms": 1,
+    "over_ms": 1,
     "budget_ms": 1,
     "effects_ms": 1,
     "tick_ms": 1,
@@ -102,6 +103,7 @@
       "settled",
       "turns",
       "busy_ms",
+      "over_ms",
       "budget_ms"
     ],
     "turn": [
@@ -166,10 +168,10 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One settled task (perf/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
+      "One settled task (perf/task.rs TaskRow). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
     ],
     "stream": 1,
-    "subject": 1,
+    "path": 3,
     "priority": 1,
     "enqueue_ms": 1,
     "start_ms": 1,

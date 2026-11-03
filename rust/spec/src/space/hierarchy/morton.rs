@@ -42,7 +42,13 @@ fn axes<const D: usize>(zoom: Zoom) -> impl Iterator<Item = usize> {
 /// The key of the node at `zoom` whose index is `at`.
 pub fn key_of<const D: usize>(zoom: Zoom, at: [i32; D]) -> u128 {
     let n = bits::<D>(zoom);
-    (digits_of(zoom, &at) << (127 - n)) | (1 << (126 - n))
+    ended(digits_of(zoom, &at), n)
+}
+
+/// `n` digits from the top, then the 1 that ends them.
+const fn ended(digits: u128, n: u32) -> u128 {
+    // Two shifts: no digits at all would shift by the word's width.
+    ((digits << (127 - n)) << 1) | (1 << (127 - n))
 }
 
 /// The zoom axis `axis`'s first digit is at.
@@ -97,16 +103,15 @@ fn spread(v: u64, n: u32) -> u64 {
     }
 }
 
-/// Whether `key` is a key, which `node_of` reads back: a 1 ends its digits
-/// below bit 127, which no key sets.
+/// Whether `key` is a key, which `node_of` reads back: a 1 ends its digits.
 pub const fn is_key(key: u128) -> bool {
-    key & (u128::MAX >> 1) != 0
+    key != 0
 }
 
 /// The digits `key` holds, above its end bit; a non-key refused.
 fn len(key: u128) -> u32 {
     xpute_kit::ensure!(is_key(key), EINVAL);
-    126 - key.trailing_zeros()
+    127 - key.trailing_zeros()
 }
 
 /// `key_of`'s inverse: the zoom, and each axis's index at it, signed.
@@ -117,7 +122,7 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
         zoom += 1;
         for i in axes::<D>(zoom) {
             read += 1;
-            at[i] = (at[i] << 1) | ((key >> (127 - read)) & 1) as i32;
+            at[i] = (at[i] << 1) | ((key >> (128 - read)) & 1) as i32;
         }
     }
     (
@@ -127,15 +132,15 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
 }
 
 /// A key written a character a zoom, coarsest first: the digits that zoom
-/// adds as one octal digit, so a coarser node's name prefixes a finer one's
-/// and the length is the zoom. Written, not built, so a read allocates nothing.
+/// adds as one digit, so a coarser node's name prefixes a finer one's and the
+/// length is the zoom. In 2D a quadkey; in 3D an octkey, the same to z8. Written, not built, so a read allocates nothing.
 pub(crate) fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
     let n = len(key);
     let (mut zoom, mut read) = (0, 0);
     while read < n {
         zoom += 1;
         let w = bits::<D>(zoom) - bits::<D>(zoom - 1);
-        let d = (key >> (127 - read - w)) & ((1 << w) - 1);
+        let d = (key >> (128 - read - w)) & ((1 << w) - 1);
         out.write_char(char::from(b'0' + d as u8))?;
         read += w;
     }
@@ -155,12 +160,12 @@ pub fn key_of_name<const D: usize>(name: &str) -> Option<u128> {
         let zoom = Zoom::try_from(z + 1).ok()?;
         let w = bits::<D>(zoom) - bits::<D>(zoom - 1);
         let d = c.checked_sub(b'0').filter(|&d| u32::from(d) < 1 << w)?;
-        if n + w > 125 {
+        if n + w > 127 {
             return None;
         }
         (digits, n) = ((digits << w) | u128::from(d), n + w);
     }
-    Some((digits << (127 - n)) | (1 << (126 - n)))
+    Some(ended(digits, n))
 }
 
 /// A cube's child at `slot`, its Z as Z's digits there name it: two's

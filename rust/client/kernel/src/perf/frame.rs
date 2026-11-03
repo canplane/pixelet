@@ -80,6 +80,8 @@ pub struct FrameSample {
     /// frame, and their time, rise to fall each.
     pub turns: f64,
     pub busy_ms: f64,
+    /// What the interval's turns ran past it (`over_ms`).
+    pub over_ms: f64,
     pub budget_ms: f64,
     /// The parts of `busy_ms`: what is left of it is unmeasured.
     pub effects_ms: f64,
@@ -206,7 +208,7 @@ impl WorstFrame {
 
 words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, interval_ms => FRAME::interval_ms, refresh_ms => FRAME::refresh_ms, paced_ms => FRAME::paced_ms, settled => FRAME::settled,
-    turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
+    turns => FRAME::turns, busy_ms => FRAME::busy_ms, over_ms => FRAME::over_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     perf_ms => FRAME::perf_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name,
@@ -269,5 +271,5 @@ pub fn unmeasured_ms(f: &FrameSample) -> f64 {
 
 /// The interval's turns ran past it: a long frame, and `over_ms` by how much.
 pub fn long(f: &FrameSample) -> bool {
-    over_ms(f) > 0.0
+    f.over_ms > 0.0
 }

@@ -3,7 +3,7 @@
 use super::*;
 
 use crate::asset::cube::ground;
-use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
+use crate::space::layer::quadrant::{neighborhood, Quadrant, LEAF_ZOOM};
 use pxl_engine::ground::majority;
 
 const SPAN: usize = TILE_CELLS as usize;
@@ -231,7 +231,7 @@ fn zero_tile_fold() {
     let zero = zero_tile();
     assert_eq!(
         fold_terrain(
-            neighborhood(Tile::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)),
+            neighborhood(Quadrant::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)),
             LEAF_ZOOM - 1
         )
         .as_ref(),

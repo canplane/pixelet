@@ -16,7 +16,7 @@ use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_COLUMN};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
@@ -34,13 +34,13 @@ use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
-use pxl_spec::space::layer::tile;
+use pxl_spec::space::layer::quadrant;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
 
-fn top() -> Tile {
-    Tile::new(LEAF_ZOOM - 1, [40, -20])
+fn top() -> Quadrant {
+    Quadrant::new(LEAF_ZOOM - 1, [40, -20])
 }
 
 /// A leaf as a client holds it: its lines, and its cells, each its own palette index
@@ -57,10 +57,10 @@ struct Leaf {
 /// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
 /// clip levels about `centre`, in units.
-fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
+fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
-    let mut admitted: Vec<Tile> = Vec::new();
+    let mut admitted: Vec<Quadrant> = Vec::new();
     let mut cells = Vec::new();
     for (
         p,
@@ -97,7 +97,7 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     }
     // Asked for, as the floor asks for what it holds: a tile held but not
     // asked is cache, which answers nothing.
-    let asks: fnv::FnvHashMap<Tile, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
+    let asks: fnv::FnvHashMap<Quadrant, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
     tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
     test::hold(center, &cells);
@@ -135,7 +135,7 @@ fn down(at: [f64; 2]) -> Ray {
 pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
-        key: morton::key_of::<3>(side, idx_of(side, &at)),
+        at: morton::key_of::<3>(side, idx_of(side, &at)),
         id: state,
         ext: None,
     }]);
@@ -256,7 +256,7 @@ fn ray_across_antimeridian() {
             Default::default(),
         )
     };
-    let tile = |x: i32| tile::tile_at(LEAF_ZOOM, [x, 0]);
+    let tile = |x: i32| quadrant::quad_at(LEAF_ZOOM, [x, 0]);
     let seam = world::ROUND / 2.0;
     let tile_cache = resident(
         [seam, 100.5],
@@ -877,7 +877,7 @@ fn area_edge_leaf_cell_thick() {
     let _g = serial();
     let s = LEAF_ZOOM - SHARD_ZOOM;
     // A served shard's westmost leaf, the shard west of it unserved.
-    let leaf = Tile::new(LEAF_ZOOM, [5 << s, 3 << s]);
+    let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
     let area = EastOf(5);
     let flat = drawn(
         vec![5; CELLS],
@@ -916,13 +916,13 @@ fn stored_decor_past_the_catalog_is_unknown() {
     use crate::domain::layer::object::asset::Asset;
     use crate::domain::layer::object::meta::decor_instance;
     use pxl_spec::asset::id::SHAPE_BITS;
-    use pxl_spec::bake::constant::EntryAt;
+    use pxl_spec::space::layer::octant::Octant;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let past: AssetId = (1 << SHAPE_BITS) | ((1 << SHAPE_BITS) - 1);
     let mut store = Store::default();
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
-    let at = EntryAt::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
+    let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
     let entry = World::new(&tile_cache, &store).entry_at(at).unwrap();
     assert_eq!(entry.state, past);
     assert_eq!(entry.asset(), Asset::Unknown);

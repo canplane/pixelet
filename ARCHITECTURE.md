@@ -80,8 +80,11 @@ where the view reads.
 Every size in the world is one number, its zoom. X goes once round the world in
 2^24 units, and a thing the world over 2^z wide is at zoom z, so one zoom finer
 is half as wide (`pxl-spec space/coord/zoom.rs`). A **cell** is the granule at a
-zoom, possibly empty. A **tile** is what is fetched and stored as one, and a
-layer's tile has the same number of cells a side at every zoom. The **pyramid**
+zoom, possibly empty. A **quadrant** is a node of the plane at a zoom (`pxl-spec
+space/layer/quadrant.rs` `Quadrant`), an **octant** one under a shard, through
+the height as well (`octant.rs` `Octant`). A **tile** is a quadrant fetched and
+stored as one, and a layer's tile has the same number of cells a side at every
+zoom. The **pyramid**
 is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1. The
 same zooms, cut through the height as well, make an octree of nodes, eight under
 each, and that octree is what a ray descends (The query, the only seam). A
@@ -138,7 +141,7 @@ object/ext.rs` `class_of`), placed and erased with its leaf.
 They come from the **objects' source**, below the `OBJECT` root, which keeps
 them a file a shard, a shard with none having no file, and keeps the **top** of
 the tree: what each node at the shard's zoom holding objects folds to
-(`host.json` `object.TOP`; `pxl-kernel domain/layer/object/repository.rs`). The
+(`file.json` `object.TOP`; `pxl-kernel domain/layer/object/repository.rs`). The
 top is read first, and its folds stand in the tree where their shards are not
 read, so a view from afar draws from it alone. A shard the top lists is read as
 a bake's tile is, the shards about the eye as the view asks the ground at the
@@ -475,7 +478,7 @@ with its own bound:
 | Query      | what a node holds, a point, or first on a ray | —; it holds nothing                                                                   | `domain/query.rs`                                         |
 | Drawing    | what each pixel's ray meets                   | the screen's rays                                                                     | `domain/scene/cast.rs`, `pxl-render gpu/ray/cast.rs`      |
 | Demand     | which records an observation requires         | a zoom's reach about the eye (`demand_tiles`)                                         | `pxl-spec space/layer/demand.rs`, `domain/view/demand.rs` |
-| Tile cache | which records are held, and why               | its slots, asserted at compile time                                                   | `domain/layer/tile_cache.rs`                              |
+| Quadrant cache | which records are held, and why               | its slots, asserted at compile time                                                   | `domain/layer/tile_cache.rs`                              |
 | Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
 Every number a person would tune is named once, with its reason, in a `param.rs`
@@ -678,10 +681,10 @@ casts by: what moved marks the tiles it covered and covers; the light's map is
 drawn again in the tiles its casters that moved mark, and the change is
 propagated on the GPU to the screen's tiles whose pixels read one of those
 (`gpu/propagate.rs`); a tile stays claimed until its history has gathered the
-jitter's frames (`gpu/resolve.rs`). The host decides from what it handed whether
+jitter's frames (`gpu/resolve.rs`). The CPU decides from what it handed whether
 a frame is drawn whole, through the tiles, or not at all, as the light decides
 whether to cast: the propagation runs only in a frame whose casters mark the
-screen's tiles drawn, which the host counts as marked, so nothing it marks is
+screen's tiles drawn, which the CPU counts as marked, so nothing it marks is
 read back.
 
 The compute entries are built by rust-gpu to WGSL and checked in beside the
@@ -778,7 +781,7 @@ test`.
 
 The kernel records its hostcalls during a turn, and the host runs them after it
 returns, so each is done before the next turn begins (`sys/io/host.rs`). What
-the host answers from what it holds, a text's lines and its pixels, the kernel
+a driver answers, a text's lines and its pixels, the kernel
 asks by a hostcall run now, answered before the call returns (`sys/io/text.rs`):
 a page's host through the module's import, a device's on the JavaScript thread
 that waits on the turn. Beside those, only what the bracket hands over is called
@@ -861,23 +864,23 @@ What crosses each edge:
 
 A read is a file in xpute's sense
 ([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#hostcalls-and-files)):
-the kernel names a root by its number and an object below it by its number,
+the kernel names a root by its number and an object below it by one name,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
-`spec/client/kernel/sys/io/host.json` `root`'s: the bakes and the assets
+`spec/client/kernel/sys/io/file.json` `root`'s: the bakes and the assets
 read-only, `STORAGE` holding the kernel's own files, each a **storage file** on
 the device, and `OBJECT` the placed objects' source, its shards and their top
 read and its edits written:
 
 | Root               | The kernel's path                                              | What the client binds it to                                                                                  |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
-| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
-| `STORAGE`          | a storage file's number, in decimal (`storage`)                | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
-| `OBJECT`           | a shard's subject, in decimal; `object.TOP`; `object.EDITS`    | for now a loopback over the place's database, which applies the edits (`namespace/object.ts`)                |
+| each bake, by kind | a tile's quadkey; the Earth's `sphere`                         | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
+| `ASSET`            | a load's id, in decimal                                        | the shipped asset that id is, by its hash (`namespace/asset.ts`)                                         |
+| `STORAGE`          | a storage file's id, in decimal (`storage`)                    | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
+| `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS`                | for now a loopback over the place's database, which applies the edits (`namespace/object.ts`)                |
 
 So the kernel names no URL, version, storage key or platform: a path is a
-number, and where it leads is the client's. The client reads the declaration
+name, and where it leads is the client's. The client reads the declaration
 (The query, the only seam) once at boot, hands the kernel the top zoom, each
 kind's format and the shards it serves (`FS_MOUNT`, `sys/io/source.rs`), and
 keeps the versions; the world's floor and its service area follow from it.
@@ -907,11 +910,11 @@ near the finer first. It changes how soon the view is right, never what it is.
 Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
 objects' shards, wanted as a layer's tiles are.
 
-`STORAGE` holds the settings, the one storage file, opened by its number
+`STORAGE` holds the settings, the one storage file, opened by its id
 (`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
 a platform that keeps text keeps their base64url (`namespace/storage.ts`
 `text_of`), and `OBJECT`'s database keeps the bytes. A storage file begins with
-its slot's format byte, and each file below `OBJECT` with its own (`host.json`
+its slot's format byte, and each file below `OBJECT` with its own (`file.json`
 `format`); the kernel refuses one of another format, one its backend cannot read
 as bytes, or one that does not decode, as a driver refuses a superblock it does
 not know, and never writes over it. It names each refused file in the snapshot
@@ -1178,7 +1181,7 @@ numbered by its id ([What fills a cell](#what-fills-a-cell)). A file a
 definition references, a model, a skin or the texture pack, is compiled as an
 **asset slot**, so the kernel knows "the cumulus' skin" and never which file it
 is. Which file fills each asset slot, and what the ingest measured of it, is the
-**catalog**: the one file the host plugs in, through which the kernel finds
+**catalog**: the one file the client plugs in, through which the kernel finds
 every other (`pxl-spec asset/catalog.rs` `Catalog`). Until it lands every asset
 slot reads as still loading, and its asset slots bound the files the kernel
 loads at once (`pxl-kernel sys/load.rs` `LOAD_FILES`).
@@ -1186,7 +1189,7 @@ loads at once (`pxl-kernel sys/load.rs` `LOAD_FILES`).
 The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
 the table that numbers each (`spec/spec/asset/ingest.json`, `pxl-tool
-bin/ingest_asset.rs`). The client binds a number to its key
+bin/ingest_asset.rs`). The client binds an id to its key
 (`ts/client/src/driver/namespace/asset.ts`).
 
 The texture pack is one WebP image of every cube's tiles, the file the cube

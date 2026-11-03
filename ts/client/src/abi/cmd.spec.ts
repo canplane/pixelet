@@ -6,9 +6,9 @@
  * The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
  * and the packet each carries — an XTP branch whose children are its fields, in
  * order. A command with no fields carries no packet. The kernel is the process; the
- * JavaScript around it is two things to it, its host, which holds the devices and
- * the turns, and its shell, the UI. A command's major is the module it is for, and
- * the sections say which of the two it is between.
+ * JavaScript around it is three things to it, its host, which holds the turns, its
+ * drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and
+ * the sections say which of them it is between.
  *
  * The same number is a command on the submission ring and an event on the
  * completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -195,7 +195,7 @@ export interface Snapshot {
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
   /** The files the kernel refused, not of their format, not decoding, or too large for any
-   * heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+   * heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
    * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
    * empty. */
   refused_files: RefusedFile[];
@@ -320,9 +320,9 @@ export function read_division_part(b: BranchCursor): DivisionPart {
 
 /** A file the kernel refused, as it opened it. */
 export interface RefusedFile {
-  /** host.json's `root`. */
+  /** file.json's `root`. */
   root: u32;
-  /** Its number below the root in decimal. */
+  /** Its path below the root, as the kernel opened it. */
   path: string;
 }
 
@@ -455,8 +455,8 @@ export function encode_fs_mount(
 
 /** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
- * @param root host.json's `root`.
- * @param path Its number below the root in decimal, as the kernel opened it. */
+ * @param root file.json's `root`.
+ * @param path Its path below the root, as the kernel opened it. */
 export function encode_fs_truncated(
   to: PacketRoom,
   root: u32,

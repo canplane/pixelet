@@ -3,9 +3,9 @@
     "The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),",
     "and the packet each carries — an XTP branch whose children are its fields, in",
     "order. A command with no fields carries no packet. The kernel is the process; the",
-    "JavaScript around it is two things to it, its host, which holds the devices and",
-    "the turns, and its shell, the UI. A command's major is the module it is for, and",
-    "the sections say which of the two it is between.",
+    "JavaScript around it is three things to it, its host, which holds the turns, its",
+    "drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and",
+    "the sections say which of them it is between.",
     "",
     "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
@@ -669,7 +669,7 @@
       "format": "hex4",
       "entries": [
         {
-          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
+          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json)"
         },
         {
           "name": "SENSOR_START",
@@ -927,7 +927,7 @@
           "val": 4866,
           "$doc": [
             "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
-            "own again, what it held set aside by the host: the kernel reads it again, and writes",
+            "own again, what it held set aside by the driver: the kernel reads it again, and writes",
             "a storage file from then on."
           ],
           "pkt": [
@@ -935,14 +935,14 @@
               "name": "root",
               "type": "u32",
               "$doc": [
-                "host.json's `root`."
+                "file.json's `root`."
               ]
             },
             {
               "name": "path",
               "type": "str",
               "$doc": [
-                "Its number below the root in decimal, as the kernel opened it."
+                "Its path below the root, as the kernel opened it."
               ]
             }
           ]
@@ -1039,7 +1039,7 @@
           "name": "EDIT_MARKER_TEXT",
           "val": 6658,
           "$doc": [
-            "The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut."
+            "The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit."
           ],
           "pkt": [
             {
@@ -1485,7 +1485,7 @@
           "list": true,
           "$doc": [
             "The files the kernel refused, not of their format, not decoding, or too large for any",
-            "heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The",
+            "heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The",
             "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
             "empty."
           ]
@@ -1645,12 +1645,12 @@
         {
           "name": "root",
           "type": "u32",
-          "$doc": ["host.json's `root`."]
+          "$doc": ["file.json's `root`."]
         },
         {
           "name": "path",
           "type": "str",
-          "$doc": ["Its number below the root in decimal."]
+          "$doc": ["Its path below the root, as the kernel opened it."]
         }
       ]
     }

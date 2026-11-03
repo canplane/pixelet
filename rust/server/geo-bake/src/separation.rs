@@ -13,7 +13,7 @@ pub mod way;
 use postgres::Client;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, G3857};
-use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{LEAF_ZOOM, TOP_ZOOM};
 
 use crate::terrain::repository::TerrainRepository;
 use crate::terrain::CELL_U;

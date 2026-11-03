@@ -14,7 +14,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{tile_at, Tile, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_at, Quadrant, TOP_ZOOM};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
@@ -112,7 +112,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
 impl TileCache<TerrainTile> {
     /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
     /// a look-up a zoom between them.
-    fn down(&self, from: &Line, tile: Tile) -> Line {
+    fn down(&self, from: &Line, tile: Quadrant) -> Line {
         match tile == from.tile {
             true => *from,
             false => self.step(&self.down(from, tile.parent()), tile),
@@ -123,9 +123,9 @@ impl TileCache<TerrainTile> {
 /// The tile a node's bound is read from: its cells' tile, within the
 /// pyramid's zooms, or where the node is wider than one, its own, the
 /// finest one tile holding it.
-fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
+fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Quadrant {
     let read = GROUND.read_zoom(cell).min(zoom);
-    tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
+    quad_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
 /// `v`, read off the clip level at `from` (`here`, else none held): exact where

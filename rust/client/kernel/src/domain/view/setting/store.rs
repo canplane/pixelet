@@ -109,7 +109,7 @@ enum Load {
     /// What it held, or nothing: written from now on.
     Loaded,
     /// Refused (sys/io/file.rs `is_refused`): the defaults, and not written
-    /// over until the host sets it aside and empties the slot.
+    /// over until the driver sets it aside and empties the slot.
     Refused,
     /// There and not readable here otherwise: the defaults, and never
     /// written over this session.
@@ -157,7 +157,7 @@ pub fn settings_load_step() -> bool {
     true
 }
 
-/// The host set a refused slot's file aside and emptied it: the store, with
+/// The driver set a refused slot's file aside and emptied it: the store, with
 /// what changed meanwhile, is written from the next keep on.
 pub fn on_settings_emptied() {
     if *load() == Load::Refused {

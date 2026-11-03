@@ -298,6 +298,11 @@ up and every later read is settled without being made.
 > `rust/client/kernel/src/sys/io/policy.rs`), so it is not asked again while it
 > is wanted and every other read goes ahead
 > (`rust/client/kernel/src/sys/io/request.rs`).
+>
+> Since 2026-11-03: the check is gone, the user agreeing. The kernel fails such a body
+> as it fails any that does not decode, a tile as `EBADMSG` and the sphere as an image no
+> header sizes, each that object's alone. What went is the line naming the cause in the
+> console, and the heap block it spared.
 
 The decoded copy the edge makes for a client that did not offer zstd is
 therefore still made, and still cached. Nothing in a Worker prevents it. What it

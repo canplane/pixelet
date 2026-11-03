@@ -69,10 +69,22 @@ fn unreadable_bytes_refused() {
 #[test]
 fn object_path_decimal() {
     for n in [0, 1, 9, 10, 702561541869797376, u64::MAX] {
-        assert_eq!(Path::of(n).as_str(), n.to_string());
+        assert_eq!(Path::of_id(n).as_str(), n.to_string());
     }
     for file in StorageFile::ALL {
         assert_eq!(file.path().as_str(), file.slot().to_string());
         assert_eq!(StorageFile::of_slot(file.slot()), Some(file));
     }
+}
+
+/// A key's path and back: a shard's quadkey and the top's own name.
+#[test]
+fn path_of_key() {
+    let shard = Quadrant::of_key("0123").expect("a tile");
+    assert_eq!(Path::of_quadrant(shard.id()).as_str(), "0123");
+    assert_eq!(id_of_path("0123"), Some(shard.id()));
+    assert_eq!(Path::of_quadrant(TOP_ID).as_str(), object::TOP);
+    assert_eq!(id_of_path(object::TOP), Some(TOP_ID));
+    assert_eq!(id_of_path(object::EDITS), None);
+    assert_eq!(Path::of_id(u64::MAX).as_str(), "18446744073709551615");
 }

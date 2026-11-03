@@ -419,10 +419,10 @@ fn wants_served_at_rest() {
         out.extend(started(&mut l));
         assert!(out.len() <= 2, "never more out than the credits");
         if let Some(key) = out.first().copied() {
-            let (_, subject) = l.attempt_of(key).expect("out");
+            let (_, id) = l.attempt_of(key).expect("out");
             ok(&mut l, key, turn as f64);
             out.remove(0);
-            wanted.retain(|&(s, _)| s != subject);
+            wanted.retain(|&(s, _)| s != id);
         }
         if wanted.is_empty() {
             return;

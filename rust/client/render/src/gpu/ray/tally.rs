@@ -4,7 +4,7 @@
 //! `ray_counts` setting asks (pxl-engine `tally`): where each pass
 //! counts cleared each counted frame, gathered into one array after the
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
-//! (`mapped`), and handed on as it lands with what the host knew of the
+//! (`mapped`), and handed on as it lands with what the CPU knew of the
 //! frame that counted it (`Frame`), by the renderer's number of that frame
 //! (`RayCounts`), as a GPU read is.
 
@@ -38,7 +38,7 @@ pub struct RayCounts {
     pub counts: [f64; RAY_COUNTS],
 }
 
-/// What the host knew of a counted frame: the renderer's number it will
+/// What the CPU knew of a counted frame: the renderer's number it will
 /// take (renderer.rs `FrameStat::frame`), and an observer's each, whether it
 /// cast and its pixels or slots.
 #[derive(Clone, Copy, Default)]
@@ -58,7 +58,7 @@ pub(super) struct Counts {
 }
 
 /// The array and its readback; whether this frame counts (`on`), what
-/// the host knew of the frame copied (`copied_frame`), and the counts that
+/// the CPU knew of the frame copied (`copied_frame`), and the counts that
 /// landed, until taken (`take`).
 pub(super) struct Tally {
     counts: u32,
@@ -159,7 +159,7 @@ impl Tally {
     }
 
     /// The counts copied last frame mapped back, and those that landed
-    /// kept with what the host knew of their frame, until taken: after the
+    /// kept with what the CPU knew of their frame, until taken: after the
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         if self.mapped && *self.mapping & DONE != 0 {

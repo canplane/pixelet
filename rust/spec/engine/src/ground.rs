@@ -104,7 +104,7 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(palette_indices(w), cell)
 }
 
-/// Tile cells an elevation sample spans.
+/// Quadrant cells an elevation sample spans.
 const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
 
 /// The first of the four samples the surface reads along an axis about a

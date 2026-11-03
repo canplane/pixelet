@@ -1,19 +1,17 @@
 // @pxl/client/driver/namespace/namespace.ts
 
 /**
- * The kernel's namespace: each number it opens a file under (host.json
- * `root`) bound to what fetches or keeps its bytes, a path below it an
- * object's number in decimal. The boot hands it to `@xpute/host`'s system
- * calls (abi/boot.ts).
+ * The kernel's namespace: each root it opens a file under (file.json `root`)
+ * bound to what fetches or keeps its bytes, a path below it the file's one
+ * name. The boot hands it to `@xpute/host`'s system calls (abi/boot.ts).
  */
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { type Binding, Namespace } from "@xpute/host/ipc/ns.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { root } from "@/abi/host.spec.ts";
+import { root } from "@/abi/file.spec.ts";
 import { BASE_LAYERS } from "./publication.spec.ts";
 import { read_asset } from "@/driver/namespace/asset.ts";
 import { OBJECTS } from "@/driver/namespace/object.ts";
@@ -21,52 +19,39 @@ import { source_declaration } from "@/driver/namespace/source.ts";
 import { commit_storage, open_storage } from "@/driver/namespace/storage.ts";
 import { read_object } from "@/driver/namespace/tile.ts";
 
-/** What answers below one number, by an object's number; one with no `commit` is read-only. */
-interface Backend {
-  open(number: bigint, signal: AbortSignal): U8Array | Promise<U8Array>;
-  commit?(number: bigint, bytes: U8Array): void;
-}
-
-/** A path's one name, an object's number in decimal; ENOENT for any other. */
-function number_of(path: string): bigint {
+/** A load's or a slot's id in decimal, a path below ASSET or STORAGE; ENOENT
+ * for any other. */
+function id_of(path: string): bigint {
   if (!/^\d{1,20}$/.test(path)) throw new FileError(Errno.ENOENT);
   return BigInt(path);
-}
-
-function by_number(backend: Backend): Binding {
-  const { open, commit } = backend;
-  return {
-    open: (path, signal) => open(number_of(path), signal),
-    commit: commit && ((path, bytes) => commit(number_of(path), bytes)),
-  };
 }
 
 /** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE
  * to the platform's storage, OBJECT to the placed objects' source. */
 export function namespace(): Namespace {
-  const bound: [u32, Backend][] = [
-    ...BASE_LAYERS.map((_, bake): [u32, Backend] => [
+  const bound: [u32, Binding][] = [
+    ...BASE_LAYERS.map((_, bake): [u32, Binding] => [
       bake,
       {
-        open: (number, signal) =>
-          read_object(source_declaration(), bake, number, signal),
+        open: (name, signal) =>
+          read_object(source_declaration()!, bake, name, signal),
       },
     ]),
-    [root.ASSET, { open: read_asset }],
+    [root.ASSET, { open: (path, signal) => read_asset(id_of(path), signal) }],
     [
       root.STORAGE,
       {
-        open: (number) => open_storage(number),
-        commit: (number, bytes) => commit_storage(number, bytes),
+        open: (path) => open_storage(id_of(path)),
+        commit: (path, bytes) => commit_storage(id_of(path), bytes),
       },
     ],
     [
       root.OBJECT,
       {
-        open: (number) => OBJECTS.open(number),
-        commit: (number, bytes) => OBJECTS.commit(number, bytes),
+        open: (path) => OBJECTS.open(path),
+        commit: (path, bytes) => OBJECTS.commit(path, bytes),
       },
     ],
   ];
-  return new Namespace(bound.map(([r, backend]) => [r, by_number(backend)]));
+  return new Namespace(bound);
 }

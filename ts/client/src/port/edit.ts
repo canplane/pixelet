@@ -4,6 +4,7 @@
  * waiting. */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import {
   type Tool,
   Command,
@@ -23,13 +24,19 @@ export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
   );
 }
 
-/** The waiting marker's text as typed, which it is drawn with. */
-export function marker_text(text: string): void {
-  HOST.now(
+/** The waiting marker's text as typed, which it is drawn with: 0, or a negative
+ * errno where the kernel refused it whole, the text before staying. */
+export function marker_text(text: string): i32 {
+  const pkt = encode_edit_marker_text(HOST.doorbell, text);
+  if (!HOST.doorbell.fits(pkt)) return Errno.EMSGSIZE;
+  const result = HOST.doorbell.call(
     port.SHELL,
     Command.EDIT_MARKER_TEXT,
-    encode_edit_marker_text(HOST.doorbell, text),
+    pkt,
+    (result) => result,
   );
+  HOST.strobe.request();
+  return result;
 }
 
 /** The waiting marker committed with its text. */

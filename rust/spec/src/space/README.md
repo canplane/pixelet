@@ -125,8 +125,8 @@ are z + 9, a layer's cells always its tile's zoom plus the layer's own constant
 world). Its key is a 2D Morton key, a digit a zoom (`hierarchy/morton.rs`), so a
 tile's key is a prefix of its children's: a leaf's key shifted down 15 − z, and
 a key alone does not say by how much, so a tile is named by its zoom and a key
-together (`Tile`, `layer/tile.rs`); the tile at a zoom over a leaf is
-`Tile::over`, and a tile's first leaf, which 512u square it begins at, is
+together (`Quadrant`, `layer/tile.rs`); the tile at a zoom over a leaf is
+`Quadrant::over`, and a tile's first leaf, which 512u square it begins at, is
 `first_leaf`.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_zoom_at`), and

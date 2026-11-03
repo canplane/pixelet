@@ -28,7 +28,7 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
@@ -96,7 +96,7 @@ pub struct Layer {
     /// The most tiles it asks for at once: a base layer's tile cache's
     /// slots, the objects' shards about the eye or their top.
     pub slots: u32,
-    /// A want's file arrived, by its subject, or its absence.
+    /// A want's file arrived, by its id, or its absence.
     on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
@@ -132,7 +132,7 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
     o: Option<Observation>,
-    dst: Option<Tile>,
+    dst: Option<Quadrant>,
 }
 
 pub struct Demand<L: Observed> {
@@ -141,22 +141,22 @@ pub struct Demand<L: Observed> {
     wants: Vec<(u64, Ask)>,
     last: Option<Key>,
     /// The floor's tiles as last observed.
-    floor: Vec<Tile>,
+    floor: Vec<Quadrant>,
     /// The asks found absent in an observation, written once all are found
     /// (`observe`); reused across observations.
-    gone: Vec<Tile>,
+    gone: Vec<Quadrant>,
     /// What it reads moved since it last observed.
     moved: bool,
     /// Where an observation builds the estimator's tiles and its asks, kept
     /// so observing stops allocating once warm. Empty between observations:
     /// what was asked is the tile cache's (`TileCache::ask`).
-    demand: Vec<Tile>,
-    asks: FnvHashMap<Tile, Ask>,
+    demand: Vec<Quadrant>,
+    asks: FnvHashMap<Quadrant, Ask>,
     /// Each ask in the view and the tile its place in the view is taken of:
     /// a demanded tile's for the tile its ground is asked of, a line's or the
     /// floor's its own. Read only for the asks left unanswered, the wants,
     /// whose order alone is read (`Policy::rank`).
-    placed: Vec<(Tile, Tile)>,
+    placed: Vec<(Quadrant, Quadrant)>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
     idle_revision: Option<u32>,
 }
@@ -184,12 +184,12 @@ impl<L: Observed> Default for Demand<L> {
 
 impl<L: Observed> Demand<L> {
     /// The floor's tiles as last observed.
-    pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
+    pub fn floor(&self) -> impl Iterator<Item = Quadrant> + Clone + '_ {
         self.floor.iter().copied()
     }
 
     /// No object for `p`: the tile over it says its ground; at the layer's top (`Base::top`), `Base::empty`.
-    pub fn absent(&mut self, p: Tile) {
+    pub fn absent(&mut self, p: Quadrant) {
         match L::empty() {
             Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => {
                 L::tile_cache().set(p, empty);
@@ -200,12 +200,12 @@ impl<L: Observed> Demand<L> {
 
     pub fn admit(
         &mut self,
-        p: Tile,
+        p: Quadrant,
         receive: impl FnOnce(u32) -> Result<L, Failure>,
     ) -> Result<(), Failure> {
         // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
-        let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
+        let farthest = |tiles: &mut dyn Iterator<Item = Quadrant>| {
             let mut walked = ColumnWalk::default();
             tiles.max_by_key(|&t| {
                 (
@@ -224,7 +224,7 @@ impl<L: Observed> Demand<L> {
     pub fn observe(
         &mut self,
         o: Option<&Observation>,
-        dst: impl Iterator<Item = Tile>,
+        dst: impl Iterator<Item = Quadrant>,
         estimator: &ByEye,
         top: Zoom,
     ) {
@@ -233,7 +233,10 @@ impl<L: Observed> Demand<L> {
         let mut placed = core::mem::take(&mut self.placed);
         // An ask in the view placed last until the wants are ordered: its
         // place, the least of those it is asked by, is read of a want alone.
-        let mut ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, priority: Priority, of: Tile| {
+        let mut ask = |asks: &mut FnvHashMap<Quadrant, Ask>,
+                       p: Quadrant,
+                       priority: Priority,
+                       of: Quadrant| {
             let a = Ask {
                 priority,
                 order: Order::LAST,
@@ -316,8 +319,8 @@ impl<L: Observed> Demand<L> {
         // (`seek`), not from the top.
         demand.clear();
         demand.extend(asks.keys().copied());
-        demand.sort_unstable_by_key(|p| p.key());
-        let unanswered = |p: Tile, lines: &mut Lines| {
+        demand.sort_unstable_by_key(|p| p.id());
+        let unanswered = |p: Quadrant, lines: &mut Lines| {
             let r = L::tile_cache();
             !r.resident(p) && (!r.seek(lines, p).settled || r.is_again_held(p))
         };
@@ -339,27 +342,27 @@ impl<L: Observed> Demand<L> {
             }
             self.gone = gone;
         }
-        // By subject, as a stream's wants are said (sys/io/request.rs `declare`):
-        // key order, a subject being its key's high half, after every absence
+        // By id, as a stream's wants are said (sys/io/request.rs `declare`):
+        // key order, an id being its key, after every absence
         // is written. Each want's place the least of the tiles it is asked by
         // (`placed`), found in one walk down the pyramid in key order, so each
         // tile's line, its own and the ground's it is ordered by, steps from
         // its neighbor's.
-        placed.sort_unstable_by_key(|&(p, of)| (p.key(), of.key()));
+        placed.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
         let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
         self.wants.clear();
         for &p in &demand {
             if unanswered(p, &mut lines) {
                 let mut a = asks[&p];
                 if let Some(o) = o {
-                    let from = placed.partition_point(|&(q, _)| q.key() < p.key());
+                    let from = placed.partition_point(|&(q, _)| q.id() < p.id());
                     for &(_, of) in placed[from..].iter().take_while(|&&(q, _)| q == p) {
                         a.order =
                             a.order
                                 .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
                     }
                 }
-                self.wants.push((p.subject(), a));
+                self.wants.push((p.id(), a));
             }
         }
         asks.clear();
@@ -381,7 +384,7 @@ impl<L: Observed> Demand<L> {
     /// tiles a reader that takes no coarser answer declares (`Base::PIN_CAP`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
-    pub fn step(&mut self, dst: Option<Tile>, pinned: &[Tile]) {
+    pub fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
@@ -483,7 +486,7 @@ pub fn admit_arrived(pass: &Pass) {
             let Some(Response {
                 key,
                 stream,
-                subject,
+                id,
                 block,
                 mut phases,
             }) = take_answer(&OF)
@@ -496,7 +499,7 @@ pub fn admit_arrived(pass: &Pass) {
                 return false;
             }
             let result = match of_stream(stream) {
-                Some(l) => (l.on_arrival)(subject, block, &mut phases),
+                Some(l) => (l.on_arrival)(id, block, &mut phases),
                 None => {
                     release(block);
                     Err(Errno::ENOTRECOVERABLE.into())
@@ -512,13 +515,13 @@ pub fn admit_arrived(pass: &Pass) {
     }
 }
 
-/// None is no object for the tile `subject` names.
+/// None is no object for the tile `id` names.
 fn on_arrived<L: Observed>(
-    subject: u64,
+    id: u64,
     block: Option<Block>,
     phases: &mut Phases,
 ) -> Result<(), Failure> {
-    let p = Tile::of_subject(subject);
+    let p = Quadrant::of_id(id);
     let Some(b) = block else {
         L::demand().absent(p);
         return Ok(());

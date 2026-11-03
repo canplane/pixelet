@@ -1,9 +1,9 @@
 // @pxl/client/driver/namespace/asset.ts
 
 /**
- * ASSET's backend: the kernel names a file by its load number, and this reads
- * what that number is. `CATALOG` is the catalog, which the host plugs in from
- * its own bundle and which names every other file; any other number is a row
+ * ASSET's backend: the kernel names a file by its load's id, and this reads
+ * what that is. `CATALOG` is the catalog, which the client plugs in from
+ * its own bundle and which names every other file; any other id is a row
  * of the ingest's table, counted from 1, read by its hash from the origin.
  */
 
@@ -11,13 +11,13 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { CATALOG } from "@/abi/host.spec.ts";
+import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/driver/namespace/catalog.spec.ts";
 import { ASSET_FILES } from "@/driver/namespace/ingest.spec.ts";
 import { asset_url } from "@/driver/namespace/route.ts";
 import { get } from "@/driver/namespace/read.ts";
 
-/** A load number: the catalog's, or a file's row in the ingest's table from 1. */
+/** A load's id: the catalog's, or a file's row in the ingest's table from 1. */
 export function read_asset(
   load: bigint,
   signal: AbortSignal,

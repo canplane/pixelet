@@ -25,6 +25,10 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         .filter(|n| *n >= 1.0 && n.fract() == 0.0)
         .ok_or("publication.json: VERSION_BYTES is no count")? as u32;
     let version_doc = spec.lines_at("$VERSION_BYTES").unwrap_or_default();
+    let version_chars = spec
+        .str_at("VERSION_CHARS")
+        .ok_or("publication.json: no VERSION_CHARS")?;
+    let chars_doc = spec.lines_at("$VERSION_CHARS").unwrap_or_default();
 
     // A kind's object in a set: the one place its segments are ordered.
     let object = spec.str_at("OBJECT").ok_or("publication.json: no OBJECT")?;
@@ -80,6 +84,9 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         format!("/** {} */", version_doc.join(" ")),
         format!("export const VERSION_BYTES = {version_bytes};"),
         "".into(),
+        format!("/** {} */", chars_doc.join(" ")),
+        format!("export const VERSION_CHARS = \"{version_chars}\";"),
+        "".into(),
     ]);
     ts.extend(ts_doc(&object_doc, ""));
     ts.extend([
@@ -131,6 +138,11 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["};", ""].map(String::from));
     rs.extend(rs_doc(&version_doc, "", "///"));
     rs.push(format!("pub const VERSION_BYTES: usize = {version_bytes};"));
+    rs.push(String::new());
+    rs.extend(rs_doc(&chars_doc, "", "///"));
+    rs.push(format!(
+        "pub const VERSION_CHARS: &str = \"{version_chars}\";"
+    ));
     rs.push(String::new());
     rs.extend(rs_doc(&object_doc, "", "///"));
     rs.extend([

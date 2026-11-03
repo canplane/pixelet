@@ -4,7 +4,7 @@
 //! each a definition of a kind — the cubes and their colors, the decors, the
 //! marker, the actors, the sky — numbered by its id, its kind over its shape
 //! (`id`), and each file a definition references a slot, which the catalog
-//! the host plugs in fills (`catalog`). The texture pack is the cube kind's:
+//! the client plugs in fills (`catalog`). The texture pack is the cube kind's:
 //! which of its tiles a cube wears on each face (`ingest`). A cube with no
 //! image still draws as its catalog color.
 

@@ -21,7 +21,7 @@ use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
 use pxl_spec::bake::constant::TILE_ELE_SPAN;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_at, quad_rows, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {
@@ -45,20 +45,20 @@ fn run() -> Result<(), String> {
         let (x0, x1) = (xs.clone().min().unwrap_or(0), xs.max().unwrap_or(0));
         let (y0, y1) = (ys.clone().min().unwrap_or(0), ys.max().unwrap_or(0));
         let ring = ring as i32;
-        for y in (y0 - ring..=y1 + ring).filter(|y| tile_rows(BLOCK_ZOOM).contains(y)) {
+        for y in (y0 - ring..=y1 + ring).filter(|y| quad_rows(BLOCK_ZOOM).contains(y)) {
             for x in x0 - ring..=x1 + ring {
-                let tile = tile_at(BLOCK_ZOOM, [x, y]);
+                let tile = quad_at(BLOCK_ZOOM, [x, y]);
                 let (west, south, side) = tile.rect();
                 let (w, n) = (merc_from_u(west), merc_from_u(south + side));
                 // A block is the tile: its side is the block's, or the grid is not the pyramid's.
                 if (merc_from_u(west + side) - w - block_merc).abs() > 1e-6 * block_merc {
-                    return Err(format!("{}: its side is not a block's", tile.name()));
+                    return Err(format!("{}: its side is not a block's", tile.key()));
                 }
                 println!(
                     "{} {} {}",
                     round(w / block_merc) as i64,
                     round(n / block_merc) as i64,
-                    tile.name()
+                    tile.key()
                 );
             }
         }

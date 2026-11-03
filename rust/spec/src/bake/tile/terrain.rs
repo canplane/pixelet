@@ -15,7 +15,7 @@ use crate::bake::separation::{self, Separation};
 use crate::procedural::Frame;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::TILE_CELLS;
-use crate::space::layer::tile::Tile;
+use crate::space::layer::quadrant::Quadrant;
 
 /// A tile's column lengths: a cell each, four palette indices a cell, and its padded
 /// samples; a tile is these and no other size.
@@ -115,7 +115,7 @@ pub fn ways_fit(separation: &Separation, brick: u32) -> Result<(), ([u32; 2], us
 /// words written, the rest left as they were; `scratch` the room it works
 /// in, `WAYS_BRICK_SEGMENTS` pairs, kept between bricks.
 pub fn brick_lines(
-    tile: Tile,
+    tile: Quadrant,
     separation: &Separation,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
@@ -226,7 +226,7 @@ fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 /// hands them (`gpu_cells`) and its heights off the tile's samples `ele` as
 /// `height_cs` draws them (`ground::height`), its ring's too.
 fn laid<'a>(
-    tile: Tile,
+    tile: Quadrant,
     ground: &'a Ground,
     ele: &'a [i16],
     place: [u32; 2],
@@ -258,7 +258,7 @@ fn laid<'a>(
 /// `HANDED_WORDS`): its palette indices four a cell (`gpu_cells`), its tile's padded
 /// samples, and its lines (`brick_lines`, with `scratch`); the rest zero.
 fn record(
-    tile: Tile,
+    tile: Quadrant,
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
@@ -291,7 +291,7 @@ fn record(
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-engine
 /// `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
-    tile: Tile,
+    tile: Quadrant,
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
@@ -311,7 +311,7 @@ pub(crate) fn brick_spans(
 
 /// The first cell at `cell`, its cells' zoom, of the clip level's brick at
 /// `place` (in bricks) of `tile`, as the world names it.
-pub fn first_cell(tile: Tile, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
+pub fn first_cell(tile: Quadrant, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
     use pxl_engine::clipmap::BRICK;
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
     [pxl_engine::wrap_idx(cell, first[0]), first[1]]
@@ -337,7 +337,7 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
 /// are read by, their rings included (`way::column`) — so a line every span
 /// of which fills no cell there (`way::fills_any`) is none at that zoom,
 /// and is not stored.
-pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
+pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
     use pxl_engine::clipmap::{BRICK, LINES_WORDS};
     let lines = &held.separation;
     let bricks = TILE_CELLS / BRICK;
@@ -433,7 +433,7 @@ pub struct FilledBrick<'a> {
 /// bin/fill_digest.rs): the first brick that does not fit and why, else
 /// what the tile takes of the client's ways (`Fit`).
 pub fn fill_fit(
-    tile: Tile,
+    tile: Quadrant,
     held: &TerrainTile,
     mut each: impl FnMut(u32, &FilledBrick<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {

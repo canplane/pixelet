@@ -8,7 +8,7 @@ use crate::domain::control::cmd::{self as abi, Command};
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store;
 use crate::sys::io::file::{self, StorageFile};
-use crate::sys::io::host_spec::root;
+use crate::sys::io::file_spec::root;
 use crate::sys::io::source;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -29,11 +29,11 @@ pub(super) fn apply(
         }
         Command::FS_TRUNCATED => {
             let p = abi::FsTruncated::read(given(pkt)?)?;
-            let number: u64 = or_refuse(p.path.parse().ok(), Errno::EINVAL)?;
             match p.root {
                 root::STORAGE => {
                     let file = or_refuse(
-                        u32::try_from(number)
+                        p.path
+                            .parse()
                             .ok()
                             .and_then(StorageFile::of_slot)
                             .filter(|&k| file::is_refused(k)),
@@ -46,7 +46,10 @@ pub(super) fn apply(
                     }
                 }
                 // Read again, as its source holds it now.
-                root::OBJECT => refuse_unless(repository::on_emptied(number), Errno::EINVAL)?,
+                root::OBJECT => {
+                    let id = or_refuse(file::id_of_path(p.path), Errno::EINVAL)?;
+                    refuse_unless(repository::on_emptied(id), Errno::EINVAL)?;
+                }
                 _ => refuse_unless(false, Errno::EINVAL)?,
             }
             Ok(Some(0))
