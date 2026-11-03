@@ -497,14 +497,14 @@ export function encode_input_pointer(
 /** Command.EDIT_TOOL's packet, written in place into `to`.
  *
  * @param val The item to place, its id (id.json); read only for that tool.
- * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
+ * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
 export function encode_edit_tool(
   to: PacketRoom,
   tool: Tool,
   val: u32,
-  tier: u32,
+  scale_steps: i32,
 ): PacketWriter {
-  return to.writer(3).u32(tool).u32(val).u32(tier);
+  return to.writer(3).u32(tool).u32(val).i32(scale_steps);
 }
 
 /** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */

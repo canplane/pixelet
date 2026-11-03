@@ -7,7 +7,7 @@
 //! resolution apart from display resolution where a screen outgrows its GPU
 //! (Unreal's screen percentage). `fixed` draws
 //! whole, `low` a device pixel a CSS pixel, each with the camera grid's
-//! beam rays on the cell's own lattice, and `auto` one of `SCALE_STEPS`
+//! beam rays on the cell's own lattice, and `auto` one of `RES_STEPS`
 //! steps between whole and `SCALE_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids, and a lattice up to
 //! `grid::LATTICE_MAX`.
@@ -153,7 +153,7 @@ impl Judge {
     /// The knobs a step down: the scale's, to `SCALE_MIN`, then, timed, the
     /// lattice's; none past both.
     fn down(&self, timed: bool) -> Option<(i32, u32)> {
-        if self.step < param::SCALE_STEPS {
+        if self.step < param::RES_STEPS {
             Some((self.step + 1, self.lattice))
         } else if timed && self.lattice < LATTICE_MAX {
             Some((self.step, self.lattice * 2))
@@ -257,7 +257,7 @@ fn state() -> &'static mut Judge {
 fn share(step: i32) -> f64 {
     libm::pow(
         param::SCALE_MIN,
-        f64::from(step) / f64::from(param::SCALE_STEPS),
+        f64::from(step) / f64::from(param::RES_STEPS),
     )
 }
 

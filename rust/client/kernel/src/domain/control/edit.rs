@@ -41,18 +41,18 @@ pub enum Tool {
     #[default]
     Pointer,
     Eraser,
-    /// An item to place, in the cube of its zoom.
+    /// An item to place, at a scale chosen for a cube.
     Item {
         asset: Asset,
-        zoom: Zoom,
+        scale_steps: i32,
     },
 }
 
 impl Tool {
-    /// What it would place, and at what zoom.
+    /// What it would place, and the zoom that comes to.
     pub fn asset(self) -> Option<(Asset, Zoom)> {
         match self {
-            Tool::Item { asset, zoom } => Some((asset, zoom)),
+            Tool::Item { asset, scale_steps } => Some((asset, asset.zoom(scale_steps))),
             Tool::Pointer | Tool::Eraser => None,
         }
     }

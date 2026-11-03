@@ -161,13 +161,13 @@ fn pause_keeps_windows() {
 fn down_scale_then_lattice() {
     let (over, settle) = (cost(0.6, 0.3, 0.6), param::RES_SETTLE_WINDOWS);
     let mut k = Judge::NEW;
-    for step in 1..=param::SCALE_STEPS {
+    for step in 1..=param::RES_STEPS {
         assert_eq!(windows_of(&mut k, over, 1, true), 1);
         assert_eq!((k.step, k.lattice), (step, 1));
         assert_eq!(windows_of(&mut k, over, settle, true), 0, "settling");
     }
     assert_eq!(windows_of(&mut k, over, 1, true), 1);
-    assert_eq!((k.step, k.lattice), (param::SCALE_STEPS, LATTICE_MAX));
+    assert_eq!((k.step, k.lattice), (param::RES_STEPS, LATTICE_MAX));
     assert_eq!(windows_of(&mut k, over, settle + 10, true), 0, "past both");
 }
 
@@ -206,7 +206,7 @@ fn step_up_judges_total() {
     assert_eq!(windows_of(&mut k, cost(0.2, 0.0, 0.7), 20, true), 0);
     assert_eq!(k.step, 1);
     let mut k = Judge {
-        step: param::SCALE_STEPS,
+        step: param::RES_STEPS,
         lattice: LATTICE_MAX,
         ..Judge::NEW
     };
@@ -224,7 +224,7 @@ fn step_up_judges_total() {
 #[test]
 fn predicted_by_part() {
     let k = Judge {
-        step: param::SCALE_STEPS,
+        step: param::RES_STEPS,
         lattice: LATTICE_MAX,
         ..Judge::NEW
     };
@@ -245,10 +245,10 @@ fn predicted_by_part() {
 fn untimed_scale_alone() {
     let (over, settle) = (param::SCALE_MISSED + 0.5, param::RES_SETTLE_WINDOWS);
     let mut k = Judge::NEW;
-    for _ in 0..param::SCALE_STEPS {
+    for _ in 0..param::RES_STEPS {
         assert_eq!(windows(&mut k, over, 1, false), 1);
         assert_eq!(windows(&mut k, over, settle, false), 0);
     }
     assert_eq!(windows(&mut k, over, settle + 10, false), 0);
-    assert_eq!((k.step, k.lattice), (param::SCALE_STEPS, 1));
+    assert_eq!((k.step, k.lattice), (param::RES_STEPS, 1));
 }

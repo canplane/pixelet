@@ -14,11 +14,11 @@ import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
 /** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
-export function tool(tool: Tool, val: u32, tier: u32): i32 {
+export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
   return HOST.doorbell.call(
     port.SHELL,
     Command.EDIT_TOOL,
-    encode_edit_tool(HOST.doorbell, tool, val, tier),
+    encode_edit_tool(HOST.doorbell, tool, val, scale_steps),
     (result) => result,
   );
 }

@@ -225,14 +225,14 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     let json = "spec/spec/bake/object.json";
     let spec = read(json)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
-    let tiers = spec
-        .get("OBJECT_TIERS")
+    let scales = spec
+        .get("OBJECT_SCALES")
         .and_then(|n| n.num())
-        .ok_or(format!("{json}: no OBJECT_TIERS"))?;
-    if tiers < 1.0 || tiers.fract() != 0.0 {
-        return Err(format!("{json}: OBJECT_TIERS {tiers} is not a count"));
+        .ok_or(format!("{json}: no OBJECT_SCALES"))?;
+    if scales < 1.0 || scales.fract() != 0.0 {
+        return Err(format!("{json}: OBJECT_SCALES {scales} is not a count"));
     }
-    let tiers = tiers as u32;
+    let scales = scales as u32;
     let head = [
         "//".to_string(),
         "// GENERATED from spec/spec/bake/object.json".into(),
@@ -251,13 +251,13 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     }));
     ts.extend([
         " */".to_string(),
-        format!("export const OBJECT_TIERS = {tiers};"),
+        format!("export const OBJECT_SCALES = {scales};"),
     ]);
 
     let mut rs = vec!["// pxl-spec/bake/object.spec.rs".to_string()];
     rs.extend(head);
     rs.extend(rs_doc(&doc, "", "///"));
-    rs.push(format!("pub const OBJECT_TIERS: usize = {tiers};"));
+    rs.push(format!("pub const OBJECT_SCALES: usize = {scales};"));
     Ok(vec![
         Output::new("ts/client/src/shell/world/object.spec.ts", file(&ts)),
         Output::new("rust/spec/src/bake/object.spec.rs", file(&rs)),

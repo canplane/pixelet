@@ -1259,8 +1259,8 @@ pub struct EditTool {
     pub tool: Tool,
     /// The item to place, its id (id.json); read only for that tool.
     pub val: u32,
-    /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
-    pub tier: u32,
+    /// A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen.
+    pub scale_steps: i32,
 }
 
 impl EditTool {
@@ -1269,7 +1269,7 @@ impl EditTool {
         Ok(EditTool {
             tool: Tool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
-            tier: integer::<u32>(f.at(2)?.get_number()?)?,
+            scale_steps: integer::<i32>(f.at(2)?.get_number()?)?,
         })
     }
 }

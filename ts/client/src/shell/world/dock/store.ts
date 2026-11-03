@@ -19,7 +19,7 @@ import {
   MARKER,
 } from "@/shell/catalog/asset/mod.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
-import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
+import { OBJECT_SCALES } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import * as DockMode from "./mode.ts";
 import * as edit from "@/port/edit.ts";
@@ -53,8 +53,8 @@ interface DockState {
   tool: Tool;
   /** The asset last held. */
   id: AssetId;
-  /** The size last chosen, kept as the tool changes. */
-  tier: u32;
+  /** The scale last chosen for a cube, as a decor's `scale_steps`, kept as the tool changes: 0 a unit, each step down its half. */
+  scaleSteps: i32;
   // The hotbar's MRU list; advanced only by selectAsset, which also switches the tool.
   recentPicks: AssetId[];
   chatLines: ChatLine[];
@@ -123,7 +123,7 @@ function save(s: DockState): void {
 const store = create<DockState>()(() => ({
   tool: Tool.Pointer,
   id: 0,
-  tier: 0,
+  scaleSteps: 0,
   recentPicks: load().hotbar,
   chatLines: [],
   dockMode: DockMode.Palette,
@@ -170,29 +170,29 @@ export function watchDockMode(
 }
 
 /** Tells the kernel, and keeps it only where the kernel took it. */
-function hold(tool: Tool, id: AssetId, tier: u32): boolean {
-  const result = edit.tool(tool, id, tier);
+function hold(tool: Tool, id: AssetId, scaleSteps: i32): boolean {
+  const result = edit.tool(tool, id, scaleSteps);
   if (result < 0) {
     console.error(`[dock] the kernel refused the tool: ${strerror(result)}`);
     return false;
   }
-  store.setState({ tool, id, tier });
+  store.setState({ tool, id, scaleSteps });
   return true;
 }
 
 export function selectTool(tool: Tool): void {
-  const { id, tier } = store.getState();
-  hold(tool, id, tier);
+  const { id, scaleSteps } = store.getState();
+  hold(tool, id, scaleSteps);
 }
 
-export function selectTier(tier: u32): void {
+export function selectScale(scaleSteps: i32): void {
   const { tool, id } = store.getState();
-  hold(tool, id, tier);
+  hold(tool, id, scaleSteps);
 }
 
 /** Holds it to place, and puts it on the hotbar. */
 export function selectAsset(id: AssetId): void {
-  if (!hold(Tool.Item, id, store.getState().tier)) return;
+  if (!hold(Tool.Item, id, store.getState().scaleSteps)) return;
   store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
 }
 
@@ -200,8 +200,8 @@ export function useTool(): Tool {
   return store((s) => s.tool);
 }
 
-export function useTier(): u32 {
-  return store((s) => s.tier);
+export function useScale(): i32 {
+  return store((s) => s.scaleSteps);
 }
 
 export function setDockMode(mode: DockMode): void {
@@ -221,10 +221,11 @@ export function flashSwatch(cube: Cube, open: boolean): void {
   }));
 }
 
-export function stepSize(delta: i32): void {
-  const { tool, id, tier } = store.getState();
+/** A step up, coarser, or down, finer, held to the object scales. */
+export function stepScale(delta: i32): void {
+  const { tool, id, scaleSteps } = store.getState();
   if (tool !== Tool.Item || kindOf(id) !== KIND.cube) return;
-  selectTier(Math.min(OBJECT_TIERS - 1, Math.max(0, tier + delta)));
+  selectScale(Math.min(0, Math.max(1 - OBJECT_SCALES, scaleSteps + delta)));
   flashSwatch(id, true);
 }
 

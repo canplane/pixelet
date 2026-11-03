@@ -24,7 +24,7 @@ import {
   recentPick,
   selectAsset,
   setDockMode,
-  stepSize,
+  stepScale,
   switchDockMode,
 } from "@/shell/world/dock/store.ts";
 import * as input from "@/port/input.ts";
@@ -48,8 +48,8 @@ const TOOL: Record<string, Tool> = {
 /** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
 const DRAWER = "KeyI";
 
-/** Photoshop's brush size: `]` a coarser block, `[` a finer, a tier being finer as it counts up. */
-const SIZE: Record<string, i32> = { BracketRight: -1, BracketLeft: 1 };
+/** Photoshop's brush size: `]` a coarser block, `[` a finer. */
+const SIZE: Record<string, i32> = { BracketRight: 1, BracketLeft: -1 };
 
 const held = new Set<string>();
 let sent: [i32, i32] = [0, 0];
@@ -100,7 +100,7 @@ export function keyDown(
     return true;
   }
   if (code in SIZE) {
-    stepSize(SIZE[code]);
+    stepScale(SIZE[code]);
     return true;
   }
   if (code in MOVE) {

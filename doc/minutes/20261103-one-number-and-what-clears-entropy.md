@@ -17,8 +17,10 @@
 - **`Asset` holds behavior, not data.** What each kind does is its methods; the user
   named the repeated "which cube, which decor" a matter of polymorphism. A kind's look
   and its table row stay outside, as a file's data does from its metadata.
-- **A cube's size is chosen, in the popover; a decor's and a marker's are not.** So a
-  cube's zoom comes of the tier and a decor's of its id.
+- **A size is a scale of the base block, not a zoom.** A cube's is chosen, in the
+  popover; a decor's and a marker's are not. "Zoom" is what it comes to, and the tool
+  holds the scale: `scale_steps`, 0, -1, -2 and -3, as a decor's already was. `tier` is
+  gone.
 - **No migration of the hotbar's stored form.** It fills back in.
 
 ## What was built
@@ -40,6 +42,6 @@ Three enums name the kinds, each saying something else: `Kind` the number's bits
 The protocol's `Tool` (`ActiveTool` before; the user took the name, and `Item` for what is
 held: an asset may be an actor or the sky, which nothing holds) is the pointer, the eraser
 or an item, whose id says its kind. In the kernel `Tool` is an enum: only an item has a
-zoom, and it keeps no size to remember.
-The shell's dock store keeps the tool, the id and the tier, and the snapshot gives only
+scale, and it keeps no size to remember.
+The shell's dock store keeps the tool, the id and the scale, and the snapshot gives only
 what the kernel makes, the draft.

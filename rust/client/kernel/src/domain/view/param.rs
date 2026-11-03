@@ -19,7 +19,7 @@ pub const SCALE_MIN: f64 = 0.5;
 
 /// The steps from whole down to `SCALE_MIN`, each a like share of the last:
 /// two of them halve the pixels.
-pub const SCALE_STEPS: i32 = 4;
+pub const RES_STEPS: i32 = 4;
 
 /// The budgets a window of the load sums, in ms: what a step down waits
 /// for.

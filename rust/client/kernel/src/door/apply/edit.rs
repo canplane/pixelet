@@ -28,7 +28,7 @@ pub(super) fn apply(
                     Asset::Unknown => return Err(MarshalError::new(Errno::EINVAL)),
                     asset => Tool::Item {
                         asset,
-                        zoom: asset.zoom(p.tier),
+                        scale_steps: p.scale_steps,
                     },
                 },
             });

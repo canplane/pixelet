@@ -15,13 +15,13 @@ const _: () = assert!(
 /// cells' heights off (pxl-engine).
 pub use pxl_engine::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
-pub use super::object::OBJECT_TIERS;
+pub use super::object::OBJECT_SCALES;
 
-/// The objects' coarsest tier, a placed cell, one unit: the ladder is the
+/// The objects' coarsest, at scale 0, a placed cell, one unit: the scales are the
 /// objects' own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 
-pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_TIERS as Zoom - 1;
+pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_SCALES as Zoom - 1;
 
 /// A placed object's address: its cube at its own zoom, named as
 /// `wrap_cell` names it, so one cube has one name.

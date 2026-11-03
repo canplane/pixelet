@@ -57,11 +57,11 @@ impl Asset {
         }
     }
 
-    /// The zoom of the cube it takes: a cube's is chosen, by `tier`; a decor's
-    /// and a marker's are their own.
-    pub fn zoom(self, tier: u32) -> Zoom {
+    /// The zoom of the cube it takes: a cube's comes of the scale chosen; a
+    /// decor's and a marker's are their own.
+    pub fn zoom(self, scale_steps: i32) -> Zoom {
         match self {
-            Asset::Cube(_) => object_zoom_of(tier),
+            Asset::Cube(_) => object_zoom_of(scale_steps),
             Asset::Decor(id) => Decor::of(id).row.cell_zoom(),
             Asset::Marker => MARKER_ZOOM,
             Asset::Unknown => GROUND.cell(),
