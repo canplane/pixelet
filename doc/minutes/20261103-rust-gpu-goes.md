@@ -15,6 +15,13 @@ The contract that changes is one source: `README.md`, and `ARCHITECTURE.md`'s
 descent "by one function the CPU and the GPU compile alike". The word applies now;
 those documents are changed once what replaces it is settled.
 
+**Freedom of expression is what makes the black box.** The user's word, against
+`encase` as against rust-gpu: what lets a shader be written in free form leaves a
+layer behind it that nobody reads, and the layouts stay explicit, in words and vec4s
+with their offsets generated from `spec/` and pxl-engine. That freedom was worth its
+price for the three weeks the structure kept turning over; the hot path now wants
+control, and what still changes often (`world::node`) may keep it longer.
+
 **The web build stays.** The user will not give it up: an app has to be installed,
 which is a barrier to entering. So what replaces rust-gpu has to run well through
 WebGPU in a browser, whatever the native app might do besides.
