@@ -382,6 +382,7 @@ fn walk_word() -> String {
         ("NONE", pyramid::NONE),
         ("CLAIMED", pyramid::CLAIMED),
         ("TAG_BITS", pyramid::TAG_BITS),
+        ("KEY_ZOOMS", !((1u32 << pyramid::TAG_BITS) - 1)),
         ("KIND_SPLIT", answer::Kind::Split as u32),
         ("KIND_CELL", answer::Kind::Cell as u32),
         ("VAL_MASK", answer::PLACED_ASSET - 1),

@@ -78,20 +78,16 @@ fn keeps(zoom: u32, c: vec3<i32>) -> bool {
 }
 
 /// The word of the slot holding the node at the zooms asked; `NONE` where none does.
-/// A slot asked from a coarser `far` to the same `near` holds it too: the coarser
-/// zooms split more and stop on the same cell (`cast::ask_zooms`), so an eye that
-/// moved a little does not ask the world again for what it asked.
 fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
   if (!keeps(zoom, c)) {
     return NONE;
   }
+  let want = (far << TAG_BITS) | (near << (TAG_BITS + ZOOM_BITS));
   let first = bucket_of(zoom, c);
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
     let held = pyramid[w];
-    let held_far = (held >> TAG_BITS) & ((1u << ZOOM_BITS) - 1u);
-    let held_near = held >> (TAG_BITS + ZOOM_BITS);
-    if (held != 0u && held != CLAIMED && held_far <= far && held_near == near
+    if (held != 0u && held != CLAIMED && (held & KEY_ZOOMS) == want
       && pyramid[w + W_NODE] == zoom
       && pyramid[w + W_NODE + 1u] == u32(c.x)
       && pyramid[w + W_NODE + 2u] == u32(c.y)
