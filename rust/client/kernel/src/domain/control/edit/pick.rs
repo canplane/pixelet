@@ -8,7 +8,7 @@ use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
@@ -36,7 +36,8 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// placed cube's entry, as it is stored).
-pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
+pub fn world_adjacent_corner(hit: &Hit, zoom: Zoom, precise_box: Option<&Aabb>) -> Q3 {
+    let new_size = units(zoom);
     let Aabb {
         min: box_min,
         max: box_max,
@@ -63,7 +64,8 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
     clippy::needless_range_loop,
     reason = "an axis indexes the hit's normal, its box and the corner at once"
 )]
-pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
+pub fn world_struck_corner(hit: &Hit, zoom: Zoom) -> Q3 {
+    let size = units(zoom);
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
         let n = hit.normal[axis];

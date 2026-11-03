@@ -11,13 +11,13 @@ pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 // ---- the drawn resolution ----
 // `auto`'s two knobs, the scale and the camera grid's lattice (pxl-engine
 // `grid::LATTICE_MAX`), share the windows, the band and the budget, `RES_`
-// (frame/resolution.rs); the steps, and the misses and probes judged where no
-// GPU time is reported, are the scale's alone, `SCALE_`.
+// (frame/resolution.rs), and its steps are `RES_STEPS`; the misses and probes
+// judged where no GPU time is reported are the scale's alone, `SCALE_`.
 
 /// The least share of the display's pixels, each way, the world is drawn at.
-pub const SCALE_MIN: f64 = 0.5;
+pub const RES_MIN: f64 = 0.5;
 
-/// The steps from whole down to `SCALE_MIN`, each a like share of the last:
+/// The steps from whole down to `RES_MIN`, each a like share of the last:
 /// two of them halve the pixels.
 pub const RES_STEPS: i32 = 4;
 

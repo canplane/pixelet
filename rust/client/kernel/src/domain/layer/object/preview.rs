@@ -10,6 +10,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
@@ -66,13 +67,13 @@ pub enum Ghost {
     Box(GhostBox),
 }
 
-/// A box the tool would fill or carve: its corner in the world's frame, its
-/// edge, the cube it would be or carve (none where there is no one cube), and
+/// A box the tool would fill or carve: its corner in the world's frame, the
+/// zoom of its cube, the cube it would be or carve (none where there is no one cube), and
 /// whether the eraser holds it.
 #[derive(Clone, Copy)]
 pub struct GhostBox {
     pub at: V3,
-    pub size: f64,
+    pub zoom: Zoom,
     pub cube: Option<AssetId>,
     pub erase: bool,
 }

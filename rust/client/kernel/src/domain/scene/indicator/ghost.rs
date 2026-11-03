@@ -17,6 +17,7 @@ use pxl_render::mesh::paint::object::PAINTER;
 use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::units;
 
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
@@ -84,7 +85,7 @@ impl GhostDraw {
         }
     }
 
-    /// A box at its corner, its size on an edge, painted as its cube paints
+    /// A box at its corner, in the cube of its zoom, painted as its cube paints
     /// where textures are on, else untextured in its color, or where there
     /// is no cube in the indicator's (`ERASE` for the eraser's, else
     /// `ACTION`). Whether what is drawn changed.
@@ -93,11 +94,12 @@ impl GhostDraw {
         draw: &mut DrawList,
         GhostBox {
             at,
-            size,
+            zoom,
             cube,
             erase,
         }: GhostBox,
     ) -> bool {
+        let size = units(zoom);
         let state = cube.filter(|_| settings_store().textures).unwrap_or(0);
         let rgb = cube.and_then(cube_rgb).unwrap_or(if erase {
             indicator::ERASE

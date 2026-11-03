@@ -79,7 +79,9 @@ const BUILD_STAMP = buildStamp();
  * neither is. Every import
  * names the default with its extension, which Metro's own platform lookup
  * does not take, so it is looked for here. A variant's own import of its
- * default is the default, which it extends. */
+ * default is the default, which it extends. Metro keeps a relative name's
+ * answer by folder and an alias's for all: a variant names its default by `./`
+ * and nothing else in its folder does, or it is handed the other's answer, itself. */
 function ownPlatform(
   file: string,
   platform: string | null,

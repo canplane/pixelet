@@ -11,7 +11,6 @@ use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
@@ -41,11 +40,11 @@ pub fn ghost() -> Ghost {
     } = pending();
 
     let use_object_style = ui != Tool::Pointer || hovered_object.is_some();
-    let cur_scale = units(if use_object_style {
+    let box_zoom = if use_object_style {
         preview_zoom
     } else {
         GROUND.cell()
-    });
+    };
 
     let carved = CARVE_CUBE.get(|| Memo::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
@@ -114,7 +113,7 @@ pub fn ghost() -> Ghost {
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],
-                size: cur_scale,
+                zoom: box_zoom,
                 cube,
                 erase,
             };

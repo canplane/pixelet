@@ -32,7 +32,7 @@ use crate::domain::query::{Hit, World};
 use crate::domain::view::frame::pose::ray_of;
 use crate::domain::view::observation;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, Zoom};
 use xpute_guest::global::Global;
 
 /// What the pointer holds, as the shell chose it (`EDIT_TOOL`).
@@ -224,7 +224,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
-            units(zoom),
+            zoom,
             flush_against(&hit).as_ref(),
         ));
         return;
@@ -234,17 +234,14 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     hover.target = target;
     hover.approach = Some(world_adjacent_corner(
         &hit,
-        units(GROUND.cell()),
+        GROUND.cell(),
         flush_against(&hit).as_ref(),
     ));
     let (corner, zoom) = match target {
         Some(Target::Object(at)) => (base_of(at.zoom(), at.at()), at.zoom()),
         Some(Target::Generated(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (
-            world_struck_corner(&hit, units(GROUND.cell())),
-            GROUND.cell(),
-        ),
+        None => (world_struck_corner(&hit, GROUND.cell()), GROUND.cell()),
     };
     // Past where the world takes an edit, nothing is pointed at.
     if !World::now().editable(&cube(zoom, idx_of(zoom, &corner))) {
