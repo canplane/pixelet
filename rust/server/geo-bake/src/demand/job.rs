@@ -6,7 +6,7 @@ use crate::coverage::Node;
 use crate::coverage::Overture;
 use crate::util;
 use postgres::Client;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -34,12 +34,10 @@ impl Default for Limits {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum Job {
-    Tile {
-        kind: super::Kind,
-        subject: u64,
-        cache: PathBuf,
-    },
+pub struct Job {
+    pub kind: super::Kind,
+    pub id: u64,
+    pub cache: PathBuf,
 }
 
 pub(crate) struct Runner {
@@ -230,19 +228,11 @@ pub fn connect(
 }
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
-    match job {
-        Job::Tile {
-            kind,
-            subject,
-            cache,
-        } => {
-            let p = Tile::of_subject(subject);
-            match kind {
-                super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
-                super::Kind::Place => super::place::execute(p, &cache, out, seconds),
-                super::Kind::Division => super::division::execute(p, &cache, out, seconds),
-            }
-        }
+    let p = Quadrant::of_id(job.id);
+    match job.kind {
+        super::Kind::Terrain => super::terrain::execute(p, &job.cache, out, seconds),
+        super::Kind::Place => super::place::execute(p, &job.cache, out, seconds),
+        super::Kind::Division => super::division::execute(p, &job.cache, out, seconds),
     }
 }
 

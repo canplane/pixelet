@@ -187,7 +187,7 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
                             continue;
                         };
                         let tile = TerrainTile::decode(&raw)?;
-                        let name = p.name();
+                        let name = p.key();
                         terrain::fill_fit(p, &tile, |k, b| out.push(line(&name, k, b)))
                             .map_err(|(at, why)| format!("{name}: brick {at:?} {why:?}"))?;
                     }

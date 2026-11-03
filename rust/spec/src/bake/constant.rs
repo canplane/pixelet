@@ -1,8 +1,7 @@
 // pxl-spec/bake/constant.rs
 
-use crate::space::coord::q3::Q3;
-use crate::space::coord::world::{wrap_cell, EXTENT};
-use crate::space::coord::zoom::{idx_of, Zoom, UNIT_ZOOM};
+use crate::space::coord::world::EXTENT;
+use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
@@ -15,40 +14,10 @@ const _: () = assert!(
 /// cells' heights off (pxl-engine).
 pub use pxl_engine::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
-pub use super::object::OBJECT_TIERS;
+pub use super::object::OBJECT_SCALES;
 
-/// The objects' coarsest tier, a placed cell, one unit: the ladder is the
+/// The objects' coarsest, at scale 0, a placed cell, one unit: the scales are the
 /// objects' own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 
-pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_TIERS as Zoom - 1;
-
-/// A placed object's address: its cube at its own zoom, named as
-/// `wrap_cell` names it, so one cube has one name.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct EntryAt {
-    zoom: Zoom,
-    at: [i32; 3],
-}
-
-impl EntryAt {
-    pub fn new(zoom: Zoom, at: [i32; 3]) -> EntryAt {
-        EntryAt {
-            zoom,
-            at: wrap_cell(zoom, at),
-        }
-    }
-
-    /// The cube of `zoom` that holds `p`.
-    pub fn holding(zoom: Zoom, p: &Q3) -> EntryAt {
-        EntryAt::new(zoom, idx_of(zoom, p))
-    }
-
-    pub fn zoom(self) -> Zoom {
-        self.zoom
-    }
-
-    pub fn at(self) -> [i32; 3] {
-        self.at
-    }
-}
+pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_SCALES as Zoom - 1;

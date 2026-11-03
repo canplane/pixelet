@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/bake/object.json
 
-/// How many sizes an object places at: a cell and its halvings, coarsest
-/// first. Four, so the 0.125u tier kept working when the cell grew from 0.5u
-/// to 1u. The shell names a size by its tier, never by a length.
-pub const OBJECT_TIERS: usize = 4;
+/// How many scales an object places at: a unit and its halvings, as a decor's
+/// `scale_steps`, 0, -1, -2 and -3. Four, so the 0.125u one kept working when the
+/// cell grew from 0.5u to 1u. The shell names a size by its scale, never by a length.
+pub const OBJECT_SCALES: usize = 4;

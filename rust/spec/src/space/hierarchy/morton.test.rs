@@ -1,7 +1,7 @@
 // pxl-spec/space/hierarchy/morton.test.rs
 
 use super::*;
-use crate::space::hierarchy::tree::{ancestor_of, slot_of};
+use crate::space::hierarchy::tree::{ancestor_of, child_idx};
 
 const POINTS: [[i32; 3]; 6] = [
     [0, 0, 0],
@@ -18,8 +18,8 @@ fn at(p: [i32; 3], zoom: Zoom) -> [i32; 3] {
 }
 
 fn digits_of(key: u128) -> (u128, u32) {
-    let n = 126 - key.trailing_zeros();
-    (key >> (127 - n), n)
+    let n = 127 - key.trailing_zeros();
+    ((key >> (127 - n)) >> 1, n)
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn digit_is_child_slot() {
         for zoom in 1..=UNIT_ZOOM {
             let [x, y, _] = at(p, zoom);
             let (d, _) = digits_of(key_of(zoom, [x, y]));
-            assert_eq!((d & 3) as usize, slot_of([x, y]), "{p:?} z{zoom}");
+            assert_eq!((d & 3) as usize, child_idx([x, y]), "{p:?} z{zoom}");
         }
     }
 }

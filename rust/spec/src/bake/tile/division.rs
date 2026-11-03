@@ -15,7 +15,6 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 
 use crate::bake::malformed;
-use crate::bake::name::{NameColumns, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
@@ -38,7 +37,7 @@ pub const NONE: u32 = u32::MAX;
 pub const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
 
 /// The cells; the occupancy; per division its id, subtype, parent, prominence
-/// and whether an area holds it; then its names' three leaves (`name`).
+/// and whether an area holds it; its name.
 type Packet = (
     Vec<u32>,
     u8,
@@ -47,8 +46,6 @@ type Packet = (
     Vec<u32>,
     Vec<u8>,
     Vec<u8>,
-    Vec<u32>,
-    Vec<String>,
     Vec<String>,
 );
 
@@ -58,8 +55,6 @@ pub struct Division {
     pub id: String,
     pub subtype: Subtype,
     pub name: String,
-    /// `(tag, name)` pairs.
-    pub names: Vec<(String, String)>,
     /// Its parent's index in the tile, `NONE` for none.
     pub parent: u32,
     /// Overture's `cartography.prominence`, 1 to 100; 0 where it gives none.
@@ -135,15 +130,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let subtypes: Vec<u8> = d.iter().map(|d| d.subtype as u8).collect();
     let prominence: Vec<u8> = d.iter().map(|d| d.prominence).collect();
     let area: Vec<u8> = d.iter().map(|d| d.area as u8).collect();
-    let names = NameColumns::of(d.iter().map(|d| {
-        (
-            d.name.as_str(),
-            d.names
-                .iter()
-                .map(|(tag, name)| (tag.as_str(), name.as_str())),
-        )
-    }));
-    let (starts, names, langs) = names.leaves();
+    let names: Vec<&str> = d.iter().map(|d| d.name.as_str()).collect();
     shape::encode::<Packet>(
         (
             &tile.cells,
@@ -153,9 +140,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
             &parents,
             &prominence,
             &area,
-            starts,
-            names,
-            langs,
+            &names,
         ),
         MAX_PKT_BYTES as u32,
     )
@@ -198,11 +183,11 @@ struct DivisionTileView<'a> {
     parents: &'a [u32],
     prominence: &'a [u8],
     area: &'a [u8],
-    names: NamesView<'a>,
+    names: Strs<'a>,
 }
 
 fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
-    let (cells, occupancy, ids, subtypes, parents, prominence, area, starts, names, langs) =
+    let (cells, occupancy, ids, subtypes, parents, prominence, area, names) =
         shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
     let n = subtypes.len();
@@ -210,6 +195,7 @@ fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
         || parents.len() != n
         || prominence.len() != n
         || area.len() != n
+        || names.len() as usize != n
         || subtypes.iter().any(|&s| Subtype::of(s).is_none())
     {
         return Err(malformed());
@@ -223,7 +209,7 @@ fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
         parents,
         prominence,
         area,
-        names: NamesView::of(starts, names, langs, n)?,
+        names,
     })
 }
 
@@ -234,14 +220,6 @@ struct DivisionRef<'a> {
     name: &'a str,
     prominence: u8,
     approx: bool,
-    names: NamesView<'a>,
-    at: u32,
-}
-
-impl<'a> DivisionRef<'a> {
-    fn languages(&self) -> impl Iterator<Item = (&'a str, &'a str)> {
-        self.names.languages(self.at)
-    }
 }
 
 impl<'a> DivisionTileView<'a> {
@@ -249,11 +227,9 @@ impl<'a> DivisionTileView<'a> {
         let k = i as usize;
         Some(DivisionRef {
             subtype: Subtype::of(*self.subtypes.get(k)?)?,
-            name: self.names.name(i)?,
+            name: self.names.get(i)?,
             prominence: self.prominence[k],
             approx: self.area[k] == 0,
-            names: self.names,
-            at: i,
         })
     }
 
@@ -296,10 +272,6 @@ fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
                 id: v.id(i).ok_or_else(malformed)?.to_string(),
                 subtype: d.subtype,
                 name: d.name.to_string(),
-                names: d
-                    .languages()
-                    .map(|(t, n)| (t.to_string(), n.to_string()))
-                    .collect(),
                 parent: v.parents[k],
                 prominence: d.prominence,
                 area: !d.approx,
@@ -360,7 +332,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             )
         })
         .collect();
-    let kept: [bool; 4] = std::array::from_fn(|q| {
+    let has_child: [bool; 4] = std::array::from_fn(|q| {
         let child = children[q];
         child.occupancy.bits() != 0
             || (0..CELLS as u32).any(|c| {
@@ -403,7 +375,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             .collect::<Vec<_>>()
             .into(),
         divisions,
-        occupancy: Occupancy::of_slots(kept),
+        occupancy: Occupancy::of_slots(has_child),
     }
 }
 

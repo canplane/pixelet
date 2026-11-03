@@ -13,7 +13,7 @@ use pxl_spec::asset::cube::{ground, sentinel};
 use pxl_spec::bake::tile::terrain::{Ground, TerrainTile, ELE_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::coverage::Coverage;
 use crate::pyramid::{Absent, Base};
@@ -48,7 +48,7 @@ impl Absence {
 }
 
 impl Absent<TerrainTile> for Absence {
-    fn at(&self, p: Tile) -> Cow<'_, TerrainTile> {
+    fn at(&self, p: Quadrant) -> Cow<'_, TerrainTile> {
         if self.coverage.holds(p.zoom, p.at) {
             Cow::Borrowed(&self.sea)
         } else if !self.coverage.meets(p.zoom, p.at) {

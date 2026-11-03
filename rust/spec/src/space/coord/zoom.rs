@@ -8,6 +8,7 @@
 use super::aabb::Aabb;
 use super::q3::{FRAC_W, Q3};
 use super::world;
+use pxl_engine::overwrite::{y_start, z_start};
 use xpute_kit::math::scalar::round;
 
 pub use pxl_engine::Zoom;
@@ -22,7 +23,8 @@ pub use pxl_engine::UNIT_ZOOM;
 /// apron.
 pub use pxl_engine::SHARD_ZOOM;
 
-/// Where Z takes its first digit: the cubes under a shard, its 3D roots.
+/// Where Z takes its first digit: the cubes under a shard, eight of them, the
+/// world's height split at sea level.
 pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 
 /// The finest a point resolves: a fraction's step.
@@ -68,12 +70,27 @@ pub const fn idx(zoom: Zoom, units: i64) -> i64 {
     }
 }
 
-/// The cell at `zoom` a position stands in, a floor on each axis.
+/// The cell at `zoom` a position stands in, a floor on each axis, Y and Z's
+/// from the world's edge (`overwrite::path`): one above where an axis has no digit.
 pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     let shift = FRAC_W as i32 + shamt(zoom);
     // Shifted as an i64, as wide as zoom 0's 32 bits; the index is no wider
     // than the position it is of.
-    at.map(|v| (i64::from(v) >> shift) as i32)
+    let floor = |k: usize, start: i32| {
+        let edge = 1i64 << (world::EXTENT[k] - 1 + FRAC_W);
+        (((i64::from(at[k]) + edge) >> shift) as i32).wrapping_sub(start)
+    };
+    [
+        (i64::from(at[0]) >> shift) as i32,
+        floor(1, y_start(zoom)),
+        floor(2, z_start(zoom)),
+    ]
+}
+
+/// Whether axis `axis` has a digit at `zoom`, so a node there stands for part of
+/// it, not the world's whole of it. X goes round.
+pub const fn has_digit(axis: usize, zoom: Zoom) -> bool {
+    axis == 0 || zoom > UNIT_ZOOM - world::EXTENT[axis]
 }
 
 /// `idx_of`'s inverse, to the cell's base.
@@ -83,13 +100,18 @@ pub fn base_of(zoom: Zoom, idx: [i32; 3]) -> Q3 {
     world::at(x << shift, y << shift, z << shift)
 }
 
+/// The box the node `idx` of `zoom` stands for, the world's whole of an axis it
+/// has no digit of.
 pub fn cube(zoom: Zoom, idx: [i32; 3]) -> Aabb {
     let side = units(zoom);
-    let min = idx.map(|c| f64::from(c) * side);
-    Aabb {
-        min,
-        max: min.map(|v| v + side),
+    let mut b = world::BOUNDS;
+    for (k, &v) in idx.iter().enumerate() {
+        if has_digit(k, zoom) {
+            b.min[k] = f64::from(v) * side;
+            b.max[k] = b.min[k] + side;
+        }
     }
+    b
 }
 
 #[cfg(test)]

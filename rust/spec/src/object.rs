@@ -12,17 +12,9 @@ pub mod ext;
 pub mod volume;
 
 use crate::asset::cube::object;
-use crate::asset::id::{kind_of, AssetId, Kind};
+use crate::asset::id::AssetId;
 
 /// Explicit air: retains the leaf and erases lower layers.
 pub fn is_air(val: AssetId) -> bool {
     val == object::air as u32
-}
-
-pub fn is_decor(val: AssetId) -> bool {
-    kind_of(val) == Some(Kind::decor)
-}
-
-pub fn is_marker(val: AssetId) -> bool {
-    kind_of(val) == Some(Kind::marker)
 }

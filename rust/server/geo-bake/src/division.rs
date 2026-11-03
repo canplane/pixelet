@@ -18,7 +18,7 @@ use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
@@ -42,18 +42,14 @@ WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)
   AND NOT EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = d.gers_id)";
 
 /// The divisions `$1` names and every parent of each.
-const RECORDS_SQL: &str = concat!(
-    "WITH RECURSIVE up AS (
+const RECORDS_SQL: &str = "WITH RECURSIVE up AS (
   SELECT d.gers_id, d.properties FROM overture_divisions d WHERE d.gers_id = ANY($1)
   UNION SELECT p.gers_id, p.properties FROM overture_divisions p JOIN up ON p.gers_id = up.properties->>'parent_division_id'
 )
-SELECT up.gers_id, up.properties->>'subtype' AS subtype, up.properties->'names'->>'primary' AS name, ",
-    pxl_geo_spec::division_names!("up"),
-    " AS names_common, up.properties->>'parent_division_id' AS parent,
+SELECT up.gers_id, up.properties->>'subtype' AS subtype, up.properties->'names'->>'primary' AS name, up.properties->>'parent_division_id' AS parent,
   (up.properties->'cartography'->>'prominence')::int AS prominence,
   EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = up.gers_id) AS area
-FROM up"
-);
+FROM up";
 
 /// Every statement the layer runs, for the catalog check.
 pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECORDS_SQL];
@@ -186,19 +182,11 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         else {
             continue;
         };
-        let names = match r.get::<_, Option<serde_json::Value>>("names_common") {
-            Some(serde_json::Value::Object(map)) => map
-                .into_iter()
-                .filter_map(|(tag, name)| name.as_str().map(|n| (tag, n.to_string())))
-                .collect(),
-            _ => Vec::new(),
-        };
         let id: String = r.get("gers_id");
         let division = Division {
             id: id.clone(),
             subtype,
             name: r.get::<_, Option<String>>("name").unwrap_or_default(),
-            names,
             parent: NONE,
             prominence: r
                 .get::<_, Option<i32>>("prominence")
@@ -257,7 +245,7 @@ impl Base for DivisionTile {
 
     const LATTICE: Lattice = GROUND;
 
-    fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
+    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         division::encode(self).map_err(|e| format!("{e:?}"))
     }
 
@@ -265,7 +253,7 @@ impl Base for DivisionTile {
         division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Quadrant, held: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
         Some(division::fold([a?, b?, c?, d?], p.zoom))
     }

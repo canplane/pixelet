@@ -1,9 +1,11 @@
-// pxl-spec/space/layer/tile.rs
+// pxl-spec/space/layer/quadrant.rs
 
 //! The pyramid: tiles of a tile grid, from the leaves up to the top, a
 //! tile's zoom its size's, so 2^z of them stand around the world. Cell
 //! placement, tile membership, folding order and cell centers are decided
 //! here only; a layer owns what a cell carries and how it folds.
+
+use core::fmt;
 
 use super::lattice::Lattice;
 use crate::space::coord::aabb::Aabb;
@@ -12,8 +14,9 @@ use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
+    ancestor_of, child_idx, child_of, first_descendant_of, off_in, parent_of, region, Node,
 };
+use pxl_engine::area::shard_over;
 use pxl_engine::wrap_idx;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
@@ -22,65 +25,78 @@ pub use pxl_engine::LEAF_ZOOM;
 /// The top: the coarsest tile any layer is kept in.
 pub use pxl_engine::TOP_ZOOM;
 const _: () = assert!(
-    morton::bits::<2>(LEAF_ZOOM) < 63,
-    "a tile's key fits its subject's word"
+    morton::bits::<2>(LEAF_ZOOM) < 64,
+    "a quadrant's id fits a u64"
 );
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Tile {
+pub struct Quadrant {
     /// Its size's.
     pub zoom: Zoom,
     /// Its index at its zoom.
     pub at: [i32; 2],
 }
 
-impl Tile {
-    pub fn new(zoom: Zoom, at: [i32; 2]) -> Tile {
-        Tile { zoom, at }
+impl Quadrant {
+    /// The node of `zoom` at `at`, named as `wrap_idx` names its X, so one has
+    /// one name.
+    pub fn new(zoom: Zoom, [x, y]: [i32; 2]) -> Quadrant {
+        Quadrant {
+            zoom,
+            at: [wrap_idx(zoom, x), y],
+        }
     }
 
     /// The tile at `z` the leaf `leaf` lies under.
-    pub fn over(zoom: Zoom, leaf: [i32; 2]) -> Tile {
-        Tile::new(zoom, ancestor_of(leaf, LEAF_ZOOM - zoom))
+    pub fn over(zoom: Zoom, leaf: [i32; 2]) -> Quadrant {
+        Quadrant::new(zoom, ancestor_of(leaf, LEAF_ZOOM - zoom))
     }
 
     #[inline]
-    pub fn parent(self) -> Tile {
-        Tile::new(self.zoom - 1, parent_of(self.at))
+    pub fn parent(self) -> Quadrant {
+        Quadrant::new(self.zoom - 1, parent_of(self.at))
     }
 
-    /// Its 2D key, X wrapped at the seam; its name is the key written
-    /// (`morton::write_name`).
-    pub fn key(self) -> u128 {
+    /// Its 2D morton code at a 3D one's width, X wrapped at the seam (`morton::key_of`).
+    fn bits(self) -> u128 {
         let [x, y] = self.at;
         key_of::<2>(self.zoom, [wrap_idx(self.zoom, x), y])
     }
 
-    /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
-    pub(crate) fn of_key(key: u128) -> Option<Tile> {
-        let (zoom, at) = node_of::<2>(key);
+    /// Its key, its quadkey as text: a digit a zoom, coarsest first, what a baked
+    /// tile is stored as, on disk and in the bucket alike, and what the kernel
+    /// opens it by.
+    pub fn key(self) -> String {
+        morton::name::<2>(self.bits())
+    }
+
+    /// `key`, written where it is wanted.
+    pub fn write_key(self, out: &mut impl fmt::Write) -> fmt::Result {
+        morton::write_name::<2>(out, self.bits())
+    }
+
+    pub fn of_key(key: &str) -> Option<Quadrant> {
+        let (zoom, at) = node_of::<2>(morton::key_of_name::<2>(key)?);
         (TOP_ZOOM..=LEAF_ZOOM)
             .contains(&zoom)
-            .then(|| tile_at(zoom, at))
+            .then(|| Quadrant::new(zoom, at))
     }
 
-    /// What a baked tile is stored as, on disk and in the bucket alike.
-    pub fn name(self) -> String {
-        morton::name::<2>(self.key())
-    }
-
-    pub fn of_name(name: &str) -> Option<Tile> {
-        Tile::of_key(morton::key_of_name::<2>(name)?)
+    /// The shard over it, or itself where it is a shard or coarser, which no one
+    /// shard is over (`area::shard_over`).
+    pub fn shard(self) -> Quadrant {
+        let (zoom, at) = shard_over(self.zoom, self.at);
+        Quadrant::new(zoom, at)
     }
 
     /// Its place among its parent's `children`.
     pub fn slot(self) -> usize {
-        slot_of(self.at)
+        child_idx(self.at)
     }
 
-    /// In `slot_of`'s order.
-    pub fn children(self) -> [Tile; 4] {
-        std::array::from_fn(|slot| Tile::new(self.zoom + 1, child_of(self.at, slot)))
+    /// In `child_idx`'s order.
+    pub fn children(self) -> [Quadrant; 4] {
+        std::array::from_fn(|slot| Quadrant::new(self.zoom + 1, child_of(self.at, slot)))
     }
 
     pub fn node(self) -> Node<2> {
@@ -103,15 +119,15 @@ impl Tile {
         region(self.node())
     }
 
-    /// A demand's subject: its key's high half, which holds every digit and
-    /// the end bit of a key no finer than z31.
-    pub fn subject(self) -> u64 {
-        (self.key() >> 64) as u64
+    /// Its id, its morton code as a number (`morton.rs`): its digits from the top,
+    /// then the 1 that ends them, all in a word.
+    pub fn id(self) -> u64 {
+        (self.bits() >> 64) as u64
     }
 
-    pub fn of_subject(subject: u64) -> Tile {
-        let (zoom, at) = node_of::<2>(u128::from(subject) << 64);
-        Tile::new(zoom, at)
+    pub fn of_id(id: u64) -> Quadrant {
+        let (zoom, at) = node_of::<2>(u128::from(id) << 64);
+        Quadrant::new(zoom, at)
     }
 }
 
@@ -123,11 +139,11 @@ pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at
 /// `neighbor_idx`; X wraps and a tile past Y's edge has no object.
-pub fn neighborhood(p: Tile) -> [Tile; 16] {
+pub fn neighborhood(p: Quadrant) -> [Quadrant; 16] {
     let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i32 - 1, (k / 4) as i32 - 1);
-        tile_at(p.zoom + 1, [x + qx, y + qy])
+        Quadrant::new(p.zoom + 1, [x + qx, y + qy])
     })
 }
 
@@ -138,17 +154,12 @@ pub(crate) const fn neighbor_idx(qx: i32, qy: i32) -> usize {
 }
 
 /// The rows of tiles at `z`, south to north; past them is no tile.
-pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i32> {
+pub fn quad_rows(zoom: Zoom) -> std::ops::Range<i32> {
     let n = 1 << zoom;
     -n / 2..n / 2
 }
 
-/// The tile at `z` at (x, y), X wrapped around the world.
-pub fn tile_at(zoom: Zoom, [x, y]: [i32; 2]) -> Tile {
-    Tile::new(zoom, [wrap_idx(zoom, x), y])
-}
-
-/// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
+/// Where a tile's own children sit in its neighborhood, in `child_idx`'s order.
 pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
 
 /// A cell of the pyramid: a node of the one hierarchy at its lattice's cell
@@ -170,8 +181,8 @@ impl Cell {
         self.lattice.tile_cell_shamt()
     }
 
-    pub fn tile(self) -> Tile {
-        Tile::new(self.tile_zoom(), ancestor_of(self.at, self.shamt()))
+    pub fn tile(self) -> Quadrant {
+        Quadrant::new(self.tile_zoom(), ancestor_of(self.at, self.shamt()))
     }
 
     /// Its place in its tile, as every lane of the tile numbers it.
@@ -241,5 +252,5 @@ impl Cell {
 }
 
 #[cfg(test)]
-#[path = "tile.test.rs"]
+#[path = "quadrant.test.rs"]
 mod test;

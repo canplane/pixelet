@@ -25,6 +25,10 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         .filter(|n| *n >= 1.0 && n.fract() == 0.0)
         .ok_or("publication.json: VERSION_BYTES is no count")? as u32;
     let version_doc = spec.lines_at("$VERSION_BYTES").unwrap_or_default();
+    let version_chars = spec
+        .str_at("VERSION_CHARS")
+        .ok_or("publication.json: no VERSION_CHARS")?;
+    let chars_doc = spec.lines_at("$VERSION_CHARS").unwrap_or_default();
 
     // A kind's object in a set: the one place its segments are ordered.
     let object = spec.str_at("OBJECT").ok_or("publication.json: no OBJECT")?;
@@ -80,6 +84,9 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         format!("/** {} */", version_doc.join(" ")),
         format!("export const VERSION_BYTES = {version_bytes};"),
         "".into(),
+        format!("/** {} */", chars_doc.join(" ")),
+        format!("export const VERSION_CHARS = \"{version_chars}\";"),
+        "".into(),
     ]);
     ts.extend(ts_doc(&object_doc, ""));
     ts.extend([
@@ -131,6 +138,11 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["};", ""].map(String::from));
     rs.extend(rs_doc(&version_doc, "", "///"));
     rs.push(format!("pub const VERSION_BYTES: usize = {version_bytes};"));
+    rs.push(String::new());
+    rs.extend(rs_doc(&chars_doc, "", "///"));
+    rs.push(format!(
+        "pub const VERSION_CHARS: &str = \"{version_chars}\";"
+    ));
     rs.push(String::new());
     rs.extend(rs_doc(&object_doc, "", "///"));
     rs.extend([
@@ -225,14 +237,14 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     let json = "spec/spec/bake/object.json";
     let spec = read(json)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
-    let tiers = spec
-        .get("OBJECT_TIERS")
+    let scales = spec
+        .get("OBJECT_SCALES")
         .and_then(|n| n.num())
-        .ok_or(format!("{json}: no OBJECT_TIERS"))?;
-    if tiers < 1.0 || tiers.fract() != 0.0 {
-        return Err(format!("{json}: OBJECT_TIERS {tiers} is not a count"));
+        .ok_or(format!("{json}: no OBJECT_SCALES"))?;
+    if scales < 1.0 || scales.fract() != 0.0 {
+        return Err(format!("{json}: OBJECT_SCALES {scales} is not a count"));
     }
-    let tiers = tiers as u32;
+    let scales = scales as u32;
     let head = [
         "//".to_string(),
         "// GENERATED from spec/spec/bake/object.json".into(),
@@ -251,13 +263,13 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     }));
     ts.extend([
         " */".to_string(),
-        format!("export const OBJECT_TIERS = {tiers};"),
+        format!("export const OBJECT_SCALES = {scales};"),
     ]);
 
     let mut rs = vec!["// pxl-spec/bake/object.spec.rs".to_string()];
     rs.extend(head);
     rs.extend(rs_doc(&doc, "", "///"));
-    rs.push(format!("pub const OBJECT_TIERS: usize = {tiers};"));
+    rs.push(format!("pub const OBJECT_SCALES: usize = {scales};"));
     Ok(vec![
         Output::new("ts/client/src/shell/world/object.spec.ts", file(&ts)),
         Output::new("rust/spec/src/bake/object.spec.rs", file(&rs)),

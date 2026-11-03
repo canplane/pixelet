@@ -22,7 +22,7 @@ use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::tile::walk::{over, Outcome};
 use pxl_geo_bake::util::{pack, Level};
 use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 fn run() -> Result<(), String> {
     cli::enter()?;
@@ -43,7 +43,7 @@ fn run() -> Result<(), String> {
                     |client, tile| match leaf(client, tile)? {
                         None => Ok(Outcome::Empty),
                         Some(divisions) => {
-                            let at = Tile::new(DIVISION_LEAF, tile);
+                            let at = Quadrant::new(DIVISION_LEAF, tile);
                             let packed = pack(&divisions.encode(at)?, Level::Stored)
                                 .map_err(|e| e.to_string())?;
                             set.write(at, &packed)?;

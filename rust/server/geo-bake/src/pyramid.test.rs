@@ -15,7 +15,7 @@ impl<const PLACE: bool> Base for Count<PLACE> {
     const LAYER: BaseLayer = BaseLayer::place;
     const LATTICE: Lattice = if PLACE { PLACE_LATTICE } else { GROUND };
 
-    fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
+    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         Ok(self.0.to_le_bytes().to_vec())
     }
 
@@ -25,7 +25,7 @@ impl<const PLACE: bool> Base for Count<PLACE> {
         )))
     }
 
-    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Quadrant, get: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         Some(Count(
             p.children()
                 .iter()
@@ -47,14 +47,14 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
         TileSet::new(root.join("set")),
         TileSet::new(root.join("stage")),
     );
-    let leaf = Tile::of_name("010332102301230").unwrap();
+    let leaf = Quadrant::of_key("010332102301230").unwrap();
     stage
         .write(
             leaf,
             &pack(&Count::<PLACE>(1).encode(leaf).unwrap(), Level::Live).unwrap(),
         )
         .unwrap();
-    let whole: FnvHashSet<Tile> = [ancestor(leaf, SHARD_ZOOM)].into_iter().collect();
+    let whole: FnvHashSet<Quadrant> = [leaf.shard()].into_iter().collect();
     let mut staged = Staged {
         base: &set,
         stage: &stage,

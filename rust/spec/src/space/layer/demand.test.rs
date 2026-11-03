@@ -5,7 +5,7 @@ use crate::space::camera::grid::*;
 use crate::space::coord::zoom::FINEST_ZOOM;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::{demand_dist, draw_dist};
-use crate::space::layer::tile::*;
+use crate::space::layer::quadrant::*;
 
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.
@@ -34,7 +34,7 @@ fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
     out
 }
 
-fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
+fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Quadrant> {
     tiles_within(zoom, foot, demand_dist(GROUND, zoom)).collect()
 }
 

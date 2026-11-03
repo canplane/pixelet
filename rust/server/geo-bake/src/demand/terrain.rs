@@ -5,14 +5,14 @@ use crate::coverage::Coverage;
 use crate::elevation::Raster;
 use crate::separation::source::Disk;
 use crate::terrain::absent::Absence;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// Each tile's rows the separation solve read and each structure it solved, kept
 /// beside the tiles of the source they came from.
 pub(super) const SOURCE: &str = ".source";
 
 pub(super) fn execute(
-    p: Tile,
+    p: Quadrant,
     cache: &std::path::Path,
     out: &std::path::Path,
     seconds: u64,

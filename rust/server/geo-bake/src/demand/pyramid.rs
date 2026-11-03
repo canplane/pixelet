@@ -5,10 +5,11 @@
 
 use super::job::{self, Job, Runner};
 use super::{Dataset, Failure, Kind};
-use crate::pyramid::{fold_stored, Absent, Base, TileSet};
+use crate::pyramid::{fold_parent, Absent, Base, TileSet};
 use crate::util::{pack, Level};
+use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -22,7 +23,7 @@ pub(super) async fn resolve(
     name: &str,
     top: Zoom,
 ) -> Result<Option<String>, Failure> {
-    let p = Tile::of_name(name).ok_or(Failure::BadName)?;
+    let p = Quadrant::of_key(name).ok_or(Failure::BadName)?;
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
@@ -30,22 +31,22 @@ pub(super) async fn resolve(
         return Ok(None);
     }
     bake_missing(data, runner, kind, p, true).await?;
-    Ok(Some(p.name()))
+    Ok(Some(p.key()))
 }
 
 fn bake_missing(
     data: Arc<Dataset>,
     runner: Arc<Runner>,
     kind: Kind,
-    p: Tile,
+    p: Quadrant,
     asked: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
         let d = data.clone();
         data.cache
-            .once(p.name(), asked, move |lease| async move {
+            .once(p.key(), asked, move |lease| async move {
                 if !d.coverage.meets(p.zoom, p.at) {
-                    return d.cache.publish(&p.name(), None).map_err(Failure::from);
+                    return d.cache.publish(&p.key(), None).map_err(Failure::from);
                 }
                 if p.zoom < kind.leaf() {
                     for below in (d.sources)(p) {
@@ -57,19 +58,19 @@ fn bake_missing(
                         .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
                 }
-                let job = Job::Tile {
+                let job = Job {
                     kind,
-                    subject: p.subject(),
+                    id: p.id(),
                     cache: d.cache.root.clone(),
                 };
-                runner.run(job, d.clone(), lease, p.name()).await
+                runner.run(job, d.clone(), lease, p.key()).await
             })
             .await
     })
 }
 
 pub(super) fn execute<L: Base>(
-    p: Tile,
+    p: Quadrant,
     cache: &Path,
     out: &Path,
     leaf: impl FnOnce() -> Result<Option<L>, String>,
@@ -78,12 +79,19 @@ pub(super) fn execute<L: Base>(
     let tile = if p.zoom == L::LEAF {
         leaf()?
     } else {
-        fold_stored(&TileSet::new(cache), p, absent)?
+        let set = TileSet::new(cache);
+        let mut sources = FnvHashMap::default();
+        for q in L::sources(p) {
+            if let Some(tile) = set.read::<L>(q)? {
+                sources.insert(q, tile);
+            }
+        }
+        fold_parent(p, |q| sources.get(&q), absent)
     };
     let pkt = tile
         .map(|tile| {
             pack(
-                &tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?,
+                &tile.encode(p).map_err(|e| format!("{}: {e}", p.key()))?,
                 Level::Live,
             )
             .map_err(|e| e.to_string())

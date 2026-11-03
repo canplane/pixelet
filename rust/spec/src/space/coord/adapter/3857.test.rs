@@ -83,10 +83,10 @@ fn tile_bbox_exclusive_edge() {
 #[test]
 fn height_meters_baked_scale() {
     use crate::procedural::Frame;
-    use crate::space::layer::tile::{Tile, LEAF_ZOOM};
+    use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
     use pxl_engine::LEAF_CELL;
     let [x, y] = [14139274.0, 4508140.0].map(u_from_merc);
-    let tile = Tile::new(
+    let tile = Quadrant::new(
         LEAF_ZOOM,
         [x, y].map(|v| libm::floor(v / units(LEAF_ZOOM)) as i32),
     );

@@ -35,7 +35,7 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec::space::layer::tile::tile_at;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// What it reads, and where `make download-earth` keeps it.
 const SRC: &str = "infra/earth/source.json";
@@ -179,7 +179,7 @@ fn lon_lat(x: f64, y: f64) -> [f64; 2] {
 }
 
 fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
-    let tile = tile_at(EARTH_ZOOM, [px, py]);
+    let tile = Quadrant::new(EARTH_ZOOM, [px, py]);
     let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
@@ -351,7 +351,7 @@ fn run() -> Result<(), String> {
                     let Some(rgba) = tile_texels(px, py, day, night) else {
                         continue;
                     };
-                    let name = tile_at(EARTH_ZOOM, [px, py]).name();
+                    let name = Quadrant::new(EARTH_ZOOM, [px, py]).key();
                     let stored = earth::encode(&rgba)
                         .map_err(|e| format!("{e:?}"))
                         .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
@@ -385,7 +385,7 @@ fn run() -> Result<(), String> {
     }
     std::fs::create_dir_all(&copy).map_err(|e| e.to_string())?;
     for p in set.by_zoom()?.into_values().flatten() {
-        std::fs::hard_link(set.path(p), copy.join(p.name()))
+        std::fs::hard_link(set.path(p), copy.join(p.key()))
             .map_err(|e| format!("{}: {e}", set.path(p).display()))?;
     }
     for name in [TILE_SPHERE, MANIFEST] {

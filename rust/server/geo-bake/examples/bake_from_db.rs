@@ -15,7 +15,7 @@ use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::tile::terrain;
 use pxl_spec::directory;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -32,7 +32,7 @@ fn main() {
     let memo = directory::temp_dir("source");
 
     for tile in tiles {
-        let idx = Tile::of_name(tile)
+        let idx = Quadrant::of_key(tile)
             .filter(|t| t.zoom == LEAF_ZOOM)
             .expect("a leaf's name")
             .at;

@@ -47,7 +47,7 @@ fn lattice_cell_off() {
 /// `child_cells` inverts `parent_cell` in every lattice.
 #[test]
 fn parent_child_cells() {
-    let p = Tile::new(13, [-5, 7]);
+    let p = Quadrant::new(13, [-5, 7]);
     let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
     for lattice in [GROUND, Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 4)] {
@@ -87,8 +87,11 @@ fn point_wrap_x_clamp_y() {
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
     for zoom in [TOP_ZOOM, LEAF_ZOOM] {
         let n = 1i32 << zoom;
-        assert_eq!(tile_at(zoom, [n / 2, 0]), tile_at(zoom, [-n / 2, 0]));
-        assert!(!tile_rows(zoom).contains(&(n / 2)));
+        assert_eq!(
+            Quadrant::new(zoom, [n / 2, 0]),
+            Quadrant::new(zoom, [-n / 2, 0])
+        );
+        assert!(!quad_rows(zoom).contains(&(n / 2)));
     }
 }
 
@@ -99,16 +102,16 @@ const BUNDANG_NAME: &str = "010332102130223";
 
 #[test]
 fn known_tile_name() {
-    let leaf = Tile::new(LEAF_ZOOM, BUNDANG);
-    assert_eq!(leaf.name(), BUNDANG_NAME);
-    assert_eq!(Tile::of_name(BUNDANG_NAME), Some(leaf));
+    let leaf = Quadrant::new(LEAF_ZOOM, BUNDANG);
+    assert_eq!(leaf.key(), BUNDANG_NAME);
+    assert_eq!(Quadrant::of_key(BUNDANG_NAME), Some(leaf));
 }
 
 /// One prefix is one region at every zoom, and a name's length is its zoom.
 #[test]
 fn tile_name_prefix() {
     for zoom in TOP_ZOOM..LEAF_ZOOM {
-        let coarse = Tile::over(zoom, BUNDANG).name();
+        let coarse = Quadrant::over(zoom, BUNDANG).key();
         assert_eq!(coarse.len(), zoom as usize);
         assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
     }
@@ -120,8 +123,8 @@ fn tile_name_round_trip() {
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
             for zoom in TOP_ZOOM..=LEAF_ZOOM {
-                let p = Tile::over(zoom, [x, y]);
-                assert_eq!(Tile::of_name(&p.name()), Some(p), "({x}, {y}) at z{zoom}");
+                let p = Quadrant::over(zoom, [x, y]);
+                assert_eq!(Quadrant::of_key(&p.key()), Some(p), "({x}, {y}) at z{zoom}");
             }
         }
     }
@@ -129,18 +132,18 @@ fn tile_name_round_trip() {
 
 #[test]
 fn bad_tile_name_refused() {
-    assert_eq!(Tile::of_name(""), None);
-    assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
-    assert_eq!(Tile::of_name("13211032031200a"), None);
+    assert_eq!(Quadrant::of_key(""), None);
+    assert_eq!(Quadrant::of_key("4"), None, "a digit is a zoom's two bits");
+    assert_eq!(Quadrant::of_key("13211032031200a"), None);
     assert_eq!(
-        Tile::of_name("-1321103203120"),
+        Quadrant::of_key("-1321103203120"),
         None,
         "the digits carry the sign"
     );
     assert_eq!(
-        Tile::of_name(&"0".repeat(LEAF_ZOOM as usize + 1)),
+        Quadrant::of_key(&"0".repeat(LEAF_ZOOM as usize + 1)),
         None,
         "nothing is finer than a leaf"
     );
-    assert_eq!(Tile::of_name("0"), None, "coarser than the top");
+    assert_eq!(Quadrant::of_key("0"), None, "coarser than the top");
 }

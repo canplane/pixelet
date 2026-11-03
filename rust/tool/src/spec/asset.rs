@@ -821,45 +821,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             .iter()
             .map(|(k, v)| format!("    pub const {k}: u16 = {v};")),
     );
-    rs.push(String::new());
-    rs.extend(
-        [
-            "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "    #[repr(u16)]",
-            "    pub enum DecorId {",
-        ]
-        .map(String::from),
-    );
-    rs.extend(entries.iter().map(|(k, v)| format!("        {k} = {v},")));
-    rs.extend(["    }".to_string(), String::new()]);
-    rs.extend([
-        "    impl DecorId {".to_string(),
-        "        /// Every decor the catalog gives out, in the JSON's own order.".into(),
-        format!(
-            "        pub const ALL: [DecorId; {}] = [{}];",
-            entries.len(),
-            entries
-                .iter()
-                .map(|(k, _)| format!("DecorId::{k}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        String::new(),
-    ]);
-    rs.extend(
-        [
-            "        /// The decor a number names, or none for a number the catalog does not",
-            "        /// give out.",
-            "        pub fn of(val: u16) -> Option<DecorId> {",
-            "            DecorId::ALL.into_iter().find(|t| *t as u16 == val)",
-            "        }",
-            "    }",
-            "}",
-            "",
-            "",
-        ]
-        .map(String::from),
-    );
+    rs.extend(["}", "", ""].map(String::from));
     rs.extend(table);
     let mut row = vec!["// pxl-content/decor.spec.rs".to_string()];
     row.extend(head);
@@ -1095,7 +1057,7 @@ fn decor_table(
         "/// the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
-        "    pub id: DecorId,",
+        "    pub id: crate::asset::id::AssetId,",
         "    pub row: &'static pxl_content::decor::Decor,",
         "    pub variants: &'static [Variant],",
         "}",
@@ -1129,7 +1091,7 @@ fn decor_table(
         );
         rs.extend([
             "    Decor {".to_string(),
-            format!("        id: DecorId::{},", r.name),
+            format!("        id: {} as u32,", r.name),
             format!("        row: &pxl_content::decor::DECORS[{i}],"),
             "        variants: &[".to_string(),
         ]);

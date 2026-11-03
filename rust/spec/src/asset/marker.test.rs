@@ -4,10 +4,10 @@ use super::*;
 use crate::space::coord::zoom;
 
 /// Markers spread over a few bricks, two to a leaf cell in places.
-fn markers() -> Vec<EntryAt> {
+fn markers() -> Vec<Octant> {
     let z = zoom::UNIT_ZOOM;
     (0..400i32)
-        .map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9]))
+        .map(|k| Octant::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9]))
         .collect()
 }
 

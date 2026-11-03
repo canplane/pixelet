@@ -4,11 +4,9 @@
 //! each a definition of a kind — the cubes and their colors, the decors, the
 //! marker, the actors, the sky — numbered by its id, its kind over its shape
 //! (`id`), and each file a definition references a slot, which the catalog
-//! the host plugs in fills (`catalog`). The texture pack is the cube kind's:
+//! the client plugs in fills (`catalog`). The texture pack is the cube kind's:
 //! which of its tiles a cube wears on each face (`ingest`). A cube with no
 //! image still draws as its catalog color.
-
-use std::sync::LazyLock;
 
 #[path = "asset/actor.spec.rs"]
 pub mod actor;
@@ -28,13 +26,11 @@ pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;
 
-pub use decor::DecorId;
 pub use id::AssetId;
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::units;
 use catalog::Catalog;
-use cube::Cube;
 use ingest::{CubeFace, PACK};
 use pxl_content::decor::DECORS;
 use pxl_content::generation;
@@ -137,13 +133,15 @@ impl decor::Decor {
         generation::first_group(&DECORS, kind as u32)
     }
 
-    /// The generator writes one entry a decor, so every id has one.
-    pub fn of(id: DecorId) -> &'static decor::Decor {
+    /// The decor an id names, or none for an id the catalog does not give out.
+    pub fn find(id: AssetId) -> Option<&'static decor::Decor> {
+        decor::DECORS.iter().find(|d| d.id == id)
+    }
+
+    /// The decor of an id known to be one, as a tool holds it.
+    pub fn of(id: AssetId) -> &'static decor::Decor {
         use xpute_kit::status::bug::OrBug;
-        decor::DECORS
-            .iter()
-            .find(|d| d.id == id)
-            .or_bug(Errno::ENOTRECOVERABLE)
+        decor::Decor::find(id).or_bug(Errno::ENOTRECOVERABLE)
     }
 }
 
@@ -162,26 +160,6 @@ fn largest(a: f64, b: f64) -> f64 {
     }
 }
 
-/// A decor's asset id, what a placed one is stored as.
-pub fn decor_num_id(id: DecorId) -> AssetId {
-    id as u32
-}
-
-/// The decor an asset id of the decor kind names.
-pub fn decor_id_from_num(num_id: AssetId) -> DecorId {
-    match u16::try_from(num_id).ok().and_then(DecorId::of) {
-        Some(id) => id,
-        None => xpute_kit::bug!(ENOTRECOVERABLE, num_id),
-    }
-}
-
-/// In numeric order.
-pub static DECOR_IDS: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
-    let mut ids = DecorId::ALL.to_vec();
-    ids.sort_by_key(|id| *id as u16);
-    ids
-});
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TileOrigin {
     pub x: u32,
@@ -189,7 +167,7 @@ pub struct TileOrigin {
 }
 
 /// The pack tile a face wears; None where the pack has no image.
-fn tile_of(cube: Cube, face: CubeFace) -> Option<u32> {
+fn tile_of(cube: AssetId, face: CubeFace) -> Option<u32> {
     PACK.tiles
         .iter()
         .find(|(c, f, _)| *c == cube && *f == face)
@@ -207,7 +185,7 @@ fn sentinel_tile_of(sentinel: u8) -> Option<u32> {
 
 /// The tile's mean color in linear light, seen from far enough that the tile
 /// is gone.
-pub fn shipped_tile_mean(cube: Cube, face: CubeFace) -> Option<[u8; 3]> {
+pub fn shipped_tile_mean(cube: AssetId, face: CubeFace) -> Option<[u8; 3]> {
     PACK.means.get(tile_of(cube, face)? as usize).copied()
 }
 
@@ -226,7 +204,7 @@ fn origin(n: u32) -> TileOrigin {
 }
 
 /// The tile's pixel origin in the pack's image.
-pub fn shipped_texture_tile(cube: Cube, face: CubeFace) -> Option<TileOrigin> {
+pub fn shipped_texture_tile(cube: AssetId, face: CubeFace) -> Option<TileOrigin> {
     tile_of(cube, face).map(origin)
 }
 

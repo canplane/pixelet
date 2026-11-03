@@ -177,15 +177,15 @@ const WORKSPACE_MANIFESTS: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.tom
 /// What a member takes from a workspace's manifest: its `package`,
 /// `dependencies` and `lints` tables under `[workspace]`.
 fn workspace_tables(manifest: &toml::Value) -> toml::Value {
-    let mut kept = toml::Table::new();
+    let mut table = toml::Table::new();
     if let Some(workspace) = manifest.get("workspace").and_then(toml::Value::as_table) {
         for key in ["package", "dependencies", "lints"] {
             if let Some(v) = workspace.get(key) {
-                kept.insert(key.to_string(), v.clone());
+                table.insert(key.to_string(), v.clone());
             }
         }
     }
-    toml::Value::Table(kept)
+    toml::Value::Table(table)
 }
 
 /// Each token of `stream` written into `out`, a doc attribute (`#[doc …]`,

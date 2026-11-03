@@ -16,7 +16,7 @@ use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::get_tile_bbox;
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 const CACHE_CAP: usize = 512;
@@ -208,7 +208,7 @@ impl Raster {
         tile: [i32; 2],
     ) -> Result<Vec<i16>, postgres::Error> {
         let tile_bbox = get_tile_bbox(LEAF_ZOOM, tile);
-        let per_m = Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m();
+        let per_m = Frame::of(Quadrant::new(LEAF_ZOOM, tile)).per_m();
         let span = ELE_PADDED_SPAN as usize;
         let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
         let env = tile_reads(tile_bbox);

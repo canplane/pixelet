@@ -7,7 +7,6 @@ fn division(subtype: Subtype, prominence: u8) -> Division {
         id: String::new(),
         subtype,
         name: String::new(),
-        names: Vec::new(),
         parent: NONE,
         prominence,
         area: true,

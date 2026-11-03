@@ -15,7 +15,7 @@ use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::source::{is_sharded, is_version, key};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
 use serde_json::{json, Map, Value};
 
 use crate::pyramid::MANIFEST;
@@ -27,7 +27,7 @@ use crate::pyramid::MANIFEST;
 pub struct Kind {
     pub format: u32,
     pub version: String,
-    pub shard: Option<BTreeSet<Tile>>,
+    pub shard: Option<BTreeSet<Quadrant>>,
 }
 
 pub(crate) type Kinds = [Kind; BaseLayer::ALL.len()];
@@ -44,7 +44,7 @@ pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<
 }
 
 /// A kind's versions for a shard and the tiles under it, over the kind's own.
-pub type Overrides = BTreeMap<Tile, Vec<(BaseLayer, String)>>;
+pub type Overrides = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
 
 /// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
@@ -71,8 +71,8 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
             ));
         }
     }
-    let held: Vec<&BTreeSet<Tile>> = kinds.iter().filter_map(|k| k.shard.as_ref()).collect();
-    let every: BTreeSet<Tile> = held
+    let held: Vec<&BTreeSet<Quadrant>> = kinds.iter().filter_map(|k| k.shard.as_ref()).collect();
+    let every: BTreeSet<Quadrant> = held
         .first()
         .map(|first| {
             first
@@ -91,7 +91,7 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
         {
             return Err(format!(
                 "override {}: no shard every kind holds, or no version a client reads",
-                t.name()
+                t.key()
             ));
         }
     }
@@ -103,14 +103,14 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
     };
     let mut shard: Map<String, Value> = folded(every)
         .into_iter()
-        .map(|t| (t.name(), json!({})))
+        .map(|t| (t.key(), json!({})))
         .collect();
     for (t, versions) in overrides {
         let version: Map<String, Value> = versions
             .iter()
             .map(|(l, p)| (l.name().to_string(), json!(p)))
             .collect();
-        shard.insert(t.name(), json!({ "version": version }));
+        shard.insert(t.key(), json!({ "version": version }));
     }
     Ok(
         json!({ "top_zoom": top_zoom, "shard": shard, "format": named(&|k| json!(k.format)), "version": named(&|k| json!(k.version)) }),
@@ -118,10 +118,10 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
 }
 
 /// Four siblings all held, written as their parent, up to the pyramid's top.
-fn folded(mut keys: BTreeSet<Tile>) -> BTreeSet<Tile> {
+fn folded(mut keys: BTreeSet<Quadrant>) -> BTreeSet<Quadrant> {
     let finest = keys.iter().map(|t| t.zoom).max().unwrap_or(TOP_ZOOM);
     for zoom in (TOP_ZOOM + 1..=finest).rev() {
-        let parents: BTreeSet<Tile> = keys
+        let parents: BTreeSet<Quadrant> = keys
             .iter()
             .filter(|t| t.zoom == zoom)
             .map(|t| t.parent())
@@ -139,7 +139,7 @@ fn folded(mut keys: BTreeSet<Tile>) -> BTreeSet<Tile> {
 }
 
 /// Shards by name: a shard's each, no node over them.
-pub fn tiles<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<BTreeSet<Tile>, String> {
+pub fn tiles<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<BTreeSet<Quadrant>, String> {
     names
         .into_iter()
         .map(|n| {
@@ -163,7 +163,7 @@ pub fn manifest(set: &Path) -> Result<Option<Value>, String> {
 }
 
 /// The shards a set's manifest names it holds; none where it names none.
-pub fn manifest_shards(manifest: &Value) -> Result<Option<BTreeSet<Tile>>, String> {
+pub fn manifest_shards(manifest: &Value) -> Result<Option<BTreeSet<Quadrant>>, String> {
     manifest["shard"]
         .as_array()
         .map(|names| tiles(names.iter().filter_map(Value::as_str)))

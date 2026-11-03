@@ -19,21 +19,27 @@ use pxl_server::db::DbError;
 
 const DIVISION_LIMIT: i64 = 5;
 
-/// ILIKE is the filter the trigram index accelerates; `%` alone rejects a
-/// query of two or three characters, so `similarity()` only ranks.
+/// The places matching `$1`, numbered by `order`, the first `$2`. ILIKE is the
+/// filter the trigram index accelerates; `%` alone rejects a query of two or
+/// three characters, so `similarity()` only ranks. A query too short for a
+/// trigram walks the index on `name`, which holds what this reads, not the rows.
 macro_rules! places_matching {
-    () => {
-        "SELECT gers_id, name, properties,
-  ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
-  ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
-FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-"
+    ($order:expr) => {
+        concat!(
+            "hit AS (SELECT gers_id, row_number() OVER (ORDER BY ",
+            $order,
+            ") AS at FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%' ORDER BY at LIMIT $2)
+SELECT p.gers_id, p.name, p.properties,
+  ST_X(p.geom) AS x3857, ST_Y(p.geom) AS y3857,
+  ST_X(ST_Transform(p.geom, 4326)) AS lon, ST_Y(ST_Transform(p.geom, 4326)) AS lat
+FROM hit JOIN overture_places p USING (gers_id) ORDER BY hit.at"
+        )
     };
 }
 
 const SEARCH_SQL: &str = concat!(
-    places_matching!(),
-    "ORDER BY similarity(name, $1) DESC, name, gers_id\nLIMIT $2"
+    "WITH ",
+    places_matching!("similarity(name, $1) DESC, name, gers_id")
 );
 
 /// The country division `near` (`$3`, `$4`) lies in; null at sea or past the
@@ -48,36 +54,34 @@ macro_rules! home {
 
 /// Ranked against `near`: its country's places first, so another country's
 /// fill only what room is left. Similarity is rounded to two decimals so
-/// distance decides among near-equal names.
+/// distance decides among near-equal names. `home` is materialized, or each
+/// matching place reads the country's polygons again.
 const SEARCH_NEAR_SQL: &str = concat!(
-    "WITH home AS (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
+    "WITH home AS MATERIALIZED (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
     home!(),
-    ")\n",
-    places_matching!(),
-    "ORDER BY EXISTS (SELECT 1 FROM home WHERE ST_Intersects(home.geom, overture_places.geom)) DESC,
+    "),\n",
+    places_matching!(
+        "EXISTS (SELECT 1 FROM home WHERE ST_Intersects(home.geom, overture_places.geom)) DESC,
   round(similarity(name, $1)::numeric, 2) DESC,
-  geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC, gers_id
-LIMIT $2"
+  geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC, gers_id"
+    )
 );
 
 /// A division is a row of `overture_divisions`, once, whatever areas it has.
+/// Found by a name in any language (`names`), and answered in its own.
 macro_rules! divisions_matching {
     () => {
-        concat!(
-            "SELECT gers_id, name, subtype, ",
-            pxl_geo_spec::division_names!("overture_divisions"),
-            " AS names_common,
+        "SELECT gers_id, name, subtype,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_divisions
-WHERE name <> '' AND name ILIKE '%' || $1 || '%'
+WHERE name <> '' AND names ILIKE '%' || $1 || '%'
 "
-        )
     };
 }
 
 const DIVISION_SEARCH_SQL: &str = concat!(
     divisions_matching!(),
-    "ORDER BY similarity(name, $1) DESC, gers_id\nLIMIT $2"
+    "ORDER BY word_similarity($1, names) DESC, similarity(name, $1) DESC, gers_id\nLIMIT $2"
 );
 
 /// `near`'s country, and the divisions its lineage holds, first.
@@ -87,7 +91,7 @@ const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
     " AS id)\n",
     divisions_matching!(),
     "ORDER BY (SELECT gers_id = home.id OR properties->'hierarchies'->0 @> jsonb_build_array(jsonb_build_object('division_id', home.id)) FROM home) DESC NULLS LAST,
-  similarity(name, $1) DESC, gers_id
+  word_similarity($1, names) DESC, similarity(name, $1) DESC, gers_id
 LIMIT $2"
 );
 
@@ -100,8 +104,6 @@ pub(crate) struct SearchResult {
     pub name: String,
     /// A place's category (`category_of`), a division's subtype.
     pub category: u16,
-    /// Null for a place.
-    pub common: Option<serde_json::Value>,
     pub context: Vec<DivisionPart>,
     pub lon: f64,
     pub lat: f64,
@@ -128,7 +130,6 @@ struct DivisionRow {
     gers_id: String,
     name: String,
     subtype: String,
-    names_common: Option<serde_json::Value>,
     lon: f64,
     lat: f64,
 }
@@ -153,7 +154,6 @@ impl DivisionRow {
             gers_id: row.get("gers_id"),
             name: row.get("name"),
             subtype: row.get("subtype"),
-            names_common: row.get("names_common"),
             lon: row.get("lon"),
             lat: row.get("lat"),
         }
@@ -206,7 +206,6 @@ pub(crate) async fn search(
             kind: SEARCH_KIND::DIVISION,
             name: r.name,
             category: u16::from(subtype as u8),
-            common: r.names_common,
             context,
             lon: r.lon,
             lat: r.lat,
@@ -228,7 +227,6 @@ pub(crate) async fn search(
             name: r.name,
             kind: SEARCH_KIND::PLACE,
             category: category_of(&properties::category_of(&r.properties)),
-            common: None,
             context,
             lon: r.lon,
             lat: r.lat,

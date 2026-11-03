@@ -10,7 +10,7 @@ use cache::Cache;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::pyramid::Base;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 pub mod job;
 use job::{Limits, Runner};
-use pxl_spec::space::layer::tile;
+use pxl_spec::space::layer::quadrant;
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
@@ -50,7 +50,7 @@ impl Kind {
     /// Its coarsest tile served, which the client reads from too: never
     /// coarser than the kind is read at.
     fn top(self, top: Zoom) -> Zoom {
-        tile::top_over(self.leaf(), top).max(self.coarsest())
+        quadrant::top_over(self.leaf(), top).max(self.coarsest())
     }
 
     /// The coarsest zoom it is read at (`pyramid::Base::COARSEST`).
@@ -88,7 +88,7 @@ impl From<String> for Failure {
 struct Dataset {
     cache: Cache,
     coverage: Coverage,
-    sources: fn(Tile) -> Vec<Tile>,
+    sources: fn(Quadrant) -> Vec<Quadrant>,
 }
 impl Dataset {
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {

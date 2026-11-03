@@ -12,7 +12,7 @@
 //! (`take_written`): its path's, its leaf's and what it allocates; a freed
 //! child group is no reader's until it is allocated again.
 
-use super::tree::{children, slot_of};
+use super::tree::{child_idx, children};
 use pxl_engine::overwrite::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,7 +33,7 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
 
 /// The child on the way to `at`, `steps` levels over it.
 fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
-    slot_of(at.map(|v| v >> steps))
+    child_idx(at.map(|v| v >> steps))
 }
 
 impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
@@ -77,7 +77,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         &self.data
     }
 
-    /// A branch's child `k`, in `slot_of`'s order.
+    /// A branch's child `k`, in `child_idx`'s order.
     pub fn child(&self, child_group: u32, k: usize) -> Slot<T> {
         self.slot(child_group as usize + k)
     }

@@ -44,7 +44,7 @@ mod tunnel;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
@@ -172,7 +172,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     }
     let [pmin, pmax] = get_tile_bbox(LEAF_ZOOM, tile);
     let scale = Scale {
-        per_m: Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m(),
+        per_m: Frame::of(Quadrant::new(LEAF_ZOOM, tile)).per_m(),
     };
     let mut src = Ring {
         tiles: tiles.into_iter().collect(),

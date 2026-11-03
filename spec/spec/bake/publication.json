@@ -12,9 +12,14 @@
     ],
     "terrain": 12,
     "place": 10,
-    "division": 8,
+    "division": 9,
     "earth": 2
   },
+  "VERSION_CHARS": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-",
+  "$VERSION_CHARS": [
+    "What a version is written in: one segment of a tile's URL, with no character it would",
+    "have to escape."
+  ],
   "VERSION_BYTES": 32,
   "$VERSION_BYTES": [
     "The longest version a declaration names: one segment of a tile's URL,",

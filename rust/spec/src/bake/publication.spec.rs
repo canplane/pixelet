@@ -15,13 +15,17 @@ pub struct Format {
 pub const FORMAT: Format = Format {
     terrain: 12,
     place: 10,
-    division: 8,
+    division: 9,
     earth: 2,
 };
 
 /// The longest version a declaration names: one segment of a tile's URL,
 /// before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`).
 pub const VERSION_BYTES: usize = 32;
+
+/// What a version is written in: one segment of a tile's URL, with no character it would
+/// have to escape.
+pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
 
 /// A kind's object in a published set, the one place its segments are
 /// ordered: the version its source declares, then the tile's name. A version

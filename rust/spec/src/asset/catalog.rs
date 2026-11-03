@@ -1,7 +1,7 @@
 // pxl-spec/asset/catalog.rs
 
-//! The catalog: the one file the host plugs in, through which the kernel
-//! finds every other (pxl-kernel sys/io/host.json `CATALOG`). Which assets
+//! The catalog: the one file the client plugs in, through which the kernel
+//! finds every other (pxl-kernel sys/io/file.json `CATALOG`). Which assets
 //! exist, and each file reference a definition makes, is compiled, the
 //! world's rule (`spec/spec/asset/`): a reference is a `Slot`. Which file
 //! fills each slot, and what the ingest measured of it, is the catalog's.

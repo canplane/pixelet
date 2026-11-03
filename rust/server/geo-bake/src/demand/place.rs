@@ -4,10 +4,10 @@ use super::job;
 use crate::coverage::Coverage;
 use crate::place;
 use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 pub(super) fn execute(
-    p: Tile,
+    p: Quadrant,
     cache: &std::path::Path,
     out: &std::path::Path,
     seconds: u64,

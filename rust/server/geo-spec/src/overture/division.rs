@@ -8,25 +8,9 @@
 //! here to be read into a name.
 
 use fnv::FnvHashMap;
-use std::collections::BTreeMap;
 
 use pxl_spec::division::{DivisionPart, Subtype};
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc, u_per_m};
-
-/// `names.common` in the UI's languages as a JSON object, NULL where none, of
-/// the row the given table or alias names.
-#[macro_export]
-macro_rules! division_names {
-    ($t:literal) => {
-        concat!(
-            "(SELECT jsonb_object_agg(key, value) FROM jsonb_each(CASE jsonb_typeof(",
-            $t,
-            ".properties->'names'->'common') WHEN 'object' THEN ",
-            $t,
-            ".properties->'names'->'common' END) WHERE jsonb_typeof(value) = 'string' AND key IN ('en', 'ko') AND value #>> '{}' <> '')"
-        )
-    };
-}
 
 /// How far a point looks for the nearest division where no area of it
 /// covers the point.
@@ -67,16 +51,12 @@ WHERE COALESCE(c.id, a.id, n.id) IS NOT NULL";
 
 /// The divisions `$1` names and every ancestor of each, as the division's
 /// own hierarchy lists them.
-pub const LINEAGE_SQL: &str = concat!(
-    "SELECT d.gers_id, d.subtype, d.name, ",
-    division_names!("d"),
-    " AS names_common, d.properties->>'parent_division_id' AS parent
+pub const LINEAGE_SQL: &str = "SELECT d.gers_id, d.subtype, d.name, d.properties->>'parent_division_id' AS parent
 FROM overture_divisions d
 WHERE d.gers_id IN (
   SELECT e->>'division_id' FROM overture_divisions f, jsonb_array_elements(f.properties->'hierarchies'->0) e WHERE f.gers_id = ANY($1)
   UNION SELECT unnest($1::text[])
-)"
-);
+)";
 
 /// A division as the statements return it.
 #[derive(Clone, Debug)]
@@ -85,23 +65,15 @@ pub struct Division {
     /// None for a subtype newer than this tree, which no name reads.
     pub subtype: Option<Subtype>,
     pub name: String,
-    pub names: BTreeMap<String, String>,
     pub parent: Option<String>,
 }
 
 impl Division {
-    pub fn new(
-        gers_id: String,
-        subtype: &str,
-        name: String,
-        names_common: Option<serde_json::Value>,
-        parent: Option<String>,
-    ) -> Division {
+    pub fn new(gers_id: String, subtype: &str, name: String, parent: Option<String>) -> Division {
         Division {
             gers_id,
             subtype: Subtype::of_word(subtype),
             name,
-            names: names_of(names_common),
             parent,
         }
     }
@@ -110,19 +82,9 @@ impl Division {
         Some(DivisionPart {
             subtype: self.subtype?,
             name: self.name.clone(),
-            names: self.names.clone(),
             approx,
         })
     }
-}
-
-fn names_of(common: Option<serde_json::Value>) -> BTreeMap<String, String> {
-    let Some(serde_json::Value::Object(map)) = common else {
-        return BTreeMap::new();
-    };
-    map.into_iter()
-        .filter_map(|(lang, name)| name.as_str().map(|n| (lang, n.to_string())))
-        .collect()
 }
 
 /// [`FINEST_SQL`]'s rows by point; `idx` counts from 1.

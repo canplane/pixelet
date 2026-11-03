@@ -226,7 +226,8 @@ fn render_rs(pack: &Pack) -> Result<String, String> {
 // the file the catalog names for the cube kind's pack (catalog.spec.rs
 // `pack`).
 
-use crate::asset::cube::{self, Cube};
+use crate::asset::cube;
+use crate::asset::id::AssetId;
 
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
 /// names them. Which face of a box wears which is the renderer's
@@ -244,7 +245,7 @@ pub enum CubeFace {
 pub struct Pack {
     pub cell: u32,
     pub columns: u32,
-    pub tiles: &'static [(Cube, CubeFace, u32)],
+    pub tiles: &'static [(AssetId, CubeFace, u32)],
     pub sentinels: &'static [(u8, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
@@ -273,7 +274,7 @@ pub const PACK: Pack = Pack {"##
             _ => return Err(format!("{INGEST_JSON}: pack.faces: {face} is no face")),
         };
         out.push(format!(
-            "        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"
+            "        (cube::{variant}::{ty} as AssetId, CubeFace::{face}, {tile}),"
         ));
     }
     out.push("    ],".to_string());

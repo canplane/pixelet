@@ -18,7 +18,7 @@ use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::util::{pack, Level};
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 fn run() -> Result<(), String> {
     cli::enter()?;
@@ -28,7 +28,7 @@ fn run() -> Result<(), String> {
         let (_, mut client) =
             Overture::reading(&[&place::READS], &run.shards.iter().copied().collect())?;
         for &shard in &run.shards {
-            let within = Tile::new(SHARD_ZOOM, shard.at);
+            let within = Quadrant::new(SHARD_ZOOM, shard.at);
             let tiles = leaves(&mut client, &coverage, within)?;
             run.stage.leaf::<PlaceTile>(shard, |set| {
                 for (tile, place) in &tiles {

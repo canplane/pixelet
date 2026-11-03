@@ -3,9 +3,9 @@
     "The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),",
     "and the packet each carries — an XTP branch whose children are its fields, in",
     "order. A command with no fields carries no packet. The kernel is the process; the",
-    "JavaScript around it is two things to it, its host, which holds the devices and",
-    "the turns, and its shell, the UI. A command's major is the module it is for, and",
-    "the sections say which of the two it is between.",
+    "JavaScript around it is three things to it, its host, which holds the turns, its",
+    "drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and",
+    "the sections say which of them it is between.",
     "",
     "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
@@ -413,9 +413,9 @@
       ]
     },
     {
-      "name": "ActiveTool",
+      "name": "Tool",
       "$doc": [
-        "What the pointer holds."
+        "What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of."
       ],
       "format": "dec",
       "default": "Pointer",
@@ -425,20 +425,12 @@
           "val": 0
         },
         {
-          "name": "Object",
+          "name": "Item",
           "val": 1
         },
         {
-          "name": "Decor",
-          "val": 2
-        },
-        {
           "name": "Eraser",
-          "val": 3
-        },
-        {
-          "name": "Marker",
-          "val": 4
+          "val": 2
         }
       ]
     },
@@ -677,7 +669,7 @@
       "format": "hex4",
       "entries": [
         {
-          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
+          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json)"
         },
         {
           "name": "SENSOR_START",
@@ -935,7 +927,7 @@
           "val": 4866,
           "$doc": [
             "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
-            "own again, what it held set aside by the host: the kernel reads it again, and writes",
+            "own again, what it held set aside by the driver: the kernel reads it again, and writes",
             "a storage file from then on."
           ],
           "pkt": [
@@ -943,14 +935,14 @@
               "name": "root",
               "type": "u32",
               "$doc": [
-                "host.json's `root`."
+                "file.json's `root`."
               ]
             },
             {
               "name": "path",
               "type": "str",
               "$doc": [
-                "Its number below the root in decimal, as the kernel opened it."
+                "Its path below the root, as the kernel opened it."
               ]
             }
           ]
@@ -1020,25 +1012,25 @@
           "name": "EDIT_TOOL",
           "val": 6657,
           "$doc": [
-            "The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
+            "The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer."
           ],
           "pkt": [
             {
               "name": "tool",
-              "type": "ActiveTool"
+              "type": "Tool"
             },
             {
               "name": "val",
               "type": "u32",
               "$doc": [
-                "The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json)."
+                "The item to place, its id (id.json); read only for that tool."
               ]
             },
             {
-              "name": "tier",
-              "type": "u32",
+              "name": "scale_steps",
+              "type": "i32",
               "$doc": [
-                "The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs)."
+                "A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen."
               ]
             }
           ]
@@ -1047,7 +1039,7 @@
           "name": "EDIT_MARKER_TEXT",
           "val": 6658,
           "$doc": [
-            "The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut."
+            "The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit."
           ],
           "pkt": [
             {
@@ -1414,8 +1406,12 @@
           "type": "CompanionState"
         },
         {
-          "name": "tool",
-          "type": "ToolState"
+          "name": "draft",
+          "type": "str",
+          "optional": true,
+          "$doc": [
+            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
+          ]
         },
         {
           "name": "orient",
@@ -1489,7 +1485,7 @@
           "list": true,
           "$doc": [
             "The files the kernel refused, not of their format, not decoding, or too large for any",
-            "heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The",
+            "heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The",
             "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
             "empty."
           ]
@@ -1507,6 +1503,13 @@
           "type": "f64",
           "$doc": [
             "How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it."
+          ]
+        },
+        {
+          "name": "area_progress",
+          "type": "f64",
+          "$doc": [
+            "How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for."
           ]
         }
       ]
@@ -1587,41 +1590,6 @@
       ]
     },
     {
-      "name": "ToolState",
-      "$doc": [
-        "The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft."
-      ],
-      "fields": [
-        {
-          "name": "active",
-          "type": "ActiveTool"
-        },
-        {
-          "name": "cube",
-          "type": "u32",
-          "$doc": [
-            "The cube the tool takes, by its number in the catalog's one value space."
-          ]
-        },
-        {
-          "name": "decor",
-          "type": "u32"
-        },
-        {
-          "name": "tier",
-          "type": "u32"
-        },
-        {
-          "name": "draft",
-          "type": "str",
-          "optional": true,
-          "$doc": [
-            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
-          ]
-        }
-      ]
-    },
-    {
       "name": "OrientationState",
       "fields": [
         {
@@ -1640,11 +1608,7 @@
     },
     {
       "name": "DivisionPart",
-      "$doc": [
-        "One division of the name, in every language the provider had rather than one resolved",
-        "name: the reader's language is the page's, and switching it re-reads a label already",
-        "sent."
-      ],
+      "$doc": ["One division of the name, in its own name."],
       "fields": [
         {
           "name": "subtype",
@@ -1656,11 +1620,6 @@
         {
           "name": "name",
           "type": "str"
-        },
-        {
-          "name": "names",
-          "type": "LangName",
-          "list": true
         },
         {
           "name": "shown",
@@ -1686,25 +1645,12 @@
         {
           "name": "root",
           "type": "u32",
-          "$doc": ["host.json's `root`."]
+          "$doc": ["file.json's `root`."]
         },
         {
           "name": "path",
           "type": "str",
-          "$doc": ["Its number below the root in decimal."]
-        }
-      ]
-    },
-    {
-      "name": "LangName",
-      "fields": [
-        {
-          "name": "lang",
-          "type": "str"
-        },
-        {
-          "name": "name",
-          "type": "str"
+          "$doc": ["Its path below the root, as the kernel opened it."]
         }
       ]
     }

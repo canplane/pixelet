@@ -337,7 +337,7 @@ pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
 }
 
 /// Lines at `zoom`, one coarser, off the 4×4 tiles about its children
-/// (pxl-spec space/layer/tile.rs `neighborhood`, a missing one none), each
+/// (pxl-spec space/layer/quadrant.rs `neighborhood`, a missing one none), each
 /// segment once: every point is the child's halved and rounded (`round`,
 /// half to even), a function of that point alone, so the copies tiles hold
 /// of one line fold to the same segments and are taken as one. A line whose

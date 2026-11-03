@@ -52,7 +52,7 @@ pub const fn max_pkt_bytes(layer: BaseLayer) -> usize {
 
 /// Which of a tile and its four children are tiles of their own, the rest
 /// said whole by the tile (terrain's zero tile, places's uncrowded ground):
-/// children in the low four bits in `slot_of`'s order, the tile itself above
+/// children in the low four bits in `child_idx`'s order, the tile itself above
 /// them. A client never asks for a child its parent marks absent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Occupancy(u8);
@@ -68,7 +68,7 @@ impl Occupancy {
         Occupancy::of_slots(children.map(Occupancy::is_tile))
     }
 
-    /// A tile whose children in `slot_of`'s order are tiles where `slots` says.
+    /// A tile whose children in `child_idx`'s order are tiles where `slots` says.
     pub fn of_slots(slots: [bool; 4]) -> Occupancy {
         let bits = (0..4)
             .filter(|&q| slots[q])

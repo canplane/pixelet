@@ -76,9 +76,10 @@ db-geo's own majors. Never `down -v`: the volume is the only copy, and filling
 it again takes hours.
 
 **Overture.** A run takes the types it names (every one by default) and the
-shards it names (the coverage's by default), and adds them to each table as it
-is, leaving a feature held already; `--whole` makes each table anew from every
-shard and swaps it in. Each type's write is one transaction, its catalog rows
+shards it names (the coverage's by default), and writes them into each table as
+it is, a feature held already taking the release's and one the release no longer
+has going from the shard its lower-left corner lies in; `--whole` makes each table
+anew from every shard and swaps it in. Each type's write is one transaction, its catalog rows
 with it, so a type stopped partway leaves nothing of itself. The official
 `overturemaps` CLI, pinned in the tools' image, downloads each type's GeoParquet
 to `overture/raw/`, kept until the release or the shards change. Divisions come

@@ -43,26 +43,6 @@ pub const boat: u16 = 1025;
 pub const car: u16 = 1026;
 pub const train: u16 = 1027;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u16)]
-pub enum DecorId {
-    tree = 1024,
-    boat = 1025,
-    car = 1026,
-    train = 1027,
-}
-
-impl DecorId {
-    /// Every decor the catalog gives out, in the JSON's own order.
-    pub const ALL: [DecorId; 4] = [DecorId::tree, DecorId::boat, DecorId::car, DecorId::train];
-
-    /// The decor a number names, or none for a number the catalog does not
-    /// give out.
-    pub fn of(val: u16) -> Option<DecorId> {
-        DecorId::ALL.into_iter().find(|t| *t as u16 == val)
-    }
-}
-
 /// How it faces, one row with the GPU's.
 pub use pxl_content::decor::Orientation;
 
@@ -78,7 +58,7 @@ pub struct Variant {
 /// the row's order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decor {
-    pub id: DecorId,
+    pub id: crate::asset::id::AssetId,
     pub row: &'static pxl_content::decor::Decor,
     pub variants: &'static [Variant],
 }
@@ -97,7 +77,7 @@ pub const DECORS: [Decor; 4] = [
     // not natural, ground. Sparse: a hillside with some trees, not a forest wall
     // at 1u spacing.
     Decor {
-        id: DecorId::tree,
+        id: tree as u32,
         row: &pxl_content::decor::DECORS[0],
         variants: &[
             Variant {
@@ -147,7 +127,7 @@ pub const DECORS: [Decor; 4] = [
     // rate reads far denser than on land: cut to a quarter of 0.015 after
     // boats covered the water.
     Decor {
-        id: DecorId::boat,
+        id: boat as u32,
         row: &pxl_content::decor::DECORS[1],
         variants: &[
             Variant {
@@ -173,7 +153,7 @@ pub const DECORS: [Decor; 4] = [
     // road, since a random heading reads as a crash. Sparse: a car every couple
     // of cells reads as gridlock.
     Decor {
-        id: DecorId::car,
+        id: car as u32,
         row: &pxl_content::decor::DECORS[2],
         variants: &[
             Variant {
@@ -202,7 +182,7 @@ pub const DECORS: [Decor; 4] = [
     // to the rail, since one lying across it reads as derailed. Very sparse:
     // trains should read as occasional.
     Decor {
-        id: DecorId::train,
+        id: train as u32,
         row: &pxl_content::decor::DECORS[3],
         variants: &[
             Variant {

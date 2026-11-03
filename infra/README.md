@@ -145,8 +145,8 @@ sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$
 sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
 # one transaction: a failure leaves the old tables as they were
 sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
-# the planner's statistics, which restore does not write
-sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_division_areas; ANALYZE overture_divisions;"
+# the planner's statistics and the visibility map, which restore does not write
+sql psql -v ON_ERROR_STOP=1 -c "VACUUM (ANALYZE) overture_places" -c "VACUUM (ANALYZE) overture_division_areas" -c "VACUUM (ANALYZE) overture_divisions"
 rm ~/overture.dump
 ```
 

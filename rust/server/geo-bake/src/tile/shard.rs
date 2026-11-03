@@ -26,14 +26,14 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
+    fold, unasked_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
 use crate::util::git_sha;
 use pxl_spec::bake::publication::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The fold's unit in the stage, and the same once its commit has begun; no
 /// shard is named so.
@@ -49,8 +49,8 @@ fn io(p: &Path, e: std::io::Error) -> String {
     format!("{}: {e}", p.display())
 }
 
-fn shard_tile(shard: Node) -> Tile {
-    Tile::new(SHARD_ZOOM, shard.at)
+fn shard_tile(shard: Node) -> Quadrant {
+    Quadrant::new(SHARD_ZOOM, shard.at)
 }
 
 impl Stage {
@@ -67,20 +67,20 @@ impl Stage {
         self.stage.root.join(format!("{unit}.done"))
     }
 
-    fn write_done(&self, unit: &str, gone: impl Iterator<Item = Tile>) -> Result<(), String> {
+    fn write_done(&self, unit: &str, gone: impl Iterator<Item = Quadrant>) -> Result<(), String> {
         let path = self.done_path(unit);
-        let names: Vec<String> = gone.map(Tile::name).collect();
+        let names: Vec<String> = gone.map(Quadrant::key).collect();
         util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
-    fn read_done(&self, unit: &str) -> Result<Vec<Tile>, String> {
+    fn read_done(&self, unit: &str) -> Result<Vec<Quadrant>, String> {
         let path = self.done_path(unit);
         match fs::read_to_string(&path) {
             Ok(text) => text
                 .lines()
                 .filter(|l| !l.is_empty())
                 .map(|l| {
-                    Tile::of_name(l).ok_or_else(|| format!("{}: {l}: no tile", path.display()))
+                    Quadrant::of_key(l).ok_or_else(|| format!("{}: {l}: no tile", path.display()))
                 })
                 .collect(),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -107,7 +107,7 @@ impl Stage {
     /// The shards the set holds once what is staged is in: those its
     /// manifest names and those staged whole. None where it holds tiles and
     /// its manifest names no shards, which nothing then knows.
-    fn will_hold(&self) -> Result<Option<BTreeSet<Tile>>, String> {
+    fn will_hold(&self) -> Result<Option<BTreeSet<Quadrant>>, String> {
         let held = match source::manifest(&self.set.root)?
             .as_ref()
             .map(source::manifest_shards)
@@ -152,20 +152,20 @@ impl Stage {
         self.not_committing()?;
         self.remove_done(&shard.name())?;
         self.clear_fold(L::LEAF)?;
-        let under = |set: &TileSet| -> Result<Vec<Tile>, String> {
+        let under = |set: &TileSet| -> Result<Vec<Quadrant>, String> {
             Ok(set
                 .by_zoom()?
                 .remove(&L::LEAF)
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|&p| ancestor(p, SHARD_ZOOM) == at)
+                .filter(|&p| p.shard() == at)
                 .collect())
         };
         for p in under(&self.stage)? {
             self.stage.remove(p)?;
         }
         fill(&self.stage)?;
-        let made: FnvHashSet<Tile> = under(&self.stage)?.into_iter().collect();
+        let made: FnvHashSet<Quadrant> = under(&self.stage)?.into_iter().collect();
         let held = under(&self.set)?;
         self.write_done(
             &shard.name(),
@@ -178,14 +178,14 @@ impl Stage {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
-        let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
-        let mut changed: FnvHashSet<Tile> = self
+        let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
+        let mut changed: FnvHashSet<Quadrant> = self
             .stage
             .by_zoom()?
             .remove(&L::LEAF)
             .unwrap_or_default()
             .into_iter()
-            .filter(|&p| tiles.contains(&ancestor(p, SHARD_ZOOM)))
+            .filter(|&p| tiles.contains(&p.shard()))
             .collect();
         let leaves_gone = self.leaves_gone(&whole)?;
         changed.extend(leaves_gone.iter().copied());
@@ -204,7 +204,7 @@ impl Stage {
     }
 
     /// The leaves the whole shards' stages take away.
-    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Tile>, String> {
+    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Quadrant>, String> {
         let mut gone = FnvHashSet::default();
         for shard in whole {
             gone.extend(self.read_done(&shard.name())?);
@@ -225,7 +225,7 @@ impl Stage {
             }
             // The set as it will be, refused before anything moves.
             let whole = self.whole()?;
-            let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
+            let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
             let mut gone = self.leaves_gone(&whole)?;
             gone.extend(self.read_done(FOLD)?);
             let view = Staged {
@@ -235,7 +235,7 @@ impl Stage {
                 whole: &tiles,
                 gone,
             };
-            let fits = L::fits_set(&view, workers)?;
+            let fits = L::check_pool(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
@@ -243,7 +243,7 @@ impl Stage {
                 let mut manifest =
                     source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
                 manifest["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 util::write_atomic(
                     &path,
@@ -258,7 +258,7 @@ impl Stage {
             if let Some(fits) = fits {
                 let text: String = fits
                     .iter()
-                    .map(|(p, fit)| format!("{} {fit}\n", p.name()))
+                    .map(|(p, fit)| format!("{} {fit}\n", p.key()))
                     .collect();
                 let path = self.next_fits();
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
@@ -283,7 +283,7 @@ impl Stage {
     fn finish_commit<L: Base>(&self) -> Result<(), String> {
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
-        let put = |p: Tile| {
+        let put = |p: Quadrant| {
             fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e))
         };
         for shard in self.whole()? {
@@ -292,7 +292,7 @@ impl Stage {
                 .get(&L::LEAF)
                 .into_iter()
                 .flatten()
-                .filter(|&&p| ancestor(p, SHARD_ZOOM) == at)
+                .filter(|&&p| p.shard() == at)
             {
                 put(p)?;
             }
@@ -311,8 +311,8 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
-        // The set's tiles all moved, what it keeps of them is theirs; the
-        // stage's kept beside its tiles, read into it, go.
+        // The set's tiles all moved, its fits are theirs; the stage's beside its
+        // tiles, read into them, go.
         let next = self.next_fits();
         if next.exists() {
             fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;
@@ -326,8 +326,7 @@ impl Stage {
         self.remove_done(COMMIT)
     }
 
-    /// What the set will keep of its tiles (`FITS`) once a commit begun has
-    /// moved them.
+    /// The set's fits (`FITS`) once a commit begun has moved its tiles.
     fn next_fits(&self) -> PathBuf {
         self.set.root.join(format!("{FITS}.next"))
     }
@@ -339,9 +338,7 @@ impl Stage {
             fs::remove_dir_all(to).map_err(|e| io(to, e))?;
         }
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
-        // A reader starts at the kind's coarsest, so no tile there goes, and
-        // none coarser was ever read: a set baked before the fold stopped
-        // there still holds them.
+        // A reader starts at the kind's coarsest, so no tile there goes.
         let skip = if pruned {
             unasked_tiles::<L>(&self.set, L::COARSEST)?
         } else {
@@ -354,7 +351,7 @@ impl Stage {
             .flatten()
             .filter(|p| p.zoom >= L::COARSEST && !skip.contains(p))
         {
-            fs::hard_link(self.set.path(p), to.join(p.name()))
+            fs::hard_link(self.set.path(p), to.join(p.key()))
                 .map_err(|e| io(&self.set.path(p), e))?;
         }
         // What the copy is, which the set may stop being once it changes again.
@@ -467,7 +464,7 @@ impl Run {
                 .flatten()
             {
                 fields["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
             }
             write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }

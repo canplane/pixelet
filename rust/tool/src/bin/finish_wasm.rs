@@ -39,7 +39,7 @@ fn put(mut n: u32, out: &mut Vec<u8>) {
 fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
     let mut out = bytes.get(..8).ok_or("not a wasm module")?.to_vec();
     let mut at = 8;
-    let mut kept = 0;
+    let mut exported = 0;
     while at < bytes.len() {
         let start = at;
         let id = bytes[at];
@@ -67,19 +67,22 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
             leb(bytes, &mut at)?;
             if keep.iter().any(|k| k.as_bytes() == name) {
                 entries.extend_from_slice(&bytes[from..at]);
-                kept += 1;
+                exported += 1;
             }
         }
         let mut body = Vec::new();
-        put(kept, &mut body);
+        put(exported, &mut body);
         body.extend(entries);
         out.push(EXPORT_SECTION);
         put(body.len() as u32, &mut out);
         out.extend(body);
         at = end;
     }
-    if kept as usize != keep.len() {
-        return Err(format!("the module exports {kept} of {}", keep.join(", ")));
+    if exported as usize != keep.len() {
+        return Err(format!(
+            "the module exports {exported} of {}",
+            keep.join(", ")
+        ));
     }
     Ok(out)
 }

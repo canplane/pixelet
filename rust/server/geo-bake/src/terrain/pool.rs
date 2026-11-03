@@ -5,7 +5,7 @@
 //! tile, as a window is a fixed grid of bricks about the eye laid at any
 //! brick, across tiles. Each brick's tree is built as a GPU builds it
 //! (pxl-spec `terrain::fill_fit`), once, as its tile is made, and what it
-//! takes kept beside the tile (`line`, pyramid.rs `FITS`); each window's
+//! takes is the tile's fit (`line`, pyramid.rs `FITS`); each window's
 //! most is the most any placement of it holds, a sliding sum over its
 //! zoom's bricks; the windows together need `terrain::pool_needs`.
 
@@ -14,13 +14,12 @@ use std::collections::BTreeMap;
 use fnv::FnvHashMap;
 use pxl_engine::clipmap::{ACROSS, BRICK};
 use pxl_engine::way::tree::POOL_CHILD_GROUPS;
-use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, Fit};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::pyramid::Staged;
-use crate::terrain::unfit;
 
 /// The bricks a tile is a side.
 const SIDE: u32 = TILE_CELLS / BRICK;
@@ -31,17 +30,21 @@ const SIDE: u32 = TILE_CELLS / BRICK;
 struct Tally {
     bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
     peak_group_cnt: u64,
-    /// Each tile's that takes anything, as the set will keep it.
-    tiles: Vec<(Tile, String)>,
+    /// The fit of each tile that takes anything.
+    tiles: Vec<(Quadrant, String)>,
 }
 
-/// The set's ways' trees fit the pool, and what it will keep of each tile
-/// that takes anything; where they do not, the window that holds the most
+/// The set's ways' trees fit the pool, and the fit of each tile that takes
+/// anything; where they do not, the window that holds the most
 /// at the zoom that needs it, its first brick and its tiles named.
-pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
-    let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
-    let base = set.base.fits()?;
-    let base = base.as_ref();
+pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, String)>, String> {
+    let tiles: Vec<Quadrant> = set.tiles()?.into_values().flatten().collect();
+    let base = match set.base.fits()? {
+        Some(fits) => fits,
+        None if set.base.by_zoom()?.is_empty() => FnvHashMap::default(),
+        None => return Err("the set holds tiles and no fits: bake it again".into()),
+    };
+    let base = &base;
     let chunk = tiles.len().div_ceil(workers.max(1)).max(1);
     let parts: Vec<Result<Tally, String>> = std::thread::scope(|s| {
         let runs: Vec<_> = tiles
@@ -82,14 +85,14 @@ pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String
     let zoom = GROUND.tile_zoom(cell) as Zoom;
     let mut under: Vec<String> = (0..ACROSS as i32 * ACROSS as i32)
         .map(|k| {
-            Tile::new(
+            Quadrant::new(
                 zoom,
                 [
                     (first[0] + k % ACROSS as i32).div_euclid(SIDE as i32),
                     (first[1] + k / ACROSS as i32).div_euclid(SIDE as i32),
                 ],
             )
-            .name()
+            .key()
         })
         .collect();
     under.sort_unstable();
@@ -103,38 +106,30 @@ pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String
     ))
 }
 
-/// The bricks of `tiles` the set holds, each its tree's child groups: as each
-/// tile kept them, or made again from the tile where the set as it is
-/// keeps nothing (`base` none, a set baked before it did).
+/// The bricks of `tiles` the set holds, each its tree's child groups, off each
+/// tile's fit.
 fn set_bricks(
     set: &Staged<'_>,
-    base: Option<&FnvHashMap<Tile, String>>,
-    tiles: &[Tile],
+    base: &FnvHashMap<Quadrant, String>,
+    tiles: &[Quadrant],
 ) -> Result<Tally, String> {
     let mut out = Tally::default();
     for &p in tiles {
-        let fit = match set.fit_of(p, base)? {
-            Some(None) => continue,
-            Some(Some(line)) => of_line(&line).map_err(|e| format!("{}: {e}", p.name()))?,
-            None => {
-                let Some(tile) = set.read::<TerrainTile>(p)? else {
-                    continue;
-                };
-                terrain::fill_fit(p, &tile, |_, _| {})
-                    .map_err(|(at, why)| format!("{}: {}", p.name(), unfit(at, why)))?
-            }
+        let Some(text) = set.fit_of(p, base)? else {
+            continue;
         };
+        let fit = of_line(&text).map_err(|e| format!("{}: {e}", p.key()))?;
         if fit == Fit::default() {
             continue;
         }
         let cell = GROUND.cell_zoom(p.zoom);
         let bricks = out.bricks.entry(cell).or_default();
-        for &(k, held) in &fit.bricks {
+        for &(k, groups) in &fit.bricks {
             let at = [
                 p.at[0] * SIDE as i32 + (k % SIDE) as i32,
                 p.at[1] * SIDE as i32 + (k / SIDE) as i32,
             ];
-            bricks.insert(at, u64::from(held));
+            bricks.insert(at, u64::from(groups));
         }
         out.peak_group_cnt = out.peak_group_cnt.max(u64::from(fit.peak_group_cnt));
         out.tiles.push((p, line(&fit)));
@@ -142,28 +137,28 @@ fn set_bricks(
     Ok(out)
 }
 
-/// What a tile takes as the set keeps it beside the tile: the most a brick
+/// A tile's fit as the set holds it: the most a brick
 /// takes, then each brick with ways as its index and the child groups it holds.
 pub fn line(fit: &Fit) -> String {
     let mut out = fit.peak_group_cnt.to_string();
-    for (k, held) in &fit.bricks {
-        out += &format!(" {k}:{held}");
+    for (k, groups) in &fit.bricks {
+        out += &format!(" {k}:{groups}");
     }
     out
 }
 
 fn of_line(line: &str) -> Result<Fit, String> {
-    let bad = || format!("kept as {line:?}, not as `line` writes");
+    let bad = || format!("a fit of {line:?}, not as `line` writes");
     let mut words = line.split_whitespace();
     let taken = words.next().ok_or_else(bad)?.parse().map_err(|_| bad())?;
-    let held = words
+    let groups = words
         .map(|w| {
             let (k, n) = w.split_once(':').ok_or_else(bad)?;
             Ok((k.parse().map_err(|_| bad())?, n.parse().map_err(|_| bad())?))
         })
         .collect::<Result<_, String>>()?;
     Ok(Fit {
-        bricks: held,
+        bricks: groups,
         peak_group_cnt: taken,
     })
 }
@@ -191,3 +186,7 @@ fn most(bricks: &FnvHashMap<[i32; 2], u64>) -> ([i32; 2], u64) {
         .max_by_key(|&(at, n)| (n, std::cmp::Reverse(at)))
         .unwrap_or(([0; 2], 0))
 }
+
+#[cfg(test)]
+#[path = "pool.test.rs"]
+mod test;

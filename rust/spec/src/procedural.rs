@@ -7,7 +7,7 @@
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::units;
 use crate::space::layer::lattice::TILE_CELLS;
-use crate::space::layer::tile::{Tile, LEAF_ZOOM};
+use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use pxl_engine::way::{Stations, INTERVAL_M};
 use pxl_engine::LEAF_CELL;
@@ -26,7 +26,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn of(tile: Tile) -> Frame {
+    pub fn of(tile: Quadrant) -> Frame {
         let (x0, y0, side) = tile.rect();
         Frame {
             corner: [x0, y0],
@@ -65,5 +65,5 @@ impl Frame {
 /// `unproject`).
 pub fn height_u_per_m(y_u: f64) -> f64 {
     let row = libm::floor(y_u / units(LEAF_ZOOM)) as i32;
-    f64::from(Frame::of(Tile::new(LEAF_ZOOM, [0, row])).per_m()) * units(LEAF_CELL)
+    f64::from(Frame::of(Quadrant::new(LEAF_ZOOM, [0, row])).per_m()) * units(LEAF_CELL)
 }

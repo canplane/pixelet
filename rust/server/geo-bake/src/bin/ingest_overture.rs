@@ -14,9 +14,10 @@
 //! written from it in one transaction, its catalog rows with it, so it is
 //! whole or absent. A run takes the types it is given (`--type`, every one
 //! when none is), each its own table and catalog rows, so one type moves to
-//! a new release while the others stay. It adds the shards it is given to
-//! each table as it is, leaving a feature it holds already; `--whole` makes
-//! each table anew from every shard, beside the live one, and swaps it in.
+//! a new release while the others stay. It writes the shards it is given into
+//! each table as it is, a feature it holds already taking the release's and
+//! one the release no longer has going; `--whole` makes each table anew from every shard, beside the live one, and
+//! swaps it in.
 //! When to run which is the user's to say: the catalog records each shard's
 //! release and when it was ingested, and decides nothing. The release is the
 //! one `source.json` pins. A column a reader
@@ -70,6 +71,11 @@ const NAME: (&str, &str) = (
     "name",
     "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED",
 );
+/// A division's name in every language Overture gives it, for search alone.
+const NAMES: (&str, &str) = (
+    "names",
+    "TEXT GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '') || ' ' || COALESCE(jsonb_path_query_array(properties->'names'->'common', '$.*')::text, '')) STORED",
+);
 
 const TYPES: &[Type] = &[
     Type {
@@ -104,8 +110,8 @@ const TYPES: &[Type] = &[
     Type {
         overture: "division",
         table: "overture_divisions",
-        columns: &[SUBTYPE, NAME],
-        indexes: &["subtype"],
+        columns: &[SUBTYPE, NAME, NAMES],
+        indexes: &["subtype", "USING GIN (names gin_trgm_ops)"],
     },
     // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
     Type {
@@ -124,7 +130,11 @@ const TYPES: &[Type] = &[
         overture: "place",
         table: "overture_places",
         columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
-        indexes: &["USING GIN (properties)", "USING GIN (name gin_trgm_ops)"],
+        indexes: &[
+            "USING GIN (properties)",
+            "USING GIN (name gin_trgm_ops)",
+            "(name) INCLUDE (gers_id, geom)",
+        ],
     },
     Type {
         overture: "segment",
@@ -295,7 +305,11 @@ fn run() -> Result<(), String> {
             add(&mut client, ty, &shards, &release, &accessed_at)?
         };
         client
-            .batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table))
+            .batch_execute(&format!("DROP TABLE {}", staging(ty)))
+            .map_err(|e| e.to_string())?;
+        // The visibility map too, or the index on a place's name reads the rows after all.
+        client
+            .batch_execute(&format!("VACUUM (ANALYZE) {}", ty.table))
             .map_err(|e| e.to_string())?;
         println!(
             "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
@@ -420,10 +434,10 @@ fn download<'a>(
         .flatten()
     {
         let other = entry.file_name().to_string_lossy().to_string();
-        let kept = out
+        let listed = out
             .iter()
             .any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
-        if !kept && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
+        if !listed && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
             let path = entry.path();
             std::fs::remove_dir_all(&path)
                 .or_else(|_| std::fs::remove_file(&path))
@@ -501,7 +515,7 @@ fn copy_extracts<'a>(
 }
 
 /// The parents the staged divisions name and neither the staging table nor,
-/// for a partial run, the live one holds, fetched by id with the CLI's
+/// for a partial run, the live one holds at this release, fetched by id with the CLI's
 /// `gers` and staged under no shard, until every parent is held. A feature
 /// the registry finds in another release than the run's fails the run. An
 /// ancestor's extract is named by its release and id, so a run fetches it
@@ -510,7 +524,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
     let t = staging(ty);
     let held = if live {
         format!(
-            " AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)",
+            " AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id AND l.release = '{release}')",
             ty.table
         )
     } else {
@@ -521,7 +535,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
         PARENT.1
     );
     let prefix = format!("{}-ancestor.", ty.overture);
-    let mut kept = Vec::new();
+    let mut all = Vec::new();
     let mut asked = FnvHashSet::default();
     loop {
         let missing: Vec<String> = client
@@ -569,7 +583,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             extracts.push(extract);
         }
         copy_extracts(client, &t, extracts.iter().map(|p| (p.as_path(), None)))?;
-        kept.extend(extracts);
+        all.extend(extracts);
     }
     for entry in std::fs::read_dir(EXTRACTS)
         .map_err(|e| e.to_string())?
@@ -580,13 +594,13 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
         }
     }
-    Ok(kept.len())
+    Ok(all.len())
 }
 
 /// Each feature of the staging table once, in key order, made into a row.
-fn feats(ty: &Type, into: &str) -> String {
+fn feats(ty: &Type, into: &str, release: &str) -> String {
     format!(
-        "INSERT INTO {into} (gers_id, properties, geom) SELECT gers_id, properties::jsonb, {} FROM (SELECT DISTINCT ON (gers_id) gers_id, properties, wkb FROM {} ORDER BY gers_id) f",
+        "INSERT INTO {into} (gers_id, properties, release, geom) SELECT gers_id, properties::jsonb, '{release}', {} FROM (SELECT DISTINCT ON (gers_id) gers_id, properties, wkb FROM {} ORDER BY gers_id) f",
         projected("wkb"),
         staging(ty)
     )
@@ -641,7 +655,9 @@ fn build_and_swap(
             table(ty, &next)
         ))
         .map_err(db)?;
-    let rows = client.execute(&feats(ty, &next), &[]).map_err(db)? as i64;
+    let rows = client
+        .execute(&feats(ty, &next, release), &[])
+        .map_err(db)? as i64;
     client.batch_execute(&indexes(ty, &next)).map_err(db)?;
     for attempt in 1..=SWAP_TRIES {
         let mut tx = client.transaction().map_err(db)?;
@@ -678,8 +694,10 @@ fn build_and_swap(
     ))
 }
 
-/// The shards added to the table as it is: a feature held already is left,
-/// with their catalog rows, in one transaction.
+/// The shards written into the table as it is: a feature held already takes
+/// the release's, and one of an older release whose lower-left corner lies in a
+/// shard, apron apart, is gone from this release and goes, with their catalog
+/// rows, in one transaction.
 fn add(
     client: &mut Client,
     ty: &Type,
@@ -691,10 +709,38 @@ fn add(
     let mut tx = client.transaction().map_err(db)?;
     let rows = tx
         .execute(
-            &format!("{} ON CONFLICT (gers_id) DO NOTHING", feats(ty, ty.table)),
+            &format!(
+                "{} ON CONFLICT (gers_id) DO UPDATE SET properties = EXCLUDED.properties, release = EXCLUDED.release, geom = EXCLUDED.geom",
+                feats(ty, ty.table, release)
+            ),
             &[],
         )
         .map_err(db)? as i64;
+    let gone = format!(
+        "DELETE FROM {} WHERE release <> $1 AND geom && ST_MakeEnvelope($2, $3, $4, $5, 3857)
+           AND ST_XMin(geom) >= $2 AND ST_YMin(geom) >= $3 AND ST_XMin(geom) < $4 AND ST_YMin(geom) < $5",
+        ty.table
+    );
+    let staged = format!("SELECT count(*) FROM {} WHERE shard = $1", staging(ty));
+    let mut removed = 0;
+    for s in shards {
+        let [left, bottom, right, top] = s.own;
+        let older = tx
+            .execute(&gone, &[&release, &left, &bottom, &right, &top])
+            .map_err(db)?;
+        let held: i64 = tx.query_one(&staged, &[&s.name]).map_err(db)?.get(0);
+        if held == 0 && older > 0 {
+            return Err(format!(
+                "{}: {} came back empty and holds {older} features of an older release; nothing written",
+                ty.table, s.name
+            ));
+        }
+        removed += older;
+    }
+    println!(
+        "[ingest/{}] {removed} features gone from {release}",
+        ty.table
+    );
     catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
@@ -709,6 +755,8 @@ struct Shard {
     at: [i32; 2],
     merc: [f64; 4],
     deg: [f64; 4],
+    /// Its own ground, no apron, the maximum exclusive (`Node::rect`), in meters.
+    own: [f64; 4],
 }
 
 impl Shard {
@@ -722,6 +770,7 @@ impl Shard {
             at: node.at,
             merc,
             deg: [w, s, if e <= w { 180.0 } else { e }, n],
+            own: node.rect().map(epsg3857::merc_from_u),
         }
     }
 
@@ -964,7 +1013,7 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
 ";
 
 fn table(ty: &Type, t: &str) -> String {
-    let mut sql = format!("CREATE TABLE IF NOT EXISTS {t} (\n  gers_id TEXT NOT NULL PRIMARY KEY,\n  properties JSONB NOT NULL,\n");
+    let mut sql = format!("CREATE TABLE IF NOT EXISTS {t} (\n  gers_id TEXT NOT NULL PRIMARY KEY,\n  properties JSONB NOT NULL,\n  release TEXT NOT NULL,\n");
     for (name, def) in ty.columns {
         sql.push_str(&format!("  {name} {def},\n"));
     }

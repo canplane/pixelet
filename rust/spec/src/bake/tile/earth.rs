@@ -11,7 +11,7 @@ use crate::bake::malformed;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::demand_dist;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use crate::space::layer::tile::TOP_ZOOM;
+use crate::space::layer::quadrant::TOP_ZOOM;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 
