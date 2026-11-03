@@ -150,10 +150,19 @@ fn literal(val: u32, format: &str) -> String {
 }
 
 /// Every command is numbered by a major and a minor that cmd.json names. A
-/// table's numbers are each given out once.
+/// table's numbers are each given out once, and no member takes a global's name.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
+        // Each member is a top-level `export const` in TypeScript, which a
+        // bundler that hoists it as `var` turns into the module's own `Object`,
+        // undefined when its `Object.defineProperty` runs.
+        if all.iter().any(|m| m.name == "Object") {
+            return Err(format!(
+                "{json}: {}'s member Object hides the global in its TypeScript module",
+                e.name
+            ));
+        }
         for (i, m) in all.iter().enumerate() {
             if let Some(other) = all[..i].iter().find(|o| o.val == m.val) {
                 return Err(format!(

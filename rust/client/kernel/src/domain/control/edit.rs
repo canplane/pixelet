@@ -42,9 +42,9 @@ use xpute_guest::global::Global;
 pub struct Tool {
     pub active_tool: ActiveTool,
     /// A placed color or a ground palette entry.
-    pub object_cube: Cube,
+    pub cube: Cube,
     /// The object size by its tier (`object_zoom_of`).
-    pub object_tier: u32,
+    pub tier: u32,
     pub decor_id: DecorId,
 }
 
@@ -52,8 +52,8 @@ impl Default for Tool {
     fn default() -> Tool {
         Tool {
             active_tool: ActiveTool::Pointer,
-            object_cube: Cube::Object(cube::Object::red),
-            object_tier: 0,
+            cube: Cube::Object(cube::Object::red),
+            tier: 0,
             decor_id: DecorId::tree,
         }
     }
@@ -259,7 +259,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
     match PlacementTool::of(&ui) {
         // The slot may have filled since the last hover update.
         Some(tool) if is_placement_blocked(tool, &hovered) => {}
-        Some(PlacementTool::Object(zoom)) => place(&hovered, zoom, ui.object_cube),
+        Some(PlacementTool::Cube(zoom)) => place(&hovered, zoom, ui.cube),
         Some(PlacementTool::Decor(id)) => place_decor(&hovered, id),
         // A draft opens there, its text the shell's to write.
         Some(PlacementTool::Marker) => draft_new(&hovered),

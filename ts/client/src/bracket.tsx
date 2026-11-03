@@ -37,8 +37,11 @@ export interface Config {
 export interface GpuHeard {
   /** A device answered, the first time or after a loss. */
   ready(): void;
-  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. A GPU counts as present until a place says otherwise, and a place says only what it hears. */
-  state(state: "present" | "waiting" | "missing" | "lost"): void;
+  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU here, or none outside a secure context. A GPU counts as present until a place says otherwise, and a place says only what it hears. */
+  state(
+    state:
+      "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure",
+  ): void;
   /** A completion the device wrote between turns, which a turn must read. */
   wake(): void;
 }

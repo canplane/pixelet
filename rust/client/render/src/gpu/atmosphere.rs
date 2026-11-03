@@ -303,9 +303,10 @@ pub struct Atmosphere {
     /// copied and on their way (`Measure::bit`).
     pending: u32,
     flying: u32,
-    /// The words as they land, and their word (`DONE` once in).
-    landed_words: [u32; SLOPES],
-    landed_word: u32,
+    /// The words as they land, and their word (`DONE` once in): on the heap, as
+    /// the host writes them and a native build's statics are outside its memory.
+    landed_words: Box<[u32; SLOPES]>,
+    landed_word: Box<u32>,
     plan: Plan,
     sun_mu: f32,
     moon_mu: f32,
@@ -448,8 +449,8 @@ impl Atmosphere {
             ),
             pending: 0,
             flying: 0,
-            landed_words: [0; SLOPES],
-            landed_word: 0,
+            landed_words: Box::new([0; SLOPES]),
+            landed_word: Box::new(0),
             plan: Plan::default(),
             read: Read::default(),
             exposure_read: Read::default(),
@@ -764,7 +765,7 @@ impl Atmosphere {
         if exposed {
             self.dispatch_exposure(ctx);
         }
-        let copied = self.pending != 0 && self.flying == 0 && self.landed_word == 0;
+        let copied = self.pending != 0 && self.flying == 0 && *self.landed_word == 0;
         if copied {
             g.copy_buf(
                 encoder,
@@ -780,7 +781,7 @@ impl Atmosphere {
     /// What the tables measured, mapped back once the copy's encoder is
     /// submitted; its landing wakes the turn that reads it.
     pub fn read_back(&mut self, g: &Gpu) {
-        if self.flying != 0 && self.landed_word == 0 {
+        if self.flying != 0 && *self.landed_word == 0 {
             let addr = off_of(self.landed_words.as_ptr()) as u32;
             g.map_read(
                 self.slopes.1,
@@ -798,10 +799,10 @@ impl Atmosphere {
     /// and the sample it was taken over; and whether each light reaches the
     /// air.
     fn take_slopes(&mut self) {
-        if self.landed_word != 1 | DONE {
+        if *self.landed_word != 1 | DONE {
             return;
         }
-        let (w, flying) = (self.landed_words, self.flying);
+        let (w, flying) = (*self.landed_words, self.flying);
         let word = |at: usize| f32::from_bits(w[at]);
         let has = |m: Measure| flying & m.bit() != 0;
         for k in 0..2 {
@@ -822,7 +823,7 @@ impl Atmosphere {
             self.ground.step = Some(1.0 / word(GROUND_WORDS));
             self.ground.sample = word(GROUND_WORDS + 1);
         }
-        (self.flying, self.landed_word) = (0, 0);
+        (self.flying, *self.landed_word) = (0, 0);
     }
 
     /// Each light's step (`LightMemo::step`), the sun's first: in reach, the

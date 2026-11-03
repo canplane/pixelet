@@ -17,7 +17,13 @@ import {
   VERSION_BYTES,
 } from "./publication.spec.ts";
 import { Command, encode_fs_mount } from "@/abi/cmd.spec.ts";
-import { Source } from "@/abi/state.ts";
+import {
+  SOURCE_ASKING,
+  SOURCE_DECLARED,
+  SOURCE_FAILING,
+  SOURCE_REFUSED,
+  type Source,
+} from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
@@ -89,7 +95,7 @@ export function declaration(text: string): Declaration | null {
   return d as Declaration;
 }
 
-let state = Source.Asking;
+let state: Source = SOURCE_ASKING;
 let cur_declaration: Declaration | null = null;
 let versions: readonly { kind: BaseLayer; version: string }[] = [];
 const listeners = new Listeners();
@@ -164,15 +170,15 @@ function send_source(
   );
 }
 
-/** Whether the source was declared; false where it never will be. */
+/** Settled once the source is declared or refused (`source_state`). */
 export async function declare_source(
   send: SendSource = send_source,
-): Promise<boolean> {
+): Promise<void> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
-      set(Source.Failing);
+      set(SOURCE_FAILING);
       await new Promise((resolve) =>
         setTimeout(resolve, Math.random() * wait_ms),
       );
@@ -185,8 +191,8 @@ export async function declare_source(
     console.error(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
     );
-    set(Source.Refused);
-    return false;
+    set(SOURCE_REFUSED);
+    return;
   }
   const shards = Object.keys(read.shard);
   if (
@@ -199,11 +205,10 @@ export async function declare_source(
     console.error(
       `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
-    set(Source.Refused);
-    return false;
+    set(SOURCE_REFUSED);
+    return;
   }
   cur_declaration = read;
   versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
-  set(Source.Declared);
-  return true;
+  set(SOURCE_DECLARED);
 }

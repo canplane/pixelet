@@ -2,45 +2,66 @@
 
 import { expect, test } from "vitest";
 
-import { Boot, Gpu, Source } from "@/abi/state.ts";
+import { Message } from "@/abi/cmd.spec.ts";
+
+import {
+  BOOT_FAILED,
+  BOOT_LOADING,
+  BOOT_STARTED,
+  BOOT_STARTING,
+  BOOT_STOPPED,
+  GPU_ASKING,
+  GPU_LOST,
+  GPU_INSECURE,
+  GPU_MISSING,
+  GPU_UNSUPPORTED,
+  GPU_PRESENT,
+  GPU_WAITING,
+  SOURCE_ASKING,
+  SOURCE_DECLARED,
+  SOURCE_FAILING,
+  SOURCE_REFUSED,
+} from "@/abi/state.ts";
 import { coverOf, type Standing } from "./cover.ts";
 
 const running: Standing = {
-  boot: Boot.Started,
-  gpu: Gpu.Present,
-  source: Source.Declared,
+  boot: BOOT_STARTED,
+  gpu: GPU_PRESENT,
+  source: SOURCE_DECLARED,
   online: true,
-  givenUp: false,
-  readFailing: false,
+  stall: null,
   stopCode: null,
   made: 1,
+  placed: true,
 };
 const starting: Standing = {
   ...running,
-  boot: Boot.Starting,
-  source: Source.Asking,
-  gpu: Gpu.Asking,
+  boot: BOOT_STARTING,
+  source: SOURCE_ASKING,
+  gpu: GPU_ASKING,
   made: 0,
 };
-const loading: Standing = { ...running, boot: Boot.Loading, made: 0.5 };
+const loading: Standing = { ...running, boot: BOOT_LOADING, made: 0.5 };
 
 test("coverOf - before it ran: failed where it will not, progress while it waits", () => {
   const of = (s: Partial<Standing>) => coverOf({ ...starting, ...s });
   for (const [s, key] of [
-    [{ boot: Boot.Failed }, "failed.boot"],
-    [{ gpu: Gpu.Missing }, "failed.gpu"],
-    [{ source: Source.Refused }, "failed.source"],
+    [{ boot: BOOT_FAILED }, "failed.boot"],
+    [{ gpu: GPU_MISSING }, "failed.gpu"],
+    [{ gpu: GPU_UNSUPPORTED }, "failed.webgpu"],
+    [{ gpu: GPU_INSECURE }, "failed.insecure"],
+    [{ source: SOURCE_REFUSED }, "failed.source"],
   ] as const) {
     expect(of(s)).toEqual({ kind: "failed", of: key });
   }
   for (const [s, key] of [
     [{}, "progress.gpu"],
-    [{ gpu: Gpu.Waiting }, "progress.gpu"],
+    [{ gpu: GPU_WAITING }, "progress.gpu"],
     [{ online: false }, "progress.offline"],
-    [{ source: Source.Failing }, "progress.server"],
-    [{ gpu: Gpu.Present }, "progress.source"],
+    [{ source: SOURCE_FAILING }, "progress.server"],
+    [{ gpu: GPU_PRESENT }, "progress.source"],
   ] as const) {
-    expect(of(s)).toEqual({ kind: "progress", of: key });
+    expect(of(s)).toEqual({ kind: "progress", of: key, made: expect.any(Number) });
   }
 });
 
@@ -48,34 +69,36 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
   const of = (s: Partial<Standing>) => coverOf({ ...loading, ...s });
   for (const [s, key] of [
     [{}, "progress.shaders"],
-    [{ made: 1 }, "toast.world_loading"],
+    [{ made: 1 }, "progress.area"],
+    [{ made: 1, placed: false }, "progress.location"],
+    [{ placed: false }, "progress.shaders"],
     [{ online: false }, "progress.offline"],
-    [{ readFailing: true }, "progress.server"],
-    [{ gpu: Gpu.Waiting }, "progress.gpu"],
+    [{ stall: Message.WorldReadFailing }, "progress.server"],
+    [{ gpu: GPU_WAITING }, "progress.gpu"],
   ] as const) {
-    expect(of(s)).toEqual({ kind: "progress", of: key });
+    expect(of(s)).toEqual({ kind: "progress", of: key, made: expect.any(Number) });
   }
-  expect(of({ gpu: Gpu.Lost })).toMatchObject({ kind: "panic" });
-  expect(of({ givenUp: true })).toMatchObject({ kind: "panic" });
+  expect(of({ gpu: GPU_LOST })).toMatchObject({ kind: "panic" });
+  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({ kind: "panic" });
 });
 
 test("coverOf - once it shows, a panic or nothing", () => {
   const of = (s: Partial<Standing>) => coverOf({ ...running, ...s });
   expect(of({})).toBeNull();
   expect(of({ online: false })).toBeNull();
-  expect(of({ gpu: Gpu.Waiting })).toBeNull();
-  expect(of({ readFailing: true })).toBeNull();
-  expect(of({ gpu: Gpu.Lost })).toMatchObject({
+  expect(of({ gpu: GPU_WAITING })).toBeNull();
+  expect(of({ stall: Message.WorldReadFailing })).toBeNull();
+  expect(of({ gpu: GPU_LOST })).toMatchObject({
     kind: "panic",
     code: "GPU_LOST",
   });
-  expect(of({ givenUp: true })).toMatchObject({
+  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
     kind: "panic",
     code: "WORLD_UNAVAILABLE",
   });
-  expect(of({ boot: Boot.Stopped, stopCode: "X" })).toEqual({
+  expect(of({ boot: BOOT_STOPPED, stopCode: "X" })).toEqual({
     kind: "panic",
-    of: "panic.kernel",
+    of: "panic.app",
     code: "X",
   });
 });

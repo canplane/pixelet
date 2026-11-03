@@ -62,12 +62,9 @@ const LANG_KEY = "pxl:lang";
 /** The catalog a system's tag reads: its language, and for Chinese its script,
  * Taiwan's, Hong Kong's and Macau's being Traditional where the tag names none. */
 function languageOf(tag: string): string {
-  const { language, script, region } = new Intl.Locale(tag);
+  const [language] = tag.split("-");
   if (language !== "zh") return language;
-  const traditional =
-    script === "Hant" ||
-    (script === undefined && ["TW", "HK", "MO"].includes(region ?? ""));
-  return traditional ? "zh-Hant" : "zh-Hans";
+  return /^zh-(Hant|TW|HK|MO)/.test(tag) ? "zh-Hant" : "zh-Hans";
 }
 
 /** The language chosen, else the first supported of the system's preferences, else en. */

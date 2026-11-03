@@ -63,7 +63,7 @@ function CubeItem({
   cell: f64;
   onPick: (cube: Cube) => void;
 }) {
-  const active = useInHand({ tool: ActiveTool.Object, cube });
+  const active = useInHand({ tool: ActiveTool.Cube, cube });
 
   return (
     <Item
@@ -136,12 +136,10 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   );
 }
 
-const enum DrawerTab {
-  Cube = 0,
-  Decor = 1,
-  Marker = 2,
-  Character = 3,
-}
+const CUBE = 0;
+const DECOR = 1;
+const MARKER = 2;
+const CHARACTER = 3;
 
 /** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
@@ -168,15 +166,15 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
         <Tabbed
           onClose={onClose}
           tabs={[
-            { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
-            { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
-            { value: DrawerTab.Marker, label: t("drawer.tabs.marker") },
-            { value: DrawerTab.Character, label: t("drawer.tabs.character") },
+            { value: CUBE, label: t("drawer.tabs.cube") },
+            { value: DECOR, label: t("drawer.tabs.decor") },
+            { value: MARKER, label: t("drawer.tabs.marker") },
+            { value: CHARACTER, label: t("drawer.tabs.character") },
           ]}
         >
           {(tab) => (
             <>
-              {tab === DrawerTab.Cube &&
+              {tab === CUBE &&
                 [...SECTIONS].map(([section, cubes]) => (
                   <Grid
                     key={section}
@@ -199,7 +197,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                   </Grid>
                 ))}
 
-              {tab === DrawerTab.Decor &&
+              {tab === DECOR &&
                 [...DECOR_SECTIONS].map(([section, kinds]) => (
                   <Grid
                     key={section}
@@ -221,7 +219,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                     }
                   </Grid>
                 ))}
-              {tab === DrawerTab.Marker && (
+              {tab === MARKER && (
                 <Grid
                   head={<SectionTitle>{t("drawer.sections.pin")}</SectionTitle>}
                 >
@@ -229,7 +227,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                 </Grid>
               )}
 
-              {tab === DrawerTab.Character && <CharacterPicker />}
+              {tab === CHARACTER && <CharacterPicker />}
             </>
           )}
         </Tabbed>

@@ -14,6 +14,7 @@ import { kernel_tool } from "@/port/edit.ts";
 import { kernel_chat } from "@/port/scene.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
+import * as DockMode from "./mode.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 interface ChatLine {
@@ -26,7 +27,7 @@ let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
 export type RecentPick =
-  | { tool: typeof ActiveTool.Object; cube: Cube }
+  | { tool: typeof ActiveTool.Cube; cube: Cube }
   | {
       tool: typeof ActiveTool.Decor;
       kind: u16;
@@ -34,8 +35,8 @@ export type RecentPick =
   | { tool: typeof ActiveTool.Marker };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
-  if (a.tool === ActiveTool.Object) {
-    return b.tool === ActiveTool.Object && a.cube === b.cube;
+  if (a.tool === ActiveTool.Cube) {
+    return b.tool === ActiveTool.Cube && a.cube === b.cube;
   }
   if (a.tool === ActiveTool.Decor) {
     return b.tool === ActiveTool.Decor && a.kind === b.kind;
@@ -45,7 +46,7 @@ function isSamePick(a: RecentPick, b: RecentPick): boolean {
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Object) return allCubes.includes(pick.cube);
+  if (pick.tool === ActiveTool.Cube) return allCubes.includes(pick.cube);
   if (pick.tool === ActiveTool.Decor) return decorIds.includes(pick.kind);
   return pick.tool === ActiveTool.Marker;
 }
@@ -61,11 +62,9 @@ function touchRecent(
   return [pick, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
-/** What the dock is for. */
-export const enum DockMode {
-  Palette = 0,
-  Message = 1,
-}
+/** One of DockMode's. */
+type DockMode = (typeof DockMode)[keyof typeof DockMode];
+export { DockMode };
 
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface DockState {
@@ -87,13 +86,13 @@ interface SwatchFlash {
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: object.white },
-  { tool: ActiveTool.Object, cube: ground.land },
-  { tool: ActiveTool.Object, cube: ground.water },
-  { tool: ActiveTool.Object, cube: ground.building },
-  { tool: ActiveTool.Object, cube: ground.residential_road },
-  { tool: ActiveTool.Object, cube: object.red },
-  { tool: ActiveTool.Object, cube: object.blue },
+  { tool: ActiveTool.Cube, cube: object.white },
+  { tool: ActiveTool.Cube, cube: ground.land },
+  { tool: ActiveTool.Cube, cube: ground.water },
+  { tool: ActiveTool.Cube, cube: ground.building },
+  { tool: ActiveTool.Cube, cube: ground.residential_road },
+  { tool: ActiveTool.Cube, cube: object.red },
+  { tool: ActiveTool.Cube, cube: object.blue },
   { tool: ActiveTool.Decor, kind: decorIds[0] },
 ];
 
@@ -199,8 +198,8 @@ function touch(pick: RecentPick): void {
 }
 
 export function selectCube(cube: Cube): void {
-  kernel_tool(ActiveTool.Object, cube, kernel_snapshot().tool.tier);
-  touch({ tool: ActiveTool.Object, cube });
+  kernel_tool(ActiveTool.Cube, cube, kernel_snapshot().tool.tier);
+  touch({ tool: ActiveTool.Cube, cube });
 }
 
 export function selectDecor(kind: u16): void {
@@ -232,7 +231,7 @@ export function flashSwatch(cube: Cube, open: boolean): void {
 
 export function stepSize(delta: i32): void {
   const h = kernel_snapshot().tool;
-  if (h.active !== ActiveTool.Object) return;
+  if (h.active !== ActiveTool.Cube) return;
   selectTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
   flashSwatch(h.cube, true);
 }
@@ -248,8 +247,8 @@ export function appendChatLine(text: string): void {
 
 export function useInHand(pick: RecentPick): boolean {
   return useKernel(({ tool: h }) => {
-    if (pick.tool === ActiveTool.Object) {
-      return h.active === ActiveTool.Object && h.cube === pick.cube;
+    if (pick.tool === ActiveTool.Cube) {
+      return h.active === ActiveTool.Cube && h.cube === pick.cube;
     }
     if (pick.tool === ActiveTool.Decor) {
       return h.active === ActiveTool.Decor && h.decor === pick.kind;

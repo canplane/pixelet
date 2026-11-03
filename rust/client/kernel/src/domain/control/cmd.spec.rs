@@ -388,7 +388,7 @@ impl PointerType {
 pub enum ActiveTool {
     #[default]
     Pointer = 0,
-    Object = 1,
+    Cube = 1,
     Decor = 2,
     Eraser = 3,
     Marker = 4,
@@ -397,7 +397,7 @@ pub enum ActiveTool {
 impl ActiveTool {
     pub const ALL: [ActiveTool; 5] = [
         ActiveTool::Pointer,
-        ActiveTool::Object,
+        ActiveTool::Cube,
         ActiveTool::Decor,
         ActiveTool::Eraser,
         ActiveTool::Marker,

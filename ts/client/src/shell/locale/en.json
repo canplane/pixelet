@@ -217,29 +217,25 @@
     "offline": "Waiting for the network…",
     "server": "Waiting for the server…",
     "source": "Reading the world's data…",
-    "shaders": "Building shaders…"
+    "location": "Waiting for your location…",
+    "shaders": "Building shaders…",
+    "area": "Loading area…"
   },
   "failed": {
-    "web": {
-      "webgpu": {
-        "title": "WebGPU isn’t available.",
-        "body": "Update your browser to the latest version or open this in another browser."
-      },
-      "insecure": {
-        "title": "An HTTPS connection is required.",
-        "body": "Open this again at its https:// address."
-      },
-      "gpu": {
-        "title": "WebGPU couldn’t start.",
-        "body": "Check the settings of your browser or device."
-      }
+    "webgpu": {
+      "title": "WebGPU isn’t available.",
+      "body": "Update your browser to the latest version or open this in another browser."
+    },
+    "insecure": {
+      "title": "An HTTPS connection is required.",
+      "body": "Open this again at its https:// address."
+    },
+    "gpu": {
+      "title": "WebGPU couldn’t start.",
+      "body": "Check the settings of your browser or device."
     },
     "boot": {
       "title": "Something went wrong.",
-      "body": "Please try again in a moment."
-    },
-    "gpu": {
-      "title": "The WebGPU connection failed.",
       "body": "Please try again in a moment."
     },
     "source": {
@@ -248,13 +244,13 @@
     }
   },
   "panic": {
-    "kernel": {
+    "app": {
       "title": "The app stopped.",
-      "body": "Reload the page."
+      "body": "Reload or reopen the app."
     },
     "gpu": {
       "title": "The WebGPU connection was lost.",
-      "body": "Reload the page."
+      "body": "Reload or reopen the app."
     },
     "server": {
       "title": "The server connection failed.",

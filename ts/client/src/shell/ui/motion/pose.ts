@@ -48,3 +48,11 @@ export interface SpinProps {
   periodMs: f64;
   children: ReactNode;
 }
+
+/** A view passing along x from `fromX` to `toX`, again and again. */
+export interface SweepProps {
+  fromX: f64;
+  toX: f64;
+  periodMs: f64;
+  style?: StyleProp<ViewStyle>;
+}

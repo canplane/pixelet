@@ -23,7 +23,7 @@ import {
   GroundStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
-import { declare_source } from "@/driver/namespace/source.ts";
+import { declare_source, source_state } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused_files } from "@/driver/namespace/refusal.ts";
 
@@ -45,12 +45,20 @@ import { text_call } from "@/driver/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, gpu_present, set_gpu } from "@/driver/gpu.ts";
 import { world_visible } from "@/driver/sys.ts";
-import { Boot } from "@/abi/state.ts";
+import {
+  BOOT_FAILED,
+  BOOT_LOADING,
+  BOOT_STARTED,
+  BOOT_STARTING,
+  BOOT_STOPPED,
+  type Boot,
+  SOURCE_DECLARED,
+} from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
 import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
 
 let called = false;
-let state = Boot.Starting;
+let state: Boot = BOOT_STARTING;
 const listeners = new Listeners();
 
 function set(next: Boot): void {
@@ -71,7 +79,7 @@ const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
     follow_refused_files(kernel_snapshot().refused_files);
-    if (state === Boot.Loading && loaded(kernel_snapshot())) set(Boot.Started);
+    if (state === BOOT_LOADING && loaded(kernel_snapshot())) set(BOOT_STARTED);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
@@ -101,19 +109,21 @@ export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;
   open().then(
-    (declared) => {
-      if (declared && state === Boot.Starting) set(Boot.Loading);
+    () => {
+      if (source_state() === SOURCE_DECLARED && state === BOOT_STARTING) {
+        set(BOOT_LOADING);
+      }
     },
     (err) => {
       console.error("[boot] the client did not start:", err);
-      if (state === Boot.Starting) set(Boot.Failed);
+      if (state === BOOT_STARTING) set(BOOT_FAILED);
     },
   );
 }
 
 /** Whether the client can run: settled once the kernel runs, a GPU has answered
  * and the world's source is declared; never where no GPU answers. */
-async function open(): Promise<boolean> {
+async function open(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
@@ -166,9 +176,9 @@ async function open(): Promise<boolean> {
   // Its turns end with it.
   HOST.doorbell.stopped = () => {
     HOST.strobe.stop();
-    set(Boot.Stopped);
+    set(BOOT_STOPPED);
   };
   const declared = declare_source();
   await gpu_present();
-  return declared;
+  await declared;
 }

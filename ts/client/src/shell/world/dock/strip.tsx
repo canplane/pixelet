@@ -55,11 +55,10 @@ const LONG_PRESS_MS = 300;
 /** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
 export const DRAG_PX = 12;
 
-const enum Gesture {
-  Pending = 0,
-  Popover = 1,
-  Drag = 2,
-}
+const PENDING = 0;
+const POPOVER = 1;
+const DRAG = 2;
+type Gesture = typeof PENDING | typeof POPOVER | typeof DRAG;
 
 /** A swatch's gesture. `press`, `pressIn` and `longPress` are React Native
  * `Pressable`'s; `release` is a lift once the sizes are open, and `end` closes
@@ -81,7 +80,7 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   handlers.current = g;
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!responder.current) {
-    let state = Gesture.Pending;
+    let state: Gesture = PENDING;
     let hold: ReturnType<typeof setTimeout> | null = null;
     const stopHold = () => {
       if (hold !== null) clearTimeout(hold);
@@ -89,44 +88,44 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
     };
     const longPress = () => {
       stopHold();
-      if (state !== Gesture.Pending) return;
-      state = Gesture.Popover;
+      if (state !== PENDING) return;
+      state = POPOVER;
       handlers.current.longPress();
     };
     responder.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        state = Gesture.Pending;
+        state = PENDING;
         if (swatch.current) handlers.current.pressIn(swatch.current);
         hold = setTimeout(longPress, LONG_PRESS_MS);
       },
       onPanResponderMove: (_e, s) => {
-        if (state === Gesture.Popover) {
+        if (state === POPOVER) {
           return handlers.current.move(s.moveX, s.moveY);
         }
         if (
-          state === Gesture.Drag ||
+          state === DRAG ||
           (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)
         )
           return;
-        state = Gesture.Drag;
+        state = DRAG;
         stopHold();
         handlers.current.end();
       },
       onPanResponderRelease: (_e, s) => {
         stopHold();
-        if (state === Gesture.Popover) {
+        if (state === POPOVER) {
           handlers.current.release(s.moveX, s.moveY);
-        } else if (state === Gesture.Pending) handlers.current.press();
+        } else if (state === PENDING) handlers.current.press();
         handlers.current.end();
-        state = Gesture.Pending;
+        state = PENDING;
       },
       onPanResponderTerminate: () => {
         stopHold();
         handlers.current.end();
-        state = Gesture.Pending;
+        state = PENDING;
       },
-      onPanResponderTerminationRequest: () => state !== Gesture.Popover,
+      onPanResponderTerminationRequest: () => state !== POPOVER,
     });
   }
   return responder.current.panHandlers;
@@ -139,7 +138,7 @@ function SwatchButton({
   cube: Cube;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  const selected = useInHand({ tool: ActiveTool.Object, cube });
+  const selected = useInHand({ tool: ActiveTool.Cube, cube });
   const ref = useRef<View | null>(null);
   const swatchFlash = useSwatchFlash();
   useEffect(() => {
@@ -308,7 +307,7 @@ export function Strip({
         contentContainerStyle={styles.picksContent}
       >
         {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Object ? (
+          pick.tool === ActiveTool.Cube ? (
             <SwatchButton key={pick.cube} cube={pick.cube} gesture={gesture} />
           ) : pick.tool === ActiveTool.Decor ? (
             <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />

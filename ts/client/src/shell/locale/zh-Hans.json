@@ -217,29 +217,25 @@
     "offline": "正在等待网络连接。",
     "server": "正在等待服务器连接。",
     "source": "正在确认世界数据。",
-    "shaders": "正在生成着色器。"
+    "location": "正在等待位置信息。",
+    "shaders": "正在生成着色器。",
+    "area": "正在加载空间。"
   },
   "failed": {
-    "web": {
-      "webgpu": {
-        "title": "无法使用 WebGPU。",
-        "body": "请将浏览器更新到最新版本，或使用其他浏览器打开。"
-      },
-      "insecure": {
-        "title": "需要 HTTPS 连接。",
-        "body": "请通过 https:// 地址重新访问。"
-      },
-      "gpu": {
-        "title": "无法启动 WebGPU。",
-        "body": "请检查浏览器或设备设置。"
-      }
+    "webgpu": {
+      "title": "无法使用 WebGPU。",
+      "body": "请将浏览器更新到最新版本，或使用其他浏览器打开。"
+    },
+    "insecure": {
+      "title": "需要 HTTPS 连接。",
+      "body": "请通过 https:// 地址重新访问。"
+    },
+    "gpu": {
+      "title": "无法启动 WebGPU。",
+      "body": "请检查浏览器或设备设置。"
     },
     "boot": {
       "title": "发生临时错误。",
-      "body": "请稍后重试。"
-    },
-    "gpu": {
-      "title": "WebGPU 连接失败。",
       "body": "请稍后重试。"
     },
     "source": {
@@ -248,13 +244,13 @@
     }
   },
   "panic": {
-    "kernel": {
+    "app": {
       "title": "应用已停止。",
-      "body": "请刷新页面。"
+      "body": "请刷新或重新打开应用。"
     },
     "gpu": {
       "title": "WebGPU 连接已断开。",
-      "body": "请刷新页面。"
+      "body": "请刷新或重新打开应用。"
     },
     "server": {
       "title": "服务器连接失败。",

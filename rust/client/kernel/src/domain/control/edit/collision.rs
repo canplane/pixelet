@@ -21,7 +21,7 @@ use crate::domain::view::frame::coord;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlacementTool {
     /// A cube at its tier's zoom.
-    Object(Zoom),
+    Cube(Zoom),
     /// Its box, of the variant and turns its corner draws.
     Decor(DecorId),
     /// One cell.
@@ -32,7 +32,7 @@ impl PlacementTool {
     /// The tool `ui` holds, where it places; none for the pointer or the eraser.
     pub fn of(ui: &Tool) -> Option<PlacementTool> {
         match ui.active_tool {
-            ActiveTool::Object => Some(PlacementTool::Object(object_zoom_of(ui.object_tier))),
+            ActiveTool::Cube => Some(PlacementTool::Cube(object_zoom_of(ui.tier))),
             ActiveTool::Decor => Some(PlacementTool::Decor(ui.decor_id)),
             ActiveTool::Marker => Some(PlacementTool::Marker),
             ActiveTool::Pointer | ActiveTool::Eraser => None,
@@ -42,7 +42,7 @@ impl PlacementTool {
     /// The kind of what it places.
     pub fn kind(self) -> Kind {
         match self {
-            PlacementTool::Object(_) => Kind::cube,
+            PlacementTool::Cube(_) => Kind::cube,
             PlacementTool::Decor(_) => Kind::decor,
             PlacementTool::Marker => Kind::marker,
         }
@@ -51,7 +51,7 @@ impl PlacementTool {
     /// The zoom of the cube it places in.
     pub fn zoom(self) -> Zoom {
         match self {
-            PlacementTool::Object(zoom) => zoom,
+            PlacementTool::Cube(zoom) => zoom,
             PlacementTool::Decor(id) => Decor::of(id).row.cell_zoom(),
             PlacementTool::Marker => MARKER_ZOOM,
         }
@@ -74,7 +74,7 @@ fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
             let (at, m) = decor.stand(cell.min, variant, turn, 1.0);
             decor.claim(at, &m)
         }
-        PlacementTool::Object(_) | PlacementTool::Marker => cell,
+        PlacementTool::Cube(_) | PlacementTool::Marker => cell,
     }
 }
 

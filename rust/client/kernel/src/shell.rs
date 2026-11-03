@@ -208,9 +208,9 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         },
         tool: ToolState {
             active: tool.active_tool,
-            cube: cube_id(tool.object_cube),
+            cube: cube_id(tool.cube),
             decor: decor_num_id(tool.decor_id),
-            tier: tool.object_tier,
+            tier: tool.tier,
             draft: write::marker_draft(),
         },
         orient: OrientationState {

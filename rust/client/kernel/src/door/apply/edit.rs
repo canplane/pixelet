@@ -24,10 +24,10 @@ pub(super) fn apply(
             let p = abi::EditTool::read(given(pkt)?)?;
             let mut tool = tool();
             tool.active_tool = p.tool;
-            tool.object_tier = p.tier;
+            tool.tier = p.tier;
             match p.tool {
-                abi::ActiveTool::Object => {
-                    tool.object_cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
+                abi::ActiveTool::Cube => {
+                    tool.cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
                     tool.decor_id = or_refuse(

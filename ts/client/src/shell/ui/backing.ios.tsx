@@ -16,7 +16,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { useDim } from "@/shell/ui/motion/dim.ts";
-import { BackingPlace, type BackingProps } from "@/shell/ui/backing.tsx";
+import { type BackingProps, BackingPlace } from "@/shell/ui/backing.tsx";
 import { alpha } from "@/shell/ui/theme.ts";
 import { Backing as Fill } from "./backing.tsx";
 

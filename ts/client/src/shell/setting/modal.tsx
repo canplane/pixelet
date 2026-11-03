@@ -13,10 +13,8 @@ import { DisclaimerSection } from "@/shell/setting/info/disclaimer.tsx";
 import { AboutSection } from "@/shell/setting/info/about.tsx";
 import { AttributionSection } from "@/shell/setting/info/attribution.tsx";
 
-const enum SettingsTab {
-  Options = 0,
-  Info = 1,
-}
+const OPTIONS = 0;
+const INFO = 1;
 
 function Separator() {
   return <View style={styles.separator} />;
@@ -30,12 +28,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       <Tabbed
         onClose={onClose}
         tabs={[
-          { value: SettingsTab.Options, label: t("settings.tabs.options") },
-          { value: SettingsTab.Info, label: t("settings.tabs.info") },
+          { value: OPTIONS, label: t("settings.tabs.options") },
+          { value: INFO, label: t("settings.tabs.info") },
         ]}
       >
         {(tab) =>
-          tab === SettingsTab.Options ? (
+          tab === OPTIONS ? (
             <>
               <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
               <Separator />

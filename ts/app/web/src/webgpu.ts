@@ -20,36 +20,11 @@ const offscreens = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 /** In the order they were bound, so a device acquired again binds each slot's newest last. */
 const canvases = new Map<u32, OffscreenCanvas>();
 
-export const enum Missing {
-  WebGpu = "web.webgpu",
-  Insecure = "web.insecure",
-  Gpu = "web.gpu",
-}
-
-/** `navigator.gpu` exists only in a secure context, so the LAN address over
- * http has none where localhost has it. */
-export async function missing(): Promise<Missing | null> {
-  const absent = await look();
-  if (absent !== null) {
-    console.error(`[gpu] cannot draw here: ${MISSING[absent]}`);
-  }
-  return absent;
-}
-
-const MISSING: Record<Missing, string> = {
-  [Missing.WebGpu]: "this browser has no WebGPU",
-  [Missing.Insecure]: "WebGPU needs a secure context, and this page is not one",
-  [Missing.Gpu]: "WebGPU is here but no adapter answered",
-};
-
-async function look(): Promise<Missing | null> {
-  if (!("gpu" in navigator)) {
-    return isSecureContext ? Missing.WebGpu : Missing.Insecure;
-  }
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: "high-performance",
-  });
-  return adapter ? null : Missing.Gpu;
+/** Why this page has no WebGPU, none where it has it: `navigator.gpu` exists only
+ * in a secure context, so the LAN address over http has none where localhost has it. */
+export function absent(): "unsupported" | "insecure" | null {
+  if ("gpu" in navigator) return null;
+  return isSecureContext ? "unsupported" : "insecure";
 }
 
 /** False where no adapter answered. What the device is, the kernel reads from

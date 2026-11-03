@@ -3,11 +3,11 @@
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { create } from "zustand";
 
-export const enum ToastTone {
-  Loading = 0,
-  Error = 1,
-  Ready = 2,
-}
+import * as ToastTone from "./tone.ts";
+
+/** One of ToastTone's. */
+type ToastTone = (typeof ToastTone)[keyof typeof ToastTone];
+export { ToastTone };
 
 export interface ToastSpec {
   message: string;

@@ -12,7 +12,7 @@ use crate::asset::color;
 use crate::asset::id::AssetId;
 
 /// A cube of the catalog (`asset/cube.json`): a palette entry of the ground's palette,
-/// or a color only an object takes; a player may place either.
+/// or one that is only ever placed; a player may place either.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cube {
     Ground(Ground),

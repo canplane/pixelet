@@ -1,74 +1,67 @@
 // @pxl/client/shell/layout.tsx
 
-import { type ReactNode, useEffect } from "react";
+import { Component, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/abi/cmd.spec.ts";
-import { Boot } from "@/abi/state.ts";
-import { useBoot, useStop } from "./boot.ts";
+import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
+import { useStanding } from "./boot.ts";
+import { coverOf, SHELL_PANIC } from "./cover.ts";
 import { Modals } from "./modal.tsx";
-import { type Cover, coverOf } from "./cover.ts";
-import { Failed, Panic, Progress } from "./screens.tsx";
+import { Screen } from "./screens.tsx";
 import { KeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { DockMode, setDockMode } from "@/shell/world/dock/store.ts";
-import {
-  useGpu,
-  useKernel,
-  useOnline,
-  useSource,
-} from "@/shell/store/watch.ts";
 
-/** Failed or progress: over the world being made, or alone before it. */
-function CoverOf({ cover }: { cover: Exclude<Cover, { kind: "panic" }> }) {
-  return cover.kind === "progress" ? (
-    <Progress of={cover.of} />
-  ) : (
-    <Failed of={cover.of} />
-  );
-}
-
-export function AppLayout({ children }: { children: ReactNode }) {
-  const gpu = useGpu();
-  const boot = useBoot();
-  const source = useSource();
-  const online = useOnline();
-  const givenUp = useKernel((s) => s.stall === Message.WorldUnavailable);
-  const stopCode = useStop();
-  const made = useKernel((s) => s.renderer_progress);
-  useEffect(() => {
-    if (givenUp) {
-      console.error(
-        "[read] a read failed past every retry; the space is given up",
-      );
-    }
-  }, [givenUp]);
-  const readFailing = useKernel((s) => s.stall === Message.WorldReadFailing);
-  const cover = coverOf({
-    boot,
-    gpu,
-    source,
-    online,
-    givenUp,
-    readFailing,
-    stopCode,
-    made,
-  });
-  if (cover?.kind === "panic") {
-    return <Panic of={cover.of} code={cover.code} />;
-  }
-  const runs = boot === Boot.Loading || boot === Boot.Started;
-  if (!runs && cover !== null) return <CoverOf cover={cover} />;
+/** The app under its cover. The world mounts once the kernel runs, and goes for a
+ * panic, as nothing can be drawn or read behind one. */
+function AppBody({ children }: { children: ReactNode }) {
+  const standing = useStanding();
+  const cover = coverOf(standing);
+  const shows =
+    (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&
+    cover?.kind !== "panic";
   return (
     // A touch elsewhere puts the typing away with the keyboard.
     <KeyboardAway onAway={() => setDockMode(DockMode.Palette)}>
-      <View style={styles.page}>{runs && children}</View>
-      <Modals />
+      <View style={styles.page}>{shows && children}</View>
+      {shows && <Modals />}
       {cover !== null && (
         <View style={StyleSheet.absoluteFill}>
-          <CoverOf cover={cover} />
+          <Screen cover={cover} />
         </View>
       )}
     </KeyboardAway>
+  );
+}
+
+/** A throw while the shell renders is a panic, not a blank page. */
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { thrown: boolean }
+> {
+  override state = { thrown: false };
+
+  static getDerivedStateFromError() {
+    return { thrown: true };
+  }
+
+  override componentDidCatch(err: unknown) {
+    console.error("[shell] a render threw:", err);
+  }
+
+  override render() {
+    return this.state.thrown ? (
+      <Screen cover={SHELL_PANIC} />
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <AppBody>{children}</AppBody>
+    </ErrorBoundary>
   );
 }
 

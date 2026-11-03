@@ -3,10 +3,9 @@
 /**
  * The aliases tsconfig.json's `paths` give the tree's own directories, and
  * the workspace packages' sources, read for what has no tsconfig resolver of
- * its own: Metro, and the const-enum table both bundlers share. Vite and
- * vitest read the same paths themselves (`resolve.tsconfigPaths`) and resolve
- * the packages as Node does. Plain TypeScript over `node:` modules, which
- * Node loads (package.json `engines`).
+ * its own: Metro. Vite and vitest read the same paths themselves
+ * (`resolve.tsconfigPaths`) and resolve the packages as Node does. Plain
+ * TypeScript over `node:` modules, which Node loads (package.json `engines`).
  */
 
 import * as fs from "node:fs";

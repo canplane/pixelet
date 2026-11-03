@@ -45,7 +45,7 @@ pub fn ghost() -> Ghost {
 
     let use_object_style = matches!(
         active_tool,
-        ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
+        ActiveTool::Cube | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
     ) || hovered_object.is_some();
     let cur_scale = units(if use_object_style {
         preview_zoom
@@ -72,7 +72,7 @@ pub fn ghost() -> Ghost {
     let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.asset())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
         (_, Some(Asset::Cube { cube })) => Some(cube),
-        (ActiveTool::Object, _) => Some(ui.object_cube),
+        (ActiveTool::Cube, _) => Some(ui.cube),
         _ => carved_style_cube,
     };
 

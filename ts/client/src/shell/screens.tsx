@@ -3,16 +3,15 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { useKernel } from "@/shell/store/watch.ts";
 import { color, textStyle } from "@/shell/ui/theme.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
+import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
 
 /** Over the world while it starts: the bar, and under it what it waits on. `of`
  * is the locale key of that line. */
-export function Progress({ of }: { of: string }) {
+function Progress({ of, made }: { of: string; made: number }) {
   const { t } = useTranslation();
-  const made = useKernel((s) => s.renderer_progress);
   return (
     <View style={styles.cover}>
       <ProgressBar made={made} />
@@ -24,7 +23,7 @@ export function Progress({ of }: { of: string }) {
 /** In place of the app before it ran, for good: where it cannot run, or what it
  * needed will not come. `of` is the locale key its title and body are under; the
  * detail is the log's. */
-export function Failed({ of }: { of: string }) {
+function Failed({ of }: { of: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.cover}>
@@ -38,7 +37,7 @@ export function Failed({ of }: { of: string }) {
 
 /** In place of the app once what ran has ended, as a blue screen says it: the
  * stop code, where there is one, is what a screenshot sent back needs. */
-export function Panic({ of, code }: { of: string; code: string | null }) {
+function Panic({ of, code }: { of: string; code: string | null }) {
   const { t } = useTranslation();
   return (
     <View style={[styles.cover, styles.panic]}>
@@ -56,6 +55,18 @@ export function Panic({ of, code }: { of: string; code: string | null }) {
       </View>
     </View>
   );
+}
+
+/** What stands over the app, as `coverOf` says. */
+export function Screen({ cover }: { cover: Cover }) {
+  switch (cover.kind) {
+    case "progress":
+      return <Progress of={cover.of} made={cover.made} />;
+    case "failed":
+      return <Failed of={cover.of} />;
+    case "panic":
+      return <Panic of={cover.of} code={cover.code} />;
+  }
 }
 
 const styles = StyleSheet.create({

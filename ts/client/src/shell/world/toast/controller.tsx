@@ -5,28 +5,32 @@ import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
-import { Gpu } from "@/abi/state.ts";
+import { GPU_WAITING, type Gpu } from "@/abi/state.ts";
 
 import { dismissToast, showToast, ToastTone } from "./store.ts";
 import { useGpu, useKernel, useOnline } from "@/shell/store/watch.ts";
 
 /** Each report's toast; of one tone, by rank: a cause before what it holds
  * up, the device's before the server's, the world's before a sensor's. */
-const enum Report {
-  Gpu = 0,
-  Network = 1,
-  Server = 2,
-  World = 3,
-  Location = 4,
-  Orientation = 5,
-}
+const GPU = 0;
+const NETWORK = 1;
+const SERVER = 2;
+const WORLD = 3;
+const LOCATION = 4;
+const ORIENTATION = 5;
+type Report =
+  | typeof GPU
+  | typeof NETWORK
+  | typeof SERVER
+  | typeof WORLD
+  | typeof LOCATION
+  | typeof ORIENTATION;
 
 /** The ready word: said once, as the first world and its companions are on screen. */
-const enum Greeting {
-  Waiting = 0,
-  Said = 1,
-  Done = 2,
-}
+const UNSAID = 0;
+const SAYING = 1;
+const SAID = 2;
+type Greeting = typeof UNSAID | typeof SAYING | typeof SAID;
 
 const READY_MS = 3000;
 
@@ -71,7 +75,10 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
+/** A timeout is only the page's, on a prompt no one answered yet (web sensor.ts
+ * `PROMPT_MS`), which is no failure to report. */
 function location(status: SensorStatus, failure: Message | null): Said | null {
+  if (failure === Message.GeolocationTimeout) return null;
   if (failure !== null) return error(messageKey(failure));
   return status === SensorStatus.Loading
     ? loading("toast.location_checking")
@@ -80,7 +87,7 @@ function location(status: SensorStatus, failure: Message | null): Said | null {
 
 /** The GPU's: none answered yet, or the one drawing is lost. */
 function gpuError(gpu: Gpu): Said | null {
-  return gpu === Gpu.Waiting ? error("toast.gpu_unstable") : null;
+  return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
 /** The server's: the reads that reach it failing. */
@@ -98,7 +105,7 @@ function world(
   if (outside) return error("toast.outside");
   if (!shown) return loading("toast.world_loading");
   if (companionLoading) return loading("toast.companion_loading");
-  return greeting === Greeting.Said
+  return greeting === SAYING
     ? { key: "toast.world_ready", tone: ToastTone.Ready }
     : null;
 }
@@ -107,38 +114,38 @@ function world(
 export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
   const locationError = useKernel((s) => s.location.err);
-  useSaid(Report.Location, location(locationStatus, locationError));
+  useSaid(LOCATION, location(locationStatus, locationError));
 
   const orientationError = useKernel((s) => s.orient.err);
   useSaid(
-    Report.Orientation,
+    ORIENTATION,
     orientationError !== null ? error(messageKey(orientationError)) : null,
   );
 
   const gpu = useGpu();
   const stall = useKernel((s) => s.stall);
-  useSaid(Report.Gpu, gpuError(gpu));
-  useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
-  useSaid(Report.Server, serverError(stall), SERVER_HOLD_MS);
+  useSaid(GPU, gpuError(gpu));
+  useSaid(NETWORK, useOnline() ? null : error("toast.network_unstable"));
+  useSaid(SERVER, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useKernel((s) => s.pivot.outside);
   const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
   const companionLoading = useKernel(
     (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
-  const [greeting, setGreeting] = useState(Greeting.Waiting);
+  const [greeting, setGreeting] = useState<Greeting>(UNSAID);
   const ready = !outside && shown && !companionLoading;
   useEffect(() => {
-    if (ready && greeting === Greeting.Waiting) setGreeting(Greeting.Said);
+    if (ready && greeting === UNSAID) setGreeting(SAYING);
     // Cut short, it is not said again.
-    if (!ready && greeting === Greeting.Said) setGreeting(Greeting.Done);
+    if (!ready && greeting === SAYING) setGreeting(SAID);
   }, [ready, greeting]);
   useEffect(() => {
-    if (greeting !== Greeting.Said) return;
-    const timer = setTimeout(() => setGreeting(Greeting.Done), READY_MS);
+    if (greeting !== SAYING) return;
+    const timer = setTimeout(() => setGreeting(SAID), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
-  useSaid(Report.World, world(outside, shown, companionLoading, greeting));
+  useSaid(WORLD, world(outside, shown, companionLoading, greeting));
 
   return null;
 }

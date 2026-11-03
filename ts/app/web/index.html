@@ -19,10 +19,8 @@
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- Near the black the map shows before its first frame. Android
-         paints its browser chrome and the standalone splash with this; the
-         manifest defaulted to #ffffff, which flashed white before a map
-         that is almost black. -->
+    <!-- Near the black the map shows: Android paints its browser chrome
+         with this. -->
     <meta name="theme-color" content="#080c0f" />
 
     <!--
@@ -70,7 +68,10 @@
     <meta name="twitter:image" content="%SITE_URL%/brand/og-image.jpg" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The shell's ground until it mounts, which replaces this. -->
+    <div id="root">
+      <div style="flex: 1; background-color: %GROUND%"></div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

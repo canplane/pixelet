@@ -6,6 +6,7 @@
  * their hue, so two uses sharing a value can change apart.
  */
 
+import { GROUND } from "@/shell/ui/ground.ts";
 import { FAMILY } from "@/shell/ui/typeface.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
@@ -51,8 +52,6 @@ const CORAL = {
 
 /** iOS's fill gray, turned as warm as the ground. */
 const FILL = "#7d766c";
-
-const GROUND = "#fffcf7";
 
 export const color = {
   white: "#ffffff",

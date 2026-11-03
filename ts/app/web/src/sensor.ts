@@ -44,6 +44,24 @@ function orient_silence(): boolean {
 
 let geo_watch: number | null = null;
 
+/** How long the world waits on a location prompt no one answers, then opens at
+ * the kernel's fallback; a later answer moves it. A device's prompt is the
+ * system's, and holds the app itself. A product number. */
+const PROMPT_MS = 5000;
+
+function geo_prompt_wait(): void {
+  setTimeout(() => {
+    navigator.permissions?.query({ name: "geolocation" }).then(
+      (status) => {
+        if (geo_watch !== null && status.state === "prompt") {
+          heard.positionError("timeout");
+        }
+      },
+      () => {},
+    );
+  }, PROMPT_MS);
+}
+
 function geo_stop(): void {
   if (geo_watch !== null) navigator.geolocation.clearWatch(geo_watch);
   geo_watch = null;
@@ -74,21 +92,26 @@ function geo_start(): void {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
       // so it is left running on any other; the kernel shows the failure until a fix lands.
-      if (err.code === err.PERMISSION_DENIED) geo_stop();
-      heard.positionError(
-        err.code === err.PERMISSION_DENIED
-          ? "denied"
-          : err.code === err.POSITION_UNAVAILABLE
-            ? "unavailable"
-            : err.code === err.TIMEOUT
-              ? "timeout"
-              : "other",
-      );
+      switch (err.code) {
+        case err.PERMISSION_DENIED:
+          geo_stop();
+          heard.positionError("denied");
+          break;
+        case err.POSITION_UNAVAILABLE:
+          heard.positionError("unavailable");
+          break;
+        case err.TIMEOUT:
+          heard.positionError("timeout");
+          break;
+        default:
+          heard.positionError("other");
+      }
     },
     // No timeout: one would raise TIMEOUT on a clock while no fix comes
     // (PositionOptions.timeout, Infinity by default), each a turn for nothing.
     { enableHighAccuracy: true, maximumAge: 5000 },
   );
+  geo_prompt_wait();
 }
 
 let orient_event: string | null = null;

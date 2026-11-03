@@ -36,6 +36,12 @@ function retry(): void {
 
 export function boot(told: GpuHeard): void {
   heard = told;
+  const why = webgpu.absent();
+  if (why !== null) {
+    console.error(`[gpu] cannot draw here: ${why}`);
+    heard.state(why);
+    return;
+  }
   ask();
 }
 
