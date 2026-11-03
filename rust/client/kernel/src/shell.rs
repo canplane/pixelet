@@ -101,7 +101,7 @@ fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
     let mut previews = ([0u32; PREVIEWS_MAX], 0);
-    for (slot, (surface, _, _)) in previews.0.iter_mut().zip(preview_rows()) {
+    for (slot, (surface, ..)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
         previews.1 += 1;
     }

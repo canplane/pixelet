@@ -13,11 +13,17 @@ import {
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
-export function preview_open(surface: u32, group: u32, number: u8): void {
+/** `bg` is what it draws over, 0xRRGGBB. */
+export function preview_open(
+  surface: u32,
+  group: u32,
+  number: u8,
+  bg: u32,
+): void {
   HOST.now(
     port.SHELL,
     Command.SCENE_PREVIEW_OPEN,
-    encode_scene_preview_open(HOST.doorbell, surface, group, number),
+    encode_scene_preview_open(HOST.doorbell, surface, group, number, bg),
   );
 }
 

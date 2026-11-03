@@ -77,6 +77,8 @@ export const color = {
   action: CORAL.deep,
   /** iOS's off-switch track: the fill gray at 16% over the ground. */
   track: tint(FILL, 0.16, GROUND),
+  /** A character preview's backdrop: the fill gray at 40% over the ground. */
+  preview: tint(FILL, 0.4, GROUND),
 
   costLow: SYSTEM.green,
   costMedium: SYSTEM.orange,

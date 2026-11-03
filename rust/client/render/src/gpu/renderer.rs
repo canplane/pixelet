@@ -93,8 +93,8 @@ pub struct FrameInput<'a> {
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
     /// Each preview: its surface, its actor's palette, which names its
-    /// draw, and the skin.
-    pub previews: &'a [(u32, u32, Image)],
+    /// draw, the skin, and what it clears to (0xRRGGBB, sRGB).
+    pub previews: &'a [(u32, u32, Image, u32)],
     /// The texture pack's image; none while it loads.
     pub pack: fn() -> Option<Image>,
     pub moon: fn() -> Option<Image>,
@@ -1490,13 +1490,15 @@ impl Renderer {
     /// another actor may play the same model.
     fn previews<'a, 'd>(
         draws: &'a Draws<'d>,
-        previews: &'a [(u32, u32, Image)],
-    ) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
-        previews.iter().filter_map(move |&(id, palette, image)| {
-            surface(id).filter(|s| s.role == surface_role::PREVIEW)?;
-            let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
-            Some((id, own[2], image, own))
-        })
+        previews: &'a [(u32, u32, Image, u32)],
+    ) -> impl Iterator<Item = (u32, u32, Image, u32, &'d [u32; DRAW_WORDS])> + 'a {
+        previews
+            .iter()
+            .filter_map(move |&(id, palette, image, bg)| {
+                surface(id).filter(|s| s.role == surface_role::PREVIEW)?;
+                let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
+                Some((id, own[2], image, bg, own))
+            })
     }
 
     /// Each preview's targets, passes and skin, made here so drawing makes nothing
@@ -1506,10 +1508,10 @@ impl Renderer {
         g: &Gpu,
         draws: &Draws,
         uniforms: &[f32],
-        previews: &[(u32, u32, Image)],
+        previews: &[(u32, u32, Image, u32)],
         moved: bool,
     ) {
-        for (id, model, image, own) in Self::previews(draws, previews) {
+        for (id, model, image, _, own) in Self::previews(draws, previews) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
@@ -1535,16 +1537,16 @@ impl Renderer {
     fn draw_cases<'d>(
         &mut self,
         ctx: &mut RenderContext,
-        previews: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>,
+        previews: impl Iterator<Item = (u32, u32, Image, u32, &'d [u32; DRAW_WORDS])>,
         uniforms: &[f32],
         moved: bool,
     ) {
-        for (id, model, image, own) in previews {
+        for (id, model, image, bg, own) in previews {
             let Some(s) = surface(id) else { continue };
             let Some(preview) = self.previews[handle_slot(id) as usize].as_mut() else {
                 continue;
             };
-            preview.draw(ctx, s, self.frame, own, uniforms, model, image, moved);
+            preview.draw(ctx, s, self.frame, own, uniforms, model, image, bg, moved);
         }
     }
 

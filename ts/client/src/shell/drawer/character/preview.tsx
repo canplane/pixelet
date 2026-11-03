@@ -11,12 +11,13 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/port/surface.ts";
 import type { Character } from "./character.ts";
-import { chrome } from "@/shell/ui/theme.ts";
+import { chrome, color } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import * as scene from "@/port/scene.ts";
 
 const PREVIEW = surface_driver(surface_role.PREVIEW);
+const BG = parseInt(color.preview.slice(1), 16);
 
 interface CharacterPreviewProps {
   character: Character;
@@ -39,7 +40,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
             setSurface(surface);
-            scene.preview_open(surface, character.group, character.number);
+            scene.preview_open(surface, character.group, character.number, BG);
             return () => scene.preview_close(surface);
           }}
         />

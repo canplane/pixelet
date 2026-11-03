@@ -1,7 +1,8 @@
 // pxl-render/gpu/pass/preview.rs
 
-//! A variant picker's preview: its actor in a frame of its own, drawn at
-//! one sample with no shadow, a blank map bound and no strength to read it by.
+//! A variant picker's preview: its actor in a frame of its own, over the flat
+//! color the shell asks for, drawn at one sample with no shadow, a blank map
+//! bound and no strength to read it by.
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
@@ -26,6 +27,7 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
+use crate::look::color::linear_rgb;
 
 pub struct Preview {
     frame_buf: u32,
@@ -43,6 +45,13 @@ const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 /// The preview's near plane: a room of its own, a model a unit tall in it.
 const CASE_NEAR: f64 = 0.1;
+
+/// What the world's color is cleared to for `bg` (0xRRGGBB, sRGB): linear, as
+/// the finish encodes it back, and whole.
+fn clear_of(bg: u32) -> [f32; 4] {
+    let [r, g, b] = linear_rgb(bg).map(|c| c as f32);
+    [r, g, b, 1.0]
+}
 
 impl Preview {
     pub fn new(
@@ -73,9 +82,9 @@ impl Preview {
         self.finish.release();
     }
 
-    /// Its actor's draw `own` into `s`, the world's `frame` aimed at the
-    /// actor; nothing where its picture's makings stand, `moved` what moved
-    /// without words.
+    /// Its actor's draw `own` into `s` over `bg` (0xRRGGBB, sRGB), the
+    /// world's `frame` aimed at the actor; nothing where its picture's makings
+    /// stand, `moved` what moved without words.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
@@ -89,6 +98,7 @@ impl Preview {
         uniforms: &[f32],
         model: u32,
         image: Image,
+        bg: u32,
         moved: bool,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -131,7 +141,7 @@ impl Preview {
         r.read(&frame);
         r.read(own);
         r.read(uniform_of(uniforms, own));
-        r.read(&[model, image.0, s.width, s.height, s.depth]);
+        r.read(&[model, image.0, s.width, s.height, s.depth, bg]);
         r.mark(moved);
         if r.end() {
             return;
@@ -146,7 +156,8 @@ impl Preview {
                 Load::Clear,
                 0.0,
                 stamp.pass(),
-            ),
+            )
+            .color_clear(clear_of(bg)),
         );
         let mut pass = TrackedRenderPass::new(g, pass);
         self.skinned_mesh.draw(
@@ -171,3 +182,7 @@ impl Preview {
         release(view_id);
     }
 }
+
+#[cfg(test)]
+#[path = "preview.test.rs"]
+mod test;

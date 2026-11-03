@@ -3,12 +3,11 @@
 // The world's color, toned and blended linear by its passes and the world's
 // gathered over frames (screen_resolve.wgsl), brought from the world's
 // pixels up to the canvas's and encoded onto it once (finish.wgsl
-// `finish`), premultiplied by its alpha for a surface that shows through
-// where nothing was drawn; and the world's depth carried up with it, the
-// nearest of what a canvas pixel covers, which what is drawn over the world
-// is tested against. Where the two sizes are one, each is the world's own
-// texel. The claimed tiles alone, at the canvas's pixels (screen_tiles.wgsl),
-// into the picture the surface keeps.
+// `finish`), its passes having filled every pixel; and the world's depth
+// carried up with it, the nearest of what a canvas pixel covers, which what
+// is drawn over the world is tested against. Where the two sizes are one,
+// each is the world's own texel. The claimed tiles alone, at the canvas's
+// pixels (screen_tiles.wgsl), into the picture the surface keeps.
 
 @group(0) @binding(1) var world: texture_2d<f32>;
 @group(0) @binding(2) var world_depth: texture_depth_2d;
@@ -54,10 +53,7 @@ fn fs(v: VertexOut) -> FinishOut {
     }
   }
   var o: FinishOut;
-  // Blended premultiplied, as its passes left it: encoded straight, then
-  // premultiplied again, so an edge brought up keeps its color.
-  let straight = select(c.rgb / max(c.a, 1e-6), c.rgb, c.a >= 1.0);
-  o.color = vec4f(finish(straight, v.clip.xy) * c.a, c.a);
+  o.color = vec4f(finish(c.rgb, v.clip.xy), 1.0);
   o.depth = d;
   return o;
 }

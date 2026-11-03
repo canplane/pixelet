@@ -25,7 +25,7 @@ pub(super) fn apply(
             let p = abi::ScenePreviewOpen::read(given(pkt)?)?;
             refuse_unless(surface::surface(p.surface).is_some(), Errno::EBADF)?;
             refuse_unless(
-                preview::preview_open(p.surface, p.group, p.number),
+                preview::preview_open(p.surface, p.group, p.number, p.bg),
                 Errno::EINVAL,
             )?;
             ask_turn(s)
