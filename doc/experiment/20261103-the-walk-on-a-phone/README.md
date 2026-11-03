@@ -627,6 +627,73 @@ on the S23, a 6 s turn, 328 frames:
 - `sample` and `miss` rise with `beam` (correlation 0.64, 0.56), on nodes absent, not re-keyed.
 - Beam rays left a frame: p50 1,263, p90 6,386, p95 6,848.
 
+### A first load, and a moved brick that leaves a split
+
+On the rebase over `main` at `430cdc831`, which reads `division` 9: runs of the evening at `pivot -`
+were a build of format 8 refused its source, not the page, and with the harness's own faults (below)
+they are no evidence. `tools/load.mjs` wraps the page's calls before its first script
+(`reports/load-*.json`), seconds from navigation on the S23:
+
+| | First pipeline | All made (of) | Wall | World |
+| --- | --- | --- | --- | --- |
+| `981947702`, cold | 4.3 | 18.9 (90) | 14.6 | 19.4 |
+| `981947702`, warm | 5.1 | 21.1 (90) | 16.0 | 28.8 |
+| `430cdc831`, cold | 3.6 | 19.1 (87) | 15.5 | 19.5 |
+| `430cdc831`, warm | 4.7 | 20.3 (87) | 15.6 | 20.6 |
+| `981947702`, the phone's own location, cold | 4.4 | 19.5 (90) | 15.1 | 28.0 |
+| `981947702`, the phone's own location, warm | 3.5 | 21.0 (90) | 17.5 | 22.8 |
+| `981947702`, a location prompt left unanswered | 5.0 | 21.3 (90) | 16.3 | 26.9 |
+
+- A reload makes the pipelines no faster than a first load: about 15 s each time.
+- The hand passes add 3 pipelines and no time. 10 `light_*` and 7 decor are made with shadows off.
+- The slowest are `decor_cs`, `decor_footing_cs`, `face_cs`, `light_*` and `miss`, at 12–16 s, side by side, so
+  a pipeline's own cost is not read here. Modules take 21–25 ms of calls for 5.1 MB.
+- From the first compute pass to the toast gone: 0.3–1.0 s, up to 8 s in some. Not split.
+- A minute was not seen, on either build, with the page's location answered or left unanswered.
+
+**`b7457102e`'s fix on this rebase**, `9029f35dc`: on a moved brick a Split's key is left as held by no
+zooms, not 0. Tip `981947702` against the tip with only the forget pass of before, two loads each, counts
+off, no storage but the camera's cleared:
+
+| | Without | With |
+| --- | --- | --- |
+| fps | 20.9, 21.4 | 22.6, 20.5 |
+| GPU p50, ms | 24.3, 25.0 | 31.7, 27.2 |
+| GPU p90, ms | 97.3, 103.4 | 74.3, 105.3 |
+| GPU p95, ms | 149.5, 141.8 | 97.6, 140.8 |
+| GPU most, ms | 377, 315 | 233, 227 |
+| interval p95, ms | 174, 187 | 174, 198 |
+
+Frame by frame with it (`reports/scan-forget-s23.json`, 153 frames): 1 whole-grid frame, where 30 of 328 were
+before the fix on the earlier base. Of the 31 frames that moved a brick, 13 left few rays and 18 part
+of the grid, none all. The parent's own scan did not draw, so that comparison is across bases. What
+stays: 71 frames over 1,500 beam rays, nearly all stopped on a Cell near the eye at other zooms (zoom 20–23).
+
+**What a harness must keep clear of, learned here.** Leaving a tab per run piled 32 on the phone and
+took an hour's numbers low. A wait of 90 s failed a cold load, and clearing every store made each load cold.
+A DevTools geolocation override alone can leave the page waiting: stub `navigator.geolocation`. And
+`main` renames what a harness imports: a run that cannot turn the profiler on reads as "never drew".
+
+**The picture of that fix** at rest, on the S23, sky fixed, one run each: mean difference 0.54 at the default view, 0.54 at 93 u, 0.30 at 541 u, 0.01–0.02% of pixels over 32. No more than a commit differs from itself between runs.
+
+### What a Cell held at other zooms answers when asked again
+
+`981947702` instrumented (`tools/left-cells.patch`, `tools/left5.mjs`, `reports/cells-s23.json`): for each node a beam ray stopped on, kept at other zooms, its slot's kind and asset before `beam_cs`, then the slot the frame wrote at the zooms asked. 285 frames, read whole, so each follows a stall of a 25 MB copy. 8,220 nodes held as a Cell and asked again, on 520,417 rays:
+
+| Held near, against asked | Held | Nodes | Rays | Nodes changed | Rays on them |
+| --- | --- | --- | --- | --- | --- |
+| coarser | air | 1,830 | 249,014 | 17 | 199 |
+| coarser | filled | 546 | 11,911 | 13 | 22 |
+| the same | air | 2,214 | 167,410 | 2 | 46 |
+| the same | filled | 865 | 12,872 | 0 | 0 |
+| finer | air | 2,178 | 70,531 | 6 | 16 |
+| finer | filled | 587 | 8,679 | 0 | 0 |
+
+- 99.5% of nodes answer the same words: air to air 6,197 nodes, 486,694 rays, 94% of those compared; filled to filled 1,985.
+- 38 nodes, 283 rays, changed: held `near` one coarser, air to a split 17, filled to a split 10, filled to air 3; held `near` one finer, air to filled 6; `far` one finer with `near` the same, air to a split 2.
+- So asked finer can turn air into a split. Those nodes sit on a boundary of `zoom_at`, near 96 or 192 u in 33 of 38, at zooms 21–23 in 36.
+- 118 more held air had no slot at the asked zooms when read, not compared.
+
 ## What runs by what
 
 `beam` and `sample` dispatch on `Grid::corners` and `Grid::samples`
