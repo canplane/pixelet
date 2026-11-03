@@ -19,6 +19,7 @@ use crate::grid::{CELL, LATTICE_MAX};
 use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
+use crate::pyramid;
 use crate::world;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
@@ -139,7 +140,7 @@ impl Grid {
         g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
         g.lefts_at = g.hit_asks_at + HITS * ASK_WORDS;
         g.misses_at = g.lefts_at + 1 + samples[0] * samples[1];
-        g.corners_at = g.misses_at + 1 + crate::pyramid::MARKS;
+        g.corners_at = g.misses_at + 1 + pyramid::MARKS;
         g
     }
 

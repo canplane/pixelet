@@ -3,7 +3,7 @@
 //! filled with those answers, the hand passes run on a device, and each ray compared.
 //! Skipped where no adapter answers.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use pxl_engine::answer::{In, Kind, AIR, FILL_SHIFT};
 use pxl_engine::beam::{self, Grid};
@@ -23,8 +23,8 @@ fn mix(zoom: Zoom, c: [i32; 3]) -> u32 {
 
 /// Rolling ground: its top, in units, at the column at `[x, y]` units.
 fn top(x: i32, y: i32) -> i32 {
-    let at = |v: i32| v as f32 * 0.02;
-    ((at(x).sin() + at(y).cos()) * 6.0 + 16.0) as i32
+    let wave = |v: i32| (v.rem_euclid(300) - 150).abs() as f32 / 75.0 - 1.0;
+    ((wave(x) + wave(y)) * 6.0 + 16.0) as i32
 }
 
 /// A box's words, `first` and `past` its steps on each axis (`answer::box_word`).
@@ -54,23 +54,26 @@ fn outside_a_box(zoom: Zoom, c: [i32; 3]) -> bool {
         (0..3).any(|a| {
             let low = (c[a] - (over[a] << d)) as i64;
             // A cell not wholly in it: a box holds all it says fills.
-            let (s0, s1) = (low * 1024 >> d, ((low + 1) * 1024 + (1 << d) - 1) >> d);
+            let (s0, s1) = ((low * 1024) >> d, ((low + 1) * 1024 + (1 << d) - 1) >> d);
             s0 < first[a] as i64 || s1 > past[a] as i64
         })
     })
 }
 
 /// The made-up world, every answer it gave kept for the pyramid.
+/// A node and the zooms it was asked at.
+type Asked = (Zoom, [i32; 3], [Zoom; 2]);
+
 #[derive(Default)]
 struct World {
-    asked: HashMap<(Zoom, [i32; 3], [Zoom; 2]), In<[u32; 2]>>,
+    asked: BTreeMap<Asked, In<[u32; 2]>>,
 }
 
 impl World {
     fn answer(zoom: Zoom, c: [i32; 3], [_, near]: [Zoom; 2]) -> In<[u32; 2]> {
         let h = mix(zoom, c);
         // Nodes of the world's ground only; a few not held.
-        if zoom >= 8 && h % 211 == 0 {
+        if zoom >= 8 && h.is_multiple_of(211) {
             return In {
                 kind: Kind::Lacks,
                 asset: [0, 0],
@@ -95,7 +98,7 @@ impl World {
         let ground = top(x, y);
         if zoom >= near {
             let asset = if z <= ground {
-                let k = if h % 5 == 0 { (h >> 8) % 8 } else { 0 };
+                let k = if h.is_multiple_of(5) { (h >> 8) % 8 } else { 0 };
                 (5 + (h >> 16) % 40) | k << FILL_SHIFT
             } else {
                 AIR[0]
@@ -105,7 +108,7 @@ impl World {
                 asset: [asset, h >> 3 & 0xffff],
             };
         }
-        if z > ground + 24 && h % 7 != 0 {
+        if z > ground + 24 && !h.is_multiple_of(7) {
             return In {
                 kind: Kind::Cell,
                 asset: AIR,
@@ -164,14 +167,14 @@ fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
         let s = slot as usize;
         // Some air as a turned eye leaves it, held at a coarser near: gone past alike.
         let air = matches!(a.kind, Kind::Cell) && a.asset == AIR;
-        let held = if air && mix(zoom, c) % 3 == 0 {
+        let held = if air && mix(zoom, c).is_multiple_of(3) {
             [zooms[0], zooms[1].saturating_sub(1)]
         } else {
             zooms
         };
         // Some splits as a moved brick leaves them: forgotten, gone through alike.
         let key = pyramid::key(tag, held);
-        let forgotten = matches!(a.kind, Kind::Split) && mix(zoom, c) % 9 == 0;
+        let forgotten = matches!(a.kind, Kind::Split) && mix(zoom, c).is_multiple_of(9);
         w[s + pyramid::W_KEY as usize] = if forgotten {
             pyramid::forgotten_split(key)
         } else {
@@ -250,8 +253,10 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<
         .map_async(wgpu::MapMode::Read, |r| r.unwrap());
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     let v = staging.slice(..).get_mapped_range().unwrap();
-    v.chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    v.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect()
 }
 
@@ -433,6 +438,7 @@ fn hand_walk_answers_as_cast_walk() {
     let buffer = |words: &[u32], usage: wgpu::BufferUsages| {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
+            // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
             contents: unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len() * 4) },
             usage: usage | wgpu::BufferUsages::COPY_SRC,
         })

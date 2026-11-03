@@ -338,7 +338,10 @@ fn compute(dir: &Path) -> String {
 /// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
-    use pxl_engine::{answer, beam, eye, face, param, pyramid, ray, value};
+    use pxl_engine::area::Shard;
+    use pxl_engine::clipmap::Lookup;
+    use pxl_engine::overwrite::NodeSlot;
+    use pxl_engine::{answer, beam, cast, eye, face, param, pyramid, ray, value, SHARD_ZOOM};
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
@@ -395,15 +398,12 @@ fn walk_word() -> String {
         ("STEPS_MOST", 4096),
         ("JITTER", eye::JITTER as u32),
         ("REVISIT", 16),
-        ("Y_START", pxl_engine::cast::Y_START),
-        ("Z_START", pxl_engine::cast::Z_START),
-        ("SHARD_ZOOM", pxl_engine::SHARD_ZOOM),
-        ("SHARD_UNKNOWN", pxl_engine::area::Shard::UNKNOWN.word()),
-        ("LOOKUP_NONE", pxl_engine::clipmap::Lookup::NONE.word()),
-        (
-            "SLOT_NOTHING",
-            pxl_engine::overwrite::NodeSlot::NOTHING.word(),
-        ),
+        ("Y_START", cast::Y_START),
+        ("Z_START", cast::Z_START),
+        ("SHARD_ZOOM", SHARD_ZOOM),
+        ("SHARD_UNKNOWN", Shard::UNKNOWN.word()),
+        ("LOOKUP_NONE", Lookup::NONE.word()),
+        ("SLOT_NOTHING", NodeSlot::NOTHING.word()),
         ("LINE_INHERITANCE", beam::LINE_INHERITANCE),
         ("LINE_STEP", beam::LINE_STEP),
         ("W_INHERITANCE", pyramid::W_INHERITANCE),
@@ -427,7 +427,7 @@ fn walk_word() -> String {
     let mut out = format!(
         "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\n",
         grid::CELLS_A_RAD / grid::SPANS,
-        pxl_engine::cast::NARROW,
+        cast::NARROW,
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
