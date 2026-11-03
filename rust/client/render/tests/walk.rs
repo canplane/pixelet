@@ -162,7 +162,14 @@ fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
             continue;
         };
         let s = slot as usize;
-        w[s + pyramid::W_KEY as usize] = pyramid::key(tag, zooms);
+        // Some splits as a moved brick leaves them: forgotten, gone through alike.
+        let key = pyramid::key(tag, zooms);
+        let forgotten = matches!(a.kind, Kind::Split) && mix(zoom, c) % 9 == 0;
+        w[s + pyramid::W_KEY as usize] = if forgotten {
+            pyramid::forgotten_split(key)
+        } else {
+            key
+        };
         w[s + pyramid::W_KIND as usize] = pyramid::kind_word(a.kind);
         w[s + pyramid::W_ASSET as usize] = a.asset[0];
         w[s + pyramid::W_ASSET as usize + 1] = a.asset[1];
@@ -364,7 +371,11 @@ fn hand_walk_answers_as_cast_walk() {
     // kept beside what this eye asked: what a held split at other zooms lets the walk
     // go on through must end where this eye's own answers do.
     let mut earlier = World::default();
-    let away = [origin[0] - (40 << 8), origin[1] + (25 << 8), origin[2] + (9 << 8)];
+    let away = [
+        origin[0] - (40 << 8),
+        origin[1] + (25 << 8),
+        origin[2] + (9 << 8),
+    ];
     for j in (0..grid.samples[1]).step_by(3) {
         for i in (0..grid.samples[0]).step_by(3) {
             let ray = aim(grid.sample([i, j]));
@@ -389,7 +400,10 @@ fn hand_walk_answers_as_cast_walk() {
             .keys()
             .filter(|k| {
                 matches!(world.asked[*k].kind, Kind::Split)
-                    && earlier.asked.keys().any(|h| h.0 == k.0 && h.1 == k.1 && h.2 != k.2)
+                    && earlier
+                        .asked
+                        .keys()
+                        .any(|h| h.0 == k.0 && h.1 == k.1 && h.2 != k.2)
             })
             .copied()
             .collect();

@@ -305,11 +305,14 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       visits += 1u;
       visited = true;
       if (beam) {
+        // Through a split at other zooms, what was found under it is not taken: the
+        // next that asks finds it again (`Inheritance::of`), as a moved brick's may
+        // be gone.
         let held = line + LINE_INHERITANCE + LINE_STEP * zoom;
         beams[held] = pyramid[w + W_INHERITANCE];
-        beams[held + 1u] = pyramid[w + W_INHERITANCE + 1u];
-        beams[held + 2u] = pyramid[w + W_INHERITANCE + 2u];
-        beams[held + 3u] = pyramid[w + W_INHERITANCE + 3u];
+        beams[held + 1u] = select(pyramid[w + W_INHERITANCE + 1u], SHARD_UNKNOWN, other_zooms);
+        beams[held + 2u] = select(pyramid[w + W_INHERITANCE + 2u], LOOKUP_NONE, other_zooms);
+        beams[held + 3u] = select(pyramid[w + W_INHERITANCE + 3u], SLOT_NOTHING, other_zooms);
       }
       let kind = pyramid[w + W_KIND];
       asset = vec2<u32>(pyramid[w + W_ASSET], pyramid[w + W_ASSET + 1u]);

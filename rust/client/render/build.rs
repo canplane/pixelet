@@ -394,6 +394,12 @@ fn walk_word() -> String {
         ("BOX_STEPS", answer::BOX_STEPS),
         ("STEPS_MOST", 4096),
         ("JITTER", eye::JITTER as u32),
+        ("SHARD_UNKNOWN", pxl_engine::area::Shard::UNKNOWN.word()),
+        ("LOOKUP_NONE", pxl_engine::clipmap::Lookup::NONE.word()),
+        (
+            "SLOT_NOTHING",
+            pxl_engine::overwrite::NodeSlot::NOTHING.word(),
+        ),
         ("LINE_INHERITANCE", beam::LINE_INHERITANCE),
         ("LINE_STEP", beam::LINE_STEP),
         ("W_INHERITANCE", pyramid::W_INHERITANCE),

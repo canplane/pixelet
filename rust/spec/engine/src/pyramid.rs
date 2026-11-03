@@ -230,6 +230,17 @@ pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
         && key >> (TAG_BITS + ZOOM_BITS) == near
 }
 
+/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
+/// so the walk that asks the world asks again, and is no empty slot, so the walk over
+/// the pyramid alone (pxl-render walk.wgsl) still goes through it, taking none of what
+/// it read of the brick. Every moved brick lies under the root and the chain over it:
+/// zeroed, they stop every ray of the frame.
+pub const fn forgotten_split(key: u32) -> u32 {
+    tag_of(key)
+        | ((1 << ZOOM_BITS) - 1) << TAG_BITS
+        | ((1 << ZOOM_BITS) - 1) << (TAG_BITS + ZOOM_BITS)
+}
+
 /// A kind as a word, and back.
 pub const fn kind_word(kind: Kind) -> u32 {
     kind as u32
