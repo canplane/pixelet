@@ -216,9 +216,9 @@
     "gpu": "Connecting to WebGPU…",
     "offline": "Waiting for the network…",
     "server": "Waiting for the server…",
-    "source": "Reading the world's data…",
+    "source": "Checking the server…",
     "location": "Waiting for your location…",
-    "shaders": "Building shaders…",
+    "shaders": "Generating shaders…",
     "area": "Loading area…"
   },
   "failed": {
@@ -239,8 +239,8 @@
       "body": "Please try again in a moment."
     },
     "source": {
-      "title": "Update to the latest version.",
-      "body": "This version can't read the world's data. Reload the page or update the app."
+      "title": "The data couldn’t be read.",
+      "body": "Reload the page or update the app."
     }
   },
   "panic": {
