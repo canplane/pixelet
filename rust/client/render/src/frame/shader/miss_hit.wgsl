@@ -36,8 +36,8 @@ fn miss_hit_cs(
   if (id.x >= size.x || id.y >= size.y) {
     return;
   }
-  let p = px(id, size);
-  let w = walk(p.aim, p.start, NONE);
+  let aim = px_aim(id, size);
+  let w = walk(aim, px_start(aim, id, size), NONE);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
@@ -46,7 +46,7 @@ fn miss_hit_cs(
     beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
     return;
   }
-  let face = face_of(p.aim, w);
+  let face = face_of(aim, w);
   var faces = 0u;
   // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both
   // of a `select` are taken, so the hit is kept under an `if`.

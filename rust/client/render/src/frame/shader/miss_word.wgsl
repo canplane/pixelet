@@ -7,19 +7,19 @@
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
 /// Pixel `id`'s ray of rays `size` wide and high, through its middle off by the eye's jitter
-/// (`px_tan`), and where it starts off its cell (`Grid::cell`, `resumed`).
-struct Px {
-  aim: Aim,
-  start: Start,
+/// (grid.wgsl `px_tan`).
+fn px_aim(id: vec2<u32>, size: vec2<u32>) -> Aim {
+  return eye_aim(px_tan(id, size));
 }
 
-fn px(id: vec2<u32>, size: vec2<u32>) -> Px {
-  let tan_at = px_tan(id, size);
-  let aim = eye_aim(tan_at);
-  return Px(aim, resumed(aim, cell_start(grid_cell(tan_at)), LINE_WORDS, NONE));
+/// Where pixel `id`'s ray aimed `aim` starts off the cell it goes through (grid.wgsl
+/// `grid_cell`, resume.wgsl `resumed`).
+fn px_start(aim: Aim, id: vec2<u32>, size: vec2<u32>) -> Start {
+  return resumed(aim, cell_start(grid_cell(px_tan(id, size))), LINE_WORDS, NONE);
 }
 
-/// The face the ray aimed `aim` entered where walk `w` stopped (`world::face_of`).
+/// The face the ray aimed `aim` entered where walk `w` stopped: twice its axis, one more
+/// where the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`'s face).
 fn face_of(aim: Aim, w: Walked) -> u32 {
   return 2u * w.axis + select(0u, 1u, aim.dir[w.axis] > 0.0);
 }

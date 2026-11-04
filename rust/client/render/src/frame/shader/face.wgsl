@@ -28,8 +28,8 @@ fn shared_zoom(a: vec3<i32>, za: u32, c: vec3<i32>, zoom: u32) -> vec2<u32> {
   return vec2<u32>(z, select(0u, 1u, all(over(a, za, z) == over(c, zoom, z))));
 }
 
-/// What was handed the node at `z` of the beam ray's line at word `line` (beam.rs
-/// `BeamLine`).
+/// What was handed the node at `z` of the beam ray's line at word `line` (pxl-engine
+/// `beam::LINE_INHERITANCE`, `beam::LINE_STEP`).
 fn line_handed(line: u32, z: u32) -> vec4<u32> {
   let k = line + LINE_INHERITANCE + LINE_STEP * z;
   return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);

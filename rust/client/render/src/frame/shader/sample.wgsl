@@ -6,7 +6,8 @@
 
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn sample_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // A row of workgroups a run of the list, a workgroup's lanes row by row (eye.rs `left_at`).
+  // A row of workgroups a run of the list, a workgroup's lanes row by row, as sample_hit.wgsl
+  // lists them.
   let place = (id.x / SAMPLE_SIDE) * SAMPLE_SIDE * SAMPLE_SIDE + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
   let at = left_at();
   if (place >= beams[at]) {

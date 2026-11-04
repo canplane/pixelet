@@ -3,8 +3,8 @@
 // The shadow map's lattice as the light's beam, cells and slots take it off its list
 // (pxl-engine light.rs): where a beam ray's line and start, a cell's start and a
 // sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
-// place of the lattice the thread at an id takes (`Map::take`); and whether the cast needs it
-// (`Map::needs`); and the reads, the stands, their squares and each list's marks, as the
+// place of the lattice the thread at an id takes (`light_take`); and whether the cast needs it
+// (`light_needs`); and the reads, the stands, their squares and each list's marks, as the
 // receivers' passes claim tiles (`light::reads_at`, `stands_at`, `coarse_at`,
 // `listed_marks_at`). The list is `beams`, as resume.wgsl names it; the receivers' passes bind
 // it apart (light_stand.wgsl).
@@ -37,7 +37,7 @@ fn light_cell_at(c: vec2<u32>) -> u32 {
   return head_word(LIGHT_HEAD_CELLS) + (c.y * head_word(LIGHT_HEAD_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
-/// The first word of sample `s`, wrapped as the slots are (`Map::sample_at`).
+/// The first word of sample `s`, wrapped as the slots are (`light::sample`).
 fn light_sample_at(s: vec2<u32>) -> u32 {
   let n = head_word(LIGHT_HEAD_SAMPLES_ACROSS);
   return head_word(LIGHT_HEAD_SAMPLES) + ((s.y % n) * n + s.x % n) * SAMPLE_WORDS;
@@ -58,7 +58,8 @@ fn listed_at(which: u32) -> u32 {
   return fed;
 }
 
-/// The list what feeds a claimed tile at `level` is listed in (light.rs `listed`).
+/// The list what feeds a claimed tile at `level` is listed in (`light::LISTED_CORNERS`,
+/// `LISTED_FED`, `LISTED_CLAIMED`).
 fn listed(level: u32) -> u32 {
   if (level == LEVEL_CORNER) {
     return LIGHT_LISTED_CORNERS;
@@ -69,12 +70,12 @@ fn listed(level: u32) -> u32 {
   return LIGHT_LISTED_FED;
 }
 
-/// The slot box texel `p` lies in: `slot_texel` the other way (`Map::slot`).
+/// The slot box texel `p` lies in: light_aim.wgsl's `slot_texel` the other way.
 fn texel_slot(p: vec2<u32>) -> vec2<u32> {
   return vec2<u32>(vec2<i32>(p) + light_corner()) & vec2<u32>(head_word(LIGHT_HEAD_SIZE) - 1u);
 }
 
-/// What of `level` the thread at `id` of its pass takes (`Map::take`): itself where the cast
+/// What of `level` the thread at `id` of its pass takes: itself where the cast
 /// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of
 /// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry `listed_per` of them; none past
 /// the list.
@@ -116,7 +117,7 @@ fn corner_texel(c: vec2<u32>) -> vec2<i32> {
   return (vec2<i32>(c) - vec2<i32>(i32(LIGHT_BEAM_WINDOW))) * i32(LIGHT_BEAM);
 }
 
-/// The tile of the box what `level` at `at` lies on (`Map::on`): a cell's its own number, a
+/// The tile of the box what `level` at `at` lies on: a cell's its own number, a
 /// beam ray's the tile its texel, which may lie past the box, lies on.
 fn light_on(level: u32, at: vec2<u32>) -> vec2<i32> {
   if (level == LEVEL_CELL) {
@@ -134,7 +135,7 @@ fn light_on(level: u32, at: vec2<u32>) -> vec2<i32> {
   return vec2<i32>(slot_texel(p) / LIGHT_TILE);
 }
 
-/// Whether a tile from `lo_at` to `hi_at` is one the cast casts (light.rs `casts_in`): tile
+/// Whether a tile from `lo_at` to `hi_at` is one the cast casts (`light::reads_at`): tile
 /// by tile where they are few, else by the squares they lie in (`light::coarse_at`); none past
 /// the box.
 fn casts_in(lo_at: vec2<i32>, hi_at: vec2<i32>) -> bool {
@@ -164,8 +165,8 @@ fn casts_in(lo_at: vec2<i32>, hi_at: vec2<i32>) -> bool {
   return false;
 }
 
-/// Whether the cast needs what `level` at `at` gives (`Map::needs`): one of the tiles it
-/// feeds, the tile it lies on and its reach about it (`Map::feeds`, `Map::reach`).
+/// Whether the cast needs what `level` at `at` gives: one of the tiles it feeds, the tile it
+/// lies on and its reach about it, the cells whose window holds a beam ray (`casts_in`).
 fn light_needs(level: u32, at: vec2<u32>) -> bool {
   let on = light_on(level, at);
   var lo = vec2<i32>(0);

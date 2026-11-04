@@ -29,12 +29,14 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 
 /// Pixel `id`'s ray again, of rays `size` wide and high, and its words written there
 /// (miss_word.wgsl): what lies about the face it stopped on told at once
-/// where it needs no asking (`world::unasked_face`), else its hit kept for that to be asked
+/// where it needs no asking, a cell short of its cube taking its box's (pxl-engine
+/// `face::BOX`), else its hit kept for that to be asked
 /// once a hit (`keep_hit`).
 fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
-  let p = px(id, size);
-  let w = walk_asking(p.aim.origin, p.aim.dir, p.aim.t_max, p.aim.range, p.start);
-  let face = face_of(p.aim, w);
+  let aim = px_aim(id, size);
+  let start = px_start(aim, id, size);
+  let w = walk_asking(aim.origin, aim.dir, aim.t_max, aim.range, start);
+  let face = face_of(aim, w);
   var faces = 0u;
   // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both
   // of a `select` are taken, so the hit is kept under an `if`.
@@ -43,7 +45,7 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
   } else if (w.ends == 1u) {
     faces = keep_hit(w, face, id);
   }
-  write_ray(id, ray_word(w, w.visits + p.start.visits, face, faces));
+  write_ray(id, ray_word(w, w.visits + start.visits, face, faces));
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, a thread a drawn pixel, each but the

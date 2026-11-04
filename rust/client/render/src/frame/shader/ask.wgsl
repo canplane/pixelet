@@ -70,7 +70,7 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
 
 /// The node `c` at `zoom`, handed `handed`, asked at `zooms`: off the slot that keeps it, unless
 /// this pass is still writing it; else of the world, and kept where this walk claims a slot
-/// (`Writing::node`). What it hands its children: the slot's where one kept it. One asked of
+/// (pxl-engine pyramid.rs, its claim `claim` here). What it hands its children: the slot's where one kept it. One asked of
 /// the world counts in `ASKED_TALLY` where `counts`.
 fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
   let tag = walk_tag();

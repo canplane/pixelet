@@ -4,9 +4,11 @@
 
 use naga::front::wgsl;
 use pxl_engine::answer;
+use pxl_engine::beam::SAMPLE_SIDE;
 use pxl_engine::grid;
 use pxl_engine::ground;
 use pxl_engine::lattice;
+use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
 use pxl_engine::screen;
 use std::path::Path;
@@ -251,6 +253,14 @@ fn strip_comments(text: &str) -> String {
     out
 }
 
+// A workgroup of light.wgsl's `light_cs` is a tile of the light's box, and light_list.wgsl's
+// `light_take` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes of one entry of the
+// list: the tile's side is that side.
+const _: () = assert!(
+    LIGHT_TILE == SAMPLE_SIDE,
+    "a light tile is a workgroup of the list's lanes a side"
+);
+
 /// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
@@ -293,7 +303,7 @@ fn walk_word() -> String {
         ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
-        ("SAMPLE_SIDE", beam::SAMPLE_SIDE),
+        ("SAMPLE_SIDE", SAMPLE_SIDE),
         ("ENTRIES", pyramid::ENTRIES),
         ("ENTRIES_AT", pyramid::ENTRIES_AT),
         ("ENTRY_WORDS", pyramid::ENTRY_WORDS),

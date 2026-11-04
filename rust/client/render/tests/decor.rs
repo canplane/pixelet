@@ -3326,10 +3326,13 @@ impl Chain<'_> {
             pass.dispatch_workgroups(self.workgroups, 1, 1);
         }
         q.submit([e.finish()]);
-        // The tiles the decor compacted stands on, as the light's mark reads its lanes.
+        // The tiles the decor compacted stands on, as the light's mark reads its lanes: the
+        // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs).
         let mut head = vec![0u32; light::HEAD_WORDS];
         head[light::HEAD_CAST] = CAST_NUMBER;
-        head[light::HEAD_SIZE] = MAP_SIDE;
+        for (k, v) in light::head_layout(MAP_SIDE) {
+            head[k] = v;
+        }
         let head = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytes(&head),

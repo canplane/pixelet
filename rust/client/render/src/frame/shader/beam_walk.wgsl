@@ -28,7 +28,7 @@ struct Beamed {
 
 /// The beam ray from `origin` aimed `aimed`, reaching `t_max` at the zooms `range` holds it to,
 /// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
-/// `base` (`cast::walk_from_root`, `Until::Beam`, `Leaving`).
+/// `base` (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
 fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
   let dir = ray_dir(aimed);
   let inv = ray_inv(dir);

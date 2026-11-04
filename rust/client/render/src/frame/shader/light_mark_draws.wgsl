@@ -30,13 +30,13 @@ fn instance_cap() -> u32 {
 }
 
 /// How many are placed: the last region's end, no more than the slots
-/// (`Instances::cnt`).
+/// (decor_compact.wgsl lays the regions).
 fn instance_cnt() -> u32 {
   let last = 2u * REGIONS - 1u;
   return min(select(0u, regions[last], last < arrayLength(&regions)), instance_cap());
 }
 
-/// The anchor on `axis` from a Q3 `o`, in units (`Instances::anchor`).
+/// The anchor on `axis` from a Q3 `o`, in units (pxl-content `generation::drawn::ANCHOR`).
 fn instance_anchor(axis: u32, o: i32) -> f32 {
   let a = i32(drawing_at(DRAWN_ANCHOR + axis));
   // The anchor and the eye in unit cells, which wrap round the world on X.
@@ -45,7 +45,7 @@ fn instance_anchor(axis: u32, o: i32) -> f32 {
 }
 
 /// Where placed slot `k` stands, its base middle as drawn, units from the eye at Q3
-/// `o` (`Instances::pos`).
+/// `o`, as decor_place.wgsl places it.
 fn instance_pos(k: u32, o: vec3<i32>) -> vec3<f32> {
   let cap = instance_cap();
   return vec3<f32>(
