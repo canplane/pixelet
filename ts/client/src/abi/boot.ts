@@ -40,7 +40,7 @@ import { key } from "@/abi/toc.spec.ts";
 import { stream } from "./gpu.spec.ts";
 import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import { submit_frame } from "@/port/surface.ts";
-import { abort } from "@/sys/stop.ts";
+import { onabort } from "@/sys/abort.ts";
 import { text_layout, text_raster } from "@/port/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, gpu_present, gpu_ready, set_gpu } from "@/port/gpu.ts";
@@ -50,7 +50,7 @@ import {
   BOOT_LOADING,
   BOOT_STARTED,
   BOOT_STARTING,
-  BOOT_STOPPED,
+  BOOT_TERMINATED,
   type Boot,
   SOURCE_DECLARED,
 } from "@/abi/state.ts";
@@ -146,12 +146,12 @@ async function open(): Promise<void> {
     (run) => requestAnimationFrame(run),
   );
   await open_host(cfg, {
-    sys: { fs: namespace(), abort },
+    sys: { fs: namespace(), onabort },
     ports: { [port.SHELL]: heard },
     policy: pacing,
     submit: submit_frame,
     // Its turns end with it.
-    stopped: () => set(BOOT_STOPPED),
+    onterminated: () => set(BOOT_TERMINATED),
   });
   bracket.sensor.hear(SENSOR_HEARD);
   bracket.gpu.boot({
@@ -175,7 +175,7 @@ async function open(): Promise<void> {
     pkt,
     (result) => result,
   );
-  // A kernel that stopped in its boot is told by `stopped`, its stop code read.
+  // A kernel that stopped in its boot is told by `onterminated`, its stop code read.
   if (booted === Errno.ENOTRECOVERABLE) return;
   if (booted < 0)
     throw new Error(`the kernel refused its boot: ${strerror(booted)}`);

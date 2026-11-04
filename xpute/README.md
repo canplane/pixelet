@@ -118,7 +118,7 @@ where there is no display, frame pacing on a page); then it sends the command
 and reads the reply. `mount` takes all the program decides and nothing of the
 order it is put together in: a guest that writes its toc in its first turn
 says so (`toc_in_turn`) and the mount runs that turn, and what is told when the
-guest stops is given with the rest (`stopped`). A program takes it all from
+guest stops is given with the rest (`onterminated`). A program takes it all from
 `@xpute/host`'s entry (`src/mod.ts`).
 
 A guest stops on a broken invariant (`bug!`) or a panic: what it installs

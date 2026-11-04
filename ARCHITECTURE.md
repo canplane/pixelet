@@ -938,8 +938,8 @@ asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
 (`ts/client/src/shell/cover.ts` `coverOf`). A broken invariant is a **bug**,
-and it ends the kernel (`xpute_guest::stop`, its record the kernel's host
-stream's), and the shell shows the blue screen with the errno and place as its
+and it ends the kernel (`xpute_guest::stop`, its record `SYS_ABORT`), and
+the shell shows the blue screen with the errno and place as its
 stop code, as it does for a GPU lost for good: a page's module traps, and on a
 device the panic hook says why and the kernel's thread stops there, the process
 going on. Memory pressure is neither; the memory map says how each range meets it.

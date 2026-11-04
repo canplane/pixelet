@@ -8,13 +8,13 @@ export const BOOT_STARTING = 0;
 export const BOOT_LOADING = 1;
 export const BOOT_STARTED = 2;
 export const BOOT_FAILED = 3;
-export const BOOT_STOPPED = 4;
+export const BOOT_TERMINATED = 4;
 export type Boot =
   | typeof BOOT_STARTING
   | typeof BOOT_LOADING
   | typeof BOOT_STARTED
   | typeof BOOT_FAILED
-  | typeof BOOT_STOPPED;
+  | typeof BOOT_TERMINATED;
 
 /** What the client has of a GPU, which the guest, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
 export const GPU_ASKING = 0;

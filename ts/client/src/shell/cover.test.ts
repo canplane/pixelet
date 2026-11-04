@@ -9,7 +9,7 @@ import {
   BOOT_LOADING,
   BOOT_STARTED,
   BOOT_STARTING,
-  BOOT_STOPPED,
+  BOOT_TERMINATED,
   GPU_ASKING,
   GPU_LOST,
   GPU_INSECURE,
@@ -107,7 +107,7 @@ test("coverOf - once it shows, a panic or nothing", () => {
     kind: "panic",
     code: "WORLD_UNAVAILABLE",
   });
-  expect(of({ boot: BOOT_STOPPED, stopCode: "X" })).toEqual({
+  expect(of({ boot: BOOT_TERMINATED, stopCode: "X" })).toEqual({
     kind: "panic",
     of: "panic.app",
     code: "X",

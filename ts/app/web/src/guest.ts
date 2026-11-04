@@ -8,8 +8,7 @@
  * URL lacks.
  */
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { open_module, reserve_mem, Toc } from "@xpute/host";
+import { open_module, reserve_mem } from "@xpute/host";
 import type { Config, Guest } from "@pxl/client/bracket.tsx";
 import * as webgpu from "./webgpu.ts";
 import { DEV_BUNDLE } from "./bundle.ts";
@@ -25,16 +24,13 @@ export async function open(cfg: Config): Promise<Guest> {
   ).arrayBuffer();
   const guest = open_module(await WebAssembly.compile(bytes), memory);
   webgpu.take(guest.mem);
-  // Found once the first turn, which the mount runs, has written the toc.
-  let gpu: u32 | null = null;
   return {
     mem: guest.mem,
-    run: (quota_ms: f64) => {
-      const wake = guest.run(quota_ms);
-      gpu ??= new Toc(guest.mem, cfg.toc_at).get(cfg.gpu_stream);
-      webgpu.run(gpu, cfg.gpu_head);
-      return wake;
-    },
+    run: guest.run,
     answer_with: guest.answer_with,
+    // The GPU's calls, run on the page's WebGPU.
+    streams: [
+      { key: cfg.gpu_stream, run: (at) => webgpu.run(at, cfg.gpu_head) },
+    ],
   };
 }

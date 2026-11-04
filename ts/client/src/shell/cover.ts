@@ -6,7 +6,7 @@ import {
   BOOT_LOADING,
   BOOT_STARTED,
   BOOT_STARTING,
-  BOOT_STOPPED,
+  BOOT_TERMINATED,
   type Boot,
   GPU_ASKING,
   GPU_INSECURE,
@@ -104,7 +104,7 @@ function waitOf(s: Standing): Cover {
  * (abi/boot.ts), so neither ever comes over the app. None once it shows. */
 export function coverOf(s: Standing): Cover | null {
   switch (s.boot) {
-    case BOOT_STOPPED:
+    case BOOT_TERMINATED:
       return panic("panic.app", s.stopCode);
     case BOOT_FAILED:
       return failed("failed.boot");

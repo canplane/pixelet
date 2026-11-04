@@ -45,7 +45,7 @@ fn bearing(deg: Option<f64>) -> bool {
 }
 
 /// A UI command: asks for a turn, and has this one raise what it asks of the
-/// host at its falling edge, so a sensor close sent after the strobe stopped is
+/// host at its falling edge, so a sensor close sent while turns are paused is
 /// still heard.
 fn ask_turn(s: &mut State) -> Result<Option<i32>, MarshalError> {
     edge::request_world_tick();

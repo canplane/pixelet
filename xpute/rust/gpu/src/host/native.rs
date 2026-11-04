@@ -106,7 +106,7 @@ pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
         DEVICE.set(Some(Device { instance, host }));
         Ok(())
     });
-    opened.unwrap_or(Err(OpenError::Stopped))
+    opened.unwrap_or(Err(OpenError::Terminated))
 }
 
 /// Binds the guest's surface `handle` to `window`, which `target` makes a

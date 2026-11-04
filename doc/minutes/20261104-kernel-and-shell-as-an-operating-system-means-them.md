@@ -54,6 +54,10 @@ for the same acts.
   `Port` took packets only in forms of its own and threw on an errno, so
   pixelet, which lays its memory out itself, could not use it and reached past
   it to the doorbell.
+- **The guest's end takes Unix's words, and `halt` goes.** The user had the
+  names judged without regard to the code as it stood: Unix's "stopped" is a
+  process paused, and the strobe's `halt` was the host hearing that the guest
+  ended, a second word for it.
 
 ## What was weighed and not taken
 
@@ -70,7 +74,7 @@ for the same acts.
 
 - `driver/` taken apart (`ce6ce0b37`). `ts/client/src/sys/` answers the
   kernel's hostcalls, as `cfg.sys` hands them to `@xpute/host`: `sys/fs/` the
-  files, `sys/text.ts`, `sys/stop.ts`. `ts/client/src/origin/` is the server
+  files, `sys/text.ts`, `sys/stop.ts` (now `sys/abort.ts`). `ts/client/src/origin/` is the server
   the client reads from. `ts/client/src/port/` carries the shell's port: a file
   for each major but SHELL, whose snapshot is `snapshot.ts`, with `shell.ts`
   the shell's way in and `SYS_BOOT` with the boot in `abi/boot.ts`.
@@ -83,8 +87,8 @@ for the same acts.
   its host test are again a guest that lays its range out on the base, as
   before `e3be4b371`.
 - What every program wrote around the strobe is the base's: `resume` and
-  `pause` are no-ops where they already hold, and the mount halts the strobe once the
-  guest stops and tells the program (the mount's `stopped`). The client keeps only
+  `pause` are no-ops where they already hold, the strobe rings a stopped
+  guest no more, and the mount tells the program (the mount's `onterminated`). The client keeps only
   its two facts, the world's view open and the page seen.
 - The architecture's figure keeps the shell to the UI; its port is the shell's
   event loop, which the sensors, the GPU and the visibility are heard on too.
@@ -113,19 +117,33 @@ for the same acts.
   host. The built page in headless Chrome booted, read its tiles and
   assets through port 0 and drew the world.
 - `mount` takes the whole of it: `toc_in_turn` (it runs the turn that writes
-  the toc), `ports` (each port's handler, never 0), `stopped`; `Host` gives
+  the toc), `ports` (each port's handler, never 0), `onterminated`; `Host` gives
   `wake`, `resume` and `pause` beside `send` and `call`, and no longer the
-  strobe. A kernel that stops in its boot shows the stop code, as one stopped
-  later does.
-- Names, after a review of them: the turn switch is `pause` and `resume`,
-  since "stop" is a guest's end everywhere here; what reads a call's answer is
+  strobe. A kernel that stops in its boot shows the stop code, as one
+  stopped later does.
+- The guest's end, in Unix's words where a name holds a state: the host sees
+  the guest **terminated**, as wait(2) says of a child (`Doorbell.terminated`
+  and `onterminated`, the mount's `onterminated`, xpute-host native `terminate`,
+  `OpenError::Terminated`, `BOOT_TERMINATED`; was `trapped`, `stopped`,
+  `BOOT_STOPPED`), since "stopped" is Unix's word for a process paused and
+  resumable, which here is `pause`; what hears the guest's report is
+  `SysHost.onabort` (was `abort`), as the mount's `onterminated` hears its end;
+  the guest's own flag is `ABORTED`. The guest's `stop` module and its `Stop`
+  stay, and prose keeps "stops". The strobe's `halt` is gone: it copied the
+  doorbell's fact, which the strobe now reads.
+- Names, after a review of them: the turn switch is `pause` and `resume`;
+  what reads a call's answer is
   `read` (was `take`); the kernel's handle on its host `Host` (was `Hosted`);
   conformance's question `INC` (was `ANSWER`); the door's kept buffers
-  `writes`; `ABORT_PATH_BYTES`.
+  `writes`; `ABORT_PATH_BYTES`; the file that answers `SYS_ABORT`
+  `sys/abort.ts` (was `sys/stop.ts`).
   `@xpute/host` has an entry (`src/mod.ts`), which pixelet imports alone; its
   deep paths stay for xpute's own packages. The web and native openers no
-  longer run the first turn; the client's boot declares its port and its stop
-  in the mount, and nothing in it reaches the strobe or binds a port after.
+  longer run the first turn; the client's boot declares its port and what it
+  does once the kernel stops in the mount, and nothing in it reaches the strobe or binds a port after.
+  The platform names the streams it runs (`Guest.streams` `run`: the page's
+  GPU stream on WebGPU), and `mount` runs them as each turn returns, so the web
+  opener no longer wraps `run` or reads the toc.
 - Kept, as the base's: what the same days moved down into it and pixelet uses,
   `stop`, `Opened`, `Door::raise_to` with `Event`, `OwnedRange`, and the
   command table's generator (`spec::cmd::table_outputs`), which writes
@@ -136,9 +154,8 @@ for the same acts.
 - The base's verbs beyond `send`, `call`, `on` and `receive`: the doorbell's
   own (`ring`, `cmd`, `writer`, `fits`) and the guest's `send_with`.
 - The client still opens its guest through the bracket and keeps `HOST` and
-  `PACING` for the port's modules (`host/mount.ts`), and the web bracket plays
-  the GPU stream after each turn and the GPU's wake asks `HOST.wake`: the
-  GPU host is the platform's, which `mount` does not yet take.
+  `PACING` for the port's modules (`host/mount.ts`), and the GPU's wake, which
+  the platform's GPU host hears, asks `HOST.wake` from the boot.
 - The kernel's sensor ABI stays raw: it takes the platform's permissions, its
   gating and its error codes.
 - Checked by format, lint, type, `cargo spec`, xpute's whole suite (its

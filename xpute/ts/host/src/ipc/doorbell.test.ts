@@ -60,12 +60,12 @@ test("doorbell - a guest that traps throws at no one: it is told, and a call ans
   console.error = () => {};
   try {
     let runs = 0;
-    let stopped = 0;
+    let terminated = 0;
     const door = new Doorbell(mem, sq_at, cq_at, () => {
       runs++;
       throw new Error("the guest trapped");
     });
-    door.stopped = () => stopped++;
+    door.onterminated = () => terminated++;
     const answer = (result: number) => result;
     // In the call that traps, and in one after it, which rings no more.
     assert.deepStrictEqual(
@@ -78,7 +78,7 @@ test("doorbell - a guest that traps throws at no one: it is told, and a call ans
     );
     door.ring(0);
     assert.deepStrictEqual(runs, 1);
-    assert.deepStrictEqual(stopped, 1);
+    assert.deepStrictEqual(terminated, 1);
   } finally {
     console.error = error;
   }
@@ -102,7 +102,7 @@ test("doorbell - a frame its port cannot take stops the guest, and it is told on
   console.error = () => {};
   try {
     let runs = 0;
-    let stopped = 0;
+    let terminated = 0;
     const door = new Doorbell(mem, sq_at, cq_at, () => {
       runs++;
       cq.push(0, 2);
@@ -111,11 +111,11 @@ test("doorbell - a frame its port cannot take stops the guest, and it is told on
     door.on(0, () => {
       throw new InvariantError(Errno.EBADF);
     });
-    door.stopped = () => stopped++;
+    door.onterminated = () => terminated++;
     assert.deepStrictEqual(door.ring(0), -1);
     assert.deepStrictEqual(door.ring(0), -1);
     assert.deepStrictEqual(runs, 1, "a stopped guest is rung no more");
-    assert.deepStrictEqual(stopped, 1);
+    assert.deepStrictEqual(terminated, 1);
   } finally {
     console.error = error;
   }

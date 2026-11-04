@@ -62,7 +62,7 @@ export interface Fs {
  * take is logged. */
 export interface SysHost {
   fs?: Fs;
-  abort?(report: Abort): void;
+  onabort?(report: Abort): void;
 }
 
 function log_abort(r: Abort): void {
@@ -153,7 +153,7 @@ export class Sys {
         const c = read_sys_abort(f);
         const num = (low: u32, high: u32) =>
           BigInt(low) | (BigInt(high) << 32n);
-        (this.host.abort ?? log_abort)({
+        (this.host.onabort ?? log_abort)({
           errnum: c.errnum,
           line: c.line,
           column: c.column,

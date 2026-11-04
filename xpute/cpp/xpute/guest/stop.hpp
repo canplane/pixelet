@@ -27,8 +27,8 @@ struct Stop {
 // run the record.
 using Hook = void (*)(const Stop &);
 
-// Installs the bug reporter, once at boot: `abort` publishes the record,
+// Installs the bug reporter, once at boot: `report` publishes the record,
 // `hook` is the form's, none where the host outlives the guest (a page).
-void install(Report abort, Hook hook = nullptr) noexcept;
+void install(Report report, Hook hook = nullptr) noexcept;
 
 } // namespace xpute::stop

@@ -19,7 +19,7 @@ use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
-pub use thread::{answer_with, stopped, Answer};
+pub use thread::{answer_with, terminate, Answer};
 pub use xpute_guest::entry::{run, BootInfo, Entry};
 
 pub struct Config {
@@ -79,7 +79,7 @@ impl Guest {
     }
 
     /// `run`, none where the guest has stopped, in this call or before it
-    /// (`stopped`).
+    /// (`terminate`).
     pub fn turn<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
         thread::run(f)
     }

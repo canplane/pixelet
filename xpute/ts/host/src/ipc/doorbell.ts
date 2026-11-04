@@ -27,7 +27,7 @@ import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
-/** Where a trapped guest's packets are written: nowhere, as its sends are dropped. */
+/** Where a stopped guest's packets are written: nowhere, as its sends are dropped. */
 const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
@@ -53,15 +53,21 @@ export class Doorbell implements PacketRoom {
   >();
   /** A listener runs inside it. */
   private reading = false;
-  /** A trapped guest is gone: its turn stopped partway, and the submission
-   * it was applying would trap it again on every ring. */
-  private trapped = false;
+  /** The guest is gone: its turn stopped partway, or a port could not take what
+   * it posted, and the submission it was applying would end it again on every
+   * ring. */
+  #terminated = false;
   private readonly hearing = new Map<u32, OnEvent>();
   wake: ((wake_ms: f64) => void) | null = null;
-  /** Told once, as the guest traps; the mount's (host.ts), which halts the strobe. */
-  stopped: (() => void) | null = null;
+  /** Told once, as the guest stops. */
+  onterminated: (() => void) | null = null;
 
   private readonly run: Run;
+
+  /** The guest is gone, and no turn runs again. */
+  get terminated(): boolean {
+    return this.#terminated;
+  }
 
   constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, run: Run) {
     this.run = run;
@@ -73,8 +79,8 @@ export class Doorbell implements PacketRoom {
    * `count` children, room made for it first; valid until that submission. */
   writer(cnt: u32): PacketWriter {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    while (!this.trapped && !this.sq.write(this.writing, cnt)) this.ring(0);
-    if (this.trapped) this.writing.begin(NOWHERE, NOWHERE_VIEW, 0, 0, cnt);
+    while (!this.#terminated && !this.sq.write(this.writing, cnt)) this.ring(0);
+    if (this.#terminated) this.writing.begin(NOWHERE, NOWHERE_VIEW, 0, 0, cnt);
     return this.writing;
   }
 
@@ -118,13 +124,13 @@ export class Doorbell implements PacketRoom {
 
   ring(quota_ms: f64): f64 {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    if (this.trapped) return NO_WAKE;
+    if (this.#terminated) return NO_WAKE;
     let wake: f64;
     try {
       wake = this.run(quota_ms);
     } catch (err) {
       // What it posted before it trapped, its report among it, is read.
-      this.stop("the guest trapped", err, true);
+      this.terminate("the guest trapped", err, true);
       return NO_WAKE;
     }
     try {
@@ -132,7 +138,7 @@ export class Doorbell implements PacketRoom {
     } catch (err) {
       // A frame its port could not take: the guest broke the protocol, or
       // what answers it failed, and nothing after that frame can be read.
-      this.stop("a port could not take what the guest posted", err, false);
+      this.terminate("a port could not take what the guest posted", err, false);
       return NO_WAKE;
     }
     this.wake?.(wake);
@@ -142,9 +148,9 @@ export class Doorbell implements PacketRoom {
   /** The guest is gone: printed here, once, and told, since a turn's caller is
    * a timer or an event with nothing to do about it. `read` first reads what
    * it posted. */
-  private stop(why: string, err: unknown, read: boolean): void {
+  private terminate(why: string, err: unknown, read: boolean): void {
     console.error(`[xpute/doorbell] ${why}:`, err);
-    this.trapped = true;
+    this.#terminated = true;
     try {
       if (read) this.read();
     } catch (err) {
@@ -153,20 +159,20 @@ export class Doorbell implements PacketRoom {
         err,
       );
     } finally {
-      this.stopped?.();
+      this.onterminated?.();
     }
   }
 
   /** Submitted as the port `src` with ACKREQ and rung with no quota until the
    * reply returns; the reply is valid only inside `read`. A guest that has
-   * trapped answers ENOTRECOVERABLE, with no reply. */
+   * stopped answers ENOTRECOVERABLE, with no reply. */
   call<T>(
     src: u32,
     cmd: u32,
     pkt: PacketWriter | null,
     read: (result: i32, reply: BranchCursor | null) => T,
   ): T {
-    if (this.trapped) return read(Errno.ENOTRECOVERABLE, null);
+    if (this.#terminated) return read(Errno.ENOTRECOVERABLE, null);
     this.next_call = frame.id_of(this.next_call + 1);
     const tag = frame.tag_of(src, this.next_call);
     let out: { val: T } | null = null;
@@ -176,7 +182,7 @@ export class Doorbell implements PacketRoom {
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
-        if (out === null && this.trapped) {
+        if (out === null && this.#terminated) {
           return read(Errno.ENOTRECOVERABLE, null);
         }
         if (out === null && pending === 0) {
@@ -250,7 +256,7 @@ export class Doorbell implements PacketRoom {
     flags: u32,
   ): void {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    if (this.trapped) return;
+    if (this.#terminated) return;
     for (;;) {
       const errnum = this.sq.push(tag, cmd, flags, pkt);
       if (errnum === Errno.OK) return;

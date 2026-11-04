@@ -1,4 +1,4 @@
-// @pxl/client/sys/stop.ts
+// @pxl/client/sys/abort.ts
 
 /** The kernel's last report, its hostcall SYS_ABORT (pxl-kernel
  * `sys/io/host.rs`), logged whole and kept short as a stop code for the shell's
@@ -16,7 +16,7 @@ export function stop_code(): string | null {
   return code;
 }
 
-export const abort: SysHost["abort"] = ({
+export const onabort: SysHost["onabort"] = ({
   errnum,
   file,
   line,

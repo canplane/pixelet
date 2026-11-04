@@ -7,7 +7,13 @@
  * and the host that gives (`Host`). The files under `src/` are xpute's own.
  */
 
-export { type Config, type Guest, type Host, mount } from "./host.ts";
+export {
+  type Config,
+  type Guest,
+  type Host,
+  mount,
+  type Stream,
+} from "./host.ts";
 export type { OnEvent } from "./ipc/doorbell.ts";
 export { type Binding, Namespace } from "./ipc/ns.ts";
 export { FileError, type Fs, type SysHost } from "./ipc/sys.ts";

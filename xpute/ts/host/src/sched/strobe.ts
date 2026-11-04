@@ -21,8 +21,6 @@ export class Strobe<G extends Grant = Grant> {
   private timer_at = Infinity;
   private last = -1;
   private running = false;
-  /** The guest stopped: no turn runs again. */
-  private halted = false;
   private readonly consider = (now: f64): void => this.turn(now);
 
   private readonly doorbell: Doorbell;
@@ -43,7 +41,7 @@ export class Strobe<G extends Grant = Grant> {
 
   /** Turns run from now on; nothing where they already run or the guest stopped. */
   resume(): void {
-    if (this.running || this.halted) return;
+    if (this.running || this.doorbell.terminated) return;
     this.running = true;
     this.last = performance.now();
     this.request();
@@ -57,14 +55,10 @@ export class Strobe<G extends Grant = Grant> {
     this.timer_at = Infinity;
   }
 
-  /** No turn runs again: the guest stopped. */
-  halt(): void {
-    this.halted = true;
-    this.pause();
-  }
-
+  /** A moment asked of the policy; none while paused or once the guest
+   * stopped. */
   request(): void {
-    if (this.asked || !this.running) return;
+    if (this.asked || !this.running || this.doorbell.terminated) return;
     this.asked = true;
     this.policy.next(this.consider);
   }
@@ -86,7 +80,7 @@ export class Strobe<G extends Grant = Grant> {
 
   private turn(now: f64): void {
     this.asked = false;
-    if (!this.running) return;
+    if (!this.running || this.doorbell.terminated) return;
     if (!this.policy.admit(now)) return this.request();
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every turn worth reporting would land.

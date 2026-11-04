@@ -22,7 +22,7 @@ pub enum OpenError {
     Adapter(wgpu::RequestAdapterError),
     Device(wgpu::RequestDeviceError),
     /// The guest it is for has stopped.
-    Stopped,
+    Terminated,
 }
 
 /// A device opened as asked, and the instance a program makes its surfaces

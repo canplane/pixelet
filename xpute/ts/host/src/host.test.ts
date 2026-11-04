@@ -20,6 +20,9 @@ const TOC_AT = 8;
 const SQ_AT = 64;
 const CQ_AT = SQ_AT + ring_bytes(CAP);
 const SLOTS_AT = CQ_AT + ring_bytes(CAP);
+/** A stream of the program's own, which the guest names in its toc. */
+const STREAM_KEY = (key.PROGRAM | 1) >>> 0;
+const STREAM_AT = 4;
 
 /** A guest that lays its rings and writes its toc in its first turn, then
  * each turn answers what was sent it, 0, and posts an event for port 1;
@@ -43,8 +46,19 @@ function guest(trap: () => boolean = () => false): Guest & { turns: number[] } {
           SLOTS_AT + slots_bytes(CAP, SLOT),
           SLOT,
         );
-        const toc = new Uint32Array(mem, TOC_AT, HEAD + 4);
-        toc.set([MAGIC, VERSION, 2, 0, key.SQ, SQ_AT, key.CQ, CQ_AT]);
+        const toc = new Uint32Array(mem, TOC_AT, HEAD + 6);
+        toc.set([
+          MAGIC,
+          VERSION,
+          3,
+          0,
+          key.SQ,
+          SQ_AT,
+          key.CQ,
+          CQ_AT,
+          STREAM_KEY,
+          STREAM_AT,
+        ]);
         return -1;
       }
       if (trap()) throw new Error("the guest trapped");
@@ -134,12 +148,12 @@ test("mount - turns run between resume and pause, and wake asks for one only the
   assert.deepStrictEqual(policy.asked, 1);
 });
 
-test("mount - a guest that stops halts the turns and is told once", () => {
+test("mount - a guest that stops runs no more turns and is told once", () => {
   const error = console.error;
   console.error = () => {};
   try {
     let trapping = false;
-    let stopped = 0;
+    let terminated = 0;
     const policy = stepped();
     const host = mount(
       guest(() => trapping),
@@ -149,13 +163,13 @@ test("mount - a guest that stops halts the turns and is told once", () => {
         sys: {},
         policy,
         submit: () => {},
-        stopped: () => stopped++,
+        onterminated: () => terminated++,
       },
     );
     trapping = true;
     assert.deepStrictEqual(host.call(1, 0), Errno.ENOTRECOVERABLE);
     host.resume();
-    assert.deepStrictEqual(stopped, 1);
+    assert.deepStrictEqual(terminated, 1);
     assert.deepStrictEqual(
       policy.asked,
       0,
@@ -164,4 +178,20 @@ test("mount - a guest that stops halts the turns and is told once", () => {
   } finally {
     console.error = error;
   }
+});
+
+test("mount - runs each stream the platform names as each turn returns", () => {
+  const g = guest();
+  const ran: number[] = [];
+  g.streams = [{ key: STREAM_KEY, run: (at) => void ran.push(at) }];
+  const host = mount(g, {
+    toc_at: TOC_AT,
+    toc_in_turn: true,
+    sys: {},
+    policy: stepped(),
+    submit: () => {},
+  });
+  assert.deepStrictEqual(ran, [], "not the turn that wrote the toc");
+  host.call(1, 0);
+  assert.deepStrictEqual(ran, [STREAM_AT]);
 });

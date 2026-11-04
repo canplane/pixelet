@@ -264,8 +264,8 @@ policy below gives; a positive `wake_ms` sets a timer that asks for a turn when
 it fires. A guest that asks for nothing is rung for nothing. The program says
 only whether turns may run (`Host.resume`, `pause`, each a no-op where it
 already holds) and asks for one where something the guest did not hear of
-changed (`wake`); once the guest stops, the mount halts the strobe and tells the
-program (its config's `stopped`). The doorbell rings too, with no quota: to make room in a full submission ring, to wait for a call's
+changed (`wake`); once the guest stops, the strobe rings it no more, and
+the mount tells the program (its config's `onterminated`). The doorbell rings too, with no quota: to make room in a full submission ring, to wait for a call's
 reply and to send a `cmd`; and whatever holds the doorbell may ring it.
 
 How long a turn may take, and how that time is spent, are settled at three
@@ -423,7 +423,7 @@ SYS_READ · _WRITE · _CLOSE ▶ Sys, in the guest's memory
 SYS_OPENAT ───────────────▶  Sys ───── open ─────────▶    fs ─▶ Namespace,
 ◀──── SYS_OPENED, later ───  Sys ◀── bytes, or errno ─    fs    one binding a root
 SYS_CLOSE of a write ─────▶  Sys ───── commit ───────▶    fs
-SYS_ABORT ────────────────▶  Sys ───── report ───────▶    abort
+SYS_ABORT ────────────────▶  Sys ───── report ───────▶    onabort
 ```
 
 The host's namespace (`@xpute/host/ipc/ns.ts` `Namespace`) is one such `fs`, its
@@ -469,7 +469,10 @@ A guest writes them through the encoder (`gpu/encode`), which takes each
 object's handle from one table and writes each record twice, once to count its
 words and once into the room reserved for them. The **GPU host** runs the stream
 on its device after the turn returns (`gpu/host` `GpuHost`): on WebGPU in a
-page, on wgpu in a native program. Some calls finish later — an image copied
+page, on wgpu in a native program. A page's platform names the stream among
+its guest's (`@xpute/host` `Guest.streams`), and the mount runs it as each
+turn returns, from the turn after the one that writes the toc; what the run
+throws ends the guest, as a trap does. A native one runs it in the turn's own call. Some calls finish later — an image copied
 in, a buffer read back, the queue's work done, a pipeline made by WebGPU's
 async call — so each names a word of the guest's memory and a ticket, a number
 the guest wrote there; once the call is done, the GPU host writes the ticket
@@ -595,8 +598,9 @@ decides what must match.
   decides — its toc, its hostcalls' answers, each port's handler, its policy,
   what is told when the guest stops — and nothing of the order the host is put
   together in. It binds the host's port, 0, to the hostcalls' end, runs the
-  guest's first turn where that turn writes the toc (`toc_in_turn`), and reads
-  the toc after it. What it gives speaks with the doorbell's verbs, `send` and
+  guest's first turn where that turn writes the toc (`toc_in_turn`), reads the
+  toc after it, and runs the streams the platform names as each turn returns
+  (`Guest.streams`). What it gives speaks with the doorbell's verbs, `send` and
   `call`, each asking the strobe for a turn after, and `wake`, `resume` and
   `pause`. Rust's (`rust/host`) reads a guest's memory by offset on
   every platform (`mem`), and on a unix one hosts a guest linked into the

@@ -27,14 +27,28 @@ import { Strobe } from "@xpute/host/sched/strobe.ts";
 
 /** The guest as its platform opened it: its memory, which never moves or
  * grows; its entry, `run`, a turn that returns when it wants the next, in
- * ms; and where its hostcalls are answered. The floor names the entry, as a C
- * runtime names `main`. */
+ * ms; where its hostcalls are answered; and the streams the platform runs.
+ * The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
   mem: ArrayBuffer;
   run(quota_ms: f64): f64;
   /** `answer` answers each call from here on: a frame laid at an offset of
    * `mem`, answered before the call returns. ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
+  /** What the platform runs as each turn returns, before the turn's frames
+   * are read, from the turn after the one that writes the toc: a stream the
+   * guest wrote, found in the toc by its key, such as a GPU's calls run on the
+   * platform's device. What a stream's run throws ends the guest, as a trap
+   * does. */
+  streams?: Stream[];
+}
+
+/** A stream a platform runs (`Guest.streams`). */
+export interface Stream {
+  /** Its toc's key. */
+  key: u32;
+  /** Runs the stream whose words begin at `at`. */
+  run(at: u32): void;
 }
 
 /** What the program mounts its guest with: all it decides, and nothing of
@@ -53,8 +67,8 @@ export interface Config<G extends Grant = Grant> {
   policy: SchedulingPolicy<G>;
   /** Fills the rings before each turn the strobe grants is rung. */
   submit(grant: G, delta_s: f64): void;
-  /** Told once the guest has stopped, after the strobe halted. */
-  stopped?(): void;
+  /** Told once the guest has stopped. */
+  onterminated?(): void;
 }
 
 export interface Host {
@@ -64,7 +78,7 @@ export interface Host {
   /** Sent as `src` with the next turn. */
   send(src: u32, cmd: u32, pkt?: PacketWriter): void;
   /** Sent as `src` and rung at once with no quota until the guest answers, so
-   * it is heard after the strobe stopped too; then a turn is asked for. `read`
+   * it is heard while turns are paused too; then a turn is asked for. `read`
    * reads the answer; without it, the result is returned and a failure is
    * logged, as an answer no one reads is. */
   call(src: u32, cmd: u32, pkt?: PacketWriter | null): i32;
@@ -86,11 +100,19 @@ export interface Host {
 export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
   if (cfg.toc_in_turn) guest.run(0);
   const toc = new Toc(guest.mem, cfg.toc_at);
+  const streams = (guest.streams ?? []).map((s) => ({
+    at: toc.get(s.key),
+    run: s.run,
+  }));
   const doorbell = new Doorbell(
     guest.mem,
     toc.get(key.SQ),
     toc.get(key.CQ),
-    (quota_ms) => guest.run(quota_ms),
+    (quota_ms) => {
+      const wake = guest.run(quota_ms);
+      for (const s of streams) s.run(s.at);
+      return wake;
+    },
   );
   const strobe = new Strobe(doorbell, cfg.policy, cfg.submit);
   const send = (src: u32, cmd: u32, pkt?: PacketWriter) => {
@@ -110,9 +132,9 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
     doorbell.on(Number(port), heard);
   }
   guest.answer_with((at) => doorbell.answer(at));
-  doorbell.stopped = () => {
-    strobe.halt();
-    cfg.stopped?.();
+  doorbell.onterminated = () => {
+    strobe.pause();
+    cfg.onterminated?.();
   };
   return {
     guest,

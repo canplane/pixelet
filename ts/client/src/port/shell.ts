@@ -19,7 +19,7 @@ import * as port from "@/abi/port.spec.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
 export { boot_state, watch_boot } from "@/abi/boot.ts";
-export { stop_code } from "@/sys/stop.ts";
+export { stop_code } from "@/sys/abort.ts";
 
 // What the client's services show the UI: the GPU's state, the network's, the world's
 // source, and where the origin serves what the shell fetches itself.

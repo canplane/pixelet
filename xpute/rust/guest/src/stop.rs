@@ -21,8 +21,8 @@ pub enum Stop<'a> {
         b: u64,
     },
     Panic(&'a std::panic::PanicHookInfo<'a>),
-    /// The guest has stopped, told last: the form ends its thread here (xpute-host
-    /// native `stopped`), or the process goes with it.
+    /// The guest has stopped, told last: the form ends its thread here
+    /// (xpute-host native `terminate`), or the process goes with it.
     End,
 }
 
@@ -30,13 +30,13 @@ pub enum Stop<'a> {
 /// being in the record's numbers, and keeps the process alive.
 pub type PanicHook = fn(Stop<'_>);
 
-static ABORT: Global<Option<Report>> = Global::new();
+static REPORT: Global<Option<Report>> = Global::new();
 
 static PANIC_HOOK: Global<Option<PanicHook>> = Global::new();
 
-static STOPPED: Global<bool> = Global::new();
+static ABORTED: Global<bool> = Global::new();
 
-/// Installs the bug reporter and std's panic hook, once at boot: `abort`
+/// Installs the bug reporter and std's panic hook, once at boot: `report`
 /// publishes the record, `panic_hook` is the form's, none where the host
 /// outlives the guest (a page). Both are process-wide, and where the guest is
 /// linked into a native program the program's other threads fail through
@@ -44,12 +44,12 @@ static STOPPED: Global<bool> = Global::new();
 /// `PanicHook` where there is one, else by the std hook this one replaced; a
 /// bug there is not reported, and is told as the panic it then is
 /// (`global::off_marked_thread`).
-pub fn install(abort: Report, panic_hook: Option<PanicHook>) {
-    ABORT.set(Some(abort));
+pub fn install(report: Report, panic_hook: Option<PanicHook>) {
+    REPORT.set(Some(report));
     PANIC_HOOK.set(panic_hook);
     bug::set_report(|errnum, at, a, b| {
         if !off_marked_thread() {
-            stopped(errnum, at, a, b);
+            abort(errnum, at, a, b);
         }
     });
     let theirs = std::panic::take_hook();
@@ -61,10 +61,10 @@ pub fn install(abort: Report, panic_hook: Option<PanicHook>) {
             }
             return;
         }
-        if !is_stopped() {
+        if !is_aborted() {
             say(Stop::Panic(info));
             if let Some(at) = info.location() {
-                stopped(Errno::ENOTRECOVERABLE, at, 0, 0);
+                abort(Errno::ENOTRECOVERABLE, at, 0, 0);
             }
         }
         say(Stop::End);
@@ -72,18 +72,18 @@ pub fn install(abort: Report, panic_hook: Option<PanicHook>) {
 }
 
 /// Told to the hook as well as the host.
-fn stopped(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
-    STOPPED.set(true);
+fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
+    ABORTED.set(true);
     say(Stop::Bug { errnum, at, a, b });
-    if let Some(abort) = *ABORT.get(|| None) {
-        abort(errnum, at, a, b);
+    if let Some(report) = *REPORT.get(|| None) {
+        report(errnum, at, a, b);
     }
 }
 
 /// Past its report a bug panics where it cannot trap, and that panic is its
 /// way out.
-fn is_stopped() -> bool {
-    *STOPPED.get(|| false)
+fn is_aborted() -> bool {
+    *ABORTED.get(|| false)
 }
 
 fn say(stop: Stop<'_>) {

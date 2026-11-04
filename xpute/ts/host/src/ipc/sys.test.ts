@@ -76,7 +76,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
       void commits.set(`${root} ${path}`, new TextDecoder().decode(bytes)),
   };
   const sys = new Sys(
-    { fs, abort: () => {} },
+    { fs, onabort: () => {} },
     turn.mem,
     (fd, res) => void answers.push([fd, res]),
   );
