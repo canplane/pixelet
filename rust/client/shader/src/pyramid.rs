@@ -30,18 +30,6 @@ pub(crate) fn pyramid_put(w: &mut Pyramid, i: u32, v: u32) {
     unsafe { *w.index_mut(i as usize) = v }
 }
 
-/// `v` added to word `i`, whoever else adds to it: what it held.
-pub(crate) fn pyramid_add(w: &mut Pyramid, i: u32, v: u32) -> u32 {
-    // SAFETY: as `pyramid_at`.
-    unsafe {
-        spirv_std::arch::atomic_i_add::<
-            u32,
-            { Scope::QueueFamily as u32 },
-            { Semantics::NONE.bits() },
-        >(w.index_mut(i as usize), v)
-    }
-}
-
 /// Word `i` raised to `v` where it is less, whoever else raises it.
 pub(crate) fn pyramid_most(w: &mut Pyramid, i: u32, v: u32) {
     // SAFETY: as `pyramid_at`.

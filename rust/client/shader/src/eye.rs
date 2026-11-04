@@ -143,10 +143,6 @@ impl Observer for Eye {
         ]
     }
 
-    fn apart(&self) -> bool {
-        false
-    }
-
     fn corners(&self) -> [u32; 2] {
         grid(self).corners
     }
@@ -165,11 +161,6 @@ impl Observer for Eye {
 
     fn hand_at(&self, idx: u32) -> u32 {
         grid(self).hand_at(idx)
-    }
-
-    /// Every ray of the eye's starts at the eye.
-    fn origin_of<W: Words + ?Sized>(&self, _: &W, _: u32) -> [i32; 3] {
-        eye_origin(self).0
     }
 
     fn keep_origin<W: Words + ?Sized>(&self, _: &mut W, _: u32, _: [i32; 3]) {}
@@ -225,10 +216,6 @@ impl Observer for Eye {
             ray: eye_ray(self, at),
             detail,
         }
-    }
-
-    fn cell_of(&self, at: [f32; 2]) -> [u32; 2] {
-        grid(self).cell(at)
     }
 
     /// Its own everywhere, each distance's zoom from the eye.

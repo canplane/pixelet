@@ -144,6 +144,8 @@ pub(super) struct CastBuffers {
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Pipeline,
     miss_list_built: Pipeline,
+    /// Their group 0 (`MISS_GROUP`), over the cast's group's buffers.
+    miss_group: u32,
     marks: u32,
     /// What lies about the faces the walks again stopped on, asked once a
     /// square of their hits (pxl-engine `beam::HIT_WORDS`): the one of
@@ -487,26 +489,86 @@ const _: () = assert!(
 );
 /// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one.
 const LIGHT_LEFT_EMPTY: [u32; 4] = [ray::MISS_ACROSS, 0, 1, 0];
-const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
-    let mut g = [0; compute::MISS_GROUP.len() + 3];
-    let mut k = 0;
-    while k < compute::MISS_GROUP.len() {
-        g[k] = compute::MISS_GROUP[k];
-        k += 1;
-    }
-    g[k] = HEAD_BINDING;
-    g[k + 1] = COMPUTE;
-    g[k + 2] = UNIFORM;
-    g
-};
+const WORLD_GROUP: [u32; 33] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE_RW,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    4,
+    COMPUTE,
+    STORAGE,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+];
+/// The missed pixels' walks again (miss.wgsl): their world's, the rays, their words and the
+/// pyramid they write.
+const MISS_GROUP: [u32; 30] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    4,
+    COMPUTE,
+    STORAGE,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&WORLD_GROUP]) && floor::holds(&[&MISS_GROUP]),
+    "the cast's world's group or the missed pixels' binds past WebGPU's floor"
+);
 
 const _: () = assert!(
     within(compute::FOLD_GROUP, WORLD_GROUP)
         && within(compute::BEAM_GROUP, WORLD_GROUP)
         && within(compute::CELL_GROUP, WORLD_GROUP)
-        && within(compute::FORGET_GROUP, WORLD_GROUP)
-        && within(compute::MISS_LIST_GROUP, WORLD_GROUP),
-    "the fold, the beam, the cells, the samples, the forgetting and the list's walk bind the cast's world's group"
+        && within(compute::FORGET_GROUP, WORLD_GROUP),
+    "the fold, the beam, the cells and the forgetting bind the cast's world's group"
 );
 
 impl RaysPass {
@@ -534,8 +596,8 @@ impl RaysPass {
         let light_sample_hit_built =
             pipelines.build_compute(g, SHADER_LIGHT_SAMPLE_HIT, &LIGHT_SAMPLE_HIT_GROUP);
         let fold_built = pipelines.build_compute(g, SHADER_FOLD, group);
-        let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
-        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
+        let miss_built = pipelines.build_compute(g, SHADER_MISS, &MISS_GROUP);
+        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, &MISS_GROUP);
         let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &compute::HIT_LEAD_GROUP);
         let hit_faces_built =
             pipelines.build_compute(g, SHADER_HIT_FACES, &compute::HIT_FACES_GROUP);
@@ -649,6 +711,7 @@ impl RaysPass {
             refold: false,
             group: 0,
             sample_group: 0,
+            miss_group: 0,
             sample_hit_group: 0,
             miss_hit_group: 0,
             beam_hit_group: 0,
@@ -1185,7 +1248,23 @@ impl RaysPass {
         ];
         if bindings != c.bindings {
             release(c.group);
-            c.group = cast_group(g, &c.miss_built, bindings);
+            c.group = cast_group(g, &c.beam_built, bindings);
+            release(c.miss_group);
+            c.miss_group = g.bind_group(
+                c.miss_built.layouts[0],
+                &[
+                    buf_entry(0, c.eye),
+                    buf_entry(1, c.clipmap),
+                    buf_entry(2, ground),
+                    view_entry(3, bindings[3]),
+                    buf_entry(4, palette_indices),
+                    buf_entry(5, c.shards),
+                    buf_entry(6, c.overwrites),
+                    buf_entry(7, pool),
+                    buf_entry(8, c.beams),
+                    buf_entry(9, c.pyramid),
+                ],
+            );
             release(c.sample_group);
             c.sample_group = g.bind_group(
                 c.sample_built.layouts[0],
@@ -1310,7 +1389,7 @@ impl RaysPass {
                 g,
                 [
                     &c.light_built,
-                    &c.miss_built,
+                    &c.beam_built,
                     &c.raster.light_boxes_built,
                     &c.light_miss_built,
                     &c.light_mark_built,
@@ -1531,7 +1610,7 @@ impl RaysPass {
                 word_bytes(4),
             );
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::miss).pass());
-            g.set_bind_group(pass, 0, c.group, &[]);
+            g.set_bind_group(pass, 0, c.miss_group, &[]);
             g.set_pipeline(pass, c.miss_list_built.id);
             g.dispatch_indirect(pass, c.miss_left, 0);
             g.set_pipeline(pass, c.miss_built.id);

@@ -96,6 +96,7 @@ pub const GRID_CORNERS: usize = 7;
 pub const GRID_SAMPLES: usize = 9;
 pub const GRID_CELLS_AT: usize = 11;
 pub const GRID_SAMPLES_AT: usize = 12;
+pub const GRID_HITS_AT: usize = 14;
 pub const GRID_LATTICE: usize = 16;
 pub const GRID_LEFTS_AT: usize = 17;
 pub const GRID_MISSES_AT: usize = 18;

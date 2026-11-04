@@ -32,7 +32,7 @@ mod world;
 use rays::{cast, light_mark};
 
 pub use beam::{beam_cs, cell_cs, light_beam_cs, light_cell_cs};
-pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
+pub use cast::{cast_cs, hit_faces_cs, hit_lead_cs};
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, fold_cs};
 pub use pyramid::forget_cs;
@@ -66,7 +66,7 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
 
 /// Word `i` of `w`, a dispatch's workgroups of `per` lanes over a list,
 /// raised to hold place `at` by the place that opens a workgroup alone:
-/// a list's places are taken one by one from 0 (`beam::Words::add`), so
+/// a list's places are taken one by one from 0 (`add`), so
 /// each workgroup's first place raises it and the rest leave it as it is.
 fn opens<W: beam::Words + ?Sized>(w: &mut W, i: u32, at: u32, per: u32) {
     if at % per == 0 {

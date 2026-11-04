@@ -5,14 +5,14 @@
 //! cast for the eye's camera grid and, `light_` before its name, for the
 //! shadow map; and the words a line and a node are held in, every observer's.
 
-use pxl_engine::cast::{self, Detail, Trace, Query, Until};
+use pxl_engine::cast::{self, Trace};
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, pyramid, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::eye::Eye;
-use crate::pyramid::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
+use crate::pyramid::{pyramid_at, pyramid_most, pyramid_put, Pyramid};
 use crate::observer::{self, Level, Observer};
 use crate::light::{Head, Map};
 use crate::world::{PaletteWords, World};
@@ -42,12 +42,6 @@ impl<W: Words + ?Sized> BeamLine<'_, W> {
     /// The node the beam ray stopped at.
     pub(crate) fn node(self) -> cast::Node {
         node_at(self.0, self.1 + beam::LINE_NODE)
-    }
-
-    /// The nodes the beam ray's walk visited (`beam::LINE_VISITS`), the
-    /// eye's: the start of every walk resumed from it, in the steps view.
-    pub(crate) fn visits(self) -> u32 {
-        self.0.word(self.1 + beam::LINE_VISITS)
     }
 
     /// What was handed the line's node of `zoom`.
@@ -117,8 +111,6 @@ impl<W: Words + ?Sized> support::Ancestors<Inheritance> for BeamAncestors<'_, W>
 pub(crate) trait Words {
     fn word(&self, k: u32) -> u32;
     fn set(&mut self, k: u32, v: u32);
-    /// `v` added to word `k`, whoever else adds to it: what it held.
-    fn add(&mut self, k: u32, v: u32) -> u32;
     /// Word `k` raised to `v` where it is less, whoever else raises it.
     fn most(&mut self, k: u32, v: u32);
 }
@@ -130,10 +122,6 @@ impl Words for Beams {
 
     fn set(&mut self, k: u32, v: u32) {
         pyramid_put(self, k, v)
-    }
-
-    fn add(&mut self, k: u32, v: u32) -> u32 {
-        pyramid_add(self, k, v)
     }
 
     fn most(&mut self, k: u32, v: u32) {
@@ -148,10 +136,6 @@ impl Words for [u32] {
 
     fn set(&mut self, k: u32, v: u32) {
         pxl_engine::fill::put(self, k, v)
-    }
-
-    fn add(&mut self, k: u32, v: u32) -> u32 {
-        crate::add(self, k, v)
     }
 
     fn most(&mut self, k: u32, v: u32) {
@@ -186,44 +170,6 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
     w.set(k + beam::NODE_ROOTS, n.roots[0] as u32);
     w.set(k + beam::NODE_ROOTS + 1, n.roots[1] as u32);
     w.set(k + beam::NODE_ROOTS + 2, n.roots[2] as u32);
-}
-
-/// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
-/// node of `line` holding where it is there, or, where that lies in another
-/// root, from the root at it; where it `resumes` not, from the world's root
-/// at 0, through the same walk; through `q`, reading or writing, its line
-/// left where it ends to `keep`.
-pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
-    q: &mut Q,
-    origin: [i32; 3],
-    ray: &cast::Ray,
-    detail: Detail,
-    t: f32,
-    line: &BeamLine<'a, W>,
-    node: cast::Node,
-    resumes: bool,
-    keep: &mut impl cast::Keep<Q::At>,
-) -> Trace<Q::At>
-where
-    BeamLine<'a, W>: cast::Over<Q::At>,
-{
-    let root = (cast::Node::ROOT, cast::Node::ROOT.idx(origin));
-    let from = if !resumes {
-        (root.0, q.root(root.1), 0.0)
-    } else {
-        let (h, held) = node.over(cast::point_at(origin, ray, t));
-        let h = cast::holding(origin, ray, h, t);
-        if held {
-            (
-                h,
-                <BeamLine<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
-                t,
-            )
-        } else {
-            (root.0, q.root(root.1), t)
-        }
-    };
-    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }
 
 /// Each beam ray of the camera grid, a thread a corner (observer.rs `beam`,

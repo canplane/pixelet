@@ -454,7 +454,23 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_CELL
     &["cell.gen"],
     // SHADER_MISS
-    &["miss.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
+        "world",
+        "world_split",
+        "ask",
+        "miss_word",
+        "miss",
+    ],
     // SHADER_FORGET
     &["forget.gen"],
     // SHADER_SAMPLE
@@ -507,7 +523,23 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_RASTER
     &["raster_box", "px", "raster"],
     // SHADER_MISS_LIST
-    &["miss_list.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
+        "world",
+        "world_split",
+        "ask",
+        "miss_word",
+        "miss",
+    ],
     // SHADER_FACE
     &["face.gen"],
     // SHADER_LIGHT_MARK
@@ -622,7 +654,15 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample_hit",
     ],
     // SHADER_MISS_HIT
-    &["walk_word", "walk_node", "side", "resume", "walk", "miss_hit"],
+    &[
+        "walk_word",
+        "walk_node",
+        "side",
+        "resume",
+        "walk",
+        "miss_word",
+        "miss_hit",
+    ],
     // SHADER_BEAM_HIT
     &["walk_word", "walk_node", "side", "resume", "walk", "beam_hit"],
     // SHADER_LIGHT_MISS_HIT

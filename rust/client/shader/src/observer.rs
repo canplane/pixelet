@@ -5,7 +5,7 @@
 //! corner's beam ray (`beam`), each cell's start off them (`cell`), each
 //! sample's box (`sample_box`; its walk by hand, pxl-render sample.wgsl), a ray's visible sample
 //! (`took`), the sky about it (`sky`) or a walk of its own (`resolve`), and its
-//! walk resumed off the beam (`resume`, `walk_again`), each casting what its
+//! each casting what its
 //! observer needs alone (`Observer::needs`). An entry is a pass's call for its
 //! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
@@ -13,11 +13,10 @@
 //! Adreno's driver refuses one chosen as it runs
 //! (doc/experiment/20261103-shaders-on-two-phones).
 
-use pxl_engine::cast::{self, Detail, Trace, Query, Until};
-use pxl_engine::world::Inheritance;
+use pxl_engine::cast::{self, Detail, Until};
 use pxl_engine::{beam, pyramid, raster, tally};
 
-use crate::beam::{resume_walk, BeamLine, Leaving, Words};
+use crate::beam::{Leaving, Words};
 use crate::pyramid::{add_tally, pyramid_at, Pyramid, Writing};
 use crate::raster::{write_box, visible_cell, NONE};
 use crate::world::{PaletteWords, World};
@@ -60,10 +59,6 @@ pub(crate) trait Observer {
     /// The passes its beam, its samples and its walks again write the
     /// observed pyramid under (pxl-engine `pyramid::BEAM_PASS`).
     fn passes(&self) -> [u32; 3];
-    /// Whether its rays start apart, a line's nodes held from its own
-    /// origin (`origin_of`); else every ray starts at one, a line's node
-    /// its own.
-    fn apart(&self) -> bool;
 
     /// Its beam rays' corners across and down.
     fn corners(&self) -> [u32; 2];
@@ -79,8 +74,7 @@ pub(crate) trait Observer {
     fn line(&self, idx: u32) -> u32;
     fn hand_at(&self, idx: u32) -> u32;
     /// Where the ray of the line at `base` of `w` started, which its nodes
-    /// are held from (`cast::Node::moved`); and that kept there.
-    fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3];
+    /// are held from (`cast::Node::moved`), kept there.
     fn keep_origin<W: Words + ?Sized>(&self, w: &mut W, base: u32, o: [i32; 3]);
     /// Its cells across and down.
     fn cells(&self) -> [u32; 2];
@@ -104,9 +98,8 @@ pub(crate) trait Observer {
     /// across, down and both, and whether the four lie about it in the
     /// world, as none does across an edge its lattice wraps at.
     fn sample_before(&self, at: Self::At) -> ([u32; 2], bool);
-    /// The ray at `at`, and the cell it starts from.
+    /// The ray at `at`.
     fn aim(&self, at: Self::At) -> Aim;
-    fn cell_of(&self, at: Self::At) -> [u32; 2];
     /// The zooms the ray at `at` asks (`aim`): the eye's, one everywhere;
     /// the map's, its tile's band (light.rs `Map`). A ray takes another's
     /// cell or sky only where that one asked as it does (`took`, `sky`).
@@ -210,42 +203,6 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
     w.set(at + beam::CELL_T, least.to_bits());
     w.set(at + beam::CELL_CORNER, from);
     w.set(at + beam::CELL_RESUMES, u32::from(alike));
-}
-
-/// The walk of the ray aimed `aim` to the cell that fills, resumed at
-/// cell `cell`'s start from the deepest node of its line holding where it
-/// is there, held from the ray's own origin, or from the root at it where
-/// that lies in another root (beam.rs `resume_walk`), where its window's
-/// beam rays asked as its rays ask, else walked from the world's root
-/// (`cell`, `beam::CELL_RESUMES`), as a ray whose sample asked otherwise
-/// walks its own (`took`); through `q`, reading or writing, its line left
-/// where it ends to `keep`. Its met, and the nodes the line's beam ray
-/// visited, none from the root.
-pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
-    o: &O,
-    q: &mut Q,
-    w: &'a W,
-    aim: &Aim,
-    cell: [u32; 2],
-    keep: &mut impl cast::Keep<Q::At>,
-) -> (Trace<Q::At>, u32)
-where
-    BeamLine<'a, W>: cast::Over<Q::At>,
-{
-    let at = o.cell_at(cell);
-    let line = BeamLine(w, o.line(w.word(at + beam::CELL_CORNER)));
-    let resumes = w.word(at + beam::CELL_RESUMES) != 0;
-    let t = f32::from_bits(w.word(at + beam::CELL_T));
-    // The line's node, read only where the walk resumes from it.
-    let node = if !resumes {
-        cast::Node::ROOT
-    } else if o.apart() {
-        line.node().moved(o.origin_of(w, line.1), aim.origin)
-    } else {
-        line.node()
-    };
-    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, resumes, keep);
-    (met, if resumes { line.visits() } else { 0 })
 }
 
 /// Sample `s`'s hit written as a box for the raster's draw (raster.rs
@@ -371,35 +328,4 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2], aim: &Aim)
 /// take only then.
 fn asks_alike<O: Observer>(o: &O, s: [u32; 2], aim: &Aim) -> bool {
     o.detail(o.point(s)).alike(aim.detail)
-}
-
-/// The ray at `at` walked again from its cell's start through the observed
-/// pyramid writing what it asks, a ray its visible sample and the pyramid left
-/// unmet, its line left where it ends to `keep`: its aim, its met and the
-/// nodes its beam ray visited.
-pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
-    o: &O,
-    world: World<'_, L>,
-    pyramid: &mut Pyramid,
-    w: &W,
-    at: O::At,
-    keep: &mut impl cast::Keep<Inheritance>,
-) -> (Aim, Trace<Inheritance>, u32) {
-    let aim = o.aim(at);
-    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[2]);
-    let (met, before) = resume(
-        o,
-        &mut Writing {
-            world,
-            pyramid: &mut *pyramid,
-            tag,
-            assets: o.assets(),
-        },
-        w,
-        &aim,
-        o.cell_of(at),
-        keep,
-    );
-    add_tally(pyramid, o.tally(), tally::MISS, met.visits);
-    (aim, met, before)
 }

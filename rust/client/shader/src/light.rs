@@ -231,10 +231,6 @@ impl Observer for Map {
         ]
     }
 
-    fn apart(&self) -> bool {
-        true
-    }
-
     fn corners(&self) -> [u32; 2] {
         let a = pxl_engine::light::beam_across(self.size);
         [a, a]
@@ -282,13 +278,6 @@ impl Observer for Map {
 
     fn hand_at(&self, idx: u32) -> u32 {
         pxl_engine::light::hand_at(self.size, idx)
-    }
-
-    /// Every ray of the light's starts apart, its line's start kept after it
-    /// (`light::LINE_ORIGIN`).
-    fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3] {
-        let k = base + pxl_engine::light::LINE_ORIGIN;
-        [w.word(k) as i32, w.word(k + 1) as i32, w.word(k + 2) as i32]
     }
 
     fn keep_origin<W: Words + ?Sized>(&self, w: &mut W, base: u32, o: [i32; 3]) {
@@ -348,13 +337,6 @@ impl Observer for Map {
             ray,
             detail: self.detail(slot),
         }
-    }
-
-    /// The cell of the box its texel lies in.
-    fn cell_of(&self, slot: [u32; 2]) -> [u32; 2] {
-        let p = self.light.texel(self.size, slot);
-        let b = pxl_engine::light::BEAM;
-        [p[0] / b, p[1] / b]
     }
 
     /// The band of the tile its texel lies on, a sample's or a slot's alike.

@@ -523,7 +523,8 @@ an angular cell and hands the rest to the rasterizer:
                                                     its own (miss_list_cs)
 ```
 
-The entries are pxl-shader's (`beam.rs`, `raster.rs`, `cast.rs` `cast_cs`). Once
+The entries are pxl-shader's (`beam.rs`, `raster.rs`, `cast.rs` `cast_cs`), the
+listed pixels' walks by hand (pxl-render `miss_hit.wgsl`, `miss.wgsl`). Once
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
 times a scale, its beam rays on a lattice, both of which the `resolution`
