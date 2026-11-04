@@ -60,7 +60,7 @@ export function open(): () => void {
 
 /** A turn asked for now, as a moved box needs one. */
 export function frame(): void {
-  HOST.strobe.request();
+  HOST.wake();
 }
 
 /** A place's pointer phase, as the kernel numbers it. */

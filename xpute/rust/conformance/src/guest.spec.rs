@@ -99,18 +99,18 @@ pub mod cmd {
     pub const OPEN: u32 = 4106;
     /// Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
     pub const CLOSE: u32 = 4107;
-    /// Zeroes a word of its own, calls SENDER with ANSWER, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
+    /// Zeroes a word of its own, calls SENDER with INC, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
     pub const CALL: u32 = 4108;
     /// What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
     /// number plus one at the offset and answers 0 before the call returns; a number of 0 it
     /// refuses with EINVAL, writing nothing.
-    pub const ANSWER: u32 = 4109;
+    pub const INC: u32 = 4109;
     /// What RAISE raises.
     pub const EVENT: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "CALL", "ANSWER", "EVENT", "OPENED",
+        "CLOSE", "CALL", "INC", "EVENT", "OPENED",
     ];
 }

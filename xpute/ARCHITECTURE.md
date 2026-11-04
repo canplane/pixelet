@@ -262,9 +262,10 @@ strobe, the pulse that tells a receiver when to act. It rings only when the host
 or the guest's last falling edge asked for a turn, at the moment the scheduling
 policy below gives; a positive `wake_ms` sets a timer that asks for a turn when
 it fires. A guest that asks for nothing is rung for nothing. The program says
-only whether turns may run (`start`, `stop`, each a no-op where it already
-holds); once the guest stops, the mount halts the strobe and tells the program
-(`Host.stopped`). The doorbell rings too, with no quota: to make room in a full submission ring, to wait for a call's
+only whether turns may run (`Host.resume`, `pause`, each a no-op where it
+already holds) and asks for one where something the guest did not hear of
+changed (`wake`); once the guest stops, the mount halts the strobe and tells the
+program (its config's `stopped`). The doorbell rings too, with no quota: to make room in a full submission ring, to wait for a call's
 reply and to send a `cmd`; and whatever holds the doorbell may ring it.
 
 How long a turn may take, and how that time is spent, are settled at three
@@ -590,11 +591,14 @@ decides what must match.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
-  platform opened, in one call (`@xpute/host/host.ts` `mount`), which binds the
-  host's port, 0, to the hostcalls' end. `mount` reads the toc as it is called,
-  so the turn or the boot call that writes it has run by then; what it gives
-  speaks with the doorbell's verbs, `send` and `call`, each asking the strobe
-  for a turn after. Rust's (`rust/host`) reads a guest's memory by offset on
+  platform opened, in one call (`@xpute/host` `mount`), given all the program
+  decides — its toc, its hostcalls' answers, each port's handler, its policy,
+  what is told when the guest stops — and nothing of the order the host is put
+  together in. It binds the host's port, 0, to the hostcalls' end, runs the
+  guest's first turn where that turn writes the toc (`toc_in_turn`), and reads
+  the toc after it. What it gives speaks with the doorbell's verbs, `send` and
+  `call`, each asking the strobe for a turn after, and `wake`, `resume` and
+  `pause`. Rust's (`rust/host`) reads a guest's memory by offset on
   every platform (`mem`), and on a unix one hosts a guest linked into the
   host's own native process (`native`). There it reserves the memory, and runs
   every call into the guest on the guest's own thread, since the guest keeps

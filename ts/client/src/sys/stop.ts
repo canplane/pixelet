@@ -5,7 +5,7 @@
  * panic. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { SysHost } from "@xpute/host/ipc/sys.ts";
+import type { SysHost } from "@xpute/host";
 import { BUILD_NUMBER } from "@/deploy.ts";
 
 let code: string | null = null;

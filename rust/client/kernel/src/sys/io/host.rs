@@ -17,23 +17,23 @@ use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::text::TextCall;
 
 /// What the kernel's top hands this module once the rings are laid.
-pub struct Hosted {
+pub struct Host {
     pub door: &'static Door,
     /// A text call made of the client, answered before it returns.
     pub text: fn(&TextCall<'_>) -> Result<u32, Errno>,
 }
 
-static HOSTED: Global<Option<Hosted>> = Global::new();
+static HOST: Global<Option<Host>> = Global::new();
 
 /// The rings are laid, so the files and the text reach a host from now on.
-pub fn set_hosted(hosted: Hosted) {
-    HOSTED.set(Some(hosted));
+pub fn set_host(host: Host) {
+    HOST.set(Some(host));
 }
 
 /// The door, where there is a host: only the file table posts through it
 /// beside this module, and `FILE_FRAMES` counts what the files post.
 pub(crate) fn door() -> Option<&'static Door> {
-    HOSTED.get(|| None).as_ref().map(|h| h.door)
+    HOST.get(|| None).as_ref().map(|h| h.door)
 }
 
 pub fn rise() {
@@ -52,7 +52,7 @@ pub const FILE_FRAMES: u32 =
 /// A text call, answered before it returns: None where there is no host, else
 /// its value or its errno, ENOSPC where no slot is free or it does not fit one.
 pub fn call(text: &TextCall<'_>) -> Option<Result<u32, Errno>> {
-    let h = HOSTED.get(|| None).as_ref()?;
+    let h = HOST.get(|| None).as_ref()?;
     Some((h.text)(text))
 }
 

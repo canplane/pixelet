@@ -60,7 +60,7 @@ struct DoorStat {
 };
 
 // How much of a report's path is kept where the whole would not fit a slot.
-inline constexpr std::size_t ABORT_PATH_TAIL = 32;
+inline constexpr std::size_t ABORT_PATH_BYTES = 32;
 
 class Door {
   public:
@@ -74,7 +74,7 @@ class Door {
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
     // A turn begins: what the last one's writes named is the host's no more.
-    void rise() const noexcept { held_.clear(); }
+    void rise() const noexcept { writes_.clear(); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
         posted(cmd, cq_.push(tag, cmd, flags, result));
@@ -125,7 +125,7 @@ class Door {
 
     void write(Fd fd, std::vector<std::uint8_t> bytes) const noexcept {
         send(frame::HOST, abi::SysWriteEvent{.fd = fd, .at = cq_.mem().off_of(std::span<const std::uint8_t>(bytes)), .len = static_cast<std::uint32_t>(bytes.size())});
-        held_.push_back(std::move(bytes));
+        writes_.push_back(std::move(bytes));
     }
 
     // A write is committed, an open not yet answered cancelled.
@@ -137,7 +137,7 @@ class Door {
     void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) const noexcept {
         cq_.clear();
         std::string_view path = at.file_name();
-        std::string_view tail = path.substr(path.size() > ABORT_PATH_TAIL ? path.size() - ABORT_PATH_TAIL : 0);
+        std::string_view tail = path.substr(path.size() > ABORT_PATH_BYTES ? path.size() - ABORT_PATH_BYTES : 0);
         for (std::string_view file : {path, tail, std::string_view{}}) {
             abi::SysAbortEvent report{
                 .errnum = static_cast<std::int32_t>(errnum),
@@ -217,7 +217,7 @@ class Door {
     // Kept by the const calls that move the rings, as the rings' own words are.
     mutable DoorStat stat_;
     // Kept until the host has run the `write` that names it.
-    mutable std::vector<std::vector<std::uint8_t>> held_;
+    mutable std::vector<std::vector<std::uint8_t>> writes_;
 };
 
 } // namespace xpute

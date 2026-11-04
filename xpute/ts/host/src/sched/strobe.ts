@@ -42,15 +42,15 @@ export class Strobe<G extends Grant = Grant> {
   }
 
   /** Turns run from now on; nothing where they already run or the guest stopped. */
-  start(): void {
+  resume(): void {
     if (this.running || this.halted) return;
     this.running = true;
     this.last = performance.now();
     this.request();
   }
 
-  /** No turn runs until `start`; nothing where none runs. */
-  stop(): void {
+  /** No turn runs until `resume`; nothing where none runs. */
+  pause(): void {
     if (!this.running) return;
     this.running = false;
     clearTimeout(this.timer);
@@ -60,7 +60,7 @@ export class Strobe<G extends Grant = Grant> {
   /** No turn runs again: the guest stopped. */
   halt(): void {
     this.halted = true;
-    this.stop();
+    this.pause();
   }
 
   request(): void {

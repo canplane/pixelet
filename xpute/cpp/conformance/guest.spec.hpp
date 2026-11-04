@@ -107,13 +107,13 @@ inline constexpr std::uint32_t OPEN = 4106u;
 // Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
 inline constexpr std::uint32_t CLOSE = 4107u;
 
-// Zeroes a word of its own, calls SENDER with ANSWER, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
+// Zeroes a word of its own, calls SENDER with INC, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
 inline constexpr std::uint32_t CALL = 4108u;
 
 // What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
 // number plus one at the offset and answers 0 before the call returns; a number of 0 it
 // refuses with EINVAL, writing nothing.
-inline constexpr std::uint32_t ANSWER = 4109u;
+inline constexpr std::uint32_t INC = 4109u;
 
 // What RAISE raises.
 inline constexpr std::uint32_t EVENT = 4353u;

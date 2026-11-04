@@ -4,7 +4,7 @@
  * what each turn the strobe grants submits before it rings. */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import type { FrameGrant } from "@xpute/host/sched/frame_pacing.ts";
+import type { FrameGrant } from "@xpute/host";
 import { bracket, type SurfaceDriver } from "@/bracket.tsx";
 import {
   Command,

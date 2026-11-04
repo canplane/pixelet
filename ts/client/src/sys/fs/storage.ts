@@ -18,7 +18,7 @@ import {
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host/ipc/sys.ts";
+import { FileError } from "@xpute/host";
 
 import { storage } from "@/abi/file.spec.ts";
 import { bracket } from "@/bracket.tsx";

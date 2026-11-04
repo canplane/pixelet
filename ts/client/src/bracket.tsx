@@ -11,7 +11,7 @@ import type { ComponentType } from "react";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Guest } from "@xpute/host/host.ts";
+import type { Guest } from "@xpute/host";
 
 export type { Guest };
 

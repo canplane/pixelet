@@ -108,13 +108,13 @@ struct State {
 }
 
 /// What CALL calls SENDER with: a number and an offset.
-struct Answer {
+struct Inc {
     n: u32,
     at: u32,
 }
 
-impl Event for Answer {
-    const NUMBER: u32 = spec::cmd::ANSWER;
+impl Event for Inc {
+    const NUMBER: u32 = spec::cmd::INC;
     const FIELDS: u32 = 2;
     fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.n));
@@ -363,7 +363,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             let n = arg(pkt)?;
             *word = 0;
             let at = mem.off_of(&raw const *word) as u32;
-            door.call(spec::SENDER, &Answer { n, at })
+            door.call(spec::SENDER, &Inc { n, at })
                 .map_err(MarshalError::new)?;
             // SAFETY: the word the port wrote before the call returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))

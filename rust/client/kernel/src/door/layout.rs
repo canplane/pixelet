@@ -220,7 +220,7 @@ pub(crate) fn install(b: &BootInfo) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        host::set_hosted(host::Hosted {
+        host::set_host(host::Host {
             door: door(),
             text: text_call,
         });

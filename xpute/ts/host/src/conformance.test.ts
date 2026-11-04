@@ -191,12 +191,12 @@ class Host {
     this.sq = new Ring(mem, this.toc.get(toc_key.SQ));
     this.cq = new Ring(mem, this.toc.get(toc_key.CQ));
     this.stream_at = this.toc.get(key.STREAM);
-    // The fixture's one call, ANSWER to SENDER, answered as SENDER: the frame
+    // The fixture's one call, INC to SENDER, answered as SENDER: the frame
     // the guest laid unpublished at `at` in its completion ring.
     guest.answer_with((at) => {
       const cq = this.cq;
       const e = cq.entry_of(at);
-      if (frame.port_of(cq.tag(e)) !== SENDER || cq.cmd(e) !== cmd.ANSWER) {
+      if (frame.port_of(cq.tag(e)) !== SENDER || cq.cmd(e) !== cmd.INC) {
         return Errno.ENOSYS;
       }
       const pkt = cq.pkt(e);

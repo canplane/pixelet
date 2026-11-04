@@ -8,7 +8,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host/ipc/sys.ts";
+import { FileError } from "@xpute/host";
 import { online } from "@/origin/online.ts";
 import { bracket } from "@/bracket.tsx";
 

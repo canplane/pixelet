@@ -42,6 +42,12 @@ for the same acts.
   and a question answered before it returns is a call to the port that answers
   it, laid unpublished in the ring's next slot. The user left it to judgment
   whether it went; it went.
+- **The package puts itself together.** A program says what only it can — its
+  guest, its hostcalls' answers, its ports, its policy, when turns may run,
+  what to do when the guest stops — and the order the host is assembled in is
+  xpute's. The user's sketch of it was `xpute.boot(topology)`, an example and
+  not a name; the session widened the base's `mount` rather than stand a new
+  entry beside it.
 - **xpute's program layer is taken out.** It was built on 2026-11-01 without a
   record of the user's, beside the base rather than over it: `call` meant
   "now" on the host's `Port` and "after the turn" on the guest's `Turn`;
@@ -76,9 +82,9 @@ for the same acts.
   emitters, `LinkConfig::DEFAULT` and `Files::try_open`. The Rust example and
   its host test are again a guest that lays its range out on the base, as
   before `e3be4b371`.
-- What every program wrote around the strobe is the base's: `start` and `stop`
-  are no-ops where they already hold, and the mount halts the strobe once the
-  guest stops and tells the program (`Host.stopped`). The client keeps only
+- What every program wrote around the strobe is the base's: `resume` and
+  `pause` are no-ops where they already hold, and the mount halts the strobe once the
+  guest stops and tells the program (the mount's `stopped`). The client keeps only
   its two facts, the world's view open and the page seen.
 - The architecture's figure keeps the shell to the UI; its port is the shell's
   event loop, which the sensors, the GPU and the visibility are heard on too.
@@ -106,6 +112,20 @@ for the same acts.
   ranges. The command table's sections say the shell where they said the
   host. The built page in headless Chrome booted, read its tiles and
   assets through port 0 and drew the world.
+- `mount` takes the whole of it: `toc_in_turn` (it runs the turn that writes
+  the toc), `ports` (each port's handler, never 0), `stopped`; `Host` gives
+  `wake`, `resume` and `pause` beside `send` and `call`, and no longer the
+  strobe. A kernel that stops in its boot shows the stop code, as one stopped
+  later does.
+- Names, after a review of them: the turn switch is `pause` and `resume`,
+  since "stop" is a guest's end everywhere here; what reads a call's answer is
+  `read` (was `take`); the kernel's handle on its host `Host` (was `Hosted`);
+  conformance's question `INC` (was `ANSWER`); the door's kept buffers
+  `writes`; `ABORT_PATH_BYTES`.
+  `@xpute/host` has an entry (`src/mod.ts`), which pixelet imports alone; its
+  deep paths stay for xpute's own packages. The web and native openers no
+  longer run the first turn; the client's boot declares its port and its stop
+  in the mount, and nothing in it reaches the strobe or binds a port after.
 - Kept, as the base's: what the same days moved down into it and pixelet uses,
   `stop`, `Opened`, `Door::raise_to` with `Event`, `OwnedRange`, and the
   command table's generator (`spec::cmd::table_outputs`), which writes
@@ -115,9 +135,10 @@ for the same acts.
 
 - The base's verbs beyond `send`, `call`, `on` and `receive`: the doorbell's
   own (`ring`, `cmd`, `writer`, `fits`) and the guest's `send_with`.
-- What else every program assembles by hand: the client's `open_host`, which
-  opens the guest through the bracket and mounts on it, and the `HOST` and
-  `PACING` it keeps for the port's modules.
+- The client still opens its guest through the bracket and keeps `HOST` and
+  `PACING` for the port's modules (`host/mount.ts`), and the web bracket plays
+  the GPU stream after each turn and the GPU's wake asks `HOST.wake`: the
+  GPU host is the platform's, which `mount` does not yet take.
 - The kernel's sensor ABI stays raw: it takes the platform's permissions, its
   gating and its error codes.
 - Checked by format, lint, type, `cargo spec`, xpute's whole suite (its

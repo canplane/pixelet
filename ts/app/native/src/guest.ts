@@ -12,7 +12,6 @@ import { PLATFORM } from "./module.ts";
  * `answer_with`). */
 export function open(): Promise<Guest> {
   const mem = PLATFORM.mem();
-  PLATFORM.run(0);
   return Promise.resolve({
     mem,
     // NaN: the kernel stopped, as a module's trap throws on a page.

@@ -7,7 +7,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { type Binding, Namespace } from "@xpute/host/ipc/ns.ts";
+import { type Binding, Namespace } from "@xpute/host";
 
 import { root } from "@/abi/file.spec.ts";
 import { BASE_LAYERS } from "@/origin/publication.spec.ts";

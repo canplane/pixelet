@@ -78,11 +78,11 @@ std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
 }
 
 // What CALL calls SENDER with: a number and an offset.
-struct Answer {
+struct Inc {
     std::uint32_t n = 0;
     std::uint32_t at = 0;
 
-    static constexpr std::uint32_t NUMBER = cmd::ANSWER;
+    static constexpr std::uint32_t NUMBER = cmd::INC;
     static constexpr std::uint32_t FIELDS = 2;
 
     void write(xtp::PacketWriter &w) const noexcept {
@@ -167,7 +167,7 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     }
     case cmd::CALL: {
         s.word = 0;
-        Result<std::uint32_t> res = s.door.call(SENDER, Answer{.n = arg, .at = s.stream.mem().off_of(&s.word)});
+        Result<std::uint32_t> res = s.door.call(SENDER, Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
         if (!res) return {.err = res.error().errnum};
         // The word the port wrote before the call returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};

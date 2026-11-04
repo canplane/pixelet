@@ -36,7 +36,7 @@ pub trait Event {
 }
 
 /// How much of a report's path is kept where the whole would not fit a slot.
-const ABORT_PATH_TAIL: usize = 32;
+const ABORT_PATH_BYTES: usize = 32;
 
 /// None for an unknown command, which replies ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
@@ -67,7 +67,7 @@ pub struct Door {
     reserve: u32,
     stat: Cell<DoorStat>,
     /// Kept until the host has run the `write` that names it.
-    held: RefCell<Vec<Vec<u8>>>,
+    writes: RefCell<Vec<Vec<u8>>>,
 }
 
 impl Door {
@@ -79,13 +79,13 @@ impl Door {
             cq,
             reserve: most_events + 1,
             stat: Cell::default(),
-            held: RefCell::new(Vec::new()),
+            writes: RefCell::new(Vec::new()),
         }
     }
 
     /// A turn begins: what the last one's writes named is the host's no more.
     pub fn rise(&self) {
-        self.held.borrow_mut().clear();
+        self.writes.borrow_mut().clear();
     }
 
     pub fn take_stat(&self) -> DoorStat {
@@ -197,7 +197,7 @@ impl Door {
                 len: bytes.len() as u32,
             },
         );
-        self.held.borrow_mut().push(bytes);
+        self.writes.borrow_mut().push(bytes);
     }
 
     /// Commits a write; cancels an open not yet answered.
@@ -212,7 +212,7 @@ impl Door {
         self.cq.clear();
         let path = at.file();
         let tail = |n: usize| path.get(path.len().saturating_sub(n)..).unwrap_or("");
-        for file in [path, tail(ABORT_PATH_TAIL), ""] {
+        for file in [path, tail(ABORT_PATH_BYTES), ""] {
             let report = SysAbortEvent {
                 errnum: errnum as i32,
                 line: at.line(),

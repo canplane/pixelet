@@ -35,13 +35,13 @@ export const OPEN = 4106 as number;
 /** Closes the packet's descriptor, answered or not; fails with EBADF for one not open. */
 export const CLOSE = 4107 as number;
 
-/** Zeroes a word of its own, calls SENDER with ANSWER, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with. */
+/** Zeroes a word of its own, calls SENDER with INC, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with. */
 export const CALL = 4108 as number;
 
 /** What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
  * number plus one at the offset and answers 0 before the call returns; a number of 0 it
  * refuses with EINVAL, writing nothing. */
-export const ANSWER = 4109 as number;
+export const INC = 4109 as number;
 
 /** What RAISE raises. */
 export const EVENT = 4353 as number;

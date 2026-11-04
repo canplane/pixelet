@@ -16,7 +16,7 @@ import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
-import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
+import { FramePacing } from "@xpute/host";
 import {
   Command,
   encode_sys_boot,
@@ -145,13 +145,19 @@ async function open(): Promise<void> {
     },
     (run) => requestAnimationFrame(run),
   );
-  await open_host(cfg, { fs: namespace(), abort }, pacing, submit_frame);
+  await open_host(cfg, {
+    sys: { fs: namespace(), abort },
+    ports: { [port.SHELL]: heard },
+    policy: pacing,
+    submit: submit_frame,
+    // Its turns end with it.
+    stopped: () => set(BOOT_STOPPED),
+  });
   bracket.sensor.hear(SENSOR_HEARD);
-  HOST.doorbell.on(port.SHELL, heard);
   bracket.gpu.boot({
     ready: gpu_ready,
     state: (state) => set_gpu(GPU_STATE[state]),
-    wake: () => HOST.strobe.request(),
+    wake: () => HOST.wake(),
   });
   bracket.online.watch(set_online);
   bracket.visibility.watch(world_visible);
@@ -169,10 +175,11 @@ async function open(): Promise<void> {
     pkt,
     (result) => result,
   );
+  // A kernel that stopped in its boot is told by `stopped`, its stop code read.
+  if (booted === Errno.ENOTRECOVERABLE) return;
   if (booted < 0)
     throw new Error(`the kernel refused its boot: ${strerror(booted)}`);
   console.info("[boot] the kernel started");
-  HOST.stopped = () => set(BOOT_STOPPED);
   const declared = declare_source();
   await gpu_present();
   await declared;

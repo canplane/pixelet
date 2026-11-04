@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host/ipc/sys.ts";
+import { FileError } from "@xpute/host";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 

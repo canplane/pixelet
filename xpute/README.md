@@ -93,7 +93,8 @@ spec                                        the numbers every language's are gen
 A program takes these as packages, by name. In TypeScript they are
 `@xpute/kit`, `@xpute/host` and `@xpute/gpu` (`ts/kit`, `ts/host`, `ts/gpu`),
 each its own source: its `package.json` maps a path under its name to the file
-under `src/` (`@xpute/host/host.ts` is `ts/host/src/host.ts`), and the files
+under `src/` (`@xpute/host/host.ts` is `ts/host/src/host.ts`), and `@xpute/host`
+alone is its entry, what a program takes (`ts/host/src/mod.ts`); the files
 strip to JavaScript as they are, so a bundler or Node's type stripping takes
 them with no build. In Rust they are the crates `xpute-kit`, `xpute-guest`,
 `xpute-host` and `xpute-gpu`. None is published yet: a program beside this tree
@@ -108,13 +109,17 @@ The smallest program shows the whole of it: a guest that answers one command
 two rings and their slots, and answers the toc's offset from a boot call; each
 turn it applies what waits, and calls the port that sent the command for a
 number it holds, answered before the call returns (`Door::call`). The host
-opens the module over a memory of its own (`@xpute/host/module.ts`
-`open_module`) and mounts on it in one call (`@xpute/host/host.ts` `mount`),
+opens the module over a memory of its own (`@xpute/host` `open_module`) and
+mounts on it in one call (`mount`),
 given that offset, its answers to the guest's hostcalls (`SysHost`, each part
-optional) and the scheduling policy that says when a turn runs and how much it
-gets (`sched/policy.ts`: a fixed quota where there is no display, frame pacing
-on a page); then it binds the port's answer (`doorbell.on`), sends the command
-and reads the reply.
+optional), what each of its ports hears (`ports`) and the scheduling policy that
+says when a turn runs and how much it gets (`sched/policy.ts`: a fixed quota
+where there is no display, frame pacing on a page); then it sends the command
+and reads the reply. `mount` takes all the program decides and nothing of the
+order it is put together in: a guest that writes its toc in its first turn
+says so (`toc_in_turn`) and the mount runs that turn, and what is told when the
+guest stops is given with the rest (`stopped`). A program takes it all from
+`@xpute/host`'s entry (`src/mod.ts`).
 
 A guest stops on a broken invariant (`bug!`) or a panic: what it installs
 (`xpute_guest::stop::install`, `cpp/xpute/guest/stop.hpp`) posts the report

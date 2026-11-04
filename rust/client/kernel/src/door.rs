@@ -72,7 +72,7 @@ pub(crate) fn door() -> &'static Door {
 }
 
 /// The kernel's text call, made of the shell's port as TEXT_LAYOUT or
-/// TEXT_RASTER and answered before it returns (sys/io/host.rs `Hosted`).
+/// TEXT_RASTER and answered before it returns (sys/io/host.rs `Host`).
 pub(crate) fn text_call(call: &TextCall<'_>) -> Result<u32, Errno> {
     match *call {
         TextCall::Layout {
