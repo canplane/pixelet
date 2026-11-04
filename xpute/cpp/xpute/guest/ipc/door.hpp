@@ -18,9 +18,6 @@
 //   host's until the host's head has passed the event (`posted`, `consumed`),
 //   so the guest writes it again, or frees it, only then. Memory a call names
 //   is the host's only until the call returns.
-//
-// The last slot of the completion ring is the stop report's alone, so a guest
-// that stops can say why without taking back a frame it published.
 // - R4. A completion finds its request by its tag, never by where it lies in
 //   either ring or when it came.
 // - R5. A call never nests: the host answers it without calling into the
@@ -31,9 +28,6 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
-#include <memory>
-#include <new>
-#include <optional>
 #include <source_location>
 #include <span>
 #include <string_view>
@@ -86,69 +80,6 @@ struct Posted {
     bool operator==(const Posted &) const = default;
 };
 
-// Bytes of the heap, given back by their size: what a read fills.
-class Bytes {
-  public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
-        if (this != &o) {
-            release();
-            at_ = std::exchange(o.at_, nullptr);
-            cnt_ = std::exchange(o.cnt_, 0);
-        }
-        return *this;
-    }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
-
-    // None where the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
-        if (cnt == 0) return b;
-        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
-        if (b.at_ == nullptr) return std::nullopt;
-        b.cnt_ = cnt;
-        return b;
-    }
-
-    std::uint8_t *data() noexcept { return at_; }
-    const std::uint8_t *data() const noexcept { return at_; }
-    std::size_t size() const noexcept { return cnt_; }
-    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
-    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
-
-  private:
-    void release() noexcept {
-        if (at_ != nullptr) ::operator delete(at_, cnt_);
-        at_ = nullptr;
-        cnt_ = 0;
-    }
-
-    std::uint8_t *at_ = nullptr;
-    std::size_t cnt_ = 0;
-};
-
-class Door;
-
-// A read into a buffer the door holds (`Door::read_buf`): the bytes are
-// handed over once the host's head has passed the read. A reading destroyed
-// before then leaves its buffer with the door, which lets it go once the head
-// has passed.
-class Reading {
-  public:
-    Reading(Posted posted, std::shared_ptr<Bytes> buf) noexcept : posted_(posted), buf_(std::move(buf)) {}
-
-    // The bytes, once the host's head has passed the read; none before then,
-    // the reading untouched.
-    std::optional<Bytes> take(const Door &door) noexcept;
-
-  private:
-    Posted posted_;
-    std::shared_ptr<Bytes> buf_;
-};
-
 // How much of a report's path is kept where the whole would not fit a slot.
 inline constexpr std::size_t ABORT_PATH_BYTES = 32;
 
@@ -156,18 +87,16 @@ class Door {
   public:
     // `most_events` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 2) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 1) {}
 
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
 
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
-    // A turn begins: what the reads and writes the host has taken named is let
-    // go, a read's buffer only where its reading was destroyed.
+    // A turn begins: what the writes the host has taken named is let go.
     void rise() const noexcept {
         std::erase_if(writes_, [this](const FileWrite &w) { return consumed(w.posted); });
-        std::erase_if(reads_, [this](const FileRead &r) { return consumed(r.posted); });
     }
 
     // The event posted last.
@@ -178,15 +107,12 @@ class Door {
     bool consumed(Posted posted) const noexcept { return cq_.consumed(posted.pos); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
-        posted(cmd, report_slot_kept() ? cq_.push(tag, cmd, flags, result) : Errno::eagain);
+        posted(cmd, cq_.push(tag, cmd, flags, result));
     }
 
     template <class Write> void post_in_place(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, Write &&write) const noexcept {
-        posted(cmd, report_slot_kept() ? cq_.push_in_place(tag, cmd, flags, result, write) : Errno::eagain);
+        posted(cmd, cq_.push_in_place(tag, cmd, flags, result, write));
     }
-
-    // Whether a frame can be laid and the stop report's slot still be free.
-    bool report_slot_kept() const noexcept { return cq_.len() + 1 < cq_.cap(); }
 
     // An event tagged `tag`.
     template <class Fill> void send_with(std::uint32_t tag, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
@@ -207,7 +133,6 @@ class Door {
     // and handed to the host's `hostcall`, its value or its errno; ENOSPC where
     // no slot is free, EMSGSIZE where it does not fit one.
     template <Event E> Result<std::uint32_t> call(const E &event) const noexcept {
-        if (!report_slot_kept()) return make_error(ErrorClass::fault, Errno::enospc);
         Result<std::uint32_t> at = cq_.stage_in_place(0, E::NUMBER, frame::ACKREQ, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(E::FIELDS, [&event](xtp::PacketWriter &b) { event.write(b); });
@@ -230,15 +155,6 @@ class Door {
         return posted();
     }
 
-    // `buf` is filled once the host's head has passed the event, and is the
-    // door's until then.
-    Reading read_buf(Fd fd, Bytes buf) const {
-        auto shared = std::make_shared<Bytes>(std::move(buf));
-        Posted at = read(fd, shared->span());
-        reads_.push_back({at, shared});
-        return Reading(at, std::move(shared));
-    }
-
     void write(Fd fd, std::vector<std::uint8_t> bytes) const noexcept {
         send(abi::fs::FsWriteEvent{.fd = fd, .at = cq_.mem().off_of(std::span<const std::uint8_t>(bytes)), .len = static_cast<std::uint32_t>(bytes.size())});
         writes_.push_back({posted(), std::move(bytes)});
@@ -247,10 +163,11 @@ class Door {
     // A write is committed, an open not yet answered cancelled.
     void close(Fd fd) const noexcept { send(abi::fs::FsCloseEvent{.fd = fd}); }
 
-    // Posts the report after what the guest already published, as the guest
-    // stops, in the slot kept for it: its file's path cut to its end, or left
-    // out, where the whole of it would not fit a slot.
+    // Drops what the turn posted and posts the report alone, as the guest stops:
+    // its file's path cut to its end, or left out, where the whole of it would
+    // not fit a slot.
     void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) const noexcept {
+        cq_.clear();
         std::string_view path = at.file_name();
         std::string_view tail = path.substr(path.size() > ABORT_PATH_BYTES ? path.size() - ABORT_PATH_BYTES : 0);
         for (std::string_view file : {path, tail, std::string_view{}}) {
@@ -344,21 +261,6 @@ class Door {
         std::vector<std::uint8_t> bytes;
     };
     mutable std::vector<FileWrite> writes_;
-    // Kept until the host's head has passed the `read_buf` that names it,
-    // whether or not its reading is still held.
-    struct FileRead {
-        Posted posted;
-        std::shared_ptr<Bytes> buf;
-    };
-    mutable std::vector<FileRead> reads_;
-
-    friend class Reading;
 };
-
-inline std::optional<Bytes> Reading::take(const Door &door) noexcept {
-    if (!door.consumed(posted_)) return std::nullopt;
-    std::erase_if(door.reads_, [this](const Door::FileRead &r) { return r.posted == posted_; });
-    return std::move(*buf_);
-}
 
 } // namespace xpute

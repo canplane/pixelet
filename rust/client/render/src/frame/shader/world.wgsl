@@ -212,63 +212,6 @@ fn is_past(shard: u32) -> bool {
   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
 }
 
-const BOUNDS_EMPTY = vec4<i32>(EMPTY_LO, EMPTY_HI, EMPTY_LO, EMPTY_HI);
-const BOUNDS_OPEN = vec4<i32>(UNBOUNDED_LO, UNBOUNDED_HI, UNBOUNDED_LO, UNBOUNDED_HI);
-
-/// What the clip levels hold of a node (`clipmap::bounded`, `clipmap::bound_over`): its
-/// bounds, the clip level read, whether one held it, whether that one holds all of it, and
-/// where its cells were found.
-struct NodeBound {
-  b: vec4<i32>,
-  clip: u32,
-  here: bool,
-  all: bool,
-  place: u32,
-}
-
-/// `clipmap::held_of`: the eye's clip level at `cell` of a node `2^l` bricks a side.
-fn held_of(place: u32, cell: u32, g: vec2<i32>, l: u32) -> NodeBound {
-  let origin = clipmap[ORIGIN_AT + cell - FIRST_CELL];
-  if (origin.z == 0i) {
-    return NodeBound(BOUNDS_EMPTY, cell, true, false, place);
-  }
-  let q = vec2<i32>(wrap_idx(cell, g.x), g.y) >> vec2<u32>(BRICK_SHIFT);
-  let d = vec2<i32>(wrap_idx(cell - BRICK_SHIFT, q.x - origin.x), q.y - origin.y);
-  let side = 1i << l;
-  let across = i32(ACROSS);
-  if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
-    return NodeBound(BOUNDS_EMPTY, cell, true, false, place);
-  }
-  let level = min(l, JOINED_LEVELS);
-  let at = vec2<u32>(q & vec2<i32>(across - 1i)) >> vec2<u32>(level);
-  let under = ACROSS >> (level - 1u);
-  let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 3u + cell_id(at)];
-  if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
-    return NodeBound(BOUNDS_OPEN, cell, true, true, place);
-  }
-  let b = bounds_of(e.z, e.w);
-  return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
-}
-
-/// `clipmap::bounded`.
-fn bounded(place: u32, cell: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
-  // The node's first cell at `cell`, or the cell holding it (`idx_at`).
-  let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
-  if (cell > zoom + BRICK_LEVELS) {
-    return held_of(place, cell, g, cell - zoom - BRICK_LEVELS);
-  }
-  let s = step_to(place, cell, g);
-  let clip = lookup_from(s.place);
-  if (!lookup_here(s.place)) {
-    return NodeBound(vec4<i32>(0i), clip, false, false, s.place);
-  }
-  let j = select(0u, clip - zoom, zoom < clip);
-  let at = s.at >> vec2<u32>(j);
-  let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) / 3u;
-  let e = lookup_slot(s.place) * BRICK_WORDS + LEVELS_AT + LEVEL_ENTRY_WORDS * (level_at + cell_id(at));
-  return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, true, s.place);
-}
-
 /// `clipmap::bound_over`: its `all` is left unread.
 fn bound_over(place: u32, coarsest_cell: u32, finest: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   let top = held_to(finest);
@@ -284,7 +227,7 @@ fn bound_over(place: u32, coarsest_cell: u32, finest: u32, zoom: u32, c: vec2<i3
     if (!got.here) {
       return NodeBound(vec4<i32>(0i), z, false, false, found);
     }
-    b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w));
+    b = joined(b, got.b);
     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
       return NodeBound(b, z, true, true, found);
     }
@@ -311,12 +254,12 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
   if (lookup_here(s.place)) {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
-    let base = slot * BRICK_WORDS;
+    let base = brick_at(slot);
     fold = palette_word(slot * BRICK_CELLS + i);
     column = ground[base + COLUMNS_AT + i];
     own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
   }
-  let t = top_of(zoom, i32(column << 16u) >> 16u);
+  let t = top_of(zoom, column_top(column));
   return Cell(select(own, VALUE_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
 }
 
@@ -754,7 +697,7 @@ fn ways_at(place: u32, before: u32, trail: u32, zoom: u32, c: vec3<i32>) -> u32 
   if (!lookup_here(place)) {
     return SLOT_NOTHING;
   }
-  return way_cursor(ground[lookup_slot(place) * BRICK_WORDS + ROOT_AT], lookup_from(place), zoom, c);
+  return way_cursor(ground[brick_at(lookup_slot(place)) + ROOT_AT], lookup_from(place), zoom, c);
 }
 
 /// `world::node`, a cell: what is placed, whole in its cube or over the ground's asset

@@ -81,54 +81,6 @@ struct State {
     save_due_ms: Option<f64>,
     /// The files `want` asks for, by id; reused across turns.
     wants: Vec<(u64, Ask)>,
-    /// The changes the store takes, in order, held while the host holds its
-    /// lanes (`change`).
-    changes: Vec<Change>,
-}
-
-/// A change to the store: a shard's fold held, a shard's leaves in place
-/// of its fold, an edit made here, sent to be kept where it changed what
-/// is placed.
-enum Change {
-    Fold([i32; 2], u32),
-    Shard([i32; 2], Vec<Write>),
-    Edit(Write),
-}
-
-/// `c` made now, where the host holds none of the store's lanes and no
-/// change waits before it; else held for `step`, in order. Only the store's
-/// writers wait.
-fn change(c: Change) {
-    let st = state();
-    if st.changes.is_empty() && !object().is_held() {
-        make(c);
-    } else {
-        st.changes.push(c);
-        request_world_tick();
-    }
-}
-
-fn make(c: Change) {
-    match c {
-        Change::Fold(at, word) => note_written(&[object().set_fold(at, word)]),
-        Change::Shard(at, writes) => {
-            if let Some(changed) = object().clear_fold(at) {
-                note_written(&[changed]);
-            }
-            apply(writes);
-        }
-        Change::Edit(write) => {
-            if apply([write.clone()]) {
-                send(write);
-            }
-        }
-    }
-}
-
-/// An edit made here, where the store takes it (`change`), and sent to be
-/// kept where it changed what is placed.
-pub fn edit(write: Write) {
-    change(Change::Edit(write));
 }
 
 impl State {
@@ -232,19 +184,29 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
 /// The top read: the shards it lists, and each fold of a shard not read
 /// held in the store.
 fn on_top(rows: Vec<(u64, u32)>) {
+    let st = state();
     let mut listed = FnvHashSet::default();
+    let mut changed = Vec::new();
     for (shard, word) in rows {
         listed.insert(shard);
-        if !state().read.contains(&shard) {
-            change(Change::Fold(Quadrant::of_id(shard).at, word));
+        if !st.read.contains(&shard) {
+            let at = Quadrant::of_id(shard).at;
+            changed.push(object().set_fold(at, word));
         }
     }
-    state().top_shards = Some(listed);
+    st.top_shards = Some(listed);
+    if !changed.is_empty() {
+        note_written(&changed);
+    }
 }
 
 /// The shard `id` read: its folds let go and its leaves written.
 fn on_shard(id: u64, writes: Vec<Write>) {
-    change(Change::Shard(Quadrant::of_id(id).at, writes));
+    let at = Quadrant::of_id(id).at;
+    if let Some(changed) = object().clear_fold(at) {
+        note_written(&[changed]);
+    }
+    apply(writes);
     state().read.insert(id);
 }
 
@@ -418,15 +380,6 @@ fn saves() -> &'static mut Notify {
 }
 
 pub fn step() {
-    // The changes held while the host held the store's lanes, all now that
-    // it holds none: nothing hands them between.
-    if !state().changes.is_empty() && !object().is_held() {
-        let mut changes = core::mem::take(&mut state().changes);
-        for c in changes.drain(..) {
-            make(c);
-        }
-        state().changes = changes;
-    }
     match state().save_due_ms {
         Some(due) if now() >= due => saves().notify(),
         Some(due) => wake_at(due),

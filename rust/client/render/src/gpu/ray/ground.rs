@@ -16,12 +16,13 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
-    SHADER_WAY_RETURN, SHADER_WAY_TREE, STORAGE, STORAGE_RW,
+    dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN,
+    SHADER_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
 };
+use crate::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, is_done, release, room, word_bytes,
-    write_buffer_bytes, Gpu, RenderContext, RESULT, UNIFORM_ALIGN_MAX,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
+    Gpu, RenderContext, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -50,8 +51,7 @@ pub struct GroundBricks<'a> {
     pub records: u32,
 }
 
-/// How a brick's fill landed: its cells are back in every case but a read
-/// the device refused.
+/// How a brick's fill landed: its cells are back in every case.
 pub enum Resident<'a> {
     /// Its ways' tree built: the child groups it holds, their count first, a
     /// record each (pxl-engine `way::tree::lay`).
@@ -59,7 +59,7 @@ pub enum Resident<'a> {
     /// To be filled again, for want of room the renderer grows: its tree not
     /// built, the pool or the scratch it was built in having run out
     /// (`Short`), or built but its records past its read's room, the tree
-    /// the refill frees; or its read refused by the device.
+    /// the refill frees.
     Again,
     /// Its tree refused, the pool or the scratch at its most having run out,
     /// or the brick past its own (`way::tree::past`): the brick stays
@@ -157,7 +157,7 @@ pub(super) struct GroundPipelines {
 impl GroundPipelines {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> GroundPipelines {
         GroundPipelines {
-            heights: pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP),
+            heights: pipelines.build_compute(g, SHADER_HEIGHT, &HEIGHT_GROUP),
             bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
             ways: pipelines.build_compute(g, SHADER_WAY, &WAY_GROUP),
             free: pipelines.build_compute(g, SHADER_WAY_FREE, &WAY_FREE_GROUP),
@@ -192,24 +192,22 @@ pub(super) struct GroundBuffers {
     pub(super) handed: [[u32; FILL_WORDS as usize]; FILL_CAP as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands bricks a mapping still out a frame more (`READS`);
-    /// each one's brick and the fill it carries (`FREE` where none), its
-    /// mapping's own done word and result (`read_back`), which the host
-    /// writes, held where the guest's allocator puts it, inside the region
-    /// the host addresses, as an arriving image's are (a static is outside
-    /// it on a device), and the ticket it was last mapped with, the
-    /// kernel's, one mapping out at a time.
+    /// each one's brick and the fill it carries (`FREE` where none), and
+    /// its mapping's own word (`read_back`), which the host writes: held
+    /// where the guest's allocator puts it, inside the region the host
+    /// addresses, as an arriving image's word is. A static is outside it on
+    /// a device.
     reads: [u32; READS],
     brick_fills: [(u32, u32); READS],
-    mapping: Box<[[u32; 2]; READS]>,
-    asked: [u32; READS],
+    mapping: Box<[u32; READS]>,
     /// Each read's records, mapped beside its brick's words into its room
     /// on the heap, as many bytes as the room holds, the buffer of its size
-    /// (none before its first read), and its mapping's done word and
-    /// result, under the same ticket: a read lands with both. Every room is made `record_bytes` as its read is next
+    /// (none before its first read), and its mapping's word: a read lands
+    /// with both. Every room is made `record_bytes` as its read is next
     /// taken, the heap granting it; else it keeps the room it has.
     record_reads: [u32; READS],
     record_rooms: [Box<[u32]>; READS],
-    record_mapping: Box<[[u32; 2]; READS]>,
+    record_mapping: Box<[u32; READS]>,
     record_bytes: u32,
     /// What each read's brick was built in, indexed by `Short`: the pool's
     /// child groups and the child groups a brick's scratch held (`ran_out`).
@@ -507,11 +505,25 @@ const _: () = assert!(
     "PALETTE_BYTES: the bricks' palette indices bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// `bound_cs`'s group: its level at a dynamic offset (`SLOT_STRIDE`), the
-/// fresh frames, the frames it writes the levels of, and the handed
-/// bricks' scratch it reads the spans in. The cast's and `fold_cs`'s one
-/// group is the cast's, which binds all of theirs.
-const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
+/// `height_cs`'s group (height.wgsl): the fresh frames, the frames it writes
+/// the tops and laid cells of, and the bricks' palette indices.
+const HEIGHT_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW,
+];
+/// `bound_cs`'s group (bound.wgsl): its level at a dynamic offset
+/// (`SLOT_STRIDE`), the fresh frames, the frames it writes the levels of, and
+/// the handed bricks' scratch it reads the spans in. The cast's and
+/// `fold_cs`'s one group is the cast's, which binds all of theirs.
+const BOUND_GROUP: [u32; 12] = dynamic(
+    [
+        0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE,
+    ],
+    0,
+);
+const _: () = assert!(
+    floor::holds(&[&HEIGHT_GROUP]) && floor::holds(&[&BOUND_GROUP]),
+    "the fill's tops' or levels' group binds past WebGPU's floor"
+);
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
@@ -566,11 +578,10 @@ impl RaysPass {
                     )
                 }),
                 brick_fills: [(FREE, 0); READS],
-                mapping: Box::new([[0; 2]; READS]),
-                asked: [0; READS],
+                mapping: Box::new([0; READS]),
                 record_reads: [0; READS],
                 record_rooms: core::array::from_fn(|_| Box::default()),
-                record_mapping: Box::new([[0; 2]; READS]),
+                record_mapping: Box::new([0; READS]),
                 built_in: [[0; 2]; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(
                     word_bytes(1 + way::tree::RECORD_WORDS as usize),
@@ -657,11 +668,10 @@ impl RaysPass {
         g.dispatch(pass, 1, 1, c.fresh_len);
         g.set_pipeline(pass, c.heights_built.id);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        let w = compute::HEIGHT_WORKGROUP;
         g.dispatch(
             pass,
-            BRICK.div_ceil(w[0]),
-            BRICK.div_ceil(w[1]),
+            BRICK.div_ceil(HEIGHT_SIDE),
+            BRICK.div_ceil(HEIGHT_SIDE),
             c.fresh_len,
         );
         // A column a thread, over the tops just drawn: each column's spans
@@ -678,7 +688,7 @@ impl RaysPass {
         g.set_pipeline(pass, c.bound_built.id);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
-            let side = (BRICK >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
+            let side = (BRICK >> j).div_ceil(LEVEL_SIDE);
             g.dispatch(pass, side, side, c.fresh_len);
         }
         // Each brick's ways as cells, a workgroup a brick, over its spans
@@ -724,8 +734,7 @@ impl RaysPass {
         };
         // A read lands with its brick's words and its records both: told
         // where it is of the brick's latest fill, discarded where a later
-        // fill asked again, whose own read brings it; one the device refused
-        // brought nothing, and the brick is filled again. A build that ran out
+        // fill asked again, whose own read brings it. A build that ran out
         // of the pool or the scratch it was built in keeps no record, its
         // count saying which (`short_of`), which grows ahead of the next
         // turn's bricks where it is as built still and may (`ran_out`,
@@ -734,10 +743,7 @@ impl RaysPass {
         // filled again, every read's room grown past them.
         for k in 0..READS {
             let (s, ticket) = c.brick_fills[k];
-            if s == FREE
-                || !is_done(&c.mapping[k][0], c.asked[k])
-                || !is_done(&c.record_mapping[k][0], c.asked[k])
-            {
+            if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
                 continue;
             }
             c.brick_fills[k] = (FREE, 0);
@@ -748,10 +754,7 @@ impl RaysPass {
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
             let words = 1 + n.min(way::tree::BRICK_CHILD_GROUPS) * way::tree::RECORD_WORDS;
-            let refused = c.mapping[k][1] != RESULT::OK || c.record_mapping[k][1] != RESULT::OK;
-            let landing = if refused {
-                Resident::Again
-            } else if n == way::tree::NONE {
+            let landing = if n == way::tree::NONE {
                 Resident::Refused
             } else if let Some(short) = short_of(n) {
                 let (i, now) = (short as usize, [c.child_groups, c.scratch_child_groups]);
@@ -817,24 +820,23 @@ impl RaysPass {
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
-            let s = c.brick_fills[k].0;
-            c.asked[k] = c.asked[k].wrapping_add(1);
+            let (s, ticket) = c.brick_fills[k];
             g.map_read(
                 c.reads[k],
                 0,
                 BACK_WORDS * 4,
                 c.cells_back[s as usize].cells,
-                &c.mapping[k],
-                c.asked[k],
+                &mut c.mapping[k],
+                ticket,
             );
-            let room = &c.record_rooms[k];
+            let room = &mut c.record_rooms[k];
             g.map_read(
                 c.record_reads[k],
                 0,
                 word_bytes(room.len()),
                 off_of(room.as_ptr()) as u32,
-                &c.record_mapping[k],
-                c.asked[k],
+                &mut c.record_mapping[k],
+                ticket,
             );
         }
     }

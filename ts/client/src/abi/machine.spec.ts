@@ -4,9 +4,9 @@
 
 /** The machine its JSON declares: the sizes a host may give, what a
  * reservation is counted in, the rings' sizes, where the front's header,
- * the rings, their slots and the GPU stream lie (0 without a GPU), which
- * the host lays before the first turn, whether it asks for the file
- * device, and the GPU it asks for. */
+ * the rings, their slots and the GPU stream lie (0 without the socket),
+ * which the host lays before the first turn, and the GPU socket where it
+ * is taken. */
 export const MACHINE = {
   mem_bytes: [1073741824, 536870912],
   region_bytes: 67108864,
@@ -19,7 +19,6 @@ export const MACHINE = {
   sq_slots_at: 1085440,
   cq_slots_at: 3182592,
   gpu_at: 7376896,
-  fs: true,
   gpu: {
     bytes: 4194304,
     power: "high-performance",

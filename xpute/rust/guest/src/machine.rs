@@ -27,8 +27,7 @@ use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::wasm::LinkConfig;
 
 /// The GPU socket: a stream the guest writes its GPU calls into and the host
-/// runs once it is published (xpute-gpu), which says its own head
-/// (ipc/stream.rs).
+/// runs after each turn (xpute-gpu), which says its own head (ipc/stream.rs).
 #[derive(Clone, Copy)]
 pub struct Gpu {
     pub bytes: u32,
@@ -59,8 +58,6 @@ pub struct Machine {
     pub cq_cap: u32,
     /// What one turn posts besides its replies (`Door::new`).
     pub turn_posts: u32,
-    /// Whether the guest asks for the file device (abi/fs.json).
-    pub fs: bool,
     pub gpu: Option<Gpu>,
 }
 
@@ -229,10 +226,8 @@ pub fn booted() -> bool {
 ///
 /// Given `gpu`, the numbers its native GPU host runs by (xpute-gpu
 /// `Numbers`), the machine takes the GPU socket, and off WebAssembly it is
-/// xpute-gpu's `native_guest!` instead: the GPU's host a device beside the
-/// guest, polled before each turn and rung as the guest publishes its stream
-/// (`BootInfo::publish`), and its admission handed the entry
-/// (`BootInfo::admit`). The program's crate
+/// xpute-gpu's `native_guest!` instead: the GPU's host around each turn and
+/// its admission handed the entry (`BootInfo::admit`). The program's crate
 /// then depends on xpute-gpu with its `host` feature for every target but
 /// wasm32, where a page's host draws and admits every frame.
 ///

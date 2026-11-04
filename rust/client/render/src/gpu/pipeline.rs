@@ -14,7 +14,7 @@ use crate::api_spec::stream;
 use crate::frame::shader::record::{
     compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{is_done, room, shader_bytes, Format, Gpu, Stencil, GATED_DEPTH};
+use crate::gpu::api::{room, shader_bytes, Format, Gpu, Stencil, DONE, GATED_DEPTH};
 use crate::gpu::surface::WORLD_COLOR;
 
 pub const GROUPS: usize = 4;
@@ -45,8 +45,8 @@ pub struct Pipelines {
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
-    /// Each pipeline's done word, by its place in `pipelines`, where the
-    /// host stores `TICKET` once it is made: boxed, so it stays where the
+    /// Each pipeline's word, by its place in `pipelines`, where the host
+    /// writes `ticket | DONE` once it is made: boxed, so it stays where the
     /// records named it. Let go with the renderer, on a lost device alone,
     /// whose host writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
@@ -59,10 +59,6 @@ impl Default for Pipelines {
         Self::new()
     }
 }
-
-/// Each pipeline's ticket: its done word's first, as each word is asked
-/// once.
-const TICKET: u32 = 1;
 
 fn fold(key: u64, word: u32) -> u64 {
     (key ^ word as u64).wrapping_mul(0x100000001b3)
@@ -138,13 +134,13 @@ impl Pipelines {
             .map(|&(_, b)| b)
     }
 
-    /// The next pipeline's place, its done word and its ticket: none once
-    /// the renderer draws, as every pipeline it draws with is made before.
-    fn next(&self) -> (usize, &u32, u32) {
+    /// The next pipeline's place, its word and its ticket: none once the
+    /// renderer draws, as every pipeline it draws with is made before.
+    fn next(&mut self) -> (usize, &mut u32, u32) {
         let at = self.pipeline_len;
         xpute_kit::ensure!(!self.is_made(), EBUSY, at);
         xpute_kit::ensure!(at < PIPELINE_CAP, ENOSPC, PIPELINE_CAP);
-        (at, &self.words[at], TICKET)
+        (at, &mut self.words[at], at as u32 + 1)
     }
 
     fn keep(&mut self, at: usize, key: u64, b: Pipeline) -> Pipeline {
@@ -244,7 +240,7 @@ impl Pipelines {
         self.keep(place, key, b)
     }
 
-    /// Whether every pipeline asked for is made, its done word holding its ticket:
+    /// Whether every pipeline asked for is made, its word holding `DONE`:
     /// the renderer draws only once it is.
     pub fn is_made(&self) -> bool {
         self.made_cnt == self.pipeline_len && self.pipeline_len != 0
@@ -253,7 +249,7 @@ impl Pipelines {
     /// The pipelines whose word says they are made since this last ran,
     /// counted; whether all are (`is_made`).
     pub fn made(&mut self) -> bool {
-        while self.made_cnt < self.pipeline_len && is_done(&self.words[self.made_cnt], TICKET) {
+        while self.made_cnt < self.pipeline_len && self.words[self.made_cnt] & DONE != 0 {
             self.made_cnt += 1;
         }
         self.is_made()

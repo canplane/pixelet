@@ -38,9 +38,8 @@ pub struct DecorFrame<'a> {
     pub drawing: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells, its base
-    /// sunk under it by none, as it stands where it is placed; handed where
-    /// they lie, their writer asking `held` (gpu/api.rs) before it writes
-    /// them again.
+    /// sunk under it by none, as it stands where it is placed; read where
+    /// it lies, unwritten until the page replays the turn.
     pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
     /// The anchor the lanes are about, less the frame's eye: where the decor's
     /// instances are drawn.
@@ -389,7 +388,7 @@ impl Generator {
                 bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
             );
             if !f.placed_records.is_empty() {
-                // One record however many.
+                // Read where the kernel holds them, one record however many.
                 g.upload_buf(
                     self.records,
                     generation::record_at(generation::SLOT_RECORDS) * 4,

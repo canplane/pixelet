@@ -17,7 +17,6 @@ pub const MACHINE: Machine = Machine {
     sq_cap: 8,
     cq_cap: 16,
     turn_posts: 1,
-    fs: false,
     gpu: None,
 };
 

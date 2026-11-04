@@ -99,6 +99,8 @@ class Ring {
         return entry(tag, cmd, flags, 0, slot);
     }
 
+    // Drops every frame not yet read: the writer's, before its reader reads.
+    void clear() const noexcept { pos(ring::TAIL).store(head(), std::memory_order_release); }
 
     // The head's frame, none when empty. Read it, then `advance`.
     std::optional<Frame> peek() const noexcept;

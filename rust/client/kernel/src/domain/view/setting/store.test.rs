@@ -3,6 +3,7 @@
 use super::*;
 use crate::domain::view::setting::schema_spec::SettingKind;
 use crate::sys;
+use crate::sys::io::host;
 use xpute_kit::status::errno::Errno;
 
 fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
@@ -167,8 +168,8 @@ fn held_after_a_change() -> bool {
     *UNSAVED.get(|| false)
 }
 
-/// The slot is read on the storage root once its file lands, and nothing is
-/// written before; what was read is not written back.
+/// The slot is read on the storage root a turn after its file lands, and
+/// nothing is written before; what was read is not written back.
 #[test]
 fn read_before_write() {
     let _g = sys::serial();
@@ -186,6 +187,8 @@ fn read_before_write() {
         StorageFile::Settings,
         Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
     );
+    assert!(!settings_load_step(), "taken from the next turn on");
+    host::rise();
     assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNSAVED.get(|| false), "what was read is not written back");
@@ -219,6 +222,7 @@ fn bad_slot_refused() {
     ] {
         open_slot();
         file::on_storage_answered(StorageFile::Settings, answer);
+        host::rise();
         assert!(
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"

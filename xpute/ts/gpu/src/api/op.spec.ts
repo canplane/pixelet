@@ -41,16 +41,16 @@ export const DESTROY = 12 as number;
 /** buffer, offset, the bytes. */
 export const WRITE_BUFFER = 13 as number;
 
-/** buffer, offset, address, bytes: the bytes read where they lie in the guest's memory as the host runs the record, no copy of them made; the guest neither rewrites nor frees them from the stream's publish until it loads END as 0 (ipc/stream R3). */
+/** buffer, offset, address, bytes: read from the guest's memory when the host runs it. */
 export const WRITE_BUFFER_AT = 14 as number;
 
 /** texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes. */
 export const WRITE_TEXTURE = 15 as number;
 
-/** as WRITE_TEXTURE, the bytes an address and a count in the guest's memory, read as WRITE_BUFFER_AT's are. */
+/** as WRITE_TEXTURE, the bytes an address and a count in the guest's memory. */
 export const WRITE_TEXTURE_AT = 16 as number;
 
-/** texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture; the word and the one after it are its done word and result (RESULT): OK once the image is in the texture, REFUSED for one the host cannot decode. One whose texture went is answered nothing. */
+/** texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture, and once it is there writes ticket | DONE at the word, where the ticket still stands; an image the host cannot decode is left out and its word not written. */
 export const COPY_EXTERNAL_IMAGE = 17 as number;
 
 /** id. */
@@ -128,10 +128,10 @@ export const END = 41 as number;
 /** encoders' count, that many encoders, each finished and let go with the record. */
 export const SUBMIT = 42 as number;
 
-/** buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address and the buffer unmapped; the word and the one after it are its done word and result (RESULT): OK, or REFUSED where the device refused the mapping and nothing was copied. */
+/** buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address, ticket | DONE written at the word and the buffer unmapped. The word is the mapping's own: the guest maps the buffer again only once it holds DONE, and judges by the ticket whose bytes landed. */
 export const MAP_ASYNC = 43 as number;
 
-/** word, ticket: the word its done word (RESULT) once what was submitted before it is done. */
+/** word, ticket: ticket | DONE at the word once what was submitted before it is done, where the ticket still stands. */
 export const QUEUE_DONE = 44 as number;
 
 /** surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE). */
@@ -146,7 +146,7 @@ export const CURRENT = 47 as number;
 /** address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then STATUS. */
 export const DEVICE = 48 as number;
 
-/** RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync, the word its done word (RESULT) once the pipeline is made; the guest names the pipeline in no other record before. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A host with no async call makes it at once and writes the word by the same path, before the next turn reads it. */
+/** RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync. Once the pipeline is made, ticket | DONE at the word, where the ticket still stands; the guest names the pipeline in no other record until it holds DONE. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A host with no async call makes it at once and writes the word by the same path, before the next turn reads it. */
 export const RENDER_PIPELINE_ASYNC = 49 as number;
 
 /** COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's. */

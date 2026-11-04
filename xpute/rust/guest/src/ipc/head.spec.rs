@@ -41,7 +41,7 @@ pub mod word {
     pub const SQ_AT: u32 = 5;
     /// Where the completion ring's words begin.
     pub const CQ_AT: u32 = 6;
-    /// Where the GPU stream is, which the host runs after each turn; 0 where the machine asks for no GPU.
+    /// Where the GPU stream is, which the host runs after each turn; 0 without the GPU socket.
     pub const GPU_AT: u32 = 7;
     pub const KEYS: &[&str] = &[
         "MAGIC",

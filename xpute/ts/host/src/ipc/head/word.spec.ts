@@ -23,5 +23,5 @@ export const SQ_AT = 5 as number;
 /** Where the completion ring's words begin. */
 export const CQ_AT = 6 as number;
 
-/** Where the GPU stream is, which the host runs after each turn; 0 where the machine asks for no GPU. */
+/** Where the GPU stream is, which the host runs after each turn; 0 without the GPU socket. */
 export const GPU_AT = 7 as number;

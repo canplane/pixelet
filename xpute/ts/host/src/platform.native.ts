@@ -2,8 +2,8 @@
 
 /**
  * A native app's guest: linked into the app and reached through xpute's
- * native module (@xpute/native), which gives its memory, and run on its own
- * thread (`Guest.thread`). A page takes platform.ts.
+ * native module (@xpute/native), which gives its memory. A page takes
+ * platform.ts.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -24,15 +24,5 @@ export function open(
       return wake;
     },
     answer_with: (answer) => XPUTE.hostcallOn(answer),
-    thread: {
-      kick: (quota_ms) => XPUTE.kick(quota_ms),
-      listen(heard) {
-        XPUTE.addListener("onNotify", () => {
-          XPUTE.answer();
-          const [wake_ms, turn_ms] = XPUTE.heard();
-          heard(wake_ms, turn_ms);
-        });
-      },
-    },
   });
 }

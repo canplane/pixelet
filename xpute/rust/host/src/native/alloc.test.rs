@@ -17,21 +17,16 @@ const HEAP_AT: u32 = 16 * PAGE_BYTES;
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
     *GUEST.get_or_init(|| {
-        native::boot(
-            &Config {
-                mem_bytes: MEM_BYTES,
-                data_end: 0,
-                heap_at: HEAP_AT,
-                stack_bytes: 1 << 20,
-                thread_name: "test-guest",
-                clock: native::now,
-                stop_hook: None,
-                admit: None,
-                publish: None,
-                ready: || true,
-            },
-            |_| -1.0,
-        )
+        native::boot(&Config {
+            mem_bytes: MEM_BYTES,
+            data_end: 0,
+            heap_at: HEAP_AT,
+            stack_bytes: 1 << 20,
+            thread_name: "test-guest",
+            clock: native::now,
+            stop_hook: None,
+            admit: None,
+        })
     })
 }
 

@@ -949,7 +949,7 @@ impl Renderer {
             self.box_groups(g);
         }
         if !uniforms.is_empty() && (grew || uniforms_moved) {
-            // One record however many.
+            // Read where the draw list holds them, one record however many.
             g.upload_buf(self.draws_buf, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);

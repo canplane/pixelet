@@ -8,8 +8,7 @@ import android.view.Surface
  * The GPU's host beside the guest (Guest.kt), as xpute exports it to JNI
  * (xpute-gpu `native_abi!`, src/host/native/jni.rs): the same calls an
  * iPhone's Swift makes through the C ABI (xpute_gpu.h). Each reaches the host
- * on the guest's thread while the caller waits; a completion kicks the guest
- * there.
+ * on the guest's thread while the caller waits.
  */
 object Gpu {
   init {
@@ -18,6 +17,16 @@ object Gpu {
 
   /** Whether the device opened; what it is, the guest reads from the host. */
   external fun open(): Boolean
+
+  /** What `wake` calls: the module's event (XputeModule.kt `onWake`). */
+  @Volatile var woken: (() -> Unit)? = null
+
+  /** Called by the device's host (xpute-gpu src/host/native/jni.rs `wake`)
+   * from whichever thread learned of a completion, attached to the VM there,
+   * to ask the turn that reads it. */
+  @JvmStatic fun wake() {
+    woken?.invoke()
+  }
 
   /** Binds the guest's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the

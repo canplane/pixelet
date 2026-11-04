@@ -2,9 +2,7 @@
 
 // The C ABI of the GPU's host beside a guest linked into its host's own
 // process (xpute.h), as xpute-gpu's `native_abi!` exports it. Each call
-// reaches the host on the guest's thread while the caller waits. The host
-// runs the guest's stream as the guest publishes it, and a completion kicks
-// the guest.
+// reaches the host on the guest's thread while the caller waits.
 
 #pragma once
 
@@ -14,6 +12,10 @@
 // asks. What it is, the guest reads from the block its first call asks the
 // host for.
 int32_t xpute_gpu_open(void);
+
+// `f` is what the host calls to ask a turn, from whichever thread learned of
+// a completion (an image decoded): the app asks for the turn that reads it.
+void xpute_gpu_wake_on(void (*f)(void));
 
 // Binds the guest's surface `handle` to `window`, on an Apple platform a
 // view's CAMetalLayer, which the caller keeps until it has unbound it: 0, or

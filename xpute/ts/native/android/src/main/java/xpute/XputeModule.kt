@@ -16,15 +16,14 @@ class XputeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
-    /** The guest has posted or asked, a hostcall waits for `answer`, or the
-     * guest has stopped. Sent from the guest's thread; Expo carries the
-     * event to the JavaScript thread. */
-    Events("onNotify")
+    /** The GPU host asks a turn. Sent from the thread that learned of the
+     * completion; Expo carries the event to the JavaScript thread. */
+    Events("onWake")
 
-    OnCreate { Guest.notify = { sendEvent("onNotify") } }
+    OnCreate { Gpu.woken = { sendEvent("onWake") } }
 
     OnDestroy {
-      Guest.notify = null
+      Gpu.woken = null
       Guest.answer = null
     }
 
@@ -33,12 +32,6 @@ class XputeModule : Module() {
     Function("mem") { NativeArrayBuffer(Guest.mem()) }
 
     Function("run") { quotaMs: Double -> Guest.run(quotaMs) }
-
-    Function("kick") { quotaMs: Double -> Guest.kick(quotaMs) }
-
-    Function("answer") { Guest.answer() }
-
-    Function("heard") { Guest.heard().toList() }
 
     Function("hostcallOn") { answer: JavaScriptFunction<Int> -> Guest.answer = answer }
 

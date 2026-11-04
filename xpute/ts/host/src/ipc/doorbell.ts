@@ -7,11 +7,6 @@
  * frame's tag is the sender's id (ipc/frame.json): a host's call takes the
  * next, which its reply keeps, and what the guest raises is handed to the one
  * listener, which tells the commands apart.
- *
- * A guest on a thread of its own (host.ts `Guest.thread`) is kicked after
- * each submission and after each read of the completion ring, which may have
- * made the room a turn waits for, and runs on its own; what it posts is read
- * as it says it has (`heard`). A ring is then a turn waited for, a call's.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -49,7 +44,6 @@ export type OnEvent = (
 export type Encode = (room: PacketRoom) => PacketWriter | null;
 
 type Run = (quota_ms: f64) => f64;
-type Kick = (quota_ms: f64) => void;
 
 export class Doorbell implements PacketRoom {
   private readonly sq: Ring;
@@ -68,37 +62,23 @@ export class Doorbell implements PacketRoom {
    * every ring. */
   #terminated = false;
   /** ENOSYS for a call until the host listens. */
-  private listener: OnEvent = () => Errno.ENOSYS;
+  private heard: OnEvent = () => Errno.ENOSYS;
   /** What was sent while the completion ring was read, sent once it is: a
    * packet is written in its slot, and room for one takes a turn. */
   private later: [u32, Encode | null][] = [];
   wake: ((wake_ms: f64) => void) | null = null;
-  /** Told what the guest's own thread ran since it was last heard: its
-   * longest turn and when it wants the next. */
-  turned: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
   /** Told once, as the guest stops. */
   onterminated: (() => void) | null = null;
 
   private readonly run: Run;
-  /** Wakes a guest on its own thread, none for one that runs only when rung. */
-  readonly kick: Kick | null;
-  /** Submissions kick nothing: the kick after them does (`batch`). */
-  private batching = false;
 
   /** The guest is gone, and no turn runs again. */
   get terminated(): boolean {
     return this.#terminated;
   }
 
-  constructor(
-    mem: ArrayBufferLike,
-    sq_at: u32,
-    cq_at: u32,
-    run: Run,
-    kick: Kick | null = null,
-  ) {
+  constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, run: Run) {
     this.run = run;
-    this.kick = kick;
     this.sq = new Ring(mem, sq_at);
     this.cq = new Ring(mem, cq_at);
   }
@@ -120,7 +100,7 @@ export class Doorbell implements PacketRoom {
 
   /** What the guest sends or calls with is handed to `heard`. */
   hear(heard: OnEvent): void {
-    this.listener = heard;
+    this.heard = heard;
   }
 
   /** Tagged 0; while the completion ring is read, once it is. */
@@ -179,41 +159,6 @@ export class Doorbell implements PacketRoom {
     }
     this.wake?.(wake);
     return wake;
-  }
-
-  /** `f`'s submissions kick nothing, so the kick its caller makes after it
-   * gives the turn that applies them its quota. */
-  batch(f: () => void): void {
-    const was = this.batching;
-    this.batching = true;
-    try {
-      f();
-    } finally {
-      this.batching = was;
-    }
-  }
-
-  /** The guest's own thread has posted or asked since it was last heard:
-   * the completion ring read dry, and what it asked told, or, where it has
-   * stopped (`wake_ms` NaN), what it posted read and its stop told. */
-  heard(wake_ms: f64, turn_ms: f64): void {
-    if (this.#terminated) return;
-    if (Number.isNaN(wake_ms)) {
-      this.terminate("the guest stopped", null, true);
-      return;
-    }
-    try {
-      this.read();
-    } catch (err) {
-      this.terminate(
-        "the host could not take what the guest posted",
-        err,
-        false,
-      );
-      return;
-    }
-    this.turned?.(turn_ms, wake_ms);
-    this.wake?.(wake_ms);
   }
 
   /** The guest is gone: printed here, once, and told, since a turn's caller is
@@ -282,7 +227,7 @@ export class Doorbell implements PacketRoom {
       : null;
     this.reading = true;
     try {
-      return this.listener(cq.tag(e), cq.cmd(e), f) ?? 0;
+      return this.heard(cq.tag(e), cq.cmd(e), f) ?? 0;
     } finally {
       this.reading = false;
     }
@@ -290,7 +235,6 @@ export class Doorbell implements PacketRoom {
 
   private read(): void {
     this.reading = true;
-    let read = 0;
     try {
       const cq = this.cq;
       for (let at = cq.peek(); at >= 0; at = cq.peek()) {
@@ -312,15 +256,13 @@ export class Doorbell implements PacketRoom {
             );
           }
         } else {
-          this.listener(tag, cmd, f);
+          this.heard(tag, cmd, f);
         }
         cq.advance();
-        read++;
       }
     } finally {
       this.reading = false;
     }
-    if (read > 0) this.kick?.(-1);
     const later = this.later;
     this.later = [];
     for (const [cmd, encode] of later) this.send(cmd, encode);
@@ -334,7 +276,6 @@ export class Doorbell implements PacketRoom {
     const pkt = encode?.(this) ?? null;
     for (;;) {
       const errnum = this.sq.push(tag, cmd, flags, pkt);
-      if (errnum === Errno.OK && !this.batching) this.kick?.(-1);
       if (errnum === Errno.OK || errnum === Errno.EMSGSIZE) return errnum;
       if (errnum !== Errno.EAGAIN) {
         throw new Error(

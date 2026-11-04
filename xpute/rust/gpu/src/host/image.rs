@@ -11,10 +11,9 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use xpute_host::mem::Memory;
 
 use super::object::Object;
-use super::pending::answer;
 use super::run::OwnedTexture;
 use super::GpuHost;
-use crate::spec::RESULT;
+use crate::spec::DONE;
 
 /// An image sent the decoder, landed in its texture at the poll after its
 /// decode comes back.
@@ -61,8 +60,7 @@ impl Decoder {
 }
 
 impl GpuHost {
-    /// `bytes` copied now, since they are the guest's again once the stream
-    /// is handed back (xpute-guest ipc/stream.rs R3).
+    /// `bytes` copied now, since they are the guest's only until the next turn.
     pub(super) fn copy_external_image(
         &mut self,
         to: OwnedTexture,
@@ -87,10 +85,9 @@ impl GpuHost {
     }
 
     /// Each decoded image written to its texture, ahead in the queue of
-    /// anything the guest submits from here, and answered OK. One the host
-    /// cannot decode is answered REFUSED, as on the web; one whose texture
-    /// went has nowhere to land, and one the device's loss forgot, and
-    /// neither is answered.
+    /// anything the guest submits from here. One the host cannot decode is
+    /// left out with its word unwritten, as on the web; one whose texture went
+    /// has nowhere to land; one the device's loss forgot answers to nothing.
     pub(super) fn land_images(&mut self, memory: &mut Memory<'_>) {
         while let Ok((job, image)) = self.decoder.answers.try_recv() {
             let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else {
@@ -101,11 +98,7 @@ impl GpuHost {
                 .iter()
                 .flatten()
                 .any(|o| matches!(o, Object::Texture(t) if *t == d.to.texture));
-            if !held {
-                continue;
-            }
-            let Some(image) = image else {
-                answer(memory, d.word, d.ticket, Some(RESULT::REFUSED));
+            let Some(image) = image.filter(|_| held) else {
                 continue;
             };
             let layout = wgpu::TexelCopyBufferLayout {
@@ -120,7 +113,9 @@ impl GpuHost {
             };
             self.queue
                 .write_texture(d.to.info(), &image.rgba, layout, size);
-            answer(memory, d.word, d.ticket, Some(RESULT::OK));
+            if memory.word(d.word) == d.ticket {
+                memory.set_word(d.word, d.ticket | DONE);
+            }
         }
     }
 }

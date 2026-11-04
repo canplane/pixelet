@@ -32,13 +32,11 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
 /// The area (pxl-engine `area::Area`): every cell's nine by its key
 /// (`area::shard_key`), four a row; a row of none where none is declared,
-/// since a binding holds at least one, and a read past it is none. The
-/// renderer hands it where it lies, so a source declared while the host
-/// holds it is made at a later call (pxl-render gpu/api.rs `held`).
+/// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
     let declared = source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
-    if s.is_empty() || (*made != declared && !api::held(s)) {
+    if s.is_empty() || *made != declared {
         s.clear();
         let nines = source::nines();
         let nine = |i: usize| nines.get(i).copied().map_or(0, i32::from);

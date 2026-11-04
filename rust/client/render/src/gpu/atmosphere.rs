@@ -41,8 +41,8 @@ use crate::frame::shader::word::{
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, is_done, pass_desc, room, sampler_entry, texture_usage,
-    view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, RESULT,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
+    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -303,14 +303,10 @@ pub struct Atmosphere {
     /// copied and on their way (`Measure::bit`).
     pending: u32,
     flying: u32,
-    /// The words as they land, and their done word and result: on the heap,
-    /// as the host writes them and a native build's statics are outside its
-    /// memory; the ticket the mapping was last asked with, the kernel's, and
-    /// whether one is out or landed and not yet taken.
+    /// The words as they land, and their word (`DONE` once in): on the heap, as
+    /// the host writes them and a native build's statics are outside its memory.
     landed_words: Box<[u32; SLOPES]>,
-    landed_word: Box<[u32; 2]>,
-    ticket: u32,
-    mapped: bool,
+    landed_word: Box<u32>,
     plan: Plan,
     sun_mu: f32,
     moon_mu: f32,
@@ -454,9 +450,7 @@ impl Atmosphere {
             pending: 0,
             flying: 0,
             landed_words: Box::new([0; SLOPES]),
-            landed_word: Box::new([0; 2]),
-            ticket: 0,
-            mapped: false,
+            landed_word: Box::new(0),
             plan: Plan::default(),
             read: Read::default(),
             exposure_read: Read::default(),
@@ -771,7 +765,7 @@ impl Atmosphere {
         if exposed {
             self.dispatch_exposure(ctx);
         }
-        let copied = self.pending != 0 && self.flying == 0;
+        let copied = self.pending != 0 && self.flying == 0 && *self.landed_word == 0;
         if copied {
             g.copy_buf(
                 encoder,
@@ -787,18 +781,16 @@ impl Atmosphere {
     /// What the tables measured, mapped back once the copy's encoder is
     /// submitted; its landing wakes the turn that reads it.
     pub fn read_back(&mut self, g: &Gpu) {
-        if self.flying != 0 && !self.mapped {
+        if self.flying != 0 && *self.landed_word == 0 {
             let addr = off_of(self.landed_words.as_ptr()) as u32;
-            self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.slopes.1,
                 0,
                 SLOPES_BYTES,
                 addr,
-                &self.landed_word,
-                self.ticket,
+                &mut self.landed_word,
+                1,
             );
-            self.mapped = true;
         }
     }
 
@@ -807,13 +799,7 @@ impl Atmosphere {
     /// and the sample it was taken over; and whether each light reaches the
     /// air.
     fn take_slopes(&mut self) {
-        if !self.mapped || !is_done(&self.landed_word[0], self.ticket) {
-            return;
-        }
-        self.mapped = false;
-        // A mapping refused measured nothing: what it carried is measured again.
-        if self.landed_word[1] != RESULT::OK {
-            self.pending |= core::mem::take(&mut self.flying);
+        if *self.landed_word != 1 | DONE {
             return;
         }
         let (w, flying) = (*self.landed_words, self.flying);
@@ -837,7 +823,7 @@ impl Atmosphere {
             self.ground.step = Some(1.0 / word(GROUND_WORDS));
             self.ground.sample = word(GROUND_WORDS + 1);
         }
-        self.flying = 0;
+        (self.flying, *self.landed_word) = (0, 0);
     }
 
     /// Each light's step (`LightMemo::step`), the sun's first: in reach, the

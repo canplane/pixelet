@@ -22,19 +22,12 @@ fn cfg(heap_at: u32) -> Config {
         clock: || 42.0,
         stop_hook: None,
         admit: None,
-        publish: None,
-        ready: || true,
     }
-}
-
-/// A turn that asks for none.
-fn turn(_: f64) -> f64 {
-    -1.0
 }
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
-    *GUEST.get_or_init(|| native::boot(&cfg(HEAP_AT), turn))
+    *GUEST.get_or_init(|| native::boot(&cfg(HEAP_AT)))
 }
 
 #[test]
@@ -94,33 +87,17 @@ fn while_idle_runs_here() {
 }
 
 #[test]
-fn ring_waits_for_a_turn() {
-    guest();
-    assert_eq!(native::ring(1.0), Some(-1.0));
-}
-
-#[test]
-fn a_kick_runs_a_turn() {
-    guest();
-    let _ = native::heard();
-    native::kick_given(-1.0);
-    assert_eq!(native::ring(0.0), Some(-1.0));
-    let (_, turn_ms) = native::heard();
-    assert!(turn_ms >= 0.0);
-}
-
-#[test]
 fn second_boot_refused() {
     guest();
-    let again = std::panic::catch_unwind(|| native::boot(&cfg(HEAP_AT), turn));
+    let again = std::panic::catch_unwind(|| native::boot(&cfg(HEAP_AT)));
     assert!(again.is_err());
 }
 
 #[test]
 fn bad_heap_refused() {
     // The slab aligns a block by its offset from the heap's first byte.
-    assert!(std::panic::catch_unwind(|| native::boot(&cfg(100), turn)).is_err());
-    assert!(std::panic::catch_unwind(|| native::boot(&cfg(MEM_BYTES), turn)).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&cfg(100))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&cfg(MEM_BYTES))).is_err());
     // Neither took the process's one boot.
     let (_, bytes) = guest().mem();
     assert_eq!(bytes, MEM_BYTES as usize);

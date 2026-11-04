@@ -290,19 +290,6 @@ fn under(slot: u32) -> u32 {
 
 // ---- way.rs: what the ways write in a cell, off the spans kept ----
 
-/// A head word's face cell (fill.rs `Scratch::head`).
-fn head_face(w: u32) -> i32 {
-  let face = i32(w) >> 16u;
-  return select(face, FACE_NONE, face == -32768i);
-}
-
-/// Where column `c`'s spans begin in the scratch from `mine`, `c` in the brick's cells,
-/// its ring one past each side (fill.rs `Scratch::column`).
-fn spans_at(mine: u32, c: vec2<i32>) -> u32 {
-  let i = u32(c.y + 1i) * SPANS_ACROSS + u32(c.x + 1i);
-  return mine + SPANS_AT + i * SPANS_COLUMN_WORDS;
-}
-
 /// What the ways write in cell `z` at zoom `cell` of column `c`, its `n` spans kept in the
 /// scratch from `mine`: a deck's slab or its pier, the highest of those over it keeping what
 /// two share; else the first air over it (`AIR_OF` over its way's palette index); else
@@ -327,20 +314,6 @@ fn way_at(mine: u32, c: vec2<i32>, n: u32, cell: u32, z: i32) -> u32 {
     }
   }
   return select(air, palette_idx, palette_idx != WAY_NOTHING);
-}
-
-/// The `k`-th of a cell and the six about it, from its own: the row under it, the column
-/// before it, the cell under it, the cell over it, the column after it, the row over it
-/// (`way::near`).
-fn near(k: u32) -> vec3<i32> {
-  var i = 6u - k;
-  var s = 1i;
-  if (k < 4u) {
-    i = k - 1u;
-    s = -1i;
-  }
-  let on = (vec3<u32>(1u, 0u, 2u) == vec3<u32>(i)) & vec3<bool>(k != 0u);
-  return select(vec3<i32>(0i), vec3<i32>(s), on);
 }
 
 /// What the ways write in cell `z` of column `c` at zoom `cell` (`way::way_cell`): its own

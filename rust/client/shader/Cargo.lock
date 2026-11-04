@@ -814,14 +814,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pxl-content"
-version = "0.0.0"
-dependencies = [
- "pxl-engine",
- "xpute-kit",
-]
-
-[[package]]
 name = "pxl-engine"
 version = "0.0.0"
 dependencies = [
@@ -833,7 +825,6 @@ dependencies = [
 name = "pxl-shader"
 version = "0.0.0"
 dependencies = [
- "pxl-content",
  "pxl-engine",
  "pxl-shader-macro",
  "spirv-std",

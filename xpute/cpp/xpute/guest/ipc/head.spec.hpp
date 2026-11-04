@@ -45,7 +45,7 @@ inline constexpr std::uint32_t SQ_AT = 5u;
 // Where the completion ring's words begin.
 inline constexpr std::uint32_t CQ_AT = 6u;
 
-// Where the GPU stream is, which the host runs after each turn; 0 where the machine asks for no GPU.
+// Where the GPU stream is, which the host runs after each turn; 0 without the GPU socket.
 inline constexpr std::uint32_t GPU_AT = 7u;
 } // namespace word
 

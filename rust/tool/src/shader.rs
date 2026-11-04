@@ -16,13 +16,10 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 6] = [
+pub const ENTRIES: [(&str, &str); 3] = [
     ("cell_cs", "cell.gen.wgsl"),
     ("hit_lead_cs", "hit_lead.gen.wgsl"),
     ("hit_faces_cs", "hit_faces.gen.wgsl"),
-    ("fold_cs", "fold.gen.wgsl"),
-    ("height_cs", "height.gen.wgsl"),
-    ("bound_cs", "bound.gen.wgsl"),
 ];
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as
@@ -35,9 +32,8 @@ pub(crate) const NIGHTLY: &str = "nightly-2026-04-11";
 /// bytes did not change has nothing to change.
 pub const STAMP: &str = "gen.digest";
 
-/// What makes the entries: pxl-engine and pxl-content, the shader crate,
-/// the builder that reads its SPIR-V into WGSL, xpute-kit beneath them, their
-/// lock and the toolchain's pin, the workspaces the crates over it inherit from, the
+/// What makes the entries: pxl-engine, the shader crate, the builder that
+/// reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the toolchain's pin, the workspaces the crates over it inherit from, the
 /// cargo config the container's cargo reads from above the shader crate and
 /// the compiler wrapper it names, and this generator, which writes each
 /// file's head — every file on disk under them but a test (`inputs`), so a
@@ -46,9 +42,8 @@ pub const STAMP: &str = "gen.digest";
 /// does not name fails there rather than going unseen. The digest is all that holds
 /// a file current, for a write that skips the container and for check_rules
 /// alike, so it names everything a file is made by.
-const INPUT_ROOTS: [&str; 13] = [
+const INPUT_ROOTS: [&str; 12] = [
     "rust/spec/engine/",
-    "rust/spec/content/",
     "rust/client/shader/",
     "rust/client/shader/build/",
     "xpute/rust/kit/",

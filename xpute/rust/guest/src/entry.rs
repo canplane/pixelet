@@ -2,18 +2,8 @@
 
 //! The one call a guest runs inside, `run`, and what its host's form hands
 //! it there. The floor names the entry it calls, as a C runtime names `main`:
-//! a module exports `run` (`wasm`), a native library's thread loops on it
+//! a module exports `run` (`wasm`), a native library `xpute_run`
 //! (xpute-host `native`), and the program implements it.
-//!
-//! Every host holds the guest to one contract. The guest runs until it has
-//! nothing to do; a host may cut it at a slice's end, the quota, where the
-//! guest's tasks yield (`sched::edge`). It returns when it wants to be woken:
-//! 0 for at once, `n` ms, or `NO_WAKE` for only when something comes. A kick
-//! wakes it early: a submission, a completion, a call. A page runs the guest
-//! on its one thread in turns its strobe grants, each cut at the turn's
-//! quota (@xpute/host `Strobe`); a native host runs it on its own thread,
-//! again at once where it answered 0, and asleep until its time or a kick
-//! otherwise (xpute-host native/thread.rs).
 
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;
@@ -38,11 +28,6 @@ pub struct BootInfo {
     /// form's host may block taking one (xpute-gpu `admit`); none where every
     /// frame is admitted (a page, whose browser paces its frames).
     pub admit: Option<fn() -> bool>,
-    /// What runs the stream the guest has just published at once, on the
-    /// guest's thread, rung as END is stored (`ipc::stream`, xpute-gpu
-    /// `host::native::publish`); none where the host runs it as the turn
-    /// returns (a page).
-    pub publish: Option<fn()>,
 }
 
 /// A turn of `quota_ms`, answering when the guest wants the next, in ms
@@ -56,7 +41,6 @@ pub fn run(quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
         let b = boot();
         crate::clock::set(b.clock);
         crate::hostcall::set(b.hostcall);
-        crate::ipc::stream::on_publish(b.publish);
     }
     entry(quota_ms, boot)
 }

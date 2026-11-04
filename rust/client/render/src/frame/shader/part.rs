@@ -39,12 +39,11 @@ pub const SHADER_SCREEN_RAY: u32 = 24;
 /// for their walk again, by hand (cast.wgsl): its one compute entry.
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
-/// generated with the cast from pxl-engine's `fill::level` and
-/// `clipmap::join`: its one compute entry.
+/// pxl-engine's `fill::level` and `clipmap::join` by hand (bound.wgsl): its
+/// one compute entry.
 pub const SHADER_BOUND: u32 = 26;
 /// Each newly held brick's columns' ground tops off its samples,
-/// generated with the cast from pxl-engine's `ground::height`: its one
-/// compute entry.
+/// pxl-engine's `fill::heights` by hand (height.wgsl): its one compute entry.
 pub const SHADER_HEIGHT: u32 = 27;
 /// The decor the ground generates in the eye's clip levels, a record a thread, on its
 /// column's surface and posed (decor_pose.wgsl): its one compute entry.
@@ -63,8 +62,8 @@ pub const SHADER_WAY: u32 = 32;
 /// `SHADER_GENERATION_THIN`'s and `SHADER_GENERATION`'s dispatches: its one
 /// compute entry.
 pub const SHADER_GENERATION_MARK: u32 = 33;
-/// The eye's clip levels folded over their bricks, generated with the cast
-/// from pxl-engine's `clipmap::fold`: its one compute entry.
+/// The eye's clip levels folded over their bricks, pxl-engine's
+/// `clipmap::fold` by hand (fold.wgsl): its one compute entry.
 pub const SHADER_FOLD: u32 = 34;
 /// A light's share of the air's volume, a column of froxels a workgroup
 /// (atmos_froxel.wgsl): its one compute entry.
@@ -352,9 +351,29 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_CAST
     &["walk_word", "tile_word", "walk_node", "side", "cast"],
     // SHADER_BOUND
-    &["bound.gen"],
+    &[
+        "world_word",
+        "way_word",
+        "clip",
+        "world_rule",
+        "way_rule",
+        "handed",
+        "brick",
+        "level",
+        "spans",
+        "bound",
+    ],
     // SHADER_HEIGHT
-    &["height.gen"],
+    &[
+        "world_word",
+        "way_word",
+        "fill_word",
+        "clip",
+        "handed",
+        "brick",
+        "ground_height",
+        "height",
+    ],
     // SHADER_GENERATION
     &[
         "walk_word",
@@ -363,6 +382,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "no_palette",
         "world_rule",
         "world",
@@ -411,6 +432,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_rule",
         "way_rule",
         "handed",
+        "ground_height",
         "way",
     ],
     // SHADER_GENERATION_MARK
@@ -425,7 +447,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_mark",
     ],
     // SHADER_FOLD
-    &["fold.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "seed",
+        "clip",
+        "world_rule",
+        "brick",
+        "level",
+        "fold",
+    ],
     // SHADER_ATMOS_FROXEL
     &[
         "atmos_medium",
@@ -462,6 +493,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",
@@ -482,6 +515,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",
@@ -502,6 +537,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",
@@ -531,6 +568,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "palette",
+        "brick",
+        "level",
         "walk_node",
         "side",
         "resume",
@@ -567,6 +606,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",
@@ -583,6 +624,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "no_palette",
         "world_rule",
         "world",
@@ -713,6 +756,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",
@@ -741,6 +786,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "clip",
+        "brick",
+        "level",
         "palette",
         "world_rule",
         "world",

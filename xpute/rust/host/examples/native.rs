@@ -25,8 +25,6 @@ mod program {
             clock: native::now,
             stop_hook: None,
             admit: None,
-            publish: None,
-            ready: || true,
         },
         turn
     );

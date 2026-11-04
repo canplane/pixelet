@@ -62,6 +62,7 @@ fn main() {
     std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
     std::fs::write(out.join("way_word.wgsl"), way_word()).expect("the ways' words");
     std::fs::write(out.join("decor_word.wgsl"), decor_word()).expect("decor's words");
+    std::fs::write(out.join("fill_word.wgsl"), fill_word()).expect("the fill's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -968,6 +969,23 @@ fn decor_word() -> String {
     )
 }
 
+/// What a handed brick's tops read by hand past the ways' words (height.wgsl), from
+/// pxl-engine, whose layouts they are: where its cells' palette words lie in its record,
+/// and a word's four palette indices.
+fn fill_word() -> String {
+    use pxl_engine::clipmap as clip;
+    let mut out = format!("const PALETTE_AT: u32 = {}u;\n", clip::PALETTE_AT);
+    // A cell's word's four palette indices, `dx + 2·dy` (ground.rs `palette_indices`).
+    let b = ground::PALETTE_BITS;
+    let m = (1u32 << b) - 1;
+    out += &format!(
+        "fn palette_four(w: u32) -> vec4<u32> {{ return vec4<u32>(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+        2 * b,
+        3 * b
+    );
+    out
+}
+
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.
@@ -1052,6 +1070,7 @@ fn words() -> String {
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
+        format!("const HEIGHT_SIDE: u32 = {HEIGHT_SIDE}u;\nconst LEVEL_SIDE: u32 = {LEVEL_SIDE}u;\nconst FOLD_LANES: u32 = {FOLD_LANES}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).
@@ -1332,6 +1351,8 @@ fn assemble(out: &Path) {
         "seed",
         "clip",
         "palette",
+        "brick",
+        "level",
         "world",
         "world_split",
         "world_asked",

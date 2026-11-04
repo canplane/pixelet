@@ -755,7 +755,7 @@ impl GpuHost {
                         )
                     }) as u32,
                 );
-                memory.store_release(address + 4 * (words - 1), STATUS::READY);
+                memory.set_word(address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }

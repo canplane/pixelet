@@ -1,12 +1,11 @@
 // pxl-shader/lib.rs
 
 //! The GPU's compute entries rust-gpu still makes, a module of their own each
-//! when built, over the world as the GPU holds it (world.rs) and the eye it is
-//! cast from (eye.rs): the cells' starts, written once over the observer it
-//! casts for (observer.rs, beam.rs), the missed pixels' hits (cast.rs) through
-//! the observed pyramid (pyramid.rs), their image bound only where rays.rs lets
-//! it be, the light's head (light.rs) and each handed brick's ground
-//! (ground.rs). An entry is named by `entry_point_name`, never by its module's
+//! when built, over the eye they are cast from (eye.rs): the cells' starts,
+//! written once over the observer it casts for (observer.rs, beam.rs), the
+//! missed pixels' hits (cast.rs) through the observed pyramid (pyramid.rs),
+//! their image bound only where rays.rs lets it be, and the light's head
+//! (light.rs). An entry is named by `entry_point_name`, never by its module's
 //! path, so each keeps the name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
@@ -16,20 +15,16 @@
 mod beam;
 mod rays;
 mod eye;
-mod ground;
 mod pyramid;
 mod observer;
 mod light;
-mod world;
 
 use rays::cast;
 
 pub use beam::cell_cs;
 pub use cast::{hit_faces_cs, hit_lead_cs};
 pub use eye::Eye;
-pub use ground::{bound_cs, height_cs, fold_cs};
 pub use light::Head;
-pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};
 

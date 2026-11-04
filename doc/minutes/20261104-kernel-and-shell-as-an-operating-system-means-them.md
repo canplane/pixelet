@@ -141,35 +141,6 @@ What the session found in the code while this was settled:
   edges and the device's numbers. The edges and the surface format are
   xpute's to take.
 
-## The next day: a unikernel on a VM
-
-On 2026-11-05 the user set the model the conventions are taken from:
-
-- **The kernel is a unikernel on a virtual machine.** The app and the
-  library OS it needs are one image: `pxl-kernel` linked with `xpute-guest`
-  (its scheduler, door, memory and stop), `guest.wasm` on a page and a
-  static library on a device, as MirageOS and Unikraft build theirs. The
-  host is its VMM: it implements the devices and gives the CPU time, as a
-  VMM gives a vCPU's. A kernel holding the app's logic is the unikernel's
-  convention, so `kernel` stays the name.
-- **The shell is the client outside the VM**, as an application on the host
-  reaches a guest's service over virtio-vsock: a unikernel has no userspace.
-  The ring pair is the device between them; its roles (the host writes SQ,
-  the guest completes on CQ) and io_uring's two rules stay.
-- **What crosses to a device follows virtio.** A device's queue is the
-  guest's to submit to and the host's to complete (the GPU stream, the
-  files); memory a request names is the device's until its completion; a
-  position never moves back; a word the host writes later for the guest is
-  published with release after what it guards and read with acquire before
-  it.
-- **Whether the kernel needs a GPU, or files, is the kernel's to decide.**
-  The machine asks (`gpu`, `fs`) and the host attaches what it asked; a boot
-  that backs a device the machine did not ask for, or none it did, is
-  refused, and an unattached device's command ENODEV.
-- **The names are kernel, shell and host** in pixelet, and guest and host in
-  xpute. core and ui, the documents' aliases for kernel and shell, go. A
-  first reading of the day, Linux in a VM, was replaced by this one.
-
 ## Overturned the same day
 
 Taken in the morning and given up by evening, kept here so no record reads
@@ -237,7 +208,7 @@ them as standing:
   to be published next, for other programs, the same reason `kit` is kept.
 - xpute's README and ARCHITECTURE, behind all of this.
 
-## What was done (`77f7bdae0`)
+## What was done (uncommitted on `main` at the end)
 
 - **The machine** (`machine.json` in the guest crate, its schema
   `xpute/spec/machine.schema.json`): memory, stack, rings, the GPU's request.

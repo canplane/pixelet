@@ -5,7 +5,6 @@
 //! reused before the list runs.
 
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::held;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
@@ -120,11 +119,7 @@ pub struct DrawList {
     frees: usize,
     rewrites: Vec<u32>,
     draws: Vec<u32>,
-    /// The frame's uniforms, written into whichever of the two the host
-    /// does not hold (gpu/api.rs `held`): the renderer hands them where
-    /// they lie.
     uniforms: Vec<f32>,
-    other_uniforms: Vec<f32>,
     next_handle: u32,
     taken: Vec<u32>,
     /// Where each actor drawn stands, units from the eye (`stand`).
@@ -136,7 +131,8 @@ pub struct Lists<'a> {
     pub rewrites: &'a [u32],
     pub frees: &'a [u32],
     pub draws: &'a [u32],
-    /// Handed where they lie (`DrawList::begin_frame`).
+    /// Read where they lie, unwritten until the page replays the turn: the
+    /// list begins again only in the next turn's `begin_frame`.
     pub uniforms: &'a [f32],
     /// Where each actor drawn stands, units from the eye, as its draw is
     /// placed (`stand`).
@@ -212,11 +208,6 @@ impl DrawList {
     }
 
     pub fn begin_frame(&mut self) {
-        if held(&self.uniforms) {
-            core::mem::swap(&mut self.uniforms, &mut self.other_uniforms);
-        }
-        // One frame a hand-off hands them, so the host holds one at most.
-        xpute_kit::ensure!(!held(&self.uniforms), EBUSY);
         self.draws.clear();
         self.uniforms.clear();
         self.stands.clear();

@@ -3,18 +3,17 @@
 //! The GPU's host beside a guest linked into its own process (xpute-host
 //! native), and its C ABI under xpute's names (`native_abi!`), on Android
 //! under the Kotlin class `xpute.Gpu` as well (`jni`): the device opened once
-//! and held, a platform's window bound to a guest's surface and let go, the
-//! stream run as the guest publishes it, and a completion that kicks the
-//! guest. The host is touched on the guest's thread alone (`Guest::run`, and
-//! the guest's own calls into `publish` and `admit`), where its `Global` is
-//! sound, so there is one a process, as there is one guest, and no program's
-//! prefix.
+//! and held, a platform's window bound to a guest's surface and let go, and
+//! what a completion calls to ask a turn. The host is touched on the guest's thread
+//! alone (`Guest::run`), where its `Global` is sound, so there is one a
+//! process, as there is one guest, and no program's prefix.
 
 #[cfg(target_os = "android")]
 pub mod jni;
 
 use core::ffi::c_void;
 use core::ptr::NonNull;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::OnceLock;
 
 use xpute_guest::global::Global;
@@ -35,6 +34,9 @@ static DEVICE: Global<Option<Device>> = Global::new();
 /// The guest the device was opened for, idle while a surface is configured
 /// off its thread (`configure`).
 static GUEST: OnceLock<Guest> = OnceLock::new();
+
+/// What `wake_on` was given, as an address; 0 for none.
+static WAKE: AtomicUsize = AtomicUsize::new(0);
 
 /// Where a native guest's surfaces are configured, for its `Config`: on an
 /// Apple platform's main thread while the guest is idle; elsewhere on the
@@ -69,8 +71,8 @@ fn device() -> Option<&'static mut Device> {
     DEVICE.get(|| None).as_mut()
 }
 
-/// The host once the device is open, for the program's own calls: on the
-/// guest's thread alone.
+/// The host once the device is open, for the program's own calls around a
+/// turn: on the guest's thread alone.
 pub fn host() -> Option<&'static mut GpuHost> {
     device().map(|d| &mut d.host)
 }
@@ -86,34 +88,29 @@ fn configure() {
     }
 }
 
-/// The guest's memory as the host reads and writes it, on the guest's
-/// thread.
+/// The guest's memory as the host reads and writes it between turns.
 fn view(guest: Guest) -> Memory<'static> {
     let (base, bytes) = guest.mem();
-    // SAFETY: the memory, reserved for the process's life; on the guest's
-    // thread, before a turn or inside the guest's publish, where the guest
-    // holds no reference into a range it has handed the host: the stream
-    // and what its records name (xpute-guest ipc/stream.rs R3), and a word
-    // the host answers (R4).
+    // SAFETY: the memory, reserved for the process's life; at a turn's edge,
+    // on the guest's thread, where nothing holds a reference into a range
+    // the guest names.
     unsafe { Memory::from_raw(base, bytes) }
 }
 
-/// Before each turn, on the guest's thread: what the device has answered
-/// since the last, written into the memory before the turn reads it.
-pub fn poll(guest: Guest) {
+/// A turn's leading edge, on the guest's thread: what the device has
+/// answered since the last, written into the memory before the turn reads
+/// it.
+pub fn before_turn(guest: Guest) {
     if let Some(h) = host() {
         h.poll(&mut view(guest));
     }
 }
 
-/// The guest has just published the stream at `stream_at`, END stored with
-/// release (xpute-guest `BootInfo::publish`), on its thread: its records run
-/// on the device once END is loaded with acquire, and its frames shown, then
-/// END stored back to 0 with release after the last record has read what it
-/// names (`GpuHost::run`); before a device is open, the stream handed back
-/// unrun, so the guest is never held and no record waits for a device that
-/// answers later.
-pub fn publish(guest: Guest, stream_at: u32) {
+/// A turn's trailing edge, on the guest's thread: the calls the turn wrote
+/// into the stream at `stream_at` run on the device, and its frames shown;
+/// before a device is open, the stream handed back unrun, so the guest is
+/// never held and no record waits for a device that answers later.
+pub fn after_turn(guest: Guest, stream_at: u32) {
     match host() {
         Some(h) => {
             h.run(&mut view(guest), stream_at);
@@ -126,10 +123,25 @@ pub fn publish(guest: Guest, stream_at: u32) {
 /// The host's admission (`crate::admit`), handed the guest with its boot
 /// (xpute-guest `BootInfo::admit`): a frame while the host admits one
 /// (`GpuHost::admit`), so taking a surface's texture never blocks the
-/// guest's thread, which a caller may be waiting on (xpute-host native
-/// `ring`); every frame before the device opens.
+/// caller waiting for the turn (xpute-host native `Guest::run`); every frame
+/// before the device opens.
 pub fn admit() -> bool {
     host().is_none_or(|h| h.admit())
+}
+
+/// `f` is what a completion calls to ask a turn, from whichever thread
+/// learned of it (`GpuHost::new`'s `wake`).
+pub fn wake_on(f: extern "C" fn()) {
+    WAKE.store(f as usize, Ordering::Release);
+}
+
+fn wake() {
+    let f = WAKE.load(Ordering::Acquire);
+    if f != 0 {
+        // SAFETY: an `extern "C" fn()` `wake_on` was given, stored as its address.
+        let f: extern "C" fn() = unsafe { core::mem::transmute(f) };
+        f();
+    }
 }
 
 /// What the exports below answer besides 0, done: the C ABI's numbers, which
@@ -163,7 +175,7 @@ pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
             device,
             queue,
         } = super::open(ask)?;
-        let host = GpuHost::new(adapter, device, queue, cfg, xpute_host::native::kick);
+        let host = GpuHost::new(adapter, device, queue, cfg, wake);
         DEVICE.set(Some(Device { instance, host }));
         Ok(())
     });
@@ -235,6 +247,8 @@ pub fn unbind(guest: Guest, handle: u32) {
 /// - `xpute_gpu_open(void) -> int32_t`: opens the device, 0 when it is open,
 ///   `NO_DEVICE` when none opened as asked, after what refused it is said
 ///   (`say_refused`).
+/// - `xpute_gpu_wake_on(void (*f)(void))`: `f` asks the platform's loop for a
+///   turn, from whichever thread learned of a completion.
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`:
 ///   binds the guest's surface `handle` to `window` (`bind`), `NO_SURFACE`
 ///   for a null one; on an Apple platform and Android, whose windows
@@ -243,12 +257,12 @@ pub fn unbind(guest: Guest, handle: u32) {
 ///
 /// On Android it also exports them to JNI under the Kotlin class `xpute.Gpu`
 /// (`jni`): `open(): Boolean`, `surfaceBind(handle: Int, surface: Surface): Int`
-/// and `surfaceUnbind(handle: Int)`. A completion kicks the guest (xpute-host
-/// native `kick`).
+/// and `surfaceUnbind(handle: Int)`, and calls back its static `wake()` for a
+/// completion.
 ///
 /// `guest` is the guest's (`native_abi!`'s `guest`), and `ask` and `cfg` the
 /// program's for the device (`Ask`, `Config`). `host()` is the program's for
-/// its own calls.
+/// its own calls around a turn.
 #[macro_export]
 macro_rules! native_abi {
     ($guest:expr, $ask:expr, $cfg:expr $(,)?) => {
@@ -287,6 +301,11 @@ macro_rules! native_abi {
             xpute_gpu_native::open()
         }
 
+        #[no_mangle]
+        pub extern "C" fn xpute_gpu_wake_on(f: extern "C" fn()) {
+            $crate::host::native::wake_on(f);
+        }
+
         /// # Safety
         /// `window` is null or a live window of the platform's kind, which
         /// its owner keeps until it has unbound the surface.
@@ -310,10 +329,11 @@ macro_rules! native_abi {
         #[cfg(target_os = "android")]
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_open(
-            _env: *mut ::xpute_host::jni::sys::JNIEnv,
-            _this: ::xpute_host::jni::sys::jobject,
+            env: *mut ::xpute_host::jni::sys::JNIEnv,
+            this: ::xpute_host::jni::sys::jobject,
         ) -> ::xpute_host::jni::sys::jboolean {
-            ::xpute_host::jni::sys::jboolean::from(xpute_gpu_native::open() == 0)
+            // SAFETY: the environment and object JNI called with.
+            unsafe { $crate::host::native::jni::open(env, this, xpute_gpu_native::open) }
         }
 
         /// # Safety
@@ -348,9 +368,9 @@ macro_rules! native_abi {
 /// A guest of `machine` (its `MACHINE`) linked into this process with the
 /// GPU's host beside it, the form xpute-guest's `guest!` expands to off
 /// WebAssembly when it is given the GPU's numbers: xpute-host's
-/// `native_guest!` with this host its device (`poll` before each turn,
-/// `publish` over the stream at the machine's `gpu_at` as the guest rings,
-/// and its admission, `admit`), and `native_abi!` with the device the
+/// `native_guest!`, each turn between this host's edges (`before_turn`, and
+/// `after_turn` over the stream at the machine's `gpu_at`) and the guest
+/// handed its admission (`admit`), and `native_abi!` with the device the
 /// machine's GPU socket asks for (`Ask::of`) and `numbers` made a `Config`
 /// with the platform's defaults (`config`). The program's crate depends on
 /// xpute-guest and xpute-host besides this crate.
@@ -361,9 +381,9 @@ macro_rules! native_guest {
             $machine,
             $fixed_bytes,
             $entry,
-            device: ::xpute_host::native::Device {
-                poll: $crate::host::native::poll,
-                publish: |guest| $crate::host::native::publish(guest, $machine.gpu_at()),
+            edges: ::xpute_host::native::Edges {
+                before: $crate::host::native::before_turn,
+                after: |guest| $crate::host::native::after_turn(guest, $machine.gpu_at()),
                 admit: Some($crate::host::native::admit),
             }
         );

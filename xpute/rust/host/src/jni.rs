@@ -3,24 +3,22 @@
 //! A native guest as an Android app reaches it: the C ABI's calls under the
 //! names JNI looks for, for the Kotlin class `xpute.Guest`, whose `external`
 //! functions they are (`native_guest!`). Only JNI's own values cross: a
-//! number, an array of numbers, and the memory as a direct buffer over the
-//! whole of it, which the app hands its JavaScript as it is. JNI's and the
-//! NDK's bindings are re-exported (`sys`, `ndk`), so a program's expansion
-//! and xpute-gpu's name them through this crate.
+//! number, and the memory as a direct buffer over the whole of it, which the
+//! app hands its JavaScript as it is. JNI's and the NDK's bindings are
+//! re-exported (`sys`, `ndk`), so a program's expansion and xpute-gpu's
+//! name them through this crate.
 
-use std::sync::OnceLock;
+use std::cell::Cell;
+use std::sync::Once;
 
 pub use jni_sys as sys;
 pub use ndk_sys as ndk;
 
-use sys::{
-    jclass, jint, jmethodID, jobject, jvalue, JNIEnv, JNINativeInterface_, JavaVM, JNI_OK,
-    JNI_VERSION_1_6,
-};
+use sys::{jdouble, jint, jobject, jvalue, JNIEnv, JNINativeInterface_};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::native::{answer_with, heard as heard_of, notify_on, Guest};
+use crate::native::{answer_with, Guest};
 
 /// JNI's functions, as the environment a call is given holds them.
 ///
@@ -31,93 +29,53 @@ pub unsafe fn env<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
     unsafe { &**env }
 }
 
-/// The VM, `xpute.Guest`'s class held past the call, and its static
-/// `hostcall(I)I` and `notified()V`. Taken on a thread Java made, since a
-/// thread the host made finds no class of the app's by name.
-struct Class {
-    vm: *mut JavaVM,
-    class: jclass,
-    hostcall: jmethodID,
-    notified: jmethodID,
+thread_local! {
+    /// The environment and `xpute.Guest` of the call waiting in `run`, which
+    /// answers the turn's hostcalls (`hostcall`).
+    #[allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion")]
+    static INTR: Cell<Option<(*mut JNIEnv, jobject)>> = const { Cell::new(None) };
 }
 
-// SAFETY: JNI's VM is one for the process and may be used from any thread; a
-// global reference and a method ID stay valid in every thread until let go.
-unsafe impl Send for Class {}
-// SAFETY: as for `Send`: nothing in it is changed once it is made.
-unsafe impl Sync for Class {}
-
-static CLASS: OnceLock<Class> = OnceLock::new();
-
-/// `xpute.Guest`'s class taken from `this`, once, and its methods made what
-/// answers the guest's hostcalls (`hostcall`) and is told the guest's news
-/// (`notify`).
+/// `Guest.run`: a turn (`turn`, the program's `xpute_run`), its hostcalls
+/// answered on this thread by `Guest.hostcall`. `this` is `xpute.Guest`.
 ///
 /// # Safety
-/// `e` and `this` are what JNI called with, `this` an `xpute.Guest`.
-pub unsafe fn hold(e: *mut JNIEnv, this: jobject) {
-    if CLASS.get().is_some() {
-        return;
-    }
-    // SAFETY: the environment JNI called this with.
-    let j = unsafe { env(e) };
-    let mut vm: *mut JavaVM = core::ptr::null_mut();
-    // SAFETY: JNI's own calls on the environment it called with; the class
-    // is held globally, so it outlives this call.
-    unsafe {
-        if j.GetJavaVM.or_bug(Errno::ENOSYS)(e, &raw mut vm) != JNI_OK {
-            return;
-        }
-        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(
-            e,
-            j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this),
-        );
-        let method = |name: &core::ffi::CStr, sig: &core::ffi::CStr| {
-            j.GetStaticMethodID.or_bug(Errno::ENOSYS)(e, class, name.as_ptr(), sig.as_ptr())
-        };
-        let hostcall = method(c"hostcall", c"(I)I");
-        let notified = method(c"notified", c"()V");
-        if hostcall.is_null() || notified.is_null() {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-            return;
-        }
-        let _ = CLASS.set(Class {
-            vm,
-            class,
-            hostcall,
-            notified,
-        });
-    }
-    answer_with(Some(hostcall));
-    notify_on(Some(notify));
+/// `env` and `this` are what JNI called with.
+pub unsafe fn run(env: *mut JNIEnv, this: jobject, turn: impl FnOnce() -> jdouble) -> jdouble {
+    static ANSWER: Once = Once::new();
+    ANSWER.call_once(|| answer_with(Some(hostcall)));
+    INTR.with(|c| c.set(Some((env, this))));
+    let wake = turn();
+    INTR.with(|c| c.set(None));
+    wake
 }
 
-/// `Guest.hostcall`, on the thread that answers it, one Java made and so
-/// attached (`answer_with`): ENOSYS on a thread JNI does not know, EIO where
-/// Kotlin threw.
+/// `Guest.hostcall`, the static `hostcall(I)I` of `xpute.Guest`, on the
+/// thread waiting in `run`, through the environment it was called with
+/// (`answer_with`): ENOSYS outside one, EIO where Kotlin threw.
 extern "C" fn hostcall(at: u32) -> i32 {
-    let Some(&Class {
-        vm,
-        class,
-        hostcall,
-        ..
-    }) = CLASS.get()
-    else {
+    let Some((e, this)) = INTR.with(Cell::get) else {
         return Errno::ENOSYS as i32;
     };
-    let mut e: *mut JNIEnv = core::ptr::null_mut();
-    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class and method JNI gave in `hold`, the class held.
+    // SAFETY: the environment and object JNI called `run` with, which wait
+    // in that call on this thread; JNI's own calls on them.
     unsafe {
-        let get = (**vm).GetEnv.or_bug(Errno::ENOSYS);
-        if get(vm, (&raw mut e).cast(), JNI_VERSION_1_6) != JNI_OK {
+        let j = env(e);
+        let class = j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this);
+        let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(
+            e,
+            class,
+            c"hostcall".as_ptr(),
+            c"(I)I".as_ptr(),
+        );
+        if method.is_null() {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
             return Errno::ENOSYS as i32;
         }
-        let j = env(e);
         let res = j.CallStaticIntMethodA.or_bug(Errno::ENOSYS)(
             e,
             class,
-            hostcall,
+            method,
             &jvalue { i: at as jint },
         );
         if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
@@ -125,56 +83,6 @@ extern "C" fn hostcall(at: u32) -> i32 {
             return Errno::EIO as i32;
         }
         res
-    }
-}
-
-/// `Guest.notified`, from the guest's thread (`notify_on`). JNI may be called
-/// only from a thread attached to the VM, so the thread is attached, for good
-/// and as a daemon: it lives as long as the guest does, and a daemon keeps no
-/// VM from exiting.
-extern "C" fn notify() {
-    let Some(&Class {
-        vm,
-        class,
-        notified,
-        ..
-    }) = CLASS.get()
-    else {
-        return;
-    };
-    let mut e: *mut JNIEnv = core::ptr::null_mut();
-    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class and method JNI gave in `hold`, the class held.
-    unsafe {
-        let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
-        if attach(vm, (&raw mut e).cast(), core::ptr::null_mut()) != JNI_OK {
-            return;
-        }
-        let j = env(e);
-        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, notified, core::ptr::null());
-        // What Kotlin threw has no Java caller here to reach.
-        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-        }
-    }
-}
-
-/// `Guest.heard`: the wake and the longest turn since it was last asked
-/// (`native::heard`), as a `double[]` of two.
-///
-/// # Safety
-/// `e` is the environment JNI called with.
-pub unsafe fn heard(e: *mut JNIEnv) -> jobject {
-    let (wake, turn_ms) = heard_of();
-    // SAFETY: the environment JNI called this with; an array of two made
-    // here and filled with two.
-    unsafe {
-        let j = env(e);
-        let out = j.NewDoubleArray.or_bug(Errno::ENOSYS)(e, 2);
-        if !out.is_null() {
-            j.SetDoubleArrayRegion.or_bug(Errno::ENOSYS)(e, out, 0, 2, [wake, turn_ms].as_ptr());
-        }
-        out
     }
 }
 

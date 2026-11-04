@@ -10,7 +10,7 @@ use xpute_kit::status::errno::Errno;
 use crate::abi::fs::FsOpened;
 use crate::abi::handle::Table;
 use crate::hostcall::answer_of;
-use crate::ipc::door::{Door, Reading};
+use crate::ipc::door::Door;
 use crate::ipc::fs::spec::flag;
 use crate::ipc::fs::Fd;
 
@@ -85,18 +85,22 @@ impl<O: Copy, const N: usize> Files<O, N> {
     }
 
     /// The file an open answered with `bytes`, read whole into the heap and
-    /// closed: its reading, whose bytes `Reading::take` hands over once the
-    /// host's head has passed it, or ENOMEM where the heap has no room for
-    /// them, nothing read.
-    pub fn read_whole(&mut self, door: &Door, fd: Fd, bytes: u32) -> Result<Reading, Errno> {
-        let mut buf = Vec::new();
-        let room = buf.try_reserve_exact(bytes as usize);
-        let read = room.map(|()| {
-            buf.resize(bytes as usize, 0);
-            door.read_buf(fd, buf)
-        });
+    /// closed: its buffer, filled once the host's head has passed the read,
+    /// or ENOMEM where the heap has no room for it, nothing read.
+    ///
+    /// # Safety
+    /// As `Door::read`: the buffer is neither read, grown nor dropped before
+    /// the host's head has passed the read.
+    pub unsafe fn read_whole(&mut self, door: &Door, fd: Fd, bytes: u32) -> Result<Vec<u8>, Errno> {
+        let mut held = Vec::new();
+        let room = held.try_reserve_exact(bytes as usize);
+        if room.is_ok() {
+            held.resize(bytes as usize, 0);
+            // SAFETY: the caller's.
+            unsafe { door.read(fd, &mut held) };
+        }
         self.close(door, fd);
-        read.map_err(|_| Errno::ENOMEM)
+        room.map(|()| held).map_err(|_| Errno::ENOMEM)
     }
 
     pub fn owner(&self, fd: Fd) -> Option<&O> {
