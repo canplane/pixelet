@@ -212,7 +212,7 @@ pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
 }
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
-/// light's slots alike (pxl-shader light.rs `light_cs`): its place off the count
+/// light's slots alike (pxl-render light.wgsl `light_cs`): its place off the count
 /// in its dispatch's words `args` (pxl-engine `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it by the place that opens each
 /// (`ray::MISS_ARGS_LIST`, `opens`); the first past the list's `room` has

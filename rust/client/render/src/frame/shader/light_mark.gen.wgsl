@@ -42,10 +42,10 @@ struct type_29 {
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(11)
-var<uniform> global_2: type_20;
 @group(0) @binding(12)
-var<storage, read_write> global_3: type_16;
+var<storage, read_write> global_2: type_16;
+@group(0) @binding(11)
+var<uniform> global_3: type_20;
 @group(0) @binding(3)
 var global_4: texture_storage_2d_array<r32uint,read_write>;
 
@@ -119,7 +119,7 @@ fn function_() {
     var phi_629_: bool;
 
     let _e40 = global;
-    let _e42 = arrayLength((&global_3.member));
+    let _e42 = arrayLength((&global_2.member));
     let _e43 = textureDimensions(global_4);
     let _e47 = global_1.member.member_8[0u];
     let _e54 = global_1.member.member_8[1u];
@@ -231,9 +231,9 @@ fn function_() {
     }
     let _e235 = type_29(phi_257__f_member, vec2<i32>(phi_257__f_member_1_i0, phi_257__f_member_1_i1));
     if _e235.member {
-        let _e242 = global_2.member.member[0u][3u];
+        let _e242 = global_3.member.member[0u][3u];
         let _e243 = bitcast<u32>(_e242);
-        let _e248 = global_2.member.member[0u][0u];
+        let _e248 = global_3.member.member[0u][0u];
         let _e249 = bitcast<u32>(_e248);
         let _e250 = (_e243 / 4u);
         let _e252 = (_e243 / 8u);
@@ -278,7 +278,7 @@ fn function_() {
         if (_e290 != 4294967295u) {
             let _e292 = (_e290 < _e42);
             if _e292 {
-                let _e295 = global_3.member[_e290];
+                let _e295 = global_2.member[_e290];
                 phi_325_ = _e295;
             } else {
                 phi_325_ = 0u;
@@ -286,7 +286,7 @@ fn function_() {
             let _e297 = phi_325_;
             if (_e297 != _e249) {
                 if _e292 {
-                    global_3.member[_e290] = _e249;
+                    global_2.member[_e290] = _e249;
                 }
             }
         }
@@ -294,7 +294,7 @@ fn function_() {
         loop {
             let _e302 = phi_335_;
             if (_e302 < 4i) {
-                let _e308 = global_2.member.member[1u][2u];
+                let _e308 = global_3.member.member[1u][2u];
                 let _e309 = (_e308 != 0i);
                 if _e309 {
                     switch _e302 {
@@ -497,7 +497,7 @@ fn function_() {
                                                         if (_e535 != 4294967295u) {
                                                             let _e537 = (_e535 < _e42);
                                                             if _e537 {
-                                                                let _e540 = global_3.member[_e535];
+                                                                let _e540 = global_2.member[_e535];
                                                                 phi_616_ = _e540;
                                                             } else {
                                                                 phi_616_ = 0u;
@@ -505,7 +505,7 @@ fn function_() {
                                                             let _e542 = phi_616_;
                                                             if (_e542 != _e249) {
                                                                 if _e537 {
-                                                                    global_3.member[_e535] = _e249;
+                                                                    global_2.member[_e535] = _e249;
                                                                 }
                                                             }
                                                         }

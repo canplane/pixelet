@@ -67,10 +67,17 @@ struct In {
 /// No node entered: what the walk reads as no answer.
 const KIND_NONE = 0xffffffffu;
 
-/// The node `c` at `zoom`, asked at `zooms`: off the slot that keeps it, unless this pass
-/// is still writing it; else of the world, and kept where this walk claims a slot
-/// (`Writing::node`).
+/// The node `c` at `zoom`, asked at `zooms`, what is handed it found from the top (`ask_handed`).
 fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
+  let a = ask_handed(world_root(zoom, c), zoom, c, zooms, true);
+  return In(a.kind, a.asset);
+}
+
+/// The node `c` at `zoom`, handed `handed`, asked at `zooms`: off the slot that keeps it, unless
+/// this pass is still writing it; else of the world, and kept where this walk claims a slot
+/// (`Writing::node`). What it hands its children: the slot's where one kept it. One asked of
+/// the world counts in `ASKED_TALLY` where `counts`.
+fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
   let tag = walk_tag();
   let want = zooms << TAG_BITS;
   // The slot it would write and the key it read there: the node's own, else a free one,
@@ -88,11 +95,11 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
         if ((slot_key & KEY_ZOOMS) == want) {
           if ((slot_key & ~KEY_ZOOMS) != tag) {
             let at = w + W_INHERITANCE;
-            let handed = vec4<u32>(pyramid_word(at), pyramid_word(at + 1u), pyramid_word(at + 2u), pyramid_word(at + 3u));
+            let kept = vec4<u32>(pyramid_word(at), pyramid_word(at + 1u), pyramid_word(at + 2u), pyramid_word(at + 3u));
             let word = pyramid_word(w + W_KIND);
             let asset = vec2<u32>(pyramid_word(w + W_ASSET), pyramid_word(w + W_ASSET + 1u));
-            if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, zooms, asset, handed, zoom, c)) {
-              return In(word & KIND_MASK, asset);
+            if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, zooms, asset, kept, zoom, c)) {
+              return Answer(word & KIND_MASK, asset, kept);
             }
           }
           to = NONE;
@@ -117,10 +124,10 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
       key = pyramid_word(ENTRIES_AT + to * ENTRY_WORDS);
     }
   }
-  if (pyramid_word(TALLY_ON) != 0u) {
+  if (counts && pyramid_word(TALLY_ON) != 0u) {
     atomicAdd(&pyramid[ASKED_TALLY], 1u);
   }
-  let a = world_node(world_root(zoom, c), zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
+  let a = world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
   if (to != NONE && key != CLAIMED) {
     let w = ENTRIES_AT + to * ENTRY_WORDS;
     if (claim(w, key)) {
@@ -138,7 +145,7 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
       atomicStore(&pyramid[w], tag | want);
     }
   }
-  return In(a.kind, a.asset);
+  return a;
 }
 
 /// The zooms the ray, where it is at `t`, asks of the node, far then near over `ZOOM_BITS`

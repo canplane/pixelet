@@ -2,43 +2,27 @@
 
 //! The world's depth from the light into its clipmap (pxl-engine `light`),
 //! every slot each frame it is cast, by the passes the eye's rays take,
-//! the shadow map their observer (`Map`; observer.rs): the beam rays and
-//! their cells' starts, the samples and their boxes, which the raster
-//! draws, each the entry the eye's takes (beam.rs `beam_cs`, `cell_cs`;
-//! raster.rs `sample_box_cs`; pxl-render sample.wgsl) handed the light's head (`Head`),
-//! every walk at its tile's band (`Light::band`); every slot taking its
-//! visible sample or the sky (`light_cs`) and the rest walked
-//! (pxl-render light_miss.wgsl); and the tiles a slide of the box keeps
-//! (`light_slide_cs`).
+//! the shadow map their observer (`Map`; observer.rs): the samples' boxes,
+//! which the raster draws, the entry the eye's takes (raster.rs
+//! `sample_box_cs`) handed the light's head (`Head`), every walk at its
+//! tile's band (`Light::band`); and the tiles a slide of the box keeps
+//! (`light_slide_cs`). The beam rays, their cells' starts, the samples,
+//! every slot taking its visible sample or the sky and the rest walked are
+//! pxl-render's by hand (light_beam.wgsl, light_cell.wgsl, sample.wgsl,
+//! light.wgsl, light_miss.wgsl), `Map` read there as light_list.wgsl.
 
 use pxl_content::Pixelet;
 use pxl_engine::cast::{self, Detail, Spacing};
 use pxl_engine::fill::put;
 use pxl_engine::light::{Light, Starts};
 use pxl_engine::{at, pyramid, tally, Zoom};
-use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
-use spirv_std::{spirv, Image};
+use spirv_std::glam::{IVec4, UVec3, Vec4};
+use spirv_std::spirv;
 
 use crate::beam::Words;
-use crate::cast::{add_cnt, enlist};
 use crate::decor::Instances;
 use crate::eye::Eye;
-use crate::observer::{self, Aim, Level, Observer, Take};
-
-/// The world's depth from the light, a slot of the light's clipmap each
-/// (pxl-engine `light`): the slot's texel of the light box, and its ray
-/// from the box's near plane along the light's rays, its cell taken off the
-/// visible sample or walked through the world's one query to the cell that
-/// fills (`cast::first`) as the eye's are, and the word it leaves there,
-/// every frame the map is cast. Its one layer read and written in place,
-/// the one format child group WebGPU lets a shader do both to, as the rays' are.
-type LightWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
-
-/// The visible sample at each texel of the box, in the
-/// box's order (pxl-engine `light::Light::texel`): its sample's number
-/// (`raster::id_of`), 0 where it kept none, read as an array of one layer,
-/// as the eye's pixels read theirs.
-type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
+use crate::observer::{Aim, Level, Observer};
 
 /// What the light's cast is handed beside the eye's words, a uniform
 /// (pxl-engine `light::HEAD_VEC4S`): its number, whether it is counted,
@@ -66,10 +50,6 @@ fn starts(m: &Head) -> Starts {
         let v = m.v[pxl_engine::light::STARTS_AT + k];
         [v.x, v.y, v.z, v.w]
     })
-}
-
-fn counts(m: &Head) -> bool {
-    m.v[0].y != 0
 }
 
 /// The cast's number (`light::HEAD_CAST`).
@@ -183,20 +163,9 @@ impl Map {
         }
     }
 
-    /// Its side (`light::HEAD_SIZE`), which its slots and its list are laid
-    /// by.
-    pub(crate) fn side(&self) -> u32 {
-        self.size
-    }
-
     /// Its samples across and down, a side.
     fn across(&self) -> u32 {
         self.size / pxl_engine::param::light::SAMPLE
-    }
-
-    /// The word a slot leaves for the walk `met` of its ray.
-    fn word<A>(&self, met: &cast::Trace<A>) -> u32 {
-        pxl_engine::light::word(pxl_engine::light::depth(&self.light, met))
     }
 
     /// The zooms what `level` at `at` walks at: the band of the tile it lies
@@ -549,75 +518,6 @@ const _: () = assert!(
     pxl_engine::light::REACH_NDC == 15,
     "`light_of` reads the shadow's radius off the rays' direction's fourth word"
 );
-
-const _: () = assert!(
-    pxl_engine::light::TILE == 8,
-    "`light_cs` is a workgroup a tile, its threads a side of it"
-);
-
-/// The world's depth from the light into every slot: a workgroup a tile
-/// (`light::TILE`), a thread a slot, each taking the visible sample where its
-/// own ray enters it (observer.rs `took`), or the sky where no sample about
-/// it met anything (observer.rs `sky`), as the eye's pixels do (cast.rs
-/// `cast_cs`), and the word it leaves there; the rest listed for their walk
-/// (pxl-render light_miss.wgsl), every slot where the raster is not made yet (observer.rs
-/// `resolve`). Only the slots of the tiles the cast casts (`Map::needs`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_cs"))]
-pub fn light_cs(
-    #[spirv(workgroup_id)] group: UVec3,
-    #[spirv(local_invocation_id)] lane: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(descriptor_set = 0, binding = 15)] visibility: &Visibility,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 17)] misses: &mut [u32],
-) {
-    let t = pxl_engine::light::TILE;
-    let m = Map::of(eye, head);
-    let n = m.side();
-    let at = m.take(&*list, Level::Ray, [group.x * t + lane.x, group.y * t + lane.y]);
-    if at[0] >= n || at[1] >= n {
-        return;
-    }
-    let slot = UVec3::new(at[0], at[1], 0);
-    // A slot no receiver reads, or one an earlier cast of the epoch cast,
-    // left as it was.
-    if !m.needs(&*list, Level::Ray, at) {
-        return;
-    }
-    let aim = m.aim(at);
-    let p = m.light.texel(n, at);
-    // [naga] Fetched at u32s, as the raster wrote them.
-    let visible: UVec4 = visibility.fetch(UVec3::new(p[0], p[1], 0));
-    let (took, hit, _) = observer::resolve(&m, &*list, at, &aim, visible.x);
-    if took == Take::Sample {
-        let met = cast::Trace {
-            ends: cast::End::Hit,
-            hit,
-            visits: 0,
-        };
-        add_cnt(misses, counts(head), tally::TOOK, 1);
-        // SAFETY: within the map, bounded by its size above.
-        unsafe { light.write(slot, m.word(&met)) };
-        return;
-    }
-    if took == Take::Sky {
-        add_cnt(misses, counts(head), tally::SKY, 1);
-        // SAFETY: within the map, bounded by its size above.
-        unsafe { light.write(slot, pxl_engine::light::word(1.0)) };
-        return;
-    }
-    // Listed for its walk again as the eye's pixels are (cast.rs `enlist`):
-    // the list holds every slot, so none finds it full.
-    add_cnt(misses, counts(head), tally::WALKED, 1);
-    let at = enlist(misses, n * n, [0; 2]);
-    put(
-        list,
-        pxl_engine::light::misses_at(n) + at,
-        slot.y << 16 | slot.x,
-    );
-}
 
 /// The tiles between `a` and `b` marked stood on, where they lie within a
 /// footprint of each other (`light::FOOTPRINT_TILES`); none past it.

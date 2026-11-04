@@ -46,10 +46,10 @@ struct type_32 {
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(11)
-var<uniform> global_2: type_20;
 @group(0) @binding(12)
-var<storage, read_write> global_3: type_32;
+var<storage, read_write> global_2: type_32;
+@group(0) @binding(11)
+var<uniform> global_3: type_20;
 @group(0) @binding(21)
 var<storage, read_write> global_4: type_32;
 
@@ -147,9 +147,9 @@ fn function_() {
     var local_7: u32;
 
     let _e58 = global;
-    let _e60 = arrayLength((&global_3.member));
+    let _e60 = arrayLength((&global_2.member));
     let _e62 = arrayLength((&global_4.member));
-    let _e67 = global_2.member.member[0u][3u];
+    let _e67 = global_3.member.member[0u][3u];
     let _e68 = bitcast<u32>(_e67);
     let _e69 = (_e68 / 8u);
     if (_e58.x >= _e69) {
@@ -167,9 +167,9 @@ fn function_() {
             let _e119 = ((f32(bitcast<i32>(((_e58.y * 8u) + 4u))) + 0.5f) - _e113);
             let _e121 = ((_e105 * _e113) + 9.192389f);
             if (((_e116 * _e116) + (_e119 * _e119)) <= (_e121 * _e121)) {
-                let _e131 = global_2.member.member[0u][0u];
+                let _e131 = global_3.member.member[0u][0u];
                 let _e132 = bitcast<u32>(_e131);
-                let _e137 = global_2.member.member[0u][2u];
+                let _e137 = global_3.member.member[0u][2u];
                 let _e138 = bitcast<u32>(_e137);
                 let _e139 = -(_e77.x);
                 let _e140 = -(_e77.y);
@@ -276,7 +276,7 @@ fn function_() {
                                                     let _e270 = select(_e267, 4294967295u, _e269);
                                                     if (_e270 != 4294967295u) {
                                                         if (_e270 < _e60) {
-                                                            let _e275 = atomicLoad((&global_3.member[_e270]));
+                                                            let _e275 = atomicLoad((&global_2.member[_e270]));
                                                             phi_345_ = _e275;
                                                         } else {
                                                             phi_345_ = 0u;
@@ -368,7 +368,7 @@ fn function_() {
                 if _e338 {
                     let _e339 = (_e336 < _e60);
                     if _e339 {
-                        let _e342 = atomicLoad((&global_3.member[_e336]));
+                        let _e342 = atomicLoad((&global_2.member[_e336]));
                         phi_389_ = _e342;
                     } else {
                         phi_389_ = 0u;
@@ -376,13 +376,13 @@ fn function_() {
                     let _e344 = phi_389_;
                     if (_e344 < _e138) {
                         if _e339 {
-                            atomicStore((&global_3.member[_e336]), _e132);
+                            atomicStore((&global_2.member[_e336]), _e132);
                         }
                         let _e348 = (_e333 + _e325);
                         let _e350 = (_e69 / 8u);
                         let _e354 = ((_e348 + ((_e58.y / 8u) * _e350)) + (_e58.x / 8u));
                         if (_e354 < _e60) {
-                            atomicStore((&global_3.member[_e354]), _e132);
+                            atomicStore((&global_2.member[_e354]), _e132);
                         }
                         if (_e132 == _e138) {
                             phi_718_ = 0u;
@@ -700,7 +700,7 @@ fn function_() {
                                                                     let _e492 = local_1;
                                                                     let _e493 = (_e492 + bitcast<u32>(((_e469 * _e373) + _e479)));
                                                                     if (_e493 < _e60) {
-                                                                        let _e497 = atomicMax((&global_3.member[_e493]), _e132);
+                                                                        let _e497 = atomicMax((&global_2.member[_e493]), _e132);
                                                                         phi_611_ = _e497;
                                                                     } else {
                                                                         phi_611_ = _e132;
@@ -710,7 +710,7 @@ fn function_() {
                                                                         let _e502 = local_2;
                                                                         if (_e502 < _e60) {
                                                                             let _e506 = local_3;
-                                                                            let _e508 = atomicAdd((&global_3.member[_e506]), 1u);
+                                                                            let _e508 = atomicAdd((&global_2.member[_e506]), 1u);
                                                                             phi_622_ = _e508;
                                                                         } else {
                                                                             phi_622_ = 0u;
@@ -719,7 +719,7 @@ fn function_() {
                                                                         let _e512 = local_4;
                                                                         let _e514 = ((_e512 + 1u) + _e510);
                                                                         if (_e514 < _e60) {
-                                                                            atomicStore((&global_3.member[_e514]), ((bitcast<u32>(_e469) << bitcast<u32>(16i)) | bitcast<u32>(_e479)));
+                                                                            atomicStore((&global_2.member[_e514]), ((bitcast<u32>(_e469) << bitcast<u32>(16i)) | bitcast<u32>(_e479)));
                                                                         }
                                                                         if (_e369 == 2u) {
                                                                             let _e566 = ((_e510 + 1u) * 64u);

@@ -91,12 +91,11 @@ pub const SHADER_FORGET: u32 = 42;
 /// to the cells the pixels about them take (pxl-engine `beam::Grid::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 43;
-/// The world's depth from the light into its clipmap, generated with the cast
-/// from pxl-engine's `light`: every slot taking the visible sample, a
-/// workgroup a tile, a compute entry; that depth laid into the map
-/// (light_map.wgsl, gpu/shadow.rs); and the slots that took none walked
-/// apart (pxl-engine `light::misses_at`), by hand (light_miss.wgsl), a compute
-/// entry of its own.
+/// The world's depth from the light into its clipmap (pxl-engine `light`):
+/// every slot taking the visible sample, a workgroup a tile (light.wgsl), a
+/// compute entry; that depth laid into the map (light_map.wgsl,
+/// gpu/shadow.rs); and the slots that took none walked apart (pxl-engine
+/// `light::misses_at`, light_miss.wgsl), a compute entry of its own.
 pub const SHADER_LIGHT: u32 = 44;
 pub const SHADER_LIGHT_MAP: u32 = 45;
 pub const SHADER_LIGHT_MISS: u32 = 46;
@@ -177,8 +176,9 @@ pub const SHADER_HIT_FACES: u32 = 74;
 /// (box_args.wgsl): its one compute entry.
 pub const SHADER_BOX_ARGS: u32 = 75;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
-/// entries of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
-/// `SHADER_SAMPLE_BOX` for the light's map (pxl-shader `light_beam_cs`…).
+/// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
+/// `SHADER_SAMPLE_BOX` for the light's map (light_beam.wgsl,
+/// light_cell.wgsl, sample_light.wgsl, pxl-shader `light_sample_box_cs`).
 pub const SHADER_LIGHT_BEAM: u32 = 76;
 pub const SHADER_LIGHT_CELL: u32 = 77;
 pub const SHADER_LIGHT_SAMPLE: u32 = 78;
@@ -493,7 +493,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample",
     ],
     // SHADER_LIGHT
-    &["light.gen"],
+    &[
+        "walk_word",
+        "walk_node",
+        "side",
+        "light_aim",
+        "light_list",
+        "light",
+    ],
     // SHADER_LIGHT_MAP
     &["light_word", "light_lay", "light_map"],
     // SHADER_LIGHT_MISS
@@ -617,9 +624,32 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX_ARGS
     &["box_args"],
     // SHADER_LIGHT_BEAM
-    &["light_beam.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
+        "world",
+        "world_split",
+        "ask",
+        "light_aim",
+        "light_list",
+        "light_beam",
+    ],
     // SHADER_LIGHT_CELL
-    &["light_cell.gen"],
+    &[
+        "walk_word",
+        "walk_node",
+        "light_aim",
+        "light_list",
+        "light_cell",
+    ],
     // SHADER_LIGHT_SAMPLE
     &[
         "walk_word",

@@ -46,10 +46,10 @@ struct type_32 {
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(11)
-var<uniform> global_2: type_20;
 @group(0) @binding(8)
-var<storage, read_write> global_3: type_16;
+var<storage, read_write> global_2: type_16;
+@group(0) @binding(11)
+var<uniform> global_3: type_20;
 @group(0) @binding(14)
 var<storage, read_write> global_4: type_16;
 @group(0) @binding(16)
@@ -157,43 +157,43 @@ fn function_() {
     let _e68 = global_1.member.member_8[2u];
     let _e71 = bitcast<i32>(bitcast<u32>(_e64.w));
     let _e74 = bitcast<i32>(bitcast<u32>(_e68.w));
-    let _e79 = global_2.member.member[2u][0u];
-    let _e84 = global_2.member.member[2u][1u];
-    let _e89 = global_2.member.member[3u][0u];
-    let _e94 = global_2.member.member[3u][1u];
-    let _e99 = global_2.member.member[3u][2u];
-    let _e110 = global_2.member.member[4u][0u];
-    let _e115 = global_2.member.member[4u][1u];
-    let _e120 = global_2.member.member[4u][2u];
-    let _e131 = global_2.member.member[5u][0u];
-    let _e136 = global_2.member.member[5u][1u];
-    let _e141 = global_2.member.member[5u][2u];
-    let _e146 = global_2.member.member[6u][0u];
-    let _e151 = global_2.member.member[6u][1u];
-    let _e156 = global_2.member.member[6u][2u];
-    let _e161 = global_2.member.member[7u][0u];
-    let _e166 = global_2.member.member[7u][1u];
-    let _e171 = global_2.member.member[7u][2u];
-    let _e176 = global_2.member.member[8u][0u];
-    let _e181 = global_2.member.member[8u][1u];
-    let _e186 = global_2.member.member[8u][2u];
-    let _e191 = global_2.member.member[9u][0u];
-    let _e196 = global_2.member.member[9u][1u];
-    let _e201 = global_2.member.member[9u][2u];
-    let _e212 = global_2.member.member[10u][0u];
-    let _e217 = global_2.member.member[10u][1u];
-    let _e222 = global_2.member.member[10u][2u];
-    let _e233 = global_2.member.member[11u][0u];
-    let _e238 = global_2.member.member[11u][1u];
-    let _e243 = global_2.member.member[11u][2u];
-    let _e254 = global_2.member.member[12u][0u];
-    let _e259 = global_2.member.member[12u][1u];
-    let _e264 = global_2.member.member[12u][2u];
-    let _e275 = global_2.member.member[0u][3u];
+    let _e79 = global_3.member.member[2u][0u];
+    let _e84 = global_3.member.member[2u][1u];
+    let _e89 = global_3.member.member[3u][0u];
+    let _e94 = global_3.member.member[3u][1u];
+    let _e99 = global_3.member.member[3u][2u];
+    let _e110 = global_3.member.member[4u][0u];
+    let _e115 = global_3.member.member[4u][1u];
+    let _e120 = global_3.member.member[4u][2u];
+    let _e131 = global_3.member.member[5u][0u];
+    let _e136 = global_3.member.member[5u][1u];
+    let _e141 = global_3.member.member[5u][2u];
+    let _e146 = global_3.member.member[6u][0u];
+    let _e151 = global_3.member.member[6u][1u];
+    let _e156 = global_3.member.member[6u][2u];
+    let _e161 = global_3.member.member[7u][0u];
+    let _e166 = global_3.member.member[7u][1u];
+    let _e171 = global_3.member.member[7u][2u];
+    let _e176 = global_3.member.member[8u][0u];
+    let _e181 = global_3.member.member[8u][1u];
+    let _e186 = global_3.member.member[8u][2u];
+    let _e191 = global_3.member.member[9u][0u];
+    let _e196 = global_3.member.member[9u][1u];
+    let _e201 = global_3.member.member[9u][2u];
+    let _e212 = global_3.member.member[10u][0u];
+    let _e217 = global_3.member.member[10u][1u];
+    let _e222 = global_3.member.member[10u][2u];
+    let _e233 = global_3.member.member[11u][0u];
+    let _e238 = global_3.member.member[11u][1u];
+    let _e243 = global_3.member.member[11u][2u];
+    let _e254 = global_3.member.member[12u][0u];
+    let _e259 = global_3.member.member[12u][1u];
+    let _e264 = global_3.member.member[12u][2u];
+    let _e275 = global_3.member.member[0u][3u];
     let _e276 = bitcast<u32>(_e275);
-    let _e281 = global_2.member.member[0u][0u];
+    let _e281 = global_3.member.member[0u][0u];
     let _e282 = bitcast<u32>(_e281);
-    let _e287 = global_2.member.member[0u][2u];
+    let _e287 = global_3.member.member[0u][2u];
     let _e289 = (_e276 / 4u);
     if (bitcast<u32>(_e287) == _e282) {
         let split_1 = vec2<u32>(_e56.x, _e56.y);
@@ -257,14 +257,14 @@ fn function_() {
             }
         }
         let _e355 = local;
-        let _e357 = global_3.member[_e355];
+        let _e357 = global_2.member[_e355];
         if (_e304 >= _e357) {
             let split_2 = vec2<u32>(4294967295u, 4294967295u);
             phi_315__i0 = split_2[0];
             phi_315__i1 = split_2[1];
         } else {
             let _e360 = local_1;
-            let _e365 = global_3.member[((_e360 + 1u) + _e304)];
+            let _e365 = global_2.member[((_e360 + 1u) + _e304)];
             let _e376 = (_e276 - 1u);
             let split_3 = vec2<u32>((((bitcast<u32>((bitcast<i32>(((_e365 & 65535u) * 8u)) + _e71)) & _e376) / 4u) + (_e305 % 2u)), (((bitcast<u32>((bitcast<i32>(((_e365 >> bitcast<u32>(16i)) * 8u)) + _e74)) & _e376) / 4u) + (_e305 / 2u)));
             phi_315__i0 = split_3[0];
@@ -329,7 +329,7 @@ fn function_() {
                                     let _e476 = phi_425_;
                                     let _e478 = (_e476 <= (_e424 / _e468));
                                     if _e478 {
-                                        let _e485 = global_3.member[(_e467 + bitcast<u32>(((_e471 * _e465) + _e476)))];
+                                        let _e485 = global_2.member[(_e467 + bitcast<u32>(((_e471 * _e465) + _e476)))];
                                         let _e486 = (_e485 == _e282);
                                         if _e486 {
                                             phi_446_ = i32();
@@ -452,7 +452,7 @@ fn function_() {
                                     let _e621 = phi_582_;
                                     let _e623 = (_e621 <= (_e569 / _e613));
                                     if _e623 {
-                                        let _e630 = global_3.member[(_e612 + bitcast<u32>(((_e616 * _e610) + _e621)))];
+                                        let _e630 = global_2.member[(_e612 + bitcast<u32>(((_e616 * _e610) + _e621)))];
                                         let _e631 = (_e630 == _e282);
                                         if _e631 {
                                             phi_603_ = i32();
@@ -601,7 +601,7 @@ fn function_() {
             let _e764 = (_e276 / 8u);
             let _e765 = (_e764 + 11u);
             let _e772 = ((((_e765 * _e765) * 144u) + ((_e764 * _e764) * 3u)) + ((((_e390[1] % _e289) * _e289) + (_e390[0] % _e289)) * 13u));
-            let _e777 = global_3.member[_e772];
+            let _e777 = global_2.member[_e772];
             if (_e777 == 4294967295u) {
             } else {
                 if (_e539 != 4294967295u) {
@@ -609,8 +609,8 @@ fn function_() {
                     loop {
                         let _e781 = phi_745_;
                         if (_e781 < 11u) {
-                            let _e786 = global_3.member[(_e772 + _e781)];
-                            let _e790 = global_3.member[(_e539 + _e781)];
+                            let _e786 = global_2.member[(_e772 + _e781)];
+                            let _e790 = global_2.member[(_e539 + _e781)];
                             let _e791 = (_e786 != _e790);
                             if _e791 {
                                 phi_765_ = u32();
@@ -648,8 +648,8 @@ fn function_() {
                         loop {
                             let _e812 = phi_781_;
                             if (_e812 < 11u) {
-                                let _e817 = global_3.member[(_e772 + _e812)];
-                                let _e821 = global_3.member[(_e684 + _e812)];
+                                let _e817 = global_2.member[(_e772 + _e812)];
+                                let _e821 = global_2.member[(_e684 + _e812)];
                                 let _e822 = (_e817 != _e821);
                                 if _e822 {
                                     phi_801_ = u32();
@@ -682,17 +682,17 @@ fn function_() {
                     }
                     let _e840 = phi_808_;
                     if _e840 {
-                        let _e844 = global_3.member[(_e772 + 1u)];
-                        let _e848 = global_3.member[(_e772 + 2u)];
-                        let _e852 = global_3.member[(_e772 + 3u)];
-                        let _e855 = global_3.member[_e772];
-                        let _e859 = global_3.member[(_e772 + 4u)];
+                        let _e844 = global_2.member[(_e772 + 1u)];
+                        let _e848 = global_2.member[(_e772 + 2u)];
+                        let _e852 = global_2.member[(_e772 + 3u)];
+                        let _e855 = global_2.member[_e772];
+                        let _e859 = global_2.member[(_e772 + 4u)];
                         let _e860 = bitcast<i32>(_e859);
-                        let _e864 = global_3.member[(_e772 + 5u)];
+                        let _e864 = global_2.member[(_e772 + 5u)];
                         let _e865 = bitcast<i32>(_e864);
-                        let _e869 = global_3.member[(_e772 + 6u)];
+                        let _e869 = global_2.member[(_e772 + 6u)];
                         let _e870 = bitcast<i32>(_e869);
-                        let _e874 = global_3.member[(_e772 + 7u)];
+                        let _e874 = global_2.member[(_e772 + 7u)];
                         let _e875 = bitcast<u32>((_e714[0] + select(0i, select(select(i32(_e723), i32_min(), (_e723 < -2147483600f)), 2147483647i, (_e723 > 2147483500f)), (_e723 == _e723))));
                         let _e877 = (bitcast<u32>((_e714[1] + select(0i, select(select(i32(_e737), i32_min(), (_e737 < -2147483600f)), 2147483647i, (_e737 > 2147483500f)), (_e737 == _e737)))) + 2147483648u);
                         let _e879 = (bitcast<u32>((_e714[2] + select(0i, select(select(i32(_e751), i32_min(), (_e751 < -2147483600f)), 2147483647i, (_e751 > 2147483500f)), (_e751 == _e751)))) + 8388608u);
@@ -779,7 +779,7 @@ fn function_() {
                             phi_986__f_member_1_i2 = split_18.member_1[2];
                         }
                         let _e1030 = type_29(vec3<f32>(phi_986__f_member_i0, phi_986__f_member_i1, phi_986__f_member_i2), vec3<f32>(phi_986__f_member_1_i0, phi_986__f_member_1_i1, phi_986__f_member_1_i2));
-                        let _e1036 = global_3.member[(_e772 + 9u)];
+                        let _e1036 = global_2.member[(_e772 + 9u)];
                         if (1u < arrayLength((&global_5.member))) {
                             let _e1041 = atomicAdd((&global_5.member[1u]), 1u);
                             phi_999_ = _e1041;
@@ -816,7 +816,7 @@ fn function_() {
                             global_4.member[_e1080] = ((((_e390[1] * _e289) + _e390[0]) + 1u) | select(0u, 2147483648u, (_e1036 != 0u)));
                         }
                         let _e1087 = (_e1044 + 7u);
-                        let _e1091 = global_3.member[(_e772 + 10u)];
+                        let _e1091 = global_2.member[(_e772 + 10u)];
                         if (_e1087 < _e58) {
                             global_4.member[_e1087] = _e1091;
                         }

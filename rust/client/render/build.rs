@@ -346,7 +346,7 @@ fn walk_word() -> String {
     use pxl_engine::clipmap::Lookup;
     use pxl_engine::overwrite::NodeSlot;
     use pxl_engine::{
-        answer, beam, cast, eye, face, light, param, pyramid, ray, tally, value, SHARD_ZOOM,
+        answer, beam, cast, eye, face, light, param, pyramid, raster, ray, tally, value, SHARD_ZOOM,
     };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
@@ -451,6 +451,24 @@ fn walk_word() -> String {
         ("LIGHT_SAMPLE", param::light::SAMPLE),
         ("LIGHT_LINE_WORDS", light::LINE_WORDS),
         ("LIGHT_LINE_ORIGIN", light::LINE_ORIGIN),
+        ("LIGHT_BEAM_WINDOW", light::BEAM_WINDOW),
+        ("LIGHT_COARSE", light::COARSE),
+        ("LIGHT_LISTED_CORNERS", light::LISTED_CORNERS),
+        ("LIGHT_LISTED_FED", light::LISTED_FED),
+        ("LIGHT_LISTED_CLAIMED", light::LISTED_CLAIMED),
+        ("LIGHT_HEAD_COUNTED", light::HEAD_COUNTED as u32),
+        ("LIGHT_BEAM_PASS", pyramid::LIGHT_BEAM_PASS),
+        (
+            "LIGHT_BEAM_TALLY",
+            pyramid::tally_at(tally::LIGHT, tally::BEAM),
+        ),
+        ("VISIBLE_LACK", raster::LACK),
+        ("MISS_ARGS_LIST", ray::MISS_ARGS_LIST),
+        ("MISS_ARGS_CNT", ray::MISS_ARGS_CNT),
+        ("MISS_ARGS_TALLY", ray::MISS_ARGS_TALLY),
+        ("TALLY_TOOK", tally::TOOK),
+        ("TALLY_SKY", tally::SKY),
+        ("TALLY_WALKED", tally::WALKED),
         ("SAMPLES_PASS", pyramid::SAMPLES_PASS),
         ("LIGHT_SAMPLES_PASS", pyramid::LIGHT_SAMPLES_PASS),
         (
@@ -516,10 +534,14 @@ fn walk_word() -> String {
         ("RAY_ZOOM_SHIFT", ray::ZOOM_SHIFT),
         ("RAY_FILL_SHIFT", ray::FILL_SHIFT),
     ];
+    // How far short of where a beam ray of the light stopped its cells' rays start: a share of
+    // its spacing, and Q3 steps (`light::margin`).
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\n",
+        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\n",
         grid::CELLS_A_RAD / grid::SPANS,
         cast::NARROW,
+        2.0 * cast::SQRT_6,
+        light::margin(0.0),
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");

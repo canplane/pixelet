@@ -37,10 +37,10 @@ struct type_20 {
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(11)
-var<uniform> global_2: type_20;
 @group(0) @binding(12)
-var<storage, read_write> global_3: type_16;
+var<storage, read_write> global_2: type_16;
+@group(0) @binding(11)
+var<uniform> global_3: type_20;
 
 fn function_() {
     var phi_145_: f32;
@@ -64,15 +64,15 @@ fn function_() {
     let _e30 = global;
     let _e36 = global_1.member.member_8[1u];
     let _e43 = global_1.member.member_8[2u];
-    let _e57 = global_2.member.member[0u][3u];
+    let _e57 = global_3.member.member[0u][3u];
     let _e58 = bitcast<u32>(_e57);
     let _e59 = (_e58 / 8u);
     if (_e30.x >= _e59) {
     } else {
         if (_e30.y >= _e59) {
         } else {
-            let _e68 = global_2.member.member[1u][0u];
-            let _e73 = global_2.member.member[1u][1u];
+            let _e68 = global_3.member.member[1u][0u];
+            let _e73 = global_3.member.member[1u][1u];
             let _e77 = global_1.member.member_5[0u];
             let _e81 = global_1.member.member_5[1u];
             let _e82 = bitcast<i32>(_e59);
@@ -201,8 +201,8 @@ fn function_() {
                 let _e230 = (_e59 + 11u);
                 let _e233 = (_e59 * _e59);
                 let _e244 = (((((((((_e230 * _e230) * 144u) + (_e233 * 3u)) + ((_e228 * _e228) * 13u)) + 1u) + (_e58 * _e58)) + _e233) + (_e30.y * _e59)) + _e30.x);
-                if (_e244 < arrayLength((&global_3.member))) {
-                    global_3.member[_e244] = 0u;
+                if (_e244 < arrayLength((&global_2.member))) {
+                    global_2.member[_e244] = 0u;
                 }
             }
         }
