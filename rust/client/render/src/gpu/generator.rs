@@ -18,10 +18,11 @@ use pxl_content::generation::{self, drawn, GROUPS};
 use pxl_engine::{clipmap, eye, overwrite};
 
 use crate::frame::draw::PIPELINE_DECOR;
-use crate::frame::shader::record::compute;
+use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT, SHADER_GENERATION_COMPACT,
-    SHADER_GENERATION_FOOTING, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
+    COMPUTE, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
+    SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN, STORAGE, STORAGE_RW,
+    UNIFORM,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
@@ -70,10 +71,48 @@ pub struct Generation<'a> {
     pub eye: &'a [u32; eye::WORDS],
 }
 
+/// `decor_cs`'s group (decor_pose.wgsl): the world's, at world.wgsl's numbers, its eye, the
+/// records, the rows and the list.
+pub const GENERATE_GROUP: [u32; 27] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
+    STORAGE, 7, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE,
+    STORAGE,
+];
+/// `decor_mark_cs`'s (decor_mark.wgsl).
+pub const MARK_GROUP: [u32; 12] = [
+    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 11, COMPUTE, STORAGE_RW, 12, COMPUTE, STORAGE,
+];
+/// `decor_thin_cs`'s (decor_thin.wgsl).
+pub const THIN_GROUP: [u32; 9] = [
+    9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE, STORAGE,
+];
+/// `decor_cnt_cs`'s (decor_cnt.wgsl).
+pub const CNT_GROUP: [u32; 15] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 13, COMPUTE, STORAGE, 14,
+    COMPUTE, STORAGE_RW,
+];
+/// `decor_compact_cs`'s (decor_compact.wgsl).
+pub const COMPACT_GROUP: [u32; 18] = [
+    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE, 13, COMPUTE, STORAGE, 14,
+    COMPUTE, STORAGE_RW, 15, COMPUTE, STORAGE_RW,
+];
+/// `decor_args_cs`'s (decor_args.wgsl).
+pub const ARGS_GROUP: [u32; 12] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&GENERATE_GROUP])
+        && floor::holds(&[&MARK_GROUP])
+        && floor::holds(&[&THIN_GROUP])
+        && floor::holds(&[&CNT_GROUP])
+        && floor::holds(&[&COMPACT_GROUP])
+        && floor::holds(&[&ARGS_GROUP]),
+    "a decor pass's group binds past WebGPU's floor"
+);
+
 pub struct Generator {
     mark: Pipeline,
     thin: Pipeline,
-    footing: Pipeline,
     generate: Pipeline,
     cnt: Pipeline,
     args_pipeline: Pipeline,
@@ -159,22 +198,12 @@ impl Generator {
             storage | buffer_usage::UNIFORM,
         );
         Generator {
-            mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &compute::DECOR_MARK_GROUP),
-            thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &compute::DECOR_THIN_GROUP),
-            // The footing's group is the pose's: one layout, one bind group.
-            footing: pipelines.build_compute(g, SHADER_GENERATION_FOOTING, &compute::DECOR_GROUP),
-            generate: pipelines.build_compute(g, SHADER_GENERATION, &compute::DECOR_GROUP),
-            cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &compute::DECOR_CNT_GROUP),
-            args_pipeline: pipelines.build_compute(
-                g,
-                SHADER_GENERATION_ARGS,
-                &compute::DECOR_ARGS_GROUP,
-            ),
-            compact: pipelines.build_compute(
-                g,
-                SHADER_GENERATION_COMPACT,
-                &compute::DECOR_COMPACT_GROUP,
-            ),
+            mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &MARK_GROUP),
+            thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &THIN_GROUP),
+            generate: pipelines.build_compute(g, SHADER_GENERATION, &GENERATE_GROUP),
+            cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &CNT_GROUP),
+            args_pipeline: pipelines.build_compute(g, SHADER_GENERATION_ARGS, &ARGS_GROUP),
+            compact: pipelines.build_compute(g, SHADER_GENERATION_COMPACT, &COMPACT_GROUP),
             groups: [0; 6],
             list: buf(
                 word_bytes(generation::LIST_WORDS as usize),
@@ -325,14 +354,16 @@ impl Generator {
             // pass's workgroups across and up, the pairs listed 0 until
             // `decor_mark_cs` lists them; whether every entry generates
             // whole, the boxes, and no pair yet in part.
-            let (s, w) = (compute::DECOR_THIN_WORKGROUP, compute::DECOR_WORKGROUP);
             let mut head = [0u32; generation::BOXES_AT as usize];
             let mut put = |at: u32, val: u32| head[at as usize] = val;
-            put(generation::THIN_ARGS, clipmap::BRICK_CELLS.div_ceil(s[0]));
+            put(
+                generation::THIN_ARGS,
+                clipmap::BRICK_CELLS.div_ceil(generation::LANES),
+            );
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::KIND_RECORDS.div_ceil(w[0]),
+                generation::KIND_RECORDS.div_ceil(generation::LANES),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));
@@ -407,12 +438,11 @@ impl Generator {
     }
 
     fn regroup(&mut self, g: &Gpu, world: World) {
-        let group = |pipeline: &Pipeline, ids: &[u32]| {
+        let group = |pipeline: &Pipeline, ids: &[(u32, u32)]| {
             let mut entries = [buf_entry(0, 0); 9];
-            for (k, &b) in ids.iter().enumerate() {
-                entries[k] = buf_entry(k as u32, b);
+            for (k, &(binding, b)) in ids.iter().enumerate() {
+                entries[k] = buf_entry(binding, b);
             }
-
             g.bind_group(pipeline.layouts[0], &entries[..ids.len()])
         };
         for id in self.groups {
@@ -422,47 +452,59 @@ impl Generator {
         self.groups = [
             group(
                 &self.mark,
-                &[clipmap, self.records, self.list, self.rows, self.zooms],
+                &[
+                    (1, clipmap),
+                    (9, self.records),
+                    (11, self.list),
+                    (12, self.zooms),
+                ],
             ),
-            group(&self.thin, &[clipmap, self.records, self.rows, self.list]),
+            group(
+                &self.thin,
+                &[(9, self.records), (10, self.rows), (11, self.list)],
+            ),
             group(
                 &self.generate,
                 &[
-                    eye,
-                    clipmap,
-                    ground,
-                    shards,
-                    overwrites,
-                    self.records,
-                    self.rows,
-                    self.list,
-                    pool,
+                    (0, eye),
+                    (1, clipmap),
+                    (2, ground),
+                    (5, shards),
+                    (6, overwrites),
+                    (7, pool),
+                    (9, self.records),
+                    (10, self.rows),
+                    (11, self.list),
                 ],
             ),
             group(
                 &self.cnt,
                 &[
-                    eye,
-                    self.drawing,
-                    self.rows,
-                    self.records,
-                    self.regions,
-                    clipmap,
+                    (0, eye),
+                    (1, clipmap),
+                    (9, self.records),
+                    (13, self.drawing),
+                    (14, self.regions),
                 ],
             ),
             group(
                 &self.args_pipeline,
-                &[self.meshes, self.regions, self.args, self.uniforms],
+                &[
+                    (0, self.meshes),
+                    (1, self.regions),
+                    (2, self.args),
+                    (3, self.uniforms),
+                ],
             ),
             group(
                 &self.compact,
                 &[
-                    self.drawing,
-                    self.rows,
-                    self.records,
-                    self.regions,
-                    self.instances,
-                    clipmap,
+                    (1, clipmap),
+                    (9, self.records),
+                    (10, self.rows),
+                    (13, self.drawing),
+                    (14, self.regions),
+                    (15, self.instances),
                 ],
             ),
         ];
@@ -525,14 +567,12 @@ impl Generator {
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.dispatch(
                 pass,
-                generation::EYE_ENTRIES.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
+                generation::EYE_ENTRIES.div_ceil(generation::LANES),
                 1,
                 1,
             );
-            // The footing and the pose over the same records and group.
             let listed = [
                 (&self.thin, self.groups[1], generation::THIN_ARGS),
-                (&self.footing, self.groups[2], generation::GENERATE_ARGS),
                 (&self.generate, self.groups[2], generation::GENERATE_ARGS),
             ];
             for (pipeline, group, args) in listed {

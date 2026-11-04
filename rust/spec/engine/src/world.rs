@@ -329,7 +329,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
 
 /// The zoom a box's placed leaves are first asked at: 8 unit cells a side,
 /// so a box with nothing placed near it is told so in a few palette indices.
-const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
+pub const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
 const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time

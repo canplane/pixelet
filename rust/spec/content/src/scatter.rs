@@ -96,8 +96,8 @@ const fn kind_of(val: u32) -> usize {
 
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
-const COUNT: u32 = 0xc047_dec0;
-const SPLIT: u32 = 0x5b17_dec0;
+pub const COUNT: u32 = 0xc047_dec0;
+pub const SPLIT: u32 = 0x5b17_dec0;
 
 /// How many of the `k`-th decor the column `b` at `zoom` holds, a leaf
 /// cell's one or none: its root's column (`ROOTS`) as many as a hash draws
@@ -106,7 +106,11 @@ const SPLIT: u32 = 0x5b17_dec0;
 /// weights its hash draws, exactly, none past what its leaf cells hold. None
 /// coarser than the root. Every word read by value.
 pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
-    let (seed, chance, root) = (SEEDS[k], CHANCES[k], ROOTS[k]);
+    count_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
+}
+
+/// `count` of a decor whose seed, chance and root are `seed`, `chance` and `root`.
+pub fn count_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
     if zoom < root {
         return 0;
     }
@@ -249,7 +253,7 @@ pub const fn root(decor: &Decor) -> Zoom {
 
 /// Each decor's counts' root (`count`, `root`): where a clip level first reads
 /// its columns.
-pub(crate) const ROOTS: [Zoom; DECORS.len()] = {
+pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL; DECORS.len()];
     let mut k = 0;
     while k < DECORS.len() {

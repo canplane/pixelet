@@ -58,8 +58,10 @@ fn main() {
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
+    std::fs::write(out.join("side.wgsl"), side_word()).expect("a box's side");
     std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
     std::fs::write(out.join("way_word.wgsl"), way_word()).expect("the ways' words");
+    std::fs::write(out.join("decor_word.wgsl"), decor_word()).expect("decor's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -519,6 +521,17 @@ fn walk_word() -> String {
     out
 }
 
+/// `answer::side`, the side of the box a cell keeping `k` eighths is drawn.
+fn side_word() -> String {
+    let cases: String = (1..answer::EIGHTHS)
+        .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
+        .collect();
+    format!(
+        "fn side(k: u32) -> f32 {{ switch (k) {{ {cases}default: {{ return {:?}; }} }} }}\n",
+        answer::side(answer::EIGHTHS)
+    )
+}
+
 /// What the world's one query by hand reads (world.wgsl), from pxl-engine and
 /// pxl-content, whose layouts and rules they are.
 fn world_word() -> String {
@@ -531,6 +544,7 @@ fn world_word() -> String {
     use pxl_engine::overwrite::{self, Cut};
     use pxl_engine::way::tree;
     use pxl_engine::{area, seed, value};
+    use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
         ("LEAF_CELL", pxl_engine::LEAF_CELL),
         ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
@@ -596,6 +610,9 @@ fn world_word() -> String {
         ("CAVE_TAG_SPLIT", SPLIT),
         ("CAVE_TAG_BLOCKS", BLOCKS),
         ("MASTER_SEED", seed::MASTER_SEED),
+        ("SEED_SALT", rng::SEED_SALT_32),
+        ("MIX_FIRST", rng::MIX32_FIRST),
+        ("MIX_LAST", rng::MIX32_LAST),
         ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
     ];
     let signed: &[(&str, i32)] = &[
@@ -720,6 +737,152 @@ fn way_word() -> String {
     out + &format!(
         "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
         clip::level_at(clip::LEVELS + 1)
+    )
+}
+
+/// What decor's passes by hand read past the world's words, from pxl-content, whose layouts
+/// they are: the records, the list, a row of the catalog, and what each decor's row
+/// determines, by decor (`Decor::cap`, `scatter::root`, `generation::first_record`).
+fn decor_word() -> String {
+    use core::mem::{offset_of, size_of};
+    use pxl_content::decor::{Decor, Orientation, DECORS};
+    use pxl_content::generation::{self as g, drawn};
+    use pxl_content::param::scatter::ALIGN_NEIGHBOR_RADIUS;
+    use pxl_content::scatter;
+    use pxl_engine::{cast, value, world};
+    let row = |at: usize| (at / size_of::<u32>()) as u32;
+    let words: &[(&str, u32)] = &[
+        ("LANES", g::LANES),
+        ("RECORD_WORDS", g::RECORD_WORDS),
+        ("HEAD_WORDS", g::HEAD_WORDS),
+        ("CNT_AT", g::CNT_AT),
+        ("SLOTS_AT", g::SLOTS_AT),
+        ("BRICK_RECORDS", g::BRICK_RECORDS),
+        ("UNGENERATED", g::UNGENERATED),
+        ("TURN_SHIFT", g::TURN_SHIFT),
+        ("VARIANT_SHIFT", g::VARIANT_SHIFT),
+        ("TURN_BITS", g::TURN_BITS),
+        ("CELL_SHIFT", g::CELL_SHIFT),
+        ("THIN_ARGS", g::THIN_ARGS),
+        ("LIST_BOXES", g::LIST_BOXES),
+        ("BOXES_AT", g::BOXES_AT),
+        ("BOX_WORDS", g::BOX_WORDS),
+        ("EVERY", g::EVERY),
+        ("LIST_EVERY", g::LIST_EVERY),
+        ("LIST_PARTS", g::LIST_PARTS),
+        ("GENERATE_ARGS", g::GENERATE_ARGS),
+        ("SLOT_RECORDS", g::SLOT_RECORDS),
+        ("PLACED_HEAD", g::PLACED_HEAD),
+        ("PLACED_HEAD_WORDS", g::PLACED_HEAD_WORDS),
+        ("RUN", g::RUN),
+        ("RUNS", g::RUNS),
+        ("EYE_ENTRIES", g::EYE_ENTRIES),
+        ("ROW_CHANCE", row(offset_of!(Decor, chance))),
+        ("DRAWN_NONE", drawn::NONE),
+        ("DRAWN_REGION_SHIFT", drawn::REGION_SHIFT),
+        ("DRAWN_COLUMNS", drawn::COLUMNS),
+        ("DRAWN_MODEL_ANGLE", drawn::MODEL_ANGLE),
+        ("DRAWN_IMPOSTOR_ANGLE", drawn::IMPOSTOR_ANGLE),
+        ("DRAWN_ANCHOR", drawn::ANCHOR),
+        ("DRAWN_HIDE", drawn::HIDE),
+        ("DRAWN_EXTENTS", drawn::EXTENTS),
+        ("DRAWN_MODEL", drawn::MODEL),
+        ("DRAWN_IMPOSTOR", drawn::IMPOSTOR),
+        ("DRAWN_CULLED", drawn::CULLED),
+        ("LIST_AT", g::LIST_AT),
+        ("LIST_WORDS", g::LIST_WORDS),
+        ("PAIR_DECOR_SHIFT", g::PAIR_DECOR_SHIFT),
+        ("PLACED_TAG", g::PLACED_TAG),
+        ("PLACED_FIRST", world::PLACED_FIRST),
+        ("COUNT_TAG", scatter::COUNT),
+        ("SPLIT_TAG", scatter::SPLIT),
+        ("DECORS", DECORS.len() as u32),
+        ("FIRST_VAL", DECORS[0].val),
+        ("ROW_WORDS", row(size_of::<Decor>())),
+        ("ROW_SEED", row(offset_of!(Decor, seed))),
+        ("ROW_ORIENTATION", row(offset_of!(Decor, orientation))),
+        ("ROW_ON", row(offset_of!(Decor, on))),
+        ("ROW_VARIANTS", row(offset_of!(Decor, variants))),
+        ("ROW_SIZES", row(offset_of!(Decor, sizes))),
+        ("ALONG_TRANSPORT", Orientation::along_transport as u32),
+        ("TRANSPORTS_FIRST", value::TRANSPORTS[0]),
+        ("TRANSPORTS_LAST", value::TRANSPORTS[1]),
+        ("REGIONS", drawn::REGIONS),
+        ("ARGS_WORDS", drawn::ARGS_WORDS),
+        ("IMPOSTOR_CORNERS", drawn::IMPOSTOR_CORNERS),
+        ("UNIFORM_WORDS", drawn::UNIFORM_WORDS),
+        ("UNIFORM_IDX", drawn::UNIFORM_IDX),
+    ];
+    let mut out = String::new();
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    let signed: &[(&str, i32)] = &[
+        ("READ_REACH", g::READ_REACH),
+        ("ALIGN_NEIGHBOR_RADIUS", ALIGN_NEIGHBOR_RADIUS),
+    ];
+    for (name, v) in signed {
+        out += &format!("const {name}: i32 = {v}i;\n");
+    }
+    let [ex, ey, ez] = g::CLAIM_EXTENT;
+    out += &format!("const CLAIM_EXTENT = vec3<i32>({ex}i, {ey}i, {ez}i);\n");
+    // What each decor's row determines, a case a decor.
+    let by_decor = |name: &str, of: &dyn Fn(usize) -> u32| {
+        let last = DECORS.len() - 1;
+        let cases: String = (0..last)
+            .map(|k| format!("case {k}u: {{ return {}u; }} ", of(k)))
+            .collect();
+        format!(
+            "fn {name}(k: u32) -> u32 {{ switch (k) {{ {cases}default: {{ return {}u; }} }} }}\n",
+            of(last)
+        )
+    };
+    let by_decor_i32 = |name: &str, of: &dyn Fn(usize) -> i32| {
+        let last = DECORS.len() - 1;
+        let cases: String = (0..last)
+            .map(|k| format!("case {k}u: {{ return {}i; }} ", of(k)))
+            .collect();
+        format!(
+            "fn {name}(k: u32) -> i32 {{ switch (k) {{ {cases}default: {{ return {}i; }} }} }}\n",
+            of(last)
+        )
+    };
+    out += &by_decor("decor_cap", &|k| DECORS[k].cap());
+    out += &by_decor("decor_first_record", &|k| {
+        g::first_record(&DECORS, k as u32)
+    });
+    out += &by_decor("decor_first_group", &|k| g::first_group(&DECORS, k as u32));
+    out += &by_decor("decor_root", &|k| scatter::ROOTS[k]);
+    out += &by_decor_i32("decor_widest", &|k| DECORS[k].widest() as i32);
+    // A record's turn as its spin, by the bits a turn's float has (decor_compact.wgsl), and
+    // how near a thing is taken to be (`drawn::NEAREST_U`).
+    let last = (1u32 << g::TURN_BITS) - 1;
+    let spin = |t: u32| (t as f32 * core::f32::consts::FRAC_PI_2).to_bits();
+    let spins: String = (0..last)
+        .map(|t| format!("case {t}u: {{ return {}u; }} ", spin(t)))
+        .collect();
+    out += &format!(
+        "fn turn_spin(turn: u32) -> u32 {{ switch (turn) {{ {spins}default: {{ return {}u; }} }} }}\n",
+        spin(last)
+    );
+    out += &format!("const NEAREST_U: f32 = {:?};\n", drawn::NEAREST_U);
+    // How far under its box's corner a cell keeping `k` eighths leaves its top, a share of
+    // the cell's side (`cast::top`, `generation::footing`), by its bits: the Rust's own float.
+    let top_of = |k: u32| {
+        let asset = (k % answer::EIGHTHS) << answer::FILL_SHIFT;
+        cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2]
+    };
+    let cases: String = (1..answer::EIGHTHS)
+        .map(|k| {
+            format!(
+                "case {k}u: {{ return bitcast<f32>({}u); }} ",
+                (1.0 - top_of(k)).to_bits()
+            )
+        })
+        .collect();
+    out + &format!(
+        "fn sink_share(k: u32) -> f32 {{ switch (k) {{ {cases}default: {{ return bitcast<f32>({}u); }} }} }}\n",
+        (1.0 - top_of(answer::EIGHTHS)).to_bits()
     )
 }
 
@@ -879,6 +1042,85 @@ fn accessors(text: &str) -> String {
     out
 }
 
+/// `text` with only the functions its entry points reach, each line one statement as
+/// `strip_comments` leaves it: a function's lines from its `fn` to its brace's close, an
+/// entry one whose attributes stand on the line before or its own.
+fn read_fns(text: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let lines: Vec<&str> = text.lines().collect();
+    // Each function's name, its first line and its last.
+    let mut fns = std::collections::BTreeMap::<&str, (usize, usize)>::new();
+    let mut entries = Vec::new();
+    let mut k = 0;
+    while k < lines.len() {
+        // A function's line, its attributes before `fn` where they stand on it.
+        let at = if lines[k].starts_with("fn ") {
+            Some(0)
+        } else if lines[k].starts_with('@') {
+            lines[k].find(" fn ").map(|p| p + 1)
+        } else {
+            None
+        };
+        let Some(rest) = at.map(|p| &lines[k][p + 3..]) else {
+            k += 1;
+            continue;
+        };
+        let name = &rest[..rest.find(|c: char| !is_word(c)).unwrap_or(rest.len())];
+        let (mut depth, mut end, mut opened) = (0i32, k, false);
+        for (j, l) in lines.iter().enumerate().skip(k) {
+            for c in l.chars() {
+                match c {
+                    '{' => (depth, opened) = (depth + 1, true),
+                    '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            if opened && depth == 0 {
+                end = j;
+                break;
+            }
+        }
+        let attrs = lines[k].starts_with('@') || (k > 0 && lines[k - 1].starts_with('@'));
+        let entry = [&lines[k], if k > 0 { &lines[k - 1] } else { &"" }]
+            .iter()
+            .any(|l| l.contains("@compute") || l.contains("@vertex") || l.contains("@fragment"));
+        if attrs && entry {
+            entries.push(name);
+        }
+        fns.insert(name, (k, end));
+        k = end + 1;
+    }
+    let mut reached = std::collections::BTreeSet::new();
+    while let Some(f) = entries.pop() {
+        if !reached.insert(f) {
+            continue;
+        }
+        let (first, last) = fns[f];
+        for l in &lines[first..=last] {
+            for w in l.split(|c: char| !is_word(c)) {
+                if fns.contains_key(w) && !reached.contains(w) {
+                    entries.push(w);
+                }
+            }
+        }
+    }
+    let mut kept = Vec::with_capacity(lines.len());
+    let mut k = 0;
+    while k < lines.len() {
+        let dropped = fns
+            .iter()
+            .find(|(name, (first, _))| *first == k && !reached.contains(*name));
+        match dropped {
+            Some((_, &(_, last))) => k = last + 1,
+            None => {
+                kept.push(lines[k]);
+                k += 1;
+            }
+        }
+    }
+    kept.join("\n") + "\n"
+}
+
 /// `text` with only the module's constants something in it reads.
 fn read_consts(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
@@ -938,7 +1180,7 @@ fn assemble(out: &Path) {
             text += "\n";
         }
         if !generated {
-            text = read_consts(&text);
+            text = read_consts(&read_fns(&text));
         }
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -1006,13 +1248,14 @@ fn assemble(out: &Path) {
         "clipmap",
         "seed",
         "clip",
+        "palette",
         "world",
         "world_split",
         "world_asked",
     ]
     .map(read)
     .join("\n");
-    let asked = read_consts(&asked);
+    let asked = read_consts(&read_fns(&asked));
     let module = wgsl::parse_str(&asked)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
     Validator::new(ValidationFlags::all(), Capabilities::empty())
