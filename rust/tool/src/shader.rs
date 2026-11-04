@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 32] = [
+pub const ENTRIES: [(&str, &str); 28] = [
     ("beam_cs", "beam.gen.wgsl"),
     ("light_beam_cs", "light_beam.gen.wgsl"),
     ("cell_cs", "cell.gen.wgsl"),
@@ -45,10 +45,6 @@ pub const ENTRIES: [(&str, &str); 32] = [
     ("decor_cnt_cs", "decor_cnt.gen.wgsl"),
     ("decor_args_cs", "decor_args.gen.wgsl"),
     ("decor_compact_cs", "decor_compact.gen.wgsl"),
-    ("way_cs", "way.gen.wgsl"),
-    ("way_free_cs", "way_free.gen.wgsl"),
-    ("way_tree_cs", "way_tree.gen.wgsl"),
-    ("way_return_cs", "way_return.gen.wgsl"),
 ];
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as

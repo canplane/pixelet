@@ -39,7 +39,7 @@ pub const POINT_SCALE: f32 = 8.0;
 
 /// Arnis's `LOWER_DECK_GAP`, a cell short of the stacked headroom: a deck at
 /// least this far under a pier's blocks it.
-const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
+pub const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
 
 /// What a pier is drawn as.
 pub(crate) const PIER: u32 = value::PIER;
@@ -205,33 +205,40 @@ pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVA
 
 /// What a brick's lines open with (pxl-engine clipmap.rs `LINES_*`): its
 /// tile's leaf cells a ground meter (pxl-spec `Frame::per_m`), then its
-/// stations, step, phase and leaf, each a float's bits.
+/// stations, step, phase and leaf, each a float's bits: where each lies,
+/// the step the narrow beam's then the wide's, the phase `phase[w][axis]`
+/// at `HEADER_PHASE + 2w + axis`.
+pub const HEADER_PER_M: usize = 0;
+pub const HEADER_STEP: usize = 1;
+pub const HEADER_PHASE: usize = 3;
+pub const HEADER_LEAF: usize = 7;
 pub const HEADER_WORDS: u32 = 8;
 
 pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
     let [[p0, p1], [p2, p3]] = st.phase;
-    [
-        per_m.to_bits(),
-        st.step[0].to_bits(),
-        st.step[1].to_bits(),
-        p0.to_bits(),
-        p1.to_bits(),
-        p2.to_bits(),
-        p3.to_bits(),
-        st.leaf.to_bits(),
-    ]
+    let mut w = [0; HEADER_WORDS as usize];
+    w[HEADER_PER_M] = per_m.to_bits();
+    w[HEADER_STEP] = st.step[0].to_bits();
+    w[HEADER_STEP + 1] = st.step[1].to_bits();
+    w[HEADER_PHASE] = p0.to_bits();
+    w[HEADER_PHASE + 1] = p1.to_bits();
+    w[HEADER_PHASE + 2] = p2.to_bits();
+    w[HEADER_PHASE + 3] = p3.to_bits();
+    w[HEADER_LEAF] = st.leaf.to_bits();
+    w
 }
 
 pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
+    let f = |k: usize| f32::from_bits(w[k]);
     let st = Stations {
-        step: [f32::from_bits(w[1]), f32::from_bits(w[2])],
+        step: [f(HEADER_STEP), f(HEADER_STEP + 1)],
         phase: [
-            [f32::from_bits(w[3]), f32::from_bits(w[4])],
-            [f32::from_bits(w[5]), f32::from_bits(w[6])],
+            [f(HEADER_PHASE), f(HEADER_PHASE + 1)],
+            [f(HEADER_PHASE + 2), f(HEADER_PHASE + 3)],
         ],
-        leaf: f32::from_bits(w[7]),
+        leaf: f(HEADER_LEAF),
     };
-    (f32::from_bits(w[0]), st)
+    (f(HEADER_PER_M), st)
 }
 
 /// A bent's columns across the deck, from its line: the middle, both edges,
@@ -598,7 +605,7 @@ fn pier_stands<C: Columns>(
 }
 
 /// What a span's value marks as a bore's air, over the palette index of its way.
-pub(crate) const AIR_OF: u32 = 0x80;
+pub const AIR_OF: u32 = 0x80;
 
 /// What one visit writes in its column, in leaf cells: a deck's slab or an
 /// embankment (its way's palette index), or a bore's or a cutting's air (`AIR_OF`
@@ -757,9 +764,8 @@ fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
 
 /// The `k`-th of a cell and the six about it, from its own: the row under
 /// it, the column before it, the cell under it, the cell over it, the column
-/// after it, the row over it — the order of the grid's cells. No index into
-/// an array: a bounds check's panic is a return no barrier after it may
-/// follow (pxl-shader `way_tree_cs`, whose leaves read it).
+/// after it, the row over it — the order of the grid's cells (pxl-render
+/// way_tree.wgsl `near`, whose leaves read it).
 fn near(k: u32) -> [i32; 3] {
     // Its axis, y, x then z, and its side.
     let (i, s) = if k < 4 {

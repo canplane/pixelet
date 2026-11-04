@@ -65,7 +65,7 @@ pub mod way {
 
     /// A deck's slab under its surface, in ground meters: Arnis's
     /// `DECK_STRUCTURE_DEPTH`.
-    pub(crate) const DECK_THICKNESS_M: f32 = 2.0;
+    pub const DECK_THICKNESS_M: f32 = 2.0;
 
     /// Clear height a deck keeps over a deck under it, in ground meters: Arnis's
     /// `STACKED_DECK_HEADROOM`.
@@ -79,5 +79,5 @@ pub mod way {
     pub(crate) const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
 
     /// Arnis's `place_pillar`: a deck this near the ground rests on it.
-    pub(crate) const PIER_MIN_RISE_M: f32 = 2.0;
+    pub const PIER_MIN_RISE_M: f32 = 2.0;
 }

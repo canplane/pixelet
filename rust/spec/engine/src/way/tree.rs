@@ -14,8 +14,8 @@
 //! `clipmap::ROOT_AT`), from which a reader steps down as the placed tree's
 //! does (`cursor`).
 //!
-//! Built a level at a time, one brick to a workgroup (pxl-shader
-//! `way_tree_cs`), top-down then back up:
+//! Built a level at a time, one brick to a workgroup (pxl-render
+//! way_tree.wgsl), top-down then back up:
 //!
 //! - the brick's nodes along z its ways' bound meets are the first
 //!   level's candidates, a slot each of its root child group (`span`, `root`);
@@ -95,6 +95,23 @@ impl Columns for Read<'_> {
 /// child group of its own (`root_word`).
 pub const POOL_CHILD_GROUPS: u32 = 1 << 20;
 
+/// The pool's free stack, a word a child group of the pool's, the two
+/// grown together (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`),
+/// which starts as WebGPU makes a buffer, zeroed: word `TAKEN_CNT` how many
+/// child groups are taken, the slots after it their ids, then the free
+/// child groups' ids, child group 0 never among them. A slot's word is its
+/// id XOR its index, so a slot never written holds its own index: every
+/// child group free, with no start to write, the ids handed from the lowest
+/// up, and a stack grown holds the child groups past the old free, so every
+/// id ever handed lies under the most ever taken, which the pool's and its
+/// mirror's growth keep to (pxl-kernel domain/layer/terrain/mirror.rs). The
+/// GPU's alone reads and writes it (pxl-render way_stack.wgsl).
+pub const TAKEN_CNT: u32 = 0;
+
+/// The lanes of a workgroup a brick, `way_tree_cs`'s, which a level's scan
+/// ranks the flagged across, and `way_return_cs`'s (pxl-render way_tree.wgsl).
+pub const LANES: u32 = 64;
+
 /// A brick's root word (`clipmap::ROOT_AT`): its root child group's id, under
 /// `POOL_CHILD_GROUPS`, and over it the Z of the node its first slot holds, in
 /// the bits left; 0, child group 0, where the brick has no tree.
@@ -171,7 +188,7 @@ pub const NONE: u32 = u32::MAX;
 
 /// A handed brick's scratch past its spans (`clipmap::TREE_AT`), a frame's,
 /// for a tree of `child_groups` at most: the child groups its build gave back, their
-/// count first, for the pushes after it (pxl-shader `way_return_cs`); then
+/// count first, for the pushes after it (pxl-render way_return.wgsl); then
 /// the child groups its tree holds from `records_at`, their count first, a
 /// record each, its child group's id and its eight child pointers and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
@@ -227,8 +244,8 @@ const _: () = assert!(
 
 /// A candidate's word: its X and Y in the brick at its zoom,
 /// `BRICK_SHIFT` bits each, and its Z.
-const REL_MASK: u32 = (1 << BRICK_SHIFT) - 1;
-const Z_SHIFT: u32 = 2 * BRICK_SHIFT;
+pub const REL_MASK: u32 = (1 << BRICK_SHIFT) - 1;
+pub const Z_SHIFT: u32 = 2 * BRICK_SHIFT;
 const _: () = assert!(
     32 - Z_SHIFT > 16,
     "a cell's Z, an i16 at the leaves, in a candidate's word"
@@ -289,7 +306,7 @@ pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
 /// Whether a level's `flagged` child groups take a brick that has taken `taken`
 /// past its most, `BRICK_CHILD_GROUPS`: refused whatever the pool holds, so its
 /// build keeps `NONE` for its records' count rather than `STARVED`, which
-/// the pool's growth answers (pxl-shader `way_tree_cs`).
+/// the pool's growth answers (pxl-render way_tree.wgsl).
 pub fn past(taken: u32, flagged: u32) -> bool {
     flagged > BRICK_CHILD_GROUPS - taken
 }
@@ -298,7 +315,7 @@ pub fn past(taken: u32, flagged: u32) -> bool {
 /// past the `child_groups` its scratch holds (`scratch_child_groups`), whose freed
 /// child groups and records each have room for so many: not taken, its build
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
-/// answers (pxl-shader `way_tree_cs`). Asked after `past`, so it marks
+/// answers (pxl-render way_tree.wgsl). Asked after `past`, so it marks
 /// only what a larger scratch holds.
 pub fn is_cramped(child_groups: u32, taken: u32, flagged: u32) -> bool {
     taken + flagged > child_groups

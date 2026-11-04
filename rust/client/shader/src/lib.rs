@@ -7,7 +7,7 @@
 //! eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (pyramid.rs), their image bound only where rays.rs lets
 //! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
-//! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
+//! each handed brick's ground (ground.rs), and the decor
 //! the ground generates (decor.rs), each workgroup a constant its code counts
 //! by (workgroup.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
@@ -26,7 +26,6 @@ mod pyramid;
 mod observer;
 mod raster;
 mod light;
-mod way;
 mod workgroup;
 mod world;
 
@@ -46,7 +45,6 @@ pub use light::{
     light_cs, light_slide_cs, light_mark_draws_cs, light_propagate_cs, Head,
 };
 pub use light_mark::light_mark_cs;
-pub use way::{way_cs, way_free_cs, way_return_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};

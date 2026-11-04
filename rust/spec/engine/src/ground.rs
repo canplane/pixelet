@@ -106,7 +106,7 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
 }
 
 /// Quadrant cells an elevation sample spans.
-const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
+pub const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
 
 /// The first of the four samples the surface reads along an axis about a
 /// texel coordinate, and how far past the second the coordinate falls; a

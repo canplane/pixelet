@@ -56,9 +56,8 @@ pub const SHADER_GENERATION: u32 = 28;
 pub const SHADER_GENERATION_CNT: u32 = 29;
 pub const SHADER_GENERATION_ARGS: u32 = 30;
 pub const SHADER_GENERATION_COMPACT: u32 = 31;
-/// Each newly held terrain frame's ways, its columns' spans off its lines,
-/// generated with the cast from pxl-engine's `ways`: its one compute
-/// entry.
+/// Each newly held terrain frame's ways, its columns' spans off its lines
+/// (pxl-engine fill.rs `spans`), by hand (way.wgsl): its one compute entry.
 pub const SHADER_WAY: u32 = 32;
 /// Which eye slots' decor generates again this frame, listed for
 /// `SHADER_GENERATION_THIN`'s and `SHADER_GENERATION`'s dispatches: its one
@@ -71,9 +70,10 @@ pub const SHADER_FOLD: u32 = 34;
 /// (atmos_froxel.wgsl): its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 35;
 /// Each handed brick's ways as a tree of cells in one pool (pxl-engine
-/// `way::tree`), generated with the cast: a re-filled brick's old child groups
-/// given back, its tree built off the pool's stack, the child groups its build
-/// gave back pushed after: a compute entry each.
+/// `way::tree`), by hand: a re-filled brick's old child groups given back
+/// (way_free.wgsl), its tree built off the pool's stack (way_tree.wgsl), the
+/// child groups its build gave back pushed after (way_return.wgsl): a compute
+/// entry each.
 pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
 pub const SHADER_WAY_RETURN: u32 = 38;
@@ -364,7 +364,15 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_GENERATION_COMPACT
     &["decor_compact.gen"],
     // SHADER_WAY
-    &["way.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "way_word",
+        "world_rule",
+        "way_rule",
+        "handed",
+        "way",
+    ],
     // SHADER_GENERATION_MARK
     &["decor_mark.gen"],
     // SHADER_FOLD
@@ -378,11 +386,20 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_froxel",
     ],
     // SHADER_WAY_FREE
-    &["way_free.gen"],
+    &["world_word", "way_word", "handed", "way_stack", "way_free"],
     // SHADER_WAY_TREE
-    &["way_tree.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "way_word",
+        "world_rule",
+        "way_rule",
+        "handed",
+        "way_stack",
+        "way_tree",
+    ],
     // SHADER_WAY_RETURN
-    &["way_return.gen"],
+    &["way_word", "handed", "way_stack", "way_return"],
     // SHADER_BEAM
     &["beam.gen"],
     // SHADER_CELL

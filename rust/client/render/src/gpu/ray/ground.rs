@@ -8,7 +8,7 @@ use pxl_engine::clipmap::{
     self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FILL_BRICK, FILL_CAP,
     FILL_WORDS, HANDED_WORDS, LEVELS, LINES_AT, PALETTE_AT, SLOTS,
 };
-use pxl_engine::way;
+use pxl_engine::{fill, way};
 use xpute_guest::mem::off_of;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -16,8 +16,8 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN,
-    SHADER_WAY_TREE,
+    compute, dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
+    SHADER_WAY_RETURN, SHADER_WAY_TREE, STORAGE, STORAGE_RW,
 };
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
@@ -114,6 +114,32 @@ pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 /// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
 
+/// `way_cs`'s group (way.wgsl): the fresh frames, the frames it reads the
+/// columns of, and the scratch it keeps the spans in.
+const WAY_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW,
+];
+/// `way_free_cs`'s (way_free.wgsl): the fresh frames, the frames whose roots it
+/// reads, the ways' pool it walks and its free stack.
+const WAY_FREE_GROUP: [u32; 12] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW,
+];
+/// `way_tree_cs`'s (way_tree.wgsl): the fresh frames, the frames whose levels it
+/// reads and roots it writes, the pool, its free stack and the scratch.
+const WAY_TREE_GROUP: [u32; 15] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW, 4,
+    COMPUTE, STORAGE_RW,
+];
+/// `way_return_cs`'s (way_return.wgsl): the scratch and the free stack.
+const WAY_RETURN_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+const _: () = assert!(
+    floor::holds(&[&WAY_GROUP])
+        && floor::holds(&[&WAY_FREE_GROUP])
+        && floor::holds(&[&WAY_TREE_GROUP])
+        && floor::holds(&[&WAY_RETURN_GROUP]),
+    "a ways' pass's group binds past WebGPU's floor"
+);
+
 /// The passes that fill a handed brick: made with the renderer's pipelines
 /// (`RaysPass::make`), before its first frame, and taken into its buffers
 /// when the first are made (`hand`).
@@ -132,10 +158,10 @@ impl GroundPipelines {
         GroundPipelines {
             heights: pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP),
             bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-            ways: pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
-            free: pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP),
-            tree: pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP),
-            give_back: pipelines.build_compute(g, SHADER_WAY_RETURN, &compute::WAY_RETURN_GROUP),
+            ways: pipelines.build_compute(g, SHADER_WAY, &WAY_GROUP),
+            free: pipelines.build_compute(g, SHADER_WAY_FREE, &WAY_FREE_GROUP),
+            tree: pipelines.build_compute(g, SHADER_WAY_TREE, &WAY_TREE_GROUP),
+            give_back: pipelines.build_compute(g, SHADER_WAY_RETURN, &WAY_RETURN_GROUP),
         }
     }
 }
@@ -226,7 +252,7 @@ pub(super) struct GroundBuffers {
 /// The ways' pool of `child_groups` on the GPU, in bytes: a slot two words,
 /// eight a child group. Its free stack is a word a child group: the count taken, then
 /// every child group's id but child group 0's, every child group free but child group 0 as WebGPU
-/// makes it, zeroed (pxl-shader `TAKEN_CNT`, `id`), so nothing is written to
+/// makes it, zeroed (pxl-engine `way::tree::TAKEN_CNT`), so nothing is written to
 /// start it, nor to grow it.
 const fn pool_bytes(child_groups: u32) -> u32 {
     child_groups * way::tree::CHILD_GROUP_WORDS * 4
@@ -275,7 +301,7 @@ enum Short {
     Scratch,
 }
 
-/// What a build whose records' count is `n` ran out of (pxl-shader
+/// What a build whose records' count is `n` ran out of (way_tree.wgsl
 /// `way_tree_cs`): `STARVED` the pool, `CRAMPED` the scratch; neither
 /// for a tree built, none counted where the brick has no ways, nor for one
 /// past the brick's own most (`NONE`), which no growth lets it build.
@@ -376,8 +402,8 @@ impl GroundBuffers {
     /// build ran out of it (`read_back`): its child pointers and its stack
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
-    /// stack's slots past the old hold the new child groups free (pxl-shader
-    /// `TAKEN_CNT`). Ahead of the turn's bricks, so their builds and the cast
+    /// stack's slots past the old hold the new child groups free (pxl-engine
+    /// `way::tree::TAKEN_CNT`). Ahead of the turn's bricks, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     ///
     /// A known gap: a device out of memory may fail to make the doubled
@@ -641,7 +667,7 @@ impl RaysPass {
         g.set_bind_group(pass, 0, c.ways_group, &[]);
         g.dispatch(
             pass,
-            clipmap::SPANS_COLUMNS.div_ceil(compute::WAY_WORKGROUP[0]),
+            clipmap::SPANS_COLUMNS.div_ceil(fill::SPANS_LANES),
             1,
             c.fresh_len,
         );

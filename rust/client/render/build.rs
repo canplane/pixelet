@@ -59,6 +59,7 @@ fn main() {
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
     std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
+    std::fs::write(out.join("way_word.wgsl"), way_word()).expect("the ways' words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -636,6 +637,89 @@ fn world_word() -> String {
     out + &format!(
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
+    )
+}
+
+/// What the ways' fill by hand reads (way.wgsl, way_tree.wgsl and the free stack's passes),
+/// from pxl-engine, whose layouts and rules they are; what the world's words hold
+/// already, theirs.
+fn way_word() -> String {
+    use pxl_engine::clipmap as clip;
+    use pxl_engine::param::way as param;
+    use pxl_engine::way::{self, tree};
+    use pxl_engine::{fill, value};
+    let words: &[(&str, u32)] = &[
+        ("HANDED_WORDS", clip::HANDED_WORDS),
+        ("FILL_BRICK", clip::FILL_BRICK),
+        ("FILL_PLACE", clip::FILL_PLACE),
+        ("FILL_CELL", clip::FILL_CELL),
+        ("FILL_FIRST", clip::FILL_FIRST),
+        ("FILL_SHARD", clip::FILL_SHARD),
+        ("FILL_CAP", clip::FILL_CAP),
+        ("ELE_AT", clip::ELE_AT),
+        ("ELE_PAD", ground::ELE_PAD),
+        ("ELE_PADDED_SPAN", ground::ELE_PADDED_SPAN),
+        ("LINES_AT", clip::LINES_AT),
+        ("LINES_ENTRIES_AT", clip::LINES_ENTRIES_AT),
+        ("LINES_SEGMENTS_AT", clip::LINES_SEGMENTS_AT),
+        ("WAYS_SHIFT", clip::WAYS_SHIFT),
+        ("WAYS_BINS_ACROSS", clip::WAYS_BINS_ACROSS),
+        ("HEADER_WORDS", way::HEADER_WORDS),
+        ("HEADER_PER_M", way::HEADER_PER_M as u32),
+        ("HEADER_STEP", way::HEADER_STEP as u32),
+        ("HEADER_PHASE", way::HEADER_PHASE as u32),
+        ("HEADER_LEAF", way::HEADER_LEAF as u32),
+        ("SEGMENT_WORDS", way::SEGMENT_WORDS as u32),
+        ("BRIDGE", way::BRIDGE),
+        ("TUNNEL", way::TUNNEL),
+        ("WAY_NOTHING", way::NOTHING),
+        ("WAY_AIR", way::AIR),
+        ("AIR_OF", way::AIR_OF),
+        ("VALUE_PIER", value::PIER),
+        ("TRANSPORTS_FIRST", value::TRANSPORTS[0]),
+        ("TRANSPORTS_LAST", value::TRANSPORTS[1]),
+        ("SPANS", way::SPANS as u32),
+        ("SPANS_AT", clip::SPANS_AT),
+        ("SPANS_ACROSS", clip::SPANS_ACROSS),
+        ("SPANS_COLUMNS", clip::SPANS_COLUMNS),
+        ("SPANS_COLUMN_WORDS", clip::SPANS_COLUMN_WORDS),
+        ("SPANS_CNT", fill::SPANS_CNT),
+        ("SPANS_PAST", fill::SPANS_PAST),
+        ("SPANS_LANES", fill::SPANS_LANES),
+        ("FREED_AT", tree::FREED_AT),
+        ("RECORD_WORDS", tree::RECORD_WORDS),
+        ("BRICK_CHILD_GROUPS", tree::BRICK_CHILD_GROUPS),
+        ("TREE_NONE", tree::NONE),
+        ("CRAMPED", tree::CRAMPED),
+        ("STARVED", tree::STARVED),
+        ("REL_MASK", tree::REL_MASK),
+        ("Z_SHIFT", tree::Z_SHIFT),
+        ("TAKEN_CNT", tree::TAKEN_CNT),
+        ("WAY_LANES", tree::LANES),
+    ];
+    let floats: &[(&str, f32)] = &[
+        ("POINT_SCALE", way::POINT_SCALE),
+        ("CELL_STEP", ground::CELL_STEP),
+        ("CELL_CENTER", lattice::CELL_CENTER),
+        ("DECK_THICKNESS_M", param::DECK_THICKNESS_M),
+        ("PIER_MIN_RISE_M", param::PIER_MIN_RISE_M),
+        ("LOWER_DECK_GAP_M", way::LOWER_DECK_GAP_M),
+        ("HALF_DIAGONAL", core::f32::consts::FRAC_1_SQRT_2),
+    ];
+    let mut out = String::new();
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    for (name, v) in floats {
+        out += &format!("const {name}: f32 = {v:?};\n");
+    }
+    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
+    let cases: String = (0..=clip::LEVELS)
+        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
+        .collect();
+    out + &format!(
+        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
+        clip::level_at(clip::LEVELS + 1)
     )
 }
 

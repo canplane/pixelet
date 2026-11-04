@@ -15,7 +15,7 @@ use proc_macro::{Delimiter, TokenStream, TokenTree};
 mod workgroup;
 
 use pxl_engine::{beam, raster, ray};
-use workgroup::{CAST_SIDE, DECOR_CELL_LANES, DECOR_RECORD_LANES, WAY_LANES};
+use workgroup::{CAST_SIDE, DECOR_CELL_LANES, DECOR_RECORD_LANES};
 
 /// Each constant, by its path as it is written here and in `threads`.
 macro_rules! sides {
@@ -23,12 +23,11 @@ macro_rules! sides {
 }
 
 /// The constants a side may be named by.
-const SIDES: [(&str, u32); 7] = sides![
+const SIDES: [(&str, u32); 6] = sides![
     beam::HIT_LANES,
     raster::FACES_LANES,
     ray::MISS_LANES,
     CAST_SIDE,
-    WAY_LANES,
     DECOR_CELL_LANES,
     DECOR_RECORD_LANES,
 ];

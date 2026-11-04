@@ -4,16 +4,7 @@
 // Source: rust/spec/engine (pxl-engine) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, then spirv-opt and naga in rust/client/shader/build.
-struct type_4 {
-    member: array<u32>,
-}
-
-struct type_11 {
-    member: u32,
-    member_1: u32,
-}
-
-struct type_19 {
+struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
     member_2: vec4<f32>,
@@ -27,15 +18,19 @@ struct type_19 {
     member_10: array<vec4<u32>, 5>,
 }
 
-struct type_20 {
-    member: type_19,
+struct type_13 {
+    member: type_12,
 }
 
-struct type_23 {
+struct type_16 {
     member: array<vec4<i32>>,
 }
 
-struct type_30 {
+struct type_19 {
+    member: array<u32>,
+}
+
+struct type_29 {
     member: u32,
     member_1: u32,
     member_2: u32,
@@ -46,28 +41,33 @@ struct type_30 {
     member_7: array<array<u32, 3>, 9>,
 }
 
-struct type_32 {
-    member: array<type_30>,
+struct type_31 {
+    member: array<type_29>,
+}
+
+struct type_33 {
+    member: u32,
+    member_1: u32,
 }
 
 struct type_38 {
     member: array<atomic<u32>>,
 }
 
-var<private> global: vec3<u32>;
-var<private> global_1: vec3<u32>;
 @group(0) @binding(0)
-var<uniform> global_2: type_20;
+var<uniform> global: type_13;
+var<private> global_1: vec3<u32>;
+var<private> global_2: vec3<u32>;
 @group(0) @binding(1)
-var<storage> global_3: type_4;
+var<storage> global_3: type_19;
 @group(0) @binding(2)
-var<storage> global_4: type_32;
+var<storage> global_4: type_31;
 @group(0) @binding(3)
-var<storage, read_write> global_5: type_4;
+var<storage, read_write> global_5: type_19;
 @group(0) @binding(4)
 var<storage, read_write> global_6: type_38;
 @group(0) @binding(5)
-var<storage> global_7: type_23;
+var<storage> global_7: type_16;
 
 fn function_() {
     var phi_121_: vec4<i32>;
@@ -203,8 +203,8 @@ fn function_() {
     var phi_693_: u32;
     var phi_176_: u32;
 
-    let _e62 = global;
-    let _e63 = global_1;
+    let _e62 = global_1;
+    let _e63 = global_2;
     let _e67 = arrayLength((&global_5.member));
     let _e69 = arrayLength((&global_7.member));
     if (_e62.x >= 768u) {
@@ -726,7 +726,7 @@ fn function_() {
                         }
                     }
                     let _e655 = local_19;
-                    let split_1 = type_11((((_e62.x * 1264u) + _e655) + _e519), select(16u, _e523, (_e523 < 16u)));
+                    let split_1 = type_33((((_e62.x * 1264u) + _e655) + _e519), select(16u, _e523, (_e523 < 16u)));
                     phi_688__f_member = split_1.member;
                     phi_688__f_member_1 = split_1.member_1;
                 } else {
@@ -738,11 +738,11 @@ fn function_() {
                         phi_198_ = 0u;
                     }
                     let _e134 = phi_198_;
-                    let split_2 = type_11((970752u + _e127), select(0u, 1u, (_e127 < _e134)));
+                    let split_2 = type_33((970752u + _e127), select(0u, 1u, (_e127 < _e134)));
                     phi_688__f_member = split_2.member;
                     phi_688__f_member_1 = split_2.member_1;
                 }
-                let _e662 = type_11(phi_688__f_member, phi_688__f_member_1);
+                let _e662 = type_33(phi_688__f_member, phi_688__f_member_1);
                 phi_692_ = 0u;
                 loop {
                     let _e666 = phi_692_;
@@ -769,11 +769,11 @@ fn function_() {
                                 let _e702 = bitcast<i32>(_e701);
                                 let _e705 = global_5.member[_e677];
                                 let _e706 = bitcast<i32>(_e705);
-                                let _e710 = global_2.member.member[0u];
-                                let _e714 = global_2.member.member[1u];
-                                let _e718 = global_2.member.member[2u];
-                                let _e722 = global_2.member.member_5[0u];
-                                let _e726 = global_2.member.member_5[1u];
+                                let _e710 = global.member.member[0u];
+                                let _e714 = global.member.member[1u];
+                                let _e718 = global.member.member[2u];
+                                let _e722 = global.member.member_5[0u];
+                                let _e726 = global.member.member_5[1u];
                                 let _e732 = (f32((((_e697 << bitcast<u32>(8u)) + 128i) - _e710)) * 0.00390625f);
                                 let _e738 = (f32((((_e702 << bitcast<u32>(8u)) + 128i) - _e714)) * 0.00390625f);
                                 let _e743 = (f32(((_e706 << bitcast<u32>(8u)) - _e718)) * 0.00390625f);
@@ -1022,7 +1022,7 @@ fn function_() {
 
 @compute @workgroup_size(64, 1, 1)
 fn decor_cnt_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
-    global = param;
-    global_1 = param_1;
+    global_1 = param;
+    global_2 = param_1;
     function_();
 }
