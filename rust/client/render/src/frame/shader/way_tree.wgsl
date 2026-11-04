@@ -10,7 +10,7 @@
 // (`way_return_cs` pushes them), every child group it holds kept as a record for the
 // read-back. Its root word last; none where it has no ways, nothing taken nor kept, or where
 // the pool or its scratch ran out, the child groups it took given back, and its records'
-// count saying which (`tree::STARVED`, `tree::CRAMPED`). A level's numbers are what every
+// count saying which (`TREE_STARVED`, `TREE_CRAMPED`). A level's numbers are what every
 // lane reads alike (`workgroupUniformLoad`), the loops' bounds, so every barrier is in
 // uniform control flow.
 
@@ -25,19 +25,19 @@ var<workgroup> sums: array<u32, WAY_LANES>;
 /// `levels[2j]`, `levels[2j + 1]`: level j's first id on the stack and its candidates,
 /// level 0 the brick's own nodes along z; the last four words (`Z0_AT`, `TAKEN_AT`,
 /// `CELL_AT`, `STATE_AT`), the first one's Z, the child groups the brick has taken, its
-/// cells' zoom and whether the pool held every level so far (`HELD`), or the brick has no
-/// ways (`BARE`), or the level the brick took past its own most (`PAST`), or past what its
-/// scratch holds (`SHORT`); 0 where the pool ran out.
+/// cells' zoom and whether every level so far fit the pool (`FITS`), or the brick has no
+/// ways (`NO_WAYS`), or the level the brick took past its own most (`PAST`), or past what
+/// its scratch holds (`CRAMPED`); 0 where the pool ran out.
 var<workgroup> levels: array<u32, WAY_LANES>;
 
 const Z0_AT = WAY_LANES - 4u;
 const TAKEN_AT = WAY_LANES - 3u;
 const CELL_AT = WAY_LANES - 2u;
 const STATE_AT = WAY_LANES - 1u;
-const HELD = 1u;
+const FITS = 1u;
 const PAST = 2u;
-const SHORT = 3u;
-const BARE = 4u;
+const CRAMPED = 3u;
+const NO_WAYS = 4u;
 
 // ---- the workgroup's words ----
 
@@ -98,11 +98,14 @@ fn slot_of(ids_at: u32, c: u32) -> u32 {
 
 /// `n` child groups off the stack together for a brick that has taken `taken`: where their
 /// ids begin in it, 0 where fewer are free or the brick would take more than its most
-/// (`tree::fits`), none taken. Taken by an add, then where they were not all free given back
-/// by lowering the count to where this pop found it: only pops race in a pass (pushes are
-/// `way_free_cs`'s and `way_return_cs`'s), so every pop that fits added before the first
-/// that did not, and the count comes to rest at the end of what was taken. Both atomics
-/// asked of every pop, a no-op where it has nothing to take or give back.
+/// (`tree::fits`), none taken. Taken by an add; where they were not all free, given back by
+/// lowering the count to where this pop found it. Only pops race in a pass (pushes are
+/// `way_free_cs`'s and `way_return_cs`'s). A pop that adds while a failed pop's add stands
+/// finds the count past the stack and fails too, and its own lowering stops above the
+/// failed one's; a pop that adds after the failed one lowered the count finds it where that
+/// one found it, and may fit in the slots it gave back. So the count comes to rest at the
+/// end of what the pops that fit took. Both atomics asked of every pop, a no-op where it has
+/// nothing to take or give back.
 fn pop(taken: u32, n: u32) -> u32 {
   let len = arrayLength(&stack);
   let past = is_past(taken, n);
@@ -390,17 +393,17 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
       nodes = u32(((ways.y - 1i) >> d) - z + 1i);
     }
     var ids_at = 0u;
-    var state = BARE;
+    var state = NO_WAYS;
     if (nodes > ROOT_NODES) {
       state = PAST;
     } else if (nodes != 0u) {
       ids_at = pop(0u, 1u);
-      state = select(0u, HELD, ids_at != 0u);
-      if (state == HELD) {
+      state = select(0u, FITS, ids_at != 0u);
+      if (state == FITS) {
         tree_root(z, CHILDREN * stack_id(ids_at));
       }
     }
-    let ok = state == HELD;
+    let ok = state == FITS;
     levels[TAKEN_AT] = u32(ok);
     levels[0] = ids_at;
     levels[1] = select(0u, ROOT_NODES, ok);
@@ -412,7 +415,7 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
   let first = level_word(0u);
   var j = 0u;
   var zoom = cell - BRICK_SHIFT;
-  var ok = level_word(STATE_AT) == HELD;
+  var ok = level_word(STATE_AT) == FITS;
   // Down: each level's candidates flagged, counted, then given their child groups together.
   while (ok && zoom < cell) {
     settle();
@@ -432,22 +435,22 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
       let had = levels[TAKEN_AT];
       // Past the brick's most, or past its scratch, none is taken: the pool is asked only
       // of what the scratch holds.
-      var short = 0u;
+      var refused = 0u;
       if (is_past(had, flagged)) {
-        short = PAST;
+        refused = PAST;
       } else if (had + flagged > room) {
-        short = SHORT;
+        refused = CRAMPED;
       }
       var next = 0u;
-      if (short == 0u) {
+      if (refused == 0u) {
         next = pop(had, flagged);
       }
       levels[TAKEN_AT] = had + flagged;
       levels[2u * j + 2u] = next;
       levels[2u * j + 3u] = CHILDREN * flagged;
-      levels[STATE_AT] = select(short, HELD, next != 0u);
+      levels[STATE_AT] = select(refused, FITS, next != 0u);
     }
-    ok = level_word(STATE_AT) == HELD;
+    ok = level_word(STATE_AT) == FITS;
     let next = level_word(2u * j + 2u);
     var before = 0u;
     for (var c = 0u; ok && c < n; c += WAY_LANES) {
@@ -513,19 +516,20 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
   settle();
   if (t == 0u) {
     let child_group = stack_id(first);
-    let short = levels[STATE_AT];
+    let state = levels[STATE_AT];
     if (ok) {
       record(records, CHILDREN * child_group);
-    } else if (short == 0u) {
-      // Past what the pool holds: its count `STARVED`, the pool's to grow (pxl-render `Short`).
-      put(records, STARVED);
-    } else if (short == PAST) {
+    } else if (state == 0u) {
+      // Past what the pool holds: its count `TREE_STARVED`, the pool's to grow (pxl-render
+      // `Short`).
+      put(records, TREE_STARVED);
+    } else if (state == PAST) {
       // Past the brick's own most, which no pool's growth lets it build: its count
       // `TREE_NONE`, refused at once (pxl-render `Resident`).
       put(records, TREE_NONE);
-    } else if (short == SHORT) {
-      // Past what its scratch holds: its count `CRAMPED`, the scratch's to grow.
-      put(records, CRAMPED);
+    } else if (state == CRAMPED) {
+      // Past what its scratch holds: its count `TREE_CRAMPED`, the scratch's to grow.
+      put(records, TREE_CRAMPED);
     }
     // Its root word (`tree::root_word`).
     ground[base + ROOT_AT] = select(0u, child_group | (levels[Z0_AT] << ROOT_ID_BITS), ok);

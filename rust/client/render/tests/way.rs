@@ -775,6 +775,7 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
         gpu.read(&b.stack),
     );
     let pool = tree::Read(&got_pool);
+    let mut ends = Vec::new();
     let records_at = tree::records_at(b.room);
     for (k, (h, slot)) in frame.hands.iter().enumerate() {
         let mine = fill::scratch_at(&scratch, k as u32) as usize;
@@ -809,6 +810,7 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
             }
             _ => assert_eq!(end, expected, "{}: how its build ended", h.name),
         }
+        ends.push(end);
         run.tally.add(match end {
             End::Built => "built",
             End::Bare => "no ways",
@@ -871,6 +873,11 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
     for slot in 0..SLOTS {
         let at = (slot * BRICK_WORDS + ROOT_AT) as usize;
         run.ground[at] = got_ground[at];
+    }
+    // A pop that ran out of the pool beside one that fit: a failed pop leaves the count where
+    // it found it, which the stack's count below holds, whichever order the two took.
+    if ends.iter().any(|e| matches!(e, End::Starved(_))) && ends.contains(&End::Built) {
+        run.tally.add("built beside one starved");
     }
     // Every slot's tree whole, in the GPU's pool and in the mirror, and none built over another.
     let mirror = tree::Read(&run.mirror);
@@ -1208,6 +1215,7 @@ fn hand_ways_fill_as_the_rust() {
         "past its root",
         "past its most",
         "starved",
+        "built beside one starved",
         "a fold gave back",
         "filled over a tree",
         "the pool grown",
