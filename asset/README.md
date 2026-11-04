@@ -42,9 +42,9 @@ the table that names them, `spec/spec/asset/ingest.json`, and draws
 `raw/place/symbol/` into the code that carries the place icons. Then it writes
 what the spec generates from the table:
 
-- `ts/client/src/driver/namespace/ingest.spec.ts` — the host's table, a key for each
+- `ts/client/src/origin/ingest.spec.ts` — the host's table, a key for each
   file's number
-- `ts/client/src/driver/namespace/catalog.spec.ts` — the catalog the host plugs in,
+- `ts/client/src/sys/fs/catalog.spec.ts` — the catalog the host plugs in,
   which file each of the kernel's slots names
 - `rust/spec/src/asset/ingest.spec.rs` — the pack's layout, which the renderer
   compiles

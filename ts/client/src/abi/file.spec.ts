@@ -3,7 +3,7 @@
 // GENERATED from spec/client/kernel/sys/io/file.json
 //
 // The kernel's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-kernel sys/io/file.rs, ts/client/src/driver/namespace/).
+// file holds (pxl-kernel sys/io/file.rs, ts/client/src/sys/fs/).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as root from "./file/root.spec.ts";
@@ -15,8 +15,8 @@ import * as format from "./file/format.spec.ts";
 /** The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
  * bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
  * one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
- * is called and where past that, a tile's version and URL, a storage key, is what the driver
- * (ts/client/src/driver/namespace/) binds the root to, `@xpute/host` carrying the open there. */
+ * is called and where past that, a tile's version and URL, a storage key, is what the client
+ * (ts/client/src/sys/fs/) binds the root to, `@xpute/host` carrying the open there. */
 export { root };
 
 /** Below the asset root, the catalog the client plugs in (pxl-spec asset/catalog.rs): the
@@ -60,6 +60,6 @@ export { storage };
  * name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
  * kernel reads a file of its format and refuses any other, reading none of it and never
  * writing over it, as a driver refuses a volume whose superblock it does not know; what
- * to do with the file is the driver's. Bump one whenever a change makes an older file mean
+ * to do with the file is the client's. Bump one whenever a change makes an older file mean
  * something other than it meant when it was written. */
 export { format };

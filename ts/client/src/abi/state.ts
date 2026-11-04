@@ -1,6 +1,6 @@
 // @pxl/client/abi/state.ts
 
-/** What a driver or the client's boot reports and the shell shows: numbers
+/** What the client reports beside the kernel and the shell shows: numbers
  * both read, as a kernel's uapi headers are, so neither reaches into the other. */
 
 /** Where the client's boot stands: starting, loading (the kernel runs, a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
@@ -16,7 +16,7 @@ export type Boot =
   | typeof BOOT_FAILED
   | typeof BOOT_STOPPED;
 
-/** What the driver has of a GPU, which the guest, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
+/** What the client has of a GPU, which the guest, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
 export const GPU_ASKING = 0;
 export const GPU_PRESENT = 1;
 export const GPU_WAITING = 2;

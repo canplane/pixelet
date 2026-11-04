@@ -6,9 +6,11 @@
  * The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
  * and the packet each carries — an XTP branch whose children are its fields, in
  * order. A command with no fields carries no packet. The kernel is the process; the
- * JavaScript around it is three things to it, its host, which holds the turns, its
- * drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and
- * the sections say which of them it is between.
+ * JavaScript around it is two things to it, its host, which holds the turns and carries
+ * its hostcalls to what answers them (ts/client/src/sys/), and its shell, the UI, which
+ * sends what the user does and what the place's sensors, GPU, visibility and frames
+ * tell it (ts/client/src/port/). A command's major is the module it is for, and the
+ * sections say what each is.
  *
  * The same number is a command on the submission ring and an event on the
  * completion ring (its `RES` clear). The direction is the ring: `pkt` is

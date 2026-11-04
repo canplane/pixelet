@@ -8,8 +8,8 @@
 //! shard's objects by the quadkey, an asset by its load's id, a storage file by
 //! its slot's, the sphere, the objects' top and their edits by their own. What
 //! it is called past that and where, a version, a URL or a storage key, is what
-//! the driver
-//! (ts/client/src/driver/namespace/) binds the root to, `@xpute/host`
+//! the client
+//! (ts/client/src/sys/fs/) binds the root to, `@xpute/host`
 //! carrying the open there. A file is bytes: how a platform keeps them, as
 //! text or otherwise, is its backend's.
 
@@ -42,7 +42,7 @@ use xpute_kit::status::errno::Errno;
 /// owner keeps. One of another format, one its backend cannot read as bytes
 /// (EBADMSG), or one larger than any heap a device is given (no build reads
 /// it) is refused: read as nothing and never written over, and named to the
-/// driver (`is_refused`), whose it is to set the file aside and empty the slot
+/// client (`is_refused`), whose it is to set the file aside and empty the slot
 /// (`on_emptied`). Which storage a slot is, how it keeps the bytes, and what
 /// an older file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -140,12 +140,12 @@ fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
-/// it was read, and nothing is written over it until the driver empties the slot.
+/// it was read, and nothing is written over it until the client empties the slot.
 pub fn is_refused(file: StorageFile) -> bool {
     refusals()[file as usize]
 }
 
-/// The driver set a refused slot's file aside and emptied it: its owner may
+/// The client set a refused slot's file aside and emptied it: its owner may
 /// open it again and write it.
 pub fn on_emptied(file: StorageFile) {
     refusals()[file as usize] = false;
@@ -164,7 +164,7 @@ pub fn storage_of(file: StorageFile, mut bytes: Vec<u8>) -> StorageRead {
     StorageRead::Bytes(bytes)
 }
 
-/// Named to the driver in the next snapshot, for it to set aside.
+/// Named to the client in the next snapshot, for it to set aside.
 fn refuse(file: StorageFile) -> StorageRead {
     refusals()[file as usize] = true;
     request_world_tick();
@@ -238,7 +238,7 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The driver's answer to `open_storage`, for a test with none: `bytes`, read
+/// The client's answer to `open_storage`, for a test with none: `bytes`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
@@ -431,7 +431,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 
 /// An open the host completed, read once (`Opened::of`); xpute's table finds
 /// its owner and closes it where it failed. A file larger than the heap every
-/// device is given cannot be held anywhere: it is the driver's answer refused,
+/// device is given cannot be held anywhere: it is the client's answer refused,
 /// closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
     let SysOpened { fd, detail, .. } = *completed;

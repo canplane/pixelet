@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/object.ts
+// @pxl/client/sys/fs/object.ts
 
 /**
  * OBJECT's backend: the placed objects' source, for now a loopback over the
@@ -26,7 +26,7 @@ import {
   top_of,
   type Leaf,
   type TopRow,
-} from "@/driver/namespace/object_tree.ts";
+} from "@/sys/fs/object_tree.ts";
 import { bracket, type Tx } from "@/bracket.tsx";
 
 /** The tree packet a file of `fmt` holds past its format byte; EBADMSG for

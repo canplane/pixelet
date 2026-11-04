@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/tile.ts
+// @pxl/client/sys/fs/tile.ts
 
 /**
  * The bakes' backend: a name the kernel opens, a tile's quadkey or the Earth's
@@ -11,10 +11,14 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { BASE_LAYERS, type BaseLayer, tileObject } from "./publication.spec.ts";
-import { tile_url } from "@/driver/namespace/route.ts";
-import { get } from "@/driver/namespace/read.ts";
-import type { Declaration } from "@/driver/namespace/source.ts";
+import {
+  BASE_LAYERS,
+  type BaseLayer,
+  tileObject,
+} from "@/origin/publication.spec.ts";
+import { tile_url } from "@/origin/route.ts";
+import { get } from "@/sys/fs/read.ts";
+import type { Declaration } from "@/sys/fs/source.ts";
 
 /** The version `name` is served under: the finest shard over it, the one its
  * name prefixes, that names one, the last of the finest as declared; else the

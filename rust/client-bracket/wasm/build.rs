@@ -1,7 +1,7 @@
 // pxl-wasm/build.rs
 
 // The module is linked as every module guest of xpute is (xpute_guest::wasm
-// `link`): its memory imported, which the central scheduler gives it
+// `link`): its memory imported, which the page reserves and gives it
 // (@xpute/host/mem/reserve.ts's reserve_mem), and its stack first. The
 // kernel lays out everything inside that memory (pxl_kernel::sys::mem, over
 // xpute_guest::mem).
@@ -22,8 +22,8 @@ use xpute_guest::wasm;
 use xpute_guest::wasm::LinkConfig;
 
 /// The memory the module declares it needs, which the engine checks when the
-/// shell hands it one: the smallest reservation this build can run in. A shell
-/// that asks for less fails to instantiate.
+/// page hands it one: the smallest reservation this build can run in. A page
+/// that reserves less fails to instantiate.
 const MIN_MEM_BYTES: u32 = PHONE_BYTES;
 
 fn main() {

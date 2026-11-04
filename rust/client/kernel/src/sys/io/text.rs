@@ -60,7 +60,7 @@ pub fn text_rise() {
     t.rasters.retain(|_, a| std::mem::take(&mut a.read));
 }
 
-/// One line at a width guessed from its characters, where no driver lays it out.
+/// One line at a width guessed from its characters, where the client does not lay it out.
 fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
     vec![(text_in, text_in.chars().count() as f64 * 7.0)]
 }
@@ -95,7 +95,7 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
         }
     };
     answer.read = true;
-    // The driver's answer is checked here, the door it comes back through: a
+    // The client's answer is checked here, the door it comes back through: a
     // line ending inside a character or out of order is no layout.
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
         .as_chunks::<{ LINE::WORDS as usize }>()

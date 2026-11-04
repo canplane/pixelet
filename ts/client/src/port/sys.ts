@@ -1,4 +1,7 @@
-// @pxl/client/driver/sys.ts
+// @pxl/client/port/sys.ts
+
+/** SYS on the shell's port: the page's visibility. The boot's SYS_BOOT is
+ * abi/boot.ts's. */
 
 import { Command, encode_sys_sleep } from "@/abi/cmd.spec.ts";
 import { HOST, set_page_visible } from "@/host/mount.ts";

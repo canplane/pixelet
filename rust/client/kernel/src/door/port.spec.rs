@@ -21,6 +21,6 @@
 /// The kernel, the guest that holds the core memory: what a worker names to reach it.
 pub const KERNEL: u32 = 1;
 
-/// The shell, with the drivers that bring the outside in (ts/client/src/port/,
-/// ts/client/src/driver/).
+/// The shell, the UI, on the place's event loop: what the user does, and what the
+/// place's sensors, GPU, visibility and frames tell it (ts/client/src/port/).
 pub const SHELL: u32 = 255;

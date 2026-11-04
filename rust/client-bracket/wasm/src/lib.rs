@@ -2,13 +2,14 @@
 
 //! The one WebAssembly module: pxl-kernel behind a directory and a doorbell.
 //!
-//! No wasm-bindgen. The central scheduler gives the module its memory, and
+//! No wasm-bindgen. The page reserves the module's memory and gives it
+//! (@xpute/host/mem/reserve.ts `reserve_mem`, ts/app/web/src/guest.ts), and
 //! the kernel lays out everything inside it on its first turn
-//! (pxl_kernel::sys::mem); the shell reads the directory once, at an address both
+//! (pxl_kernel::sys::mem); the host reads the directory once, at an address both
 //! sides know, and everything after crosses in that memory
 //! (pxl_kernel::door). The module's form is xpute's (xpute_guest::wasm): the
 //! allocator over the memory, what the module reads of itself, and `run`,
-//! the export the shell rings. What is here is pixelet's: its numbers, where
+//! the export the host rings. What is here is pixelet's: its numbers, where
 //! its heap begins and the kernel as the entry.
 
 use pxl_kernel::door;

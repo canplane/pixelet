@@ -24,7 +24,7 @@ import {
   GEO_PREFIX,
   SITE_URL,
   TILE_PREFIX,
-} from "@pxl/client/driver/namespace/route.spec.ts";
+} from "@pxl/client/origin/route.spec.ts";
 import { GROUND } from "@pxl/client/shell/ui/ground.ts";
 import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
@@ -228,7 +228,8 @@ const corePathIncludes = [
   "/ts/client/src/host/",
   "/ts/client/src/abi/",
   "/ts/client/src/port/",
-  "/ts/client/src/driver/",
+  "/ts/client/src/sys/",
+  "/ts/client/src/origin/",
   "/ts/client/src/shell/catalog/",
   "/ts/app/web/src/guest.",
 ];

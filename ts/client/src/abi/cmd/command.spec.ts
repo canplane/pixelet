@@ -36,12 +36,12 @@ export const SURFACE_FRAME = 0x1504;
 export const SYS_SLEEP = 0x1002;
 /** What the tile source declares of itself, once the client has it: the tile root's
  * `source`, the published one out of the bucket or the dev tile server's, read by the
- * client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.
+ * client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
  * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
 export const FS_MOUNT = 0x1301;
 /** A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
- * own again, what it held set aside by the driver: the kernel reads it again, and writes
+ * own again, what it held set aside by the client: the kernel reads it again, and writes
  * a storage file from then on. */
 export const FS_TRUNCATED = 0x1302;
 /** A permission as the shell's prompt or the browser's change reported it. */
@@ -95,7 +95,7 @@ export const CAMERA_GOTO = 0x1804;
  * first of a run is taken to be where the camera already is, so nothing moves as
  * it begins; the camera follows the tracker from there until POSE_END.
  * Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
- * the camera, sent by the device app's driver. */
+ * the camera, sent by the device app. */
 export const INPUT_XR_POSE = 0x1109;
 /** The tracker let the camera go: back to the controller it had. */
 export const INPUT_XR_POSE_END = 0x110a;

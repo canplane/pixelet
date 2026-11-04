@@ -5,18 +5,22 @@
   boundaries. At the host/guest boundary:
   - Under `xpute/`: host, guest and their contract only. No pixelet word
     (kernel, shell, pixelet).
+  - Kernel and shell mean what they mean in an operating system: the kernel is
+    the core, the shell the UI. A port is a scheduling unit, not a role.
   - pixelet's host is `ts/client/src/host/` and the client's bracket, and gives
-    no number a meaning. The kernel's two ABIs stand apart. What the shell holds
-    (the commands for the UI's intents and its input, the snapshot, the surfaces
-    it lends, the profiler) goes in `ts/client/src/port/`. What answers the
-    kernel's devices goes in `ts/client/src/driver/`: its opens and writes
-    (names, versions, kept keys, refusals) in `driver/namespace/`, its text,
-    sensors and GPU beside. The numbers both read, generated from `spec/` or
-    written beside it (a driver's state the shell shows, `abi/state.ts`), and
-    the boot are `ts/client/src/abi/`. None of it goes into `@xpute/host` or
-    `xpute-host`.
+    no number a meaning. What answers the kernel's hostcalls goes in
+    `ts/client/src/sys/`: its files (names, versions, kept keys, refusals) in
+    `sys/fs/`, its text and its stop report beside. What the shell's port
+    carries goes in `ts/client/src/port/`, a file a major: the commands for the
+    UI's intents and its input, the snapshot, the surfaces it lends and each
+    turn's frame, what the place's sensors, GPU and visibility tell the kernel,
+    the profiler. The server the client reads from (its routes, its published
+    tables, whether the device is online) is `ts/client/src/origin/`. The
+    numbers both read, generated from `spec/` or written beside it (a state the
+    client reports and the shell shows, `abi/state.ts`), and the boot are
+    `ts/client/src/abi/`. None of it goes into `@xpute/host` or `xpute-host`.
   - The shell (`ts/client/src/shell/`) is the UI. It computes no coordinate or
-    tile, is not the host, and reaches the kernel and the drivers through
+    tile, is not the host, and reaches the kernel, `sys/` and `origin/` through
     `port/` alone.
   - Don't propose removing a part of xpute's `kit` because nothing here calls
     it.

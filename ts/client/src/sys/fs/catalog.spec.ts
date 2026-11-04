@@ -1,9 +1,9 @@
-// @pxl/client/driver/namespace/catalog.spec.ts
+// @pxl/client/sys/fs/catalog.spec.ts
 //
 // GENERATED from the asset specs and ingest.json
 //
 // The catalog the host plugs in, served below the asset root at `CATALOG`
-// (ts/client/src/driver/namespace/asset.ts): the file each of the kernel's slots names and its
+// (ts/client/src/sys/fs/asset.ts): the file each of the kernel's slots names and its
 // extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.
 
 export const CATALOG_HEX =

@@ -1,8 +1,8 @@
-// @pxl/client/driver/namespace/online.ts
+// @pxl/client/origin/online.ts
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 
-/** Whether the device says it is online: the driver's to know, as the GPU is, and the guest's only as a read's failure. */
+/** Whether the device says it is online: the client's to know, as the GPU is, and the guest's only as a read's failure. */
 let state = true;
 const listeners = new Listeners();
 

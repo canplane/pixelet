@@ -3,7 +3,7 @@
 // GENERATED from spec/client/kernel/sys/io/file.json
 //
 // The kernel's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-kernel sys/io/file.rs, ts/client/src/driver/namespace/).
+// file holds (pxl-kernel sys/io/file.rs, ts/client/src/sys/fs/).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -18,10 +18,10 @@
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
 /// bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
 /// one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
-/// is called and where past that, a tile's version and URL, a storage key, is what the driver
-/// (ts/client/src/driver/namespace/) binds the root to, `@xpute/host` carrying the open there.
+/// is called and where past that, a tile's version and URL, a storage key, is what the client
+/// (ts/client/src/sys/fs/) binds the root to, `@xpute/host` carrying the open there.
 pub mod root {
-    /// The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the driver's choice.
+    /// The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice.
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's id in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
@@ -29,7 +29,7 @@ pub mod root {
     /// as a bake's tile is named, its `format.OBJECT` first; the top of their tree, read
     /// (`object.TOP`); and their edits, written (`object.EDITS`)
     /// (domain/layer/object/repository.rs). A shard with none has no file. The source keeps the
-    /// shards and the top and applies the edits; which source, a mock or a server, is the driver's.
+    /// shards and the top and applies the edits; which source, a mock or a server, is the client's.
     pub const OBJECT: u32 = 258;
 }
 
@@ -92,7 +92,7 @@ pub mod storage {
 /// name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
 /// kernel reads a file of its format and refuses any other, reading none of it and never
 /// writing over it, as a driver refuses a volume whose superblock it does not know; what
-/// to do with the file is the driver's. Bump one whenever a change makes an older file mean
+/// to do with the file is the client's. Bump one whenever a change makes an older file mean
 /// something other than it meant when it was written.
 pub mod format {
     pub const SETTINGS: u8 = 1;

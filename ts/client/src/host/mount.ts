@@ -39,7 +39,7 @@ export function set_view_open(open: boolean): void {
   steer();
 }
 
-/** The page or the app seen or hidden (driver/sys.ts). */
+/** The page or the app seen or hidden (port/sys.ts). */
 export function set_page_visible(visible: boolean): void {
   page_visible = visible;
   steer();

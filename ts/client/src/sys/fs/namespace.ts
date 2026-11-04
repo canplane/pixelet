@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/namespace.ts
+// @pxl/client/sys/fs/namespace.ts
 
 /**
  * The kernel's namespace: each root it opens a file under (file.json `root`)
@@ -10,12 +10,12 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { type Binding, Namespace } from "@xpute/host/ipc/ns.ts";
 
 import { root } from "@/abi/file.spec.ts";
-import { BASE_LAYERS } from "./publication.spec.ts";
-import { read_asset } from "@/driver/namespace/asset.ts";
-import { OBJECTS } from "@/driver/namespace/object.ts";
-import { source_declaration } from "@/driver/namespace/source.ts";
-import { commit_storage, open_storage } from "@/driver/namespace/storage.ts";
-import { read_object } from "@/driver/namespace/tile.ts";
+import { BASE_LAYERS } from "@/origin/publication.spec.ts";
+import { read_asset } from "@/sys/fs/asset.ts";
+import { OBJECTS } from "@/sys/fs/object.ts";
+import { source_declaration } from "@/sys/fs/source.ts";
+import { commit_storage, open_storage } from "@/sys/fs/storage.ts";
+import { read_object } from "@/sys/fs/tile.ts";
 
 /** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE
  * to the platform's storage, OBJECT to the placed objects' source. */

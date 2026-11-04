@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/storage.ts
+// @pxl/client/sys/fs/storage.ts
 
 /**
  * STORAGE's backend: the kernel's storage files (file.json `storage`), the

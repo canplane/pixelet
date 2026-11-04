@@ -13,6 +13,6 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 /** The kernel, the guest that holds the core memory: what a worker names to reach it. */
 export const KERNEL: u32 = 1 as number;
 
-/** The shell, with the drivers that bring the outside in (ts/client/src/port/,
- * ts/client/src/driver/). */
+/** The shell, the UI, on the place's event loop: what the user does, and what the
+ * place's sensors, GPU, visibility and frames tell it (ts/client/src/port/). */
 export const SHELL: u32 = 255 as number;

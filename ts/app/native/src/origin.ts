@@ -2,7 +2,7 @@
 
 import { Platform } from "react-native";
 
-import { SITE_URL } from "@pxl/client/driver/namespace/route.spec.ts";
+import { SITE_URL } from "@pxl/client/origin/route.spec.ts";
 import { PLATFORM } from "./module.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */

@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "Tile objects as the kernel named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the Earth's sphere. The driver must make the same (tile.test.ts)."
+    "Tile objects as the kernel named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the Earth's sphere. tile.ts must make the same (tile.test.ts)."
   ],
   "source": {
     "top_zoom": 4,

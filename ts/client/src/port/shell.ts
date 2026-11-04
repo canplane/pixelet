@@ -2,8 +2,9 @@
 
 /** The kernel as the shell reaches it, beside each major's own commands
  * (input.ts, edit.ts, camera.ts, scene.ts, setting.ts, sensor.ts, surface.ts,
- * perf.ts, snapshot.ts), and what the drivers below it show the UI. The shell
- * names no host and no driver (AGENTS.md). */
+ * perf.ts, snapshot.ts, fs.ts, gpu.ts, sys.ts), and what the client's
+ * services (sys/, origin/) show the UI. The shell names no host and no
+ * service (AGENTS.md). */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type {
@@ -18,20 +19,20 @@ import * as port from "@/abi/port.spec.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
 export { boot_state, watch_boot } from "@/abi/boot.ts";
-export { stop_code } from "@/driver/stop.ts";
+export { stop_code } from "@/sys/stop.ts";
 
-// What the drivers show the UI: the GPU's state, the network's, the world's
+// What the client's services show the UI: the GPU's state, the network's, the world's
 // source, and where the origin serves what the shell fetches itself.
-export { gpu, watch_gpu } from "@/driver/gpu.ts";
-export { online, watch_online } from "@/driver/namespace/online.ts";
+export { gpu, watch_gpu } from "@/port/gpu.ts";
+export { online, watch_online } from "@/origin/online.ts";
 export {
   source_state,
   source_versions,
   watch_source,
-} from "@/driver/namespace/source.ts";
-export { asset_url } from "@/driver/namespace/route.ts";
-export { SEARCH_URL } from "@/driver/namespace/route.spec.ts";
-export { ASSET_FILES, PACK } from "@/driver/namespace/ingest.spec.ts";
+} from "@/sys/fs/source.ts";
+export { asset_url } from "@/origin/route.ts";
+export { SEARCH_URL } from "@/origin/route.spec.ts";
+export { ASSET_FILES, PACK } from "@/origin/ingest.spec.ts";
 
 /** A command of the kernel's, rung at once with no quota. */
 export function command(cmd: Command, pkt?: PacketWriter): void {

@@ -3,9 +3,11 @@
     "The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),",
     "and the packet each carries — an XTP branch whose children are its fields, in",
     "order. A command with no fields carries no packet. The kernel is the process; the",
-    "JavaScript around it is three things to it, its host, which holds the turns, its",
-    "drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and",
-    "the sections say which of them it is between.",
+    "JavaScript around it is two things to it, its host, which holds the turns and carries",
+    "its hostcalls to what answers them (ts/client/src/sys/), and its shell, the UI, which",
+    "sends what the user does and what the place's sensors, GPU, visibility and frames",
+    "tell it (ts/client/src/port/). A command's major is the module it is for, and the",
+    "sections say what each is.",
     "",
     "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
@@ -890,7 +892,7 @@
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
             "`source`, the published one out of the bucket or the dev tile server's, read by the",
-            "client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.",
+            "client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.",
             "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
             "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
@@ -927,7 +929,7 @@
           "val": 4866,
           "$doc": [
             "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
-            "own again, what it held set aside by the driver: the kernel reads it again, and writes",
+            "own again, what it held set aside by the client: the kernel reads it again, and writes",
             "a storage file from then on."
           ],
           "pkt": [
@@ -1292,7 +1294,7 @@
             "first of a run is taken to be where the camera already is, so nothing moves as",
             "it begins; the camera follows the tracker from there until POSE_END.",
             "Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive",
-            "the camera, sent by the device app's driver."
+            "the camera, sent by the device app."
           ],
           "pkt": [
             {

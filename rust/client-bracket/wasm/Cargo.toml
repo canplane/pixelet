@@ -7,7 +7,7 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"
-# The module links against an imported memory and the shell's imports; it has
+# The module links against an imported memory and the host's imports; it has
 # no native test binary. Its tests are pxl-kernel's and xpute-kit's.
 test = false
 doctest = false

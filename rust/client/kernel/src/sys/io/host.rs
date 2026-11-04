@@ -2,7 +2,7 @@
 //
 // What the kernel asks of the host, as xpute hostcalls recorded during a
 // turn and run by the host after it returns, so they are done before the
-// next turn rises; and what a driver answers through it, as
+// next turn rises; and what the client answers through it, as
 // hostcalls run before they return. The clock too is called directly,
 // since a turn measures its budget mid-turn.
 

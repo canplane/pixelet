@@ -1,9 +1,13 @@
-// @pxl/client/driver/namespace/tile.test.ts
+// @pxl/client/sys/fs/tile.test.ts
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { type BaseLayer, TILE_SPHERE, tileObject } from "./publication.spec.ts";
+import {
+  type BaseLayer,
+  TILE_SPHERE,
+  tileObject,
+} from "@/origin/publication.spec.ts";
 import { declaration } from "./source.ts";
 import { version_of } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };

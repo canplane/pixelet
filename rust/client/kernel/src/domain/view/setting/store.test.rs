@@ -142,7 +142,7 @@ fn session_setting_not_stored() {
     );
 }
 
-/// What storage holds of the slot, as its driver hands it over.
+/// What storage holds of the slot, as the client hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = vec![StorageFile::Settings.format()];
     bytes.extend(storage_of(pairs));
@@ -209,7 +209,7 @@ fn empty_slot_defaults() {
 
 /// A file too large for any heap, or of another format (the JSON by name the
 /// slot held before), is refused: the defaults, nothing written over it until
-/// the driver sets it aside and empties the slot, and then what changed meanwhile.
+/// the client sets it aside and empties the slot, and then what changed meanwhile.
 #[test]
 fn bad_slot_refused() {
     let _g = sys::serial();
@@ -240,7 +240,7 @@ fn bad_slot_refused() {
     }
 }
 
-/// One that fails to open otherwise is not the driver's to set aside: the
+/// One that fails to open otherwise is not the client's to set aside: the
 /// defaults, never written over this session.
 #[test]
 fn unreadable_slot_stored() {

@@ -64,11 +64,11 @@ on the browser's WebGPU; on a device, `pxl-native` links it into the app
 the same **client** (`ts/client`), and each hands it, once, its own **client's
 bracket**: the guest and what its platform gives, storage, text, the network,
 the sensors and the surfaces (`ts/client/src/bracket.tsx`). The client is the
-host (`src/host/`), what the shell holds of the kernel (`src/port/`), what
-answers the kernel's devices, its opens and writes among them (`src/driver/`),
-the numbers both read and the boot (`src/abi/`), and the **shell**
-(`src/shell/`), the UI, which changes the world only by commands the kernel
-applies.
+host (`src/host/`), what answers the kernel's hostcalls, its files among them
+(`src/sys/`), what the shell's port carries (`src/port/`), the server it reads
+from (`src/origin/`), the numbers both read and the boot (`src/abi/`), and the
+**shell** (`src/shell/`), the UI, which changes the world only by commands the
+kernel applies.
 
 Almost nothing is computed at request time. Tiles and assets are served from a
 bucket under names that never come to mean something else, a tile under its
@@ -206,8 +206,9 @@ language by where a thing runs.
 │   ├── client/          #   the client both apps bundle
 │   │   └── src/
 │   │       ├── host/    #     xpute's host, mounted
-│   │       ├── port/    #     what the shell holds of the kernel
-│   │       ├── driver/  #     what answers the kernel's devices
+│   │       ├── sys/     #     what answers the kernel's hostcalls
+│   │       ├── port/    #     what the shell's port carries
+│   │       ├── origin/  #     the server the client reads from
 │   │       ├── abi/     #     the numbers both read, and the boot
 │   │       └── shell/   #     the UI
 │   ├── app/web/         #   the page's app and its bracket

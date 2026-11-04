@@ -94,7 +94,7 @@ pub struct SnapshotInputs {
 
 /// The refused files a snapshot names at once: every storage file, and as
 /// many of the objects' as the view asks for at once; the rest are named as
-/// the driver empties those.
+/// the client empties those.
 const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInputs {
@@ -240,7 +240,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.
-/// The network and the GPU are the drivers', which say them.
+/// The network and the GPU are the client's, which says them.
 fn stall() -> Option<Message> {
     if request::given_up() {
         return Some(Message::WorldUnavailable);

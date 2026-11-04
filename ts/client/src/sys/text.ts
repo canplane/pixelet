@@ -1,4 +1,4 @@
-// @pxl/client/driver/text.ts
+// @pxl/client/sys/text.ts
 
 /**
  * The kernel's own hostcalls, TEXT_LAYOUT and TEXT_RASTER, answered from

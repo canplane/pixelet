@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/storage.test.ts
+// @pxl/client/sys/fs/storage.test.ts
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

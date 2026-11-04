@@ -46,14 +46,14 @@ pub const THREAD_STACK_BYTES: u32 = 8388608;
 /// two, which the ring checks, since a position is taken modulo it by masking.
 ///
 /// Sized to what a turn is sent, not to a burst: a full ring loses nothing, since
-/// the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
+/// the host rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
 /// `writer`, `submit`). And small because every slot ends up resident: a
 /// position only grows, so each slot is written in turn, and a slot is a page
 /// since a FS_MOUNT's or a SCENE_CHAT's packet can come near one.
 pub const SQ_CAP: u32 = 512;
 
 /// Frames the completion ring holds: everything one turn leaves, since the
-/// shell reads it dry before it rings again. A turn leaves at most a reply to
+/// host reads it dry before it rings again. A turn leaves at most a reply to
 /// each command it applies and its own events after the drain (door.rs
 /// `EVENTS`), so a ring of the submission ring's capacity plus the door's
 /// reserve, `EVENTS` + 1, never stops a drain partway; twice is the present
@@ -71,7 +71,7 @@ pub const RING_SLOT_AT: u32 = 1572864;
 
 /// Where the kernel's toc is (xpute-guest ipc/toc.rs): the page under
 /// GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
-/// rather than one the module hands out, so the shell finds it with no call but the
+/// rather than one the module hands out, so the host finds it with no call but the
 /// first turn's, which lays the memory out and writes it.
 pub const TOC_AT: u32 = 8384512;
 
@@ -123,7 +123,7 @@ pub const REGION_BYTES: u32 = 67108864;
 /// as one ArrayBuffer.
 ///
 /// Also the floor the module declares to the engine (`--initial-memory`), so a
-/// shell that asks for less fails to instantiate rather than booting into a
+/// page that reserves less fails to instantiate rather than booting into a
 /// kernel with nowhere to put the terrain.
 pub const PHONE_BYTES: u32 = 536870912;
 

@@ -3,7 +3,7 @@
 //! Where placed objects are kept and come from, the one way the object
 //! layer's records are read and written: what is asked for arrives and an
 //! edit is sent, each write `<key, id, ext>`. Who keeps them is their
-//! source's, a mock's or a server's (ts/client/src/driver/namespace/object.ts),
+//! source's, a mock's or a server's (ts/client/src/sys/fs/object.ts),
 //! below OBJECT (file.json `root`); this file reads what it serves and sends
 //! it edits.
 //!
@@ -22,7 +22,7 @@
 //!
 //! The writes the store takes go up as edits, batched (file.json
 //! `object.EDITS`), which the source applies to its shards and its top. A
-//! file that does not decode is refused, named to the driver to set aside
+//! file that does not decode is refused, named to the client to set aside
 //! (`refused_files`), and read again once it says so (`on_emptied`).
 
 use fnv::FnvHashSet;
@@ -73,7 +73,7 @@ struct State {
     top_shards: Option<FnvHashSet<u64>>,
     /// The shards read, by id: their leaves are in the store.
     read: FnvHashSet<u64>,
-    /// The files below OBJECT refused, by id, until the driver says each
+    /// The files below OBJECT refused, by id, until the client says each
     /// is empty or its source's own again.
     refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
@@ -122,7 +122,7 @@ pub fn holds(space: &Aabb) -> bool {
 /// The shards the view asks for (domain/view/demand.rs `object_step`), each
 /// with its ask, no more than `WANTS`: before the top is read, the top
 /// alone; then those it lists not yet read, in place of what was wanted
-/// before. A file refused is not wanted until the driver empties it.
+/// before. A file refused is not wanted until the client empties it.
 pub fn want(asked: impl Iterator<Item = (Quadrant, Ask)>) {
     let st = state();
     st.wants.clear();
@@ -215,7 +215,7 @@ pub fn refused_files() -> &'static [u64] {
     &state().refused_files
 }
 
-/// The driver set the refused file `id` aside: it is wanted again, as
+/// The client set the refused file `id` aside: it is wanted again, as
 /// new. False where it was not refused.
 pub fn on_emptied(id: u64) -> bool {
     let st = state();

@@ -20,7 +20,7 @@
 double xpute_run(double quota_ms);
 
 // The memory: its first byte, with its bytes written through `bytes` (which
-// may be null) — what the shell reads the directory and the rings through.
+// may be null) — what the host reads the directory and the rings through.
 uint8_t *xpute_mem(uint32_t *bytes);
 
 // `answer`, or none for null, answers the kernel's hostcalls: each a record

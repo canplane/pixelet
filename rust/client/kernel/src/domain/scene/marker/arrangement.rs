@@ -406,7 +406,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             refused = true;
         }
     }
-    // Painted at render, or laid out by the driver, neither of which asks a
+    // Painted at render, or laid out by the client, neither of which asks a
     // turn: one looks again, while a design is on its way (`design::coming`),
     // once a slot let go may make room for one that had none, or once a
     // hold let go frees the old slot.

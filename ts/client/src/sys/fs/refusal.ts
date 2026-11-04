@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/refusal.ts
+// @pxl/client/sys/fs/refusal.ts
 
 /**
  * The files the kernel refused (the snapshot's `refused_files`): each set aside
@@ -9,20 +9,11 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-import {
-  Command,
-  encode_fs_truncated,
-  type RefusedFile,
-} from "@/abi/cmd.spec.ts";
+import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import { root } from "@/abi/file.spec.ts";
-import * as port from "@/abi/port.spec.ts";
-import { HOST } from "@/host/mount.ts";
-import { OBJECTS } from "@/driver/namespace/object.ts";
-import {
-  STORAGE,
-  set_aside,
-  type Storage,
-} from "@/driver/namespace/storage.ts";
+import { fs_truncated } from "@/port/fs.ts";
+import { OBJECTS } from "@/sys/fs/object.ts";
+import { STORAGE, set_aside, type Storage } from "@/sys/fs/storage.ts";
 
 /** A file set aside by the backend `root` is bound to, by its path; false,
  * nothing changed, where it did not. */
@@ -51,23 +42,11 @@ export function set_aside_by_root(s: Storage): SetAside {
  * aside twice. */
 const emptying = new Set<string>();
 
-/** The kernel told a file is empty (FS_TRUNCATED), after the completion
- * ring is read: the doorbell refuses a write while it reads. */
-function file_emptied(f: RefusedFile): void {
-  queueMicrotask(() =>
-    HOST.send(
-      port.SHELL,
-      Command.FS_TRUNCATED,
-      encode_fs_truncated(HOST.doorbell, f.root, f.path),
-    ),
-  );
-}
-
 /** The snapshot's `refused_files`: each file set aside once, and the kernel told
  * (`emptied`). */
 export function follow_refused_files(
   files: readonly RefusedFile[],
-  emptied: (f: RefusedFile) => void = file_emptied,
+  emptied: (f: RefusedFile) => void = fs_truncated,
   aside: SetAside = set_aside_by_root(STORAGE),
 ): void {
   const named = new Set(files.map((f) => `${f.root}/${f.path}`));

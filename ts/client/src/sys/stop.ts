@@ -1,7 +1,7 @@
-// @pxl/client/driver/stop.ts
+// @pxl/client/sys/stop.ts
 
 /** The kernel's last report, its hostcall `abort` (pxl-kernel
- * `sys/stop.rs`), logged whole and kept short as a stop code for the shell's
+ * `sys/io/host.rs`), logged whole and kept short as a stop code for the shell's
  * panic. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";

@@ -26,7 +26,7 @@ use xpute_host::mem::Memory;
 use xpute_host::native::{self, stopped, Alloc, BootInfo, Config};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a
-/// `Vec` the kernel hands the shell lies in the memory the shell reads.
+/// `Vec` the kernel hands out lies in the memory the host reads.
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
 
@@ -34,7 +34,7 @@ static ALLOC: Alloc = Alloc;
 // as a page on a phone reserves, its own ranges past the rings' front
 // (GLOBAL_BASE, door/layout.rs: a device's library keeps its statics where
 // the linker put them) and its heap past `.fixed`, as the module's is — and
-// the doorbell and the memory the shell reads the directory and the rings
+// the doorbell and the memory the host reads the directory and the rings
 // through, exported under xpute's names as `xpute_run` and `xpute_mem`, with
 // `xpute_hostcall_on` for what answers its hostcalls (include/pxl_native.h),
 // and `guest()` here.

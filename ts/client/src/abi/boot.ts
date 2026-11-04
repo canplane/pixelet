@@ -2,9 +2,9 @@
 
 /**
  * Boots the client, bottom up, once its app has set the place (bracket.tsx):
- * the guest the place opens; xpute's host mounted on it with pixelet's drivers
- * (the roots, the program's calls, the stop report, each turn's submission) and
- * the frame pacing; the place told where to report what its sensors, its GPU,
+ * the guest the place opens; xpute's host mounted on it with pixelet's
+ * hostcalls (sys/: the roots, the program's calls, the stop report), each
+ * turn's submission (port/surface.ts) and the frame pacing; the place told where to report what its sensors, its GPU,
  * its network and its visibility hear; then the kernel, by `SYS_BOOT`. The
  * shell is no part of it: it reads where the boot stands through the port
  * (port/shell.ts), and what the kernel shows it once it has started.
@@ -23,9 +23,9 @@ import {
   GroundStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
-import { declare_source, source_state } from "@/driver/namespace/source.ts";
-import { namespace } from "@/driver/namespace/namespace.ts";
-import { follow_refused_files } from "@/driver/namespace/refusal.ts";
+import { declare_source, source_state } from "@/sys/fs/source.ts";
+import { namespace } from "@/sys/fs/namespace.ts";
+import { follow_refused_files } from "@/sys/fs/refusal.ts";
 
 import { HOST, open_host } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
@@ -38,13 +38,13 @@ import {
 } from "./mem.spec.ts";
 import { key } from "@/abi/toc.spec.ts";
 import { stream } from "./gpu.spec.ts";
-import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/driver/sensor.ts";
-import { submit_frame } from "@/driver/frame.ts";
-import { abort } from "@/driver/stop.ts";
-import { text_call } from "@/driver/text.ts";
+import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/port/sensor.ts";
+import { submit_frame } from "@/port/surface.ts";
+import { abort } from "@/sys/stop.ts";
+import { text_call } from "@/sys/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
-import { GPU_STATE, gpu_present, set_gpu } from "@/driver/gpu.ts";
-import { world_visible } from "@/driver/sys.ts";
+import { GPU_STATE, gpu_present, gpu_ready, set_gpu } from "@/port/gpu.ts";
+import { world_visible } from "@/port/sys.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
@@ -54,7 +54,7 @@ import {
   type Boot,
   SOURCE_DECLARED,
 } from "@/abi/state.ts";
-import { set_online } from "@/driver/namespace/online.ts";
+import { set_online } from "@/origin/online.ts";
 import { snapshot_posted } from "@/port/snapshot.ts";
 import * as snapshot from "@/port/snapshot.ts";
 
@@ -74,8 +74,8 @@ export function boot_state(): Boot {
 
 export const watch_boot = listeners.watch;
 
-/** What the shell hears the kernel raise: the snapshot it reads, and the
- * files it names refused; the sensors the drivers start and stop. */
+/** What the kernel raises for the shell's port: the snapshot, and the files
+ * it names refused; the sensors it starts and stops. */
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
@@ -151,7 +151,7 @@ async function open(): Promise<void> {
   bracket.sensor.hear(SENSOR_HEARD);
   HOST.doorbell.listen(port.SHELL, heard);
   bracket.gpu.boot({
-    ready: () => HOST.send(port.SHELL, Command.GPU_READY),
+    ready: gpu_ready,
     state: (state) => set_gpu(GPU_STATE[state]),
     wake: () => HOST.strobe.request(),
   });

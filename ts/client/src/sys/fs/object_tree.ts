@@ -1,4 +1,4 @@
-// @pxl/client/driver/namespace/object_tree.ts
+// @pxl/client/sys/fs/object_tree.ts
 
 /**
  * The placed objects' tree as their source keeps it beside the kernel: a

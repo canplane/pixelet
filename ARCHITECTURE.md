@@ -157,7 +157,7 @@ in the order made (`object.EDITS`), sent a while after the first and no more
 than a turn allows. The objects' source applies them to its shards and rebuilds
 the top's rows of the shards they reach; the kernel writes no shard and no top.
 It folds as the tree does, a rule the client's `OBJECT` backend holds again
-(`ts/client/src/driver/namespace/object_tree.ts`), held to the store by one
+(`ts/client/src/sys/fs/object_tree.ts`), held to the store by one
 record both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
 client's own database or a server, the kernel cannot tell.
 
@@ -784,8 +784,8 @@ test`.
 
 The kernel records its hostcalls during a turn, and the host runs them after it
 returns, so each is done before the next turn begins (`sys/io/host.rs`). What
-a driver answers, a text's lines and its pixels, the kernel
-asks by a hostcall run now, answered before the call returns (`sys/io/text.rs`):
+the client answers, a text's lines and its pixels, the kernel asks by a
+hostcall run now, answered before the call returns (`sys/io/text.rs`):
 a page's host through the module's import, a device's on the JavaScript thread
 that waits on the turn. Beside those, only what the bracket hands over is called
 directly. An answer comes back as a number, read once by `answer_of` into a count
@@ -799,28 +799,30 @@ app hands the client once, of what its platform gives
 mounts `@xpute/host` on the guest the bracket opened (`host/mount.ts`
 `open_host`) and names none of pixelet's numbers: what a `SURFACE_FRAME` carries,
 what an open or a write means and what the stop report says are handed it by the
-client's boot (`ts/client/src/abi/boot.ts`). The kernel's two ABIs stand apart
-in the client, as a display stack's do: what the shell holds, the commands for
-the UI's intents and its input, the snapshot, the surfaces it lends and the
-profiler, is `ts/client/src/port/`; what answers the kernel's devices, its opens
-and writes (`driver/namespace/`), its text, sensors and GPU, is
-`ts/client/src/driver/`; the numbers both read, generated from `spec/` or, for
-the states a driver reports and the shell shows, written beside it
-(`abi/state.ts`), are `ts/client/src/abi/`.
+client's boot (`ts/client/src/abi/boot.ts`). What answers the kernel's
+hostcalls is `ts/client/src/sys/`: its files, their names, versions, kept keys
+and refusals (`sys/fs/`), and its text and its stop report beside. What the
+shell's port carries is `ts/client/src/port/`, a file a major. The server the
+client reads from, its routes, its published tables and whether the device is
+online, is `ts/client/src/origin/`; the numbers both read, generated from
+`spec/` or, for the states the client reports and the shell shows, written
+beside it (`abi/state.ts`), are `ts/client/src/abi/`.
 
 The host and the kernel share xpute's two rings, one for what the host submits
 and one for what the kernel completes, each frame naming a port at the kernel's
-far side: the host, 0, whose are xpute's own commands (the answers to the
-kernel's opens), and the shell, 255, with the drivers. 2 to 254 are reserved for
-threads that would work beside the kernel on slabs it lends them, and 1, the
-kernel's own, is the number such a thread would name to reach it
+far side. A port is a scheduling unit: what runs apart has its own, and what
+runs on one loop shares one. The host, 0, has xpute's own commands (the answers
+to the kernel's opens); the shell, 255, is the platform's event loop, where the
+UI runs and where the platform's sensors, GPU and visibility are heard. 2 to 254 are
+reserved for threads that would work beside the kernel on slabs it lends them,
+and 1, the kernel's own, is the number such a thread would name to reach it
 (`spec/client/kernel/door/port.json`). The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
 tree. A command's major is the module it is for (`SYS`, `FS`, `INPUT`,
 `SENSOR`, `GPU`, `SURFACE`, `SETTING`, `SCENE`, `CAMERA`, `EDIT`, `PERF`,
 `SHELL`): the door applies each major's in its own file (`door/apply/`), and
-the client sends each from its major's file in `port/` or `driver/`. The kernel
+the client sends each from its major's file in `port/`. The kernel
 also posts **events** nobody asked for, such as a sensor to watch or a new
 snapshot, each for the port that hears it.
 
@@ -830,38 +832,41 @@ after a turn only when what it is made of moved (`shell.rs` `SnapshotInputs`), a
 carries only what the kernel owns; what is rounded or timed for presentation is
 the shell's. The shell hands the kernel the surfaces to draw into and computes
 no coordinate, tile or draw; what it needs of the model is generated from the
-same JSON as the Rust. The host, `port/`, `driver/`, `abi/` and the shell are
-one package, `ts/client`, and the shell reaches the kernel and the drivers
-through `port/` alone.
+same JSON as the Rust. The host, `sys/`, `port/`, `origin/`, `abi/` and the
+shell are one package, `ts/client`, and the shell reaches the kernel, `sys/` and
+`origin/` through `port/` alone.
 
-The kernel stands between two stacks that run opposite ways. By role, the
-shell is above it, the kernel's user, and the devices below; by substrate, the
-kernel is xpute's guest and the host is below it. The kernel's edge to the
-shell is its **upper ABI**, and its edge to the devices its **lower ABI**. Both
-ride xpute's carriers, and the host gives neither a meaning; the shell and the
-host share one process only because a page and an app hold both.
+Kernel and shell mean what they mean in an operating system, and the kernel
+stands between two stacks that run opposite ways. By role, the shell is above
+it, the kernel's user, and what it asks of the platform it asks below it,
+by hostcall; by substrate, the kernel is xpute's guest and the host is below it.
+To the kernel the shell's port and its hostcalls are one face, its ABI: whether
+a reading is a hand's or a sensor's is the client's to know. Both ride xpute's
+carriers, and the host gives neither a meaning; the shell and the host share one
+process only because a page and an app hold both.
 
 ```text
  pixelet, by role                          xpute, by substrate
 
-   shell     the UI: React over the          guest   the kernel, run in turns
-             snapshot                                (pxl-wasm, pxl-native)
-     │ ▲  upper ABI, ts/client/src/port/       │ ▲  xpute's contract
-     ▼ │                                       ▼ │
-   kernel    decides all, owns no device     host    @xpute/host, mounted by
-     │ ▲  lower ABI, ts/client/src/driver/           ts/client/src/host/
+   shell     the UI: React over the        guest   the kernel, run in turns
+             snapshot; the platform's              (pxl-wasm, pxl-native)
+             sensors, GPU, visibility        │ ▲  xpute's contract
+     │ ▲  port 255, ts/client/src/port/      ▼ │
+     ▼ │                                   host    @xpute/host, mounted by
+   kernel    decides all, owns no device           ts/client/src/host/
+     │ ▲  hostcalls, ts/client/src/sys/
      ▼ │
-   devices   the place's files, text,
-             sensors, GPU, visibility
+   platform  its files, text, the stop
+             report
 ```
 
 What crosses each edge:
 
-| Edge                          | Down                                                                                                                       | Up                                                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads  | the snapshot, replaced whole when it moved, and the events it is told by                                   |
-| kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                           | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `SURFACE_FRAME` |
-| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, hostcalls and the GPU stream's records, the panic hook if it stops                 |
+| Edge                        | Down                                                                                                                                                                                                                                                                                              | Up                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| shell and kernel, `port/`   | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends and each turn's frame (`SURFACE_*`), a sensor's reading, the GPU's readiness, the page's visibility, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them |
+| kernel and platform, `sys/` | opens and writes, a text's layout and raster, the stop report                                                                                                                                                                                                                                     | a file read whole, a text's lines and its pixels                                                                 |
+| host and guest, xpute       | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0                                                                                                                                                                        | completions and events, hostcalls and the GPU stream's records, the panic hook if it stops                       |
 
 ## Reads, and the one scheduler
 
@@ -869,18 +874,18 @@ A read is a file in xpute's sense
 ([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#hostcalls-and-files)):
 the kernel names a root by its number and an object below it by one name,
 and the client binds each root to what answers it, once at boot
-(`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
+(`ts/client/src/sys/fs/namespace.ts` `namespace`). The roots are
 `spec/client/kernel/sys/io/file.json` `root`'s: the bakes and the assets
 read-only, `STORAGE` holding the kernel's own files, each a **storage file** on
 the device, and `OBJECT` the placed objects' source, its shards and their top
 read and its edits written:
 
-| Root               | The kernel's path                                              | What the client binds it to                                                                                  |
-| ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| each bake, by kind | a tile's quadkey; the Earth's `sphere`                         | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
-| `ASSET`            | a load's id, in decimal                                        | the shipped asset that id is, by its hash (`namespace/asset.ts`)                                         |
-| `STORAGE`          | a storage file's id, in decimal (`storage`)                    | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
-| `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS`                | for now a loopback over the place's database, which applies the edits (`namespace/object.ts`)                |
+| Root               | The kernel's path                               | What the client binds it to                                                                               |
+| ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| each bake, by kind | a tile's quadkey; the Earth's `sphere`          | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`sys/fs/tile.ts`) |
+| `ASSET`            | a load's id, in decimal                         | the shipped asset that id is, by its hash (`sys/fs/asset.ts`)                                             |
+| `STORAGE`          | a storage file's id, in decimal (`storage`)     | the platform's storage, under a key it picks (`sys/fs/storage.ts`)                                        |
+| `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS` | for now a loopback over the place's database, which applies the edits (`sys/fs/object.ts`)                |
 
 So the kernel names no URL, version, storage key or platform: a path is a
 name, and where it leads is the client's. The client reads the declaration
@@ -915,14 +920,14 @@ objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its id
 (`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
-a platform that keeps text keeps their base64url (`namespace/storage.ts`), and
+a platform that keeps text keeps their base64url (`sys/fs/storage.ts`), and
 `OBJECT`'s database keeps the bytes. A storage file begins with its slot's
 format byte, and each file below `OBJECT` with its own (`file.json` `format`);
 the kernel refuses one of another format, one its backend cannot read as bytes,
 or one that does not decode, as a driver refuses a superblock it does
 not know, and never writes over it. It names each refused file in the snapshot
 (`refused_files`); the client sets it aside, empties it and says so
-(`FS_TRUNCATED`, `namespace/refusal.ts`), and the kernel reads it again. A shard
+(`FS_TRUNCATED`, `sys/fs/refusal.ts`), and the kernel reads it again. A shard
 whose file is refused stays unread meanwhile, and no edit stands in it.
 
 ## When something goes wrong
@@ -968,7 +973,7 @@ turn.
 
 Before each turn the client submits one `SURFACE_FRAME` on the kernel's rings,
 with the host's alone: the turn's pacing, the reads allowed out and
-the clock (`ts/client/src/driver/frame.ts` `submit_frame`); a turn rung for a
+the clock (`ts/client/src/port/surface.ts` `submit_frame`); a turn rung for a
 command alone carries none and draws nothing. The view each frame is drawn at
 is the world surface's layout box, in CSS pixels (`SURFACE_RESIZE`), and a
 pointer is placed on it from its top left (`INPUT_POINTER`). The host's turns are paced to the display by
@@ -1193,7 +1198,7 @@ The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
 the table that numbers each (`spec/spec/asset/ingest.json`, `pxl-tool
 bin/ingest_asset.rs`). The client binds an id to its key
-(`ts/client/src/driver/namespace/asset.ts`).
+(`ts/client/src/sys/fs/asset.ts`).
 
 The texture pack is one WebP image of every cube's tiles, the file the cube
 kind's definition names (`spec/spec/asset/cube.json` `pack`), and one table of

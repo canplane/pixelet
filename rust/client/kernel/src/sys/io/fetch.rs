@@ -4,7 +4,7 @@
 //! quadkey, and a shard's objects below OBJECT by the shard's, their top by
 //! its own name (sys/io/file.rs);
 //! a version, an address, a protocol or a storage key is the client's
-//! (ts/client/src/driver/namespace/tile.ts, object.ts). What an absent object
+//! (ts/client/src/sys/fs/tile.ts, object.ts). What an absent object
 //! means is decided here per stream.
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.

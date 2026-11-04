@@ -57,7 +57,7 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
 /// asserts on a full completion ring. Valid until the next turn.
 fn stats_words(window_ms: Option<f64>) -> u32 {
     use crate::perf::spec::STATS;
-    // On the heap, not a static: a native build's statics are outside the shell-readable memory.
+    // On the heap, not a static: a native build's statics are outside the core memory, where the client reads them.
     static WORDS: Global<Box<[u32; STATS::WORDS as usize]>> = Global::new();
     let stats = read::perf_stats(window_ms);
     let now = read::perf_now();

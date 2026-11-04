@@ -1,8 +1,8 @@
-// @pxl/client/driver/namespace/ingest.spec.ts
+// @pxl/client/origin/ingest.spec.ts
 //
 // GENERATED from spec/spec/asset/ingest.json
 // Every shipped asset by its number below the asset root, file n at
-// `ASSET_FILES[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
+// `ASSET_FILES[n - 1]` (ts/client/src/sys/fs/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The
 // bytes themselves are in the bucket.

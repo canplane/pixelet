@@ -464,7 +464,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
 
     // Which values a word names, for what folds the objects' tree beside the
     // kernel: the client's source of placed objects
-    // (ts/client/src/driver/namespace/object_tree.ts).
+    // (ts/client/src/sys/fs/object_tree.ts).
     let air = cube_entries(&object)
         .find(|e| e.name == "air")
         .ok_or(format!("{CUBE_JSON}: no object.air"))?;
