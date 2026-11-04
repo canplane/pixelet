@@ -13,8 +13,8 @@
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
 //! slot its index names modulo the map's side. A slot holds its depth
 //! (`word`). A tile of slots cast in an epoch holds until the box slides it
-//! off or into another band (`Light::keeps`, pxl-shader light.rs
-//! `light_slide_cs`).
+//! off or into another band (`Light::keeps`, pxl-render
+//! light_slide.wgsl).
 
 use crate::beam;
 use crate::cast;
@@ -158,7 +158,7 @@ impl Light {
     }
 
     /// The tile of the box a receiver standing `v` units from the eye
-    /// stands on (pxl-shader light.rs `light_mark_cs`, `light_mark_draws_cs`).
+    /// stands on (pxl-render light_mark.wgsl, light_mark_draws.wgsl).
     pub fn tile_of(&self, v: [f32; 3]) -> [i32; 2] {
         let (at, tile) = (self.texel_at(v), TILE as f32);
         [
@@ -168,7 +168,7 @@ impl Light {
     }
 
     /// How many tiles either side of its own a drawn receiver stands on
-    /// (pxl-shader light.rs `light_mark_draws_cs`): as many as half the widest
+    /// (pxl-render light_mark_draws.wgsl): as many as half the widest
     /// decor of `C`'s (`Content::WIDEST`) spans, at least one, as its tile is
     /// one a point of it lies in.
     pub fn ring<C: Content>(&self) -> i32 {
@@ -180,7 +180,7 @@ impl Light {
     /// The way up `C`'s tallest decor (`Content::TALLEST`) on the box, in
     /// tiles across and down, and the steps it takes a tile apart at most:
     /// a receiver standing on a tile reads the box up it, decor and the
-    /// actors no taller (pxl-shader light.rs `light_propagate_cs`). The box is
+    /// actors no taller (pxl-render light_propagate.wgsl). The box is
     /// orthographic, so it is the same from every tile.
     pub fn up<C: Content>(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
@@ -262,7 +262,7 @@ impl Light {
     /// cast left in it where the box slid to its corner from `was`, the
     /// eye's zooms `range`: the tile lay in the box under `was` too, and its
     /// band there is its band here (`band`). The one rule of what a slide
-    /// keeps (pxl-shader light.rs `light_slide_cs`).
+    /// keeps (pxl-render light_slide.wgsl).
     pub fn keeps(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], was: [i32; 2]) -> bool {
         let (n, t) = (tiles(size) as i32, TILE as i32);
         let from = [
@@ -360,13 +360,13 @@ pub const HEAD_EPOCH: usize = 2;
 pub const HEAD_SIZE: usize = 3;
 /// The clipmap's corner the cast before was cast under, X and Y, the first
 /// two words of the second vec4: how many tiles the box slid since, its
-/// corners `TILE`-aligned, which the reads move by (pxl-shader light.rs
-/// `light_slide_cs`).
+/// corners `TILE`-aligned, which the reads move by (pxl-render
+/// light_slide.wgsl).
 pub const HEAD_CORNER_WAS: usize = 4;
 /// Whether the cast's marks take each pixel's footprint (`FOOTPRINT_TILES`),
 /// 1 or 0, the second vec4's third word: not while the eye moves, as the next
 /// frame's rays mark again, and in the first frame it stands, which the
-/// jitter's frames after it stand on (pxl-shader light.rs `light_mark_cs`).
+/// jitter's frames after it stand on (pxl-render light_mark.wgsl).
 pub const HEAD_FOOTPRINT: usize = 6;
 /// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
 pub const HEAD_MISSES: usize = 7;
@@ -431,7 +431,7 @@ pub const STARTS_FRACS: usize = 7;
 pub const STARTS_VEC4S: usize = 11;
 
 /// The actors the host draws, receivers of the shadow map as decor is
-/// (pxl-shader light.rs `light_mark_draws_cs`), past the starts: how many, the
+/// (pxl-render light_mark_draws.wgsl), past the starts: how many, the
 /// first word of a vec4, then each where it stands, units from the eye, a
 /// vec4 each, as many as `ACTORS`; any past them marks nothing.
 pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
@@ -574,7 +574,7 @@ const FILTER: f32 = 1.0;
 
 /// The tiles a receiver that reads a slot may stand in, across and down from
 /// the slot's tile, from the first to the last: a tap reads that far
-/// (pxl-shader light.rs `light_propagate_cs`).
+/// (pxl-render light_propagate.wgsl).
 pub const READ_TILES: [i32; 2] = [-2, 1];
 pub const LINE_WORDS: u32 = LINE_ORIGIN + 3;
 
@@ -675,8 +675,8 @@ pub const fn misses_at(size: u32) -> u32 {
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
-/// last cast a receiver stood on it in (`HEAD_CAST`; pxl-shader light.rs
-/// `light_mark_cs`, `light_mark_draws_cs`): where the eye's pixels meet the
+/// last cast a receiver stood on it in (`HEAD_CAST`; pxl-render
+/// light_mark.wgsl, light_mark_draws.wgsl): where the eye's pixels meet the
 /// world, and where the decor and the actors drawn stand.
 pub const fn stands_at(size: u32) -> u32 {
     misses_at(size) + size * size
@@ -685,7 +685,7 @@ pub const fn stands_at(size: u32) -> u32 {
 /// The tiles a receiver reads, past the stands, as many: the number of the
 /// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
 /// within its taps of the way up from a tile one stands on (`Light::up`;
-/// pxl-shader light.rs `light_propagate_cs`). A tile this cast's number names is
+/// pxl-render light_propagate.wgsl). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
@@ -697,7 +697,7 @@ pub const fn tiles(size: u32) -> u32 {
 }
 
 /// The tiles across and down a pixel's footprint may span and be marked
-/// whole (pxl-shader light.rs `light_mark_cs`): between where its ray met
+/// whole (pxl-render light_mark.wgsl): between where its ray met
 /// the world and where its neighbor's did, which a jitter of under half a
 /// pixel either way keeps its ray within, so the marks hold whatever the
 /// jitter. Past it the two met apart, an edge, and each marks its own. Taken
@@ -725,7 +725,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 }
 
 /// What a cast within its epoch casts, listed as its tiles are claimed
-/// (pxl-shader light.rs `light_propagate_cs`): what feeds a claimed tile
+/// (pxl-render light_propagate.wgsl): what feeds a claimed tile
 /// at each level of the lattice, by the reach it feeds within (pxl-shader
 /// light.rs `Map::reach`), each the box tile it lies on: the beam rays'
 /// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
@@ -805,8 +805,8 @@ pub const fn lefts_at(size: u32) -> u32 {
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
 /// pass's three words (x, y, z) from its `ARGS_*` word, then each whole from
 /// `ARGS_WHOLE`. A cast starts with none, `LIST_ACROSS` workgroups a row
-/// and no row; a tile claimed as the cast's to cast (pxl-shader light.rs
-/// `light_propagate_cs`) copies the whole in where the cast begins its
+/// and no row; a tile claimed as the cast's to cast (pxl-render
+/// light_propagate.wgsl) copies the whole in where the cast begins its
 /// epoch, else opens the rows what it lists takes (`listed_at`); a cast
 /// that claims none, as where the receivers moved only within the tiles
 /// cast, casts none.
@@ -1091,7 +1091,7 @@ mod tests {
 
     /// Every texel a receiver's taps read, at any height up to the tallest
     /// decor over a point stood on, lies in a tile the propagation reads from the
-    /// tile stood on (pxl-shader light.rs `light_propagate_cs`: a tile `t` is read
+    /// tile stood on (pxl-render light_propagate.wgsl: a tile `t` is read
     /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
     /// light's slant.
     #[test]

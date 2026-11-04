@@ -29,10 +29,10 @@ struct type_16 {
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(3)
-var global_2: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(9)
-var<storage> global_3: type_16;
+var<storage> global_2: type_16;
+@group(0) @binding(3)
+var global_3: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(8)
 var<storage> global_4: type_16;
 
@@ -47,7 +47,7 @@ fn function_() {
     var local: u32;
 
     let _e22 = global;
-    let _e26 = global_3.member[120u];
+    let _e26 = global_2.member[120u];
     if (_e22.x >= select(_e26, 524288u, (524288u < _e26))) {
     } else {
         let _e34 = global_1.member.member_10[3u][2u];
@@ -92,7 +92,7 @@ fn function_() {
         }
         let _e74 = vec3<u32>((_e40 & 65535u), (_e40 >> bitcast<u32>(16i)), 3u);
         let _e81 = local;
-        textureStore(global_2, vec2<u32>(_e74.x, _e74.y), i32(_e74.z), vec4(_e81));
+        textureStore(global_3, vec2<u32>(_e74.x, _e74.y), i32(_e74.z), vec4(_e81));
     }
     return;
 }

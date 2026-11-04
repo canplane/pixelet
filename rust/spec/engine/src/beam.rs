@@ -96,6 +96,7 @@ pub const GRID_CORNERS: usize = 7;
 pub const GRID_SAMPLES: usize = 9;
 pub const GRID_CELLS_AT: usize = 11;
 pub const GRID_SAMPLES_AT: usize = 12;
+pub const GRID_ASKS_AT: usize = 13;
 pub const GRID_HITS_AT: usize = 14;
 pub const GRID_LATTICE: usize = 16;
 pub const GRID_LEFTS_AT: usize = 17;
@@ -198,7 +199,7 @@ impl Grid {
             lattice: w[GRID_LATTICE],
             cells_at: w[11],
             samples_at: w[12],
-            asks_at: w[13],
+            asks_at: w[GRID_ASKS_AT],
             hits_at: w[14],
             hit_asks_at: w[15],
             lefts_at: w[17],

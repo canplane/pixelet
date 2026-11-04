@@ -4,7 +4,10 @@
 // (pxl-shader light.rs `Map`): where a beam ray's line and start, a cell's start and a
 // sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
 // place of the lattice the thread at an id takes (`Map::take`); and whether the cast needs it
-// (`Map::needs`). The list is `beams`, as resume.wgsl names it.
+// (`Map::needs`); and the reads, the stands, their squares and each list's marks, as the
+// receivers' passes claim tiles (`light::reads_at`, `stands_at`, `coarse_at`,
+// `listed_marks_at`). The list is `beams`, as resume.wgsl names it; the receivers' passes bind
+// it apart (light_stand.wgsl).
 
 /// The levels of the map's lattice (pxl-shader observer.rs `Level`).
 const LEVEL_CORNER = 0u;
@@ -175,4 +178,43 @@ fn light_needs(level: u32, at: vec2<u32>) -> bool {
     hi = vec2<i32>(w + 1i);
   }
   return casts_in(on + lo, on + hi);
+}
+
+/// The tiles across the map, and down (`light::tiles`).
+fn light_tiles() -> u32 {
+  return head_word(LIGHT_HEAD_TILES);
+}
+
+/// The reads, a word a tile (`light::reads_at`).
+fn reads_at() -> u32 {
+  return head_word(LIGHT_HEAD_READS);
+}
+
+/// The stands, a word a tile before the reads (`light::stands_at`).
+fn stands_at() -> u32 {
+  let n = light_tiles();
+  return reads_at() - n * n;
+}
+
+/// The word of the square of `COARSE` tiles a side tile `t` lies in, past the reads
+/// (`light::coarse_square`).
+fn coarse_square(t: vec2<u32>) -> u32 {
+  let n = light_tiles();
+  return reads_at() + n * n + (t.y / LIGHT_COARSE) * (n / LIGHT_COARSE) + t.x / LIGHT_COARSE;
+}
+
+/// The first of list `which`'s marks, a word a place, past the squares
+/// (`light::listed_marks_at`): the corners', the fed's, the claimed's.
+fn listed_marks_at(which: u32) -> u32 {
+  let n = light_tiles();
+  let c = n / LIGHT_COARSE;
+  let corners = beam_across();
+  var at = reads_at() + n * n + c * c;
+  if (which > LIGHT_LISTED_CORNERS) {
+    at += corners * corners;
+  }
+  if (which > LIGHT_LISTED_FED) {
+    at += n * n;
+  }
+  return at;
 }

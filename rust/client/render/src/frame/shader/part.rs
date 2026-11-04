@@ -82,8 +82,8 @@ pub const SHADER_WAY_RETURN: u32 = 38;
 pub const SHADER_BEAM: u32 = 39;
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid, and the pyramid forgotten (pxl-engine `pyramid`): a
-/// compute entry each.
+/// observed pyramid, and the pyramid forgotten (pxl-engine `pyramid`), by
+/// hand (forget.wgsl): a compute entry each.
 pub const SHADER_MISS: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
 /// The samples, a thread each, resumed from their cells' starts and walked
@@ -104,7 +104,8 @@ pub const SHADER_AO_APPLY: u32 = 47;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 48;
 /// The samples' hits handed to the rasterizer (pxl-engine `raster`):
-/// their boxes written, a compute entry; and the boxes drawn, the nearest
+/// their boxes written, by hand (boxes.wgsl, sample_box.wgsl), a compute
+/// entry; and the boxes drawn, the nearest
 /// face a pixel's ray enters kept with its sample (raster.wgsl), which the
 /// cast's pixels read (`SHADER_CAST`).
 pub const SHADER_SAMPLE_BOX: u32 = 49;
@@ -119,7 +120,8 @@ pub const SHADER_FACE: u32 = 52;
 /// The tiles of the light's box its receivers stand on in a cast
 /// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
-/// (`light::reads_at`): compute entries.
+/// (`light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
+/// light_propagate.wgsl): compute entries.
 pub const SHADER_LIGHT_MARK: u32 = 53;
 pub const SHADER_LIGHT_MARK_DRAWS: u32 = 54;
 pub const SHADER_LIGHT_PROPAGATE: u32 = 55;
@@ -159,7 +161,8 @@ pub const SHADER_SCREEN_BOUND: u32 = 66;
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 67;
 /// The tiles of the light's box the box slid onto, or slid into another
-/// band (pxl-engine `Light::keeps`): a compute entry.
+/// band (pxl-engine `Light::keeps`), by hand (light_slide.wgsl): a compute
+/// entry.
 pub const SHADER_LIGHT_SLIDE: u32 = 68;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
@@ -178,7 +181,7 @@ pub const SHADER_BOX_ARGS: u32 = 75;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (light_beam.wgsl,
-/// light_cell.wgsl, sample_light.wgsl, pxl-shader `light_sample_box_cs`).
+/// light_cell.wgsl, sample_light.wgsl, light_sample_box.wgsl).
 pub const SHADER_LIGHT_BEAM: u32 = 76;
 pub const SHADER_LIGHT_CELL: u32 = 77;
 pub const SHADER_LIGHT_SAMPLE: u32 = 78;
@@ -488,7 +491,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "miss",
     ],
     // SHADER_FORGET
-    &["forget.gen"],
+    &["walk_word", "world_word", "seed", "forget"],
     // SHADER_SAMPLE
     &[
         "walk_word",
@@ -542,7 +545,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX
-    &["sample_box.gen"],
+    &[
+        "walk_word",
+        "raster_box",
+        "walk_node",
+        "side",
+        "resume",
+        "sample_eye",
+        "boxes",
+        "sample_box",
+    ],
     // SHADER_RASTER
     &["raster_box", "px", "raster"],
     // SHADER_MISS_LIST
@@ -578,11 +590,42 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "face",
     ],
     // SHADER_LIGHT_MARK
-    &["light_mark.gen"],
+    &[
+        "walk_word",
+        "walk_node",
+        "side",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "light_mark",
+    ],
     // SHADER_LIGHT_MARK_DRAWS
-    &["light_mark_draws.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "walk_node",
+        "side",
+        "seed",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "light_mark_draws",
+    ],
     // SHADER_LIGHT_PROPAGATE
-    &["light_propagate.gen"],
+    &[
+        "walk_word",
+        "decor_word",
+        "walk_node",
+        "side",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "light_propagate",
+    ],
     // SHADER_GENERATION_THIN
     &[
         "walk_word",
@@ -630,7 +673,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SKINNED_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
     // SHADER_LIGHT_SLIDE
-    &["light_slide.gen"],
+    &[
+        "walk_word",
+        "walk_node",
+        "side",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "light_slide",
+    ],
     // SHADER_DECOR_MARK
     &["frame", "place", "instance", "decor_place", "tile_mark"],
     // SHADER_IMPOSTOR_MARK
@@ -700,7 +752,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample",
     ],
     // SHADER_LIGHT_SAMPLE_BOX
-    &["light_sample_box.gen"],
+    &[
+        "walk_word",
+        "raster_box",
+        "walk_node",
+        "side",
+        "resume",
+        "light_aim",
+        "sample_light",
+        "boxes",
+        "light_sample_box",
+    ],
     // SHADER_SAMPLE_HIT
     &[
         "walk_word",

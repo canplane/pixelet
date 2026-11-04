@@ -19,10 +19,10 @@ use pxl_engine::{beam, eye, light, raster, ray};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
+    COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
     SHADER_SAMPLE_BOX, STORAGE, STORAGE_RW, UNIFORM,
 };
-use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
+use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes,
     Format, Gpu, Load, RenderContext,
@@ -31,6 +31,34 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_engine::param::light::SAMPLE;
 use pxl_engine::param::raster::GROWTH;
+
+/// The boxes' writing's groups (boxes.wgsl): the eye, the samples' words, the
+/// boxes and the args (sample_box.wgsl); and the light's head beside them
+/// (light_sample_box.wgsl).
+const SAMPLE_BOX_GROUP: [u32; 12] = [
+    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 14, COMPUTE, STORAGE_RW, 16, COMPUTE, STORAGE_RW,
+];
+const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    super::cast::HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    14,
+    COMPUTE,
+    STORAGE_RW,
+    16,
+    COMPUTE,
+    STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&SAMPLE_BOX_GROUP]) && floor::holds(&[&LIGHT_SAMPLE_BOX_GROUP]),
+    "the boxes' writing's group binds past WebGPU's floor"
+);
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -41,10 +69,10 @@ use pxl_engine::param::raster::GROWTH;
 /// faces' asking, the boxes' and the missed pixels' hits', made again
 /// exactly when what they bind is another (`bindings`).
 pub(super) struct Raster {
-    /// The boxes' writing, the eye's and the shadow map's (pxl-shader
-    /// raster.rs `sample_box_cs`), each over its own group.
+    /// The boxes' writing, the eye's and the shadow map's (sample_box.wgsl,
+    /// light_sample_box.wgsl), each over its own group.
     pub(super) boxes_built: Pipeline,
-    /// The shadow map's samples' boxes (pxl-shader `light_sample_box_cs`),
+    /// The shadow map's samples' boxes (light_sample_box.wgsl),
     /// the light's head bound beside what the screen's binds.
     pub(super) light_boxes_built: Pipeline,
     faces_built: Pipeline,
@@ -106,11 +134,11 @@ impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
-            boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
+            boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
             light_boxes_built: pipelines.build_compute(
                 g,
                 SHADER_LIGHT_SAMPLE_BOX,
-                &compute::LIGHT_SAMPLE_BOX_GROUP,
+                &LIGHT_SAMPLE_BOX_GROUP,
             ),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
@@ -308,9 +336,8 @@ impl Raster {
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.set_pipeline(pass, self.boxes_built.id);
-            let w = compute::SAMPLE_BOX_WORKGROUP;
             let [x, y] = grid.samples;
-            g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
             g.end(pass);
         }
         // Gated, the depth starts at the nearest, which no box passes, and

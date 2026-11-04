@@ -6,14 +6,12 @@
 //! light_cell.wgsl); and the words a line and a node are held in, every
 //! observer's.
 
-use pxl_engine::cast;
-use pxl_engine::beam;
 use spirv_std::glam::UVec3;
 use spirv_std::spirv;
 
 use crate::eye::Eye;
 use crate::pyramid::{pyramid_at, pyramid_most, pyramid_put};
-use crate::observer::{self, Level, Observer};
+use crate::observer::{self, Observer};
 use crate::light::Head;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-engine
@@ -62,24 +60,6 @@ impl Words for [u32] {
     }
 }
 
-/// The node at word `k`, as a line and a sample each hold one
-/// (pxl-engine `beam::NODE_WORDS`).
-pub(crate) fn node_at<W: Words + ?Sized>(w: &W, k: u32) -> cast::Node {
-    cast::Node {
-        corner: [
-            w.word(k + beam::NODE_CORNER),
-            w.word(k + beam::NODE_CORNER + 1),
-            w.word(k + beam::NODE_CORNER + 2),
-        ],
-        zoom: w.word(k + beam::NODE_ZOOM),
-        roots: [
-            w.word(k + beam::NODE_ROOTS) as i32,
-            w.word(k + beam::NODE_ROOTS + 1) as i32,
-            w.word(k + beam::NODE_ROOTS + 2) as i32,
-        ],
-    }
-}
-
 /// Where each cell's rays start (pxl-engine `beam::CELL_WORDS`), a thread a
 /// cell of the screen's lattice (observer.rs `cell`, `beam::Grid::span`),
 /// past the lines in the beam rays' buffer (`Grid::cell_at`); the shadow
@@ -97,7 +77,7 @@ pub fn cell_cs(
 /// Cell `id` of `o`'s lattice, where it has one.
 fn cell_by<O: Observer>(o: &O, id: UVec3, beams: &mut Beams) {
     let [across, down] = o.cells();
-    let c = o.take(&*beams, Level::Cell, [id.x, id.y]);
+    let c = o.take(&*beams, [id.x, id.y]);
     if c[0] >= across || c[1] >= down {
         return;
     }

@@ -10,7 +10,7 @@ use pxl_engine::{beam, eye};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
-use crate::observer::{Level, Observer};
+use crate::observer::Observer;
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-engine `eye` lays them (asserted below).
@@ -92,15 +92,6 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
     )
 }
 
-/// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
-pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
-    let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray::new(
-        cast::through(v3(eye.forward_far), v3(eye.right), v3(eye.up), tx, ty),
-        eye.forward_far.w,
-    )
-}
-
 /// The camera grid the frame casts on, read whole off the eye's words, as
 /// the kernel worked it out once (pxl-engine `beam::Grid`).
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
@@ -114,8 +105,6 @@ pub(crate) fn grid(eye: &Eye) -> beam::Grid {
 const _: () = assert!(eye::GRID_WORDS == 20, "`grid` reads the grid's five vec4s");
 
 impl Observer for Eye {
-    type At = [f32; 2];
-
     fn corners(&self) -> [u32; 2] {
         grid(self).corners
     }
@@ -150,31 +139,13 @@ impl Observer for Eye {
         eye_origin(self).1
     }
 
-    fn samples(&self) -> [u32; 2] {
-        grid(self).samples
-    }
-
-    fn point(&self, s: [u32; 2]) -> [f32; 2] {
-        grid(self).sample(s)
-    }
-
-    fn sample_at(&self, s: [u32; 2]) -> u32 {
-        grid(self).sample_at(s)
-    }
-
-    /// From the eye, its boxes about it marked at the screen's tangents.
-    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
-        (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
-    }
-
     /// Every one: what the eye casts is what it shows.
-    fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
+    fn needs<W: Words + ?Sized>(&self, _: &W, _: [u32; 2]) -> bool {
         true
     }
 
     /// Each at its own place: it casts its lattice whole.
-    fn take<W: Words + ?Sized>(&self, _: &W, _: Level, id: [u32; 2]) -> [u32; 2] {
+    fn take<W: Words + ?Sized>(&self, _: &W, id: [u32; 2]) -> [u32; 2] {
         id
     }
-
 }

@@ -343,7 +343,7 @@ fn compute(dir: &Path) -> String {
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
     use pxl_engine::area::Shard;
-    use pxl_engine::clipmap::Lookup;
+    use pxl_engine::clipmap::{self, Lookup};
     use pxl_engine::overwrite::NodeSlot;
     use pxl_engine::{
         answer, beam, cast, eye, face, light, param, pyramid, raster, ray, tally, value, SHARD_ZOOM,
@@ -491,6 +491,7 @@ fn walk_word() -> String {
         ("GRID_CELLS_AT", beam::GRID_CELLS_AT as u32),
         ("GRID_SAMPLES_AT", beam::GRID_SAMPLES_AT as u32),
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
+        ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
         ("GRID_LATTICE", beam::GRID_LATTICE as u32),
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
@@ -543,6 +544,17 @@ fn walk_word() -> String {
         ("RASTER_ARGS_INSTANCES", raster::ARGS_INSTANCES),
         ("RASTER_ARGS_ASKS", raster::ARGS_ASKS),
         ("RASTER_FACES_LANES", raster::FACES_LANES),
+        ("LIGHT_HEAD_CORNER_WAS", light::HEAD_CORNER_WAS as u32),
+        ("LIGHT_HEAD_FOOTPRINT", light::HEAD_FOOTPRINT as u32),
+        ("LIGHT_ACTORS_AT", light::ACTORS_AT as u32),
+        ("LIGHT_ACTORS", light::ACTORS as u32),
+        ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
+        ("LIGHT_ARGS_BEAM", light::ARGS_BEAM),
+        ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
+        ("LIGHT_ARGS_SAMPLE", light::ARGS_SAMPLE),
+        ("LIGHT_ARGS_SAMPLE_BOX", light::ARGS_SAMPLE_BOX),
+        ("LIGHT_ARGS_SLOT", light::ARGS_SLOT),
+        ("LIGHT_ARGS_WHOLE", light::ARGS_WHOLE),
         ("ASK_NODE", beam::ASK_NODE),
         ("ASK_FACE", beam::ASK_FACE),
         ("ASK_LINE", beam::ASK_LINE),
@@ -552,15 +564,30 @@ fn walk_word() -> String {
         ("FACE_WORD_BITS", face::BITS),
         ("FACE_EDGES", face::EDGES),
         ("FACE_RISE_SHIFT", face::RISE_SHIFT),
+        ("RASTER_ARGS_FACES", raster::ARGS_FACES),
+        ("PYRAMID_FORGETS", pyramid::FORGETS),
+        ("FORGETS_ALL", pyramid::FORGETS_ALL),
+        ("PYRAMID_MOVED_AT", pyramid::MOVED_AT),
+        ("PYRAMID_BOXES_AT", pyramid::BOXES_AT),
+        ("PYRAMID_WRITTEN_AT", pyramid::WRITTEN_AT),
+        ("W_KEY", pyramid::W_KEY),
+        ("W_PLACED", pyramid::W_PLACED),
+        ("EYE_CLIP_LEVELS", clipmap::EYE_CLIP_LEVELS),
     ];
     // How far short of where a beam ray of the light stopped its cells' rays start: a share of
-    // its spacing, and Q3 steps (`light::margin`).
+    // its spacing, and Q3 steps (`light::margin`). A slot a receiver reads lies within the disk
+    // grown by its taps' reach (`light::READ_PAD`); a tile holds one where its middle lies
+    // within it grown by half the tile's diagonal (light_propagate.wgsl).
+    let tile_pad = light::READ_PAD + light::TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\n",
+        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\n",
         grid::CELLS_A_RAD / grid::SPANS,
         cast::NARROW,
         2.0 * cast::SQRT_6,
         light::margin(0.0),
+        light::FOOTPRINT_TILES,
+        light::READ_TILES[0],
+        light::READ_TILES[1],
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
@@ -859,7 +886,15 @@ fn decor_word() -> String {
         ("IMPOSTOR_CORNERS", drawn::IMPOSTOR_CORNERS),
         ("UNIFORM_WORDS", drawn::UNIFORM_WORDS),
         ("UNIFORM_IDX", drawn::UNIFORM_IDX),
+        ("TALLEST", g::TALLEST as u32),
+        ("WIDEST", g::WIDEST as u32),
     ];
+    const {
+        assert!(
+            g::TALLEST > 0 && g::WIDEST > 0,
+            "decor's tallest and widest are a cell or more"
+        );
+    }
     let mut out = String::new();
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
@@ -1016,6 +1051,7 @@ fn words() -> String {
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
+        format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).

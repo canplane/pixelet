@@ -8,7 +8,7 @@ struct type_6 {
     member: array<u32>,
 }
 
-struct type_12 {
+struct type_11 {
     member: array<vec4<i32>>,
 }
 
@@ -27,7 +27,7 @@ struct type_18 {
 var<private> global: vec3<u32>;
 var<private> global_1: vec3<u32>;
 @group(0) @binding(1)
-var<storage, read_write> global_2: type_12;
+var<storage, read_write> global_2: type_11;
 @group(0) @binding(2)
 var<storage> global_3: type_6;
 

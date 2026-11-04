@@ -633,9 +633,9 @@ impl Generator {
     }
 }
 
-/// The decor compacted as a reader beside the draws reads it (pxl-shader
-/// decor.rs `Instances`, read by light.rs `light_mark_draws_cs`): its drawing
-/// words, its regions and its instances, and the slots they hold.
+/// The decor compacted as a reader beside the draws reads it
+/// (light_mark_draws.wgsl): its drawing words, its regions and its instances,
+/// and the slots they hold.
 #[derive(Clone, Copy)]
 pub struct Instances {
     pub drawing: u32,

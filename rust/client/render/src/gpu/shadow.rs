@@ -255,7 +255,7 @@ impl Shadow {
         // the rows: the clipmap's corner, a whole number of tiles
         // (`light::TILE`), so a tile of the box holds whole tiles of the world
         // and what the cast read of it moves with the box a tile at a time
-        // (pxl-shader light.rs `light_slide_cs`).
+        // (light_slide.wgsl).
         let m = &mut self.light_view_proj;
         let mut cell = [0i64; 3];
         let tile = f64::from(light::TILE);

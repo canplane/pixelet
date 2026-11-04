@@ -4,16 +4,16 @@
 //! (`world::node`) by every entry that walks or generates over it.
 
 use pxl_content::Pixelet;
-use pxl_engine::answer::{self, In};
+use pxl_engine::answer::In;
 use pxl_engine::area::{Area, Shard};
-use pxl_engine::cast::{self, End, Query};
+use pxl_engine::cast::Query;
 use pxl_engine::fill::{self, column_of, level_of};
 use pxl_engine::overwrite::{Cut, Columns};
 use pxl_engine::clipmap::{
     self, Bricks, Lookup, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
 };
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{at, face, ground, way};
+use pxl_engine::{at, ground, way};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
@@ -250,25 +250,4 @@ impl<L> World<'_, L> {
     pub(crate) fn cuts(&self) -> [Cut; 2] {
         [cut(self.eye.carve), cut(self.eye.hide)]
     }
-}
-
-/// What lies about the face a hit that ended `ends` at the asset `asset`
-/// met, where it needs no asking (pxl-render face.wgsl `face_word`): nothing where it stopped
-/// on none, a box's own where the cell keeps short of its cube
-/// (`face::BOX`); and whether it is asked instead.
-pub(crate) fn unasked_face(ends: End, asset: u32) -> (bool, u32) {
-    if ends != End::Hit {
-        (false, 0)
-    } else if answer::fill_eighths(asset) < answer::EIGHTHS {
-        (false, face::BOX)
-    } else {
-        (true, 0)
-    }
-}
-
-/// The face a ray enters a cell through across `axis` (pxl-engine
-/// `ray`): 2·axis, plus one where its outward normal points down the axis,
-/// against the ray.
-pub(crate) fn face_of(ray: &cast::Ray, axis: u32) -> u32 {
-    2 * axis + (pxl_engine::axis(ray.dir, axis) > 0.0) as u32
 }

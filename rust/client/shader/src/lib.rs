@@ -1,17 +1,13 @@
 // pxl-shader/lib.rs
 
-//! The GPU's compute entries, a module of their own each when built, over
-//! the world as the GPU holds it (world.rs) and the eye it is cast from
-//! (eye.rs): the passes a cast takes, written once over the observer it
-//! casts for (observer.rs), a pass both observers take an entry each, the
-//! eye's rays (beam.rs, raster.rs, cast.rs) through the
-//! observed pyramid (pyramid.rs), their image bound only where rays.rs lets
-//! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
-//! each handed brick's ground (ground.rs), and the decor
-//! the ground generates (decor.rs), each workgroup a constant its code counts
-//! by (workgroup.rs). An entry is named
-//! by `entry_point_name`, never by its module's path, so each keeps the
-//! name pxl-tool shader.rs `ENTRIES` reads.
+//! The GPU's compute entries rust-gpu still makes, a module of their own each
+//! when built, over the world as the GPU holds it (world.rs) and the eye it is
+//! cast from (eye.rs): the cells' starts, written once over the observer it
+//! casts for (observer.rs, beam.rs), the missed pixels' hits (cast.rs) through
+//! the observed pyramid (pyramid.rs), their image bound only where rays.rs lets
+//! it be, the light's head (light.rs) and each handed brick's ground
+//! (ground.rs). An entry is named by `entry_point_name`, never by its module's
+//! path, so each keeps the name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 // The workspace's clippy never builds this crate.
@@ -19,25 +15,20 @@
 
 mod beam;
 mod rays;
-mod decor;
 mod eye;
 mod ground;
 mod pyramid;
 mod observer;
-mod raster;
 mod light;
 mod world;
 
-use rays::{cast, light_mark};
+use rays::cast;
 
 pub use beam::cell_cs;
 pub use cast::{hit_faces_cs, hit_lead_cs};
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, fold_cs};
-pub use pyramid::forget_cs;
-pub use raster::{light_sample_box_cs, sample_box_cs};
-pub use light::{light_mark_draws_cs, light_propagate_cs, light_slide_cs, Head};
-pub use light_mark::light_mark_cs;
+pub use light::Head;
 pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};
@@ -68,23 +59,6 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
 fn opens<W: beam::Words + ?Sized>(w: &mut W, i: u32, at: u32, per: u32) {
     if at % per == 0 {
         w.most(i, at / per + 1);
-    }
-}
-
-/// Word `i` of `s` raised to `v` where it is less, none past `s`; what it
-/// was, `v` past `s`.
-fn raise(s: &mut [u32], i: u32, v: u32) -> u32 {
-    if (i as usize) < s.len() {
-        // SAFETY: just bounded by the slice's own length.
-        unsafe {
-            spirv_std::arch::atomic_u_max::<
-                u32,
-                { Scope::QueueFamily as u32 },
-                { Semantics::NONE.bits() },
-            >(s.get_unchecked_mut(i as usize), v)
-        }
-    } else {
-        v
     }
 }
 
