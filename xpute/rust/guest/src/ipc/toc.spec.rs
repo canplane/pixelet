@@ -31,18 +31,17 @@ pub const VERSION: u32 = 1;
 /// Words before the first entry.
 pub const HEAD: u32 = 4;
 
-/// What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
-/// numbers of a host's scheduling policy, which the program now injects when the host
-/// boots (the host's sched/policy.ts).
+/// What an entry's value is. 3 to 6 are retired and given to nothing else: 3 to 5 were
+/// the numbers of a host's scheduling policy, which the program now injects when the
+/// host boots (the host's sched/policy.ts); 6 was the hostcall stream's, whose calls
+/// are now frames on the completion ring for the host's port (ipc/sys.json).
 pub mod key {
     /// Where the submission ring's words begin.
     pub const SQ: u32 = 1;
     /// Where the completion ring's words begin.
     pub const CQ: u32 = 2;
-    /// Where the hostcall stream's words begin (ipc/sys.json).
-    pub const SYS: u32 = 6;
     /// The bit every key a program numbers for itself carries: xpute gives none of
     /// them a meaning, and a host that is not the program's passes over them.
     pub const PROGRAM: u32 = 2147483648;
-    pub const KEYS: &[&str] = &["SQ", "CQ", "SYS", "PROGRAM"];
+    pub const KEYS: &[&str] = &["SQ", "CQ", "PROGRAM"];
 }

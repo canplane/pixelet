@@ -10,12 +10,13 @@
 using namespace xpute;
 
 XPUTE_TEST(file_descriptor_owner) {
-    std::vector<std::uint64_t> words(128);
-    Sys sys(Memory(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8), 0, 256);
+    std::vector<std::uint64_t> words(1024);
+    Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
+    Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
     Files<std::string, 8> files;
-    Fd a = files.open(sys, 7, "a", "first");
-    files.close(sys, a);
-    Fd b = files.open(sys, 7, "b", "second");
+    Fd a = files.open(door, 7, "a", "first");
+    files.close(door, a);
+    Fd b = files.open(door, 7, "b", "second");
     XPUTE_CHECK(files.held_for([](const std::string &o) { return o == "second"; }) == b);
 }
 
@@ -29,12 +30,13 @@ XPUTE_TEST(file_answer_read_once) {
 }
 
 XPUTE_TEST(file_read_whole_closes) {
-    std::vector<std::uint64_t> words(128);
-    Sys sys(Memory(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8), 0, 256);
+    std::vector<std::uint64_t> words(1024);
+    Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
+    Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
     Files<std::string, 8> files;
-    Fd fd = files.open(sys, 7, "a", "first");
+    Fd fd = files.open(door, 7, "a", "first");
     // None of the heap lies in the test's memory, so the file is empty.
-    Result<Bytes> bytes = files.read_whole(sys, fd, 0);
+    Result<Bytes> bytes = files.read_whole(door, fd, 0);
     XPUTE_CHECK(bytes && bytes->size() == 0);
     XPUTE_CHECK(files.owner(fd) == nullptr);
 }

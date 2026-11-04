@@ -36,7 +36,7 @@ static ALLOC: Alloc = Alloc;
 // the linker put them) and its heap past `.fixed`, as the module's is — and
 // the doorbell and the memory the host reads the directory and the rings
 // through, exported under xpute's names as `xpute_run` and `xpute_mem`, with
-// `xpute_hostcall_on` for what answers its hostcalls (include/pxl_native.h),
+// `xpute_hostcall_on` for what answers its calls (include/pxl_native.h),
 // and `guest()` here.
 xpute_host::native_abi!(
     Config {

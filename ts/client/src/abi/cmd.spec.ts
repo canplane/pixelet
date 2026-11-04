@@ -49,6 +49,7 @@ import * as CameraMinor from "./cmd/camera_minor.spec.ts";
 import * as PerfMinor from "./cmd/perf_minor.spec.ts";
 import * as EditMinor from "./cmd/edit_minor.spec.ts";
 import * as ShellMinor from "./cmd/shell_minor.spec.ts";
+import * as TextMinor from "./cmd/text_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
 import * as Tool from "./cmd/tool.spec.ts";
@@ -112,6 +113,10 @@ export { EditMinor };
 /** One of ShellMinor's, as its enum was a type. */
 type ShellMinor = (typeof ShellMinor)[keyof typeof ShellMinor];
 export { ShellMinor };
+
+/** One of TextMinor's, as its enum was a type. */
+type TextMinor = (typeof TextMinor)[keyof typeof TextMinor];
+export { TextMinor };
 
 /** One of PointerPhase's, as its enum was a type. */
 type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
@@ -348,6 +353,62 @@ export interface SensorStopEvent {
 
 export function read_sensor_stop(b: BranchCursor): SensorStopEvent {
   return { sensor: b.at(0).get<Sensor>() };
+}
+
+/** Command.TEXT_LAYOUT's event. */
+export interface TextLayoutEvent {
+  weight: u32;
+  px: f64;
+  /** 0 for one line. */
+  max_width: f64;
+  at: u32;
+  lines: u32;
+  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
+  text_at: u32;
+  /** Its bytes. */
+  text_len: u32;
+}
+
+export function read_text_layout(b: BranchCursor): TextLayoutEvent {
+  return {
+    weight: b.at(0).get<u32>(),
+    px: b.at(1).get<f64>(),
+    max_width: b.at(2).get<f64>(),
+    at: b.at(3).get<u32>(),
+    lines: b.at(4).get<u32>(),
+    text_at: b.at(5).get<u32>(),
+    text_len: b.at(6).get<u32>(),
+  };
+}
+
+/** Command.TEXT_RASTER's event. */
+export interface TextRasterEvent {
+  weight: u32;
+  px: f64;
+  /** 0xRRGGBBAA. */
+  color: u32;
+  at: u32;
+  width: u32;
+  height: u32;
+  x: f64;
+  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
+  text_at: u32;
+  /** Its bytes. */
+  text_len: u32;
+}
+
+export function read_text_raster(b: BranchCursor): TextRasterEvent {
+  return {
+    weight: b.at(0).get<u32>(),
+    px: b.at(1).get<f64>(),
+    color: b.at(2).get<u32>(),
+    at: b.at(3).get<u32>(),
+    width: b.at(4).get<u32>(),
+    height: b.at(5).get<u32>(),
+    x: b.at(6).get<f64>(),
+    text_at: b.at(7).get<u32>(),
+    text_len: b.at(8).get<u32>(),
+  };
 }
 
 /** Command.SENSOR_POS's packet, written in place into `to`. */

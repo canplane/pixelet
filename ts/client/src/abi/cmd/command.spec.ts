@@ -2,14 +2,24 @@
 //
 // GENERATED from spec/client/kernel/domain/control/cmd.json
 
-// ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json) ----
+// ---- the process asks the shell: events on the completion ring, and calls answered before they return ----
 
 /** Start watching. */
 export const SENSOR_START = 0x1201;
 /** Stop watching. */
 export const SENSOR_STOP = 0x1203;
+/** The text in the platform's own family at the weight and size, broken into lines no
+ * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
+ * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
+ * (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
+export const TEXT_LAYOUT = 0x1c01;
+/** One line drawn in the platform's own family, starting at x with the middle of its em
+ * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
+ * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
+ * it returns. */
+export const TEXT_RASTER = 0x1c02;
 
-// ---- the host answers: an I/O the process started, done ----
+// ---- the shell answers: a sensor's reading ----
 
 /** A GPS fix; a field is absent where the browser gave none. */
 export const SENSOR_POS = 0x1202;
@@ -20,7 +30,7 @@ export const SENSOR_ORIENT = 0x1205;
  * orient_silence_is_loss). */
 export const SENSOR_ERR = 0x120b;
 
-// ---- the host tells the process: its start, its turn, its window and its devices ----
+// ---- the shell tells the process: its start, its turn, its window, the tile source and the platform's devices ----
 
 /** The kernel's start: what the platform is. Its storage files it opens itself, on the storage root. */
 export const SYS_BOOT = 0x1001;

@@ -42,13 +42,13 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
 
 thread_local! {
     /// The environment and `PxlNative` of the call waiting in `run`, which
-    /// answers the turn's hostcalls (`hostcall`).
+    /// answers the turn's calls (`hostcall`).
     #[allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion")]
     static INTR: Cell<Option<(*mut JNIEnv, jobject)>> = const { Cell::new(None) };
 }
 
 /// A turn of `quota_ms`: the entry, xpute_run (xpute-host native `native_abi!`, lib.rs),
-/// its hostcalls answered on this thread by `hostcall`. `this` is `PxlNative`.
+/// its calls answered on this thread by `hostcall`. `this` is `PxlNative`.
 #[no_mangle]
 extern "system" fn Java_me_plei_pixelet_platform_PxlNative_run(
     env: *mut JNIEnv,

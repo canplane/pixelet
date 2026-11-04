@@ -5,16 +5,27 @@
 //! again, so overrunning it is a sizing bug, not a state to wait out. What the
 //! host sent, port 0, is xpute's own and applied here; the program is
 //! handed every other sender's, and an open the host completed.
+//!
+//! The guest's hostcalls are frames too (ipc/sys.json): its files and its
+//! report go to the host's port, 0, posted as any event is; a call answered
+//! before it returns, to any port, is laid unpublished in the next slot and
+//! its place handed to the host's `hostcall`.
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
+use core::panic::Location;
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::abi::cmd::{Command, Nop, SysOpened};
+use crate::abi::cmd::{
+    Command, Nop, SysAbortEvent, SysCloseEvent, SysOpenatEvent, SysOpened, SysReadEvent,
+    SysWriteEvent,
+};
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
+use crate::ipc::sys::{answer_of, Fd};
+use crate::mem::off_of_slice;
 
 /// An event a table generates (xpute-tool `spec/cmd`): its number, the
 /// children it is written as, and its writer.
@@ -23,6 +34,9 @@ pub trait Event {
     const FIELDS: u32;
     fn write(&self, w: &mut PacketWriter);
 }
+
+/// How much of a report's path is kept where the whole would not fit a slot.
+const ABORT_PATH_TAIL: usize = 32;
 
 /// None for an unknown command, which replies ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
@@ -52,6 +66,8 @@ pub struct Door {
     /// What one command may leave: its events, or the turn's after the drain, and its reply.
     reserve: u32,
     stat: Cell<DoorStat>,
+    /// Kept until the host has run the `write` that names it.
+    held: RefCell<Vec<Vec<u8>>>,
 }
 
 impl Door {
@@ -63,7 +79,13 @@ impl Door {
             cq,
             reserve: most_events + 1,
             stat: Cell::default(),
+            held: RefCell::new(Vec::new()),
         }
+    }
+
+    /// A turn begins: what the last one's writes named is the host's no more.
+    pub fn rise(&self) {
+        self.held.borrow_mut().clear();
     }
 
     pub fn take_stat(&self) -> DoorStat {
@@ -118,6 +140,104 @@ impl Door {
     /// `event` for `port`.
     pub fn send<E: Event>(&self, port: u32, event: &E) {
         self.send_with(port, E::NUMBER, E::FIELDS, |w| event.write(w));
+    }
+
+    /// `event` for `port`, answered before this returns: laid in the next
+    /// slot unpublished and handed to the host's `hostcall`, its value or its
+    /// errno; ENOSPC where no slot is free, EMSGSIZE where it does not fit one.
+    pub fn call<E: Event>(&self, port: u32, event: &E) -> Result<u32, Errno> {
+        let at = self
+            .cq
+            .stage_in_place(frame::tag_of(port, 0), E::NUMBER, frame::ACKREQ, |out| {
+                let mut w = PacketWriter::new(out, E::FIELDS);
+                event.write(&mut w);
+                w.fit_len()
+            })
+            .map_err(|e| if e == Errno::EAGAIN { Errno::ENOSPC } else { e })?;
+        answer_of(crate::hostcall::hostcall(at as u32))
+    }
+
+    /// The file at `path` below `root` opened as `fd`, answered by SYS_OPENED
+    /// on a later turn.
+    pub fn openat(&self, fd: Fd, root: u32, flags: u32, path: &str) {
+        self.send(
+            frame::HOST,
+            &SysOpenatEvent {
+                fd,
+                root,
+                flags,
+                path: &path,
+            },
+        );
+    }
+
+    /// `dst` is filled once the host takes the turn's frames.
+    ///
+    /// # Safety
+    /// `dst` stays allocated, unmoved and unread until the next rise.
+    pub unsafe fn read(&self, fd: Fd, dst: &mut [u8]) {
+        let at = off_of_slice(&raw mut *dst) as u32;
+        self.send(
+            frame::HOST,
+            &SysReadEvent {
+                fd,
+                at,
+                len: dst.len() as u32,
+            },
+        );
+    }
+
+    pub fn write(&self, fd: Fd, bytes: Vec<u8>) {
+        let at = off_of_slice(bytes.as_slice()) as u32;
+        self.send(
+            frame::HOST,
+            &SysWriteEvent {
+                fd,
+                at,
+                len: bytes.len() as u32,
+            },
+        );
+        self.held.borrow_mut().push(bytes);
+    }
+
+    /// Commits a write; cancels an open not yet answered.
+    pub fn close(&self, fd: Fd) {
+        self.send(frame::HOST, &SysCloseEvent { fd });
+    }
+
+    /// Drops what the turn posted and posts the report alone, as the guest
+    /// stops: its file's path cut to its end, or left out, where the whole of
+    /// it would not fit a slot.
+    pub fn abort(&self, errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
+        self.cq.clear();
+        let path = at.file();
+        let tail = |n: usize| path.get(path.len().saturating_sub(n)..).unwrap_or("");
+        for file in [path, tail(ABORT_PATH_TAIL), ""] {
+            let report = SysAbortEvent {
+                errnum: errnum as i32,
+                line: at.line(),
+                column: at.column(),
+                a_low: a as u32,
+                a_high: (a >> 32) as u32,
+                b_low: b as u32,
+                b_high: (b >> 32) as u32,
+                file: &file,
+            };
+            let e = self.cq.push_in_place(
+                frame::tag_of(frame::HOST, 0),
+                SysAbortEvent::NUMBER,
+                0,
+                0,
+                |out| {
+                    let mut w = PacketWriter::new(out, SysAbortEvent::FIELDS);
+                    report.write(&mut w);
+                    w.fit_len()
+                },
+            );
+            if e != Errno::EMSGSIZE || file.is_empty() {
+                return self.on_posted(SysAbortEvent::NUMBER, e);
+            }
+        }
     }
 
     /// An unapplied command can wait in the submission ring; what it would
@@ -180,7 +300,8 @@ fn apply_frame(
             None => 0,
         })),
         Some(Command::SYS_OPENED) => handle(Submission::Opened(SysOpened::read(given()?)?)),
-        None => Ok(None),
+        // The guest's own hostcalls, which the host never sends.
+        Some(_) | None => Ok(None),
     }
 }
 

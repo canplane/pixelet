@@ -24,7 +24,8 @@ export const VERSION: u32 = 1 as number;
 /** Words before the first entry. */
 export const HEAD: u32 = 4 as number;
 
-/** What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
- * numbers of a host's scheduling policy, which the program now injects when the host
- * boots (the host's sched/policy.ts). */
+/** What an entry's value is. 3 to 6 are retired and given to nothing else: 3 to 5 were
+ * the numbers of a host's scheduling policy, which the program now injects when the
+ * host boots (the host's sched/policy.ts); 6 was the hostcall stream's, whose calls
+ * are now frames on the completion ring for the host's port (ipc/sys.json). */
 export { key };

@@ -8,7 +8,7 @@ import { PLATFORM } from "./module.ts";
 
 /** The config is not read here: the linked guest's memory is given in Rust
  * (pxl-native lib.rs `guest`), and its GPU stream played there (surface.rs).
- * A hostcall comes back to this thread while `run` waits (xpute-host native
+ * A call the kernel makes comes back to this thread while `run` waits (xpute-host native
  * `answer_with`). */
 export function open(): Promise<Guest> {
   const mem = PLATFORM.mem();

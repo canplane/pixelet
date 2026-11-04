@@ -2,10 +2,11 @@
 
 /**
  * A host mounted on a guest its platform opened: the toc, a doorbell
- * whose every turn runs the guest's host stream as it ends (a trapped turn's
+ * whose every turn reads what the guest left as it ends (a trapped turn's
  * too, so its report is read before the doorbell hears it stop), the guest's
  * rings, on which the host sends as port 0 and the program's ports as
- * their own, the hostcalls answered through the program's `SysHost`, and the
+ * their own, the hostcalls, frames for port 0, answered through the
+ * program's `SysHost`, and the
  * strobe, which runs turns as the scheduling policy the program boots it with
  * says (sched/policy.ts).
  */
@@ -29,8 +30,8 @@ import { Strobe } from "@xpute/host/sched/strobe.ts";
 export interface Guest {
   mem: ArrayBuffer;
   run(quota_ms: f64): f64;
-  /** `answer` answers each hostcall from here on: a record at an offset of
-   * `mem`, run before the hostcall returns. ENOSYS until it is set. */
+  /** `answer` answers each call from here on: a frame laid at an offset of
+   * `mem`, answered before the call returns. ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
 }
 
@@ -68,34 +69,26 @@ export interface Host<G extends Grant = Grant> {
 
 export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host<G> {
   const toc = new Toc(guest.mem, cfg.toc_at);
-  const stream = toc.get(key.SYS);
   const doorbell = new Doorbell(
     guest.mem,
     toc.get(key.SQ),
     toc.get(key.CQ),
-    (quota_ms) => {
-      let wake: f64;
-      try {
-        wake = guest.run(quota_ms);
-      } finally {
-        sys.run(guest.mem, stream);
-      }
-      return wake;
-    },
+    (quota_ms) => guest.run(quota_ms),
   );
   const strobe = new Strobe(doorbell, cfg.policy, cfg.submit);
   const send = (src: u32, cmd: u32, pkt?: PacketWriter) => {
     doorbell.send(src, cmd, pkt);
     strobe.request();
   };
-  const sys = new Sys(cfg.sys, (fd, res, detail) =>
+  const sys = new Sys(cfg.sys, guest.mem, (fd, res, detail) =>
     send(
       frame.HOST,
       Command.SYS_OPENED,
       encode_sys_opened(doorbell, fd, res, detail),
     ),
   );
-  guest.answer_with((at) => sys.call(guest.mem, at));
+  doorbell.on(frame.HOST, sys.receive);
+  guest.answer_with((at) => doorbell.answer(at));
   const host: Host<G> = {
     guest,
     toc,

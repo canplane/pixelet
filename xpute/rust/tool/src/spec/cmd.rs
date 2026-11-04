@@ -232,7 +232,7 @@ const TARGETS: [Target; 1] = [Target {
     rs: "rust/guest/src/abi/cmd.spec.rs",
     rs_logical: "xpute-guest/abi/cmd.spec.rs",
     number: "crate::abi::number",
-    event: None,
+    event: Some("crate::ipc::door"),
     cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
 }];
 

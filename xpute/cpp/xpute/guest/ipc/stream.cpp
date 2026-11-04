@@ -43,18 +43,6 @@ void Stream::record(std::uint32_t op, std::span<const std::uint32_t> args, std::
     fill(*w, args, tail, bytes);
 }
 
-std::optional<std::uint32_t> Stream::past(std::uint32_t op, std::span<const std::uint32_t> args,
-                                          std::optional<std::span<const std::uint8_t>> bytes) noexcept {
-    std::uint32_t n = static_cast<std::uint32_t>(args.size()) + byte_words_of(bytes);
-    std::uint32_t at = head_ + len_;
-    if (std::uint64_t{at} + 2 + n > words_) return std::nullopt;
-    std::uint32_t off = at_ + WORD * at;
-    mem_.set_word(off, op);
-    mem_.set_word(off + WORD, n);
-    fill(off + 2 * WORD, args, {}, bytes);
-    return off;
-}
-
 void Stream::fill(std::uint32_t w, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,
                   std::optional<std::span<const std::uint8_t>> bytes) noexcept {
     auto a = static_cast<std::uint32_t>(args.size()), t = static_cast<std::uint32_t>(tail.size());

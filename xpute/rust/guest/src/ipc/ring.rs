@@ -168,18 +168,54 @@ impl Ring {
         result: i32,
         write: impl FnOnce(&mut [u8]) -> Option<u32>,
     ) -> Errno {
+        match self.lay(tag, cmd, flags, result, write) {
+            Ok(_) => {
+                self.advance_tail();
+                Errno::OK
+            }
+            Err(e) => e,
+        }
+    }
+
+    /// `push_in_place`'s frame laid at the tail and not published: where its
+    /// words begin in the memory. The next push takes its place.
+    pub fn stage_in_place(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) -> Result<usize, Errno> {
+        let at = self.lay(tag, cmd, flags, 0, write)?;
+        Ok(self.at + 4 * at)
+    }
+
+    /// Drops every frame not yet read: the writer's, before its reader reads.
+    pub fn clear(&self) {
+        self.words()[TAIL as usize] = self.head();
+    }
+
+    /// The frame at the tail, its packet written by `write`: the word where
+    /// it begins, from the ring's start.
+    fn lay(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) -> Result<usize, Errno> {
         if self.len() >= self.cap {
-            return Errno::EAGAIN;
+            return Err(Errno::EAGAIN);
         }
         let start = self.slot_at(self.tail());
         let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize])
             .filter(|&n| n <= self.slot_bytes)
         else {
-            return Errno::EMSGSIZE;
+            return Err(Errno::EMSGSIZE);
         };
         self.pad(start, n as usize);
-        self.publish(tag, cmd, flags, result, self.slot_base + start as u32);
-        Errno::OK
+        Ok(self.entry(tag, cmd, flags, result, self.slot_base + start as u32))
     }
 
     fn pad(&self, start: usize, len: usize) {
@@ -187,12 +223,23 @@ impl Ring {
     }
 
     fn publish(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) {
+        self.entry(tag, cmd, flags, result, pkt_at);
+        self.advance_tail();
+    }
+
+    /// The frame's words at the tail's entry, unpublished: where they begin.
+    fn entry(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) -> usize {
         let w = self.words();
         let at = self.entry_at(w[TAIL as usize]) as usize;
         w[at + frame::TAG as usize] = tag;
         w[at + frame::CMD as usize] = cmd_word(cmd, flags);
         w[at + frame::RESULT as usize] = result as u32;
         w[at + frame::PKT as usize] = pkt_at;
+        at
+    }
+
+    fn advance_tail(&self) {
+        let w = self.words();
         w[TAIL as usize] = w[TAIL as usize].wrapping_add(1);
     }
 

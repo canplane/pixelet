@@ -16,7 +16,9 @@ pub(crate) mod port;
 #[path = "door/toc.spec.rs"]
 pub(crate) mod toc;
 
-use crate::domain::control::cmd::{Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent};
+use crate::domain::control::cmd::{
+    Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent, TextLayoutEvent, TextRasterEvent,
+};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
@@ -32,6 +34,7 @@ use crate::sys::io::host;
 use crate::sys::io::loader;
 use crate::sys::io::request;
 use crate::sys::io::text;
+use crate::sys::io::text::TextCall;
 use crate::sys::mem::section;
 use crate::sys::mem::spec;
 use crate::sys::sched::edge;
@@ -49,6 +52,7 @@ use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
 use xpute_guest::stop::{self, PanicHook};
+use xpute_kit::status::errno::Errno;
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
@@ -59,12 +63,61 @@ struct State {
 
 static DOOR: Global<Door> = Global::new();
 
-fn door() -> &'static Door {
+pub(crate) fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: once, the door's first use; the ranges are the layout's alone.
         let (sq, cq) = unsafe { layout::rings() };
         Door::new(sq, cq, EVENTS)
     })
+}
+
+/// The kernel's text call, made of the shell's port as TEXT_LAYOUT or
+/// TEXT_RASTER and answered before it returns (sys/io/host.rs `Hosted`).
+pub(crate) fn text_call(call: &TextCall<'_>) -> Result<u32, Errno> {
+    match *call {
+        TextCall::Layout {
+            weight,
+            px,
+            max_width,
+            at,
+            lines,
+            text,
+        } => door().call(
+            port::SHELL,
+            &TextLayoutEvent {
+                weight,
+                px,
+                max_width,
+                at,
+                lines,
+                text_at: off_of_slice(text.as_bytes()) as u32,
+                text_len: text.len() as u32,
+            },
+        ),
+        TextCall::Raster {
+            weight,
+            px,
+            color,
+            at,
+            width,
+            height,
+            x,
+            text,
+        } => door().call(
+            port::SHELL,
+            &TextRasterEvent {
+                weight,
+                px,
+                color,
+                at,
+                width,
+                height,
+                x,
+                text_at: off_of_slice(text.as_bytes()) as u32,
+                text_len: text.len() as u32,
+            },
+        ),
+    }
 }
 
 /// The rings' peaks since the last take, the profiler's (perf/report.rs
@@ -73,18 +126,20 @@ pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
 
-/// What a turn raises, all after its drain and once (`post_shell` at the
-/// falling edge): a sensor's start or stop each, and the snapshot. A command
-/// raises nothing itself, so the door's reserve past this is its reply.
-const EVENTS: u32 = Sensor::ALL.len() as u32 + 1;
+/// What a turn posts besides its replies: a sensor's start or stop each and
+/// the snapshot, all after its drain and once (`post_shell` at the falling
+/// edge); the files' hostcalls at their most, whether the drain or the rest
+/// of the turn posts them (`host::FILE_FRAMES`); and the slot a call is laid
+/// in, never published. The door's reserve past this is a command's reply.
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 1 + host::FILE_FRAMES + 1;
 
-// The shell reads the completion ring dry before it rings, so a ring with
+// The host reads the completion ring dry before it rings, so a ring with
 // room for a reply to every submission and the door's reserve past the last
 // (`Door::new`, EVENTS + 1) never stops a drain partway (mem.json
 // CQ_CAP).
 const _: () = assert!(
     spec::SQ_CAP + EVENTS < spec::CQ_CAP,
-    "a full submission ring's replies and the turn's events do not fit the completion ring"
+    "a full submission ring's replies and the turn's posts do not fit the completion ring"
 );
 
 static STATE: Global<State> = Global::new();
@@ -96,8 +151,8 @@ fn state() -> &'static mut State {
     })
 }
 
-/// xpute's two rings and the host's stream, and the GPU stream.
-const TOC_ENTRIES: usize = 4;
+/// xpute's two rings, and the GPU stream.
+const TOC_ENTRIES: usize = 3;
 
 /// A case lives on its surface, so it goes with it.
 fn close_surface(handle: u32) {
@@ -135,7 +190,6 @@ fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
     let entries: [Entry; TOC_ENTRIES] = [
         (key::SQ, door().sq().at() as u32),
         (key::CQ, door().cq().at() as u32),
-        (key::SYS, layout::range(layout::Fixed::Host).off),
         (GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at TOC_AT, kept clear of the rings and the
@@ -197,7 +251,6 @@ pub fn run(
         dispatch::run();
     }
     api::gpu_publish();
-    host::fall();
     let fall = edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     let wake = if door().pending() { 0.0 } else { fall };

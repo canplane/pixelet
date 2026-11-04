@@ -10,12 +10,11 @@
 use core::cell::Cell;
 
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::door::{Door, Outcome, Submission};
+use xpute_guest::ipc::door::{Door, Event, Outcome, Submission};
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
-use xpute_guest::ipc::sys::Sys;
 use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc};
 use xpute_guest::mem::Memory;
 use xpute_guest::sched::wake::NO_WAKE;
@@ -23,7 +22,7 @@ use xpute_kit::math::rng::SplitMix32;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::TreeReader;
+use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
 use crate::spec;
 
@@ -41,17 +40,15 @@ const CQ_DESC: usize = 2;
 const SQ_SLOT: usize = 3;
 const CQ_SLOT: usize = 4;
 const STREAM: usize = 5;
-const SYS: usize = 6;
-const PARTS: usize = 7;
+const PARTS: usize = 6;
 
 const PART_BYTES: [u32; PARTS] = [
-    toc_words(4) as u32 * 4,
+    toc_words(3) as u32 * 4,
     ring_bytes(spec::SQ_CAP),
     ring_bytes(spec::CQ_CAP),
     slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES),
     slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES),
     spec::STREAM_WORDS * 4,
-    spec::SYS_WORDS * 4,
 ];
 
 /// The most a layout spans: the page it starts past, every part, and the most
@@ -101,14 +98,28 @@ struct Guest {
 
 struct State {
     stream: Stream,
-    sys: Sys,
     files: Files<u32, { spec::HANDLES as usize }>,
     handles: Table<(), { spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
-    /// What HOSTCALL's host writes.
+    /// What CALL's port writes.
     word: u32,
+}
+
+/// What CALL calls SENDER with: a number and an offset.
+struct Answer {
+    n: u32,
+    at: u32,
+}
+
+impl Event for Answer {
+    const NUMBER: u32 = spec::cmd::ANSWER;
+    const FIELDS: u32 = 2;
+    fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.n));
+        w.u32(Some(self.at));
+    }
 }
 
 /// Where each part lies under `seed`, from the range's start: the parts in the
@@ -138,7 +149,7 @@ fn layout(seed: u32) -> [u32; PARTS] {
 unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     let at = layout(seed).map(|off| range + off);
     // SAFETY: the caller's memory; the ranges are the layout's.
-    let (sq, cq, stream, sys) = unsafe {
+    let (sq, cq, stream) = unsafe {
         (
             Ring::init(
                 mem,
@@ -155,7 +166,6 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
                 spec::SLOT_BYTES,
             ),
             Stream::new(mem, at[STREAM] as usize, spec::STREAM_WORDS as usize, 1),
-            Sys::new(mem, at[SYS] as usize, spec::SYS_WORDS as usize),
         )
     };
     let door = Door::new(sq, cq, spec::MOST_RAISE);
@@ -164,12 +174,11 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         write_toc(
             mem,
             at[TOC] as usize,
-            toc_words(4),
+            toc_words(3),
             &[
                 (key::SQ, at[SQ_DESC]),
                 (key::CQ, at[CQ_DESC]),
                 (spec::key::STREAM, at[STREAM]),
-                (key::SYS, at[SYS]),
             ],
         )
     };
@@ -177,7 +186,6 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         door,
         state: State {
             stream,
-            sys,
             files: Files::new(),
             handles: Table::new(),
             now,
@@ -196,10 +204,10 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
 unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
-    state.sys.rise();
+    door.rise();
     door.receive(|submission| match submission {
         Submission::Opened(opened) => {
-            if let Some(owner) = state.files.complete_open(&mut state.sys, &opened) {
+            if let Some(owner) = state.files.complete_open(door, &opened) {
                 door.post(
                     frame::tag_of(spec::SENDER, owner),
                     spec::cmd::OPENED,
@@ -212,7 +220,6 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
     });
     state.stream.publish();
-    state.sys.fall();
     if door.pending() {
         0.0
     } else {
@@ -305,7 +312,6 @@ mod wasm {
 fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
     let State {
         stream,
-        sys,
         files,
         handles,
         now,
@@ -348,18 +354,18 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             Ok(Some(0))
         }
         spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
-        spec::cmd::OPEN => Ok(Some(files.open(sys, 1, "f", arg(pkt)?) as i32)),
+        spec::cmd::OPEN => Ok(Some(files.open(door, 1, "f", arg(pkt)?) as i32)),
         spec::cmd::CLOSE => files
-            .close(sys, arg(pkt)?)
+            .close(door, arg(pkt)?)
             .map(|_| Some(0))
             .ok_or_else(bad_handle),
-        spec::cmd::HOSTCALL => {
+        spec::cmd::CALL => {
             let n = arg(pkt)?;
             *word = 0;
             let at = mem.off_of(&raw const *word) as u32;
-            sys.call(spec::hostcall::ANSWER, &[n, at], &[])
+            door.call(spec::SENDER, &Answer { n, at })
                 .map_err(MarshalError::new)?;
-            // SAFETY: the word the host wrote before the hostcall returned.
+            // SAFETY: the word the port wrote before the call returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
         }
         _ => Ok(None),

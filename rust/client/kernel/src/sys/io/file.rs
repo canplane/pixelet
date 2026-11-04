@@ -24,7 +24,7 @@ use xpute_kit::status::bug::OrBug;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::file_spec::{format, object, root, storage};
-use crate::sys::io::host::{sys, turn};
+use crate::sys::io::host::{door, turn};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
@@ -77,7 +77,7 @@ impl StorageFile {
 }
 
 /// The longest name the kernel opens: a u64 in decimal, at its widest, past
-/// every quadkey, so the host stream's reserve can count on it.
+/// every quadkey, so a slot holds the open that names it.
 pub const PATH_BYTES: usize = 20;
 
 const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
@@ -108,13 +108,13 @@ fn files() -> &'static mut Files<Owner, OPEN> {
 
 /// Opens `root`'s object `path`; none where there is no host.
 pub fn open(_: Credit, root: u32, path: Path, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root, path.as_str(), owner))
+    Some(files().open(door()?, root, path.as_str(), owner))
 }
 
 /// Opens a storage file to be read whole; what it held is taken with `take_storage`.
 pub fn open_storage(file: StorageFile) -> Option<Fd> {
     Some(files().open(
-        sys()?,
+        door()?,
         root::STORAGE,
         file.path().as_str(),
         Owner::StorageFile(file),
@@ -277,11 +277,11 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
 /// `dst` is filled from the next turn on.
 ///
 /// # Safety
-/// As `Sys::read`: `dst` outlives this turn, unmoved and unread.
+/// As `Door::read`: `dst` outlives this turn, unmoved and unread.
 pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
-    if let Some(sys) = sys() {
+    if let Some(door) = door() {
         // SAFETY: the caller's.
-        unsafe { sys.read(fd, dst) };
+        unsafe { door.read(fd, dst) };
     }
 }
 
@@ -295,14 +295,14 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
 /// The bytes are filled from the next turn on: as `read`, they are neither
 /// read nor dropped before then.
 pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
-    let sys = sys().or_bug(Errno::ENOTRECOVERABLE);
+    let door = door().or_bug(Errno::ENOTRECOVERABLE);
     // SAFETY: the caller's.
-    unsafe { files().read_whole(sys, fd, bytes) }.map_err(|_| Refusal::now())
+    unsafe { files().read_whole(door, fd, bytes) }.map_err(|_| Refusal::now())
 }
 
 pub fn close(fd: Fd) {
-    if let Some(sys) = sys() {
-        files().close(sys, fd);
+    if let Some(door) = door() {
+        files().close(door, fd);
     }
 }
 
@@ -400,7 +400,7 @@ static LAST_WRITE: Global<(u64, u32)> = Global::new();
 /// for its owner to write on a later turn. Nothing is written, and none
 /// counted, where there is no host.
 pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
-    let Some(sys) = sys() else { return true };
+    let Some(door) = door() else { return true };
     let written = LAST_WRITE.get(|| (0, 0));
     if written.0 != turn() {
         *written = (turn(), 0);
@@ -409,7 +409,7 @@ pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
         return false;
     }
     written.1 += 1;
-    files().write_whole(sys, root, path.as_str(), bytes, Owner::Write);
+    files().write_whole(door, root, path.as_str(), bytes, Owner::Write);
     true
 }
 
@@ -418,9 +418,9 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     if is_refused(file) {
         return;
     }
-    if let Some(sys) = sys() {
+    if let Some(door) = door() {
         files().write_whole(
-            sys,
+            door,
             root::STORAGE,
             file.path().as_str(),
             seal(file, bytes),
@@ -435,7 +435,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 /// closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
     let SysOpened { fd, detail, .. } = *completed;
-    let Some(owner) = sys().and_then(|sys| files().complete_open(sys, completed)) else {
+    let Some(owner) = door().and_then(|door| files().complete_open(door, completed)) else {
         return;
     };
     let opened = match Opened::of(completed) {

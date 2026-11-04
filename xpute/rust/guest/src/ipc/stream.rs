@@ -140,22 +140,6 @@ impl Stream {
         let Some(w) = self.reserve(op, n) else { return };
         fill(w, args, tail, bytes);
     }
-
-    /// A record laid past the last the turn has recorded and never published,
-    /// for a hostcall: its offset in the memory, or none where it does not
-    /// fit. The next record written takes its words.
-    pub fn past(&mut self, op: u32, args: &[u32], bytes: Option<&[u8]>) -> Option<usize> {
-        let n = record_words(args.len(), bytes.map(<[u8]>::len)) - 2;
-        let at = self.head + self.len;
-        if at + 2 + n > self.words {
-            return None;
-        }
-        let w = &mut self.words()[at..at + 2 + n];
-        w[0] = op;
-        w[1] = n as u32;
-        fill(&mut w[2..], args, &[], bytes);
-        Some(self.at + at * WORD)
-    }
 }
 
 /// A record's words past its op and count: `args`, `tail`, and `bytes` as

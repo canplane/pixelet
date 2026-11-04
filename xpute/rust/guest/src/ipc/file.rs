@@ -9,8 +9,9 @@ use xpute_kit::status::errno::Errno;
 
 use crate::abi::cmd::SysOpened;
 use crate::abi::handle::Table;
+use crate::ipc::door::Door;
 use crate::ipc::sys::spec::flag;
-use crate::ipc::sys::{answer_of, Fd, Sys};
+use crate::ipc::sys::{answer_of, Fd};
 
 /// What an open came to, read once from the host's answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,31 +54,31 @@ impl<O: Copy, const N: usize> Files<O, N> {
         Files { held: Table::new() }
     }
 
-    pub fn open(&mut self, sys: &mut Sys, root: u32, path: &str, owner: O) -> Fd {
+    pub fn open(&mut self, door: &Door, root: u32, path: &str, owner: O) -> Fd {
         let fd = self.held.insert(owner).or_bug(Errno::ENOSPC);
-        sys.openat(fd, root, flag::O_RDONLY, path.as_bytes());
+        door.openat(fd, root, flag::O_RDONLY, path);
         fd
     }
 
-    pub fn close(&mut self, sys: &mut Sys, fd: Fd) -> Option<O> {
-        sys.close(fd);
+    pub fn close(&mut self, door: &Door, fd: Fd) -> Option<O> {
+        door.close(fd);
         self.held.remove(fd)
     }
 
     /// Opened, written and closed in one turn; no answer comes.
-    pub fn write_whole(&mut self, sys: &mut Sys, root: u32, path: &str, bytes: Vec<u8>, owner: O) {
+    pub fn write_whole(&mut self, door: &Door, root: u32, path: &str, bytes: Vec<u8>, owner: O) {
         let fd = self.held.insert(owner).or_bug(Errno::ENOSPC);
-        sys.openat(fd, root, flag::O_WRONLY, path.as_bytes());
-        sys.write(fd, bytes);
-        self.close(sys, fd);
+        door.openat(fd, root, flag::O_WRONLY, path);
+        door.write(fd, bytes);
+        self.close(door, fd);
     }
 
     /// The owner of the open `opened` completes, or none where its descriptor
     /// was closed since; a descriptor whose open failed is closed here.
-    pub fn complete_open(&mut self, sys: &mut Sys, opened: &SysOpened) -> Option<O> {
+    pub fn complete_open(&mut self, door: &Door, opened: &SysOpened) -> Option<O> {
         let owner = self.owner(opened.fd).copied()?;
         if opened.res < 0 {
-            self.close(sys, opened.fd);
+            self.close(door, opened.fd);
         }
         Some(owner)
     }
@@ -87,22 +88,17 @@ impl<O: Copy, const N: usize> Files<O, N> {
     /// heap has no room for it, nothing read.
     ///
     /// # Safety
-    /// As `Sys::read`: the buffer is neither read, grown nor dropped before
+    /// As `Door::read`: the buffer is neither read, grown nor dropped before
     /// the next rise.
-    pub unsafe fn read_whole(
-        &mut self,
-        sys: &mut Sys,
-        fd: Fd,
-        bytes: u32,
-    ) -> Result<Vec<u8>, Errno> {
+    pub unsafe fn read_whole(&mut self, door: &Door, fd: Fd, bytes: u32) -> Result<Vec<u8>, Errno> {
         let mut held = Vec::new();
         let room = held.try_reserve_exact(bytes as usize);
         if room.is_ok() {
             held.resize(bytes as usize, 0);
             // SAFETY: the caller's.
-            unsafe { sys.read(fd, &mut held) };
+            unsafe { door.read(fd, &mut held) };
         }
-        self.close(sys, fd);
+        self.close(door, fd);
         room.map(|()| held).map_err(|_| Errno::ENOMEM)
     }
 

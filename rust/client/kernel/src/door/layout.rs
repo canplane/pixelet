@@ -9,6 +9,7 @@
 use xpute_guest::entry::BootInfo;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
+use super::{door, text_call};
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
@@ -21,7 +22,6 @@ use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::host;
-use crate::sys::io::host_spec::stream::BYTES;
 use crate::sys::io::param;
 use crate::sys::mem::section::{self, fixed_at, map, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::sys::mem::spec::{
@@ -110,7 +110,6 @@ pub(crate) enum Fixed {
     Division,
     Uploads,
     Gpu,
-    Host,
 }
 
 /// None is let go.
@@ -133,12 +132,11 @@ const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
 pub(crate) const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
-const FIXED: [u32; 5] = [
+const FIXED: [u32; 4] = [
     fixed::TERRAIN_BYTES,
     division::DIVISION_BYTES,
     upload::uploads_bytes(MAX_LIVE_UPLOADS),
     stream::BYTES,
-    BYTES,
 ];
 
 pub(crate) const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
@@ -222,7 +220,10 @@ pub(crate) fn install(b: &BootInfo) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        host::set_stream(range(Fixed::Host).off);
+        host::set_hosted(host::Hosted {
+            door: door(),
+            text: text_call,
+        });
         upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
         api::install(range(Fixed::Gpu).off)
     }

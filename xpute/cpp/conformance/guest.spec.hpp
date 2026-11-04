@@ -17,7 +17,7 @@
 
 namespace xpute::conformance {
 
-// The room a guest's shared range asks for: the toc, both rings, the two streams
+// The room a guest's shared range asks for: the toc, both rings, the stream
 // and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
 // begins, and so where the toc is, the guest's boot answers (the contract's rule 0);
 // what else a memory holds — a module's stack and data — is the build's, and no number here.
@@ -46,9 +46,6 @@ inline constexpr std::uint32_t SLOT_BYTES = 256u;
 // The stream's range, its END word first.
 inline constexpr std::uint32_t STREAM_WORDS = 256u;
 
-// The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
-inline constexpr std::uint32_t SYS_WORDS = 64u;
-
 // The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
 inline constexpr std::uint32_t STACK_BYTES = 1048576u;
 
@@ -68,14 +65,6 @@ namespace key {
 // Where the stream is, run by the host after every turn.
 inline constexpr std::uint32_t STREAM = 2147483649u;
 } // namespace key
-
-// The guest's own hostcall, past xpute's PROGRAM bit.
-namespace hostcall {
-
-// A number and an offset: the host writes the number plus one at the offset and answers 0,
-// before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing.
-inline constexpr std::uint32_t ANSWER = 2147483649u;
-} // namespace hostcall
 
 // The port a trace sends the guest's own commands as, and the one the guest raises
 // its events for (ipc/frame.json PORT_SHIFT).
@@ -112,14 +101,19 @@ inline constexpr std::uint32_t MARK = 4104u;
 // Reads the host's clock and replies with the whole milliseconds since the last MARK.
 inline constexpr std::uint32_t SINCE = 4105u;
 
-// Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open.
+// Opens a file for the packet's number, its owner, and replies with the descriptor, its SYS_OPENAT posted for the host's port, which no trace's host answers; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open.
 inline constexpr std::uint32_t OPEN = 4106u;
 
 // Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
 inline constexpr std::uint32_t CLOSE = 4107u;
 
-// Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused.
-inline constexpr std::uint32_t HOSTCALL = 4108u;
+// Zeroes a word of its own, calls SENDER with ANSWER, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
+inline constexpr std::uint32_t CALL = 4108u;
+
+// What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
+// number plus one at the offset and answers 0 before the call returns; a number of 0 it
+// refuses with EINVAL, writing nothing.
+inline constexpr std::uint32_t ANSWER = 4109u;
 
 // What RAISE raises.
 inline constexpr std::uint32_t EVENT = 4353u;

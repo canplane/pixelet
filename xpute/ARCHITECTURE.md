@@ -22,8 +22,9 @@ format, an errno table, scalar math — that any program can link and call.
 
 Three things cross between the ends and nothing else does: one memory they
 share, one call in, one number out. Two calls go the other way, each answered
-before it returns: the host's clock, and a hostcall run now, a question the host
-answers from what it already holds (both below). The sections follow from that:
+before it returns: the host's clock, and a call a guest makes of a port, a
+question answered from what is already held (both below). The sections follow
+from that:
 
 1. the memory;
 2. what is written into it — one shape for every message, its data, and the
@@ -66,9 +67,9 @@ it reads lie by a **toc**, a table of contents as a CD's tells where each track
 begins (`ipc/toc`, `spec/ipc/toc.json`), which the guest writes in its first
 turn, or in a boot call that returns its offset; the host learns that one offset
 from outside and finds everything else from there (`@xpute/host/ipc/toc.ts`
-`Toc`). xpute numbers a key for each part of its own — the two queues and the
-hostcall stream the sections below describe — and a program numbers its own keys
-with the `PROGRAM` bit set.
+`Toc`). xpute numbers a key for each part of its own — the two queues the
+sections below describe — and a program numbers its own keys with the `PROGRAM`
+bit set.
 
 ```text
 one guest's layout; the order of its ranges is the guest's, the heap last
@@ -80,14 +81,11 @@ one guest's layout; the order of its ranges is the guest's, the heap last
    │   MAGIC · VERSION · count · 0   │
    │   SQ  · offset ─────────────────┼──┐
    │   CQ  · offset ─────────────────┼──┼──┐
-   │   SYS · offset ─────────────────┼──┼──┼──┐
-   │   PROGRAM | n · value           │  │  │  │
-   ├─────────────────────────────────┤  │  │  │
-   │ submission ring · its slots     │◀─┘  │  │
-   ├─────────────────────────────────┤     │  │
-   │ completion ring · its slots     │◀────┘  │
-   ├─────────────────────────────────┤        │
-   │ hostcall stream                 │◀───────┘
+   │   PROGRAM | n · value           │  │  │
+   ├─────────────────────────────────┤  │  │
+   │ submission ring · its slots     │◀─┘  │
+   ├─────────────────────────────────┤     │
+   │ completion ring · its slots     │◀────┘
    ├─────────────────────────────────┤
    │ the guest's own ranges          │
    ├─────────────────────────────────┤
@@ -390,13 +388,15 @@ transaction whole, and `commit` says so.
 ### Hostcalls and files
 
 A **hostcall** is a guest's call into its host, the name Wasmtime and Lucet give
-one. Some are every program's: open, read, write and close a file, and report
-the invariant that stopped the guest; a program numbers its own with the
-`PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run after the
-turn from one stream the toc names (`SYS`), or, a program's own, at once
-(below). The report (`ABORT`) drops the turn's other calls and is published
-alone, at once; a guest's bug reporter and, in Rust, its panic hook publish it
-(`stop`), which the guest installs (`stop::install`).
+one: open, read, write and close a file, and report the invariant that stopped
+the guest. The host is a port like any other, 0, so a hostcall is a frame for it
+on the completion ring, posted as an event is and taken after the turn returns
+(`ipc/door` `Door::openat`, `read`, `write`, `close`, `abort`;
+`spec/ipc/sys.json`, xpute's own commands `SYS_*`). There is no second way: a
+program's own question goes to the port that answers it, as any command does.
+The report (`SYS_ABORT`) drops what the turn posted and goes alone; a guest's
+bug reporter and, in Rust, its panic hook post it (`stop`), which the guest
+installs (`stop::install`).
 
 Files borrow Plan 9's file namespace:
 
@@ -412,18 +412,17 @@ in its file table (`ipc/file` `Files::opened`), a failed open closed there. A
 read, a write and a close are done before the next turn, and a file opened for
 writing is replaced at its close by what was written.
 
-The host's end runs some calls itself and hands the rest to the program
+The host's port runs some calls itself and hands the rest to the program
 (`@xpute/host/ipc/sys.ts` `Sys`, `SysHost`):
 
 ```text
-the guest's turn          the host, after it returns   the program's SysHost
-────────────────          ──────────────────────────   ─────────────────────
-READ · WRITE · CLOSE ──▶  Sys, in the guest's memory
-OPENAT ────────────────▶  Sys ────── open ──────────▶  fs ─▶ Namespace,
-◀── SYS_OPENED, later ──  Sys ◀─── bytes, or errno ──  fs    one binding a root
-CLOSE of a write ──────▶  Sys ────── commit ────────▶  fs
-ABORT ─────────────────▶  Sys ────── report ────────▶  abort
-PROGRAM | n ───────────▶  Sys ────── call ──────────▶  program
+the guest's turn             port 0, after it returns     the program's SysHost
+────────────────             ────────────────────────     ─────────────────────
+SYS_READ · _WRITE · _CLOSE ▶ Sys, in the guest's memory
+SYS_OPENAT ───────────────▶  Sys ───── open ─────────▶    fs ─▶ Namespace,
+◀──── SYS_OPENED, later ───  Sys ◀── bytes, or errno ─    fs    one binding a root
+SYS_CLOSE of a write ─────▶  Sys ───── commit ───────▶    fs
+SYS_ABORT ────────────────▶  Sys ───── report ───────▶    abort
 ```
 
 The host's namespace (`@xpute/host/ipc/ns.ts` `Namespace`) is one such `fs`, its
@@ -432,31 +431,30 @@ names, `ENOENT` below a root nothing is bound to, `EROFS` for a write below one
 that cannot be written. What a file is, where it lies and how it is fetched are
 the binding's; xpute only carries the call.
 
-### A hostcall run now
+### A call answered before it returns
 
-A hostcall from the stream is answered after the turn returns, so a guest that
-needs its answer to go on waits a turn for it, and a chain of such calls a turn
-each. Some need nothing from outside: the host holds the answer already, as a
-page's text engine holds a line's width. For those a program's hostcall is run
-now: the guest lays its record past the last its turn has recorded, where
-nothing publishes it, and hands the host its offset (`ipc/sys`
-`Sys::call`; one the stream carries is `Sys::send`). The host runs it before the call returns, reading that
-record and writing only what it names, and answers with a value or `-errno`. It
-hands the call to the program as it hands one from the stream
-(`@xpute/host/ipc/sys.ts` `Sys.call`), so the program numbers its
-calls once and may have them run either way.
+A frame on the completion ring is taken after the turn returns, so a guest that
+needs its answer to go on waits a turn for it, and a chain of such asks a turn
+each. Some need nothing from outside: what answers holds it already, as a page's
+text engine holds a line's width. For those a guest calls a port: it lays the
+frame in the completion ring's next slot, where nothing publishes it, and hands
+the host its offset (`ipc/door` `Door::call`). The host hands the frame to the
+port its tag names, as it hands that port the frames a turn leaves
+(`@xpute/host/ipc/doorbell.ts` `answer`, `on`), and the port answers before the
+call returns, writing only what the frame names, with a value or `-errno`;
+`ENOSYS` where no port listens. The next frame posted takes the slot.
 
-A hostcall run now never waits on anything outside: an open, a buffer read back
-and every hostcall of xpute's own go in the stream. It crosses the boundary once
-a call where the rest cross once a turn, so it is for the few calls a turn
-cannot answer late.
+A call never waits on anything outside: an open, a buffer read back and every
+hostcall of xpute's own are frames the turn leaves. It crosses the boundary once
+a call where the rest cross once a turn, so it is for the few asks a turn cannot
+answer late.
 
 A module imports the entry as `env.hostcall`, beside `env.now`; a guest linked
 into a native program is handed it with its clock (`BootInfo`). There the guest
 runs on its own thread while the caller of `run` waits, so the native host hands
-each hostcall run now back to that caller, which answers it on its own thread
-and waits again (`xpute-host/native/thread.rs`); the program says what answers
-through `xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
+each call back to that caller, which answers it on its own thread and waits
+again (`xpute-host/native/thread.rs`); the program says what answers through
+`xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
 
 ### A GPU's calls, in WebGPU's words
 
@@ -530,7 +528,7 @@ one the other end could catch being broken.
    Offset 0 names nothing, and nothing that crosses lies there.
 2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
-   what a hostcall run now names while it runs (rule 8). The quota is advice,
+   what a call names while it runs (rule 8). The quota is advice,
    not a deadline: a guest can spend a whole quota inside one function, and the
    host cannot take the turn back until it returns. `wake_ms` is 0 for the next
    turn, a positive number for that many milliseconds from now, and negative
@@ -545,21 +543,22 @@ one the other end could catch being broken.
    xpute's own.
 4. **What the host sends** is applied in order, each submission once. The guest may leave some for a later turn, never out of order or
    skipped, and asks for the next turn while it does.
-5. **What a turn leaves** — events, replies, stream records — is taken by the
-   host before the next turn, none dropped. Order holds within one place a turn
-   writes to, not between places, so a guest that needs one request run before
-   another puts both in the same place. Running past the room set aside is a
-   sizing mistake, and stops the guest.
+5. **What a turn leaves** — events, replies, hostcalls, stream records — is
+   taken by the host before the next turn, none dropped. Order holds within one
+   place a turn writes to, not between places, so a guest that needs one request
+   run before another puts both in the same place. Running past the room set
+   aside is a sizing mistake, and stops the guest.
 6. **Handles.** A handle is `slot | generation << 16`, 0 is never one, and the
    issuing side checks the generation.
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in
    milliseconds. It never runs backward, and only differences mean anything.
-8. **A hostcall run now.** During a turn the guest may hand the host the offset
-   of a hostcall's record. The host runs it before the call returns, reads that
-   record and writes only what it names, and answers with a value or `-errno`,
-   `ENOSYS` for a call that is not the program's. It answers from what it
-   already holds and waits on nothing outside, and the guest runs nothing until
-   it has, so the two sides still never run at once.
+8. **A call.** During a turn the guest may hand the host the offset of a frame
+   it laid, unpublished, in the completion ring's next slot. The port the
+   frame's tag names answers it before the call returns, reads that frame and
+   writes only what it names, with a value or `-errno`, `ENOSYS` where no port
+   listens. It answers from what it already holds and waits on nothing outside,
+   and the guest runs nothing until it has, so the two sides still never run at
+   once.
 
 Everything else is one end's own. The guest's: where its ranges lie, its heap,
 its tick, passes, tasks and files. The host's: the size of a quota, when to
@@ -591,8 +590,8 @@ decides what must match.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
-  platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
-  hostcall stream as each turn returns. `mount` reads the toc as it is called,
+  platform opened, in one call (`@xpute/host/host.ts` `mount`), which binds the
+  host's port, 0, to the hostcalls' end. `mount` reads the toc as it is called,
   so the turn or the boot call that writes it has run by then; what it gives
   speaks with the doorbell's verbs, `send` and `call`, each asking the strobe
   for a turn after. Rust's (`rust/host`) reads a guest's memory by offset on

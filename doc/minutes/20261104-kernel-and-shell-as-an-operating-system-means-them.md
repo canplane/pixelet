@@ -37,6 +37,11 @@ for the same acts.
   the other's turn), `call` (answered before it returns), `on` (a handler
   bound), `receive` (what came, handed on). `Door` and `Doorbell` stay: they
   name the substrate's two ends, where host and guest do rank.
+- **No shortcut beside the rings.** As Unix keeps one way, the hostcall stream
+  goes: a hostcall is a frame for the host's port, 0, on the completion ring,
+  and a question answered before it returns is a call to the port that answers
+  it, laid unpublished in the ring's next slot. The user left it to judgment
+  whether it went; it went.
 - **xpute's program layer is taken out.** It was built on 2026-11-01 without a
   record of the user's, beside the base rather than over it: `call` meant
   "now" on the host's `Port` and "after the turn" on the guest's `Turn`;
@@ -84,6 +89,23 @@ for the same acts.
   none reads is logged on a failure as the doorbell logs one. pixelet's port
   speaks through `HOST.send` and `HOST.call` alone, but for the frame each
   turn's submit writes.
+- The hostcall stream out of xpute: `SYS_OPENAT`, `SYS_READ`, `SYS_WRITE`,
+  `SYS_CLOSE` and `SYS_ABORT` are xpute's own commands, posted for port 0
+  (`Door::openat` and the rest; the guest's `Sys` is gone), and the host's
+  `Sys` is port 0's handler. A call is `Door::call(port, &event)`, answered by
+  the port's handler through `Doorbell.answer`; the toc's `SYS` key is
+  retired, `spec/ipc/sys.json` keeps the open flags, and the C++ guest, the
+  conformance guests (`CALL` and `ANSWER` where `HOSTCALL` was, `call.tsv`)
+  and the example follow. A report that would not fit a slot keeps its path's
+  end, or none.
+- pixelet: the kernel posts its files through the door and its report as
+  `SYS_ABORT`; its text is `TEXT_LAYOUT` and `TEXT_RASTER`, a major of its
+  own, called on the shell's port and answered in `ts/client/src/port/text.ts`
+  (was `sys/text.ts`). The door's reserve counts the files' frames a turn
+  (`host::FILE_FRAMES`) and a call's slot; the 64 KiB stream left the fixed
+  ranges. The command table's sections say the shell where they said the
+  host. The built page in headless Chrome booted, read its tiles and
+  assets through port 0 and drew the world.
 - Kept, as the base's: what the same days moved down into it and pixelet uses,
   `stop`, `Opened`, `Door::raise_to` with `Event`, `OwnedRange`, and the
   command table's generator (`spec::cmd::table_outputs`), which writes
@@ -91,17 +113,14 @@ for the same acts.
 
 ## Open
 
-- The hostcall stream beside the rings: a guest asks the host's port 0 by
-  records of its own format (`spec/ipc/sys.json`), not by the rings' frames.
-  The user sees no reason for a second way, as Unix keeps one, but leaves it
-  to judgment. A guest's `call` to 255 has no path but through port 0.
+- The base's verbs beyond `send`, `call`, `on` and `receive`: the doorbell's
+  own (`ring`, `cmd`, `writer`, `fits`) and the guest's `send_with`.
 - What else every program assembles by hand: the client's `open_host`, which
   opens the guest through the bracket and mounts on it, and the `HOST` and
   `PACING` it keeps for the port's modules.
-- `cmd.json`'s sections still name the host for what the shell's port carries
-  ("the host tells the process") and call the sensors' start and stop
-  hostcalls.
 - The kernel's sensor ABI stays raw: it takes the platform's permissions, its
   gating and its error codes.
-- Checked by format, lint, type, the C++ build and `cargo spec`; the tests,
-  the example's and the strobe's among them, were not run.
+- Checked by format, lint, type, `cargo spec`, xpute's whole suite (its
+  conformance traces on every guest and the example among it), the kernel's
+  and the client's tests, and the page in headless Chrome; a device build was
+  not made.

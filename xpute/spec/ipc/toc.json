@@ -32,13 +32,13 @@
   "key": {
     "$type": "u32",
     "$doc": [
-      "What an entry's value is. 3 to 5 are retired and given to nothing else: they were the",
-      "numbers of a host's scheduling policy, which the program now injects when the host",
-      "boots (the host's sched/policy.ts)."
+      "What an entry's value is. 3 to 6 are retired and given to nothing else: 3 to 5 were",
+      "the numbers of a host's scheduling policy, which the program now injects when the",
+      "host boots (the host's sched/policy.ts); 6 was the hostcall stream's, whose calls",
+      "are now frames on the completion ring for the host's port (ipc/sys.json)."
     ],
     "SQ": { "$val": 1, "$doc": ["Where the submission ring's words begin."] },
     "CQ": { "$val": 2, "$doc": ["Where the completion ring's words begin."] },
-    "SYS": { "$val": 6, "$doc": ["Where the hostcall stream's words begin (ipc/sys.json)."] },
     "PROGRAM": {
       "$val": 2147483648,
       "$doc": [

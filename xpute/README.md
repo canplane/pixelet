@@ -38,12 +38,11 @@ what that program computes.
 
 Three edges, and two calls the other way, each answered before it returns: the
 guest reads the host's clock (`now`), because it spends its quota against that
-clock in the middle of a turn, when the host cannot run; and it runs a
-**hostcall**, a guest's call into its host, now rather than from the stream the
-host runs after the turn: one of its program's that the host answers from what
-it already holds, where an answer a turn later would cost it that turn. There is
-no second entry point, no other callback, and nothing either side holds a
-pointer to on the other.
+clock in the middle of a turn, when the host cannot run; and it calls a port
+(`hostcall`), a frame it laid on its ring answered now rather than a turn
+later: a question what answers holds already, where an answer a turn later
+would cost the guest that turn. There is no second entry point, no other
+callback, and nothing either side holds a pointer to on the other.
 
 `run` is the whole of the guest's life. xpute names it, as a C runtime names
 `main`, and the guest implements it. It runs when the host rings, for as long as
@@ -53,14 +52,16 @@ asks for nothing is rung for nothing.
 
 What the guest cannot do itself — a file, a call to a GPU — it asks for in what
 its turn leaves, and the host takes every such request before it rings again.
+The host is a port like the rest, 0: what the guest asks of it are frames on the
+same ring as everything else the guest sends.
 
 A file is asked for as POSIX's `openat` and io_uring's submission and completion
 name it: opened below a root the host bound, read and written by descriptor,
 each answered with a result or Linux's errno, its open's answer (`SYS_OPENED`) a
 turn later. WASI's calls look alike — an open, a read, an errno, a directory the
 host grants — but each returns before the guest goes on. Here nothing the guest
-asks returns within its turn but a hostcall run now: a guest waits a turn for
-what it asked, and never blocks.
+asks returns within its turn but a call to a port answered from what it holds: a
+guest waits a turn for what it asked, and never blocks.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped
 that way, and the contract either end must keep.
@@ -104,19 +105,20 @@ and names the crates by `path`.
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
 `make test` runs. The guest lays out its own range, a page for the toc, then the
-two rings and their slots and the hostcalls' stream, and answers the toc's
-offset from a boot call; each turn it applies what waits, and asks the host for
-a number it holds by a hostcall run now. The host opens the module over a memory
-of its own (`@xpute/host/module.ts` `open_module`) and mounts on it in one call
-(`@xpute/host/host.ts` `mount`), given that offset, its answers to the guest's
-calls (`SysHost`, each part optional) and the scheduling policy that says when a
-turn runs and how much it gets (`sched/policy.ts`: a fixed quota where there is
-no display, frame pacing on a page); then it sends the command and reads the
-reply.
+two rings and their slots, and answers the toc's offset from a boot call; each
+turn it applies what waits, and calls the port that sent the command for a
+number it holds, answered before the call returns (`Door::call`). The host
+opens the module over a memory of its own (`@xpute/host/module.ts`
+`open_module`) and mounts on it in one call (`@xpute/host/host.ts` `mount`),
+given that offset, its answers to the guest's hostcalls (`SysHost`, each part
+optional) and the scheduling policy that says when a turn runs and how much it
+gets (`sched/policy.ts`: a fixed quota where there is no display, frame pacing
+on a page); then it binds the port's answer (`doorbell.on`), sends the command
+and reads the reply.
 
 A guest stops on a broken invariant (`bug!`) or a panic: what it installs
-(`xpute_guest::stop::install`, `cpp/xpute/guest/stop.hpp`) publishes the report
-(`ABORT`) as the turn's one record, which the host hears. An event a guest's
+(`xpute_guest::stop::install`, `cpp/xpute/guest/stop.hpp`) posts the report
+(`SYS_ABORT`) as the turn's one frame, which the host hears. An event a guest's
 table generates is sent to the port it names (`ipc/door` `Door::send`).
 A program's command table is generated for both ends by xpute-tool
 (`spec::cmd::table_outputs`), handed the table and where its code goes.

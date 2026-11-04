@@ -13,10 +13,9 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as key from "./conformance/key.spec.ts";
-import * as hostcall from "./conformance/hostcall.spec.ts";
 import * as cmd from "./conformance/cmd.spec.ts";
 
-/** The room a guest's shared range asks for: the toc, both rings, the two streams
+/** The room a guest's shared range asks for: the toc, both rings, the stream
  * and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
  * begins, and so where the toc is, the guest's boot answers (the contract's rule 0);
  * what else a memory holds — a module's stack and data — is the build's, and no number here. */
@@ -45,9 +44,6 @@ export const SLOT_BYTES: u32 = 256 as number;
 /** The stream's range, its END word first. */
 export const STREAM_WORDS: u32 = 256 as number;
 
-/** The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them. */
-export const SYS_WORDS: u32 = 64 as number;
-
 /** The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile). */
 export const STACK_BYTES: u32 = 1048576 as number;
 
@@ -63,9 +59,6 @@ export const MOST_RAISE: u32 = 32 as number;
 
 /** The guest's own entry in its toc, past xpute's PROGRAM bit. */
 export { key };
-
-/** The guest's own hostcall, past xpute's PROGRAM bit. */
-export { hostcall };
 
 /** The port a trace sends the guest's own commands as, and the one the guest raises
  * its events for (ipc/frame.json PORT_SHIFT). */

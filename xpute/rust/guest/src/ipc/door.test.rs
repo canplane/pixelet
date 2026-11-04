@@ -12,18 +12,22 @@ const MOST_EVENTS: u32 = 64;
 const PROGRAM: u32 = 1 << frame::PORT_SHIFT;
 
 fn door() -> (Door, Box<[u8]>) {
+    door_of(SLOT)
+}
+
+fn door_of(slot: u32) -> (Door, Box<[u8]>) {
     let sq_desc = 8;
     let cq_desc = sq_desc + ring_bytes(SQ);
     let sq_slot = cq_desc + ring_bytes(CQ);
-    let cq_slot = sq_slot + slots_bytes(SQ, SLOT);
-    let mut buf = vec![0u8; (cq_slot + slots_bytes(CQ, SLOT)) as usize].into_boxed_slice();
+    let cq_slot = sq_slot + slots_bytes(SQ, slot);
+    let mut buf = vec![0u8; (cq_slot + slots_bytes(CQ, slot)) as usize].into_boxed_slice();
     let mem = unsafe { Memory::new(buf.as_mut_ptr().expose_provenance(), buf.len()) };
     // SAFETY: the buffer outlives the door — both are returned together and
     // the caller holds them for the test.
     let (sq, cq) = unsafe {
         (
-            Ring::init(mem, sq_desc as usize, SQ, sq_slot, SLOT),
-            Ring::init(mem, cq_desc as usize, CQ, cq_slot, SLOT),
+            Ring::init(mem, sq_desc as usize, SQ, sq_slot, slot),
+            Ring::init(mem, cq_desc as usize, CQ, cq_slot, slot),
         )
     };
     (Door::new(sq, cq, MOST_EVENTS), buf)
@@ -164,4 +168,34 @@ fn host_frame_unknown_refused() {
     d.receive(|_| unreachable!("the host's command is none of the program's"));
     let f = d.cq().peek().expect("a failure's reply");
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
+}
+
+/// What `call` sends, an event with no fields.
+struct Ping;
+
+impl Event for Ping {
+    const NUMBER: u32 = 0x1201;
+    const FIELDS: u32 = 0;
+    fn write(&self, _: &mut PacketWriter) {}
+}
+
+#[test]
+fn call_publishes_nothing() {
+    let (d, _buf) = door();
+    d.send(1, &Ping);
+    // No host's `hostcall` is installed in a native test, so the call is refused.
+    assert_eq!(d.call(1, &Ping), Err(Errno::ENOSYS));
+    assert_eq!(d.cq().len(), 1, "the call's frame is laid, not published");
+}
+
+#[test]
+fn abort_posts_the_report_alone() {
+    let (d, _buf) = door_of(256);
+    d.send(1, &Ping);
+    d.close(3);
+    d.abort(Errno::EINVAL, core::panic::Location::caller(), 1, 2);
+    assert_eq!(d.cq().len(), 1);
+    let f = d.cq().peek().expect("the report");
+    assert_eq!(frame::port_of(f.tag), frame::HOST);
+    assert_eq!(f.cmd, crate::abi::cmd::Command::SYS_ABORT as u32);
 }

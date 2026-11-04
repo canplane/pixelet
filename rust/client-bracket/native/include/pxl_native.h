@@ -23,7 +23,7 @@ double xpute_run(double quota_ms);
 // may be null) — what the host reads the directory and the rings through.
 uint8_t *xpute_mem(uint32_t *bytes);
 
-// `answer`, or none for null, answers the kernel's hostcalls: each a record
+// `answer`, or none for null, answers the kernel's calls: each a frame laid
 // at an offset of the memory, handed back to the thread waiting in
 // `xpute_run` and answered there before the turn goes on, with a value or
 // -errno. It must not call into the guest.

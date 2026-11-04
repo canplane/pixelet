@@ -27,9 +27,10 @@ inline constexpr std::uint32_t VERSION = 1u;
 // Words before the first entry.
 inline constexpr std::uint32_t HEAD = 4u;
 
-// What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
-// numbers of a host's scheduling policy, which the program now injects when the host
-// boots (the host's sched/policy.ts).
+// What an entry's value is. 3 to 6 are retired and given to nothing else: 3 to 5 were
+// the numbers of a host's scheduling policy, which the program now injects when the
+// host boots (the host's sched/policy.ts); 6 was the hostcall stream's, whose calls
+// are now frames on the completion ring for the host's port (ipc/sys.json).
 namespace key {
 
 // Where the submission ring's words begin.
@@ -37,9 +38,6 @@ inline constexpr std::uint32_t SQ = 1u;
 
 // Where the completion ring's words begin.
 inline constexpr std::uint32_t CQ = 2u;
-
-// Where the hostcall stream's words begin (ipc/sys.json).
-inline constexpr std::uint32_t SYS = 6u;
 
 // The bit every key a program numbers for itself carries: xpute gives none of
 // them a meaning, and a host that is not the program's passes over them.

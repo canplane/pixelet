@@ -31,8 +31,13 @@ import { InvariantError } from "@xpute/kit/status/error.ts";
 const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
-/** What a port hears the guest raise; valid only inside the call. */
-type OnEvent = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
+/** What a port hears the guest send; valid only inside the call. A frame the
+ * guest calls with is answered with what it returns, 0 for nothing. */
+export type OnEvent = (
+  tag: u32,
+  cmd: u32,
+  f: BranchCursor | null,
+) => i32 | void;
 
 type Run = (quota_ms: f64) => f64;
 
@@ -79,8 +84,8 @@ export class Doorbell implements PacketRoom {
     return pkt.finish() >= 0;
   }
 
-  /** What the guest raises for `port` is handed to `heard`; what it raises
-   * for a port none listens on is dropped. */
+  /** What the guest sends or calls `port` with is handed to `heard`; what it
+   * sends a port none listens on is dropped, and a call to one ENOSYS. */
   on(port: u32, heard: OnEvent): void {
     this.hearing.set(port, heard);
   }
@@ -118,16 +123,38 @@ export class Doorbell implements PacketRoom {
     try {
       wake = this.run(quota_ms);
     } catch (err) {
-      // Printed here, once, and told: a turn's caller is a timer or an event,
-      // with nothing to do about it.
-      console.error("[xpute/doorbell] the guest trapped:", err);
-      this.trapped = true;
-      this.stopped?.();
+      // What it posted before it trapped, its report among it, is read.
+      this.stop("the guest trapped", err, true);
       return NO_WAKE;
     }
-    this.read();
+    try {
+      this.read();
+    } catch (err) {
+      // A frame its port could not take: the guest broke the protocol, or
+      // what answers it failed, and nothing after that frame can be read.
+      this.stop("a port could not take what the guest posted", err, false);
+      return NO_WAKE;
+    }
     this.wake?.(wake);
     return wake;
+  }
+
+  /** The guest is gone: printed here, once, and told, since a turn's caller is
+   * a timer or an event with nothing to do about it. `read` first reads what
+   * it posted. */
+  private stop(why: string, err: unknown, read: boolean): void {
+    console.error(`[xpute/doorbell] ${why}:`, err);
+    this.trapped = true;
+    try {
+      if (read) this.read();
+    } catch (err) {
+      console.error(
+        "[xpute/doorbell] a port could not take what the guest posted:",
+        err,
+      );
+    } finally {
+      this.stopped?.();
+    }
   }
 
   /** Submitted as the port `src` with ACKREQ and rung with no quota until the
@@ -149,7 +176,9 @@ export class Doorbell implements PacketRoom {
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
-        if (this.trapped) return take(Errno.ENOTRECOVERABLE, null);
+        if (out === null && this.trapped) {
+          return take(Errno.ENOTRECOVERABLE, null);
+        }
         if (out === null && pending === 0) {
           throw new InvariantError(Errno.EPROTO);
         }
@@ -158,6 +187,27 @@ export class Doorbell implements PacketRoom {
       this.waiting.delete(tag);
     }
     return (out as { val: T }).val;
+  }
+
+  /** The guest's call, a frame it laid at `at` in the completion ring and has
+   * not published, answered by the port its tag names, before the guest goes
+   * on. Run inside the guest's turn, so the answer rings nothing. */
+  answer(at: u32): i32 {
+    const cq = this.cq;
+    const e = cq.entry_of(at);
+    const tag = cq.tag(e);
+    const heard = this.hearing.get(frame.port_of(tag));
+    if (!heard) return Errno.ENOSYS;
+    const pkt = cq.pkt(e);
+    const f: BranchCursor | null = pkt
+      ? new TreeReader(pkt).read_branch()
+      : null;
+    this.reading = true;
+    try {
+      return heard(tag, cq.cmd(e), f) ?? 0;
+    } finally {
+      this.reading = false;
+    }
   }
 
   private read(): void {

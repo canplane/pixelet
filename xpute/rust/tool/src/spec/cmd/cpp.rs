@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/cpp.rs
 
 //! The command table as a C++ guest's header: its enums and each packet's
-//! reader; a C++ guest raises no event and writes no record.
+//! reader, and each event's struct and writer; a C++ guest writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
@@ -91,6 +91,76 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
+    let one = match spec.kind(&f.ty)? {
+        _ if f.list => return Err(format!("cmd.json: a C++ guest writes no list ({})", f.name)),
+        Kind::Number => cpp_number(&f.ty).to_string(),
+        Kind::Str => "std::string_view".to_string(),
+        Kind::Bool => "bool".to_string(),
+        _ => {
+            return Err(format!(
+                "cmd.json: a C++ guest writes no {} ({})",
+                f.ty, f.name
+            ))
+        }
+    };
+    Ok(if f.optional {
+        format!("std::optional<{one}>")
+    } else {
+        one
+    })
+}
+
+/// The writer's call for `f`, which takes a value or none as the field is.
+fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
+    let method = match spec.kind(&f.ty)? {
+        Kind::Bool => "boolean",
+        Kind::Str => "str",
+        _ => f.ty.as_str(),
+    };
+    Ok(format!("w.{method}({});", f.name))
+}
+
+/// An event, a frame the guest posts: its number, the children it is written
+/// as, and its writer (cpp/xpute/guest/ipc/door.hpp `Event`).
+fn cpp_event(
+    spec: &Spec,
+    out: &mut Vec<String>,
+    c: &Member,
+    fields: &[Field],
+) -> Result<(), String> {
+    out.extend([
+        String::new(),
+        format!("// Command::{}'s event.", c.name),
+        format!("struct {}Event {{", pascal(&c.name)),
+    ]);
+    for f in fields {
+        if let Some(doc) = &f.doc {
+            out.extend(crate::spec::line_comments(doc, "    "));
+        }
+        out.push(format!("    {} {}{{}};", cpp_write_type(spec, f)?, f.name));
+    }
+    out.extend([
+        String::new(),
+        "    // Its number, and the children it is written as.".to_string(),
+        format!("    static constexpr std::uint32_t NUMBER = {};", c.val),
+        format!(
+            "    static constexpr std::uint32_t FIELDS = {};",
+            fields.len()
+        ),
+        String::new(),
+        format!(
+            "    void write(xtp::PacketWriter &{}) const noexcept {{",
+            if fields.is_empty() { "" } else { "w" }
+        ),
+    ]);
+    for f in fields {
+        out.push(format!("        {}", cpp_write(spec, f)?));
+    }
+    out.extend(["    }".to_string(), "};".to_string()]);
+    Ok(())
+}
+
 pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
     let mut out = vec![
         format!("// {path}"),
@@ -168,12 +238,6 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if c.event.is_some() {
-            return Err(format!(
-                "{}: a C++ guest raises no event ({})",
-                t.json, c.name
-            ));
-        }
         if let Some(pkt) = &c.pkt {
             out.extend([
                 String::new(),
@@ -209,6 +273,9 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 "    }".to_string(),
                 "};".to_string(),
             ]);
+        }
+        if let Some(event) = &c.event {
+            cpp_event(spec, &mut out, c, event)?;
         }
     }
     out.extend([String::new(), format!("}} // namespace {namespace}")]);

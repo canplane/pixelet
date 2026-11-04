@@ -1,6 +1,6 @@
 // @pxl/client/sys/stop.ts
 
-/** The kernel's last report, its hostcall `abort` (pxl-kernel
+/** The kernel's last report, its hostcall SYS_ABORT (pxl-kernel
  * `sys/io/host.rs`), logged whole and kept short as a stop code for the shell's
  * panic. */
 

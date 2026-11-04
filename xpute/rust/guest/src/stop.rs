@@ -1,8 +1,8 @@
 // xpute-guest/stop.rs
 
-//! How a guest stops: a broken invariant (`bug!`) or a panic, published to
-//! the host as the turn's one record (what `install` is given, the guest's
-//! `Sys::abort`) and told to the hook of a form whose guest shares its process
+//! How a guest stops: a broken invariant (`bug!`) or a panic, posted to the
+//! host as the turn's one frame (what `install` is given, the guest's
+//! `Door::abort`) and told to the hook of a form whose guest shares its process
 //! with the host, where a panic would otherwise take the host with it.
 
 use core::panic::Location;

@@ -1,20 +1,27 @@
 // @xpute/host/ipc/sys.ts
 
 /**
- * The host's end of a guest's hostcalls (rust/guest/src/ipc/sys.rs):
- * the records a turn left, run after it returns and before the next begins, so
- * whatever they name in guest memory is written before the guest reads it; and
- * a program's call made as a hostcall, one record run before the hostcall
- * returns.
+ * The host's port, 0, as a guest's hostcalls reach it (ipc/sys.json): each a
+ * frame on the completion ring, taken after the turn returns and before the
+ * next begins, so whatever it names in guest memory is written before the
+ * guest reads it.
  */
 
-import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
-import { each_record, text_of } from "./stream.ts";
-import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import {
+  Command,
+  read_sys_abort,
+  read_sys_close,
+  read_sys_openat,
+  read_sys_read,
+  read_sys_write,
+} from "@xpute/host/abi/cmd.spec.ts";
+import { flag } from "./sys.spec.ts";
 
 /** Why an open did not answer with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
@@ -50,16 +57,12 @@ export interface Fs {
   commit(root: u32, path: string, bytes: U8Array): void;
 }
 
-/** What answers a program's hostcalls. Each part a program leaves out is
- * refused: an open with ENOENT (a write's with EROFS), a call of its own with
- * ENOSYS; a report it does not take is logged. */
+/** What answers a guest's hostcalls. Each part a program leaves out is
+ * refused: an open with ENOENT (a write's with EROFS); a report it does not
+ * take is logged. */
 export interface SysHost {
   fs?: Fs;
   abort?(report: Abort): void;
-  /** A call of the program's own: its number, the record's words, and where
-   * its arguments begin in them. A hostcall's answer is what it returns, 0
-   * for none. */
-  program?(code: u32, w: U32Array, a: u32): i32 | void;
 }
 
 function log_abort(r: Abort): void {
@@ -87,54 +90,51 @@ export class Sys {
   readonly files = new Map<u32, File>();
 
   private readonly host: SysHost;
+  private readonly mem: ArrayBuffer;
   private readonly answer_open: (fd: u32, res: i32, detail: u32) => void;
 
-  /** `answer_open` answers an open: a size, or an errno and the host's detail. */
+  /** `mem` is the guest's, which a read writes and a write reads;
+   * `answer_open` answers an open: a size, or an errno and the host's detail. */
   constructor(
     host: SysHost,
+    mem: ArrayBufferLike,
     answer_open: (fd: u32, res: i32, detail: u32) => void,
   ) {
     this.host = host;
+    this.mem = mem as ArrayBuffer;
     this.answer_open = answer_open;
   }
 
-  run(mem: ArrayBuffer, at: u32): void {
-    each_record(mem, at, HEAD, this.record);
-  }
-
-  /** The hostcall's record at `at`, run now: the program's answer, or ENOSYS
-   * for a call that is not the program's. */
-  call(mem: ArrayBuffer, at: u32): i32 {
-    const [code, n] = new Uint32Array(mem, at, 2);
-    if ((code & op.PROGRAM) === 0) return Errno.ENOSYS;
-    if (!this.host.program) return Errno.ENOSYS;
-    const w = new Uint32Array(mem, at, 2 + n) as U32Array;
-    return this.host.program(code, w, 2) ?? 0;
-  }
-
-  private readonly record = (code: u32, w: U32Array, a: u32): void => {
-    switch (code) {
-      case op.OPENAT:
-        this.openat(w[a], w[a + 1], w[a + 2], text_of(w, a + args.OPENAT));
-        break;
-      case op.READ: {
-        const bytes = this.files.get(w[a])?.bytes;
-        if (!bytes) throw new InvariantError(Errno.EBADF);
-        const len = Math.min(w[a + 2], bytes.byteLength);
-        new Uint8Array(w.buffer, w[a + 1], len).set(bytes.subarray(0, len));
+  /** A hostcall the guest sent the host's port (doorbell.ts `on`). */
+  readonly receive = (_tag: u32, cmd: u32, f: BranchCursor | null): void => {
+    if (f === null) throw new InvariantError(Errno.EBADMSG);
+    switch (cmd) {
+      case Command.SYS_OPENAT: {
+        const c = read_sys_openat(f);
+        this.openat(c.fd, c.root, c.flags, c.path);
         break;
       }
-      case op.WRITE: {
-        const written = this.files.get(w[a])?.written;
+      case Command.SYS_READ: {
+        const c = read_sys_read(f);
+        const bytes = this.files.get(c.fd)?.bytes;
+        if (!bytes) throw new InvariantError(Errno.EBADF);
+        const len = Math.min(c.len, bytes.byteLength);
+        new Uint8Array(this.mem, c.at, len).set(bytes.subarray(0, len));
+        break;
+      }
+      case Command.SYS_WRITE: {
+        const c = read_sys_write(f);
+        const written = this.files.get(c.fd)?.written;
         if (!written) throw new InvariantError(Errno.EBADF);
         // A copy: the guest keeps the range only until its next turn.
-        written.push(new Uint8Array(w.buffer, w[a + 1], w[a + 2]).slice());
+        written.push(new Uint8Array(this.mem, c.at, c.len).slice());
         break;
       }
-      case op.CLOSE: {
-        const file = this.files.get(w[a]);
+      case Command.SYS_CLOSE: {
+        const fd = read_sys_close(f).fd;
+        const file = this.files.get(fd);
         if (!file) break;
-        this.files.delete(w[a]);
+        this.files.delete(fd);
         file.controller.abort();
         if (file.written) {
           const whole = new Uint8Array(
@@ -149,24 +149,22 @@ export class Sys {
         }
         break;
       }
-      case op.ABORT: {
-        const num = (i: u32) =>
-          BigInt(w[a + i]) | (BigInt(w[a + i + 1]) << 32n);
+      case Command.SYS_ABORT: {
+        const c = read_sys_abort(f);
+        const num = (low: u32, high: u32) =>
+          BigInt(low) | (BigInt(high) << 32n);
         (this.host.abort ?? log_abort)({
-          errnum: w[a] | 0,
-          line: w[a + 1],
-          column: w[a + 2],
-          a: num(abort.A),
-          b: num(abort.B),
-          file: text_of(w, a + args.ABORT),
+          errnum: c.errnum,
+          line: c.line,
+          column: c.column,
+          a: num(c.a_low, c.a_high),
+          b: num(c.b_low, c.b_high),
+          file: c.file,
         });
         break;
       }
       default:
-        if ((code & op.PROGRAM) === 0 || !this.host.program) {
-          throw new InvariantError(Errno.ENOSYS);
-        }
-        this.host.program(code, w, a);
+        throw new InvariantError(Errno.ENOSYS);
     }
   };
 
@@ -179,8 +177,8 @@ export class Sys {
       written: null,
     };
     this.files.set(fd, file);
-    // An answer is a submission, and a full ring rings a turn that would
-    // overwrite the records this run is still reading, so answers wait until it ends.
+    // An answer is a submission, and a full ring rings a turn, which the
+    // completion ring being read forbids, so answers wait until it ends.
     const answer = (res: i32, detail: u32) => {
       if (this.files.get(fd) !== file) return;
       if (res < 0) this.files.delete(fd);

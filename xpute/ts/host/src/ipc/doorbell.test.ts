@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { Doorbell } from "./doorbell.ts";
+import * as frame from "./frame.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 
 const CAP = 8;
@@ -78,6 +79,82 @@ test("doorbell - a guest that traps throws at no one: it is told, and a call ans
     door.ring(0);
     assert.deepStrictEqual(runs, 1);
     assert.deepStrictEqual(stopped, 1);
+  } finally {
+    console.error = error;
+  }
+});
+
+test("doorbell - a frame its port cannot take stops the guest, and it is told once", () => {
+  const sq_at = 8;
+  const cq_at = sq_at + ring_bytes(CAP);
+  const slots_at = cq_at + ring_bytes(CAP);
+  const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
+  Ring.init(mem, sq_at, CAP, slots_at, SLOT);
+  const cq = Ring.init(
+    mem,
+    cq_at,
+    CAP,
+    slots_at + slots_bytes(CAP, SLOT),
+    SLOT,
+  );
+
+  const error = console.error;
+  console.error = () => {};
+  try {
+    let runs = 0;
+    let stopped = 0;
+    const door = new Doorbell(mem, sq_at, cq_at, () => {
+      runs++;
+      cq.push(0, 2);
+      return 0;
+    });
+    door.on(0, () => {
+      throw new InvariantError(Errno.EBADF);
+    });
+    door.stopped = () => stopped++;
+    assert.deepStrictEqual(door.ring(0), -1);
+    assert.deepStrictEqual(door.ring(0), -1);
+    assert.deepStrictEqual(runs, 1, "a stopped guest is rung no more");
+    assert.deepStrictEqual(stopped, 1);
+  } finally {
+    console.error = error;
+  }
+});
+
+test("doorbell - a call answered in the turn that traps takes its answer once", () => {
+  const sq_at = 8;
+  const cq_at = sq_at + ring_bytes(CAP);
+  const slots_at = cq_at + ring_bytes(CAP);
+  const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
+  const sq = Ring.init(mem, sq_at, CAP, slots_at, SLOT);
+  const cq = Ring.init(
+    mem,
+    cq_at,
+    CAP,
+    slots_at + slots_bytes(CAP, SLOT),
+    SLOT,
+  );
+
+  const error = console.error;
+  console.error = () => {};
+  try {
+    // A guest that answers the call, then traps in the same turn.
+    const door = new Doorbell(mem, sq_at, cq_at, () => {
+      const at = sq.peek();
+      const tag = sq.tag(at);
+      sq.advance();
+      cq.push(tag, 1, frame.RES, null, 7);
+      throw new Error("the guest trapped");
+    });
+    const taken: number[] = [];
+    const answer = door.call(
+      1,
+      1,
+      null,
+      (result) => (taken.push(result), result),
+    );
+    assert.deepStrictEqual(answer, 7);
+    assert.deepStrictEqual(taken, [7], "the answer is taken once");
   } finally {
     console.error = error;
   }

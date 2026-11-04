@@ -21,7 +21,7 @@
     reason = "generated from the spec"
 )]
 
-/// The room a guest's shared range asks for: the toc, both rings, the two streams
+/// The room a guest's shared range asks for: the toc, both rings, the stream
 /// and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
 /// begins, and so where the toc is, the guest's boot answers (the contract's rule 0);
 /// what else a memory holds — a module's stack and data — is the build's, and no number here.
@@ -50,9 +50,6 @@ pub const SLOT_BYTES: u32 = 256;
 /// The stream's range, its END word first.
 pub const STREAM_WORDS: u32 = 256;
 
-/// The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
-pub const SYS_WORDS: u32 = 64;
-
 /// The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
 pub const STACK_BYTES: u32 = 1048576;
 
@@ -71,14 +68,6 @@ pub mod key {
     /// Where the stream is, run by the host after every turn.
     pub const STREAM: u32 = 2147483649;
     pub const KEYS: &[&str] = &["STREAM"];
-}
-
-/// The guest's own hostcall, past xpute's PROGRAM bit.
-pub mod hostcall {
-    /// A number and an offset: the host writes the number plus one at the offset and answers 0,
-    /// before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing.
-    pub const ANSWER: u32 = 2147483649;
-    pub const KEYS: &[&str] = &["ANSWER"];
 }
 
 /// The port a trace sends the guest's own commands as, and the one the guest raises
@@ -106,18 +95,22 @@ pub mod cmd {
     pub const MARK: u32 = 4104;
     /// Reads the host's clock and replies with the whole milliseconds since the last MARK.
     pub const SINCE: u32 = 4105;
-    /// Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open.
+    /// Opens a file for the packet's number, its owner, and replies with the descriptor, its SYS_OPENAT posted for the host's port, which no trace's host answers; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open.
     pub const OPEN: u32 = 4106;
     /// Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
     pub const CLOSE: u32 = 4107;
-    /// Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused.
-    pub const HOSTCALL: u32 = 4108;
+    /// Zeroes a word of its own, calls SENDER with ANSWER, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with.
+    pub const CALL: u32 = 4108;
+    /// What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
+    /// number plus one at the offset and answers 0 before the call returns; a number of 0 it
+    /// refuses with EINVAL, writing nothing.
+    pub const ANSWER: u32 = 4109;
     /// What RAISE raises.
     pub const EVENT: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "HOSTCALL", "EVENT", "OPENED",
+        "CLOSE", "CALL", "ANSWER", "EVENT", "OPENED",
     ];
 }

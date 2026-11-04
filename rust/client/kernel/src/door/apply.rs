@@ -76,7 +76,8 @@ pub(super) fn apply(
         Some(abi::Major::PERF) => perf::apply(s, cmd, pkt),
         Some(abi::Major::EDIT) => edit::apply(s, cmd, pkt),
         Some(abi::Major::SHELL) => shell::apply(s, cmd, pkt),
-        None => Ok(None),
+        // The kernel's calls of the shell's text, which the shell never sends.
+        Some(abi::Major::TEXT) | None => Ok(None),
     }
 }
 

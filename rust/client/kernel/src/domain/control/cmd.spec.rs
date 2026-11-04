@@ -61,10 +61,11 @@ pub enum Major {
     PERF = 0x19,
     EDIT = 0x1a,
     SHELL = 0x1b,
+    TEXT = 0x1c,
 }
 
 impl Major {
-    pub const ALL: [Major; 12] = [
+    pub const ALL: [Major; 13] = [
         Major::SYS,
         Major::INPUT,
         Major::SENSOR,
@@ -77,6 +78,7 @@ impl Major {
         Major::PERF,
         Major::EDIT,
         Major::SHELL,
+        Major::TEXT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -336,6 +338,23 @@ impl ShellMinor {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ShellMinor> {
         ShellMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// What the kernel asks the platform's text, answered before the call returns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TextMinor {
+    LAYOUT = 0x01,
+    RASTER = 0x02,
+}
+
+impl TextMinor {
+    pub const ALL: [TextMinor; 2] = [TextMinor::LAYOUT, TextMinor::RASTER];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<TextMinor> {
+        TextMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -601,13 +620,23 @@ impl Message {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
-    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json) ----
+    // ---- the process asks the shell: events on the completion ring, and calls answered before they return ----
     /// Start watching.
     SENSOR_START = 0x1201,
     /// Stop watching.
     SENSOR_STOP = 0x1203,
+    /// The text in the platform's own family at the weight and size, broken into lines no
+    /// wider than the width where it can be; at `at` in the kernel's memory, how many lines,
+    /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
+    /// (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
+    TEXT_LAYOUT = 0x1c01,
+    /// One line drawn in the platform's own family, starting at x with the middle of its em
+    /// box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
+    /// RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
+    /// it returns.
+    TEXT_RASTER = 0x1c02,
 
-    // ---- the host answers: an I/O the process started, done ----
+    // ---- the shell answers: a sensor's reading ----
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
@@ -617,7 +646,7 @@ pub enum Command {
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
 
-    // ---- the host tells the process: its start, its turn, its window and its devices ----
+    // ---- the shell tells the process: its start, its turn, its window, the tile source and the platform's devices ----
     /// The kernel's start: what the platform is. Its storage files it opens itself, on the storage root.
     SYS_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
@@ -710,9 +739,11 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 37] = [
+    pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
+        Command::TEXT_LAYOUT,
+        Command::TEXT_RASTER,
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -1004,6 +1035,84 @@ impl xpute_guest::ipc::door::Event for SensorStopEvent {
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {
         SensorStopEvent::write(self, w);
+    }
+}
+
+/// Command::TEXT_LAYOUT's event.
+pub struct TextLayoutEvent {
+    pub weight: u32,
+    pub px: f64,
+    /// 0 for one line.
+    pub max_width: f64,
+    pub at: u32,
+    pub lines: u32,
+    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
+    pub text_at: u32,
+    /// Its bytes.
+    pub text_len: u32,
+}
+
+impl TextLayoutEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 7;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.weight));
+        w.f64(Some(self.px));
+        w.f64(Some(self.max_width));
+        w.u32(Some(self.at));
+        w.u32(Some(self.lines));
+        w.u32(Some(self.text_at));
+        w.u32(Some(self.text_len));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for TextLayoutEvent {
+    const NUMBER: u32 = 7169;
+    const FIELDS: u32 = 7;
+    fn write(&self, w: &mut PacketWriter) {
+        TextLayoutEvent::write(self, w);
+    }
+}
+
+/// Command::TEXT_RASTER's event.
+pub struct TextRasterEvent {
+    pub weight: u32,
+    pub px: f64,
+    /// 0xRRGGBBAA.
+    pub color: u32,
+    pub at: u32,
+    pub width: u32,
+    pub height: u32,
+    pub x: f64,
+    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
+    pub text_at: u32,
+    /// Its bytes.
+    pub text_len: u32,
+}
+
+impl TextRasterEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 9;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.weight));
+        w.f64(Some(self.px));
+        w.u32(Some(self.color));
+        w.u32(Some(self.at));
+        w.u32(Some(self.width));
+        w.u32(Some(self.height));
+        w.f64(Some(self.x));
+        w.u32(Some(self.text_at));
+        w.u32(Some(self.text_len));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for TextRasterEvent {
+    const NUMBER: u32 = 7170;
+    const FIELDS: u32 = 9;
+    fn write(&self, w: &mut PacketWriter) {
+        TextRasterEvent::write(self, w);
     }
 }
 

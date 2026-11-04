@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/text.rs
 
-//! Text laid out and drawn by the platform, asked by hostcall (TEXT_LAYOUT,
-//! TEXT_RASTER) and answered before the call returns. Each world frame keeps
+//! Text laid out and drawn by the platform, called on the shell's port
+//! (TEXT_LAYOUT, TEXT_RASTER) and answered before the call returns. Each world frame keeps
 //! only the answers the frame before read. A native test has no host: a text
 //! is one line of fixed width per character and is never drawn.
 
@@ -15,8 +15,35 @@ use pxl_render::look::marker::Font;
 use xpute_guest::mem::off_of_slice;
 
 use crate::sys::io::host;
-use crate::sys::io::host_spec::{op, LAYOUT, LAYOUT_ANSWER, LINE, RASTER};
+use crate::sys::io::host_spec::{LAYOUT_ANSWER, LINE};
 use xpute_guest::global::Global;
+
+/// What the kernel asks of the platform's text, answered before the call
+/// returns, each written at its `at` (host.json `LAYOUT_ANSWER`, `LINE`; the
+/// commands TEXT_LAYOUT and TEXT_RASTER, which the kernel's top makes of it).
+pub enum TextCall<'a> {
+    /// `text` broken into lines no wider than `max_width` (0 for one line),
+    /// `lines` of them at most.
+    Layout {
+        weight: u32,
+        px: f64,
+        max_width: f64,
+        at: u32,
+        lines: u32,
+        text: &'a str,
+    },
+    /// One line of `text` drawn into `width` by `height` pixels from `x`.
+    Raster {
+        weight: u32,
+        px: f64,
+        color: u32,
+        at: u32,
+        width: u32,
+        height: u32,
+        x: f64,
+        text: &'a str,
+    },
+}
 
 /// (weight, px bits, max width bits; 0 for one line, text).
 type LayoutKey = (u32, u32, u32, String);
@@ -80,13 +107,15 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
             let lines = text_in.chars().count().max(1) as u32;
             let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
                 .into_boxed_slice();
-            let mut args = [0u32; LAYOUT::WORDS as usize];
-            args[LAYOUT::weight as usize] = font.weight;
-            args[LAYOUT::px as usize] = font.px.to_bits();
-            args[LAYOUT::max_width as usize] = (max_width as f32).to_bits();
-            args[LAYOUT::at as usize] = off_of_slice(&raw mut *at) as u32;
-            args[LAYOUT::lines as usize] = lines;
-            match host::call(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
+            let call = TextCall::Layout {
+                weight: font.weight,
+                px: f64::from(font.px),
+                max_width: f64::from(max_width as f32),
+                at: off_of_slice(&raw mut *at) as u32,
+                lines,
+                text: text_in,
+            };
+            match host::call(&call) {
                 None => return Some(unlaid(text_in)),
                 Some(Err(_)) => return None,
                 Some(Ok(_)) => {}
@@ -148,18 +177,17 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     let (size, origin) = raster_box(font, advance);
     let scale = ATLAS_SCALE as f32;
     let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-    let mut args = [0u32; RASTER::WORDS as usize];
-    args[RASTER::weight as usize] = font.weight;
-    args[RASTER::px as usize] = (font.px * scale).to_bits();
-    args[RASTER::color as usize] = color;
-    args[RASTER::at as usize] = off_of_slice(&raw mut *px) as u32;
-    args[RASTER::width as usize] = size[0];
-    args[RASTER::height as usize] = size[1];
-    args[RASTER::x as usize] = origin[0].to_bits();
-    if !matches!(
-        host::call(op::TEXT_RASTER, &args, text_in.as_bytes()),
-        Some(Ok(_))
-    ) {
+    let call = TextCall::Raster {
+        weight: font.weight,
+        px: f64::from(font.px * scale),
+        color,
+        at: off_of_slice(&raw mut *px) as u32,
+        width: size[0],
+        height: size[1],
+        x: f64::from(origin[0]),
+        text: text_in,
+    };
+    if !matches!(host::call(&call), Some(Ok(_))) {
         return None;
     }
     let at = RasterAt {

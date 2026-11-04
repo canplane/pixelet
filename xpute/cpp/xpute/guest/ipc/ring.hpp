@@ -31,6 +31,7 @@ class Ring {
 
     static Ring init(Memory mem, std::uint32_t at, std::uint32_t cap, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept;
 
+    const Memory &mem() const noexcept { return mem_; }
     std::uint32_t cap() const noexcept { return cap_; }
     std::uint32_t slot_bytes() const noexcept { return slot_bytes_; }
     std::uint32_t head() const noexcept { return header(ring::HEAD); }
@@ -57,6 +58,21 @@ class Ring {
         return Errno::ok;
     }
 
+    // `push_in_place`'s frame laid at the tail and not published: where its
+    // words begin in the memory; EAGAIN where the ring is full, EMSGSIZE where
+    // the packet did not fit. The next push takes its place.
+    template <class Write> Result<std::uint32_t> stage_in_place(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, Write &&write) const noexcept {
+        if (len() >= cap()) return make_error(ErrorClass::fault, Errno::eagain);
+        std::uint32_t slot = slot_at(tail());
+        std::optional<std::uint32_t> n = write(std::span<std::uint8_t>(mem_.at(slot), slot_bytes()));
+        if (!n || *n > slot_bytes()) return make_error(ErrorClass::fault, Errno::emsgsize);
+        pad(slot, *n);
+        return entry(tag, cmd, flags, 0, slot);
+    }
+
+    // Drops every frame not yet read: the writer's, before its reader reads.
+    void clear() const noexcept { set_header(ring::TAIL, head()); }
+
     // The head's frame, none when empty. Read it, then `advance`.
     std::optional<Frame> peek() const noexcept;
 
@@ -71,6 +87,8 @@ class Ring {
     std::uint32_t slot_at(std::uint32_t pos) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;
     void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;
+    // The frame's words at the tail's entry, unpublished: where they begin in the memory.
+    std::uint32_t entry(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;
 
     Memory mem_;
     std::uint32_t at_;

@@ -49,6 +49,8 @@ function pkt_bytes(u8: U8Array, at: u32): u32 {
 }
 
 export class Ring {
+  /** Where the ring's words begin in the memory. */
+  readonly at: u32;
   readonly words: Uint32Array;
   readonly cap: u32;
   readonly slot_bytes: u32;
@@ -61,6 +63,7 @@ export class Ring {
     const head = new Uint32Array(mem, at, HEADER_WORDS);
     const cap = head[CAP];
     if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
+    this.at = at;
     this.cap = cap;
     this.slot_bytes = head[SLOT_BYTES];
     this.slot_base = head[SLOT_BASE];
@@ -159,6 +162,20 @@ export class Ring {
     w[at + frame.PKT] = pkt_at;
     w[TAIL] = (w[TAIL] + 1) >>> 0;
     return Errno.OK;
+  }
+
+  /** The entry whose words begin at `offset` in the memory, as `peek` gives
+   * one; EBADMSG where no entry begins there. */
+  entry_of(offset: u32): u32 {
+    const word = (offset - this.at) / 4;
+    if (
+      !Number.isInteger(word) ||
+      word < HEADER_WORDS ||
+      (word - HEADER_WORDS) % frame.WORDS !== 0 ||
+      word >= this.words.length
+    )
+      throw new MarshalError(Errno.EBADMSG);
+    return word;
   }
 
   /** -1 when empty. */

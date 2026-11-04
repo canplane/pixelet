@@ -1,7 +1,7 @@
 // cpp/xpute/guest/stop.hpp
 
-// How a guest stops: a broken invariant (`bug`), published to the host as the
-// turn's one record (what `stop::install` is given, the guest's `Sys::abort`)
+// How a guest stops: a broken invariant (`bug`), posted to the host as the
+// turn's one frame (what `stop::install` is given, the guest's `Door::abort`)
 // and told to the hook of a form whose process dies with the guest. C++ has
 // no panic of its own: what libc++ aborts on is a bug (kit status/bug.cpp).
 

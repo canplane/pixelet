@@ -42,14 +42,18 @@ void Ring::pad(std::uint32_t slot, std::uint32_t n) const noexcept {
 }
 
 void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
-    std::uint32_t t = tail();
-    std::uint32_t f = at_ + 4 * entry_at(t);
+    entry(tag, cmd, flags, result, pkt_at);
+    // The frame is whole before the tail says so.
+    set_header(ring::TAIL, tail() + 1);
+}
+
+std::uint32_t Ring::entry(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
+    std::uint32_t f = at_ + 4 * entry_at(tail());
     mem_.set_word(f + 4 * frame::TAG, tag);
     mem_.set_word(f + 4 * frame::CMD, frame::cmd_word(cmd, flags));
     mem_.set_word(f + 4 * frame::RESULT, static_cast<std::uint32_t>(result));
     mem_.set_word(f + 4 * frame::PKT, pkt_at);
-    // The frame is whole before the tail says so.
-    set_header(ring::TAIL, t + 1);
+    return f;
 }
 
 Errno Ring::push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::optional<std::span<const std::uint8_t>> pkt) const noexcept {

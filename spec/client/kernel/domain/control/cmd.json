@@ -102,6 +102,10 @@
         {
           "name": "SHELL",
           "val": 27
+        },
+        {
+          "name": "TEXT",
+          "val": 28
         }
       ]
     },
@@ -358,6 +362,23 @@
         {
           "name": "SNAPSHOT",
           "val": 1
+        }
+      ]
+    },
+    {
+      "name": "TextMinor",
+      "$doc": [
+        "What the kernel asks the platform's text, answered before the call returns."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "LAYOUT",
+          "val": 1
+        },
+        {
+          "name": "RASTER",
+          "val": 2
         }
       ]
     },
@@ -671,7 +692,7 @@
       "format": "hex4",
       "entries": [
         {
-          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json)"
+          "section": "the process asks the shell: events on the completion ring, and calls answered before they return"
         },
         {
           "name": "SENSOR_START",
@@ -700,7 +721,113 @@
           ]
         },
         {
-          "section": "the host answers: an I/O the process started, done"
+          "name": "TEXT_LAYOUT",
+          "val": 7169,
+          "$doc": [
+            "The text in the platform's own family at the weight and size, broken into lines no",
+            "wider than the width where it can be; at `at` in the kernel's memory, how many lines,",
+            "then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most",
+            "(sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
+          ],
+          "event": [
+            {
+              "name": "weight",
+              "type": "u32"
+            },
+            {
+              "name": "px",
+              "type": "f64"
+            },
+            {
+              "name": "max_width",
+              "type": "f64",
+              "$doc": [
+                "0 for one line."
+              ]
+            },
+            {
+              "name": "at",
+              "type": "u32"
+            },
+            {
+              "name": "lines",
+              "type": "u32"
+            },
+            {
+              "name": "text_at",
+              "type": "u32",
+              "$doc": [
+                "Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+              ]
+            },
+            {
+              "name": "text_len",
+              "type": "u32",
+              "$doc": [
+                "Its bytes."
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TEXT_RASTER",
+          "val": 7170,
+          "$doc": [
+            "One line drawn in the platform's own family, starting at x with the middle of its em",
+            "box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,",
+            "RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before",
+            "it returns."
+          ],
+          "event": [
+            {
+              "name": "weight",
+              "type": "u32"
+            },
+            {
+              "name": "px",
+              "type": "f64"
+            },
+            {
+              "name": "color",
+              "type": "u32",
+              "$doc": [
+                "0xRRGGBBAA."
+              ]
+            },
+            {
+              "name": "at",
+              "type": "u32"
+            },
+            {
+              "name": "width",
+              "type": "u32"
+            },
+            {
+              "name": "height",
+              "type": "u32"
+            },
+            {
+              "name": "x",
+              "type": "f64"
+            },
+            {
+              "name": "text_at",
+              "type": "u32",
+              "$doc": [
+                "Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+              ]
+            },
+            {
+              "name": "text_len",
+              "type": "u32",
+              "$doc": [
+                "Its bytes."
+              ]
+            }
+          ]
+        },
+        {
+          "section": "the shell answers: a sensor's reading"
         },
         {
           "name": "SENSOR_POS",
@@ -787,7 +914,7 @@
           ]
         },
         {
-          "section": "the host tells the process: its start, its turn, its window and its devices"
+          "section": "the shell tells the process: its start, its turn, its window, the tile source and the platform's devices"
         },
         {
           "name": "SYS_BOOT",

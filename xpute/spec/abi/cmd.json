@@ -6,7 +6,7 @@
     "program numbers its own as it likes, and the sender tells the two apart.",
     "",
     "The direction is the ring: `pkt` is what the host submits, `event` what the guest",
-    "raises on the completion ring."
+    "posts on the completion ring for the host's port, its hostcalls (ipc/sys.json)."
   ],
   "extern": [],
   "enums": [
@@ -21,10 +21,15 @@
     },
     {
       "name": "SysMinor",
-      "$doc": ["The hostcalls' answers (ipc/sys.json)."],
+      "$doc": ["The hostcalls and their answers (ipc/sys.json)."],
       "format": "hex2",
       "entries": [
-        { "name": "OPENED", "val": 1 }
+        { "name": "OPENED", "val": 1 },
+        { "name": "OPENAT", "val": 2 },
+        { "name": "READ", "val": 3 },
+        { "name": "WRITE", "val": 4 },
+        { "name": "CLOSE", "val": 5 },
+        { "name": "ABORT", "val": 6 }
       ]
     },
     {
@@ -53,6 +58,61 @@
               "type": "u32",
               "$doc": ["Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."]
             }
+          ]
+        },
+        {
+          "name": "SYS_OPENAT",
+          "val": 258,
+          "$doc": ["The file at `path` below `root` opened as `fd`, answered by SYS_OPENED."],
+          "event": [
+            { "name": "fd", "type": "u32" },
+            { "name": "root", "type": "u32" },
+            { "name": "flags", "type": "u32", "$doc": ["ipc/sys.json `flag`."] },
+            { "name": "path", "type": "str" }
+          ]
+        },
+        {
+          "name": "SYS_READ",
+          "val": 259,
+          "$doc": ["The opened file's first `len` bytes copied to `at` in the guest's memory."],
+          "event": [
+            { "name": "fd", "type": "u32" },
+            { "name": "at", "type": "u32" },
+            { "name": "len", "type": "u32" }
+          ]
+        },
+        {
+          "name": "SYS_WRITE",
+          "val": 260,
+          "$doc": ["The `len` bytes at `at` added to what the file opened for writing holds."],
+          "event": [
+            { "name": "fd", "type": "u32" },
+            { "name": "at", "type": "u32" },
+            { "name": "len", "type": "u32" }
+          ]
+        },
+        {
+          "name": "SYS_CLOSE",
+          "val": 261,
+          "$doc": [
+            "The descriptor ended. A file opened for writing is replaced by what was written; an",
+            "open not yet answered is canceled, and never answered."
+          ],
+          "event": [{ "name": "fd", "type": "u32" }]
+        },
+        {
+          "name": "SYS_ABORT",
+          "val": 262,
+          "$doc": ["The broken invariant the guest reports as it stops (xpute-kit status/bug.rs)."],
+          "event": [
+            { "name": "errnum", "type": "i32" },
+            { "name": "line", "type": "u32" },
+            { "name": "column", "type": "u32" },
+            { "name": "a_low", "type": "u32" },
+            { "name": "a_high", "type": "u32" },
+            { "name": "b_low", "type": "u32" },
+            { "name": "b_high", "type": "u32" },
+            { "name": "file", "type": "str" }
           ]
         }
       ]

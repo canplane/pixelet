@@ -3,9 +3,9 @@
 /**
  * The smallest host, beside the smallest guest (rust/example): the guest's
  * module opened over a memory of its own, the host mounted on it with a
- * policy for a host with no display and an answer to the one hostcall the
- * guest makes, then one command sent and its reply read. Build the guest
- * first (`make build`).
+ * policy for a host with no display, a port that answers the guest's one
+ * call, then one command sent as that port and its reply read. Build the
+ * guest first (`make build`).
  */
 
 import { test } from "vitest";
@@ -16,7 +16,6 @@ import { fileURLToPath } from "node:url";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { mount } from "@xpute/host/host.ts";
-import { op } from "@xpute/host/ipc/sys.spec.ts";
 import { open_module } from "@xpute/host/module.ts";
 import { FixedQuota } from "@xpute/host/sched/fixed_quota.ts";
 
@@ -33,13 +32,13 @@ const GUEST = join(
 
 // The guest's numbers (rust/example/src/lib.rs).
 const SUM = 0x1001;
-const ASK = (op.PROGRAM | 1) >>> 0;
+const ASK = 0x1002;
 
 /** The host's answer to `ASK`, which the guest adds. */
 const ANSWER = 100;
 
-/** The port the program sends as: any but the host's, 0. */
-const SENDER = 1;
+/** The port that sends SUM and answers ASK: any but the host's, 0. */
+const ASKER = 1;
 
 test("example - a command answered with what the guest asked its host", () => {
   // Two MiB, never grown: the guest's stack, its data, its range and its heap.
@@ -51,16 +50,17 @@ test("example - a command answered with what the guest asked its host", () => {
   const boot = guest.instance.exports.boot as () => number;
   const host = mount(guest, {
     toc_at: boot() >>> 0,
-    sys: { program: (code) => (code === ASK ? ANSWER : Errno.ENOSYS) },
+    sys: {},
     policy: new FixedQuota(4),
     submit: () => {},
   });
+  host.doorbell.on(ASKER, (_tag, cmd) => (cmd === ASK ? ANSWER : Errno.ENOSYS));
 
   const pkt = host.doorbell.writer(2);
   pkt.u32(2);
   pkt.u32(3);
   assert.deepStrictEqual(
-    host.doorbell.call(SENDER, SUM, pkt, (result) => result),
+    host.call(ASKER, SUM, pkt, (result) => result),
     2 + 3 + ANSWER,
   );
 });

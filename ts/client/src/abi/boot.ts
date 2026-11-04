@@ -3,7 +3,7 @@
 /**
  * Boots the client, bottom up, once its app has set the place (bracket.tsx):
  * the guest the place opens; xpute's host mounted on it with pixelet's
- * hostcalls (sys/: the roots, the program's calls, the stop report), each
+ * hostcalls (sys/: the roots, the stop report), each
  * turn's submission (port/surface.ts) and the frame pacing; the place told where to report what its sensors, its GPU,
  * its network and its visibility hear; then the kernel, by `SYS_BOOT`. The
  * shell is no part of it: it reads where the boot stands through the port
@@ -41,7 +41,7 @@ import { stream } from "./gpu.spec.ts";
 import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import { submit_frame } from "@/port/surface.ts";
 import { abort } from "@/sys/stop.ts";
-import { text_call } from "@/sys/text.ts";
+import { text_layout, text_raster } from "@/port/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, gpu_present, gpu_ready, set_gpu } from "@/port/gpu.ts";
 import { world_visible } from "@/port/sys.ts";
@@ -74,8 +74,9 @@ export function boot_state(): Boot {
 
 export const watch_boot = listeners.watch;
 
-/** What the kernel raises for the shell's port: the snapshot, and the files
- * it names refused; the sensors it starts and stops. */
+/** What the kernel sends the shell's port: the snapshot, and the files it
+ * names refused; the sensors it starts and stops; and the text it calls for,
+ * answered before the call returns. */
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
@@ -84,6 +85,8 @@ const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
+  [Command.TEXT_LAYOUT]: text_layout,
+  [Command.TEXT_RASTER]: text_raster,
 };
 
 /** Whether the world has come, or nothing will show of it: every pipeline made,
@@ -142,12 +145,7 @@ async function open(): Promise<void> {
     },
     (run) => requestAnimationFrame(run),
   );
-  await open_host(
-    cfg,
-    { fs: namespace(), program: text_call, abort },
-    pacing,
-    submit_frame,
-  );
+  await open_host(cfg, { fs: namespace(), abort }, pacing, submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
   HOST.doorbell.on(port.SHELL, heard);
   bracket.gpu.boot({

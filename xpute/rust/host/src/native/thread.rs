@@ -22,7 +22,7 @@ unsafe impl Send for Job {}
 /// What the guest's thread hands back while a caller waits.
 enum Back {
     Done,
-    /// A hostcall's record, at its offset, for the caller to answer.
+    /// A call's frame, at its offset, for the caller to answer.
     Hostcall(u32),
     /// The guest has stopped: its thread runs nothing again (`stopped`).
     Stopped,

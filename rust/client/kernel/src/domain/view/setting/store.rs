@@ -97,7 +97,7 @@ fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
 /// The store differs from what storage holds. Written once a turn, so a turn
-/// of changes costs the host stream one file, whatever their number.
+/// of changes costs the host one file, whatever their number.
 static UNSAVED: Global<bool> = Global::new();
 
 /// The store against its storage file, opened on the storage root

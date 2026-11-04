@@ -24,17 +24,16 @@ import { key as toc_key } from "@xpute/host/ipc/toc.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { Sys } from "@xpute/host/ipc/sys.ts";
 import { open_module } from "@xpute/host/module.ts";
 import {
   cmd,
-  hostcall,
   key,
   LAYOUTS,
   MEM_BYTES,
   SENDER,
 } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
+import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
@@ -192,21 +191,22 @@ class Host {
     this.sq = new Ring(mem, this.toc.get(toc_key.SQ));
     this.cq = new Ring(mem, this.toc.get(toc_key.CQ));
     this.stream_at = this.toc.get(key.STREAM);
-    // The fixture's one call, answered through this runtime's own end, as a
-    // program's host mounts it.
-    const sys = new Sys(
-      {
-        program: (code, w, a) => {
-          if (code !== hostcall.ANSWER) return Errno.ENOSYS;
-          const [n, word] = [w[a], w[a + 1]];
-          if (n === 0) return Errno.EINVAL;
-          new Uint32Array(mem, word, 1)[0] = n + 1;
-          return 0;
-        },
-      },
-      () => {},
-    );
-    guest.answer_with((at) => sys.call(mem, at));
+    // The fixture's one call, ANSWER to SENDER, answered as SENDER: the frame
+    // the guest laid unpublished at `at` in its completion ring.
+    guest.answer_with((at) => {
+      const cq = this.cq;
+      const e = cq.entry_of(at);
+      if (frame.port_of(cq.tag(e)) !== SENDER || cq.cmd(e) !== cmd.ANSWER) {
+        return Errno.ENOSYS;
+      }
+      const pkt = cq.pkt(e);
+      if (pkt === null) return Errno.EBADMSG;
+      const f = new TreeReader(pkt).read_branch();
+      const [n, word] = [f.at(0).get<number>(), f.at(1).get<number>()];
+      if (n === 0) return Errno.EINVAL;
+      new Uint32Array(mem, word, 1)[0] = n + 1;
+      return 0;
+    });
   }
 
   /** As the port `src`. */
@@ -244,6 +244,14 @@ class Host {
     const completions: Completion[] = [];
     const cq = this.cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {
+      // A hostcall, for the host's port, which no trace's host answers.
+      if (
+        frame.port_of(cq.tag(at)) === frame.HOST &&
+        (cq.flags(at) & frame.RES) === 0
+      ) {
+        cq.advance();
+        continue;
+      }
       completions.push({
         tag: frame.id_of(cq.tag(at)),
         cmd: cq.cmd(at),
@@ -548,7 +556,7 @@ function run(
   }
 }
 
-for (const trace of ["toc", "door", "handle", "clock", "file", "hostcall"]) {
+for (const trace of ["toc", "door", "handle", "clock", "file", "call"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);
