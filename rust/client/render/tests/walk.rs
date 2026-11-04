@@ -12,6 +12,9 @@ use pxl_engine::cast::{
 };
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::{eye, pyramid, ray, Zoom, FRAC_W};
+use pxl_render::frame::shader::record::{
+    src, SHADER_BEAM_HIT, SHADER_LIGHT_MISS_HIT, SHADER_SAMPLE_HIT,
+};
 
 /// The hash a node's made-up content turns on.
 fn mix(zoom: Zoom, c: [i32; 3]) -> u32 {
@@ -448,13 +451,7 @@ fn hand_walk_answers_as_cast_walk() {
     let beams_buf = buffer(&beams_gpu, wgpu::BufferUsages::STORAGE);
     let pyramid_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
     let left = buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
-    let source = |parts: [&str; 4]| parts.join("\n");
-    let sample_src = source([
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/sample_hit.wgsl")),
-    ]);
+    let sample_src = src(SHADER_SAMPLE_HIT);
     let binds = [
         (0, eye_buf.as_entire_binding()),
         (8, beams_buf.as_entire_binding()),
@@ -464,7 +461,7 @@ fn hand_walk_answers_as_cast_walk() {
     run(
         &device,
         &queue,
-        &sample_src,
+        sample_src,
         "sample_hit_cs",
         &binds,
         [
@@ -481,16 +478,11 @@ fn hand_walk_answers_as_cast_walk() {
         &vec![0u32; grid.size() as usize],
         wgpu::BufferUsages::STORAGE,
     );
-    let beam_src = source([
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/beam_hit.wgsl")),
-    ]);
+    let beam_src = src(SHADER_BEAM_HIT);
     run(
         &device,
         &queue,
-        &beam_src,
+        beam_src,
         "beam_hit_cs",
         &[
             (0, eye_buf.as_entire_binding()),
@@ -730,18 +722,11 @@ fn hand_light_walk_answers_as_cast_walk() {
         dimension: Some(wgpu::TextureViewDimension::D2Array),
         ..Default::default()
     });
-    let source = [
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/light_aim.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/light_miss_hit.wgsl")),
-    ]
-    .join("\n");
+    let source = src(SHADER_LIGHT_MISS_HIT);
     run(
         &device,
         &queue,
-        &source,
+        source,
         "light_miss_hit_cs",
         &[
             (0, eye_buf.as_entire_binding()),

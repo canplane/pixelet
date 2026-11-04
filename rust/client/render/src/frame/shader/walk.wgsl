@@ -6,7 +6,6 @@
 // keeps ends left, for the walk that asks the world to do again whole. What it
 // reads no thread of it writes.
 
-@group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(9) var<storage, read> pyramid: array<u32>;
 
 /// The word of the slot holding the node at the zooms asked; `NONE` where none does.
@@ -60,103 +59,30 @@ fn slot_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
   return NONE;
 }
 
-/// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
-/// and other frames', says which asks again (`revisits`).
-struct Aim {
-  origin: vec3<i32>,
-  dir: vec3<f32>,
-  t_max: f32,
-  range: vec2<u32>,
-  seed: u32,
-}
-
-/// The eye's ray at the tangents `tan_at`.
-fn eye_aim(tan_at: vec2<f32>) -> Aim {
-  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
-  return Aim(
-    vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
-    aimed / length(aimed),
-    eye_f32(FAR),
-    vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
-    mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
-  );
-}
-
 /// Whether this ray asks again of a node it could go past, one ray in `REVISIT_ONE_IN`, other
 /// rays on other frames: what it asks is kept at the zooms asked, for the next frame's.
 fn revisits(seed: u32) -> bool {
   return (seed >> 8u) % REVISIT_ONE_IN == 0u;
 }
 
-/// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
-/// its reach, anything else left.
-struct Walked {
-  ends: u32,
-  zoom: u32,
-  corner: vec3<u32>,
-  roots: vec3<i32>,
-  asset: vec2<u32>,
-  axis: u32,
-  face: u32,
-  t: f32,
-  visits: u32,
-}
-
-/// The ray `aim`, from the start of its cell `cell` (`resume`, `resume_walk`,
-/// `cast::walk`), from the root where `cell` is `NONE`; or, where `line` is a beam
-/// ray's line and not `NONE`, from the root (`Until::Beam`), what was handed each node
-/// it visits written there at once, in place of a stack.
-fn walk(aim: Aim, cell: vec2<u32>, line: u32) -> Walked {
+/// The ray `aim`, from `start`; or, where `line` is a beam ray's line and not `NONE`, from the
+/// root (`Until::Beam`), what was handed each node it visits written there at once, in place
+/// of a stack.
+fn walk(aim: Aim, start: Start, line: u32) -> Walked {
   let beam = line != NONE;
-  let dir = select(aim.dir, vec3<f32>(0.0), abs(aim.dir) < vec3<f32>(1.17549435e-38));
-  let inv = select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
-  let span_n = vec2<u32>(eye_word(GRID + 5u), eye_word(GRID + 6u));
+  let dir = ray_dir(aim.dir);
+  let inv = ray_inv(dir);
   let t_max = aim.t_max;
   let range = aim.range;
   let origin = aim.origin;
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
-
-  // Where its cell's start hands it (`resume`, `resume_walk`).
-  let at_cell = eye_word(GRID + 11u) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
-  let resumes = !beam && cell.x != NONE && beams[at_cell + CELL_RESUMES] != 0u;
-  var t = 0.0;
-  var corner = vec3<u32>(0u);
-  var zoom = 0u;
-  var roots = vec3<i32>(0);
-  var visits = 0u;
-  if (resumes) {
-    let line = beams[at_cell + CELL_CORNER] * LINE_WORDS;
-    visits = beams[line + LINE_VISITS];
-    t = bitcast<f32>(beams[at_cell + CELL_T]);
-    let k = line + LINE_NODE;
-    let node_c = vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]);
-    let node_r = vec3<i32>(i32(beams[k + NODE_ROOTS]), i32(beams[k + NODE_ROOTS + 1u]), i32(beams[k + NODE_ROOTS + 2u]));
-    // Where it is at `t`, on the finest grid, and its root (`point_at`).
-    let d = vec3<i32>(floor(dir * t * f32(1u << FRAC_W)));
-    let p = og + vec3<u32>(d);
-    let on = select(vec3<i32>(0), vec3<i32>(1), (d >= vec3<i32>(0)) & (p < og))
-      + select(vec3<i32>(0), vec3<i32>(-1), (d < vec3<i32>(0)) & (p > og));
-    if (all(node_r == on)) {
-      let apart = (node_c.x ^ p.x) | (node_c.y ^ p.y) | (node_c.z ^ p.z);
-      zoom = min(beams[k + NODE_ZOOM], countLeadingZeros(apart));
-      corner = node_c & vec3<u32>(~under(zoom));
-      roots = node_r;
-      // The node over it that holds where it is, as the walk's planes say (`holding`).
-      for (var i = 0u; i < 33u && zoom != 0u; i += 1u) {
-        let u = under(zoom);
-        let s = span_of(dir, inv, units(corner, og, roots), far_of(corner, u, og, roots), t, t_max);
-        let t0 = max(t, largest(s.near));
-        let t1 = min(t_max, smallest(s.far));
-        if (t0 <= t && t < t1) {
-          break;
-        }
-        zoom -= 1u;
-        corner = corner & vec3<u32>(~under(zoom));
-      }
-    }
-  }
+  var t = start.t;
+  var corner = start.corner;
+  var zoom = start.zoom;
+  var roots = start.roots;
+  var visits = start.visits;
 
   // 0 goes on; 1 a hit; 2 lacks; 3 gone to its reach; 4 left to `sample_cs`.
   var ends = 0u;
@@ -309,6 +235,5 @@ fn walk(aim: Aim, cell: vec2<u32>, line: u32) -> Walked {
       }
     }
   }
-  let face = 2u * axis + select(0u, 1u, dir[axis] > 0.0);
-  return Walked(ends, zoom, corner, roots, asset, axis, face, hit_t, visits);
+  return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
 }

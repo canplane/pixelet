@@ -340,8 +340,9 @@ pub const W_BIAS: usize = 16;
 /// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
 /// cast before (`HEAD_CORNER_WAS`), whether its marks take each pixel's
 /// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
-/// `STARTS_AT`), then the actors (`ACTORS_AT`).
-pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS;
+/// `STARTS_AT`), then the actors (`ACTORS_AT`), then the list's places for the passes by hand
+/// (`HEAD_CELLS`).
+pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// The cast's number, counted up from one each cast, which a tile stood on
 /// and read in it is marked with (`stands_at`, `reads_at`).
@@ -369,6 +370,34 @@ pub const HEAD_CORNER_WAS: usize = 4;
 pub const HEAD_FOOTPRINT: usize = 6;
 /// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
 pub const HEAD_MISSES: usize = 7;
+/// Where a shader by hand finds the list's words, and how many a row, as `head_layout` lays them
+/// for the map's side: words of their own past the actors, so the head the generated passes read
+/// keeps its places.
+pub const HEAD_CELLS: usize = 4 * (ACTORS_AT + 1 + ACTORS);
+pub const HEAD_CELLS_ACROSS: usize = HEAD_CELLS + 1;
+pub const HEAD_SAMPLES: usize = HEAD_CELLS + 2;
+pub const HEAD_SAMPLES_ACROSS: usize = HEAD_CELLS + 3;
+pub const HEAD_LEFTS: usize = HEAD_CELLS + 4;
+pub const HEAD_READS: usize = HEAD_CELLS + 5;
+pub const HEAD_TILES: usize = HEAD_CELLS + 6;
+pub const HEAD_FED: usize = HEAD_CELLS + 7;
+const HEAD_LAID_VEC4S: usize = 2;
+
+/// The words of the head the map's side lays: each word and what it holds.
+pub const fn head_layout(size: u32) -> [(usize, u32); 10] {
+    [
+        (HEAD_SIZE, size),
+        (HEAD_MISSES, misses_cnt(size)),
+        (HEAD_CELLS, cell(size, [0, 0])),
+        (HEAD_CELLS_ACROSS, cells_across(size)),
+        (HEAD_SAMPLES, sample(size, 0)),
+        (HEAD_SAMPLES_ACROSS, size / SAMPLE),
+        (HEAD_LEFTS, lefts_at(size)),
+        (HEAD_READS, reads_at(size)),
+        (HEAD_TILES, tiles(size)),
+        (HEAD_FED, listed_at(size, LISTED_FED)),
+    ]
+}
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -715,6 +744,10 @@ pub const LISTED_CLAIMED: u32 = 2;
 pub const LISTS: u32 = 3;
 pub const LIST_ACROSS: u32 = 64;
 pub const LISTED_LANES: u32 = 64;
+const _: () = assert!(
+    LISTED_LANES == beam::SAMPLE_SIDE * beam::SAMPLE_SIDE,
+    "a listed pass's workgroup is the samples' passes' square"
+);
 
 /// The places of list `which` on the map `size` texels a side: every beam
 /// ray's corner, or every tile.
@@ -756,8 +789,16 @@ pub const fn listed_per(side: u32) -> u32 {
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares, the lists.
+/// stands, the reads, their squares, the lists, the samples left.
 pub const fn list_words(size: u32) -> u32 {
+    lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
+}
+
+/// The samples their walk over the observed pyramid left, for the walk that asks the world
+/// (pxl-render sample_hit.wgsl, sample.wgsl), past the lists, as the eye's are past its words
+/// (`beam::Grid::lefts_at`): how many, copied in once it is done, then each, its X and its Y
+/// over 16 bits.
+pub const fn lefts_at(size: u32) -> u32 {
     listed_at(size, LISTS)
 }
 

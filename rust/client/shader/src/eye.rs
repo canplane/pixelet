@@ -208,10 +208,6 @@ impl Observer for Eye {
         grid(self).sample(s)
     }
 
-    fn sample_cell(&self, s: [u32; 2]) -> [u32; 2] {
-        grid(self).sample_cell(s)
-    }
-
     fn sample_at(&self, s: [u32; 2]) -> u32 {
         grid(self).sample_at(s)
     }
@@ -256,12 +252,7 @@ impl Observer for Eye {
     }
 
     /// The one the walk over the observed pyramid alone left at the thread's
-    /// place among them (pxl-render sample_hit.wgsl).
-    fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
-        left_at(w, grid(self).lefts_at, id)
-    }
-
-    /// As `sample_walked` (pxl-render beam_hit.wgsl).
+    /// place among them (pxl-render beam_hit.wgsl).
     fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
         left_at(w, grid(self).corners_at, id)
     }

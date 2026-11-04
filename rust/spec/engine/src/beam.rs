@@ -89,7 +89,17 @@ pub struct Grid {
 /// `lattice` (`GRID_LATTICE`), `lefts_at`, `misses_at` and `corners_at`: whole
 /// vec4s.
 pub const GRID_WORDS: usize = 20;
+pub const GRID_KEEP: usize = 1;
+pub const GRID_PAST: usize = 4;
+pub const GRID_SPAN: usize = 5;
+pub const GRID_CORNERS: usize = 7;
+pub const GRID_SAMPLES: usize = 9;
+pub const GRID_CELLS_AT: usize = 11;
+pub const GRID_SAMPLES_AT: usize = 12;
 pub const GRID_LATTICE: usize = 16;
+pub const GRID_LEFTS_AT: usize = 17;
+pub const GRID_MISSES_AT: usize = 18;
+pub const GRID_CORNERS_AT: usize = 19;
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -404,6 +414,11 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
+
+/// The side of a workgroup of the passes over a lattice's samples, a thread a sample, and of
+/// those over what they left, a thread a place in the list (pxl-render sample_hit.wgsl,
+/// sample.wgsl).
+pub const SAMPLE_SIDE: u32 = 8;
 
 /// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among

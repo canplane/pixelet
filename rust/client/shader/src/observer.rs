@@ -3,7 +3,7 @@
 //! What a cast asks of the one it casts for (`Observer`), the eye or the
 //! shadow map, and the passes every cast takes, written once over it: each
 //! corner's beam ray (`beam`), each cell's start off them (`cell`), each
-//! sample's walk (`sample`) and box (`sample_box`), a ray's visible sample
+//! sample's box (`sample_box`; its walk by hand, pxl-render sample.wgsl), a ray's visible sample
 //! (`took`), the sky about it (`sky`) or a walk of its own (`resolve`), and its
 //! walk resumed off the beam (`resume`, `walk_again`), each casting what its
 //! observer needs alone (`Observer::needs`). An entry is a pass's call for its
@@ -17,7 +17,7 @@ use pxl_engine::cast::{self, Detail, Trace, Query, Until};
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, pyramid, raster, tally};
 
-use crate::beam::{resume_walk, sample_put, BeamLine, Leaving, Words};
+use crate::beam::{resume_walk, BeamLine, Leaving, Words};
 use crate::pyramid::{add_tally, pyramid_at, Pyramid, Writing};
 use crate::raster::{write_box, visible_cell, NONE};
 use crate::world::{PaletteWords, World};
@@ -96,10 +96,9 @@ pub(crate) trait Observer {
     fn cell_at(&self, c: [u32; 2]) -> u32;
     /// Its samples across and down.
     fn samples(&self) -> [u32; 2];
-    /// Where sample `s` is aimed, the cell it starts from, and the first
-    /// word of its hit (`beam::SAMPLE_WORDS`).
+    /// Where sample `s` is aimed, and the first word of its hit
+    /// (`beam::SAMPLE_WORDS`).
     fn point(&self, s: [u32; 2]) -> Self::At;
-    fn sample_cell(&self, s: [u32; 2]) -> [u32; 2];
     fn sample_at(&self, s: [u32; 2]) -> u32;
     /// The first of the four samples about `at`, the others the next
     /// across, down and both, and whether the four lie about it in the
@@ -124,11 +123,6 @@ pub(crate) trait Observer {
     /// off its words `w`: none past the lattice's end. The one place a pass
     /// is told which thread takes which.
     fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2];
-    /// The sample the thread at `id` of `sample_cs` walks: none past those it
-    /// has.
-    fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
-        self.take(w, Level::Sample, id)
-    }
     /// The corner the thread at `id` of `beam_cs` walks: none past those it has.
     fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
         self.take(w, Level::Corner, id)
@@ -252,48 +246,6 @@ where
     };
     let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, resumes, keep);
     (met, if resumes { line.visits() } else { 0 })
-}
-
-/// Sample `s`'s ray resumed from its cell's start, walked to the cell that
-/// fills through the observed pyramid writing what it asks, and its hit
-/// left in `w` for the raster (`sample_put`), with the nodes it and its
-/// beam ray visited.
-pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
-    o: &O,
-    world: World<'_, L>,
-    pyramid: &mut Pyramid,
-    w: &mut W,
-    s: [u32; 2],
-) {
-    // One not needed meets nothing, so draws no box (`sample_box`).
-    if !o.needs(&*w, Level::Sample, s) {
-        w.set(
-            o.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM,
-            beam::SAMPLE_NONE,
-        );
-        return;
-    }
-    let aim = o.aim(o.point(s));
-    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[1]);
-    let (met, before) = resume(
-        o,
-        &mut Writing {
-            world,
-            pyramid: &mut *pyramid,
-            tag,
-            assets: o.assets(),
-        },
-        &*w,
-        &aim,
-        o.sample_cell(s),
-        &mut (),
-    );
-    add_tally(pyramid, o.tally(), tally::SAMPLE, met.visits);
-    let met = Trace {
-        visits: met.visits + before,
-        ..met
-    };
-    sample_put(w, o.sample_at(s), &met);
 }
 
 /// Sample `s`'s hit written as a box for the raster's draw (raster.rs

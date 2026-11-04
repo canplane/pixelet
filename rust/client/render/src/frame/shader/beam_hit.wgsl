@@ -9,23 +9,23 @@
 
 @compute @workgroup_size(8, 8, 1)
 fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let corners = vec2<u32>(eye_word(GRID + 7u), eye_word(GRID + 8u));
+  let corners = vec2<u32>(eye_word(GRID + GRID_CORNERS), eye_word(GRID + GRID_CORNERS + 1u));
   if (id.x >= corners.x || id.y >= corners.y) {
     return;
   }
-  let past = f32(eye_word(GRID + 4u));
+  let past = f32(eye_word(GRID + GRID_PAST));
   let s = eye_f32(GRID);
   let tx = -eye_f32(TAN) + (f32(id.x) - past) * s;
   let ty = eye_f32(TAN + 1u) - (f32(id.y) - past) * s;
   let idx = id.y * corners.x + id.x;
   let base = idx * LINE_WORDS;
-  let w = walk(eye_aim(vec2<f32>(tx, ty)), vec2<u32>(0u), base);
+  let w = walk(eye_aim(vec2<f32>(tx, ty)), root_start(), base);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % 64u == 0u) {
       atomicAdd(&left[0], 1u);
     }
-    beams[eye_word(GRID + 19u) + 1u + place] = id.x | (id.y << 16u);
+    beams[eye_word(GRID + GRID_CORNERS_AT) + 1u + place] = id.x | (id.y << 16u);
     return;
   }
   let at = base + LINE_NODE;
@@ -38,5 +38,5 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[at + NODE_ROOTS + 2u] = u32(w.roots.z);
   beams[base + LINE_VISITS] = w.visits;
   // How far the rays about it start (`Grid::hand_at`, `Grid::hand_dist`).
-  beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(w.t * eye_f32(GRID + 1u));
+  beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(w.t * eye_f32(GRID + GRID_KEEP));
 }

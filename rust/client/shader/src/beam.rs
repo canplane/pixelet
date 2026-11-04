@@ -1,13 +1,11 @@
 // pxl-shader/beam.rs
 
 //! The beam rays (pxl-engine `beam`): each corner's walk and line
-//! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
-//! samples walked from those starts (`sample_cs`), each cast for the eye's
-//! camera grid and, `light_` before its name, for the shadow map; and the
-//! words a line, a
-//! node and a sample are held in, every observer's.
+//! (`beam_cs`) and where each cell's rays start off them (`cell_cs`), each
+//! cast for the eye's camera grid and, `light_` before its name, for the
+//! shadow map; and the words a line and a node are held in, every observer's.
 
-use pxl_engine::cast::{self, Detail, End, Trace, Query, Until};
+use pxl_engine::cast::{self, Detail, Trace, Query, Until};
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, pyramid, support, way};
 use spirv_std::glam::{IVec4, UVec3};
@@ -190,28 +188,6 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
     w.set(k + beam::NODE_ROOTS + 2, n.roots[2] as u32);
 }
 
-/// A sample's hit `met` put at word `base` (pxl-engine
-/// `beam::SAMPLE_WORDS`), as the raster reads it (raster.rs): the node and
-/// cell it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
-/// whether what it stopped at lacks, and the axis it entered across; what
-/// lies about that face is the eye's box's, asked once a box (raster.rs
-/// `face_cs`).
-pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace<A>) {
-    let hit = &met.hit;
-    node_put(w, base + beam::SAMPLE_NODE, &hit.node);
-    if met.ends == End::Miss {
-        w.set(
-            base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
-            beam::SAMPLE_NONE,
-        );
-    }
-    w.set(base + beam::SAMPLE_LACKS, (met.ends == End::Lacks) as u32);
-    w.set(base + beam::SAMPLE_ASSET, hit.asset[0]);
-    w.set(base + beam::SAMPLE_ASSET + 1, hit.asset[1]);
-    w.set(base + beam::SAMPLE_AXIS, hit.axis);
-    w.set(base + beam::SAMPLE_VISITS, met.visits);
-}
-
 /// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it; where it `resumes` not, from the world's root
@@ -388,84 +364,4 @@ fn cell_by<O: Observer>(o: &O, id: UVec3, beams: &mut Beams) {
         return;
     }
     observer::cell(o, beams, c);
-}
-
-/// Each sample of the camera grid, a thread each (observer.rs `sample`,
-/// pxl-engine `beam::Grid::samples`); the shadow map's is
-/// `light_sample_cs`. The node and asset it stopped at left for the raster
-/// (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where it went on
-/// to its reach, and whether what it stopped at lacks. What lies about the
-/// face it entered is asked only of a sample that draws a box, the one
-/// whose words a pixel reads (raster.rs `face_cs`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn sample_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] _head: &Head,
-) {
-    let clipmap: &[IVec4] = clipmap;
-    let world = World {
-        clipmap,
-        ground,
-        palette_indices,
-        shards,
-        overwrites,
-        eye,
-        pool: way::tree::Read(pool),
-    };
-    sample_by(eye, id, world, pyramid, beams);
-}
-
-/// `sample_cs` for the shadow map's samples (`param::light::SAMPLE`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_sample_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn light_sample_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
-) {
-    let clipmap: &[IVec4] = clipmap;
-    let world = World {
-        clipmap,
-        ground,
-        palette_indices,
-        shards,
-        overwrites,
-        eye,
-        pool: way::tree::Read(pool),
-    };
-    sample_by(&Map::of(eye, head), id, world, pyramid, beams);
-}
-
-/// Sample `id` of `o`'s lattice, where it has one.
-fn sample_by<O: Observer, L: PaletteWords>(
-    o: &O,
-    id: UVec3,
-    world: World<'_, L>,
-    pyramid: &mut Pyramid,
-    beams: &mut Beams,
-) {
-    let [across, down] = o.samples();
-    let s = o.sample_walked(&*beams, [id.x, id.y]);
-    if s[0] >= across || s[1] >= down {
-        return;
-    }
-    observer::sample(o, world, pyramid, beams, s);
 }

@@ -10,7 +10,7 @@
 @group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 8>;
 
 /// A hit kept for what lies about its face to be asked once a hit (`keep_hit`).
-fn keep_hit(w: Walked, id: vec2<u32>) -> u32 {
+fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   let r = atomicAdd(&left[7], 1u);
   if (r >= HITS) {
     return 0u;
@@ -26,7 +26,7 @@ fn keep_hit(w: Walked, id: vec2<u32>) -> u32 {
   beams[k + HIT_NODE + NODE_ROOTS] = u32(w.roots.x);
   beams[k + HIT_NODE + NODE_ROOTS + 1u] = u32(w.roots.y);
   beams[k + HIT_NODE + NODE_ROOTS + 2u] = u32(w.roots.z);
-  beams[k + HIT_FACE] = w.face;
+  beams[k + HIT_FACE] = face;
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
   return HIT_WAITS | r;
 }
@@ -51,28 +51,34 @@ fn miss_hit_cs(
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let ndc = (vec2<f32>(id) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);
   let tan_at = vec2<f32>(ndc.x, -ndc.y) * tan_xy;
-  let span_n = vec2<u32>(eye_word(GRID + 5u), eye_word(GRID + 6u));
+  let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
   let s = eye_f32(GRID);
   let cell = min(
     vec2<u32>(max(floor(vec2<f32>(tan_at.x + tan_xy.x, tan_xy.y - tan_at.y) / s), vec2<f32>(0.0))),
     span_n - vec2<u32>(1u),
   );
-  let w = walk(eye_aim(tan_at), cell, NONE);
+  let aim = eye_aim(tan_at);
+  let w = walk(
+    aim,
+    resumed(aim, eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS, LINE_WORDS, NONE),
+    NONE,
+  );
+  let face = 2u * w.axis + select(0u, 1u, aim.dir[w.axis] > 0.0);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
       atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);
     }
-    beams[eye_word(GRID + 18u) + 1u + place] = listed;
+    beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
     return;
   }
   var word = vec4<u32>(0u, 0u, w.visits, 0u);
   if (w.ends == 1u) {
     let fill = (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
-    let faces = select(FACE_BOX, keep_hit(w, id), fill == 0u);
+    let faces = select(FACE_BOX, keep_hit(w, face, id), fill == 0u);
     let steps = eye_word(ORIGIN + 3u) != 0u;
     word = vec4<u32>(
-      (w.asset.x & VAL_MASK) | (w.face << RAY_FACE_SHIFT) | (w.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
+      (w.asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (w.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
       bitcast<u32>(w.t),
       select(w.asset.y, w.visits, steps),
       faces,
