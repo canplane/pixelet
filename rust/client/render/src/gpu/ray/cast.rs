@@ -2166,7 +2166,7 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
         ),
         (
             light::ARGS_CELLS,
-            across(light::cells_across(shadow::SIZE), [CELL_SIDE, CELL_SIDE, 1]),
+            across(light::cells_across(shadow::SIZE), SAMPLE_WORKGROUP),
         ),
         (light::ARGS_SAMPLE, across(samples, SAMPLE_WORKGROUP)),
         (

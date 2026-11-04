@@ -1,5 +1,5 @@
 //! `cell_cs` by hand (frame/shader/cell.wgsl) finds where each of the eye's cells' rays start
-//! as pxl-shader's `observer::cell` does for the eye, over pxl-engine's `beam::Grid`: the
+//! as rust-gpu's `cell_cs` did for the eye, over pxl-engine's `beam::Grid`: the
 //! least of its window's beam rays' hand-on distances, that corner, and whether its rays
 //! resume. Over grids at the screens a frame lays (wide, tall, narrow, a lattice of one cell
 //! and of two), the distances as beam rays leave them (ties, none met, nought). Every word of
@@ -61,9 +61,9 @@ fn eye_words(g: &Grid) -> Vec<u32> {
     w
 }
 
-/// Cell `c`'s start, its window `k` corners past it a side (pxl-shader observer.rs `cell`
-/// over eye.rs `Eye`'s window and detail): the least distance, its corner, and whether its
-/// window's beam rays asked as its rays ask.
+/// Cell `c`'s start, its window `k` corners past it a side, as rust-gpu's `cell_cs` took it
+/// over the eye's window and detail: the least distance, its corner, and whether its window's
+/// beam rays asked as its rays ask.
 fn start(g: &Grid, words: &[u32], c: [u32; 2], k: u32) -> [u32; 3] {
     let detail = Detail {
         range: [0, 0],

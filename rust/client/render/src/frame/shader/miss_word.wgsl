@@ -2,7 +2,7 @@
 
 // A missed pixel's ray and the words its walk leaves there, as the walk over the observed
 // pyramid alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
-// (pxl-shader cast.rs `px_tan`, `word`, `write_ray`, `keep_hit`).
+// (grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 

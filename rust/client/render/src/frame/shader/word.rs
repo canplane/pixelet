@@ -295,8 +295,8 @@ pub const LEVEL_SIDE: u32 = 8;
 /// The eye's clip levels' entries a workgroup of the fold takes (gpu/ray/cast.rs `fold`,
 /// fold.wgsl).
 pub const FOLD_LANES: u32 = 64;
-/// The cells a side a workgroup of their starts takes, the camera grid's and the
-/// shadow map's (gpu/ray/cast.rs, cell.wgsl, light_cell.wgsl).
+/// The cells a side a workgroup of the camera grid's cells' starts takes (gpu/ray/cast.rs,
+/// cell.wgsl).
 pub const CELL_SIDE: u32 = 8;
 
 /// The air's tables' sizes (gpu/atmosphere.rs `SIZES`, atmos_medium.wgsl).

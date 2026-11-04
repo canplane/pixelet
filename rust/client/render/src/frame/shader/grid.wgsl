@@ -10,7 +10,7 @@ fn cell_start(c: vec2<u32>) -> u32 {
 }
 
 /// The tangents across and up where drawn pixel `p` of the `size` the rays are takes its
-/// ray, its middle off by the eye's jitter, row 0 at the top (pxl-shader cast.rs `px_tan`).
+/// ray, its middle off by the eye's jitter, row 0 at the top.
 fn px_tan(p: vec2<u32>, size: vec2<u32>) -> vec2<f32> {
   let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
   let ndc = (vec2<f32>(p) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);

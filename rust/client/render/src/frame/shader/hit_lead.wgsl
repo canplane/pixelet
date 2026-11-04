@@ -5,11 +5,11 @@
 // is one whose pixel's neighbors to the left and above wait for no hit alike within its
 // square of `HIT_SQUARE` a side, so a patch of hits alike is asked once a square, and which
 // of them asks is a function of the pixels alone. It is listed with its ask for the faces'
-// pass as a box is (pxl-shader raster.rs `face_cs`), off the line its cell's rays resumed
-// from. Any other is told the neighbor's hit it takes them from, the left before the one
-// above (`beam::HIT_FOLLOWS`), which `hit_faces_cs` follows. It reads the hits and its
-// neighbors' last ray words, and writes only its own hit's last word and its ask, so no
-// thread reads what another writes (pxl-shader cast.rs `hit_lead_cs`).
+// pass as a box is (face.wgsl `face_cs`), off the line its cell's rays resumed from. Any
+// other is told the neighbor's hit it takes them from, the left before the one above
+// (`beam::HIT_FOLLOWS`), which `hit_faces_cs` follows. It reads the hits and its neighbors'
+// last ray words, and writes only its own hit's last word and its ask, so no thread reads
+// what another writes.
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;

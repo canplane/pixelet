@@ -859,15 +859,7 @@ fn hand_world_answers_as_the_rust() {
     ]
     .join("\n");
     let words = words.as_str();
-    let hand = [
-        include_str!(concat!(env!("OUT_DIR"), "/shader/clipmap.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/clip.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/palette.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/world.wgsl")),
-    ]
-    .join("\n");
-    let hand = hand.as_str();
+    let hand = include_str!(concat!(env!("OUT_DIR"), "/shader/world.wgsl"));
     let source = WORLD_ASKED;
     let module = taken(&device, "world", source);
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

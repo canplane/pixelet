@@ -1,12 +1,13 @@
-//! The missed pixels' hits by hand answer as pxl-shader's: `hit_lead_cs`
+//! The missed pixels' hits by hand answer as rust-gpu's did: `hit_lead_cs`
 //! (frame/shader/hit_lead.wgsl) leads each square's patch of hits alike and lists its ask,
 //! `hit_faces_cs` (frame/shader/hit_faces.wgsl) puts the faces asked at every hit's pixel.
 //! The hits are as the walks again keep them (miss_hit.wgsl `keep_hit`): a pixel waits for
 //! its hit's number, hits taken in no order, patches of one node and face across squares'
 //! edges, neighbors alike but for the face or a root, stale marks, pixels at the screen's
-//! edges, counts past a workgroup and past `beam::HITS`. Every word of the beam rays',
-//! the walk again's and the rays' compared, the asks as a set, as the order their places
-//! are taken in is the device's. Skipped where no adapter answers.
+//! edges, counts past a workgroup and past `beam::HITS`, a lone hit, an earlier cast's hits
+//! past the count. Every word of the beam rays', the walk again's and the rays' compared,
+//! the asks as a set, as the order their places are taken in is the device's. Skipped where
+//! no adapter answers.
 
 mod gpu;
 
@@ -37,9 +38,11 @@ struct Screen {
     dense: u32,
     /// The count past the hits kept, as the walks' count runs on past `HITS`.
     over: u32,
+    /// The hits kept at most.
+    most: u32,
 }
 
-const SCREENS: [Screen; 4] = [
+const SCREENS: [Screen; 5] = [
     Screen {
         name: "a phone's, few hits",
         size: [333, 197],
@@ -47,6 +50,7 @@ const SCREENS: [Screen; 4] = [
         jitter: [0.25, -0.375],
         dense: 5,
         over: 0,
+        most: HITS,
     },
     Screen {
         name: "a wide one, most hits",
@@ -55,6 +59,7 @@ const SCREENS: [Screen; 4] = [
         jitter: [-0.5, 0.5],
         dense: 15,
         over: 0,
+        most: HITS,
     },
     Screen {
         name: "a 16:9 one at 90°, half its pixels",
@@ -63,6 +68,7 @@ const SCREENS: [Screen; 4] = [
         jitter: [0.125, 0.0625],
         dense: 8,
         over: 0,
+        most: HITS,
     },
     Screen {
         name: "every pixel a hit, past `HITS`",
@@ -71,6 +77,16 @@ const SCREENS: [Screen; 4] = [
         jitter: [0.0, 0.0],
         dense: 16,
         over: 77,
+        most: HITS,
+    },
+    Screen {
+        name: "one hit, so one ask opens the faces' one workgroup",
+        size: [96, 64],
+        tan: [1.0, 0.75],
+        jitter: [0.375, -0.125],
+        dense: 8,
+        over: 0,
+        most: 1,
     },
 ];
 
@@ -125,13 +141,21 @@ fn kept(g: &Grid, s: &Screen, seed: u32) -> Kept {
         .filter(|&k| mix(k, seed ^ 7) % 16 < s.dense)
         .collect();
     hit.sort_by_key(|&k| mix(k, seed ^ 9));
-    hit.truncate(HITS as usize);
+    hit.truncate(s.most.min(HITS) as usize);
     for (r, &k) in hit.iter().enumerate() {
         let p = [k % w, k / w];
         let at = g.hit_at(r as u32) as usize;
         beams[at..at + HIT_PX as usize].copy_from_slice(&stop(patch(p, seed)));
         beams[at + HIT_PX as usize] = p[1] << 16 | p[0];
         faces[k as usize] = HIT_WAITS | r as u32;
+    }
+    // Past the hits kept, a workgroup's worth of an earlier cast's: pixels on the screen, faces
+    // their own, which no thread past the count may put.
+    for r in hit.len() as u32..(hit.len() as u32 + HIT_LANES).min(HITS) {
+        let at = g.hit_at(r) as usize;
+        let k = mix(r, seed ^ 11) % (w * h);
+        beams[at + HIT_PX as usize] = ((k / w) << 16) | (k % w);
+        beams[at + HIT_OUT as usize] = mix(r, seed ^ 13) & !HIT_FOLLOWS;
     }
     // Stale marks: a waiting number past `HITS`, or one whose hit is another pixel's.
     for k in 0..w * h {
@@ -160,7 +184,7 @@ fn eye_words(g: &Grid, s: &Screen) -> Vec<u32> {
     e
 }
 
-/// pxl-shader cast.rs `px_tan`.
+/// The tangents of pixel `p`'s ray, as grid.wgsl `px_tan` takes them.
 fn px_tan(s: &Screen, p: [u32; 2]) -> [f32; 2] {
     let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
@@ -190,8 +214,8 @@ fn cells_of(g: &Grid, s: &Screen, p: [u32; 2]) -> [[u32; 2]; 2] {
     [cell, other]
 }
 
-/// What `hit_lead_cs` writes, thread by thread in the order of the hits (pxl-shader cast.rs
-/// `hit_lead_cs`, `alike_hit`, `alike`): the beam rays' and the walk again's words.
+/// What `hit_lead_cs` writes, thread by thread in the order of the hits, as rust-gpu's did:
+/// the beam rays' and the walk again's words.
 fn lead(g: &Grid, s: &Screen, kept: &Kept, beams: &mut [u32], marks: &mut [u32]) {
     let w = s.size[0];
     let alike_hit = |beams: &[u32], k: u32, x: u32, y: u32| {
@@ -250,7 +274,7 @@ fn sorted_asks(g: &Grid, beams: &mut [u32], n: u32) {
     beams[at..at + (n * ASK_WORDS) as usize].copy_from_slice(asks.concat().as_slice());
 }
 
-/// What `hit_faces_cs` writes (pxl-shader cast.rs `hit_faces_cs`): each hit's faces at its
+/// What `hit_faces_cs` writes, as rust-gpu's did: each hit's faces at its
 /// pixel, followed to the hit that asked them.
 fn faces_put(g: &Grid, s: &Screen, kept: &Kept, beams: &[u32], faces: &mut [u32]) {
     for id in 0..kept.cnt.min(HITS) {

@@ -3,7 +3,8 @@
 //! (gpu/ray/cast.rs `fold`): over the real world of tests/real_world on both sides of the
 //! seam, and over its table as the kernel leaves it between folds, a clip level moved a brick
 //! before its bricks are held, slots let go, a clip level laid out or not. Every word of
-//! the table compared after each fold. Skipped where no adapter answers.
+//! the table, and of a row past it, compared after each fold. Skipped where no adapter
+//! answers.
 
 mod gpu;
 mod real_world;
@@ -184,6 +185,11 @@ fn hand_fold_folds_as_clipmap_fold() {
                 .iter()
                 .filter(|r| **r == [0; 4])
                 .count();
+            // A row past the table, which no thread of a fold writes.
+            let spare = [0x5eed, -0x5eed, 1, -1];
+            want.push(spare);
+            let mut table = table;
+            table.push(spare);
             let want: Vec<u32> = want.iter().flatten().map(|&v| v as u32).collect();
             let have = fold_hand(&gpu, &p, &ground, &table);
             tally.compare(&format!("{side}, {name}"), &want, &have, row_name);

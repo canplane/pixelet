@@ -1,9 +1,9 @@
 // pxl-render/cell.wgsl
 
-// Where each of the eye's camera grid's cells' rays start (pxl-shader observer.rs `cell`,
-// pxl-engine `beam::CELL_WORDS`), a thread a cell: the least of the beam rays' hand-on
-// distances within its window of corners (`beam::Grid::cell_window`), and that corner, whose
-// line its rays resume from. The shadow map's are light_cell.wgsl's.
+// Where each of the eye's camera grid's cells' rays start (pxl-engine `beam::CELL_WORDS`),
+// a thread a cell: the least of the beam rays' hand-on distances within its window of
+// corners (`beam::Grid::cell_window`), and that corner, whose line its rays resume from.
+// The shadow map's are light_cell.wgsl's.
 //
 // The window is f32 as the Rust's, a ceiling over a square root and two divisions: where
 // what it takes the ceiling of falls within a few ulps of a whole number, a GPU's rounding
