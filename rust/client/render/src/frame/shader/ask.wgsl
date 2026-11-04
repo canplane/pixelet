@@ -18,11 +18,6 @@ fn walk_tag() -> u32 {
   return PASSES * pyramid_word(FRAME) + WALK_PASS;
 }
 
-/// A cut as the eye holds it: its index, then its zoom.
-fn eye_cut(k: u32) -> vec4<i32> {
-  return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
-}
-
 /// Whether the entry at word `w` is the node (`is_node`).
 fn is_node(w: u32, zoom: u32, c: vec3<i32>) -> bool {
   let n = w + W_NODE;

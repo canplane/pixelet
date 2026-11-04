@@ -147,7 +147,7 @@ pub const NONE: u32 = 0;
 /// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
 /// so on, by the stem of the entry's file.
 pub mod compute {
-    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM};
+    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM};
     use crate::frame::shader::floor;
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }

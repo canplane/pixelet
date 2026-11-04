@@ -68,13 +68,18 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1,
 
 /// The eye's walk again's words past those: the args what lies about the
 /// faces its hits met is asked by, once a square of them (pxl-shader cast.rs
-/// `hit_lead_cs`, raster.rs `face_cs`), laid as the boxes' are
+/// `hit_lead_cs`, pxl-render face.wgsl `face_cs`), laid as the boxes' are
 /// (`raster::ARGS_WORDS`: their count, their dispatch, where their asks
 /// lie), at a storage binding's alignment, 256 bytes on every device, so
 /// the faces' pass binds them alone as it binds the boxes'. Set each frame
 /// the cast runs, as the words before them are.
 pub const MISS_ARGS_ROOM: u32 = 64;
 const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ROOM);
+
+/// The side of the pixels' pass's workgroup, a square of pixels (pxl-render cast.wgsl
+/// `cast_cs`): the walk over every pixel is dispatched by it where the list is full
+/// (`MISS_ARGS_WHOLE`).
+pub const CAST_SIDE: u32 = 8;
 
 /// The first word of a hit at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.

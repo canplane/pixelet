@@ -13,7 +13,7 @@ use pxl_engine::clipmap::{
     self, Bricks, Lookup, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
 };
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{at, face, ground, support, way};
+use pxl_engine::{at, face, ground, way};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
@@ -252,29 +252,8 @@ impl<L> World<'_, L> {
     }
 }
 
-impl<L: PaletteWords> World<'_, L> {
-    /// What lies about face `face` of the cell `c` of `zoom` a ray stopped
-    /// on (pxl-engine `face::word`): each cell beside it at its zoom,
-    /// hiding its cube whole (`answer::whole`), asked off `line`, the line
-    /// down to it read in place (`support::Ancestors`), each from the deepest
-    /// node it shares with it (`support::asset`).
-    /// Asked once a hit (raster.rs `face_cs`); a hit that needs none is
-    /// told so first (`unasked_face`).
-    pub(crate) fn ask_face(
-        &mut self,
-        face: u32,
-        zoom: u32,
-        c: [i32; 3],
-        line: &impl support::Ancestors<Inheritance>,
-    ) -> u32 {
-        face::word(face, |d| {
-            answer::whole(support::asset(self, line, zoom, face::beside(zoom, c, d)))
-        })
-    }
-}
-
 /// What lies about the face a hit that ended `ends` at the asset `asset`
-/// met, where it needs no asking (`World::ask_face`): nothing where it stopped
+/// met, where it needs no asking (pxl-render face.wgsl `face_word`): nothing where it stopped
 /// on none, a box's own where the cell keeps short of its cube
 /// (`face::BOX`); and whether it is asked instead.
 pub(crate) fn unasked_face(ends: End, asset: u32) -> (bool, u32) {

@@ -12,17 +12,17 @@
 //! light.wgsl, light_miss.wgsl), `Map` read there as light_list.wgsl.
 
 use pxl_content::Pixelet;
-use pxl_engine::cast::{self, Detail, Spacing};
+use pxl_engine::cast::{Detail, Spacing};
 use pxl_engine::fill::put;
 use pxl_engine::light::{Light, Starts};
-use pxl_engine::{at, pyramid, tally, Zoom};
+use pxl_engine::{at, Zoom};
 use spirv_std::glam::{IVec4, UVec3, Vec4};
 use spirv_std::spirv;
 
 use crate::beam::Words;
 use crate::decor::Instances;
 use crate::eye::Eye;
-use crate::observer::{Aim, Level, Observer};
+use crate::observer::{Level, Observer};
 
 /// What the light's cast is handed beside the eye's words, a uniform
 /// (pxl-engine `light::HEAD_VEC4S`): its number, whether it is counted,
@@ -182,42 +182,9 @@ impl Map {
 impl Observer for Map {
     type At = [u32; 2];
 
-    fn tally(&self) -> u32 {
-        tally::LIGHT
-    }
-
-    /// Kept as the eye's are: what `light_miss_hit_cs` cannot answer it leaves to a whole
-    /// walk, and a ray that stops on a cell no slot keeps is left every cast.
-    fn assets(&self) -> bool {
-        true
-    }
-
-    fn passes(&self) -> [u32; 3] {
-        [
-            pyramid::LIGHT_BEAM_PASS,
-            pyramid::LIGHT_SAMPLES_PASS,
-            pyramid::LIGHT_MISSED_PASS,
-        ]
-    }
-
     fn corners(&self) -> [u32; 2] {
         let a = pxl_engine::light::beam_across(self.size);
         [a, a]
-    }
-
-    /// From where its texel of the box, which may lie past it, lies on the
-    /// near plane (`light::Starts`, `light::corner_at`).
-    fn corner(&self, c: [u32; 2]) -> Aim {
-        let p = pxl_engine::light::corner_at(c);
-        let o = self.starts.start([
-            self.light.corner[0].wrapping_add(p[0]),
-            self.light.corner[1].wrapping_add(p[1]),
-        ]);
-        Aim {
-            origin: o,
-            ray: cast::Ray::new(self.light.dir, self.light.t_max),
-            detail: self.corner_detail(c),
-        }
     }
 
     /// The band of the tile its texel lies on, as a slot asks its own.
@@ -230,30 +197,8 @@ impl Observer for Map {
         self.asks(Level::Cell, c)
     }
 
-    /// Its hit less `light::margin`, none before the near plane.
-    fn handed(&self, aim: &Aim, t: f32) -> f32 {
-        let width = aim.detail.spacing.width(0.0);
-        let t = t - pxl_engine::light::margin(width);
-        if t > 0.0 {
-            t
-        } else {
-            0.0
-        }
-    }
-
-    fn line(&self, idx: u32) -> u32 {
-        pxl_engine::light::line(self.size, idx)
-    }
-
     fn hand_at(&self, idx: u32) -> u32 {
         pxl_engine::light::hand_at(self.size, idx)
-    }
-
-    fn keep_origin<W: Words + ?Sized>(&self, w: &mut W, base: u32, o: [i32; 3]) {
-        let k = base + pxl_engine::light::LINE_ORIGIN;
-        w.set(k, o[0] as u32);
-        w.set(k + 1, o[1] as u32);
-        w.set(k + 2, o[2] as u32);
     }
 
     fn cells(&self) -> [u32; 2] {
@@ -285,32 +230,6 @@ impl Observer for Map {
     fn sample_at(&self, s: [u32; 2]) -> u32 {
         let n = self.across();
         pxl_engine::light::sample(self.size, (s[1] % n) * n + s[0] % n)
-    }
-
-    /// Not about it within a sample of the box's edge, where the slots wrap:
-    /// a sample past it lies at the box's other side.
-    fn sample_before(&self, slot: [u32; 2]) -> ([u32; 2], bool) {
-        let d = pxl_engine::param::light::SAMPLE;
-        let p = self.light.texel(self.size, slot);
-        let (r, n) = ([slot[0] % d, slot[1] % d], self.size);
-        let inside = p[0] >= r[0] && p[0] - r[0] + d < n && p[1] >= r[1] && p[1] - r[1] + d < n;
-        ([slot[0] / d, slot[1] / d], inside)
-    }
-
-    /// From where its texel of the box lies on the near plane (`light::ray`).
-    fn aim(&self, slot: [u32; 2]) -> Aim {
-        let p = self.light.texel(self.size, slot);
-        let (origin, ray) = pxl_engine::light::ray(&self.light, &self.starts, p);
-        Aim {
-            origin,
-            ray,
-            detail: self.detail(slot),
-        }
-    }
-
-    /// The band of the tile its texel lies on, a sample's or a slot's alike.
-    fn detail(&self, slot: [u32; 2]) -> Detail {
-        self.asks(Level::Ray, slot)
     }
 
     /// From where box texel (0, 0)'s ray starts, as the raster lays the

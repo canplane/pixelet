@@ -416,6 +416,11 @@ pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
+/// The side of a workgroup of the passes over the beam rays' corners, a thread a corner, and
+/// of the one over what the first left, a thread a place in the list (pxl-render
+/// beam_hit.wgsl, beam.wgsl).
+pub const CORNER_SIDE: u32 = 8;
+
 /// The side of a workgroup of the passes over a lattice's samples, a thread a sample, and of
 /// those over what they left, a thread a place in the list (pxl-render sample_hit.wgsl,
 /// sample.wgsl).

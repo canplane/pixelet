@@ -5,8 +5,8 @@
 //! written (`sample_box_cs`, span `sample_box`, a thread a sample of the
 //! camera grid) and the boxes drawn at the rays' pixels (raster.wgsl, span
 //! `sraster`, its fragments the drawn pixels), the nearest face a pixel's
-//! ray enters kept with its sample, which the cast's pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
-//! box's face asked once a box (`face_cs`, span `face`). Its targets are
+//! ray enters kept with its sample, which the cast's pixels read (frame/shader/cast.wgsl `cast_cs`); then what lies about each
+//! box's face asked once a box (frame/shader/face.wgsl `face_cs`, span `face`). Its targets are
 //! written whole each frame before they are read: in a frame not drawn
 //! whole, through a gate of their own, the depth cleared to the nearest and
 //! the claimed tiles set back to the far plane (raster_gate.wgsl), so the
@@ -17,9 +17,10 @@
 
 use pxl_engine::{beam, eye, light, raster, ray};
 
+use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
-    SHADER_SAMPLE_BOX,
+    compute, COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
+    SHADER_SAMPLE_BOX, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
@@ -87,6 +88,18 @@ pub(super) struct LightRaster {
     group: u32,
 }
 
+/// `face_cs`'s (face.wgsl): the eye, the world's query's buffers but the palette, which it
+/// reads none of, the beam's words it asks off and leaves the faces in, and the args it is
+/// bound to.
+const FACE_GROUP: [u32; 24] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
+    STORAGE, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE_RW, 16, COMPUTE, STORAGE,
+];
+const _: () = assert!(
+    floor::holds(&[&FACE_GROUP]),
+    "the faces' group binds past WebGPU's floor"
+);
+
 impl Raster {
     /// Its pipelines and its args and uniform, made where the cast's are
     /// (`RaysPass::make`).
@@ -99,7 +112,7 @@ impl Raster {
                 SHADER_LIGHT_SAMPLE_BOX,
                 &compute::LIGHT_SAMPLE_BOX_GROUP,
             ),
-            faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
+            faces_built: pipelines.build_compute(g, SHADER_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
             args: g.buf(

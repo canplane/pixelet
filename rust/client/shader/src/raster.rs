@@ -2,27 +2,26 @@
 
 //! The samples' hits handed to the rasterizer (pxl-engine `raster`):
 //! each stopped sample's box written for the raster's draw (`sample_box_cs`),
-//! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
-//! reads each pixel's visible sample off; and what lies about each hit's
-//! face asked once a hit (`face_cs`), a box's and a missed pixel's alike.
+//! which pxl-render raster.wgsl draws and pxl-render cast.wgsl `cast_cs`
+//! reads each pixel's visible sample off; and the ask of what lies about each
+//! box's face, which pxl-render face.wgsl `face_cs` answers once a box.
 
 use pxl_engine::cast::End;
-use pxl_engine::{beam, cast, raster, support, way};
-use pxl_shader_macro::compute;
-use spirv_std::glam::{IVec4, UVec3};
+use pxl_engine::{beam, cast, raster};
+use spirv_std::glam::UVec3;
 use spirv_std::spirv;
 
-use crate::beam::{node_at, BeamLine, Beams, BeamAncestors, Words};
-use crate::eye::{eye_origin, eye_ray, grid, Eye};
+use crate::beam::{node_at, Beams, Words};
+use crate::eye::{eye_ray, grid, Eye};
 use crate::light::{Head, Map};
 use crate::observer::{self, Level, Observer};
-use crate::world::{face_of, unasked_face, NoPalette, World};
+use crate::world::{face_of, unasked_face};
 use crate::{add, opens};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
 /// every word a pixel reads of them: the node, the asset, whether it lacks
 /// and the axis entered across, so what lies about its face is alike too
-/// (world.rs `World::ask_face`, its face the axis's turned to the eye).
+/// (pxl-render face.wgsl `face_word`, its face the axis's turned to the eye).
 fn alike<W: Words + ?Sized>(w: &W, a: u32, b: u32) -> bool {
     let mut k = 0;
     while k < beam::SAMPLE_FACES {
@@ -94,32 +93,6 @@ pub(crate) fn write_box<W: Words + ?Sized>(
     box_at
 }
 
-/// The cell a ray from `origin` takes off the visible sample, the sample at
-/// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
-/// the sample entered by, the eye's pixels and the light's slots alike, and
-/// whether it does.
-pub(crate) fn visible_cell<W: Words + ?Sized>(
-    w: &W,
-    k: u32,
-    origin: [i32; 3],
-    ray: &cast::Ray,
-) -> (cast::Hit<u32>, bool) {
-    let node = node_at(w, k + beam::SAMPLE_NODE);
-    let asset = [
-        w.word(k + beam::SAMPLE_ASSET),
-        w.word(k + beam::SAMPLE_ASSET + 1),
-    ];
-    let (enter, axis, enters) = cast::entry(origin, ray, &node, asset[0]);
-    let hit = cast::Hit {
-        t: enter,
-        axis,
-        node,
-        at: 0u32,
-        asset,
-    };
-    (hit, enters && axis == w.word(k + beam::SAMPLE_AXIS))
-}
-
 /// Each sample of the camera grid, a thread each: written as a box for the
 /// raster's draw (observer.rs `sample_box`); and what lies about its face
 /// asked once a box (`ask`), as its pixels draw the face. The shadow map's
@@ -172,9 +145,9 @@ fn box_by<O: Observer>(
 /// What lies about the face sample `s` entered, the screen's, whose box is
 /// at `place` among the boxes: told at once where it needs no asking
 /// (`world::unasked_face`, a lack none), left in its words (`beam::SAMPLE_FACES`)
-/// where its pixels read it (cast.rs `cast_cs`); else its ask at `place`
+/// where its pixels read it (pxl-render cast.wgsl `cast_cs`); else its ask at `place`
 /// (`beam::Grid::ask_at`), off the line its cell's rays resumed from, for
-/// the faces' pass (`face_cs`), its faces to be left there.
+/// the faces' pass (pxl-render face.wgsl `face_cs`), its faces to be left there.
 fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     let g = grid(eye);
     let k = g.sample_at(s);
@@ -198,60 +171,4 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     beams.set(a + beam::ASK_FACE, face);
     beams.set(a + beam::ASK_LINE, beam::Grid::line(corner));
     beams.set(a + beam::ASK_TO, k + beam::SAMPLE_FACES);
-}
-
-/// Each hit asked its faces, a thread each, `raster::FACES_LANES` a
-/// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past
-/// their count (`raster::ARGS_INSTANCES`) returning at once: what lies
-/// about the face its ray entered (`World::ask_face`), asked of the world's
-/// query once a hit, off the line down to it from
-/// the deepest node of its cell's beam ray's line over it, that line read
-/// in place (`support::sub_line`, beam.rs `BeamAncestors`), and left in the word its ask
-/// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their
-/// faces left in their samples' words, which the pixels read (cast.rs
-/// `cast_cs`); and the missed pixels' hits' (`beam::Grid::hit_ask_at`;
-/// cast.rs `hit_lead_cs`), their args laid alike (pxl-engine
-/// `ray::MISS_ARGS_ROOM`), their faces left in the hits, which their pixels
-/// take (cast.rs `hit_faces_cs`). One pass for both, over the args it is
-/// bound to: where its asks lie (`raster::ARGS_ASKS`) and how many.
-#[compute(threads(raster::FACES_LANES), entry_point_name = "face_cs")]
-#[allow(clippy::too_many_arguments)]
-pub fn face_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &[u32],
-) {
-    if id.x >= args[raster::ARGS_INSTANCES as usize] {
-        return;
-    }
-    let a = args[raster::ARGS_ASKS as usize] + id.x * beam::ASK_WORDS;
-    let to = beams.word(a + beam::ASK_TO);
-    if to == beam::ASK_NONE {
-        return;
-    }
-    let faces = {
-        let w: &Beams = beams;
-        let (origin, _) = eye_origin(eye);
-        let node = node_at(w, w.word(a + beam::ASK_NODE));
-        let (zoom, c) = (node.zoom, node.idx(origin));
-        let base = BeamAncestors::of(BeamLine(w, w.word(a + beam::ASK_LINE)), origin);
-        let mut world = World {
-            clipmap,
-            ground,
-            palette_indices: NoPalette(0),
-            shards,
-            overwrites,
-            eye,
-            pool: way::tree::Read(pool),
-        };
-        let below = support::sub_line(&mut world, &base, zoom, c);
-        world.ask_face(w.word(a + beam::ASK_FACE), zoom, c, &below.joined(&base))
-    };
-    beams.set(to, faces);
 }

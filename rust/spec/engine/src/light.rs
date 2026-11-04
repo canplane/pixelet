@@ -518,7 +518,7 @@ impl Starts {
 /// slots' pass (pxl-shader `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries):
+/// The light's beam (pxl-shader beam.rs `light_beam_cs`, `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
 /// the light's rays until a cell that fills or lacks or a split narrower than

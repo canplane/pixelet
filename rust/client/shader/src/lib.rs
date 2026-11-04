@@ -26,17 +26,16 @@ mod pyramid;
 mod observer;
 mod raster;
 mod light;
-mod workgroup;
 mod world;
 
 use rays::{cast, light_mark};
 
-pub use beam::{beam_cs, cell_cs};
-pub use cast::{cast_cs, hit_faces_cs, hit_lead_cs};
+pub use beam::cell_cs;
+pub use cast::{hit_faces_cs, hit_lead_cs};
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, fold_cs};
 pub use pyramid::forget_cs;
-pub use raster::{face_cs, light_sample_box_cs, sample_box_cs};
+pub use raster::{light_sample_box_cs, sample_box_cs};
 pub use light::{light_mark_draws_cs, light_propagate_cs, light_slide_cs, Head};
 pub use light_mark::light_mark_cs;
 pub use world::{PaletteWords, NoPalette, World};

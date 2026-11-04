@@ -5,17 +5,13 @@
 //! is `#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_lead_cs"))]`,
 //! each side named in `threads` written as its constant's value, since
 //! rust-gpu's `threads` takes literals alone. The constants are
-//! pxl-engine's and pxl-shader workgroup.rs's, read here as they are.
+//! pxl-engine's, read here as they are.
 
 #![deny(warnings)]
 
 use proc_macro::{Delimiter, TokenStream, TokenTree};
 
-#[path = "../../src/workgroup.rs"]
-mod workgroup;
-
 use pxl_engine::{beam, raster, ray};
-use workgroup::CAST_SIDE;
 
 /// Each constant, by its path as it is written here and in `threads`.
 macro_rules! sides {
@@ -23,12 +19,7 @@ macro_rules! sides {
 }
 
 /// The constants a side may be named by.
-const SIDES: [(&str, u32); 4] = sides![
-    beam::HIT_LANES,
-    raster::FACES_LANES,
-    ray::MISS_LANES,
-    CAST_SIDE,
-];
+const SIDES: [(&str, u32); 3] = sides![beam::HIT_LANES, raster::FACES_LANES, ray::MISS_LANES];
 
 /// rust-gpu's `#[spirv(compute(..))]` over the same arguments, each side
 /// `threads` names by a constant of `SIDES` written as its value, a literal

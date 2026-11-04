@@ -35,8 +35,8 @@ pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
 pub const SHADER_MARKER_REGION: u32 = 23;
 /// The eye's rays drawn at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
-/// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-engine's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
+/// Each drawn pixel's ray off the visible sample or the sky, the rest marked and listed
+/// for their walk again, by hand (cast.wgsl): its one compute entry.
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-engine's `fill::level` and
@@ -77,9 +77,8 @@ pub const SHADER_ATMOS_FROXEL: u32 = 35;
 pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
 pub const SHADER_WAY_RETURN: u32 = 38;
-/// The camera grid's beam rays, a thread a corner, and where each cell's
-/// pixels start off them, generated with the cast from pxl-engine's
-/// `beam`: a compute entry each.
+/// The camera grid's beam rays `SHADER_BEAM_HIT` left, a thread each, walked asking the
+/// world, by hand (beam.wgsl): its one compute entry.
 pub const SHADER_BEAM: u32 = 39;
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
@@ -114,7 +113,8 @@ pub const SHADER_RASTER: u32 = 50;
 /// (pxl-engine `pyramid::MARKS_AT`), a thread each: a compute entry.
 pub const SHADER_MISS_LIST: u32 = 51;
 /// What lies about each box's face, asked once a box (pxl-engine
-/// `raster::ARGS_FACES`): a compute entry.
+/// `raster::ARGS_FACES`), and each missed pixel's hit's, by hand (face.wgsl): its one
+/// compute entry.
 pub const SHADER_FACE: u32 = 52;
 /// The tiles of the light's box its receivers stand on in a cast
 /// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
@@ -347,7 +347,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "screen_shade"
     ],
     // SHADER_CAST
-    &["cast.gen"],
+    &["walk_word", "tile_word", "walk_node", "side", "cast"],
     // SHADER_BOUND
     &["bound.gen"],
     // SHADER_HEIGHT
@@ -450,7 +450,23 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_WAY_RETURN
     &["way_word", "handed", "way_stack", "way_return"],
     // SHADER_BEAM
-    &["beam.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
+        "world",
+        "world_split",
+        "ask",
+        "beam_walk",
+        "beam",
+    ],
     // SHADER_CELL
     &["cell.gen"],
     // SHADER_MISS
@@ -548,7 +564,19 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "miss",
     ],
     // SHADER_FACE
-    &["face.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "clipmap",
+        "seed",
+        "clip",
+        "no_palette",
+        "world_rule",
+        "world",
+        "world_split",
+        "face",
+    ],
     // SHADER_LIGHT_MARK
     &["light_mark.gen"],
     // SHADER_LIGHT_MARK_DRAWS
@@ -640,6 +668,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ask",
         "light_aim",
         "light_list",
+        "beam_walk",
         "light_beam",
     ],
     // SHADER_LIGHT_CELL
@@ -694,7 +723,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "miss_hit",
     ],
     // SHADER_BEAM_HIT
-    &["walk_word", "walk_node", "side", "resume", "walk", "beam_hit"],
+    &[
+        "walk_word",
+        "walk_node",
+        "side",
+        "resume",
+        "walk",
+        "beam_hit",
+    ],
     // SHADER_LIGHT_MISS_HIT
     &[
         "walk_word",
