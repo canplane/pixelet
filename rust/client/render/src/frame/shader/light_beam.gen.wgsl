@@ -41,7 +41,7 @@ struct type_32 {
 }
 
 struct type_35 {
-    member: array<vec4<i32>, 46>,
+    member: array<vec4<i32>, 48>,
 }
 
 struct type_36 {

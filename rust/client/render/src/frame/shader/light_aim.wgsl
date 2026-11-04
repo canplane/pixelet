@@ -3,8 +3,11 @@
 // A listed slot's ray and the word its walk leaves there, as `light_miss_hit_cs` and
 // `light_miss_cs` take them (pxl-engine light.rs `ray`, `Light::band`, `depth`, `word`).
 
-@group(0) @binding(10) var light: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(11) var<uniform> head: array<vec4<i32>, LIGHT_HEAD_VEC4S>;
+
+fn head_word(k: u32) -> u32 {
+  return u32(head[k / 4u][k % 4u]);
+}
 
 fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
@@ -34,15 +37,9 @@ fn gap(k: u32, half: f32) -> f32 {
   return max(max(a - half, half - b), 0.0);
 }
 
-/// Where the listed slots start in the list, their count first (`light::misses_cnt`).
-fn misses_cnt() -> u32 {
-  return u32(head[LIGHT_HEAD_MISSES / 4u][LIGHT_HEAD_MISSES % 4u]);
-}
-
 /// The slot's texel of the box (`Light::texel`).
 fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
-  let size = u32(head[LIGHT_HEAD_SIZE / 4u][LIGHT_HEAD_SIZE % 4u]);
-  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(size - 1u);
+  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(head_word(LIGHT_HEAD_SIZE) - 1u);
 }
 
 fn light_corner() -> vec2<i32> {
@@ -52,7 +49,7 @@ fn light_corner() -> vec2<i32> {
 /// The band of the tile a texel lies on (`Light::band`).
 fn texel_band(texel: vec2<u32>) -> u32 {
   let tile = texel / LIGHT_TILE;
-  let half = f32(u32(head[LIGHT_HEAD_SIZE / 4u][LIGHT_HEAD_SIZE % 4u])) / 2.0;
+  let half = f32(head_word(LIGHT_HEAD_SIZE)) / 2.0;
   let x = gap(tile.x, half) * length(light_v3(LIGHT_ACROSS));
   let y = gap(tile.y, half) * length(light_v3(LIGHT_DOWN));
   return zoom_at(x * x + y * y, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
@@ -66,4 +63,9 @@ fn stop_word(t: f32, axis: u32) -> u32 {
 
 fn depth_word(d: f32) -> u32 {
   return min(u32(d * f32(LIGHT_DEPTH_ONE) + 0.5), LIGHT_DEPTH_ONE);
+}
+
+/// The word a slot's ended walk leaves: the far plane where it stopped at nothing.
+fn walked_word(w: Walked) -> u32 {
+  return select(depth_word(1.0), stop_word(w.t, w.axis), w.ends == 1u);
 }

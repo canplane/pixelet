@@ -4,8 +4,8 @@
 //! every slot each frame it is cast, by the passes the eye's rays take,
 //! the shadow map their observer (`Map`; observer.rs): the beam rays and
 //! their cells' starts, the samples and their boxes, which the raster
-//! draws, each the entry the eye's takes (beam.rs `beam_cs`, `cell_cs`,
-//! `sample_cs`; raster.rs `sample_box_cs`) handed the light's head (`Head`),
+//! draws, each the entry the eye's takes (beam.rs `beam_cs`, `cell_cs`;
+//! raster.rs `sample_box_cs`; pxl-render sample.wgsl) handed the light's head (`Head`),
 //! every walk at its tile's band (`Light::band`); every slot taking its
 //! visible sample or the sky (`light_cs`) and the rest walked
 //! (pxl-render light_miss.wgsl); and the tiles a slide of the box keeps
@@ -320,10 +320,6 @@ impl Observer for Map {
     fn point(&self, s: [u32; 2]) -> [u32; 2] {
         let d = pxl_engine::param::light::SAMPLE;
         [s[0] * d, s[1] * d]
-    }
-
-    fn sample_cell(&self, s: [u32; 2]) -> [u32; 2] {
-        self.cell_of(self.point(s))
     }
 
     /// Its number on the slots' lattice, wrapped as the slots are: in range

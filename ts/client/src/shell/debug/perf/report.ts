@@ -40,7 +40,7 @@ type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
 /** The `ray_counts` setting's counts over the window, the kernel's sums of
  * its frames' (perf.json FRAME's rays columns): an observer's line each where
  * it cast — the nodes its beam rays, its samples and its walk again asked a
- * cast, those of the last asked of the world, its pixels or slots cast again, those that took the visible sample,
+ * cast, those its walks by hand asked of the world, its pixels or slots cast again, those that took the visible sample,
  * that walked and that took the sky, each as a share of its pixels or its
  * map's slots, the nodes its walk again asked a walking one, and the boxes
  * it drew a cast. */

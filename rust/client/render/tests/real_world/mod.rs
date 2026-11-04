@@ -59,11 +59,15 @@ pub const FINEST: Zoom = LEAF_CELL + 3;
 pub const EYE: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 
 /// The shards served: west of the seam far past what the clip levels reach, a few east of
-/// it, from row 40 to 44: an edge of the area within every clip level's reach but the west;
-/// and a shard left out in it (`NOTCH`), whose corners only a diagonal leaf cell touches;
-/// and the shard at the world's first node, no clip level's reach.
+/// it, and three about X = 0, where X's roots part, from row 40 to 44: an edge of the area
+/// within every clip level's reach but the west; and a shard left out in it (`NOTCH`), whose
+/// corners only a diagonal leaf cell touches; and the shard at the world's first node, no clip
+/// level's reach.
 pub fn served(n: [i32; 2]) -> bool {
-    (n[0] >= 100 || n[0] < -124) && (40..44).contains(&n[1]) && n != NOTCH || n == [0, 0]
+    (n[0] >= 100 || n[0] < -124 || (-1..=1).contains(&n[0]))
+        && (40..44).contains(&n[1])
+        && n != NOTCH
+        || n == [0, 0]
 }
 
 /// The shard left out of the area.

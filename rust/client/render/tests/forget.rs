@@ -46,6 +46,7 @@ fn over_brick(b: &Built, w: World, cell: Zoom, q: [i32; 2]) -> Met {
         tag: pyramid::tag(3, pyramid::MISSED_PASS),
         asks: Asks::default(),
         met: Some(&mut met),
+        writes: true,
     };
     let detail = Detail {
         range: [8, FINEST],

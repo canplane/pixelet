@@ -198,7 +198,10 @@ pub const SHADER_BEAM_HIT: u32 = 83;
 /// The light's missed slots' walk over the observed pyramid alone, by hand: what it does
 /// not end `SHADER_LIGHT_MISS` walks again.
 pub const SHADER_LIGHT_MISS_HIT: u32 = 84;
-pub const SHADERS: u32 = 85;
+/// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
+/// again.
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 85;
+pub const SHADERS: u32 = 86;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -389,7 +392,18 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_FORGET
     &["forget.gen"],
     // SHADER_SAMPLE
-    &["sample.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "resume",
+        "world",
+        "world_split",
+        "ask",
+        "sample_eye",
+        "sample_put",
+        "sample",
+    ],
     // SHADER_LIGHT
     &["light.gen"],
     // SHADER_LIGHT_MAP
@@ -401,6 +415,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_node",
         "world",
         "world_split",
+        "ask",
         "light_aim",
         "light_miss",
     ],
@@ -488,21 +503,53 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_CELL
     &["light_cell.gen"],
     // SHADER_LIGHT_SAMPLE
-    &["light_sample.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "walk_node",
+        "resume",
+        "world",
+        "world_split",
+        "ask",
+        "light_aim",
+        "sample_light",
+        "sample_put",
+        "sample",
+    ],
     // SHADER_LIGHT_SAMPLE_BOX
     &["light_sample_box.gen"],
     // SHADER_SAMPLE_HIT
-    &["walk_word", "walk_node", "walk", "sample_hit"],
+    &[
+        "walk_word",
+        "walk_node",
+        "resume",
+        "walk",
+        "sample_eye",
+        "sample_put",
+        "sample_hit",
+    ],
     // SHADER_MISS_HIT
-    &["walk_word", "walk_node", "walk", "miss_hit"],
+    &["walk_word", "walk_node", "resume", "walk", "miss_hit"],
     // SHADER_BEAM_HIT
-    &["walk_word", "walk_node", "walk", "beam_hit"],
+    &["walk_word", "walk_node", "resume", "walk", "beam_hit"],
     // SHADER_LIGHT_MISS_HIT
     &[
         "walk_word",
         "walk_node",
+        "resume",
         "walk",
         "light_aim",
         "light_miss_hit",
+    ],
+    // SHADER_LIGHT_SAMPLE_HIT
+    &[
+        "walk_word",
+        "walk_node",
+        "resume",
+        "walk",
+        "light_aim",
+        "sample_light",
+        "sample_put",
+        "sample_hit",
     ],
 ];

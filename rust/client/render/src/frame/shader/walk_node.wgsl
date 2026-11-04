@@ -1,8 +1,8 @@
 // pxl-render/walk_node.wgsl
 
-// What a walk works out of a node, every walk's alike: the eye's words, a node's planes and
-// its index, its bucket, the zoom asked at a distance, a ray's span in a box (pxl-engine
-// cast.rs).
+// What a walk works out of a node, every walk's alike: the eye's words, a ray to walk, where
+// it starts and ends, a node's planes and its index, its bucket, the zoom asked at a distance,
+// a ray's span in a box (pxl-engine cast.rs).
 
 @group(0) @binding(0) var<uniform> eye: array<vec4<u32>, EYE_VEC4S>;
 
@@ -16,6 +16,65 @@ fn eye_f32(k: u32) -> f32 {
 
 fn eye_v3(k: u32) -> vec3<f32> {
   return vec3<f32>(eye_f32(k), eye_f32(k + 1u), eye_f32(k + 2u));
+}
+
+/// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
+/// and other frames', says which asks again (walk.wgsl `revisits`).
+struct Aim {
+  origin: vec3<i32>,
+  dir: vec3<f32>,
+  t_max: f32,
+  range: vec2<u32>,
+  seed: u32,
+}
+
+/// The eye's ray at the tangents `tan_at`.
+fn eye_aim(tan_at: vec2<f32>) -> Aim {
+  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
+  return Aim(
+    vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
+    aimed / length(aimed),
+    eye_f32(FAR),
+    vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
+    mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
+  );
+}
+
+/// The ray's way, its axes it hardly moves along none (`Ray::new`).
+fn ray_dir(aimed: vec3<f32>) -> vec3<f32> {
+  return select(aimed, vec3<f32>(0.0), abs(aimed) < vec3<f32>(1.17549435e-38));
+}
+
+fn ray_inv(dir: vec3<f32>) -> vec3<f32> {
+  return select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
+}
+
+/// Where a walk starts: the node holding where the ray is at `t`, and the nodes its beam ray
+/// visited (`visits`, resume.wgsl).
+struct Start {
+  t: f32,
+  corner: vec3<u32>,
+  zoom: u32,
+  roots: vec3<i32>,
+  visits: u32,
+}
+
+/// From the root of the origin, at 0.
+fn root_start() -> Start {
+  return Start(0.0, vec3<u32>(0u), 0u, vec3<i32>(0), 0u);
+}
+
+/// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
+/// its reach, anything else left.
+struct Walked {
+  ends: u32,
+  zoom: u32,
+  corner: vec3<u32>,
+  roots: vec3<i32>,
+  asset: vec2<u32>,
+  axis: u32,
+  t: f32,
+  visits: u32,
 }
 
 /// Units from the origin at `og` to `p`, in the root `roots` from it (pxl-engine

@@ -18,9 +18,10 @@ pub const LIGHT: u32 = 1;
 pub const OBSERVERS: u32 = 2;
 
 /// An observer's lanes: the nodes its beam rays, its samples and its walk
-/// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walk
-/// again's by hand, those asked of the world (`ASKED`), no slot answering, the
-/// walks by rust-gpu counting none; its pixels or
+/// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walks
+/// that ask the world by hand, its samples' and the light's walk again,
+/// those asked of the world (`ASKED`), no slot answering, the walks by
+/// rust-gpu counting none; its pixels or
 /// slots that took the visible sample, those that walked and those that took
 /// the sky (`TOOK`, `WALKED`, `SKY`), together every one it cast again; the
 /// boxes drawn (`BOXES`).

@@ -10,17 +10,18 @@ mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use keeping::*;
+
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, BUCKET, CLAIMED};
+use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::{eye, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
 };
 
-use keeping::*;
 use real_world::{Built, World, FINEST, NOTCH};
 
 /// Where the eye is, a leaf cell: east of X = 0, by the seam on the far side, a few cells over
@@ -28,6 +29,8 @@ use real_world::{Built, World, FINEST, NOTCH};
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 /// One west of X = 0, a mile from the first over the seam.
 const EYE_WEST: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
+/// By X = 0, where X's roots part.
+const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 
 const SIZE: u32 = 256;
 /// A word a GPU's rounding may move, as tests/walk.rs takes it.
@@ -135,477 +138,6 @@ fn slot_ray(c: &Case, s: &Light, starts: &Starts, slot: [u32; 2]) -> ([i32; 3], 
             spacing: s.spacing(),
         },
     )
-}
-
-fn bytes(words: &[u32]) -> &[u8] {
-    // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
-    unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len() * 4) }
-}
-
-struct Gpu {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-}
-
-impl Gpu {
-    fn buffer(&self, words: &[u32], usage: wgpu::BufferUsages) -> wgpu::Buffer {
-        use wgpu::util::DeviceExt as _;
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytes(words),
-                usage: usage | wgpu::BufferUsages::COPY_SRC,
-            })
-    }
-
-    fn read(&self, from: &wgpu::Buffer) -> Vec<u32> {
-        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: from.size(),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let mut e = self.device.create_command_encoder(&Default::default());
-        e.copy_buffer_to_buffer(from, 0, &staging, 0, from.size());
-        self.queue.submit([e.finish()]);
-        staging
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, |r| r.unwrap());
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
-        let v = staging.slice(..).get_mapped_range().unwrap();
-        v.as_chunks::<4>()
-            .0
-            .iter()
-            .map(|b| u32::from_le_bytes(*b))
-            .collect()
-    }
-
-    fn pipeline(&self, source: &str, entry: &str) -> wgpu::ComputePipeline {
-        let module = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(entry),
-                source: wgpu::ShaderSource::Wgsl(source.into()),
-            });
-        self.device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry),
-                layout: None,
-                module: &module,
-                entry_point: Some(entry),
-                compilation_options: Default::default(),
-                cache: None,
-            })
-    }
-
-    fn dispatch(
-        &self,
-        p: &wgpu::ComputePipeline,
-        binds: &[(u32, wgpu::BindingResource)],
-        groups: [u32; 2],
-    ) {
-        let entries: Vec<_> = binds
-            .iter()
-            .map(|(b, resource)| wgpu::BindGroupEntry {
-                binding: *b,
-                resource: resource.clone(),
-            })
-            .collect();
-        let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &p.get_bind_group_layout(0),
-            entries: &entries,
-        });
-        let mut e = self.device.create_command_encoder(&Default::default());
-        {
-            let mut pass = e.begin_compute_pass(&Default::default());
-            pass.set_pipeline(p);
-            pass.set_bind_group(0, &group, &[]);
-            pass.dispatch_workgroups(groups[0], groups[1], 1);
-        }
-        self.queue.submit([e.finish()]);
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
-    }
-
-    fn map(&self) -> wgpu::Texture {
-        self.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: SIZE,
-                height: SIZE,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R32Uint,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        })
-    }
-
-    fn read_map(&self, map: &wgpu::Texture) -> Vec<u32> {
-        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: u64::from(SIZE * SIZE * 4),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let mut e = self.device.create_command_encoder(&Default::default());
-        e.copy_texture_to_buffer(
-            map.as_image_copy(),
-            wgpu::TexelCopyBufferInfo {
-                buffer: &staging,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(SIZE * 4),
-                    rows_per_image: None,
-                },
-            },
-            map.size(),
-        );
-        self.queue.submit([e.finish()]);
-        staging
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, |r| r.unwrap());
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
-        let v = staging.slice(..).get_mapped_range().unwrap();
-        v.as_chunks::<4>()
-            .0
-            .iter()
-            .map(|b| u32::from_le_bytes(*b))
-            .collect()
-    }
-}
-
-/// What a slot's kept before the walks, and what it must be after.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord)]
-enum Trap {
-    /// Held at other zooms by an earlier frame: written over.
-    OtherFrame,
-    /// Held at other zooms by this frame's samples: stands, the node kept beside it.
-    Beside,
-    /// Kept by this pass, a false answer: not read, and not written.
-    OwnPass,
-    /// At the zooms asked, one word its stamp covers over, as a walk writing leaves them:
-    /// asked of the world, and not written.
-    TornWords,
-    /// Kept by an earlier frame, the world's answer: read, and stands.
-    Kept,
-    /// Kept by this frame's samples, the world's answer: read, and stands.
-    KeptThisFrame,
-    /// Kept by this frame's samples, a false answer: what the walk takes, and stands.
-    KeptFalse,
-    /// A split a moved brick lay under: at no zooms, written over.
-    Forgotten,
-    /// A walk's claim: no key to read, and it stands; the node kept in the next free slot.
-    Claimed,
-    /// Its bucket full of other nodes: the one its hash names written over, the rest stand.
-    Victim,
-    /// Its bucket all claimed: none written.
-    AllClaimed,
-    /// Its first slot another node's: the next free one taken.
-    NextFree,
-    /// Its bucket full of nodes a word apart at the zooms asked, false: none read, the one
-    /// its hash names written over.
-    NotIt,
-}
-
-/// The node `trap` stands on: its zoom and index, the band asked, the first slot of its bucket.
-#[derive(Clone, Copy)]
-struct Laid {
-    trap: Trap,
-    zoom: Zoom,
-    c: [i32; 3],
-    band: Zoom,
-    first: u32,
-}
-
-/// Some of the nodes `nodes` the walks visit set up, one a kind a few in turn, each alone in
-/// its bucket, so no other node's slot goes with it; a false answer only on a node one band
-/// asks, as nothing then takes its slot, in whichever order the walks run.
-fn lay_traps(table: &mut [u32], w: World, cuts: [Cut; 2], nodes: &Met) -> Vec<Laid> {
-    const KINDS: [Trap; 13] = [
-        Trap::OtherFrame,
-        Trap::Beside,
-        Trap::OwnPass,
-        Trap::TornWords,
-        Trap::Kept,
-        Trap::KeptThisFrame,
-        Trap::KeptFalse,
-        Trap::Forgotten,
-        Trap::Claimed,
-        Trap::Victim,
-        Trap::AllClaimed,
-        Trap::NextFree,
-        Trap::NotIt,
-    ];
-    let mut bands: BTreeMap<(Zoom, [i32; 3]), u32> = BTreeMap::new();
-    for &(z, c, _) in nodes.keys() {
-        *bands.entry((z, c)).or_default() += 1;
-    }
-    let mut in_bucket: BTreeMap<u32, u32> = BTreeMap::new();
-    for &(z, c, _) in nodes.keys() {
-        if pyramid::keeps(z, c) {
-            *in_bucket.entry(pyramid::entry_of(z, c)).or_default() += 1;
-        }
-    }
-    let mut laid = Vec::new();
-    let mut buckets = BTreeSet::new();
-    let earlier = pyramid::tag(FRAME - 1, pyramid::LIGHT_SAMPLES_PASS);
-    let this_samples = pyramid::tag(FRAME, pyramid::LIGHT_SAMPLES_PASS);
-    let own = pyramid::tag(FRAME, pyramid::LIGHT_MISSED_PASS);
-    let mut turn = 0usize;
-    let mut torn = 0u32;
-    for (n, &(zoom, c, [_, band])) in nodes.keys().enumerate() {
-        // Below the top, whose nodes every ray meets, one in so many.
-        if zoom < 12 || !pyramid::keeps(zoom, c) || n % 13 != 0 {
-            continue;
-        }
-        let first = pyramid::entry_of(zoom, c);
-        if in_bucket[&first] != 1 || !buckets.insert(first) {
-            continue;
-        }
-        let trap = KINDS[turn % KINDS.len()];
-        turn += 1;
-        if matches!(
-            trap,
-            Trap::KeptFalse | Trap::OwnPass | Trap::TornWords | Trap::NotIt
-        ) && bands[&(zoom, c)] != 1
-        {
-            continue;
-        }
-        let (a, words) = truth(w, cuts, zoom, c, [band, band]);
-        let other = [band - 1, band - 1];
-        let (at_other, words_other) = truth(w, cuts, zoom, c, other);
-        let wrong = In {
-            kind: Kind::Cell,
-            asset: if a.kind == Kind::Cell && !answer::transparent(a.asset[0]) {
-                answer::AIR
-            } else {
-                [value::OBJECTS[0], 0]
-            },
-        };
-        // Another node of the bucket, at a zoom no walk here asks.
-        let stranger = |k: i32| [c[0] ^ (k + 1), c[1], c[2]];
-        match trap {
-            Trap::OtherFrame => {
-                put_entry(
-                    table,
-                    first + 1,
-                    zoom,
-                    c,
-                    pyramid::key(earlier, other),
-                    &at_other,
-                    words_other,
-                );
-            }
-            Trap::Beside => {
-                put_entry(
-                    table,
-                    first,
-                    zoom,
-                    c,
-                    pyramid::key(this_samples, other),
-                    &at_other,
-                    words_other,
-                );
-            }
-            Trap::OwnPass => {
-                put_entry(
-                    table,
-                    first,
-                    zoom,
-                    c,
-                    pyramid::key(own, [band, band]),
-                    &wrong,
-                    words,
-                );
-            }
-            Trap::TornWords => {
-                // A false answer and its stamp, then one word its stamp covers over: taken if
-                // that word goes unread.
-                let key = pyramid::key(this_samples, [band, band]);
-                put_entry(table, first, zoom, c, key, &wrong, words);
-                let e = pyramid::entry_at(first) as usize;
-                let kind = e + pyramid::W_KIND as usize;
-                let asset = e + pyramid::W_ASSET as usize;
-                let handed = e + pyramid::W_INHERITANCE as usize;
-                let stamp =
-                    |key, zoom, c| pyramid::stamped(wrong.kind, key, wrong.asset, words, zoom, c);
-                torn += 1;
-                match torn % 13 {
-                    0 => table[kind] = stamp(pyramid::key(this_samples, [band - 1, band]), zoom, c),
-                    1 => table[kind] = stamp(pyramid::key(this_samples, [band, band - 1]), zoom, c),
-                    2 => table[kind] ^= 1,
-                    3 => table[asset] ^= 1,
-                    4 => table[asset + 1] ^= 1,
-                    5 => table[handed] ^= 1,
-                    6 => table[handed + 1] ^= 1,
-                    7 => table[handed + 2] ^= 1,
-                    8 => table[handed + 3] ^= 1,
-                    9 => table[kind] = stamp(key, zoom + 1, c),
-                    10 => table[kind] = stamp(key, zoom, [c[0] ^ 1, c[1], c[2]]),
-                    11 => table[kind] = stamp(key, zoom, [c[0], c[1] ^ 1, c[2]]),
-                    _ => table[kind] = stamp(key, zoom, [c[0], c[1], c[2] ^ 1]),
-                }
-            }
-            Trap::Kept => {
-                put_entry(
-                    table,
-                    first + 1,
-                    zoom,
-                    c,
-                    pyramid::key(earlier, [band, band]),
-                    &a,
-                    words,
-                );
-            }
-            Trap::KeptThisFrame => {
-                put_entry(
-                    table,
-                    first,
-                    zoom,
-                    c,
-                    pyramid::key(this_samples, [band, band]),
-                    &a,
-                    words,
-                );
-            }
-            Trap::KeptFalse => {
-                put_entry(
-                    table,
-                    first,
-                    zoom,
-                    c,
-                    pyramid::key(this_samples, [band, band]),
-                    &wrong,
-                    words,
-                );
-            }
-            Trap::Forgotten => {
-                let key = pyramid::forgotten_split(pyramid::key(earlier, [band, band]));
-                put_entry(table, first, zoom, c, key, &a, words);
-            }
-            Trap::Claimed => {
-                put_entry(table, first, zoom, c, CLAIMED, &a, words);
-            }
-            Trap::Victim => {
-                for k in 0..BUCKET {
-                    let key = pyramid::key(earlier, [band, band]);
-                    put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
-                }
-            }
-            Trap::AllClaimed => {
-                for k in 0..BUCKET {
-                    put_entry(table, first + k, zoom, c, CLAIMED, &a, words);
-                }
-            }
-            Trap::NextFree => {
-                let key = pyramid::key(earlier, [band, band]);
-                put_entry(table, first, 40, stranger(0), key, &a, words);
-            }
-            Trap::NotIt => {
-                // False but for the one a walk writes over, which a thread may read as it does.
-                let key = pyramid::key(earlier, [band, band]);
-                let v = pyramid::victim(zoom, c);
-                let apart = [
-                    (zoom + 1, c),
-                    (zoom, [c[0] ^ 1, c[1], c[2]]),
-                    (zoom, [c[0], c[1] ^ 1, c[2]]),
-                    (zoom, [c[0], c[1], c[2] ^ 1]),
-                ];
-                for (k, (z, at)) in apart.into_iter().enumerate() {
-                    let said = if k as u32 == v { &a } else { &wrong };
-                    put_entry(table, first + k as u32, z, at, key, said, words);
-                }
-            }
-        }
-        laid.push(Laid {
-            trap,
-            zoom,
-            c,
-            band,
-            first,
-        });
-    }
-    laid
-}
-
-/// `table` with the false answers `traps` laid gone, for walks other than the frame's they
-/// were laid for: another's may write over them in any order.
-fn truthful(table: &mut [u32], traps: &[Laid], tag: u32) {
-    for l in traps {
-        if matches!(
-            l.trap,
-            Trap::OwnPass | Trap::TornWords | Trap::KeptFalse | Trap::NotIt
-        ) {
-            for k in 0..BUCKET {
-                let w = pyramid::entry_at(l.first + k) as usize;
-                if table[w] != CLAIMED
-                    && (l.trap == Trap::OwnPass || pyramid::tag_of(table[w]) != tag)
-                {
-                    table[w] = 0;
-                }
-            }
-        }
-    }
-}
-
-/// The slots of `table` holding the node at `band`.
-fn holding(table: &[u32], l: &Laid, tag: u32) -> Vec<u32> {
-    (0..BUCKET)
-        .filter(|&k| {
-            let w = pyramid::entry_at(l.first + k) as usize;
-            let key = table[w];
-            key != CLAIMED
-                && pyramid::tag_of(key) == tag
-                && pyramid::holds(key, [l.band, l.band])
-                && is_node(table, w, l.zoom, l.c)
-        })
-        .collect()
-}
-
-/// Whether `table` holds to what `l` was laid for, no other node asked in its bucket. Two
-/// walks may keep a node twice, one finding the other's slot claimed, as `Writing`'s do.
-fn trap_holds(table: &[u32], before: &[u32], l: &Laid, tag: u32) -> bool {
-    let same = |k: u32| {
-        let w = pyramid::entry_at(l.first + k) as usize;
-        let n = pyramid::ENTRY_WORDS as usize;
-        table[w..w + n] == before[w..w + n]
-    };
-    let new = holding(table, l, tag);
-    match l.trap {
-        Trap::OtherFrame => new.contains(&1),
-        Trap::Forgotten => new.contains(&0),
-        Trap::Beside | Trap::Claimed | Trap::NextFree => same(0) && new.contains(&1),
-        Trap::OwnPass
-        | Trap::TornWords
-        | Trap::Kept
-        | Trap::KeptThisFrame
-        | Trap::KeptFalse
-        | Trap::AllClaimed => (0..BUCKET).all(same),
-        Trap::Victim | Trap::NotIt => {
-            let v = pyramid::victim(l.zoom, l.c);
-            (0..BUCKET).all(|k| k == v || same(k)) && new == [v]
-        }
-    }
-}
-
-/// The world's buffers on the device.
-struct Bound {
-    clip: wgpu::Buffer,
-    ground: wgpu::Buffer,
-    palette: wgpu::Buffer,
-    shards: wgpu::Buffer,
-    placed: wgpu::Buffer,
-    pool: wgpu::Buffer,
 }
 
 fn cases(b: &Built) -> Vec<Case> {
@@ -965,7 +497,7 @@ fn hand_light_miss_answers_as_light_miss_cs() {
     let store = wgpu::BufferUsages::STORAGE;
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-    let bound = Bound {
+    let bound = WorldBufs {
         clip: gpu.buffer(&clip_flat, store),
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
@@ -982,7 +514,7 @@ fn hand_light_miss_answers_as_light_miss_cs() {
     }
     // West of X = 0, every node's X negative as the world names it: kept, found and read.
     let west = real_world::build(EYE_WEST);
-    let bound_west = Bound {
+    let bound_west = WorldBufs {
         clip: gpu.buffer(
             &west
                 .clipmap
@@ -1027,6 +559,50 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         &case,
         &mut failed,
     );
+    // Over X = 0, where X's roots part: rays end in the next root.
+    let zero = real_world::build(EYE_ZERO);
+    let bound_zero = WorldBufs {
+        clip: gpu.buffer(
+            &zero
+                .clipmap
+                .iter()
+                .flatten()
+                .map(|&v| v as u32)
+                .collect::<Vec<u32>>(),
+            store,
+        ),
+        ground: gpu.buffer(&zero.ground, store),
+        palette: gpu.buffer(&zero.palette, store),
+        shards: gpu.buffer(&flat_u(&zero.shards), store),
+        placed: gpu.buffer(&zero.overwrites, store),
+        pool: gpu.buffer(&zero.pool, store),
+    };
+    let case = Case {
+        name: "over X = 0",
+        origin: q8([
+            10,
+            EYE_ZERO[1] + 90,
+            zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+        ]),
+        dir: [0.3, 0.2, -0.93],
+        side: 1.0,
+        back: 60.0,
+        t_max: 400.0,
+        range: [8, FINEST],
+        corner: [1300, -900],
+        cuts: [Cut::NONE; 2],
+        eye_first: false,
+        least: &[("ended in another root", 1467), ("slots", 19850)],
+    };
+    run_case(
+        &gpu,
+        &bound_zero,
+        &miss,
+        &hit,
+        zero.world(),
+        &case,
+        &mut failed,
+    );
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
@@ -1036,7 +612,7 @@ const STRUCK_EVERY: u32 = 11;
 
 fn run_case(
     gpu: &Gpu,
-    b: &Bound,
+    b: &WorldBufs,
     miss: &wgpu::ComputePipeline,
     hit: &wgpu::ComputePipeline,
     w: World,
@@ -1095,6 +671,7 @@ fn run_case(
             table: &mut empty,
             tag,
             asks: Asks::default(),
+            writes: true,
             met: Some(&mut met),
         };
         for k in 0..n {
@@ -1115,6 +692,7 @@ fn run_case(
             table: &mut table0,
             tag: pyramid::tag(FRAME, pyramid::MISSED_PASS),
             asks: Asks::default(),
+            writes: true,
             met: None,
         };
         let detail = Detail {
@@ -1139,7 +717,17 @@ fn run_case(
             }
         }
     }
-    let traps = lay_traps(&mut table0, w, case.cuts, &met);
+    let traps = lay_traps(
+        &mut table0,
+        w,
+        case.cuts,
+        &met,
+        [
+            pyramid::tag(FRAME - 1, pyramid::LIGHT_SAMPLES_PASS),
+            pyramid::tag(FRAME, pyramid::LIGHT_SAMPLES_PASS),
+            tag,
+        ],
+    );
 
     // The reference: a slot at a time, over that table.
     let mut table_ref = table0.clone();
@@ -1154,6 +742,7 @@ fn run_case(
             table: &mut table_ref,
             tag,
             asks: Asks::default(),
+            writes: true,
             met: Some(&mut met_ref),
         };
         for k in 0..n {
@@ -1187,7 +776,7 @@ fn run_case(
     };
 
     // The hand pass, over the same table.
-    let map = gpu.map();
+    let map = gpu.map(SIZE);
     let view = map.create_view(&wgpu::TextureViewDescriptor {
         dimension: Some(wgpu::TextureViewDimension::D2Array),
         ..Default::default()
@@ -1202,6 +791,17 @@ fn run_case(
     );
     let got = gpu.read_map(&map);
     let table_hand = gpu.read(&table_buf);
+    // A slot left claimed: the dispatch did not run to its end, and its words are no answer.
+    let claimed_before = left_claimed(&table0).len();
+    let claimed = left_claimed(&table_hand);
+    if claimed.len() > claimed_before {
+        failed.push(format!(
+            "{name}: the pass did not run to its end: {} slots left claimed, first {:?}",
+            claimed.len() - claimed_before,
+            claimed.first()
+        ));
+        return;
+    }
 
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
     let mut read_only = table0.clone();
@@ -1278,8 +878,7 @@ fn run_case(
     for ((zoom, c, key), (e, v)) in &hand_kept {
         let (zoom, c, key) = (*zoom, *c, *key);
         let first = pyramid::entry_of(zoom, c);
-        let far = (key >> pyramid::TAG_BITS) & ((1 << pxl_engine::ZOOM_BITS) - 1);
-        let near = key >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS);
+        let [far, near] = key_zooms(key);
         let (a, words) = truth(w, case.cuts, zoom, c, [far, near]);
         let k = pyramid::W_INHERITANCE as usize;
         let at = pyramid::W_ASSET as usize;
@@ -1338,13 +937,7 @@ fn run_case(
     }
     let by_hand: BTreeSet<_> = hand_kept
         .keys()
-        .map(|k| {
-            (
-                k.0,
-                k.1,
-                [k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS); 2],
-            )
-        })
+        .map(|k| (k.0, k.1, key_zooms(k.2)))
         .collect();
     let grazed = |k: &(Zoom, [i32; 3], [Zoom; 2])| met_ref.get(k).copied().unwrap_or(0) < SURE;
     let mut alone: BTreeSet<u32> = asked_in
@@ -1389,11 +982,7 @@ fn run_case(
         .filter(|k| !hand_kept.contains_key(*k))
         .map(|k| {
             met_ref
-                .get(&(
-                    k.0,
-                    k.1,
-                    [k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS); 2],
-                ))
+                .get(&(k.0, k.1, key_zooms(k.2)))
                 .copied()
                 .unwrap_or(0)
         })
@@ -1403,7 +992,7 @@ fn run_case(
     // The slots laid, as the Rust's rule leaves each.
     let mut trap_cnt: BTreeMap<Trap, (u32, u32, u32)> = BTreeMap::new();
     for l in &traps {
-        if !alone.contains(&l.first) || !met_ref.contains_key(&(l.zoom, l.c, [l.band; 2])) {
+        if !alone.contains(&l.first) || !met_ref.contains_key(&(l.zoom, l.c, l.zooms)) {
             continue;
         }
         let e = trap_cnt.entry(l.trap).or_default();
@@ -1437,11 +1026,11 @@ fn run_case(
     next[pyramid::FRAME as usize] = FRAME + 1;
     next[lane] = 0;
     next[asked_lane] = 0;
-    truthful(&mut next, &traps, tag);
+    strike_traps(&mut next, &traps, tag);
     let next_buf = gpu.buffer(&next, store_of());
     let list2 = gpu.buffer(&list, store_of());
     let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0], store_of());
-    let map2 = gpu.map();
+    let map2 = gpu.map(SIZE);
     let view2 = map2.create_view(&wgpu::TextureViewDescriptor {
         dimension: Some(wgpu::TextureViewDimension::D2Array),
         ..Default::default()
@@ -1479,6 +1068,7 @@ fn run_case(
         table: &mut table_next,
         tag: pyramid::tag(FRAME + 1, pyramid::LIGHT_MISSED_PASS),
         asks: Asks::default(),
+        writes: true,
         met: None,
     };
     let mut want2 = vec![0u32; n as usize];
@@ -1498,6 +1088,12 @@ fn run_case(
     );
     let got2 = gpu.read_map(&map2);
     let table_after = gpu.read(&next_buf);
+    if left_claimed(&table_after).len() > left_claimed(&next).len() {
+        failed.push(format!(
+            "{name}: the next frame's pass did not run to its end"
+        ));
+        return;
+    }
     let mut next_differ = 0u32;
     let mut next_stepped = 0u32;
     let mut first_next = None;
@@ -1664,6 +1260,7 @@ fn a_step_over(
             table: &mut *table,
             tag,
             asks: Asks::default(),
+            writes: true,
             met: None,
         };
         let t = cast::first(&mut q, from, r, d, Until::Opaque);
@@ -1697,6 +1294,7 @@ fn a_step_over(
         table: &mut *table,
         tag,
         asks: Asks::default(),
+        writes: true,
         met: None,
     };
     let t = cast::first(&mut q, o, &r, d, Until::Opaque);
@@ -1731,6 +1329,7 @@ fn tell_slot(
         table: &mut before.to_vec(),
         tag: pyramid::tag(FRAME + 2, pyramid::LIGHT_MISSED_PASS),
         asks: Asks::default(),
+        writes: true,
         met: None,
     };
     let t = cast::first(&mut q, o, &r, d, Until::Opaque);
@@ -1747,7 +1346,7 @@ fn tell_slot(
 
 /// `light_miss_cs`'s group, over the eye, the head, the table and the list.
 fn miss_binds<'a>(
-    b: &'a Bound,
+    b: &'a WorldBufs,
     [eye, head, table, list]: [&'a wgpu::Buffer; 4],
     view: &'a wgpu::TextureView,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
@@ -1811,8 +1410,4 @@ fn forget_reads_a_stamped_kind() {
         pyramid::forgotten_split(key)
     );
     assert_eq!(out[pyramid::entry_at(44) as usize], 0);
-}
-
-fn store_of() -> wgpu::BufferUsages {
-    wgpu::BufferUsages::STORAGE
 }

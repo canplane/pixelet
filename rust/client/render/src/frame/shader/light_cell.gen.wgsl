@@ -27,7 +27,7 @@ struct type_19 {
 }
 
 struct type_22 {
-    member: array<vec4<i32>, 46>,
+    member: array<vec4<i32>, 48>,
 }
 
 struct type_23 {
