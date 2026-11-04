@@ -918,6 +918,7 @@ fn assemble(out: &Path) {
     let asked = [
         "walk_word",
         "world_word",
+        "world_rule",
         "world",
         "world_split",
         "world_asked",
