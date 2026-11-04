@@ -14,19 +14,9 @@ struct Px {
 }
 
 fn px(id: vec2<u32>, size: vec2<u32>) -> Px {
-  let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let ndc = (vec2<f32>(id) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);
-  let tan_at = vec2<f32>(ndc.x, -ndc.y) * tan_xy;
-  let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
-  let s = eye_f32(GRID);
-  let cell = min(
-    vec2<u32>(max(floor(vec2<f32>(tan_at.x + tan_xy.x, tan_xy.y - tan_at.y) / s), vec2<f32>(0.0))),
-    span_n - vec2<u32>(1u),
-  );
+  let tan_at = px_tan(id, size);
   let aim = eye_aim(tan_at);
-  let at_cell = eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
-  return Px(aim, resumed(aim, at_cell, LINE_WORDS, NONE));
+  return Px(aim, resumed(aim, cell_start(grid_cell(tan_at)), LINE_WORDS, NONE));
 }
 
 /// The face the ray aimed `aim` entered where walk `w` stopped (`world::face_of`).
@@ -43,7 +33,7 @@ fn hit_fill(w: Walked) -> u32 {
 /// Walk `w`'s hit at pixel `id`, entered through `face`, put as hit `r` for what lies about
 /// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`).
 fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
-  let k = eye_word(GRID + GRID_HITS_AT) + r * HIT_WORDS;
+  let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
   beams[k + HIT_NODE + NODE_CORNER] = w.corner.x;
   beams[k + HIT_NODE + NODE_CORNER + 1u] = w.corner.y;

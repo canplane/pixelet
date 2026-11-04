@@ -83,13 +83,16 @@ pub struct Grid {
     pub corners_at: u32,
 }
 
-/// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `radius`,
-/// `radius_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
-/// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`, then
-/// `lattice` (`GRID_LATTICE`), `lefts_at`, `misses_at` and `corners_at`: whole
-/// vec4s.
-pub const GRID_WORDS: usize = 20;
+/// The grid's words among the eye's (`eye::GRID`), where each field lies
+/// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
+/// `past`, `span`, `corners` and `samples`, across then up, the words where
+/// the cells' starts, the samples' hits, the boxes' asks, the missed pixels'
+/// hits and their asks start, `lattice`, and where the lists the walk over
+/// the observed pyramid alone leaves start: whole vec4s.
+pub const GRID_S: usize = 0;
 pub const GRID_KEEP: usize = 1;
+pub const GRID_RADIUS: usize = 2;
+pub const GRID_RADIUS_TAN: usize = 3;
 pub const GRID_PAST: usize = 4;
 pub const GRID_SPAN: usize = 5;
 pub const GRID_CORNERS: usize = 7;
@@ -98,10 +101,12 @@ pub const GRID_CELLS_AT: usize = 11;
 pub const GRID_SAMPLES_AT: usize = 12;
 pub const GRID_ASKS_AT: usize = 13;
 pub const GRID_HITS_AT: usize = 14;
+pub const GRID_HIT_ASKS_AT: usize = 15;
 pub const GRID_LATTICE: usize = 16;
 pub const GRID_LEFTS_AT: usize = 17;
 pub const GRID_MISSES_AT: usize = 18;
 pub const GRID_CORNERS_AT: usize = 19;
+pub const GRID_WORDS: usize = 20;
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -158,29 +163,34 @@ impl Grid {
 
     /// Its words (`GRID_WORDS`), as `of_words` reads them.
     pub fn words(&self) -> [u32; GRID_WORDS] {
-        let f = |v: f32| v.to_bits();
-        [
-            f(self.s),
-            f(self.keep),
-            f(self.radius),
-            f(self.radius_tan),
-            self.past,
-            self.span[0],
-            self.span[1],
-            self.corners[0],
-            self.corners[1],
-            self.samples[0],
-            self.samples[1],
+        let mut w = [0; GRID_WORDS];
+        (w[GRID_S], w[GRID_KEEP], w[GRID_RADIUS], w[GRID_RADIUS_TAN]) = (
+            self.s.to_bits(),
+            self.keep.to_bits(),
+            self.radius.to_bits(),
+            self.radius_tan.to_bits(),
+        );
+        w[GRID_PAST] = self.past;
+        (w[GRID_SPAN], w[GRID_SPAN + 1]) = (self.span[0], self.span[1]);
+        (w[GRID_CORNERS], w[GRID_CORNERS + 1]) = (self.corners[0], self.corners[1]);
+        (w[GRID_SAMPLES], w[GRID_SAMPLES + 1]) = (self.samples[0], self.samples[1]);
+        (
+            w[GRID_CELLS_AT],
+            w[GRID_SAMPLES_AT],
+            w[GRID_ASKS_AT],
+            w[GRID_HITS_AT],
+            w[GRID_HIT_ASKS_AT],
+        ) = (
             self.cells_at,
             self.samples_at,
             self.asks_at,
             self.hits_at,
             self.hit_asks_at,
-            self.lattice,
-            self.lefts_at,
-            self.misses_at,
-            self.corners_at,
-        ]
+        );
+        w[GRID_LATTICE] = self.lattice;
+        (w[GRID_LEFTS_AT], w[GRID_MISSES_AT], w[GRID_CORNERS_AT]) =
+            (self.lefts_at, self.misses_at, self.corners_at);
+        w
     }
 
     /// The grid at the screen's tangents `tan` from its words `w`.
@@ -188,23 +198,23 @@ impl Grid {
         let f = f32::from_bits;
         Grid {
             tan,
-            s: f(w[0]),
-            keep: f(w[1]),
-            radius: f(w[2]),
-            radius_tan: f(w[3]),
-            past: w[4],
-            span: [w[5], w[6]],
-            corners: [w[7], w[8]],
-            samples: [w[9], w[10]],
+            s: f(w[GRID_S]),
+            keep: f(w[GRID_KEEP]),
+            radius: f(w[GRID_RADIUS]),
+            radius_tan: f(w[GRID_RADIUS_TAN]),
+            past: w[GRID_PAST],
+            span: [w[GRID_SPAN], w[GRID_SPAN + 1]],
+            corners: [w[GRID_CORNERS], w[GRID_CORNERS + 1]],
+            samples: [w[GRID_SAMPLES], w[GRID_SAMPLES + 1]],
             lattice: w[GRID_LATTICE],
-            cells_at: w[11],
-            samples_at: w[12],
+            cells_at: w[GRID_CELLS_AT],
+            samples_at: w[GRID_SAMPLES_AT],
             asks_at: w[GRID_ASKS_AT],
-            hits_at: w[14],
-            hit_asks_at: w[15],
-            lefts_at: w[17],
-            misses_at: w[18],
-            corners_at: w[19],
+            hits_at: w[GRID_HITS_AT],
+            hit_asks_at: w[GRID_HIT_ASKS_AT],
+            lefts_at: w[GRID_LEFTS_AT],
+            misses_at: w[GRID_MISSES_AT],
+            corners_at: w[GRID_CORNERS_AT],
         }
     }
 

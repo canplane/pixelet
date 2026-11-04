@@ -135,7 +135,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       } else if (other_zooms) {
         // No box of it read. A beam ray stops at a split too narrow to share, which
         // a box would decide: left.
-        let width = eye_f32(GRID) * length(far_v);
+        let width = eye_f32(GRID + GRID_S) * length(far_v);
         let side_w = hi.x - lo.x;
         if (beam && side_w * side_w < NARROW * NARROW * width * width) {
           ends = 4u;
@@ -150,7 +150,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         let past = vec3<u32>((asset.x >> BOX_BITS) & m, asset.y & m, (asset.y >> (2u * BOX_BITS)) & m) + vec3<u32>(1u);
         // A beam ray's width at its far corner: it stops at a split it may not
         // share with the rays about it, and clears one it clears by that.
-        let width = select(0.0, eye_f32(GRID) * length(far_v), beam);
+        let width = select(0.0, eye_f32(GRID + GRID_S) * length(far_v), beam);
         let side_w = hi.x - lo.x;
         let narrow = beam && side_w * side_w < NARROW * NARROW * width * width;
         let grown = NARROW * width;

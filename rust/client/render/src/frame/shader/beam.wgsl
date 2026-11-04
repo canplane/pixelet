@@ -24,7 +24,7 @@ fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   // Its tangents (`Grid::corner`).
   let past = f32(eye_word(GRID + GRID_PAST));
-  let s = eye_f32(GRID);
+  let s = eye_f32(GRID + GRID_S);
   let tx = -eye_f32(TAN) + (f32(c.x) - past) * s;
   let ty = eye_f32(TAN + 1u) - (f32(c.y) - past) * s;
   let idx = c.y * corners.x + c.x;

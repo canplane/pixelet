@@ -885,6 +885,8 @@ fn hand_world_answers_as_the_rust() {
         &[
             words,
             include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
+            include_str!(concat!(env!("OUT_DIR"), "/shader/eye_bind.wgsl")),
+            include_str!(concat!(env!("OUT_DIR"), "/shader/grid.wgsl")),
             include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
             include_str!(concat!(env!("OUT_DIR"), "/shader/side.wgsl")),
             include_str!(concat!(env!("OUT_DIR"), "/shader/resume.wgsl")),

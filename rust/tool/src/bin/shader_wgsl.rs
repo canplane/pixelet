@@ -133,7 +133,7 @@ if [ {fresh} = true ] || [ ! -f $made/done ]; then
   cargo run -q --release --locked -p pxl-shader-build
   rm -rf /made/.part
   mkdir /made/.part
-  cp {SPVS}/*.wgsl /made/.part/
+  for f in {SPVS}/*.wgsl; do if [ -e \"$f\" ]; then cp \"$f\" /made/.part/; fi; done
   if [ -f $made/done ]; then
     if ! diff -r -x done /made/.part $made >/dev/null; then
       echo \"the build differs from what the machine made of {digest} before\" >&2

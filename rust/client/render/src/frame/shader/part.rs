@@ -79,6 +79,8 @@ pub const SHADER_WAY_RETURN: u32 = 38;
 /// The camera grid's beam rays `SHADER_BEAM_HIT` left, a thread each, walked asking the
 /// world, by hand (beam.wgsl): its one compute entry.
 pub const SHADER_BEAM: u32 = 39;
+/// Where each of the camera grid's cells' rays start off its beam rays, by hand
+/// (cell.wgsl): its one compute entry.
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
 /// observed pyramid, and the pyramid forgotten (pxl-engine `pyramid`), by
@@ -171,7 +173,8 @@ pub const SHADER_LOCATION_ZONE_MARK: u32 = 71;
 pub const SHADER_LOCATION_BEACON_MARK: u32 = 72;
 /// The missed pixels' hits whose faces are asked once a square of them,
 /// the one of each square that asks listed (pxl-engine `beam::HIT_WORDS`), and
-/// the faces asked put at their pixels: compute entries.
+/// the faces asked put at their pixels, by hand (hit_lead.wgsl,
+/// hit_faces.wgsl): compute entries.
 pub const SHADER_HIT_LEAD: u32 = 73;
 pub const SHADER_HIT_FACES: u32 = 74;
 /// The indirect args of a quad a tile of the box the frame's marks cover
@@ -349,7 +352,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "screen_shade"
     ],
     // SHADER_CAST
-    &["walk_word", "tile_word", "walk_node", "side", "cast"],
+    &[
+        "walk_word",
+        "tile_word",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "cast",
+    ],
     // SHADER_BOUND
     &[
         "world_word",
@@ -379,6 +389,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "decor_word",
+        "eye_bind",
         "clipmap",
         "seed",
         "clip",
@@ -397,6 +408,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "decor_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -487,6 +499,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -504,11 +517,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "beam",
     ],
     // SHADER_CELL
-    &["cell.gen"],
+    &["walk_word", "eye_bind", "grid", "cell"],
     // SHADER_MISS
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -522,6 +537,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world",
         "world_split",
         "ask",
+        "hit",
         "miss_word",
         "miss",
     ],
@@ -531,6 +547,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -551,6 +569,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "side",
         "light_aim",
@@ -570,6 +589,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "palette",
         "brick",
         "level",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -587,6 +607,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "raster_box",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -600,6 +622,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -613,6 +637,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world",
         "world_split",
         "ask",
+        "hit",
         "miss_word",
         "miss",
     ],
@@ -620,6 +645,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
         "walk_node",
         "clipmap",
         "seed",
@@ -635,6 +661,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MARK
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "side",
         "light_aim",
@@ -648,6 +675,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "decor_word",
+        "eye_bind",
         "walk_node",
         "side",
         "seed",
@@ -661,6 +689,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "decor_word",
+        "eye_bind",
         "walk_node",
         "side",
         "light_aim",
@@ -718,6 +747,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_SLIDE
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "side",
         "light_aim",
@@ -741,15 +771,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_mark",
     ],
     // SHADER_HIT_LEAD
-    &["hit_lead.gen"],
+    &["walk_word", "ray", "eye_bind", "grid", "hit", "hit_lead"],
     // SHADER_HIT_FACES
-    &["hit_faces.gen"],
+    &["walk_word", "ray", "eye_bind", "hit", "hit_faces"],
     // SHADER_BOX_ARGS
     &["box_args"],
     // SHADER_LIGHT_BEAM
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -771,6 +802,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_CELL
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "light_aim",
         "light_list",
@@ -780,6 +812,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -802,6 +835,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "raster_box",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -813,6 +847,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SAMPLE_HIT
     &[
         "walk_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -824,16 +860,20 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MISS_HIT
     &[
         "walk_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
         "walk",
+        "hit",
         "miss_word",
         "miss_hit",
     ],
     // SHADER_BEAM_HIT
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",
@@ -843,6 +883,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MISS_HIT
     &[
         "walk_word",
+        "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "resume",
@@ -853,6 +895,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_SAMPLE_HIT
     &[
         "walk_word",
+        "eye_bind",
         "walk_node",
         "side",
         "resume",

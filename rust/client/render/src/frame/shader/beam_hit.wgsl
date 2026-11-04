@@ -14,7 +14,7 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let past = f32(eye_word(GRID + GRID_PAST));
-  let s = eye_f32(GRID);
+  let s = eye_f32(GRID + GRID_S);
   let tx = -eye_f32(TAN) + (f32(id.x) - past) * s;
   let ty = eye_f32(TAN + 1u) - (f32(id.y) - past) * s;
   let idx = id.y * corners.x + id.x;

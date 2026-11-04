@@ -15,14 +15,14 @@ use super::tally::{self, Counts, RayCounts, Tally};
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, within, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
+    within, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
     SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM,
     SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
     SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT,
     SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST, SHADER_SAMPLE,
     SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
 };
-use crate::frame::shader::word::{FOLD_LANES, ROW_LANES, SQUARE_SIDE};
+use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -703,14 +703,54 @@ const _: () = assert!(
 /// What `fold_cs` reads of the cast's world's group (fold.wgsl): the clip
 /// levels' table it writes the folds into, and the bricks' levels.
 const FOLD_GROUP: [u32; 6] = [1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE];
+/// What `cell_cs` reads of it (cell.wgsl): the eye, and the beam rays' words
+/// it writes the cells' starts into.
+const CELL_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW];
+/// The missed pixels' hits' passes' groups (hit_lead.wgsl, hit_faces.wgsl,
+/// `hit_groups`): the eye, the rays, the beam's words, the pyramid's head, and
+/// the walk again's words the leaders are listed in.
+const HIT_LEAD_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE,
+    14,
+    COMPUTE,
+    STORAGE_RW,
+];
+const HIT_FACES_GROUP: [u32; 12] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE,
+    9,
+    COMPUTE,
+    STORAGE,
+];
 const _: () = assert!(
-    floor::holds(&[&FOLD_GROUP]),
-    "the fold's group binds past WebGPU's floor"
+    floor::holds(&[&FOLD_GROUP])
+        && floor::holds(&[&CELL_GROUP])
+        && floor::holds(&[&HIT_LEAD_GROUP])
+        && floor::holds(&[&HIT_FACES_GROUP]),
+    "the fold's, the cells' or the hits' group binds past WebGPU's floor"
 );
 
 const _: () = assert!(
     within(FOLD_GROUP, WORLD_GROUP)
-        && within(compute::CELL_GROUP, WORLD_GROUP)
+        && within(CELL_GROUP, WORLD_GROUP)
         && within(FORGET_GROUP, WORLD_GROUP)
         && within(
             [
@@ -756,9 +796,8 @@ impl RaysPass {
         let fold_built = pipelines.build_compute(g, SHADER_FOLD, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, &MISS_GROUP);
         let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, &MISS_GROUP);
-        let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &compute::HIT_LEAD_GROUP);
-        let hit_faces_built =
-            pipelines.build_compute(g, SHADER_HIT_FACES, &compute::HIT_FACES_GROUP);
+        let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &HIT_LEAD_GROUP);
+        let hit_faces_built = pipelines.build_compute(g, SHADER_HIT_FACES, &HIT_FACES_GROUP);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
         let light_built = pipelines.build_compute(g, SHADER_LIGHT, &LIGHT_GROUP);
         let light_miss_built = pipelines.build_compute(g, SHADER_LIGHT_MISS, &LIGHT_MISS_GROUP);
@@ -1663,7 +1702,7 @@ impl RaysPass {
                     GpuSpanName::beam,
                     &c.cells_built,
                     c.grid.span,
-                    compute::CELL_WORKGROUP,
+                    [CELL_SIDE, CELL_SIDE, 1],
                 ),
                 (
                     GpuSpanName::sample_hit,
@@ -2127,7 +2166,7 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
         ),
         (
             light::ARGS_CELLS,
-            across(light::cells_across(shadow::SIZE), compute::CELL_WORKGROUP),
+            across(light::cells_across(shadow::SIZE), [CELL_SIDE, CELL_SIDE, 1]),
         ),
         (light::ARGS_SAMPLE, across(samples, SAMPLE_WORKGROUP)),
         (

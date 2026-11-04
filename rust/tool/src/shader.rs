@@ -16,11 +16,7 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 3] = [
-    ("cell_cs", "cell.gen.wgsl"),
-    ("hit_lead_cs", "hit_lead.gen.wgsl"),
-    ("hit_faces_cs", "hit_faces.gen.wgsl"),
-];
+pub const ENTRIES: [(&str, &str); 0] = [];
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as
 /// rust/client/shader/rust-toolchain.toml holds it.

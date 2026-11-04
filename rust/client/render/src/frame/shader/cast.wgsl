@@ -60,7 +60,7 @@ fn went_on(s: vec2<u32>) -> bool {
 /// The first of the four samples about the screen's point at the tangents `at`
 /// (`Grid::sample_before`).
 fn sample_before(at: vec2<f32>) -> vec2<u32> {
-  let d = eye_f32(GRID) / f32(SAMPLE * eye_word(GRID + GRID_LATTICE));
+  let d = eye_f32(GRID + GRID_S) / f32(SAMPLE * eye_word(GRID + GRID_LATTICE));
   let n = vec2<u32>(eye_word(GRID + GRID_SAMPLES), eye_word(GRID + GRID_SAMPLES + 1u));
   let v = vec2<f32>(at.x + eye_f32(TAN), eye_f32(TAN + 1u) - at.y);
   return min(vec2<u32>(max(floor(v / d), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES), n - vec2<u32>(2u));
