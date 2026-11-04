@@ -11,7 +11,6 @@
 // shard, where its ground's cells were held, its ways' cursor. A cut is `vec4<i32>` as
 // the eye holds one, its index then its zoom (`overwrite::Cut`, `NO_CUT` for none).
 
-@group(0) @binding(1) var<storage, read> clipmap: array<vec4<i32>>;
 @group(0) @binding(2) var<storage, read> ground: array<u32>;
 @group(0) @binding(4) var<storage, read> palette_indices: array<u32>;
 @group(0) @binding(5) var<storage, read> shards: array<vec4<u32>>;
@@ -27,21 +26,9 @@ struct Answer {
 
 // ---- value.rs, answer.rs ----
 
-fn grounds(v: u32) -> bool {
-  return v >= GROUNDS_FIRST && v <= GROUNDS_LAST;
-}
-
-fn voxel(v: u32) -> bool {
-  return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
-}
-
 fn fills(asset: u32) -> bool {
   let v = asset & VAL_MASK;
   return v != VALUE_VOID && v != VALUE_AIR;
-}
-
-fn eighths(fill: u32) -> u32 {
-  return min(fill / (FULL / EIGHTHS), EIGHTHS);
 }
 
 struct Cover {
@@ -226,111 +213,6 @@ fn is_past(shard: u32) -> bool {
   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
 }
 
-/// `area::is_wall`, off the shard the node `(cell, b)` knows.
-fn is_wall(shard: u32, cell: u32, b: vec2<i32>) -> bool {
-  let served = shard >> SHARD_SERVED_SHIFT;
-  if (cell < LEAF_CELL) {
-    return false;
-  }
-  let leaf = b >> vec2<u32>(cell - LEAF_CELL);
-  let own = b >> vec2<u32>(cell - SHARD_ZOOM);
-  let shift = LEAF_CELL - SHARD_ZOOM;
-  // The shards of the leaf cells about it: two a side at most.
-  let lo = ((leaf - 1i) >> vec2<u32>(shift)) - own;
-  let hi = ((leaf + 1i) >> vec2<u32>(shift)) - own;
-  let dx = vec2<i32>(lo.x, hi.x) + 1i;
-  let dy = vec2<i32>(lo.y, hi.y) + 1i;
-  let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
-  return any(((vec4<u32>(served) >> bits) & vec4<u32>(1u)) == vec4<u32>(0u));
-}
-
-/// `wrap_idx`.
-fn wrap_idx(zoom: u32, x: i32) -> i32 {
-  if (zoom == 0u) {
-    return 0i;
-  }
-  return (x << (32u - zoom)) >> (32u - zoom);
-}
-
-// ---- clipmap.rs ----
-
-fn spread(v: u32) -> u32 {
-  var s = (v | (v << 8u)) & 0x00ff00ffu;
-  s = (s | (s << 4u)) & 0x0f0f0f0fu;
-  s = (s | (s << 2u)) & 0x33333333u;
-  return (s | (s << 1u)) & 0x55555555u;
-}
-
-/// `clipmap::idx_of`.
-fn cell_id(at: vec2<u32>) -> u32 {
-  return spread(at.x) | (spread(at.y) << 1u);
-}
-
-fn lookup(cell: u32, clip: u32, slot: u32, here: bool) -> u32 {
-  return (cell << LOOKUP_CELL_SHIFT) | (clip << LOOKUP_FROM_SHIFT) | (u32(here) << LOOKUP_SLOT_BITS) | slot;
-}
-
-fn lookup_cell(l: u32) -> u32 {
-  return l >> LOOKUP_CELL_SHIFT;
-}
-
-fn lookup_from(l: u32) -> u32 {
-  return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 1u);
-}
-
-fn lookup_slot(l: u32) -> u32 {
-  return l & ((1u << LOOKUP_SLOT_BITS) - 1u);
-}
-
-fn lookup_here(l: u32) -> bool {
-  return (l & (1u << LOOKUP_SLOT_BITS)) != 0u;
-}
-
-/// `clipmap::cell_at`.
-fn cell_at(zoom: u32, clip: u32, c: vec2<i32>) -> vec2<i32> {
-  let s = zoom - clip;
-  return vec2<i32>(wrap_idx(clip, c.x >> s), c.y >> s);
-}
-
-struct Step {
-  place: u32,
-  at: vec2<u32>,
-}
-
-/// `clipmap::step`: the zooms `above` leaves unknown, finest first.
-fn step_to(above: u32, cell: u32, g: vec2<i32>) -> Step {
-  let known = above != LOOKUP_NONE && cell >= lookup_from(above);
-  var stop = FIRST_CELL - 1u;
-  var f = lookup(cell, FIRST_CELL, 0u, false);
-  if (known) {
-    stop = lookup_cell(above);
-    f = (above & LOOKUP_AT) | (cell << LOOKUP_CELL_SHIFT);
-  }
-  for (var z = cell; z > stop; z -= 1u) {
-    let q = cell_at(cell, z, g) >> vec2<u32>(BRICK_SHIFT);
-    let m = vec2<i32>(i32(ACROSS) - 1i);
-    let e = vec2<u32>(q & m);
-    let row = clipmap[(z - FIRST_CELL) * CLIP_ENTRIES + e.y * ACROSS + e.x];
-    if (row.z != 0i && row.x == q.x && row.y == q.y) {
-      f = lookup(cell, z, u32(row.z - 1i), true);
-      break;
-    }
-  }
-  return Step(f, vec2<u32>(cell_at(cell, lookup_from(f), g) & vec2<i32>(i32(BRICK) - 1i)));
-}
-
-fn held_to(cell: u32) -> u32 {
-  return clamp(cell, FIRST_CELL, LEAF_CELL);
-}
-
-/// A bound word's lowest and highest (`answer::bound_of`).
-fn bound_of(w: i32) -> vec2<i32> {
-  return vec2<i32>((w << 16u) >> 16u, w >> 16u);
-}
-
-/// `ground::Bounds`: the ground's lowest and highest, then the ways'.
-fn bounds_of(a: i32, b: i32) -> vec4<i32> {
-  return vec4<i32>(bound_of(a), bound_of(b));
 }
 
 const BOUNDS_EMPTY = vec4<i32>(EMPTY_LO, EMPTY_HI, EMPTY_LO, EMPTY_HI);
@@ -443,37 +325,6 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
 
 // ---- ground.rs ----
 
-struct Top {
-  cells: i32,
-  part: u32,
-}
-
-/// `ground::top` of `h` leaf cells.
-fn top_of(cell: u32, h: i32) -> Top {
-  if (cell >= LEAF_CELL) {
-    return Top(h << (cell - LEAF_CELL), FULL);
-  }
-  let n = LEAF_CELL - cell;
-  let cells = h >> n;
-  let rest = u32(h) & ((1u << n) - 1u);
-  let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
-  if (eighths(part) == 0u) {
-    return Top(cells, FULL);
-  }
-  return Top(cells + 1i, part);
-}
-
-fn face_height(cell: u32, t: i32) -> i32 {
-  if (cell >= LEAF_CELL) {
-    return t >> (cell - LEAF_CELL);
-  }
-  return t << (LEAF_CELL - cell);
-}
-
-fn leaf_cells(cell: u32) -> i32 {
-  return select(1i, 1i << ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL);
-}
-
 /// `strata::by_depth`.
 fn by_depth(cell: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
   if (z >= t) {
@@ -558,38 +409,7 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.palette_idx, col.top, col.part, col.fold, r.place);
 }
 
-// ---- pxl-content cave.rs, share.rs ----
-
-/// `xpute_kit::derive_seed_u32`.
-fn seed_mix(base: u32, tag: u32) -> u32 {
-  var z = (base ^ tag) + 0x9e3779b9u;
-  z = (z ^ (z >> 16u)) * 0x85ebca6bu;
-  z = (z ^ (z >> 13u)) * 0xc2b2ae35u;
-  return z ^ (z >> 16u);
-}
-
-/// `seed::node_seed`.
-fn node_seed(tag: u32, zoom: u32, c: vec3<i32>) -> u32 {
-  var h = seed_mix(seed_mix(MASTER_SEED, tag), zoom);
-  h = seed_mix(h, u32(wrap_idx(zoom, c.x)));
-  h = seed_mix(h, u32(c.y));
-  return seed_mix(h, u32(c.z));
-}
-
-fn rotl(v: u32, s: u32) -> u32 {
-  return (v << (s & 31u)) | (v >> ((32u - s) & 31u));
-}
-
-/// `share::halve`.
-fn halve(n: u32, room_0: u32, room_1: u32, w: u32) -> u32 {
-  let scaled = n * (w >> 16u);
-  let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));
-  let least = select(0u, n - room_1, n > room_1);
-  if (part < least) {
-    return least;
-  }
-  return min(part, min(n, room_0));
-}
+// ---- pxl-content cave.rs ----
 
 /// A tunnel's part in a node, in pipe cells: where it comes in and goes out, the sides
 /// it crosses there (6 none, at its ends), and its blocks (`cave::Piece`).

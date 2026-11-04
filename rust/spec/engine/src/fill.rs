@@ -8,8 +8,8 @@
 //! each column's once, into its scratch, the frame's (`spans`,
 //! `clipmap::SPANS_AT`), and off them its levels, level 0 each column's own
 //! (`level`), and its ways' tree (`way::tree`). A GPU runs each pass a
-//! thread a column or entry (pxl-shader `height_cs`, `way_cs`,
-//! `bound_cs`); a bake runs its columns' passes in order over one brick
+//! thread a column or entry (pxl-shader `height_cs`, `bound_cs`; pxl-render
+//! way.wgsl `way_cs`); a bake runs its columns' passes in order over one brick
 //! (`brick`), so the spans it sizes a tile's room by are the ones a GPU
 //! keeps.
 
@@ -169,10 +169,14 @@ impl way::ColumnSpans for Scratch<'_> {
     }
 }
 
+/// The lanes of `way_cs`'s workgroup, a column of a handed brick and its ring
+/// each (`spans`, pxl-render way.wgsl).
+pub const SPANS_LANES: u32 = 64;
+
 /// A column's spans' head word's count (`clipmap::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
-const SPANS_CNT: u32 = SPANS_PAST - 1;
-const SPANS_PAST: u32 = 0x8000;
+pub const SPANS_CNT: u32 = SPANS_PAST - 1;
+pub const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`clipmap::SPANS_COLUMN_WORDS`).
 fn head_word(s: &way::Spans, fits: bool) -> u32 {
@@ -188,7 +192,8 @@ fn head_word(s: &way::Spans, fits: bool) -> u32 {
 /// `scratch`, `clipmap::FILL_CAP` bricks' alike, each a `FILL_CAP`th of its
 /// length (`way::tree::scratch_words`), which the renderer grows
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
-/// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
+/// the buffer, as the pool's free stack takes its own (pxl-render way_tree.wgsl
+/// `pop`).
 /// A one brick's scratch is the first's.
 pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
     k * (scratch.len() as u32 / clipmap::FILL_CAP)
@@ -449,7 +454,7 @@ pub fn brick(
 /// The brick filled into `lane` and its spans into `scratch` (`brick`),
 /// its cells at `cell`, its ways' tree built into `pool`, its child pointers
 /// then its data words, a level at a time as a GPU's workgroup builds it
-/// (pxl-shader `way_tree_cs`, `way::tree`), from the brick's own nodes
+/// (pxl-render way_tree.wgsl, `way::tree`), from the brick's own nodes
 /// along z down, its child groups taken in order from child group `from`, its
 /// root's, child group 0 being none's: the child groups it took, those it holds once
 /// folded, and its root word (`way::tree::root_word`), none taken and 0

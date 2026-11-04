@@ -4,7 +4,7 @@
 // Source: rust/spec/engine (pxl-engine) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, then spirv-opt and naga in rust/client/shader/build.
-struct type_4 {
+struct type_6 {
     member: array<u32>,
 }
 
@@ -13,13 +13,13 @@ struct type_14 {
     member_1: u32,
 }
 
+var<private> global: vec3<u32>;
 @group(0) @binding(0)
-var<storage> global: type_4;
+var<storage> global_1: type_6;
 @group(0) @binding(1)
-var<storage, read_write> global_1: type_4;
-var<private> global_2: vec3<u32>;
+var<storage, read_write> global_2: type_6;
 @group(0) @binding(2)
-var<storage, read_write> global_3: type_4;
+var<storage, read_write> global_3: type_6;
 
 fn function_() {
     var local: vec4<u32>;
@@ -140,9 +140,9 @@ fn function_() {
     var local_28: i32;
     var local_29: i32;
 
-    let _e57 = global_2;
-    let _e59 = arrayLength((&global.member));
-    let _e61 = arrayLength((&global_1.member));
+    let _e57 = global;
+    let _e59 = arrayLength((&global_1.member));
+    let _e61 = arrayLength((&global_2.member));
     if (_e57.x >= 64u) {
     } else {
         if (_e57.y >= 64u) {
@@ -150,7 +150,7 @@ fn function_() {
             let _e69 = (_e57.z * 9567u);
             let _e70 = (_e69 < _e59);
             if _e70 {
-                let _e73 = global.member[_e69];
+                let _e73 = global_1.member[_e69];
                 phi_102_ = _e73;
             } else {
                 phi_102_ = 0u;
@@ -159,7 +159,7 @@ fn function_() {
             let _e76 = (_e75 * 16043u);
             let _e77 = (_e69 + 1u);
             if (_e77 < _e59) {
-                let _e81 = global.member[_e77];
+                let _e81 = global_1.member[_e77];
                 phi_111_ = _e81;
             } else {
                 phi_111_ = 0u;
@@ -167,7 +167,7 @@ fn function_() {
             let _e83 = phi_111_;
             let _e87 = (_e69 + 2u);
             if (_e87 < _e59) {
-                let _e91 = global.member[_e87];
+                let _e91 = global_1.member[_e87];
                 phi_121_ = _e91;
             } else {
                 phi_121_ = 0u;
@@ -184,7 +184,7 @@ fn function_() {
             let _e130 = (_e129 + _e128);
             let _e131 = (_e130 < _e59);
             if _e131 {
-                let _e134 = global.member[_e130];
+                let _e134 = global_1.member[_e130];
                 phi_156_ = _e134;
             } else {
                 phi_156_ = 0u;
@@ -411,7 +411,7 @@ fn function_() {
                                 let _e359 = ((bitcast<u32>(_e340) * 36u) + bitcast<u32>(_e356));
                                 let _e362 = ((_e69 + 4102u) + (_e359 / 2u));
                                 if (_e362 < _e59) {
-                                    let _e366 = global.member[_e362];
+                                    let _e366 = global_1.member[_e362];
                                     phi_397_ = _e366;
                                 } else {
                                     phi_397_ = 0u;
@@ -482,7 +482,7 @@ fn function_() {
             let _e439 = phi_436_;
             let _e440 = (_e76 + _e128);
             if (_e440 < _e61) {
-                global_1.member[_e440] = (bitcast<u32>(_e439) & 65535u);
+                global_2.member[_e440] = (bitcast<u32>(_e439) & 65535u);
             }
             if ((_e57.x % 2u) == 1u) {
             } else {
@@ -498,7 +498,7 @@ fn function_() {
                         if _e454 {
                             let _e456 = (_e129 + (_e128 + _e451));
                             if (_e456 < _e59) {
-                                let _e460 = global.member[_e456];
+                                let _e460 = global_1.member[_e456];
                                 phi_475_ = _e460;
                             } else {
                                 phi_475_ = 0u;
@@ -678,12 +678,12 @@ fn function_() {
                     let _e588 = ((_e76 + 15018u) + (_e128 / 4u));
                     if (_e588 < _e61) {
                         let _e593 = local_27;
-                        global_1.member[_e588] = _e593;
+                        global_2.member[_e588] = _e593;
                     }
                 }
             }
             if _e70 {
-                let _e596 = global.member[_e69];
+                let _e596 = global_1.member[_e69];
                 phi_595_ = _e596;
             } else {
                 phi_595_ = 0u;
@@ -691,7 +691,7 @@ fn function_() {
             let _e598 = phi_595_;
             let _e600 = ((_e598 * 4096u) + _e128);
             if _e131 {
-                let _e603 = global.member[_e130];
+                let _e603 = global_1.member[_e130];
                 phi_603_ = _e603;
             } else {
                 phi_603_ = 0u;
@@ -707,7 +707,7 @@ fn function_() {
 
 @compute @workgroup_size(8, 8, 1)
 fn height_cs(@builtin(global_invocation_id) param: vec3<u32>) {
-    global_2 = param;
+    global = param;
     function_();
 }
 

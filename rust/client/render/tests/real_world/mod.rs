@@ -521,9 +521,8 @@ pub fn fold(
     }
 }
 
-/// The world about an eye at `eye`, seeded the one way.
-pub fn build(eye: [i32; 2]) -> Built {
-    // The service area's index, a cell's nine by its key.
+/// The service area's index, a cell's nine by its key (`served`).
+pub fn shards() -> Vec<[u32; 4]> {
     let mut shards = vec![[0u32; 4]; (area::SHARD_CELLS / 4) as usize];
     for y in 0..1 << SHARD_ZOOM {
         for x in 0..1 << SHARD_ZOOM {
@@ -531,6 +530,12 @@ pub fn build(eye: [i32; 2]) -> Built {
             shards[key / 4][key % 4] = area::nine(served, [x, y]);
         }
     }
+    shards
+}
+
+/// The world about an eye at `eye`, seeded the one way.
+pub fn build(eye: [i32; 2]) -> Built {
+    let shards = shards();
 
     // The clip levels and their bricks, each filled as a frame's fill does; some wanted
     // and not yet held.

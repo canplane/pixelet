@@ -80,10 +80,10 @@ pub const FILL_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 /// (`area::Shard`, its word), which the ways' fill asks the wall by
 /// (`area::is_wall`).
 pub const FILL_BRICK: u32 = 0;
-pub(crate) const FILL_PLACE: u32 = FILL_BRICK + 1;
+pub const FILL_PLACE: u32 = FILL_BRICK + 1;
 pub const FILL_CELL: u32 = FILL_PLACE + 1;
 pub const FILL_FIRST: u32 = FILL_CELL + 1;
-pub(crate) const FILL_SHARD: u32 = FILL_FIRST + 2;
+pub const FILL_SHARD: u32 = FILL_FIRST + 2;
 pub const FILL_WORDS: u32 = FILL_SHARD + 1;
 
 /// A brick fill's words (`FILL_WORDS`), `place` its `place_word`.
@@ -219,7 +219,7 @@ pub const LEVEL_WORDS: u32 = LEVEL_ENTRY_WORDS * level_at(LEVELS + 1);
 /// which its fill keeps its columns' spans off.
 pub const WAYS_ACROSS: u32 = 32;
 pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
-const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
+pub const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
 pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// The most entries a brick holds of its tile's ways: one a segment and a
@@ -247,18 +247,18 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGM
 /// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
 /// bound and its ways' tree are made off the spans (fill.rs `level`,
 /// `way::tree::leaf`), and they go with the frame.
-pub(crate) const SPANS_AT: u32 = 0;
+pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
 /// first.
-pub(crate) const SPANS_ACROSS: u32 = BRICK + 2;
+pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (`way::Spans`): a head word, its count, the
 /// count's high bit set where they did not fit `way::SPANS`, and its face
 /// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
-pub(crate) const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
+pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A brick's columns, a word a cell, row by row: a cell's ground's top in
