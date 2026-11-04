@@ -35,12 +35,12 @@ var<private> global: vec3<u32>;
 var<uniform> global_1: type_13;
 @group(0) @binding(8)
 var<storage, read_write> global_2: type_16;
-@group(0) @binding(3)
-var global_3: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(14)
-var<storage, read_write> global_4: type_26;
+var<storage, read_write> global_3: type_26;
 @group(0) @binding(9)
-var<storage> global_5: type_16;
+var<storage> global_4: type_16;
+@group(0) @binding(3)
+var global_5: texture_storage_2d_array<r32uint,read_write>;
 
 fn function_() {
     var phi_124_: u32;
@@ -69,8 +69,8 @@ fn function_() {
     var phi_293_: bool;
 
     let _e36 = global;
-    let _e38 = arrayLength((&global_4.member));
-    let _e42 = global_5.member[120u];
+    let _e38 = arrayLength((&global_3.member));
+    let _e42 = global_4.member[120u];
     if (_e36.x >= select(_e42, 524288u, (524288u < _e42))) {
     } else {
         let _e50 = global_1.member.member_10[0u][0u];
@@ -90,7 +90,7 @@ fn function_() {
             phi_155_ = 524288u;
         } else {
             let _e97 = vec3<u32>((_e91 - 1u), _e93, 3u);
-            let _e103 = textureLoad(global_3, vec2<u32>(_e97.x, _e97.y), i32(_e97.z));
+            let _e103 = textureLoad(global_5, vec2<u32>(_e97.x, _e97.y), i32(_e97.z));
             if ((_e103.x & 2147483648u) == 0u) {
                 phi_152_ = u32();
                 phi_153_ = true;
@@ -147,7 +147,7 @@ fn function_() {
                 phi_214_ = _e147;
             } else {
                 let _e152 = vec3<u32>(_e91, (_e93 - 1u), 3u);
-                let _e158 = textureLoad(global_3, vec2<u32>(_e152.x, _e152.y), i32(_e152.z));
+                let _e158 = textureLoad(global_5, vec2<u32>(_e152.x, _e152.y), i32(_e152.z));
                 if ((_e158.x & 2147483648u) == 0u) {
                     phi_211_ = u32();
                     phi_212_ = true;
@@ -208,7 +208,7 @@ fn function_() {
             global_2.member[(_e86 + 9u)] = (2147483648u | _e204);
         } else {
             if (65u < _e38) {
-                let _e213 = atomicAdd((&global_4.member[65u]), 1u);
+                let _e213 = atomicAdd((&global_3.member[65u]), 1u);
                 phi_229_ = _e213;
             } else {
                 phi_229_ = 0u;
@@ -216,10 +216,10 @@ fn function_() {
             let _e215 = phi_229_;
             if ((_e215 % 64u) == 0u) {
                 if (68u < _e38) {
-                    let _e223 = atomicMax((&global_4.member[68u]), ((_e215 / 64u) + 1u));
+                    let _e223 = atomicMax((&global_3.member[68u]), ((_e215 / 64u) + 1u));
                 }
             }
-            let _e224 = textureDimensions(global_3);
+            let _e224 = textureDimensions(global_5);
             let _e230 = global_1.member.member_9[0u];
             let _e242 = global_1.member.member_9[1u];
             let _e253 = floor(((((((((f32(_e91) + 0.5f) + _e230) / f32(_e224.x)) * 2f) - 1f) * _e79) + _e79) / _e84));

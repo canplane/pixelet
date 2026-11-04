@@ -6,11 +6,11 @@
 //! (pxl-engine `beam::Grid`), a ray at the screen's tangents.
 
 use pxl_engine::cast::{self, Detail};
-use pxl_engine::{beam, eye, pyramid, tally};
+use pxl_engine::{beam, eye};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
-use crate::observer::{Aim, Level, Observer};
+use crate::observer::Observer;
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-engine `eye` lays them (asserted below).
@@ -92,15 +92,6 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
     )
 }
 
-/// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
-pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
-    let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray::new(
-        cast::through(v3(eye.forward_far), v3(eye.right), v3(eye.up), tx, ty),
-        eye.forward_far.w,
-    )
-}
-
 /// The camera grid the frame casts on, read whole off the eye's words, as
 /// the kernel worked it out once (pxl-engine `beam::Grid`).
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
@@ -113,66 +104,14 @@ pub(crate) fn grid(eye: &Eye) -> beam::Grid {
 }
 const _: () = assert!(eye::GRID_WORDS == 20, "`grid` reads the grid's five vec4s");
 
-/// What the walk over the observed pyramid alone left at the place of the thread
-/// `id`, workgroups in a row, off its count and list at word `at`: none past them.
-fn left_at<W: Words + ?Sized>(w: &W, at: u32, id: [u32; 2]) -> [u32; 2] {
-    let place = (id[0] / 8) * 64 + (id[1] % 8) * 8 + id[0] % 8;
-    if place >= w.word(at) {
-        return [u32::MAX; 2];
-    }
-    let s = w.word(at + 1 + place);
-    [s & 0xffff, s >> 16]
-}
-
 impl Observer for Eye {
-    type At = [f32; 2];
-
-    fn tally(&self) -> u32 {
-        tally::EYE
-    }
-
-    fn assets(&self) -> bool {
-        true
-    }
-
-    fn passes(&self) -> [u32; 3] {
-        [
-            pyramid::BEAM_PASS,
-            pyramid::SAMPLES_PASS,
-            pyramid::MISSED_PASS,
-        ]
-    }
-
-    fn apart(&self) -> bool {
-        false
-    }
-
     fn corners(&self) -> [u32; 2] {
         grid(self).corners
-    }
-
-    fn corner(&self, c: [u32; 2]) -> Aim {
-        self.aim(grid(self).corner(c))
-    }
-
-    fn handed(&self, _: &Aim, t: f32) -> f32 {
-        grid(self).hand_dist(t)
-    }
-
-    fn line(&self, idx: u32) -> u32 {
-        beam::Grid::line(idx)
     }
 
     fn hand_at(&self, idx: u32) -> u32 {
         grid(self).hand_at(idx)
     }
-
-    /// Every ray of the eye's starts at the eye.
-    fn origin_of<W: Words + ?Sized>(&self, _: &W, _: u32) -> [i32; 3] {
-        eye_origin(self).0
-    }
-
-    fn keep_origin<W: Words + ?Sized>(&self, _: &mut W, _: u32, _: [i32; 3]) {}
 
     fn cells(&self) -> [u32; 2] {
         grid(self).span
@@ -200,60 +139,13 @@ impl Observer for Eye {
         eye_origin(self).1
     }
 
-    fn samples(&self) -> [u32; 2] {
-        grid(self).samples
-    }
-
-    fn point(&self, s: [u32; 2]) -> [f32; 2] {
-        grid(self).sample(s)
-    }
-
-    fn sample_at(&self, s: [u32; 2]) -> u32 {
-        grid(self).sample_at(s)
-    }
-
-    /// Always about it: the lattice runs `param::beam::NEAR` samples past the
-    /// screen.
-    fn sample_before(&self, at: [f32; 2]) -> ([u32; 2], bool) {
-        (grid(self).sample_before(at), true)
-    }
-
-    fn aim(&self, at: [f32; 2]) -> Aim {
-        let (origin, detail) = eye_origin(self);
-        Aim {
-            origin,
-            ray: eye_ray(self, at),
-            detail,
-        }
-    }
-
-    fn cell_of(&self, at: [f32; 2]) -> [u32; 2] {
-        grid(self).cell(at)
-    }
-
-    /// Its own everywhere, each distance's zoom from the eye.
-    fn detail(&self, _: [f32; 2]) -> Detail {
-        eye_origin(self).1
-    }
-
-    /// From the eye, its boxes about it marked at the screen's tangents.
-    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
-        (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
-    }
-
     /// Every one: what the eye casts is what it shows.
-    fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
+    fn needs<W: Words + ?Sized>(&self, _: &W, _: [u32; 2]) -> bool {
         true
     }
 
     /// Each at its own place: it casts its lattice whole.
-    fn take<W: Words + ?Sized>(&self, _: &W, _: Level, id: [u32; 2]) -> [u32; 2] {
+    fn take<W: Words + ?Sized>(&self, _: &W, id: [u32; 2]) -> [u32; 2] {
         id
-    }
-
-    /// The one the walk over the observed pyramid alone left at the thread's
-    /// place among them (pxl-render beam_hit.wgsl).
-    fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
-        left_at(w, grid(self).corners_at, id)
     }
 }

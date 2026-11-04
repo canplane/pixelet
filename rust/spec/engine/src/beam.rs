@@ -96,6 +96,8 @@ pub const GRID_CORNERS: usize = 7;
 pub const GRID_SAMPLES: usize = 9;
 pub const GRID_CELLS_AT: usize = 11;
 pub const GRID_SAMPLES_AT: usize = 12;
+pub const GRID_ASKS_AT: usize = 13;
+pub const GRID_HITS_AT: usize = 14;
 pub const GRID_LATTICE: usize = 16;
 pub const GRID_LEFTS_AT: usize = 17;
 pub const GRID_MISSES_AT: usize = 18;
@@ -197,7 +199,7 @@ impl Grid {
             lattice: w[GRID_LATTICE],
             cells_at: w[11],
             samples_at: w[12],
-            asks_at: w[13],
+            asks_at: w[GRID_ASKS_AT],
             hits_at: w[14],
             hit_asks_at: w[15],
             lefts_at: w[17],
@@ -414,6 +416,11 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
+
+/// The side of a workgroup of the passes over the beam rays' corners, a thread a corner, and
+/// of the one over what the first left, a thread a place in the list (pxl-render
+/// beam_hit.wgsl, beam.wgsl).
+pub const CORNER_SIDE: u32 = 8;
 
 /// The side of a workgroup of the passes over a lattice's samples, a thread a sample, and of
 /// those over what they left, a thread a place in the list (pxl-render sample_hit.wgsl,

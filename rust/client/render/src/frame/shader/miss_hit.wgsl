@@ -1,10 +1,9 @@
 // pxl-render/miss_hit.wgsl
 
 // The pixels `cast_cs` listed, their walk over the observed pyramid alone (walk.wgsl).
-// One it leaves stays marked and is listed for `miss_list_cs`; one that ends is
-// written as that writes it (pxl-shader cast.rs `walk_missed`, `word`, `keep_hit`).
+// One it leaves stays marked and is listed for `miss_list_cs` (miss.wgsl); one that ends is
+// written as that writes it (miss_word.wgsl).
 
-@group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 /// `miss_list_cs`'s dispatch and how many are listed, then the kept hits' dispatch
 /// and how many (`pyramid::HITS_ARGS`, copied there after).
 @group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 8>;
@@ -18,16 +17,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   if (r % HIT_LANES == 0u) {
     atomicMax(&left[4], r / HIT_LANES + 1u);
   }
-  let k = eye_word(GRID + 14u) + r * HIT_WORDS;
-  beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
-  beams[k + HIT_NODE + NODE_CORNER] = w.corner.x;
-  beams[k + HIT_NODE + NODE_CORNER + 1u] = w.corner.y;
-  beams[k + HIT_NODE + NODE_CORNER + 2u] = w.corner.z;
-  beams[k + HIT_NODE + NODE_ROOTS] = u32(w.roots.x);
-  beams[k + HIT_NODE + NODE_ROOTS + 1u] = u32(w.roots.y);
-  beams[k + HIT_NODE + NODE_ROOTS + 2u] = u32(w.roots.z);
-  beams[k + HIT_FACE] = face;
-  beams[k + HIT_PX] = (id.y << 16u) | id.x;
+  hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
 
@@ -46,24 +36,8 @@ fn miss_hit_cs(
   if (id.x >= size.x || id.y >= size.y) {
     return;
   }
-  // Where its ray goes through the pixel (`px_tan`) and its cell (`Grid::cell`).
-  let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let ndc = (vec2<f32>(id) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);
-  let tan_at = vec2<f32>(ndc.x, -ndc.y) * tan_xy;
-  let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
-  let s = eye_f32(GRID);
-  let cell = min(
-    vec2<u32>(max(floor(vec2<f32>(tan_at.x + tan_xy.x, tan_xy.y - tan_at.y) / s), vec2<f32>(0.0))),
-    span_n - vec2<u32>(1u),
-  );
-  let aim = eye_aim(tan_at);
-  let w = walk(
-    aim,
-    resumed(aim, eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS, LINE_WORDS, NONE),
-    NONE,
-  );
-  let face = 2u * w.axis + select(0u, 1u, aim.dir[w.axis] > 0.0);
+  let p = px(id, size);
+  let w = walk(p.aim, p.start, NONE);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
@@ -72,19 +46,10 @@ fn miss_hit_cs(
     beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
     return;
   }
-  var word = vec4<u32>(0u, 0u, w.visits, 0u);
+  let face = face_of(p.aim, w);
+  var faces = 0u;
   if (w.ends == 1u) {
-    let fill = (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
-    let faces = select(FACE_BOX, keep_hit(w, face, id), fill == 0u);
-    let steps = eye_word(ORIGIN + 3u) != 0u;
-    word = vec4<u32>(
-      (w.asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (w.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
-      bitcast<u32>(w.t),
-      select(w.asset.y, w.visits, steps),
-      faces,
-    );
+    faces = select(FACE_BOX, keep_hit(w, face, id), hit_fill(w) == 0u);
   }
-  for (var i = 0u; i < 4u; i += 1u) {
-    textureStore(rays, id, i, vec4<u32>(word[i], 0u, 0u, 0u));
-  }
+  write_ray(id, ray_word(w, w.visits, face, faces));
 }

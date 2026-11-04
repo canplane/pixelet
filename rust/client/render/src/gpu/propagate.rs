@@ -2,8 +2,8 @@
 
 //! The light's map's tiles that changed propagated to the screen's
 //! (screen_propagate.wgsl), as the light's propagation takes the screen's
-//! receivers to the light's tiles (pxl-shader light.rs
-//! `light_propagate_cs`): in a frame
+//! receivers to the light's tiles
+//! (light_propagate.wgsl): in a frame
 //! where the casters that changed marked tiles of the map (gpu/tiles.rs),
 //! each screen tile whose pixels' shadow's taps read one of them is set to
 //! have changed this frame, on the GPU, after the marks and before anything

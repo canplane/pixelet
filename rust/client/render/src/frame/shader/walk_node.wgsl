@@ -18,6 +18,11 @@ fn eye_v3(k: u32) -> vec3<f32> {
   return vec3<f32>(eye_f32(k), eye_f32(k + 1u), eye_f32(k + 2u));
 }
 
+/// A cut as the eye holds it: its index, then its zoom.
+fn eye_cut(k: u32) -> vec4<i32> {
+  return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
+}
+
 /// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
 /// and other frames', says which asks again (walk.wgsl `revisits`).
 struct Aim {

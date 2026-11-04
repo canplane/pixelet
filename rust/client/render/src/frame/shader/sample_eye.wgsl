@@ -36,12 +36,17 @@ fn sample_aim(s: vec2<u32>) -> Aim {
   ));
 }
 
-/// Off its cell (`Grid::sample_cell`).
-fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
+/// The first word of its cell's start (`Grid::sample_cell`, `Grid::cell_at`).
+fn sample_cell_word(s: vec2<u32>) -> u32 {
   let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
   let cell = min(
     (max(s, vec2<u32>(NEAR_SAMPLES)) - vec2<u32>(NEAR_SAMPLES)) / (SAMPLE * eye_word(GRID + GRID_LATTICE)),
     span_n - vec2<u32>(1u),
   );
-  return resumed(aim, eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS, LINE_WORDS, NONE);
+  return eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
+}
+
+/// Off its cell.
+fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
+  return resumed(aim, sample_cell_word(s), LINE_WORDS, NONE);
 }

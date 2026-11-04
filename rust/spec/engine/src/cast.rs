@@ -118,7 +118,7 @@ const _: () = assert!(
 
 /// √6, as an f32 rounds it: a cube `NARROW` spacings wide spans `√3 ·
 /// NARROW`, `2√6` of them, corner to corner.
-pub(crate) const SQRT_6: f32 = 2.449_489_8;
+pub const SQRT_6: f32 = 2.449_489_8;
 
 /// Which cell a ray stops at: the first it cannot see through
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is

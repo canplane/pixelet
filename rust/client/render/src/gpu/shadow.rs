@@ -4,7 +4,7 @@
 //! orthographic about the eye and as wide as every effect reaches (the
 //! kernel's `STAGE_AT::EFFECT_REACH`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the visible sample (pxl-shader `light_cs`), into
+//! rays are, off samples and the visible sample (light.wgsl `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order, one triangle over it
@@ -255,7 +255,7 @@ impl Shadow {
         // the rows: the clipmap's corner, a whole number of tiles
         // (`light::TILE`), so a tile of the box holds whole tiles of the world
         // and what the cast read of it moves with the box a tile at a time
-        // (pxl-shader light.rs `light_slide_cs`).
+        // (light_slide.wgsl).
         let m = &mut self.light_view_proj;
         let mut cell = [0i64; 3];
         let tile = f64::from(light::TILE);

@@ -1,13 +1,13 @@
 // pxl-render/beam_hit.wgsl
 
 // The beam rays' walk over the observed pyramid alone (walk.wgsl), its line kept as
-// it goes. One it leaves is listed for `beam_cs`, which writes what it asks; one that
-// ends is left as that leaves it (pxl-shader observer.rs `beam`, beam.rs `Leaving`).
+// it goes. One it leaves is listed for `beam_cs` (beam.wgsl), which writes what it asks; one
+// that ends is left as that leaves it.
 
 /// `beam_cs`'s dispatch, then how many are listed: only the list's own atomics.
 @group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 4>;
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(CORNER_SIDE, CORNER_SIDE, 1)
 fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let corners = vec2<u32>(eye_word(GRID + GRID_CORNERS), eye_word(GRID + GRID_CORNERS + 1u));
   if (id.x >= corners.x || id.y >= corners.y) {
@@ -22,7 +22,7 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let w = walk(eye_aim(vec2<f32>(tx, ty)), root_start(), base);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
-    if (place % 64u == 0u) {
+    if (place % (CORNER_SIDE * CORNER_SIDE) == 0u) {
       atomicAdd(&left[0], 1u);
     }
     beams[eye_word(GRID + GRID_CORNERS_AT) + 1u + place] = id.x | (id.y << 16u);

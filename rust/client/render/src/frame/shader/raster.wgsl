@@ -10,7 +10,7 @@
 // one face, and the face lies in its plane, so a kept fragment's depth is where
 // the ray enters the box: the depth test, early, keeps the nearest box the
 // pixel's ray enters of every sample's. A pixel keeps that face's sample's
-// number, which the cast's pixels read (pxl-shader cast.rs `cast_cs`). A box
+// number, which the cast's pixels read (cast.wgsl `cast_cs`). A box
 // about the eye (`RASTER_EYED`), which the near plane may cut, is drawn over
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.

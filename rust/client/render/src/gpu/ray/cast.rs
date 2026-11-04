@@ -20,8 +20,9 @@ use crate::frame::shader::record::{
     SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
     SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT,
     SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST, SHADER_SAMPLE,
-    SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM,
+    SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
 };
+use crate::frame::shader::word::{ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -34,7 +35,7 @@ use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
 use pxl_engine::param::light::SAMPLE;
 
-/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
+/// The GPU's cast this frame (frame/shader/cast.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
@@ -81,10 +82,10 @@ pub struct Overwrites<'a> {
 /// What the GPU's cast reads; it writes the world surface's rays.
 pub(super) struct CastBuffers {
     pipeline: Pipeline,
-    /// The beam rays (`beam_cs`, a thread a corner), where each cell's
+    /// The beam rays (`beam_cs`, a thread a corner left), where each cell's
     /// rays start off them (`cell_cs`, a thread a cell), the samples walked
-    /// from those starts (`sample_cs`, a thread a sample): the eye's over
-    /// the cast's group and the shadow map's over the light's (`light_groups`),
+    /// from those starts (`sample_cs`, a thread a sample left): the eye's over
+    /// `ask_group` and the cast's group and the shadow map's over the light's (`light_groups`),
     /// each told by the head it binds (`eye_head`, `light_head`); and the
     /// eye's buffer (pxl-engine `beam`): a line a corner, a start a
     /// cell, a hit a sample, as the last cast's `grid` lays them, none
@@ -92,8 +93,9 @@ pub(super) struct CastBuffers {
     beam_built: Pipeline,
     cells_built: Pipeline,
     sample_built: Pipeline,
-    /// Over the world's buffers and the pyramid written (`SAMPLE_GROUP`).
-    sample_group: u32,
+    /// The eye's walks that ask the world, its beam rays' and its samples': over the world's
+    /// buffers and the pyramid written (`ASK_GROUP`).
+    ask_group: u32,
     /// The samples' walk over the pyramid alone, ahead of `sample_built`.
     sample_hit_built: Pipeline,
     sample_hit_group: u32,
@@ -109,8 +111,9 @@ pub(super) struct CastBuffers {
     beam_hit_built: Pipeline,
     beam_hit_group: u32,
     beam_left: u32,
-    /// The same passes for the shadow map, an entry each (pxl-shader
-    /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
+    /// The same passes for the shadow map, an entry each (light_beam.wgsl,
+    /// light_cell.wgsl, sample_light.wgsl): the cells over the same group, the
+    /// beam rays and the samples over `ASK_GROUP`.
     light_beam_built: Pipeline,
     light_cells_built: Pipeline,
     light_sample_built: Pipeline,
@@ -144,6 +147,8 @@ pub(super) struct CastBuffers {
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Pipeline,
     miss_list_built: Pipeline,
+    /// Their group 0 (`MISS_GROUP`), over the cast's group's buffers.
+    miss_group: u32,
     marks: u32,
     /// What lies about the faces the walks again stopped on, asked once a
     /// square of their hits (pxl-engine `beam::HIT_WORDS`): the one of
@@ -366,8 +371,13 @@ const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
 ];
 /// `sample_hit_cs`'s and `sample_cs`'s (sample_hit.wgsl, sample.wgsl).
 const SAMPLE_WORKGROUP: [u32; 3] = [beam::SAMPLE_SIDE, beam::SAMPLE_SIDE, 1];
-/// Either observer's `sample_cs`: its world's, its words, the pyramid it writes, its head.
-const SAMPLE_GROUP: [u32; 30] = [
+/// `beam_hit_cs`'s, `beam_cs`'s and `light_beam_cs`'s (beam_hit.wgsl, beam.wgsl,
+/// light_beam.wgsl).
+const BEAM_WORKGROUP: [u32; 3] = [beam::CORNER_SIDE, beam::CORNER_SIDE, 1];
+/// The walks that ask the world (ask.wgsl): either observer's beam rays (`beam_cs`,
+/// `light_beam_cs`) and samples (`sample_cs`): its world's, its words, the pyramid it writes,
+/// its head.
+const ASK_GROUP: [u32; 30] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -400,8 +410,34 @@ const SAMPLE_GROUP: [u32; 30] = [
     UNIFORM,
 ];
 const _: () = assert!(
-    floor::holds(&[&SAMPLE_GROUP]),
-    "the samples' group binds past WebGPU's floor"
+    floor::holds(&[&ASK_GROUP]),
+    "the asking walks' group binds past WebGPU's floor"
+);
+/// The light's slots' (`light_cs`): the list, the map it writes, the head, the visibility
+/// it reads and the missed slots' dispatch.
+const LIGHT_GROUP: [u32; 18] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    10,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    15,
+    COMPUTE,
+    TEXTURE_UINT_ARRAY,
+    17,
+    COMPUTE,
+    STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&LIGHT_GROUP]),
+    "the light's slots' group binds past WebGPU's floor"
 );
 /// The samples `sample_hit_cs` left: `sample_cs`'s dispatch, then their count.
 const SAMPLE_LEFT_START: [u32; 4] = [0, 1, 1, 0];
@@ -422,6 +458,36 @@ const MISS_HIT_GROUP: [u32; 15] = [
     COMPUTE,
     STORAGE_RW,
 ];
+/// `cast_cs`'s (cast.wgsl): the eye, the rays, the beam's words, the pyramid it lists the
+/// marked pixels in, the visibility buffer, the walk again's words and the claimed tiles
+/// (`px_group`).
+const CAST_GROUP: [u32; 24] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+    13,
+    COMPUTE,
+    TEXTURE_UINT_ARRAY,
+    14,
+    COMPUTE,
+    STORAGE_RW,
+    30,
+    COMPUTE,
+    STORAGE,
+    31,
+    COMPUTE,
+    UNIFORM,
+];
+const CAST_WORKGROUP: [u32; 3] = [ray::CAST_SIDE, ray::CAST_SIDE, 1];
 /// The pixels `miss_hit_cs` left: `miss_list_cs`'s dispatch and their count, then
 /// the hits it kept, as `pyramid::HITS_ARGS` lays them.
 const MISS_LEFT_EMPTY: [u32; 8] = [ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0];
@@ -485,28 +551,174 @@ const _: () = assert!(
     floor::holds(&[&LIGHT_MISS_GROUP]),
     "the light's missed slots' group binds past WebGPU's floor"
 );
+/// What `forget_cs` reads of the cast's world's group (forget.wgsl): the
+/// observed pyramid.
+const FORGET_GROUP: [u32; 3] = [9, COMPUTE, STORAGE_RW];
+/// The light's receivers' passes' groups: the eye, the head and the list,
+/// and the rays the eye's pixels met the world by (light_mark.wgsl), the decor
+/// placed (light_mark_draws.wgsl) or the passes' args (light_propagate.wgsl).
+const LIGHT_MARK_GROUP: [u32; 12] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+];
+const LIGHT_MARK_DRAWS_GROUP: [u32; 18] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+    18,
+    COMPUTE,
+    STORAGE,
+    19,
+    COMPUTE,
+    STORAGE,
+    20,
+    COMPUTE,
+    STORAGE,
+];
+const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+    21,
+    COMPUTE,
+    STORAGE_RW,
+];
+/// `light_slide_cs`'s (light_slide.wgsl): the eye, the head and the list.
+const LIGHT_SLIDE_GROUP: [u32; 9] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&LIGHT_MARK_GROUP])
+        && floor::holds(&[&LIGHT_MARK_DRAWS_GROUP])
+        && floor::holds(&[&LIGHT_PROPAGATE_GROUP])
+        && floor::holds(&[&LIGHT_SLIDE_GROUP]),
+    "a light receivers' pass's group binds past WebGPU's floor"
+);
 /// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one.
 const LIGHT_LEFT_EMPTY: [u32; 4] = [ray::MISS_ACROSS, 0, 1, 0];
-const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
-    let mut g = [0; compute::MISS_GROUP.len() + 3];
-    let mut k = 0;
-    while k < compute::MISS_GROUP.len() {
-        g[k] = compute::MISS_GROUP[k];
-        k += 1;
-    }
-    g[k] = HEAD_BINDING;
-    g[k + 1] = COMPUTE;
-    g[k + 2] = UNIFORM;
-    g
-};
+const WORLD_GROUP: [u32; 33] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE_RW,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    4,
+    COMPUTE,
+    STORAGE,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+];
+/// The missed pixels' walks again (miss.wgsl): their world's, the rays, their words and the
+/// pyramid they write.
+const MISS_GROUP: [u32; 30] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    4,
+    COMPUTE,
+    STORAGE,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+];
+const _: () = assert!(
+    floor::holds(&[&WORLD_GROUP]) && floor::holds(&[&MISS_GROUP]),
+    "the cast's world's group or the missed pixels' binds past WebGPU's floor"
+);
 
 const _: () = assert!(
     within(compute::FOLD_GROUP, WORLD_GROUP)
-        && within(compute::BEAM_GROUP, WORLD_GROUP)
         && within(compute::CELL_GROUP, WORLD_GROUP)
-        && within(compute::FORGET_GROUP, WORLD_GROUP)
-        && within(compute::MISS_LIST_GROUP, WORLD_GROUP),
-    "the fold, the beam, the cells, the samples, the forgetting and the list's walk bind the cast's world's group"
+        && within(FORGET_GROUP, WORLD_GROUP)
+        && within(
+            [
+                0,
+                COMPUTE,
+                UNIFORM,
+                8,
+                COMPUTE,
+                STORAGE_RW,
+                HEAD_BINDING,
+                COMPUTE,
+                UNIFORM
+            ],
+            WORLD_GROUP
+        ),
+    "the fold, the cells, the forgetting and the light's cells bind the cast's world's group"
 );
 
 impl RaysPass {
@@ -521,37 +733,35 @@ impl RaysPass {
         self.ground_built = Some(GroundPipelines::new(g, pipelines));
         // One group for every kernel over the cast's world but the pixels'.
         let group = &WORLD_GROUP;
-        let pipeline = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
-        let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
+        let pipeline = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
+        let beam_built = pipelines.build_compute(g, SHADER_BEAM, &ASK_GROUP);
         let cells_built = pipelines.build_compute(g, SHADER_CELL, group);
-        let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, &SAMPLE_GROUP);
+        let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, &ASK_GROUP);
         let sample_hit_built = pipelines.build_compute(g, SHADER_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
         let miss_hit_built = pipelines.build_compute(g, SHADER_MISS_HIT, &MISS_HIT_GROUP);
         let beam_hit_built = pipelines.build_compute(g, SHADER_BEAM_HIT, &SAMPLE_HIT_GROUP);
-        let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, group);
+        let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, &ASK_GROUP);
         let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
-        let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &SAMPLE_GROUP);
+        let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &ASK_GROUP);
         let light_sample_hit_built =
             pipelines.build_compute(g, SHADER_LIGHT_SAMPLE_HIT, &LIGHT_SAMPLE_HIT_GROUP);
         let fold_built = pipelines.build_compute(g, SHADER_FOLD, group);
-        let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
-        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
+        let miss_built = pipelines.build_compute(g, SHADER_MISS, &MISS_GROUP);
+        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, &MISS_GROUP);
         let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &compute::HIT_LEAD_GROUP);
         let hit_faces_built =
             pipelines.build_compute(g, SHADER_HIT_FACES, &compute::HIT_FACES_GROUP);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
-        let light_built = pipelines.build_compute(g, SHADER_LIGHT, &compute::LIGHT_GROUP);
+        let light_built = pipelines.build_compute(g, SHADER_LIGHT, &LIGHT_GROUP);
         let light_miss_built = pipelines.build_compute(g, SHADER_LIGHT_MISS, &LIGHT_MISS_GROUP);
         let light_miss_hit_built =
             pipelines.build_compute(g, SHADER_LIGHT_MISS_HIT, &LIGHT_MISS_HIT_GROUP);
-        let light_mark_built =
-            pipelines.build_compute(g, SHADER_LIGHT_MARK, &compute::LIGHT_MARK_GROUP);
+        let light_mark_built = pipelines.build_compute(g, SHADER_LIGHT_MARK, &LIGHT_MARK_GROUP);
         let light_mark_draws_built =
-            pipelines.build_compute(g, SHADER_LIGHT_MARK_DRAWS, &compute::LIGHT_MARK_DRAWS_GROUP);
+            pipelines.build_compute(g, SHADER_LIGHT_MARK_DRAWS, &LIGHT_MARK_DRAWS_GROUP);
         let light_propagate_built =
-            pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &compute::LIGHT_PROPAGATE_GROUP);
-        let light_slide_built =
-            pipelines.build_compute(g, SHADER_LIGHT_SLIDE, &compute::LIGHT_SLIDE_GROUP);
+            pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
+        let light_slide_built = pipelines.build_compute(g, SHADER_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
@@ -648,7 +858,8 @@ impl RaysPass {
             light_footprint_owed: false,
             refold: false,
             group: 0,
-            sample_group: 0,
+            ask_group: 0,
+            miss_group: 0,
             sample_hit_group: 0,
             miss_hit_group: 0,
             beam_hit_group: 0,
@@ -1185,9 +1396,25 @@ impl RaysPass {
         ];
         if bindings != c.bindings {
             release(c.group);
-            c.group = cast_group(g, &c.miss_built, bindings);
-            release(c.sample_group);
-            c.sample_group = g.bind_group(
+            c.group = cast_group(g, &c.cells_built, bindings);
+            release(c.miss_group);
+            c.miss_group = g.bind_group(
+                c.miss_built.layouts[0],
+                &[
+                    buf_entry(0, c.eye),
+                    buf_entry(1, c.clipmap),
+                    buf_entry(2, ground),
+                    view_entry(3, bindings[3]),
+                    buf_entry(4, palette_indices),
+                    buf_entry(5, c.shards),
+                    buf_entry(6, c.overwrites),
+                    buf_entry(7, pool),
+                    buf_entry(8, c.beams),
+                    buf_entry(9, c.pyramid),
+                ],
+            );
+            release(c.ask_group);
+            c.ask_group = g.bind_group(
                 c.sample_built.layouts[0],
                 &[
                     buf_entry(0, c.eye),
@@ -1310,7 +1537,7 @@ impl RaysPass {
                 g,
                 [
                     &c.light_built,
-                    &c.miss_built,
+                    &c.cells_built,
                     &c.raster.light_boxes_built,
                     &c.light_miss_built,
                     &c.light_mark_built,
@@ -1408,12 +1635,7 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != pyramid::FORGETS_NONE {
                 g.set_pipeline(pass, c.forget_built.id);
-                g.dispatch(
-                    pass,
-                    pyramid::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]),
-                    1,
-                    1,
-                );
+                g.dispatch(pass, pyramid::ENTRIES.div_ceil(ROW_LANES), 1, 1);
             }
             g.end(pass);
             for (span, pipeline, [x, y], w) in [
@@ -1421,13 +1643,13 @@ impl RaysPass {
                     GpuSpanName::beam,
                     &c.beam_hit_built,
                     c.grid.corners,
-                    compute::BEAM_WORKGROUP,
+                    BEAM_WORKGROUP,
                 ),
                 (
                     GpuSpanName::beam,
                     &c.beam_built,
                     c.grid.corners,
-                    compute::BEAM_WORKGROUP,
+                    BEAM_WORKGROUP,
                 ),
                 (
                     GpuSpanName::beam,
@@ -1447,12 +1669,7 @@ impl RaysPass {
                     c.grid.samples,
                     SAMPLE_WORKGROUP,
                 ),
-                (
-                    GpuSpanName::px,
-                    &c.pipeline,
-                    c.size,
-                    compute::CAST_WORKGROUP,
-                ),
+                (GpuSpanName::px, &c.pipeline, c.size, CAST_WORKGROUP),
             ] {
                 if kind == FrameKind::px && span != GpuSpanName::px {
                     continue;
@@ -1465,6 +1682,7 @@ impl RaysPass {
                     g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
                 }
                 if beam_left {
+                    group = c.ask_group;
                     g.copy_buf(
                         encoder,
                         (c.beam_left, word_bytes(3)),
@@ -1477,7 +1695,7 @@ impl RaysPass {
                     g.write_buf(c.sample_left, 0, bytes(&SAMPLE_LEFT_START));
                 }
                 if span == GpuSpanName::sample {
-                    group = c.sample_group;
+                    group = c.ask_group;
                     g.copy_buf(
                         encoder,
                         (c.sample_left, word_bytes(3)),
@@ -1531,7 +1749,7 @@ impl RaysPass {
                 word_bytes(4),
             );
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::miss).pass());
-            g.set_bind_group(pass, 0, c.group, &[]);
+            g.set_bind_group(pass, 0, c.miss_group, &[]);
             g.set_pipeline(pass, c.miss_list_built.id);
             g.dispatch_indirect(pass, c.miss_left, 0);
             g.set_pipeline(pass, c.miss_built.id);
@@ -1594,9 +1812,8 @@ impl RaysPass {
                 let pass = g.compute_pass(encoder, stamp);
                 g.set_bind_group(pass, 0, c.light_groups[4], &[]);
                 g.set_pipeline(pass, c.light_mark_built.id);
-                let w = compute::LIGHT_MARK_WORKGROUP;
                 let [x, y] = c.size;
-                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
                 g.end(pass);
             }
             // The beam, the samples, their boxes drawn, the slots taking
@@ -1609,10 +1826,9 @@ impl RaysPass {
             // read anew first, a thread a tile (`light_slide_cs`).
             if c.light_slid {
                 let n = light::tiles(shadow::SIZE);
-                let w = compute::LIGHT_SLIDE_WORKGROUP;
                 g.set_bind_group(pass, 0, c.light_groups[7], &[]);
                 g.set_pipeline(pass, c.light_slide_built.id);
-                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+                g.dispatch(pass, n.div_ceil(SQUARE_SIDE), n.div_ceil(SQUARE_SIDE), 1);
             }
             // The tiles the drawn receivers stand on marked, timed with the
             // beam: where the decor and the actors drawn stand, a thread each
@@ -1621,21 +1837,19 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.light_groups[5], &[]);
             g.set_pipeline(pass, c.light_mark_draws_built.id);
             let cap = c.generator.instances().map_or(0, |p| p.cap);
-            let w = compute::LIGHT_MARK_DRAWS_WORKGROUP;
-            g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
+            g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(ROW_LANES), 1, 1);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
             g.set_pipeline(pass, c.light_propagate_built.id);
-            let w = compute::LIGHT_PROPAGATE_WORKGROUP;
             let n = light::tiles(shadow::SIZE);
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
-            // The beam and the cells' starts by the eye's passes over the
-            // light's world's group, which hands them the light's head. Each
-            // as many workgroups as the propagation left it
-            // (`light::ARGS_WORDS`).
+            g.dispatch(pass, n.div_ceil(SQUARE_SIDE), n.div_ceil(SQUARE_SIDE), 1);
+            // The beam over the samples' group and the cells' starts over the
+            // light's world's group, each handed the light's head. Each as
+            // many workgroups as the propagation left it (`light::ARGS_WORDS`).
             let args = |w: u32| word_bytes(w as usize);
-            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
+            g.set_bind_group(pass, 0, c.light_groups[10], &[]);
             g.set_pipeline(pass, c.light_beam_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
+            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
             g.set_pipeline(pass, c.light_cells_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
             g.end(pass);
@@ -1901,7 +2115,7 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     for (w, whole) in [
         (
             light::ARGS_BEAM,
-            across(light::beam_across(shadow::SIZE), compute::BEAM_WORKGROUP),
+            across(light::beam_across(shadow::SIZE), BEAM_WORKGROUP),
         ),
         (
             light::ARGS_CELLS,
@@ -1910,7 +2124,7 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
         (light::ARGS_SAMPLE, across(samples, SAMPLE_WORKGROUP)),
         (
             light::ARGS_SAMPLE_BOX,
-            across(samples, compute::SAMPLE_BOX_WORKGROUP),
+            across(samples, [SQUARE_SIDE, SQUARE_SIDE, 1]),
         ),
         (light::ARGS_SLOT, [tiles, tiles, 1]),
     ] {
@@ -1994,7 +2208,7 @@ fn light_groups(
             .collect::<Vec<_>>()
     };
     [
-        g.bind_group(walk.layouts[0], &of(&compute::LIGHT_GROUP)),
+        g.bind_group(walk.layouts[0], &of(&LIGHT_GROUP)),
         cast_group(
             g,
             world,
@@ -2028,10 +2242,10 @@ fn light_groups(
             )
         },
         g.bind_group(miss.layouts[0], &of(&LIGHT_MISS_GROUP)),
-        g.bind_group(mark.layouts[0], &of(&compute::LIGHT_MARK_GROUP)),
-        g.bind_group(mark_draws.layouts[0], &of(&compute::LIGHT_MARK_DRAWS_GROUP)),
-        g.bind_group(propagate.layouts[0], &of(&compute::LIGHT_PROPAGATE_GROUP)),
-        g.bind_group(slide.layouts[0], &of(&compute::LIGHT_SLIDE_GROUP)),
+        g.bind_group(mark.layouts[0], &of(&LIGHT_MARK_GROUP)),
+        g.bind_group(mark_draws.layouts[0], &of(&LIGHT_MARK_DRAWS_GROUP)),
+        g.bind_group(propagate.layouts[0], &of(&LIGHT_PROPAGATE_GROUP)),
+        g.bind_group(slide.layouts[0], &of(&LIGHT_SLIDE_GROUP)),
         g.bind_group(miss_hit.layouts[0], &of(&LIGHT_MISS_HIT_GROUP)),
         g.bind_group(
             sample_hit.layouts[0],
@@ -2043,6 +2257,6 @@ fn light_groups(
                 buf_entry(HEAD_BINDING, head),
             ],
         ),
-        g.bind_group(sample.layouts[0], &of(&SAMPLE_GROUP)),
+        g.bind_group(sample.layouts[0], &of(&ASK_GROUP)),
     ]
 }

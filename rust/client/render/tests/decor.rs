@@ -26,6 +26,7 @@ use pxl_engine::{area, eye, value, wrap_idx, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
     SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
+    SHADER_LIGHT_MARK_DRAWS,
 };
 use wgpu::util::DeviceExt;
 
@@ -3392,8 +3393,8 @@ fn hand_frames_answer_as_the_rust() {
     ];
     let mark_draws = pipeline(
         &device,
-        "light_mark_draws generated",
-        include_str!("../src/frame/shader/light_mark_draws.gen.wgsl"),
+        "light_mark_draws by hand",
+        src(SHADER_LIGHT_MARK_DRAWS),
         "light_mark_draws_cs",
     );
     let mut totals = Tally::default();
