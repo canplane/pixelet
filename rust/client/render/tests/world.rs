@@ -880,6 +880,7 @@ fn hand_world_answers_as_the_rust() {
             include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
             include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
             hand,
+            include_str!(concat!(env!("OUT_DIR"), "/shader/world_split.wgsl")),
         ]
         .join("\n"),
     );

@@ -5,22 +5,22 @@
 //! to find next frame. The walk's from the root, as `light_miss_hit_cs`'s is: a walk resumed
 //! from its cell's start is not asked of it. Skipped where no adapter answers.
 
+mod keeping;
 mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_engine::answer::{self, In, Kind};
-use pxl_engine::cast::{self, Detail, End, Query, Ray, Spacing, Until};
+use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, BUCKET, CLAIMED, NONE};
-use pxl_engine::way::tree;
-use pxl_engine::world::{self, Inheritance};
+use pxl_engine::pyramid::{self, BUCKET, CLAIMED};
 use pxl_engine::{eye, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
 };
 
+use keeping::*;
 use real_world::{Built, World, FINEST, NOTCH};
 
 /// Where the eye is, a leaf cell: east of X = 0, by the seam on the far side, a few cells over
@@ -38,201 +38,6 @@ const FRAME: u32 = 9;
 const TELLS: u32 = 4;
 /// Rays that visit a node for it to be no grazing's.
 const SURE: u32 = 9;
-
-/// How many visits each node had, by its zoom, its index and the zoom it was asked at.
-type Met = BTreeMap<(Zoom, [i32; 3], Zoom), u32>;
-
-/// Why each visit was answered as it was: off a slot, or of the world because no slot may
-/// keep it, none holds it, one holds it at other zooms, or this pass keeps it.
-#[derive(Default, Clone, Copy)]
-struct Asks {
-    visits: u64,
-    kept: u64,
-    past_roots: u64,
-    absent: u64,
-    other_zooms: u64,
-    own_pass: u64,
-}
-
-impl Asks {
-    fn of_world(&self) -> u64 {
-        self.past_roots + self.absent + self.other_zooms + self.own_pass
-    }
-}
-
-fn is_node(t: &[u32], w: usize, zoom: Zoom, c: [i32; 3]) -> bool {
-    let n = w + pyramid::W_NODE as usize;
-    t[n] == zoom && t[n + 1] == c[0] as u32 && t[n + 2] == c[1] as u32 && t[n + 3] == c[2] as u32
-}
-
-/// `Writing` over a table of words, one walk at a time.
-struct Keeping<'a> {
-    w: World<'a>,
-    cuts: [Cut; 2],
-    table: &'a mut [u32],
-    tag: u32,
-    asks: Asks,
-    /// Every node visited at the zoom asked, how many times, where it is wanted.
-    met: Option<&'a mut Met>,
-}
-
-impl Query for Keeping<'_> {
-    type At = Inheritance;
-
-    fn root(&mut self, node: [i32; 3]) -> Inheritance {
-        Inheritance::of(&self.w, (0, node))
-    }
-
-    fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
-    }
-
-    fn node(
-        &mut self,
-        n: &mut Inheritance,
-        zoom: Zoom,
-        c: [i32; 3],
-        zooms: [Zoom; 2],
-        _: f32,
-    ) -> In<[u32; 2]> {
-        self.asks.visits += 1;
-        if let Some(met) = &mut self.met {
-            *met.entry((zoom, c, zooms[1])).or_default() += 1;
-        }
-        let t = &mut *self.table;
-        let (mut to, mut key) = (NONE, CLAIMED);
-        let mut other_zooms = false;
-        let mut own_pass = false;
-        let mut unstamped = false;
-        let keeps = pyramid::keeps(zoom, c);
-        if keeps {
-            let first = pyramid::entry_of(zoom, c);
-            let mut free = NONE;
-            let mut k = 0;
-            while k < BUCKET {
-                let w = pyramid::entry_at(first + k) as usize;
-                let held = t[w];
-                if held != CLAIMED && held != 0 && is_node(t, w, zoom, c) {
-                    if pyramid::holds(held, zooms) {
-                        if pyramid::tag_of(held) == self.tag {
-                            own_pass = true;
-                            to = NONE;
-                            free = NONE;
-                            break;
-                        }
-                        let a = w + pyramid::W_INHERITANCE as usize;
-                        let handed = [t[a], t[a + 1], t[a + 2], t[a + 3]];
-                        let at = w + pyramid::W_ASSET as usize;
-                        let asset = [t[at], t[at + 1]];
-                        let word = t[w + pyramid::W_KIND as usize];
-                        if pyramid::stamp_holds(word, held, asset, handed, zoom, c) {
-                            *n = Inheritance::of_words(handed);
-                            self.asks.kept += 1;
-                            return In {
-                                kind: pyramid::kind_of(word),
-                                asset,
-                            };
-                        }
-                        // Words of two writes: asked of the world, and left to the walk that
-                        // writes.
-                        unstamped = true;
-                        to = NONE;
-                        free = NONE;
-                        break;
-                    }
-                    other_zooms = true;
-                    if pyramid::tag_of(held) / pyramid::PASSES < self.tag / pyramid::PASSES {
-                        (to, key) = (first + k, held);
-                    }
-                } else if held == 0 && free == NONE {
-                    free = first + k;
-                }
-                k += 1;
-            }
-            if to == NONE && free != NONE {
-                (to, key) = (free, 0);
-            } else if to == NONE && k == BUCKET {
-                let v = first + pyramid::victim(zoom, c);
-                (to, key) = (v, t[pyramid::entry_at(v) as usize]);
-            }
-        }
-        let which = if !keeps {
-            &mut self.asks.past_roots
-        } else if unstamped {
-            &mut self.asks.other_zooms
-        } else if own_pass {
-            &mut self.asks.own_pass
-        } else if other_zooms {
-            &mut self.asks.other_zooms
-        } else {
-            &mut self.asks.absent
-        };
-        *which += 1;
-        let pool = tree::Read(self.w.pool);
-        let mut held = self.w;
-        let answer = world::node(
-            &mut held,
-            &self.w,
-            &self.w,
-            &pool,
-            n,
-            (zoom, c),
-            zooms,
-            self.cuts,
-        );
-        if to != NONE && key != CLAIMED {
-            put_entry(
-                t,
-                to,
-                zoom,
-                c,
-                pyramid::key(self.tag, zooms),
-                &answer,
-                n.words(),
-            );
-        }
-        answer
-    }
-}
-
-fn put_entry(
-    t: &mut [u32],
-    slot: u32,
-    zoom: Zoom,
-    c: [i32; 3],
-    key: u32,
-    a: &In<[u32; 2]>,
-    words: [u32; 4],
-) {
-    let w = pyramid::entry_at(slot) as usize;
-    t[w + pyramid::W_KEY as usize] = key;
-    t[w + pyramid::W_KIND as usize] = pyramid::stamped(a.kind, key, a.asset, words, zoom, c);
-    t[w + pyramid::W_ASSET as usize] = a.asset[0];
-    t[w + pyramid::W_ASSET as usize + 1] = a.asset[1];
-    let h = w + pyramid::W_INHERITANCE as usize;
-    t[h..h + 4].copy_from_slice(&words);
-    let n = w + pyramid::W_NODE as usize;
-    t[n] = zoom;
-    t[n + 1] = c[0] as u32;
-    t[n + 2] = c[1] as u32;
-    t[n + 3] = c[2] as u32;
-}
-
-/// What the world answers of a node with nothing handed down, what it hands on included:
-/// what a stackless walk asks.
-fn truth(
-    w: World,
-    cuts: [Cut; 2],
-    zoom: Zoom,
-    c: [i32; 3],
-    zooms: [Zoom; 2],
-) -> (In<[u32; 2]>, [u32; 4]) {
-    let pool = tree::Read(w.pool);
-    let mut held = w;
-    let mut at = Inheritance::of(&w, (zoom, c));
-    let a = world::node(&mut held, &w, &w, &pool, &mut at, (zoom, c), zooms, cuts);
-    (a, at.words())
-}
 
 /// A light box and where its rays start, as a host lays them for the eye (light.rs `Starts`).
 fn box_of(c: &Case) -> (Light, Starts) {
@@ -314,14 +119,6 @@ struct Case {
     /// Least of each kind of thing this seeded case meets, a third of what it met: which walk
     /// reads what another keeps moves some.
     least: &'static [(&'static str, u32)],
-}
-
-fn q8(units: [i32; 3]) -> [i32; 3] {
-    [
-        units[0].wrapping_shl(FRAC_W) | 5,
-        units[1].wrapping_shl(FRAC_W) | 77,
-        units[2].wrapping_shl(FRAC_W) | 13,
-    ]
 }
 
 /// What a slot's walk and the table left of the node that decides it.
@@ -566,7 +363,7 @@ fn lay_traps(table: &mut [u32], w: World, cuts: [Cut; 2], nodes: &Met) -> Vec<La
     let own = pyramid::tag(FRAME, pyramid::LIGHT_MISSED_PASS);
     let mut turn = 0usize;
     let mut torn = 0u32;
-    for (n, &(zoom, c, band)) in nodes.keys().enumerate() {
+    for (n, &(zoom, c, [_, band])) in nodes.keys().enumerate() {
         // Below the top, whose nodes every ray meets, one in so many.
         if zoom < 12 || !pyramid::keeps(zoom, c) || n % 13 != 0 {
             continue;
@@ -1541,9 +1338,15 @@ fn run_case(
     }
     let by_hand: BTreeSet<_> = hand_kept
         .keys()
-        .map(|k| (k.0, k.1, k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS)))
+        .map(|k| {
+            (
+                k.0,
+                k.1,
+                [k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS); 2],
+            )
+        })
         .collect();
-    let grazed = |k: &(Zoom, [i32; 3], Zoom)| met_ref.get(k).copied().unwrap_or(0) < SURE;
+    let grazed = |k: &(Zoom, [i32; 3], [Zoom; 2])| met_ref.get(k).copied().unwrap_or(0) < SURE;
     let mut alone: BTreeSet<u32> = asked_in
         .iter()
         .filter(|(_, n)| **n == 1)
@@ -1586,7 +1389,11 @@ fn run_case(
         .filter(|k| !hand_kept.contains_key(*k))
         .map(|k| {
             met_ref
-                .get(&(k.0, k.1, k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS)))
+                .get(&(
+                    k.0,
+                    k.1,
+                    [k.2 >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS); 2],
+                ))
                 .copied()
                 .unwrap_or(0)
         })
@@ -1596,7 +1403,7 @@ fn run_case(
     // The slots laid, as the Rust's rule leaves each.
     let mut trap_cnt: BTreeMap<Trap, (u32, u32, u32)> = BTreeMap::new();
     for l in &traps {
-        if !alone.contains(&l.first) || !met_ref.contains_key(&(l.zoom, l.c, l.band)) {
+        if !alone.contains(&l.first) || !met_ref.contains_key(&(l.zoom, l.c, [l.band; 2])) {
             continue;
         }
         let e = trap_cnt.entry(l.trap).or_default();
@@ -1811,7 +1618,8 @@ fn run_case(
             "{asked} asked against {of_world} of {visits} visits"
         ));
     }
-    if most_visits > cast::STEPS_MOST / 8 {
+    // A ray down a column of no ground falls to its reach, as far as `t_max` is from it.
+    if most_visits > cast::STEPS_MOST / 4 {
         fail(format!(
             "a ray of {most_visits} visits near the walk's bound"
         ));

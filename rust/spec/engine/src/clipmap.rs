@@ -736,6 +736,15 @@ impl Entry {
     pub fn slot(&self) -> u32 {
         (self.present - 1) as u32
     }
+
+    /// Whether a query, or what one handed on, reads it other than as `was`: another brick
+    /// or slot. A brick wanted absent is read as well, its cells off a coarser clip level
+    /// where its block's bound is folded (`fold`); a fill's ticket is no query's.
+    pub fn moved_from(&self, was: Entry) -> bool {
+        self.brick[0] != was.brick[0]
+            || self.brick[1] != was.brick[1]
+            || self.present != was.present
+    }
 }
 
 /// The row of the clip levels' buffer each clip level's first brick is at: past
@@ -984,4 +993,29 @@ fn entry_at(zoom: Zoom, from: Zoom, [x, y]: [u32; 2]) -> (u32, [u32; 2]) {
     )]
     let j = if zoom >= from { 0 } else { from - zoom };
     (j, [x >> j, y >> j])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Entry;
+
+    #[test]
+    fn moved_from_reads_what_a_query_reads() {
+        let at = |b: [i32; 2], present: i32, ticket: u32| Entry {
+            brick: b,
+            present,
+            ticket,
+        };
+        // Present: another brick or slot moved it, a ticket did not.
+        assert!(at([1, 2], 3, 0).moved_from(at([1, 5], 3, 0)));
+        assert!(at([1, 2], 3, 0).moved_from(at([4, 2], 3, 0)));
+        assert!(at([1, 2], 3, 0).moved_from(at([1, 2], 4, 0)));
+        assert!(!at([1, 2], 3, 7).moved_from(at([1, 2], 3, 0)));
+        // Present on one side alone.
+        assert!(at([1, 2], 3, 0).moved_from(at([1, 2], 0, 0)));
+        assert!(at([1, 2], 0, 0).moved_from(at([1, 2], 3, 0)));
+        // Neither present: another brick moved it, a ticket did not.
+        assert!(at([1, 2], 0, 0).moved_from(at([8, 9], 0, 5)));
+        assert!(!at([1, 2], 0, 0).moved_from(at([1, 2], 0, 5)));
+    }
 }

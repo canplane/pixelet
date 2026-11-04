@@ -871,9 +871,15 @@ fn assemble(out: &Path) {
     }
     assert!(rastered, "no shader holds raster.wgsl's `Raster`");
     // The world's query asked word for word, as the test and Tint take it, in no shader.
-    let asked = ["walk_word", "world_word", "world", "world_asked"]
-        .map(read)
-        .join("\n");
+    let asked = [
+        "walk_word",
+        "world_word",
+        "world",
+        "world_split",
+        "world_asked",
+    ]
+    .map(read)
+    .join("\n");
     let asked = read_consts(&asked);
     let module = wgsl::parse_str(&asked)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));

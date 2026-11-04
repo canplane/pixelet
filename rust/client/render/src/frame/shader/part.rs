@@ -400,6 +400,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_word",
         "walk_node",
         "world",
+        "world_split",
         "light_aim",
         "light_miss",
     ],
