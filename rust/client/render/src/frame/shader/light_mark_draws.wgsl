@@ -10,7 +10,7 @@
 // (gpu/ray/cast.rs `Cast::actors`), no more than `light::ACTORS`. Run after decor is
 // placed, before the propagation.
 
-/// The decor compacted this frame as its draws read it (pxl-shader decor.rs
+/// The decor compacted this frame as its draws read it (decor_compact.wgsl
 /// `decor_compact_cs`): its drawing words, its regions and its instances.
 @group(0) @binding(18) var<storage, read> drawing: array<u32>;
 @group(0) @binding(19) var<storage, read> regions: array<u32>;

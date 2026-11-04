@@ -137,8 +137,8 @@ if xpute:
     task("check-xpute")
 
 # The tests of what the same selection reached.
-# The web app's test compiles the generated shaders with Tint.
-if under("ts/client/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
+# The shader test compiles the shaders with Tint.
+if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
     task("test-ts")
 if xpute:
     task("test-xpute")

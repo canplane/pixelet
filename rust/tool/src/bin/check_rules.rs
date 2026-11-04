@@ -2,9 +2,8 @@
 
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even where clippy
-//! does not see it, no CommonJS file, each generated shader made from the
-//! sources the tree holds now, the layers' order, where nothing names what is
-//! above it, the layers read by the query alone, the screen's pixels read
+//! does not see it, no CommonJS file, the layers' order, where nothing names
+//! what is above it, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
@@ -13,7 +12,6 @@
 use std::process::{Command, ExitCode};
 
 use pxl_tool::root;
-use pxl_tool::shader::{inputs_digest, stale};
 use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
@@ -479,7 +477,6 @@ fn run() -> Result<Vec<String>, String> {
         ROUNDING_ROOTS.iter().any(|r| f.starts_with(r))
             && !ROUNDING_VARIANT_FILES.contains(f)
             && rounded.is_match(f)
-            && !f.ends_with(".gen.wgsl")
     }) {
         let calls = !f.ends_with(".rs");
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -567,22 +564,13 @@ fn run() -> Result<Vec<String>, String> {
     }
 
     problems.extend(unlinked(&files, &read));
-
-    // The generated shaders' stamp names the digest of the sources they were
-    // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
-    // stale.
-    for f in stale(&root, &inputs_digest(&root)?) {
-        problems.push(format!(
-            "{f}: stale against pxl-engine's sources; run `cargo shader-wgsl` in rust/"
-        ));
-    }
     Ok(problems)
 }
 
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the query as the one seam, the screen's pixels and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the query as the one seam, the screen's pixels and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {

@@ -3,7 +3,7 @@
 // A beam ray walked from the world's root to the first cell that fills or lacks, or the first
 // split too narrow to share (`cast::walk`, `Until::Beam`), through the observed pyramid writing
 // what it asks (ask.wgsl), either observer's (beam.wgsl, light_beam.wgsl). Its line is left as
-// it goes (pxl-shader beam.rs `Leaving`): what was handed each node it goes into is written at
+// it goes (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at
 // that node's zoom, read back where the walk pops to its child, in place of a stack.
 
 /// What was handed the line's node at `zoom`, at `base` (`beam::LINE_INHERITANCE`).

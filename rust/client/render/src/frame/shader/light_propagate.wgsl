@@ -64,7 +64,7 @@ fn up_at(u: Up, k: u32) -> vec2<i32> {
 }
 
 /// Pass `w`'s rows raised to hold entry `e` of the list it takes, its threads one of
-/// `across` a side of the entry's tile each (pxl-shader light.rs `opened`).
+/// `across` a side of the entry's tile each (pxl-engine `light::LIST_ACROSS`).
 fn opened(w: u32, e: u32, across: u32) {
   let per = LIGHT_LIST_ACROSS * LIGHT_LISTED_LANES;
   args_most(w + 1u, ((e + 1u) * across * across + per - 1u) / per);
@@ -73,7 +73,7 @@ fn opened(w: u32, e: u32, across: u32) {
 /// The places of list `which`, `across` a row, whose reach `lo`..`hi` about the tile
 /// they lie on, less `off`, holds claimed tile `t`, listed where no claim of the cast
 /// listed them yet (`light::listed_marks_at`), and the rows of the passes that take
-/// them opened (pxl-shader light.rs `Map::enlist`).
+/// them opened (`opened`).
 fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi: vec2<i32>, off: vec2<i32>) {
   let marks = listed_marks_at(which);
   let at = listed_at(which);
@@ -100,8 +100,8 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
   }
 }
 
-/// What feeds claimed tile `t` listed at each level (pxl-shader light.rs `Map::reach`,
-/// `Map::on`): a slot its own tile; a cell a tile either way; a beam ray the cells whose
+/// What feeds claimed tile `t` listed at each level (light_list.wgsl `light_needs`, its
+/// rule the other way): a slot its own tile; a cell a tile either way; a beam ray the cells whose
 /// window of `2 + 2 · BEAM_WINDOW` holds it, its number less the tile beam ray 0 lies on
 /// (`light_on`).
 fn enlist(current: u32, t: vec2<i32>) {

@@ -48,8 +48,12 @@ fn miss_hit_cs(
   }
   let face = face_of(p.aim, w);
   var faces = 0u;
-  if (w.ends == 1u) {
-    faces = select(FACE_BOX, keep_hit(w, face, id), hit_fill(w) == 0u);
+  // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both
+  // of a `select` are taken, so the hit is kept under an `if`.
+  if (w.ends == 1u && hit_fill(w) != 0u) {
+    faces = FACE_BOX;
+  } else if (w.ends == 1u) {
+    faces = keep_hit(w, face, id);
   }
   write_ray(id, ray_word(w, w.visits, face, faces));
 }

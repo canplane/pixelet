@@ -36,7 +36,7 @@ fn eye_vec3(k: u32) -> vec3f {
 }
 
 // The ray along a px's aim (`aim`), as the cast formed it
-// (pxl-shader `eye_ray`): pxl-engine cast.rs `through`'s mirror,
+// (walk_node.wgsl `eye_aim`): pxl-engine cast.rs `through`'s mirror,
 // off the eye's own words, so the t a ray left is laid along the very
 // direction it was cast in.
 fn through(a: vec3f) -> vec3f {

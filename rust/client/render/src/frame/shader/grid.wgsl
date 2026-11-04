@@ -10,11 +10,12 @@ fn cell_start(c: vec2<u32>) -> u32 {
 }
 
 /// The tangents across and up where drawn pixel `p` of the `size` the rays are takes its
-/// ray, its middle off by the eye's jitter, row 0 at the top.
+/// ray, its middle off by the eye's jitter, row 0 at the top: the one place a drawn pixel's
+/// ray is worked out, every pass that walks or marks one reads it here.
 fn px_tan(p: vec2<u32>, size: vec2<u32>) -> vec2<f32> {
   let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let ndc = (vec2<f32>(p) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);
-  return vec2<f32>(ndc.x, -ndc.y) * vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
+  let at = (vec2<f32>(p) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0;
+  return vec2<f32>(at.x - 1.0, 1.0 - at.y) * vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
 }
 
 /// The screen's cell holding the point at the tangents `t` (`Grid::cell`).

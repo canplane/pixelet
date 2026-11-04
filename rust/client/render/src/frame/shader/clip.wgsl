@@ -170,6 +170,6 @@ fn bounded(place: u32, cell: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
     return NodeBound(vec4<i32>(0i), clip, false, false, s.place);
   }
   let j = select(0u, clip - zoom, zoom < clip);
-  let e = level_word(brick_at(lookup_slot(s.place)), j, s.at >> vec2<u32>(j));
+  let e = level_entry(brick_at(lookup_slot(s.place)), j, s.at >> vec2<u32>(j));
   return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, true, s.place);
 }

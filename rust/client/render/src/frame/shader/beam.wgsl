@@ -2,7 +2,7 @@
 
 // The eye's beam rays `beam_hit_cs` left, each walked from the root asking the world
 // (beam_walk.wgsl), its line left in the eye's beam rays' buffer (pxl-engine
-// `beam::Grid::corners`, pxl-shader eye.rs `Eye`). A thread each at its place in their list.
+// `beam::Grid::corners`, eye_bind.wgsl). A thread each at its place in their list.
 
 const WALK_PASS: u32 = BEAM_PASS;
 const VISITS_TALLY: u32 = EYE_BEAM_TALLY;

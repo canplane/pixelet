@@ -1,7 +1,7 @@
 // pxl-render/resume.wgsl
 
-// Where a ray's walk starts off its cell (pxl-shader observer.rs `resume`, beam.rs
-// `resume_walk`): the words a cast's beam rays left, the eye's or the light's.
+// Where a ray's walk starts off its cell (pxl-engine `beam::CELL_WORDS`, `beam::LINE_WORDS`):
+// the words a cast's beam rays left, the eye's or the light's.
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 

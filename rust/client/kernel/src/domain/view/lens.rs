@@ -54,7 +54,7 @@ impl Stepped {
 }
 
 /// What a GPU's cast of the screen's rays reads of the eye (pxl-engine
-/// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
+/// `eye`, pxl-render eye_bind.wgsl): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and how far it draws (observation.rs `eye_draw_dist`); the unit right;

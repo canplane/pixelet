@@ -1,6 +1,6 @@
 // pxl-render/sample_eye.wgsl
 
-// The eye as the samples' walks take it (pxl-shader eye.rs `Eye`): each sample its thread's,
+// The eye as the samples' walks take it (eye_bind.wgsl): each sample its thread's,
 // every one needed, a ray at the screen's tangents.
 
 const WALK_PASS: u32 = SAMPLES_PASS;

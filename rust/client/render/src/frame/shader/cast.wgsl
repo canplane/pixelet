@@ -1,7 +1,8 @@
 // pxl-render/cast.wgsl
 
 // Each drawn pixel's ray off the visible sample the raster kept at it (pxl-engine `raster`;
-// gpu/ray/raster.rs), or the sky, a thread a pixel (pxl-shader observer.rs `resolve`). The cell
+// gpu/ray/raster.rs), or the sky, a thread a pixel, as light.wgsl's `took` and `sky` take a
+// slot's. The cell
 // it takes is the visible sample's, where its ray enters that sample's cell across the axis the
 // sample entered by, tested again exactly where a GPU's f32 may part the two (`cast::entry`),
 // with what lies about its face, the sample's; the sky where no sample about it met anything.
@@ -32,7 +33,7 @@ fn add_cnt(on: bool, lane: u32) {
 
 /// One more missed pixel listed for its walk again: its place off the count, the rows the list
 /// fills raised to hold it by the place that opens each; the first past the list's room has
-/// the walk over `whole` workgroups dispatched instead (pxl-shader cast.rs `enlist`).
+/// the walk over `whole` workgroups dispatched instead (pxl-engine `ray::MISS_ARGS_WORDS`).
 fn enlist(whole: vec2<u32>) -> u32 {
   let at = atomicAdd(&marks[MISS_ARGS_CNT], 1u);
   let per = MISS_LANES * MISS_ACROSS;
@@ -85,11 +86,7 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (!tiles_claimed(tiles, changed_at[tile])) {
     return;
   }
-  // Where its ray goes through the pixel, its middle off by the eye's jitter (`px_tan`).
-  let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let ndc_x = (f32(id.x) + 0.5 + jitter.x) / f32(size.x) * 2.0 - 1.0;
-  let ndc_y = 1.0 - (f32(id.y) + 0.5 + jitter.y) / f32(size.y) * 2.0;
-  let px = vec2<f32>(ndc_x * eye_f32(TAN), ndc_y * eye_f32(TAN + 1u));
+  let px = px_tan(id.xy, size.xy);
   let aim = eye_aim(px);
   let dir = ray_dir(aim.dir);
   let visible = textureLoad(visibility, vec2<i32>(id.xy), 0i, 0i).x;

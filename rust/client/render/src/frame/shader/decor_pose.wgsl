@@ -7,8 +7,7 @@
 // is walked cell by cell. One ask of the world, in the loop (`world_cell`), so a thread
 // holds what the loop reads after and no more. No stack, no array, no struct of `var`.
 //
-// Footing and pose are one pass, as neither holds a walk: pxl-shader's `decor_footing_cs`
-// stood apart so that no pass held the world's walk twice.
+// Footing and pose are one pass, as neither holds a walk.
 //
 // Of a record a thread writes its first word, and its box's height and sink. The eye's
 // words are eye_bind.wgsl's.

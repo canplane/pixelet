@@ -39,8 +39,8 @@ fn height([x, y]: [i32; 2]) -> i32 {
 /// Where a tower stands in a brick of the leaves, on each axis.
 const TOWER: core::ops::Range<i32> = 40..48;
 
-/// The clip levels as one side holds them, laid out as a GPU's are (pxl-shader
-/// world.rs `World`): every clip level's entries then their first bricks
+/// The clip levels as one side holds them, laid out as a GPU's are (pxl-render
+/// clip.wgsl): every clip level's entries then their first bricks
 /// (`ORIGIN_AT`), the eye's clip levels' entries, and each slot's brick.
 #[derive(Clone, Copy)]
 struct Clipmap<'a> {

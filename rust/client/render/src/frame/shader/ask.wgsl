@@ -1,7 +1,7 @@
 // pxl-render/ask.wgsl
 
 // A ray's walk, each node off the observed pyramid or asked of the world there and then and
-// kept (pxl-engine `cast::walk`, pxl-shader pyramid.rs `Writing`). No stack: a node asked of the
+// kept (pxl-engine `cast::walk`, `pyramid`). No stack: a node asked of the
 // world finds what is handed it from the top (`world_root`). The pyramid's words all atomic, as
 // a slot's key is exchanged to claim it: no compare-and-swap, which Safari's WGSL compiler
 // writes Metal for that does not compile (doc/experiment/20261103-shaders-on-two-phones). A

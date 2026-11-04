@@ -33,7 +33,7 @@ pub mod light {
     /// rasterizer's polygon offset: its greatest slope, in depth a texel
     /// (light.rs `slope`), times this. The raster casters' depth pipelines take it
     /// (pxl-render record.rs `depth_only`), and the world's cast adds it
-    /// (pxl-shader `light_cs`), so the two kinds of caster shadow alike. A
+    /// (pxl-render light.wgsl `light_cs`), so the two kinds of caster shadow alike. A
     /// receiver compares each tap at its own plane's depth there (pxl-render
     /// shadow.wgsl), so the push covers only the texels a tap filters, a texel
     /// each way, along the steeper axis; the receiver's texel of normal offset

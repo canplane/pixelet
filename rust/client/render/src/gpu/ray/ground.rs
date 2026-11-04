@@ -497,7 +497,7 @@ const _: () = assert!(
 
 /// The clip levels' bricks' cells' four palette indices, a word a cell in the
 /// slots' order: written by the fill off each handed brick (`height_cs`), read
-/// by the cast at a hit (pxl-shader `World`'s `PaletteWords`). Their own
+/// by the cast at a hit (palette.wgsl). Their own
 /// buffer, as the bricks' binding has no room for them.
 const PALETTE_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
 const _: () = assert!(

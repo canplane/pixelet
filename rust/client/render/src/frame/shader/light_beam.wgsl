@@ -12,8 +12,8 @@ fn light_spacing() -> f32 {
   return f32(LIGHT_BEAM) * length(light_v3(LIGHT_ACROSS));
 }
 
-/// Each beam ray of the shadow map the cast needs, a thread a corner (pxl-shader observer.rs
-/// `beam`, light.rs `Map::corner`): from where its texel, `BEAM_WINDOW` beam rays before the
+/// Each beam ray of the shadow map the cast needs, a thread a corner (light_list.wgsl
+/// `corner`, pxl-engine `light::corner_at`): from where its texel, `BEAM_WINDOW` beam rays before the
 /// box's first, lies on the near plane, at its tile's band; its line, its origin, its visits
 /// and how far the rays about it start (`Map::handed`, `light::margin`) left in the list.
 @compute @workgroup_size(CORNER_SIDE, CORNER_SIDE, 1)

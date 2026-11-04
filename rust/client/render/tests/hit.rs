@@ -1,4 +1,4 @@
-//! The missed pixels' hits by hand answer as rust-gpu's did: `hit_lead_cs`
+//! The missed pixels' hits by hand answer as `lead` and `faces_put` here do: `hit_lead_cs`
 //! (frame/shader/hit_lead.wgsl) leads each square's patch of hits alike and lists its ask,
 //! `hit_faces_cs` (frame/shader/hit_faces.wgsl) puts the faces asked at every hit's pixel.
 //! The hits are as the walks again keep them (miss_hit.wgsl `keep_hit`): a pixel waits for
@@ -214,8 +214,8 @@ fn cells_of(g: &Grid, s: &Screen, p: [u32; 2]) -> [[u32; 2]; 2] {
     [cell, other]
 }
 
-/// What `hit_lead_cs` writes, thread by thread in the order of the hits, as rust-gpu's did:
-/// the beam rays' and the walk again's words.
+/// What `hit_lead_cs` writes, thread by thread in the order of the hits: the beam rays' and
+/// the walk again's words.
 fn lead(g: &Grid, s: &Screen, kept: &Kept, beams: &mut [u32], marks: &mut [u32]) {
     let w = s.size[0];
     let alike_hit = |beams: &[u32], k: u32, x: u32, y: u32| {
@@ -274,7 +274,7 @@ fn sorted_asks(g: &Grid, beams: &mut [u32], n: u32) {
     beams[at..at + (n * ASK_WORDS) as usize].copy_from_slice(asks.concat().as_slice());
 }
 
-/// What `hit_faces_cs` writes, as rust-gpu's did: each hit's faces at its
+/// What `hit_faces_cs` writes: each hit's faces at its
 /// pixel, followed to the hit that asked them.
 fn faces_put(g: &Grid, s: &Screen, kept: &Kept, beams: &[u32], faces: &mut [u32]) {
     for id in 0..kept.cnt.min(HITS) {

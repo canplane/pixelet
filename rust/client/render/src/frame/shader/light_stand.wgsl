@@ -52,7 +52,7 @@ fn tile_word(first: u32, t: vec2<i32>) -> u32 {
 }
 
 /// Tile `t` marked stood on in the cast numbered `current`, none past the box: written
-/// only where it does not hold that number yet (pxl-shader light.rs `stand`).
+/// only where it does not hold that number yet (pxl-engine `light::stands_at`).
 fn stand(current: u32, t: vec2<i32>) {
   let w = tile_word(stands_at(), t);
   if (w != NO_TILE && list_at(w) != current) {

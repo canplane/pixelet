@@ -88,9 +88,7 @@ impl Detail {
 
     /// Whether a walk asking it may take what one asking `other` met: the
     /// cell it stopped at, the sky past it, the line it left. Only where
-    /// both asked the same zooms at the same spacing. [rust-gpu] Word by
-    /// word: an array's `==` is an intrinsic (`raw_eq`) its backend lowers
-    /// none of.
+    /// both asked the same zooms at the same spacing.
     pub fn alike(self, other: Detail) -> bool {
         self.range[0] == other.range[0]
             && self.range[1] == other.range[1]
@@ -179,9 +177,8 @@ impl Ray {
 
 /// The greater and the lesser of two floats, one comparison each. IEEE's
 /// `f32::max` and `f32::min` hand back the other operand where one is NaN,
-/// and rust-gpu lowers each into two NaN-check branches — seventeen a pass
-/// of the walk's loop. No number the walk compares is NaN (`Ray::new`), so
-/// the comparison is the whole rule.
+/// and no number the walk compares is NaN (`Ray::new`), so the comparison is
+/// the whole rule.
 fn greater(a: f32, b: f32) -> f32 {
     if a > b {
         a

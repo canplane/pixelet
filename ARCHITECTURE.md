@@ -523,8 +523,8 @@ an angular cell and hands the rest to the rasterizer:
                                                     its own (miss_list_cs)
 ```
 
-The entries are pxl-shader's (`beam.rs`, `raster.rs`, `cast.rs` `cast_cs`), the
-listed pixels' walks by hand (pxl-render `miss_hit.wgsl`, `miss.wgsl`). Once
+The entries are pxl-render's WGSL (`beam.wgsl`, `sample.wgsl`, `raster.wgsl`,
+`cast.wgsl` `cast_cs`, the listed pixels' walks `miss_hit.wgsl`, `miss.wgsl`). Once
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
 times a scale, its beam rays on a lattice, both of which the `resolution`
@@ -553,7 +553,7 @@ before the next.
 
 What the rays asked of each node is kept between frames in the **observed
 pyramid** (`pxl-engine pyramid.rs`), a table keyed by the node, and
-forgotten only where what a node read changed (`pxl-shader pyramid.rs`
+forgotten only where what a node read changed (pxl-render `forget.wgsl`
 `forget_cs`).
 
 A ray leaves four words (`pxl-engine ray.rs`): the asset it met, with its
@@ -576,8 +576,8 @@ Shadows are read off the shadow map, the world's depth from the sun in a square
 box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
 and held in a map slot by its index modulo the map's side (`pxl-engine
 light.rs` `Light`). The sun is an observer as the eye is: one set of passes,
-written once over an interface both implement (`pxl-shader observer.rs`
-`Observer`), asks the world, each tile of the box at one zoom, its band: the
+written once over a part each observer gives (pxl-render `sample_eye.wgsl`,
+`sample_light.wgsl` and the like), asks the world, each tile of the box at one zoom, its band: the
 camera grid's cell zoom at the tile column's nearest point to the eye. This
 contract was changed on purpose. The light asked at the eye's zooms, so a
 shadow had the detail of what it falls on, and a tile was cast again as the eye
@@ -608,8 +608,8 @@ a slot's, a sample's and a beam ray's alike. A ray takes another's walk only
 where that one asked as it does: the cell a sample stopped at, the sky past the
 samples about it, and its cell's start and line, where every beam ray of the
 cell's window did; else it walks on its own, from the world's root where it
-was the window (`pxl-engine cast.rs` `Detail::alike`; `pxl-shader
-observer.rs` `took`, `sky`, `cell`). A band is the tile's place in the box
+was the window (`pxl-engine cast.rs` `Detail::alike`; pxl-render
+`light.wgsl` `took`, `sky`, `cell.wgsl`, `light_cell.wgsl`). A band is the tile's place in the box
 alone, so what a tile holds moves with the light, the eye's zooms and the world
 under it, and no walk reads where the eye stands: the eye and the light run the
 same entries (`beam_cs`, `sample_cs`) over one walk. The eye moving keeps every
@@ -691,20 +691,12 @@ whether to cast: the propagation runs only in a frame whose casters mark the
 screen's tiles drawn, which the CPU counts as marked, so nothing it marks is
 read back.
 
-The compute entries are built by rust-gpu to WGSL and checked in beside the
-renderer's shaders (`frame/shader/*.gen.wgsl`, pxl-tool `shader.rs` `ENTRIES`);
-the renderer's build validates every shader with naga, and the web app's test
-compiles each with Tint, the compiler a browser runs
-(`ts/tool/shader/shader.test.ts`). Nothing in pxl-engine aborts, so a check
-that fails in an entry (a bound, an overflow) is built as unreachable
-(`rust/client/shader/build`, `ShaderPanicStrategy`) and spirv-opt drops its
-branch; where one is reached after all, the invocation runs on with WGSL's
-defined behaviour for the access instead of ending. A function an entry's
-buffers reach is kept once for those buffers, not written again into every
-caller, and one that may fail a check stays a function. Those two need
-rust-gpu's codegen changed: the shader build takes a copy of it, and
-`rust/client/shader/rustc_codegen_spirv/README.md` is the ledger of what
-differs from the published crate, why, and how to upgrade it.
+The compute entries are WGSL by hand, assembled from parts
+(`frame/shader/part.rs`), each held word for word to pxl-engine's Rust by a
+test over a real world's buffers (`rust/client/render/tests/`); the layouts
+and numbers they read are generated from pxl-engine by the renderer's build.
+The build validates every shader with naga, and a test compiles each with
+Tint, the compiler a browser runs (`ts/tool/shader/shader.test.ts`).
 
 ## Past the pyramid: the sky and the sphere
 
@@ -1255,7 +1247,7 @@ them.
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | `pxl-kernel domain/query/support.rs` `step_slide`                                       | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                   | `pxl-engine cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                    | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                          | `pxl-engine cast.rs` `walk`                                                          | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
-| Laine and Karras's beams; Reshetov et al.                                                                                              | `pxl-shader beam.rs`, `pxl-engine cast.rs` `Until::Beam`                             | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
+| Laine and Karras's beams; Reshetov et al.                                                                                              | pxl-render `beam.wgsl`, `pxl-engine cast.rs` `Until::Beam`                           | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
 | Tevs, Ihrke and Seidel's maximum mipmaps                                                                                               | `pxl-engine clipmap.rs` `bounded`                                                    | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
 | The clipmap                                                                                                                            | `pxl-engine clipmap.rs`, `light.rs` `Light`                                          | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
 | Burns and Hunt's visibility buffer (JCGT 2013)                                                                                         | `pxl-render gpu/ray/raster.rs` `Raster`, `frame/shader/raster.wgsl`                     | Each pixel keeps the number of the nearest thing drawn over it, here a sample's box, and reads the rest off that                         |

@@ -1,6 +1,6 @@
 // pxl-render/sample_light.wgsl
 
-// The shadow map as the samples' walks take it (pxl-shader light.rs `Map`): a sample every
+// The shadow map as the samples' walks take it (light_list.wgsl): a sample every
 // `LIGHT_SAMPLE` slots, taken off what the cast casts, each ray at its tile's band.
 
 const WALK_PASS: u32 = LIGHT_SAMPLES_PASS;

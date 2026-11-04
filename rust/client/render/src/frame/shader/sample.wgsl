@@ -2,7 +2,7 @@
 
 // The samples `sample_hit_cs` left, either observer's (sample_eye.wgsl, sample_light.wgsl),
 // walked from their cells' starts asking the world (ask.wgsl), a thread each at its place in
-// their list (pxl-shader observer.rs `sample`).
+// their list (sample_eye.wgsl, sample_light.wgsl).
 
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn sample_cs(@builtin(global_invocation_id) id: vec3<u32>) {

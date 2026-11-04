@@ -2,8 +2,8 @@
 
 // A stopped sample's box written for the raster's draw (raster.wgsl), the eye's samples'
 // and the light's alike, over the samples' words (resume.wgsl `beams`) and their observer
-// (sample_eye.wgsl, sample_light.wgsl) (pxl-engine raster.rs; pxl-shader raster.rs
-// `write_box`, observer.rs `sample_box`): the boxes and the raster's args.
+// (sample_eye.wgsl, sample_light.wgsl) (pxl-engine raster.rs): the boxes and the raster's
+// args.
 
 @group(0) @binding(14) var<storage, read_write> boxes: array<u32>;
 /// The raster's args (pxl-engine `raster::ARGS_INSTANCES`, `raster::ARGS_FACES`).
@@ -33,7 +33,7 @@ fn args_most(i: u32, v: u32) {
 }
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in every word a
-/// pixel reads of them (pxl-shader raster.rs `alike`).
+/// pixel reads of them (pxl-engine `raster`).
 fn alike(a: u32, b: u32) -> bool {
   for (var k = 0u; k < SAMPLE_FACES; k += 1u) {
     if (beams[a + k] != beams[b + k]) {
@@ -82,7 +82,7 @@ fn is_eyed(b: Box, tan_xy: vec2<f32>) -> bool {
 /// lies about the eye at the screen's tangents `tan` where `eyed` asks; none where it went
 /// on to its reach, or where a sample at `before`, the one across or up, `NO_BOX` where
 /// there is none, stopped alike. Its place among the boxes, `NO_BOX` where it wrote none
-/// (pxl-shader raster.rs `write_box`).
+/// (pxl-engine `raster`, `cast::asset_box`).
 fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, eyed: bool, tan_xy: vec2<f32>) -> u32 {
   if (beams[k + SAMPLE_NODE + NODE_ZOOM] == SAMPLE_NONE) {
     return NO_BOX;
@@ -110,8 +110,8 @@ fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, eyed: bo
 }
 
 /// The sample the thread at `id` takes written as a box, the one across and up before it
-/// each where the cast takes it, so it was sampled this cast (pxl-shader observer.rs
-/// `sample_box`): its place among the boxes, `NO_BOX` where it wrote none.
+/// each where the cast takes it, so it was sampled this cast: its place among the boxes,
+/// `NO_BOX` where it wrote none.
 fn sample_box(id: vec2<u32>, origin: vec3<i32>, eyed: bool, tan_xy: vec2<f32>) -> u32 {
   let n = sample_lattice();
   let s = sample_taken(id);

@@ -1,7 +1,7 @@
 // pxl-render/light.wgsl
 
-// The world's depth from the light into every slot the cast needs (pxl-shader observer.rs
-// `resolve`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
+// The world's depth from the light into every slot the cast needs (light_list.wgsl
+// `light_needs`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
 // sample where its own ray enters it as that sample entered it (`took`), or the sky where no
 // sample about it met anything (`sky`), each only where that sample asked the band the slot
 // asks; the rest listed for their walk (light_miss_hit.wgsl, light_miss.wgsl).

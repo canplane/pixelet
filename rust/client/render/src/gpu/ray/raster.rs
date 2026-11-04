@@ -1,7 +1,7 @@
 // pxl-render/gpu/ray/raster.rs
 
 //! The samples' hits handed to the rasterizer (pxl-engine `raster`,
-//! pxl-shader raster.rs): after the samples, each stopped sample's box
+//! frame/shader/boxes.wgsl): after the samples, each stopped sample's box
 //! written (`sample_box_cs`, span `sample_box`, a thread a sample of the
 //! camera grid) and the boxes drawn at the rays' pixels (raster.wgsl, span
 //! `sraster`, its fragments the drawn pixels), the nearest face a pixel's
@@ -216,7 +216,7 @@ impl Raster {
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
             self.size = size;
         }
-        // The cast's view (pxl-shader cast.rs `px_tan`): its axes, the
+        // The cast's view (frame/shader/grid.wgsl `px_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
         // the drawn pixels and the rays' reach, each pixel's ray as the cast
         // forms it.
@@ -464,8 +464,8 @@ impl Raster {
             n,
             n,
             v.t_max,
-            // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // light.rs `Map::raster_layout`).
+            // The boxes are laid from box texel (0, 0)'s start
+            // (frame/shader/light_sample_box.wgsl).
             0.0,
             0.0,
             0.0,

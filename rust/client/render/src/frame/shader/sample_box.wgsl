@@ -3,14 +3,14 @@
 // Each sample of the camera grid, a thread each, written as a box for the raster's draw
 // (boxes.wgsl, the eye as sample_eye.wgsl takes it), the one across and up before it each
 // sampled; and what lies about its face asked once a box (`ask`), as its pixels draw the
-// face (pxl-shader raster.rs `sample_box_cs`). The shadow map's is light_sample_box.wgsl,
+// face (pxl-engine `raster`). The shadow map's is light_sample_box.wgsl,
 // which asks none.
 
 /// What lies about the face sample `s` entered, whose box is at `place` among the
 /// boxes: told at once where it needs no asking, a lack none, left in its words
 /// (`beam::SAMPLE_FACES`) where its pixels read it; else its ask at `place`
 /// (`Grid::ask_at`), off the line its cell's rays resumed from, for the faces' pass,
-/// its faces to be left there (pxl-shader raster.rs `ask`).
+/// its faces to be left there (pxl-engine `beam::ASK_WORDS`).
 fn ask_face(s: vec2<u32>, place: u32) {
   let k = sample_word(s);
   let a = eye_word(GRID + GRID_ASKS_AT) + place * ASK_WORDS;
@@ -22,7 +22,7 @@ fn ask_face(s: vec2<u32>, place: u32) {
     return;
   }
   // The face its ray enters across its axis: 2·axis, plus one where the ray runs up
-  // it (pxl-shader world.rs `face_of`).
+  // it (miss_word.wgsl `face_of`).
   let dir = sample_aim(s).dir;
   let axis = beams[k + SAMPLE_AXIS];
   let along = select(select(dir.z, dir.y, axis == 1u), dir.x, axis == 0u);
@@ -38,7 +38,7 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let place = sample_box(id.xy, origin, true, vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)));
   if (place != NO_BOX) {
     ask_face(sample_taken(id.xy), place);
-    // The faces' pass's workgroups raised to hold it (pxl-shader lib.rs `opens`).
+    // The faces' pass's workgroups raised to hold it, by the box that opens one.
     if (place % RASTER_FACES_LANES == 0u) {
       args_most(RASTER_ARGS_FACES, place / RASTER_FACES_LANES + 1u);
     }

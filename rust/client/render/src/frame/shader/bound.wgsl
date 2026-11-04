@@ -21,7 +21,7 @@ fn entry_bounds(base: u32, j: u32, at: vec2<u32>, rec: u32, k: u32) -> vec2<i32>
   }
   var b = BOUNDS_EMPTY;
   for (var q = 0u; q < 4u; q += 1u) {
-    let e = level_word(base, j - 1u, 2u * at + vec2<u32>(q & 1u, q >> 1u));
+    let e = level_entry(base, j - 1u, 2u * at + vec2<u32>(q & 1u, q >> 1u));
     b = joined(b, bounds_of(i32(ground[e]), i32(ground[e + 1u])));
   }
   return bounds_word(b);
@@ -36,7 +36,7 @@ fn bound_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let rec = handed_at(id.z);
   let base = brick_at(fresh[rec + FILL_BRICK]);
   let w = entry_bounds(base, j, id.xy, rec, id.z);
-  let e = level_word(base, j, id.xy);
+  let e = level_entry(base, j, id.xy);
   ground[e] = u32(w.x);
   ground[e + 1u] = u32(w.y);
 }

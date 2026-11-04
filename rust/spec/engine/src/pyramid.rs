@@ -32,8 +32,8 @@
 //! it from another node of the same slot (`forgets` reads its column). A
 //! walk writes a slot only once it has claimed it, its key exchanged for
 //! `CLAIMED` and found to be the one it read, and writes the key last; a
-//! walk that found another put back what it took (pxl-shader pyramid.rs
-//! `pyramid_claim`), the slot claimed in between; a writing
+//! walk that found another put back what it took (pxl-render ask.wgsl `claim`), the
+//! slot claimed in between; a writing
 //! walk that read a slot takes what it read only where it hashes to the
 //! entry's stamp (`stamped`), as another walk may be taking the slot over as
 //! it reads.
@@ -340,8 +340,8 @@ pub fn reads_written(placed: u32, first: u32) -> bool {
 }
 
 /// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
-/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
-/// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
+/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them: a node's
+/// answer reads
 /// the bricks under it alone — its cells' and their clip levels' over them
 /// (`clipmap::step`), a wider node's the block of bricks its own size
 /// (`clipmap::bounded`) — and what was handed it found its cells there, so a

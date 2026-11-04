@@ -9,8 +9,7 @@ meant to do and where it is, not why its author thinks it is right.
 
 ## Rules
 
-- Read only: no edit, `git add`, commit, stash or checkout, no
-  `cargo shader-wgsl` that writes (`--check` is fine), no dev server.
+- Read only: no edit, `git add`, commit, stash or checkout, no dev server.
   `git diff` and `git show HEAD:<path>` are fine.
 - Review only the scope you were given.
 - Read code through the LSP tool: definitions, references, callers, callees.
@@ -23,8 +22,7 @@ meant to do and where it is, not why its author thinks it is right.
   could break it: a caller with other inputs, an edge case (zero, negative,
   wrap-around, a bound's last value), a path still doing it the old way. On the
   GPU, a barrier is in uniform control flow: no bounds check's panic or early
-  return before it. A generated file, `.gen.wgsl` above all, matches its
-  sources.
+  return before it. A generated file matches its sources.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.

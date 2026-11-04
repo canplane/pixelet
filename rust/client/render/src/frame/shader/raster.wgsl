@@ -129,7 +129,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     );
     return o;
   }
-  // The cast's projection (pxl-shader cast.rs `px_tan`), reversed and
+  // The cast's projection (grid.wgsl `px_tan`), reversed and
   // infinite: depth RASTER_NEAR over the view depth, which along a pixel's
   // ray falls as the ray's distance grows; moved against the rays' offset,
   // so a pixel's middle draws what its own ray goes through.

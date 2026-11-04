@@ -1,13 +1,13 @@
 // pxl-content/lib.rs
 
-//! gpu-portable: pixelet's content, one source for the CPU and, through
-//! rust-gpu, WGSL, as the engine's is (pxl-engine): the rules the engine
+//! gpu-portable: pixelet's content, the rules the CPU runs and the GPU's WGSL
+//! is written to, as the engine's are (pxl-engine): the rules the engine
 //! asks of it (pxl-engine `content::Content`), answered by `Pixelet`: its
 //! caves (`cave`), its strata (`strata`) and its decor's bounds; its palette
 //! (`cube`, `decor`), laid into the engine's value space; the decor the
 //! ground holds and how it is generated (`scatter`, `generation`); and the
-//! clouds' field (`cloud`). pxl-spec, the kernel, the renderer and the
-//! shader crate name `Pixelet` where they hand the engine its content.
+//! clouds' field (`cloud`). pxl-spec, the kernel and the renderer name
+//! `Pixelet` where they hand the engine its content.
 
 #![no_std]
 

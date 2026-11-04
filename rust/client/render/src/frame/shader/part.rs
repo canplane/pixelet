@@ -4,8 +4,8 @@
 //! crate for its numbers, and read by build.rs, which assembles each
 //! (record.rs `source`), validates it, and reads off it which stages read
 //! each binding (record.rs `pipeline`), so a pipeline's groups take their
-//! visibility from its shader and from nowhere else. A render shader's parts
-//! follow constant.wgsl; a generated module (`.gen`) is its own whole.
+//! visibility from its shader and from nowhere else. A shader's parts follow
+//! constant.wgsl.
 
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
@@ -356,6 +356,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "tile_word",
         "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "cast",
@@ -490,6 +491,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_rule",
         "way_rule",
         "handed",
+        "level",
         "way_stack",
         "way_tree",
     ],
@@ -662,6 +664,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "eye_bind",
+        "grid",
         "walk_node",
         "side",
         "light_aim",

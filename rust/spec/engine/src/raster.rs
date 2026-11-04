@@ -1,8 +1,8 @@
 // pxl-engine/raster.rs
 
 //! gpu-portable: the samples' hits drawn as boxes, so the rasterizer keeps
-//! each drawn pixel's cell (pxl-render boxes.wgsl; pxl-shader cast.rs
-//! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
+//! each drawn pixel's cell (pxl-render boxes.wgsl, cast.wgsl `cast_cs`,
+//! gpu/ray/raster.rs, raster.wgsl). Each sample that
 //! stopped is a box, the cell as the cast stops on it (`cast::asset_box`),
 //! unless the sample before it across or up stopped alike, which some
 //! sample before it in turn draws. A box draws its face turned to the eye
@@ -19,7 +19,7 @@
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
-/// face (pxl-shader `face_cs`), `FACES_LANES` boxes a workgroup
+/// face (pxl-render face.wgsl `face_cs`), `FACES_LANES` boxes a workgroup
 /// (`ARGS_FACES`), its workgroups raised by the box that opens each, the
 /// other two 1; then the first word of the boxes' asks among the beam rays'
 /// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`).

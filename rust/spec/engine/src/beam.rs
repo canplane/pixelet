@@ -26,7 +26,7 @@ use crate::world;
 /// from the screen's tangents (`of`), where the kernel writes the
 /// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-engine
 /// `eye::GRID`): every thread of the cast reads it off them
-/// (pxl-shader `grid`), and the renderer sizes the cast's dispatches
+/// (pxl-render grid.wgsl), and the renderer sizes the cast's dispatches
 /// and its buffer off the same words.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
@@ -390,11 +390,10 @@ pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
 /// What a cell hands its rays, in words, every observer's (`light::cell`):
 /// where they start, f32 bits; the corner of the least
-/// start, as an index into the corners row by row (pxl-shader observer.rs
-/// `idx`), whose line the faces they stop on are asked off; and whether they
-/// resume from that line, 1, or walk from the world's root, 0, a beam ray of
-/// its window having asked other zooms than they do (pxl-shader observer.rs
-/// `cell`). A screen's cell each, in the beam rays' buffer past the lines
+/// start, as an index into the corners row by row, whose line the faces they
+/// stop on are asked off; and whether they resume from that line, 1, or walk
+/// from the world's root, 0, a beam ray of its window having asked other zooms
+/// than they do (pxl-render cell.wgsl, light_cell.wgsl). A screen's cell each, in the beam rays' buffer past the lines
 /// (`Grid::cell_at`), one binding for both.
 pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
@@ -437,7 +436,7 @@ pub const CORNER_SIDE: u32 = 8;
 /// sample.wgsl).
 pub const SAMPLE_SIDE: u32 = 8;
 
-/// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
+/// What a hit's faces are asked off, once a hit (pxl-render face.wgsl
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among
 /// the beam rays' words, the face its ray entered (pxl-engine `ray`),
 /// the first word of the beam ray's line its faces are asked off, the line
@@ -453,8 +452,8 @@ pub const ASK_TO: u32 = 3;
 pub const ASK_WORDS: u32 = 4;
 pub const ASK_NONE: u32 = u32::MAX;
 
-/// The hits of the pixels that missed and walked again (pxl-shader cast.rs
-/// `missed`) whose faces are asked, `HITS` at most, a number each as the
+/// The hits of the pixels that missed and walked again (pxl-render
+/// miss_word.wgsl `hit_put`) whose faces are asked, `HITS` at most, a number each as the
 /// walks take them, in words: its node (`NODE_WORDS`), the face its ray
 /// entered, its pixel, its row over its column, and what it is told
 /// (`HIT_OUT`): its faces where it asks them, else `HIT_FOLLOWS` and the

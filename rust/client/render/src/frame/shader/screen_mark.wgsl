@@ -2,7 +2,7 @@
 
 // The tiles marked (gpu/tiles.rs `Tiles::mark`), the screen's or the light's
 // map's, as a light tile's word is marked with the cast that reads it
-// (pxl-shader light.rs `light_mark_cs`): a thread a tile of the frame's one
+// (light_mark.wgsl `light_mark_cs`): a thread a tile of the frame's one
 // mark, whose word (`changed_at`) takes this frame's number; a frame drawn
 // whole hands one mark of every tile.
 

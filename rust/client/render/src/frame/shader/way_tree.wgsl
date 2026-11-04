@@ -176,7 +176,7 @@ fn flag(base: u32, cell: u32, zoom: u32, slot: u32) -> bool {
   if (zoom >= cell) {
     return false;
   }
-  let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * (level_at(cell - zoom) + cell_id(vec2<u32>(at.xy)));
+  let e = level_entry(base, cell - zoom, vec2<u32>(at.xy));
   let ways = bound_of(i32(ground[e + 1u]));
   let d = LEAF_CELL - zoom;
   return ways.x < ((at.z + 1i) << d) && ways.y > (at.z << d);
@@ -356,7 +356,7 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
     put(records, 0u);
     let cell = fresh[rec + FILL_CELL];
     // The brick's own nodes along z its ways meet (fill.rs `root_span`, `tree::span`).
-    let top = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_at(BRICK_LEVELS);
+    let top = level_entry(base, BRICK_LEVELS, vec2<u32>(0u));
     let ways = bound_of(i32(ground[top + 1u]));
     let d = LEAF_CELL - (cell - BRICK_SHIFT);
     var z = 0i;

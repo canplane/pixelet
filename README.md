@@ -22,9 +22,10 @@ the screen, not what it holds.
 
 Every pixel's ray, every step a walker takes, the pointer and every edit ask the
 world the same question: what fills this node? One function answers it, each
-layer written over the one below (`pxl-engine world.rs` `node`). It is
-compiled for the CPU and, through rust-gpu, for the GPU (`pxl-engine cast.rs`
-`first`, `pxl-shader cast.rs` `cast_cs`), so what is drawn is what is walked on
+layer written over the one below (`pxl-engine world.rs` `node`). The CPU runs
+it as written; the GPU runs it written again by hand in WGSL (pxl-render
+`world.wgsl`), held word for word to the Rust by a test
+(`rust/client/render/tests/world.rs`), so what is drawn is what is walked on
 and edited.
 
 ```text
@@ -242,8 +243,8 @@ language by where a thing runs.
 │   ├── spec/            #   pxl-spec: the model every crate shares
 │   │   ├── engine/      #     pxl-engine: what CPU and GPU both compute
 │   │   └── content/     #     pxl-content: pixelet's content over it
-│   ├── client/          #   pxl-kernel, pxl-render, and pxl-shader, the GPU's
-│   │                    #     compute entries built to WGSL
+│   ├── client/          #   pxl-kernel and pxl-render, its shaders WGSL by
+│   │                    #     hand
 │   ├── server/          #   pxl-geo (/geo), pxl-api (/api), pxl-server,
 │   │                    #     pxl-geo-spec; pxl-geo-bake, the bakes
 │   └── tool/            #   pxl-tool: the repository's own Rust programs, run by cargo

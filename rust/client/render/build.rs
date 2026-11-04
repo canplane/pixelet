@@ -182,11 +182,6 @@ fn main() {
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
     std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
-    std::fs::write(
-        Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"),
-        compute(dir),
-    )
-    .expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
@@ -256,90 +251,6 @@ fn strip_comments(text: &str) -> String {
     out
 }
 
-/// Each generated compute entry's group 0 as its WGSL declares it, a binding
-/// its index, its stages and its kind (frame/shader/record.rs's codes), and
-/// its workgroup: what a pipeline's layout is made of and a dispatch counts
-/// by, read off the one module rust-gpu wrote.
-fn compute(dir: &Path) -> String {
-    let mut out = String::new();
-    let mut files: Vec<_> = std::fs::read_dir(dir)
-        .expect("the shaders")
-        .map(|e| e.expect("a shader").path())
-        .collect();
-    files.sort();
-    for path in files {
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        let Some(stem) = name.strip_suffix(".gen.wgsl") else {
-            continue;
-        };
-        let text = std::fs::read_to_string(&path).expect("a generated shader");
-        let lines: Vec<&str> = text.lines().collect();
-        let mut group = Vec::new();
-        let mut workgroup = None;
-        for (k, line) in lines.iter().enumerate() {
-            let line = line.trim();
-            if let Some(rest) = line.strip_prefix("@group(0) @binding(") {
-                let binding: u32 = rest
-                    .split(')')
-                    .next()
-                    .and_then(|n| n.parse().ok())
-                    .expect("a binding's index");
-                let var = lines.get(k + 1).map(|l| l.trim()).unwrap_or_default();
-                let kind = if var.starts_with("var<uniform>") {
-                    "UNIFORM"
-                } else if var.starts_with("var<storage, read_write>") {
-                    "STORAGE_RW"
-                } else if var.starts_with("var<storage>") {
-                    "STORAGE"
-                } else if var.contains("texture_storage_2d_array<r32uint,read_write>") {
-                    "STORAGE_TEXTURE_RW"
-                } else if var.contains("texture_2d_array<u32>") {
-                    "TEXTURE_UINT_ARRAY"
-                } else {
-                    panic!("{name}: binding {binding} is of no kind a layout names: {var}");
-                };
-                group.push((binding, kind));
-            }
-            if let Some(rest) = line.strip_prefix("@compute @workgroup_size(") {
-                workgroup = Some(
-                    rest.split(')')
-                        .next()
-                        .expect("a workgroup")
-                        .replace(' ', ""),
-                );
-            }
-        }
-        group.sort();
-        let upper = stem.to_uppercase();
-        let entries: Vec<String> = group
-            .iter()
-            .map(|(b, k)| format!("{b}, super::COMPUTE, super::{k}"))
-            .collect();
-        out += &format!(
-            "pub const {upper}_GROUP: [u32; {}] = [{}];\n",
-            3 * group.len(),
-            entries.join(", ")
-        );
-        out += &format!(
-            "pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n",
-            workgroup.expect("an entry's workgroup")
-        );
-        // Its layout within what every device binds (frame/shader/floor.rs).
-        out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
-    }
-    out
-}
-
-/// The tiles' uniform as every pass reads it (pxl-engine
-/// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
-/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
-/// the frames since it changed, wrapping, and claimed while fewer than the
-/// uniform's `claimed_for`. The one rule the screen's and the light's passes
-/// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
-/// the Rust itself.
 /// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
@@ -735,9 +646,17 @@ fn world_word() -> String {
         .enumerate()
         .map(|(k, b)| format!("case {k}u: {{ return {b}u; }} "))
         .collect();
-    out + &format!(
+    out += &format!(
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
+    );
+    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
+    let cases: String = (0..=clip::LEVELS)
+        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
+        .collect();
+    out + &format!(
+        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
+        clip::level_at(clip::LEVELS + 1)
     )
 }
 
@@ -814,14 +733,7 @@ fn way_word() -> String {
     for (name, v) in floats {
         out += &format!("const {name}: f32 = {v:?};\n");
     }
-    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
-    let cases: String = (0..=clip::LEVELS)
-        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
-        .collect();
-    out + &format!(
-        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
-        clip::level_at(clip::LEVELS + 1)
-    )
+    out
 }
 
 /// What decor's passes by hand read past the world's words, from pxl-content, whose layouts
@@ -995,6 +907,12 @@ fn fill_word() -> String {
     out
 }
 
+/// The tiles' uniform as every pass reads it (pxl-engine
+/// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
+/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
+/// the frames since it changed, wrapping, and claimed while fewer than the
+/// uniform's `claimed_for`. The one rule every pass that reads the tiles
+/// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast.wgsl).
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.
@@ -1232,6 +1150,40 @@ fn read_fns(text: &str) -> String {
     kept.join("\n") + "\n"
 }
 
+/// `text` with only the structs something in it reads, each line one statement as
+/// `strip_comments` leaves it: a struct's lines from its `struct` to its brace's close.
+fn read_structs(text: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut lines: Vec<&str> = text.lines().collect();
+    loop {
+        // Each struct's name, its first line and its last.
+        let mut structs = Vec::new();
+        let mut k = 0;
+        while k < lines.len() {
+            let Some(rest) = lines[k].strip_prefix("struct ") else {
+                k += 1;
+                continue;
+            };
+            let name = &rest[..rest.find(|c: char| !is_word(c)).unwrap_or(rest.len())];
+            // Its brace closes on its own line, or on a line of its own after.
+            let end = (k..lines.len())
+                .find(|&j| j == k && lines[j].contains('}') || lines[j].starts_with('}'))
+                .expect("a struct's close");
+            structs.push((name, k, end));
+            k = end + 1;
+        }
+        let unread = structs.iter().find(|(name, first, last)| {
+            !lines.iter().enumerate().any(|(j, l)| {
+                (j < *first || j > *last) && l.split(|c: char| !is_word(c)).any(|w| w == *name)
+            })
+        });
+        let Some(&(_, first, last)) = unread else {
+            return lines.join("\n") + "\n";
+        };
+        lines.drain(first..=last);
+    }
+}
+
 /// `text` with only the module's constants something in it reads.
 fn read_consts(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
@@ -1280,19 +1232,12 @@ fn assemble(out: &Path) {
     let (mut sources, mut stages) = (String::new(), String::new());
     let mut rastered = false;
     for (kind, parts) in part::PARTS.iter().enumerate() {
-        let generated = parts.len() == 1 && parts[0].ends_with(".gen");
-        let mut text = if generated {
-            String::new()
-        } else {
-            constant.clone() + "\n"
-        };
+        let mut text = constant.clone() + "\n";
         for part in parts.iter() {
             text += &read(part);
             text += "\n";
         }
-        if !generated {
-            text = read_consts(&read_fns(&text));
-        }
+        text = read_consts(&read_structs(&read_fns(&text)));
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         // The raster's view as the host writes it (frame/shader/word.rs `RASTER_FLOATS`).
@@ -1368,7 +1313,7 @@ fn assemble(out: &Path) {
     ]
     .map(read)
     .join("\n");
-    let asked = read_consts(&read_fns(&asked));
+    let asked = read_consts(&read_structs(&read_fns(&asked)));
     let module = wgsl::parse_str(&asked)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
     Validator::new(ValidationFlags::all(), Capabilities::empty())

@@ -1,7 +1,7 @@
 // pxl-engine/light.rs
 
 //! gpu-portable: the world's depth from the light, a ray a texel of the light's
-//! shadow map (pxl-shader `light_cs`): each texel's ray from where it
+//! shadow map (pxl-render light.wgsl `light_cs`): each texel's ray from where it
 //! lies on the light box's near plane, along the light's rays to the far
 //! plane, walked through the one descent the eye's rays take, every node
 //! asked at its tile's band, the zoom the eye's rays ask as near as the
@@ -355,8 +355,7 @@ pub const HEAD_COUNTED: usize = 1;
 pub const HEAD_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the shadow map share is handed the eye's own head, all zero, in
-/// its place (pxl-shader pass_observer.rs `PassObserver`): a head naming no map is the
-/// eye's.
+/// its place: a head naming no map is the eye's.
 pub const HEAD_SIZE: usize = 3;
 /// The clipmap's corner the cast before was cast under, X and Y, the first
 /// two words of the second vec4: how many tiles the box slid since, its
@@ -370,9 +369,8 @@ pub const HEAD_CORNER_WAS: usize = 4;
 pub const HEAD_FOOTPRINT: usize = 6;
 /// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
 pub const HEAD_MISSES: usize = 7;
-/// Where a shader by hand finds the list's words, and how many a row, as `head_layout` lays them
-/// for the map's side: words of their own past the actors, so the head the generated passes read
-/// keeps its places.
+/// Where a pass finds the list's words, and how many a row, as `head_layout` lays them for the
+/// map's side: words of their own past the actors.
 pub const HEAD_CELLS: usize = 4 * (ACTORS_AT + 1 + ACTORS);
 pub const HEAD_CELLS_ACROSS: usize = HEAD_CELLS + 1;
 pub const HEAD_SAMPLES: usize = HEAD_CELLS + 2;
@@ -515,10 +513,11 @@ impl Starts {
 }
 
 /// The clipmap's tiles, `TILE` slots a side, a workgroup each of the
-/// slots' pass (pxl-shader `light_cs`), dispatched over the whole map.
+/// slots' pass (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-shader beam.rs `light_beam_cs`, `light_cell_cs`):
+/// The light's beam (pxl-render light_beam.wgsl `light_beam_cs`, light_cell.wgsl
+/// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
 /// the light's rays until a cell that fills or lacks or a split narrower than
@@ -555,8 +554,8 @@ const _: () = assert!(
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
 
 /// The box texel beam ray `c` starts over, across and down: every `BEAM`-th,
-/// from `BEAM_WINDOW` of them before the box's first (pxl-shader light.rs
-/// `Map::corner`).
+/// from `BEAM_WINDOW` of them before the box's first (pxl-render light_list.wgsl
+/// `corner`).
 pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
     let (b, w) = (BEAM as i32, BEAM_WINDOW as i32);
     [(c[0] as i32 - w) * b, (c[1] as i32 - w) * b]
@@ -626,8 +625,8 @@ pub fn margin(width: f32) -> f32 {
 
 /// The shadow map as the eye's rays are cast, every slot every frame
 /// (pxl-engine `raster`): a sample every `SAMPLE` slots across and down
-/// walked (pxl-shader beam.rs `sample_cs`), the cells they stopped at written
-/// as boxes by the eye's writer (pxl-shader raster.rs `boxed`) and drawn
+/// walked (pxl-render sample.wgsl `sample_cs`), the cells they stopped at written
+/// as boxes by the eye's writer (pxl-render boxes.wgsl `write_box`) and drawn
 /// from the light by the eye's raster, orthographic (pxl-render raster.wgsl),
 /// in the box's order (`Light::texel`), each texel keeping the nearest its own
 /// ray enters; and a slot whose ray enters its visible sample, tested again
@@ -657,7 +656,7 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (pxl-render light_miss.wgsl) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
 /// that took their visible sample, by the same listing and dispatch
-/// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
+/// (pxl-render cast.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
@@ -707,7 +706,7 @@ pub const FOOTPRINT_TILES: i32 = 3;
 /// The reads by the square of `COARSE` tiles a side, past them, `coarse`
 /// a row: the cast's number where a tile in the square is the cast's to
 /// cast, read in place of the tiles where a span of them is asked
-/// (pxl-shader light.rs `Map::needs`).
+/// (pxl-render light_list.wgsl `light_needs`).
 pub const COARSE: u32 = 8;
 
 pub const fn coarse(size: u32) -> u32 {
@@ -726,15 +725,15 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 
 /// What a cast within its epoch casts, listed as its tiles are claimed
 /// (pxl-render light_propagate.wgsl): what feeds a claimed tile
-/// at each level of the lattice, by the reach it feeds within (pxl-shader
-/// light.rs `Map::reach`), each the box tile it lies on: the beam rays'
+/// at each level of the lattice, by the reach it feeds within (pxl-render
+/// light_list.wgsl `light_needs`), each the box tile it lies on: the beam rays'
 /// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
 /// (`LISTED_FED`), and the tiles claimed, whose slots it casts
 /// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
 /// j << 16` each; before the lists, a word for every place of each, the
 /// last cast that listed it, so each is listed once a cast. The passes
-/// that cast tiles take their threads off these (pxl-shader observer.rs
-/// `Observer::take`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
+/// that cast tiles take their threads off these (pxl-render light_list.wgsl
+/// `light_take`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
 /// entry `listed_per` of them. A cast that begins an epoch casts every
 /// tile a receiver reads, and its passes go whole over the map instead
 /// (`ARGS_WHOLE`).

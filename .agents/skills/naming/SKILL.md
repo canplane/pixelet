@@ -63,9 +63,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   storage (a bucket object, a storage key, a baked file's field) as needing a
   version bump to change; a setting's name can change, since storage keeps its
   `number`.
-- When renaming, search what the language server doesn't see: the
-  `rust/client/shader` crate, generated code, and the `.wgsl` files that read a
-  render setting by its path's name.
+- When renaming, search what the language server doesn't see: generated
+  code and the `.wgsl` files, which read pxl-engine's layouts and a render
+  setting by their names.
 - Watch a renamed C++ struct field being taken by a same-named parameter of its
   own method (`Section::at` read `off + off` until `this->off`).
 - Let a backticked identifier in a comment or document follow the code; leave

@@ -1,6 +1,6 @@
 //! `sample_hit_cs` and `sample_cs` by hand (frame/shader/sample_hit.wgsl, sample.wgsl), the eye's
 //! and the light's (sample_eye.wgsl, sample_light.wgsl), answer as `cast::walk` resumed off the
-//! beam (pxl-shader observer.rs `resume`) through `Writing` (tests/keeping): over the real world
+//! beam (resume.wgsl) through `Writing` (tests/keeping): over the real world
 //! of tests/real_world, off the lines and cells' starts the beam's passes leave there, each
 //! sample's words as the Rust's `sample_put`, what it left in the observed pyramid as `Writing`
 //! leaves it, and the next frame off that. Skipped where no adapter answers.
@@ -19,7 +19,7 @@ use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
 use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{eye, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
     SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
@@ -221,7 +221,21 @@ impl Observed {
         ray: &Ray,
         detail: Detail,
     ) -> (Trace<Inheritance>, u32) {
-        let at = self.cell_at(s) as usize;
+        self.walk_at(q, beams, self.cell_at(s), o, ray, detail)
+    }
+
+    /// A ray's walk through `q` from `o`, resumed off the cell whose start is at word `cell`
+    /// of `beams` (`resumed`), or from the world's root where that cell resumes not.
+    fn walk_at(
+        &self,
+        q: &mut Keeping,
+        beams: &[u32],
+        cell: u32,
+        o: [i32; 3],
+        ray: &Ray,
+        detail: Detail,
+    ) -> (Trace<Inheritance>, u32) {
+        let at = cell as usize;
         let line = beams[at + beam::CELL_CORNER as usize] * self.line_words;
         let over = LineOver { beams, line };
         let resumes = beams[at + beam::CELL_RESUMES as usize] != 0;
@@ -2136,5 +2150,416 @@ fn hand_light_samples_answer_as_cast_walk() {
         c.least,
         &mut failed,
     );
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A screen's pixels the cast marked missed, their rays as the walks again take them: how many
+/// across and down, the eye's jitter, one in so many marked, and how many of those the cast
+/// listed before its list was full.
+struct Screen {
+    name: &'static str,
+    size: [u32; 2],
+    jitter: [f32; 2],
+    marked_in: u32,
+    listed: u32,
+}
+
+/// The ray texture's words, a layer each (`ray::WORDS`), read back whole.
+fn rays_texture(gpu: &Gpu, size: [u32; 2], words: &[u32]) -> wgpu::Texture {
+    let t = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: size[0],
+            height: size[1],
+            depth_or_array_layers: ray::WORDS,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R32Uint,
+        usage: wgpu::TextureUsages::STORAGE_BINDING
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    gpu.queue.write_texture(
+        t.as_image_copy(),
+        bytes(words),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(size[0] * 4),
+            rows_per_image: Some(size[1]),
+        },
+        t.size(),
+    );
+    t
+}
+
+fn read_rays(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
+    let [w, h, layers] = [t.width(), t.height(), t.depth_or_array_layers()];
+    let row = (w * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+    let staging = gpu.buffer(
+        &vec![0u32; (row / 4 * h * layers) as usize],
+        wgpu::BufferUsages::COPY_DST,
+    );
+    let mut e = gpu.device.create_command_encoder(&Default::default());
+    e.copy_texture_to_buffer(
+        t.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &staging,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(row),
+                rows_per_image: Some(h),
+            },
+        },
+        t.size(),
+    );
+    gpu.queue.submit([e.finish()]);
+    gpu.read(&staging)
+        .chunks((row / 4) as usize)
+        .flat_map(|r| r[..w as usize].to_vec())
+        .collect()
+}
+
+/// The tangents across and up of pixel `p`'s ray through its jittered middle, row 0 at the
+/// top: the rule every pass that walks a drawn pixel takes it by (grid.wgsl `px_tan`).
+fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
+    let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
+    [ndc_x * tan[0], ndc_y * tan[1]]
+}
+
+/// Pixel `p`'s ray, the zooms it asks, and the first word of its cell's start (`Grid::cell`).
+fn px_aim(obs: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail, u32) {
+    let Rays::Eye {
+        axes,
+        far,
+        range,
+        grid,
+        ..
+    } = &obs.rays
+    else {
+        unreachable!()
+    };
+    let at = px_tan(s, grid.tan, p);
+    let d = cast::through(axes[0], axes[1], axes[2], at[0], at[1]);
+    let detail = Detail {
+        range: *range,
+        spacing: Spacing {
+            angle: grid.s,
+            across: 0.0,
+        },
+    };
+    (Ray::new(d, *far), detail, grid.cell_at(grid.cell(at)))
+}
+
+#[test]
+fn hand_missed_pixels_answer_as_cast_walk() {
+    use pxl_engine::face;
+    use pxl_render::frame::shader::record::{SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST};
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let at = spots(&built);
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let eyes = [
+        EyeCase {
+            name: "the eye, over the ground",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+            look: [0.5, 0.4, -0.77],
+            tan: [0.3, 0.2],
+            lattice: 1,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+            least: &[],
+        },
+        EyeCase {
+            name: "the eye, lattice 2, over the seam",
+            origin: over([EYE[0] + 280, EYE[1] + 90], 40),
+            look: [0.8, 0.2, -0.55],
+            tan: [0.4, 0.3],
+            lattice: 2,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+            least: &[],
+        },
+        EyeCase {
+            name: "the eye, on a bridge",
+            origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
+            look: [0.5, -0.3, -0.8],
+            tan: [0.3, 0.3],
+            lattice: 1,
+            far: 600.0,
+            range: [LEAF_CELL, FINEST],
+            cuts: none,
+            least: &[],
+        },
+    ];
+    let screens = [
+        Screen {
+            name: "every pixel marked and listed",
+            size: [96, 61],
+            jitter: [0.0, 0.0],
+            marked_in: 1,
+            listed: u32::MAX,
+        },
+        Screen {
+            name: "one in three marked, jittered, the list full past a third",
+            size: [131, 77],
+            jitter: [0.25, -0.375],
+            marked_in: 3,
+            listed: 1000,
+        },
+    ];
+    let hit_p = gpu.pipeline(src(SHADER_MISS_HIT), "miss_hit_cs");
+    let list_p = gpu.pipeline(src(SHADER_MISS_LIST), "miss_list_cs");
+    let whole_p = gpu.pipeline(src(SHADER_MISS), "miss_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    for c in &eyes {
+        for s in &screens {
+            let name = format!("{}, {}", c.name, s.name);
+            let mut obs = eye_of(c, [0; 3]);
+            for k in 0..2 {
+                obs.eye[eye::JITTER + k] = s.jitter[k].to_bits();
+            }
+            let mut table0 = vec![0u32; pyramid::WORDS as usize];
+            table0[pyramid::FRAME as usize] = FRAME;
+            let table_buf = gpu.buffer(&table0, store_of());
+            let words = eye_beams(&gpu, &b, &obs, &table_buf);
+            let mut table = gpu.read(&table_buf);
+            let Rays::Eye { origin, grid, .. } = &obs.rays else {
+                unreachable!()
+            };
+            let (origin, grid) = (*origin, *grid);
+
+            // The pixels the cast marked, and those it listed, in an order of their own as its
+            // atomics take them.
+            let [wd, ht] = s.size;
+            let texels = (wd * ht) as usize;
+            let mark = |p: u32| (p.wrapping_mul(0x9e37_79b9) >> 7).is_multiple_of(s.marked_in);
+            let mut marked: Vec<u32> = (0..wd * ht).filter(|&p| mark(p)).collect();
+            marked.sort_by_key(|&p| p.wrapping_mul(0x85eb_ca77).rotate_left(13));
+            let listed = marked.len().min(s.listed as usize);
+            table[pyramid::MARKS_CNT as usize] = listed as u32;
+            for (k, &p) in marked[..listed].iter().enumerate() {
+                table[(pyramid::MARKS_AT + k as u32) as usize] = ((p / wd) << 16) | (p % wd);
+            }
+            let mut ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
+                .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
+                .collect();
+            for &p in &marked {
+                ray_words[p as usize] = ray::MISS;
+            }
+
+            // The walk over the pyramid alone, what it left listed, then the walks that ask.
+            let rays = rays_texture(&gpu, s.size, &ray_words);
+            let view = rays.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+            let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+            let beams = gpu.buffer(&words, store_of());
+            let table_buf = gpu.buffer(&table, store_of());
+            let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0], store_of());
+            gpu.dispatch(
+                &hit_p,
+                &[
+                    (0, eye_buf.as_entire_binding()),
+                    (3, wgpu::BindingResource::TextureView(&view)),
+                    (8, beams.as_entire_binding()),
+                    (9, table_buf.as_entire_binding()),
+                    (10, left.as_entire_binding()),
+                ],
+                [
+                    ray::MISS_ACROSS,
+                    (listed as u32)
+                        .div_ceil(ray::MISS_ACROSS * ray::MISS_LANES)
+                        .max(1),
+                ],
+            );
+            let args = gpu.read(&left);
+            let mut after = gpu.read(&beams);
+            after[grid.misses_at as usize] = args[3];
+            let mut table = gpu.read(&table_buf);
+            table[pyramid::HITS_ARGS as usize..(pyramid::HITS_CNT + 1) as usize]
+                .copy_from_slice(&args[4..8]);
+            let beams = gpu.buffer(&after, store_of());
+            let table_buf = gpu.buffer(&table, store_of());
+            let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
+            binds.push((3, wgpu::BindingResource::TextureView(&view)));
+            if args[1] != 0 {
+                gpu.dispatch(&list_p, &binds, [args[0], args[1]]);
+            }
+            gpu.dispatch(&whole_p, &binds, [wd.div_ceil(8), ht.div_ceil(8)]);
+            let out = read_rays(&gpu, &rays);
+            let out_beams = gpu.read(&beams);
+            let out_table = gpu.read(&table_buf);
+            let claimed = left_claimed(&out_table);
+            if claimed.len() > left_claimed(&table0).len() {
+                failed.push(format!("{name}: the passes did not run to their end"));
+                continue;
+            }
+
+            // Each marked pixel's words as `cast::walk` writing the pyramid leaves them, its hit
+            // kept where its faces are to be asked.
+            let tag = pyramid::tag(FRAME, pyramid::MISSED_PASS);
+            let mut table_ref = table0.clone();
+            let mut q = Keeping {
+                w,
+                cuts: obs.cuts,
+                table: &mut table_ref,
+                tag,
+                asks: Asks::default(),
+                writes: true,
+                met: None,
+            };
+            let left_at: BTreeSet<u32> = (0..args[3])
+                .map(|k| after[(grid.misses_at + 1 + k) as usize])
+                .collect();
+            let (mut same, mut differ, mut stepped) = (0u32, 0u32, 0u32);
+            let mut hits = BTreeSet::new();
+            for &p in &marked {
+                let px = [p % wd, p / wd];
+                let (r, d, cell) = px_aim(&obs, s, px);
+                let (met, before) = obs.walk_at(&mut q, &words, cell, origin, &r, d);
+                let got = |l: u32| out[l as usize * texels + p as usize];
+                let face = 2 * met.hit.axis + u32::from(r.dir[met.hit.axis as usize] > 0.0);
+                let was_left = left_at.contains(&((px[1] << 16) | px[0]));
+                let walked_again = was_left || !marked[..listed].contains(&p);
+                let mut ok = got(0) != ray::MISS;
+                if met.ends == End::Hit {
+                    let whole = answer::fill_eighths(met.hit.asset[0]) == answer::EIGHTHS;
+                    ok = ok
+                        && got(0) == ray::first_word(met.hit.asset[0], face, met.hit.node.zoom)
+                        && got(2) == met.hit.asset[1];
+                    let t = f32::from_bits(got(1));
+                    ok = ok && (t - met.hit.t).abs() <= 1e-4 * met.hit.t.max(1.0);
+                    if whole {
+                        // Its hit kept, its number marked waiting, its words the walk's.
+                        let n = got(3) & !beam::HIT_WAITS;
+                        let k = grid.hit_at(n) as usize;
+                        let node = k + beam::HIT_NODE as usize;
+                        ok = ok
+                            && got(3) & beam::HIT_WAITS != 0
+                            && hits.insert(n)
+                            && out_beams[node + beam::NODE_ZOOM as usize] == met.hit.node.zoom
+                            && (0..3).all(|a| {
+                                out_beams[node + beam::NODE_CORNER as usize + a]
+                                    == met.hit.node.corner[a]
+                                    && out_beams[node + beam::NODE_ROOTS as usize + a]
+                                        == met.hit.node.roots[a] as u32
+                            })
+                            && out_beams[k + beam::HIT_FACE as usize] == face
+                            && out_beams[k + beam::HIT_PX as usize] == (px[1] << 16 | px[0]);
+                    } else {
+                        ok = ok && got(3) == face::BOX;
+                    }
+                } else {
+                    ok = ok && got(0) == 0 && got(1) == 0 && got(3) == 0;
+                }
+                // Its visits with its beam ray's, where it met nothing.
+                if met.ends != End::Hit {
+                    ok = ok && got(2).abs_diff(met.visits + before) <= VISITS_OFF;
+                }
+                if !ok && stepped <= STEPS_TRIED {
+                    // A start a step over, as a GPU rounds it.
+                    let o = origin;
+                    let again = (0..27).any(|m| {
+                        let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
+                        let mut q = Keeping {
+                            w,
+                            cuts: obs.cuts,
+                            table: &mut table0.clone(),
+                            tag,
+                            asks: Asks::default(),
+                            writes: true,
+                            met: None,
+                        };
+                        let (m, _) = obs.walk_at(&mut q, &words, cell, from, &r, d);
+                        m.ends == met.ends
+                            && (m.ends != End::Hit
+                                || got(0) == ray::first_word(m.hit.asset[0], face, m.hit.node.zoom))
+                    });
+                    if again {
+                        stepped += 1;
+                        ok = true;
+                    }
+                }
+                if ok {
+                    same += 1;
+                } else {
+                    differ += 1;
+                    if differ <= 3 {
+                        eprintln!(
+                            "DIFFERS {name} {px:?} left {was_left} again {walked_again}: want {:?} z{} {:?} t{} axis {} asset {:x?} visits {}+{before}; got {:x?}",
+                            met.ends, met.hit.node.zoom, met.hit.node.corner, met.hit.t, met.hit.axis, met.hit.asset, met.visits,
+                            [got(0), got(1), got(2), got(3)]
+                        );
+                    }
+                    assert!(
+                        std::env::var_os("MUT_WGSL").is_none(),
+                        "{name}: {px:?} differs"
+                    );
+                }
+                let mut add =
+                    |k: &'static str, yes: bool| *kinds.entry(k).or_default() += u64::from(yes);
+                add("pixels", true);
+                add("left by the walk over the pyramid", was_left);
+                add(
+                    "past the list, walked over every pixel",
+                    !marked[..listed].contains(&p),
+                );
+                add("hit", met.ends == End::Hit);
+                add(
+                    "hit, its faces kept to ask",
+                    met.ends == End::Hit
+                        && answer::fill_eighths(met.hit.asset[0]) == answer::EIGHTHS,
+                );
+                add("past its reach", met.ends == End::Miss);
+                add(
+                    "resumed",
+                    words[cell as usize + beam::CELL_RESUMES as usize] != 0,
+                );
+            }
+            // The hits kept are numbered from 0, one each, as many as the count.
+            let cnt = out_table[pyramid::HITS_CNT as usize];
+            if hits.len() as u32 != cnt || hits.iter().copied().max().is_some_and(|m| m + 1 != cnt)
+            {
+                failed.push(format!(
+                    "{name}: {} hits kept against a count of {cnt}",
+                    hits.len()
+                ));
+            }
+            // A pixel the cast did not mark stands.
+            let untouched = (0..wd * ht).filter(|&p| !mark(p)).all(|p| {
+                (0..ray::WORDS as usize)
+                    .all(|l| out[l * texels + p as usize] == ray_words[l * texels + p as usize])
+            });
+            if !untouched {
+                failed.push(format!("{name}: a pixel not marked was written"));
+            }
+            eprintln!("{name}: {same} alike, {differ} differ, {stepped} a step over");
+            if differ > 0 {
+                failed.push(format!("{name}: {differ} pixels differ"));
+            }
+        }
+    }
+    eprintln!("  KINDS missed {kinds:?}");
+    for (what, n) in [
+        ("left by the walk over the pyramid", 1),
+        ("past the list, walked over every pixel", 1),
+        ("hit, its faces kept to ask", 1),
+        ("past its reach", 1),
+    ] {
+        if kinds.get(what).copied().unwrap_or(0) < n {
+            failed.push(format!("too few of {what} to say"));
+        }
+    }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

@@ -337,7 +337,7 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
     true
 }
 
-/// The binding of a pass's head (pxl-shader light.rs `Head`): the light's
+/// The binding of a pass's head (pxl-engine `light::HEAD_SIZE`): the light's
 /// map's, or the eye's, which names none.
 pub(super) const HEAD_BINDING: u32 = 11;
 

@@ -1,8 +1,8 @@
 //! Decor's passes by hand (frame/shader/decor_pose.wgsl, decor_args.wgsl) answer as the
 //! Rust does: over the real world of tests/real_world, each record a thread leaves as
 //! `generation::placement` stands it through the real walk (`support::column_surface`),
-//! as the generated modules did while they were held (doc/experiment/20261104-taking-rust-gpu-out/decor),
-//! for word. Skipped where no adapter answers.
+//! word for word (doc/experiment/20261104-taking-rust-gpu-out/decor). Skipped where no
+//! adapter answers.
 
 mod real_world;
 

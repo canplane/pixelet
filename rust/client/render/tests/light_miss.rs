@@ -1,5 +1,5 @@
-//! `light_miss_cs` by hand (frame/shader/light_miss.wgsl) answers as pxl-shader's `Writing`
-//! over `cast::walk`: over the real world of tests/real_world, each slot's word as
+//! `light_miss_cs` by hand (frame/shader/light_miss.wgsl) answers as `cast::walk` writing the
+//! observed pyramid (tests/keeping `Writing`): over the real world of tests/real_world, each slot's word as
 //! `light::word(light::depth(..))` of its walk, and what it leaves in the observed pyramid
 //! as `Writing` leaves it (`Keeping` here, its rule over the same words), kept for the walk
 //! to find next frame. The walk's from the root, as `light_miss_hit_cs`'s is: a walk resumed
@@ -1287,7 +1287,7 @@ fn a_step_over(
         return true;
     }
     // A cell whose edge it stops at, its span in it a few of the steps its start is rounded
-    // to: starts two steps apart on two axes pass by, as rust-gpu's module does.
+    // to: starts two steps apart on two axes pass by.
     let mut q = Keeping {
         w,
         cuts: case.cuts,

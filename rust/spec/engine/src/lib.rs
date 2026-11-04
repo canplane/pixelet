@@ -1,17 +1,18 @@
 // pxl-engine/lib.rs
 
-//! gpu-portable: one source for the CPU and, through rust-gpu, WGSL.
+//! gpu-portable: the rules the CPU runs and the GPU's WGSL is written to.
 //!
 //! What pixelet's spec computes the same on the CPU and on the GPU, in
 //! `core` alone: the zooms and the lattices of cells on them, a node's seed,
 //! the value space, the ground and the service area it ends at, the ray's
 //! descent, and the samples' stops as the boxes a raster draws, asking the
 //! content it draws its rules (`content`).
-//! pxl-spec takes it as its own, and a shader crate depends on it as it is.
+//! pxl-spec takes it as its own; pxl-render's WGSL passes are written by hand
+//! to it, their layouts generated from it (pxl-render build.rs), each held word
+//! for word to it by a test (pxl-render tests/).
 //!
 //! No check here fails: an index stays in its array, a divisor is not zero,
-//! a range's bounds do not cross. A GPU's module takes each as unreachable
-//! (pxl-shader-build's panic strategy, rustc_codegen_spirv `remove_aborts`).
+//! a range's bounds do not cross.
 
 #![no_std]
 

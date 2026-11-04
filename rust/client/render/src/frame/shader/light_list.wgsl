@@ -1,7 +1,7 @@
 // pxl-render/light_list.wgsl
 
 // The shadow map's lattice as the light's beam, cells and slots take it off its list
-// (pxl-shader light.rs `Map`): where a beam ray's line and start, a cell's start and a
+// (pxl-engine light.rs): where a beam ray's line and start, a cell's start and a
 // sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
 // place of the lattice the thread at an id takes (`Map::take`); and whether the cast needs it
 // (`Map::needs`); and the reads, the stands, their squares and each list's marks, as the
@@ -9,7 +9,7 @@
 // `listed_marks_at`). The list is `beams`, as resume.wgsl names it; the receivers' passes bind
 // it apart (light_stand.wgsl).
 
-/// The levels of the map's lattice (pxl-shader observer.rs `Level`).
+/// The levels of the map's lattice: a beam ray's corner, a cell, a sample, a slot's ray.
 const LEVEL_CORNER = 0u;
 const LEVEL_CELL = 1u;
 const LEVEL_SAMPLE = 2u;
@@ -75,13 +75,15 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 }
 
 /// What of `level` the thread at `id` of its pass takes (`Map::take`): itself where the cast
-/// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of 8 × 8
-/// `LISTED_LANES` and an entry `listed_per` of them; none past the list.
+/// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of
+/// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry `listed_per` of them; none past
+/// the list.
 fn light_take(level: u32, id: vec2<u32>) -> vec2<u32> {
   if (head_word(LIGHT_HEAD_EPOCH) == head_word(LIGHT_HEAD_CAST)) {
     return id;
   }
-  let place = ((id.y / 8u) * LIGHT_LIST_ACROSS + id.x / 8u) * LIGHT_LISTED_LANES + (id.y % 8u) * 8u + id.x % 8u;
+  let place = ((id.y / SAMPLE_SIDE) * LIGHT_LIST_ACROSS + id.x / SAMPLE_SIDE) * LIGHT_LISTED_LANES
+    + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
   var across = 1u;
   if (level == LEVEL_SAMPLE) {
     across = LIGHT_TILE / LIGHT_SAMPLE;

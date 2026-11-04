@@ -115,8 +115,7 @@ fn over(c: [i32; 3], zoom: Zoom, z: Zoom) -> [i32; 3] {
     ancestor_at(zoom, c, zoom - z)
 }
 
-/// Whether two nodes are one. [rust-gpu] By its words: an array's `==` is
-/// an intrinsic it does not lower.
+/// Whether two nodes are one, by their words.
 fn same(a: [i32; 3], b: [i32; 3]) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }
@@ -124,7 +123,8 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
 /// A line as a reader of the assets about its node reads it (`asset`), in
 /// place: its node, by its index at its zoom, and what was handed it and
 /// each node over it, by zoom. A descent's own (`Line`), or one a reader
-/// holds elsewhere, read where it lies (`JoinedLine`; pxl-shader a beam ray's).
+/// holds elsewhere, read where it lies (`JoinedLine`; a beam ray's in the beam
+/// rays' words, pxl-render resume.wgsl).
 pub trait Ancestors<A: Copy> {
     fn at(&self) -> [i32; 3];
     fn zoom(&self) -> Zoom;
@@ -159,9 +159,7 @@ pub struct SubLine<A> {
 
 /// A line down to a node read with the line it was descended off
 /// (`SubLine::joined`): over `low`, the other's, read where it lies; from `low`
-/// down, its own descent's. [rust-gpu] Two references and no array of its
-/// own: naga refuses a pointer in a value a shader keeps whole, as one with
-/// an array is kept.
+/// down, its own descent's: two references and no array of its own.
 pub struct JoinedLine<'a, L, A> {
     base: &'a L,
     sub: &'a SubLine<A>,
