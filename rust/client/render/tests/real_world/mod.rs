@@ -477,6 +477,46 @@ impl Built {
     }
 }
 
+/// The eye's clip levels' entries in `clipmap` folded a level at a time over its entry table
+/// (`clip::fold`), and some left as a clip level moved along one axis left them, not yet
+/// folded again.
+pub fn fold(
+    clipmap: &mut [[i32; 4]],
+    ground: &[u32],
+    palette: &[u32],
+    shards: &[[u32; 4]],
+    pool: &[u32],
+) {
+    for l in 1..=JOINED_LEVELS {
+        for cell in FIRST_CELL..=LEAF_CELL {
+            let entries: Vec<_> = {
+                let w = World {
+                    clipmap,
+                    ground,
+                    palette,
+                    shards,
+                    overwrites: &[0; 16],
+                    pool,
+                };
+                (0..(ACROSS >> l) * (ACROSS >> l))
+                    .map(|b| clip::fold(&w, cell, l, b))
+                    .collect()
+            };
+            for (b, e) in entries.into_iter().enumerate() {
+                let at =
+                    JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + clip::joined_idx(l, [0, 0]);
+                clipmap[at as usize + b] = e.map(|v| v as i32);
+            }
+        }
+    }
+    for e in 0..(JOINED_ENTRIES * EYE_CLIP_LEVELS) as usize {
+        let h = mix(e as u32, [7, 11]);
+        if h.is_multiple_of(5) {
+            clipmap[JOINED_AT as usize + e][(h >> 8 & 1) as usize] ^= 1;
+        }
+    }
+}
+
 /// The world about an eye at `eye`, seeded the one way.
 pub fn build(eye: [i32; 2]) -> Built {
     // The service area's index, a cell's nine by its key.
@@ -580,38 +620,8 @@ pub fn build(eye: [i32; 2]) -> Built {
     eprintln!(
         "{held_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_group} child groups"
     );
-    // Their entries, folded a level at a time.
     let overwrites_none = vec![0u32; 16];
-    for l in 1..=JOINED_LEVELS {
-        for cell in FIRST_CELL..=LEAF_CELL {
-            let entries: Vec<_> = {
-                let w = World {
-                    clipmap: &clipmap,
-                    ground: &ground_words,
-                    palette: &palette_words,
-                    shards: &shards,
-                    overwrites: &overwrites_none,
-                    pool: &pool,
-                };
-                (0..(ACROSS >> l) * (ACROSS >> l))
-                    .map(|b| clip::fold(&w, cell, l, b))
-                    .collect()
-            };
-            for (b, e) in entries.into_iter().enumerate() {
-                let at =
-                    JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + clip::joined_idx(l, [0, 0]);
-                clipmap[at as usize + b] = e.map(|v| v as i32);
-            }
-        }
-    }
-
-    // Some entries as a clip level moved along one axis left them, not yet folded again.
-    for e in 0..(JOINED_ENTRIES * EYE_CLIP_LEVELS) as usize {
-        let h = mix(e as u32, [7, 11]);
-        if h.is_multiple_of(5) {
-            clipmap[JOINED_AT as usize + e][(h >> 8 & 1) as usize] ^= 1;
-        }
-    }
+    fold(&mut clipmap, &ground_words, &palette_words, &shards, &pool);
 
     // A ground's top, off whichever clip level holds it.
     let top_at = |g: [i32; 2]| {

@@ -860,10 +860,11 @@ impl RaysPass {
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
                 let was = c.entries.get(4 * k..4 * k + 4);
-                if was != Some(row) {
+                let entry = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]);
+                if was.is_none_or(|w| entry(row).moved_from(entry(w))) {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
-                let held = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]).brick();
+                let held = |r: &[i32]| entry(r).brick();
                 let (now, was) = (held(row), was.map(held));
                 present_moved |= match was {
                     Some((brick, present)) => {
