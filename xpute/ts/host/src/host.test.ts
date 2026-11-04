@@ -1,34 +1,48 @@
 // @xpute/host/host.test.ts
 
-/** What `mount` puts together from its config alone: the first turn where it
- * writes the toc, the ports, the stop, and the turns paused and resumed. */
+/** What `mount` puts together from its config alone: the front laid before
+ * any turn, the guest's commands handed by their major, the stop, and the
+ * turns paused and resumed. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
-import { type Guest, mount } from "./host.ts";
+import { type Config, type Guest, mount } from "./host.ts";
 import * as frame from "./ipc/frame.ts";
+import type { Front } from "./ipc/head.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ipc/ring.ts";
-import { HEAD, key, MAGIC, VERSION } from "./ipc/toc.spec.ts";
+import * as ring from "./ipc/ring.spec.ts";
 import type { Grant, SchedulingPolicy } from "./sched/policy.ts";
 
 const CAP = 8;
 const SLOT = 256;
-const TOC_AT = 8;
+const HEAD_AT = 0;
+/** Where the guest's GPU stream begins, which the header names. */
+const STREAM_AT = 32;
 const SQ_AT = 64;
 const CQ_AT = SQ_AT + ring_bytes(CAP);
 const SLOTS_AT = CQ_AT + ring_bytes(CAP);
-/** A stream of the program's own, which the guest names in its toc. */
-const STREAM_KEY = (key.PROGRAM | 1) >>> 0;
-const STREAM_AT = 4;
+const FRONT: Front = {
+  sq_cap: CAP,
+  cq_cap: CAP,
+  slot_bytes: SLOT,
+  sq_at: SQ_AT,
+  cq_at: CQ_AT,
+  sq_slots_at: SLOTS_AT,
+  cq_slots_at: SLOTS_AT + slots_bytes(CAP, SLOT),
+  gpu_at: STREAM_AT,
+};
+/** A command of the program's, and one of xpute's own, the guest posts
+ * each turn. */
+const PROGRAM_EVENT = (frame.PROGRAM_MAJOR << 8) | 9;
+const OWN_EVENT = 0x0109;
 
-/** A guest that lays its rings and writes its toc in its first turn, then
- * each turn answers what was sent it, 0, and posts an event for port 1;
- * `trap` makes a turn throw. */
+/** A guest that opens the rings its host laid, then each turn answers what
+ * was sent it, 0, and posts PROGRAM_EVENT and OWN_EVENT; `trap` makes a turn
+ * throw. */
 function guest(trap: () => boolean = () => false): Guest & { turns: number[] } {
-  const mem = new ArrayBuffer(SLOTS_AT + 2 * slots_bytes(CAP, SLOT));
+  const mem = new ArrayBuffer(FRONT.cq_slots_at + slots_bytes(CAP, SLOT));
   let sq: Ring | null = null;
   let cq: Ring | null = null;
   const turns: number[] = [];
@@ -37,41 +51,22 @@ function guest(trap: () => boolean = () => false): Guest & { turns: number[] } {
     turns,
     run(quota_ms) {
       turns.push(quota_ms);
-      if (sq === null || cq === null) {
-        sq = Ring.init(mem, SQ_AT, CAP, SLOTS_AT, SLOT);
-        cq = Ring.init(
-          mem,
-          CQ_AT,
-          CAP,
-          SLOTS_AT + slots_bytes(CAP, SLOT),
-          SLOT,
-        );
-        const toc = new Uint32Array(mem, TOC_AT, HEAD + 6);
-        toc.set([
-          MAGIC,
-          VERSION,
-          3,
-          0,
-          key.SQ,
-          SQ_AT,
-          key.CQ,
-          CQ_AT,
-          STREAM_KEY,
-          STREAM_AT,
-        ]);
-        return -1;
-      }
+      sq ??= new Ring(mem, SQ_AT);
+      cq ??= new Ring(mem, CQ_AT);
       if (trap()) throw new Error("the guest trapped");
       for (let at = sq.peek(); at >= 0; at = sq.peek()) {
         cq.push(sq.tag(at), sq.cmd(at), frame.RES);
         sq.advance();
       }
-      cq.push(1 << 24, 9);
+      cq.push(0, PROGRAM_EVENT);
+      cq.push(0, OWN_EVENT);
       return -1;
     },
     answer_with() {},
   };
 }
+
+const LAID = { head_at: HEAD_AT, lay: FRONT } satisfies Partial<Config>;
 
 /** A policy whose moments come when the test says, each a turn of no quota. */
 function stepped(): SchedulingPolicy & { asked: number; step(): void } {
@@ -93,47 +88,38 @@ function stepped(): SchedulingPolicy & { asked: number; step(): void } {
   };
 }
 
-test("mount - runs the turn that writes the toc, and binds each port before any turn is read", () => {
+test("mount - lays the front before any turn, and hands the program only its own commands", () => {
   const g = guest();
   const heard: number[] = [];
   const host = mount(g, {
-    toc_at: TOC_AT,
-    toc_in_turn: true,
-    sys: {},
-    ports: { 1: (_tag, cmd) => void heard.push(cmd) },
+    ...LAID,
+    program: (_tag, cmd) => void heard.push(cmd),
     policy: stepped(),
     submit: () => {},
   });
+  assert.deepStrictEqual(g.turns, [], "no turn before the front is laid");
   assert.deepStrictEqual(
-    g.turns,
-    [0],
-    "one turn, of no quota, before the toc is read",
+    [host.head.sq_at, host.head.cq_at, host.head.gpu_at],
+    [SQ_AT, CQ_AT, STREAM_AT],
   );
-  host.call(1, 0);
-  assert.deepStrictEqual(heard, [9]);
+  host.call(PROGRAM_EVENT);
+  assert.deepStrictEqual(heard, [PROGRAM_EVENT]);
 });
 
-test("mount - refuses a handler for the host's own port", () => {
-  assert.throws(
-    () =>
-      mount(guest(), {
-        toc_at: TOC_AT,
-        toc_in_turn: true,
-        sys: {},
-        ports: { 0: () => {} },
-        policy: stepped(),
-        submit: () => {},
-      }),
-    (e: unknown) => e instanceof InvariantError && e.errnum === Errno.EINVAL,
-  );
+test("mount - a front already laid is kept as it is, its rings' positions with it", () => {
+  const g = guest();
+  mount(g, { ...LAID, policy: stepped(), submit: () => {} });
+  const sq = new Uint32Array(g.mem, SQ_AT, ring.HEADER_WORDS);
+  const tail = sq[ring.TAIL];
+  assert.ok(tail > 0, "the attach is waiting in the submission ring");
+  mount(g, { ...LAID, policy: stepped(), submit: () => {} });
+  assert.ok(sq[ring.TAIL] > tail, "laid again, the ring would start over");
 });
 
 test("mount - turns run between resume and pause, and wake asks for one only then", () => {
   const policy = stepped();
   const host = mount(guest(), {
-    toc_at: TOC_AT,
-    toc_in_turn: true,
-    sys: {},
+    ...LAID,
     policy,
     submit: () => {},
   });
@@ -158,16 +144,14 @@ test("mount - a guest that stops runs no more turns and is told once", () => {
     const host = mount(
       guest(() => trapping),
       {
-        toc_at: TOC_AT,
-        toc_in_turn: true,
-        sys: {},
+        ...LAID,
         policy,
         submit: () => {},
         onterminated: () => terminated++,
       },
     );
     trapping = true;
-    assert.deepStrictEqual(host.call(1, 0), Errno.ENOTRECOVERABLE);
+    assert.deepStrictEqual(host.call(PROGRAM_EVENT), Errno.ENOTRECOVERABLE);
     host.resume();
     assert.deepStrictEqual(terminated, 1);
     assert.deepStrictEqual(
@@ -180,18 +164,24 @@ test("mount - a guest that stops runs no more turns and is told once", () => {
   }
 });
 
-test("mount - runs each stream the platform names as each turn returns", () => {
-  const g = guest();
-  const ran: number[] = [];
-  g.streams = [{ key: STREAM_KEY, run: (at) => void ran.push(at) }];
-  const host = mount(g, {
-    toc_at: TOC_AT,
-    toc_in_turn: true,
-    sys: {},
+test("mount - grants the GPU the guest's stream and memory, and runs it as each turn returns", () => {
+  const granted: number[] = [];
+  let ran = 0;
+  const gpu = {
+    grant: (to: { at: number }) => void granted.push(to.at),
+    after_turn: () => void ran++,
+  };
+  const ask = {
+    power: "high-performance",
+    features: { required: [], optional: [] },
+  };
+  const host = mount(guest(), {
+    ...LAID,
+    gpu: { by: gpu, ask },
     policy: stepped(),
     submit: () => {},
   });
-  assert.deepStrictEqual(ran, [], "not the turn that wrote the toc");
-  host.call(1, 0);
-  assert.deepStrictEqual(ran, [STREAM_AT]);
+  assert.deepStrictEqual([granted, ran], [[STREAM_AT], 0]);
+  host.call(PROGRAM_EVENT);
+  assert.deepStrictEqual(ran, 1);
 });

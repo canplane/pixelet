@@ -2159,21 +2159,6 @@ dependencies = [
  "pxl-spec",
  "xpute-gpu",
  "xpute-guest",
- "xpute-kit",
-]
-
-[[package]]
-name = "pxl-native"
-version = "0.0.0"
-dependencies = [
- "fnv",
- "jni-sys 0.3.1",
- "ndk-sys",
- "pxl-kernel",
- "pxl-render",
- "wgpu",
- "xpute-gpu",
- "xpute-guest",
  "xpute-host",
  "xpute-kit",
  "zstd 0.13.3",
@@ -2239,15 +2224,6 @@ dependencies = [
  "ureq",
  "webp",
  "xpute-tool",
-]
-
-[[package]]
-name = "pxl-wasm"
-version = "0.0.0"
-dependencies = [
- "pxl-kernel",
- "xpute-gpu",
- "xpute-guest",
 ]
 
 [[package]]
@@ -3720,7 +3696,9 @@ dependencies = [
 name = "xpute-host"
 version = "0.0.0"
 dependencies = [
+ "jni-sys 0.3.1",
  "libc",
+ "ndk-sys",
  "xpute-guest",
  "xpute-kit",
 ]

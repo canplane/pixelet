@@ -21,19 +21,15 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host";
 
 import { storage } from "@/abi/file.spec.ts";
-import { bracket } from "@/bracket.tsx";
+import * as local from "@/services/storage.ts";
 
-/** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
+/** Storage as the platform gives it (services/storage.ts): a refused write keeps nothing, and does not throw. */
 export interface Storage {
   get(key: string): string | null;
   set(key: string, value: string): void;
 }
 
-/** The bracket's, read at each call: the bracket is set after this loads. */
-export const STORAGE: Storage = {
-  get: (key) => bracket.storage.get(key),
-  set: (key, value) => bracket.storage.set(key, value),
-};
+export const STORAGE: Storage = local;
 
 /** The bytes `text` keeps; EBADMSG for text that keeps none. */
 function bytes_of(text: string): U8Array {

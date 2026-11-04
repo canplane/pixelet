@@ -1,9 +1,30 @@
 // cpp/xpute/guest/ipc/ring.hpp
 
 // A ring of frames, laid out by spec/ipc/ring.json.
+//
+// A ring's two sides may take turns on one thread, as a page's host and its
+// module do, or run at once on two, as a native host and a guest on its own
+// thread do. The same rules, io_uring's, hold either way:
+//
+// - R1. Each position word has one writer: TAIL is the producer's and HEAD
+//   the consumer's.
+// - R2. A position word is stored with release and loaded with acquire. The
+//   producer writes a frame and its slot, then stores TAIL past them; the
+//   consumer loads TAIL before it reads them, and stores HEAD past a frame
+//   once it is done with the frame and its slot; the producer loads HEAD
+//   before it writes into that frame or slot again.
+// - R3. Memory a frame names by its address is the receiver's from the
+//   moment the frame is published until the receiver stores HEAD past it.
+//   The sender writes it again only once it has loaded a HEAD past that
+//   frame (`consumed`).
+//
+// The frames' and slots' own words are plain memory, ordered by the position
+// words alone. Where a target has no threads, as WebAssembly without its
+// atomics feature, the atomic accesses are its plain loads and stores.
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -26,7 +47,7 @@ constexpr std::uint32_t slots_bytes(std::uint32_t cap, std::uint32_t slot_bytes)
 
 class Ring {
   public:
-    // A cap that is not a power of two is a bug.
+    // A cap that is not a power of two, or a ring not on a word, is a bug.
     Ring(Memory mem, std::uint32_t at) noexcept;
 
     static Ring init(Memory mem, std::uint32_t at, std::uint32_t cap, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept;
@@ -34,10 +55,18 @@ class Ring {
     const Memory &mem() const noexcept { return mem_; }
     std::uint32_t cap() const noexcept { return cap_; }
     std::uint32_t slot_bytes() const noexcept { return slot_bytes_; }
-    std::uint32_t head() const noexcept { return header(ring::HEAD); }
-    std::uint32_t tail() const noexcept { return header(ring::TAIL); }
+    std::uint32_t head() const noexcept { return pos(ring::HEAD).load(std::memory_order_acquire); }
+    std::uint32_t tail() const noexcept { return pos(ring::TAIL).load(std::memory_order_acquire); }
     std::uint32_t len() const noexcept { return tail() - head(); }
     bool empty() const noexcept { return len() == 0; }
+
+    // Whether the consumer has stored its head past the frame published at
+    // `pos`: what that frame named is the producer's again (R3). The
+    // producer's to ask.
+    bool consumed(std::uint32_t pos) const noexcept {
+        std::uint32_t t = tail();
+        return t - head() < t - pos;
+    }
 
     // The word, from the ring's start, where the frame at `position` begins.
     std::uint32_t entry_at(std::uint32_t pos) const noexcept { return ring::HEADER_WORDS + (pos & (cap_ - 1)) * frame::WORDS; }
@@ -71,7 +100,7 @@ class Ring {
     }
 
     // Drops every frame not yet read: the writer's, before its reader reads.
-    void clear() const noexcept { set_header(ring::TAIL, head()); }
+    void clear() const noexcept { pos(ring::TAIL).store(head(), std::memory_order_release); }
 
     // The head's frame, none when empty. Read it, then `advance`.
     std::optional<Frame> peek() const noexcept;
@@ -83,7 +112,10 @@ class Ring {
 
   private:
     std::uint32_t header(std::uint32_t word) const noexcept { return mem_.word(at_ + 4 * word); }
-    void set_header(std::uint32_t word, std::uint32_t w) const noexcept { mem_.set_word(at_ + 4 * word, w); }
+    // A position word (HEAD, TAIL), only ever touched as an atomic (R2).
+    std::atomic_ref<std::uint32_t> pos(std::uint32_t word) const noexcept {
+        return std::atomic_ref<std::uint32_t>(*reinterpret_cast<std::uint32_t *>(mem_.at(at_ + 4 * word)));
+    }
     std::uint32_t slot_at(std::uint32_t pos) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;
     void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;

@@ -2,21 +2,25 @@
 //
 // GENERATED from spec/abi/cmd.json
 
-// xpute's own commands.
+// Every command, by the side that sends it.
+
+// ---- host, export ----
 
 /** Replies with its packet's value, or 0 where it has none — the rings' own test. */
 export const NOP = 0x0000;
-/** An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
- * Never sent for a descriptor already closed. */
-export const SYS_OPENED = 0x0101;
-/** The file at `path` below `root` opened as `fd`, answered by SYS_OPENED. */
-export const SYS_OPENAT = 0x0102;
-/** The opened file's first `len` bytes copied to `at` in the guest's memory. */
-export const SYS_READ = 0x0103;
-/** The `len` bytes at `at` added to what the file opened for writing holds. */
-export const SYS_WRITE = 0x0104;
-/** The descriptor ended. A file opened for writing is replaced by what was written; an
- * open not yet answered is canceled, and never answered. */
-export const SYS_CLOSE = 0x0105;
+/** A host has attached, the first or again after one before it went: the mount sends it
+ * once the front is laid. What the old host's requests leave behind is the guest's to let go. */
+export const SYS_ATTACH = 0x0107;
+/** The guest is about to be frozen, its turns stopped for as long as its host is hidden:
+ * its last sure moment to save. A call, rung at once. */
+export const SYS_SUSPEND = 0x0108;
+/** The guest woken from SYS_SUSPEND. A call, rung at once. */
+export const SYS_RESUME = 0x0109;
+/** The GPU the machine asked for answered, the first time or again after a loss, whose
+ * sign is in the stream's device block. */
+export const GPU_READY = 0x0201;
+
+// ---- host, import ----
+
 /** The broken invariant the guest reports as it stops (xpute-kit status/bug.rs). */
 export const SYS_ABORT = 0x0106;

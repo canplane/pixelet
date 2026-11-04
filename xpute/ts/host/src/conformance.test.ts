@@ -18,20 +18,23 @@ import { Golden } from "@xpute/kit/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/host/abi/cmd.spec.ts";
+import * as fs from "@xpute/host/abi/fs.spec.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
-import { Toc } from "@xpute/host/ipc/toc.ts";
-import { key as toc_key } from "@xpute/host/ipc/toc.spec.ts";
+import { Head } from "@xpute/host/ipc/head.ts";
+import { WORDS, word } from "@xpute/host/ipc/head.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
 import { open_module } from "@xpute/host/module.ts";
 import {
+  CQ_CAP,
   cmd,
-  key,
   LAYOUTS,
   MEM_BYTES,
-  SENDER,
+  SLOT_BYTES,
+  SQ_CAP,
 } from "@xpute/host/conformance.spec.ts";
+import * as ring from "@xpute/host/ipc/ring.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 
@@ -61,9 +64,10 @@ const MODULE_BYTES = 4 << 20;
 
 const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
-/** A guest as the host holds it, and the offset its boot answered. */
+/** A guest as the host holds it, and where its boot answered its front's
+ * header is. */
 interface Opened extends Guest {
-  toc_at: number;
+  head_at: number;
 }
 
 interface Opener {
@@ -100,10 +104,10 @@ function native(path: string): Opener {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
       answer = answer_enosys;
-      const toc_at = boot(at, now, host, seed);
+      const head_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
-        toc_at,
+        head_at,
         run: (quota) => guest_run(at, quota),
         answer_with: (a) => (answer = a),
       };
@@ -135,7 +139,7 @@ function module(path: string): Opener {
       const boot = guest.instance.exports.xpute_conformance_boot as (
         seed: number,
       ) => number;
-      return { ...guest, toc_at: boot(seed) >>> 0 };
+      return { ...guest, head_at: boot(seed) >>> 0 };
     },
     close() {},
   };
@@ -162,8 +166,6 @@ interface Completion {
   cmd: number;
   reply: boolean;
   result: number;
-  /** The port its tag names: whom a reply or an event is for. */
-  src: number;
 }
 
 interface Turn {
@@ -173,9 +175,8 @@ interface Turn {
 }
 
 class Host {
-  readonly toc: Toc;
-  /** The toc's word kept at 0. */
-  readonly reserved: number;
+  /** The header's words. */
+  readonly head: Uint32Array;
   readonly sq: Ring;
   private readonly cq: Ring;
   private readonly stream_at: number;
@@ -186,19 +187,17 @@ class Host {
   constructor(guest: Opened) {
     this.guest = guest;
     const mem = guest.mem;
-    this.toc = new Toc(mem, guest.toc_at);
-    this.reserved = new Uint32Array(mem, guest.toc_at, 4)[3];
-    this.sq = new Ring(mem, this.toc.get(toc_key.SQ));
-    this.cq = new Ring(mem, this.toc.get(toc_key.CQ));
-    this.stream_at = this.toc.get(key.STREAM);
-    // The fixture's one call, INC to SENDER, answered as SENDER: the frame
-    // the guest laid unpublished at `at` in its completion ring.
+    const head = new Head(mem, guest.head_at);
+    this.head = new Uint32Array(mem, guest.head_at, WORDS);
+    this.sq = new Ring(mem, head.sq_at);
+    this.cq = new Ring(mem, head.cq_at);
+    this.stream_at = head.gpu_at;
+    // The fixture's one call, INC: the frame the guest laid unpublished at
+    // `at` in its completion ring.
     guest.answer_with((at) => {
       const cq = this.cq;
       const e = cq.entry_of(at);
-      if (frame.port_of(cq.tag(e)) !== SENDER || cq.cmd(e) !== cmd.INC) {
-        return Errno.ENOSYS;
-      }
+      if (cq.cmd(e) !== cmd.INC) return Errno.ENOSYS;
       const pkt = cq.pkt(e);
       if (pkt === null) return Errno.EBADMSG;
       const f = new TreeReader(pkt).read_branch();
@@ -209,14 +208,7 @@ class Host {
     });
   }
 
-  /** As the port `src`. */
-  submit(
-    tag: number,
-    cmd: number,
-    ack: boolean,
-    args: number[],
-    src: number,
-  ): void {
+  submit(tag: number, cmd: number, ack: boolean, args: number[]): void {
     const sq = this.sq;
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
@@ -232,7 +224,7 @@ class Host {
       pkt = this.writer;
     }
     assert.deepStrictEqual(
-      sq.push(frame.tag_of(src, tag), cmd, ack ? frame.ACKREQ : 0, pkt),
+      sq.push(tag, cmd, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }
@@ -240,24 +232,24 @@ class Host {
   ring(quota_ms: number): Turn {
     const wake = this.guest.run(quota_ms);
     const stream: number[] = [];
-    each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
+    each_record(this.guest.mem, this.stream_at, (op) => stream.push(op));
     const completions: Completion[] = [];
     const cq = this.cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {
-      // A hostcall, for the host's port, which no trace's host answers.
+      // An event of xpute's own, the host's control or the file device's,
+      // which no trace's host takes.
       if (
-        frame.port_of(cq.tag(at)) === frame.HOST &&
+        frame.major_of(cq.cmd(at)) < frame.PROGRAM_MAJOR &&
         (cq.flags(at) & frame.RES) === 0
       ) {
         cq.advance();
         continue;
       }
       completions.push({
-        tag: frame.id_of(cq.tag(at)),
+        tag: cq.tag(at),
         cmd: cq.cmd(at),
         reply: (cq.flags(at) & frame.RES) !== 0,
         result: cq.result(at),
-        src: frame.port_of(cq.tag(at)),
       });
       cq.advance();
     }
@@ -269,54 +261,48 @@ class Host {
     return this.sq.len > 0;
   }
 
-  names(k: number): boolean {
-    try {
-      this.toc.get(k);
-      return true;
-    } catch {
-      return false;
-    }
+  /** The header's word `name` says. */
+  word(name: string): number {
+    if (!(name in word)) throw new Error(`no header word ${name}`);
+    return this.head[word[name as keyof typeof word]];
+  }
+
+  /** The ring header's word `at` of the ring the header's `ring_at` names. */
+  ring_word(ring_at: string, at: number): number {
+    return new Uint32Array(
+      this.head.buffer,
+      this.word(ring_at),
+      ring.HEADER_WORDS,
+    )[at];
   }
 }
 
-function key_number(name: string): number {
-  const keys: Record<string, number> = {
-    SQ: toc_key.SQ,
-    CQ: toc_key.CQ,
-    STREAM: key.STREAM,
-  };
-  if (!(name in keys)) throw new Error(`no key ${name}`);
-  return keys[name];
-}
-
-/** The guest's own commands, which a trace sends as SENDER. */
+/** The guest's own commands, by name. */
 const CMD_NAMES = Object.entries(cmd).filter(
   ([, v]) => typeof v === "number",
 ) as [string, number][];
 
-/** xpute's own, which a trace sends as the host. */
+/** xpute's own a trace sends: the host's control's and the file device's. */
 const HOST_NAMES: [string, number][] = [
   ["NOP", Command.NOP],
-  ["SYS_OPENED", Command.SYS_OPENED],
+  ["FS_OPENED", fs.Command.FS_OPENED],
 ];
 
-/** A name of either table and the port that sends it, or a number in hex,
- * which SENDER sends. */
-function cmd_number(name: string): { cmd: number; src: number } {
-  const found = CMD_NAMES.find(([n]) => n === name);
-  if (found) return { cmd: found[1], src: SENDER };
-  const own = HOST_NAMES.find(([n]) => n === name);
-  if (own) return { cmd: own[1], src: frame.HOST };
+/** The fixture's numbers a header's size words say again. */
+const SIZES: Record<string, number> = { SQ_CAP, CQ_CAP, SLOT_BYTES };
+
+/** A name of either table, or a number in hex. */
+function cmd_number(name: string): number {
+  const found = [...CMD_NAMES, ...HOST_NAMES].find(([n]) => n === name);
+  if (found) return found[1];
   const n = parseInt(name.replace(/^0x/, ""), 16);
   if (Number.isNaN(n)) throw new Error(`no command ${name}`);
-  return { cmd: n, src: SENDER };
+  return n;
 }
 
-/** A reply to the host is to one of xpute's own; anything else the guest
- * raised or answered is its own. */
-function cmd_name(n: number, host: boolean): string {
+function cmd_name(n: number): string {
   return (
-    (host ? HOST_NAMES : CMD_NAMES).find(([, v]) => v === n)?.[0] ??
+    [...HOST_NAMES, ...CMD_NAMES].find(([, v]) => v === n)?.[0] ??
     `0x${n.toString(16).padStart(4, "0")}`
   );
 }
@@ -327,7 +313,7 @@ function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
   const flush = () => {
-    if (run) out.push(`${cmd_name(run[0], false)}*${run[1]}`);
+    if (run) out.push(`${cmd_name(run[0])}*${run[1]}`);
     run = null;
   };
   for (const c of completions) {
@@ -337,12 +323,12 @@ function render_completions(completions: Completion[]): string {
       } else {
         flush();
         if (c.tag === 0) run = [c.cmd, 1];
-        else out.push(`${c.tag}:${cmd_name(c.cmd, false)}`);
+        else out.push(`${c.tag}:${cmd_name(c.cmd)}`);
       }
       continue;
     }
     flush();
-    out.push(`${c.tag}:${cmd_name(c.cmd, c.src === frame.HOST)}=${c.result}`);
+    out.push(`${c.tag}:${cmd_name(c.cmd)}=${c.result}`);
   }
   flush();
   return out.length === 0 ? "-" : out.join(" ");
@@ -440,13 +426,11 @@ function run(
     const step = g.s(`${trace}.step.${i}`).split(" ");
     switch (step[0]) {
       case "submit": {
-        const { cmd, src } = cmd_number(step[2]);
         host.submit(
           Number(step[1]),
-          cmd,
+          cmd_number(step[2]),
           step[3] === "ack",
           step.slice(4).map((t) => val(t, vars)),
-          src,
         );
         break;
       }
@@ -542,21 +526,33 @@ function run(
   for (let r = 0; g.has(at(`relation.${r}`)); r++) {
     relation(g.s(at(`relation.${r}`)), vars, name);
   }
-  if (g.has(at("toc.keys"))) {
-    for (const k of g.s(at("toc.keys")).split(" ")) {
-      assert.ok(host.names(key_number(k)), `${name}: the toc names no ${k}`);
+  if (g.has(at("head.sizes"))) {
+    for (const k of g.s(at("head.sizes")).split(" ")) {
+      assert.deepStrictEqual(
+        host.word(k),
+        SIZES[k],
+        `${name}: the header's ${k}`,
+      );
     }
-  }
-  if (g.has(at("toc.reserved"))) {
     assert.deepStrictEqual(
-      host.reserved,
-      g.u32(at("toc.reserved")),
-      `${name}: the toc's reserved word`,
+      [
+        host.ring_word("SQ_AT", ring.CAP),
+        host.ring_word("CQ_AT", ring.CAP),
+        host.ring_word("SQ_AT", ring.SLOT_BYTES),
+        host.ring_word("CQ_AT", ring.SLOT_BYTES),
+      ],
+      [SQ_CAP, CQ_CAP, SLOT_BYTES, SLOT_BYTES],
+      `${name}: the rings' own headers`,
     );
+  }
+  if (g.has(at("head.places"))) {
+    for (const k of g.s(at("head.places")).split(" ")) {
+      assert.notDeepStrictEqual(host.word(k), 0, `${name}: the header's ${k}`);
+    }
   }
 }
 
-for (const trace of ["toc", "door", "handle", "clock", "file", "call"]) {
+for (const trace of ["head", "door", "handle", "clock", "file", "call"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

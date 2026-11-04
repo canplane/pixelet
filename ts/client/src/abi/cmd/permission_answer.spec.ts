@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/permission_answer.spec.ts
+// ts/client/src/abi/cmd/permission_answer.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // A sensor permission, as the shell's prompt or the browser's change reported it.
 

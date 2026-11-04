@@ -44,12 +44,14 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
     };
     let mut s = State {
         last_snapshot: Default::default(),
+        snapshot_posted: None,
+        snapshot_owed: false,
         asked: false,
     };
     assert_eq!(
-        apply(
+        shell::apply(
             &mut s,
-            Command::CAMERA_GOTO as u32,
+            abi::Command::CAMERA_GOTO as u32,
             &Some(&buf[..len as usize])
         )
         .map_err(|e| e.errnum),

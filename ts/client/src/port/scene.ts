@@ -1,49 +1,33 @@
 // @pxl/client/port/scene.ts
 
-/** The scene's commands: a character drawn alone into a surface the shell
- * lent, and a line said. */
+/** The scene's commands: what a surface the shell lent draws, the world or a
+ * character alone, and a line said. */
 
 import type { u32, u8 } from "@xpute/kit/abi/word.ts";
-import {
-  Command,
-  encode_scene_chat,
-  encode_scene_preview_close,
-  encode_scene_preview_open,
-} from "@/abi/cmd.spec.ts";
-import { HOST } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
+import { encode_scene_chat, SceneContent } from "@/abi/cmd.spec.ts";
+import { host, kernel } from "@/host/kernel.ts";
 
-/** `bg` is what it draws over, 0xRRGGBB. */
-export function preview_open(
+/** The world drawn into `surface`. */
+export function draw_world(surface: u32): void {
+  kernel.scene_draw(surface, SceneContent.World, null, null, null);
+}
+
+/** A character drawn alone into `surface`, over `bg`, 0xRRGGBB; a second one
+ * replaces it. */
+export function draw_character(
   surface: u32,
   group: u32,
   number: u8,
   bg: u32,
 ): void {
-  HOST.call(
-    port.SHELL,
-    Command.SCENE_PREVIEW_OPEN,
-    encode_scene_preview_open(HOST.doorbell, surface, group, number, bg),
-  );
-}
-
-export function preview_close(surface: u32): void {
-  HOST.call(
-    port.SHELL,
-    Command.SCENE_PREVIEW_CLOSE,
-    encode_scene_preview_close(HOST.doorbell, surface),
-  );
+  kernel.scene_draw(surface, SceneContent.Character, group, number, bg);
 }
 
 export function chat(text: string): void {
-  HOST.call(
-    port.SHELL,
-    Command.SCENE_CHAT,
-    encode_scene_chat(HOST.doorbell, text),
-  );
+  kernel.scene_chat(text);
 }
 
 /** Whether a line fits a command; one too long to send is refused whole. */
 export function chat_fits(text: string): boolean {
-  return HOST.doorbell.fits(encode_scene_chat(HOST.doorbell, text));
+  return host.doorbell.fits(encode_scene_chat(host.doorbell, text));
 }

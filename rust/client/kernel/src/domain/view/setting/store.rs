@@ -20,7 +20,7 @@ use xpute_guest::global::Global;
 static DEVELOPMENT: Global<bool> = Global::new();
 
 /// Development builds offer the settings schema.json marks `dev`, as the
-/// shell's boot says (`SYS_BOOT`).
+/// shell's boot says (`SETTING_DEVELOPMENT`).
 pub fn set_development(development: bool) {
     DEVELOPMENT.set(development);
 }

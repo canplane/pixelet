@@ -1,6 +1,7 @@
 // tsc checks and emits nothing. `@xpute/kit`, `@xpute/host` and `@xpute/gpu`
 // resolve as the packages they are (pnpm-workspace.yaml), as vitest resolves
-// them.
+// them. A file a native app has of its own (platform.native.ts) is read
+// under tsconfig.native.json.
 {
   "compilerOptions": {
     "target": "esnext",
@@ -20,6 +21,7 @@
     "kit",
     "host",
     "gpu",
+    "native",
     "example",
     "script",
     "vitest.config.ts",

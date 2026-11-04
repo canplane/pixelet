@@ -6,6 +6,7 @@
 //! (xpute-host `native`), and the program implements it.
 
 use crate::mem::heap::HeapStat;
+use crate::stop::PanicHook;
 
 /// What every guest is handed, whichever form it is built in. Asked for as a
 /// function (`Entry`).
@@ -19,6 +20,14 @@ pub struct BootInfo {
     pub clock: fn() -> f64,
     pub hostcall: crate::hostcall::Hostcall,
     pub heap_stat: fn() -> HeapStat,
+    /// Where a form whose guest shares its process with the host says why
+    /// the guest stopped, and ends its thread (`stop::install`); none where
+    /// the host outlives the guest apart from it (a page).
+    pub stop_hook: Option<PanicHook>,
+    /// Whether the GPU's host takes a frame now without blocking, where a
+    /// form's host may block taking one (xpute-gpu `admit`); none where every
+    /// frame is admitted (a page, whose browser paces its frames).
+    pub admit: Option<fn() -> bool>,
 }
 
 /// A turn of `quota_ms`, answering when the guest wants the next, in ms

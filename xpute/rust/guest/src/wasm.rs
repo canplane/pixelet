@@ -53,6 +53,8 @@ pub fn boot_info(
         clock: now,
         hostcall,
         heap_stat,
+        stop_hook: None,
+        admit: None,
     }
 }
 

@@ -8,8 +8,7 @@ description: How a performance problem in pixelet is analyzed and a change to it
 The aim is a faster program that keeps every condition the design met, not
 one measured case fitted at the cost of another.
 
-- Name the contracts and symmetries the change touches first (`AGENTS.md`,
-  Reading and changing). A measured gain alone doesn't weaken one; changing
+- Name the contracts and symmetries the change touches first. A measured gain alone doesn't weaken one; changing
   one is a design change, proposed on its own.
 - Find the cause in the code: predict from the structure what it costs and
   why. A costly function is where the time went, not proof its body is wrong.

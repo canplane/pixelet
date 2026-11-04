@@ -1,6 +1,9 @@
 // @xpute/host/ipc/ring.ts
 
-/** A ring of frames, laid out by spec/ipc/ring.json. */
+/** A ring of frames, laid out by spec/ipc/ring.json. Each end writes one of
+ * the positions, the producer TAIL and the consumer HEAD, each stored with
+ * release after the frames it covers and loaded with acquire before them
+ * (Atomics), so a guest on another thread reads what they say. */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -102,11 +105,11 @@ export class Ring {
   }
 
   get head(): u32 {
-    return this.words[HEAD];
+    return Atomics.load(this.words, HEAD);
   }
 
   get tail(): u32 {
-    return this.words[TAIL];
+    return Atomics.load(this.words, TAIL);
   }
 
   get len(): u32 {
@@ -155,12 +158,13 @@ export class Ring {
       pkt_at = this.slot_base + start;
     }
     const w = this.words;
-    const at = this.entry_at(this.tail);
+    const tail = this.tail;
+    const at = this.entry_at(tail);
     w[at + frame.TAG] = tag;
     w[at + frame.CMD] = frame.cmd_word(cmd, flags);
     w[at + frame.RESULT] = result >>> 0;
     w[at + frame.PKT] = pkt_at;
-    w[TAIL] = (w[TAIL] + 1) >>> 0;
+    Atomics.store(w, TAIL, (tail + 1) >>> 0);
     return Errno.OK;
   }
 
@@ -217,6 +221,6 @@ export class Ring {
 
   advance(): void {
     if (this.len === 0) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    this.words[HEAD] = (this.head + 1) >>> 0;
+    Atomics.store(this.words, HEAD, (this.head + 1) >>> 0);
   }
 }

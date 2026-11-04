@@ -18,13 +18,11 @@ use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
 /// a pointer only through `xpute_guest::mem::at` or `Memory::at`.
-const OFF_CRATES: [&str; 6] = [
+const OFF_CRATES: [&str; 4] = [
     "xpute/rust/guest/src/",
     "xpute/rust/host/src/",
     "rust/client/kernel/src/",
     "rust/client/render/src/",
-    "rust/client-bracket/wasm/src/",
-    "rust/client-bracket/native/src/",
 ];
 
 /// One rounding: half to even (xpute ARCHITECTURE.md, `math/scalar`). A call

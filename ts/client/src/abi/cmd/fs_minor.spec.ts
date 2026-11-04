@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/fs_minor.spec.ts
+// ts/client/src/abi/cmd/fs_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The kernel's files: a root mounted, a storage file truncated.
 

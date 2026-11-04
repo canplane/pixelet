@@ -8,11 +8,12 @@
 pub mod cmd;
 pub mod data;
 pub mod errno;
+pub mod machine;
 
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
@@ -38,6 +39,12 @@ impl Output {
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut out = cmd::outputs()?;
+    // The example's machine and protocol, kept beside xpute's own code.
+    out.extend(machine::outputs(&root(), "rust/example/machine.json")?);
+    out.extend(cmd::protocol_outputs(
+        &root(),
+        &["rust/example/asker.json"],
+    )?);
     out.extend(errno::outputs()?);
     out.extend(data::outputs()?);
     Ok(out)
@@ -108,12 +115,18 @@ fn marked(path: &Path) -> bool {
 /// Writes every output that differs from the file on disk, or, not `write`,
 /// fails where one does.
 pub fn apply(outputs: Vec<Output>, write: bool) -> Result<(), String> {
+    apply_at(&root(), outputs, write)
+}
+
+/// `apply`, each output's path from `root`.
+pub fn apply_at(root: &Path, outputs: Vec<Output>, write: bool) -> Result<(), String> {
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs
             .into_iter()
             .map(|o| {
+                let at = root.join(&o.path).to_string_lossy().into_owned();
                 scope.spawn(move || {
-                    format_text(&o.path, o.text).map(|text| Output { path: o.path, text })
+                    format_text(&at, o.text).map(|text| Output { path: o.path, text })
                 })
             })
             .collect();
@@ -125,7 +138,6 @@ pub fn apply(outputs: Vec<Output>, write: bool) -> Result<(), String> {
             })
             .collect::<Result<Vec<_>, String>>()
     })?;
-    let root = root();
     let stale: Vec<&Output> = outputs
         .iter()
         .filter(|o| {
@@ -453,4 +465,21 @@ pub fn generated(json: &str) -> String {
 
 pub fn file(lines: &[String]) -> String {
     lines.join("\n") + "\n"
+}
+
+/// `p`, given from the directory `json` is in, as a path from the root `json`
+/// is given from; refused where it climbs past that root.
+pub fn beside(json: &str, p: &str) -> Result<String, String> {
+    let dir = Path::new(json).parent().unwrap_or(Path::new(""));
+    let mut out = PathBuf::new();
+    for c in dir.join(p).components() {
+        match c {
+            Component::ParentDir if !out.pop() => {
+                return Err(format!("{json}: {p} is outside the root"))
+            }
+            Component::ParentDir | Component::CurDir => {}
+            c => out.push(c),
+        }
+    }
+    Ok(out.to_string_lossy().into_owned())
 }

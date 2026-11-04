@@ -5,8 +5,7 @@ description: Bake terrain, place and division tiles from the geo DB into each ki
 
 # Baking tiles
 
-How to build a tile set and check it. What a tile holds and how the bake folds
-it is in ARCHITECTURE.md, "Making the data"; uploading a set is
+How to build a tile set and check it. Uploading a set is
 [publish-bucket](../publish-bucket/SKILL.md).
 
 ## The bakes
@@ -80,7 +79,7 @@ make bake-terrain ARGS="--stage fold --stage commit"
 
 ## Versions
 
-**Every bake gets a new version name.** Bump the kind's `FORMAT` (`spec/spec/bake/publication.json`) only when how the client
+Bump the kind's `FORMAT` (`spec/spec/bake/publication.json`) only when how the client
 reads a tile changes (its format in `pxl-spec bake/`).
 
 After a re-ingest or a bake change, `rm -rf out/oven` (the dev tile server's

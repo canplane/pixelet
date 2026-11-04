@@ -2,13 +2,16 @@
 //
 // GENERATED from spec/abi/cmd.json
 
-//! xpute's own commands, by number (kit abi/cmd: `major << 8 | minor`), and the packet
-//! each carries — an XTP branch whose children are its fields, in order. A command with
-//! no fields carries no packet. The host sends them, port 0 (ipc/frame.json HOST); a
-//! program numbers its own as it likes, and the sender tells the two apart.
-//!
-//! The direction is the ring: `pkt` is what the host submits, `event` what the guest
-//! posts on the completion ring for the host's port, its hostcalls (ipc/sys.json).
+//! xpute's own protocol, the host's, on majors NOP, SYS and GPU: the guest's life as its host tells it.
+//! NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME are the guest's
+//! life as its host sees it: a host (re)attached, the guest about to be frozen, and woken;
+//! what each means to keep or reset is the guest's. GPU_READY is the GPU grant's state:
+//! the device the machine asked for answered. SYS_ABORT is the guest's end, the broken
+//! invariant it reports as it stops, which the host hears as a VMM hears a guest's exit.
+//! Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose
+//! children are its fields, in order; one with no fields carries no packet. Files are a
+//! device of their own (fs.json). Majors 0x00 to 0x0F are xpute's (ipc/frame.json); a
+//! program numbers its own protocols' commands past them.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -36,10 +39,11 @@ use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 pub enum Major {
     NOP = 0x00,
     SYS = 0x01,
+    GPU = 0x02,
 }
 
 impl Major {
-    pub const ALL: [Major; 2] = [Major::NOP, Major::SYS];
+    pub const ALL: [Major; 3] = [Major::NOP, Major::SYS, Major::GPU];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Major> {
@@ -47,26 +51,22 @@ impl Major {
     }
 }
 
-/// The hostcalls and their answers (ipc/sys.json).
+/// The guest's life as its host tells it, and its end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SysMinor {
-    OPENED = 0x01,
-    OPENAT = 0x02,
-    READ = 0x03,
-    WRITE = 0x04,
-    CLOSE = 0x05,
     ABORT = 0x06,
+    ATTACH = 0x07,
+    SUSPEND = 0x08,
+    RESUME = 0x09,
 }
 
 impl SysMinor {
-    pub const ALL: [SysMinor; 6] = [
-        SysMinor::OPENED,
-        SysMinor::OPENAT,
-        SysMinor::READ,
-        SysMinor::WRITE,
-        SysMinor::CLOSE,
+    pub const ALL: [SysMinor; 4] = [
         SysMinor::ABORT,
+        SysMinor::ATTACH,
+        SysMinor::SUSPEND,
+        SysMinor::RESUME,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -75,36 +75,53 @@ impl SysMinor {
     }
 }
 
-/// xpute's own commands.
+/// The GPU grant's state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum GpuMinor {
+    READY = 0x01,
+}
+
+impl GpuMinor {
+    pub const ALL: [GpuMinor; 1] = [GpuMinor::READY];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<GpuMinor> {
+        GpuMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// Every command, by the side that sends it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
+    // ---- host, export ----
     /// Replies with its packet's value, or 0 where it has none — the rings' own test.
     NOP = 0x0000,
-    /// An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
-    /// Never sent for a descriptor already closed.
-    SYS_OPENED = 0x0101,
-    /// The file at `path` below `root` opened as `fd`, answered by SYS_OPENED.
-    SYS_OPENAT = 0x0102,
-    /// The opened file's first `len` bytes copied to `at` in the guest's memory.
-    SYS_READ = 0x0103,
-    /// The `len` bytes at `at` added to what the file opened for writing holds.
-    SYS_WRITE = 0x0104,
-    /// The descriptor ended. A file opened for writing is replaced by what was written; an
-    /// open not yet answered is canceled, and never answered.
-    SYS_CLOSE = 0x0105,
+    /// A host has attached, the first or again after one before it went: the mount sends it
+    /// once the front is laid. What the old host's requests leave behind is the guest's to let go.
+    SYS_ATTACH = 0x0107,
+    /// The guest is about to be frozen, its turns stopped for as long as its host is hidden:
+    /// its last sure moment to save. A call, rung at once.
+    SYS_SUSPEND = 0x0108,
+    /// The guest woken from SYS_SUSPEND. A call, rung at once.
+    SYS_RESUME = 0x0109,
+    /// The GPU the machine asked for answered, the first time or again after a loss, whose
+    /// sign is in the stream's device block.
+    GPU_READY = 0x0201,
+
+    // ---- host, import ----
     /// The broken invariant the guest reports as it stops (xpute-kit status/bug.rs).
     SYS_ABORT = 0x0106,
 }
 
 impl Command {
-    pub const ALL: [Command; 7] = [
+    pub const ALL: [Command; 6] = [
         Command::NOP,
-        Command::SYS_OPENED,
-        Command::SYS_OPENAT,
-        Command::SYS_READ,
-        Command::SYS_WRITE,
-        Command::SYS_CLOSE,
+        Command::SYS_ATTACH,
+        Command::SYS_SUSPEND,
+        Command::SYS_RESUME,
+        Command::GPU_READY,
         Command::SYS_ABORT,
     ];
 
@@ -126,129 +143,6 @@ impl Nop {
         Ok(Nop {
             val: integer::<u32>(f.at(0)?.get_number()?)?,
         })
-    }
-}
-
-/// Command::SYS_OPENED's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SysOpened {
-    pub fd: u32,
-    pub res: i32,
-    /// Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on.
-    pub detail: u32,
-}
-
-impl SysOpened {
-    pub fn read(pkt: &[u8]) -> Result<SysOpened, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SysOpened {
-            fd: integer::<u32>(f.at(0)?.get_number()?)?,
-            res: integer::<i32>(f.at(1)?.get_number()?)?,
-            detail: integer::<u32>(f.at(2)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::SYS_OPENAT's event.
-pub struct SysOpenatEvent<'a> {
-    pub fd: u32,
-    pub root: u32,
-    /// ipc/sys.json `flag`.
-    pub flags: u32,
-    pub path: &'a dyn Display,
-}
-
-impl SysOpenatEvent<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 4;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.fd));
-        w.u32(Some(self.root));
-        w.u32(Some(self.flags));
-        w.str_display(self.path);
-    }
-}
-
-impl crate::ipc::door::Event for SysOpenatEvent<'_> {
-    const NUMBER: u32 = 258;
-    const FIELDS: u32 = 4;
-    fn write(&self, w: &mut PacketWriter) {
-        SysOpenatEvent::write(self, w);
-    }
-}
-
-/// Command::SYS_READ's event.
-pub struct SysReadEvent {
-    pub fd: u32,
-    pub at: u32,
-    pub len: u32,
-}
-
-impl SysReadEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 3;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.fd));
-        w.u32(Some(self.at));
-        w.u32(Some(self.len));
-    }
-}
-
-impl crate::ipc::door::Event for SysReadEvent {
-    const NUMBER: u32 = 259;
-    const FIELDS: u32 = 3;
-    fn write(&self, w: &mut PacketWriter) {
-        SysReadEvent::write(self, w);
-    }
-}
-
-/// Command::SYS_WRITE's event.
-pub struct SysWriteEvent {
-    pub fd: u32,
-    pub at: u32,
-    pub len: u32,
-}
-
-impl SysWriteEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 3;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.fd));
-        w.u32(Some(self.at));
-        w.u32(Some(self.len));
-    }
-}
-
-impl crate::ipc::door::Event for SysWriteEvent {
-    const NUMBER: u32 = 260;
-    const FIELDS: u32 = 3;
-    fn write(&self, w: &mut PacketWriter) {
-        SysWriteEvent::write(self, w);
-    }
-}
-
-/// Command::SYS_CLOSE's event.
-pub struct SysCloseEvent {
-    pub fd: u32,
-}
-
-impl SysCloseEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.fd));
-    }
-}
-
-impl crate::ipc::door::Event for SysCloseEvent {
-    const NUMBER: u32 = 261;
-    const FIELDS: u32 = 1;
-    fn write(&self, w: &mut PacketWriter) {
-        SysCloseEvent::write(self, w);
     }
 }
 

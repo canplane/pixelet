@@ -75,8 +75,9 @@ const DEVICE_WORDS: usize = PERIOD_AT + 3;
 
 /// The head's words past the stream's own: the device's block, then the
 /// spans' reads, `READS` of them, each its word, then the begin and end ticks
-/// of the frame it timed, two words a tick (`read_at`).
-const DEVICE_AT: usize = 1;
+/// of the frame it timed, two words a tick (`read_at`). The stream says the
+/// head's length itself, so the host reads none of this.
+const DEVICE_AT: usize = Stream::OWN_WORDS;
 const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
 /// The spans' reads on their way at once, each its own mapped buffer: a
 /// frame's read lands a frame or two after it, so with three none waits on
@@ -89,10 +90,6 @@ const HEAD: usize = READS_AT + READS * READ_WORDS;
 const fn read_at(k: usize) -> usize {
     READS_AT + k * READ_WORDS
 }
-const _: () = assert!(
-    HEAD == stream::HEAD as usize,
-    "spec/client/render/gpu/api.json's stream HEAD is the head laid out here"
-);
 
 /// What the device is, once its block is in.
 #[derive(Clone, Copy)]
@@ -477,6 +474,12 @@ struct State {
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
+    /// The objects let go while the host held the stream, destroyed once it
+    /// hands it back (`writable`).
+    released: Vec<Id>,
+    /// A device answered while the host held the stream: its block is asked
+    /// once it hands it back.
+    device_owed: bool,
 }
 
 /// An image file copied into its texture: the file's bytes kept until the
@@ -509,16 +512,22 @@ const _: () =
     assert!(align_of::<Encoder<OBJECTS>>() <= 8 && ENCODER_BYTES < stream::RESERVE as usize);
 
 /// # Safety
-/// `at` must address `stream::BYTES`, zeroed, that nothing else writes,
-/// 8-aligned, for as long as the module runs.
-pub unsafe fn install(at: u32) -> u32 {
-    let words = (stream::BYTES as usize - ENCODER_BYTES) / WORD;
+/// `at` must address `bytes`, zeroed, that nothing else writes, 8-aligned,
+/// for as long as the module runs: the stream, then the encoder's handle
+/// table at its end.
+pub unsafe fn install(at: u32, bytes: u32) -> u32 {
+    xpute_kit::ensure!(
+        bytes as usize > ENCODER_BYTES + stream::RESERVE as usize,
+        EINVAL,
+        bytes
+    );
+    let words = (bytes as usize - ENCODER_BYTES) / WORD;
     // SAFETY: the caller's range: the stream, then the encoder, which zeroed
     // bytes are an empty one of, aligned as the range is.
     let (stream, encoder) = unsafe {
         (
             Stream::new(mem::core(), at as usize, words, HEAD),
-            &mut *mem::at::<Encoder<OBJECTS>>(at as usize + stream::BYTES as usize - ENCODER_BYTES),
+            &mut *mem::at::<Encoder<OBJECTS>>(at as usize + bytes as usize - ENCODER_BYTES),
         )
     };
     STATE.set(Some(State {
@@ -539,6 +548,8 @@ pub unsafe fn install(at: u32) -> u32 {
         images: Vec::new(),
         landed: Vec::new(),
         generation: 0,
+        released: Vec::new(),
+        device_owed: false,
     }));
     at
 }
@@ -549,9 +560,38 @@ pub fn stream_at() -> Option<u32> {
     STATE.get(|| None).as_ref().map(|s| s.at)
 }
 
-/// The renderer's calls, once the device has told what it is.
+/// The renderer's calls, once the device has told what it is, on a turn
+/// the stream is the kernel's to write (`stream_free`).
 pub fn gpu() -> Option<&'static Gpu> {
-    device().map(|_| &GPU)
+    device().filter(|_| stream_free()).map(|_| &GPU)
+}
+
+/// Whether the host has handed the stream back since the kernel last
+/// published it (xpute_guest ipc/stream.rs R3): until then the kernel
+/// records nothing, and a frame is held.
+pub fn stream_free() -> bool {
+    STATE.get(|| None).as_mut().is_none_or(writable)
+}
+
+/// `stream_free`, and once it is, what waited for it recorded: the device's
+/// block asked and the objects let go meanwhile destroyed.
+fn writable(s: &mut State) -> bool {
+    if !s.stream.is_free() {
+        return false;
+    }
+    if core::mem::take(&mut s.device_owed) {
+        ask_device(s);
+    }
+    let State {
+        released,
+        encoder,
+        stream,
+        ..
+    } = s;
+    for id in released.drain(..) {
+        encoder.destroy(stream, id);
+    }
+    true
 }
 
 /// The device as its block says, once the host has written it: asked for on
@@ -594,11 +634,19 @@ pub fn device() -> Option<Device> {
     s.device
 }
 
-/// A device answered: its block is asked for, and read once the host has
-/// written it.
+/// A device answered: its block is asked for, once the stream is the
+/// kernel's to write, and read once the host has written it.
 pub fn on_device_answered() {
     let s = state();
     *head(DEVICE_AT + DEVICE_WORDS - 1) = 0;
+    if writable(s) {
+        ask_device(s);
+    } else {
+        s.device_owed = true;
+    }
+}
+
+fn ask_device(s: &mut State) {
     let at = s.at as usize + DEVICE_AT * WORD;
     // SAFETY: the head's block, the host's to write.
     let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE_WORDS) };
@@ -702,6 +750,8 @@ pub fn on_device_lost() {
         s.images.clear();
         s.landed.clear();
         s.generation = s.generation.wrapping_add(1);
+        s.released.clear();
+        s.device_owed = false;
         for r in 0..READS {
             *head(read_at(r)) = 0;
         }
@@ -792,7 +842,11 @@ fn handle_of(id: Option<Id>) -> Id {
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
-            s.encoder.destroy(&mut s.stream, id);
+            if writable(s) {
+                s.encoder.destroy(&mut s.stream, id);
+            } else {
+                s.released.push(id);
+            }
         }
     }
 }

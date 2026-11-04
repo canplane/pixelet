@@ -1,10 +1,9 @@
 // @pxl/client/port/gpu.ts
 
-/** GPU on the shell's port: the place's word that its GPU is ready, sent on,
- * and its state, kept for the shell to show. */
+/** The place's GPU state, kept for the shell to show. The kernel hears of
+ * the device itself on the GPU's own port (@xpute/gpu). */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { Command } from "@/abi/cmd.spec.ts";
 import {
   GPU_ASKING,
   GPU_LOST,
@@ -15,14 +14,10 @@ import {
   GPU_WAITING,
   type Gpu,
 } from "@/abi/state.ts";
-import type { GpuHeard } from "@/bracket.tsx";
-import { HOST } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
+import type { GpuState } from "@xpute/gpu/web.ts";
 
 /** A place's word for its GPU, as the client keeps it. */
-export const GPU_STATE: Readonly<
-  Record<Parameters<GpuHeard["state"]>[0], Gpu>
-> = {
+export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,
   waiting: GPU_WAITING,
   missing: GPU_MISSING,
@@ -30,11 +25,6 @@ export const GPU_STATE: Readonly<
   unsupported: GPU_UNSUPPORTED,
   insecure: GPU_INSECURE,
 };
-
-/** The place's GPU device has answered, which the kernel's renderer waits on. */
-export function gpu_ready(): void {
-  HOST.send(port.SHELL, Command.GPU_READY);
-}
 
 let state: Gpu = GPU_ASKING;
 const listeners = new Listeners();

@@ -28,3 +28,9 @@ pub fn hostcall(at: u32) -> i32 {
         .with(Cell::get)
         .map_or(Errno::ENOSYS as i32, |f| f(at))
 }
+
+/// A host's answer as one value: a count, or the errno it refused with. A code
+/// no errno names is the host breaking the protocol, EPROTO.
+pub fn answer_of(res: i32) -> Result<u32, Errno> {
+    u32::try_from(res).map_err(|_| Errno::of(res).unwrap_or(Errno::EPROTO))
+}

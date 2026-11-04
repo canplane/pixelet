@@ -32,11 +32,8 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     return -1;
   });
   let refused = 0;
-  door.on(0, () => {
-    assert.throws(
-      () => door.call(1, 1, null, (result) => result),
-      InvariantError,
-    );
+  door.hear(() => {
+    assert.throws(() => door.call(1, null, (result) => result), InvariantError);
     refused++;
   });
   door.ring(0);
@@ -68,14 +65,8 @@ test("doorbell - a guest that traps throws at no one: it is told, and a call ans
     door.onterminated = () => terminated++;
     const answer = (result: number) => result;
     // In the call that traps, and in one after it, which rings no more.
-    assert.deepStrictEqual(
-      door.call(1, 1, null, answer),
-      Errno.ENOTRECOVERABLE,
-    );
-    assert.deepStrictEqual(
-      door.call(1, 1, null, answer),
-      Errno.ENOTRECOVERABLE,
-    );
+    assert.deepStrictEqual(door.call(1, null, answer), Errno.ENOTRECOVERABLE);
+    assert.deepStrictEqual(door.call(1, null, answer), Errno.ENOTRECOVERABLE);
     door.ring(0);
     assert.deepStrictEqual(runs, 1);
     assert.deepStrictEqual(terminated, 1);
@@ -84,7 +75,7 @@ test("doorbell - a guest that traps throws at no one: it is told, and a call ans
   }
 });
 
-test("doorbell - a frame its port cannot take stops the guest, and it is told once", () => {
+test("doorbell - a frame the host cannot take stops the guest, and it is told once", () => {
   const sq_at = 8;
   const cq_at = sq_at + ring_bytes(CAP);
   const slots_at = cq_at + ring_bytes(CAP);
@@ -108,7 +99,7 @@ test("doorbell - a frame its port cannot take stops the guest, and it is told on
       cq.push(0, 2);
       return 0;
     });
-    door.on(0, () => {
+    door.hear(() => {
       throw new InvariantError(Errno.EBADF);
     });
     door.onterminated = () => terminated++;
@@ -147,12 +138,7 @@ test("doorbell - a call answered in the turn that traps takes its answer once", 
       throw new Error("the guest trapped");
     });
     const taken: number[] = [];
-    const answer = door.call(
-      1,
-      1,
-      null,
-      (result) => (taken.push(result), result),
-    );
+    const answer = door.call(1, null, (result) => (taken.push(result), result));
     assert.deepStrictEqual(answer, 7);
     assert.deepStrictEqual(taken, [7], "the answer is taken once");
   } finally {

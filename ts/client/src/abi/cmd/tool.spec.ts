@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/tool.spec.ts
+// ts/client/src/abi/cmd/tool.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of.
 

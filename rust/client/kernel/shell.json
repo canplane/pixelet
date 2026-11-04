@@ -1,0 +1,1787 @@
+{
+  "$doc": [
+    "The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:",
+    "`major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet",
+    "it carries — an XTP branch whose children are its fields, in order. A command with no",
+    "fields carries no packet. The kernel is the guest; the JavaScript around it is two",
+    "things to it, its host, which holds the turns and carries its hostcalls to what",
+    "answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user",
+    "does and what the place's sensors, visibility and frames tell it",
+    "(ts/client/src/port/). A command's major is the module it is for.",
+    "",
+    "`export` is what the shell sends the kernel and `import` what the kernel posts to it, `call`",
+    "one its sender waits on. Each is written and read by what this file generates, on",
+    "both sides, so no field is found by its position anywhere else.",
+    "",
+    "A field is a number of a width, a `bool`, a `str`, a member of an enum",
+    "below or of one another spec declares (`extern`), or a record below. An",
+    "`optional` one may be absent, its kind kept; a `list` is a branch of them,",
+    "or a packed array where the item is a number. A record crosses as a branch",
+    "of its own fields, and is how a block past a slot is laid out. An enum's",
+    "`unknown` is the member a number it does not give out reads as; an enum",
+    "without one refuses the packet. The generator refuses a number given twice."
+  ],
+  "gen": {
+    "ts": "../../../ts/client/src/abi/cmd.spec.ts",
+    "rs": "src/domain/control/cmd.spec.rs"
+  },
+  "name": "shell",
+  "export": [
+    {
+      "name": "SENSOR_POS",
+      "val": 4610,
+      "$doc": [
+        "A GPS fix; a field is absent where the browser gave none."
+      ],
+      "pkt": [
+        {
+          "name": "lon",
+          "type": "f64"
+        },
+        {
+          "name": "lat",
+          "type": "f64"
+        },
+        {
+          "name": "alt",
+          "type": "f64",
+          "optional": true
+        },
+        {
+          "name": "accuracy",
+          "type": "f64",
+          "optional": true
+        },
+        {
+          "name": "course",
+          "type": "f64",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "SENSOR_ORIENT",
+      "val": 4613,
+      "$doc": [
+        "An orientation event; a field is absent where the browser gave none."
+      ],
+      "pkt": [
+        {
+          "name": "webkit_compass_heading",
+          "type": "f64",
+          "optional": true
+        },
+        {
+          "name": "alpha",
+          "type": "f64",
+          "optional": true
+        },
+        {
+          "name": "beta",
+          "type": "f64",
+          "optional": true
+        },
+        {
+          "name": "gamma",
+          "type": "f64",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "SENSOR_ERR",
+      "val": 4619,
+      "$doc": [
+        "A watch that ended in failure and was stopped, refused from the start (PermissionDenied)",
+        "or cut off; the compass's, where the platform says so (SYS_BOOT's",
+        "orient_silence_is_loss)."
+      ],
+      "pkt": [
+        {
+          "name": "sensor",
+          "type": "Sensor"
+        },
+        {
+          "name": "code",
+          "type": "GeolocationErrorCode",
+          "optional": true,
+          "$doc": [
+            "Geolocation's; orientation gives none today."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TURN_GRANT",
+      "val": 7425,
+      "$doc": [
+        "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
+        "phases on what is left of the quota, the fetches within the credits. The turn leaves",
+        "its events on the completion ring, drawn by the kernel. It carries the host's alone:",
+        "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
+        "world surface's (SURFACE_RESIZE)."
+      ],
+      "pkt": [
+        {
+          "name": "refresh_ms",
+          "type": "f64",
+          "$doc": [
+            "The display's refresh, as the host measures it from the animation frames it is handed,",
+            "and the interval it paces turns at, a whole number of refreshes (the pacing the client",
+            "boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget."
+          ]
+        },
+        {
+          "name": "paced_ms",
+          "type": "f64"
+        },
+        {
+          "name": "interactive",
+          "type": "bool"
+        },
+        {
+          "name": "credits",
+          "type": "u32"
+        },
+        {
+          "name": "unix_ms",
+          "type": "f64",
+          "$doc": [
+            "The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and",
+            "the step the tick takes, its change since the last frame."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FS_MOUNT",
+      "val": 4865,
+      "$doc": [
+        "What the tile source declares of itself, once the client has it: the tile root's",
+        "`source`, the published one out of the bucket or the dev tile server's, read by the",
+        "client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.",
+        "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
+        "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
+      ],
+      "pkt": [
+        {
+          "name": "top_zoom",
+          "type": "u32",
+          "$doc": [
+            "The coarsest zoom the source supplies whole."
+          ]
+        },
+        {
+          "name": "format",
+          "type": "u32",
+          "list": true,
+          "$doc": [
+            "Each kind's format, one a kind, indexed by its bake's number",
+            "(pxl-spec bake/publication.spec.rs)."
+          ]
+        },
+        {
+          "name": "shard",
+          "type": "str",
+          "list": true,
+          "$doc": [
+            "The shards it serves, by name. Their order means nothing: no two at a zoom",
+            "are over one node, and the finer wins."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "FS_TRUNCATED",
+      "val": 4866,
+      "$doc": [
+        "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
+        "own again, what it held set aside by the client: the kernel reads it again, and writes",
+        "a storage file from then on."
+      ],
+      "pkt": [
+        {
+          "name": "root",
+          "type": "u32",
+          "$doc": [
+            "file.json's `root`."
+          ]
+        },
+        {
+          "name": "path",
+          "type": "str",
+          "$doc": [
+            "Its path below the root, as the kernel opened it."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SENSOR_PERMISSION",
+      "val": 4614,
+      "$doc": [
+        "A permission as the shell's prompt or the browser's change reported it."
+      ],
+      "pkt": [
+        {
+          "name": "sensor",
+          "type": "Sensor"
+        },
+        {
+          "name": "answer",
+          "type": "PermissionAnswer"
+        }
+      ]
+    },
+    {
+      "name": "SENSOR_PLATFORM",
+      "val": 4621,
+      "$doc": [
+        "What the place's sensors are: whether it has a position and a heading, whether the",
+        "heading asks a permission, and how it says it is lost. Sent once the kernel is attached."
+      ],
+      "pkt": [
+        {
+          "name": "geolocation",
+          "type": "bool"
+        },
+        {
+          "name": "orient",
+          "type": "bool"
+        },
+        {
+          "name": "orient_permission",
+          "type": "bool",
+          "$doc": [
+            "iOS 13+'s gate: requestPermission exists and must run inside a gesture."
+          ]
+        },
+        {
+          "name": "orient_silence_is_loss",
+          "type": "bool",
+          "$doc": [
+            "A browser's compass talks while the device is still and cannot say it stopped, so",
+            "silence is the only sign of loss; a device's speaks only when the heading turns and",
+            "reports a failure itself (SENSOR_ERR)."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SETTING_DEVELOPMENT",
+      "val": 5634,
+      "$doc": [
+        "Whether this is a development build, which offers the settings schema.json marks `dev`.",
+        "Sent once the kernel is attached."
+      ],
+      "pkt": [
+        {
+          "name": "development",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "INPUT_POINTER",
+      "val": 4354,
+      "$doc": [
+        "A pointer event on the world's canvas, in CSS pixels from the top left of its layout box",
+        "(transforms aside), as the world surface's size is (SURFACE_RESIZE)."
+      ],
+      "pkt": [
+        {
+          "name": "phase",
+          "type": "PointerPhase"
+        },
+        {
+          "name": "pointer_type",
+          "type": "PointerType"
+        },
+        {
+          "name": "id",
+          "type": "i32"
+        },
+        {
+          "name": "button",
+          "type": "i32"
+        },
+        {
+          "name": "x",
+          "type": "f64"
+        },
+        {
+          "name": "y",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "EDIT_TOOL",
+      "val": 6657,
+      "$doc": [
+        "The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer."
+      ],
+      "pkt": [
+        {
+          "name": "tool",
+          "type": "Tool"
+        },
+        {
+          "name": "val",
+          "type": "u32",
+          "$doc": [
+            "The item to place, its id (id.json); read only for that tool."
+          ]
+        },
+        {
+          "name": "scale_steps",
+          "type": "i32",
+          "$doc": [
+            "A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "EDIT_MARKER_TEXT",
+      "val": 6658,
+      "$doc": [
+        "The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit."
+      ],
+      "pkt": [
+        {
+          "name": "text",
+          "type": "str"
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "EDIT_MARKER_CANCEL",
+      "val": 6659,
+      "$doc": [
+        "The marker's draft dropped, nothing committed."
+      ],
+      "call": true
+    },
+    {
+      "name": "EDIT_MARKER_COMMIT",
+      "val": 6660,
+      "$doc": [
+        "The marker's draft committed with its text, where its place is still free or still a marker, and closed."
+      ],
+      "call": true
+    },
+    {
+      "name": "INPUT_WHEEL",
+      "val": 4355,
+      "pkt": [
+        {
+          "name": "delta_y",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "INPUT_MOVE",
+      "val": 4358,
+      "$doc": [
+        "The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down."
+      ],
+      "pkt": [
+        {
+          "name": "x",
+          "type": "i32"
+        },
+        {
+          "name": "y",
+          "type": "i32"
+        }
+      ]
+    },
+    {
+      "name": "SURFACE_OPEN",
+      "val": 5377,
+      "$doc": [
+        "A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what."
+      ],
+      "call": true
+    },
+    {
+      "name": "SURFACE_RESIZE",
+      "val": 5378,
+      "$doc": [
+        "The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."
+      ],
+      "pkt": [
+        {
+          "name": "surface",
+          "type": "u32"
+        },
+        {
+          "name": "width",
+          "type": "u32"
+        },
+        {
+          "name": "height",
+          "type": "u32"
+        },
+        {
+          "name": "device_pixel_ratio",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "SURFACE_CLOSE",
+      "val": 5379,
+      "$doc": [
+        "A call: the canvas is going, and what it drew and held on the device is let go before the call returns."
+      ],
+      "pkt": [
+        {
+          "name": "surface",
+          "type": "u32"
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "SCENE_DRAW",
+      "val": 5892,
+      "$doc": [
+        "A call, answered 0 or an errno: what a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the",
+        "sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface",
+        "replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL",
+        "where the character's fields are not all given for a character, any is given for the world, or no character is",
+        "named by them."
+      ],
+      "pkt": [
+        {
+          "name": "surface",
+          "type": "u32"
+        },
+        {
+          "name": "content",
+          "type": "SceneContent"
+        },
+        {
+          "name": "group",
+          "type": "CharacterGroup",
+          "optional": true
+        },
+        {
+          "name": "number",
+          "type": "u8",
+          "optional": true
+        },
+        {
+          "name": "bg",
+          "type": "u32",
+          "optional": true,
+          "$doc": [
+            "What the character is drawn over, 0xRRGGBB, sRGB."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "SETTING_SET",
+      "val": 5633,
+      "$doc": [
+        "A setting set from the sheet or the character picker; EAGAIN until the kernel has read the",
+        "kept settings, which would be read over it."
+      ],
+      "pkt": [
+        {
+          "name": "key",
+          "type": "SettingKey"
+        },
+        {
+          "name": "value",
+          "type": "u32",
+          "$doc": [
+            "A toggle's 0 or 1, a choice's option by its index, or a number."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "SCENE_CHAT",
+      "val": 5891,
+      "$doc": [
+        "A line the player said, shown over the character."
+      ],
+      "pkt": [
+        {
+          "name": "text",
+          "type": "str"
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "CAMERA_TRACKING",
+      "val": 6145,
+      "$doc": [
+        "The tracking button's press, as the button showed it."
+      ],
+      "pkt": [
+        {
+          "name": "tracking",
+          "type": "Tracking"
+        }
+      ]
+    },
+    {
+      "name": "CAMERA_NORTH_UP",
+      "val": 6146,
+      "$doc": [
+        "The compass's press: north up."
+      ],
+      "call": true
+    },
+    {
+      "name": "SENSOR_LOCATE",
+      "val": 4620,
+      "$doc": [
+        "The search panel's location card's press: the location asked for. The compass is",
+        "asked for where it is used, entering follow mode (TRACKING), and never alone: nothing",
+        "reads it without the location."
+      ],
+      "call": true
+    },
+    {
+      "name": "CAMERA_GOTO",
+      "val": 6148,
+      "$doc": [
+        "A search result: the pivot moved there, and the view asked with it at once, as the",
+        "controls ask it where the camera stands; a view field absent keeps what the view has."
+      ],
+      "pkt": [
+        {
+          "name": "lon",
+          "type": "f64"
+        },
+        {
+          "name": "lat",
+          "type": "f64"
+        },
+        {
+          "name": "dist",
+          "type": "f64",
+          "optional": true,
+          "$doc": [
+            "The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in."
+          ]
+        },
+        {
+          "name": "azimuth",
+          "type": "f64",
+          "optional": true,
+          "$doc": [
+            "The heading about Z in radians, wrapped."
+          ]
+        },
+        {
+          "name": "polar",
+          "type": "f64",
+          "optional": true,
+          "$doc": [
+            "The angle down from vertical in radians, clamped."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "INPUT_XR_POSE",
+      "val": 4361,
+      "$doc": [
+        "A tracked pose: where a tracker has the camera, and its turn as a unit quaternion",
+        "(x, y, z, w) from the camera's axes to the tracker's, in the world's units. The",
+        "first of a run is taken to be where the camera already is, so nothing moves as",
+        "it begins; the camera follows the tracker from there until POSE_END.",
+        "Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive",
+        "the camera, sent by the device app."
+      ],
+      "pkt": [
+        {
+          "name": "x",
+          "type": "f64"
+        },
+        {
+          "name": "y",
+          "type": "f64"
+        },
+        {
+          "name": "z",
+          "type": "f64"
+        },
+        {
+          "name": "qx",
+          "type": "f64"
+        },
+        {
+          "name": "qy",
+          "type": "f64"
+        },
+        {
+          "name": "qz",
+          "type": "f64"
+        },
+        {
+          "name": "qw",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "INPUT_XR_POSE_END",
+      "val": 4362,
+      "$doc": [
+        "The tracker let the camera go: back to the controller it had."
+      ]
+    },
+    {
+      "name": "PERF_START",
+      "val": 6401,
+      "$doc": [
+        "A fresh recording window."
+      ],
+      "call": true
+    },
+    {
+      "name": "PERF_STOP",
+      "val": 6402,
+      "$doc": [
+        "The window frozen, so what is exported holds still."
+      ],
+      "call": true
+    },
+    {
+      "name": "PERF_STATS",
+      "val": 6403,
+      "$doc": [
+        "The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics",
+        "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
+        "number past the door is finite, so no window is infinite."
+      ],
+      "pkt": [
+        {
+          "name": "window_ms",
+          "type": "f64",
+          "optional": true
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "PERF_RINGS",
+      "val": 6404,
+      "$doc": [
+        "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn."
+      ],
+      "call": true
+    }
+  ],
+  "import": [
+    {
+      "name": "SENSOR_START",
+      "val": 4609,
+      "$doc": [
+        "Start watching."
+      ],
+      "pkt": [
+        {
+          "name": "sensor",
+          "type": "Sensor"
+        }
+      ]
+    },
+    {
+      "name": "SENSOR_STOP",
+      "val": 4611,
+      "$doc": [
+        "Stop watching."
+      ],
+      "pkt": [
+        {
+          "name": "sensor",
+          "type": "Sensor"
+        }
+      ]
+    },
+    {
+      "name": "TEXT_LAYOUT",
+      "val": 7169,
+      "$doc": [
+        "The text in the platform's own family at the weight and size, broken into lines no",
+        "wider than the width where it can be; at `at` in the kernel's memory, how many lines,",
+        "then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most",
+        "(sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
+      ],
+      "pkt": [
+        {
+          "name": "weight",
+          "type": "u32"
+        },
+        {
+          "name": "px",
+          "type": "f64"
+        },
+        {
+          "name": "max_width",
+          "type": "f64",
+          "$doc": [
+            "0 for one line."
+          ]
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "lines",
+          "type": "u32"
+        },
+        {
+          "name": "text_at",
+          "type": "u32",
+          "$doc": [
+            "Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+          ]
+        },
+        {
+          "name": "text_len",
+          "type": "u32",
+          "$doc": [
+            "Its bytes."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "TEXT_RASTER",
+      "val": 7170,
+      "$doc": [
+        "One line drawn in the platform's own family, starting at x with the middle of its em",
+        "box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,",
+        "RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before",
+        "it returns."
+      ],
+      "pkt": [
+        {
+          "name": "weight",
+          "type": "u32"
+        },
+        {
+          "name": "px",
+          "type": "f64"
+        },
+        {
+          "name": "color",
+          "type": "u32",
+          "$doc": [
+            "0xRRGGBBAA."
+          ]
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "width",
+          "type": "u32"
+        },
+        {
+          "name": "height",
+          "type": "u32"
+        },
+        {
+          "name": "x",
+          "type": "f64"
+        },
+        {
+          "name": "text_at",
+          "type": "u32",
+          "$doc": [
+            "Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+          ]
+        },
+        {
+          "name": "text_len",
+          "type": "u32",
+          "$doc": [
+            "Its bytes."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "SHELL_SNAPSHOT",
+      "val": 6913,
+      "$doc": [
+        "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
+        "block the kernel holds, valid until the next snapshot."
+      ],
+      "pkt": [
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "len",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "extern": [
+    {
+      "name": "BakeKind",
+      "rs": "pxl_spec::bake::publication::BakeKind",
+      "$doc": [
+        "By its index in BAKE_KINDS (publication.spec.ts)."
+      ]
+    },
+    {
+      "name": "SettingKey",
+      "rs": "crate::domain::view::setting::schema_spec::SettingKey",
+      "$doc": [
+        "A setting by its place in schema.json's SETTING, its row's `key`."
+      ]
+    },
+    {
+      "name": "CharacterGroup",
+      "rs": "pxl_spec::asset::actor::Group",
+      "repr": "u8",
+      "$doc": [
+        "actor.json's group, by its number."
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "Major",
+      "$doc": [
+        "The module a command is for: the kernel's, or the device's that sends it."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "INPUT",
+          "val": 17
+        },
+        {
+          "name": "SENSOR",
+          "val": 18
+        },
+        {
+          "name": "FS",
+          "val": 19
+        },
+        {
+          "name": "SURFACE",
+          "val": 21
+        },
+        {
+          "name": "SETTING",
+          "val": 22
+        },
+        {
+          "name": "SCENE",
+          "val": 23
+        },
+        {
+          "name": "CAMERA",
+          "val": 24
+        },
+        {
+          "name": "PERF",
+          "val": 25
+        },
+        {
+          "name": "EDIT",
+          "val": 26
+        },
+        {
+          "name": "SHELL",
+          "val": 27
+        },
+        {
+          "name": "TEXT",
+          "val": 28
+        },
+        {
+          "name": "TURN",
+          "val": 29
+        }
+      ]
+    },
+    {
+      "name": "InputMinor",
+      "$doc": [
+        "The input's: the pointer, the wheel, the held movement, a tracker's pose."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "POINTER",
+          "val": 2
+        },
+        {
+          "name": "WHEEL",
+          "val": 3
+        },
+        {
+          "name": "MOVE",
+          "val": 6
+        },
+        {
+          "name": "XR_POSE",
+          "val": 9
+        },
+        {
+          "name": "XR_POSE_END",
+          "val": 10
+        }
+      ]
+    },
+    {
+      "name": "SensorMinor",
+      "$doc": [
+        "The device sensors'."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "START",
+          "val": 1
+        },
+        {
+          "name": "POS",
+          "val": 2
+        },
+        {
+          "name": "STOP",
+          "val": 3
+        },
+        {
+          "name": "ORIENT",
+          "val": 5
+        },
+        {
+          "name": "PERMISSION",
+          "val": 6
+        },
+        {
+          "name": "ERR",
+          "val": 11
+        },
+        {
+          "name": "LOCATE",
+          "val": 12
+        },
+        {
+          "name": "PLATFORM",
+          "val": 13
+        }
+      ]
+    },
+    {
+      "name": "FsMinor",
+      "$doc": [
+        "The kernel's files: a root mounted, a storage file truncated."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "MOUNT",
+          "val": 1
+        },
+        {
+          "name": "TRUNCATED",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "SurfaceMinor",
+      "$doc": [
+        "A surface's: opened, resized, closed, and the frame drawn into the surfaces."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "OPEN",
+          "val": 1
+        },
+        {
+          "name": "RESIZE",
+          "val": 2
+        },
+        {
+          "name": "CLOSE",
+          "val": 3
+        }
+      ]
+    },
+    {
+      "name": "TurnMinor",
+      "$doc": [
+        "A turn's: what the host grants it, the credits and the clock."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "GRANT",
+          "val": 1
+        }
+      ]
+    },
+    {
+      "name": "SettingMinor",
+      "$doc": [
+        "A setting's."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "SET",
+          "val": 1
+        },
+        {
+          "name": "DEVELOPMENT",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "SceneMinor",
+      "$doc": [
+        "The scene's: what a surface draws, a line said."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "CHAT",
+          "val": 3
+        },
+        {
+          "name": "DRAW",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "CameraMinor",
+      "$doc": [
+        "The camera's: the tracking button, the compass, a search result."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "TRACKING",
+          "val": 1
+        },
+        {
+          "name": "NORTH_UP",
+          "val": 2
+        },
+        {
+          "name": "GOTO",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "PerfMinor",
+      "$doc": [
+        "The profiler's."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "START",
+          "val": 1
+        },
+        {
+          "name": "STOP",
+          "val": 2
+        },
+        {
+          "name": "STATS",
+          "val": 3
+        },
+        {
+          "name": "RINGS",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "EditMinor",
+      "$doc": [
+        "The edit's: the tool and what it takes, and a marker's draft."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "TOOL",
+          "val": 1
+        },
+        {
+          "name": "MARKER_TEXT",
+          "val": 2
+        },
+        {
+          "name": "MARKER_CANCEL",
+          "val": 3
+        },
+        {
+          "name": "MARKER_COMMIT",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "ShellMinor",
+      "$doc": [
+        "What the kernel shows the shell."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "SNAPSHOT",
+          "val": 1
+        }
+      ]
+    },
+    {
+      "name": "TextMinor",
+      "$doc": [
+        "What the kernel asks the platform's text, answered before the call returns."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "LAYOUT",
+          "val": 1
+        },
+        {
+          "name": "RASTER",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "PointerPhase",
+      "$doc": [
+        "Where a pointer event is in its gesture."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "Down",
+          "val": 0
+        },
+        {
+          "name": "Move",
+          "val": 1
+        },
+        {
+          "name": "Up",
+          "val": 2
+        },
+        {
+          "name": "Out",
+          "val": 3
+        },
+        {
+          "name": "Cancel",
+          "val": 4,
+          "$doc": [
+            "The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PointerType",
+      "$doc": [
+        "What the pointer is, as the browser's `pointerType` says."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "Mouse",
+          "val": 0
+        },
+        {
+          "name": "Touch",
+          "val": 1
+        },
+        {
+          "name": "Pen",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "Tool",
+      "$doc": [
+        "What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of."
+      ],
+      "format": "dec",
+      "default": "Pointer",
+      "entries": [
+        {
+          "name": "Pointer",
+          "val": 0
+        },
+        {
+          "name": "Item",
+          "val": 1
+        },
+        {
+          "name": "Eraser",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "SceneContent",
+      "$doc": [
+        "What a surface draws (SCENE_DRAW)."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "World",
+          "val": 0
+        },
+        {
+          "name": "Character",
+          "val": 1,
+          "$doc": [
+            "One character alone, named by its group and number."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "$doc": [
+        "What the tracking button did, as the button showed it."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "Recenter",
+          "val": 0,
+          "$doc": [
+            "Back to the device."
+          ]
+        },
+        {
+          "name": "Follow",
+          "val": 1,
+          "$doc": [
+            "Follow mode on, where the compass is listened to."
+          ]
+        },
+        {
+          "name": "Unfollow",
+          "val": 2,
+          "$doc": [
+            "Follow mode off, north up again."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GeolocationErrorCode",
+      "$doc": [
+        "The browser's PositionError codes."
+      ],
+      "format": "dec",
+      "unknown": "Other",
+      "entries": [
+        {
+          "name": "Other",
+          "val": 0
+        },
+        {
+          "name": "PermissionDenied",
+          "val": 1
+        },
+        {
+          "name": "PositionUnavailable",
+          "val": 2
+        },
+        {
+          "name": "Timeout",
+          "val": 3
+        }
+      ]
+    },
+    {
+      "name": "Sensor",
+      "$doc": [
+        "Which of the device's sensors."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "Geolocation",
+          "val": 0
+        },
+        {
+          "name": "Orientation",
+          "val": 1
+        }
+      ]
+    },
+    {
+      "name": "PermissionAnswer",
+      "$doc": [
+        "A sensor permission, as the shell's prompt or the browser's change reported it."
+      ],
+      "format": "dec",
+      "entries": [
+        {
+          "name": "Asking",
+          "val": 0,
+          "$doc": [
+            "The shell's prompt is up."
+          ]
+        },
+        {
+          "name": "Granted",
+          "val": 1
+        },
+        {
+          "name": "Denied",
+          "val": 2
+        },
+        {
+          "name": "Failed",
+          "val": 3,
+          "$doc": [
+            "The prompt itself threw."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GroundStatus",
+      "$doc": [
+        "Whether the screen shows the world: Success once a frame that drew ground went",
+        "to it, or one went over a view whose tiles all answered with nothing to draw;",
+        "Loading until then, on a first load, after a jump or a lost device; Idle before",
+        "there is a view."
+      ],
+      "format": "dec",
+      "default": "Idle",
+      "entries": [
+        {
+          "name": "Idle",
+          "val": 0
+        },
+        {
+          "name": "Loading",
+          "val": 1
+        },
+        {
+          "name": "Success",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "SensorStatus",
+      "$doc": [
+        "Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor."
+      ],
+      "format": "dec",
+      "default": "Idle",
+      "entries": [
+        {
+          "name": "Idle",
+          "val": 0
+        },
+        {
+          "name": "Loading",
+          "val": 1
+        },
+        {
+          "name": "Ready",
+          "val": 2
+        },
+        {
+          "name": "Error",
+          "val": 3
+        },
+        {
+          "name": "Unavailable",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "Message",
+      "$doc": [
+        "A message the kernel raises and the shell shows.",
+        "",
+        "The kernel decides which message a state calls for and carries the number.",
+        "It never carries the words: a string that exists to be read has no reason",
+        "to sit in the kernel's memory, and the shell has the locale files already",
+        "(ts/client/src/locale) — the same split `strerror` is on the other side of.",
+        "",
+        "The number is the name here, and a band is what a message is about."
+      ],
+      "format": "hex4",
+      "entries": [
+        {
+          "section": "0x02 where the device says it is"
+        },
+        {
+          "name": "GeolocationUnsupported",
+          "val": 515
+        },
+        {
+          "name": "GeolocationPermissionDenied",
+          "val": 516
+        },
+        {
+          "name": "GeolocationPositionUnavailable",
+          "val": 517
+        },
+        {
+          "name": "GeolocationTimeout",
+          "val": 518
+        },
+        {
+          "name": "GeolocationGenericError",
+          "val": 519
+        },
+        {
+          "section": "0x03 which way the device is facing"
+        },
+        {
+          "name": "OrientationPermissionError",
+          "val": 770
+        },
+        {
+          "name": "OrientationPermissionDenied",
+          "val": 771
+        },
+        {
+          "name": "OrientationSignalLost",
+          "val": 772
+        },
+        {
+          "section": "0x04 why the server does not answer the world's reads"
+        },
+        {
+          "name": "WorldReadFailing",
+          "val": 1027,
+          "$doc": [
+            "Reads reach the server and fail; they are tried again."
+          ]
+        },
+        {
+          "name": "WorldUnavailable",
+          "val": 1028,
+          "$doc": [
+            "Reads failed past every retry; the world is not coming."
+          ]
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "name": "Snapshot",
+      "$doc": [
+        "What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole."
+      ],
+      "fields": [
+        {
+          "name": "pivot",
+          "type": "PivotState"
+        },
+        {
+          "name": "location",
+          "type": "LocationState"
+        },
+        {
+          "name": "companion",
+          "type": "CompanionState"
+        },
+        {
+          "name": "draft",
+          "type": "str",
+          "optional": true,
+          "$doc": [
+            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
+          ]
+        },
+        {
+          "name": "orient",
+          "type": "OrientationState"
+        },
+        {
+          "name": "azimuth",
+          "type": "f64",
+          "$doc": [
+            "The view's azimuth."
+          ]
+        },
+        {
+          "name": "is_follow_mode",
+          "type": "bool"
+        },
+        {
+          "name": "camera_busy",
+          "type": "bool"
+        },
+        {
+          "name": "zooming",
+          "type": "bool",
+          "$doc": [
+            "A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."
+          ]
+        },
+        {
+          "name": "over_marker",
+          "type": "bool",
+          "$doc": [
+            "The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft."
+          ]
+        },
+        {
+          "name": "settings",
+          "type": "u32",
+          "list": true,
+          "$doc": [
+            "Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel",
+            "has read its storage file, a few turns from boot."
+          ]
+        },
+        {
+          "name": "m_per_px",
+          "type": "f64",
+          "$doc": [
+            "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
+          ]
+        },
+        {
+          "name": "division",
+          "type": "DivisionPart",
+          "list": true,
+          "$doc": [
+            "The division the pivot is in and every one above it, broad to narrow; empty",
+            "where the pivot is in none or the tile it is read out of has not arrived."
+          ]
+        },
+        {
+          "name": "previews",
+          "type": "u32",
+          "list": true,
+          "$doc": [
+            "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
+          ]
+        },
+        {
+          "name": "refused_files",
+          "type": "RefusedFile",
+          "list": true,
+          "$doc": [
+            "The files the kernel refused, not of their format, not decoding, or too large for any",
+            "heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The",
+            "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
+            "empty."
+          ]
+        },
+        {
+          "name": "stall",
+          "type": "Message",
+          "optional": true,
+          "$doc": [
+            "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say."
+          ]
+        },
+        {
+          "name": "renderer_progress",
+          "type": "f64",
+          "$doc": [
+            "How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it."
+          ]
+        },
+        {
+          "name": "area_progress",
+          "type": "f64",
+          "$doc": [
+            "How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PivotState",
+      "fields": [
+        {
+          "name": "status",
+          "type": "GroundStatus"
+        },
+        {
+          "name": "is_off_center",
+          "type": "bool"
+        },
+        {
+          "name": "lon_lat",
+          "type": "LonLat",
+          "optional": true,
+          "$doc": [
+            "The pivot in degrees: what the search measures distance from."
+          ]
+        },
+        {
+          "name": "outside",
+          "type": "bool",
+          "$doc": [
+            "The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs)."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LonLat",
+      "fields": [
+        {
+          "name": "lon",
+          "type": "f64"
+        },
+        {
+          "name": "lat",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "LocationState",
+      "fields": [
+        {
+          "name": "status",
+          "type": "SensorStatus"
+        },
+        {
+          "name": "has_location",
+          "type": "bool"
+        },
+        {
+          "name": "err",
+          "type": "Message",
+          "optional": true,
+          "$doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CompanionState",
+      "fields": [
+        {
+          "name": "person_ready",
+          "type": "bool"
+        },
+        {
+          "name": "pet_ready",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "OrientationState",
+      "fields": [
+        {
+          "name": "status",
+          "type": "SensorStatus"
+        },
+        {
+          "name": "err",
+          "type": "Message",
+          "optional": true,
+          "$doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DivisionPart",
+      "$doc": [
+        "One division of the name, in its own name."
+      ],
+      "fields": [
+        {
+          "name": "subtype",
+          "type": "u8",
+          "$doc": [
+            "Overture's subtype, broadest first (spec/spec/division.json)."
+          ]
+        },
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "shown",
+          "type": "bool",
+          "$doc": [
+            "The view is in far enough for its name to show: as far as Overture's own tiles",
+            "show it from (pxl-spec bake/tile/division.rs `Division::shown_from`)."
+          ]
+        },
+        {
+          "name": "area",
+          "type": "bool",
+          "$doc": [
+            "Held by an area the point is in; one without is the nearest found by its point."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RefusedFile",
+      "$doc": [
+        "A file the kernel refused, as it opened it."
+      ],
+      "fields": [
+        {
+          "name": "root",
+          "type": "u32",
+          "$doc": [
+            "file.json's `root`."
+          ]
+        },
+        {
+          "name": "path",
+          "type": "str",
+          "$doc": [
+            "Its path below the root, as the kernel opened it."
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -24,7 +24,7 @@ import {
   SOURCE_REFUSED,
   type Source,
 } from "@/abi/state.ts";
-import { bracket } from "@/bracket.tsx";
+import * as origin from "@/services/origin.ts";
 import { fs_mount } from "@/port/fs.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
@@ -135,7 +135,7 @@ const ASK_AGAIN_MOST_MS = 60_000;
 
 async function ask_declaration(): Promise<string | null> {
   try {
-    const res = await bracket.origin.get(TILE_SOURCE_ROUTE);
+    const res = await origin.get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();

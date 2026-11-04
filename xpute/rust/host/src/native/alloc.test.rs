@@ -24,6 +24,8 @@ fn guest() -> Guest {
             stack_bytes: 1 << 20,
             thread_name: "test-guest",
             clock: native::now,
+            stop_hook: None,
+            admit: None,
         })
     })
 }

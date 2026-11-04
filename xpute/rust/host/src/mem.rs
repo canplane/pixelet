@@ -6,6 +6,7 @@
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU32, Ordering};
 
 pub struct Memory<'a> {
     base: NonNull<u8>,
@@ -71,6 +72,29 @@ impl<'a> Memory<'a> {
 
     pub fn set_word(&mut self, at: u32, v: u32) {
         self.write(at as usize, &v.to_le_bytes());
+    }
+
+    /// The word at `at` as an atomic, for a word that hands memory between
+    /// host and guest, which both sides touch only atomically: a ring's
+    /// position, a stream's END. It must lie on a word.
+    fn atomic(&self, at: u32) -> &AtomicU32 {
+        let p = self.range(at as usize, 4).cast::<u32>();
+        assert!(p.is_aligned(), "[mem] the word at {at} is not on a word");
+        // SAFETY: in the memory and aligned, as just checked; a word both
+        // sides touch only atomically.
+        unsafe { AtomicU32::from_ptr(p) }
+    }
+
+    /// The handing word at `at`, loaded with acquire: what the other side
+    /// wrote before it stored the word is seen.
+    pub fn load_acquire(&self, at: u32) -> u32 {
+        self.atomic(at).load(Ordering::Acquire)
+    }
+
+    /// `v` stored into the handing word at `at` with release: what this side
+    /// wrote or read before is done before the other side sees `v`.
+    pub fn store_release(&mut self, at: u32, v: u32) {
+        self.atomic(at).store(v, Ordering::Release);
     }
 }
 

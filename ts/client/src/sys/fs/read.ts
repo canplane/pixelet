@@ -10,14 +10,14 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host";
 import { online } from "@/origin/online.ts";
-import { bracket } from "@/bracket.tsx";
+import * as origin from "@/services/origin.ts";
 
 /** The object at `url`, whole. */
 export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
   let body: U8Array;
   try {
-    res = await bracket.origin.get(url, signal);
+    res = await origin.get(url, signal);
     body = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
     // TypeError covers offline, DNS, CORS and refused alike, so only the

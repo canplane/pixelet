@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/pointer_phase.spec.ts
+// ts/client/src/abi/cmd/pointer_phase.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // Where a pointer event is in its gesture.
 

@@ -17,14 +17,16 @@ typedef int32_t (*xpute_conformance_hostcall)(uint32_t at);
 
 #ifdef __wasm__
 
-// Lays the guest out by `seed` (LAYOUTS) and answers the toc's offset.
+// Lays the guest out by `seed` (LAYOUTS), writes the front's header as a host
+// does for a machine, and answers the header's offset.
 // `run` answers 0 while a submission waits, -1 otherwise.
 std::uint32_t xpute_conformance_boot(std::uint32_t seed);
 
 #else
 
 // `mem` is MEM_BYTES long and 8-aligned. Lays the guest out by `seed`
-// (LAYOUTS) and answers the toc's offset.
+// (LAYOUTS), writes the front's header as a host does for a machine, and
+// answers the header's offset.
 std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_hostcall hostcall, std::uint32_t seed);
 
 // Answers 0 while a submission waits, -1 otherwise.

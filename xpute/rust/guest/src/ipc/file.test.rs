@@ -35,7 +35,7 @@ fn descriptor_owner() {
 fn failed_open_closed() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let failed = files.open(&door, 7, "a", "first");
-    let answer = SysOpened {
+    let answer = FsOpened {
         fd: failed,
         res: -2,
         detail: 0,
@@ -43,7 +43,7 @@ fn failed_open_closed() {
     assert_eq!(files.complete_open(&door, &answer), Some("first"));
     assert_eq!(files.owner(failed), None, "a failed open is closed");
     let held = files.open(&door, 7, "b", "second");
-    let answer = SysOpened {
+    let answer = FsOpened {
         fd: held,
         res: 5,
         detail: 0,
@@ -58,7 +58,7 @@ fn failed_open_closed() {
 
 #[test]
 fn answer_read_once() {
-    let answer = |res| SysOpened {
+    let answer = |res| FsOpened {
         fd: 1,
         res,
         detail: 404,
@@ -97,7 +97,7 @@ fn stale_answer_ownerless() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let stale = files.open(&door, 7, "a", "first");
     files.close(&door, stale);
-    let answer = SysOpened {
+    let answer = FsOpened {
         fd: stale,
         res: -2,
         detail: 0,

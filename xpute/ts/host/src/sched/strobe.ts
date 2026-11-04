@@ -89,7 +89,13 @@ export class Strobe<G extends Grant = Grant> {
     clearTimeout(this.timer);
     this.timer_at = Infinity;
     const grant = this.policy.grant(performance.now());
-    this.submit(grant, delta_s);
+    // What `submit` sends goes with this turn, so it asks for no other.
+    this.asked = true;
+    try {
+      this.submit(grant, delta_s);
+    } finally {
+      this.asked = false;
+    }
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);
     this.policy.observe(performance.now() - t0, grant, wake_ms);

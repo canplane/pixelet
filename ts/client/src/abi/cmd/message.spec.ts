@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/message.spec.ts
+// ts/client/src/abi/cmd/message.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // A message the kernel raises and the shell shows.
 //

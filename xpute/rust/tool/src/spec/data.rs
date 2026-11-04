@@ -36,11 +36,11 @@ const DATA_SPECS: [DataSpec; 7] = [
         mk: Some(("cpp/conformance/guest.spec.mk", "CONFORMANCE_")),
     },
     DataSpec {
-        json: "spec/ipc/toc.json",
-        ts: "ts/host/src/ipc/toc.spec.ts",
-        rs: "rust/guest/src/ipc/toc.spec.rs",
+        json: "spec/ipc/head.json",
+        ts: "ts/host/src/ipc/head.spec.ts",
+        rs: "rust/guest/src/ipc/head.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/toc.spec.hpp", "xpute::toc"),
+        cpp: ("cpp/xpute/guest/ipc/head.spec.hpp", "xpute::head"),
         mk: None,
     },
     DataSpec {
@@ -60,11 +60,11 @@ const DATA_SPECS: [DataSpec; 7] = [
         mk: None,
     },
     DataSpec {
-        json: "spec/ipc/sys.json",
-        ts: "ts/host/src/ipc/sys.spec.ts",
-        rs: "rust/guest/src/ipc/sys.spec.rs",
+        json: "spec/ipc/fs.json",
+        ts: "ts/host/src/ipc/fs.spec.ts",
+        rs: "rust/guest/src/ipc/fs.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys"),
+        cpp: ("cpp/xpute/guest/ipc/fs.spec.hpp", "xpute::fs"),
         mk: None,
     },
     DataSpec {

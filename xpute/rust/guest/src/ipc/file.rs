@@ -7,11 +7,12 @@
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::cmd::SysOpened;
+use crate::abi::fs::FsOpened;
 use crate::abi::handle::Table;
+use crate::hostcall::answer_of;
 use crate::ipc::door::Door;
-use crate::ipc::sys::spec::flag;
-use crate::ipc::sys::{answer_of, Fd};
+use crate::ipc::fs::spec::flag;
+use crate::ipc::fs::Fd;
 
 /// What an open came to, read once from the host's answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,7 +27,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub fn of(opened: &SysOpened) -> Opened {
+    pub fn of(opened: &FsOpened) -> Opened {
         match answer_of(opened.res) {
             Ok(n) => Opened::Bytes(n),
             Err(Errno::ENOENT) => Opened::Absent,
@@ -75,7 +76,7 @@ impl<O: Copy, const N: usize> Files<O, N> {
 
     /// The owner of the open `opened` completes, or none where its descriptor
     /// was closed since; a descriptor whose open failed is closed here.
-    pub fn complete_open(&mut self, door: &Door, opened: &SysOpened) -> Option<O> {
+    pub fn complete_open(&mut self, door: &Door, opened: &FsOpened) -> Option<O> {
         let owner = self.owner(opened.fd).copied()?;
         if opened.res < 0 {
             self.close(door, opened.fd);
@@ -84,12 +85,12 @@ impl<O: Copy, const N: usize> Files<O, N> {
     }
 
     /// The file an open answered with `bytes`, read whole into the heap and
-    /// closed: its buffer, filled from the next turn on, or ENOMEM where the
-    /// heap has no room for it, nothing read.
+    /// closed: its buffer, filled once the host's head has passed the read,
+    /// or ENOMEM where the heap has no room for it, nothing read.
     ///
     /// # Safety
     /// As `Door::read`: the buffer is neither read, grown nor dropped before
-    /// the next rise.
+    /// the host's head has passed the read.
     pub unsafe fn read_whole(&mut self, door: &Door, fd: Fd, bytes: u32) -> Result<Vec<u8>, Errno> {
         let mut held = Vec::new();
         let room = held.try_reserve_exact(bytes as usize);

@@ -20,6 +20,7 @@ static constexpr std::uint64_t padded(std::uint64_t n) noexcept {
 
 Ring::Ring(Memory mem, std::uint32_t at) noexcept
     : mem_(mem), at_(at), cap_(header(ring::CAP)), slot_bytes_(header(ring::SLOT_BYTES)), slot_base_(header(ring::SLOT_BASE)) {
+    ensure(reinterpret_cast<std::uintptr_t>(mem.at(at)) % std::atomic_ref<std::uint32_t>::required_alignment == 0, Errno::einval, at);
     ensure(power_of_two(cap_), Errno::einval, cap_, at);
 }
 
@@ -43,8 +44,8 @@ void Ring::pad(std::uint32_t slot, std::uint32_t n) const noexcept {
 
 void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
     entry(tag, cmd, flags, result, pkt_at);
-    // The frame is whole before the tail says so.
-    set_header(ring::TAIL, tail() + 1);
+    // The frame is whole before the tail says so (R2).
+    pos(ring::TAIL).store(tail() + 1, std::memory_order_release);
 }
 
 std::uint32_t Ring::entry(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
@@ -97,7 +98,8 @@ Result<std::span<const std::uint8_t>> Ring::pkt(const Frame &f) const noexcept {
 
 void Ring::advance() const noexcept {
     ensure(!empty(), Errno::enotrecoverable);
-    set_header(ring::HEAD, head() + 1);
+    // The head's frame, and its slot, let go (R2).
+    pos(ring::HEAD).store(head() + 1, std::memory_order_release);
 }
 
 } // namespace xpute

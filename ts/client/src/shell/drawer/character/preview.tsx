@@ -8,15 +8,14 @@ import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/shell/ui/icon.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/port/surface.ts";
 import type { Character } from "./character.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { bracket } from "@/bracket.tsx";
+import { Preview } from "@/services/surface.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import * as scene from "@/port/scene.ts";
 
-const PREVIEW = surface_driver(surface_role.PREVIEW);
+const PREVIEW = surface_driver();
 const BACKDROP = parseInt(color.backdrop.slice(1), 16);
 
 interface CharacterPreviewProps {
@@ -35,13 +34,18 @@ export function CharacterPreview(props: CharacterPreviewProps) {
         // Hidden until drawn: the canvas still holds the last character's frame.
       }
       <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
-        <bracket.surface.Preview
+        <Preview
           surface={PREVIEW}
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
             setSurface(surface);
-            scene.preview_open(surface, character.group, character.number, BACKDROP);
-            return () => scene.preview_close(surface);
+            scene.draw_character(
+              surface,
+              character.group,
+              character.number,
+              BACKDROP,
+            );
+            return () => {};
           }}
         />
       </View>

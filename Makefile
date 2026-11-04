@@ -24,7 +24,7 @@
 	fmt fmt-ts fmt-rust \
 	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
-	serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
+	serve-shelf watch-wasm web web-oven web-shelf web-preview-oven web-preview-shelf \
 	sync-build-number deploy
 
 # Each tree's packages, by its own manager: ts/'s here, xpute's by its make.
@@ -50,7 +50,7 @@ check-rules:
 check-spec:
 	+cd rust && cargo spec
 check-build:
-	pnpm --dir ts/app/web build
+	pnpm --dir ts/client build:web
 check-xpute:
 	$(MAKE) -C xpute check
 
@@ -82,18 +82,20 @@ spec:
 # every route the published deployment's, so not for bake work, its tile
 # prefix frozen; `dev-oven` bakes each on demand; `dev-shelf` takes each
 # kind's set under ./out. The two local ones run the three servers beside the
-# client, each its own job, so Ctrl-C stops them all. `preview` is the bundle
-# a deploy builds, to measure the client by.
+# client, each its own job, so Ctrl-C stops them all. Each dev target runs
+# the module's watcher beside the client (ts/client/script/watch-wasm.py): a
+# change under rust/ rebuilds public/guest.wasm and the page is reloaded by
+# hand. `preview` is the bundle a deploy builds, to measure the client by.
 dev: sync-build-number
-	pnpm --dir ts/app/web dev
+	$(MAKE) -j2 watch-wasm web
 dev-oven: sync-build-number
-	$(MAKE) -j4 serve-geo serve-api serve-tile web-oven
+	$(MAKE) -j5 serve-geo serve-api serve-tile watch-wasm web-oven
 dev-shelf: sync-build-number
-	$(MAKE) -j4 serve-geo serve-api serve-shelf web-shelf
+	$(MAKE) -j5 serve-geo serve-api serve-shelf watch-wasm web-shelf
 dev-native:
-	pnpm --dir ts/app/native start
+	pnpm --dir ts/client start
 preview: sync-build-number
-	pnpm --dir ts/app/web preview
+	pnpm --dir ts/client preview
 preview-oven: sync-build-number
 	$(MAKE) -j4 serve-geo serve-api serve-tile web-preview-oven
 preview-shelf: sync-build-number
@@ -101,14 +103,18 @@ preview-shelf: sync-build-number
 
 serve-shelf:
 	+cd rust && $(CURDIR)/script/with-env.sh cargo serve-tile --shelf ./out
+watch-wasm:
+	./ts/client/script/watch-wasm.py
+web:
+	pnpm --dir ts/client web
 web-oven:
-	pnpm --dir ts/app/web dev:oven
+	pnpm --dir ts/client web:oven
 web-shelf:
-	pnpm --dir ts/app/web dev:shelf
+	pnpm --dir ts/client web:shelf
 web-preview-oven:
-	pnpm --dir ts/app/web preview:oven
+	pnpm --dir ts/client preview:oven
 web-preview-shelf:
-	pnpm --dir ts/app/web preview:shelf
+	pnpm --dir ts/client preview:shelf
 
 # The binaries that make the repository's data and the dev servers, each
 # rust/'s `cargo <name>` (rust/.cargo/config.toml) under the local databases'

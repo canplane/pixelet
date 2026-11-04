@@ -8,6 +8,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@xpute/kit": "workspace:*"
+    "@xpute/kit": "workspace:*",
+    "@xpute/native": "workspace:*"
   }
 }

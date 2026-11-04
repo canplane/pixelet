@@ -64,6 +64,8 @@ fn programs_match_record() {
                     "{}.turn.{turn}",
                     p.name
                 );
+                // Read as a host runs it, and handed back.
+                xpute_guest::mem::core().set_word(s.head_at() + Stream::END * WORD, 0);
                 turn += 1;
             },
         );

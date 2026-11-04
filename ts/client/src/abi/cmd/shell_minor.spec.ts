@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/shell_minor.spec.ts
+// ts/client/src/abi/cmd/shell_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // What the kernel shows the shell.
 

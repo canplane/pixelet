@@ -6,17 +6,17 @@
  * in the kernel's memory is in place when the call returns.
  */
 
-import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
 
-import { read_text_layout, read_text_raster } from "@/abi/cmd.spec.ts";
+import type { TextLayoutEvent, TextRasterEvent } from "@/abi/cmd.spec.ts";
 import { LAYOUT_ANSWER, LINE } from "@/abi/host.spec.ts";
-import { bracket } from "@/bracket.tsx";
-import { HOST } from "@/host/mount.ts";
+import * as font from "@/services/text.ts";
+import { host } from "@/host/kernel.ts";
 
 /** The text a call names in the kernel's memory, held until the call returns. */
 function text_of(at: number, len: number): string {
-  return td.decode(new Uint8Array(HOST.guest.mem as ArrayBuffer, at, len));
+  return td.decode(new Uint8Array(host.guest.mem as ArrayBuffer, at, len));
 }
 
 /** What no line starts with: closing marks, and in Japanese the small kana and
@@ -89,14 +89,13 @@ function line_ends(
 
 /** TEXT_LAYOUT: the text laid out a line at a time, each line's end and
  * width written at the call's `at`. */
-export function text_layout(f: BranchCursor): void {
-  const { weight, px, max_width, at, lines, text_at, text_len } =
-    read_text_layout(f);
+export function text_layout(e: TextLayoutEvent): i32 {
+  const { weight, px, max_width, at, lines, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
-  const width = (s: string) => bracket.text.width(weight, px, s);
+  const width = (s: string) => font.width(weight, px, s);
   const ends = line_ends(text, max_width, width).slice(0, lines);
   const out = new DataView(
-    HOST.guest.mem as ArrayBuffer,
+    host.guest.mem as ArrayBuffer,
     at,
     4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
   );
@@ -111,14 +110,14 @@ export function text_layout(f: BranchCursor): void {
     out.setFloat32(4 * (l + LINE.width), width(line.trim()), true);
     start = end;
   });
+  return 0;
 }
 
 /** TEXT_RASTER: one line's pixels written at the call's `at`. */
-export function text_raster(f: BranchCursor): void {
-  const { weight, px, color, at, width, height, x, text_at, text_len } =
-    read_text_raster(f);
+export function text_raster(e: TextRasterEvent): i32 {
+  const { weight, px, color, at, width, height, x, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
-  bracket.text.raster(
+  font.raster(
     weight,
     px,
     color,
@@ -126,6 +125,7 @@ export function text_raster(f: BranchCursor): void {
     x,
     width,
     height,
-    new Uint8Array(HOST.guest.mem as ArrayBuffer, at, width * height * 4),
+    new Uint8Array(host.guest.mem as ArrayBuffer, at, width * height * 4),
   );
+  return 0;
 }

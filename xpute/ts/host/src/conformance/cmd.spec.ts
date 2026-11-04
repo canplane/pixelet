@@ -29,18 +29,18 @@ export const MARK = 4104 as number;
 /** Reads the host's clock and replies with the whole milliseconds since the last MARK. */
 export const SINCE = 4105 as number;
 
-/** Opens a file for the packet's number, its owner, and replies with the descriptor, its SYS_OPENAT posted for the host's port, which no trace's host answers; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open. */
+/** Opens a file for the packet's number, its owner, and replies with the descriptor, its FS_OPENAT posted for the file device, which no trace's host answers; the host's answer (FS_OPENED) raises OPENED for that owner while the descriptor is open. */
 export const OPEN = 4106 as number;
 
 /** Closes the packet's descriptor, answered or not; fails with EBADF for one not open. */
 export const CLOSE = 4107 as number;
 
-/** Zeroes a word of its own, calls SENDER with INC, the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno SENDER refused with. */
+/** Zeroes a word of its own, calls INC with the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno the host refused INC with. */
 export const CALL = 4108 as number;
 
-/** What CALL calls SENDER with: a branch of a number and an offset. SENDER writes the
- * number plus one at the offset and answers 0 before the call returns; a number of 0 it
- * refuses with EINVAL, writing nothing. */
+/** What CALL calls: a branch of a number and an offset. The host writes the number plus
+ * one at the offset and answers 0 before the call returns; a number of 0 it refuses with
+ * EINVAL, writing nothing. */
 export const INC = 4109 as number;
 
 /** What RAISE raises. */

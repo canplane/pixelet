@@ -34,7 +34,7 @@ import {
   textStyle,
 } from "@/shell/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
-import { bracket } from "@/bracket.tsx";
+import { useWindowSize } from "@/services/viewport.ts";
 
 export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;
@@ -81,7 +81,7 @@ export function Toast({
   touchBelow,
 }: ToastProps) {
   const error = tone === ToastTone.Error;
-  const span = bracket.view.useWindowSize().width;
+  const span = useWindowSize().width;
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<f64>(TOAST_SIDE);
 

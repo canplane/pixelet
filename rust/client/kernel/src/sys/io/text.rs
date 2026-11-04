@@ -1,6 +1,6 @@
 // pxl-kernel/sys/io/text.rs
 
-//! Text laid out and drawn by the platform, called on the shell's port
+//! Text laid out and drawn by the platform, called with the shell's commands
 //! (TEXT_LAYOUT, TEXT_RASTER) and answered before the call returns. Each world frame keeps
 //! only the answers the frame before read. A native test has no host: a text
 //! is one line of fixed width per character and is never drawn.

@@ -4,9 +4,9 @@
  * The host's end of a guest's rings. One ring of the doorbell is one turn
  * (sched/strobe.ts). Everything a turn leaves is read before the next is rung,
  * so a listener must not ring the guest while the completion ring is read. A
- * frame's tag names a port (ipc/frame.json): the doorbell sends as the port it
- * is given, and hands what the guest raises to the port it names, where one
- * listens.
+ * frame's tag is the sender's id (ipc/frame.json): a host's call takes the
+ * next, which its reply keeps, and what the guest raises is handed to the one
+ * listener, which tells the commands apart.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -31,13 +31,17 @@ import { InvariantError } from "@xpute/kit/status/error.ts";
 const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
-/** What a port hears the guest send; valid only inside the call. A frame the
- * guest calls with is answered with what it returns, 0 for nothing. */
+/** What the host hears the guest send; valid only inside the call. A frame
+ * the guest calls with is answered with what it returns, 0 for nothing. */
 export type OnEvent = (
   tag: u32,
   cmd: u32,
   f: BranchCursor | null,
 ) => i32 | void;
+
+/** Writes a command's packet into the room it is given, as a generated
+ * `encode_*` does. */
+export type Encode = (room: PacketRoom) => PacketWriter | null;
 
 type Run = (quota_ms: f64) => f64;
 
@@ -53,11 +57,15 @@ export class Doorbell implements PacketRoom {
   >();
   /** A listener runs inside it. */
   private reading = false;
-  /** The guest is gone: its turn stopped partway, or a port could not take what
-   * it posted, and the submission it was applying would end it again on every
-   * ring. */
+  /** The guest is gone: its turn stopped partway, or the host could not take
+   * what it posted, and the submission it was applying would end it again on
+   * every ring. */
   #terminated = false;
-  private readonly hearing = new Map<u32, OnEvent>();
+  /** ENOSYS for a call until the host listens. */
+  private heard: OnEvent = () => Errno.ENOSYS;
+  /** What was sent while the completion ring was read, sent once it is: a
+   * packet is written in its slot, and room for one takes a turn. */
+  private later: [u32, Encode | null][] = [];
   wake: ((wake_ms: f64) => void) | null = null;
   /** Told once, as the guest stops. */
   onterminated: (() => void) | null = null;
@@ -90,22 +98,26 @@ export class Doorbell implements PacketRoom {
     return pkt.finish() >= 0;
   }
 
-  /** What the guest sends or calls `port` with is handed to `heard`; what it
-   * sends a port none listens on is dropped, and a call to one ENOSYS. */
-  on(port: u32, heard: OnEvent): void {
-    this.hearing.set(port, heard);
+  /** What the guest sends or calls with is handed to `heard`. */
+  hear(heard: OnEvent): void {
+    this.heard = heard;
   }
 
-  /** As the port `src`. */
-  send(src: u32, cmd: u32, pkt: PacketWriter | null = null): void {
-    this.submit(frame.tag_of(src, 0), cmd, pkt, 0);
+  /** Tagged 0; while the completion ring is read, once it is. */
+  send(cmd: u32, encode: Encode | null = null): void {
+    if (this.reading) {
+      this.later.push([cmd, encode]);
+      return;
+    }
+    const errnum = this.submit(0, cmd, encode, 0);
+    if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** `cmd` sent as the port `src` and rung, its arguments its packet's fields
-   * in turn, each lowered as XTP lowers a value (wire/xtp `TreeView.set`): a
-   * command from outside the host's own code, a console's. */
-  cmd(src: u32, cmd: u32, ...args: NodeValue<NodeView>[]): void {
-    this.send(src, cmd, this.lower(args));
+  /** `cmd` sent and rung, its arguments its packet's fields in turn, each
+   * lowered as XTP lowers a value (wire/xtp `TreeView.set`): a command from
+   * outside the host's own code, a console's. */
+  cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
+    this.send(cmd, () => this.lower(args));
     this.ring(0);
   }
 
@@ -136,9 +148,13 @@ export class Doorbell implements PacketRoom {
     try {
       this.read();
     } catch (err) {
-      // A frame its port could not take: the guest broke the protocol, or
+      // A frame the host could not take: the guest broke the protocol, or
       // what answers it failed, and nothing after that frame can be read.
-      this.terminate("a port could not take what the guest posted", err, false);
+      this.terminate(
+        "the host could not take what the guest posted",
+        err,
+        false,
+      );
       return NO_WAKE;
     }
     this.wake?.(wake);
@@ -155,7 +171,7 @@ export class Doorbell implements PacketRoom {
       if (read) this.read();
     } catch (err) {
       console.error(
-        "[xpute/doorbell] a port could not take what the guest posted:",
+        "[xpute/doorbell] the host could not take what the guest posted:",
         err,
       );
     } finally {
@@ -163,22 +179,26 @@ export class Doorbell implements PacketRoom {
     }
   }
 
-  /** Submitted as the port `src` with ACKREQ and rung with no quota until the
+  /** Submitted with ACKREQ, tagged with the next call's id, and rung with no quota until the
    * reply returns; the reply is valid only inside `read`. A guest that has
-   * stopped answers ENOTRECOVERABLE, with no reply. */
+   * stopped answers ENOTRECOVERABLE, and a packet past a slot EMSGSIZE, with
+   * no reply. Refused while the completion ring is read, since the answer
+   * takes a turn. */
   call<T>(
-    src: u32,
     cmd: u32,
-    pkt: PacketWriter | null,
+    encode: Encode | null,
     read: (result: i32, reply: BranchCursor | null) => T,
   ): T {
+    if (this.reading) throw new InvariantError(Errno.EBUSY);
     if (this.#terminated) return read(Errno.ENOTRECOVERABLE, null);
-    this.next_call = frame.id_of(this.next_call + 1);
-    const tag = frame.tag_of(src, this.next_call);
+    // 0 is a send's.
+    this.next_call = (this.next_call + 1) >>> 0 || 1;
+    const tag = this.next_call;
     let out: { val: T } | null = null;
     this.waiting.set(tag, (result, f) => (out = { val: read(result, f) }));
     try {
-      this.submit(tag, cmd, pkt, frame.ACKREQ);
+      const errnum = this.submit(tag, cmd, encode, frame.ACKREQ);
+      if (errnum !== Errno.OK) return read(errnum, null);
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
@@ -196,21 +216,18 @@ export class Doorbell implements PacketRoom {
   }
 
   /** The guest's call, a frame it laid at `at` in the completion ring and has
-   * not published, answered by the port its tag names, before the guest goes
-   * on. Run inside the guest's turn, so the answer rings nothing. */
+   * not published, answered by the listener before the guest goes on. Run
+   * inside the guest's turn, so the answer rings nothing. */
   answer(at: u32): i32 {
     const cq = this.cq;
     const e = cq.entry_of(at);
-    const tag = cq.tag(e);
-    const heard = this.hearing.get(frame.port_of(tag));
-    if (!heard) return Errno.ENOSYS;
     const pkt = cq.pkt(e);
     const f: BranchCursor | null = pkt
       ? new TreeReader(pkt).read_branch()
       : null;
     this.reading = true;
     try {
-      return heard(tag, cq.cmd(e), f) ?? 0;
+      return this.heard(cq.tag(e), cq.cmd(e), f) ?? 0;
     } finally {
       this.reading = false;
     }
@@ -233,33 +250,33 @@ export class Doorbell implements PacketRoom {
             waiting(cq.result(at), f);
           } else if (cq.result(at) < 0) {
             console.warn(
-              `[xpute/doorbell] port ${frame.port_of(tag)}'s command 0x${cmd.toString(
-                16,
-              )} failed: ${strerror(cq.result(at))}`,
+              `[xpute/doorbell] command 0x${cmd.toString(16)} failed: ${strerror(
+                cq.result(at),
+              )}`,
             );
           }
         } else {
-          this.hearing.get(frame.port_of(tag))?.(tag, cmd, f);
+          this.heard(tag, cmd, f);
         }
         cq.advance();
       }
     } finally {
       this.reading = false;
     }
+    const later = this.later;
+    this.later = [];
+    for (const [cmd, encode] of later) this.send(cmd, encode);
   }
 
-  /** Never from a listener: one could not wait for room, since that takes a turn. */
-  private submit(
-    tag: u32,
-    cmd: u32,
-    pkt: PacketWriter | null,
-    flags: u32,
-  ): void {
+  /** Never from a listener: one could not wait for room, since that takes a
+   * turn. EMSGSIZE where the packet is past a slot. */
+  private submit(tag: u32, cmd: u32, encode: Encode | null, flags: u32): i32 {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    if (this.#terminated) return;
+    if (this.#terminated) return Errno.OK;
+    const pkt = encode?.(this) ?? null;
     for (;;) {
       const errnum = this.sq.push(tag, cmd, flags, pkt);
-      if (errnum === Errno.OK) return;
+      if (errnum === Errno.OK || errnum === Errno.EMSGSIZE) return errnum;
       if (errnum !== Errno.EAGAIN) {
         throw new Error(
           `[xpute/doorbell] command 0x${cmd.toString(

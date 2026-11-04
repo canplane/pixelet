@@ -8,7 +8,7 @@ import { FileError } from "@xpute/host";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 
 import { format, object } from "@/abi/file.spec.ts";
-import type { Tx } from "@/bracket.tsx";
+import type { Tx } from "@/services/types.ts";
 import {
   decode_top,
   decode_writes,

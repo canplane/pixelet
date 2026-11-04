@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/camera_minor.spec.ts
+// ts/client/src/abi/cmd/camera_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The camera's: the tracking button, the compass, a search result.
 

@@ -19,14 +19,14 @@ import { ViewButtons } from "./view-buttons.tsx";
 import { BusyDim } from "@/shell/world/busy-dim.tsx";
 import { useChromeTop } from "@/shell/world/chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
-import { bracket } from "@/bracket.tsx";
+import { useWindowSize } from "@/services/viewport.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 export function TopOverlays() {
   const { t } = useTranslation();
   const top = useChromeTop();
 
-  const { width } = bracket.view.useWindowSize();
+  const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
   const ramp = SCRIM_FADE / (width - 2 * from);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # The number of the build the deployment serves, as it says itself at
 # /build.json, cached in ts/client/.build_number: a build CI did not number is
-# labeled `#<n>-<id>` from it (ts/app/web/vite.config.ts `buildNumber`). Plain
+# labeled `#<n>-<id>` from it (ts/build/stamp.ts `stamp`). Plain
 # HTTPS, so it needs no credential; where the site cannot be reached, the
 # cache stays as it was.
 #

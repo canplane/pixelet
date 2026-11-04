@@ -1,7 +1,7 @@
 // pxl-kernel/domain/control/sensor.rs
 
 //! The GPS and compass, as decisions rather than readings. The kernel watches
-//! them only while the world's surface is open (`SURFACE_OPEN` and
+//! them only while a surface draws the world (`SCENE_DRAW` until
 //! `SURFACE_CLOSE`, door/apply.rs), posting `SENSOR_START` and `SENSOR_STOP`,
 //! and asks for the location again when the location card is pressed
 //! (`SENSOR_LOCATE`).

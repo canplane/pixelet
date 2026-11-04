@@ -9,6 +9,7 @@ pub mod entry;
 pub mod global;
 pub mod hostcall;
 pub mod ipc;
+pub mod machine;
 pub mod mem;
 pub mod sched;
 pub mod stop;

@@ -15,12 +15,13 @@
 
 use core::fmt::{self, Write};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::abi::cmd::SysOpened;
+use xpute_guest::abi::fs::FsOpened;
 use xpute_guest::ipc::file::Files;
 pub use xpute_guest::ipc::file::Opened;
-use xpute_guest::ipc::sys::Fd;
+use xpute_guest::ipc::fs::Fd;
 use xpute_kit::status::bug::OrBug;
 
+use crate::machine::MACHINE;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::file_spec::{format, object, root, storage};
@@ -29,7 +30,6 @@ use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refusal;
-use crate::sys::mem::spec::MIN_HEAP_BYTES;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
@@ -433,13 +433,13 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 /// its owner and closes it where it failed. A file larger than the heap every
 /// device is given cannot be held anywhere: it is the client's answer refused,
 /// closed here, and the owner hears EFBIG.
-pub fn on_opened(completed: &SysOpened) {
-    let SysOpened { fd, detail, .. } = *completed;
+pub fn on_opened(completed: &FsOpened) {
+    let FsOpened { fd, detail, .. } = *completed;
     let Some(owner) = door().and_then(|door| files().complete_open(door, completed)) else {
         return;
     };
     let opened = match Opened::of(completed) {
-        Opened::Bytes(n) if n > MIN_HEAP_BYTES => {
+        Opened::Bytes(n) if n > MACHINE.min_heap_bytes => {
             close(fd);
             Opened::Failed {
                 errnum: Errno::EFBIG,

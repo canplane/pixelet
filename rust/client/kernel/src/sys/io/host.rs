@@ -1,15 +1,15 @@
 // pxl-kernel/sys/io/host.rs
 //
 // What the kernel asks of its host and the client beside it: its files and
-// its report, frames for the host's port that the host takes after the turn
-// returns, so they are done before the next turn rises; and the client's
-// text, called on the shell's port and answered before the call returns.
+// its report, frames of xpute's own commands that the host takes after the
+// turn returns, so they are done before the next turn rises; and the client's
+// text, called with the shell's commands and answered before the call returns.
 
 use core::panic::Location;
 
 use xpute_guest::global::Global;
 use xpute_guest::ipc::door::Door;
-use xpute_guest::ipc::sys::FD_TURN_FRAMES;
+use xpute_guest::ipc::fs::FD_TURN_FRAMES;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::file::StorageFile;

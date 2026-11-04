@@ -1,14 +1,14 @@
 // pxl-tool/bin/render_brand.rs
 
 //! The page's icons and link preview from `ts/client/brand` into
-//! `ts/app/web/public/brand`, made by each web build and kept out of git, so they are
+//! `ts/client/public/brand`, made by each web build and kept out of git, so they are
 //! never older than the brand. The symbol's outline is code both apps bundle
 //! (`ts/client/src/shell/setting/info/symbol-path.ts`), so it is kept: a build only
 //! checks it is what the brand writes, and `--symbol` rewrites it. `icon.png`
 //! is opaque because both platforms paint alpha black.
 //!
-//!   pnpm --dir ts/app/web build:brand   the icons, the outline checked
-//!   make render-brand                        the outline rewritten as well
+//!   pnpm --dir ts/client build:brand   the icons, the outline checked
+//!   make render-brand               the outline rewritten as well
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -138,7 +138,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let out = root().join("ts/app/web/public/brand");
+    let out = root().join("ts/client/public/brand");
     let symbol = trim(&open("symbol.png")?, 8);
     let icon = open("icon.png")?;
     let preview = open("og-image.png")?;

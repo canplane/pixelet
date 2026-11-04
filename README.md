@@ -57,18 +57,18 @@ one program inside another: the **host** owns the platform, grants the guest
 one memory and a quota of time on each call into it, a **turn**, and does the
 outside work the guest asked for once the turn returns.
 
-The kernel's **bracket** plugs it into one of its forms. In a browser tab,
-`pxl-wasm` makes it one WebAssembly module, which the page (`ts/app/web`) runs
-on the browser's WebGPU; on a device, `pxl-native` links it into the app
-(`ts/app/native`) as a library that runs its GPU calls on wgpu. Both apps bundle
-the same **client** (`ts/client`), and each hands it, once, its own **client's
-bracket**: the guest and what its platform gives, storage, text, the network,
-the sensors and the surfaces (`ts/client/src/bracket.tsx`). The client is the
-host (`src/host/`), what answers the kernel's hostcalls, its files among them
-(`src/sys/`), what the shell's port carries (`src/port/`), the server it reads
-from (`src/origin/`), the numbers both read and the boot (`src/abi/`), and the
-**shell** (`src/shell/`), the UI, which changes the world only by commands the
-kernel applies.
+The kernel's crate is its artifact, in the form xpute gives its target. One
+Expo app (`ts/client`) is built for iOS, Android and the page. In a browser tab
+the kernel is one WebAssembly module, which the page runs on the browser's
+WebGPU; on a device it is the library linked into the app, whose GPU calls
+xpute's host runs on wgpu. The app bundles the **client** (`ts/client`): the
+host (`src/host/`); the services, what each platform gives, the guest,
+storage, text, the network, the sensors and the surfaces (`src/services/`, a
+page's `x.ts` beside a device's `x.native.ts`), what answers the kernel's
+hostcalls, its files among them (`src/sys/`), what the app's ABI carries
+(`src/port/`) and the server it reads from (`src/origin/`); the numbers both
+read and the boot (`src/abi/`); and the **shell** (`src/shell/`), the UI,
+which changes the world only by commands the kernel applies.
 
 Almost nothing is computed at request time. Tiles and assets are served from a
 bucket under names that never come to mean something else, a tile under its
@@ -77,7 +77,7 @@ queries a database when asked.
 
 | Layer     | Technology                                                                     |
 | --------- | ------------------------------------------------------------------------------ |
-| Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device |
+| Shell     | TypeScript, React 19 in React Native through Expo: react-native-web on a page   |
 | Kernel    | Rust, one WebAssembly module on a page, a static library in the device app     |
 | Rendering | WebGPU (WGSL): the browser's, or wgpu over Metal or Vulkan on a device          |
 | Edge      | Cloudflare Worker + R2                                                         |
@@ -119,7 +119,6 @@ here, rebuilds the servers, publishes the client and smoke-tests the result
 git clone git@github.com:canplane/pixelet.git
 cd pixelet
 
-cp ts/app/web/.env.example ts/app/web/.env
 # for the databases and the servers, below:
 cp infra/local/.env.example infra/local/.env
 cp rust/server/.env.example rust/server/.env
@@ -143,18 +142,40 @@ make dev-oven
 `preview-shelf` are the same three over the production bundle, which is the one
 to measure speed in.
 
+The page is Expo's web build, bundled by Metro into one HTML file over one
+bundle. `dev` runs `expo start --web` beside a Rust watcher that rebuilds the
+kernel's module, `ts/client/public/guest.wasm` (`ts/client/script/build-wasm.py`),
+which the page fetches as `/guest.wasm?v=<build id>`. `ts/client/index.html` is
+the page's template, which `ts/client/script/web.ts html` writes into `public/`;
+`web.ts stamp` writes `dist/build.json` after an export, and `web.ts serve`
+serves `dist/` for a preview. The dev server and the preview forward the
+server routes as the Worker does (`ts/client/script/proxy.ts`), by what the
+environment says:
+
+| Variable                                                    | What it sets                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `PXL_DEV_SOURCE`                                            | `delivery` (the default), `oven` or `shelf`, as the targets set it |
+| `PXL_REMOTE_ORIGIN`                                         | The deployment `delivery` reads from, else the site                |
+| `PXL_GEO_BASE_URL`, `PXL_TILE_BASE_URL`, `PXL_API_BASE_URL` | The local servers, `127.0.0.1` on 3000, 3001 and 3002 by default   |
+| `PXL_PREVIEW_PORT`                                          | The preview's port, 4173 by default                                |
+
+In `ts/client`, `pnpm web`, `web:oven` and `web:shelf` are the dev server,
+`build:web` the export a deploy publishes, `preview[:oven|:shelf]` the export
+served, `build:wasm[:published]` the kernel's module and `build:brand` the
+symbol's outline.
+
 | Target                          | Description                                                          |
 | ------------------------------- | -------------------------------------------------------------------- |
 | `make dev`                      | The client alone, every route from the live deployment               |
 | `make dev-oven` / `dev-shelf`   | The client and its servers, tiles baked on demand / off the last bakes |
 | `make preview[-oven\|-shelf]`   | The same over the production bundle                                  |
-| `make dev-native`               | Metro, for the device app                                            |
+| `make dev-native`               | Metro, for a device's Debug build                                    |
 | `make spec`                     | Generate Rust and TypeScript from the JSON under `spec/`             |
 | `make serve-<geo\|api\|tile>`   | One server, or the dev tile server                                   |
 | `make bake-<kind> [ARGS=…]`     | Make a kind's data: `terrain`, `place`, `division`, `earth`, `star`, `geoid` |
 | `make ingest-<overture\|asset>` | Fill db-geo from Overture; hash `asset/content/` into `./out/asset`  |
 | `make download-<what>`          | Fetch a source a tool reads: `pack`, `moon`, `earth`, `star`         |
-| `make render-brand`             | The symbol's outline both apps bundle                                |
+| `make render-brand`             | The symbol's outline the app bundles                                 |
 | `make deploy`                   | Build and publish the client with the Worker; CI runs it             |
 | `make install`                  | Every tree's packages: `ts/`'s and xpute's                           |
 | `make -j8 check` / `test`       | Every check / every test, or one tree's: `check-ts`, `test-rust`, …  |
@@ -186,12 +207,14 @@ ln -sfn ../.agents/skills .claude/skills
 
 ### On a device
 
-`ts/app/native` is the device's app: React Native through Expo, which bundles
-the client, links the kernel in and takes every route from the live
-deployment. Its native projects are generated by `expo prebuild` and not kept,
-and the kernel is built with the app by a step of its native build
-(`ts/app/native/script/build-native.py`). Setting a machine up, building and
-installing are the [device-build skill](./.agents/skills/device-build/SKILL.md).
+On a device `ts/client` bundles the client, links the kernel in and takes every
+route from the live deployment. Its native projects (`ts/client/ios/`,
+`ts/client/android/`) are generated by `expo prebuild` and not kept. The kernel,
+`pxl-kernel`, is built with the app by a step of its native build, through
+xpute's React Native module, `@xpute/native`
+(`xpute/ts/native/script/build-core.py`); the app's own native module is
+`ts/client/modules/platform/`. Setting a machine up, building and installing are
+the [device-build skill](./.agents/skills/device-build/SKILL.md).
 
 ---
 
@@ -203,16 +226,16 @@ language by where a thing runs.
 ```
 .
 ├── ts/                  # The TypeScript workspace (pnpm)
-│   ├── client/          #   the client both apps bundle
+│   ├── client/          #   the client the app bundles
 │   │   └── src/
-│   │       ├── host/    #     xpute's host, mounted
-│   │       ├── sys/     #     what answers the kernel's hostcalls
-│   │       ├── port/    #     what the shell's port carries
-│   │       ├── origin/  #     the server the client reads from
-│   │       ├── abi/     #     the numbers both read, and the boot
-│   │       └── shell/   #     the UI
-│   ├── app/web/         #   the page's app and its bracket
-│   ├── app/native/      #   the device's app, its native module and bracket
+│   │       ├── host/     #     xpute's host, mounted
+│   │       ├── services/ #     what each platform gives
+│   │       ├── sys/      #     what answers the kernel's hostcalls
+│   │       ├── port/     #     what the app's ABI carries
+│   │       ├── origin/   #     the server the client reads from
+│   │       ├── abi/      #     the numbers both read, and the boot
+│   │       └── shell/    #     the UI
+│   ├── app/             #   the Expo app: iOS, Android and the page
 │   ├── server/edge/     #   the Cloudflare Worker that serves it all
 │   └── build/           #   what the bundlers read the workspace through
 ├── rust/                # The Rust workspace (Cargo)
@@ -221,7 +244,6 @@ language by where a thing runs.
 │   │   └── content/     #     pxl-content: pixelet's content over it
 │   ├── client/          #   pxl-kernel, pxl-render, and pxl-shader, the GPU's
 │   │                    #     compute entries built to WGSL
-│   ├── client-bracket/  #   pxl-wasm and pxl-native, the kernel's two forms
 │   ├── server/          #   pxl-geo (/geo), pxl-api (/api), pxl-server,
 │   │                    #     pxl-geo-spec; pxl-geo-bake, the bakes
 │   └── tool/            #   pxl-tool: the repository's own Rust programs, run by cargo
@@ -256,7 +278,7 @@ byte by `xpute/script/export.py`; [xpute/README.md](./xpute/README.md) and
 [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) describe the system under the
 application. Nothing under it names pixelet. pixelet takes it through its
 packages, as any program would: `ts/pnpm-workspace.yaml` lists xpute's, which
-the client and the apps depend on as `workspace:*`, and `rust/Cargo.toml` names
+the client and the app depend on as `workspace:*`, and `rust/Cargo.toml` names
 the crates by path.
 
 ---

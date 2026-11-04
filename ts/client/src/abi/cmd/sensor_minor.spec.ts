@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/sensor_minor.spec.ts
+// ts/client/src/abi/cmd/sensor_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The device sensors'.
 
@@ -11,3 +11,4 @@ export const ORIENT = 0x05;
 export const PERMISSION = 0x06;
 export const ERR = 0x0b;
 export const LOCATE = 0x0c;
+export const PLATFORM = 0x0d;

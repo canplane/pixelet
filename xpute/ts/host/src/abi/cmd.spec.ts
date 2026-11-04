@@ -3,13 +3,16 @@
 // GENERATED from spec/abi/cmd.json
 
 /**
- * xpute's own commands, by number (kit abi/cmd: `major << 8 | minor`), and the packet
- * each carries — an XTP branch whose children are its fields, in order. A command with
- * no fields carries no packet. The host sends them, port 0 (ipc/frame.json HOST); a
- * program numbers its own as it likes, and the sender tells the two apart.
- *
- * The direction is the ring: `pkt` is what the host submits, `event` what the guest
- * posts on the completion ring for the host's port, its hostcalls (ipc/sys.json).
+ * xpute's own protocol, the host's, on majors NOP, SYS and GPU: the guest's life as its host tells it.
+ * NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME are the guest's
+ * life as its host sees it: a host (re)attached, the guest about to be frozen, and woken;
+ * what each means to keep or reset is the guest's. GPU_READY is the GPU grant's state:
+ * the device the machine asked for answered. SYS_ABORT is the guest's end, the broken
+ * invariant it reports as it stops, which the host hears as a VMM hears a guest's exit.
+ * Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose
+ * children are its fields, in order; one with no fields carries no packet. Files are a
+ * device of their own (fs.json). Majors 0x00 to 0x0F are xpute's (ipc/frame.json); a
+ * program numbers its own protocols' commands past them.
  */
 
 import type {
@@ -20,7 +23,11 @@ import type {
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Major from "./cmd/major.spec.ts";
 import * as SysMinor from "./cmd/sys_minor.spec.ts";
+import * as GpuMinor from "./cmd/gpu_minor.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import type { Host, OnEvent } from "../mod.ts";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -30,6 +37,10 @@ export { Major };
 type SysMinor = (typeof SysMinor)[keyof typeof SysMinor];
 export { SysMinor };
 
+/** One of GpuMinor's, as its enum was a type. */
+type GpuMinor = (typeof GpuMinor)[keyof typeof GpuMinor];
+export { GpuMinor };
+
 /** One of Command's, as its enum was a type. */
 type Command = (typeof Command)[keyof typeof Command];
 export { Command };
@@ -37,75 +48,6 @@ export { Command };
 /** Command.NOP's packet, written in place into `to`. */
 export function encode_nop(to: PacketRoom, val: u32): PacketWriter {
   return to.writer(1).u32(val);
-}
-
-/** Command.SYS_OPENED's packet, written in place into `to`.
- *
- * @param detail Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on. */
-export function encode_sys_opened(
-  to: PacketRoom,
-  fd: u32,
-  res: i32,
-  detail: u32,
-): PacketWriter {
-  return to.writer(3).u32(fd).i32(res).u32(detail);
-}
-
-/** Command.SYS_OPENAT's event. */
-export interface SysOpenatEvent {
-  fd: u32;
-  root: u32;
-  /** ipc/sys.json `flag`. */
-  flags: u32;
-  path: string;
-}
-
-export function read_sys_openat(b: BranchCursor): SysOpenatEvent {
-  return {
-    fd: b.at(0).get<u32>(),
-    root: b.at(1).get<u32>(),
-    flags: b.at(2).get<u32>(),
-    path: b.at(3).get<string>(),
-  };
-}
-
-/** Command.SYS_READ's event. */
-export interface SysReadEvent {
-  fd: u32;
-  at: u32;
-  len: u32;
-}
-
-export function read_sys_read(b: BranchCursor): SysReadEvent {
-  return {
-    fd: b.at(0).get<u32>(),
-    at: b.at(1).get<u32>(),
-    len: b.at(2).get<u32>(),
-  };
-}
-
-/** Command.SYS_WRITE's event. */
-export interface SysWriteEvent {
-  fd: u32;
-  at: u32;
-  len: u32;
-}
-
-export function read_sys_write(b: BranchCursor): SysWriteEvent {
-  return {
-    fd: b.at(0).get<u32>(),
-    at: b.at(1).get<u32>(),
-    len: b.at(2).get<u32>(),
-  };
-}
-
-/** Command.SYS_CLOSE's event. */
-export interface SysCloseEvent {
-  fd: u32;
-}
-
-export function read_sys_close(b: BranchCursor): SysCloseEvent {
-  return { fd: b.at(0).get<u32>() };
 }
 
 /** Command.SYS_ABORT's event. */
@@ -131,4 +73,45 @@ export function read_sys_abort(b: BranchCursor): SysAbortEvent {
     b_high: b.at(6).get<u32>(),
     file: b.at(7).get<string>(),
   };
+}
+
+/** What the host sends on the host protocol, bound to `host`: each
+ * command rung, or called and answered before it returns. */
+export function host_exports(host: Host) {
+  return {
+    nop: (val: u32): void => host.send(Command.NOP, (r) => encode_nop(r, val)),
+    sys_attach: (): void => host.send(Command.SYS_ATTACH),
+    sys_suspend: (): i32 => host.call(Command.SYS_SUSPEND),
+    sys_resume: (): i32 => host.call(Command.SYS_RESUME),
+    gpu_ready: (): void => host.send(Command.GPU_READY),
+  };
+}
+
+/** The host protocol's stubs, bound. */
+export type HostExports = ReturnType<typeof host_exports>;
+
+/** What the program does with each command the guest posts on the host protocol; a
+ * call's answer is its return. */
+export interface HostImports {
+  /** The broken invariant the guest reports as it stops (xpute-kit status/bug.rs). */
+  sys_abort(e: SysAbortEvent): void;
+}
+
+/** `h` as the handler a host routes the host protocol's commands to, each one read and
+ * handed to its member; ENOSYS for one the protocol does not carry. */
+export function host_imports(h: HostImports): OnEvent {
+  return (_tag, cmd, f) => {
+    switch (cmd) {
+      case Command.SYS_ABORT:
+        return h.sys_abort(read_sys_abort(need(f)));
+      default:
+        return Errno.ENOSYS;
+    }
+  };
+}
+
+/** A packet the command carries, which a frame without one breaks. */
+function need<T>(f: T | null): T {
+  if (f === null) throw new MarshalError(Errno.EBADMSG);
+  return f;
 }

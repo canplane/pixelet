@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/perf_minor.spec.ts
+// ts/client/src/abi/cmd/perf_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The profiler's.
 

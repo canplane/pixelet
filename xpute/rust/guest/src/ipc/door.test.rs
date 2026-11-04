@@ -8,8 +8,8 @@ const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
 const MOST_EVENTS: u32 = 64;
-/// A program's port, sending the program's commands.
-const PROGRAM: u32 = 1 << frame::PORT_SHIFT;
+/// A command of the program's own, past xpute's majors.
+const PROGRAM: u32 = frame::PROGRAM_MAJOR << 8 | 1;
 
 fn door() -> (Door, Box<[u8]>) {
     door_of(SLOT)
@@ -39,7 +39,7 @@ fn command_needs_reply_room() {
     for _ in 0..CQ - MOST_EVENTS {
         d.post(0, 2, 0, 0);
     }
-    assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
+    assert_eq!(d.sq().push(0, PROGRAM, frame::ACKREQ, 0, None), Errno::OK);
     d.receive(|_| {
         for _ in 0..MOST_EVENTS {
             d.post(0, 2, 0, 0);
@@ -60,7 +60,7 @@ fn ring_peaks() {
         d.post(0, 2, 0, 0);
     }
     for _ in 0..SQ {
-        assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
+        assert_eq!(d.sq().push(0, PROGRAM, frame::ACKREQ, 0, None), Errno::OK);
     }
     assert_eq!(d.receive(|_| Ok(Some(0))), 3);
     assert_eq!(
@@ -91,7 +91,7 @@ fn ring_peaks() {
     );
 }
 
-/// SYS_OPENED's packet: the descriptor, its result and no detail.
+/// FS_OPENED's packet: the descriptor, its result and no detail.
 fn sys_opened(fd: u32, res: i32) -> Vec<u8> {
     let mut buf = vec![0u8; SLOT as usize];
     let mut w = PacketWriter::new(&mut buf, 3);
@@ -121,7 +121,8 @@ fn open_completion_handed_over() {
     let (d, _buf) = door();
     let pkt = sys_opened(3, 9);
     assert_eq!(
-        d.sq().push(0, Command::SYS_OPENED as u32, 0, 0, Some(&pkt)),
+        d.sq()
+            .push(0, fs::Command::FS_OPENED as u32, 0, 0, Some(&pkt)),
         Errno::OK
     );
     let mut got = None;
@@ -130,29 +131,29 @@ fn open_completion_handed_over() {
             got = Some((opened.fd, opened.res));
             Ok(Some(0))
         }
-        Submission::Program(..) => unreachable!("an open's completion is not the program's frame"),
+        Submission::Life(_) | Submission::GpuReady | Submission::Program(..) => {
+            unreachable!("an open's completion is not the program's frame")
+        }
     });
     assert_eq!(got, Some((3, 9)));
 }
 
 #[test]
-fn program_frame_numbered_nop_handed_over() {
+fn program_command_handed_over() {
     let (d, _buf) = door();
-    let tag = PROGRAM | 6;
-    assert_eq!(
-        d.sq()
-            .push(tag, Command::NOP as u32, frame::ACKREQ, 0, None),
-        Errno::OK
-    );
+    let tag = 6;
+    assert_eq!(d.sq().push(tag, PROGRAM, frame::ACKREQ, 0, None), Errno::OK);
     let mut got = None;
     d.receive(|submission| match submission {
         Submission::Program(cmd, _) => {
             got = Some(cmd);
             Ok(Some(1))
         }
-        Submission::Opened(_) => unreachable!("port 1 is not the host"),
+        Submission::Life(_) | Submission::GpuReady | Submission::Opened(_) => {
+            unreachable!("a command past xpute's majors is the program's")
+        }
     });
-    assert_eq!(got, Some(Command::NOP as u32));
+    assert_eq!(got, Some(PROGRAM));
     let f = d.cq().peek().expect("a reply");
     assert_eq!(
         (f.tag, f.result),
@@ -162,10 +163,10 @@ fn program_frame_numbered_nop_handed_over() {
 }
 
 #[test]
-fn host_frame_unknown_refused() {
+fn xpute_number_unknown_refused() {
     let (d, _buf) = door();
-    assert_eq!(d.sq().push(5, 0x1001, 0, 0, None), Errno::OK);
-    d.receive(|_| unreachable!("the host's command is none of the program's"));
+    assert_eq!(d.sq().push(5, 0x0f01, 0, 0, None), Errno::OK);
+    d.receive(|_| unreachable!("a number under xpute's majors is none of the program's"));
     let f = d.cq().peek().expect("a failure's reply");
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }
@@ -182,20 +183,20 @@ impl Event for Ping {
 #[test]
 fn call_publishes_nothing() {
     let (d, _buf) = door();
-    d.send(1, &Ping);
+    d.send(&Ping);
     // No host's `hostcall` is installed in a native test, so the call is refused.
-    assert_eq!(d.call(1, &Ping), Err(Errno::ENOSYS));
+    assert_eq!(d.call(&Ping), Err(Errno::ENOSYS));
     assert_eq!(d.cq().len(), 1, "the call's frame is laid, not published");
 }
 
 #[test]
 fn abort_posts_the_report_alone() {
     let (d, _buf) = door_of(256);
-    d.send(1, &Ping);
+    d.send(&Ping);
     d.close(3);
     d.abort(Errno::EINVAL, core::panic::Location::caller(), 1, 2);
     assert_eq!(d.cq().len(), 1);
     let f = d.cq().peek().expect("the report");
-    assert_eq!(frame::port_of(f.tag), frame::HOST);
+    assert_eq!(f.tag, 0);
     assert_eq!(f.cmd, crate::abi::cmd::Command::SYS_ABORT as u32);
 }

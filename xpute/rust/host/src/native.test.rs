@@ -20,6 +20,8 @@ fn cfg(heap_at: u32) -> Config {
         stack_bytes: 1 << 20,
         thread_name: "test-guest",
         clock: || 42.0,
+        stop_hook: None,
+        admit: None,
     }
 }
 

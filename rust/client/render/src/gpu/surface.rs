@@ -8,6 +8,7 @@ use xpute_guest::abi::handle::{handle_slot, Table as Handles};
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::round;
 
+use crate::api_spec::surface_role;
 use crate::gpu::api::Format;
 
 /// Slot 0 is never a surface.
@@ -26,6 +27,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 #[derive(Clone, Copy, Default)]
 pub struct Surface {
     pub handle: u32,
+    /// What it draws, a `surface_role`.
     pub role: u32,
     pub px_w: u32,
     pub px_h: u32,
@@ -130,15 +132,16 @@ fn table() -> &'static mut Table {
     })
 }
 
-/// 0 when every surface is taken.
-pub fn surface_open(role: u32) -> u32 {
+/// A canvas that draws nothing until its role is set (`surface_role`); 0
+/// when every surface is taken.
+pub fn surface_open() -> u32 {
     let t = table();
     let Some(handle) = t.handles.insert(()) else {
         return 0;
     };
     t.surfaces[handle_slot(handle) as usize] = Surface {
         handle,
-        role,
+        role: surface_role::NONE,
         dpr: 1.0,
         ratio: 1.0,
         ..Surface::default()

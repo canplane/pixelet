@@ -1,21 +1,19 @@
-// pxl-kernel/domain/control/cmd.spec.rs
+// rust/client/kernel/src/domain/control/cmd.spec.rs
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
-//! The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
-//! and the packet each carries — an XTP branch whose children are its fields, in
-//! order. A command with no fields carries no packet. The kernel is the process; the
-//! JavaScript around it is two things to it, its host, which holds the turns and carries
-//! its hostcalls to what answers them (ts/client/src/sys/), and its shell, the UI, which
-//! sends what the user does and what the place's sensors, GPU, visibility and frames
-//! tell it (ts/client/src/port/). A command's major is the module it is for, and the
-//! sections say what each is.
+//! The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:
+//! `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
+//! it carries — an XTP branch whose children are its fields, in order. A command with no
+//! fields carries no packet. The kernel is the guest; the JavaScript around it is two
+//! things to it, its host, which holds the turns and carries its hostcalls to what
+//! answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user
+//! does and what the place's sensors, visibility and frames tell it
+//! (ts/client/src/port/). A command's major is the module it is for.
 //!
-//! The same number is a command on the submission ring and an event on the
-//! completion ring (its `RES` clear). The direction is the ring: `pkt` is
-//! what the shell submits, `event` what the kernel posts. Each is written and
-//! read by what this file generates, on both sides, so no field is found by
-//! its position anywhere else.
+//! `export` is what the shell sends the kernel and `import` what the kernel posts to it, `call`
+//! one its sender waits on. Each is written and read by what this file generates, on
+//! both sides, so no field is found by its position anywhere else.
 //!
 //! A field is a number of a width, a `bool`, a `str`, a member of an enum
 //! below or of one another spec declares (`extern`), or a record below. An
@@ -49,11 +47,9 @@ use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
-    SYS = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
     FS = 0x13,
-    GPU = 0x14,
     SURFACE = 0x15,
     SETTING = 0x16,
     SCENE = 0x17,
@@ -62,15 +58,14 @@ pub enum Major {
     EDIT = 0x1a,
     SHELL = 0x1b,
     TEXT = 0x1c,
+    TURN = 0x1d,
 }
 
 impl Major {
-    pub const ALL: [Major; 13] = [
-        Major::SYS,
+    pub const ALL: [Major; 12] = [
         Major::INPUT,
         Major::SENSOR,
         Major::FS,
-        Major::GPU,
         Major::SURFACE,
         Major::SETTING,
         Major::SCENE,
@@ -79,28 +74,12 @@ impl Major {
         Major::EDIT,
         Major::SHELL,
         Major::TEXT,
+        Major::TURN,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Major> {
         Major::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// The system's: the kernel's start, and the platform's sleep and wake.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum SysMinor {
-    BOOT = 0x01,
-    SLEEP = 0x02,
-}
-
-impl SysMinor {
-    pub const ALL: [SysMinor; 2] = [SysMinor::BOOT, SysMinor::SLEEP];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<SysMinor> {
-        SysMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -141,10 +120,11 @@ pub enum SensorMinor {
     PERMISSION = 0x06,
     ERR = 0x0b,
     LOCATE = 0x0c,
+    PLATFORM = 0x0d,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 7] = [
+    pub const ALL: [SensorMinor; 8] = [
         SensorMinor::START,
         SensorMinor::POS,
         SensorMinor::STOP,
@@ -152,6 +132,7 @@ impl SensorMinor {
         SensorMinor::PERMISSION,
         SensorMinor::ERR,
         SensorMinor::LOCATE,
+        SensorMinor::PLATFORM,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -177,22 +158,6 @@ impl FsMinor {
     }
 }
 
-/// The GPU's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum GpuMinor {
-    READY = 0x01,
-}
-
-impl GpuMinor {
-    pub const ALL: [GpuMinor; 1] = [GpuMinor::READY];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<GpuMinor> {
-        GpuMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// A surface's: opened, resized, closed, and the frame drawn into the surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -200,15 +165,13 @@ pub enum SurfaceMinor {
     OPEN = 0x01,
     RESIZE = 0x02,
     CLOSE = 0x03,
-    FRAME = 0x04,
 }
 
 impl SurfaceMinor {
-    pub const ALL: [SurfaceMinor; 4] = [
+    pub const ALL: [SurfaceMinor; 3] = [
         SurfaceMinor::OPEN,
         SurfaceMinor::RESIZE,
         SurfaceMinor::CLOSE,
-        SurfaceMinor::FRAME,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -217,15 +180,32 @@ impl SurfaceMinor {
     }
 }
 
+/// A turn's: what the host grants it, the credits and the clock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TurnMinor {
+    GRANT = 0x01,
+}
+
+impl TurnMinor {
+    pub const ALL: [TurnMinor; 1] = [TurnMinor::GRANT];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<TurnMinor> {
+        TurnMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
 /// A setting's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingMinor {
     SET = 0x01,
+    DEVELOPMENT = 0x02,
 }
 
 impl SettingMinor {
-    pub const ALL: [SettingMinor; 1] = [SettingMinor::SET];
+    pub const ALL: [SettingMinor; 2] = [SettingMinor::SET, SettingMinor::DEVELOPMENT];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SettingMinor> {
@@ -233,21 +213,16 @@ impl SettingMinor {
     }
 }
 
-/// The scene's: a character drawn alone into a surface, a line said.
+/// The scene's: what a surface draws, a line said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SceneMinor {
-    PREVIEW_OPEN = 0x01,
-    PREVIEW_CLOSE = 0x02,
     CHAT = 0x03,
+    DRAW = 0x04,
 }
 
 impl SceneMinor {
-    pub const ALL: [SceneMinor; 3] = [
-        SceneMinor::PREVIEW_OPEN,
-        SceneMinor::PREVIEW_CLOSE,
-        SceneMinor::CHAT,
-    ];
+    pub const ALL: [SceneMinor; 2] = [SceneMinor::CHAT, SceneMinor::DRAW];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SceneMinor> {
@@ -419,6 +394,24 @@ impl Tool {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Tool> {
         Tool::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// What a surface draws (SCENE_DRAW).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SceneContent {
+    World = 0,
+    /// One character alone, named by its group and number.
+    Character = 1,
+}
+
+impl SceneContent {
+    pub const ALL: [SceneContent; 2] = [SceneContent::World, SceneContent::Character];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<SceneContent> {
+        SceneContent::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -617,26 +610,11 @@ impl Message {
     }
 }
 
+/// Every command, by the side that sends it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
-    // ---- the process asks the shell: events on the completion ring, and calls answered before they return ----
-    /// Start watching.
-    SENSOR_START = 0x1201,
-    /// Stop watching.
-    SENSOR_STOP = 0x1203,
-    /// The text in the platform's own family at the weight and size, broken into lines no
-    /// wider than the width where it can be; at `at` in the kernel's memory, how many lines,
-    /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-    /// (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
-    TEXT_LAYOUT = 0x1c01,
-    /// One line drawn in the platform's own family, starting at x with the middle of its em
-    /// box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
-    /// RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
-    /// it returns.
-    TEXT_RASTER = 0x1c02,
-
-    // ---- the shell answers: a sensor's reading ----
+    // ---- shell, export ----
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
@@ -645,20 +623,12 @@ pub enum Command {
     /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
-
-    // ---- the shell tells the process: its start, its turn, its window, the tile source and the platform's devices ----
-    /// The kernel's start: what the platform is. Its storage files it opens itself, on the storage root.
-    SYS_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
     /// its events on the completion ring, drawn by the kernel. It carries the host's alone:
     /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
     /// world surface's (SURFACE_RESIZE).
-    SURFACE_FRAME = 0x1504,
-    /// The platform about to stop the process, or waking it: the page or the app hidden or
-    /// shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
-    /// hiding is the save's last sure moment.
-    SYS_SLEEP = 0x1002,
+    TURN_GRANT = 0x1d01,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
     /// client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
@@ -671,10 +641,12 @@ pub enum Command {
     FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
-    /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge.
-    GPU_READY = 0x1401,
-
-    // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
+    /// What the place's sensors are: whether it has a position and a heading, whether the
+    /// heading asks a permission, and how it says it is lost. Sent once the kernel is attached.
+    SENSOR_PLATFORM = 0x120d,
+    /// Whether this is a development build, which offers the settings schema.json marks `dev`.
+    /// Sent once the kernel is attached.
+    SETTING_DEVELOPMENT = 0x1602,
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
@@ -689,15 +661,18 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_MOVE = 0x1106,
-    /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on.
+    /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what.
     SURFACE_OPEN = 0x1501,
     /// The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's.
     SURFACE_RESIZE = 0x1502,
-    /// A call: the canvas is going, and what it held on the device is let go before the call returns.
+    /// A call: the canvas is going, and what it drew and held on the device is let go before the call returns.
     SURFACE_CLOSE = 0x1503,
-    /// A character drawn alone into a surface the shell handed over, as the picker shows it, over `bg`, 0xRRGGBB, sRGB.
-    SCENE_PREVIEW_OPEN = 0x1701,
-    SCENE_PREVIEW_CLOSE = 0x1702,
+    /// A call, answered 0 or an errno: what a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
+    /// sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
+    /// replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
+    /// where the character's fields are not all given for a character, any is given for the world, or no character is
+    /// named by them.
+    SCENE_DRAW = 0x1704,
     /// A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
     /// kept settings, which would be read over it.
     SETTING_SET = 0x1601,
@@ -733,27 +708,38 @@ pub enum Command {
     PERF_STATS = 0x1903,
     /// The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn.
     PERF_RINGS = 0x1904,
+
+    // ---- shell, import ----
+    /// Start watching.
+    SENSOR_START = 0x1201,
+    /// Stop watching.
+    SENSOR_STOP = 0x1203,
+    /// The text in the platform's own family at the weight and size, broken into lines no
+    /// wider than the width where it can be; at `at` in the kernel's memory, how many lines,
+    /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
+    /// (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
+    TEXT_LAYOUT = 0x1c01,
+    /// One line drawn in the platform's own family, starting at x with the middle of its em
+    /// box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
+    /// RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
+    /// it returns.
+    TEXT_RASTER = 0x1c02,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
     SHELL_SNAPSHOT = 0x1b01,
 }
 
 impl Command {
-    pub const ALL: [Command; 39] = [
-        Command::SENSOR_START,
-        Command::SENSOR_STOP,
-        Command::TEXT_LAYOUT,
-        Command::TEXT_RASTER,
+    pub const ALL: [Command; 37] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
-        Command::SYS_BOOT,
-        Command::SURFACE_FRAME,
-        Command::SYS_SLEEP,
+        Command::TURN_GRANT,
         Command::FS_MOUNT,
         Command::FS_TRUNCATED,
         Command::SENSOR_PERMISSION,
-        Command::GPU_READY,
+        Command::SENSOR_PLATFORM,
+        Command::SETTING_DEVELOPMENT,
         Command::INPUT_POINTER,
         Command::EDIT_TOOL,
         Command::EDIT_MARKER_TEXT,
@@ -764,8 +750,7 @@ impl Command {
         Command::SURFACE_OPEN,
         Command::SURFACE_RESIZE,
         Command::SURFACE_CLOSE,
-        Command::SCENE_PREVIEW_OPEN,
-        Command::SCENE_PREVIEW_CLOSE,
+        Command::SCENE_DRAW,
         Command::SETTING_SET,
         Command::SCENE_CHAT,
         Command::CAMERA_TRACKING,
@@ -778,6 +763,10 @@ impl Command {
         Command::PERF_STOP,
         Command::PERF_STATS,
         Command::PERF_RINGS,
+        Command::SENSOR_START,
+        Command::SENSOR_STOP,
+        Command::TEXT_LAYOUT,
+        Command::TEXT_RASTER,
         Command::SHELL_SNAPSHOT,
     ];
 
@@ -994,128 +983,6 @@ impl RefusedFile<'_> {
     }
 }
 
-/// Command::SENSOR_START's event.
-pub struct SensorStartEvent {
-    pub sensor: Sensor,
-}
-
-impl SensorStartEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.sensor as u32));
-    }
-}
-
-impl xpute_guest::ipc::door::Event for SensorStartEvent {
-    const NUMBER: u32 = 4609;
-    const FIELDS: u32 = 1;
-    fn write(&self, w: &mut PacketWriter) {
-        SensorStartEvent::write(self, w);
-    }
-}
-
-/// Command::SENSOR_STOP's event.
-pub struct SensorStopEvent {
-    pub sensor: Sensor,
-}
-
-impl SensorStopEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.sensor as u32));
-    }
-}
-
-impl xpute_guest::ipc::door::Event for SensorStopEvent {
-    const NUMBER: u32 = 4611;
-    const FIELDS: u32 = 1;
-    fn write(&self, w: &mut PacketWriter) {
-        SensorStopEvent::write(self, w);
-    }
-}
-
-/// Command::TEXT_LAYOUT's event.
-pub struct TextLayoutEvent {
-    pub weight: u32,
-    pub px: f64,
-    /// 0 for one line.
-    pub max_width: f64,
-    pub at: u32,
-    pub lines: u32,
-    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
-    pub text_at: u32,
-    /// Its bytes.
-    pub text_len: u32,
-}
-
-impl TextLayoutEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 7;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.weight));
-        w.f64(Some(self.px));
-        w.f64(Some(self.max_width));
-        w.u32(Some(self.at));
-        w.u32(Some(self.lines));
-        w.u32(Some(self.text_at));
-        w.u32(Some(self.text_len));
-    }
-}
-
-impl xpute_guest::ipc::door::Event for TextLayoutEvent {
-    const NUMBER: u32 = 7169;
-    const FIELDS: u32 = 7;
-    fn write(&self, w: &mut PacketWriter) {
-        TextLayoutEvent::write(self, w);
-    }
-}
-
-/// Command::TEXT_RASTER's event.
-pub struct TextRasterEvent {
-    pub weight: u32,
-    pub px: f64,
-    /// 0xRRGGBBAA.
-    pub color: u32,
-    pub at: u32,
-    pub width: u32,
-    pub height: u32,
-    pub x: f64,
-    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
-    pub text_at: u32,
-    /// Its bytes.
-    pub text_len: u32,
-}
-
-impl TextRasterEvent {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 9;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.weight));
-        w.f64(Some(self.px));
-        w.u32(Some(self.color));
-        w.u32(Some(self.at));
-        w.u32(Some(self.width));
-        w.u32(Some(self.height));
-        w.f64(Some(self.x));
-        w.u32(Some(self.text_at));
-        w.u32(Some(self.text_len));
-    }
-}
-
-impl xpute_guest::ipc::door::Event for TextRasterEvent {
-    const NUMBER: u32 = 7170;
-    const FIELDS: u32 = 9;
-    fn write(&self, w: &mut PacketWriter) {
-        TextRasterEvent::write(self, w);
-    }
-}
-
 /// Command::SENSOR_POS's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorPos {
@@ -1205,37 +1072,9 @@ impl SensorErr {
     }
 }
 
-/// Command::SYS_BOOT's packet.
+/// Command::TURN_GRANT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SysBoot {
-    /// A development build, which offers the settings schema.json marks `dev`.
-    pub development: bool,
-    pub geolocation: bool,
-    pub orient: bool,
-    /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
-    pub orient_permission: bool,
-    /// A browser's compass talks while the device is still and cannot say it stopped, so
-    /// silence is the only sign of loss; a device's speaks only when the heading turns and
-    /// reports a failure itself (SENSOR_ERR).
-    pub orient_silence_is_loss: bool,
-}
-
-impl SysBoot {
-    pub fn read(pkt: &[u8]) -> Result<SysBoot, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SysBoot {
-            development: f.at(0)?.get_bool()?,
-            geolocation: f.at(1)?.get_bool()?,
-            orient: f.at(2)?.get_bool()?,
-            orient_permission: f.at(3)?.get_bool()?,
-            orient_silence_is_loss: f.at(4)?.get_bool()?,
-        })
-    }
-}
-
-/// Command::SURFACE_FRAME's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SurfaceFrame {
+pub struct TurnGrant {
     /// The display's refresh, as the host measures it from the animation frames it is handed,
     /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
     /// boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
@@ -1248,30 +1087,15 @@ pub struct SurfaceFrame {
     pub unix_ms: f64,
 }
 
-impl SurfaceFrame {
-    pub fn read(pkt: &[u8]) -> Result<SurfaceFrame, MarshalError> {
+impl TurnGrant {
+    pub fn read(pkt: &[u8]) -> Result<TurnGrant, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SurfaceFrame {
+        Ok(TurnGrant {
             refresh_ms: finite(f.at(0)?.get_number()?)?,
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
             credits: integer::<u32>(f.at(3)?.get_number()?)?,
             unix_ms: finite(f.at(4)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::SYS_SLEEP's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SysSleep {
-    pub awake: bool,
-}
-
-impl SysSleep {
-    pub fn read(pkt: &[u8]) -> Result<SysSleep, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SysSleep {
-            awake: f.at(0)?.get_bool()?,
         })
     }
 }
@@ -1333,6 +1157,46 @@ impl SensorPermission {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
+        })
+    }
+}
+
+/// Command::SENSOR_PLATFORM's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct SensorPlatform {
+    pub geolocation: bool,
+    pub orient: bool,
+    /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+    pub orient_permission: bool,
+    /// A browser's compass talks while the device is still and cannot say it stopped, so
+    /// silence is the only sign of loss; a device's speaks only when the heading turns and
+    /// reports a failure itself (SENSOR_ERR).
+    pub orient_silence_is_loss: bool,
+}
+
+impl SensorPlatform {
+    pub fn read(pkt: &[u8]) -> Result<SensorPlatform, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SensorPlatform {
+            geolocation: f.at(0)?.get_bool()?,
+            orient: f.at(1)?.get_bool()?,
+            orient_permission: f.at(2)?.get_bool()?,
+            orient_silence_is_loss: f.at(3)?.get_bool()?,
+        })
+    }
+}
+
+/// Command::SETTING_DEVELOPMENT's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct SettingDevelopment {
+    pub development: bool,
+}
+
+impl SettingDevelopment {
+    pub fn read(pkt: &[u8]) -> Result<SettingDevelopment, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SettingDevelopment {
+            development: f.at(0)?.get_bool()?,
         })
     }
 }
@@ -1432,22 +1296,6 @@ impl InputMove {
     }
 }
 
-/// Command::SURFACE_OPEN's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SurfaceOpen {
-    /// The renderer's surface_role (render/gpu/api.json).
-    pub role: u32,
-}
-
-impl SurfaceOpen {
-    pub fn read(pkt: &[u8]) -> Result<SurfaceOpen, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SurfaceOpen {
-            role: integer::<u32>(f.at(0)?.get_number()?)?,
-        })
-    }
-}
-
 /// Command::SURFACE_RESIZE's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SurfaceResize {
@@ -1484,39 +1332,39 @@ impl SurfaceClose {
     }
 }
 
-/// Command::SCENE_PREVIEW_OPEN's packet.
+/// Command::SCENE_DRAW's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct ScenePreviewOpen {
+pub struct SceneDraw {
     pub surface: u32,
-    pub group: pxl_spec::asset::actor::Group,
-    pub number: u8,
-    pub bg: u32,
+    pub content: SceneContent,
+    pub group: Option<pxl_spec::asset::actor::Group>,
+    pub number: Option<u8>,
+    /// What the character is drawn over, 0xRRGGBB, sRGB.
+    pub bg: Option<u32>,
 }
 
-impl ScenePreviewOpen {
-    pub fn read(pkt: &[u8]) -> Result<ScenePreviewOpen, MarshalError> {
+impl SceneDraw {
+    pub fn read(pkt: &[u8]) -> Result<SceneDraw, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ScenePreviewOpen {
+        Ok(SceneDraw {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?)
+            content: SceneContent::of(integer::<u32>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
-            number: integer::<u8>(f.at(2)?.get_number()?)?,
-            bg: integer::<u32>(f.at(3)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::SCENE_PREVIEW_CLOSE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct ScenePreviewClose {
-    pub surface: u32,
-}
-
-impl ScenePreviewClose {
-    pub fn read(pkt: &[u8]) -> Result<ScenePreviewClose, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ScenePreviewClose {
-            surface: integer::<u32>(f.at(0)?.get_number()?)?,
+            group: match f.at(2)?.opt() {
+                Some(c) => Some(
+                    pxl_spec::asset::actor::Group::of(integer::<u8>(c.get_number()?)?)
+                        .ok_or_else(|| unknown())?,
+                ),
+                None => None,
+            },
+            number: match f.at(3)?.opt() {
+                Some(c) => Some(integer::<u8>(c.get_number()?)?),
+                None => None,
+            },
+            bg: match f.at(4)?.opt() {
+                Some(c) => Some(integer::<u32>(c.get_number()?)?),
+                None => None,
+            },
         })
     }
 }
@@ -1653,6 +1501,128 @@ impl PerfStats {
     }
 }
 
+/// Command::SENSOR_START's event.
+pub struct SensorStartEvent {
+    pub sensor: Sensor,
+}
+
+impl SensorStartEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.sensor as u32));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for SensorStartEvent {
+    const NUMBER: u32 = 4609;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        SensorStartEvent::write(self, w);
+    }
+}
+
+/// Command::SENSOR_STOP's event.
+pub struct SensorStopEvent {
+    pub sensor: Sensor,
+}
+
+impl SensorStopEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.sensor as u32));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for SensorStopEvent {
+    const NUMBER: u32 = 4611;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        SensorStopEvent::write(self, w);
+    }
+}
+
+/// Command::TEXT_LAYOUT's event.
+pub struct TextLayoutEvent {
+    pub weight: u32,
+    pub px: f64,
+    /// 0 for one line.
+    pub max_width: f64,
+    pub at: u32,
+    pub lines: u32,
+    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
+    pub text_at: u32,
+    /// Its bytes.
+    pub text_len: u32,
+}
+
+impl TextLayoutEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 7;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.weight));
+        w.f64(Some(self.px));
+        w.f64(Some(self.max_width));
+        w.u32(Some(self.at));
+        w.u32(Some(self.lines));
+        w.u32(Some(self.text_at));
+        w.u32(Some(self.text_len));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for TextLayoutEvent {
+    const NUMBER: u32 = 7169;
+    const FIELDS: u32 = 7;
+    fn write(&self, w: &mut PacketWriter) {
+        TextLayoutEvent::write(self, w);
+    }
+}
+
+/// Command::TEXT_RASTER's event.
+pub struct TextRasterEvent {
+    pub weight: u32,
+    pub px: f64,
+    /// 0xRRGGBBAA.
+    pub color: u32,
+    pub at: u32,
+    pub width: u32,
+    pub height: u32,
+    pub x: f64,
+    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
+    pub text_at: u32,
+    /// Its bytes.
+    pub text_len: u32,
+}
+
+impl TextRasterEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 9;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.weight));
+        w.f64(Some(self.px));
+        w.u32(Some(self.color));
+        w.u32(Some(self.at));
+        w.u32(Some(self.width));
+        w.u32(Some(self.height));
+        w.f64(Some(self.x));
+        w.u32(Some(self.text_at));
+        w.u32(Some(self.text_len));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for TextRasterEvent {
+    const NUMBER: u32 = 7170;
+    const FIELDS: u32 = 9;
+    fn write(&self, w: &mut PacketWriter) {
+        TextRasterEvent::write(self, w);
+    }
+}
+
 /// Command::SHELL_SNAPSHOT's event.
 pub struct ShellSnapshotEvent {
     pub at: u32,
@@ -1674,5 +1644,159 @@ impl xpute_guest::ipc::door::Event for ShellSnapshotEvent {
     const FIELDS: u32 = 2;
     fn write(&self, w: &mut PacketWriter) {
         ShellSnapshotEvent::write(self, w);
+    }
+}
+
+/// The shell protocol's guest end: what it posts to the host and what it hears from it.
+pub mod shell {
+    use super::*;
+    use xpute_guest::ipc::door::Outcome;
+    use xpute_guest::machine;
+    use xpute_kit::status::errno::Errno;
+
+    /// Command::SENSOR_START, posted for the host.
+    pub fn sensor_start(e: &SensorStartEvent) {
+        machine::door().send(e);
+    }
+
+    /// Command::SENSOR_STOP, posted for the host.
+    pub fn sensor_stop(e: &SensorStopEvent) {
+        machine::door().send(e);
+    }
+
+    /// Command::TEXT_LAYOUT, answered by the host before this returns.
+    pub fn text_layout(e: &TextLayoutEvent) -> Result<u32, Errno> {
+        machine::door().call(e)
+    }
+
+    /// Command::TEXT_RASTER, answered by the host before this returns.
+    pub fn text_raster(e: &TextRasterEvent) -> Result<u32, Errno> {
+        machine::door().call(e)
+    }
+
+    /// Command::SHELL_SNAPSHOT, posted for the host.
+    pub fn shell_snapshot(e: &ShellSnapshotEvent) {
+        machine::door().send(e);
+    }
+
+    /// What the program does with each command the host sends.
+    pub trait Exports {
+        fn sensor_pos(&mut self, c: SensorPos) -> Outcome;
+        fn sensor_orient(&mut self, c: SensorOrient) -> Outcome;
+        fn sensor_err(&mut self, c: SensorErr) -> Outcome;
+        fn turn_grant(&mut self, c: TurnGrant) -> Outcome;
+        fn fs_mount(&mut self, c: FsMount<'_>) -> Outcome;
+        fn fs_truncated(&mut self, c: FsTruncated<'_>) -> Outcome;
+        fn sensor_permission(&mut self, c: SensorPermission) -> Outcome;
+        fn sensor_platform(&mut self, c: SensorPlatform) -> Outcome;
+        fn setting_development(&mut self, c: SettingDevelopment) -> Outcome;
+        fn input_pointer(&mut self, c: InputPointer) -> Outcome;
+        fn edit_tool(&mut self, c: EditTool) -> Outcome;
+        fn edit_marker_text(&mut self, c: EditMarkerText<'_>) -> Outcome;
+        fn edit_marker_cancel(&mut self) -> Outcome;
+        fn edit_marker_commit(&mut self) -> Outcome;
+        fn input_wheel(&mut self, c: InputWheel) -> Outcome;
+        fn input_move(&mut self, c: InputMove) -> Outcome;
+        fn surface_open(&mut self) -> Outcome;
+        fn surface_resize(&mut self, c: SurfaceResize) -> Outcome;
+        fn surface_close(&mut self, c: SurfaceClose) -> Outcome;
+        fn scene_draw(&mut self, c: SceneDraw) -> Outcome;
+        fn setting_set(&mut self, c: SettingSet) -> Outcome;
+        fn scene_chat(&mut self, c: SceneChat<'_>) -> Outcome;
+        fn camera_tracking(&mut self, c: CameraTracking) -> Outcome;
+        fn camera_north_up(&mut self) -> Outcome;
+        fn sensor_locate(&mut self) -> Outcome;
+        fn camera_goto(&mut self, c: CameraGoto) -> Outcome;
+        fn input_xr_pose(&mut self, c: InputXrPose) -> Outcome;
+        fn input_xr_pose_end(&mut self) -> Outcome;
+        fn perf_start(&mut self) -> Outcome;
+        fn perf_stop(&mut self) -> Outcome;
+        fn perf_stats(&mut self, c: PerfStats) -> Outcome;
+        fn perf_rings(&mut self) -> Outcome;
+    }
+
+    /// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.
+    pub fn apply<H: Exports>(h: &mut H, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
+        match cmd {
+            x if x == Command::SENSOR_POS as u32 => h.sensor_pos(SensorPos::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SENSOR_ORIENT as u32 => h.sensor_orient(SensorOrient::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SENSOR_ERR as u32 => h.sensor_err(SensorErr::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::TURN_GRANT as u32 => h.turn_grant(TurnGrant::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::FS_MOUNT as u32 => h.fs_mount(FsMount::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::FS_TRUNCATED as u32 => h.fs_truncated(FsTruncated::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SENSOR_PERMISSION as u32 => h.sensor_permission(
+                SensorPermission::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?,
+            ),
+            x if x == Command::SENSOR_PLATFORM as u32 => h.sensor_platform(SensorPlatform::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SETTING_DEVELOPMENT as u32 => h.setting_development(
+                SettingDevelopment::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?,
+            ),
+            x if x == Command::INPUT_POINTER as u32 => h.input_pointer(InputPointer::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::EDIT_TOOL as u32 => h.edit_tool(EditTool::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::EDIT_MARKER_TEXT as u32 => h.edit_marker_text(EditMarkerText::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::EDIT_MARKER_CANCEL as u32 => h.edit_marker_cancel(),
+            x if x == Command::EDIT_MARKER_COMMIT as u32 => h.edit_marker_commit(),
+            x if x == Command::INPUT_WHEEL as u32 => h.input_wheel(InputWheel::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::INPUT_MOVE as u32 => h.input_move(InputMove::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SURFACE_OPEN as u32 => h.surface_open(),
+            x if x == Command::SURFACE_RESIZE as u32 => h.surface_resize(SurfaceResize::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SURFACE_CLOSE as u32 => h.surface_close(SurfaceClose::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SCENE_DRAW as u32 => h.scene_draw(SceneDraw::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SETTING_SET as u32 => h.setting_set(SettingSet::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::SCENE_CHAT as u32 => h.scene_chat(SceneChat::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::CAMERA_TRACKING as u32 => h.camera_tracking(CameraTracking::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::CAMERA_NORTH_UP as u32 => h.camera_north_up(),
+            x if x == Command::SENSOR_LOCATE as u32 => h.sensor_locate(),
+            x if x == Command::CAMERA_GOTO as u32 => h.camera_goto(CameraGoto::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::INPUT_XR_POSE as u32 => h.input_xr_pose(InputXrPose::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::INPUT_XR_POSE_END as u32 => h.input_xr_pose_end(),
+            x if x == Command::PERF_START as u32 => h.perf_start(),
+            x if x == Command::PERF_STOP as u32 => h.perf_stop(),
+            x if x == Command::PERF_STATS as u32 => h.perf_stats(PerfStats::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::PERF_RINGS as u32 => h.perf_rings(),
+            _ => Err(MarshalError::new(Errno::ENOSYS)),
+        }
     }
 }

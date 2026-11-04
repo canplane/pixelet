@@ -9,7 +9,7 @@
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 
-use xpute_guest::ipc::sys::Fd;
+use xpute_guest::ipc::fs::Fd;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};

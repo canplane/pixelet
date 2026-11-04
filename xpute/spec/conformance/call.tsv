@@ -1,6 +1,6 @@
-# A call's trace (ARCHITECTURE.md, the contract's rule 8). CALL calls SENDER with the fixture's INC
-# (guest.json `cmd`) and replies with the word SENDER wrote, so a reply says the port took the frame and
-# wrote what it named before the call returned, inside the turn. Two in one turn each reach the port.
+# A call's trace (ARCHITECTURE.md, the contract's rule 8). CALL calls the fixture's INC (guest.json
+# `cmd`) and replies with the word the host wrote, so a reply says the host took the frame and wrote what
+# it named before the call returned, inside the turn. Two in one turn each reach the host.
 scenarios	C8.answered C8.refused C8.twice
 
 C8.answered.step.0	submit 1 CALL ack 41

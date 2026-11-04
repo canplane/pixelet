@@ -5,14 +5,13 @@
 # either needs before it can answer anything — is the group's own directory,
 # and the two processes sit inside it.
 #
-# The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
-# how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
-# main thread and each worker instantiate for themselves, and pxl-native, linked
-# into a device's app, which draws with wgpu where the page's host draws with
-# the browser's WebGPU. A bracket is no domain: it is xpute's mechanism for
-# its form (xpute-guest's wasm, xpute-host's native, xpute-gpu) booted with
-# pixelet's numbers, the kernel's door as the guest's entry, and what is
-# pixelet's own. The server end is native: pxl-geo and pxl-api over
+# The client is one core, pxl-render and pxl-kernel, and pxl-kernel is its
+# artifact: one `xpute_guest::guest!` makes it the WebAssembly module the
+# main thread and each worker instantiate for themselves, and the library
+# linked into a device's app, which draws with wgpu where the page's host
+# draws with the browser's WebGPU. The form is xpute's for its target
+# (xpute-guest's wasm, xpute-host's native, xpute-gpu's host). The server end
+# is native: pxl-geo and pxl-api over
 # pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
 # and pxl-geo-spec where the two geo halves read the same tables.
 #
@@ -21,8 +20,8 @@
 # Nothing else crosses: a third-party dependency in either ships every byte
 # to the client and is read as this tree's own code, so each one below is
 # there because it was held to what it replaced and did not differ — and
-# nothing in the client's crates may assume WebAssembly; pxl-wasm, a bracket,
-# is the one crate that does.
+# nothing in the client's crates may assume WebAssembly; the guest's form,
+# xpute's, is what tells the targets apart.
 
 [workspace]
 resolver = "2"
@@ -32,8 +31,6 @@ members = [
   "spec/content",
   "client/render",
   "client/kernel",
-  "client-bracket/wasm",
-  "client-bracket/native",
   "server",
   "server/geo-spec",
   "server/geo",
@@ -144,7 +141,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 # The name section is not stripped here. What is published is what Binaryen
-# finishes (ts/app/web/script/build-wasm.py): it strips the name, producers and
+# finishes (ts/client/script/build-wasm.py): it strips the name, producers and
 # target-features sections in one pass, and it has to read the target
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.
@@ -156,7 +153,7 @@ panic = "abort"
 # browser. The bake wraps each page so that one bad page out of tens of
 # thousands is counted rather than fatal, and there is nothing to catch under
 # `abort`; a request handler wrapped by the web framework is the same story.
-# The module is untouched — ts/app/web/script/build-wasm.py builds the
+# The module is untouched — ts/client/script/build-wasm.py builds the
 # published one `--release` and the dev server's `watch`, below —
 # and the two binaries never link together.
 #
@@ -169,16 +166,17 @@ inherits = "release"
 opt-level = 3
 panic = "unwind"
 
-# What the device app links (pxl-native). The release profile's `z` is for a
-# download, and an app is installed once and then runs every frame on a
-# phone's battery, so it takes the faster code; it aborts as the module does,
-# since a trap ends the client either way.
+# What the device app links (pxl-kernel, as ts/client/package.json names
+# it). The release profile's `z` is for a download, and an app is installed
+# once and then runs every frame on a phone's battery, so it takes the faster
+# code; it aborts as the module does, since a trap ends the client either
+# way.
 [profile.native]
 inherits = "release"
 opt-level = 3
 
 # The module as the dev server rebuilds it on every change
-# (ts/app/web/script/build-wasm.py). It keeps the release profile's `z`,
+# (ts/client/script/build-wasm.py). It keeps the release profile's `z`,
 # which costs this module no speed (above), and drops what makes every build
 # of it start over: one codegen unit and the whole-graph LTO, which are for
 # the bytes a visitor downloads. A change then recompiles only the crates it
@@ -190,7 +188,7 @@ codegen-units = 256
 incremental = true
 
 # The device's library as a dev build of the app rebuilds it
-# (ts/app/native/script/build-native.py), as `watch` is the module's: the
+# (xpute/ts/native/script/build-core.py), as `watch` is the module's: the
 # native profile's code, without the one codegen unit and the whole-graph
 # LTO that make every build of it start over, so a change recompiles the
 # crates it reaches. A Release build of the app takes `native`.

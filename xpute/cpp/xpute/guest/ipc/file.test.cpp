@@ -21,7 +21,7 @@ XPUTE_TEST(file_descriptor_owner) {
 }
 
 XPUTE_TEST(file_answer_read_once) {
-    auto answer = [](std::int32_t res) { return abi::SysOpened{.fd = 1, .res = res, .detail = 404}; };
+    auto answer = [](std::int32_t res) { return abi::fs::FsOpened{.fd = 1, .res = res, .detail = 404}; };
     XPUTE_CHECK((Opened::of(answer(5)) == Opened{.kind = Opened::Kind::bytes, .bytes = 5}));
     XPUTE_CHECK((Opened::of(answer(-2)) == Opened{.kind = Opened::Kind::absent}));
     XPUTE_CHECK((Opened::of(answer(-5)) == Opened{.kind = Opened::Kind::failed, .errnum = Errno::eio, .detail = 404}));

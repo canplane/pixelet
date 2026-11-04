@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["XputeModule"]
+  },
+  "android": {
+    "modules": ["xpute.XputeModule"]
+  }
+}

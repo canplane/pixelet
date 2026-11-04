@@ -1,15 +1,21 @@
 // xpute-tool/spec/cmd.rs
 
-//! xpute's command table. The emitters are cmd/ts.rs, cmd/rs.rs and
-//! cmd/cpp.rs.
+//! A protocol over xpute's rings, xpute's own or a program's: its commands,
+//! as a WIT world names them from the guest's side, `export` what the guest
+//! implements and the host calls and `import` what the host implements and
+//! the guest calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
+//! cmd/cpp.rs; cmd/service.rs writes each end's binding over xpute's ends.
 
 mod cpp;
 mod rs;
+mod service;
 mod ts;
+
+use std::path::Path;
 
 use serde::Deserialize;
 
-use super::{pascal, read_as, Output};
+use super::{beside, pascal, read_as, Output};
 
 #[derive(Deserialize)]
 struct Field {
@@ -24,13 +30,17 @@ struct Field {
     doc: Option<Vec<String>>,
 }
 
+/// An enum's member; a command is one of `Command`'s, made from its
+/// protocol's entry (`Cmd`).
 #[derive(Deserialize)]
 struct Member {
     name: String,
     val: u32,
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
+    #[serde(skip)]
     pkt: Option<Vec<Field>>,
+    #[serde(skip)]
     event: Option<Vec<Field>>,
 }
 
@@ -72,14 +82,127 @@ struct Record {
     fields: Vec<Field>,
 }
 
+/// A command as its protocol lists it. `call`: the sender waits for the answer
+/// (an `export` the host calls, an `import` the host answers before it returns).
 #[derive(Deserialize)]
-struct Spec {
+#[serde(deny_unknown_fields)]
+struct Cmd {
+    name: String,
+    val: u32,
+    #[serde(rename = "$doc")]
+    doc: Option<Vec<String>>,
+    pkt: Option<Vec<Field>>,
+    #[serde(default)]
+    call: bool,
+}
+
+/// A protocol: the commands the host sends the guest (`export`) and those the
+/// guest posts to the host (`import`). `name` is the program's, for the generated
+/// code's names only. The bus reads none of it; a host routes a frame by its
+/// command's major.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Doc {
     #[serde(rename = "$doc")]
     doc: Vec<String>,
-    #[serde(rename = "extern")]
+    name: String,
+    #[serde(default)]
+    export: Vec<Cmd>,
+    #[serde(default)]
+    import: Vec<Cmd>,
+    #[serde(rename = "extern", default)]
+    externs: Vec<Extern>,
+    #[serde(default)]
+    enums: Vec<Enum>,
+    #[serde(default)]
+    records: Vec<Record>,
+    /// Where a program's code goes, from the JSON's own directory.
+    gen: Option<Gen>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Gen {
+    pub(crate) ts: String,
+    pub(crate) rs: String,
+}
+
+struct Spec {
+    doc: Vec<String>,
     externs: Vec<Extern>,
     enums: Vec<Enum>,
     records: Vec<Record>,
+    /// Each command `Command`'s member named in `export` or `import`.
+    protocol: Protocol,
+    gen: Option<Gen>,
+}
+
+/// A protocol as the emitters read it.
+struct Protocol {
+    name: String,
+    exports: Vec<(String, bool)>,
+    imports: Vec<(String, bool)>,
+}
+
+/// `json`'s protocol, its commands made `Command`'s members, each `export` a
+/// packet the guest reads and each `import` one it writes.
+fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
+    let d: Doc = read_as(json)?;
+    if d.enums.iter().any(|e| e.name == "Command") {
+        return Err(format!(
+            "{shown}: Command is made from export and import, not declared"
+        ));
+    }
+    let mut entries = Vec::new();
+    let mut of = Protocol {
+        name: d.name.clone(),
+        exports: Vec::new(),
+        imports: Vec::new(),
+    };
+    for (dir, cmds) in [("export", d.export), ("import", d.import)] {
+        if cmds.is_empty() {
+            continue;
+        }
+        entries.push(Entry::Section(Section {
+            section: format!("{}, {dir}", d.name),
+        }));
+        for c in cmds {
+            let (pkt, event) = if dir == "export" {
+                (c.pkt, None)
+            } else {
+                (None, Some(c.pkt.unwrap_or_default()))
+            };
+            if dir == "export" {
+                of.exports.push((c.name.clone(), c.call));
+            } else {
+                of.imports.push((c.name.clone(), c.call));
+            }
+            entries.push(Entry::Member(Member {
+                name: c.name,
+                val: c.val,
+                doc: c.doc,
+                pkt,
+                event,
+            }));
+        }
+    }
+    let mut enums = d.enums;
+    enums.push(Enum {
+        name: "Command".into(),
+        doc: Some(vec!["Every command, by the side that sends it.".into()]),
+        format: "hex4".into(),
+        default: None,
+        unknown: None,
+        entries,
+    });
+    Ok(Spec {
+        doc: d.doc,
+        externs: d.externs,
+        enums,
+        records: d.records,
+        protocol: of,
+        gen: d.gen,
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -223,68 +346,176 @@ struct Target {
     /// each implements (`xpute_guest::ipc::door`).
     event: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
+    /// For xpute's own protocols, where the host's TypeScript binding takes
+    /// the host's types from inside its own package.
+    host_ts: Option<&'static str>,
 }
 
-const TARGETS: [Target; 1] = [Target {
-    json: "spec/abi/cmd.json",
-    ts: "ts/host/src/abi/cmd.spec.ts",
-    ts_logical: "@xpute/host/abi/cmd.spec.ts",
-    rs: "rust/guest/src/abi/cmd.spec.rs",
-    rs_logical: "xpute-guest/abi/cmd.spec.rs",
-    number: "crate::abi::number",
-    event: Some("crate::ipc::door"),
-    cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-}];
+const TARGETS: [Target; 2] = [
+    Target {
+        json: "spec/abi/cmd.json",
+        ts: "ts/host/src/abi/cmd.spec.ts",
+        ts_logical: "@xpute/host/abi/cmd.spec.ts",
+        rs: "rust/guest/src/abi/cmd.spec.rs",
+        rs_logical: "xpute-guest/abi/cmd.spec.rs",
+        number: "crate::abi::number",
+        event: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
+        host_ts: Some("../mod.ts"),
+    },
+    Target {
+        json: "spec/abi/fs.json",
+        ts: "ts/host/src/abi/fs.spec.ts",
+        ts_logical: "@xpute/host/abi/fs.spec.ts",
+        rs: "rust/guest/src/abi/fs.spec.rs",
+        rs_logical: "xpute-guest/abi/fs.spec.rs",
+        number: "crate::abi::number",
+        event: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/guest/abi/fs.spec.hpp", "xpute::abi::fs")),
+        host_ts: Some("../mod.ts"),
+    },
+];
 
-/// A command table and where its code goes, given by whoever owns it: xpute
-/// reads it and writes nothing of the owner's own.
-pub struct Table<'a> {
-    /// Where the table is read from.
-    pub json: &'a str,
-    /// Where each output is written, its enums' modules in the folder beside
-    /// the TypeScript.
-    pub ts: &'a str,
-    pub rs: &'a str,
-    /// Each as the generated files' headers name it.
-    pub json_shown: &'a str,
-    pub ts_shown: &'a str,
-    pub rs_shown: &'a str,
-    /// Where the number checks a packet's reader calls are.
-    pub number: &'a str,
-    /// For a guest that raises the table's events: the module whose `Event`
-    /// each implements (`xpute_guest::ipc::door`).
-    pub event: Option<&'a str>,
+/// The first major a program's commands take; those below it are xpute's
+/// own (spec/ipc/frame.json `PROGRAM_MAJOR`).
+const PROGRAM_MAJOR: u32 = 0x10;
+
+/// Each command's number given once across `specs`, each read from its JSON.
+fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
+    let mut seen: Vec<(u32, &str, &str)> = Vec::new();
+    for (spec, json) in specs {
+        for c in spec.commands()? {
+            if let Some((_, name, at)) = seen.iter().find(|(v, ..)| *v == c.val) {
+                return Err(format!(
+                    "{json}: {} is 0x{:04x}, which {at} gives {name}",
+                    c.name, c.val
+                ));
+            }
+            seen.push((c.val, &c.name, json));
+        }
+    }
+    Ok(())
 }
 
-/// `table`'s TypeScript and Rust.
-pub fn table_outputs(table: &Table) -> Result<Vec<Output>, String> {
-    let keep = |s: &str| -> &'static str { Box::leak(s.to_string().into_boxed_str()) };
-    let spec: Spec = read_as(table.json)?;
-    check_numbers(&spec, table.json_shown)?;
-    let t = Target {
-        json: keep(table.json_shown),
-        ts: keep(table.ts),
-        ts_logical: keep(table.ts_shown),
-        rs: keep(table.rs),
-        rs_logical: keep(table.rs_shown),
-        number: keep(table.number),
-        event: table.event.map(keep),
-        cpp: None,
-    };
-    let mut out = ts::emit(&spec, &t)?;
-    out.push(Output::new(t.rs, rs::emit(&spec, &t)?));
+/// A program's protocols, each `json` from `root`, and each one's code where
+/// its `gen` says, each path in the outputs from `root` as its `json` is. A
+/// command under xpute's majors is refused, and so is a number two of them
+/// give.
+pub fn protocol_outputs(root: &Path, jsons: &[&str]) -> Result<Vec<Output>, String> {
+    let mut specs = Vec::new();
+    for json in jsons {
+        let spec = read_spec(&root.join(json).to_string_lossy(), json)?;
+        check_numbers(&spec, json)?;
+        if let Some(c) = spec
+            .commands()?
+            .into_iter()
+            .find(|c| c.val >> 8 < PROGRAM_MAJOR)
+        {
+            return Err(format!(
+                "{json}: {} is 0x{:04x}, under major 0x{PROGRAM_MAJOR:02x}, among xpute's own",
+                c.name, c.val
+            ));
+        }
+        specs.push((spec, *json));
+    }
+    let read: Vec<(&Spec, &str)> = specs.iter().map(|(s, j)| (s, *j)).collect();
+    check_once(&read)?;
+    let mut out = Vec::new();
+    for (spec, json) in &specs {
+        out.extend(one_protocol(spec, json)?);
+    }
     Ok(out)
+}
+
+fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
+    let keep = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let gen = spec
+        .gen
+        .as_ref()
+        .ok_or(format!("{json}: says nowhere its code goes (gen)"))?;
+    let (ts_at, rs_at) = (keep(beside(json, &gen.ts)?), keep(beside(json, &gen.rs)?));
+    let t = Target {
+        json: keep(json.to_string()),
+        ts: ts_at,
+        ts_logical: ts_at,
+        rs: rs_at,
+        rs_logical: rs_at,
+        number: "xpute_guest::abi::number",
+        event: Some("xpute_guest::ipc::door"),
+        cpp: None,
+        host_ts: None,
+    };
+    let mut out = ts::emit(spec, &t)?;
+    let (imports, body) = service::ts(spec, "@xpute/host")?;
+    if let Some(first) = out.first_mut() {
+        first.text = splice_ts(&first.text, &imports, &body);
+    }
+    out.push(Output::new(t.rs, rs::emit(spec, &t)? + &service::rs(spec)?));
+    Ok(out)
+}
+
+/// `imports` after the module's last import, `body` at its end, and the word
+/// types the body spells added to the words' import.
+fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let body_text = body.join("\n");
+    for l in lines.iter_mut() {
+        if let Some(names) = l
+            .strip_prefix("import type { ")
+            .and_then(|r| r.strip_suffix(" } from \"@xpute/kit/abi/word.ts\";"))
+        {
+            let mut all: Vec<String> = names.split(", ").map(str::to_string).collect();
+            for w in ["f64", "i32", "u32", "u8"] {
+                if body_text.contains(&format!(": {w}")) && !all.iter().any(|a| a == w) {
+                    all.push(w.to_string());
+                }
+            }
+            all.sort();
+            *l = format!(
+                "import type {{ {} }} from \"@xpute/kit/abi/word.ts\";",
+                all.join(", ")
+            );
+        }
+    }
+    let last = lines
+        .iter()
+        .rposition(|l| l.starts_with("import "))
+        .map_or(0, |i| i + 1);
+    lines.splice(last..last, imports.iter().cloned());
+    lines.extend(body.iter().cloned());
+    lines.join("\n") + "\n"
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut out = Vec::new();
+    let mut specs = Vec::new();
     for t in &TARGETS {
-        let spec: Spec = read_as(t.json)?;
+        let spec = read_spec(t.json, t.json)?;
         check_numbers(&spec, t.json)?;
-        out.extend(ts::emit(&spec, t)?);
-        out.push(Output::new(t.rs, rs::emit(&spec, t)?));
+        if let Some(c) = spec
+            .commands()?
+            .into_iter()
+            .find(|c| c.val >> 8 >= PROGRAM_MAJOR)
+        {
+            return Err(format!(
+                "{}: {} is 0x{:04x}, past xpute's majors",
+                t.json, c.name, c.val
+            ));
+        }
+        specs.push((spec, t));
+    }
+    let read: Vec<(&Spec, &str)> = specs.iter().map(|(s, t)| (s, t.json)).collect();
+    check_once(&read)?;
+    for (spec, t) in &specs {
+        let mut ts = ts::emit(spec, t)?;
+        if let (Some(host), Some(first)) = (t.host_ts, ts.first_mut()) {
+            let (imports, body) = service::ts(spec, host)?;
+            first.text = splice_ts(&first.text, &imports, &body);
+        }
+        out.extend(ts);
+        out.push(Output::new(t.rs, rs::emit(spec, t)?));
         if let Some((path, namespace)) = t.cpp {
-            out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
+            out.push(Output::new(path, cpp::emit(spec, t, path, namespace)?));
         }
     }
     Ok(out)

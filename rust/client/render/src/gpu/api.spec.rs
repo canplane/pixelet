@@ -16,28 +16,24 @@
     reason = "generated from the spec"
 )]
 
-/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone.
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or
+/// nothing yet, as a canvas opens before the shell says what it draws.
 pub mod surface_role {
     pub const WORLD: u32 = 0;
     pub const PREVIEW: u32 = 1;
+    pub const NONE: u32 = 2;
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
-/// (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
+/// (xpute-guest ipc/stream.rs) in the kernel's machine's GPU socket, which the
 /// kernel writes its calls into during a turn and the host runs once the turn
-/// has returned.
+/// has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).
 ///
-/// Its head is HEAD words, past the stream's END what the host writes for the
+/// Its head, past the stream's own words, is what the host writes for the
 /// kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
 /// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
-/// ticks (gpu/api.rs lays them out and holds this number to it).
+/// ticks. gpu/api.rs lays them out, and the stream says the head's length itself.
 pub mod stream {
-    pub const HEAD: u32 = 423;
-    /// The range's size: the stream, what one turn may send the device, then at
-    /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
-    /// empty one of. A product number, said rather than derived: a turn's uploads
-    /// wait (`room`) only when a burst of them comes at once.
-    pub const BYTES: u32 = 4194304;
     /// What an upload leaves of the range. The records a turn cannot put off — a
     /// frame's passes and draws, the renderer's pipelines — are never refused, so
     /// an upload, or a shader module made before the renderer (`MODULE_BYTES`),
@@ -52,8 +48,8 @@ pub mod stream {
 }
 
 /// What a device's GPU host runs the renderer's stream by (xpute-gpu host
-/// `Config`), which pxl-native hands it; a page's browser paces its frames and
-/// stages its writes itself.
+/// `Config`), which the kernel hands it (pxl-kernel lib.rs `GPU`, xpute-gpu
+/// `Numbers`); a page's browser paces its frames and stages its writes itself.
 pub mod device {
     /// The frames drawn and not yet finished on the GPU at once: a turn draws only
     /// while fewer are (xpute-gpu host `GpuHost::admit`), and a surface queues as

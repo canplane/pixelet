@@ -5,7 +5,7 @@
  * panic. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { SysHost } from "@xpute/host";
+import type { Abort } from "@xpute/host";
 import { BUILD_NUMBER } from "@/deploy.ts";
 
 let code: string | null = null;
@@ -16,14 +16,7 @@ export function stop_code(): string | null {
   return code;
 }
 
-export const onabort: SysHost["onabort"] = ({
-  errnum,
-  file,
-  line,
-  column,
-  a,
-  b,
-}) => {
+export const onabort = ({ errnum, file, line, column, a, b }: Abort): void => {
   console.error(
     `[kernel] stopped: ${strerror(errnum)} at ${file.replace(
       /^\.+/,

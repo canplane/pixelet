@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/text_minor.spec.ts
+// ts/client/src/abi/cmd/text_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // What the kernel asks the platform's text, answered before the call returns.
 

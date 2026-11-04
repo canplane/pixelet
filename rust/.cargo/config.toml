@@ -4,15 +4,15 @@
 # and serve a dev run.
 [alias]
 # The module as it ships, in both builds, and the servers with their tests' code.
-lint-guest = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-wasm", "--", "-D", "warnings"]
-lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-wasm", "--no-default-features", "--", "-D", "warnings"]
+lint-guest = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "--", "-D", "warnings"]
+lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-kernel", "--no-default-features", "--", "-D", "warnings"]
 lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-api", "--", "-D", "warnings"]
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.
 lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
-# The device's library, for an iPhone and an Android phone.
-lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-native", "--", "-D", "warnings"]
-lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-native", "--no-default-features", "--", "-D", "warnings"]
+# The kernel as a device's library, for an iPhone and an Android phone.
+lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-kernel", "--", "-D", "warnings"]
+lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-kernel", "--no-default-features", "--", "-D", "warnings"]
 # pxl-tool holds every model to the committed table, which has been wrong by hand before.
 test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool"]
 test-kernel-published = ["test", "-p", "pxl-kernel", "--no-default-features"]
@@ -45,7 +45,7 @@ download-star = ["run", "-p", "pxl-tool", "--bin", "download_star", "--"]
 # After any change under asset/content/.
 ingest-asset = ["run", "-p", "pxl-tool", "--bin", "ingest_asset", "--"]
 # The symbol's outline both apps bundle, when ts/client/brand's symbol changes;
-# the page's icons are made by its build (ts/app/web build:brand).
+# the page's icons are made by its build (ts/client build:brand).
 render-brand = ["run", "-p", "pxl-tool", "--bin", "render_brand", "--", "--symbol"]
 serve-geo = ["run", "--profile", "server", "-p", "pxl-geo", "--bin", "pxl-geo", "--"]
 serve-api = ["run", "--profile", "server", "-p", "pxl-api", "--bin", "pxl-api", "--"]

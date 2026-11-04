@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/render/gpu/api.json
 
-export const HEAD = 423 as number;
-
-/** The range's size: the stream, what one turn may send the device, then at
- * its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
- * empty one of. A product number, said rather than derived: a turn's uploads
- * wait (`room`) only when a burst of them comes at once. */
-export const BYTES = 4194304 as number;
-
 /** What an upload leaves of the range. The records a turn cannot put off — a
  * frame's passes and draws, the renderer's pipelines — are never refused, so
  * an upload, or a shader module made before the renderer (`MODULE_BYTES`),

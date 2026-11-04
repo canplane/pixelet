@@ -30,6 +30,9 @@ jspm_packages/
 # Build output: each language's own target/, beside its tree's root (rust/,
 # cpp/'s Makefile, ts/'s browser bundle).
 target/
+# What the native module's Gradle build leaves beside it.
+ts/native/android/build/
+ts/native/android/.gradle/
 
 # A library's locks are its consumer's to keep.
 rust/Cargo.lock

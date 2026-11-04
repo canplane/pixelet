@@ -7,7 +7,7 @@
   },
   "scripts": {
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
-    "typecheck": "tsc -p . && tsc -p app/native && tsc -p server/edge",
+    "typecheck": "tsc -p . && tsc -p client/tsconfig.native.json && tsc -p server/edge",
     "test": "vitest run",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",

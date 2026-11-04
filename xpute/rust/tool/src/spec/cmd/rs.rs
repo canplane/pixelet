@@ -6,7 +6,7 @@
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
 
-fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
+pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
         let kind = spec.kind(&f.ty)?;
         if f.list

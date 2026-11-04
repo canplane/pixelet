@@ -20,9 +20,9 @@
 #include "xpute/guest/abi/cmd.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
 #include "xpute/guest/hostcall.hpp"
-#include "xpute/guest/ipc/toc.hpp"
 #include "xpute/guest/ipc/door.hpp"
 #include "xpute/guest/ipc/file.hpp"
+#include "xpute/guest/ipc/head.hpp"
 #include "xpute/guest/ipc/ring.hpp"
 #include "xpute/guest/ipc/stream.hpp"
 #include "xpute/guest/mem.hpp"
@@ -40,10 +40,10 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 
 // What the guest shares with its host, each on pages of its own, in the order
 // a layout draws (`layout`).
-enum Part : std::size_t { TOC, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
+enum Part : std::size_t { HEAD, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
-    toc_words(3) * 4,
+    head::WORDS * 4,
     ring_bytes(SQ_CAP),
     ring_bytes(CQ_CAP),
     slots_bytes(SQ_CAP, SLOT_BYTES),
@@ -77,7 +77,7 @@ std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     return at;
 }
 
-// What CALL calls SENDER with: a number and an offset.
+// What CALL calls: a number and an offset.
 struct Inc {
     std::uint32_t n = 0;
     std::uint32_t at = 0;
@@ -99,7 +99,7 @@ struct State {
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
-    // What CALL's port writes.
+    // What the host writes as it answers CALL's INC.
     std::uint32_t word = 0;
 };
 
@@ -140,7 +140,7 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(frame::tag_of(SENDER, k), cmd::EVENT, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::EVENT, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -167,9 +167,9 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     }
     case cmd::CALL: {
         s.word = 0;
-        Result<std::uint32_t> res = s.door.call(SENDER, Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
+        Result<std::uint32_t> res = s.door.call(Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
         if (!res) return {.err = res.error().errnum};
-        // The word the port wrote before the call returned.
+        // The word the host wrote before the call returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
     }
     default:
@@ -184,21 +184,17 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
     Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
         .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
-    const std::array<Entry, 3> entries{{
-        {toc::key::SQ, at[SQ_DESC]},
-        {toc::key::CQ, at[CQ_DESC]},
-        {key::STREAM, at[STREAM]},
-    }};
-    write_toc(m, at[TOC], toc_words(entries.size()), entries);
-    return at[TOC];
+    // The stream lies where a GPU stream would: the host runs it after every turn.
+    write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .gpu_at = at[STREAM]});
+    return at[HEAD];
 }
 
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.door.rise();
     s.door.receive(
-        [&s](const abi::SysOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.door, opened)) s.door.post(frame::tag_of(SENDER, *owner), cmd::OPENED, 0, opened.res);
+        [&s](const abi::fs::FsOpened &opened) {
+            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.door, opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
             return Outcome{};
         },
         [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });

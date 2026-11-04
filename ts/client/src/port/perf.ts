@@ -13,9 +13,7 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
-import { Command, encode_perf_stats } from "@/abi/cmd.spec.ts";
 import {
   OUTCOME_NAMES,
   STREAM_NAMES,
@@ -40,38 +38,35 @@ import {
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { HOST } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
+import { host, kernel } from "@/host/kernel.ts";
 
 const WORD = 8;
 /** A task's `path` column, its bytes (perf.json `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
-/** A command answered inside the call: the address of its reply in the kernel's memory. */
-function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return HOST.call(port.SHELL, cmd, pkt, (at) => {
-    // A refusal is -errno, never an address.
-    if (at < 0) throw new FaultError(-at as i32);
-    return at >>> 0;
-  });
+/** A call's answer, the address of its reply in the kernel's memory; a
+ * refusal is -errno, never an address. */
+function reply_at(at: i32): u32 {
+  if (at < 0) throw new FaultError(-at as i32);
+  return at >>> 0;
 }
 
 /** A fresh recording window, called at once. */
 export function start(): void {
-  HOST.call(port.SHELL, Command.PERF_START);
+  kernel.perf_start();
 }
 
 /** The window frozen, so what is exported holds still. */
 export function stop(): void {
-  HOST.call(port.SHELL, Command.PERF_STOP);
+  kernel.perf_stop();
 }
 
-const words = (at: u32, n: u32) => new Float64Array(HOST.guest.mem, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.mem, at, n);
+const words = (at: u32, n: u32) => new Float64Array(host.guest.mem, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(host.guest.mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
   file === 0
     ? null
-    : `${td.decode(new Uint8Array(HOST.guest.mem, file, bytes))}:${line}`;
+    : `${td.decode(new Uint8Array(host.guest.mem, file, bytes))}:${line}`;
 
 /** The columns that are lists, a word a name. The names are their owners', and
  * shown by the shell. */
@@ -361,10 +356,7 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 
 /** STAT's words over `window_ms` and NOW's, as PERF_STATS lays them out. */
 function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
-  const r = u32s(
-    call(Command.PERF_STATS, encode_perf_stats(HOST.doorbell, window_ms)),
-    STATS.WORDS,
-  );
+  const r = u32s(reply_at(kernel.perf_stats(window_ms)), STATS.WORDS);
   return {
     stats: words(r[STATS.stats_at], r[STATS.stats_words]),
     now: words(r[STATS.now_at], r[STATS.now_words]),
@@ -397,7 +389,7 @@ export function perf_view(): ViewSection {
 
 /** The rings as they lie, each its address and count, with nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
-  const r = u32s(call(Command.PERF_RINGS), RINGS.WORDS);
+  const r = u32s(reply_at(kernel.perf_rings()), RINGS.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
     const at = RINGS.slots + RING_NAMES.indexOf(name) * RING.WORDS;
     return [r[at + RING.at], r[at + RING.cnt]];
@@ -440,7 +432,7 @@ export function perf_tasks(last: u32 | null = null): TaskRecord[] {
       path: td
         .decode(
           new Uint8Array(
-            HOST.guest.mem,
+            host.guest.mem,
             at + (o + TASK.path) * WORD,
             PATH_BYTES,
           ),

@@ -1,8 +1,8 @@
 // @xpute/host/ipc/ns.ts
 
 /**
- * The roots a program binds, Plan 9's namespace, as the `Fs` it hands `Sys`
- * (sys.ts): each root the guest opens a file under answered by whatever the
+ * The roots a program binds, Plan 9's namespace, as the `Fs` it hands `FsServer`
+ * (fs.ts): each root the guest opens a file under answered by whatever the
  * program keeps there, bound once and sealed. What a path below a root names
  * is the bound side's alone.
  */
@@ -10,7 +10,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError, type Fs } from "./sys.ts";
+import { FileError, type Fs } from "./fs.ts";
 
 /** What answers below one root; one with no `commit` is read-only. */
 export interface Binding {

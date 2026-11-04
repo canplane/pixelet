@@ -15,11 +15,11 @@ constexpr std::uint32_t SQ = 8;
 constexpr std::uint32_t CQ = 256;
 constexpr std::uint32_t SLOT = 64;
 constexpr std::uint32_t MOST_EVENTS = 64;
-// A program's port, sending the program's commands.
-constexpr std::uint32_t PROGRAM = 1u << frame::PORT_SHIFT;
+// A command of the program's own, past xpute's majors.
+constexpr std::uint32_t PROGRAM = frame::PROGRAM_MAJOR << 8 | 1;
 
 // These tests submit no open.
-constexpr auto no_open = [](const abi::SysOpened &) { return Outcome{}; };
+constexpr auto no_open = [](const abi::fs::FsOpened &) { return Outcome{}; };
 
 struct Fixture {
     std::vector<std::uint64_t> buf;
@@ -40,7 +40,7 @@ XPUTE_TEST(door_command_needs_reply_room) {
     Fixture f = door();
     const Door &d = f.door;
     for (std::uint32_t k = 0; k < CQ - MOST_EVENTS; k++) d.post(0, 2, 0, 0);
-    XPUTE_CHECK(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0) == Errno::ok);
+    XPUTE_CHECK(d.sq().push(0, PROGRAM, frame::ACKREQ, 0) == Errno::ok);
     d.receive(no_open, [&](std::uint32_t, std::span<const std::uint8_t>) {
         for (std::uint32_t k = 0; k < MOST_EVENTS; k++) d.post(0, 2, 0, 0);
         return Outcome{.val = 7};
@@ -51,13 +51,13 @@ XPUTE_TEST(door_command_needs_reply_room) {
 XPUTE_TEST(door_event_pkt_errno) {
     Fixture f = door();
     const Door &d = f.door;
-    d.send_with(1, 9, 1, [](xtp::PacketWriter &w) { w.u32(41); });
+    d.send_with(7, 9, 1, [](xtp::PacketWriter &w) { w.u32(41); });
     std::optional<Frame> got = d.cq().peek();
-    XPUTE_CHECK(got && got->cmd == 9 && got->tag == PROGRAM && (got->flags & frame::RES) == 0);
+    XPUTE_CHECK(got && got->cmd == 9 && got->tag == 7 && (got->flags & frame::RES) == 0);
     XPUTE_CHECK(*xtp::TreeReader::make(*d.cq().pkt(*got))->read_branch()->at(0)->get_number() == 41.0);
     d.cq().advance();
 
-    XPUTE_CHECK(d.sq().push(PROGRAM | 5, 1, 0, 0) == Errno::ok);
+    XPUTE_CHECK(d.sq().push(5, PROGRAM, 0, 0) == Errno::ok);
     // The submission ring lies at 8.
     std::uint32_t entry = 8 + 4 * d.sq().entry_at(0);
     Memory mem(reinterpret_cast<std::uintptr_t>(f.buf.data()), f.buf.size() * 8);
@@ -66,7 +66,7 @@ XPUTE_TEST(door_event_pkt_errno) {
     d.receive(no_open, [&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Outcome{}; });
     XPUTE_CHECK(!applied);
     got = d.cq().peek();
-    XPUTE_CHECK(got && got->tag == (PROGRAM | 5) && got->result == static_cast<std::int32_t>(Errno::ebadmsg));
+    XPUTE_CHECK(got && got->tag == 5 && got->result == static_cast<std::int32_t>(Errno::ebadmsg));
 }
 
 XPUTE_TEST(door_ring_peaks) {
@@ -74,7 +74,7 @@ XPUTE_TEST(door_ring_peaks) {
     const Door &d = f.door;
     // Three commands start before the reserve runs out, so five of eight wait.
     for (std::uint32_t k = 0; k < CQ - (MOST_EVENTS + 1) - 2; k++) d.post(0, 2, 0, 0);
-    for (std::uint32_t k = 0; k < SQ; k++) XPUTE_CHECK(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0) == Errno::ok);
+    for (std::uint32_t k = 0; k < SQ; k++) XPUTE_CHECK(d.sq().push(0, PROGRAM, frame::ACKREQ, 0) == Errno::ok);
     XPUTE_CHECK(d.receive(no_open, [](std::uint32_t, std::span<const std::uint8_t>) { return Outcome{}; }) == 3);
     XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = CQ - MOST_EVENTS, .sq_peak = SQ, .left_peak = SQ - 3}));
     XPUTE_CHECK_EQ(d.take_stat() == DoorStat{}, true, "taking it starts the next from zero");
@@ -84,22 +84,22 @@ XPUTE_TEST(door_ring_peaks) {
     XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = SQ - 3, .sq_peak = SQ - 3, .left_peak = 0}));
 }
 
-XPUTE_TEST(door_program_frame_numbered_nop_handed_over) {
+XPUTE_TEST(door_program_command_handed_over) {
     Fixture f = door();
     const Door &d = f.door;
-    std::uint32_t tag = PROGRAM | 6;
-    XPUTE_CHECK(d.sq().push(tag, static_cast<std::uint32_t>(abi::Command::NOP), frame::ACKREQ, 0) == Errno::ok);
+    std::uint32_t tag = 6;
+    XPUTE_CHECK(d.sq().push(tag, PROGRAM, frame::ACKREQ, 0) == Errno::ok);
     std::uint32_t got = 0xffff;
     d.receive(no_open, [&](std::uint32_t cmd, std::span<const std::uint8_t>) { return got = cmd, Outcome{.val = 1}; });
-    XPUTE_CHECK(got == static_cast<std::uint32_t>(abi::Command::NOP));
+    XPUTE_CHECK(got == PROGRAM);
     std::optional<Frame> reply = d.cq().peek();
     XPUTE_CHECK(reply && reply->tag == tag && reply->result == 1);
 }
 
-XPUTE_TEST(door_host_frame_unknown_refused) {
+XPUTE_TEST(door_xpute_number_unknown_refused) {
     Fixture f = door();
     const Door &d = f.door;
-    XPUTE_CHECK(d.sq().push(5, 0x1001, 0, 0) == Errno::ok);
+    XPUTE_CHECK(d.sq().push(5, 0x0f01, 0, 0) == Errno::ok);
     bool applied = false;
     d.receive(no_open, [&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Outcome{}; });
     XPUTE_CHECK(!applied);

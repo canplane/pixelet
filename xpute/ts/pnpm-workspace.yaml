@@ -4,6 +4,7 @@ packages:
   - kit
   - host
   - gpu
+  - native
 
 # koffi opens a native guest.
 onlyBuiltDependencies:

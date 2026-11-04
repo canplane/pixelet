@@ -19,7 +19,9 @@ import { n1, pct, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
-import { bracket, type LongFrame } from "@/bracket.tsx";
+import { type LongFrame } from "@/services/types.ts";
+import * as long_frame from "@/services/long-frame.ts";
+import * as share from "@/services/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes in the one unit the figures are shown in, signed. */
@@ -170,7 +172,7 @@ export function frameLine({ sample: s, delta }: Worst): string {
 
 /** What the place hears its long frames by, where that is less than both sources. */
 function longSourcesText(): string {
-  const sources = bracket.longFrame.sources();
+  const sources = long_frame.sources();
   if (sources.includes("loaf")) return "";
   return sources.includes("longtask")
     ? " (LoAF unsupported; longtask only)"
@@ -323,7 +325,7 @@ export async function perfReportCopy(text: string): Promise<string> {
   const kb = `${Math.max(1, round(text.length / 1024))} KiB`;
   let said: string;
   try {
-    await bracket.share.copy(text);
+    await share.copy(text);
     said = `report copied · ${kb}`;
   } catch {
     said = `report printed to the console · ${kb} (the clipboard refused it)`;

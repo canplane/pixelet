@@ -21,7 +21,7 @@ import {
   type ViewSection,
   type Worst,
 } from "@/port/perf.ts";
-import type { LongFrame } from "@/bracket.tsx";
+import type { LongFrame } from "@/services/types.ts";
 import { longFramesSince } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;

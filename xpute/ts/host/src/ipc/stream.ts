@@ -2,8 +2,12 @@
 
 /**
  * A turn's calls from guest to host (rust/guest/src/ipc/stream.rs),
- * run after the turn returns. Word 0 of the head is END, the count of record
- * words past the head; a record is op, n, then n words.
+ * run after the turn returns. Word END of the head is the count of record
+ * words past the head, and word HEAD the head's own count of words, so a host
+ * finds the records from the stream itself; a record is op, n, then n words.
+ * The guest publishes END with release; the host loads it with acquire and,
+ * once it has run the records, stores 0 with release, which hands the
+ * stream back to the guest for its next records.
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
@@ -11,22 +15,28 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 
 export const END = 0;
+export const HEAD = 1;
 
-/** The words are valid only inside `run`. */
+/** The words are valid only inside `run`, and the stream is the guest's
+ * again once this returns, a throw from `run` included. */
 export function each_record(
   mem: ArrayBufferLike,
   at: u32,
-  head: u32,
   run: (op: u32, w: U32Array, a: u32, n: u32) => void,
 ): void {
-  const end = new Uint32Array(mem, at, head)[END];
+  const own = new Uint32Array(mem, at, 2);
+  const end = Atomics.load(own, END);
   if (end === 0) return;
-  const w = new Uint32Array(mem, at + 4 * head, end) as U32Array;
-  for (let k = 0; k < end;) {
-    const op = w[k];
-    const n = w[k + 1];
-    run(op, w, k + 2, n);
-    k += 2 + n;
+  const w = new Uint32Array(mem, at + 4 * own[HEAD], end) as U32Array;
+  try {
+    for (let k = 0; k < end;) {
+      const op = w[k];
+      const n = w[k + 1];
+      run(op, w, k + 2, n);
+      k += 2 + n;
+    }
+  } finally {
+    Atomics.store(own, END, 0);
   }
 }
 

@@ -4,7 +4,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { SEARCH_URL } from "@/port/shell.ts";
 import type { NamePart } from "@/shell/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
-import { bracket } from "@/bracket.tsx";
+import * as origin from "@/services/origin.ts";
 import type { SEARCH_KIND } from "./search.spec.ts";
 
 /** A part as the API writes it: its subtype's number, and `approx` where no area holds the point. */
@@ -37,7 +37,7 @@ export async function fetchSearch(
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await bracket.origin.get(
+  const res = await origin.get(
     `${SEARCH_URL}?${params.toString()}`,
     opts?.signal,
   );

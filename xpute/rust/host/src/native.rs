@@ -9,6 +9,7 @@
 
 mod alloc;
 mod reserve;
+mod say;
 mod thread;
 
 use core::ptr::NonNull;
@@ -19,8 +20,11 @@ use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
+pub use say::{say, stop_hook};
 pub use thread::{answer_with, terminate, Answer};
 pub use xpute_guest::entry::{run, BootInfo, Entry};
+pub use xpute_guest::machine::Machine;
+pub use xpute_guest::stop::PanicHook;
 
 pub struct Config {
     /// Reserved once, never grown.
@@ -33,6 +37,30 @@ pub struct Config {
     pub stack_bytes: usize,
     pub thread_name: &'static str,
     pub clock: fn() -> f64,
+    /// `BootInfo::stop_hook`.
+    pub stop_hook: Option<PanicHook>,
+    /// `BootInfo::admit`.
+    pub admit: Option<fn() -> bool>,
+}
+
+/// What another host beside the guest, such as its GPU's, does at the edges
+/// of each turn, on the guest's thread: before the entry runs and after it
+/// returns, each handed the guest. Its admission is what the guest is handed
+/// as `BootInfo::admit`.
+#[derive(Clone, Copy)]
+pub struct Edges {
+    pub before: fn(Guest),
+    pub after: fn(Guest),
+    pub admit: Option<fn() -> bool>,
+}
+
+impl Edges {
+    /// Nothing done at either edge, and every frame admitted.
+    pub const NONE: Edges = Edges {
+        before: |_| {},
+        after: |_| {},
+        admit: None,
+    };
 }
 
 /// The only way to call into the booted guest.
@@ -111,6 +139,8 @@ impl Guest {
             clock: cfg.clock,
             hostcall: thread::hostcall,
             heap_stat: alloc::stat,
+            stop_hook: cfg.stop_hook,
+            admit: cfg.admit,
         }
     }
 }
@@ -119,6 +149,15 @@ impl Guest {
 pub fn now() -> f64 {
     static START: OnceLock<Instant> = OnceLock::new();
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+/// A turn of a guest of `machine`: on the first, the front its host laid
+/// held to the machine and opened (`machine::boot`), then `entry`'s.
+pub fn turn(machine: &Machine, quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
+    if !xpute_guest::machine::booted() {
+        xpute_guest::machine::boot(machine);
+    }
+    entry(quota_ms, boot)
 }
 
 /// Boots the guest with `cfg` on the first call and exports its entry and
@@ -187,5 +226,87 @@ macro_rules! native_abi {
             // SAFETY: the caller's word, or none.
             xpute_native::mem(unsafe { bytes.as_mut() })
         }
+    };
+}
+
+/// A guest of `machine` (its `MACHINE`) linked into this process, its fixed
+/// ranges `fixed_bytes` long, whose turns `entry` runs (`Entry`) once the
+/// first has opened the front its host laid (`turn`): the native form
+/// xpute-guest's `guest!` expands to off WebAssembly. It installs `Alloc` as
+/// the global allocator and boots the guest through `native_abi!`, with the
+/// smaller of the machine's sizes, its own ranges past the machine's front,
+/// the heap past the fixed ranges, the machine's thread stack and xpute's
+/// stop hook (`stop_hook`). Given `edges`, each turn runs between them and
+/// the guest is handed their admission (`Edges`); xpute-gpu's `native_guest!`
+/// gives its host's.
+///
+/// On Android it also exports the C ABI's calls to JNI under the Kotlin class
+/// `xpute.Guest` (`jni`): `run(quotaMs: Double): Double` and
+/// `mem(): ByteBuffer`, calling back its static `hostcall(at: Int): Int` for
+/// each hostcall.
+#[macro_export]
+macro_rules! native_guest {
+    ($machine:expr, $fixed_bytes:expr, $entry:expr, edges: $edges:expr $(,)?) => {
+        const _: () = $machine.check($fixed_bytes);
+
+        #[global_allocator]
+        static XPUTE_ALLOC: $crate::native::Alloc = $crate::native::Alloc;
+
+        mod xpute_native_guest {
+            #[allow(unused_imports)]
+            use super::*;
+
+            const ENTRY: $crate::native::Entry = $entry;
+            pub(super) const EDGES: $crate::native::Edges = $edges;
+
+            pub(super) fn xpute_turn(quota_ms: f64, boot: fn() -> $crate::native::BootInfo) -> f64 {
+                (EDGES.before)(guest());
+                let wake = $crate::native::turn(&$machine, quota_ms, boot, ENTRY);
+                (EDGES.after)(guest());
+                wake
+            }
+        }
+
+        $crate::native_abi!(
+            $crate::native::Config {
+                mem_bytes: $machine.min_mem_bytes(),
+                data_end: $machine.global_base(),
+                heap_at: $machine.heap_at($machine.global_base(), $fixed_bytes),
+                stack_bytes: $machine.thread_stack_bytes as usize,
+                thread_name: "xpute-guest",
+                clock: $crate::native::now,
+                stop_hook: Some($crate::native::stop_hook),
+                admit: xpute_native_guest::EDGES.admit,
+            },
+            xpute_native_guest::xpute_turn
+        );
+
+        /// # Safety
+        /// Called by JNI.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Guest_run(
+            env: *mut $crate::jni::sys::JNIEnv,
+            this: $crate::jni::sys::jobject,
+            quota_ms: $crate::jni::sys::jdouble,
+        ) -> $crate::jni::sys::jdouble {
+            // SAFETY: the environment and object JNI called with.
+            unsafe { $crate::jni::run(env, this, || xpute_run(quota_ms)) }
+        }
+
+        /// # Safety
+        /// Called by JNI.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Guest_mem(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jobject {
+            // SAFETY: the environment JNI called with.
+            unsafe { $crate::jni::mem(env, guest()) }
+        }
+    };
+    ($machine:expr, $fixed_bytes:expr, $entry:expr $(,)?) => {
+        $crate::native_guest!($machine, $fixed_bytes, $entry, edges: $crate::native::Edges::NONE);
     };
 }

@@ -22,7 +22,7 @@ import { LIST_NAMES } from "./column.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
-import { bracket } from "@/bracket.tsx";
+import * as share from "@/services/share.ts";
 
 const PID = 1;
 const TID_FRAMES = 1;
@@ -205,7 +205,7 @@ export async function perfTraceSave(): Promise<string> {
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `perf-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
-    await bracket.share.save(name, json, "application/json");
+    await share.save(name, json, "application/json");
     console.log(
       `[perf] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`,
     );

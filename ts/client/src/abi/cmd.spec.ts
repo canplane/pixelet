@@ -1,22 +1,20 @@
-// @pxl/client/abi/cmd.spec.ts
+// ts/client/src/abi/cmd.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 /**
- * The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
- * and the packet each carries — an XTP branch whose children are its fields, in
- * order. A command with no fields carries no packet. The kernel is the process; the
- * JavaScript around it is two things to it, its host, which holds the turns and carries
- * its hostcalls to what answers them (ts/client/src/sys/), and its shell, the UI, which
- * sends what the user does and what the place's sensors, GPU, visibility and frames
- * tell it (ts/client/src/port/). A command's major is the module it is for, and the
- * sections say what each is.
+ * The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:
+ * `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
+ * it carries — an XTP branch whose children are its fields, in order. A command with no
+ * fields carries no packet. The kernel is the guest; the JavaScript around it is two
+ * things to it, its host, which holds the turns and carries its hostcalls to what
+ * answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user
+ * does and what the place's sensors, visibility and frames tell it
+ * (ts/client/src/port/). A command's major is the module it is for.
  *
- * The same number is a command on the submission ring and an event on the
- * completion ring (its `RES` clear). The direction is the ring: `pkt` is
- * what the shell submits, `event` what the kernel posts. Each is written and
- * read by what this file generates, on both sides, so no field is found by
- * its position anywhere else.
+ * `export` is what the shell sends the kernel and `import` what the kernel posts to it, `call`
+ * one its sender waits on. Each is written and read by what this file generates, on
+ * both sides, so no field is found by its position anywhere else.
  *
  * A field is a number of a width, a `bool`, a `str`, a member of an enum
  * below or of one another spec declares (`extern`), or a record below. An
@@ -37,12 +35,11 @@ import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Major from "./cmd/major.spec.ts";
-import * as SysMinor from "./cmd/sys_minor.spec.ts";
 import * as InputMinor from "./cmd/input_minor.spec.ts";
 import * as SensorMinor from "./cmd/sensor_minor.spec.ts";
 import * as FsMinor from "./cmd/fs_minor.spec.ts";
-import * as GpuMinor from "./cmd/gpu_minor.spec.ts";
 import * as SurfaceMinor from "./cmd/surface_minor.spec.ts";
+import * as TurnMinor from "./cmd/turn_minor.spec.ts";
 import * as SettingMinor from "./cmd/setting_minor.spec.ts";
 import * as SceneMinor from "./cmd/scene_minor.spec.ts";
 import * as CameraMinor from "./cmd/camera_minor.spec.ts";
@@ -53,6 +50,7 @@ import * as TextMinor from "./cmd/text_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
 import * as Tool from "./cmd/tool.spec.ts";
+import * as SceneContent from "./cmd/scene_content.spec.ts";
 import * as Tracking from "./cmd/tracking.spec.ts";
 import * as GeolocationErrorCode from "./cmd/geolocation_error_code.spec.ts";
 import * as Sensor from "./cmd/sensor.spec.ts";
@@ -61,14 +59,13 @@ import * as GroundStatus from "./cmd/ground_status.spec.ts";
 import * as SensorStatus from "./cmd/sensor_status.spec.ts";
 import * as Message from "./cmd/message.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import type { Host, OnEvent } from "@xpute/host";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
 export { Major };
-
-/** One of SysMinor's, as its enum was a type. */
-type SysMinor = (typeof SysMinor)[keyof typeof SysMinor];
-export { SysMinor };
 
 /** One of InputMinor's, as its enum was a type. */
 type InputMinor = (typeof InputMinor)[keyof typeof InputMinor];
@@ -82,13 +79,13 @@ export { SensorMinor };
 type FsMinor = (typeof FsMinor)[keyof typeof FsMinor];
 export { FsMinor };
 
-/** One of GpuMinor's, as its enum was a type. */
-type GpuMinor = (typeof GpuMinor)[keyof typeof GpuMinor];
-export { GpuMinor };
-
 /** One of SurfaceMinor's, as its enum was a type. */
 type SurfaceMinor = (typeof SurfaceMinor)[keyof typeof SurfaceMinor];
 export { SurfaceMinor };
+
+/** One of TurnMinor's, as its enum was a type. */
+type TurnMinor = (typeof TurnMinor)[keyof typeof TurnMinor];
+export { TurnMinor };
 
 /** One of SettingMinor's, as its enum was a type. */
 type SettingMinor = (typeof SettingMinor)[keyof typeof SettingMinor];
@@ -129,6 +126,10 @@ export { PointerType };
 /** One of Tool's, as its enum was a type. */
 type Tool = (typeof Tool)[keyof typeof Tool];
 export { Tool };
+
+/** One of SceneContent's, as its enum was a type. */
+type SceneContent = (typeof SceneContent)[keyof typeof SceneContent];
+export { SceneContent };
 
 /** One of Tracking's, as its enum was a type. */
 type Tracking = (typeof Tracking)[keyof typeof Tracking];
@@ -337,6 +338,287 @@ export function read_refused_file(b: BranchCursor): RefusedFile {
   return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
 }
 
+/** Command.SENSOR_POS's packet, written in place into `to`. */
+export function encode_sensor_pos(
+  to: PacketRoom,
+  lon: f64,
+  lat: f64,
+  alt: f64 | null,
+  accuracy: f64 | null,
+  course: f64 | null,
+): PacketWriter {
+  return to.writer(5).f64(lon).f64(lat).f64(alt).f64(accuracy).f64(course);
+}
+
+/** Command.SENSOR_ORIENT's packet, written in place into `to`. */
+export function encode_sensor_orient(
+  to: PacketRoom,
+  webkit_compass_heading: f64 | null,
+  alpha: f64 | null,
+  beta: f64 | null,
+  gamma: f64 | null,
+): PacketWriter {
+  return to
+    .writer(4)
+    .f64(webkit_compass_heading)
+    .f64(alpha)
+    .f64(beta)
+    .f64(gamma);
+}
+
+/** Command.SENSOR_ERR's packet, written in place into `to`.
+ *
+ * @param code Geolocation's; orientation gives none today. */
+export function encode_sensor_err(
+  to: PacketRoom,
+  sensor: Sensor,
+  code: GeolocationErrorCode | null,
+): PacketWriter {
+  return to.writer(2).u32(sensor).u32(code);
+}
+
+/** Command.TURN_GRANT's packet, written in place into `to`.
+ *
+ * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
+ * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
+export function encode_turn_grant(
+  to: PacketRoom,
+  refresh_ms: f64,
+  paced_ms: f64,
+  interactive: boolean,
+  credits: u32,
+  unix_ms: f64,
+): PacketWriter {
+  return to
+    .writer(5)
+    .f64(refresh_ms)
+    .f64(paced_ms)
+    .bool(interactive)
+    .u32(credits)
+    .f64(unix_ms);
+}
+
+/** Command.FS_MOUNT's packet, written in place into `to`.
+ *
+ * @param top_zoom The coarsest zoom the source supplies whole.
+ * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
+ * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
+export function encode_fs_mount(
+  to: PacketRoom,
+  top_zoom: u32,
+  format: u32[],
+  shard: string[],
+): PacketWriter {
+  return to
+    .writer(3)
+    .u32(top_zoom)
+    .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
+    .strs(shard);
+}
+
+/** Command.FS_TRUNCATED's packet, written in place into `to`.
+ *
+ * @param root file.json's `root`.
+ * @param path Its path below the root, as the kernel opened it. */
+export function encode_fs_truncated(
+  to: PacketRoom,
+  root: u32,
+  path: string,
+): PacketWriter {
+  return to.writer(2).u32(root).str(path);
+}
+
+/** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
+export function encode_sensor_permission(
+  to: PacketRoom,
+  sensor: Sensor,
+  answer: PermissionAnswer,
+): PacketWriter {
+  return to.writer(2).u32(sensor).u32(answer);
+}
+
+/** Command.SENSOR_PLATFORM's packet, written in place into `to`.
+ *
+ * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+ * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
+export function encode_sensor_platform(
+  to: PacketRoom,
+  geolocation: boolean,
+  orient: boolean,
+  orient_permission: boolean,
+  orient_silence_is_loss: boolean,
+): PacketWriter {
+  return to
+    .writer(4)
+    .bool(geolocation)
+    .bool(orient)
+    .bool(orient_permission)
+    .bool(orient_silence_is_loss);
+}
+
+/** Command.SETTING_DEVELOPMENT's packet, written in place into `to`. */
+export function encode_setting_development(
+  to: PacketRoom,
+  development: boolean,
+): PacketWriter {
+  return to.writer(1).bool(development);
+}
+
+/** Command.INPUT_POINTER's packet, written in place into `to`. */
+export function encode_input_pointer(
+  to: PacketRoom,
+  phase: PointerPhase,
+  pointer_type: PointerType,
+  id: i32,
+  button: i32,
+  x: f64,
+  y: f64,
+): PacketWriter {
+  return to
+    .writer(6)
+    .u32(phase)
+    .u32(pointer_type)
+    .i32(id)
+    .i32(button)
+    .f64(x)
+    .f64(y);
+}
+
+/** Command.EDIT_TOOL's packet, written in place into `to`.
+ *
+ * @param val The item to place, its id (id.json); read only for that tool.
+ * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
+export function encode_edit_tool(
+  to: PacketRoom,
+  tool: Tool,
+  val: u32,
+  scale_steps: i32,
+): PacketWriter {
+  return to.writer(3).u32(tool).u32(val).i32(scale_steps);
+}
+
+/** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */
+export function encode_edit_marker_text(
+  to: PacketRoom,
+  text: string,
+): PacketWriter {
+  return to.writer(1).str(text);
+}
+
+/** Command.INPUT_WHEEL's packet, written in place into `to`. */
+export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
+  return to.writer(1).f64(delta_y);
+}
+
+/** Command.INPUT_MOVE's packet, written in place into `to`. */
+export function encode_input_move(
+  to: PacketRoom,
+  x: i32,
+  y: i32,
+): PacketWriter {
+  return to.writer(2).i32(x).i32(y);
+}
+
+/** Command.SURFACE_RESIZE's packet, written in place into `to`. */
+export function encode_surface_resize(
+  to: PacketRoom,
+  surface: u32,
+  width: u32,
+  height: u32,
+  device_pixel_ratio: f64,
+): PacketWriter {
+  return to
+    .writer(4)
+    .u32(surface)
+    .u32(width)
+    .u32(height)
+    .f64(device_pixel_ratio);
+}
+
+/** Command.SURFACE_CLOSE's packet, written in place into `to`. */
+export function encode_surface_close(
+  to: PacketRoom,
+  surface: u32,
+): PacketWriter {
+  return to.writer(1).u32(surface);
+}
+
+/** Command.SCENE_DRAW's packet, written in place into `to`.
+ *
+ * @param bg What the character is drawn over, 0xRRGGBB, sRGB. */
+export function encode_scene_draw(
+  to: PacketRoom,
+  surface: u32,
+  content: SceneContent,
+  group: u32 | null,
+  number: u8 | null,
+  bg: u32 | null,
+): PacketWriter {
+  return to.writer(5).u32(surface).u32(content).u32(group).u8(number).u32(bg);
+}
+
+/** Command.SETTING_SET's packet, written in place into `to`.
+ *
+ * @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
+export function encode_setting_set(
+  to: PacketRoom,
+  key: u32,
+  value: u32,
+): PacketWriter {
+  return to.writer(2).u32(key).u32(value);
+}
+
+/** Command.SCENE_CHAT's packet, written in place into `to`. */
+export function encode_scene_chat(to: PacketRoom, text: string): PacketWriter {
+  return to.writer(1).str(text);
+}
+
+/** Command.CAMERA_TRACKING's packet, written in place into `to`. */
+export function encode_camera_tracking(
+  to: PacketRoom,
+  tracking: Tracking,
+): PacketWriter {
+  return to.writer(1).u32(tracking);
+}
+
+/** Command.CAMERA_GOTO's packet, written in place into `to`.
+ *
+ * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
+ * @param azimuth The heading about Z in radians, wrapped.
+ * @param polar The angle down from vertical in radians, clamped. */
+export function encode_camera_goto(
+  to: PacketRoom,
+  lon: f64,
+  lat: f64,
+  dist: f64 | null,
+  azimuth: f64 | null,
+  polar: f64 | null,
+): PacketWriter {
+  return to.writer(5).f64(lon).f64(lat).f64(dist).f64(azimuth).f64(polar);
+}
+
+/** Command.INPUT_XR_POSE's packet, written in place into `to`. */
+export function encode_input_xr_pose(
+  to: PacketRoom,
+  x: f64,
+  y: f64,
+  z: f64,
+  qx: f64,
+  qy: f64,
+  qz: f64,
+  qw: f64,
+): PacketWriter {
+  return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
+}
+
+/** Command.PERF_STATS's packet, written in place into `to`. */
+export function encode_perf_stats(
+  to: PacketRoom,
+  window_ms: f64 | null,
+): PacketWriter {
+  return to.writer(1).f64(window_ms);
+}
+
 /** Command.SENSOR_START's event. */
 export interface SensorStartEvent {
   sensor: Sensor;
@@ -411,299 +693,6 @@ export function read_text_raster(b: BranchCursor): TextRasterEvent {
   };
 }
 
-/** Command.SENSOR_POS's packet, written in place into `to`. */
-export function encode_sensor_pos(
-  to: PacketRoom,
-  lon: f64,
-  lat: f64,
-  alt: f64 | null,
-  accuracy: f64 | null,
-  course: f64 | null,
-): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(alt).f64(accuracy).f64(course);
-}
-
-/** Command.SENSOR_ORIENT's packet, written in place into `to`. */
-export function encode_sensor_orient(
-  to: PacketRoom,
-  webkit_compass_heading: f64 | null,
-  alpha: f64 | null,
-  beta: f64 | null,
-  gamma: f64 | null,
-): PacketWriter {
-  return to
-    .writer(4)
-    .f64(webkit_compass_heading)
-    .f64(alpha)
-    .f64(beta)
-    .f64(gamma);
-}
-
-/** Command.SENSOR_ERR's packet, written in place into `to`.
- *
- * @param code Geolocation's; orientation gives none today. */
-export function encode_sensor_err(
-  to: PacketRoom,
-  sensor: Sensor,
-  code: GeolocationErrorCode | null,
-): PacketWriter {
-  return to.writer(2).u32(sensor).u32(code);
-}
-
-/** Command.SYS_BOOT's packet, written in place into `to`.
- *
- * @param development A development build, which offers the settings schema.json marks `dev`.
- * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
-export function encode_sys_boot(
-  to: PacketRoom,
-  development: boolean,
-  geolocation: boolean,
-  orient: boolean,
-  orient_permission: boolean,
-  orient_silence_is_loss: boolean,
-): PacketWriter {
-  return to
-    .writer(5)
-    .bool(development)
-    .bool(geolocation)
-    .bool(orient)
-    .bool(orient_permission)
-    .bool(orient_silence_is_loss);
-}
-
-/** Command.SURFACE_FRAME's packet, written in place into `to`.
- *
- * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
- * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
-export function encode_surface_frame(
-  to: PacketRoom,
-  refresh_ms: f64,
-  paced_ms: f64,
-  interactive: boolean,
-  credits: u32,
-  unix_ms: f64,
-): PacketWriter {
-  return to
-    .writer(5)
-    .f64(refresh_ms)
-    .f64(paced_ms)
-    .bool(interactive)
-    .u32(credits)
-    .f64(unix_ms);
-}
-
-/** Command.SYS_SLEEP's packet, written in place into `to`. */
-export function encode_sys_sleep(to: PacketRoom, awake: boolean): PacketWriter {
-  return to.writer(1).bool(awake);
-}
-
-/** Command.FS_MOUNT's packet, written in place into `to`.
- *
- * @param top_zoom The coarsest zoom the source supplies whole.
- * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
- * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_fs_mount(
-  to: PacketRoom,
-  top_zoom: u32,
-  format: u32[],
-  shard: string[],
-): PacketWriter {
-  return to
-    .writer(3)
-    .u32(top_zoom)
-    .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
-    .strs(shard);
-}
-
-/** Command.FS_TRUNCATED's packet, written in place into `to`.
- *
- * @param root file.json's `root`.
- * @param path Its path below the root, as the kernel opened it. */
-export function encode_fs_truncated(
-  to: PacketRoom,
-  root: u32,
-  path: string,
-): PacketWriter {
-  return to.writer(2).u32(root).str(path);
-}
-
-/** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
-export function encode_sensor_permission(
-  to: PacketRoom,
-  sensor: Sensor,
-  answer: PermissionAnswer,
-): PacketWriter {
-  return to.writer(2).u32(sensor).u32(answer);
-}
-
-/** Command.INPUT_POINTER's packet, written in place into `to`. */
-export function encode_input_pointer(
-  to: PacketRoom,
-  phase: PointerPhase,
-  pointer_type: PointerType,
-  id: i32,
-  button: i32,
-  x: f64,
-  y: f64,
-): PacketWriter {
-  return to
-    .writer(6)
-    .u32(phase)
-    .u32(pointer_type)
-    .i32(id)
-    .i32(button)
-    .f64(x)
-    .f64(y);
-}
-
-/** Command.EDIT_TOOL's packet, written in place into `to`.
- *
- * @param val The item to place, its id (id.json); read only for that tool.
- * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
-export function encode_edit_tool(
-  to: PacketRoom,
-  tool: Tool,
-  val: u32,
-  scale_steps: i32,
-): PacketWriter {
-  return to.writer(3).u32(tool).u32(val).i32(scale_steps);
-}
-
-/** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */
-export function encode_edit_marker_text(
-  to: PacketRoom,
-  text: string,
-): PacketWriter {
-  return to.writer(1).str(text);
-}
-
-/** Command.INPUT_WHEEL's packet, written in place into `to`. */
-export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
-  return to.writer(1).f64(delta_y);
-}
-
-/** Command.INPUT_MOVE's packet, written in place into `to`. */
-export function encode_input_move(
-  to: PacketRoom,
-  x: i32,
-  y: i32,
-): PacketWriter {
-  return to.writer(2).i32(x).i32(y);
-}
-
-/** Command.SURFACE_OPEN's packet, written in place into `to`.
- *
- * @param role The renderer's surface_role (render/gpu/api.json). */
-export function encode_surface_open(to: PacketRoom, role: u32): PacketWriter {
-  return to.writer(1).u32(role);
-}
-
-/** Command.SURFACE_RESIZE's packet, written in place into `to`. */
-export function encode_surface_resize(
-  to: PacketRoom,
-  surface: u32,
-  width: u32,
-  height: u32,
-  device_pixel_ratio: f64,
-): PacketWriter {
-  return to
-    .writer(4)
-    .u32(surface)
-    .u32(width)
-    .u32(height)
-    .f64(device_pixel_ratio);
-}
-
-/** Command.SURFACE_CLOSE's packet, written in place into `to`. */
-export function encode_surface_close(
-  to: PacketRoom,
-  surface: u32,
-): PacketWriter {
-  return to.writer(1).u32(surface);
-}
-
-/** Command.SCENE_PREVIEW_OPEN's packet, written in place into `to`. */
-export function encode_scene_preview_open(
-  to: PacketRoom,
-  surface: u32,
-  group: u32,
-  number: u8,
-  bg: u32,
-): PacketWriter {
-  return to.writer(4).u32(surface).u32(group).u8(number).u32(bg);
-}
-
-/** Command.SCENE_PREVIEW_CLOSE's packet, written in place into `to`. */
-export function encode_scene_preview_close(
-  to: PacketRoom,
-  surface: u32,
-): PacketWriter {
-  return to.writer(1).u32(surface);
-}
-
-/** Command.SETTING_SET's packet, written in place into `to`.
- *
- * @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
-export function encode_setting_set(
-  to: PacketRoom,
-  key: u32,
-  value: u32,
-): PacketWriter {
-  return to.writer(2).u32(key).u32(value);
-}
-
-/** Command.SCENE_CHAT's packet, written in place into `to`. */
-export function encode_scene_chat(to: PacketRoom, text: string): PacketWriter {
-  return to.writer(1).str(text);
-}
-
-/** Command.CAMERA_TRACKING's packet, written in place into `to`. */
-export function encode_camera_tracking(
-  to: PacketRoom,
-  tracking: Tracking,
-): PacketWriter {
-  return to.writer(1).u32(tracking);
-}
-
-/** Command.CAMERA_GOTO's packet, written in place into `to`.
- *
- * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
- * @param azimuth The heading about Z in radians, wrapped.
- * @param polar The angle down from vertical in radians, clamped. */
-export function encode_camera_goto(
-  to: PacketRoom,
-  lon: f64,
-  lat: f64,
-  dist: f64 | null,
-  azimuth: f64 | null,
-  polar: f64 | null,
-): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(dist).f64(azimuth).f64(polar);
-}
-
-/** Command.INPUT_XR_POSE's packet, written in place into `to`. */
-export function encode_input_xr_pose(
-  to: PacketRoom,
-  x: f64,
-  y: f64,
-  z: f64,
-  qx: f64,
-  qy: f64,
-  qz: f64,
-  qw: f64,
-): PacketWriter {
-  return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
-}
-
-/** Command.PERF_STATS's packet, written in place into `to`. */
-export function encode_perf_stats(
-  to: PacketRoom,
-  window_ms: f64 | null,
-): PacketWriter {
-  return to.writer(1).f64(window_ms);
-}
-
 /** Command.SHELL_SNAPSHOT's event. */
 export interface ShellSnapshotEvent {
   at: u32;
@@ -712,4 +701,217 @@ export interface ShellSnapshotEvent {
 
 export function read_shell_snapshot(b: BranchCursor): ShellSnapshotEvent {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
+}
+
+/** What the host sends on the shell protocol, bound to `host`: each
+ * command rung, or called and answered before it returns. */
+export function shell_exports(host: Host) {
+  return {
+    sensor_pos: (
+      lon: f64,
+      lat: f64,
+      alt: f64 | null,
+      accuracy: f64 | null,
+      course: f64 | null,
+    ): void =>
+      host.send(Command.SENSOR_POS, (r) =>
+        encode_sensor_pos(r, lon, lat, alt, accuracy, course),
+      ),
+    sensor_orient: (
+      webkit_compass_heading: f64 | null,
+      alpha: f64 | null,
+      beta: f64 | null,
+      gamma: f64 | null,
+    ): void =>
+      host.send(Command.SENSOR_ORIENT, (r) =>
+        encode_sensor_orient(r, webkit_compass_heading, alpha, beta, gamma),
+      ),
+    sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null): void =>
+      host.send(Command.SENSOR_ERR, (r) => encode_sensor_err(r, sensor, code)),
+    turn_grant: (
+      refresh_ms: f64,
+      paced_ms: f64,
+      interactive: boolean,
+      credits: u32,
+      unix_ms: f64,
+    ): void =>
+      host.send(Command.TURN_GRANT, (r) =>
+        encode_turn_grant(
+          r,
+          refresh_ms,
+          paced_ms,
+          interactive,
+          credits,
+          unix_ms,
+        ),
+      ),
+    fs_mount: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
+      host.call(Command.FS_MOUNT, (r) =>
+        encode_fs_mount(r, top_zoom, format, shard),
+      ),
+    fs_truncated: (root: u32, path: string): void =>
+      host.send(Command.FS_TRUNCATED, (r) =>
+        encode_fs_truncated(r, root, path),
+      ),
+    sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
+      host.send(Command.SENSOR_PERMISSION, (r) =>
+        encode_sensor_permission(r, sensor, answer),
+      ),
+    sensor_platform: (
+      geolocation: boolean,
+      orient: boolean,
+      orient_permission: boolean,
+      orient_silence_is_loss: boolean,
+    ): void =>
+      host.send(Command.SENSOR_PLATFORM, (r) =>
+        encode_sensor_platform(
+          r,
+          geolocation,
+          orient,
+          orient_permission,
+          orient_silence_is_loss,
+        ),
+      ),
+    setting_development: (development: boolean): void =>
+      host.send(Command.SETTING_DEVELOPMENT, (r) =>
+        encode_setting_development(r, development),
+      ),
+    input_pointer: (
+      phase: PointerPhase,
+      pointer_type: PointerType,
+      id: i32,
+      button: i32,
+      x: f64,
+      y: f64,
+    ): void =>
+      host.send(Command.INPUT_POINTER, (r) =>
+        encode_input_pointer(r, phase, pointer_type, id, button, x, y),
+      ),
+    edit_tool: (tool: Tool, val: u32, scale_steps: i32): i32 =>
+      host.call(Command.EDIT_TOOL, (r) =>
+        encode_edit_tool(r, tool, val, scale_steps),
+      ),
+    edit_marker_text: (text: string): i32 =>
+      host.call(Command.EDIT_MARKER_TEXT, (r) =>
+        encode_edit_marker_text(r, text),
+      ),
+    edit_marker_cancel: (): i32 => host.call(Command.EDIT_MARKER_CANCEL),
+    edit_marker_commit: (): i32 => host.call(Command.EDIT_MARKER_COMMIT),
+    input_wheel: (delta_y: f64): void =>
+      host.send(Command.INPUT_WHEEL, (r) => encode_input_wheel(r, delta_y)),
+    input_move: (x: i32, y: i32): void =>
+      host.send(Command.INPUT_MOVE, (r) => encode_input_move(r, x, y)),
+    surface_open: (): i32 => host.call(Command.SURFACE_OPEN),
+    surface_resize: (
+      surface: u32,
+      width: u32,
+      height: u32,
+      device_pixel_ratio: f64,
+    ): void =>
+      host.send(Command.SURFACE_RESIZE, (r) =>
+        encode_surface_resize(r, surface, width, height, device_pixel_ratio),
+      ),
+    surface_close: (surface: u32): i32 =>
+      host.call(Command.SURFACE_CLOSE, (r) => encode_surface_close(r, surface)),
+    scene_draw: (
+      surface: u32,
+      content: SceneContent,
+      group: u32 | null,
+      number: u8 | null,
+      bg: u32 | null,
+    ): i32 =>
+      host.call(Command.SCENE_DRAW, (r) =>
+        encode_scene_draw(r, surface, content, group, number, bg),
+      ),
+    setting_set: (key: u32, value: u32): i32 =>
+      host.call(Command.SETTING_SET, (r) => encode_setting_set(r, key, value)),
+    scene_chat: (text: string): i32 =>
+      host.call(Command.SCENE_CHAT, (r) => encode_scene_chat(r, text)),
+    camera_tracking: (tracking: Tracking): void =>
+      host.send(Command.CAMERA_TRACKING, (r) =>
+        encode_camera_tracking(r, tracking),
+      ),
+    camera_north_up: (): i32 => host.call(Command.CAMERA_NORTH_UP),
+    sensor_locate: (): i32 => host.call(Command.SENSOR_LOCATE),
+    camera_goto: (
+      lon: f64,
+      lat: f64,
+      dist: f64 | null,
+      azimuth: f64 | null,
+      polar: f64 | null,
+    ): i32 =>
+      host.call(Command.CAMERA_GOTO, (r) =>
+        encode_camera_goto(r, lon, lat, dist, azimuth, polar),
+      ),
+    input_xr_pose: (
+      x: f64,
+      y: f64,
+      z: f64,
+      qx: f64,
+      qy: f64,
+      qz: f64,
+      qw: f64,
+    ): void =>
+      host.send(Command.INPUT_XR_POSE, (r) =>
+        encode_input_xr_pose(r, x, y, z, qx, qy, qz, qw),
+      ),
+    input_xr_pose_end: (): void => host.send(Command.INPUT_XR_POSE_END),
+    perf_start: (): i32 => host.call(Command.PERF_START),
+    perf_stop: (): i32 => host.call(Command.PERF_STOP),
+    perf_stats: (window_ms: f64 | null): i32 =>
+      host.call(Command.PERF_STATS, (r) => encode_perf_stats(r, window_ms)),
+    perf_rings: (): i32 => host.call(Command.PERF_RINGS),
+  };
+}
+
+/** The shell protocol's stubs, bound. */
+export type ShellExports = ReturnType<typeof shell_exports>;
+
+/** What the program does with each command the guest posts on the shell protocol; a
+ * call's answer is its return. */
+export interface ShellImports {
+  /** Start watching. */
+  sensor_start(e: SensorStartEvent): void;
+  /** Stop watching. */
+  sensor_stop(e: SensorStopEvent): void;
+  /** The text in the platform's own family at the weight and size, broken into lines no
+   * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
+   * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
+   * (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
+  text_layout(e: TextLayoutEvent): i32;
+  /** One line drawn in the platform's own family, starting at x with the middle of its em
+   * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
+   * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
+   * it returns. */
+  text_raster(e: TextRasterEvent): i32;
+  /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
+   * block the kernel holds, valid until the next snapshot. */
+  shell_snapshot(e: ShellSnapshotEvent): void;
+}
+
+/** `h` as the handler a host routes the shell protocol's commands to, each one read and
+ * handed to its member; ENOSYS for one the protocol does not carry. */
+export function shell_imports(h: ShellImports): OnEvent {
+  return (_tag, cmd, f) => {
+    switch (cmd) {
+      case Command.SENSOR_START:
+        return h.sensor_start(read_sensor_start(need(f)));
+      case Command.SENSOR_STOP:
+        return h.sensor_stop(read_sensor_stop(need(f)));
+      case Command.TEXT_LAYOUT:
+        return h.text_layout(read_text_layout(need(f)));
+      case Command.TEXT_RASTER:
+        return h.text_raster(read_text_raster(need(f)));
+      case Command.SHELL_SNAPSHOT:
+        return h.shell_snapshot(read_shell_snapshot(need(f)));
+      default:
+        return Errno.ENOSYS;
+    }
+  };
+}
+
+/** A packet the command carries, which a frame without one breaks. */
+function need<T>(f: T | null): T {
+  if (f === null) throw new MarshalError(Errno.EBADMSG);
+  return f;
 }

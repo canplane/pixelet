@@ -1,0 +1,63 @@
+// @xpute/native/android/build.gradle
+//
+// xpute's module on Android (src/main/java/xpute/), and the guest linked with
+// it: the app's core crate, as the app's package.json `xpute.core` names it,
+// built by script/build-core.py for each variant the app is built as, before
+// the variant's native libraries are merged.
+
+import groovy.json.JsonSlurper
+
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'xpute'
+version = '0.0.0'
+
+// The app is the directory over its android/.
+def app = rootProject.projectDir.parentFile
+def core = new JsonSlurper().parse(new File(app, "package.json")).xpute?.core
+if (core == null) {
+  throw new GradleException("${app}/package.json names no xpute.core")
+}
+
+android {
+  namespace "xpute"
+  ndkVersion rootProject.ext.ndkVersion
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+    // The library Guest.kt and Gpu.kt load: cargo's name for the crate's.
+    buildConfigField "String", "CORE", "\"${core.package.replace('-', '_')}\""
+  }
+  buildFeatures {
+    buildConfig true
+  }
+}
+
+// Each variant's library in a directory of its own, which the variant alone
+// packs.
+["debug", "release"].each { variant ->
+  def out = layout.buildDirectory.dir("core/${variant}")
+  android.sourceSets[variant].jniLibs.srcDirs += out.get().asFile
+
+  def build = tasks.register("buildCore${variant.capitalize()}", Exec) {
+    // cargo is what knows whether the core is current, and answers in a
+    // moment when it is: the task runs every build.
+    outputs.upToDateWhen { false }
+    def home = System.getProperty("user.home")
+    // rustup's installer puts its tools in the home directory, which
+    // Gradle's PATH need not name.
+    environment "PATH", "${home}/.cargo/bin:${System.getenv("PATH")}"
+    doFirst {
+      commandLine "${projectDir}/../script/build-core.py", "--android",
+        "--app", app.absolutePath,
+        "--variant", variant,
+        "--out", out.get().asFile.absolutePath,
+        "--ndk", android.ndkDirectory.absolutePath,
+        "--api", rootProject.ext.minSdkVersion.toString()
+    }
+  }
+  tasks.matching { it.name == "merge${variant.capitalize()}JniLibFolders" }.configureEach { dependsOn build }
+}

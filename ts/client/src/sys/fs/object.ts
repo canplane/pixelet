@@ -2,7 +2,7 @@
 
 /**
  * OBJECT's backend: the placed objects' source, for now a loopback over the
- * place's database (bracket `db`). It serves what the kernel reads, a shard's
+ * platform's database (services/db.ts). It serves what the kernel reads, a shard's
  * file by the shard's quadkey and the top of the tree (file.json
  * `object.TOP`), and takes what it writes, edit batches (`object.EDITS`): it
  * lays each batch's writes over the shards they lie in, keeps them, and
@@ -27,7 +27,8 @@ import {
   type Leaf,
   type TopRow,
 } from "@/sys/fs/object_tree.ts";
-import { bracket, type Tx } from "@/bracket.tsx";
+import { type Tx } from "@/services/types.ts";
+import * as db from "@/services/db.ts";
 
 /** The tree packet a file of `fmt` holds past its format byte; EBADMSG for
  * one of another format. */
@@ -111,11 +112,10 @@ function by_shard(a: TopRow, b: TopRow): number {
   return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
-/** The database as the bracket gives it. */
+/** The database as the platform gives it (services/db.ts). */
 export type Db = { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 
-/** The bracket's, read at each call: the bracket is set after this loads. */
-const DB: Db = { transaction: (fn) => bracket.db.transaction(fn) };
+const DB: Db = db;
 
 /** Moves what `key` holds to `<key>:aside:<ms>`, none of an older one lost. */
 async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {

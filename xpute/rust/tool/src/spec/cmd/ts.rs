@@ -18,7 +18,7 @@ fn check_packed(f: &Field) -> Result<(), String> {
     }
 }
 
-fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
+pub(super) fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let one = match spec.kind(&f.ty)? {
         Kind::Number => f.ty.clone(),
         Kind::Bool => "boolean".to_string(),
@@ -136,7 +136,10 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
         .map(|(i, f)| Ok(format!("{}: {}", f.name, ts_read(spec, f, i)?)))
         .collect::<Result<Vec<_>, String>>()?;
     Ok(vec![
-        format!("export function read_{name}(b: BranchCursor): {ty} {{"),
+        format!(
+            "export function read_{name}({}: BranchCursor): {ty} {{",
+            if fields.is_empty() { "_b" } else { "b" }
+        ),
         format!("  return {{ {} }};", reads.join(", ")),
         "}".to_string(),
     ])

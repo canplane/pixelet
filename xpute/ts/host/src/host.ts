@@ -1,33 +1,42 @@
 // @xpute/host/host.ts
 
 /**
- * A host mounted on a guest its platform opened: the toc, a doorbell
- * whose every turn reads what the guest left as it ends (a trapped turn's
- * too, so its report is read before the doorbell hears it stop), the guest's
- * rings, on which the host sends as port 0 and the program's ports as
- * their own, the hostcalls, frames for port 0, answered through the
- * program's `SysHost`, and the
- * strobe, which runs turns as the scheduling policy the program boots it with
- * says (sched/policy.ts).
+ * A host mounted on a guest its platform opened: the front it lays before
+ * the first turn (ipc/head.ts), a doorbell whose every turn reads what the
+ * guest left as it ends (a trapped turn's too, so its report is read before
+ * the doorbell hears it stop), what answers the guest's commands by their
+ * major — xpute's own below PROGRAM_MAJOR (abi/cmd.json: the guest's report
+ * as it aborts; the file device where the program backs one, ipc/fs.ts), the
+ * program's from there — and the strobe, which runs turns as the scheduling
+ * policy the program boots it with says (sched/policy.ts).
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
-import type { BranchCursor, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { Command, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
-import { Toc } from "@xpute/host/ipc/toc.ts";
-import { key } from "@xpute/host/ipc/toc.spec.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import {
+  Command,
+  Major,
+  host_imports,
+  type SysAbortEvent,
+} from "@xpute/host/abi/cmd.spec.ts";
+import * as fs from "@xpute/host/abi/fs.spec.ts";
+import { type Front, Head, laid, lay } from "@xpute/host/ipc/head.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
-import { Doorbell, type OnEvent } from "@xpute/host/ipc/doorbell.ts";
-import { Sys, type SysHost } from "@xpute/host/ipc/sys.ts";
+import {
+  Doorbell,
+  type Encode,
+  type OnEvent,
+} from "@xpute/host/ipc/doorbell.ts";
+import { type Fs, FsServer } from "@xpute/host/ipc/fs.ts";
 import type { Grant, SchedulingPolicy } from "@xpute/host/sched/policy.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
+import { open } from "./platform";
 
 /** The guest as its platform opened it: its memory, which never moves or
  * grows; its entry, `run`, a turn that returns when it wants the next, in
- * ms; where its hostcalls are answered; and the streams the platform runs.
+ * ms; and where its hostcalls are answered.
  * The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
   mem: ArrayBuffer;
@@ -35,34 +44,85 @@ export interface Guest {
   /** `answer` answers each call from here on: a frame laid at an offset of
    * `mem`, answered before the call returns. ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
-  /** What the platform runs as each turn returns, before the turn's frames
-   * are read, from the turn after the one that writes the toc: a stream the
-   * guest wrote, found in the toc by its key, such as a GPU's calls run on the
-   * platform's device. What a stream's run throws ends the guest, as a trap
-   * does. */
-  streams?: Stream[];
 }
 
-/** A stream a platform runs (`Guest.streams`). */
-export interface Stream {
-  /** Its toc's key. */
-  key: u32;
-  /** Runs the stream whose words begin at `at`. */
-  run(at: u32): void;
+/** What a guest asks of the GPU it is granted (its machine's `gpu`): a power
+ * preference, and features the device must have and those it takes where the
+ * adapter has them, by WebGPU's names. */
+export interface GpuAsk {
+  power: string;
+  features: { required: readonly string[]; optional: readonly string[] };
+}
+
+/** A platform's GPU, granted to a guest: it opens a device as the guest asks,
+ * runs the guest's stream on it as each turn returns, and says when a device
+ * has answered. What `after_turn` throws ends the guest, as a trap does. */
+export interface Gpu {
+  grant(to: GpuGrant): void;
+  after_turn(): void;
+}
+
+/** What a GPU is granted to: the guest's memory, which never moves; where its
+ * stream begins; what it asks; `ready`, which tells the guest a device
+ * answered (GPU_READY); and `wake`, a turn asked for, as a
+ * completion the guest did not hear of came. */
+export interface GpuGrant {
+  mem: ArrayBuffer;
+  at: u32;
+  ask: GpuAsk;
+  ready(): void;
+  wake(): void;
+}
+
+/** The guest's report as it aborts: the errno of the invariant it broke, where,
+ * and two numbers it gave. */
+export interface Abort {
+  errnum: number;
+  file: string;
+  line: u32;
+  column: u32;
+  a: bigint;
+  b: bigint;
+}
+
+function abort_of(e: SysAbortEvent): Abort {
+  const num = (low: u32, high: u32) => BigInt(low) | (BigInt(high) << 32n);
+  return {
+    errnum: e.errnum,
+    file: e.file,
+    line: e.line,
+    column: e.column,
+    a: num(e.a_low, e.a_high),
+    b: num(e.b_low, e.b_high),
+  };
+}
+
+function log_abort(r: Abort): void {
+  console.error(
+    `[xpute] stopped: ${strerror(r.errnum)} at ${r.file}:${r.line}:${r.column} (${r.a}, ${r.b})`,
+  );
 }
 
 /** What the program mounts its guest with: all it decides, and nothing of
  * the order the host is put together in. */
 export interface Config<G extends Grant = Grant> {
-  toc_at: u32;
-  /** The guest writes its toc in its first turn, which `mount` runs, with no
-   * quota, before it reads it; unset for a guest whose boot call wrote it.
-   * Nothing answers yet in that turn: a call it makes is refused, ENOSYS. */
-  toc_in_turn?: boolean;
-  sys: SysHost;
-  /** Each of the program's ports and what it hears the guest send or call
-   * it with, bound before any turn's frames are read; not 0, the host's. */
-  ports?: Record<u32, OnEvent>;
+  /** Where the front's header is. */
+  head_at: u32;
+  /** The front the host lays there before the first turn, unless one is
+   * laid: a guest that outlived its host's reload keeps its rings as they
+   * are. Unset for a guest that laid its own. */
+  lay?: Front;
+  /** What backs the file device (Major FS), where it is given. */
+  fs?: Fs;
+  /** The guest's report as it aborts (port 0's SYS_ABORT); logged where
+   * none takes it. */
+  onabort?(report: Abort): void;
+  /** The GPU granted and what the guest asks of it (set by `boot` from the
+   * machine); its stream is where the header says. */
+  gpu?: { by: Gpu; ask: GpuAsk };
+  /** What the program hears the guest send or call it with, its commands
+   * those of PROGRAM_MAJOR and up; a call it does not take is ENOSYS. */
+  program?: OnEvent;
   /** When turns run and how much each gets, the program's policy. */
   policy: SchedulingPolicy<G>;
   /** Fills the rings before each turn the strobe grants is rung. */
@@ -73,94 +133,174 @@ export interface Config<G extends Grant = Grant> {
 
 export interface Host {
   guest: Guest;
-  toc: Toc;
+  head: Head;
   doorbell: Doorbell;
-  /** Sent as `src` with the next turn. */
-  send(src: u32, cmd: u32, pkt?: PacketWriter): void;
-  /** Sent as `src` and rung at once with no quota until the guest answers, so
-   * it is heard while turns are paused too; then a turn is asked for. `read`
-   * reads the answer; without it, the result is returned and a failure is
-   * logged, as an answer no one reads is. */
-  call(src: u32, cmd: u32, pkt?: PacketWriter | null): i32;
+  /** Sent with the next turn, its packet written by `encode`; while the
+   * completion ring is read, once it is. */
+  send(cmd: u32, encode?: Encode): void;
+  /** Rung at once with no quota until the guest answers, so it is heard
+   * while turns are paused too; then a turn is asked for. `read` reads the
+   * answer; without it, the result is returned and a failure is logged, as
+   * an answer no one reads is. */
+  call(cmd: u32, encode?: Encode | null): i32;
   call<T>(
-    src: u32,
     cmd: u32,
-    pkt: PacketWriter | null,
+    encode: Encode | null,
     read: (result: i32, reply: BranchCursor | null) => T,
   ): T;
   /** A turn asked for, as something the guest did not hear of changed. */
   wake(): void;
-  /** Turns run from now on, as the policy gives them; nothing where they
-   * already run or the guest stopped. */
+  /** Turns run from now on, as the policy gives them, while the platform
+   * shows the program; nothing where they already run or the guest stopped. */
   resume(): void;
   /** No turn runs until `resume`; a `call` still rings at once. */
   pause(): void;
+  /** Whether the platform shows the program: a hidden one runs no turn, as a
+   * hidden page gets no frame. Each change is told the guest at once
+   * (SYS_SUSPEND, SYS_RESUME). */
+  visible(visible: boolean): void;
 }
 
 export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
-  if (cfg.toc_in_turn) guest.run(0);
-  const toc = new Toc(guest.mem, cfg.toc_at);
-  const streams = (guest.streams ?? []).map((s) => ({
-    at: toc.get(s.key),
-    run: s.run,
-  }));
+  if (cfg.lay && !laid(guest.mem, cfg.head_at)) {
+    lay(guest.mem, cfg.head_at, cfg.lay);
+  }
+  const head = new Head(guest.mem, cfg.head_at);
+  const gpu = cfg.gpu?.by;
   const doorbell = new Doorbell(
     guest.mem,
-    toc.get(key.SQ),
-    toc.get(key.CQ),
+    head.sq_at,
+    head.cq_at,
     (quota_ms) => {
       const wake = guest.run(quota_ms);
-      for (const s of streams) s.run(s.at);
+      gpu?.after_turn();
       return wake;
     },
   );
   const strobe = new Strobe(doorbell, cfg.policy, cfg.submit);
-  const send = (src: u32, cmd: u32, pkt?: PacketWriter) => {
-    doorbell.send(src, cmd, pkt);
+  let resumed = false;
+  let shown = true;
+  const steer = () => (resumed && shown ? strobe.resume() : strobe.pause());
+  const send = (cmd: u32, encode?: Encode) => {
+    doorbell.send(cmd, encode);
     strobe.request();
   };
-  const sys = new Sys(cfg.sys, guest.mem, (fd, res, detail) =>
-    send(
-      frame.HOST,
-      Command.SYS_OPENED,
-      encode_sys_opened(doorbell, fd, res, detail),
-    ),
-  );
-  doorbell.on(frame.HOST, sys.receive);
-  for (const [port, heard] of Object.entries(cfg.ports ?? {})) {
-    if (Number(port) === frame.HOST) throw new InvariantError(Errno.EINVAL);
-    doorbell.on(Number(port), heard);
+  const own = new Map<u32, OnEvent>([
+    [
+      Major.SYS,
+      host_imports({
+        sys_abort: (e) => (cfg.onabort ?? log_abort)(abort_of(e)),
+      }),
+    ],
+  ]);
+  if (cfg.fs) {
+    const files = new FsServer(cfg.fs, guest.mem, (fd, res, detail) =>
+      send(fs.Command.FS_OPENED, (room) =>
+        fs.encode_fs_opened(room, fd, res, detail),
+      ),
+    );
+    own.set(fs.Major.FS, fs.fs_imports(files));
   }
+  doorbell.hear((tag, cmd, f) => {
+    const major = frame.major_of(cmd);
+    const heard = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
+    return heard ? heard(tag, cmd, f) : Errno.ENOSYS;
+  });
   guest.answer_with((at) => doorbell.answer(at));
+  if (cfg.gpu) {
+    cfg.gpu.by.grant({
+      mem: guest.mem,
+      at: head.gpu_at,
+      ask: cfg.gpu.ask,
+      ready: () => send(Command.GPU_READY),
+      wake: () => strobe.request(),
+    });
+  }
   doorbell.onterminated = () => {
     strobe.pause();
     cfg.onterminated?.();
   };
+  function call<T>(
+    cmd: u32,
+    encode: Encode | null = null,
+    read?: (result: i32, reply: BranchCursor | null) => T,
+  ): T | i32 {
+    const out = doorbell.call(cmd, encode, (result, reply) => {
+      if (read) return read(result, reply);
+      if (result < 0) {
+        console.warn(
+          `[xpute/host] command 0x${cmd.toString(16)} failed: ${strerror(result)}`,
+        );
+      }
+      return result;
+    });
+    strobe.request();
+    return out;
+  }
+  // The guest hears a host attach before anything else it is sent.
+  doorbell.send(Command.SYS_ATTACH);
   return {
     guest,
-    toc,
+    head,
     doorbell,
     send,
-    call<T>(
-      src: u32,
-      cmd: u32,
-      pkt: PacketWriter | null = null,
-      read?: (result: i32, reply: BranchCursor | null) => T,
-    ): T | i32 {
-      const out = doorbell.call(src, cmd, pkt, (result, reply) => {
-        if (read) return read(result, reply);
-        if (result < 0) {
-          console.warn(
-            `[xpute/host] port ${src}'s command 0x${cmd.toString(16)} failed: ${strerror(result)}`,
-          );
-        }
-        return result;
-      });
-      strobe.request();
-      return out;
-    },
+    call,
     wake: () => strobe.request(),
-    resume: () => strobe.resume(),
-    pause: () => strobe.pause(),
+    resume: () => {
+      resumed = true;
+      steer();
+    },
+    pause: () => {
+      resumed = false;
+      steer();
+    },
+    visible: (visible) => {
+      if (visible === shown) return;
+      shown = visible;
+      steer();
+      // At once: a hidden page gets no frame, and hiding is the last sure
+      // moment the guest has to keep what it holds.
+      call(visible ? Command.SYS_RESUME : Command.SYS_SUSPEND);
+    },
   };
+}
+
+/** What the host reads of a guest's machine (its generated `MACHINE`): the
+ * memory sizes it allows and their region, where the front's header is and
+ * the front the host lays there, and the GPU it asks for, none where it takes
+ * no GPU. What the program's commands carry is the program's. */
+export interface Machine extends Front {
+  mem_bytes: readonly u32[];
+  region_bytes: u32;
+  head_at: u32;
+  gpu: GpuAsk | null;
+}
+
+/** Where a page finds its guest: its module, fetched from a URL or given as
+ * bytes, `init` the fetch's, and the bytes of its memory, one of the sizes
+ * its machine allows. A native guest is linked in and takes none. */
+export interface ModuleSource {
+  module: URL | BufferSource;
+  bytes: u32;
+  init?: RequestInit;
+}
+
+/** The guest opened as `machine` declares, by this build's platform
+ * (platform.ts, platform.native.ts), from `guest` on a page; the host
+ * mounted on it, its front laid, and granted `gpu` where its machine asks for
+ * one. */
+export async function boot<G extends Grant>(
+  machine: Machine,
+  cfg: Omit<Config<G>, "head_at" | "lay" | "gpu"> & {
+    guest?: ModuleSource;
+    gpu?: Gpu;
+  },
+): Promise<Host> {
+  const { guest, gpu, ...rest } = cfg;
+  return mount(await open(machine, guest), {
+    ...rest,
+    head_at: machine.head_at,
+    lay: machine,
+    gpu: gpu && machine.gpu ? { by: gpu, ask: machine.gpu } : undefined,
+  });
 }

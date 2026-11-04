@@ -1,0 +1,51 @@
+// @pxl/client/src/app.config.ts
+
+/**
+ * The app as Expo builds it, for a device and for the page. The icon is the
+ * client's brand, found from the workspace (ts/build/paths.ts). The page is
+ * one HTML file over one bundle (`output: "single"`), from the template
+ * script/web.ts makes of index.html into public/.
+ */
+
+import * as path from "node:path";
+import { WORKSPACE } from "@pxl/build/paths.ts";
+
+const icon = path.join(WORKSPACE, "client/brand/icon.png");
+
+export default {
+  expo: {
+    name: "pixelet",
+    slug: "pixelet",
+    version: "0.0.0",
+    orientation: "portrait",
+    userInterfaceStyle: "light",
+    icon,
+    platforms: ["ios", "android", "web"],
+    web: { bundler: "metro", output: "single" },
+    locales: {
+      ko: "./locale/ko.json",
+      ja: "./locale/ja.json",
+      "zh-Hans": "./locale/zh-Hans.json",
+      "zh-Hant": "./locale/zh-Hant.json",
+    },
+    ios: { bundleIdentifier: "me.plei.pixelet" },
+    android: {
+      package: "me.plei.pixelet",
+      adaptiveIcon: { foregroundImage: icon },
+    },
+    plugins: [
+      ["expo-horizon-core", { supportedDevices: "quest3|quest3s" }],
+      [
+        "expo-horizon-location",
+        {
+          locationWhenInUsePermission:
+            "pixelet shows you where you are in the world, and what you build stands there.",
+        },
+      ],
+      "./plugin/prebuilt-flavor.ts",
+      "./plugin/android-build.ts",
+      "./plugin/ios-build.ts",
+      "./plugin/ios-scene.ts",
+    ],
+  },
+};

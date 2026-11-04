@@ -3,8 +3,8 @@
 //! PERF: the profiler's.
 
 use super::State;
-use super::{ask_turn, given, refuse_unless};
-use crate::domain::control::cmd::{self as abi, Command};
+use super::{ask_turn, refuse_unless};
+use crate::domain::control::cmd as abi;
 use crate::domain::view::setting::store::settings_store;
 use crate::perf::read;
 use crate::perf::record;
@@ -12,35 +12,32 @@ use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_guest::ipc::door::Outcome;
 use xpute_guest::mem::off_of;
 use xpute_guest::mem::off_of_slice;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
-pub(super) fn apply(
-    s: &mut State,
-    cmd: Command,
-    pkt: &Option<&[u8]>,
-) -> Result<Option<i32>, MarshalError> {
-    match cmd {
-        // Records only while the profiler setting is on.
-        Command::PERF_START => {
-            refuse_unless(settings_store().perf, Errno::EPERM)?;
-            refuse_unless(perf_window_start(), Errno::ENOMEM)?;
-            ask_turn(s)
-        }
-        Command::PERF_STOP => {
-            perf_window_stop();
-            ask_turn(s)
-        }
-        // Memory is at most 1 GiB, so an address fits an i32.
-        Command::PERF_STATS => {
-            let window_ms = abi::PerfStats::read(given(pkt)?)?.window_ms;
-            Ok(Some(read_timed(|| stats_words(window_ms)) as i32))
-        }
-        Command::PERF_RINGS => Ok(Some(read_timed(perf_rings) as i32)),
-        _ => Ok(None),
-    }
+/// The profiler records only while its setting is on.
+pub(super) fn start(s: &mut State) -> Outcome {
+    refuse_unless(settings_store().perf, Errno::EPERM)?;
+    refuse_unless(perf_window_start(), Errno::ENOMEM)?;
+    ask_turn(s)
+}
+
+pub(super) fn stop(s: &mut State) -> Outcome {
+    perf_window_stop();
+    ask_turn(s)
+}
+
+/// The address of the statistics' words. Memory is at most 1 GiB, so an
+/// address fits an i32.
+pub(super) fn stats(c: abi::PerfStats) -> Outcome {
+    Ok(Some(read_timed(|| stats_words(c.window_ms)) as i32))
+}
+
+/// The address of the rings' words, which fits an i32 as the statistics' does.
+pub(super) fn rings() -> Outcome {
+    Ok(Some(read_timed(perf_rings) as i32))
 }
 
 /// A read of the profiler, its time the profiler's cost to the interval
