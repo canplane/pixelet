@@ -93,12 +93,10 @@ The generated shaders' blocks break the rule today (a `vec2<f32>` and a
 
 ## Check
 
-- `ts/app/web/probe.html` on the dev server compiles every generated module
-  on the device it is opened on; `?src=` a shader under `doc/experiment/`.
-  A render shader is composed at run time from hand-written parts, so the
-  probe does not reach it; the experiment's `tools/catch_render.mjs` opens
-  the page on the S23 with a hook that keeps the WGSL of each render
-  pipeline the device refuses.
+- `ts/tool/shader/probe.html` (`pnpm probe` there) compiles every module as
+  the renderer assembles it, compute and render, on the device it is opened
+  on; `?bisect=<name>` finds the line it refuses, `?src=` a shader under
+  `doc/experiment/`.
 - Safari on the Mac stands in for the iPhone.
 - The S23 over USB: `adb forward tcp:9333 localabstract:chrome_devtools_remote`
   and `adb reverse tcp:5173 tcp:5173`, then the experiment's `tools/cdp.mjs`

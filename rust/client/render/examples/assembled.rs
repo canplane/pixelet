@@ -1,7 +1,8 @@
 // pxl-render/examples/assembled.rs
 
 //! Every shader by hand as the page takes it, and the world's asked one, written into the
-//! directory named, a file each: for Tint (ts/tool/shader/shader.test.ts).
+//! directory named, a file each: for Tint (ts/tool/shader/shader.test.ts) and the device's
+//! own compiler (ts/tool/shader/probe.html).
 
 use pxl_render::frame::shader::record::{self, PARTS};
 
@@ -14,12 +15,10 @@ fn main() {
         std::fs::write(format!("{dir}/{name}.wgsl"), text).expect("a shader");
     };
     for (kind, parts) in PARTS.iter().enumerate() {
-        if !parts.iter().any(|p| p.ends_with(".gen")) {
-            write(
-                format!("{kind}-{}", parts.last().expect("a shader's parts")),
-                record::src(kind as u32),
-            );
-        }
+        write(
+            format!("{kind}-{}", parts.last().expect("a shader's parts")),
+            record::src(kind as u32),
+        );
     }
     write("world_asked".to_string(), record::WORLD_ASKED);
 }

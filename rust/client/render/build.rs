@@ -510,8 +510,8 @@ fn walk_word() -> String {
     // within it grown by half the tile's diagonal (light_propagate.wgsl).
     let tile_pad = light::READ_PAD + light::TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\n",
-        grid::CELLS_A_RAD / grid::SPANS,
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\n",
+        grid::INV_SPLIT2,
         cast::NARROW,
         2.0 * cast::SQRT_6,
         light::margin(0.0),

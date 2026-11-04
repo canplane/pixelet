@@ -1,0 +1,15 @@
+{
+  "name": "@pxl/shader",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "probe": "vite --host",
+    "test": "vitest run --root .. tool/shader"
+  },
+  "devDependencies": {
+    "@pxl/build": "workspace:*",
+    "@xpute/kit": "workspace:*",
+    "vite": "^8.3.0",
+    "webgpu": "0.6.2"
+  }
+}

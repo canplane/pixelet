@@ -133,7 +133,7 @@ fn keeps(zoom: u32, c: vec3<i32>) -> bool {
 
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
-  let x2 = r2 / (ZOOM_SPLIT * ZOOM_SPLIT);
+  let x2 = r2 * INV_SPLIT2;
   let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
   let z = u32(clamp(i32(UNIT_ZOOM) - e, 0i, i32(FINEST_ZOOM)));
   return min(max(z, range.x), range.y);

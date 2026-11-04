@@ -24,6 +24,6 @@
       "@pxl/build/*": ["./build/*"]
     }
   },
-  "include": ["client", "build", "vitest.config.ts"],
+  "include": ["client", "build", "tool/shader", "vitest.config.ts"],
   "exclude": ["**/node_modules", "**/dist", "client/ios", "client/android"]
 }

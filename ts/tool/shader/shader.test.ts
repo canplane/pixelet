@@ -1,4 +1,4 @@
-// @pxl/web/shader.test.ts
+// @pxl/shader/shader.test.ts
 
 /**
  * Whether the browser's compiler takes the shaders the page hands it: each

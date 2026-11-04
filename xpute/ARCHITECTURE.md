@@ -781,6 +781,19 @@ for every language at once. There are two kinds:
   set of values holds every language's implementation: the same draws, the same
   rounding, the same order.
 
+A GPU is held to one rounding only where WGSL rounds correctly. Its `+`, `−` and
+`×` round half to even, as every language here does. Its division may be 2.5
+ulps off, its square root, `length` and the transcendentals have only bounds,
+and a product may be fused into the sum after it. So which operations a rule
+takes depends on who decides it:
+
+- **A rule the CPU and a GPU both decide** takes only `+`, `−`, `×`, a
+  comparison, a bit operation and a power of two's scaling. A division by a
+  constant is a product by its reciprocal, which rounds the same everywhere.
+- **A rule a GPU alone decides** is one function every pass calls, so the GPU
+  agrees with itself; the test that holds it to its reference names the ulps it
+  allows and counts what took them.
+
 The **traces** under `spec/conformance/` are a third kind, not outputs at all.
 Each says what a host does and what it must then see: the completions, stream
 records and next-turn asks each turn leaves. They are written from the
