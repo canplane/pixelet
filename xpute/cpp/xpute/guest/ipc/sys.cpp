@@ -36,21 +36,21 @@ void Sys::close(Fd fd) noexcept {
     stream_.record(sys::op::CLOSE, args);
 }
 
-void Sys::call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept {
+void Sys::send(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept {
     ensure((op & sys::op::PROGRAM) != 0, Errno::einval, op);
     stream_.record(op, args, {}, bytes);
 }
 
-Result<std::uint32_t> Sys::call_now(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept {
+Result<std::uint32_t> Sys::call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept {
     ensure((op & sys::op::PROGRAM) != 0, Errno::einval, op);
     std::optional<std::uint32_t> at = stream_.past(op, args, bytes);
     if (!at) return make_error(ErrorClass::fault, Errno::enospc);
     return answer_of(xpute::hostcall(*at));
 }
 
-bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {
+bool Sys::try_send(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {
     if (!stream_.fits(record_bytes(args.size(), bytes.size()), reserve)) return false;
-    call(op, args, bytes);
+    send(op, args, bytes);
     return true;
 }
 

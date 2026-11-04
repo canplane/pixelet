@@ -61,8 +61,8 @@ const _: () = assert!(
 /// A hostcall the host runs before it returns: None where there is no host,
 /// else its value or its errno, ENOSPC where the record does not fit past
 /// the turn's.
-pub fn call_now(op: u32, args: &[u32], bytes: &[u8]) -> Option<Result<u32, Errno>> {
-    Some(sys()?.call_now(op, args, bytes))
+pub fn call(op: u32, args: &[u32], bytes: &[u8]) -> Option<Result<u32, Errno>> {
+    Some(sys()?.call(op, args, bytes))
 }
 
 static TURN: Global<u64> = Global::new();

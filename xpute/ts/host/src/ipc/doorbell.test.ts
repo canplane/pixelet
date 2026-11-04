@@ -31,7 +31,7 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     return -1;
   });
   let refused = 0;
-  door.listen(0, () => {
+  door.on(0, () => {
     assert.throws(
       () => door.call(1, 1, null, (result) => result),
       InvariantError,

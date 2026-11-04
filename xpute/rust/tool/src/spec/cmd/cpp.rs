@@ -1,9 +1,7 @@
 // xpute-tool/spec/cmd/cpp.rs
 
 //! The command table as a C++ guest's header: its enums and each packet's
-//! reader; and for a program's own table, each packet read from a `Packet`
-//! (`from_packet`) and each event's writer. A C++ guest writes no record, and
-//! raises no event of xpute's own table.
+//! reader; a C++ guest raises no event and writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
@@ -93,82 +91,7 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
-    let one = match spec.kind(&f.ty)? {
-        _ if f.list => {
-            return Err(format!(
-                "cmd.json: a C++ program writes no list ({})",
-                f.name
-            ))
-        }
-        Kind::Number => cpp_number(&f.ty).to_string(),
-        Kind::Str => "std::string_view".to_string(),
-        Kind::Bool => "bool".to_string(),
-        _ => {
-            return Err(format!(
-                "cmd.json: a C++ program writes no {} ({})",
-                f.ty, f.name
-            ))
-        }
-    };
-    Ok(if f.optional {
-        format!("std::optional<{one}>")
-    } else {
-        one
-    })
-}
-
-/// The writer's call for `f`, which takes a value or none as the field is.
-fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
-    let method = match spec.kind(&f.ty)? {
-        Kind::Bool => "boolean",
-        Kind::Str => "str",
-        _ => f.ty.as_str(),
-    };
-    Ok(format!("w.{method}({});", f.name))
-}
-
-/// A program's event: its number, the children it is written as, and its
-/// writer (cpp/xpute/guest/ipc/door.hpp `Event`).
-fn cpp_event(
-    spec: &Spec,
-    out: &mut Vec<String>,
-    c: &Member,
-    fields: &[Field],
-) -> Result<(), String> {
-    out.extend([
-        String::new(),
-        format!("// Command::{}'s event.", c.name),
-        format!("struct {}Event {{", pascal(&c.name)),
-    ]);
-    for f in fields {
-        if let Some(doc) = &f.doc {
-            out.extend(crate::spec::line_comments(doc, "    "));
-        }
-        out.push(format!("    {} {}{{}};", cpp_write_type(spec, f)?, f.name));
-    }
-    out.extend([
-        String::new(),
-        "    // Its number, and the children it is written as.".to_string(),
-        format!("    static constexpr std::uint32_t NUMBER = {};", c.val),
-        format!(
-            "    static constexpr std::uint32_t FIELDS = {};",
-            fields.len()
-        ),
-        String::new(),
-        format!(
-            "    void write(xtp::PacketWriter &{}) const noexcept {{",
-            if fields.is_empty() { "" } else { "w" }
-        ),
-    ]);
-    for f in fields {
-        out.push(format!("        {}", cpp_write(spec, f)?));
-    }
-    out.extend(["    }".to_string(), "};".to_string()]);
-    Ok(())
-}
-
-pub(super) fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
+pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
     let mut out = vec![
         format!("// {path}"),
         "//".into(),
@@ -191,36 +114,12 @@ pub(super) fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Resu
             "#include \"xpute/kit/status/error.hpp\"",
             "#include \"xpute/kit/wire/xtp/cursor.hpp\"",
             "#include \"xpute/kit/wire/xtp/encode.hpp\"",
+            "#include \"number.hpp\"",
+            "",
+            &format!("namespace {namespace} {{"),
         ]
         .map(String::from),
     );
-    // A program's table lies outside the library, so it names the library's
-    // headers from its root, and takes the library's names into its namespace.
-    if t.program.is_some() {
-        out.extend(
-            [
-                "#include \"xpute/guest/abi/number.hpp\"",
-                "#include \"xpute/guest/program.hpp\"",
-                "",
-                &format!("namespace {namespace} {{"),
-                "",
-                "using ::xpute::Result;",
-                "using ::xpute::abi::finite;",
-                "using ::xpute::abi::integer;",
-                "namespace xtp = ::xpute::xtp;",
-            ]
-            .map(String::from),
-        );
-    } else {
-        out.extend(
-            [
-                "#include \"number.hpp\"",
-                "",
-                &format!("namespace {namespace} {{"),
-            ]
-            .map(String::from),
-        );
-    }
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         out.push(String::new());
@@ -269,7 +168,7 @@ pub(super) fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Resu
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if c.event.is_some() && t.program.is_none() {
+        if c.event.is_some() {
             return Err(format!(
                 "{}: a C++ guest raises no event ({})",
                 t.json, c.name
@@ -305,25 +204,11 @@ pub(super) fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Resu
                         .map(|l| format!("        {l}")),
                 );
             }
-            out.extend(["        return out;".to_string(), "    }".to_string()]);
-            if t.program.is_some() {
-                out.extend([
-                    String::new(),
-                    format!(
-                        "    static Result<{name}> from_packet(::xpute::Packet pkt) noexcept {{"
-                    ),
-                    "        std::optional<std::span<const std::uint8_t>> b = pkt.bytes();"
-                        .to_string(),
-                    "        if (!b) return ::xpute::marshal_error(::xpute::Errno::ebadmsg);"
-                        .to_string(),
-                    "        return read(*b);".to_string(),
-                    "    }".to_string(),
-                ]);
-            }
-            out.push("};".to_string());
-        }
-        if let Some(event) = &c.event {
-            cpp_event(spec, &mut out, c, event)?;
+            out.extend([
+                "        return out;".to_string(),
+                "    }".to_string(),
+                "};".to_string(),
+            ]);
         }
     }
     out.extend([String::new(), format!("}} // namespace {namespace}")]);

@@ -81,7 +81,10 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   as Unix shows it (results, errnos, limits). A verb each for the two ways a
   message crosses: the rings, taken later (`send`, a guest's `call` and its
   files, `raise`, `on`), and the direct call, answered before it returns
-  (`call`, `call_now`). Deferred by the user.
+  (`call`, `call_now`). Deferred by the user. A layer of that name was built
+  the same evening without a record of the user's (`e3be4b371` to
+  `327465eaf`), beside the base rather than over it, and taken out on
+  2026-11-04 (20261104-kernel-and-shell-as-an-operating-system-means-them.md).
 - **Threads.** No use yet; the one candidate the code shows is a glTF's parse,
   unmeasured.
 

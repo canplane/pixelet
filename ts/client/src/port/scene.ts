@@ -20,7 +20,7 @@ export function preview_open(
   number: u8,
   bg: u32,
 ): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.SCENE_PREVIEW_OPEN,
     encode_scene_preview_open(HOST.doorbell, surface, group, number, bg),
@@ -28,7 +28,7 @@ export function preview_open(
 }
 
 export function preview_close(surface: u32): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.SCENE_PREVIEW_CLOSE,
     encode_scene_preview_close(HOST.doorbell, surface),
@@ -36,7 +36,7 @@ export function preview_close(surface: u32): void {
 }
 
 export function chat(text: string): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.SCENE_CHAT,
     encode_scene_chat(HOST.doorbell, text),

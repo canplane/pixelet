@@ -22,12 +22,7 @@ export function fs_mount(
 ): boolean {
   const pkt = encode_fs_mount(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  return HOST.doorbell.call(
-    port.SHELL,
-    Command.FS_MOUNT,
-    pkt,
-    (result) => result >= 0,
-  );
+  return HOST.call(port.SHELL, Command.FS_MOUNT, pkt, (result) => result >= 0);
 }
 
 /** A refused file set aside, so the kernel may read it again (FS_TRUNCATED),

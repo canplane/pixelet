@@ -49,21 +49,21 @@ const PATH_BYTES = 3 * WORD;
 
 /** A command answered inside the call: the address of its reply in the kernel's memory. */
 function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return HOST.doorbell.call(port.SHELL, cmd, pkt, (at) => {
+  return HOST.call(port.SHELL, cmd, pkt, (at) => {
     // A refusal is -errno, never an address.
     if (at < 0) throw new FaultError(-at as i32);
     return at >>> 0;
   });
 }
 
-/** A fresh recording window, rung at once. */
+/** A fresh recording window, called at once. */
 export function start(): void {
-  HOST.now(port.SHELL, Command.PERF_START);
+  HOST.call(port.SHELL, Command.PERF_START);
 }
 
 /** The window frozen, so what is exported holds still. */
 export function stop(): void {
-  HOST.now(port.SHELL, Command.PERF_STOP);
+  HOST.call(port.SHELL, Command.PERF_STOP);
 }
 
 const words = (at: u32, n: u32) => new Float64Array(HOST.guest.mem, at, n);

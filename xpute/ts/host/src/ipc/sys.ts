@@ -104,7 +104,7 @@ export class Sys {
 
   /** The hostcall's record at `at`, run now: the program's answer, or ENOSYS
    * for a call that is not the program's. */
-  call_now(mem: ArrayBuffer, at: u32): i32 {
+  call(mem: ArrayBuffer, at: u32): i32 {
     const [code, n] = new Uint32Array(mem, at, 2);
     if ((code & op.PROGRAM) === 0) return Errno.ENOSYS;
     if (!this.host.program) return Errno.ENOSYS;

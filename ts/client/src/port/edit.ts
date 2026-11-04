@@ -16,7 +16,7 @@ import * as port from "@/abi/port.spec.ts";
 
 /** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
 export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
-  return HOST.doorbell.call(
+  return HOST.call(
     port.SHELL,
     Command.EDIT_TOOL,
     encode_edit_tool(HOST.doorbell, tool, val, scale_steps),
@@ -29,22 +29,20 @@ export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
 export function marker_text(text: string): i32 {
   const pkt = encode_edit_marker_text(HOST.doorbell, text);
   if (!HOST.doorbell.fits(pkt)) return Errno.EMSGSIZE;
-  const result = HOST.doorbell.call(
+  return HOST.call(
     port.SHELL,
     Command.EDIT_MARKER_TEXT,
     pkt,
     (result) => result,
   );
-  HOST.strobe.request();
-  return result;
 }
 
 /** The waiting marker committed with its text. */
 export function marker_commit(): void {
-  HOST.now(port.SHELL, Command.EDIT_MARKER_COMMIT);
+  HOST.call(port.SHELL, Command.EDIT_MARKER_COMMIT);
 }
 
 /** The waiting marker let go. */
 export function marker_cancel(): void {
-  HOST.now(port.SHELL, Command.EDIT_MARKER_CANCEL);
+  HOST.call(port.SHELL, Command.EDIT_MARKER_CANCEL);
 }

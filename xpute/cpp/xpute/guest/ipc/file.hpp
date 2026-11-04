@@ -102,13 +102,6 @@ template <class O, std::size_t N> class Files {
         return fd;
     }
 
-    // `open`, or none where `N - 1` are open already.
-    std::optional<Fd> try_open(Sys &sys, std::uint32_t root, std::string_view path, O owner) {
-        std::optional<Fd> fd = held_.insert(std::move(owner));
-        if (fd) sys.openat(*fd, root, sys::flag::O_RDONLY, path);
-        return fd;
-    }
-
     // Answered or not.
     std::optional<O> close(Sys &sys, Fd fd) {
         sys.close(fd);

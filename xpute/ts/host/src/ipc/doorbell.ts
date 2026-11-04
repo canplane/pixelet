@@ -53,7 +53,7 @@ export class Doorbell implements PacketRoom {
   private trapped = false;
   private readonly hearing = new Map<u32, OnEvent>();
   wake: ((wake_ms: f64) => void) | null = null;
-  /** Told once, as the guest traps. */
+  /** Told once, as the guest traps; the mount's (host.ts), which halts the strobe. */
   stopped: (() => void) | null = null;
 
   private readonly run: Run;
@@ -81,7 +81,7 @@ export class Doorbell implements PacketRoom {
 
   /** What the guest raises for `port` is handed to `heard`; what it raises
    * for a port none listens on is dropped. */
-  listen(port: u32, heard: OnEvent): void {
+  on(port: u32, heard: OnEvent): void {
     this.hearing.set(port, heard);
   }
 

@@ -10,7 +10,6 @@ pub mod global;
 pub mod hostcall;
 pub mod ipc;
 pub mod mem;
-pub mod program;
 pub mod sched;
 pub mod stop;
 pub mod wasm;

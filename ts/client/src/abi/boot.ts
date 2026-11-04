@@ -149,7 +149,7 @@ async function open(): Promise<void> {
     submit_frame,
   );
   bracket.sensor.hear(SENSOR_HEARD);
-  HOST.doorbell.listen(port.SHELL, heard);
+  HOST.doorbell.on(port.SHELL, heard);
   bracket.gpu.boot({
     ready: gpu_ready,
     state: (state) => set_gpu(GPU_STATE[state]),
@@ -165,7 +165,7 @@ async function open(): Promise<void> {
     bracket.sensor.orient.gated,
     bracket.sensor.orient.silence,
   );
-  const booted = HOST.doorbell.call(
+  const booted = HOST.call(
     port.SHELL,
     Command.SYS_BOOT,
     pkt,
@@ -174,11 +174,7 @@ async function open(): Promise<void> {
   if (booted < 0)
     throw new Error(`the kernel refused its boot: ${strerror(booted)}`);
   console.info("[boot] the kernel started");
-  // Its turns end with it.
-  HOST.doorbell.stopped = () => {
-    HOST.strobe.stop();
-    set(BOOT_STOPPED);
-  };
+  HOST.stopped = () => set(BOOT_STOPPED);
   const declared = declare_source();
   await gpu_present();
   await declared;

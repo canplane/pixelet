@@ -802,7 +802,8 @@ what an open or a write means and what the stop report says are handed it by the
 client's boot (`ts/client/src/abi/boot.ts`). What answers the kernel's
 hostcalls is `ts/client/src/sys/`: its files, their names, versions, kept keys
 and refusals (`sys/fs/`), and its text and its stop report beside. What the
-shell's port carries is `ts/client/src/port/`, a file a major. The server the
+shell's port carries is `ts/client/src/port/`, a file a major (SHELL's snapshot
+in `snapshot.ts`, `shell.ts` the shell's way in). The server the
 client reads from, its routes, its published tables and whether the device is
 online, is `ts/client/src/origin/`; the numbers both read, generated from
 `spec/` or, for the states the client reports and the shell shows, written
@@ -849,12 +850,11 @@ process only because a page and an app hold both.
  pixelet, by role                          xpute, by substrate
 
    shell     the UI: React over the        guest   the kernel, run in turns
-             snapshot; the platform's              (pxl-wasm, pxl-native)
-             sensors, GPU, visibility        │ ▲  xpute's contract
-     │ ▲  port 255, ts/client/src/port/      ▼ │
-     ▼ │                                   host    @xpute/host, mounted by
-   kernel    decides all, owns no device           ts/client/src/host/
-     │ ▲  hostcalls, ts/client/src/sys/
+             snapshot                              (pxl-wasm, pxl-native)
+     │ ▲  port 255, ts/client/src/port/      │ ▲  xpute's contract
+     ▼ │  (the shell's event loop)           ▼ │
+   kernel    decides all, owns no device   host    @xpute/host, mounted by
+     │ ▲  hostcalls, ts/client/src/sys/            ts/client/src/host/
      ▼ │
    platform  its files, text, the stop
              report
@@ -862,11 +862,11 @@ process only because a page and an app hold both.
 
 What crosses each edge:
 
-| Edge                        | Down                                                                                                                                                                                                                                                                                              | Up                                                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| shell and kernel, `port/`   | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends and each turn's frame (`SURFACE_*`), a sensor's reading, the GPU's readiness, the page's visibility, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them |
-| kernel and platform, `sys/` | opens and writes, a text's layout and raster, the stop report                                                                                                                                                                                                                                     | a file read whole, a text's lines and its pixels                                                                 |
-| host and guest, xpute       | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0                                                                                                                                                                        | completions and events, hostcalls and the GPU stream's records, the panic hook if it stops                       |
+| Edge                                 | Down                                                                                                                                                                                                                                                                                              | Up                                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| the shell's port and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends and each turn's frame (`SURFACE_*`), a sensor's reading, the GPU's readiness, the page's visibility, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them |
+| kernel and platform, `sys/`          | opens and writes, a text's layout and raster, the stop report                                                                                                                                                                                                                                     | a file read whole, a text's lines and its pixels                                                                 |
+| host and guest, xpute                | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0                                                                                                                                                                        | completions and events, hostcalls and the GPU stream's records, the panic hook if it stops                       |
 
 ## Reads, and the one scheduler
 

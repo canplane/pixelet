@@ -21,6 +21,8 @@ export class Strobe<G extends Grant = Grant> {
   private timer_at = Infinity;
   private last = -1;
   private running = false;
+  /** The guest stopped: no turn runs again. */
+  private halted = false;
   private readonly consider = (now: f64): void => this.turn(now);
 
   private readonly doorbell: Doorbell;
@@ -39,16 +41,26 @@ export class Strobe<G extends Grant = Grant> {
     doorbell.wake = (wake_ms) => this.wake(wake_ms);
   }
 
+  /** Turns run from now on; nothing where they already run or the guest stopped. */
   start(): void {
+    if (this.running || this.halted) return;
     this.running = true;
     this.last = performance.now();
     this.request();
   }
 
+  /** No turn runs until `start`; nothing where none runs. */
   stop(): void {
+    if (!this.running) return;
     this.running = false;
     clearTimeout(this.timer);
     this.timer_at = Infinity;
+  }
+
+  /** No turn runs again: the guest stopped. */
+  halt(): void {
+    this.halted = true;
+    this.stop();
   }
 
   request(): void {

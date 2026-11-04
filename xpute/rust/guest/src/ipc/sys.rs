@@ -100,15 +100,15 @@ impl Sys {
     }
 
     /// `op` carries the PROGRAM bit.
-    pub fn call(&mut self, op: u32, args: &[u32], bytes: &[u8]) {
+    pub fn send(&mut self, op: u32, args: &[u32], bytes: &[u8]) {
         xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
         self.stream.record(op, args, &[], Some(bytes));
     }
 
-    /// `call` run by the host before this returns, from what it already
+    /// `send` run by the host before this returns, from what it already
     /// holds: its value or its errno, ENOSPC where the record does not fit
     /// past the turn's. What `args` name it writes during the call.
-    pub fn call_now(&mut self, op: u32, args: &[u32], bytes: &[u8]) -> Result<u32, Errno> {
+    pub fn call(&mut self, op: u32, args: &[u32], bytes: &[u8]) -> Result<u32, Errno> {
         xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
         let at = self
             .stream
@@ -117,16 +117,16 @@ impl Sys {
         answer_of(crate::hostcall::hostcall(at as u32))
     }
 
-    /// `call` where it fits with `reserve` bytes left after it; false, and
+    /// `send` where it fits with `reserve` bytes left after it; false, and
     /// nothing recorded, where it does not, for the caller to ask again a later turn.
-    pub fn try_call(&mut self, op: u32, args: &[u32], bytes: &[u8], reserve: usize) -> bool {
+    pub fn try_send(&mut self, op: u32, args: &[u32], bytes: &[u8], reserve: usize) -> bool {
         if !self
             .stream
             .fits(record_bytes(args.len(), Some(bytes.len())), reserve)
         {
             return false;
         }
-        self.call(op, args, bytes);
+        self.send(op, args, bytes);
         true
     }
 

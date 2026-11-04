@@ -106,8 +106,8 @@ impl Door {
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
-    /// An event for `port`.
-    pub fn raise(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+    /// An event for `port`, its packet written by `f`.
+    pub fn send_with(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
         self.post_in_place(frame::tag_of(port, 0), cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
@@ -116,8 +116,8 @@ impl Door {
     }
 
     /// `event` for `port`.
-    pub fn raise_to<E: Event>(&self, port: u32, event: &E) {
-        self.raise(port, E::NUMBER, E::FIELDS, |w| event.write(w));
+    pub fn send<E: Event>(&self, port: u32, event: &E) {
+        self.send_with(port, E::NUMBER, E::FIELDS, |w| event.write(w));
     }
 
     /// An unapplied command can wait in the submission ring; what it would
@@ -133,7 +133,7 @@ impl Door {
     /// Applies submissions in order while there is room; the rest waits for
     /// the next turn. Replies only to `ACKREQ` and to failures. Returns how
     /// many completions it made.
-    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Outcome) -> u32 {
+    pub fn receive(&self, mut handle: impl FnMut(Submission) -> Outcome) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         while self.has_room() {

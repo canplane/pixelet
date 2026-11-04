@@ -18,7 +18,7 @@ import * as port from "@/abi/port.spec.ts";
 
 /** 0 when the kernel has none left. */
 function surface_open(role: u32): u32 {
-  return HOST.doorbell.call(
+  return HOST.call(
     port.SHELL,
     Command.SURFACE_OPEN,
     encode_surface_open(HOST.doorbell, role),
@@ -35,7 +35,7 @@ function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
 }
 
 function surface_close(surface: u32): void {
-  HOST.doorbell.call(
+  HOST.call(
     port.SHELL,
     Command.SURFACE_CLOSE,
     encode_surface_close(HOST.doorbell, surface),

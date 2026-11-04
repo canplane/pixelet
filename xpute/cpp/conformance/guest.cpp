@@ -157,7 +157,7 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     case cmd::HOSTCALL: {
         s.word = 0;
         const std::array<std::uint32_t, 2> args{arg, s.stream.mem().off_of(&s.word)};
-        Result<std::uint32_t> res = s.sys.call_now(hostcall::ANSWER, args, {});
+        Result<std::uint32_t> res = s.sys.call(hostcall::ANSWER, args, {});
         if (!res) return {.err = res.error().errnum};
         // The word the host wrote before the hostcall returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
@@ -187,7 +187,7 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.sys.rise();
-    s.door.drain(
+    s.door.receive(
         [&s](const abi::SysOpened &opened) {
             if (std::optional<std::uint32_t> owner = s.files.complete_open(s.sys, opened)) s.door.post(frame::tag_of(SENDER, *owner), cmd::OPENED, 0, opened.res);
             return Outcome{};

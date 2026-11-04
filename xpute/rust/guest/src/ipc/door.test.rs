@@ -36,7 +36,7 @@ fn command_needs_reply_room() {
         d.post(0, 2, 0, 0);
     }
     assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
-    d.drain(|_| {
+    d.receive(|_| {
         for _ in 0..MOST_EVENTS {
             d.post(0, 2, 0, 0);
         }
@@ -58,7 +58,7 @@ fn ring_peaks() {
     for _ in 0..SQ {
         assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
     }
-    assert_eq!(d.drain(|_| Ok(Some(0))), 3);
+    assert_eq!(d.receive(|_| Ok(Some(0))), 3);
     assert_eq!(
         d.take_stat(),
         DoorStat {
@@ -76,7 +76,7 @@ fn ring_peaks() {
     while d.cq().peek().is_some() {
         d.cq().advance();
     }
-    assert_eq!(d.drain(|_| Ok(Some(0))), SQ - 3);
+    assert_eq!(d.receive(|_| Ok(Some(0))), SQ - 3);
     assert_eq!(
         d.take_stat(),
         DoorStat {
@@ -104,7 +104,7 @@ fn door_answers_nop() {
         d.sq().push(4, Command::NOP as u32, frame::ACKREQ, 0, None),
         Errno::OK
     );
-    d.drain(|_| unreachable!("the program is handed no NOP"));
+    d.receive(|_| unreachable!("the program is handed no NOP"));
     let f = d.cq().peek().expect("a reply");
     assert_eq!(
         (f.tag, f.cmd, f.flags & frame::RES, f.result),
@@ -121,7 +121,7 @@ fn open_completion_handed_over() {
         Errno::OK
     );
     let mut got = None;
-    d.drain(|submission| match submission {
+    d.receive(|submission| match submission {
         Submission::Opened(opened) => {
             got = Some((opened.fd, opened.res));
             Ok(Some(0))
@@ -141,7 +141,7 @@ fn program_frame_numbered_nop_handed_over() {
         Errno::OK
     );
     let mut got = None;
-    d.drain(|submission| match submission {
+    d.receive(|submission| match submission {
         Submission::Program(cmd, _) => {
             got = Some(cmd);
             Ok(Some(1))
@@ -161,7 +161,7 @@ fn program_frame_numbered_nop_handed_over() {
 fn host_frame_unknown_refused() {
     let (d, _buf) = door();
     assert_eq!(d.sq().push(5, 0x1001, 0, 0, None), Errno::OK);
-    d.drain(|_| unreachable!("the host's command is none of the program's"));
+    d.receive(|_| unreachable!("the host's command is none of the program's"));
     let f = d.cq().peek().expect("a failure's reply");
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }

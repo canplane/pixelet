@@ -2,9 +2,11 @@
 
 **2026-11-04** — recorded with the user. Main was at `e82319435`. The user asked
 why agents mix host and guest, kernel and shell. The comments beside the
-brackets name the shell for what the host does (the memory given, the directory
-read, `run` rung), and port 255, `SHELL`, carried the shell and the drivers
-alike, so one word meant the UI in `shell/` and the whole client on the rings.
+brackets named the shell for what the host does (the memory given, the
+directory read, `run` rung); port 255, `SHELL`, carried the shell and the
+drivers alike, so one word meant the UI in `shell/` and the whole client on the
+rings; and xpute had grown a second layer beside its base, with its own words
+for the same acts.
 
 ## What the user decided
 
@@ -22,8 +24,25 @@ alike, so one word meant the UI in `shell/` and the whole client on the rings.
   level the core needs, is how the core is written.
 - **`driver/` mixed two things, so it goes.** What answers the kernel's
   hostcalls and what the shell's port carries are apart.
-- **The layout follows the naming rules and the web's usual words**, as the
-  session laid it out and the user took it.
+- **The base comes first: it stands right, its names fit, and its ends are
+  symmetric.** An easier surface is made in the base itself where that keeps
+  the rings and no bindgen; where it cannot be, a layer goes over the base, as
+  libc's functions go over the system calls: the same words, the same
+  meanings, the same formats. A layer whose words mean something else, or
+  whose formats split from the base's, is not one.
+- **The rings are RPC between peers, and xpute is the bus.** As a PCIe fabric
+  has a controller and a device on each port, the host is the controller and
+  each port holds a guest; to xpute 1 and 255 are peers, and only the guests
+  rank themselves by role. Every end speaks the same verbs: `send` (taken on
+  the other's turn), `call` (answered before it returns), `on` (a handler
+  bound), `receive` (what came, handed on). `Door` and `Doorbell` stay: they
+  name the substrate's two ends, where host and guest do rank.
+- **xpute's program layer is taken out.** It was built on 2026-11-01 without a
+  record of the user's, beside the base rather than over it: `call` meant
+  "now" on the host's `Port` and "after the turn" on the guest's `Turn`;
+  `Port` took packets only in forms of its own and threw on an errno, so
+  pixelet, which lays its memory out itself, could not use it and reached past
+  it to the doorbell.
 
 ## What was weighed and not taken
 
@@ -36,30 +55,53 @@ alike, so one word meant the UI in `shell/` and the whole client on the rings.
 - `PLATFORM`, `PLACE`, `OUTSIDE`, `LOOP` and `CORE` as port names: with 255 the
   UI, `KERNEL` and `SHELL` stand.
 
-## What was built
+## What was done
 
-- `ts/client/src/sys/`, what answers the kernel's hostcalls, as `cfg.sys`
-  hands them to `@xpute/host`: `sys/fs/` the files (the namespace, its
-  backends, the source's declaration, the refusals, the catalog), `sys/text.ts`
-  and `sys/stop.ts`.
-- `ts/client/src/origin/`, the server the client reads from: the routes, the
-  published tables, the ingest's keys and whether the device is online.
-- `ts/client/src/port/`, a file a major on the shell's port, now as the door's
-  (`door/apply/`): `fs.ts` (`FS_MOUNT`, `FS_TRUNCATED`, sent for `sys/fs/`),
-  `gpu.ts`, `sys.ts` (`SYS_SLEEP`), `surface.ts` with each turn's frame, and
-  `sensor.ts` with the readings and the kernel's asks to start and stop.
-- The generators write into the new paths (`rust/tool/src/spec/`); the spec's
-  docs, the kernel's comments, `AGENTS.md`, `ARCHITECTURE.md`, `README.md` and
-  `asset/README.md` say `sys/`, `port/` and `origin/`, and the kernel's
-  comments say the client where they said the driver.
+- `driver/` taken apart (`ce6ce0b37`). `ts/client/src/sys/` answers the
+  kernel's hostcalls, as `cfg.sys` hands them to `@xpute/host`: `sys/fs/` the
+  files, `sys/text.ts`, `sys/stop.ts`. `ts/client/src/origin/` is the server
+  the client reads from. `ts/client/src/port/` carries the shell's port: a file
+  for each major but SHELL, whose snapshot is `snapshot.ts`, with `shell.ts`
+  the shell's way in and `SYS_BOOT` with the boot in `abi/boot.ts`.
+- The comments that gave the shell the host's work, in the brackets,
+  `mem.json` and the kernel's profiler, say the host, the page or the client.
+- The program layer out of xpute: `program!` and `XPUTE_PROGRAM`,
+  `spec/program.json`, `@xpute/host`'s `open` and `Port`, the C++ example, the
+  example's table, xpute-tool's `cmd` binary and the program branches of its
+  emitters, `LinkConfig::DEFAULT` and `Files::try_open`. The Rust example and
+  its host test are again a guest that lays its range out on the base, as
+  before `e3be4b371`.
+- What every program wrote around the strobe is the base's: `start` and `stop`
+  are no-ops where they already hold, and the mount halts the strobe once the
+  guest stops and tells the program (`Host.stopped`). The client keeps only
+  its two facts, the world's view open and the page seen.
+- The architecture's figure keeps the shell to the UI; its port is the shell's
+  event loop, which the sensors, the GPU and the visibility are heard on too.
+- The verbs, on both ends: the guest's `Sys::call` is `send`, `call_now`
+  `call`, `try_call` `try_send`; `Door::raise_to` is `send`, `raise`
+  `send_with`, `drain` `receive`; the host's `Doorbell.listen` is `on`,
+  `Sys.call_now` `call`, and `Host.now` folds into `Host.call`, whose answer
+  none reads is logged on a failure as the doorbell logs one. pixelet's port
+  speaks through `HOST.send` and `HOST.call` alone, but for the frame each
+  turn's submit writes.
+- Kept, as the base's: what the same days moved down into it and pixelet uses,
+  `stop`, `Opened`, `Door::raise_to` with `Event`, `OwnedRange`, and the
+  command table's generator (`spec::cmd::table_outputs`), which writes
+  pixelet's table.
 
 ## Open
 
-- The bracket comments that name the shell for the host's work:
-  `rust/client-bracket/wasm/src/lib.rs`, `wasm/build.rs`, `wasm/Cargo.toml`,
-  `native/src/lib.rs`, `native/include/pxl_native.h`, and
-  `spec/client/kernel/sys/mem/mem.json`, which writes `mem.spec.rs`.
+- The hostcall stream beside the rings: a guest asks the host's port 0 by
+  records of its own format (`spec/ipc/sys.json`), not by the rings' frames.
+  The user sees no reason for a second way, as Unix keeps one, but leaves it
+  to judgment. A guest's `call` to 255 has no path but through port 0.
+- What else every program assembles by hand: the client's `open_host`, which
+  opens the guest through the bracket and mounts on it, and the `HOST` and
+  `PACING` it keeps for the port's modules.
+- `cmd.json`'s sections still name the host for what the shell's port carries
+  ("the host tells the process") and call the sensors' start and stop
+  hostcalls.
 - The kernel's sensor ABI stays raw: it takes the platform's permissions, its
   gating and its error codes.
-- Checked by format, lint and type (`pnpm --dir ts check`) and by `cargo spec`;
-  the tests were not run.
+- Checked by format, lint, type, the C++ build and `cargo spec`; the tests,
+  the example's and the strobe's among them, were not run.

@@ -8,7 +8,7 @@ import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
 export function set(key: u32, value: u32): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.SETTING_SET,
     encode_setting_set(HOST.doorbell, key, value),

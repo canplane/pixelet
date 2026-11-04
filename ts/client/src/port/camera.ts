@@ -29,12 +29,12 @@ export async function tracking(tracking: Tracking): Promise<void> {
 
 /** The compass's press: north up. */
 export function north_up(): void {
-  HOST.now(port.SHELL, Command.CAMERA_NORTH_UP);
+  HOST.call(port.SHELL, Command.CAMERA_NORTH_UP);
 }
 
 /** A search result: the pivot moved there, the view as it is. */
 export function goto(lon: f64, lat: f64): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.CAMERA_GOTO,
     encode_camera_goto(HOST.doorbell, lon, lat, null, null, null),

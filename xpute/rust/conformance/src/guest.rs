@@ -197,7 +197,7 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
-    door.drain(|submission| match submission {
+    door.receive(|submission| match submission {
         Submission::Opened(opened) => {
             if let Some(owner) = state.files.complete_open(&mut state.sys, &opened) {
                 door.post(
@@ -357,7 +357,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             let n = arg(pkt)?;
             *word = 0;
             let at = mem.off_of(&raw const *word) as u32;
-            sys.call_now(spec::hostcall::ANSWER, &[n, at], &[])
+            sys.call(spec::hostcall::ANSWER, &[n, at], &[])
                 .map_err(MarshalError::new)?;
             // SAFETY: the word the host wrote before the hostcall returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))

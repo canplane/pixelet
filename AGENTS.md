@@ -11,7 +11,8 @@
     no number a meaning. What answers the kernel's hostcalls goes in
     `ts/client/src/sys/`: its files (names, versions, kept keys, refusals) in
     `sys/fs/`, its text and its stop report beside. What the shell's port
-    carries goes in `ts/client/src/port/`, a file a major: the commands for the
+    carries goes in `ts/client/src/port/`, a file a major (SHELL's snapshot in
+    `snapshot.ts`, `shell.ts` the shell's way in): the commands for the
     UI's intents and its input, the snapshot, the surfaces it lends and each
     turn's frame, what the place's sensors, GPU and visibility tell the kernel,
     the profiler. The server the client reads from (its routes, its published

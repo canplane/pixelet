@@ -21,15 +21,11 @@ export let PACING: FramePacing;
 
 let view_open = false;
 let page_visible = true;
-let turning = false;
 
 /** Turns run while the world's view is open and the page is seen: a hidden
  * page gets no frame, and a closed view draws none. */
 function steer(): void {
-  const turn = view_open && page_visible;
-  if (turn === turning) return;
-  turning = turn;
-  if (turn) HOST.strobe.start();
+  if (view_open && page_visible) HOST.strobe.start();
   else HOST.strobe.stop();
 }
 

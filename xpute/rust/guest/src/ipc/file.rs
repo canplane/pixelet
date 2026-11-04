@@ -54,14 +54,9 @@ impl<O: Copy, const N: usize> Files<O, N> {
     }
 
     pub fn open(&mut self, sys: &mut Sys, root: u32, path: &str, owner: O) -> Fd {
-        self.try_open(sys, root, path, owner).or_bug(Errno::ENOSPC)
-    }
-
-    /// `open`, or none where `N - 1` are open already.
-    pub fn try_open(&mut self, sys: &mut Sys, root: u32, path: &str, owner: O) -> Option<Fd> {
-        let fd = self.held.insert(owner)?;
+        let fd = self.held.insert(owner).or_bug(Errno::ENOSPC);
         sys.openat(fd, root, flag::O_RDONLY, path.as_bytes());
-        Some(fd)
+        fd
     }
 
     pub fn close(&mut self, sys: &mut Sys, fd: Fd) -> Option<O> {

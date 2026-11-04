@@ -24,7 +24,7 @@ import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
 export function locate(): void {
-  HOST.now(port.SHELL, Command.SENSOR_LOCATE);
+  HOST.call(port.SHELL, Command.SENSOR_LOCATE);
 }
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
@@ -82,7 +82,7 @@ function kernel_orient(
 
 /** The compass gives no code for its failure. */
 function kernel_orient_lost(): void {
-  HOST.now(
+  HOST.call(
     port.SHELL,
     Command.SENSOR_ERR,
     encode_sensor_err(HOST.doorbell, Sensor.Orientation, null),

@@ -69,7 +69,7 @@ class Door {
     }
 
     // An event for `port`.
-    template <class Fill> void raise(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
+    template <class Fill> void send_with(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
         post_in_place(frame::tag_of(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
@@ -79,8 +79,8 @@ class Door {
     }
 
     // `event` for `port`.
-    template <Event E> void raise_to(std::uint32_t port, const E &event) const noexcept {
-        raise(port, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
+    template <Event E> void send(std::uint32_t port, const E &event) const noexcept {
+        send_with(port, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
     }
 
     // Applies waiting commands in order while there is room for what one more may
@@ -89,7 +89,7 @@ class Door {
     // its value, and an open the host completed goes to `opened`; every other
     // sender's goes to `apply`. A drain runs before
     // any phase's budget, so the program records what it is handed and returns.
-    template <class Opened, class Apply> std::uint32_t drain(Opened &&opened, Apply &&apply) const noexcept {
+    template <class Opened, class Apply> std::uint32_t receive(Opened &&opened, Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {

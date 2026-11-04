@@ -206,7 +206,7 @@ class Host {
       },
       () => {},
     );
-    guest.answer_with((at) => sys.call_now(mem, at));
+    guest.answer_with((at) => sys.call(mem, at));
   }
 
   /** As the port `src`. */

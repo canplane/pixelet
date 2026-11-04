@@ -26,7 +26,7 @@ struct DataSpec {
     mk: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 8] = [
+const DATA_SPECS: [DataSpec; 7] = [
     DataSpec {
         json: "spec/conformance/guest.json",
         ts: "ts/host/src/conformance.spec.ts",
@@ -66,14 +66,6 @@ const DATA_SPECS: [DataSpec; 8] = [
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys"),
         mk: None,
-    },
-    DataSpec {
-        json: "spec/program.json",
-        ts: "ts/host/src/program.spec.ts",
-        rs: "rust/guest/src/program.spec.rs",
-        enums: Enums::None,
-        cpp: ("cpp/xpute/guest/program.spec.hpp", "xpute::program"),
-        mk: Some(("cpp/xpute/guest/program.spec.mk", "PROGRAM_")),
     },
     DataSpec {
         json: "spec/gpu/api.json",

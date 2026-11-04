@@ -83,7 +83,7 @@ ts/host                                     the host end in TypeScript, mounted 
 rust/host                                   the host end in Rust: a guest's memory by offset, and a guest linked in
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
-rust/example  ·  cpp/example  ·  ts/example the smallest guest in each, and the host that drives both
+rust/example  ·  ts/example                 the smallest guest, and the host that drives it
 rust/tool                                   the repository's own Rust programs, run by cargo
 script                                      the repository's own scripts (Python)
 spec                                        the numbers every language's are generated from
@@ -92,7 +92,7 @@ spec                                        the numbers every language's are gen
 A program takes these as packages, by name. In TypeScript they are
 `@xpute/kit`, `@xpute/host` and `@xpute/gpu` (`ts/kit`, `ts/host`, `ts/gpu`),
 each its own source: its `package.json` maps a path under its name to the file
-under `src/` (`@xpute/host/port.ts` is `ts/host/src/port.ts`), and the files
+under `src/` (`@xpute/host/host.ts` is `ts/host/src/host.ts`), and the files
 strip to JavaScript as they are, so a bundler or Node's type stripping takes
 them with no build. In Rust they are the crates `xpute-kit`, `xpute-guest`,
 `xpute-host` and `xpute-gpu`. None is published yet: a program beside this tree
@@ -101,101 +101,37 @@ and names the crates by `path`.
 
 ## Embedding a guest
 
-The smallest program shows the whole of it: a guest that answers one command, in
-Rust (`rust/example`) and in C++ (`cpp/example`), and the host that drives
-either (`ts/example/sum.test.ts`), which `make test` runs. Each end is one
-declaration. The guest names a function for each command it answers in
-`xpute_guest::program!`, or in C++ `XPUTE_PROGRAM`
-(`cpp/xpute/guest/program.hpp`), which lays its range out (a page for the toc,
-then the two rings and their slots and the hostcalls' stream, then the heap),
-runs its turns and hands each command to its function: the function's result is
-the reply, and its errno the failure. The host opens it in one call
-(`@xpute/host/port.ts` `open`) and talks to it through a **port**, the number
-the guest sees as a command's sender. `send` puts a command on the rings for the
-next turn, `on` hears what the guest raises after the turn that raised it, and
-`call` rings the guest at once and returns its answer. A hostcall of the
-program's own is answered by the function `open` was given for its number. What
-waits on the host runs as a task (`Turn::spawn`): a file is read whole by
-awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
-open is answered and ready on the next, from the host's `Fs` that `open` was
-given; `raise` sends an event from the task to the program's port, and
-`Door::raise_to` to any port. A bug or a panic ends the guest:
-`program!` and `XPUTE_PROGRAM` install xpute's stop (`xpute-guest/stop.rs`,
-`cpp/xpute/guest/stop.hpp`), which the host hears as `ABORT`.
+The smallest program shows the whole of it: a guest that answers one command
+(`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
+`make test` runs. The guest lays out its own range, a page for the toc, then the
+two rings and their slots and the hostcalls' stream, and answers the toc's
+offset from a boot call; each turn it applies what waits, and asks the host for
+a number it holds by a hostcall run now. The host opens the module over a memory
+of its own (`@xpute/host/module.ts` `open_module`) and mounts on it in one call
+(`@xpute/host/host.ts` `mount`), given that offset, its answers to the guest's
+calls (`SysHost`, each part optional) and the scheduling policy that says when a
+turn runs and how much it gets (`sched/policy.ts`: a fixed quota where there is
+no display, frame pacing on a page); then it sends the command and reads the
+reply.
 
-The commands are the program's own table (`spec/example/cmd.json`), generated
-for both ends by xpute-tool's `cmd`: the guest's function takes its packet as
-the struct the table makes for it, and the host sends a command and hears an
-event by the constant the table makes for it, its fields by place. Nothing it
-generates reads a name at run time, so a bundle keeps the numbers alone.
+A guest stops on a broken invariant (`bug!`) or a panic: what it installs
+(`xpute_guest::stop::install`, `cpp/xpute/guest/stop.hpp`) publishes the report
+(`ABORT`) as the turn's one record, which the host hears. An event a guest's
+table generates is sent to the port it names (`ipc/door` `Door::send`).
+A program's command table is generated for both ends by xpute-tool
+(`spec::cmd::table_outputs`), handed the table and where its code goes.
 
-```sh
-cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs --write
-# and a C++ guest's header: --cpp guest/cmd.spec.hpp --namespace my_program
-```
+A guest built as a **WebAssembly module** takes its form from
+`xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
+installs its allocator and exports `run`, the entry it calls:
 
 ```rust
 // build.rs, with xpute-guest as a build dependency
 fn main() {
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig::DEFAULT);
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
 }
 
 // lib.rs
-xpute_guest::program! {
-    on Command::SUM => sum, // fn(&mut Turn, Sum) -> Result<i32, Errno>
-    on Command::COUNT => count,
-}
-
-fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
-    let path = String::from(p.path);
-    cx.spawn(async move {
-        let res = match read(Root::FILES as u32, &path).await {
-            Ok(bytes) => bytes.len() as i32,
-            Err(e) => e as i32,
-        };
-        raise(&CountedEvent { res });
-    })?;
-    Ok(0)
-}
-```
-
-In C++ a task is a coroutine (`Task<>`), and the read holds its own copy of the
-path, so the handler makes it and hands it over:
-
-```cpp
-Task<> count_bytes(Read file) {
-    Result<Bytes> bytes = co_await file;
-    raise(CountedEvent{.res = bytes ? int32_t(bytes->size()) : int32_t(bytes.error().errnum)});
-}
-
-Result<int32_t> count(Turn &cx, Count p) {
-    if (Result<void> s = cx.spawn(count_bytes(read(static_cast<std::uint32_t>(Root::FILES), p.path))); !s) return s.error();
-    return 0;
-}
-
-XPUTE_PROGRAM(on<Command::SUM, sum>, on<Command::COUNT, count>) // sum: Result<int32_t>(Turn &, Sum)
-```
-
-```ts
-const guest = open(module, { answer: { [Hostcall.ASK]: () => ANSWER }, fs });
-guest.on(SUMMED, (total) => console.log(total)); // 5
-guest.call(SUM, 2, 3); // 2 + 3 + ANSWER
-guest.on(COUNTED, (res) => console.log(res)); // the file's bytes, or -errno
-guest.send(COUNT, "file.txt");
-```
-
-Under the two declarations lie the parts they compose, which a program that lays
-its memory out itself uses as they are. A guest built as a **WebAssembly
-module** takes its form from `xpute_guest::wasm`: a call in its `build.rs`, and
-one `wasm_abi!`, which installs its allocator and exports `run`, the entry it
-calls. Its host opens the module over a memory of its own
-(`@xpute/host/module.ts` `open_module`) and mounts on it (`@xpute/host/host.ts`
-`mount`), given where the toc lies, its answers to the guest's calls (`SysHost`,
-each part optional) and the scheduling policy that says when a turn runs and how
-much it gets (`sched/policy.ts`: a fixed quota where there is no display, frame
-pacing on a page, and the fixed quota where `open` is given none).
-
-```rust
 xpute_guest::wasm_abi!(
     xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
     my_guest::entry // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64

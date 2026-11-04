@@ -34,9 +34,9 @@ export { asset_url } from "@/origin/route.ts";
 export { SEARCH_URL } from "@/origin/route.spec.ts";
 export { ASSET_FILES, PACK } from "@/origin/ingest.spec.ts";
 
-/** A command of the kernel's, rung at once with no quota. */
+/** A command of the kernel's, called at once. */
 export function command(cmd: Command, pkt?: PacketWriter): void {
-  HOST.now(port.SHELL, cmd, pkt);
+  HOST.call(port.SHELL, cmd, pkt);
 }
 
 /** Where the shell writes a command's packet (`encode_*`), in place: the

@@ -177,7 +177,7 @@ pub fn run(
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    door().drain(|submission| match submission {
+    door().receive(|submission| match submission {
         Submission::Opened(opened) => {
             file::on_opened(&opened);
             Ok(Some(0))
@@ -224,8 +224,8 @@ fn post_shell(s: &mut State) {
         take_geolocation_command, GeolocationCommand,
     };
 
-    let start = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStartEvent { sensor });
-    let stop = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStopEvent { sensor });
+    let start = |sensor: Sensor| door().send(port::SHELL, &SensorStartEvent { sensor });
+    let stop = |sensor: Sensor| door().send(port::SHELL, &SensorStopEvent { sensor });
     if let Some(c) = take_geolocation_command() {
         match c {
             GeolocationCommand::Start => start(Sensor::Geolocation),
@@ -247,7 +247,7 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        door().raise_to(
+        door().send(
             port::SHELL,
             &ShellSnapshotEvent {
                 at: off_of_slice(&raw const buf[..]) as u32,

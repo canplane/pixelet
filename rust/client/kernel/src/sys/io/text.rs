@@ -14,7 +14,7 @@ use pxl_render::gpu::text::{raster_box, Raster};
 use pxl_render::look::marker::Font;
 use xpute_guest::mem::off_of_slice;
 
-use crate::sys::io::host::call_now;
+use crate::sys::io::host;
 use crate::sys::io::host_spec::{op, LAYOUT, LAYOUT_ANSWER, LINE, RASTER};
 use xpute_guest::global::Global;
 
@@ -86,7 +86,7 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
             args[LAYOUT::max_width as usize] = (max_width as f32).to_bits();
             args[LAYOUT::at as usize] = off_of_slice(&raw mut *at) as u32;
             args[LAYOUT::lines as usize] = lines;
-            match call_now(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
+            match host::call(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
                 None => return Some(unlaid(text_in)),
                 Some(Err(_)) => return None,
                 Some(Ok(_)) => {}
@@ -157,7 +157,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     args[RASTER::height as usize] = size[1];
     args[RASTER::x as usize] = origin[0].to_bits();
     if !matches!(
-        call_now(op::TEXT_RASTER, &args, text_in.as_bytes()),
+        host::call(op::TEXT_RASTER, &args, text_in.as_bytes()),
         Some(Ok(_))
     ) {
         return None;

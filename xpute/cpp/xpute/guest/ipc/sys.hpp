@@ -66,16 +66,16 @@ class Sys {
     void close(Fd fd) noexcept;
 
     // `op` carries the PROGRAM bit.
-    void call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
+    void send(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
 
-    // `call` run by the host before this returns, from what it already holds:
+    // `send` run by the host before this returns, from what it already holds:
     // its value or its errno, ENOSPC where the record does not fit past the
     // turn's. What `args` name it writes during the call.
-    Result<std::uint32_t> call_now(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
+    Result<std::uint32_t> call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
 
-    // `call` where it fits with `reserve` bytes left after it; false, and nothing
+    // `send` where it fits with `reserve` bytes left after it; false, and nothing
     // recorded, where it does not, for the caller to ask again a later turn.
-    bool try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept;
+    bool try_send(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept;
 
     // The one call of the turn, published at once; what was recorded before it is
     // dropped.

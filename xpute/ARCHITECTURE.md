@@ -214,7 +214,7 @@ completion ring for what the guest answers and raises, each where the toc says
 - it rings the guest with a quota (`ring`), which is one whole turn;
 - it then reads the completion ring dry, handing each reply to the call waiting
   for it and each event to the port it names, where one is attached
-  (`listen`).
+  (`on`).
 
 Two ways in sit on top of that. A question the host needs answered at once is a
 `call`: submitted with `ACKREQ` and rung with no quota until its reply comes
@@ -224,10 +224,11 @@ sent and rung. A guest that traps is gone, and the doorbell rings it no more.
 
 The guest's end is the **door** (`ipc/door` `Door`). It applies the submissions
 in order, answers each, and posts what the guest raises into the completion
-ring, for the port it names (`raise`, or `raise_to` for an event its table
-generates, `Event`), which holds a whole turn's output.
+ring, for the port it names (`send` for an event its table generates,
+`Event`, or `send_with` for a packet written in place), which holds a whole
+turn's output.
 What the host sent it applies itself, and hands the program every other sender's
-and each open the host completed (`Submission`). A drain runs before any phase's budget, so the program records what it is handed
+and each open the host completed (`receive`, `Submission`). A drain runs before any phase's budget, so the program records what it is handed
 and returns. Before each submission the door checks that the ring has room for
 the most one command may leave — its events, a bound the program gives
 (`most_events`), and its reply — and where it has not, it applies no more and
@@ -262,8 +263,10 @@ On the host side, something has to decide when to ring at all. That is the
 strobe, the pulse that tells a receiver when to act. It rings only when the host
 or the guest's last falling edge asked for a turn, at the moment the scheduling
 policy below gives; a positive `wake_ms` sets a timer that asks for a turn when
-it fires. A guest that asks for nothing is rung for nothing. The doorbell rings
-too, with no quota: to make room in a full submission ring, to wait for a call's
+it fires. A guest that asks for nothing is rung for nothing. The program says
+only whether turns may run (`start`, `stop`, each a no-op where it already
+holds); once the guest stops, the mount halts the strobe and tells the program
+(`Host.stopped`). The doorbell rings too, with no quota: to make room in a full submission ring, to wait for a call's
 reply and to send a `cmd`; and whatever holds the doorbell may ring it.
 
 How long a turn may take, and how that time is spent, are settled at three
@@ -393,7 +396,7 @@ the invariant that stopped the guest; a program numbers its own with the
 turn from one stream the toc names (`SYS`), or, a program's own, at once
 (below). The report (`ABORT`) drops the turn's other calls and is published
 alone, at once; a guest's bug reporter and, in Rust, its panic hook publish it
-(`stop`), which `program!` and `XPUTE_PROGRAM` install.
+(`stop`), which the guest installs (`stop::install`).
 
 Files borrow Plan 9's file namespace:
 
@@ -437,10 +440,10 @@ each. Some need nothing from outside: the host holds the answer already, as a
 page's text engine holds a line's width. For those a program's hostcall is run
 now: the guest lays its record past the last its turn has recorded, where
 nothing publishes it, and hands the host its offset (`ipc/sys`
-`Sys::call_now`). The host runs it before the call returns, reading that
+`Sys::call`; one the stream carries is `Sys::send`). The host runs it before the call returns, reading that
 record and writing only what it names, and answers with a value or `-errno`. It
 hands the call to the program as it hands one from the stream
-(`@xpute/host/ipc/sys.ts` `Sys.call_now`), so the program numbers its
+(`@xpute/host/ipc/sys.ts` `Sys.call`), so the program numbers its
 calls once and may have them run either way.
 
 A hostcall run now never waits on anything outside: an open, a buffer read back
@@ -584,32 +587,22 @@ decides what must match.
   nothing facing it is whole.
 - **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++
   (`cpp/xpute/guest`) are the same end, either plugged into any host, so what
-  one gives a program the other gives too. Both give a guest in one
-  declaration (`xpute-guest/program.rs` `program!`,
-  `cpp/xpute/guest/program.hpp` `XPUTE_PROGRAM`), which lays the range out by
-  the same numbers (`spec/program.json`), runs the turns and hands each command
-  to a function the program names, and runs as tasks what waits on the host, a
-  file read whole awaited across turns (`read`: a future in Rust, a coroutine's
-  awaitable in C++); and both give the parts it composes. One example, in each
-  language (`rust/example`, `cpp/example`), is held to the same host's tests.
+  one gives a program the other gives too.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
   platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
   hostcall stream as each turn returns. `mount` reads the toc as it is called,
-  so the turn or the boot call that writes it has run by then. Over any mount a
-  **port** (`port.ts`) speaks as one sender, with a verb for each way a message
-  crosses: `send` and `on` by the rings, a turn later, and `call` directly,
-  answered before it returns; `open` opens a module built with `program!` or
-  `XPUTE_PROGRAM`, mounts on it and gives that port in one call. Rust's
-  (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and
-  on a unix one hosts a guest linked into the host's own native process
-  (`native`). There it reserves
-  the memory, and runs every call into the guest on the guest's own thread,
-  since the guest keeps its module-wide values in `Global`s
-  (`xpute-guest/global.rs`), statics sound on one thread alone, handing each
-  hostcall back to the caller that waits. It also provides the allocator that
-  keeps the guest's blocks in its memory and every other thread's out of it.
+  so the turn or the boot call that writes it has run by then; what it gives
+  speaks with the doorbell's verbs, `send` and `call`, each asking the strobe
+  for a turn after. Rust's (`rust/host`) reads a guest's memory by offset on
+  every platform (`mem`), and on a unix one hosts a guest linked into the
+  host's own native process (`native`). There it reserves the memory, and runs
+  every call into the guest on the guest's own thread, since the guest keeps
+  its module-wide values in `Global`s (`xpute-guest/global.rs`), statics sound
+  on one thread alone, handing each hostcall back to the caller that waits. It
+  also provides the allocator that keeps the guest's blocks in its memory and
+  every other thread's out of it.
 - **The GPU's calls follow the same split.** Each guest language writes them
   (`rust/gpu`, `cpp/xpute/gpu`). The GPU hosts run them in TypeScript on WebGPU
   (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
@@ -618,7 +611,7 @@ decides what must match.
   traps; its stack's size and any front it keeps below the linker's data are its
   own numbers. Rust's build script prints the flags (`xpute-guest/wasm/link.rs`
   `link`), and the C++ guest is linked with the same (`cpp/Makefile`
-  `MODULE_LINK`).
+  `WASM_LINK`).
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it
 to run xpute's way — memory granted once, work in turns, I/O by asking.
