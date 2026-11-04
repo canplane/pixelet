@@ -2,8 +2,8 @@
 
 // Holds the C++ encoder to golden/gpu/programs.tsv: the programs
 // rust/gpu/src/programs.test.rs writes, the same calls in C++, write the
-// words the record holds turn by turn. Each turn ends with a ticket at the
-// done word, the turn's number from 1; the last reads the result back.
+// words the record holds turn by turn. Each turn ends with a request whose
+// ticket is the turn's number from 1; the last reads the result back.
 
 #include <cstring>
 #include <functional>
@@ -34,7 +34,8 @@ struct At {
     std::uint32_t readback;
 
     std::span<const std::uint8_t> input_bytes() const { return {mem.at(input), input_len}; }
-    std::uint32_t &done() const { return *reinterpret_cast<std::uint32_t *>(mem.at(done_at)); }
+    // The done word and the result after it (spec RESULT), the host's.
+    const std::array<std::uint32_t, 2> &done() const { return *reinterpret_cast<const std::array<std::uint32_t, 2> *>(mem.at(done_at)); }
     // Reads `n` bytes of `buffer` back to the record's place, as WebGPU reads
     // back: copied into a buffer made to be mapped, then mapped.
     void read(Encoder &gpu, Stream &s, Id buffer, std::uint32_t n, std::uint32_t ticket) const {
@@ -316,11 +317,11 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
 }
 
 // The triangle again, its render pipeline and a compute pipeline made by the
-// async ops: each in a turn of its own, its ticket at the done word, and named
-// by no record until the next turn has found it DONE.
+// async ops: each in a turn of its own, and named by no record until the next
+// turn has found its ticket at the done word.
 void pipelines_async(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
     Id cm = *gpu.shader_module(s, "@compute @workgroup_size(1) fn main() {}\n");
-    Id compute = *gpu.compute_pipeline_async(s, {std::nullopt, cm, "main"}, at.done(), 1);
+    Id compute = *gpu.compute_pipeline_async(s, {std::nullopt, cm, "main"}, at.done()[0], 1);
     turn(s);
     auto [t, v] = target(gpu, s);
     Id m = *gpu.shader_module(s, "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
@@ -335,7 +336,7 @@ void pipelines_async(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
                                             .depth_stencil = std::nullopt,
                                             .multisample = {},
                                             .fragment = FragmentState{m, "fs", COLOR_TARGET}},
-                                           at.done(), 2);
+                                           at.done()[0], 2);
     turn(s);
     Id e = *gpu.encoder(s);
     Id work = *gpu.compute_pass(s, e, std::nullopt);

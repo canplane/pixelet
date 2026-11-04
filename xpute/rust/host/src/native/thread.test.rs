@@ -6,7 +6,11 @@ use super::*;
 /// later one come back with none.
 #[test]
 fn terminate_ends_the_guest_alone() {
-    start("guest", 1 << 20, || {});
+    let vcpu = Vcpu {
+        turn: |_| -1.0,
+        ready: || true,
+    };
+    start("guest", 1 << 20, vcpu, || {});
     assert_eq!(run(|| 1), Some(1));
     assert_eq!(run::<()>(|| terminate()), None);
     assert_eq!(run(|| 2), None);

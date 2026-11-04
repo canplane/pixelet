@@ -30,7 +30,7 @@
     "SLOT_BYTES": { "$val": 4, "$doc": ["A ring slot's payload, the same for both rings."] },
     "SQ_AT": { "$val": 5, "$doc": ["Where the submission ring's words begin."] },
     "CQ_AT": { "$val": 6, "$doc": ["Where the completion ring's words begin."] },
-    "GPU_AT": { "$val": 7, "$doc": ["Where the GPU stream is, which the host runs after each turn; 0 without the GPU socket."] }
+    "GPU_AT": { "$val": 7, "$doc": ["Where the GPU stream is, which the host runs after each turn; 0 where the machine asks for no GPU."] }
   },
 
   "WORDS": {

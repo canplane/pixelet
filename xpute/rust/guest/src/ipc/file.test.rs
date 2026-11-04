@@ -86,10 +86,24 @@ fn answer_read_once() {
 fn read_whole_closes() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let fd = files.open(&door, 7, "a", "first");
-    // SAFETY: nothing runs the records, so nothing fills the buffer.
-    let bytes = unsafe { files.read_whole(&door, fd, 5) };
-    assert_eq!(bytes.map(|b| b.len()), Ok(5));
+    assert!(files.read_whole(&door, fd, 5).is_ok());
     assert_eq!(files.owner(fd), None, "read whole, it is closed");
+}
+
+/// The bytes are the host's until its head has passed the read, and are
+/// handed over then.
+#[test]
+fn read_whole_held_until_consumed() {
+    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let fd = files.open(&door, 7, "a", "first");
+    let read = files.read_whole(&door, fd, 5).expect("room for five bytes");
+    let read = read
+        .take(&door)
+        .expect_err("the head has not passed the read");
+    while door.cq().peek().is_some() {
+        door.cq().advance();
+    }
+    assert_eq!(read.take(&door).map(|b| b.len()).ok(), Some(5));
 }
 
 #[test]

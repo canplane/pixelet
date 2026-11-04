@@ -18,10 +18,28 @@
 //   its records, then stores their count; the host loads the count before it
 //   reads them, and stores 0 once it is done with them; the guest loads END
 //   before it writes records again.
-// - R3. The records, and the memory a record names for the host to read, are
-//   the host's from the count's store until the host stores 0. A host stores
-//   0 whether or not it ran them, so a host with nothing to run them on never
-//   holds the guest.
+// - R3. The records, and the memory a record names for the host to read
+//   (xpute gpu's WRITE_BUFFER_AT, WRITE_TEXTURE_AT, an image's bytes), are the
+//   host's from the count's store until the guest loads END as 0. In between
+//   nothing in the guest rewrites or frees that memory, and no copy of it is
+//   made. END is that point because the host's last read of the guest's
+//   memory is a record's run, whose write copies the bytes before it returns
+//   (wgpu's write_buffer, write_texture). A writer of such memory writes it
+//   while the stream is the guest's, and otherwise defers itself alone, or
+//   writes a second buffer the host does not hold. A host stores 0 whether or
+//   not it ran them, so a host with nothing to run them on never holds the
+//   guest.
+// - R4. A word a record names for the host to answer later has one writer for
+//   good. A completion's ticket is the guest's alone, a sequence it advances
+//   for its done word, wrapping, one request out on the word at a
+//   time; the done word is the host's alone, which stores there the ticket it
+//   finished, with release, once what the request guards is written and after
+//   the result beside it where the request can fail. The guest holds the
+//   request done where the done word, loaded with acquire, equals the ticket
+//   it asked with: a late answer to a request dropped or superseded never
+//   does (xpute gpu spec RESULT). A block's status (the device's STATUS) is the
+//   host's alone, stored with release after the block. No word is written by
+//   both.
 //
 // A guest that finds END not yet 0 writes no records (`free`): the turn
 // leaves what it would have recorded for a later one.

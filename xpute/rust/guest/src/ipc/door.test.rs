@@ -190,13 +190,45 @@ fn call_publishes_nothing() {
 }
 
 #[test]
-fn abort_posts_the_report_alone() {
+fn abort_posts_the_report_after_what_was_published() {
     let (d, _buf) = door_of(256);
     d.send(&Ping);
     d.close(3);
     d.abort(Errno::EINVAL, core::panic::Location::caller(), 1, 2);
-    assert_eq!(d.cq().len(), 1);
+    assert_eq!(d.cq().len(), 3, "no published frame is taken back");
+    d.cq().advance();
+    d.cq().advance();
     let f = d.cq().peek().expect("the report");
     assert_eq!(f.tag, 0);
     assert_eq!(f.cmd, crate::abi::cmd::Command::SYS_ABORT as u32);
+}
+
+#[test]
+fn a_full_ring_keeps_the_report_slot() {
+    let (d, _buf) = door_of(256);
+    while d.cq().len() + 1 < d.cq().cap {
+        d.send(&Ping);
+    }
+    assert_eq!(
+        d.call(&Ping),
+        Err(Errno::ENOSPC),
+        "a call takes no slot of the report's"
+    );
+    d.abort(Errno::EINVAL, core::panic::Location::caller(), 1, 2);
+    assert_eq!(d.cq().len(), d.cq().cap, "the report took the last slot");
+}
+
+/// A reading dropped before the head has passed it leaves its buffer with
+/// the door, which lets it go at the first rise after.
+#[test]
+fn dropped_reading_kept_until_consumed() {
+    let (d, _buf) = door();
+    drop(d.read_buf(3, vec![0; 5]));
+    d.rise();
+    assert_eq!(d.reads.borrow().len(), 1, "the host may still fill it");
+    while d.cq().peek().is_some() {
+        d.cq().advance();
+    }
+    d.rise();
+    assert!(d.reads.borrow().is_empty());
 }

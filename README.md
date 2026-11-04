@@ -52,9 +52,11 @@ one Rust kernel drawing with WebGPU.
 ## What runs where
 
 The world lives in one Rust **kernel** (`pxl-kernel`, drawing through
-`pxl-render`). It runs as the guest of [xpute](./xpute/README.md), which runs
-one program inside another: the **host** owns the platform, grants the guest
-one memory and a quota of time on each call into it, a **turn**, and does the
+`pxl-render`). It runs as the guest of [xpute](./xpute/README.md), a
+unikernel on a virtual machine: the kernel and xpute's guest library, its
+library OS, are one image. The **host** is its VMM: it implements the devices
+the kernel's machine asks for, the GPU and the files, grants the guest one
+memory and a quota of time on each call into it, a **turn**, and does the
 outside work the guest asked for once the turn returns.
 
 The kernel's crate is its artifact, in the form xpute gives its target. One
@@ -67,8 +69,9 @@ storage, text, the network, the sensors and the surfaces (`src/services/`, a
 page's `x.ts` beside a device's `x.native.ts`), what answers the kernel's
 hostcalls, its files among them (`src/sys/`), what the app's ABI carries
 (`src/port/`) and the server it reads from (`src/origin/`); the numbers both
-read and the boot (`src/abi/`); and the **shell** (`src/shell/`), the UI,
-which changes the world only by commands the kernel applies.
+read and the boot (`src/abi/`); and the **shell** (`src/shell/`), the UI, the
+client outside the VM, which changes the world only by commands the kernel
+applies.
 
 Almost nothing is computed at request time. Tiles and assets are served from a
 bucket under names that never come to mean something else, a tile under its

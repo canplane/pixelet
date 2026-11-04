@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/canplane/xpute/spec/machine.schema.json",
   "title": "xpute machine",
-  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU socket its guest is given (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the host, and on the guest MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/cmd.json, spec/abi/fs.json) are protocol files too.",
+  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU its guest asks for (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the host, and on the guest MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/cmd.json, spec/abi/fs.json) are protocol files too.",
   "type": "object",
   "required": ["$doc"],
   "properties": {
@@ -67,8 +67,16 @@
         }
       }
     },
+    "fs": {
+      "description": "The file device the guest asks for (spec/abi/fs.json), which the host attaches and backs with the program's storage. Absent, none, and a file command is refused ENODEV.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" }
+      }
+    },
     "gpu": {
-      "description": "The GPU socket: a stream past the rings the guest writes its GPU calls into and the host runs after each turn (xpute-gpu), which says its own head (xpute-guest ipc/stream.rs). Absent, none.",
+      "description": "The GPU the guest asks for: a stream past the rings the guest writes its GPU calls into and the host runs after each turn (xpute-gpu), which says its own head (xpute-guest ipc/stream.rs). Absent, none.",
       "type": "object",
       "required": ["bytes", "power", "features"],
       "additionalProperties": false,
@@ -158,6 +166,7 @@
     "mem": ["stack", "rings"],
     "stack": ["mem", "rings"],
     "rings": ["mem", "stack"],
+    "fs": ["mem", "stack", "rings"],
     "gpu": ["mem", "stack", "rings"]
   },
   "$defs": {

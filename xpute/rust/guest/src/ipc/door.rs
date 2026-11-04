@@ -13,8 +13,9 @@
 //! `hostcall`. The host routes each by its command's major.
 //!
 //! Both rings keep a ring's rules (ring.rs R1 to R3), so the door holds
-//! whether its host takes turns with the guest or runs beside it; and two
-//! more, io_uring's too:
+//! whether its host takes turns with the guest or runs beside it, a host
+//! beside it beginning a turn only while the completion ring has room for
+//! one (`has_room`); and two more, io_uring's too:
 //!
 //! - R3, as the door keeps it: memory an event names by its address is the
 //!   host's until the host's head has passed the event (`posted`,
@@ -24,10 +25,15 @@
 //!   in either ring or when it came.
 //! - R5. A call never nests: the host answers it without calling into the
 //!   guest, and the guest makes no call while another is unanswered.
+//!
+//! The last slot of the completion ring is the stop report's alone, so a
+//! guest that stops can say why without taking back a frame it published.
 
 use core::cell::{Cell, RefCell};
 use core::panic::Location;
+use std::rc::Rc;
 
+use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -54,6 +60,29 @@ const ABORT_PATH_BYTES: usize = 32;
 /// Where an event was posted in the completion ring: asked of `consumed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Posted(u32);
+
+/// A read into a buffer the door holds (`Door::read_buf`): the bytes are
+/// handed over once the host's head has passed the read. A reading dropped
+/// before then leaves its buffer with the door, which lets it go once the
+/// head has passed.
+pub struct Reading {
+    posted: Posted,
+    buf: Rc<Vec<u8>>,
+}
+
+impl Reading {
+    /// The bytes, once the host's head has passed the read; the reading
+    /// again, untouched, before then.
+    pub fn take(self, door: &Door) -> Result<Vec<u8>, Reading> {
+        if !door.consumed(self.posted) {
+            return Err(self);
+        }
+        door.reads
+            .borrow_mut()
+            .retain(|(posted, _)| *posted != self.posted);
+        Ok(Rc::try_unwrap(self.buf).or_bug(Errno::ENOTRECOVERABLE))
+    }
+}
 
 /// None for an unknown command, which replies ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
@@ -98,11 +127,15 @@ pub struct DoorStat {
 pub struct Door {
     sq: Ring,
     cq: Ring,
-    /// What one command may leave: its events, or the turn's after the drain, and its reply.
+    /// What one command may leave: its events, or the turn's after the drain,
+    /// its reply and the stop report's slot.
     reserve: u32,
     stat: Cell<DoorStat>,
     /// Kept until the host's head has passed the `write` that names it.
     writes: RefCell<Vec<(Posted, Vec<u8>)>>,
+    /// Kept until the host's head has passed the `read_buf` that names it,
+    /// whether or not its reading is still held.
+    reads: RefCell<Vec<(Posted, Rc<Vec<u8>>)>>,
 }
 
 impl Door {
@@ -112,15 +145,20 @@ impl Door {
         Door {
             sq,
             cq,
-            reserve: most_events + 1,
+            reserve: most_events + 2,
             stat: Cell::default(),
             writes: RefCell::new(Vec::new()),
+            reads: RefCell::new(Vec::new()),
         }
     }
 
-    /// A turn begins: what the writes the host has taken named is let go.
+    /// A turn begins: what the reads and writes the host has taken named is
+    /// let go, a read's buffer only where its reading was dropped.
     pub fn rise(&self) {
         self.writes
+            .borrow_mut()
+            .retain(|&(posted, _)| !self.consumed(posted));
+        self.reads
             .borrow_mut()
             .retain(|&(posted, _)| !self.consumed(posted));
     }
@@ -155,7 +193,11 @@ impl Door {
     }
 
     pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
-        self.on_posted(cmd, self.cq.push(tag, cmd, flags, result, None));
+        let e = match self.report_slot_kept() {
+            true => self.cq.push(tag, cmd, flags, result, None),
+            false => Errno::EAGAIN,
+        };
+        self.on_posted(cmd, e);
     }
 
     /// `write` fills the slot's payload and answers the packet's length, or
@@ -168,7 +210,16 @@ impl Door {
         result: i32,
         write: impl FnOnce(&mut [u8]) -> Option<u32>,
     ) {
-        self.on_posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
+        let e = match self.report_slot_kept() {
+            true => self.cq.push_in_place(tag, cmd, flags, result, write),
+            false => Errno::EAGAIN,
+        };
+        self.on_posted(cmd, e);
+    }
+
+    /// Whether a frame can be laid and the stop report's slot still be free.
+    fn report_slot_kept(&self) -> bool {
+        self.cq.len() + 1 < self.cq.cap
     }
 
     fn on_posted(&self, cmd: u32, e: Errno) {
@@ -194,6 +245,9 @@ impl Door {
     /// unpublished and handed to the host's `hostcall`, its value or its
     /// errno; ENOSPC where no slot is free, EMSGSIZE where it does not fit one.
     pub fn call<E: Event>(&self, event: &E) -> Result<u32, Errno> {
+        if !self.report_slot_kept() {
+            return Err(Errno::ENOSPC);
+        }
         let at = self
             .cq
             .stage_in_place(0, E::NUMBER, frame::ACKREQ, |out| {
@@ -231,6 +285,17 @@ impl Door {
         self.posted()
     }
 
+    /// `buf` is filled once the host's head has passed the event, and is
+    /// the door's until then.
+    pub fn read_buf(&self, fd: Fd, mut buf: Vec<u8>) -> Reading {
+        // SAFETY: the buffer moves into the door, which neither reads, grows
+        // nor drops it before `consumed` says the host is done with it.
+        let posted = unsafe { self.read(fd, &mut buf) };
+        let buf = Rc::new(buf);
+        self.reads.borrow_mut().push((posted, Rc::clone(&buf)));
+        Reading { posted, buf }
+    }
+
     pub fn write(&self, fd: Fd, bytes: Vec<u8>) {
         let at = off_of_slice(bytes.as_slice()) as u32;
         self.send(&FsWriteEvent {
@@ -246,11 +311,10 @@ impl Door {
         self.send(&FsCloseEvent { fd });
     }
 
-    /// Drops what the turn posted and posts the report alone, as the guest
-    /// stops: its file's path cut to its end, or left out, where the whole of
-    /// it would not fit a slot.
+    /// Posts the report after what the guest already published, as the guest
+    /// stops, in the slot kept for it: its file's path cut to its end, or left
+    /// out, where the whole of it would not fit a slot.
     pub fn abort(&self, errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
-        self.cq.clear();
         let path = at.file();
         let tail = |n: usize| path.get(path.len().saturating_sub(n)..).unwrap_or("");
         for file in [path, tail(ABORT_PATH_BYTES), ""] {
@@ -278,8 +342,9 @@ impl Door {
     }
 
     /// An unapplied command can wait in the submission ring; what it would
-    /// raise could not wait anywhere, so room is checked before it starts.
-    fn has_room(&self) -> bool {
+    /// raise could not wait anywhere, so room is checked before it starts,
+    /// and before a turn does, by a host that runs beside the guest.
+    pub fn has_room(&self) -> bool {
         self.cq.len() + self.reserve <= self.cq.cap
     }
 

@@ -131,8 +131,8 @@ fn stale_handle_inert() {
 }
 
 /// Each program's recorded turns, run as they were written, read back the
-/// bytes the record holds: turn K's ticket, K + 1, stands at the done word
-/// as the guest left it, and the next turn waits for its DONE.
+/// bytes the record holds: turn K's ticket is K + 1, and the next turn waits
+/// for the host to store it at the done word.
 #[test]
 fn records_read_back() {
     let g = Golden::load(GOLDEN);
@@ -167,9 +167,8 @@ fn records_read_back() {
             let words = g.bytes(turn);
             memory[..words.len()].copy_from_slice(&words);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
-            Memory::of(&mut memory).set_word(done, ticket);
             host.run(&mut Memory::of(&mut memory), 0);
-            while Memory::of(&mut memory).word(done) & DONE == 0 {
+            while Memory::of(&mut memory).load_acquire(done) != ticket {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
                 host.poll(&mut Memory::of(&mut memory));
             }

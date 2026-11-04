@@ -50,8 +50,8 @@ pub struct Cast<'a> {
     /// (`clipmap::ORIGIN_AT`).
     pub clipmap: &'a [i32],
     /// The service area's index (pxl-engine `area::Area`), its keys four a
-    /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
-    /// unwritten until the page replays the turn.
+    /// row (pxl-kernel domain/scene/cast.rs `shards`); handed where it lies,
+    /// its writer asking `held` (gpu/api.rs) before it writes it again.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU generates and draws over the same world (gpu/generator.rs).
@@ -65,11 +65,12 @@ pub struct Cast<'a> {
     pub ray_counts: bool,
 }
 
-/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
-/// child pointer and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, the revision they are at, and the child groups
-/// written since `since`, the revision they were last handed at, by their
-/// first slots (`GpuColumns`).
+/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it
+/// lives: its child pointer and data lanes, handed where they lie, their
+/// writer asking `held` (gpu/api.rs) before it writes them again; the room
+/// either has before it grows, the revision they are at, and the child
+/// groups written since `since`, the revision they were last handed at, by
+/// their first slots (`GpuColumns`).
 pub struct Overwrites<'a> {
     pub first_child: &'a [u32],
     pub data: &'a [u32],
@@ -1040,7 +1041,7 @@ impl RaysPass {
             );
         }
         if shards_moved || shards_grow {
-            // Read where the kernel holds it, one record however large.
+            // One record however large.
             g.upload_buf(c.shards, 0, bytes(cast.shards));
         }
         let o = &cast.overwrites;
@@ -1060,7 +1061,7 @@ impl RaysPass {
         if overwrites_moved {
             // Held at `since`: the child groups written after it alone, a record
             // each, where the stream has room for them all; else both lanes
-            // whole, read where they live, two records however large.
+            // whole, two records however large.
             fn child_group(lane: &[u32], first: u32) -> &[u32] {
                 &lane[first as usize..(first + overwrite::CHILDREN) as usize]
             }

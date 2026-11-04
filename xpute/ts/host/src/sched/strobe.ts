@@ -4,7 +4,9 @@
  * When a guest's turn is rung: only when the host (`request`) or the guest's
  * last falling edge asked for one, at a moment the scheduling policy it was
  * booted with gives and admits (policy.ts); a moment it does not admit passes
- * to the next.
+ * to the next. A guest on a thread of its own (host.ts `Guest.thread`) is
+ * kicked with the turn's quota instead of rung, and the policy is handed
+ * what it ran as the doorbell hears it (`Doorbell.heard`).
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -21,6 +23,8 @@ export class Strobe<G extends Grant = Grant> {
   private timer_at = Infinity;
   private last = -1;
   private running = false;
+  /** The last grant a guest on its own thread was kicked with. */
+  private granted: G | null = null;
   private readonly consider = (now: f64): void => this.turn(now);
 
   private readonly doorbell: Doorbell;
@@ -37,6 +41,9 @@ export class Strobe<G extends Grant = Grant> {
     this.policy = policy;
     this.submit = submit;
     doorbell.wake = (wake_ms) => this.wake(wake_ms);
+    doorbell.turned = (turn_ms, wake_ms) => {
+      if (this.granted) this.policy.observe(turn_ms, this.granted, wake_ms);
+    };
   }
 
   /** Turns run from now on; nothing where they already run or the guest stopped. */
@@ -89,12 +96,18 @@ export class Strobe<G extends Grant = Grant> {
     clearTimeout(this.timer);
     this.timer_at = Infinity;
     const grant = this.policy.grant(performance.now());
-    // What `submit` sends goes with this turn, so it asks for no other.
+    // What `submit` sends goes with this turn, so it asks for no other, and
+    // kicks nothing before the turn's own kick.
     this.asked = true;
     try {
-      this.submit(grant, delta_s);
+      this.doorbell.batch(() => this.submit(grant, delta_s));
     } finally {
       this.asked = false;
+    }
+    if (this.doorbell.kick) {
+      this.granted = grant;
+      this.doorbell.kick(grant.quota_ms);
+      return;
     }
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);

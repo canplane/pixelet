@@ -766,25 +766,27 @@ it: a layer asks io for a tile, and io never asks what the tile is for.
 
 ## The kernel and its host
 
-The kernel is the core: it holds the world and decides everything about it,
-but owns no device. It is a guest of xpute, and its **host** gives it the rest:
-one memory, granted once, and a share of time on each call, a **turn**
+The kernel is a unikernel on a virtual machine: it holds the world and
+decides everything about it, but owns no device. `pxl-kernel` and
+`xpute-guest`, its library OS (its scheduler, door, memory and stop), are one
+image, a guest of xpute. Its **host** is its VMM: it implements the devices
+the kernel's machine asks for and gives it the rest, one memory, granted once,
+and a share of time on each call, a **turn**
 ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md)). The kernel owns the
-abstractions and the policy over those grants, as a library OS does.
+abstractions and the policy over those grants.
 
-Outside the kernel pixelet has three parts, by xpute's picture of a core's
+Around the kernel pixelet has three parts, by xpute's picture of a guest's
 world:
 
-- the **ui**, the screens and components: React over the kernel's snapshot
+- the **shell**, the screens and components, the client outside the VM (a
+  unikernel has no userspace): React over the kernel's snapshot
   (`ts/client/src/shell/`);
 - the **services**, what answers the kernel's app ABI and what each platform
   gives — the surfaces, the position, storage, files, text and the server
   (`ts/client/src/services/`, `port/`, `sys/`, `origin/`);
-- the **host**, xpute's, booted once by the client (`ts/client/src/abi/boot.ts`)
-  and kept for the rest of it (`ts/client/src/host/`).
-
-The code still calls the core the kernel and the ui the shell; those are code
-names until the move onto xpute's words renames them (open).
+- the **host**, xpute's, the kernel's VMM, booted once by the client
+  (`ts/client/src/abi/boot.ts`) and kept for the rest of it
+  (`ts/client/src/host/`).
 
 The kernel's crate is its artifact, in xpute's guest form for its target
 (`pxl-kernel lib.rs`, one `xpute_guest::guest!` over its machine,
@@ -803,20 +805,20 @@ the app calls besides xpute's names is the transport's decoder (`unpack.rs`,
 under `cargo test`.
 
 The kernel has two ABIs, xpute's two, on one number space. **xpute's predefined
-ABI**, majors under 0x10, is the host's, and the kernel's HAL: the kernel calls
-it for its files and its report, posted during a turn and taken after it
-returns, so each is done before the next turn begins (`sys/io/host.rs`), and it
-raises the kernel's interrupts: its life (`SYS_ATTACH`, `SYS_SUSPEND`,
-`SYS_RESUME`, `door/life.rs`), a GPU answered (`GPU_READY`) and an open answered
-(`FS_OPENED`). **The app's ABI** is what the app defines,
-`rust/client/kernel/shell.json`: the ui's intents and what the platform's
-services give, the surfaces, the sensors, the text, the data and each turn's
-grant. Both sides' readers, writers and bindings are generated from it
+ABI**, majors under 0x10, is the host's, the kernel's devices: the kernel calls
+the file device for its files and posts its report, during a turn and taken
+after it returns, so each is done before the next turn begins
+(`sys/io/host.rs`), and the host raises the kernel's interrupts: its life
+(`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`), a GPU answered
+(`GPU_READY`) and an open answered (`FS_OPENED`). **The app's ABI** is what the
+app defines, `rust/client/kernel/shell.json`: the shell's intents and what the
+platform's services give, the surfaces, the sensors, the text, the data and each
+turn's grant. Both sides' readers, writers and bindings are generated from it
 (`domain/control/cmd.spec.rs`, `ts/client/src/abi/cmd.spec.ts`), each packet an
-XTP tree, xpute's relocatable binary tree. Its exports are what the ui and the
-services submit; its imports are what the kernel posts unasked, the snapshot and
-the sensors it starts and stops, and the text it calls for, a text's lines and
-its pixels (`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
+XTP tree, xpute's relocatable binary tree. Its exports are what the shell and
+the services submit; its imports are what the kernel posts unasked, the snapshot
+and the sensors it starts and stops, and the text it calls for, a text's lines
+and its pixels (`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
 (`sys/io/text.rs`, `ts/client/src/port/text.ts`): a page's host through the
 module's import, a device's on the JavaScript thread that waits on the turn. A
 command's major is the module it is for (`INPUT`, `SENSOR`, `FS`, `SURFACE`,
@@ -829,7 +831,8 @@ names is the host breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
 (`ts/client/src/abi/boot.ts`) boots `@xpute/host` (`boot`) as the kernel's
-machine declares it (generated into `abi/machine.spec.ts`), with what backs the
+machine declares it (generated into `abi/machine.spec.ts`), which asks for both
+of xpute's devices, the GPU and the files (`gpu`, `fs`), with what backs the
 files (`sys/fs/namespace.ts` `namespace`), the stop report (`sys/abort.ts`), the
 app ABI's handlers (`shell_imports`), the frame pacing and each turn's
 submission (`port/surface.ts` `submit_grant`); `host/kernel.ts` keeps the host
@@ -844,32 +847,33 @@ native module is bound in `services/pxl-platform.ts`. What answers the kernel's
 files is `ts/client/src/sys/`: their names, versions, kept keys and refusals
 (`sys/fs/`), and its stop report beside. What the app ABI's client end carries
 is `ts/client/src/port/`, a file a major (SHELL's snapshot in `snapshot.ts`,
-`shell.ts` the ui's way in). The server the client reads from, its routes, its
-published tables and whether the device is online, is `ts/client/src/origin/`;
-the numbers both read, generated from `spec/` or, for the states the client
-reports and the ui shows, written beside it (`abi/state.ts`), are
-`ts/client/src/abi/`.
+`shell.ts` the shell's way in). The server the client reads from, its routes,
+its published tables and whether the device is online, is
+`ts/client/src/origin/`; the numbers both read, generated from `spec/` or, for
+the states the client reports and the shell shows, written beside it
+(`abi/state.ts`), are `ts/client/src/abi/`.
 
-The **ui** (`ts/client/src/shell/`) is React over the kernel's **snapshot**,
+The **shell** (`ts/client/src/shell/`) is React over the kernel's **snapshot**,
 where every control is a command. The snapshot is replaced whole after a turn
 only when what it is made of moved (`shell.rs` `SnapshotInputs`), and carries
 only what the kernel owns; what is rounded or timed for presentation is the
-ui's. The ui lends the kernel the surfaces to draw into and computes no
+shell's. The shell lends the kernel the surfaces to draw into and computes no
 coordinate, tile or draw; what it needs of the model is generated from the same
 JSON as the Rust. The host, `services/`, `sys/`, `port/`, `origin/`, `abi/` and
-the ui are one package, `ts/client`, which one Expo app, `ts/client`, bundles for
-iOS, Android and the page; the ui reaches the kernel, `sys/` and `origin/`
-through `port/` alone, and `port/` reaches the kernel through the generated
-stubs alone.
+the shell are one package, `ts/client`, which one Expo app, `ts/client`, bundles
+for iOS, Android and the page; the shell reaches the kernel, `sys/` and
+`origin/` through `port/` alone, and `port/` reaches the kernel through the
+generated stubs alone.
 
-The stack reads ui and services, kernel, host: an application over a kernel
-over its hardware. Both ABIs ride xpute's one pair of rings, told apart by a
-command's major, and the host carries the app's submissions without reading
-them. The ui meets the host directly only for the surfaces it lends the GPU
-and the lifecycle (boot, visibility), through `@xpute/host`'s TypeScript API.
+The stack reads shell and services, kernel, host: the clients outside the VM,
+the unikernel, and its VMM. Both ABIs ride xpute's one pair of rings, the device
+between the shell and the kernel, told apart by a command's major, and the host
+carries the app's submissions without reading them. The shell meets the host
+directly only for the surfaces it lends the GPU and the lifecycle (boot,
+visibility), through `@xpute/host`'s TypeScript API.
 
 ```text
-  ui         React over the snapshot         ts/client/src/shell/
+  shell      React over the snapshot         ts/client/src/shell/
   services   the app ABI's client end, what  ts/client/src/services/,
              each platform gives             port/, sys/, origin/
     │ ▲   the app's ABI, shell.json: commands submitted and completed;
@@ -877,21 +881,21 @@ and the lifecycle (boot, visibility), through `@xpute/host`'s TypeScript API.
   kernel     decides all, owns no device     pxl-kernel's guest!
     │ ▲   xpute's ABI: the files and the report called; the life,
     ▼ │   GPU_READY and FS_OPENED raised
-  host       xpute's, the kernel's HAL       @xpute/host, ts/client/src/host/
+  host       xpute's, the kernel's VMM       @xpute/host, ts/client/src/host/
 ```
 
 What crosses each edge:
 
-| Edge                                     | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| the ui and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`) and each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
-| kernel and host, xpute's ABI             | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole, the kernel's life, a GPU answered                                                                                                                                 |
-| host and guest, xpute                    | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions and events, hostcalls and the GPU stream's records, xpute's stop hook if it stops                                                                                        |
+| Edge                                        | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the shell and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`) and each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
+| kernel and host, xpute's ABI                | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole, the kernel's life, a GPU answered                                                                                                                                 |
+| host and guest, xpute                       | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions and events, hostcalls and the GPU stream's records, xpute's stop hook if it stops                                                                                        |
 
 ## Reads, and the one scheduler
 
 A read is a file in xpute's sense
-([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#hostcalls-and-files)):
+([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#the-file-device)):
 the kernel names a root by its number and an object below it by one name,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/sys/fs/namespace.ts` `namespace`). The roots are

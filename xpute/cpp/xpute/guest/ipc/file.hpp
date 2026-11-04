@@ -7,7 +7,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <new>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -51,50 +50,6 @@ struct Opened {
     }
 };
 
-// Bytes of the heap, given back by their size: what a read fills.
-class Bytes {
-  public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
-        if (this != &o) {
-            release();
-            at_ = std::exchange(o.at_, nullptr);
-            cnt_ = std::exchange(o.cnt_, 0);
-        }
-        return *this;
-    }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
-
-    // None where the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
-        if (cnt == 0) return b;
-        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
-        if (b.at_ == nullptr) return std::nullopt;
-        b.cnt_ = cnt;
-        return b;
-    }
-
-    std::uint8_t *data() noexcept { return at_; }
-    const std::uint8_t *data() const noexcept { return at_; }
-    std::size_t size() const noexcept { return cnt_; }
-    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
-    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
-
-  private:
-    void release() noexcept {
-        if (at_ != nullptr) ::operator delete(at_, cnt_);
-        at_ = nullptr;
-        cnt_ = 0;
-    }
-
-    std::uint8_t *at_ = nullptr;
-    std::size_t cnt_ = 0;
-};
-
 // At most `N - 1` open at once; one more is a bug.
 template <class O, std::size_t N> class Files {
   public:
@@ -129,15 +84,18 @@ template <class O, std::size_t N> class Files {
     }
 
     // The file an open answered with `bytes`, read whole into the heap and
-    // closed: its bytes, filled once the host's head has passed the read and
-    // kept until then, or ENOMEM where the heap has no room for them, nothing
-    // read.
-    Result<Bytes> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
-        std::optional<Bytes> held = Bytes::make(bytes);
-        if (held) door.read(fd, held->span());
+    // closed: its reading, whose bytes `Reading::take` hands over once the host's
+    // head has passed it, or ENOMEM where the heap has no room for them,
+    // nothing read.
+    Result<Reading> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
+        std::optional<Bytes> buf = Bytes::make(bytes);
+        if (!buf) {
+            close(door, fd);
+            return make_error(ErrorClass::fault, Errno::enomem);
+        }
+        Reading read = door.read_buf(fd, std::move(*buf));
         close(door, fd);
-        if (!held) return make_error(ErrorClass::fault, Errno::enomem);
-        return std::move(*held);
+        return read;
     }
 
     const O *owner(Fd fd) const noexcept { return held_.get(fd); }

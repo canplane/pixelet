@@ -7,7 +7,7 @@ description: Build the device app (ts/client) and put it on an iPhone, the iOS s
 
 The device app is `ts/client` (`@pxl/client`), the same Expo app the page is built
 from. Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
-`expo prebuild` and are not committed. Each platform's build builds the core,
+`expo prebuild` and are not committed. Each platform's build builds the kernel,
 `pxl-kernel` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
 `xpute/ts/native/script/build-core.py`.
 

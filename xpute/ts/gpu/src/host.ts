@@ -17,7 +17,7 @@ import {
 } from "@xpute/host/abi/handle.ts";
 import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
-import { DONE, NONE, op, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
+import { NONE, op, RESULT, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
 import {
   ADDRESS_MODE,
   BLEND_FACTOR,
@@ -240,9 +240,12 @@ export class GpuHost {
     this.objects.length = 0;
     this.making.clear();
     if (this.block) {
-      new Uint32Array(this.memory(), this.block.address, this.block.words)[
-        this.block.words - 1
-      ] = STATUS.LOST;
+      const block = new Uint32Array(
+        this.memory(),
+        this.block.address,
+        this.block.words,
+      );
+      Atomics.store(block, this.block.words - 1, STATUS.LOST);
     }
   }
 
@@ -305,11 +308,13 @@ export class GpuHost {
       });
   }
 
-  /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
-  private write_done(word: u32, ticket: u32): void {
-    const w = new Uint32Array(this.memory(), word, 1);
-    if (w[0] !== ticket) return;
-    w[0] = (ticket | DONE) >>> 0;
+  /** The request asked with `ticket` answered at the done word `word`
+   * (RESULT): `result` into the word after it first, where the request has
+   * one, then the ticket, with release; and a turn asked to read it. */
+  private write_done(word: u32, ticket: u32, result?: u32): void {
+    const w = new Uint32Array(this.memory(), word, result === undefined ? 1 : 2);
+    if (result !== undefined) w[1] = result;
+    Atomics.store(w, 0, ticket);
     this.wake();
   }
 
@@ -782,10 +787,12 @@ export class GpuHost {
       case op.COPY_EXTERNAL_IMAGE: {
         const to = this.texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
-        // Copied now: the guest's bytes are only its until the next turn.
+        // Copied now: the bytes are the guest's again once the stream is
+        // handed back (xpute-guest ipc/stream.rs R3).
         const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
-        // An image the browser cannot decode is left out, its word not written.
+        // One whose texture went, with the device or by the guest, is
+        // answered nothing; one the browser cannot decode, REFUSED.
         createImageBitmap(image, {
           imageOrientation: flipY ? "flipY" : "from-image",
           premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none",
@@ -797,11 +804,15 @@ export class GpuHost {
                 to,
                 [source.width, source.height],
               );
-              this.write_done(word, ticket);
+              this.write_done(word, ticket, RESULT.OK);
             }
             source.close();
           },
-          () => {},
+          () => {
+            if (this.objects.includes(to.texture)) {
+              this.write_done(word, ticket, RESULT.REFUSED);
+            }
+          },
         );
         return;
       }
@@ -1066,7 +1077,7 @@ export class GpuHost {
         const word = r.u();
         const ticket = r.u();
         // Where the device went since (`lost`) it lands nowhere, as the native
-        // host's pending reads are dropped.
+        // host's pending reads are dropped; one the device refused, REFUSED.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
             if (this.get<GPUBuffer>(id) !== buffer) return;
@@ -1074,10 +1085,12 @@ export class GpuHost {
               new Uint8Array(buffer.getMappedRange(offset, size)),
             );
             buffer.unmap();
-            new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
-            this.wake();
+            this.write_done(word, ticket, RESULT.OK);
           },
-          () => {},
+          () => {
+            if (this.get<GPUBuffer>(id) !== buffer) return;
+            this.write_done(word, ticket, RESULT.REFUSED);
+          },
         );
         return;
       }
@@ -1134,7 +1147,7 @@ export class GpuHost {
         out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
           navigator.gpu.getPreferredCanvasFormat(),
         );
-        out[words - 1] = STATUS.READY;
+        Atomics.store(out, words - 1, STATUS.READY);
         return;
       }
       default:

@@ -7,8 +7,8 @@
 //!
 //! What finishes after a turn, a read back, the queue's work done or an
 //! async pipeline, which wgpu makes at once, lands at a later turn's `poll`:
-//! the guest finds `ticket | DONE` a turn or more later, as on the web, and
-//! nothing here waits.
+//! the guest finds its ticket at the done word a turn or more later (spec
+//! RESULT), as on the web, and nothing here waits.
 //!
 //! Beside a guest linked into its own process, `native` holds the host and
 //! exports it under xpute's names (`native_abi!`).
@@ -42,8 +42,6 @@ use surface::Surface;
 pub use configure::ConfigureAt;
 pub use open::{open, Ask, OpenError, Opened};
 
-#[cfg(test)]
-use crate::spec::DONE;
 #[cfg(test)]
 use admit::FrameGuard;
 
@@ -98,8 +96,9 @@ pub struct GpuHost {
 }
 
 impl GpuHost {
-    /// `wake` asks the platform's loop for a turn, from any thread: whoever
-    /// learns of a completion between turns asks for the turn that writes it.
+    /// `wake` asks for a turn, from any thread (beside a native guest, its
+    /// kick): whoever learns of a completion asks for the turn whose `poll`
+    /// writes it.
     /// A device lost (`Unknown`, not `Destroyed`, which is its owner's doing)
     /// is told the guest at the next turn's edge.
     pub fn new(
@@ -152,12 +151,13 @@ impl GpuHost {
         self.pending.clear();
         self.decoding.clear();
         if let Some((address, words)) = self.block {
-            memory.set_word(address + 4 * (words - 1), STATUS::LOST);
+            memory.store_release(address + 4 * (words - 1), STATUS::LOST);
         }
     }
 
-    /// What the device has answered since, written into `memory`: run at the
-    /// turn's edge, before the turn reads its words. A loss ends everything else.
+    /// What the device has answered since, written into `memory`: run on the
+    /// thread that runs the stream, before a turn reads its words. A loss
+    /// ends everything else.
     pub fn poll(&mut self, memory: &mut Memory<'_>) {
         if self.gone.swap(false, Ordering::AcqRel) {
             self.on_lost(memory);

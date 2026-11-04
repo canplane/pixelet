@@ -12,6 +12,7 @@ use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
 use pxl_engine::overwrite;
 use pxl_engine::LEAF_CELL;
+use pxl_render::gpu::api;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
@@ -190,6 +191,13 @@ pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
     let walked = WalkKey { zoom, cell, hide };
     let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
     if h.walked == Some(walked) && !met {
+        return;
+    }
+    // The renderer hands the records where they lie: while the host holds
+    // them they stay, walked again at a later frame (pxl-render gpu/api.rs
+    // `held`).
+    if api::held(&h.placed) {
+        h.walked = None;
         return;
     }
     h.walked = Some(walked);

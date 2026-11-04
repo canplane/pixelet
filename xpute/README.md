@@ -1,74 +1,79 @@
 # xpute
 
-xpute makes a program's core its first-class citizen. The core is compiled
+xpute makes a program's guest its first-class citizen. The guest is compiled
 code, the same code as a WebAssembly module in a page and as a library linked
 into a native app; it leads, and JavaScript does the I/O and the UI around it.
 No foreign function call is made for each piece of the boundary: the two share
 one memory, and a pair of rings in it carries everything else, in io_uring's
 shape. xpute is that arrangement, both ends of it, and `kit`, the generic code
-underneath. It is not a general runtime, not an actor bus and not an operating
-system.
+underneath. It is not a general runtime and not an actor bus.
 
-**Host** and **guest** mean what they mean in WebAssembly. The core is the
-guest, run inside; the host is what runs it. Nothing in xpute knows what the
-core computes.
+**Host** and **guest** mean what they mean in WebAssembly and in a virtual
+machine. The guest is a **unikernel**: the program and xpute's guest library,
+its library OS, built as one image, as MirageOS and Unikraft build theirs, and
+run inside. The host is its **VMM**: it implements the guest's devices and
+gives it its time. Nothing in xpute knows what the guest computes.
 
-## The core and its world
+## The guest and its world
 
-A core's author sees two things: the core and its **world**. The core sends to
-its world and receives from it, and never names a destination. A world is its
-commands, as a WIT world is: its **imports**, which the core calls, and its
-**exports**, which the core handles.
+A guest's author sees two things: the guest and its **world**. The guest sends
+to its world and receives from it, and never names a destination. A world is
+its commands, as a WIT world is: its **imports**, which the guest calls, and
+its **exports**, which the guest handles.
 
 ```text
-┌─ the core ─────────────┐                 ┌─ its world ────────────┐
-│ decides; owns no       │ ─── imports ──▶ │ answers what the core  │
+┌─ the guest ────────────┐                 ┌─ its world ────────────┐
+│ decides; owns no       │ ─── imports ──▶ │ answers what the guest │
 │ device                 │                 │ calls                  │
-│                        │ ◀── exports ─── │ sends what the core    │
+│                        │ ◀── exports ─── │ sends what the guest   │
 │                        │                 │ handles                │
 └────────────────────────┘                 └────────────────────────┘
 ```
 
-## The ui, the core and the host
+## The shell, the guest and the host
 
-A platform's author sees the world as two parts, and the stack reads ui, core,
-host: an application over a kernel over its hardware.
+A platform's author sees the world as two parts: the client outside the VM,
+and the VMM under it.
 
-- **The ui and the core** stand as io_uring's application and kernel. The ui
-  submits its commands to the core, and the core completes them; what the core
-  sends the ui unasked, more rarely, is an **upcall**. The app's ABI is this
-  relation.
-- **The core and the host** stand as a kernel and its HAL. The host is the
-  core's hardware: the memory, the clock and the turns, the GPU, the storage
-  (the file device). The core calls its HAL, and the HAL raises interrupts.
+- **The shell and the guest.** The program's **shell**, its screens and
+  components, is the client outside the VM, as an application on a host
+  reaches a guest's service over virtio-vsock: a unikernel has no userspace.
+  The ring pair is the device between them, by io_uring's roles: the shell
+  submits its commands to the guest, and the guest completes them; what the
+  guest sends the shell unasked, more rarely, is an **upcall**. The app's ABI
+  is this relation.
+- **The guest and the host.** The host implements the devices the guest's
+  machine asks for (the GPU, the file device), by virtio's convention, and
+  gives the guest its memory, its clock and its turns, as a VMM gives a
+  vCPU's time. The guest calls its devices, and the host raises interrupts.
   xpute's predefined ABI is this relation.
 
 ```text
-  ui     the application    screens, components
+  shell  the client         screens, components
    │ ▲
    ▼ │   the app's ABI: commands submitted and completed; upcalls
-  core   the kernel         decides; owns no device
+  guest  the unikernel      the program and its library OS; owns no device
    │ ▲
-   ▼ │   xpute's ABI: calls down; interrupts up
-  host   its HAL            memory, clock and turns, GPU, files
+   ▼ │   xpute's ABI: calls to its devices; interrupts up
+  host   its VMM            memory, clock and turns, GPU, files
 ```
 
-Physically the ui and the host share one JavaScript runtime, and natively the
-host has Rust pieces beside it: the guest's thread, its memory and the GPU's
-run. Both relations ride the same pair of rings, told apart by a command's
-major: the host carries the ui's submissions on the SQ and hands the core's
-completions and upcalls back. The ui meets the host directly only for the
-surfaces (a view lent to the GPU) and the lifecycle (boot, visibility),
-through the host's TypeScript API.
+Physically the shell and the host share one JavaScript runtime, and natively
+the host has Rust pieces beside it: the guest's thread, its memory and the
+GPU's run. Both relations ride the same pair of rings, told apart by a
+command's major: the host carries the shell's submissions on the SQ and hands
+the guest's completions and upcalls back. The shell meets the host directly
+only for the surfaces (a view lent to the GPU) and the lifecycle (boot,
+visibility), through the host's TypeScript API.
 
 ## Two ABIs, one number space
 
 A command is `major << 8 | minor` (`kit` `abi/cmd`), and who defines it decides
 its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F (`spec/abi/`).
-Its imports are the core's calls to its HAL: the file device's calls
+Its imports are the guest's calls to its devices: the file device's calls
 (`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`, `spec/abi/fs.json`) and
-`SYS_ABORT`, the report the core posts as it stops. Its exports are the HAL's
-interrupts:
+`SYS_ABORT`, the report the guest posts as it stops. Its exports are the
+host's interrupts:
 
 - `SYS_ATTACH`, a host attached, the first time or again;
 - `SYS_SUSPEND` and `SYS_RESUME`, calls around a hidden host;
@@ -86,10 +91,10 @@ host hands a frame to what answers its command's major.
 ## The rings
 
 The rings are io_uring's, by its roles. The **SQ** is written by the host, the
-side where the outside's interrupts arrive: the ui's submissions and the HAL's
-interrupts. The **CQ** is written by the core: its completions and upcalls,
-and its own calls to the HAL, in ublk's manner, whose results come back on the
-SQ. Five rules make the contract:
+side where the outside's interrupts arrive: the shell's submissions and the
+host's own interrupts. The **CQ** is written by the guest: its completions and
+upcalls, and its own calls to its devices, in ublk's manner, whose results
+come back on the SQ. Five rules make the contract:
 
 1. Each ring has one writer.
 2. A position is published with release and read with acquire.
@@ -98,7 +103,7 @@ SQ. Five rules make the contract:
 4. A completion finds its request by id.
 5. A call never nests, and its answer makes no call.
 
-When each side runs is the platform's. On the web the core runs on the page's
+When each side runs is the platform's. On the web the guest runs on the page's
 event loop, in turns the **strobe** gives, the web host's policy, paced to the
 display's frames; natively it runs on its own thread.
 
@@ -106,13 +111,16 @@ display's frames; natively it runs on its own thread.
 
 A guest crate declares its **machine** (`machine.json`, its schema
 `spec/machine.schema.json`): the memory sizes a host may give, the stack, the
-rings, and the GPU it requests. The GPU is a resource, as the memory is: the
-machine requests it, and the host grants it. From the machine the host lays
-the **front** before the first turn: a header of words (`spec/ipc/head.json`)
-naming the rings and the GPU stream, and each ring's own header. The guest
-computes the same front from the same machine and checks the header against
-it, stopping with `ENOEXEC` where a word differs. The GPU stream says its own
-head.
+rings, and the devices it asks for, `gpu` and `fs`. Which devices the guest
+needs is the guest's to decide, as a VM's configuration names its virtio
+devices: the host attaches what the machine asks for, a boot that backs a
+device the machine does not ask for, or none it does, is refused, and an
+unattached device's command is answered `ENODEV`. From the machine the host
+lays the **front** before the first turn: a header of words
+(`spec/ipc/head.json`) naming the rings and the GPU stream, and each ring's own
+header. The guest computes the same front from the same machine and checks the
+header against it, stopping with `ENOEXEC` where a word differs. The GPU
+stream says its own head.
 
 ## Embedding a guest
 
@@ -130,10 +138,10 @@ import and a trait for the exports on the guest. A program runs it as
 is stale); xpute's own files are written by `cargo spec`. The generated code
 is committed.
 
-The **core crate is the artifact**. It builds as `rlib`, `cdylib` and
-`staticlib`, links by its machine in `build.rs`, and writes one
-`xpute_guest::guest!`, which picks the WebAssembly module or the native
-library by its target:
+The **guest crate is the artifact**, the unikernel's one image. It builds as
+`rlib`, `cdylib` and `staticlib`, links by its machine in `build.rs`, and
+writes one `xpute_guest::guest!`, which picks the WebAssembly module or the
+native library by its target:
 
 ```toml
 [lib]
@@ -154,17 +162,20 @@ fn main() {
     xpute_guest::wasm::link(&machine::MACHINE.link());
 }
 
-// lib.rs; `gpu:` only where the machine requests a GPU
+// lib.rs; `gpu:` only where the machine asks for a GPU
 const GPU: xpute_gpu::Numbers = xpute_gpu::Numbers { frame_latency: 2, upload_chunk_bytes: 1 << 20 };
-xpute_guest::guest!(MACHINE, FIXED_BYTES, my_core::run, gpu: GPU);
+xpute_guest::guest!(MACHINE, FIXED_BYTES, my_guest::run, gpu: GPU);
 ```
 
 The entry, `run`, is a turn: called with a quota of time, it applies what
 waits on the SQ, posts what it has on the CQ, and returns when it wants the
 next turn. On wasm32 the form is a module that exports `run`; anywhere else it
-is the native library, with its memory laid out from the machine, its thread,
-its allocator and xpute's stop hook, exported as `xpute_run`, `xpute_mem` and
-`xpute_hostcall_on` (`rust/host/include/xpute.h`), its GPU host's calls as
+is the native library, with its memory laid out from the machine, its own
+thread, which runs the guest while it has work and sleeps until a kick or the
+time it asked for, its allocator and xpute's stop hook, exported as
+`xpute_run`, `xpute_kick`, `xpute_mem`, `xpute_hostcall_on`,
+`xpute_notify_on`, `xpute_answer` and `xpute_heard`
+(`rust/host/include/xpute.h`), its GPU host's calls as
 `xpute_gpu_*` (`rust/gpu/include/xpute_gpu.h`), and on Android the same calls
 under the Kotlin classes `xpute.Guest` and `xpute.Gpu`.
 
@@ -172,13 +183,14 @@ On the JavaScript side an app calls `@xpute/host`'s `boot(machine, { guest?,
 ... })` once. The platform is picked by file: `x.ts` is the page's,
 `x.native.ts` the device's, as a native bundler and `tsconfig.native.json`
 (`moduleSuffixes`) resolve them. A page passes its module as `guest`; a device
-passes none, since the core is linked in. A native app installs
+passes none, since the guest is linked in. A native app installs
 **`@xpute/native`**, the React Native module (Kotlin, Swift, JNI, the headers
-and the core's build for iOS and Android), which Expo autolinks; the app's
-`package.json` names its core crate (`xpute.core`). The rest of the config is
-what the program decides: what backs the files (`fs`), what hears its own
-commands (`program`), the GPU it grants (`gpu`, `@xpute/gpu`'s `WebGpu` or
-`NativeGpu`), its scheduling policy and what it submits before each turn.
+and the guest's build for iOS and Android), which Expo autolinks; the app's
+`package.json` names its guest crate (`xpute.core`). The rest of the config is
+what the program decides: what backs the files (`fs`) and the GPU it grants
+(`gpu`, `@xpute/gpu`'s `WebGpu` or `NativeGpu`), each where the machine asks
+for it, what hears its own commands (`program`), its scheduling policy and
+what it submits before each turn.
 
 A **C++ guest** takes the library in two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
@@ -190,10 +202,10 @@ includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
 
 xpute carries the mechanism, and the policy belongs to the program.
 
-- **It does not know what the core computes.** No domain type reaches `kit` or
+- **It does not know what the guest computes.** No domain type reaches `kit` or
   either end.
 - **It does not choose the memory past the front.** The machine says the sizes;
-  what the core's ranges hold, and where, is the core's.
+  what the guest's ranges hold, and where, is the guest's.
 - **It does not choose an allocator.** The heap is reached through one call, and
   what answers it is the guest's choice.
 - **It is not a transport.** Nothing here leaves the machine; what carries bytes

@@ -7,7 +7,7 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Rules
 
-- **Lead with the core.** Put first the claim the rest follows from. The
+- **Lead with the main claim.** Put first the claim the rest follows from. The
   masthead (tagline, date, play link, screenshot) stays on top.
 - **Earn a name before you use it.** Say the need first, then name what meets
   it, in a main clause:
@@ -42,6 +42,8 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Checks
 
+- The parts are named the kernel, the shell and the host in pixelet's
+  documents, and the guest, the host and the program in xpute's.
 - What the old version named (paths, identifiers, constants) is still there
   or was cut on purpose, and nothing points at what was cut.
 - No minute under `doc/` is linked.

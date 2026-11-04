@@ -247,11 +247,6 @@ impl Ring {
         Ok(self.at + 4 * at)
     }
 
-    /// Drops every frame not yet read: the writer's, before its reader reads.
-    pub fn clear(&self) {
-        self.pos(TAIL).store(self.head(), Ordering::Release);
-    }
-
     /// The frame at the tail, its packet written by `write`: the word where
     /// it begins, from the ring's start.
     fn lay(

@@ -39,7 +39,6 @@ use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::ray::{BrickFill, CellsBack, Resident};
 use xpute_guest::mem::range::arr;
 
@@ -522,7 +521,6 @@ const REFUSED: u32 = u32::MAX;
 /// the heap gives a page back (`Clipmap::heap`), when it is absent again
 /// and handed again (`step`).
 const WAITING: u32 = u32::MAX - 1;
-const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 
 /// Slot `b`'s cells back from its fill `ticket` (pxl-render `read_back`), and
 /// how its ways' tree landed, where the slot still waits on that fill: built,
@@ -784,10 +782,9 @@ pub fn fill(
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&indices[from..from + 4]);
         }
         let written = brick_lines(tile, &held.separation, place, scratch, lines);
-        // Under `DONE`, which a read's word holds once it lands, so no
-        // ticket reads as landed before it is: 1 to `DONE` − 1, never
-        // `REFUSED`, which is past them.
-        w.ticket = w.ticket % (DONE - 1) + 1;
+        // 1 to `WAITING` − 1: never 0, which no fill holds, nor `WAITING` or
+        // `REFUSED`, which are past them.
+        w.ticket = w.ticket % (WAITING - 1) + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(b)) as u32,
             ticket: w.ticket,

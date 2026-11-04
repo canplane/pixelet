@@ -2,9 +2,9 @@
 
 //! The programs spec/golden/gpu/programs.tsv records, as the Rust encoder
 //! writes them; cpp/xpute/gpu/encode.test.cpp writes the same calls in C++.
-//! Each turn ends through `turn` with a ticket at the done word, the turn's
-//! number from 1, which the next turn waits on; the last reads the result
-//! back to the record's place.
+//! Each turn ends through `turn` with a request whose ticket is the turn's
+//! number from 1, which the next turn waits for the host to store at the
+//! done word; the last reads the result back to the record's place.
 
 use xpute_guest::ipc::stream::Stream;
 
@@ -33,9 +33,10 @@ impl At {
         unsafe { core::slice::from_raw_parts(self.base.add(self.input), self.input_len) }
     }
 
-    fn done(&self) -> &'static mut u32 {
+    /// The done word and the result after it (spec RESULT), the host's.
+    fn done(&self) -> &'static [u32; 2] {
         // SAFETY: as `input`; the places do not overlap.
-        unsafe { &mut *self.base.add(self.done).cast::<u32>() }
+        unsafe { &*self.base.add(self.done).cast::<[u32; 2]>() }
     }
 
     /// Reads `n` bytes of `buffer` back to the record's place, as WebGPU
@@ -766,8 +767,8 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
 }
 
 /// The triangle again, its render pipeline and a compute pipeline made by
-/// the async ops: each in a turn of its own, its ticket at the done word,
-/// and named by no record until the next turn has found it DONE.
+/// the async ops: each in a turn of its own, and named by no record until
+/// the next turn has found its ticket at the done word.
 fn pipelines_async(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let m = gpu
         .shader_module(s, "@compute @workgroup_size(1) fn main() {}\n")
@@ -780,7 +781,7 @@ fn pipelines_async(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) 
                 module: m,
                 entry: "main",
             },
-            at.done(),
+            &at.done()[0],
             1,
         )
         .unwrap();
@@ -816,7 +817,7 @@ fn pipelines_async(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) 
                     targets: &targets,
                 }),
             },
-            at.done(),
+            &at.done()[0],
             2,
         )
         .unwrap();

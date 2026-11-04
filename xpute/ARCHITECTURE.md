@@ -1,33 +1,41 @@
 # Architecture — xpute
 
-[xpute](./README.md) makes a program's core its first-class citizen: the core
-leads, the same compiled code on the web and natively, and JavaScript does the
-I/O and the UI around it. The two share one memory, and a pair of rings in it
-carries everything else, with no foreign function call for each piece of the
-boundary. The core is the **guest**, as WebAssembly means it, run inside; the
-**host** is what runs it.
+[xpute](./README.md) makes a program's guest its first-class citizen: the
+guest leads, the same compiled code on the web and natively, and JavaScript
+does the I/O and the UI around it. The two share one memory, and a pair of
+rings in it carries everything else, with no foreign function call for each
+piece of the boundary. **Guest** and **host** mean what they mean in
+WebAssembly and in a virtual machine. The guest is a **unikernel**, run
+inside: the program and xpute's guest library, its library OS, built as one
+image. The **host** is its VMM: it implements the guest's devices and gives
+it its time.
 
-The core sees one thing outside it, its **world**, whose commands are its
+The guest sees one thing outside it, its **world**, whose commands are its
 **imports**, which it calls, and its **exports**, which it handles, as a WIT
 world says; it never names a destination. A platform's author sees the world
-in two parts, and the stack reads **ui**, core, host: an application over a
-kernel over its hardware. The ui submits commands to the core and the core
-completes them, as an application and io_uring's kernel do; what the core
-sends the ui unasked, more rarely, is an upcall. That relation is the app's
-ABI. The host is the core's hardware, its HAL: the memory, the clock and the
-turns, the GPU, the storage. The core calls it, and it raises interrupts. That
-relation is xpute's predefined ABI.
+in two parts: the client outside the VM, and the VMM under it. The program's
+**shell**, its screens and components, is the client, as an application on a
+host reaches a guest's service over virtio-vsock: a unikernel has no
+userspace. The ring pair is the device between them. The shell submits
+commands to the guest and the guest completes them, by io_uring's roles; what
+the guest sends the shell unasked, more rarely, is an upcall. That relation is
+the app's ABI. The host implements the devices the guest's machine asks for,
+the GPU and the file device, by virtio's convention, and gives the guest its
+memory, its clock and its turns, as a VMM gives a vCPU's time. The guest calls
+its devices, and the host raises interrupts. That relation is xpute's
+predefined ABI.
 
-Physically the ui and the host share one JavaScript runtime, and natively the
-host has Rust pieces beside it: the guest's thread, its memory and the GPU's
-run. Both relations ride the same ring pair, told apart by a command's major;
-the host carries the ui's submissions on the submission ring without reading
-them. The ui meets the host directly only for the surfaces (a view lent to the
-GPU) and the lifecycle (boot, visibility), through the host's TypeScript API.
+Physically the shell and the host share one JavaScript runtime, and natively
+the host has Rust pieces beside it: the guest's thread, its memory and the
+GPU's run. Both relations ride the same ring pair, told apart by a command's
+major; the host carries the shell's submissions on the submission ring without
+reading them. The shell meets the host directly only for the surfaces (a view
+lent to the GPU) and the lifecycle (boot, visibility), through the host's
+TypeScript API.
 
-The host grants real resources, a real region and a real quota, and the guest
-builds its own abstractions over them, as a library operating system does over
-an exokernel; nothing is virtualized, and xpute does not enforce the grants.
+The host grants real resources, a real region and a real quota, and the
+guest's library OS builds the program's abstractions over them; nothing is
+emulated, and xpute does not enforce the grants.
 
 xpute comes in two layers. `kit` is generic code — collections, codecs, a wire
 format, an errno table, scalar math — that any program can link and call.
@@ -77,7 +85,8 @@ before either runs. A guest crate declares it once, as its **machine**
 for both ends; `xpute-guest/machine.rs` `Machine`): the sizes a host may give
 and the unit a reservation is counted in, the heap the smallest must leave, a
 module's stack and a native guest's thread's stack, the rings' capacities and
-slot size, what one turn posts besides its replies, and the GPU it requests.
+slot size, what one turn posts besides its replies, and the devices it asks
+for, `gpu` and `fs`.
 
 The front follows from the machine, the same on both ends: the stack, a page
 for the **header**, the two rings and their slots, the GPU stream, then where
@@ -111,7 +120,7 @@ one guest's memory; the front is the machine's, the rest the guest's
    ├─────────────────────────────────┤        │
    │ both rings' slots               │        │
    ├─────────────────────────────────┤        │
-   │ GPU stream, where requested     │◀───────┘
+   │ GPU stream, where asked for     │◀───────┘
    ├─────────────────────────────────┤ global_base
    │ a module's data                 │
    ├─────────────────────────────────┤
@@ -163,9 +172,9 @@ an NVMe controller posts an asynchronous event to its completion queue.
 A command is `major << 8 | minor` (`kit` `abi/cmd`), and who defines it decides
 its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F
 (`spec/abi/cmd.json`, `spec/abi/fs.json`). Its imports are the guest's calls to
-its HAL: the file device's (`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`) and
-`SYS_ABORT`, the report the guest posts as it stops. Its exports are the HAL's
-interrupts: `SYS_ATTACH`, a host attached, the first time or again;
+its devices: the file device's (`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`)
+and `SYS_ABORT`, the report the guest posts as it stops. Its exports are the
+host's interrupts: `SYS_ATTACH`, a host attached, the first time or again;
 `SYS_SUSPEND` and `SYS_RESUME`, calls around a hidden host; `GPU_READY`, the
 GPU the machine asked for answered; and `FS_OPENED`, an open answered. `NOP` is
 the rings' own test. What each life command means to keep or reset is the
@@ -254,11 +263,11 @@ is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a
 slot, and such a packet crosses by address, in a heap block.
 
 Two rings make a pair, by io_uring's roles. The **SQ**, the submission ring, is
-written by the host, the side where the outside's interrupts arrive: the ui's
-submissions and the HAL's own interrupts. The **CQ**, the completion ring, is
-written by the guest: its completions and upcalls, and its own calls to the
-HAL, posted as ublk's server posts its requests, whose results come back on the
-SQ. Each lies where the header says (`SQ_AT`, `CQ_AT`).
+written by the host, the side where the outside's interrupts arrive: the
+shell's submissions and the host's own interrupts. The **CQ**, the completion
+ring, is written by the guest: its completions and upcalls, and its own calls
+to its devices, posted as ublk's server posts its requests, whose results come
+back on the SQ. Each lies where the header says (`SQ_AT`, `CQ_AT`).
 
 The host drives the pair through the **doorbell**
 (`@xpute/host/ipc/doorbell.ts` `Doorbell`):
@@ -332,6 +341,12 @@ the artifact, built as `rlib`, `cdylib` and `staticlib`; a React Native app
 links it through xpute's native module (`ts/native`, `@xpute/native`), which
 builds it for the device as the app is built (`script/build-core.py`).
 
+Every host holds the guest to one contract (`xpute-guest/entry.rs`): the
+guest runs until it has nothing to do; a host may cut it at a slice's end, the
+quota, where its tasks yield; it returns when it wants to be woken, `wake_ms`;
+and a kick — a submission, a completion, a call — wakes it early. What differs
+is who runs it, and on which thread.
+
 When each side runs is the platform's. On a page the guest and the host share
 one thread, the page's event loop, and take turns. Something on the host side
 has to decide when to ring at all. That is the **strobe**
@@ -345,8 +360,37 @@ no-op where it already holds) and asks for one where something the guest did
 not hear of changed (`wake`); once the guest stops, the strobe rings it no
 more, and the mount tells the program (its config's `onterminated`). The
 doorbell rings too, with no quota: to make room in a full SQ, to wait for a
-call's reply and to send a `cmd`. Natively every call into the guest runs on
-the guest's own thread (`xpute-host/native/thread.rs`).
+call's reply and to send a `cmd`.
+
+Natively the guest runs on its own thread, a vCPU that runs while it has work,
+as Linux's idle loop and io_uring's submitter have it: submitting is not
+stopping (`xpute-host/native/thread.rs`). The thread runs a turn whenever it is
+kicked or the time the last turn asked for has come, at once again where the
+turn answered 0, and sleeps otherwise. The host's JavaScript writes the SQ,
+stores its tail with release and kicks (`xpute_kick`), with the quota of the
+turn it grants where the strobe grants one: the strobe and its policy still
+pace frames to the display, and a turn no kick gave a quota is given the last
+quota a kick gave. As a turn ends, the thread tells the JavaScript side
+(`xpute_notify_on`), which reads the CQ dry on its own thread and hands the
+policy what ran (`Doorbell.heard`); a read kicks too, for the room it made. A
+call stays synchronous to its caller: submitted, kicked, and waited for in
+`xpute_run` until a turn begun after it has ended. Three rules hold the loop:
+
+- **No kick is lost.** A kick sets a flag under the loop's lock and wakes the
+  thread; the thread reads the flag, its wake time and its work under that
+  lock before it waits on a condition variable, which gives the lock up as it
+  sleeps, so a kick lands before the check or wakes the wait.
+- **Every wait has its answerer.** The guest's thread waits for an answer only
+  while a hostcall stands in the loop's state: the JavaScript thread waiting
+  in `xpute_run` answers it there; with none waiting the JavaScript side is
+  told and answers it on its thread (`xpute_answer`), as a VMM handles a
+  vCPU's exit. The JavaScript thread waits on the guest only in `xpute_run`
+  and in a device's call, and answers in both, so neither waits on the other.
+- **A turn begins only where it can post what one may**: the door's room in
+  the CQ (`Door::has_room`), read under the lock; where there is none, the
+  thread says so and waits for the kick that follows the next read. Every turn
+  drains the SQ before any phase's budget, so a kick's submission is applied
+  by the next turn whatever made it run.
 
 How long a turn may take, and how that time is spent, are settled at three
 levels, from the outside in.
@@ -437,10 +481,10 @@ one side of a boundary.
 
 ## I/O, by asking
 
-A guest cannot do I/O, because the host owns the connections, as hardware does
-under a kernel. So the guest asks, in what its turn leaves, and the host hands
-the ask on and brings back what came of it — in a completion, or into memory
-the request named.
+A guest cannot do I/O: the host owns the connections, as a VMM owns the devices
+it implements for its guest. So the guest asks, in what its turn leaves, and the
+host hands the ask on and brings back what came of it — in a completion, or into
+memory the request named.
 
 How much may be out at once, and which goes first, are the program's; it passes
 a bound in its own commands.
@@ -449,8 +493,15 @@ a bound in its own commands.
 
 Some requests come in thousands a turn — every call a renderer makes to a device
 it cannot reach — and need neither a reply nor a packet. For those the guest
-writes a **stream** (`ipc/stream`): records laid end to end during a turn, which
-the host runs, all of them, after the turn returns and before it rings again.
+writes a **stream** (`ipc/stream`): records laid end to end during a turn, and
+published by storing their count, END, with release. A page's host runs them,
+all of them, after the turn returns and before it rings again; a native GPU
+host runs them as END is stored, rung from the publish itself on the guest's
+thread (`BootInfo::publish`). Either loads END with acquire before it reads a
+record, and stores it back to 0 with release only after the last record has
+read what it names (wgpu's buffer and texture writes copy their input before
+they return); the guest touches that memory again only once it has loaded END
+as 0 (`ipc/stream` R1 to R3).
 
 ```text
 0       END    words of records past the head, set as the turn ends
@@ -482,8 +533,11 @@ and goes alone; a guest's bug reporter and, in Rust, its panic hook post it
 (`stop`), which the guest installs (`stop::install`).
 
 Files are a device of xpute's own, major `FS` (`spec/abi/fs.json`, its flags
-`spec/ipc/fs.json`), and xpute ships both ends. They borrow Plan 9's file
-namespace, in POSIX's words:
+`spec/ipc/fs.json`), and xpute ships both ends. The machine asks for it (`fs`)
+and the host attaches it then, backed by the program's storage
+(`@xpute/host` `boot`): a boot that backs files the machine does not ask for,
+or none it does, is refused, and a file command to a guest without the device
+is answered `ENODEV`. Files borrow Plan 9's file namespace, in POSIX's words:
 
 - the guest issues the descriptor, a handle of its own file table (`ipc/file`
   `Files`);
@@ -537,15 +591,17 @@ answer late.
 
 A module imports the entry as `env.hostcall`, beside `env.now`; a guest linked
 into a native program is handed it with its clock (`BootInfo`). There the guest
-runs on its own thread while the caller of `run` waits, so the native host hands
-each call back to that caller, which answers it on its own thread and waits
-again (`xpute-host/native/thread.rs`); the program says what answers through
-`xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
+runs on its own thread, so the native host hands each call to the thread that
+answers it, the caller waiting in `xpute_run` or else the program, told
+(`xpute_notify_on`) and answering on its own thread (`xpute_answer`), the
+guest's thread waiting meanwhile (`xpute-host/native/thread.rs`); the program
+says what answers through `xpute_hostcall_on` (`answer_with`), under xpute's
+name as the entry is.
 
-### The GPU, a resource granted
+### The GPU, a device asked for
 
-A GPU is a resource the machine requests and the host grants, as memory is.
-The machine's `gpu` says what it asks — the stream's bytes, WebGPU's power
+A GPU is a device the machine asks for and the host attaches, as the file device
+is. The machine's `gpu` says what it asks — the stream's bytes, WebGPU's power
 preference, the features it must have and those it takes where the adapter has
 them — and the host opens a device as asked (`@xpute/host` `Gpu`, `GpuGrant`,
 `GpuAsk`; natively `xpute-gpu/host/open.rs` `open`, `Ask::of`). Each time a
@@ -567,18 +623,23 @@ returns (`gpu/host` `GpuHost`): on WebGPU in a page (`@xpute/gpu/web.ts`
 native program, inside the turn's own call (`@xpute/gpu/native.ts`
 `NativeGpu`). What the run throws ends the guest, as a trap does. Some calls
 finish later — an image copied in, a buffer read back, the queue's work done, a
-pipeline made by WebGPU's async call — so each names a word of the guest's
-memory and a ticket, a number the guest wrote there; once the call is done, the
-GPU host writes the ticket back with `DONE` set. A guest names an async
-pipeline in no record until its word says `DONE`, so nothing it records waits
-on the host. wgpu has no async call: the native GPU host makes the pipeline at
-once and writes its word by the same path.
+pipeline made by WebGPU's async call — so each names a done word of the guest's
+memory and a ticket, the next of a sequence the guest alone advances for that
+word, one request out on it at a time. Once the call is done, the GPU host,
+the done word's one writer, stores the ticket there with release, after what
+it guards and, for a read back or an image, the result in the word after it;
+the guest loads the word with acquire and holds the call done where it equals
+the ticket it asked with (`ipc/stream` R4, `RESULT`). A guest names an async
+pipeline in no record until its done word holds its ticket, so nothing it
+records waits on the host. wgpu has no async call: the native GPU host makes
+the pipeline at once and writes its done word by the same path.
 
-What a surface shows — a canvas, a view's layer, a window — is lent by the ui,
-bound to the GPU host under the guest's handle for it and let go by that handle
-(`bind`, `unbind`); the guest names the surface by the handle's slot in its
-records. Here the GPU host is the side that keeps the object, so it checks the
-generation. On a device the view is xpute's (`@xpute/native` `SurfaceView`).
+What a surface shows — a canvas, a view's layer, a window — is lent by the
+shell, bound to the GPU host under the guest's handle for it and let go by that
+handle (`bind`, `unbind`); the guest names the surface by the handle's slot in
+its records. Here the GPU host is the side that keeps the object, so it checks
+the generation. On a device the view is xpute's (`@xpute/native`
+`SurfaceView`).
 
 The native GPU host reaches the guest's memory by offset (`xpute-host/mem.rs`
 `Memory`), each read or write only the range the guest names, since the host's
@@ -595,15 +656,15 @@ choices, which beside a native guest are xpute's defaults
 Apple platform and RGBA elsewhere, where a surface is configured
 (`ConfigureAt`), and `Fifo` presentation.
 
-Beside a guest linked into its own process, the GPU host runs at the edges of
-each turn on the guest's thread, what the device answered written in before it
-and the turn's stream run and its frames shown after it (`before_turn`,
-`after_turn`), and is exported as the entry is, under xpute's names
+Beside a guest linked into its own process, the GPU host is a device on the
+guest's thread: what the device answered is written in before each turn
+(`poll`), the stream is run and its frames shown as the guest publishes it
+(`publish`), and a completion kicks the guest (xpute-host native `kick`). It
+is exported as the entry is, under xpute's names
 (`xpute-gpu/host/native.rs` `native_abi!`, `rust/gpu/include/xpute_gpu.h`):
 `xpute_gpu_open` opens the device and holds it, `xpute_gpu_surface_bind` makes
 a surface of a window the platform hands over and binds it under the guest's
-handle, `xpute_gpu_surface_unbind` lets it go, and `xpute_gpu_wake_on` takes
-the function a completion calls to ask a turn. It makes a surface's target of
+handle, and `xpute_gpu_surface_unbind` lets it go. It makes a surface's target of
 the window itself, a layer on an Apple platform and a native window on
 Android, and on Android exports the same calls to JNI under the Kotlin class
 `xpute.Gpu`. The GPU host is touched on the guest's thread alone
@@ -724,11 +785,11 @@ decides what must match.
   `SYS_RESUME`). Rust's (`rust/host`) reads a guest's memory by offset on
   every platform (`mem`), and on a unix one hosts a guest linked into the
   host's own native process (`native`). There it reserves the memory, and runs
-  every call into the guest on the guest's own thread, since the guest keeps
-  its module-wide values in `Global`s (`xpute-guest/global.rs`), statics sound
-  on one thread alone, handing each hostcall back to the caller that waits. It
-  also provides the allocator that keeps the guest's blocks in its memory and
-  every other thread's out of it. The React Native module (`ts/native`) holds
+  the guest on its own thread, which loops while the guest has work, since the
+  guest keeps its module-wide values in `Global`s (`xpute-guest/global.rs`),
+  statics sound on one thread alone, handing each hostcall to the thread that
+  answers it. It also provides the allocator that keeps the guest's blocks in
+  its memory and every other thread's out of it. The React Native module (`ts/native`) holds
   the Kotlin, the Swift and the headers that bind the two, and Expo autolinks
   it.
 - **The GPU's calls follow the same split.** Each guest language writes them
@@ -808,8 +869,9 @@ where the tree records the source.
 
 | Precedent                                                   | Where                            | What is taken                                                                  |
 | ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
-| A kernel over its HAL                                       | the host                         | The host read as the core's hardware: calls down, interrupts up                |
+| A unikernel (MirageOS, Unikraft) and its library OS         | the guest                        | The program and its library OS as one image, with no userspace                 |
+| A VMM and virtio's devices                                  | the host, the machine            | The host implements the devices the machine asks for; interrupts up            |
+| virtio-vsock                                                | the shell                        | A client outside the VM reaching the guest's service over a device             |
 | WebAssembly's host and guest, a WIT world                   | the two ABIs                     | The names; a world's imports and exports, seen from the guest                  |
 | Aegis                                                       | `sched/policy`                   | The quota as a cooperative counterpart of its CPU slice                        |
 | Linux's scheduling policies (`sched_setscheduler`)          | `sched/policy`                   | Its name: how turns are scheduled, chosen apart from what rings them           |

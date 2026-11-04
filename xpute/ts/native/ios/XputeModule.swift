@@ -8,26 +8,27 @@ import ExpoModulesCore
 /// surface draws into (SurfaceView.swift). android/'s XputeModule.kt is the
 /// same under the same names.
 public class XputeModule: Module {
-  /// The module `xpute_gpu_wake_on`'s function sends through.
+  /// The module `xpute_notify_on`'s function sends through.
   nonisolated(unsafe) static weak var current: XputeModule?
-  /// What answers the guest's hostcalls, called on the JavaScript thread
-  /// while `run` waits on the turn making them.
+  /// What answers the guest's hostcalls, called on the JavaScript thread,
+  /// inside `run` or `answer`.
   nonisolated(unsafe) static var answer: JavaScriptValue?
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
-    /// The GPU host asks a turn, for a completion it learned of between turns.
-    Events("onWake")
+    /// The guest has posted or asked, a hostcall waits for `answer`, or the
+    /// guest has stopped.
+    Events("onNotify")
 
     OnCreate {
       XputeModule.current = self
       // A C function captures nothing, so it reaches the module through the
-      // static. Called from the thread that learned of a completion: Expo's
-      // sendEvent schedules the event onto the JavaScript thread itself.
-      xpute_gpu_wake_on { XputeModule.current?.sendEvent("onWake") }
-      // On the thread waiting in `run`, the JavaScript thread, which may
-      // call into JavaScript there. A host that throws refused it (EIO).
+      // static. Called from the guest's thread: Expo's sendEvent schedules
+      // the event onto the JavaScript thread itself.
+      xpute_notify_on { XputeModule.current?.sendEvent("onNotify") }
+      // On the JavaScript thread, inside `run` or `answer`, which may call
+      // into JavaScript there. A host that throws refused it (EIO).
       xpute_hostcall_on { at in
         guard let answer = XputeModule.answer else { return -38 }
         guard let res = try? answer.getFunction().call(arguments: Int(at)) else { return -5 }
@@ -38,6 +39,7 @@ public class XputeModule: Module {
       XputeModule.current = nil
       XputeModule.answer = nil
       xpute_hostcall_on(nil)
+      xpute_notify_on(nil)
     }
 
     Function("mem") { () throws -> NativeArrayBuffer in
@@ -50,6 +52,20 @@ public class XputeModule: Module {
 
     Function("run") { (quotaMs: Double) -> Double in
       xpute_run(quotaMs)
+    }
+
+    Function("kick") { (quotaMs: Double) in
+      xpute_kick(quotaMs)
+    }
+
+    Function("answer") {
+      xpute_answer()
+    }
+
+    Function("heard") { () -> [Double] in
+      var turnMs: Double = 0
+      let wake = xpute_heard(&turnMs)
+      return [wake, turnMs]
     }
 
     /// Kept past the call, so a copy of the value it was handed.

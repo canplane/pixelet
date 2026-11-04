@@ -33,6 +33,7 @@ use crate::domain::layer::object::ext::{Ext, Pools, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::overwrite::{self, path, NodeSlot};
+use pxl_render::gpu::api;
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
 
@@ -230,6 +231,13 @@ impl Store {
     /// What is placed as of now, which every write moves.
     pub fn revision(&self) -> u32 {
         self.revision
+    }
+
+    /// Whether the host holds the tree's lanes, which the renderer hands
+    /// where they lie (pxl-render gpu/api.rs `held`): nothing writes the
+    /// tree until it gives them back (repository.rs `Change`).
+    pub(crate) fn is_held(&self) -> bool {
+        api::held(self.tree.first_child()) || api::held(self.tree.data())
     }
 
     /// The tree's columns as the GPU takes them (`GpuColumns`): the child groups

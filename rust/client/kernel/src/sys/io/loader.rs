@@ -10,7 +10,7 @@
 //!
 //! A read that did not arrive is retried, and one the heap refused room for
 //! waits, as a tile's body does, until the heap gives some back (the request
-//! scheduler's `Wait::Room`): its bytes are taken when the open answers, and
+//! scheduler's `Wait::Room`): its room is taken when the open answers, and
 //! its descriptor closed there with its credit. Bytes that do not parse are
 //! final, since asking again returns the same bytes. An image is its file's
 //! bytes, handed to the renderer under the asset's number, which makes its
@@ -25,7 +25,7 @@ use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
 use crate::sys::io::demand::Ask;
 use crate::sys::io::failure::{Ended, Failure};
-use crate::sys::io::file::{self, Opened, Owner};
+use crate::sys::io::file::{self, Opened, Owner, Reading};
 use crate::sys::io::file_spec::{root, CATALOG};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
@@ -196,9 +196,9 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
-/// The open answered: its bytes taken now, as a tile's body is
+/// The open answered: its room taken now, as a tile's body's is
 /// (sys/io/fetch.rs `on_opened`), and its descriptor closed with its credit;
-/// where the heap refuses them room, the want waits for room.
+/// where the heap refuses it, the want waits for room.
 pub fn on_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
         on_load_rejected(key, Ended::Failed(Failure::from(opened)));
@@ -209,13 +209,11 @@ pub fn on_opened(fd: u32, key: u64, opened: Opened) {
         settle(key, Ended::Ok, None);
         return;
     };
-    // SAFETY: the bytes are filled from the next turn on, and the arrival
-    // reads them only after it.
-    match unsafe { file::read_whole(fd, n) } {
-        Ok(bytes) => {
+    match file::read_whole(fd, n) {
+        Ok(reading) => {
             settle(key, Ended::Ok, None);
             let (kind, load) = what;
-            arrive(kind, load, bytes);
+            arrive(kind, load, reading);
         }
         Err(refused) => settle(key, Ended::Refused(refused), None),
     }
@@ -275,20 +273,26 @@ pub fn on_images_lost() {
 /// parse or landing. Where the turn's quota is spent before the tasks run, as
 /// it is while the frame outweighs its share, each task advances a step a
 /// turn, so k arrivals advance k steps, not one.
-fn arrive(kind: LoadKind, load: Load, bytes: Vec<u8>) {
+fn arrive(kind: LoadKind, load: Load, reading: Reading) {
     *loader().at(kind, load) = Some(Entry::Arrived);
     // The pool holds a task for each slot, the catalog and the sphere
     // (TASKS): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
-    let spawned = task::spawn(arrival(kind, load, bytes), TaskPriority::Arrival as u8);
+    let spawned = task::spawn(arrival(kind, load, reading), TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, load.id());
 }
 
 /// An asset file arrived, read whole: a model parsed, an image kept until
-/// its texture lands, the catalog read.
-async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
-    // In once the host has run the turn's records.
-    next_turn(world_edge).await;
+/// its texture lands, the catalog read, each once the host's head has passed
+/// its read.
+async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
+    let buf = loop {
+        match file::take_read(reading) {
+            Ok(buf) => break buf,
+            Err(unread) => reading = unread,
+        }
+        next_turn(world_edge).await;
+    };
     yield_if_spent(world_edge).await;
     match kind {
         LoadKind::Image => return on_image_arrived(load, buf),
