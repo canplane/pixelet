@@ -12,7 +12,6 @@
 // the eye holds one, its index then its zoom (`overwrite::Cut`, `NO_CUT` for none).
 
 @group(0) @binding(2) var<storage, read> ground: array<u32>;
-@group(0) @binding(4) var<storage, read> palette_indices: array<u32>;
 @group(0) @binding(5) var<storage, read> shards: array<vec4<u32>>;
 @group(0) @binding(6) var<storage, read> overwrites: array<u32>;
 @group(0) @binding(7) var<storage, read> pool: array<u32>;
@@ -213,8 +212,6 @@ fn is_past(shard: u32) -> bool {
   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
 }
 
-}
-
 const BOUNDS_EMPTY = vec4<i32>(EMPTY_LO, EMPTY_HI, EMPTY_LO, EMPTY_HI);
 const BOUNDS_OPEN = vec4<i32>(UNBOUNDED_LO, UNBOUNDED_HI, UNBOUNDED_LO, UNBOUNDED_HI);
 
@@ -315,7 +312,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
     let base = slot * BRICK_WORDS;
-    fold = palette_indices[slot * BRICK_CELLS + i];
+    fold = palette_word(slot * BRICK_CELLS + i);
     column = ground[base + COLUMNS_AT + i];
     own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
   }

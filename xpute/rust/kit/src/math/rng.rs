@@ -9,7 +9,7 @@ mod w32;
 #[path = "rng.64.rs"]
 mod w64;
 
-pub use w32::{derive_seed_u32, mix32, SplitMix32};
+pub use w32::{derive_seed_u32, mix32, SplitMix32, MIX32_FIRST, MIX32_LAST, SEED_SALT_32};
 pub use w64::{derive_seed_u64, mix64, SplitMix64};
 
 /// Uniform in [0, 1).

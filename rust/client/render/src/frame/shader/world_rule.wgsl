@@ -38,27 +38,7 @@ fn is_wall(shard: u32, cell: u32, b: vec2<i32>) -> bool {
   return any(((vec4<u32>(served) >> bits) & vec4<u32>(1u)) == vec4<u32>(0u));
 }
 
-/// `wrap_idx`.
-fn wrap_idx(zoom: u32, x: i32) -> i32 {
-  if (zoom == 0u) {
-    return 0i;
-  }
-  return (x << (32u - zoom)) >> (32u - zoom);
-}
-
 // ---- clipmap.rs ----
-
-fn spread(v: u32) -> u32 {
-  var s = (v | (v << 8u)) & 0x00ff00ffu;
-  s = (s | (s << 4u)) & 0x0f0f0f0fu;
-  s = (s | (s << 2u)) & 0x33333333u;
-  return (s | (s << 1u)) & 0x55555555u;
-}
-
-/// `clipmap::idx_of`.
-fn cell_id(at: vec2<u32>) -> u32 {
-  return spread(at.x) | (spread(at.y) << 1u);
-}
 
 /// A bound word's lowest and highest (`answer::bound_of`).
 fn bound_of(w: i32) -> vec2<i32> {

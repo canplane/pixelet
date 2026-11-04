@@ -5,6 +5,7 @@
 #![allow(dead_code, reason = "each test reads its own of it")]
 
 use pxl_content::cube::ground as palette;
+use pxl_content::decor::DECORS;
 use pxl_content::Pixelet;
 use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::clipmap::{
@@ -435,6 +436,9 @@ impl Placing {
     }
 }
 
+/// The first decor's stored value (pxl-content `DECORS`).
+pub const FIRST_DECOR_VAL: u32 = DECORS[0].val;
+
 /// The world built, and what lies where a test sends what it asks.
 pub struct Built {
     pub clipmap: Vec<[i32; 4]>,
@@ -453,6 +457,8 @@ pub struct Built {
     pub lone: Vec<[i32; 3]>,
     pub over_bridges: Vec<[i32; 3]>,
     pub unheld: Vec<[i32; 3]>,
+    /// Decor placed, each a unit leaf.
+    pub decors: Vec<[i32; 3]>,
     /// The stream it was built by, going on.
     pub draw: Draw,
 }
@@ -535,6 +541,16 @@ pub fn shards() -> Vec<[u32; 4]> {
 
 /// The world about an eye at `eye`, seeded the one way.
 pub fn build(eye: [i32; 2]) -> Built {
+    build_with_decors(eye, 0)
+}
+
+/// `build`, and `placed_decors` decors placed about the eye.
+pub fn build_with_decors(eye: [i32; 2], placed_decors: u32) -> Built {
+    build_with(eye, placed_decors, &[])
+}
+
+/// `build_with_decors`, and the leaves `leaves` placed last, each its zoom, node and word.
+pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], u32)]) -> Built {
     let shards = shards();
 
     // The clip levels and their bricks, each filled as a frame's fill does; some wanted
@@ -799,8 +815,33 @@ pub fn build(eye: [i32; 2]) -> Built {
         );
         unheld.push(leaf);
     }
+    // Decor placed on the ground about the eye, its handle over its value (tests/decor.rs).
+    let mut decors = Vec::new();
+    let mut scatter = Draw(0x51ed_270b);
+    for k in 0..placed_decors {
+        let reach = if k % 3 == 0 { 2000 } else { 200 };
+        let g = [
+            eye[0] + scatter.within(-reach, reach),
+            (eye[1] + scatter.within(-reach, reach)).max((40 << 16) + 2),
+        ];
+        let at = [
+            wrap_idx(LEAF_CELL, g[0]),
+            g[1],
+            top_at(g) + scatter.within(0, 2),
+        ];
+        placing.put(
+            LEAF_CELL,
+            at,
+            overwrite::leaf_word(FIRST_DECOR_VAL + k % 4, 7000 + k),
+        );
+        decors.push(at);
+    }
+    for &(zoom, c, word) in leaves {
+        placing.put(zoom, c, word);
+    }
     let overwrites = placing.words();
     Built {
+        decors,
         clipmap,
         ground: ground_words,
         palette: palette_words,

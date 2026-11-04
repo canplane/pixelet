@@ -10,8 +10,5 @@
 /// `cast_cs`'s workgroup a side, a square of pixels.
 pub const CAST_SIDE: u32 = 8;
 
-/// Lanes `decor_thin_cs`'s workgroup has: a clip level cell each.
-pub const DECOR_CELL_LANES: u32 = 64;
 
-/// Lanes a decor pass's workgroup has (`decor_cnt_cs`, `decor_compact_cs`).
-pub const DECOR_RECORD_LANES: u32 = 64;
+

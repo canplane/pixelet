@@ -4,11 +4,7 @@
 // Source: rust/spec/engine (pxl-engine) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, then spirv-opt and naga in rust/client/shader/build.
-struct type_4 {
-    member: array<u32>,
-}
-
-struct type_19 {
+struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
     member_2: vec4<f32>,
@@ -22,16 +18,20 @@ struct type_19 {
     member_10: array<vec4<u32>, 5>,
 }
 
-struct type_20 {
-    member: type_19,
+struct type_13 {
+    member: type_12,
 }
 
-struct type_23 {
+struct type_16 {
+    member: array<u32>,
+}
+
+struct type_19 {
     member: array<vec4<i32>, 48>,
 }
 
-struct type_24 {
-    member: type_23,
+struct type_20 {
+    member: type_19,
 }
 
 struct type_29 {
@@ -45,9 +45,9 @@ struct type_32 {
 
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
-var<uniform> global_1: type_20;
+var<uniform> global_1: type_13;
 @group(0) @binding(11)
-var<uniform> global_2: type_24;
+var<uniform> global_2: type_20;
 @group(0) @binding(12)
 var<storage, read_write> global_3: type_32;
 @group(0) @binding(21)

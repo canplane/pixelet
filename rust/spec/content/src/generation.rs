@@ -20,13 +20,20 @@ use crate::decor::{Decor, Orientation, DECORS};
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
 
-/// The records a run of a decor pass reads (pxl-shader decor.rs `run_of`),
+/// The lanes of a decor pass's workgroup.
+pub const LANES: u32 = 64;
+const _: () = assert!(
+    EYE_ENTRIES.is_multiple_of(LANES) && clipmap::BRICK_CELLS.is_multiple_of(LANES),
+    "a pass over the entries or a brick's cells is dispatched whole workgroups"
+);
+
+/// The records a run of a decor pass reads (decor_run.wgsl `run_of`),
 /// a decor's capacity a whole number of them.
 pub const RUN: u32 = 16;
 
 /// The most decor one brick generates, every decor's together: each decor's
 /// capacity (`Decor::cap`) laid in the catalog's order.
-pub(crate) const BRICK_RECORDS: u32 = {
+pub const BRICK_RECORDS: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < DECORS.len() {
         sum += DECORS[k].cap();
@@ -66,40 +73,9 @@ pub const EYE_ENTRIES: u32 = EYE_CLIP_LEVELS * ENTRIES;
 /// its region).
 pub const UNGENERATED: u32 = u32::MAX;
 const _: () = assert!(UNGENERATED >> drawn::REGION_SHIFT == drawn::NONE);
-/// A record retained by the thinning and still to generate: `decor_thin_cs`
-/// lays it, its candidate's cell and seed after it, and `decor_cs`
-/// generates it in its place the same frame, so no other pass reads one.
-pub const RETAINED: u32 = UNGENERATED - 1;
-
-/// A record whose candidate's footing is found, its pose still to ask
-/// (`decor_footing_cs`, then `decor_cs`, the same frame): its first word
-/// marked by every zoom and region bit set, as `RETAINED`'s, and holding
-/// below them whether the finest zoom's column surface was found and its
-/// top cell (`Footing::held`, `Footing::base`, 16 bits signed), bit 17
-/// clear, so no footing word is `RETAINED` or `UNGENERATED`; its box's
-/// height and sink in its words as `decor_cs` leaves them.
-pub const fn footing_word(held: bool, base: i32) -> u32 {
-    FOOTING_MARK | (base as u32 & 0xffff) << 1 | held as u32
-}
-
-/// Whether a record's first word is a footing's (`footing_word`).
-pub const fn is_footing(w: u32) -> bool {
-    w & FOOTING_MARK == FOOTING_MARK && w & 1 << 17 == 0
-}
-
-/// A footing word's `held` and `base` (`footing_word`).
-pub const fn footing_of(w: u32) -> (bool, i32) {
-    (w & 1 != 0, ((w << 15) as i32) >> 16)
-}
-
-const FOOTING_MARK: u32 = !((1 << CELL_SHIFT) - 1);
-const _: () = assert!(
-    CELL_SHIFT == 18 && pxl_engine::HEIGHT_BITS <= 16 && LEAF_CELL == UNIT_ZOOM,
-    "a footing's top cell, a unit or coarser within the world's height, fits 16 bits under the mark"
-);
 const _: () = assert!(
     FINEST_ZOOM < (1 << ZOOM_BITS) - 1,
-    "no record's first word is `RETAINED` or `UNGENERATED`: its zoom's bits are never all set"
+    "no record's first word is `UNGENERATED`: its zoom's bits are never all set"
 );
 
 /// The GPU's decor in one buffer of words: a head per eye entry, then each
@@ -110,15 +86,15 @@ const _: () = assert!(
 /// entry whose brick the clip levels no longer hold there is skipped by it
 /// (`generated_for`) — then how many records each decor laid (`cnt_at`).
 /// Placed decor's head is its count.
-pub(crate) const CNT_AT: u32 = 3;
+pub const CNT_AT: u32 = 3;
 pub const HEAD_WORDS: u32 = CNT_AT + DECORS.len() as u32;
-const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
+pub const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
 /// Records the entries hold, every one, ahead of placed decor's.
 pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
 pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
-pub(crate) const PLACED_HEAD_WORDS: u32 = 4;
+pub const PLACED_HEAD_WORDS: u32 = 4;
 
-/// The runs of records a decor pass's workgroup reads (pxl-shader decor.rs
+/// The runs of records a decor pass's workgroup reads (decor_run.wgsl
 /// `run_of`): an entry's, `RUN` records each; placed decor's, a record each.
 pub const RUNS: u32 = BRICK_RECORDS / RUN;
 
@@ -134,7 +110,7 @@ pub const fn cnt_at(s: u32, k: u32) -> u32 {
 
 /// Where `rows`' decor `k`'s records start among an entry's: the decors'
 /// capacities laid in the catalog's order (`Decor::cap`).
-pub(crate) fn first_record(rows: &[Decor], k: u32) -> u32 {
+pub fn first_record(rows: &[Decor], k: u32) -> u32 {
     let (mut first, mut j) = (0, 0);
     while j < k {
         first += rows[j as usize].cap();
@@ -202,11 +178,28 @@ pub const fn part_at(n: u32) -> u32 {
     LIST_WORDS - 1 - n
 }
 
+/// A pair's word in the list: its entry, then its decor past `PAIR_DECOR_SHIFT`.
+pub const PAIR_DECOR_SHIFT: u32 = 16;
+const _: () = assert!(
+    EYE_ENTRIES <= 1 << PAIR_DECOR_SHIFT,
+    "an entry fits under a pair's decor"
+);
+
+/// Entry `s` and decor `j` as a pair's word.
+pub const fn pair_word(s: u32, j: u32) -> u32 {
+    s | j << PAIR_DECOR_SHIFT
+}
+
+/// A pair's word's entry and decor (`pair_word`).
+pub const fn pair_of(w: u32) -> (u32, u32) {
+    (w & ((1 << PAIR_DECOR_SHIFT) - 1), w >> PAIR_DECOR_SHIFT)
+}
+
 /// How far about its own, in its clip level's cells, a candidate's generation
 /// reads the world (`placement`): the leaf cells its pose votes on, no
 /// farther than as many of its clip level's, its box, and the placed decor that
 /// may claim it, none wider than the widest decor.
-const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
+pub const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
 /// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the clip level at
 /// `cell`.
@@ -259,20 +252,22 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 /// the coarsest it stands at (`scatter::coarsest_stand`); past them, once
 /// sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
-    decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
+    decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
 
 /// A record's turn's place and width in its first word, and its zoom's
 /// place past it (`record_word`).
-const TURN_SHIFT: u32 = 16;
-const TURN_BITS: u32 = 2;
-const CELL_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
+pub const TURN_SHIFT: u32 = 16;
+/// A record's variant's place past its decor, a byte each (`record_word`).
+pub const VARIANT_SHIFT: u32 = 8;
+pub const TURN_BITS: u32 = 2;
+pub const CELL_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
 
 /// A record's decor, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
     (
-        w & 0xff,
-        (w >> 8) & 0xff,
+        w & ((1 << VARIANT_SHIFT) - 1),
+        (w >> VARIANT_SHIFT) & ((1 << VARIANT_SHIFT) - 1),
         (w >> TURN_SHIFT) & ((1 << TURN_BITS) - 1),
         (w >> CELL_SHIFT) & ((1 << ZOOM_BITS) - 1),
     )
@@ -320,6 +315,8 @@ pub mod drawn {
     /// instance 0, which a device without `indirect-first-instance` holds
     /// every indirect draw to.
     pub const ARGS_WORDS: u32 = 5;
+    /// The strip an impostor's instance is drawn by, its corners.
+    pub const IMPOSTOR_CORNERS: u32 = 4;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, every
     /// device's dynamic offset alignment), its index list's first slot at
     /// `UNIFORM_IDX` within it: the columns' base, to which the args pass adds
@@ -340,6 +337,10 @@ pub mod drawn {
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
     pub const DRAWING_WORDS: u32 = EXTENTS + GROUPS;
+
+    /// The least distance, in units, a thing's span about the eye is taken at
+    /// (decor_cnt.wgsl `cnt_one`).
+    pub const NEAREST_U: f32 = 1e-3;
 
     /// What a thing spanning `across` radians about the eye is drawn as: a
     /// model at `model` or more, else an impostor at `impostor` or more, else
@@ -690,7 +691,7 @@ pub fn held_at(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
 }
 
 /// Placed decor's tag (`node_seed`).
-const PLACED_TAG: u32 = 0x91ac_ed5e;
+pub const PLACED_TAG: u32 = 0x91ac_ed5e;
 
 /// A placed decor's variant and heading, seeded only by the unit cell of its
 /// corner, its one stable identity, so a preview predicts exactly what a
@@ -716,7 +717,7 @@ pub fn row_of(rows: &[Decor], val: u32) -> (u32, bool) {
 /// How far before a box's min corner, in unit cells, a placed decor's corner
 /// may lie and its box still meet it: any decor's widest side and tallest
 /// box, less one.
-const CLAIM_EXTENT: [i32; 3] = {
+pub const CLAIM_EXTENT: [i32; 3] = {
     let (mut wide, mut tall, mut k) = (1, 1, 0);
     while k < DECORS.len() {
         let d = &DECORS[k];

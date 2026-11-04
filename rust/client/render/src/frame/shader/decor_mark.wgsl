@@ -1,0 +1,50 @@
+// pxl-render/decor_mark.wgsl
+
+// The eye's entries whose decor generates again this frame, a thread an entry, each decor shown
+// at its clip level listed: whole where every entry does or its records were not generated
+// for its brick, its head then laid anew and each decor's count none yet; else in part, from
+// the list's end, where a box of the frame's reaches what its brick reads
+// (pxl-content `generation::LIST_AT`, `part_at`).
+
+@group(0) @binding(9) var<storage, read_write> records: array<u32>;
+@group(0) @binding(11) var<storage, read_write> list: array<atomic<u32>>;
+@group(0) @binding(12) var<storage, read> shown: array<u32>;
+
+fn list_word(k: u32) -> u32 {
+  return atomicLoad(&list[k]);
+}
+
+@compute @workgroup_size(LANES)
+fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  let s = id.x;
+  let row = clipmap[s];
+  if (row.z == 0i) {
+    return;
+  }
+  let cell = FIRST_CELL + s / CLIP_ENTRIES;
+  let whole = list_word(LIST_EVERY) != 0u || !generated_for(s, row.xy);
+  if (whole) {
+    let h = s * HEAD_WORDS;
+    records[h] = u32(row.x);
+    records[h + 1u] = u32(row.y);
+    records[h + 2u] = 1u;
+    for (var k = 0u; k < DECORS; k += 1u) {
+      records[cnt_at(s, k)] = 0u;
+    }
+  } else {
+    let k = BRICK_SHIFT + LEAF_CELL - cell;
+    let cells = vec4<i32>(row.xy << vec2<u32>(k), (row.xy + 1i) << vec2<u32>(k));
+    if (!is_changed(cell, cells)) {
+      return;
+    }
+  }
+  for (var j = 0u; j < DECORS; j += 1u) {
+    if (((shown[j] >> (cell - FIRST_CELL)) & 1u) != 0u) {
+      let count_at = select(LIST_PARTS, THIN_ARGS + 2u, whole);
+      let n = atomicAdd(&list[count_at], 1u);
+      atomicAdd(&list[GENERATE_ARGS + 2u], 1u);
+      let w = select(part_at(n), LIST_AT + n, whole);
+      atomicStore(&list[w], pair_word(s, j));
+    }
+  }
+}

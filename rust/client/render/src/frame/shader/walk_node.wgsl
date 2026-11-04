@@ -195,20 +195,6 @@ fn crossing(d: vec3<f32>, t: vec3<f32>, last: bool) -> u32 {
   return e;
 }
 
-/// The side of the box a cell keeping `k` eighths is drawn (`answer::side`).
-fn side(k: u32) -> f32 {
-  switch (k) {
-    case 1u: { return 0.5; }
-    case 2u: { return 0.6299605; }
-    case 3u: { return 0.7211248; }
-    case 4u: { return 0.7937005; }
-    case 5u: { return 0.854988; }
-    case 6u: { return 0.9085603; }
-    case 7u: { return 0.9564656; }
-    default: { return 1.0; }
-  }
-}
-
 /// Step `e` of a box on the grid's own planes, rounded out by `out` where finer
 /// than the finest grid's count (`meets_box`'s `step`).
 fn box_step(e: vec3<u32>, u: u32, out: u32) -> vec3<u32> {

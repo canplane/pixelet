@@ -5,14 +5,17 @@
 //! through it, and a stream that draws it over a Weyl sequence.
 
 /// The golden ratio's 32-bit word, the 64-bit family's salt's counterpart.
-const SEED_SALT_32: u32 = 0x9e37_79b9;
+pub const SEED_SALT_32: u32 = 0x9e37_79b9;
+/// Murmur3's two multipliers (`mix32`).
+pub const MIX32_FIRST: u32 = 0x85eb_ca6b;
+pub const MIX32_LAST: u32 = 0xc2b2_ae35;
 
 /// Murmur3's 32-bit finalizer, `mix64`'s counterpart.
 pub fn mix32(x: u32) -> u32 {
     let x = x.wrapping_add(SEED_SALT_32);
     let mut z = x;
-    z = (z ^ (z >> 16)).wrapping_mul(0x85eb_ca6b);
-    z = (z ^ (z >> 13)).wrapping_mul(0xc2b2_ae35);
+    z = (z ^ (z >> 16)).wrapping_mul(MIX32_FIRST);
+    z = (z ^ (z >> 13)).wrapping_mul(MIX32_LAST);
     z ^ (z >> 16)
 }
 

@@ -46,13 +46,13 @@ pub const SHADER_BOUND: u32 = 26;
 /// generated with the cast from pxl-engine's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHT: u32 = 27;
-/// The decor the ground generates in the eye's clip levels, generated with the
-/// cast from pxl-engine's `scatter`: its one compute entry.
+/// The decor the ground generates in the eye's clip levels, a record a thread, on its
+/// column's surface and posed (decor_pose.wgsl): its one compute entry.
 pub const SHADER_GENERATION: u32 = 28;
 /// What `SHADER_GENERATION` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn compacted into the decor's instances: pxl-engine
-/// `generation::drawn`.
+/// args (decor_args.wgsl); each drawn compacted into the decor's instances:
+/// pxl-engine `generation::drawn`.
 pub const SHADER_GENERATION_CNT: u32 = 29;
 pub const SHADER_GENERATION_ARGS: u32 = 30;
 pub const SHADER_GENERATION_COMPACT: u32 = 31;
@@ -176,32 +176,29 @@ pub const SHADER_HIT_FACES: u32 = 74;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
 pub const SHADER_BOX_ARGS: u32 = 75;
-/// The footing of the decor `SHADER_GENERATION` poses, asked apart from its
-/// pose (pxl-shader `decor_footing_cs`): its one compute entry.
-pub const SHADER_GENERATION_FOOTING: u32 = 76;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// entries of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (pxl-shader `light_beam_cs`…).
-pub const SHADER_LIGHT_BEAM: u32 = 77;
-pub const SHADER_LIGHT_CELL: u32 = 78;
-pub const SHADER_LIGHT_SAMPLE: u32 = 79;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 80;
+pub const SHADER_LIGHT_BEAM: u32 = 76;
+pub const SHADER_LIGHT_CELL: u32 = 77;
+pub const SHADER_LIGHT_SAMPLE: u32 = 78;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 79;
 /// The samples' walk over the observed pyramid alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
-pub const SHADER_SAMPLE_HIT: u32 = 81;
+pub const SHADER_SAMPLE_HIT: u32 = 80;
 /// The missed pixels' walk over the observed pyramid alone, by hand: what it does
 /// not end `SHADER_MISS_LIST` walks again.
-pub const SHADER_MISS_HIT: u32 = 82;
+pub const SHADER_MISS_HIT: u32 = 81;
 /// The beam rays' walk over the observed pyramid alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
-pub const SHADER_BEAM_HIT: u32 = 83;
+pub const SHADER_BEAM_HIT: u32 = 82;
 /// The light's missed slots' walk over the observed pyramid alone, by hand: what it does
 /// not end `SHADER_LIGHT_MISS` walks again.
-pub const SHADER_LIGHT_MISS_HIT: u32 = 84;
+pub const SHADER_LIGHT_MISS_HIT: u32 = 83;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
 /// again.
-pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 85;
-pub const SHADERS: u32 = 86;
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 84;
+pub const SHADERS: u32 = 85;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -356,25 +353,74 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_HEIGHT
     &["height.gen"],
     // SHADER_GENERATION
-    &["decor.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "clipmap",
+        "seed",
+        "clip",
+        "no_palette",
+        "world_rule",
+        "world",
+        "decor_record",
+        "decor_box",
+        "decor_row",
+        "decor_pose",
+    ],
     // SHADER_GENERATION_CNT
-    &["decor_cnt.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "decor_record",
+        "decor_run",
+        "decor_cnt",
+    ],
     // SHADER_GENERATION_ARGS
-    &["decor_args.gen"],
+    &["decor_word", "decor_args"],
     // SHADER_GENERATION_COMPACT
-    &["decor_compact.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "clipmap",
+        "seed",
+        "decor_record",
+        "decor_row",
+        "decor_run",
+        "decor_compact",
+    ],
     // SHADER_WAY
     &[
         "walk_word",
         "world_word",
         "way_word",
+        "clipmap",
+        "seed",
+        "clip",
         "world_rule",
         "way_rule",
         "handed",
         "way",
     ],
     // SHADER_GENERATION_MARK
-    &["decor_mark.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "clipmap",
+        "seed",
+        "decor_record",
+        "decor_box",
+        "decor_mark",
+    ],
     // SHADER_FOLD
     &["fold.gen"],
     // SHADER_ATMOS_FROXEL
@@ -392,6 +438,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "way_word",
+        "clipmap",
+        "seed",
+        "clip",
         "world_rule",
         "way_rule",
         "handed",
@@ -413,7 +462,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "walk_node",
+        "side",
         "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
         "world",
         "world_split",
         "ask",
@@ -429,11 +484,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "world_word",
-        "walk_node",
         "world_rule",
         "clipmap",
         "seed",
         "clip",
+        "palette",
+        "walk_node",
+        "side",
+        "resume",
         "world",
         "world_split",
         "ask",
@@ -459,7 +517,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_PROPAGATE
     &["light_propagate.gen"],
     // SHADER_GENERATION_THIN
-    &["decor_thin.gen"],
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "seed",
+        "decor_record",
+        "decor_row",
+        "decor_scatter",
+        "decor_thin",
+    ],
     // SHADER_SCREEN_FINISH
     &[
         "frame",
@@ -517,8 +584,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["hit_faces.gen"],
     // SHADER_BOX_ARGS
     &["box_args"],
-    // SHADER_GENERATION_FOOTING
-    &["decor_footing.gen"],
     // SHADER_LIGHT_BEAM
     &["light_beam.gen"],
     // SHADER_LIGHT_CELL
@@ -528,7 +593,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "walk_node",
+        "side",
         "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "palette",
+        "world_rule",
         "world",
         "world_split",
         "ask",
@@ -543,6 +614,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "walk_node",
+        "side",
         "resume",
         "walk",
         "sample_eye",
@@ -550,13 +622,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample_hit",
     ],
     // SHADER_MISS_HIT
-    &["walk_word", "walk_node", "resume", "walk", "miss_hit"],
+    &["walk_word", "walk_node", "side", "resume", "walk", "miss_hit"],
     // SHADER_BEAM_HIT
-    &["walk_word", "walk_node", "resume", "walk", "beam_hit"],
+    &["walk_word", "walk_node", "side", "resume", "walk", "beam_hit"],
     // SHADER_LIGHT_MISS_HIT
     &[
         "walk_word",
         "walk_node",
+        "side",
         "resume",
         "walk",
         "light_aim",
@@ -566,6 +639,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "walk_node",
+        "side",
         "resume",
         "walk",
         "light_aim",

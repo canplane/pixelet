@@ -51,21 +51,6 @@ impl<A: Copy> Line<A> {
     }
 }
 
-impl<A: Copy> ColumnSurface<A> {
-    /// A column surface whose assets are asked off `line` alone (`asset`),
-    /// as a pass that did not walk the column holds it: the line straight
-    /// down to its top cell (`line`), which is the one its walk found
-    /// (`column_surface_line_is_its_top_cells`).
-    pub fn of_line(line: Line<A>) -> ColumnSurface<A> {
-        ColumnSurface {
-            top: (0, 0.0),
-            ends: End::Hit,
-            line,
-            origin: [0; 3],
-        }
-    }
-}
-
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
     fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]) {
         self.line = Line::of_walk(self.origin, &met.hit.node, met.hit.at, stack);
@@ -392,8 +377,8 @@ mod tests {
     }
 
     /// The line a column surface keeps is the line straight down to its top
-    /// cell, its column's at its zoom: what a pass that did not walk the
-    /// column asks its assets off (`ColumnSurface::of_line`), the same answers.
+    /// cell, its column's at its zoom: what a reader that did not walk the
+    /// column asks its assets off, the same answers.
     #[test]
     fn column_surface_line_is_its_top_cells() {
         for g in [[6, 3], [2, 3], [3, 0], [9, 5]] {
@@ -408,12 +393,7 @@ mod tests {
             ] {
                 assert_eq!(
                     asset(&mut Step, &f.line, UNIT_ZOOM, c),
-                    asset(
-                        &mut Step,
-                        &ColumnSurface::of_line(rebuilt).line,
-                        UNIT_ZOOM,
-                        c
-                    ),
+                    asset(&mut Step, &rebuilt, UNIT_ZOOM, c),
                     "{g:?} {c:?}"
                 );
             }
