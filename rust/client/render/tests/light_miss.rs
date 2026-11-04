@@ -1811,7 +1811,8 @@ fn run_case(
             "{asked} asked against {of_world} of {visits} visits"
         ));
     }
-    if most_visits > cast::STEPS_MOST / 8 {
+    // A ray down a column of no ground falls to its reach, as far as `t_max` is from it.
+    if most_visits > cast::STEPS_MOST / 4 {
         fail(format!(
             "a ray of {most_visits} visits near the walk's bound"
         ));

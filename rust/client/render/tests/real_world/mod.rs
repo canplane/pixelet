@@ -9,8 +9,9 @@ use pxl_content::Pixelet;
 use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::clipmap::{
     self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL, HANDED_WORDS, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LINES_AT,
-    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, ORIGIN_AT, PALETTE_AT, ROOT_AT, TREE_AT,
+    EYE_CLIP_LEVELS, FIRST_CELL, HANDED_WORDS, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT,
+    LAID_CELLS, LINES_AT, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, ORIGIN_AT, PALETTE_AT, ROOT_AT,
+    TREE_AT,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
@@ -336,7 +337,8 @@ pub fn handed(
             (elevation(eye, cell, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
         };
         let width = 16 + (h >> 24) % 48;
-        let kind = value::TRANSPORTS[0] + (h >> 4) % 18;
+        let kinds = value::TRANSPORTS[1] - value::TRANSPORTS[0] + 1;
+        let kind = value::TRANSPORTS[0] + (h >> 4) % kinds;
         let clear = match line {
             1 => 6,
             4 => (1u32 << s).clamp(6, 250),
@@ -538,6 +540,16 @@ pub fn build(eye: [i32; 2]) -> Built {
         }
     }
     assert!(ground_words.len() as u32 / BRICK_WORDS == held_bricks);
+    // Some of each brick's columns no ground, its cells laid void, under ways and not: what the
+    // ways stand on there, or nothing.
+    for slot in 0..held_bricks {
+        for i in 0..BRICK_CELLS {
+            if mix(slot + 1000, [i as i32, 3]).is_multiple_of(29) {
+                let w = (slot * BRICK_WORDS + LAID_AT + i / LAID_CELLS) as usize;
+                ground_words[w] &= !(0xff << (8 * (i % LAID_CELLS)));
+            }
+        }
+    }
     // Slot 0 a brick with a tree a node of any brick's Z may read: a place held by none, its
     // slot 0, reads no slot.
     let words = BRICK_WORDS as usize;
