@@ -58,6 +58,7 @@ fn main() {
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
+    std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -341,7 +342,9 @@ fn walk_word() -> String {
     use pxl_engine::area::Shard;
     use pxl_engine::clipmap::Lookup;
     use pxl_engine::overwrite::NodeSlot;
-    use pxl_engine::{answer, beam, cast, eye, face, param, pyramid, ray, value, SHARD_ZOOM};
+    use pxl_engine::{
+        answer, beam, cast, eye, face, light, param, pyramid, ray, tally, value, SHARD_ZOOM,
+    };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
@@ -380,6 +383,7 @@ fn walk_word() -> String {
         ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
         ("BUCKET", pyramid::BUCKET),
         ("W_KIND", pyramid::W_KIND),
+        ("KIND_MASK", pyramid::KIND_MASK),
         ("W_ASSET", pyramid::W_ASSET),
         ("W_NODE", pyramid::W_NODE),
         ("NONE", pyramid::NONE),
@@ -395,9 +399,44 @@ fn walk_word() -> String {
         ("EIGHTHS", answer::EIGHTHS),
         ("BOX_BITS", answer::BOX_BITS),
         ("BOX_STEPS", answer::BOX_STEPS),
-        ("STEPS_MOST", 4096),
+        ("STEPS_MOST", cast::STEPS_MOST),
         ("JITTER", eye::JITTER as u32),
-        ("REVISIT", 16),
+        ("REVISIT_ONE_IN", 16),
+        ("LIGHT", eye::LIGHT as u32),
+        ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
+        ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
+        ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
+        ("LIGHT_ANCHOR", light::ANCHOR as u32),
+        ("LIGHT_TILE", light::TILE),
+        ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
+        ("LIGHT_MISS_STRUCK", light::MISS_STRUCK),
+        ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
+        ("LIGHT_MISSED_PASS", pyramid::LIGHT_MISSED_PASS),
+        (
+            "LIGHT_ASKED_TALLY",
+            pyramid::tally_at(tally::LIGHT, tally::ASKED),
+        ),
+        ("LIGHT_T_MAX", light::W_T_MAX as u32),
+        ("LIGHT_ACROSS", light::W_ACROSS as u32),
+        ("LIGHT_DOWN", light::W_DOWN as u32),
+        ("LIGHT_DIR", light::W_DIR as u32),
+        ("LIGHT_BIAS", light::W_BIAS as u32),
+        ("LIGHT_CORNER_X", light::CORNER[0] as u32),
+        ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
+        ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
+        ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
+        ("STARTS_DOWN", light::STARTS_DOWN as u32),
+        ("STARTS_ANCHORS", light::STARTS_ANCHORS as u32),
+        ("STARTS_FRACS", light::STARTS_FRACS as u32),
+        (
+            "LIGHT_MISS_TALLY",
+            pyramid::tally_at(tally::LIGHT, tally::MISS),
+        ),
+        ("CARVE", eye::CARVE as u32),
+        ("HIDE", eye::HIDE as u32),
+        ("FRAME", pyramid::FRAME),
+        ("PASSES", pyramid::PASSES),
+        ("TALLY_ON", pyramid::TALLY_ON),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),
@@ -433,6 +472,127 @@ fn walk_word() -> String {
         out += &format!("const {name}: u32 = {v}u;\n");
     }
     out
+}
+
+/// What the world's one query by hand reads (world.wgsl), from pxl-engine and
+/// pxl-content, whose layouts and rules they are.
+fn world_word() -> String {
+    use pxl_content::cave::{
+        BLOCK, BLOCKS, CELL_BLOCKS, CROSS, PIPE, ROOT, ROOT_BLOCKS, SPAWN, SPLIT, WALK,
+    };
+    use pxl_content::cube::ground as palette;
+    use pxl_content::param::{cave, strata};
+    use pxl_engine::clipmap as clip;
+    use pxl_engine::overwrite::{self, Cut};
+    use pxl_engine::way::tree;
+    use pxl_engine::{area, seed, value};
+    let words: &[(&str, u32)] = &[
+        ("LEAF_CELL", pxl_engine::LEAF_CELL),
+        ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
+        ("VALUE_UNKNOWN", value::UNKNOWN),
+        ("GROUNDS_FIRST", value::GROUNDS[0]),
+        ("GROUNDS_LAST", value::GROUNDS[1]),
+        ("OBJECTS_FIRST", value::OBJECTS[0]),
+        ("OBJECTS_LAST", value::OBJECTS[1]),
+        ("KIND_LACKS", answer::Kind::Lacks as u32),
+        ("PLACED_ASSET", answer::PLACED_ASSET),
+        ("FULL", answer::FULL),
+        ("FULL_BITS", answer::FULL.trailing_zeros()),
+        ("FILL_BITS", answer::FILL_BITS),
+        ("BRANCH", overwrite::BRANCH),
+        ("OBJECT_ROOT", overwrite::OBJECT_ROOT),
+        ("CHILDREN", overwrite::CHILDREN),
+        ("SLOT_FOLDED", overwrite::FOLDED),
+        ("SLOT_ZOOM_MASK", overwrite::ZOOM_MASK),
+        ("SLOT_SHIFT", overwrite::SLOT_SHIFT),
+        ("POOL_CHILD_GROUPS", tree::POOL_CHILD_GROUPS),
+        ("ROOT_ID_BITS", tree::ROOT_ID_BITS),
+        ("ROOT_NODES", tree::ROOT_NODES),
+        ("SHARD_KNOWN", area::SHARD_KNOWN),
+        ("SHARD_SERVED_SHIFT", area::SHARD_SERVED_SHIFT),
+        ("SHARD_OWN", area::OWN),
+        ("BRICK", clip::BRICK),
+        ("BRICK_SHIFT", clip::BRICK_SHIFT),
+        ("BRICK_CELLS", clip::BRICK_CELLS),
+        ("BRICK_WORDS", clip::BRICK_WORDS),
+        ("BRICK_LEVELS", clip::LEVELS),
+        ("ACROSS", clip::ACROSS),
+        ("CLIP_ENTRIES", clip::ENTRIES),
+        ("FIRST_CELL", clip::FIRST_CELL),
+        ("ORIGIN_AT", clip::ORIGIN_AT),
+        ("JOINED_AT", clip::JOINED_AT),
+        ("JOINED_ENTRIES", clip::JOINED_ENTRIES),
+        ("JOINED_LEVELS", clip::JOINED_LEVELS),
+        ("COLUMNS_AT", clip::COLUMNS_AT),
+        ("LEVELS_AT", clip::LEVELS_AT),
+        ("LEVEL_ENTRY_WORDS", clip::LEVEL_ENTRY_WORDS),
+        ("LAID_AT", clip::LAID_AT),
+        ("LAID_CELLS", clip::LAID_CELLS),
+        ("ROOT_AT", clip::ROOT_AT),
+        ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
+        ("LOOKUP_FROM_SHIFT", clip::LOOKUP_FROM_SHIFT),
+        ("LOOKUP_CELL_SHIFT", clip::LOOKUP_CELL_SHIFT),
+        ("LOOKUP_AT", (1 << clip::LOOKUP_CELL_SHIFT) - 1),
+        ("STRATA_SAND", palette::sand as u32),
+        ("STRATA_BEACH", palette::beach as u32),
+        ("STRATA_WATER", palette::water as u32),
+        ("STRATA_SOIL", palette::soil as u32),
+        ("STRATA_SANDSTONE", palette::sandstone as u32),
+        ("STRATA_STONE", palette::stone as u32),
+        ("CAVE_ROOT", ROOT),
+        ("CAVE_PIPE", PIPE),
+        ("CAVE_BLOCK", BLOCK),
+        ("CELL_BLOCKS", CELL_BLOCKS),
+        ("ROOT_BLOCKS", ROOT_BLOCKS),
+        ("CAVE_NUDGE", cave::NUDGE),
+        ("CAVE_TAG_SPAWN", SPAWN),
+        ("CAVE_TAG_WALK", WALK),
+        ("CAVE_TAG_CROSS", CROSS),
+        ("CAVE_TAG_SPLIT", SPLIT),
+        ("CAVE_TAG_BLOCKS", BLOCKS),
+        ("MASTER_SEED", seed::MASTER_SEED),
+        ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
+    ];
+    let signed: &[(&str, i32)] = &[
+        ("SEA_LEVEL", pxl_engine::SEA_LEVEL),
+        ("SEA_CELLS", ground::SEA_CELLS),
+        ("EMPTY_LO", ground::EMPTY[0]),
+        ("EMPTY_HI", ground::EMPTY[1]),
+        ("UNBOUNDED_LO", ground::UNBOUNDED[0]),
+        ("UNBOUNDED_HI", ground::UNBOUNDED[1]),
+        ("STRATA_FILLER_DEPTH", strata::FILLER_DEPTH),
+        ("STRATA_SANDSTONE_DEPTH", strata::SANDSTONE_DEPTH),
+        ("STRATA_BEDROCK_DEPTH", strata::BEDROCK_DEPTH),
+    ];
+    let mut out = String::new();
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    for (name, v) in signed {
+        out += &format!("const {name}: i32 = {v}i;\n");
+    }
+    for (name, [a, b]) in [
+        ("BOX_NONE", answer::BOX_NONE),
+        ("BOX_WHOLE", answer::BOX_WHOLE),
+    ] {
+        out += &format!("const {name} = vec2<u32>({a}u, {b}u);\n");
+    }
+    let [a, b, c, d, _] = cave::ROOT_TUNNELS;
+    out += &format!("const TUNNELS_FIRST = vec4<u32>({a}u, {b}u, {c}u, {d}u);\n");
+    let none = Cut::NONE;
+    out += &format!(
+        "const NO_CUT = vec4<i32>({}i, {}i, {}i, {}i);\n",
+        none.at[0], none.at[1], none.at[2], none.zoom as i32
+    );
+    let cases: String = cave::BLOCKS_A_TUNNEL[..4]
+        .iter()
+        .enumerate()
+        .map(|(k, b)| format!("case {k}u: {{ return {b}u; }} "))
+        .collect();
+    out + &format!(
+        "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
+        cave::BLOCKS_A_TUNNEL[4]
+    )
 }
 
 fn tile_word() -> String {
@@ -591,6 +751,39 @@ fn accessors(text: &str) -> String {
     out
 }
 
+/// `text` with only the module's constants something in it reads.
+fn read_consts(text: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let name_of = |line: &str| {
+        let rest = line.strip_prefix("const ")?;
+        rest.find(|c: char| !is_word(c))
+            .map(|end| rest[..end].to_string())
+    };
+    let mut lines: Vec<&str> = text.lines().collect();
+    loop {
+        let mut names = std::collections::BTreeMap::<&str, u32>::new();
+        for w in lines.iter().flat_map(|l| l.split(|c: char| !is_word(c))) {
+            *names.entry(w).or_default() += 1;
+        }
+        let (mut read, mut unread) = (Vec::with_capacity(lines.len()), false);
+        let mut through = false;
+        for l in &lines {
+            if through {
+                through = !l.contains(';');
+            } else if name_of(l).is_some_and(|name| names[name.as_str()] == 1) {
+                through = !l.contains(';');
+                unread = true;
+            } else {
+                read.push(*l);
+            }
+        }
+        lines = read;
+        if !unread {
+            return lines.join("\n") + "\n";
+        }
+    }
+}
+
 /// Every shader assembled from its parts (part.rs `PARTS`), validated as
 /// WebGPU takes it, every capability off; written where record.rs `source`
 /// includes it; and which stages read each of its bindings, read off its
@@ -615,6 +808,9 @@ fn assemble(out: &Path) {
         for part in parts.iter() {
             text += &read(part);
             text += "\n";
+        }
+        if !generated {
+            text = read_consts(&text);
         }
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -674,6 +870,24 @@ fn assemble(out: &Path) {
         stages += &format!("    &[{}],\n", entries.join(", "));
     }
     assert!(rastered, "no shader holds raster.wgsl's `Raster`");
+    // The world's query asked word for word, as the test and Tint take it, in no shader.
+    let asked = [
+        "walk_word",
+        "world_word",
+        "world",
+        "world_split",
+        "world_asked",
+    ]
+    .map(read)
+    .join("\n");
+    let asked = read_consts(&asked);
+    let module = wgsl::parse_str(&asked)
+        .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
+    Validator::new(ValidationFlags::all(), Capabilities::empty())
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
+    std::fs::write(out.join("assembled").join("world_asked.wgsl"), asked)
+        .expect("the world's asked shader");
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),

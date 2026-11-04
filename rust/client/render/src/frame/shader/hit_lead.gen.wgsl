@@ -70,7 +70,7 @@ fn function_() {
 
     let _e36 = global;
     let _e38 = arrayLength((&global_4.member));
-    let _e42 = global_5.member[118u];
+    let _e42 = global_5.member[120u];
     if (_e36.x >= select(_e42, 524288u, (524288u < _e42))) {
     } else {
         let _e50 = global_1.member.member_10[0u][0u];

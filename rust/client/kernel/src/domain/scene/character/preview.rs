@@ -31,6 +31,8 @@ const CASE_DEPTH_U: f64 = 100_000.0;
 struct Preview {
     id: u32,
     character: Character,
+    /// What it clears to, 0xRRGGBB, sRGB.
+    bg: u32,
     actor: Option<Actor>,
     /// Where its actor stands, once held.
     transform: Option<Transform>,
@@ -55,7 +57,7 @@ pub const PREVIEWS_MAX: usize = surface::SURFACES;
 
 /// Replaces a preview already open under `id`. False where `id` names no
 /// surface or no character.
-pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
+pub fn preview_open(id: u32, group: Group, number: u8, bg: u32) -> bool {
     preview_close(id);
     let Some(character) = Character::of(group, number) else {
         return false;
@@ -63,6 +65,7 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     previews().previews.push(Preview {
         id,
         character,
+        bg,
         actor: None,
         transform: None,
         model: None,
@@ -156,16 +159,17 @@ pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     }
 }
 
-/// (preview, its actor's palette, skin image), the image as the loader has it
-/// now: the palette names the preview's own draw, as its model is the
-/// companion's too.
-pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
+/// (preview, its actor's palette, skin image, what it clears to), the image as
+/// the loader has it now: the palette names the preview's own draw, as its
+/// model is the companion's too.
+pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]), u32)> {
     let c: &'static _ = previews();
     c.previews.iter().filter_map(|preview| {
         Some((
             preview.id,
             preview.actor.as_ref()?.palette(),
             load_of(preview.character.skin).and_then(load_image)?,
+            preview.bg,
         ))
     })
 }

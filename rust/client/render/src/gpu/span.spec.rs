@@ -34,18 +34,18 @@ pub enum GpuSpanName {
     fill = 10,
     cast = 11,
     beam = 12,
-    cell = 13,
-    sample_hit = 14,
-    sample = 15,
-    sample_box = 16,
-    sraster = 17,
-    px = 18,
-    miss = 19,
-    light_receivers = 20,
-    light_beam = 21,
-    light_sample = 22,
-    light_raster = 23,
-    light_slot = 24,
+    sample_hit = 13,
+    sample = 14,
+    sample_box = 15,
+    sraster = 16,
+    px = 17,
+    miss = 18,
+    light_receivers = 19,
+    light_beam = 20,
+    light_sample = 21,
+    light_raster = 22,
+    light_slot = 23,
+    light_hit = 24,
     light_walk = 25,
     generate = 26,
     shadow = 27,
@@ -71,7 +71,6 @@ impl GpuSpanName {
         GpuSpanName::fill,
         GpuSpanName::cast,
         GpuSpanName::beam,
-        GpuSpanName::cell,
         GpuSpanName::sample_hit,
         GpuSpanName::sample,
         GpuSpanName::sample_box,
@@ -83,6 +82,7 @@ impl GpuSpanName {
         GpuSpanName::light_sample,
         GpuSpanName::light_raster,
         GpuSpanName::light_slot,
+        GpuSpanName::light_hit,
         GpuSpanName::light_walk,
         GpuSpanName::generate,
         GpuSpanName::shadow,
@@ -116,7 +116,7 @@ impl GpuSpanName {
         GpuSpanName::propagate,
     ];
     /// The members whose `per_cell` is true, in the JSON's order.
-    pub const PER_CELL: [GpuSpanName; 2] = [GpuSpanName::beam, GpuSpanName::cell];
+    pub const PER_CELL: [GpuSpanName; 1] = [GpuSpanName::beam];
 }
 
 pub const LIGHT_MOVED: usize = 4;

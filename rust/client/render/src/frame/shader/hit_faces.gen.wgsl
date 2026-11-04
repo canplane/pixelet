@@ -47,7 +47,7 @@ fn function_() {
     var local: u32;
 
     let _e22 = global;
-    let _e26 = global_3.member[118u];
+    let _e26 = global_3.member[120u];
     if (_e22.x >= select(_e26, 524288u, (524288u < _e26))) {
     } else {
         let _e34 = global_1.member.member_10[3u][2u];

@@ -298,11 +298,11 @@ impl Light {
         };
         Light {
             first: v(0),
-            t_max: f32::from_bits(w[3]),
-            across: v(4),
-            down: v(8),
-            dir: v(12),
-            bias: v(16),
+            t_max: f32::from_bits(w[W_T_MAX]),
+            across: v(W_ACROSS),
+            down: v(W_DOWN),
+            dir: v(W_DIR),
+            bias: v(W_BIAS),
             corner: CORNER.map(|k| w[k] as i32),
             reach_ndc: f32::from_bits(w[REACH_NDC]),
         }
@@ -327,6 +327,13 @@ impl Light {
         out
     }
 }
+
+/// A `Light`'s words (`words`), each from `eye::LIGHT`, as a shader reads them.
+pub const W_T_MAX: usize = 3;
+pub const W_ACROSS: usize = 4;
+pub const W_DOWN: usize = 8;
+pub const W_DIR: usize = 12;
+pub const W_BIAS: usize = 16;
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
@@ -360,6 +367,8 @@ pub const HEAD_CORNER_WAS: usize = 4;
 /// frame's rays mark again, and in the first frame it stands, which the
 /// jitter's frames after it stand on (pxl-shader light.rs `light_mark_cs`).
 pub const HEAD_FOOTPRINT: usize = 6;
+/// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
+pub const HEAD_MISSES: usize = 7;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -385,6 +394,11 @@ pub const ANCHOR: i32 = 2048;
 /// vec4 each from `STARTS_AT`: the base, the steps across and down, the
 /// anchors, their remainders.
 pub const STARTS_AT: usize = 2;
+/// `Starts`'s vec4s from `STARTS_AT`, as a shader reads them (`Starts::words`).
+pub const STARTS_ACROSS: usize = 1;
+pub const STARTS_DOWN: usize = 2;
+pub const STARTS_ANCHORS: usize = 3;
+pub const STARTS_FRACS: usize = 7;
 pub const STARTS_VEC4S: usize = 11;
 
 /// The actors the host draws, receivers of the shadow map as decor is
@@ -611,13 +625,17 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 }
 
 /// The slots whose ray took no visible sample, listed for their walk
-/// (pxl-shader `light_miss_cs`) apart from the slots that took theirs
+/// (pxl-render light_miss.wgsl) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
 /// that took their visible sample, by the same listing and dispatch
 /// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+/// A slot its walk over the observed pyramid ended is struck from the list with this
+/// (pxl-render light_miss_hit.wgsl), past any slot's X and Y.
+pub const MISS_STRUCK: u32 = u32::MAX;
+
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }

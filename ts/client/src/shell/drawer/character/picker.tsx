@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
-  alpha,
   color,
   hairline,
   textScale,
@@ -210,7 +209,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: alpha(color.fill, 0.4),
+    backgroundColor: color.backdrop,
   },
   chipColumn: {
     flexShrink: 1,

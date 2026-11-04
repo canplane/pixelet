@@ -664,7 +664,7 @@ pub enum Command {
     SURFACE_RESIZE = 0x1502,
     /// A call: the canvas is going, and what it held on the device is let go before the call returns.
     SURFACE_CLOSE = 0x1503,
-    /// A character drawn alone into a surface the shell handed over, as the picker shows it.
+    /// A character drawn alone into a surface the shell handed over, as the picker shows it, over `bg`, 0xRRGGBB, sRGB.
     SCENE_PREVIEW_OPEN = 0x1701,
     SCENE_PREVIEW_CLOSE = 0x1702,
     /// A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
@@ -1379,6 +1379,7 @@ pub struct ScenePreviewOpen {
     pub surface: u32,
     pub group: pxl_spec::asset::actor::Group,
     pub number: u8,
+    pub bg: u32,
 }
 
 impl ScenePreviewOpen {
@@ -1389,6 +1390,7 @@ impl ScenePreviewOpen {
             group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
             number: integer::<u8>(f.at(2)?.get_number()?)?,
+            bg: integer::<u32>(f.at(3)?.get_number()?)?,
         })
     }
 }

@@ -566,8 +566,9 @@ export function encode_scene_preview_open(
   surface: u32,
   group: u32,
   number: u8,
+  bg: u32,
 ): PacketWriter {
-  return to.writer(3).u32(surface).u32(group).u8(number);
+  return to.writer(4).u32(surface).u32(group).u8(number).u32(bg);
 }
 
 /** Command.SCENE_PREVIEW_CLOSE's packet, written in place into `to`. */

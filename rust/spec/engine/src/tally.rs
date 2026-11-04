@@ -18,27 +18,30 @@ pub const LIGHT: u32 = 1;
 pub const OBSERVERS: u32 = 2;
 
 /// An observer's lanes: the nodes its beam rays, its samples and its walk
-/// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; its pixels or
+/// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walk
+/// again's by hand, those asked of the world (`ASKED`), no slot answering, the
+/// walks by rust-gpu counting none; its pixels or
 /// slots that took the visible sample, those that walked and those that took
 /// the sky (`TOOK`, `WALKED`, `SKY`), together every one it cast again; the
 /// boxes drawn (`BOXES`).
 pub const BEAM: u32 = 0;
 pub const SAMPLE: u32 = 1;
 pub const MISS: u32 = 2;
-pub const TOOK: u32 = 3;
-pub const WALKED: u32 = 4;
-pub const SKY: u32 = 5;
-pub const BOXES: u32 = 6;
-pub const LANES: u32 = 7;
+pub const ASKED: u32 = 3;
+pub const TOOK: u32 = 4;
+pub const WALKED: u32 = 5;
+pub const SKY: u32 = 6;
+pub const BOXES: u32 = 7;
+pub const LANES: u32 = 8;
 pub const WORDS: u32 = OBSERVERS * LANES;
 
 /// The lanes a walk writing the pyramid adds to, from the first
-/// (`BEAM` to `MISS`), and those a pixel or a slot does (`TOOK` to
+/// (`BEAM` to `ASKED`), and those a pixel or a slot does (`TOOK` to
 /// `SKY`), each a run where it adds.
-pub const WALKS: u32 = 3;
+pub const WALKS: u32 = 4;
 pub const RAYS: u32 = 3;
 const _: () = assert!(
-    BEAM == 0 && MISS + 1 == WALKS && TOOK == WALKS && SKY + 1 == WALKS + RAYS && BOXES == SKY + 1
+    BEAM == 0 && ASKED + 1 == WALKS && TOOK == WALKS && SKY + 1 == WALKS + RAYS && BOXES == SKY + 1
 );
 
 /// Lane `lane` of `observer` in the array.

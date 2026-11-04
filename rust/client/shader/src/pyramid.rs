@@ -195,20 +195,23 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                             break;
                         }
                         let a = w + pyramid::W_INHERITANCE;
-                        let at = Inheritance::of_words([
+                        let handed = [
                             pyramid_at(self.pyramid, a),
                             pyramid_at(self.pyramid, a + 1),
                             pyramid_at(self.pyramid, a + 2),
                             pyramid_at(self.pyramid, a + 3),
-                        ]);
-                        let kind = pyramid::kind_of(pyramid_at(self.pyramid, w + pyramid::W_KIND));
+                        ];
+                        let word = pyramid_load(self.pyramid, w + pyramid::W_KIND);
                         let asset = [
                             pyramid_at(self.pyramid, w + pyramid::W_ASSET),
                             pyramid_at(self.pyramid, w + pyramid::W_ASSET + 1),
                         ];
-                        if pyramid_load(self.pyramid, w) == held {
-                            *n = at;
-                            return In { kind, asset };
+                        if pyramid::stamp_holds(word, held, asset, handed, zoom, c) {
+                            *n = Inheritance::of_words(handed);
+                            return In {
+                                kind: pyramid::kind_of(word),
+                                asset,
+                            };
                         }
                         to = pyramid::NONE;
                         free = pyramid::NONE;
@@ -242,14 +245,15 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             && key != pyramid::CLAIMED
             && pyramid_claim(self.pyramid, w, key)
         {
+            let words = n.words();
+            let key = pyramid::key(self.tag, zooms);
             pyramid_put(
                 self.pyramid,
                 w + pyramid::W_KIND,
-                pyramid::kind_word(answer.kind),
+                pyramid::stamped(answer.kind, key, answer.asset, words, zoom, c),
             );
             pyramid_put(self.pyramid, w + pyramid::W_ASSET, answer.asset[0]);
             pyramid_put(self.pyramid, w + pyramid::W_ASSET + 1, answer.asset[1]);
-            let words = n.words();
             let a = w + pyramid::W_INHERITANCE;
             pyramid_put(self.pyramid, a, words[0]);
             pyramid_put(self.pyramid, a + 1, words[1]);
@@ -260,7 +264,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             pyramid_put(self.pyramid, k + 1, c[0] as u32);
             pyramid_put(self.pyramid, k + 2, c[1] as u32);
             pyramid_put(self.pyramid, k + 3, c[2] as u32);
-            pyramid_store(self.pyramid, w, pyramid::key(self.tag, zooms));
+            pyramid_store(self.pyramid, w, key);
         }
         answer
     }
@@ -301,7 +305,7 @@ pub fn forget_cs(
     }
     if pyramid::forgets(&moved, zoom, [x, y]) {
         let key = pyramid_at(pyramid, w + pyramid::W_KEY);
-        let split = pyramid_at(pyramid, w + pyramid::W_KIND)
+        let split = pyramid_at(pyramid, w + pyramid::W_KIND) & pyramid::KIND_MASK
             == pyramid::kind_word(pxl_engine::answer::Kind::Split);
         pyramid_put(
             pyramid,

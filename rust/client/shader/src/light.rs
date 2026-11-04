@@ -8,25 +8,22 @@
 //! `sample_cs`; raster.rs `sample_box_cs`) handed the light's head (`Head`),
 //! every walk at its tile's band (`Light::band`); every slot taking its
 //! visible sample or the sky (`light_cs`) and the rest walked
-//! (`light_miss_cs`); and the tiles a slide of the box keeps
+//! (pxl-render light_miss.wgsl); and the tiles a slide of the box keeps
 //! (`light_slide_cs`).
 
 use pxl_content::Pixelet;
 use pxl_engine::cast::{self, Detail, Spacing};
 use pxl_engine::fill::put;
 use pxl_engine::light::{Light, Starts};
-use pxl_engine::{at, pyramid, ray, tally, way, Zoom};
-use pxl_shader_macro::compute;
+use pxl_engine::{at, pyramid, tally, Zoom};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
-use crate::beam::{Beams, Words};
+use crate::beam::Words;
 use crate::cast::{add_cnt, enlist};
 use crate::decor::Instances;
 use crate::eye::Eye;
-use crate::pyramid::Pyramid;
 use crate::observer::{self, Aim, Level, Observer, Take};
-use crate::world::World;
 
 /// The world's depth from the light, a slot of the light's clipmap each
 /// (pxl-engine `light`): the slot's texel of the light box, and its ray
@@ -134,29 +131,6 @@ fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i
     false
 }
 
-/// The world as the light's walk again reads it, as the eye's do, the palette indices
-/// too, which only what a hit is drawn by holds and the map's word leaves
-/// out (`Map::word`).
-fn world<'a>(
-    eye: &'a Eye,
-    clipmap: &'a [IVec4],
-    ground: &'a [u32],
-    palette_indices: &'a [u32],
-    shards: &'a [IVec4],
-    overwrites: &'a [u32],
-    pool: &'a [u32],
-) -> World<'a, &'a [u32]> {
-    World {
-        clipmap,
-        ground,
-        palette_indices,
-        shards,
-        overwrites,
-        eye,
-        pool: way::tree::Read(pool),
-    }
-}
-
 /// The light's cast off the eye's words (pxl-engine `light::Light::words`).
 pub(crate) fn light_of(eye: &Eye) -> Light {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
@@ -243,11 +217,10 @@ impl Observer for Map {
         tally::LIGHT
     }
 
-    /// None: its rays need only a hit's depth, and the pyramid's slots,
-    /// a fixed few a bucket (`pyramid::victim`), are kept for the cells the
-    /// eye's rays are drawn by and walk again.
+    /// Kept as the eye's are: what `light_miss_hit_cs` cannot answer it leaves to a whole
+    /// walk, and a ray that stops on a cell no slot keeps is left every cast.
     fn assets(&self) -> bool {
-        false
+        true
     }
 
     fn passes(&self) -> [u32; 3] {
@@ -609,7 +582,7 @@ const _: () = assert!(
 /// own ray enters it (observer.rs `took`), or the sky where no sample about
 /// it met anything (observer.rs `sky`), as the eye's pixels do (cast.rs
 /// `cast_cs`), and the word it leaves there; the rest listed for their walk
-/// (`light_miss_cs`), every slot where the raster is not made yet (observer.rs
+/// (pxl-render light_miss.wgsl), every slot where the raster is not made yet (observer.rs
 /// `resolve`). Only the slots of the tiles the cast casts (`Map::needs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_cs"))]
 pub fn light_cs(
@@ -666,45 +639,6 @@ pub fn light_cs(
         pxl_engine::light::misses_at(n) + at,
         slot.y << 16 | slot.x,
     );
-}
-
-/// The world's depth from the light into each slot `light_cs` listed: a thread
-/// a slot, `ray::MISS_LANES` a workgroup and `ray::MISS_ACROSS` workgroups
-/// a row, each past the count returning at once, as the eye's listed pixels
-/// are (cast.rs `miss_list_cs`), its ray walked again (observer.rs
-/// `walk_again`), and the word it leaves there. The list read and written
-/// plainly.
-#[compute(threads(ray::MISS_LANES), entry_point_name = "light_miss_cs")]
-#[allow(clippy::too_many_arguments)]
-pub fn light_miss_cs(
-    #[spirv(workgroup_id)] group: UVec3,
-    #[spirv(local_invocation_id)] lane: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
-) {
-    let clipmap: &[IVec4] = clipmap;
-    let m = Map::of(eye, head);
-    let n = m.side();
-    let i = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES
-        + lane.x;
-    if i >= list.word(pxl_engine::light::misses_cnt(n)) {
-        return;
-    }
-    let w = list.word(pxl_engine::light::misses_at(n) + i);
-    let slot = UVec3::new(w & 0xffff, w >> 16, 0);
-    let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
-    let (_, met, _) = observer::walk_again(&m, world, pyramid, &*list, [slot.x, slot.y], &mut ());
-    // SAFETY: a slot `light_cs` listed, within the map.
-    unsafe { light.write(slot, m.word(&met)) };
 }
 
 /// The tiles between `a` and `b` marked stood on, where they lie within a

@@ -1147,7 +1147,7 @@
           "name": "SCENE_PREVIEW_OPEN",
           "val": 5889,
           "$doc": [
-            "A character drawn alone into a surface the shell handed over, as the picker shows it."
+            "A character drawn alone into a surface the shell handed over, as the picker shows it, over `bg`, 0xRRGGBB, sRGB."
           ],
           "pkt": [
             {
@@ -1161,6 +1161,10 @@
             {
               "name": "number",
               "type": "u8"
+            },
+            {
+              "name": "bg",
+              "type": "u32"
             }
           ]
         },

@@ -108,13 +108,13 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 #[derive(Clone, Copy)]
 pub struct Shard(u32);
 
-const SHARD_KNOWN: u32 = 1;
-const SHARD_SERVED_SHIFT: u32 = 1;
+pub const SHARD_KNOWN: u32 = 1;
+pub const SHARD_SERVED_SHIFT: u32 = 1;
 /// The bits of which of the nine are served (`Shard::served_bits`).
 const SHARD_SERVED_BITS: u32 = 9;
 const SHARD_ALL: u32 = (1 << SHARD_SERVED_BITS) - 1;
 /// Its own among the nine, the center.
-const OWN: u32 = 1 << 4;
+pub const OWN: u32 = 1 << 4;
 const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
 impl Shard {

@@ -159,7 +159,7 @@ pub fn stage_render(pace: Pace) {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut previews = [(0u32, 0u32, none); SURFACES];
+    let mut previews = [(0u32, 0u32, none, 0u32); SURFACES];
     let mut preview_cnt = 0;
     for (slot, row) in previews.iter_mut().zip(preview_rows()) {
         *slot = row;

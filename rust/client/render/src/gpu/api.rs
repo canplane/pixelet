@@ -330,12 +330,14 @@ pub enum Load {
     ReadOnly,
 }
 
-/// A pass's targets: color cleared to transparent or loaded, depth cleared
-/// to `depth_clear`, loaded or read only, and its stencil, where it has one,
-/// cleared to 0 or loaded (`load_stencil`); 0 for one absent.
+/// A pass's targets: color cleared to transparent, or to what `color_clear`
+/// gives, or loaded, depth cleared to `depth_clear`, loaded or read only, and
+/// its stencil, where it has one, cleared to 0 or loaded (`load_stencil`); 0
+/// for one absent.
 pub struct PassDesc {
     color: Id,
     color_load: Load,
+    color_clear: [f32; 4],
     depth: Id,
     depth_load: Load,
     depth_clear: f32,
@@ -352,6 +354,14 @@ impl PassDesc {
             ..self
         }
     }
+
+    /// Its color cleared to `rgba`, linear.
+    pub fn color_clear(self, rgba: [f32; 4]) -> PassDesc {
+        PassDesc {
+            color_clear: rgba,
+            ..self
+        }
+    }
 }
 
 pub fn pass_desc(
@@ -365,6 +375,7 @@ pub fn pass_desc(
     PassDesc {
         color,
         color_load,
+        color_clear: [0.0; 4],
         depth,
         depth_load,
         depth_clear,
@@ -1328,7 +1339,7 @@ impl Gpu {
             resolve: None,
             load: load_op(d.color_load),
             store: StoreOp::store,
-            clear: [0.0; 4],
+            clear: d.color_clear,
         }];
         let depth_stencil = (d.depth != 0).then(|| encode::DepthStencilAttachment {
             view: d.depth,
@@ -1501,14 +1512,14 @@ impl Gpu {
         Some(r)
     }
 
-    /// Configured in the format the device prefers, its alpha premultiplied.
+    /// Configured in the format the device prefers, opaque.
     pub fn configure(&self, surface: u32) {
         call::configure(
             &mut self.s().stream,
             handle_slot(surface),
             None,
             TEXTURE_USAGE::RENDER_ATTACHMENT,
-            CanvasAlphaMode::premultiplied,
+            CanvasAlphaMode::opaque,
         );
     }
 

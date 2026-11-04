@@ -25,13 +25,13 @@ pub const ROOT: Zoom = LEAF_CELL - 8;
 /// The pipe cell, 8 units, a tunnel's step.
 pub const PIPE: Zoom = LEAF_CELL - 3;
 /// A block, 2 units, what a pipe cell hollows a whole of.
-const BLOCK: Zoom = LEAF_CELL - 1;
+pub const BLOCK: Zoom = LEAF_CELL - 1;
 /// The classes' zooms: a tunnel of class `k` starts in a node there.
 /// The classes a tunnel is of, by the size of the node it starts in.
 const CLASSES: usize = 5;
 const CLASS: [Zoom; CLASSES] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3, ROOT + 4];
 /// A root's blocks: its tunnels', every root alike.
-const ROOT_BLOCKS: u32 = {
+pub const ROOT_BLOCKS: u32 = {
     let mut n = 0;
     let mut k = 0;
     while k < CLASSES {
@@ -41,14 +41,14 @@ const ROOT_BLOCKS: u32 = {
     n
 };
 /// A pipe cell's blocks, 4 a side.
-const CELL_BLOCKS: u32 = 64;
+pub const CELL_BLOCKS: u32 = 64;
 
 /// The tags of a node's draws (`node_seed`).
-const SPAWN: u32 = 0xca7e_5001;
-const WALK: u32 = 0xca7e_5002;
-const CROSS: u32 = 0xca7e_5003;
-const SPLIT: u32 = 0xca7e_5004;
-const BLOCKS: u32 = 0xca7e_5006;
+pub const SPAWN: u32 = 0xca7e_5001;
+pub const WALK: u32 = 0xca7e_5002;
+pub const CROSS: u32 = 0xca7e_5003;
+pub const SPLIT: u32 = 0xca7e_5004;
+pub const BLOCKS: u32 = 0xca7e_5006;
 
 /// A tunnel's part in a node, in pipe cells: where it comes in and goes
 /// out, the sides it crosses there (6 none, at its ends), and its blocks.

@@ -22,7 +22,7 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     (max(id.xy, vec2<u32>(NEAR_SAMPLES)) - vec2<u32>(NEAR_SAMPLES)) / cell_samples,
     span_n - vec2<u32>(1u),
   );
-  let w = walk(vec2<f32>(tx, ty), cell, NONE);
+  let w = walk(eye_aim(vec2<f32>(tx, ty)), cell, NONE);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % 64u == 0u) {

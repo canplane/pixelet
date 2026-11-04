@@ -19,7 +19,7 @@ pub mod cloud {
     pub const CUMULUS_KM: f64 = 1.5;
 }
 
-pub(crate) mod cave {
+pub mod cave {
     /// The tunnels every root cube (256 units) holds, by class: one 256
     /// across, four 128, sixteen 64, sixty-four 32 and a hundred and sixty
     /// 16, the last under two thirds of the 256 it could start, so they lie
@@ -35,7 +35,7 @@ pub(crate) mod cave {
     pub const NUDGE: u32 = 1200;
 }
 
-pub(crate) mod strata {
+pub mod strata {
     /// A layer of ground cells under a face, in leaf cells, before the stone.
     pub const FILLER_DEPTH: i32 = 3;
 

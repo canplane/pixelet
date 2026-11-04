@@ -10,7 +10,7 @@ use crate::{wrap_idx, Zoom};
 
 /// The seed every draw on the world's nodes starts from (`node_seed`): the
 /// caves, the ground's decor and a placed decor's pose.
-const MASTER_SEED: u32 = 0x5eed_0001;
+pub const MASTER_SEED: u32 = 0x5eed_0001;
 
 /// A node's seed for one use: `tag` names the use, and the node's zoom and
 /// each of its indices are folded in, in order, X named as the world names

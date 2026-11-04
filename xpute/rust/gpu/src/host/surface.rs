@@ -137,14 +137,19 @@ impl GpuHost {
                 "[gpu] surface {n} cannot show {format:?} on this adapter"
             );
             // Shows through where clear, as a premultiplied canvas does; Metal
-            // offers only opaque and post-multiplied.
-            let alpha_mode = [
-                wgpu::CompositeAlphaMode::PreMultiplied,
-                wgpu::CompositeAlphaMode::PostMultiplied,
-            ]
-            .into_iter()
-            .find(|m| premultiplied && caps.alpha_modes.contains(m))
-            .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+            // offers only opaque and post-multiplied. Opaque is opaque or inherit,
+            // whichever the surface offers (Adreno 740's is inherit).
+            let alpha_mode = if premultiplied {
+                [
+                    wgpu::CompositeAlphaMode::PreMultiplied,
+                    wgpu::CompositeAlphaMode::PostMultiplied,
+                ]
+                .into_iter()
+                .find(|m| caps.alpha_modes.contains(m))
+                .unwrap_or_else(|| panic!("[gpu] surface {n} cannot show through on this adapter"))
+            } else {
+                wgpu::CompositeAlphaMode::Auto
+            };
             let config = wgpu::SurfaceConfiguration {
                 usage,
                 format,

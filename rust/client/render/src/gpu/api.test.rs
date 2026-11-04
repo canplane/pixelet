@@ -3,6 +3,15 @@
 use super::*;
 
 #[test]
+fn a_pass_clears_to_transparent_unless_given() {
+    let d = pass_desc(1, Load::Clear, 0, Load::Clear, 0.0, None);
+    assert_eq!(d.color_clear, [0.0; 4]);
+    let rgba = [0.5, 0.25, 0.125, 1.0];
+    let d = d.color_clear(rgba).load_stencil();
+    assert_eq!(d.color_clear, rgba, "the stencil's load leaves it");
+}
+
+#[test]
 fn state_holds_what_was_set() {
     let mut s = DrawState::default();
     assert!(!s.is_pipeline_set(7), "a pass begins holding no pipeline");
