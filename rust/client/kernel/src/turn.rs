@@ -56,6 +56,7 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::frame::resolution::Pace;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store;
+use crate::perf::record::perf_recording;
 use crate::perf::report::{perf_frame, FrameTurn};
 use crate::perf::window::perf_follow;
 use crate::pointer;
@@ -235,12 +236,18 @@ pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
-/// Effects are not budgeted, so nothing in them may be real work.
+/// Effects are not budgeted, so nothing in them may be real work. Each is
+/// timed only while the profiler records, which alone reads the times.
 macro_rules! effect {
     ($times:ident, $name:ident, $step:expr) => {{
-        let at = now();
-        $step;
-        $times[EffectName::$name as usize] += now() - at;
+        match $times.as_mut() {
+            Some(times) => {
+                let at = now();
+                $step;
+                times[EffectName::$name as usize] += now() - at;
+            }
+            None => $step,
+        }
     }};
 }
 
@@ -248,7 +255,7 @@ macro_rules! effect {
 pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
-    let mut times = [0.0; spec::EFFECT_NAMES];
+    let mut times = perf_recording().then_some([0.0; spec::EFFECT_NAMES]);
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
         if store::settings_load_step() {
@@ -269,7 +276,7 @@ pub fn world_turn() -> f64 {
     // device_coord is not gated like pivot: the location indicator keeps its last coordinate across a transient none.
     effect!(times, location, location_step(off_center().device_coord));
     effect!(times, settings, store::settings_keep_step());
-    *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
+    *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times.unwrap_or_default();
     now() - at
 }
 

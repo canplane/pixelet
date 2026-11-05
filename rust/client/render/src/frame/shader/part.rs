@@ -215,7 +215,11 @@ pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 83;
 pub const SHADER_LIGHT_BEAM_HIT: u32 = 84;
 /// The tiles claimed, listed for `SHADER_CAST`.
 pub const SHADER_CAST_TILES: u32 = 85;
-pub const SHADERS: u32 = 86;
+/// The box of the screen's claimed tiles, a frame through the gate's (`SHADER_DECOR_GATE`).
+pub const SHADER_CLAIMED_BOX: u32 = 86;
+/// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
+pub const SHADER_DECOR_GATE: u32 = 87;
+pub const SHADERS: u32 = 88;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -671,6 +675,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_box",
         "light_list",
         "light_stand",
+        "decor_ball",
         "light_mark_draws",
     ],
     // SHADER_LIGHT_PROPAGATE
@@ -917,4 +922,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CAST_TILES
     &["tile_word", "cast_tiles"],
+    // SHADER_CLAIMED_BOX
+    &["tile_word", "claimed_box"],
+    // SHADER_DECOR_GATE
+    &[
+        "frame",
+        "decor_word",
+        "tile_word",
+        "decor_ball",
+        "decor_gate",
+    ],
 ];

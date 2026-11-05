@@ -20,7 +20,7 @@ struct Placement {
 };
 
 fn placed(v: VertexIn) -> Placement {
-  let i = instances[draw_idx() + v.i];
+  let i = order[draw_idx() + v.i];
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);
   let fit = fits[draw_layer()];

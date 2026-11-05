@@ -300,7 +300,10 @@ impl Uploads {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
             let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
-            let id = g.bind_group(layout, &[buf_entry(0, self.buf[i])]);
+            let id = g.bind_group(
+                layout,
+                &[buf_entry(0, self.buf[i]), buf_entry(1, self.buf[i])],
+            );
             self.group[i] = id;
         }
         Some(self.group[i])

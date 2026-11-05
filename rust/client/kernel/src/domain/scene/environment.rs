@@ -176,23 +176,26 @@ impl EnvironmentDraw {
         let heights = |days: f64| heights(days, at);
         let step = steps();
         // As fast as each height moves over the minute from `at`, when it will
-        // have moved a step; a 0 step at once, whether its height moves or not.
+        // have moved a step. A light with no step landed (`unknown`) steps at
+        // every observation and wakes no turn: its measures' landing does
+        // (pxl-render `landed`).
         const MINUTE_MS: f64 = 60_000.0;
-        let sky_next = |at: f64| {
+        let rate = |at: f64, unknown: f64| {
             let days = j2000_days(at);
             let (now, then) = (heights(days), heights(days + MINUTE_MS / 86_400_000.0));
             at + (0..2)
                 .map(|k| match step[k] {
-                    0.0 => 0.0,
+                    0.0 => unknown,
                     s => s * MINUTE_MS / (then[k] - now[k]).abs(),
                 })
                 .fold(f64::INFINITY, f64::min)
         };
+        let sky_next = |at: f64| rate(at, 0.0);
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
         if !self.started {
             (self.sky_at, self.clouds_at) = Default::default();
         }
-        let (sky, next, stepped) = self.sky_at.at(sky_ms, sky_next);
+        let (sky, _, stepped) = self.sky_at.at(sky_ms, sky_next);
         if stepped {
             self.days = j2000_days(sky);
             self.aim();
@@ -203,7 +206,11 @@ impl EnvironmentDraw {
             region::note_animation();
         }
         self.time = (clouds - first) / 1000.0;
-        let sky_in = if held { f64::INFINITY } else { next - sky_ms };
+        let sky_in = if held {
+            f64::INFINITY
+        } else {
+            rate(sky, f64::INFINITY) - sky_ms
+        };
         sky_in.min(clouds_due - unix_ms).max(0.0)
     }
 

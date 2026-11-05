@@ -102,7 +102,7 @@ fn stands_as_a_cube_keeps() {
         for v in 0..d.variants {
             let [x, y, z] = d.sizes[v as usize];
             for cell in FIRST_CELL..=LEAF_CELL {
-                let steps = 3 * (d.cell_zoom() - cell.min(d.cell_zoom()));
+                let steps = 3 * (UNIT_ZOOM - cell.min(UNIT_ZOOM));
                 let fill = (u64::from(x * y * z) * u64::from(FULL)) >> steps;
                 assert_eq!(
                     stands_at(d, v, cell),

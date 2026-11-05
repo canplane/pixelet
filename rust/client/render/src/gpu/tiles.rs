@@ -21,7 +21,7 @@
 use pxl_engine::screen::{self, TILES_WORDS};
 
 use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
-use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_SCREEN_MARK};
+use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
 };
@@ -70,10 +70,21 @@ const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
 /// args.
 const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
 
+/// What the claimed tiles' box's pass binds (claimed_box.wgsl): the box, the tiles' words
+/// and uniform.
+const CLAIMED_BOX_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
+];
+
+/// The claimed tiles' box before its pass: none, its first past its last.
+const NO_CLAIMED_BOX: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
+
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_BOX_ARGS], &BOX_ARGS_GROUP) && binds(&[COMPUTE_SCREEN_MARK], &MARK_GROUP),
+    binds(&[COMPUTE_BOX_ARGS], &BOX_ARGS_GROUP)
+        && binds(&[COMPUTE_SCREEN_MARK], &MARK_GROUP)
+        && binds(&[COMPUTE_CLAIMED_BOX], &CLAIMED_BOX_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -118,6 +129,10 @@ pub struct Tiles {
     /// The number the last frame through the gate wrote into the claimed
     /// tiles' stencil, 0 where the target was drawn whole (`gate`).
     gate_number: u32,
+    /// The box of the tiles claimed, from the first across and down to the last, four words
+    /// the GPU's, and the pass that sets it (`dispatch_claimed_box`).
+    claimed_box: u32,
+    claimed_box_pass: Pipeline,
 }
 
 impl Tiles {
@@ -167,6 +182,11 @@ impl Tiles {
             marks_box,
             box_args,
             gate_number: 0,
+            claimed_box: g.buf(
+                word_bytes(4),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            ),
+            claimed_box_pass: pipelines.build_compute(g, COMPUTE_CLAIMED_BOX, &CLAIMED_BOX_GROUP),
         }
     }
 
@@ -177,6 +197,7 @@ impl Tiles {
             self.changed_at,
             self.mark_uniform,
             self.marks_box,
+            self.claimed_box,
             args,
             group,
         ] {
@@ -265,6 +286,29 @@ impl Tiles {
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
         release(group);
+    }
+
+    /// The box of the tiles this frame claims, once its marks are made, set by a thread a tile
+    /// (claimed_box.wgsl): four words the GPU's, timed with the marks.
+    pub fn dispatch_claimed_box(&self, ctx: &mut RenderContext) -> u32 {
+        let g = ctx.g;
+        g.write_buf(self.claimed_box, 0, bytes(&NO_CLAIMED_BOX));
+        let group = g.bind_group(
+            self.claimed_box_pass.layouts[0],
+            &[
+                buf_entry(0, self.claimed_box),
+                buf_entry(30, self.changed_at),
+                buf_entry(31, self.uniform),
+            ],
+        );
+        let [across, down] = self.squares();
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
+        g.set_bind_group(pass, 0, group, &[]);
+        g.set_pipeline(pass, self.claimed_box_pass.id);
+        g.dispatch(pass, (across * down).div_ceil(64), 1, 1);
+        g.end(pass);
+        release(group);
+        self.claimed_box
     }
 
     /// The words and the uniform as this frame draws them, the claimed alone

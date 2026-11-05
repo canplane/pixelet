@@ -20,16 +20,18 @@ use pxl_engine::{clipmap, eye, overwrite};
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT,
-    COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN, STORAGE,
-    STORAGE_RW, UNIFORM,
+    binds, COMPUTE, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS, COMPUTE_GENERATION,
+    COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT,
+    COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu, Layout,
+    RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
+use crate::gpu::span_spec::GpuSpanName;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
@@ -103,11 +105,20 @@ pub const COMPACT_GROUP: [u32; 18] = [
 pub const ARGS_GROUP: [u32; 12] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
 ];
+/// `decor_gate_cs`'s and `decor_gate_args_cs`'s (decor_gate.wgsl): the frame's words, the
+/// regions' uniforms and args, the instances, the gated list and args, the claimed tiles' box,
+/// the regions' counts and first slots, and the tiles' uniform.
+pub const GATE_GROUP: [u32; 27] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE,
+    STORAGE_RW, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 31, COMPUTE,
+    UNIFORM,
+];
 
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
+    binds(&[COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS], &GATE_GROUP)
+        && binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
         && binds(&[COMPUTE_GENERATION_THIN], &THIN_GROUP)
         && binds(&[COMPUTE_GENERATION], &GENERATE_GROUP)
         && binds(&[COMPUTE_GENERATION_CNT], &CNT_GROUP)
@@ -121,7 +132,8 @@ const _: () = assert!(
         && floor::holds(&[&THIN_GROUP])
         && floor::holds(&[&CNT_GROUP])
         && floor::holds(&[&COMPACT_GROUP])
-        && floor::holds(&[&ARGS_GROUP]),
+        && floor::holds(&[&ARGS_GROUP])
+        && floor::holds(&[&GATE_GROUP]),
     "a decor pass's group binds past WebGPU's floor"
 );
 
@@ -155,6 +167,14 @@ pub struct Generator {
     draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
+    /// What a frame through the gate draws in their place (`gate`): the instances that meet
+    /// its claimed tiles, listed at each region's place, and the regions' args with them; the
+    /// draws' group over that list, and the passes that make it.
+    gated: u32,
+    gated_args: u32,
+    gated_group: u32,
+    gate_args: Pipeline,
+    gate: Pipeline,
     cap: u32,
     /// The placed decor's records, as last handed.
     placed_cnt: u32,
@@ -242,6 +262,14 @@ impl Generator {
                 &[buf_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
             ),
             instances_group: 0,
+            gated: 0,
+            gated_args: buf(
+                word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
+                storage | buffer_usage::INDIRECT,
+            ),
+            gated_group: 0,
+            gate_args: pipelines.build_compute(g, COMPUTE_DECOR_GATE_ARGS, &GATE_GROUP),
+            gate: pipelines.build_compute(g, COMPUTE_DECOR_GATE, &GATE_GROUP),
             cap: 0,
             placed_cnt: 0,
             bindings: [0; 6],
@@ -301,8 +329,20 @@ impl Generator {
             release(records);
             release(instances);
             release(self.instances_group);
-            self.instances_group =
-                g.bind_group(self.draw_layouts[1], &[buf_entry(0, self.instances)]);
+            release(self.gated_group);
+            release(self.gated);
+            self.gated = g.buf(
+                word_bytes(((drawn::COLUMNS + 1) * need) as usize),
+                buffer_usage::STORAGE,
+            );
+            self.instances_group = g.bind_group(
+                self.draw_layouts[1],
+                &[buf_entry(0, self.instances), buf_entry(1, self.instances)],
+            );
+            self.gated_group = g.bind_group(
+                self.draw_layouts[1],
+                &[buf_entry(0, self.instances), buf_entry(1, self.gated)],
+            );
             self.cap = need;
             self.placed.forget();
         }
@@ -644,7 +684,40 @@ impl Generator {
             instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
+            gated: (self.gated_group, self.gated_args),
         })
+    }
+
+    /// The instances a frame through the gate draws, those whose ball meets the box of its
+    /// claimed tiles (decor_gate.wgsl), off the frame's words, the tiles' uniform and that
+    /// box, once the frame's marks are made: timed with the marks.
+    pub fn gate(&self, ctx: &mut RenderContext, frame: u32, tiles: u32, claimed_box: u32) {
+        if !(self.on && self.instances != 0) {
+            return;
+        }
+        let g = ctx.g;
+        let group = g.bind_group(
+            self.gate.layouts[0],
+            &[
+                buf_entry(0, frame),
+                buf_entry(1, self.uniforms),
+                buf_entry(2, self.args),
+                buf_entry(3, self.instances),
+                buf_entry(4, self.gated),
+                buf_entry(5, self.gated_args),
+                buf_entry(6, claimed_box),
+                buf_entry(7, self.regions),
+                buf_entry(31, tiles),
+            ],
+        );
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
+        g.set_bind_group(pass, 0, group, &[]);
+        g.set_pipeline(pass, self.gate_args.id);
+        g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
+        g.set_pipeline(pass, self.gate.id);
+        g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
+        g.end(pass);
+        release(group);
     }
 }
 
@@ -666,9 +739,21 @@ pub struct IndirectDraw {
     pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
+    /// The group and the args a frame through the gate draws by (`Generator::gate`).
+    pub gated: (u32, u32),
 }
 
 impl IndirectDraw {
+    /// The draw a frame through the gate makes: its list and args in place of the
+    /// instances' own (`Generator::gate`).
+    pub fn through_gate(self) -> IndirectDraw {
+        IndirectDraw {
+            instances_group: self.gated.0,
+            args: self.gated.1,
+            ..self
+        }
+    }
+
     /// Where region `region`'s indirect args lie, in bytes.
     pub fn args_at(&self, region: u32) -> u32 {
         drawn::ARGS_WORDS * 4 * region

@@ -221,7 +221,7 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 /// drawn at (`stands`). Where it keeps none it is none there, and in none
 /// coarser.
 pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
-    stands(decor.sizes[variant as usize], decor.cell_zoom(), cell)
+    stands(decor.sizes[variant as usize], UNIT_ZOOM, cell)
 }
 
 /// `stands_at` of a box `[x, y, z]` in cells at `own`, by value: the eighths
@@ -320,11 +320,6 @@ impl Decor {
     /// Whether the ground generates it on a cell of `value`: a palette entry it stands on.
     pub const fn allows(&self, val: u32) -> bool {
         val < 256 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
-    }
-
-    /// Its cell's zoom: a unit's, `scale_steps` coarser.
-    pub const fn cell_zoom(&self) -> Zoom {
-        (UNIT_ZOOM as i32 - self.scale_steps) as Zoom
     }
 }
 

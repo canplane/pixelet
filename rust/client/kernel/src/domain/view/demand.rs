@@ -139,6 +139,9 @@ pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
+    /// Each want's order before its place in the view is read: what a turn
+    /// of the frustum alone orders again from (`reorder`).
+    orders: Vec<Order>,
     last: Option<Key>,
     /// The floor's tiles as last observed.
     floor: Vec<Quadrant>,
@@ -154,8 +157,9 @@ pub struct Demand<L: Observed> {
     asks: FnvHashMap<Quadrant, Ask>,
     /// Each ask in the view and the tile its place in the view is taken of:
     /// a demanded tile's for the tile its ground is asked of, a line's or the
-    /// floor's its own. Read only for the asks left unanswered, the wants,
-    /// whose order alone is read (`Policy::rank`).
+    /// floor's its own, by the ask's id. Read only for the asks left
+    /// unanswered, the wants, whose order alone is read (`Policy::rank`),
+    /// and kept to order them again (`reorder`).
     placed: Vec<(Quadrant, Quadrant)>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
     idle_revision: Option<u32>,
@@ -168,6 +172,7 @@ impl<L: Observed> Default for Demand<L> {
             observation: None,
             demand: Vec::new(),
             wants: Vec::new(),
+            orders: Vec::new(),
             last: None,
             floor: Vec::new(),
             gone: Vec::new(),
@@ -231,6 +236,7 @@ impl<L: Observed> Demand<L> {
         let mut demand = core::mem::take(&mut self.demand);
         let mut asks = core::mem::take(&mut self.asks);
         let mut placed = core::mem::take(&mut self.placed);
+        placed.clear();
         // An ask in the view placed last until the wants are ordered: its
         // place, the least of those it is asked by, is read of a want alone.
         let mut ask = |asks: &mut FnvHashMap<Quadrant, Ask>,
@@ -351,9 +357,11 @@ impl<L: Observed> Demand<L> {
         placed.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
         let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
         self.wants.clear();
+        self.orders.clear();
         for &p in &demand {
             if unanswered(p, &mut lines) {
                 let mut a = asks[&p];
+                self.orders.push(a.order);
                 if let Some(o) = o {
                     let from = placed.partition_point(|&(q, _)| q.id() < p.id());
                     for &(_, of) in placed[from..].iter().take_while(|&&(q, _)| q == p) {
@@ -367,12 +375,31 @@ impl<L: Observed> Demand<L> {
         }
         asks.clear();
         self.asks = asks;
-        placed.clear();
         self.placed = placed;
         demand.clear();
         self.demand = demand;
 
         self.observation = o.copied();
+    }
+
+    /// The wants ordered again for `o`, which differs from the observation
+    /// they were found for in its frustum alone: what is asked is of the
+    /// eye's place, which stood, and only the order is of where it looks.
+    fn reorder(&mut self, o: &Observation) {
+        let mut ground = ColumnWalk::default();
+        for ((id, a), &base) in self.wants.iter_mut().zip(&self.orders) {
+            a.order = base;
+            let from = self.placed.partition_point(|&(q, _)| q.id() < *id);
+            for &(_, of) in self.placed[from..]
+                .iter()
+                .take_while(|&&(q, _)| q.id() == *id)
+            {
+                a.order = a
+                    .order
+                    .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
+            }
+        }
+        self.observation = Some(*o);
     }
 
     /// The layer's turn, from the live eye: the eye that is coming, which
@@ -398,7 +425,24 @@ impl<L: Observed> Demand<L> {
         }
         self.idle_revision = None;
         let now = Key { o, dst };
-        if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
+        let moved = core::mem::take(&mut self.moved);
+        // Turned in place: the same asks, ordered again.
+        let turned = !moved
+            && self.last.is_some_and(|k| {
+                k.dst == dst
+                    && k.o.zip(o).is_some_and(|(was, is)| {
+                        Observation {
+                            frustum: is.frustum,
+                            ..was
+                        } == is
+                    })
+            });
+        if turned && self.last != Some(now) {
+            if let Some(o) = o.as_ref() {
+                self.reorder(o);
+            }
+            self.last = Some(now);
+        } else if moved || self.last != Some(now) {
             let line = dst
                 .into_iter()
                 .flat_map(|p| {

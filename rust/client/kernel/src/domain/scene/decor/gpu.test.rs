@@ -47,7 +47,7 @@ fn decor_clip_levels_by_size() {
                 .map(|v| {
                     d.row.sizes[v]
                         .iter()
-                        .map(|&s| units(d.row.cell_zoom()) * f64::from(s))
+                        .map(|&s| units(UNIT_ZOOM) * f64::from(s))
                         .product::<f64>()
                 })
                 .fold(0.0, f64::max);

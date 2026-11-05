@@ -36,8 +36,6 @@ pub struct Decor {
     pub orientation: Orientation,
     /// The palette entries it may stand on, a bit each.
     pub on: [u32; 8],
-    /// Its cell: a unit's zoom, this many coarser.
-    pub scale_steps: i32,
     pub variants: u32,
     /// Each variant's box, in its decor's cells; none past `variants`.
     pub sizes: [[u32; 3]; VARIANTS],
@@ -52,7 +50,6 @@ pub const DECORS: [Decor; 4] = [
         chance: 107374182,
         orientation: Orientation::random,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        scale_steps: 0,
         variants: 9,
         sizes: [[1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 2], [1, 1, 2], [1, 1, 2], [1, 1, 2]],
     },
@@ -63,7 +60,6 @@ pub const DECORS: [Decor; 4] = [
         chance: 4294967,
         orientation: Orientation::random,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        scale_steps: 0,
         variants: 4,
         sizes: [[3, 2, 1], [2, 4, 3], [2, 4, 5], [2, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },
@@ -74,7 +70,6 @@ pub const DECORS: [Decor; 4] = [
         chance: 12884902,
         orientation: Orientation::along_transport,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        scale_steps: 0,
         variants: 5,
         sizes: [[1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },
@@ -85,7 +80,6 @@ pub const DECORS: [Decor; 4] = [
         chance: 6442451,
         orientation: Orientation::along_transport,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        scale_steps: 0,
         variants: 4,
         sizes: [[1, 3, 2], [1, 3, 2], [1, 3, 2], [1, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },

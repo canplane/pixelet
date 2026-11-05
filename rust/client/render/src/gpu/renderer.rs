@@ -46,6 +46,7 @@ use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
+use crate::gpu::generator::IndirectDraw;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
@@ -62,7 +63,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
-use crate::gpu::read::Read;
+use crate::gpu::read::{Read, Written};
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
@@ -428,6 +429,13 @@ pub struct Renderer {
     ao_read: Read,
     previews: [Option<Preview>; SURFACES],
     order: Vec<u32>,
+    /// The draws' uniforms as the device holds them (`draws_buf`).
+    uniforms_written: Written,
+    /// A frame's lookups, kept for their room: the handles its lists
+    /// touch, the draws the kernel bounds and the uploads its marks read.
+    touched: Vec<u32>,
+    bounded: Vec<u32>,
+    read_uploads: Vec<u32>,
 }
 
 impl Renderer {
@@ -530,6 +538,10 @@ impl Renderer {
             moon,
             previews: [const { None }; SURFACES],
             order: Vec::new(),
+            uniforms_written: Written::default(),
+            touched: Vec::new(),
+            bounded: Vec::new(),
+            read_uploads: Vec::new(),
         };
         r.screen.make(g, &mut r.pipelines);
         r.box_groups(g);
@@ -777,17 +789,15 @@ impl Renderer {
 
     /// The uploads the listed draws that mark read, each once
     /// (gpu/pass/mark.rs `UploadCopies`).
-    fn marks_read(&self, draws: &Draws) -> Vec<u32> {
-        let mut out = Vec::new();
+    fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
+        out.clear();
         self.skinned_mesh
-            .marks_read(draws.of(PIPELINE_SKINNED), &mut out);
-        self.decor.marks_read(draws, &mut out);
-        self.impostor
-            .marks_read(draws.of(PIPELINE_IMPOSTOR), &mut out);
-        self.location.marks_read(draws, &mut out);
+            .marks_read(draws.of(PIPELINE_SKINNED), out);
+        self.decor.marks_read(draws, out);
+        self.impostor.marks_read(draws.of(PIPELINE_IMPOSTOR), out);
+        self.location.marks_read(draws, out);
         out.sort_unstable();
         out.dedup();
-        out
     }
 
     /// A turn whose lists were taken and no frame drawn: the uploads they
@@ -801,7 +811,8 @@ impl Renderer {
 
     /// Whether a draw the kernel does not bound moved since the last
     /// frame (`BESIDE`): its record or uniform, or an upload it reads
-    /// (`touched`, the handles this frame's lists upload, rewrite or free).
+    /// (`touched`, the handles this frame's lists upload, rewrite or free),
+    /// `touched` and `bounded` sorted.
     fn beside_moved(
         &mut self,
         records: &[u32],
@@ -812,10 +823,10 @@ impl Renderer {
         let r = &mut self.beside;
         r.begin();
         for d in records.as_chunks::<DRAW_WORDS>().0 {
-            if BESIDE.contains(&d[4]) && !bounded.contains(&d[0]) {
+            if BESIDE.contains(&d[4]) && bounded.binary_search(&d[0]).is_err() {
                 r.read(d);
                 r.read(uniform_of(uniforms, d));
-                r.mark(touched.contains(&d[0]));
+                r.mark(touched.binary_search(&d[0]).is_ok());
             }
         }
         !r.end()
@@ -823,9 +834,15 @@ impl Renderer {
 
     /// The world image's opaque models: the decor generated over the world. The
     /// impostors are the lit pass's alone.
-    fn draw_opaque(&mut self, pass: &mut TrackedRenderPass, b: &mut Uploads, stage: Stage) {
+    fn draw_opaque(
+        &mut self,
+        pass: &mut TrackedRenderPass,
+        generated: Option<IndirectDraw>,
+        b: &mut Uploads,
+        stage: Stage,
+    ) {
         self.decor
-            .draw_generated(pass, self.screen.generated(), b, stage, self.models.frame);
+            .draw_generated(pass, generated, b, stage, self.models.frame);
     }
 
     /// A frame in two stages, each standing while what it reads stands:
@@ -871,30 +888,60 @@ impl Renderer {
                 .sync_atlas(g, &self.mips, input.atlas, input.text),
         );
         let lists = input.lists;
-        let touched: Vec<u32> = lists
-            .uploads
-            .as_chunks::<UPLOAD_WORDS>()
-            .0
-            .iter()
-            .map(|u| u[0])
-            .chain(
-                lists
-                    .rewrites
-                    .as_chunks::<REWRITE_WORDS>()
-                    .0
-                    .iter()
-                    .map(|r| r[0]),
-            )
-            .chain(lists.frees.iter().copied())
-            .collect();
+        // The handles this frame's lists upload, rewrite or free, and the
+        // draws the kernel bounds, sorted to be looked up.
+        let mut touched = core::mem::take(&mut self.touched);
+        touched.clear();
+        touched.extend(
+            lists
+                .uploads
+                .as_chunks::<UPLOAD_WORDS>()
+                .0
+                .iter()
+                .map(|u| u[0]),
+        );
+        touched.extend(
+            lists
+                .rewrites
+                .as_chunks::<REWRITE_WORDS>()
+                .0
+                .iter()
+                .map(|r| r[0]),
+        );
+        touched.extend_from_slice(lists.frees);
+        touched.sort_unstable();
+        touched.dedup();
+        let mut bounded = core::mem::take(&mut self.bounded);
+        bounded.clear();
+        bounded.extend_from_slice(input.bounded_draws);
+        bounded.sort_unstable();
         let (records, uniforms, uploads_moved) = take_lists(Some(g), lists);
+        // The draws' uniforms, in a buffer of room for them: what changed of
+        // them written, a draw's record a run.
+        let uniform_bytes = word_bytes(uniforms.len());
+        let grew = uniform_bytes > self.draws_bytes;
+        if grew {
+            release(self.draws_buf);
+            self.draws_bytes = uniform_bytes * 2;
+            self.draws_buf = g.buf(
+                self.draws_bytes,
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            );
+            self.box_groups(g);
+            self.uniforms_written.forget();
+        }
+        let uniforms_moved = self.uniforms_written.write(
+            g,
+            self.draws_buf,
+            bytes(uniforms),
+            word_bytes(DRAW_FLOATS) as usize,
+        );
         let l = &mut self.lists_read;
         l.begin();
-        l.mark(uploads_moved);
-        let uniforms_moved = l.read(uniforms);
+        l.mark(uploads_moved || uniforms_moved);
         let lists_moved = l.read(records) | uniforms_moved;
         let listed_same = l.end();
-        let beside_moved = self.beside_moved(records, uniforms, &touched, input.bounded_draws);
+        let beside_moved = self.beside_moved(records, uniforms, &touched, &bounded);
         read.read(input.previews);
 
         targets(g, world);
@@ -956,21 +1003,6 @@ impl Renderer {
                 .ensure(g, world.width, world.height, world.depth_only_view);
         if ao_remade {
             read.mark(true);
-        }
-        let uniform_bytes = word_bytes(uniforms.len());
-        let grew = uniform_bytes > self.draws_bytes;
-        if grew {
-            release(self.draws_buf);
-            self.draws_bytes = uniform_bytes * 2;
-            self.draws_buf = g.buf(
-                self.draws_bytes,
-                buffer_usage::STORAGE | buffer_usage::COPY_DST,
-            );
-            self.box_groups(g);
-        }
-        if !uniforms.is_empty() && (grew || uniforms_moved) {
-            // One record however many.
-            g.upload_buf(self.draws_buf, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
@@ -1106,7 +1138,7 @@ impl Renderer {
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
             stat.rays = self.screen.take_counts();
-            self.order = order;
+            (self.order, self.touched, self.bounded) = (order, touched, bounded);
             return (FrameKind::stood, stat);
         }
 
@@ -1133,7 +1165,8 @@ impl Renderer {
         } else {
             (false, false)
         };
-        let read_uploads = self.marks_read(&draws);
+        let mut read_uploads = core::mem::take(&mut self.read_uploads);
+        self.marks_read(&draws, &mut read_uploads);
         self.last_frame_uploads.prepare(g, &read_uploads, b);
         // The sun's map: whole where it moved, but where the frame is gated
         // over the world the sun's cast left as it was, through its gate,
@@ -1213,6 +1246,17 @@ impl Renderer {
             pass.end();
             frames.into_iter().for_each(release);
         }
+        // Decor generated, in a frame through the gate, drawn where it meets the tiles the
+        // frame claims, now that its marks are made (`Generator::gate`).
+        let generated = if gated {
+            let claimed_box = self.resolve.tiles.dispatch_claimed_box(&mut ctx);
+            let tiles = self.resolve.tiles.this_frame().1;
+            self.screen
+                .gate_generated(&mut ctx, self.frame_buf, tiles, claimed_box);
+            self.screen.generated().map(IndirectDraw::through_gate)
+        } else {
+            self.screen.generated()
+        };
         if map_drawn {
             self.light_tiles.dispatch_marks(&mut ctx);
         }
@@ -1325,15 +1369,11 @@ impl Renderer {
             release(group);
         }
         // The world that stands while the eye does: what the occlusion reads.
-        self.draw_opaque(&mut pass, b, Stage::Lit);
+        self.draw_opaque(&mut pass, generated, b, Stage::Lit);
         self.screen.draw(&mut pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-        self.impostor.draw_generated(
-            &mut pass,
-            self.screen.generated(),
-            GROUPS,
-            self.models.frame,
-        );
+        self.impostor
+            .draw_generated(&mut pass, generated, GROUPS, self.models.frame);
         if ao_found {
             // The pass ends about the occlusion only where it is found again,
             // in a frame drawn whole: it reads the depth just laid, and the
@@ -1501,7 +1541,8 @@ impl Renderer {
         stat.gpu_lattice = gpu_lattice;
         stat.gpu_frame = gpu_frame;
         stat.rays = self.screen.take_counts();
-        self.order = order;
+        (self.order, self.touched, self.bounded) = (order, touched, bounded);
+        self.read_uploads = read_uploads;
         (kind, stat)
     }
 
@@ -1749,9 +1790,11 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         if let Some(r) = slot.as_mut() {
             r.put_off();
         }
+        // The modules are made a few a turn; a pipeline asked for wakes the
+        // turn as it is made (`landed`).
         return FrameOutput {
             kind: FrameKind::unready,
-            redraw: true,
+            redraw: slot.is_none(),
             stat: None,
         };
     }
@@ -1760,10 +1803,25 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
         kind,
-        // An image landing is taken on a turn to come.
-        redraw: *REDRAW.get(|| false) || api::images_landing(),
+        redraw: *REDRAW.get(|| false),
         stat: Some(stat),
     }
+}
+
+/// Whether what the device made since this last ran wants a frame: an
+/// image landed, to be taken (`api::images_landed`), a pipeline made, which
+/// the progress shows and the first frame waits on, or the air's measures
+/// (`Atmosphere::landed`). Each wakes the turn as its fence is stored
+/// (xpute `RESULT`), so none is polled.
+pub fn landed() -> bool {
+    let images = api::images_landed();
+    let made = RENDERER.get(|| None).as_mut().is_some_and(|r| {
+        let was = r.pipelines.share();
+        let pipelines =
+            !r.pipelines.is_made() && (r.pipelines.made() || r.pipelines.share() != was);
+        pipelines || r.atmosphere.landed()
+    });
+    images || made
 }
 
 /// Uploads listed with no device wait in the table for the next one.

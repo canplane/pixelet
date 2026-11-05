@@ -59,6 +59,8 @@ pub struct Marks {
     marks: Vec<([u32; DRAW_WORDS], u32)>,
     now_cnt: usize,
     was: Vec<Draw>,
+    /// This frame's draws, kept for their room.
+    now: Vec<Draw>,
 }
 
 impl Marks {
@@ -80,6 +82,7 @@ impl Marks {
             marks: Vec::new(),
             now_cnt: 0,
             was: Vec::new(),
+            now: Vec::new(),
         }
     }
 
@@ -104,11 +107,17 @@ impl Marks {
         last_frame_uploads: &UploadCopies,
     ) -> bool {
         let (read, put) = (self.read, self.put);
-        let now: Vec<Draw> = draws.map(|d| drawn_of(uniforms, d)).collect();
-        let moved = |d: &Draw| read(&d.0) != 0 && touched.contains(&read(&d.0));
+        let mut now = core::mem::take(&mut self.now);
+        now.clear();
+        now.extend(draws.map(|d| drawn_of(uniforms, d)));
+        let moved = |d: &Draw| read(&d.0) != 0 && touched.binary_search(&read(&d.0)).is_ok();
+        // A list that keeps its order finds each draw where it was first.
+        let drawn = |list: &[Draw], k: usize, d: &Draw| {
+            list.get(k).is_some_and(|w| alike(w, d)) || list.iter().any(|w| alike(w, d))
+        };
         let mut marks: Vec<(Draw, u32)> = Vec::new();
-        for d in &now {
-            if !moved(d) && self.was.iter().any(|w| alike(w, d)) {
+        for (k, d) in now.iter().enumerate() {
+            if !moved(d) && drawn(&self.was, k, d) {
                 continue;
             }
             let group = match read(&d.0) {
@@ -118,8 +127,8 @@ impl Marks {
             marks.extend(group.map(|group| (*d, group)));
         }
         let now_cnt = marks.len();
-        for w in &self.was {
-            if !moved(w) && now.iter().any(|d| alike(w, d)) {
+        for (k, w) in self.was.iter().enumerate() {
+            if !moved(w) && drawn(&now, k, w) {
                 continue;
             }
             let group = match read(&w.0) {
@@ -141,6 +150,7 @@ impl Marks {
             .map(|((d, _), group)| (d, group))
             .collect();
         self.now_cnt = now_cnt;
+        self.now = now;
         !self.marks.is_empty()
     }
 
@@ -240,7 +250,7 @@ impl UploadCopies {
             }
             let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
             let buf = g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-            let group = g.bind_group(layout, &[buf_entry(0, buf)]);
+            let group = g.bind_group(layout, &[buf_entry(0, buf), buf_entry(1, buf)]);
             self.copies.push(Copy {
                 handle: h,
                 buf,
@@ -266,12 +276,12 @@ impl UploadCopies {
         let mut k = 0;
         while k < self.copies.len() {
             let c = &mut self.copies[k];
-            if !handles.contains(&c.handle) {
+            if handles.binary_search(&c.handle).is_err() {
                 let c = self.copies.swap_remove(k);
                 self.let_go.push((c.buf, c.group));
                 continue;
             }
-            if !c.held || touched.contains(&c.handle) {
+            if !c.held || touched.binary_search(&c.handle).is_ok() {
                 let src = uploads.buf_of(c.handle).filter(|&(_, size)| size == c.size);
                 if let Some((src, size)) = src {
                     g.copy_buf(encoder, (src, 0), (c.buf, 0), size);

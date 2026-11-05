@@ -557,6 +557,8 @@ struct Arriving {
     image: u32,
     texture: Id,
     fence: Box<[u32; 2]>,
+    /// Whether its landing was told (`images_landed`).
+    told: bool,
 }
 
 const IMAGE_TICKET: u32 = 1;
@@ -916,13 +918,16 @@ pub fn take_landed(mut landed: impl FnMut(u32)) {
     }
 }
 
-/// Whether an image handed to the device has yet to land (`Gpu::image`):
-/// another turn is wanted to take it.
-pub fn images_landing() -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| {
-        s.images
-            .iter()
-            .any(|a| !signaled(&a.fence[0], IMAGE_TICKET))
+/// Whether an image handed to the device landed since this last ran
+/// (`Gpu::image`): its fence's store woke the turn, and a frame is wanted
+/// to take it.
+pub fn images_landed() -> bool {
+    STATE.get(|| None).as_mut().is_some_and(|s| {
+        s.images.iter_mut().fold(false, |any, a| {
+            let landed = !a.told && signaled(&a.fence[0], IMAGE_TICKET);
+            a.told |= landed;
+            any | landed
+        })
     })
 }
 
@@ -1522,6 +1527,7 @@ impl Gpu {
             image,
             texture,
             fence,
+            told: false,
         });
         None
     }

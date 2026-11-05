@@ -877,7 +877,6 @@ fn decor_table(
         chance: u32,
         orient: String,
         on: [u32; 8],
-        scale_steps: i32,
         sizes: Vec<String>,
         models: Vec<String>,
     }
@@ -910,15 +909,6 @@ fn decor_table(
                 .ok_or(format!("{}: {l:?} is no ground palette_idx", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
-        let scale_steps = match k.get("scale_steps") {
-            None => 0.0,
-            Some(n) => n
-                .num()
-                .filter(|n| {
-                    n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)
-                })
-                .ok_or(at("scale_steps"))?,
-        };
         let (mut sizes, mut models) = (Vec::new(), Vec::new());
         for v in k
             .get("variants")
@@ -968,7 +958,6 @@ fn decor_table(
             chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
             orient: orient.to_string(),
             on,
-            scale_steps: scale_steps as i32,
             sizes,
             models,
         });
@@ -1006,8 +995,6 @@ fn decor_table(
             "    pub orientation: Orientation,",
             "    /// The palette entries it may stand on, a bit each.",
             "    pub on: [u32; 8],",
-            "    /// Its cell: a unit's zoom, this many coarser.",
-            "    pub scale_steps: i32,",
             "    pub variants: u32,",
             "    /// Each variant's box, in its decor's cells; none past `variants`.",
             "    pub sizes: [[u32; 3]; VARIANTS],",
@@ -1032,7 +1019,6 @@ fn decor_table(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
             ),
-            format!("        scale_steps: {},", r.scale_steps),
             format!("        variants: {},", r.models.len()),
             format!("        sizes: [{}],", sizes.join(", ")),
             "    },".to_string(),

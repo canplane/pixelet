@@ -10,7 +10,7 @@ use pxl_spec::asset::cube::cube_of;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::id::{kind_of, Kind};
 use pxl_spec::asset::AssetId;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
@@ -62,7 +62,7 @@ impl Asset {
     pub fn zoom(self, scale_steps: i32) -> Zoom {
         match self {
             Asset::Cube(_) => object_zoom_of(scale_steps),
-            Asset::Decor(id) => Decor::of(id).row.cell_zoom(),
+            Asset::Decor(_) => UNIT_ZOOM,
             Asset::Marker => MARKER_ZOOM,
             Asset::Unknown => GROUND.cell(),
         }

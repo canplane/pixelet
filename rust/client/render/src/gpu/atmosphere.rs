@@ -773,6 +773,13 @@ impl Atmosphere {
         }
     }
 
+    /// Whether measures landed for a frame to take (`take_slopes`): a
+    /// mapping refused asks none, what it carried copied again with the next
+    /// frame drawn.
+    pub fn landed(&self) -> bool {
+        self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == RESULT::OK
+    }
+
     /// Landed measures become their steps, each the quantity over which what
     /// its table shows moves one display level at the slope it moves at now,
     /// and the sample it was taken over; and whether each light reaches the

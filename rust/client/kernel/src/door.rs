@@ -201,6 +201,11 @@ pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
+    // An image or a pipeline the device made since: its fence's store woke
+    // this turn, and a frame takes it.
+    if renderer::landed() {
+        edge::request_world_tick();
+    }
     door().receive(|submission| match submission {
         Submission::Life(l) => life::apply(s, l),
         Submission::GpuReady => {

@@ -20,7 +20,6 @@ use crate::beam;
 use crate::cast;
 use crate::cast::Spacing;
 use crate::cast::{End, Ray, Trace};
-use crate::content::Content;
 use crate::eye;
 use crate::grid;
 use crate::param::light;
@@ -172,17 +171,6 @@ impl Light {
             libm::floorf((at[0] + 0.5) / tile) as i32,
             libm::floorf((at[1] + 0.5) / tile) as i32,
         ]
-    }
-
-    /// How many tiles either side of its own a drawn receiver stands on
-    /// (pxl-render light_mark_draws.wgsl): as many as half the widest
-    /// decor of `C`'s (`Content::WIDEST`) spans, at least one, as its tile is
-    /// one a point of it lies in. Half the widest over a tile's texels is a
-    /// power of two's scaling; over the width, a product by its reciprocal
-    /// (`width_inverse`).
-    pub fn ring<C: Content>(&self) -> i32 {
-        let half = C::WIDEST as f32 * (0.5 / TILE as f32);
-        (libm::ceilf(half * self.width_inverse()) as i32).max(1)
     }
 
     /// Whether box texel `p` of the map `size` a side lies where a receiver

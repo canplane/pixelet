@@ -464,7 +464,7 @@ pub fn node<H: Resident>(
         let column = held.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
         // the cell is air where they take it all.
-        let ground = column.asset::<H::Content>(zoom, c[2], || false);
+        let ground = column.asset::<H::Content>(zoom, c[2]);
         let cave = if ground != VOID && column.opens::<H::Content>(zoom, c[2]) {
             H::Content::hollow((zoom, c))
         } else {
@@ -557,20 +557,15 @@ impl Cell {
         }
     }
 
-    /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
-    /// it (`opens`) and `hollow` says one does, asked only there: the
-    /// ground's palette index, its fold's majority at a coarser cell, as what is
-    /// placed is its fold's, `void` for air; by `C`'s strata
-    /// (`Content::by_depth`).
-    pub fn asset<C: Content>(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
+    /// The asset in cell `z` of the column at `cell`, before the caves take
+    /// their share (`opens`, `Content::hollow`): the ground's palette index,
+    /// its fold's majority at a coarser cell, as what is placed is its
+    /// fold's, `void` for air; by `C`'s strata (`Content::by_depth`).
+    pub fn asset<C: Content>(&self, cell: Zoom, z: i32) -> u32 {
         if !self.is_grounded() {
             return VOID;
         }
-        let g = C::by_depth(cell, self.palette_idx, self.top, z);
-        if g == VOID || self.opens::<C>(cell, z) && hollow() {
-            return VOID;
-        }
-        g
+        C::by_depth(cell, self.palette_idx, self.top, z)
     }
 }
 

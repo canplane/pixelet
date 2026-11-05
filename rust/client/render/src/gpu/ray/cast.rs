@@ -2219,6 +2219,19 @@ impl RaysPass {
         self.cast.as_ref().and_then(|c| c.generator.indirect_draw())
     }
 
+    /// What a frame through the gate draws of decor generated (`Generator::gate`).
+    pub fn gate_generated(
+        &self,
+        ctx: &mut RenderContext,
+        frame: u32,
+        tiles: u32,
+        claimed_box: u32,
+    ) {
+        if let Some(c) = self.cast.as_ref() {
+            c.generator.gate(ctx, frame, tiles, claimed_box);
+        }
+    }
+
     /// The frame was dropped with its cast and its image: the rays and the
     /// image hold older ones.
     pub fn on_dropped(&mut self) {

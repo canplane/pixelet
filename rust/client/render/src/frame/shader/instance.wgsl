@@ -1,8 +1,7 @@
 // A decor draw's instances, as the model tier (decor.wgsl) and the
 // impostors (impostor.wgsl) both read them: the draw's uniform
 // (gpu/pass/model.rs `put_instances`) and the decor's instances, `instances`,
-// a lane a field; the n-th instance drawn is the one the idx list's
-// n-th word names.
+// a lane a field; the n-th instance drawn is the one the list `order` names.
 
 struct Draw {
   translation: vec3f,
@@ -26,6 +25,10 @@ fn draw_layer() -> u32 { return bitcast<u32>(draw_words[1].z); }
 fn draw_idx() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(3) @binding(0) var<storage, read> instances: array<u32>;
+// The n-th instance a draw draws is the one the n-th word from its list's first
+// (`draw_idx`) names: the instances' own list, or in a frame through the gate the list of
+// those that meet its claimed tiles (decor_gate.wgsl).
+@group(3) @binding(1) var<storage, read> order: array<u32>;
 
 // Instance `i`'s word in lane `k`.
 fn lane(k: u32, i: u32) -> f32 {

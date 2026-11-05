@@ -88,8 +88,7 @@ fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
     v = instance_pos(k, o);
   }
-  let middle = v + vec3<f32>(0.0, 0.0, f32(TALLEST) * 0.5);
-  if (!sees(middle, f32(TALLEST + WIDEST))) {
+  if (!sees(decor_middle(v), decor_radius())) {
     return;
   }
   let t = tile_of(v);

@@ -29,7 +29,7 @@ pub mod symbol;
 pub use id::AssetId;
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::zoom::units;
+use crate::space::coord::zoom::{units, UNIT_ZOOM};
 use catalog::Catalog;
 use ingest::{CubeFace, PACK};
 use pxl_content::decor::DECORS;
@@ -78,7 +78,7 @@ impl decor::Decor {
     /// How far any variant's box reaches from its min corner however it
     /// turns, in units.
     pub fn box_extent(&self) -> f64 {
-        let cell = units(self.row.cell_zoom());
+        let cell = units(UNIT_ZOOM);
         let extent = |size: &[u32; 3]| {
             let [x, y, z] = size.map(|n| f64::from(n) * cell);
             let across = x.max(y);
@@ -91,7 +91,7 @@ impl decor::Decor {
     fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
         self.row
             .cells(variant, turn)
-            .map(|n| f64::from(n) * units(self.row.cell_zoom()))
+            .map(|n| f64::from(n) * units(UNIT_ZOOM))
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in

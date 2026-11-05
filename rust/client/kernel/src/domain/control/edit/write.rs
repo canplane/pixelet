@@ -119,8 +119,7 @@ fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
 
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
-    (Decor::of(id).row.cell_zoom() <= GROUND.cell() && is_carved(&World::now(), at))
-        .then(|| World::now().generated_instance(Decor::of(id), at))?
+    is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: a draft

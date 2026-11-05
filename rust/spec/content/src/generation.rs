@@ -726,10 +726,6 @@ pub const CLAIM_EXTENT: [i32; 3] = {
     let (mut wide, mut tall, mut k) = (1, 1, 0);
     while k < DECORS.len() {
         let d = &DECORS[k];
-        assert!(
-            d.scale_steps == 0,
-            "decor is generated and claimed in unit cells"
-        );
         wide = if d.widest() > wide { d.widest() } else { wide };
         let mut v = 0;
         while v < d.variants as usize {

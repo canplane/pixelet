@@ -59,7 +59,10 @@ pub const COMPUTE_LIGHT_MISS_HIT: u32 = 43;
 pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
 pub const COMPUTE_LIGHT_BEAM_HIT: u32 = 45;
 pub const COMPUTE_CAST_TILES: u32 = 46;
-pub const COMPUTES: u32 = 47;
+pub const COMPUTE_CLAIMED_BOX: u32 = 47;
+pub const COMPUTE_DECOR_GATE_ARGS: u32 = 48;
+pub const COMPUTE_DECOR_GATE: u32 = 49;
+pub const COMPUTES: u32 = 50;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -68,6 +71,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
         COMPUTE_CAST => (SHADER_CAST, "cast_cs"),
         COMPUTE_CAST_TILES => (SHADER_CAST_TILES, "cast_tiles_cs"),
+        COMPUTE_CLAIMED_BOX => (SHADER_CLAIMED_BOX, "claimed_box_cs"),
+        COMPUTE_DECOR_GATE_ARGS => (SHADER_DECOR_GATE, "decor_gate_args_cs"),
+        COMPUTE_DECOR_GATE => (SHADER_DECOR_GATE, "decor_gate_cs"),
         COMPUTE_BOUND => (SHADER_BOUND, "bound_cs"),
         COMPUTE_HEIGHT => (SHADER_HEIGHT, "height_cs"),
         COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),
@@ -481,13 +487,18 @@ const BOX_GROUP: [[u32; 2]; 13] = and(
 /// one owner makes binds in every pipeline that names them (gpu/generator.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
-const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
+/// An upload's words, and the list a draw reads its instances in order by, the words
+/// themselves but in a frame through the gate (instance.wgsl `order`).
+const UPLOAD: [[u32; 2]; 2] = [[0, STORAGE], [1, STORAGE]];
 /// An upload's group as every pipeline binding one lays it out, which the
 /// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
-pub const UPLOAD_LAYOUT: [u32; 3] = [
+pub const UPLOAD_LAYOUT: [u32; 6] = [
     UPLOAD[0][0],
     stages_reading(&UPLOAD, UPLOAD[0][0]),
     UPLOAD[0][1],
+    UPLOAD[1][0],
+    stages_reading(&UPLOAD, UPLOAD[1][0]),
+    UPLOAD[1][1],
 ];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];

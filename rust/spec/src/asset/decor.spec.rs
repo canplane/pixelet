@@ -19,10 +19,7 @@
 // of it is the decor's. Its model is drawn as made, a glb unit a unit, its
 // origin at the middle of the box's base, where it stands: no origin is
 // moved, and glTF fixes none, so a model must be made with it there. It may
-// reach a little past the box. A
-// decor's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
-// where negative, as a marker's, marker.json), one for every variant,
-// since a placement lands on the cell before its variant is drawn. The
+// reach a little past the box. A decor's cell is a unit, a z24 cell. The
 // ground generates a decor only on its own palette entries, and no two decors share one, so
 // two decors' boxes never meet.
 //
