@@ -58,7 +58,8 @@ pub const COMPUTE_BEAM_HIT: u32 = 42;
 pub const COMPUTE_LIGHT_MISS_HIT: u32 = 43;
 pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
 pub const COMPUTE_LIGHT_BEAM_HIT: u32 = 45;
-pub const COMPUTES: u32 = 46;
+pub const COMPUTE_CAST_TILES: u32 = 46;
+pub const COMPUTES: u32 = 47;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -66,6 +67,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
     match id {
         COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
         COMPUTE_CAST => (SHADER_CAST, "cast_cs"),
+        COMPUTE_CAST_TILES => (SHADER_CAST_TILES, "cast_tiles_cs"),
         COMPUTE_BOUND => (SHADER_BOUND, "bound_cs"),
         COMPUTE_HEIGHT => (SHADER_HEIGHT, "height_cs"),
         COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),

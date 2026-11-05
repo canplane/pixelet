@@ -163,6 +163,49 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   busy p95 50 to 43, fps 25 to 27.6. Shadows off, three cool pairs: 43.9 to 44.0 fps,
   even. The first round's −3 fps was run order: the first of a pair runs faster.
 
+- **Far views' cost is the cache forgetting** (forget-bricks.patch, held for the Mac's
+  GPU tests; S23, dawn, shadows on, 6 s circle at fixed zooms, ×2): a node's bricks
+  were tested by entry bit modulo ACROSS, so a moving fine level dropped nodes that
+  alias it anywhere in the world. A cache 4× larger changed nothing; no forgetting
+  took asked 215k to 3k. Each level now hands the box its moved bricks lie in: at
+  11,761 u asked 215k to 22–37k, sample 15 to 2, busy 58 to 41–47; at 131,072 u 90k to
+  10k, busy 40 to 29–33. The default view is unchanged.
+- **`px` over the claimed tiles** (px-tiles.patch, held likewise): at rest px 2.29 to
+  0.07 ms, busy 10.4 to 8.3; moving frames even.
+- **The frame in stages, 4–6 submits** (submits.patch, held likewise): on the S23 no
+  cost, shadows on busy p95 53 to 46; whether it stops Safari's hang is untested.
+
+- **The atomics' second round answers wrong on the Mac**, stacked on forget-bricks and
+  px-tiles: `hand_light_beam_rays_answer_as_cast_walk` failed 4 of 18 runs, the next
+  frame only, one light beam ray ending one node over; without it 10 of 10 pass. The
+  plain reads under the claims were assumed safe; they are not, as built. Held; the
+  plain groups are being narrowed one by one.
+
+- **The light map recast whole on a depth step** (main e50bf2d5ec, a depth tag, two
+  time-swept drives): the light frame's key changes by its depth cell alone (planes
+  snapped by `DEPTH_STEP`, 0.2 of the box's depth), as the eye moves along a low sun;
+  45% of light casts start a new frame so, 60–64 ms against 49–56, 48–51% of the
+  drive's busy. A filter of changed columns to those reaching the map changed nothing
+  and was dropped. Being built: the depth step slid as a tile shift is, the ray kept
+  and its window moved, so a kept texel equals a fresh cast.
+- **Only the light list and stands plain** (atomics-light.patch, held for the Mac's GPU
+  tests): at equal `world`, `light_beam` 7.2 to 4.5 ms throttled, 3.7 to 2.6 cool, busy
+  62 to 59–60, nothing else rose. The candidate with the ways, decor and exposure plain
+  too read world +0.8, likely warmth, unsettled.
+
+- **The depth step slid** (light-depth-slide.patch, 33 files and a contract change,
+  held): at 178 u whole recasts 9–13 to 1–2 a window, but a stepped cast costs as much
+  as the whole recast it replaces (82.5 ms against 62 unstepped; base's whole 69–90),
+  so the tail stays. In the time-swept drive whole casts 116/109 to 85/85, most of the
+  rest cheap far re-anchors past the window (51 ms, walk 0.4), busy p95 −4/−16, fps
+  +0.4/+2.0. The dear casts left change the light frame's key without the sun moving
+  (cast_from or half_width), 34 a drive: all cast_from, the sky re-aiming the sun from
+  the eye's place as it travels tens of km at the sweep's far end (environment.rs
+  `sky_anchor`), each re-aim easing through several light frames. Left as it is: a
+  user rarely travels so far with shadows on.
+- **Decor's model floor** (diagnostic, at rest): models down to 1 camera cell (~11 px,
+  "set by eye") cost much of the 3.3 ms: world 5.24 to 3.41 at 2 cells, 2.69 at 4.
+
 ## Did not work
 
 - **The atomics, first round** (entries apart from keys, plain tallies, a name column,
@@ -203,7 +246,11 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   cap isn't the fix; the suspect is one large command buffer stalling in WebKit or
   Metal, not a shader that never ends (two runs against one; a split run could be
   luck). Reading found every loop in that frame ending on data the code can produce.
-  Next: the frame in several submits, in the app, tested in Safari.
+  Next: the frame in several submits, in the app, tested in Safari. On main
+  3d9521137f (forget-bricks and px-tiles, one submit a frame) it pinned again ~50 s
+  into the far zoom, memory flat at 412 MiB: the cache's aliasing was not the cause,
+  which puts the weight on the single large command buffer. submits.patch's Safari run
+  waits for a force-quit.
 
 - **`light_receivers`** 6.9–8.1 ms every frame with an actor walking, the largest
   light cost now; receivers.patch is being measured.

@@ -213,7 +213,9 @@ pub const SHADER_LIGHT_MISS_HIT: u32 = 82;
 pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 83;
 /// `SHADER_BEAM_HIT` for the light's map: what it does not end `SHADER_LIGHT_BEAM` walks again.
 pub const SHADER_LIGHT_BEAM_HIT: u32 = 84;
-pub const SHADERS: u32 = 85;
+/// The tiles claimed, listed for `SHADER_CAST`.
+pub const SHADER_CAST_TILES: u32 = 85;
+pub const SHADERS: u32 = 86;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -362,15 +364,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "screen_shade"
     ],
     // SHADER_CAST
-    &[
-        "walk_word",
-        "tile_word",
-        "eye_bind",
-        "grid",
-        "walk_node",
-        "side",
-        "cast",
-    ],
+    &["walk_word", "eye_bind", "grid", "walk_node", "side", "cast"],
     // SHADER_BOUND
     &[
         "world_word",
@@ -921,4 +915,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "beam.light",
         "beam_hit",
     ],
+    // SHADER_CAST_TILES
+    &["tile_word", "cast_tiles"],
 ];

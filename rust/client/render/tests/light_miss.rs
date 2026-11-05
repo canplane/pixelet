@@ -37,6 +37,8 @@ const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const EYE_WEST: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 /// By X = 0, where X's roots part.
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
+/// On X's seam, where the world goes round.
+const EYE_SEAM: [i32; 2] = [(1 << 23) - 8, (40 << 16) + 30];
 
 const SIZE: u32 = 256;
 /// A word a GPU's rounding may move, as tests/walk.rs takes it: its depth's product fused into
@@ -601,6 +603,7 @@ struct Edited<'a> {
     b: &'a WorldBufs,
     w: World<'a>,
     moved: [u32; MOVED_WORDS as usize],
+    moved_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
     forget: &'a wgpu::ComputePipeline,
 }
 
@@ -745,6 +748,10 @@ fn run_case(
         next[node_cache::FORGETS as usize] = node_cache::FORGETS_MOVED;
         let m = node_cache::MOVED_AT as usize;
         next[m..m + MOVED_WORDS as usize].copy_from_slice(&e.moved);
+        for (k, b) in e.moved_bricks.iter().enumerate() {
+            let at = node_cache::MOVED_BRICKS_AT as usize + 4 * k;
+            next[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
+        }
     }
     let next_buf = gpu.buffer(&next, store_of());
     if let Some(e) = edited {
@@ -933,15 +940,62 @@ fn miss_binds<'a>(
 /// them.
 #[test]
 fn an_edited_brick_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE,
+        LEAF_CELL,
+        [90, 90],
+        "about the eye, its leaf bricks handed between the frames",
+    );
+}
+
+/// `an_edited_brick_is_never_answered_as_it_was` at a clip level coarser than the leaves'.
+#[test]
+fn an_edited_coarse_brick_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE,
+        LEAF_CELL - 1,
+        [90, 90],
+        "about the eye, a coarser level's bricks handed between the frames",
+    );
+}
+
+/// `an_edited_brick_is_never_answered_as_it_was` on X's seam, where the world goes round, the
+/// leaf clip level's bricks lying either side of it.
+#[test]
+fn an_edited_brick_over_the_seam_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE_SEAM,
+        LEAF_CELL,
+        [4, 90],
+        "on the seam, the leaf bricks either side of it handed between the frames",
+    );
+}
+
+/// A frame's walks about `by` leaf cells from `eye` over a world whose clip level at `cell`
+/// lacks its bricks, every brick of that level then handed, and the next frame's, after the app
+/// forgets by the entries that moved, answering as the world that holds them.
+fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static str) {
     let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let built = real_world::build(EYE);
-    // Before: the leaf clip level's entries wanted and not yet filled, folded again.
+    let built = real_world::build(eye);
+    // Before: the clip level's entries wanted and not yet filled, folded again.
     let mut was = built.clipmap.clone();
-    let leaf = ((LEAF_CELL - FIRST_CELL) * ENTRIES) as usize;
-    for row in &mut was[leaf..leaf + ENTRIES as usize] {
+    let level = ((cell - FIRST_CELL) * ENTRIES) as usize;
+    let rows = level..level + ENTRIES as usize;
+    if eye == EYE_SEAM {
+        let x = |west: bool| {
+            was[rows.clone()]
+                .iter()
+                .any(|r| (r[0] < 0) == west && r[2] != 0)
+        };
+        assert!(
+            x(true) && x(false),
+            "the level's bricks held lie on one side of the seam"
+        );
+    }
+    for row in &mut was[rows] {
         row[2..].fill(0);
     }
     real_world::fold(
@@ -954,9 +1008,16 @@ fn an_edited_brick_is_never_answered_as_it_was() {
     let now = &built.clipmap;
     // The host's rule (gpu/ray/cast.rs): an eye's entry moved where its brick did.
     let mut moved = [0u32; MOVED_WORDS as usize];
+    let mut moved_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
     for k in 0..(clipmap::EYE_CLIP_LEVELS * ENTRIES) as usize {
         if Entry::of(now[k]).moved_from(Entry::of(was[k])) {
             moved[k / 32] |= 1 << (k % 32);
+            for q in [Entry::of(now[k]).brick, Entry::of(was[k]).brick] {
+                if q != [i32::MIN; 2] {
+                    let level = &mut moved_bricks[k / ENTRIES as usize];
+                    *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
+                }
+            }
         }
     }
     assert!(moved.iter().any(|&m| m != 0), "no entry moved");
@@ -986,8 +1047,8 @@ fn an_edited_brick_is_never_answered_as_it_was() {
     let forget = gpu.pipeline(src(SHADER_FORGET), "forget_cs");
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let case = Case {
-        name: "about the eye, its leaf bricks handed between the frames",
-        origin: over([EYE[0] + 90, EYE[1] + 90], 40),
+        name,
+        origin: over([eye[0] + by[0], eye[1] + by[1]], 40),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
         back: 60.0,
@@ -1001,6 +1062,7 @@ fn an_edited_brick_is_never_answered_as_it_was() {
         b: &after,
         w: built.world(),
         moved,
+        moved_bricks,
         forget: &forget,
     };
     let mut failed = Vec::new();

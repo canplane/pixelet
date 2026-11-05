@@ -62,7 +62,8 @@ use crate::ZOOM_BITS;
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
 /// eye's clip levels, a clip level's `clipmap::ENTRIES` bits in turn, set where
-/// the brick it holds moved or was handed since the last cast; and the boxes of
+/// the brick it holds moved or was handed since the last cast, and the box those bricks lie
+/// in a clip level (`MOVED_BRICKS_AT`); and the boxes of
 /// leaf cells whose columns what is placed or a preview's cuts changed since
 /// the last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
 /// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
@@ -76,7 +77,11 @@ pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
 pub const MOVED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
-pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
+/// Each of the eye's clip levels' bricks that moved, the box they lie in, `[x0, y0, x1, y1]`
+/// from first to last, none as `NO_BRICKS`: an entry's bit holds any brick of its place modulo
+/// `clipmap::ACROSS`, the box tells them from those of other places.
+pub const MOVED_BRICKS_AT: u32 = MOVED_AT + MOVED_WORDS;
+pub const BOXES_AT: u32 = MOVED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN_CAP: u32 = 32;
 /// Whether the walks count what they ask, where the `ray_counts` setting
@@ -104,6 +109,33 @@ pub const fn lane_at(observer: u32, lane: u32) -> u32 {
 /// over the bricks that moved, over a box of what is placed or cut that
 /// changed, or handed a slot of a child group of what is placed that was
 /// written (pxl-render forget.wgsl `forgets`, `over_box`, `reads_written`).
+/// A clip level's moved bricks' box where none moved (`MOVED_BRICKS_AT`).
+pub const NO_BRICKS: [i32; 4] = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
+
+/// The box of what boxes `a` and `b` hold (`MOVED_BRICKS_AT`).
+pub const fn bricks_joined(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
+    const fn most(x: i32, y: i32) -> i32 {
+        if x > y {
+            x
+        } else {
+            y
+        }
+    }
+    const fn least(x: i32, y: i32) -> i32 {
+        if x < y {
+            x
+        } else {
+            y
+        }
+    }
+    [
+        least(a[0], b[0]),
+        least(a[1], b[1]),
+        most(a[2], b[2]),
+        most(a[3], b[3]),
+    ]
+}
+
 pub const FORGETS_NONE: u32 = 0;
 pub const FORGETS_ALL: u32 = 1;
 pub const FORGETS_MOVED: u32 = 2;

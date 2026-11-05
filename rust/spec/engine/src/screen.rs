@@ -10,6 +10,8 @@
 
 /// A tile's drawn pixels a side.
 pub const TILE: u32 = 32;
+/// The threads of a workgroup of the pass that lists the claimed tiles.
+pub const CAST_TILES_LANES: u32 = 64;
 
 /// The frames the jitter's sequence covers a pixel in.
 pub const JITTERS: u32 = 8;

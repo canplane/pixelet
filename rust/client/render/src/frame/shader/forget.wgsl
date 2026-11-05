@@ -36,8 +36,10 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   return word;
 }
 
-/// Whether the node of `zoom` at column `c` reads a brick that moved, the moved
-/// entries' words at `MOVED_AT`.
+/// Whether the node of `zoom` at column `c` reads a brick that moved: one in the box of the
+/// clip level's moved bricks (`MOVED_BRICKS_AT`), whose entry is among the moved entries' words
+/// at `MOVED_AT`. A node coarser than `TOP_ZOOM` reads no brick, its ground a split whatever
+/// the clip levels hold (world_split.wgsl `ground_split`, world.wgsl `ground_cell`).
 fn forgets(zoom: u32, c: vec2<i32>) -> bool {
   for (var w = 0u; w < EYE_CLIP_LEVELS; w += 1u) {
     let cell = FIRST_CELL + w;
@@ -55,6 +57,12 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
     }
     let q0 = lo >> vec2<u32>(BRICK_SHIFT);
     let q1 = hi >> vec2<u32>(BRICK_SHIFT);
+    let b = NODE_CACHE_MOVED_BRICKS_AT + 4u * w;
+    let first = vec2<i32>(i32(node_cache[b]), i32(node_cache[b + 1u]));
+    let last = vec2<i32>(i32(node_cache[b + 2u]), i32(node_cache[b + 3u]));
+    if (any(q1 < first) || any(q0 > last)) {
+      continue;
+    }
     let at = NODE_CACHE_MOVED_AT + w * LEVEL_WORDS;
     for (var k = 0u; k < LEVEL_WORDS; k += 1u) {
       if ((node_cache[at + k] & entries_word(q0, q1, k)) != 0u) {

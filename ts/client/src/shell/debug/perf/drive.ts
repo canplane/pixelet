@@ -6,7 +6,7 @@
  * the profiler on, the sky at 07:00; the camera zoomed to its farthest and
  * tilted to just over the horizon through the canvas's own input; then, for
  * the whole window, turned a full circle every `TURN_S` while the wheel sweeps
- * the zoom in and out; and the window's report. Two runs alike are two windows
+ * the zoom in and out, both by the time; and the window's report. Two runs alike are two windows
  * alike, so a change is read off their reports.
  */
 
@@ -86,15 +86,17 @@ export async function perfDrive(seconds = 60): Promise<string> {
   const start = -Math.PI / 2;
   pointer("pointerdown", on(start), 2);
   const t0 = performance.now();
-  let n = 0;
+  // The sweep's steps in from the farthest, by the time: a frame late sends what it owes, so
+  // a faster build and a slower one pass the same zooms at the same seconds.
+  const leg = RUN * STEP_MS;
+  let swept = 0;
   const step = setInterval(() => {
-    pointer(
-      "pointermove",
-      on(start + ((performance.now() - t0) / 1000 / TURN_S) * 2 * Math.PI),
-      2,
-    );
-    wheel(Math.floor(n / RUN) % 2 ? WHEEL : -WHEEL);
-    n++;
+    const ms = performance.now() - t0;
+    pointer("pointermove", on(start + (ms / 1000 / TURN_S) * 2 * Math.PI), 2);
+    const part = (ms % leg) / leg;
+    const steps = RUN * (Math.floor(ms / leg) % 2 ? 1 - part : part);
+    wheel((swept - steps) * WHEEL);
+    swept = steps;
   }, STEP_MS);
   await wait(seconds * 1000);
   clearInterval(step);

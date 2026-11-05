@@ -6,7 +6,7 @@
 
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
-use pxl_engine::{beam, eye, light, node_cache, overwrite, raster, ray, LEAF_CELL};
+use pxl_engine::{beam, eye, light, node_cache, overwrite, raster, ray, screen, LEAF_CELL};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -15,13 +15,13 @@ use super::raster::Raster;
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_BEAM, COMPUTE_BEAM_HIT, COMPUTE_CAST, COMPUTE_CELL, COMPUTE_FOLD,
-    COMPUTE_FORGET, COMPUTE_HIT_FACES, COMPUTE_HIT_LEAD, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM,
-    COMPUTE_LIGHT_BEAM_HIT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MARK, COMPUTE_LIGHT_MARK_DRAWS,
-    COMPUTE_LIGHT_MISS, COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_SAMPLE,
-    COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_MISS, COMPUTE_MISS_HIT,
-    COMPUTE_MISS_LIST, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
-    TEXTURE_UINT_ARRAY, UNIFORM,
+    binds, COMPUTE, COMPUTE_BEAM, COMPUTE_BEAM_HIT, COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL,
+    COMPUTE_FOLD, COMPUTE_FORGET, COMPUTE_HIT_FACES, COMPUTE_HIT_LEAD, COMPUTE_LIGHT,
+    COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MARK,
+    COMPUTE_LIGHT_MARK_DRAWS, COMPUTE_LIGHT_MISS, COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_PROPAGATE,
+    COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_MISS,
+    COMPUTE_MISS_HIT, COMPUTE_MISS_LIST, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW,
+    STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
 };
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
@@ -143,7 +143,8 @@ pub(super) struct CastBuffers {
     /// `ray::MISS_ARGS_WORDS`); the node cache forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's clip levels' entries that moved
-    /// (`moved`, a bit an entry, against the entries as `entries` last held them)
+    /// (`moved`, a bit an entry, against the entries as `entries` last held them; `moved_bricks`,
+    /// the box a clip level's lie in)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
     /// `holding` of them, as decor's generation holds them, gpu/generator.rs
     /// `hold`), and those handed a slot of a child group of what is placed that
@@ -173,6 +174,7 @@ pub(super) struct CastBuffers {
     frame: u32,
     forget: bool,
     moved: [u32; node_cache::MOVED_WORDS as usize],
+    moved_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
     boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
     written_groups: [u32; node_cache::WRITTEN_CAP as usize],
@@ -315,6 +317,11 @@ pub(super) struct CastBuffers {
     raster: Raster,
     px_group: u32,
     px_bound: [u32; 7],
+    /// The claimed tiles, listed ahead of the pixels in their pass, and the words their
+    /// dispatch takes (cast_tiles.wgsl), made again with the tiles (`px_bound`).
+    cast_tiles_built: Pipeline,
+    cast_tiles: u32,
+    cast_tiles_group: u32,
     /// What the light's cast and the eye's recast, counted where the setting
     /// asks (ray/count.rs).
     counter: Counter,
@@ -326,6 +333,7 @@ pub(super) struct CastBuffers {
 struct ForgetHead {
     all: bool,
     moved: [u32; node_cache::MOVED_WORDS as usize],
+    moved_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
     boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
     written_groups: [u32; node_cache::WRITTEN_CAP as usize],
@@ -463,9 +471,9 @@ const MISS_HIT_GROUP: [u32; 15] = [
     STORAGE_RW,
 ];
 /// `cast_cs`'s (cast.wgsl): the eye, the rays, the beam's words, the node cache it lists the
-/// marked pixels in, the visibility buffer, the walk again's words and the claimed tiles
+/// marked pixels in, the visibility buffer, the walk again's words and the claimed tiles' list
 /// (`px_group`).
-const CAST_GROUP: [u32; 24] = [
+const CAST_GROUP: [u32; 21] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -487,11 +495,21 @@ const CAST_GROUP: [u32; 24] = [
     30,
     COMPUTE,
     STORAGE,
-    31,
-    COMPUTE,
-    UNIFORM,
+];
+/// `cast_tiles_cs`'s (cast_tiles.wgsl): the list, the tiles' words and uniform.
+const CAST_TILES_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
 ];
 const CAST_WORKGROUP: [u32; 3] = [ray::CAST_SIDE, ray::CAST_SIDE, 1];
+/// A tile's workgroups of `cast_cs`, across and down.
+const TILE_CASTS: u32 = screen::TILE / ray::CAST_SIDE;
+const _: () = assert!(
+    screen::TILE.is_multiple_of(ray::CAST_SIDE),
+    "a tile is a whole number of the cast's workgroups"
+);
+/// The claimed tiles' list as a frame's cast starts: `cast_cs`'s dispatch, no tile yet, each
+/// one's workgroups across and down (cast_tiles.wgsl).
+const CAST_TILES_START: [u32; 3] = [0, TILE_CASTS, TILE_CASTS];
 /// The pixels `miss_hit_cs` left: `miss_list_cs`'s dispatch and their count, then
 /// the hits it kept, as `node_cache::HITS_ARGS` lays them.
 const MISS_LEFT_EMPTY: [u32; 8] = [ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0];
@@ -734,6 +752,7 @@ const _: () = assert!(
 // it (build.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_CAST], &CAST_GROUP)
+        && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
         && binds(
             &[
                 COMPUTE_BEAM,
@@ -784,6 +803,7 @@ impl RaysPass {
         // One group for every kernel over the cast's world but the pixels'.
         let group = &WORLD_GROUP;
         let pipeline = pipelines.build_compute(g, COMPUTE_CAST, &CAST_GROUP);
+        let cast_tiles_built = pipelines.build_compute(g, COMPUTE_CAST_TILES, &CAST_TILES_GROUP);
         let beam_built = pipelines.build_compute(g, COMPUTE_BEAM, &ASK_GROUP);
         let cells_built = pipelines.build_compute(g, COMPUTE_CELL, group);
         let sample_built = pipelines.build_compute(g, COMPUTE_SAMPLE, &ASK_GROUP);
@@ -819,6 +839,9 @@ impl RaysPass {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             pipeline,
+            cast_tiles_built,
+            cast_tiles: 0,
+            cast_tiles_group: 0,
             beam_built,
             cells_built,
             sample_built,
@@ -855,6 +878,7 @@ impl RaysPass {
             frame: 0,
             forget: true,
             moved: [0; node_cache::MOVED_WORDS as usize],
+            moved_bricks: [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize],
             boxes: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             written_groups: [0; node_cache::WRITTEN_CAP as usize],
@@ -1210,6 +1234,14 @@ impl RaysPass {
                 let entry = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]);
                 if was.is_none_or(|w| entry(row).moved_from(entry(w))) {
                     c.moved[k / 32] |= 1 << (k % 32);
+                    let level = &mut c.moved_bricks[k / clipmap::ENTRIES as usize];
+                    for q in [Some(entry(row).brick), was.map(|w| entry(w).brick)]
+                        .into_iter()
+                        .flatten()
+                        .filter(|&q| q != [i32::MIN; 2])
+                    {
+                        *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
+                    }
                 }
                 let held = |r: &[i32]| entry(r).brick();
                 let (now, was) = (held(row), was.map(held));
@@ -1278,6 +1310,8 @@ impl RaysPass {
                 let row = &cast.clipmap[4 * k..4 * k + 4];
                 if w < clipmap::EYE_CLIP_LEVELS && [row[0], row[1]] == q {
                     c.moved[k / 32] |= 1 << (k % 32);
+                    let level = &mut c.moved_bricks[w as usize];
+                    *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
                 }
             }
         }
@@ -1427,8 +1461,8 @@ impl RaysPass {
             g.write_buf(c.eye, 0, bytes(&words));
         }
         // The samples' raster through its gate where only the kernel's
-        // bounds moved; the pixels' cast passes by the tiles not claimed
-        // (`px_group`).
+        // bounds moved; the pixels' cast takes the tiles claimed alone
+        // (`CAST_TILES_START`).
         c.gated = gated && kind == FrameKind::px;
         if casts {
             c.forgets = if c.forget {
@@ -1449,7 +1483,12 @@ impl RaysPass {
             head[node_cache::FRAME as usize] = c.frame;
             head[node_cache::FORGETS as usize] = c.forgets;
             let boxes = node_cache::BOXES_AT as usize;
-            head[node_cache::MOVED_AT as usize..boxes].copy_from_slice(&c.moved);
+            let bricks = node_cache::MOVED_BRICKS_AT as usize;
+            head[node_cache::MOVED_AT as usize..bricks].copy_from_slice(&c.moved);
+            for (k, b) in c.moved_bricks.iter().enumerate() {
+                let at = bricks + 4 * k;
+                head[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
+            }
             head[boxes] = c.holding as u32;
             for (k, b) in c.boxes[..c.holding].iter().enumerate() {
                 let at = boxes + 1 + 4 * k;
@@ -1478,12 +1517,14 @@ impl RaysPass {
             c.sent_forget = Some(ForgetHead {
                 all: c.forgets == node_cache::FORGETS_ALL,
                 moved: c.moved,
+                moved_bricks: c.moved_bricks,
                 boxes: c.boxes,
                 holding: c.holding,
                 written_groups: c.written_groups,
                 writes: c.writes,
             });
             (c.forget, c.moved) = (false, [0; node_cache::MOVED_WORDS as usize]);
+            c.moved_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
             (c.holding, c.writes) = (0, 0);
         } else {
             c.sent_forget = None;
@@ -1621,7 +1662,22 @@ impl RaysPass {
             ];
             if px_bound != c.px_bound {
                 release(c.px_group);
-                c.px_group = px_group(g, &c.pipeline, px_bound, c.marks);
+                release(c.cast_tiles_group);
+                release(c.cast_tiles);
+                let [across, down] = c.size.map(|v| v.div_ceil(screen::TILE));
+                c.cast_tiles = g.buf(
+                    word_bytes(CAST_TILES_START.len() + (across * down) as usize),
+                    buffer_usage::STORAGE | buffer_usage::INDIRECT | buffer_usage::COPY_DST,
+                );
+                c.cast_tiles_group = g.bind_group(
+                    c.cast_tiles_built.layouts[0],
+                    &[
+                        buf_entry(0, c.cast_tiles),
+                        buf_entry(30, changed_at),
+                        buf_entry(31, uniform),
+                    ],
+                );
+                c.px_group = px_group(g, &c.pipeline, px_bound, c.marks, c.cast_tiles);
                 c.px_bound = px_bound;
             }
         }
@@ -1824,11 +1880,25 @@ impl RaysPass {
                     let gated = c.gated.then_some(claimed);
                     c.raster.draw(ctx, &c.grid, kind == FrameKind::cast, gated);
                     group = c.px_group;
+                    g.write_buf(c.cast_tiles, 0, bytes(&CAST_TILES_START));
                 }
                 let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
+                if span == GpuSpanName::px {
+                    let tiles = c.size.map(|v| v.div_ceil(screen::TILE));
+                    g.set_bind_group(pass, 0, c.cast_tiles_group, &[]);
+                    g.set_pipeline(pass, c.cast_tiles_built.id);
+                    g.dispatch(
+                        pass,
+                        (tiles[0] * tiles[1]).div_ceil(screen::CAST_TILES_LANES),
+                        1,
+                        1,
+                    );
+                }
                 g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, pipeline.id);
-                if span == GpuSpanName::sample {
+                if span == GpuSpanName::px {
+                    g.dispatch_indirect(pass, c.cast_tiles, 0);
+                } else if span == GpuSpanName::sample {
                     g.dispatch_indirect(pass, c.sample_left, 0);
                 } else if beam_left {
                     g.dispatch_indirect(pass, c.beam_left, 0);
@@ -2141,6 +2211,9 @@ impl RaysPass {
                 for (m, was) in c.moved.iter_mut().zip(f.moved) {
                     *m |= was;
                 }
+                for (b, was) in c.moved_bricks.iter_mut().zip(f.moved_bricks) {
+                    *b = node_cache::bricks_joined(*b, was);
+                }
                 for &b in &f.boxes[..f.holding] {
                     hold(&mut c.boxes, &mut c.holding, b);
                 }
@@ -2222,10 +2295,10 @@ fn hit_groups(g: &Gpu, [lead, faces]: [&Pipeline; 2], bindings: [u32; 5]) -> [u3
 
 /// The pixels' group 0 over `bindings`: the eye, the rays, the beam's words,
 /// the node cache, which the marked pixels are listed in, the visibility buffer,
-/// a one-layer array, and the words the marked are counted in (`marks`).
+/// a one-layer array, the words the marked are counted in (`marks`) and the claimed tiles' list.
 /// No world: a pixel walks nothing of its own (`cast_cs`).
-fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32) -> u32 {
-    let [eye, rays, beams, node_cache, visibility, changed_at, tiles] = bindings;
+fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32, list: u32) -> u32 {
+    let [eye, rays, beams, node_cache, visibility, ..] = bindings;
     let entries = [
         buf_entry(0, eye),
         view_entry(3, rays),
@@ -2233,8 +2306,7 @@ fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32) -> u32
         buf_entry(9, node_cache),
         view_entry(13, visibility),
         buf_entry(14, marks),
-        buf_entry(30, changed_at),
-        buf_entry(31, tiles),
+        buf_entry(30, list),
     ];
     g.bind_group(pipeline.layouts[0], &entries)
 }

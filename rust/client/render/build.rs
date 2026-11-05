@@ -539,6 +539,7 @@ fn walk_word() -> String {
         ("NODE_CACHE_FORGETS", node_cache::FORGETS),
         ("FORGETS_ALL", node_cache::FORGETS_ALL),
         ("NODE_CACHE_MOVED_AT", node_cache::MOVED_AT),
+        ("NODE_CACHE_MOVED_BRICKS_AT", node_cache::MOVED_BRICKS_AT),
         ("NODE_CACHE_BOXES_AT", node_cache::BOXES_AT),
         ("NODE_CACHE_WRITTEN_AT", node_cache::WRITTEN_AT),
         ("NODE_CACHE_WRITTEN_CAP", node_cache::WRITTEN_CAP),
@@ -969,7 +970,7 @@ fn fill_word() -> String {
 /// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
 /// the frames since it changed, wrapping, and claimed while fewer than the
 /// uniform's `claimed_for`. The one rule every pass that reads the tiles
-/// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast.wgsl).
+/// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast_tiles.wgsl).
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.
@@ -977,12 +978,15 @@ fn tile_word() -> String {
     assert_eq!(screen::age(5, 5), 0);
     assert!(screen::claimed(0, 1) && !screen::claimed(1, 1));
     assert!(screen::claimed(u32::MAX - 1, u32::MAX) && !screen::claimed(u32::MAX, u32::MAX));
-    concat!(
-        "struct Tiles { count: vec4u, size: vec4f, };\n",
-        "fn tiles_age(t: Tiles, changed_at: u32) -> u32 { return t.count.w - changed_at; }\n",
-        "fn tiles_claimed(t: Tiles, changed_at: u32) -> bool { return tiles_age(t, changed_at) < t.count.z; }\n",
+    format!(
+        concat!(
+            "const CAST_TILES_LANES: u32 = {}u;\n",
+            "struct Tiles {{ count: vec4u, size: vec4f, }};\n",
+            "fn tiles_age(t: Tiles, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
+            "fn tiles_claimed(t: Tiles, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
+        ),
+        screen::CAST_TILES_LANES
     )
-    .to_string()
 }
 
 /// Every setting (src/param.rs), named by its path under `param` (`sky::sun`'s

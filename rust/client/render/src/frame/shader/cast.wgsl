@@ -1,8 +1,8 @@
 // pxl-render/cast.wgsl
 
 // Each drawn pixel's ray off the visible sample the raster kept at it (pxl-engine `raster`;
-// gpu/ray/raster.rs), or the sky, a thread a pixel, as light.wgsl's `visible_entry` and `sky` take a
-// slot's. The cell
+// gpu/ray/raster.rs), or the sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as
+// light.wgsl's `visible_entry` and `sky` take a slot's. The cell
 // it takes is the visible sample's, where its ray enters that sample's cell across the axis the
 // sample entered by, tested again exactly where a GPU's f32 may part the two (`cast::entry`),
 // with what lies about its face, the sample's; the sky where no sample about it met anything.
@@ -20,8 +20,12 @@
 /// The walk again's words: its dispatches, the count it lists by and the counts' lanes
 /// (`ray::MISS_ARGS_WORDS`).
 @group(0) @binding(14) var<storage, read_write> marks: array<atomic<u32>>;
-@group(0) @binding(30) var<storage, read> changed_at: array<u32>;
-@group(0) @binding(31) var<uniform> tiles: Tiles;
+/// The tiles claimed, this pass's dispatch ahead of them (cast_tiles.wgsl).
+struct CastTiles {
+  args: array<u32, 3>,
+  at: array<u32>,
+}
+@group(0) @binding(30) var<storage, read> claimed: CastTiles;
 
 /// `v` added to the counts' lane `lane` (pxl-engine `count::REUSED` on), where it counts
 /// (`ray::MISS_ARGS_COUNT`).
@@ -73,21 +77,17 @@ fn write_ray(p: vec2<u32>, w: vec4<u32>) {
 }
 
 @compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
-fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
+  let tile = claimed.at[w.x];
+  let p = vec2<u32>(tile & 0xffffu, tile >> 16u) * SCREEN_TILE + w.yz * CAST_SIDE + l.xy;
   let size = textureDimensions(rays);
-  if (id.x >= size.x || id.y >= size.y) {
+  if (p.x >= size.x || p.y >= size.y) {
     return;
   }
-  // A tile not claimed is passed by: a frame not drawn whole casts the claimed tiles' pixels
-  // alone (pxl-engine `screen`).
-  let tile = (id.y / SCREEN_TILE) * tiles.count.x + id.x / SCREEN_TILE;
-  if (!tiles_claimed(tiles, changed_at[tile])) {
-    return;
-  }
-  let px = px_tan(id.xy, size.xy);
+  let px = px_tan(p, size.xy);
   let aim = eye_aim(px);
   let dir = ray_dir(aim.dir);
-  let visible = textureLoad(visibility, vec2<i32>(id.xy), 0i, 0i).x;
+  let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
   let steps = eye_word(ORIGIN + 3u) != 0u;
   let on = node_cache[COUNT_ON] != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
@@ -115,7 +115,7 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       add_cnt(on, COUNT_REUSED);
       let face = 2u * axis + select(0u, 1u, dir[axis] > 0.0);
       let fill = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
-      write_ray(id.xy, vec4<u32>(
+      write_ray(p, vec4<u32>(
         (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
         bitcast<u32>(past_origin(b.near[axis])),
         select(asset.y, beams[k + SAMPLE_VISITS], steps),
@@ -130,16 +130,16 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let s = sample_before(px);
     if (went_on(s) && went_on(s + vec2<u32>(1u, 0u)) && went_on(s + vec2<u32>(0u, 1u)) && went_on(s + vec2<u32>(1u))) {
       add_cnt(on, COUNT_SKY);
-      write_ray(id.xy, vec4<u32>(0u, 0u, select(0u, beams[sample_word(s) + SAMPLE_VISITS], steps), 0u));
+      write_ray(p, vec4<u32>(0u, 0u, select(0u, beams[sample_word(s) + SAMPLE_VISITS], steps), 0u));
       return;
     }
   }
   // Neither: marked and listed for its walk (miss_hit.wgsl), which reads and writes the
   // node cache.
   add_cnt(on, COUNT_WALKED);
-  textureStore(rays, id.xy, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));
+  textureStore(rays, p, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));
   let at = enlist((size + vec2<u32>(CAST_SIDE - 1u)) / CAST_SIDE);
   if (at < MARKS) {
-    node_cache[MARKS_AT + at] = (id.y << 16u) | id.x;
+    node_cache[MARKS_AT + at] = (p.y << 16u) | p.x;
   }
 }

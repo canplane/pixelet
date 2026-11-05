@@ -33,8 +33,8 @@ use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{eye, face, node_cache, raster, ray, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
-    src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE,
-    SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
+    src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE,
+    SHADER_SAMPLE, SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
@@ -749,6 +749,7 @@ fn hand_pixels_answer_as_cast_entry() {
     let Some(gpu) = device() else { return };
     let face_p = gpu.pipeline(src(SHADER_FACE), "face_cs");
     let cast_p = gpu.pipeline(src(SHADER_CAST), "cast_cs");
+    let cast_tiles_p = gpu.pipeline(src(SHADER_CAST_TILES), "cast_tiles_cs");
     let probe_p = gpu.pipeline(
         &format!("{}\n{PROBE}", gpu::source(src(SHADER_CAST), "cast_cs")),
         "probe_cs",
@@ -877,6 +878,24 @@ fn hand_pixels_answer_as_cast_entry() {
         uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::CLAIMED_FOR, now]);
         let changed_buf = gpu.buffer(&changed, store());
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
+        let mut list_words = vec![0u32; 3 + (tiles[0] * tiles[1]) as usize];
+        let per_tile = screen::TILE / ray::CAST_SIDE;
+        list_words[1..3].copy_from_slice(&[per_tile, per_tile]);
+        let list = gpu.buffer(&list_words, store());
+        gpu.dispatch(
+            &cast_tiles_p,
+            &[
+                (0, list.as_entire_binding()),
+                (30, changed_buf.as_entire_binding()),
+                (31, tiles_buf.as_entire_binding()),
+            ],
+            [
+                (tiles[0] * tiles[1]).div_ceil(screen::CAST_TILES_LANES),
+                1,
+                1,
+            ],
+        );
+        let listed = gpu.read(&list)[0];
 
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
@@ -890,10 +909,9 @@ fn hand_pixels_answer_as_cast_entry() {
                 (9, table_buf.as_entire_binding()),
                 (13, wgpu::BindingResource::TextureView(&vis_view)),
                 (14, marks.as_entire_binding()),
-                (30, changed_buf.as_entire_binding()),
-                (31, tiles_buf.as_entire_binding()),
+                (30, list.as_entire_binding()),
             ],
-            [wd.div_ceil(ray::CAST_SIDE), ht.div_ceil(ray::CAST_SIDE), 1],
+            [listed, per_tile, per_tile],
         );
 
         // The Rust, along the device's ray, at each pixel the device drew: a pixel left as it
