@@ -212,11 +212,12 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
         // It keeps nothing across its life, and draws nothing.
         Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
         Submission::Opened(opened) => {
-            if let Some(owner) = state.files.complete_open(door, &opened) {
+            if let Some(owner) = state.files.complete_open(&opened) {
                 door.post(owner, spec::cmd::OPENED, 0, opened.res);
             }
             Ok(Some(0))
         }
+        Submission::Closed(_) => Ok(Some(0)),
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
     });
     state.stream.publish();

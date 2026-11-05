@@ -105,12 +105,21 @@ struct Machine {
     mem: Mem,
     stack: Stack,
     rings: Rings,
+    fs: Option<Fs>,
     gpu: Option<Gpu>,
+}
+
+/// The file device, asked for by being there.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Fs {
+    #[serde(rename = "$doc", default)]
+    _doc: Vec<String>,
 }
 
 /// The front's places, as xpute-guest machine.rs computes them: the
 /// header's page past the stack, the rings, their slots, and the GPU stream
-/// past them, 0 without the socket.
+/// past them, 0 without a GPU.
 impl Machine {
     fn head_at(&self) -> u32 {
         page_up(self.stack.module_bytes)
@@ -202,6 +211,7 @@ fn machine_rs(m: &Machine, json: &str, shown: &str) -> String {
         format!("    sq_cap: {},", m.rings.sq_cap),
         format!("    cq_cap: {},", m.rings.cq_cap),
         format!("    turn_posts: {},", m.rings.turn_posts),
+        format!("    fs: {},", m.fs.is_some()),
         format!("    gpu: {gpu},"),
         "};".into(),
         String::new(),
@@ -232,9 +242,9 @@ fn machine_ts(m: &Machine, json: &str, shown: &str) -> String {
         String::new(),
         "/** The machine its JSON declares: the sizes a host may give, what a".into(),
         " * reservation is counted in, the rings' sizes, where the front's header,".into(),
-        " * the rings, their slots and the GPU stream lie (0 without the socket),".into(),
-        " * which the host lays before the first turn, and the GPU socket where it".into(),
-        " * is taken. */".into(),
+        " * the rings, their slots and the GPU stream lie (0 without a GPU), which".into(),
+        " * the host lays before the first turn, whether it asks for the file".into(),
+        " * device, and the GPU it asks for. */".into(),
         "export const MACHINE = {".into(),
         format!("  mem_bytes: [{}],", sizes.join(", ")),
         format!("  region_bytes: {},", m.mem.region_bytes),
@@ -245,6 +255,10 @@ fn machine_ts(m: &Machine, json: &str, shown: &str) -> String {
     for (name, at) in m.places() {
         lines.push(format!("  {name}: {at},"));
     }
-    lines.extend([format!("  gpu: {gpu},"), "} as const;".into()]);
+    lines.extend([
+        format!("  fs: {},", m.fs.is_some()),
+        format!("  gpu: {gpu},"),
+        "} as const;".into(),
+    ]);
     file(&lines)
 }

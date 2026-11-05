@@ -42,6 +42,9 @@ struct Member {
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
     event: Option<Vec<Field>>,
+    /// An `import`'s completion's packet, which the host writes and the guest reads.
+    #[serde(skip)]
+    reply: Option<Vec<Field>>,
 }
 
 #[derive(Deserialize)]
@@ -84,6 +87,8 @@ struct Record {
 
 /// A command as its protocol lists it. `call`: the sender waits for the answer
 /// (an `export` the host calls, an `import` the host answers before it returns).
+/// `ackreq`: an `import` the host completes on a later turn, a frame of its tag
+/// flagged RES, its packet `reply`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -94,6 +99,9 @@ struct Cmd {
     pkt: Option<Vec<Field>>,
     #[serde(default)]
     call: bool,
+    #[serde(default)]
+    ackreq: bool,
+    reply: Option<Vec<Field>>,
 }
 
 /// A protocol: the commands the host sends the guest (`export`) and those the
@@ -167,6 +175,15 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             section: format!("{}, {dir}", d.name),
         }));
         for c in cmds {
+            if (c.ackreq || c.reply.is_some()) && (dir == "export" || c.call) {
+                return Err(format!(
+                    "{shown}: {} is completed later, so an import and no call",
+                    c.name
+                ));
+            }
+            if c.reply.is_some() && !c.ackreq {
+                return Err(format!("{shown}: {} has a reply and no ackreq", c.name));
+            }
             let (pkt, event) = if dir == "export" {
                 (c.pkt, None)
             } else {
@@ -183,6 +200,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 doc: c.doc,
                 pkt,
                 event,
+                reply: c.reply,
             }));
         }
     }

@@ -37,24 +37,24 @@ export const U32_KEYS: KeyTraits<u32> = {
 };
 
 export class IndexedMap<K extends numeric> {
-  private keys: KeyLane;
+  private _keys: KeyLane;
   /** Per slot, position + 1; 0 is an empty slot. */
-  private table: U32Array;
+  private _table: U32Array;
   /** 32 − log2(table size): a hash's top bits pick the home slot. */
-  private shift: u32;
-  private mask: u32;
+  private _shift: u32;
+  private _mask: u32;
   private _size: u32 = 0;
 
-  private readonly traits: KeyTraits<K>;
+  private readonly _traits: KeyTraits<K>;
 
   constructor(traits: KeyTraits<K>, cap: u32 = 16) {
-    this.traits = traits;
+    this._traits = traits;
     let sz = 2;
     while (sz < cap * 2) sz <<= 1;
-    this.table = new Uint32Array(sz);
-    this.keys = this.take_keys(sz >>> 1);
-    this.mask = sz - 1;
-    this.shift = 32 - Math.log2(sz);
+    this._table = new Uint32Array(sz);
+    this._keys = this._take_keys(sz >>> 1);
+    this._mask = sz - 1;
+    this._shift = 32 - Math.log2(sz);
   }
 
   get size(): u32 {
@@ -62,28 +62,28 @@ export class IndexedMap<K extends numeric> {
   }
 
   key_at(pos: u32): K {
-    return this.keys[pos] as K;
+    return this._keys[pos] as K;
   }
 
   find(key: K): i32 {
-    const k = this.traits.norm(key);
-    let s = this.home(k);
+    const k = this._traits.norm(key);
+    let s = this._home(k);
     for (;;) {
-      const e = this.table[s];
+      const e = this._table[s];
       if (e === 0) return -1;
-      if (this.keys[e - 1] === k) return e - 1;
-      s = (s + 1) & this.mask;
+      if (this._keys[e - 1] === k) return e - 1;
+      s = (s + 1) & this._mask;
     }
   }
 
   insert(key: K): u32 {
     const found = this.find(key);
     if (found >= 0) return found;
-    if ((this._size + 1) * 2 > this.table.length) this.grow();
-    const k = this.traits.norm(key);
+    if ((this._size + 1) * 2 > this._table.length) this._grow();
+    const k = this._traits.norm(key);
     const pos = this._size++;
-    this.keys[pos] = k as never;
-    this.place(k, pos);
+    this._keys[pos] = k as never;
+    this._place(k, pos);
     return pos;
   }
 
@@ -93,19 +93,19 @@ export class IndexedMap<K extends numeric> {
    * or `pos` itself when the removed entry was the last.
    */
   remove_at(pos: u32): u32 {
-    this.unplace(this.slot_of(this.keys[pos] as K));
+    this._unplace(this._slot_of(this._keys[pos] as K));
     const last = --this._size;
     if (pos !== last) {
-      const moved = this.keys[last] as K;
-      this.table[this.slot_of(moved)] = pos + 1;
-      this.keys[pos] = moved as never;
+      const moved = this._keys[last] as K;
+      this._table[this._slot_of(moved)] = pos + 1;
+      this._keys[pos] = moved as never;
     }
     return last;
   }
 
   /** Forgets every entry; the capacity stays. */
   clear(): void {
-    this.table.fill(0);
+    this._table.fill(0);
     this._size = 0;
   }
 
@@ -123,55 +123,55 @@ export class IndexedMap<K extends numeric> {
     }
   }
 
-  private take_keys(n: u32): KeyLane {
-    return new (this.traits.ctor as unknown as AnyTypedArrayCtor<KeyLane>)(n);
+  private _take_keys(n: u32): KeyLane {
+    return new (this._traits.ctor as unknown as AnyTypedArrayCtor<KeyLane>)(n);
   }
 
-  private home(k: K): u32 {
-    return this.traits.hash(k) >>> this.shift;
+  private _home(k: K): u32 {
+    return this._traits.hash(k) >>> this._shift;
   }
 
-  private place(k: K, pos: u32): void {
-    let s = this.home(k);
-    while (this.table[s] !== 0) s = (s + 1) & this.mask;
-    this.table[s] = pos + 1;
+  private _place(k: K, pos: u32): void {
+    let s = this._home(k);
+    while (this._table[s] !== 0) s = (s + 1) & this._mask;
+    this._table[s] = pos + 1;
   }
 
-  private slot_of(k: K): u32 {
-    let s = this.home(k);
-    while (this.keys[this.table[s] - 1] !== k) s = (s + 1) & this.mask;
+  private _slot_of(k: K): u32 {
+    let s = this._home(k);
+    while (this._keys[this._table[s] - 1] !== k) s = (s + 1) & this._mask;
     return s;
   }
 
   /** Backward-shift deletion: pull later entries of the probe run into the
    * hole unless their own home lies cyclically between the hole and them. */
-  private unplace(hole: u32): void {
+  private _unplace(hole: u32): void {
     let i = hole;
     let j = hole;
-    this.table[i] = 0;
+    this._table[i] = 0;
     for (;;) {
-      j = (j + 1) & this.mask;
-      const e = this.table[j];
+      j = (j + 1) & this._mask;
+      const e = this._table[j];
       if (e === 0) return;
-      const h = this.home(this.keys[e - 1] as K);
+      const h = this._home(this._keys[e - 1] as K);
       const stays = i <= j ? h > i && h <= j : h > i || h <= j;
       if (!stays) {
-        this.table[i] = e;
-        this.table[j] = 0;
+        this._table[i] = e;
+        this._table[j] = 0;
         i = j;
       }
     }
   }
 
-  private grow(): void {
-    const sz = this.table.length * 2;
-    const keys = this.take_keys(sz >>> 1);
-    keys.set(this.keys.subarray(0, this._size) as never);
-    this.keys = keys;
-    this.table = new Uint32Array(sz);
-    this.mask = sz - 1;
-    this.shift = 32 - Math.log2(sz);
-    for (let pos = 0; pos < this._size; pos++) this.place(keys[pos] as K, pos);
+  private _grow(): void {
+    const sz = this._table.length * 2;
+    const keys = this._take_keys(sz >>> 1);
+    keys.set(this._keys.subarray(0, this._size) as never);
+    this._keys = keys;
+    this._table = new Uint32Array(sz);
+    this._mask = sz - 1;
+    this._shift = 32 - Math.log2(sz);
+    for (let pos = 0; pos < this._size; pos++) this._place(keys[pos] as K, pos);
   }
 }
 

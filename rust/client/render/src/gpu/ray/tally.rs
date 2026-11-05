@@ -11,7 +11,7 @@
 use pxl_engine::{pyramid, raster, ray, tally};
 use xpute_guest::mem::off_of;
 
-use crate::gpu::api::{buffer_usage, bytes, word_bytes, Gpu, DONE};
+use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
 const WORDS: usize = tally::WORDS as usize;
 
@@ -67,7 +67,10 @@ pub(super) struct Tally {
     frame: Frame,
     copied_frame: Frame,
     read_counts: Box<[u32; WORDS]>,
-    mapping: Box<u32>,
+    /// The mapping's fence and result, the host's, and the ticket it
+    /// was last asked with, the kernel's: one mapping out at a time.
+    mapping: Box<[u32; 2]>,
+    ticket: u32,
     copied: bool,
     mapped: bool,
     ray_counts: Option<RayCounts>,
@@ -89,7 +92,8 @@ impl Tally {
             frame: Frame::default(),
             copied_frame: Frame::default(),
             read_counts: Box::new([0; WORDS]),
-            mapping: Box::new(DONE),
+            mapping: Box::new([0; 2]),
+            ticket: 0,
             copied: false,
             mapped: false,
             ray_counts: None,
@@ -162,7 +166,11 @@ impl Tally {
     /// kept with what the CPU knew of their frame, until taken: after the
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
-        if self.mapped && *self.mapping & DONE != 0 {
+        let landed = signaled(&self.mapping[0], self.ticket);
+        if self.mapped && landed && self.mapping[1] != RESULT::OK {
+            self.mapped = false;
+        }
+        if self.mapped && landed {
             let (l, f) = (&self.read_counts, self.copied_frame);
             let mut counts = [0.0; RAY_COUNTS];
             for o in 0..tally::OBSERVERS {
@@ -182,9 +190,17 @@ impl Tally {
             });
             self.mapped = false;
         }
-        if self.copied && *self.mapping & DONE != 0 {
+        if self.copied && landed {
             let addr = off_of(self.read_counts.as_ptr()) as u32;
-            g.map_read(self.read, 0, word_bytes(WORDS), addr, &mut self.mapping, 1);
+            self.ticket = self.ticket.wrapping_add(1);
+            g.map_read(
+                self.read,
+                0,
+                word_bytes(WORDS),
+                addr,
+                &self.mapping,
+                self.ticket,
+            );
             (self.copied, self.mapped) = (false, true);
         }
     }

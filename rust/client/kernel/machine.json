@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The kernel's machine (xpute spec/machine.schema.json): the memory a device gives it,",
-    "its stack, its rings and the GPU socket.",
+    "its stack, its rings and the GPU it asks for.",
     "",
     "`turn_posts` is what the kernel's turn may post besides its replies: a sensor's start",
     "or stop each, the snapshot, the files' hostcalls at their most and a call's slot",
@@ -83,6 +83,11 @@
     "sq_cap": 512,
     "cq_cap": 1024,
     "turn_posts": 172
+  },
+  "fs": {
+    "$doc": [
+      "Its roots: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source (ts/client/src/sys/fs/namespace.ts)."
+    ]
   },
   "gpu": {
     "$doc": [

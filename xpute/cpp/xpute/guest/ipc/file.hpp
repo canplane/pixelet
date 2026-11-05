@@ -1,13 +1,12 @@
 // cpp/xpute/guest/ipc/file.hpp
 
-// A guest's open files. A descriptor is a table handle, so an answer to one
+// A guest's open files. A descriptor is a table handle, so a completion of one
 // already closed reaches no one.
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
-#include <new>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -24,15 +23,15 @@
 
 namespace xpute {
 
-// What an open came to, read once from the host's answer.
+// What an open came to, read once from the host's completion.
 struct Opened {
     enum class Kind : std::uint8_t {
         // The file's size is `bytes`; the descriptor is its owner's to read and close.
         bytes,
-        // No such file; the descriptor is closed (`Files::complete_open`).
+        // No such file; the descriptor is gone (`Files::complete_open`).
         absent,
         // Every other failure, `errnum`, and the number the host refused with,
-        // `detail`; the descriptor is closed.
+        // `detail`; the descriptor is gone.
         failed,
     };
 
@@ -43,56 +42,12 @@ struct Opened {
 
     bool operator==(const Opened &) const = default;
 
-    static Opened of(const abi::fs::FsOpened &opened) noexcept {
+    static Opened of(const FsOpened &opened) noexcept {
         Result<std::uint32_t> n = answer_of(opened.res);
         if (n) return {.kind = Kind::bytes, .bytes = *n};
         if (n.error().errnum == Errno::enoent) return {.kind = Kind::absent};
         return {.kind = Kind::failed, .errnum = n.error().errnum, .detail = opened.detail};
     }
-};
-
-// Bytes of the heap, given back by their size: what a read fills.
-class Bytes {
-  public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
-        if (this != &o) {
-            release();
-            at_ = std::exchange(o.at_, nullptr);
-            cnt_ = std::exchange(o.cnt_, 0);
-        }
-        return *this;
-    }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
-
-    // None where the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
-        if (cnt == 0) return b;
-        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
-        if (b.at_ == nullptr) return std::nullopt;
-        b.cnt_ = cnt;
-        return b;
-    }
-
-    std::uint8_t *data() noexcept { return at_; }
-    const std::uint8_t *data() const noexcept { return at_; }
-    std::size_t size() const noexcept { return cnt_; }
-    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
-    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
-
-  private:
-    void release() noexcept {
-        if (at_ != nullptr) ::operator delete(at_, cnt_);
-        at_ = nullptr;
-        cnt_ = 0;
-    }
-
-    std::uint8_t *at_ = nullptr;
-    std::size_t cnt_ = 0;
 };
 
 // At most `N - 1` open at once; one more is a bug.
@@ -107,10 +62,10 @@ template <class O, std::size_t N> class Files {
     // Answered or not.
     std::optional<O> close(const Door &door, Fd fd) {
         door.close(fd);
-        return held_.remove(fd);
+        return fds_.remove(fd);
     }
 
-    // Opened, written and closed in one turn, so no answer comes.
+    // Opened, written and closed in one turn; the completions reach no owner.
     void write_whole(const Door &door, std::uint32_t root, std::string_view path, std::vector<std::uint8_t> bytes, O owner) {
         Fd fd = take(std::move(owner));
         door.openat(fd, root, fs::flag::O_WRONLY, path);
@@ -119,32 +74,36 @@ template <class O, std::size_t N> class Files {
     }
 
     // The owner of the open `opened` completes, or none where its descriptor was
-    // closed since; a descriptor whose open failed is closed here.
-    std::optional<O> complete_open(const Door &door, const abi::fs::FsOpened &opened) {
-        const O *held = held_.get(opened.fd);
-        if (held == nullptr) return std::nullopt;
-        O owner = *held;
-        if (opened.res < 0) close(door, opened.fd);
+    // closed since; a failed open leaves no descriptor to close, and its handle
+    // is let go here.
+    std::optional<O> complete_open(const FsOpened &opened) {
+        const O *found = fds_.get(opened.fd);
+        if (found == nullptr) return std::nullopt;
+        O owner = *found;
+        if (opened.res < 0) fds_.remove(opened.fd);
         return owner;
     }
 
-    // The file an open answered with `bytes`, read whole into the heap and
-    // closed: its bytes, filled once the host's head has passed the read and
-    // kept until then, or ENOMEM where the heap has no room for them, nothing
-    // read.
-    Result<Bytes> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
-        std::optional<Bytes> held = Bytes::make(bytes);
-        if (held) door.read(fd, held->span());
+    // The file an open completed with `bytes`, read whole into the heap and
+    // closed: its reading, whose bytes `Reading::take` hands over once the host's
+    // head has passed it, or ENOMEM where the heap has no room for them,
+    // nothing read.
+    Result<Reading> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
+        std::optional<Bytes> buf = Bytes::make(bytes);
+        if (!buf) {
+            close(door, fd);
+            return make_error(ErrorClass::fault, Errno::enomem);
+        }
+        Reading read = door.read_buf(fd, std::move(*buf));
         close(door, fd);
-        if (!held) return make_error(ErrorClass::fault, Errno::enomem);
-        return std::move(*held);
+        return read;
     }
 
-    const O *owner(Fd fd) const noexcept { return held_.get(fd); }
+    const O *owner(Fd fd) const noexcept { return fds_.get(fd); }
 
-    template <class Which> std::optional<Fd> held_for(Which &&which) {
+    template <class Which> std::optional<Fd> find(Which &&which) {
         std::optional<Fd> found;
-        held_.each([&](std::uint32_t fd, O &o) {
+        fds_.each([&](std::uint32_t fd, O &o) {
             if (!found && which(o)) found = fd;
         });
         return found;
@@ -152,12 +111,12 @@ template <class O, std::size_t N> class Files {
 
   private:
     Fd take(O owner) noexcept {
-        std::optional<Fd> fd = held_.insert(std::move(owner));
+        std::optional<Fd> fd = fds_.insert(std::move(owner));
         ensure(fd.has_value(), Errno::enospc, N);
         return *fd;
     }
 
-    abi::Table<O, N> held_;
+    abi::Table<O, N> fds_;
 };
 
 } // namespace xpute

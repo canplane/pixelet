@@ -179,11 +179,19 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(pkt) = &c.pkt {
+        let lower = c.name.to_lowercase();
+        let pkts = [
+            (c.pkt.as_ref(), lower.clone(), "packet"),
+            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{lower}_reply"), "completion's packet"),
+        ];
+        for (pkt, encode, what) in pkts {
+            let Some(pkt) = pkt else {
+                continue;
+            };
             // Written in place, its fields handed over as they are: no record is made for it.
             uses.note(spec, pkt, false)?;
             let mut doc = vec![format!(
-                "Command.{}'s packet, written in place into `to`.",
+                "Command.{}'s {what}, written in place into `to`.",
                 c.name
             )];
             for f in pkt {
@@ -205,8 +213,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 .map(|f| ts_write(spec, f, &f.name))
                 .collect::<Result<Vec<_>, String>>()?;
             tail.push(format!(
-                "export function encode_{}(to: PacketRoom{}): PacketWriter {{",
-                c.name.to_lowercase(),
+                "export function encode_{encode}(to: PacketRoom{}): PacketWriter {{",
                 params.concat()
             ));
             tail.push(format!(

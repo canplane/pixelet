@@ -28,11 +28,11 @@ fn descriptor_owner() {
     let a = files.open(&door, 7, "a", "first");
     files.close(&door, a);
     let b = files.open(&door, 7, "b", "second");
-    assert_eq!(files.held_for(|o| *o == "second"), Some(b));
+    assert_eq!(files.find(|o| *o == "second"), Some(b));
 }
 
 #[test]
-fn failed_open_closed() {
+fn failed_open_let_go() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let failed = files.open(&door, 7, "a", "first");
     let answer = FsOpened {
@@ -40,24 +40,24 @@ fn failed_open_closed() {
         res: -2,
         detail: 0,
     };
-    assert_eq!(files.complete_open(&door, &answer), Some("first"));
-    assert_eq!(files.owner(failed), None, "a failed open is closed");
-    let held = files.open(&door, 7, "b", "second");
+    assert_eq!(files.complete_open(&answer), Some("first"));
+    assert_eq!(files.owner(failed), None, "a failed open leaves no descriptor");
+    let open = files.open(&door, 7, "b", "second");
     let answer = FsOpened {
-        fd: held,
+        fd: open,
         res: 5,
         detail: 0,
     };
-    assert_eq!(files.complete_open(&door, &answer), Some("second"));
+    assert_eq!(files.complete_open(&answer), Some("second"));
     assert_eq!(
-        files.owner(held),
+        files.owner(open),
         Some(&"second"),
         "one that yielded bytes stays open"
     );
 }
 
 #[test]
-fn answer_read_once() {
+fn completion_read_once() {
     let answer = |res| FsOpened {
         fd: 1,
         res,
@@ -86,14 +86,28 @@ fn answer_read_once() {
 fn read_whole_closes() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let fd = files.open(&door, 7, "a", "first");
-    // SAFETY: nothing runs the records, so nothing fills the buffer.
-    let bytes = unsafe { files.read_whole(&door, fd, 5) };
-    assert_eq!(bytes.map(|b| b.len()), Ok(5));
+    assert!(files.read_whole(&door, fd, 5).is_ok());
     assert_eq!(files.owner(fd), None, "read whole, it is closed");
 }
 
+/// The bytes are the host's until its head has passed the read, and are
+/// handed over then.
 #[test]
-fn stale_answer_ownerless() {
+fn read_whole_held_until_consumed() {
+    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let fd = files.open(&door, 7, "a", "first");
+    let read = files.read_whole(&door, fd, 5).expect("room for five bytes");
+    let read = read
+        .take(&door)
+        .expect_err("the head has not passed the read");
+    while door.cq().peek().is_some() {
+        door.cq().advance();
+    }
+    assert_eq!(read.take(&door).map(|b| b.len()).ok(), Some(5));
+}
+
+#[test]
+fn stale_completion_ownerless() {
     let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
     let stale = files.open(&door, 7, "a", "first");
     files.close(&door, stale);
@@ -102,5 +116,5 @@ fn stale_answer_ownerless() {
         res: -2,
         detail: 0,
     };
-    assert_eq!(files.complete_open(&door, &answer), None);
+    assert_eq!(files.complete_open(&answer), None);
 }

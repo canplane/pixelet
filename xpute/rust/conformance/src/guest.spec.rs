@@ -87,9 +87,9 @@ pub mod cmd {
     pub const MARK: u32 = 4104;
     /// Reads the host's clock and replies with the whole milliseconds since the last MARK.
     pub const SINCE: u32 = 4105;
-    /// Opens a file for the packet's number, its owner, and replies with the descriptor, its FS_OPENAT posted for the file device, which no trace's host answers; the host's answer (FS_OPENED) raises OPENED for that owner while the descriptor is open.
+    /// Opens a file for the packet's number, its owner, and replies with the descriptor, its FS_OPENAT posted for the file device, which no trace's host takes; the open's completion, a trace's `complete`, raises OPENED for that owner while the descriptor is open.
     pub const OPEN: u32 = 4106;
-    /// Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
+    /// Closes the packet's descriptor, its open completed or not; fails with EBADF for one not open.
     pub const CLOSE: u32 = 4107;
     /// Zeroes a word of its own, calls INC with the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno the host refused INC with.
     pub const CALL: u32 = 4108;
@@ -99,7 +99,7 @@ pub mod cmd {
     pub const INC: u32 = 4109;
     /// What RAISE raises.
     pub const EVENT: u32 = 4353;
-    /// An open answered: tagged with its owner, its result the host's.
+    /// An open completed: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",

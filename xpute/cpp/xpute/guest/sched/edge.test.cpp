@@ -71,6 +71,11 @@ Task<int> twice(int n) {
     co_return 2 * n;
 }
 
+Task<> waits_on_the_host() {
+    co_await host_turn(edge);
+    seen.push_back(3);
+}
+
 Task<> awaits_a_task() {
     seen.push_back(co_await twice(21));
 }
@@ -110,6 +115,20 @@ XPUTE_TEST(edge_falling_edge_earliest_wait) {
     edge.ask_next();
     edge.wake_at(test_clock() + 100);
     XPUTE_CHECK(edge.fall() == 0);
+}
+
+XPUTE_TEST(edge_host_turn_asks_none) {
+    reset();
+    edge.rise(4);
+    XPUTE_CHECK(spawn(waits_on_the_host(), 0));
+    poll();
+    XPUTE_CHECK(seen.empty());
+    XPUTE_CHECK_EQ(edge.fall(), NO_WAKE, "a task waiting on its host asks for no turn");
+
+    edge.rise(4);
+    XPUTE_CHECK(fifo.wakes == 1);
+    poll();
+    XPUTE_CHECK((seen == std::vector{3}));
 }
 
 XPUTE_TEST(edge_notice_wakes_task) {

@@ -11,14 +11,16 @@
 #   read FD N / write FD TEXT / close FD
 #   turn              the host runs the turn's records
 #   deliver R P B     the transport answers what `later` held, with B as `file` takes it
-#   expect opened FD RES   the next answer the guest is sent: a size, or an errno by name
-#   expect quiet      no answer the guest has not been held to
+#   expect opened FD RES   the next completion the guest is sent, of an open: a size, or an errno by name
+#   expect closed FD RES   the next, of a close: 0, or an errno by name
+#   expect quiet      no completion the guest has not been held to
 #   expect read HEX   what the last read put in the guest's memory
 #   expect commit R P TEXT   what a close made the file
 #
-# An open's answer comes on a later turn, however much later: `later` is how a trace says the
-# transport is slow, and nothing here fixes how many turns pass.
-scenarios	open.later open.absent read write close.opening stale.reuse root.walk
+# An open's completion comes on a later turn, however much later: `later` is how a trace says the
+# transport is slow, and nothing here fixes how many turns pass. Each open and each close is
+# completed once.
+scenarios	open.later open.absent read write write.refused close.opening close.unknown stale.reuse root.walk
 
 open.later.step.0	file 7 a/b later
 open.later.step.1	openat 0x10001 7 rd a/b
@@ -40,28 +42,51 @@ read.step.4	read 0x10001 5
 read.step.5	close 0x10001
 read.step.6	turn
 read.step.7	expect read 68656c6c6f
-read.step.8	expect quiet
+read.step.8	expect closed 0x10001 0
+read.step.9	expect quiet
 
-# Opened to write and closed in one turn: the close commits what was written, and the open, ended
-# before it was answered, is answered nothing.
+# Opened to write and closed in one turn: an open to write is completed at once, and the close
+# commits what was written, read where the guest keeps it.
 write.step.0	openat 0x10001 7 wr a
 write.step.1	write 0x10001 ab
 write.step.2	write 0x10001 c
 write.step.3	close 0x10001
 write.step.4	turn
-write.step.5	expect quiet
-write.step.6	expect commit 7 a abc
+write.step.5	expect opened 0x10001 0
+write.step.6	expect closed 0x10001 0
+write.step.7	expect quiet
+write.step.8	expect commit 7 a abc
 
-# A close ends a descriptor still opening: its open is never answered, however late its transport.
+# A file refused to write is written and closed in the same turn: the write is dropped, the open
+# completed with its errno, and the close finds no descriptor.
+write.refused.step.0	openat 0x10001 7 wr ../a
+write.refused.step.1	write 0x10001 ab
+write.refused.step.2	close 0x10001
+write.refused.step.3	turn
+write.refused.step.4	expect opened 0x10001 EACCES
+write.refused.step.5	expect closed 0x10001 EBADF
+write.refused.step.6	expect quiet
+
+# A close ends a descriptor still opening: its open is completed with ECANCELED before the close,
+# and nothing more, however late its transport.
 close.opening.step.0	file 7 a later
 close.opening.step.1	openat 0x10001 7 rd a
 close.opening.step.2	close 0x10001
 close.opening.step.3	turn
-close.opening.step.4	deliver 7 a 61
-close.opening.step.5	expect quiet
+close.opening.step.4	expect opened 0x10001 ECANCELED
+close.opening.step.5	expect closed 0x10001 0
+close.opening.step.6	deliver 7 a 61
+close.opening.step.7	expect quiet
+
+# A close of a descriptor the host does not hold is completed with EBADF.
+close.unknown.step.0	close 0x10001
+close.unknown.step.1	turn
+close.unknown.step.2	expect closed 0x10001 EBADF
+close.unknown.step.3	expect quiet
 
 # The slot a closed descriptor held is issued again under a new generation before the old open's
-# transport answers: the late answer reaches neither descriptor, and the new one gets its own.
+# transport answers: the old open is completed with ECANCELED at its close, the late answer reaches
+# neither descriptor, and the new one gets its own.
 stale.reuse.step.0	file 7 a later
 stale.reuse.step.1	file 7 b later
 stale.reuse.step.2	openat 0x10001 7 rd a
@@ -69,11 +94,13 @@ stale.reuse.step.3	turn
 stale.reuse.step.4	close 0x10001
 stale.reuse.step.5	openat 0x20001 7 rd b
 stale.reuse.step.6	turn
-stale.reuse.step.7	deliver 7 a 61
-stale.reuse.step.8	expect quiet
-stale.reuse.step.9	deliver 7 b 6262
-stale.reuse.step.10	expect opened 0x20001 2
-stale.reuse.step.11	expect quiet
+stale.reuse.step.7	expect opened 0x10001 ECANCELED
+stale.reuse.step.8	expect closed 0x10001 0
+stale.reuse.step.9	deliver 7 a 61
+stale.reuse.step.10	expect quiet
+stale.reuse.step.11	deliver 7 b 6262
+stale.reuse.step.12	expect opened 0x20001 2
+stale.reuse.step.13	expect quiet
 
 # A root is the whole of what it grants: a path walks down from it a name at a time, and a name
 # that is empty, `.` or `..` — an absolute path's first among them — is refused before any host sees it.

@@ -6,18 +6,24 @@
 // the ring is a sizing fault.
 //
 // The guest's hostcalls are frames too: its files (abi/fs.json) and its report
-// are posted as any event is; a call answered before it returns is laid
-// unpublished in the next slot and its place handed to the host's `hostcall`.
-// The host routes each by its command's major.
+// are posted as any event is, an open and a close with ACKREQ, which the host
+// completes on a later turn with a frame flagged RES on the submission ring; a
+// call answered before it returns is laid unpublished in the next slot and its
+// place handed to the host's `hostcall`. The host routes each by its command's
+// major.
 //
 // Both rings keep a ring's rules (ring.hpp R1 to R3), so the door holds
 // whether its host takes turns with the guest or runs beside it; and two more,
 // io_uring's too:
 //
 // - R3, as the door keeps it: memory an event names by its address is the
-//   host's until the host's head has passed the event (`posted`, `consumed`),
+//   host's until the host's head has passed the event (`last_pos`, `is_consumed`),
 //   so the guest writes it again, or frees it, only then. Memory a call names
-//   is the host's only until the call returns.
+//   is the host's only until the call returns, and the bytes an FS_WRITE
+//   names are the host's until its descriptor's FS_CLOSE is completed.
+//
+// The last slot of the completion ring is the stop report's alone, so a guest
+// that stops can say why without taking back a frame it published.
 // - R4. A completion finds its request by its tag, never by where it lies in
 //   either ring or when it came.
 // - R5. A call never nests: the host answers it without calling into the
@@ -28,6 +34,9 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <memory>
+#include <new>
+#include <optional>
 #include <source_location>
 #include <span>
 #include <string_view>
@@ -73,11 +82,89 @@ struct DoorStat {
     bool operator==(const DoorStat &) const = default;
 };
 
-// Where an event was posted in the completion ring: asked of `consumed`.
-struct Posted {
+// Where an event was posted in the completion ring: asked of `is_consumed`.
+struct Pos {
     std::uint32_t pos;
 
-    bool operator==(const Posted &) const = default;
+    bool operator==(const Pos &) const = default;
+};
+
+// Bytes of the heap, given back by their size: what a read fills.
+class Bytes {
+  public:
+    Bytes() noexcept = default;
+    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
+    Bytes &operator=(Bytes &&o) noexcept {
+        if (this != &o) {
+            release();
+            at_ = std::exchange(o.at_, nullptr);
+            cnt_ = std::exchange(o.cnt_, 0);
+        }
+        return *this;
+    }
+    Bytes(const Bytes &) = delete;
+    Bytes &operator=(const Bytes &) = delete;
+    ~Bytes() { release(); }
+
+    // None where the heap has no room.
+    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
+        Bytes b;
+        if (cnt == 0) return b;
+        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
+        if (b.at_ == nullptr) return std::nullopt;
+        b.cnt_ = cnt;
+        return b;
+    }
+
+    std::uint8_t *data() noexcept { return at_; }
+    const std::uint8_t *data() const noexcept { return at_; }
+    std::size_t size() const noexcept { return cnt_; }
+    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
+    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
+
+  private:
+    void release() noexcept {
+        if (at_ != nullptr) ::operator delete(at_, cnt_);
+        at_ = nullptr;
+        cnt_ = 0;
+    }
+
+    std::uint8_t *at_ = nullptr;
+    std::size_t cnt_ = 0;
+};
+
+class Door;
+
+// A read into a buffer the door holds (`Door::read_buf`): the bytes are
+// handed over once the host's head has passed the read. A reading destroyed
+// before then leaves its buffer with the door, which lets it go once the head
+// has passed. The door outlives it.
+class Reading {
+  public:
+    Reading(const Door &door, Pos pos) noexcept : door_(&door), pos_(pos) {}
+    Reading(Reading &&o) noexcept : door_(std::exchange(o.door_, nullptr)), pos_(o.pos_) {}
+    Reading &operator=(Reading &&o) noexcept {
+        if (this != &o) {
+            drop();
+            door_ = std::exchange(o.door_, nullptr);
+            pos_ = o.pos_;
+        }
+        return *this;
+    }
+    Reading(const Reading &) = delete;
+    Reading &operator=(const Reading &) = delete;
+    ~Reading() { drop(); }
+
+    // The bytes, once the host's head has passed the read; none before then,
+    // the reading untouched.
+    std::optional<Bytes> take(const Door &door) noexcept;
+
+  private:
+    // Leaves the buffer to the door.
+    void drop() noexcept;
+
+    const Door *door_;
+    Pos pos_;
 };
 
 // How much of a report's path is kept where the whole would not fit a slot.
@@ -87,36 +174,40 @@ class Door {
   public:
     // `most_events` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 1) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 2) {}
 
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
 
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
-    // A turn begins: what the writes the host has taken named is let go.
+    // A turn begins: what the reads the host has taken named is let go, only
+    // where its reading was destroyed.
     void rise() const noexcept {
-        std::erase_if(writes_, [this](const FileWrite &w) { return consumed(w.posted); });
+        std::erase_if(reads_, [this](const FileRead &r) { return r.dropped && is_consumed(r.pos); });
     }
 
     // The event posted last.
-    Posted posted() const noexcept { return {cq_.tail() - 1}; }
+    Pos last_pos() const noexcept { return {cq_.tail() - 1}; }
 
-    // Whether the host's head has passed the event posted at `posted`: what it
+    // Whether the host's head has passed the event posted at `pos`: what it
     // named is the guest's again (R3).
-    bool consumed(Posted posted) const noexcept { return cq_.consumed(posted.pos); }
+    bool is_consumed(Pos pos) const noexcept { return cq_.is_consumed(pos.pos); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
-        posted(cmd, cq_.push(tag, cmd, flags, result));
+        check_post(cmd, can_post() ? cq_.push(tag, cmd, flags, result) : Errno::eagain);
     }
 
     template <class Write> void post_in_place(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, Write &&write) const noexcept {
-        posted(cmd, cq_.push_in_place(tag, cmd, flags, result, write));
+        check_post(cmd, can_post() ? cq_.push_in_place(tag, cmd, flags, result, write) : Errno::eagain);
     }
 
-    // An event tagged `tag`.
-    template <class Fill> void send_with(std::uint32_t tag, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
-        post_in_place(tag, cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+    // Whether a frame can be laid and the stop report's slot still be free.
+    bool can_post() const noexcept { return cq_.len() + 1 < cq_.cap(); }
+
+    // A frame tagged `tag` and flagged `flags`.
+    template <class Fill> void send_with(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::uint32_t cnt, Fill &&fill) const noexcept {
+        post_in_place(tag, cmd, flags, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
@@ -126,13 +217,14 @@ class Door {
 
     // `event`, tagged 0.
     template <Event E> void send(const E &event) const noexcept {
-        send_with(0, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
+        send_with(0, E::NUMBER, 0, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
     }
 
     // `event`, answered before this returns: laid in the next slot unpublished
     // and handed to the host's `hostcall`, its value or its errno; ENOSPC where
     // no slot is free, EMSGSIZE where it does not fit one.
     template <Event E> Result<std::uint32_t> call(const E &event) const noexcept {
+        if (!can_post()) return make_error(ErrorClass::fault, Errno::enospc);
         Result<std::uint32_t> at = cq_.stage_in_place(0, E::NUMBER, frame::ACKREQ, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(E::FIELDS, [&event](xtp::PacketWriter &b) { event.write(b); });
@@ -143,31 +235,44 @@ class Door {
         return answer_of(xpute::hostcall(*at));
     }
 
-    // Answered by FS_OPENED on a later turn.
+    // Completed on a later turn, handed to `receive`'s `opened`.
     void openat(Fd fd, std::uint32_t root, std::uint32_t flags, std::string_view path) const noexcept {
-        send(abi::fs::FsOpenatEvent{.fd = fd, .root = root, .flags = flags, .path = path});
+        abi::fs::FsOpenatEvent event{.fd = fd, .root = root, .flags = flags, .path = path};
+        send_with(fd, abi::fs::FsOpenatEvent::NUMBER, frame::ACKREQ, abi::fs::FsOpenatEvent::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
     }
 
     // `dst` is filled once the host's head has passed the event, and is kept,
-    // unread, until `consumed` says so: where it was posted.
-    Posted read(Fd fd, std::span<std::uint8_t> dst) const noexcept {
+    // unread, until `is_consumed` says so: where it was posted.
+    Pos read(Fd fd, std::span<std::uint8_t> dst) const noexcept {
         send(abi::fs::FsReadEvent{.fd = fd, .at = cq_.mem().off_of(dst), .len = static_cast<std::uint32_t>(dst.size())});
-        return posted();
+        return last_pos();
     }
 
+    // `buf` is filled once the host's head has passed the event, and is the
+    // door's until then.
+    Reading read_buf(Fd fd, Bytes buf) const {
+        Pos at = read(fd, buf.span());
+        reads_.push_back({at, std::move(buf), false});
+        return Reading(*this, at);
+    }
+
+    // `bytes` are the door's until `fd`'s close is completed.
     void write(Fd fd, std::vector<std::uint8_t> bytes) const noexcept {
         send(abi::fs::FsWriteEvent{.fd = fd, .at = cq_.mem().off_of(std::span<const std::uint8_t>(bytes)), .len = static_cast<std::uint32_t>(bytes.size())});
-        writes_.push_back({posted(), std::move(bytes)});
+        writes_.push_back({fd, std::move(bytes)});
     }
 
-    // A write is committed, an open not yet answered cancelled.
-    void close(Fd fd) const noexcept { send(abi::fs::FsCloseEvent{.fd = fd}); }
+    // Commits a write, and completes an open not yet completed with
+    // ECANCELED; completed on a later turn, handed to `receive`'s `closed`.
+    void close(Fd fd) const noexcept {
+        abi::fs::FsCloseEvent event{.fd = fd};
+        send_with(fd, abi::fs::FsCloseEvent::NUMBER, frame::ACKREQ, abi::fs::FsCloseEvent::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
+    }
 
-    // Drops what the turn posted and posts the report alone, as the guest stops:
-    // its file's path cut to its end, or left out, where the whole of it would
-    // not fit a slot.
+    // Posts the report after what the guest already published, as the guest
+    // stops, in the slot kept for it: its file's path cut to its end, or left
+    // out, where the whole of it would not fit a slot.
     void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) const noexcept {
-        cq_.clear();
         std::string_view path = at.file_name();
         std::string_view tail = path.substr(path.size() > ABORT_PATH_BYTES ? path.size() - ABORT_PATH_BYTES : 0);
         for (std::string_view file : {path, tail, std::string_view{}}) {
@@ -187,24 +292,31 @@ class Door {
                 Result<std::uint32_t> n = w.finish();
                 return n ? std::optional(*n) : std::nullopt;
             });
-            if (e != Errno::emsgsize || file.empty()) return posted(abi::SysAbortEvent::NUMBER, e);
+            if (e != Errno::emsgsize || file.empty()) return check_post(abi::SysAbortEvent::NUMBER, e);
         }
     }
 
     // Applies waiting commands in order while there is room for what one more may
-    // leave; replies to ACKREQ and to failures. Answers how many completions it made.
-    // A command under xpute's majors is xpute's own and applied here: NOP
-    // answers its value, and an open the host completed goes to `opened`;
-    // every command past them goes to `apply`. A drain runs before any phase's
+    // leave; replies to ACKREQ and to failures, and to no completion. Answers how
+    // many completions it made. A command under xpute's majors is xpute's own and
+    // applied here: NOP answers its value; an open the host completed goes to
+    // `opened`, and a close it completed lets go of the bytes its descriptor's
+    // writes named and goes to `closed`; every command past them goes to
+    // `apply`. A drain runs before any phase's
     // budget, so the program records what it is handed and returns.
-    template <class Opened, class Apply> std::uint32_t receive(Opened &&opened, Apply &&apply) const noexcept {
+    template <class Opened, class Closed, class Apply> std::uint32_t receive(Opened &&opened, Closed &&closed, Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
+            if (f->flags & frame::RES) {
+                complete(*f, opened, closed);
+                sq_.advance();
+                continue;
+            }
             Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
-            Outcome a = pkt ? apply_frame(*f, *pkt, opened, apply) : Outcome{.err = pkt.error().errnum};
+            Outcome a = pkt ? apply_frame(*f, *pkt, apply) : Outcome{.err = pkt.error().errnum};
             sq_.advance();
             if (a.err != Errno::ok) {
                 post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
@@ -221,13 +333,24 @@ class Door {
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
-    template <class Opened, class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
-        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return apply(f.cmd, pkt);
-        if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_OPENED)) {
-            Result<abi::fs::FsOpened> o = abi::fs::FsOpened::read(pkt);
-            if (!o) return {.err = o.error().errnum};
-            return opened(*o);
+    // The host's completion of an open or a close, found by its tag, the
+    // descriptor (R4). Any other is dropped.
+    template <class Opened, class Closed> void complete(const Frame &f, Opened &opened, Closed &closed) const noexcept {
+        Fd fd = f.tag;
+        if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_OPENAT)) {
+            std::uint32_t detail = 0;
+            if (Result<std::span<const std::uint8_t>> pkt = sq_.pkt(f); pkt && !pkt->empty()) {
+                if (Result<abi::fs::FsOpenatReply> r = abi::fs::FsOpenatReply::read(*pkt)) detail = r->detail;
+            }
+            (void)opened(FsOpened{.fd = fd, .res = f.result, .detail = detail});
+        } else if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_CLOSE)) {
+            std::erase_if(writes_, [fd](const FileWrite &w) { return w.fd == fd; });
+            closed(FsClosed{.fd = fd, .res = f.result});
         }
+    }
+
+    template <class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Apply &apply) noexcept {
+        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return apply(f.cmd, pkt);
         if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
             if (pkt.empty()) return {};
             Result<abi::Nop> nop = abi::Nop::read(pkt);
@@ -244,7 +367,7 @@ class Door {
         return {.err = Errno::enosys};
     }
 
-    void posted(std::uint32_t cmd, Errno e) const noexcept {
+    void check_post(std::uint32_t cmd, Errno e) const noexcept {
         stat_.cq_peak = std::max(stat_.cq_peak, cq_.len());
         ensure(e == Errno::ok, Errno::enospc, cmd, static_cast<std::uint64_t>(static_cast<std::int64_t>(e)));
     }
@@ -255,12 +378,42 @@ class Door {
     std::uint32_t reserve_;
     // Kept by the const calls that move the rings, as the rings' own words are.
     mutable DoorStat stat_;
-    // Kept until the host's head has passed the `write` that names it.
+    // Kept until the FS_CLOSE of the descriptor its `write` named is completed.
     struct FileWrite {
-        Posted posted;
+        Fd fd;
         std::vector<std::uint8_t> bytes;
     };
     mutable std::vector<FileWrite> writes_;
+    // Kept until its reading takes it, or until the host's head has passed
+    // the `read_buf` that names it once its reading is destroyed.
+    struct FileRead {
+        Pos pos;
+        Bytes buf;
+        bool dropped;
+    };
+    mutable std::vector<FileRead> reads_;
+
+    friend class Reading;
 };
+
+inline std::optional<Bytes> Reading::take(const Door &door) noexcept {
+    if (!door.is_consumed(pos_)) return std::nullopt;
+    std::optional<Bytes> bytes;
+    std::erase_if(door.reads_, [&](Door::FileRead &r) {
+        if (r.pos != pos_) return false;
+        bytes = std::move(r.buf);
+        return true;
+    });
+    door_ = nullptr;
+    return bytes;
+}
+
+inline void Reading::drop() noexcept {
+    if (door_ == nullptr) return;
+    for (Door::FileRead &r : door_->reads_) {
+        if (r.pos == pos_) r.dropped = true;
+    }
+    door_ = nullptr;
+}
 
 } // namespace xpute

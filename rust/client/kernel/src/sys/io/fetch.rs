@@ -9,10 +9,11 @@
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 
+use xpute_guest::ipc::door::Pos;
 use xpute_guest::ipc::fs::Fd;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_guest::sched::edge::{host_turn, notified, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
@@ -39,7 +40,7 @@ pub fn start(credit: Credit, stream: Stream, id: u64) {
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.
 pub fn cancel(key: u64) -> bool {
-    let Some(fd) = file::held_for(|o| matches!(o, Owner::Fetch { key: k, .. } if *k == key)) else {
+    let Some(fd) = file::find(|o| matches!(o, Owner::Fetch { key: k, .. } if *k == key)) else {
         return false;
     };
     file::close(fd);
@@ -72,7 +73,16 @@ enum Receipt {
 struct Arrival {
     key: u64,
     receipt: Receipt,
+    /// The read that fills its body, none where nothing was read: the body
+    /// is the host's until `file::is_consumed` says its head has passed it.
+    read: Option<Pos>,
     net_ms: f64,
+}
+
+impl Arrival {
+    fn is_filled(&self) -> bool {
+        self.read.is_none_or(file::is_consumed)
+    }
 }
 
 /// No more arrive at once than fetches are out, each on its credit.
@@ -126,6 +136,7 @@ fn arrivals() -> &'static mut Notify {
 /// `detail` is only printed by the profiler.
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
+    let mut read = None;
     let got = match opened {
         Opened::Absent => Receipt::Absent,
         failed @ Opened::Failed { .. } => Receipt::Failed(Failure::from(failed)),
@@ -141,14 +152,15 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
         Opened::Bytes(n) => {
             let got = match body::take(stream, n) {
                 Ok(block) => {
-                    // SAFETY: a block just acquired, `n` long, and no one else's;
-                    // the arrival holds it until `fetch_task` waits out the turn.
-                    unsafe {
+                    // SAFETY: a block just acquired, `n` long, and no one
+                    // else's; the arrival holds it, unread, until the host's
+                    // head has passed the read.
+                    read = Some(unsafe {
                         file::read(
                             fd,
                             core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
-                        );
-                    };
+                        )
+                    });
                     Receipt::Read(Some(block))
                 }
                 Err(refused) => Receipt::Refused(refused),
@@ -160,23 +172,23 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     arrival_queue().push(Arrival {
         key,
         receipt: got,
+        read,
         net_ms: now() - at_ms,
     });
     arrivals().notify();
 }
 
-/// Arrivals are handed to their owners on a later turn, once their bytes
-/// are in, yielding where the turn is spent; the owner decodes them
+/// Arrivals are handed to their owners once their bodies are filled, oldest
+/// first, yielding where the turn is spent; the owner decodes them
 /// (domain/view/demand.rs `admit_arrived`).
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
         while !arrival_queue().is_empty() {
-            let received = core::mem::take(arrival_queue());
-            next_turn(world_edge).await;
-            for arrival in received {
-                yield_if_spent(world_edge).await;
-                on_fetch_arrived(arrival);
+            yield_if_spent(world_edge).await;
+            match arrival_queue().iter().position(Arrival::is_filled) {
+                Some(at) => on_fetch_arrived(arrival_queue().remove(at)),
+                None => host_turn(world_edge).await,
             }
         }
     }
@@ -187,6 +199,7 @@ fn on_fetch_arrived(
         key,
         receipt: got,
         net_ms,
+        ..
     }: Arrival,
 ) {
     let block = match got {

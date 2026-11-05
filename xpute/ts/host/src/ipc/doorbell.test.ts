@@ -32,7 +32,7 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     return -1;
   });
   let refused = 0;
-  door.hear(() => {
+  door.listen(() => {
     assert.throws(() => door.call(1, null, (result) => result), InvariantError);
     refused++;
   });
@@ -99,7 +99,7 @@ test("doorbell - a frame the host cannot take stops the guest, and it is told on
       cq.push(0, 2);
       return 0;
     });
-    door.hear(() => {
+    door.listen(() => {
       throw new InvariantError(Errno.EBADF);
     });
     door.onterminated = () => terminated++;

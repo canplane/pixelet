@@ -23,7 +23,7 @@ const text = new TextEncoder();
 class Turn {
   readonly mem = new ArrayBuffer(1 << 16);
   writes = 0;
-  private frames: [number, U8Array][] = [];
+  private _frames: [number, U8Array][] = [];
 
   post(cmd: number, cnt: number, fill: (w: PacketWriter) => void): void {
     const buf = new Uint8Array(1024);
@@ -35,22 +35,24 @@ class Turn {
       cnt,
     );
     fill(w);
-    this.frames.push([cmd, buf.slice(0, w.finish())]);
+    this._frames.push([cmd, buf.slice(0, w.finish())]);
   }
 
   /** The frames handed to the device, as its host hands them. */
   take(server: FsServer): void {
-    const heard = fs_imports(server);
-    for (const [cmd, pkt] of this.frames) {
-      heard(0, cmd, new TreeReader(pkt).read_branch());
+    const listener = fs_imports(server);
+    for (const [cmd, pkt] of this._frames) {
+      listener(0, cmd, new TreeReader(pkt).read_branch());
     }
-    this.frames = [];
+    this._frames = [];
   }
 }
 
 const ERRNO: Record<string, number> = {
   ENOENT: Errno.ENOENT,
   EACCES: Errno.EACCES,
+  ECANCELED: Errno.ECANCELED,
+  EBADF: Errno.EBADF,
 };
 const errno = (name: string): number => ERRNO[name];
 
@@ -59,7 +61,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
   const files = new Map<string, string>();
   const waiting = new Map<string, (bytes: U8Array) => void>();
   const failing = new Map<string, (err: FileError) => void>();
-  const answers: [number, number][] = [];
+  const answers: [number, number, number][] = [];
   const commits = new Map<string, string>();
   const fs: Fs = {
     open: (root, path) => {
@@ -79,7 +81,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
   const server = new FsServer(
     fs,
     turn.mem,
-    (fd, res) => void answers.push([fd, res]),
+    (tag, cmd, res) => void answers.push([cmd, tag, res]),
   );
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -109,7 +111,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
         break;
       case "write": {
         const bytes = text.encode(a[1]);
-        // Each write its own bytes: the host copies them only once the turn is taken.
+        // Each write its own bytes: the host reads them only at the close.
         const at_ = SCRATCH + 4096 + 64 * turn.writes++;
         new Uint8Array(turn.mem, at_, bytes.length).set(bytes);
         turn.post(Command.FS_WRITE, 3, (w) =>
@@ -135,8 +137,10 @@ async function run(g: Golden, scenario: string): Promise<void> {
       }
       case "expect":
         switch (a[0]) {
-          case "opened": {
-            const want: [number, number] = [
+          case "opened":
+          case "closed": {
+            const want: [number, number, number] = [
+              a[0] === "opened" ? Command.FS_OPENAT : Command.FS_CLOSE,
               Number(a[1]),
               /^\d+$/.test(a[2]) ? Number(a[2]) : errno(a[2]),
             ];

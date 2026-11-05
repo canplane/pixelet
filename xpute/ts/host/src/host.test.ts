@@ -90,10 +90,10 @@ function stepped(): SchedulingPolicy & { asked: number; step(): void } {
 
 test("mount - lays the front before any turn, and hands the program only its own commands", () => {
   const g = guest();
-  const heard: number[] = [];
+  const cmds: number[] = [];
   const host = mount(g, {
     ...LAID,
-    program: (_tag, cmd) => void heard.push(cmd),
+    program: (_tag, cmd) => void cmds.push(cmd),
     policy: stepped(),
     submit: () => {},
   });
@@ -103,7 +103,7 @@ test("mount - lays the front before any turn, and hands the program only its own
     [SQ_AT, CQ_AT, STREAM_AT],
   );
   host.call(PROGRAM_EVENT);
-  assert.deepStrictEqual(heard, [PROGRAM_EVENT]);
+  assert.deepStrictEqual(cmds, [PROGRAM_EVENT]);
 });
 
 test("mount - a front already laid is kept as it is, its rings' positions with it", () => {
@@ -129,9 +129,10 @@ test("mount - turns run between resume and pause, and wake asks for one only the
   host.resume();
   assert.deepStrictEqual(policy.asked, 1, "a second resume asks nothing more");
   policy.step();
+  const asked = policy.asked;
   host.pause();
   host.wake();
-  assert.deepStrictEqual(policy.asked, 1);
+  assert.deepStrictEqual(policy.asked, asked, "paused, so wake asks nothing");
 });
 
 test("mount - a guest that stops runs no more turns and is told once", () => {

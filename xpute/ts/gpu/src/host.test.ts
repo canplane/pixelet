@@ -4,8 +4,8 @@
  * Holds the web host to golden/gpu/programs.tsv where it runs, in a browser
  * on its WebGPU: each program's recorded turns, run as they were written,
  * read back the bytes the record holds, as the native host's do
- * (rust/gpu/src/host.test.rs). Turn K's ticket, K + 1, stands at the done
- * word as the guest left it, and the next turn waits for its DONE. And a
+ * (rust/gpu/src/host.test.rs). Turn K's ticket is K + 1, and the next turn
+ * waits for the host to store it at the fence. And a
  * surface's handle holds its slot only while it is the one bound there.
  *
  * ts/gpu/script/browser.ts serves it to Chrome, and the page posts its outcome
@@ -14,7 +14,6 @@
 
 import { Golden } from "@xpute/kit/golden.ts";
 
-import { DONE } from "./api.spec.ts";
 import { GpuHost } from "./host.ts";
 
 function check(ok: boolean, msg: string): asserts ok {
@@ -66,9 +65,8 @@ async function replay(): Promise<void> {
     g.each(`${p}.turn`, (k) => turns.push(k));
     for (const [k, turn] of turns.entries()) {
       bytes.set(g.bytes(turn), 0);
-      words[done / 4] = k + 1;
       host.run(0);
-      while ((words[done / 4] & DONE) === 0) {
+      while (Atomics.load(words, done / 4) !== k + 1) {
         await new Promise((r) => setTimeout(r, 1));
       }
     }

@@ -77,6 +77,27 @@ fn falling_edge_earliest_wait() {
     assert_eq!(edge().fall(), 0.0);
 }
 
+/// A task waiting on its host asks for no turn, and is woken at the next.
+#[test]
+fn host_turn_asks_none() {
+    let _g = serial();
+    clock::set(clock);
+    CLOCK_MS.with(|c| c.set(0.0));
+    EDGE.set(Edge::new());
+    WAKES.with(|w| w.set(0));
+    let w = waker();
+    let mut cx = Context::from_waker(&w);
+
+    edge().rise(4.0);
+    let mut fut = pin!(host_turn(edge));
+    assert!(fut.as_mut().poll(&mut cx).is_pending());
+    assert_eq!(edge().fall(), NO_WAKE);
+
+    edge().rise(4.0);
+    assert_eq!(WAKES.with(|w| w.get()), 1);
+    assert!(fut.as_mut().poll(&mut cx).is_ready());
+}
+
 static NOTIFY: Global<Notify> = Global::new();
 
 fn notify() -> &'static mut Notify {

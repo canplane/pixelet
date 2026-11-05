@@ -44,9 +44,9 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
     };
     let mut s = State {
         last_snapshot: Default::default(),
-        snapshot_posted: None,
-        snapshot_owed: false,
-        asked: false,
+        snapshot_pos: None,
+        snapshot_pending: false,
+        snapshot_due: false,
     };
     assert_eq!(
         shell::apply(

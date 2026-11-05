@@ -1,6 +1,6 @@
 // pxl-kernel/sys/io/file.rs
 
-//! xpute's file table with an owner per descriptor, so an open's answer
+//! xpute's file table with an owner per descriptor, so an open's completion
 //! reaches its owner and one for a closed descriptor reaches no one. A
 //! native test has no host and opens nothing.
 //!
@@ -15,10 +15,11 @@
 
 use core::fmt::{self, Write};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::abi::fs::FsOpened;
+use xpute_guest::ipc::door::Pos;
+pub use xpute_guest::ipc::door::Reading;
 use xpute_guest::ipc::file::Files;
 pub use xpute_guest::ipc::file::Opened;
-use xpute_guest::ipc::fs::Fd;
+use xpute_guest::ipc::fs::{Fd, FsOpened};
 use xpute_kit::status::bug::OrBug;
 
 use crate::machine::MACHINE;
@@ -183,11 +184,8 @@ enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused(Refusal),
-    /// Filled from the turn after `asked`.
-    Reading {
-        bytes: Vec<u8>,
-        asked: u64,
-    },
+    /// The host's until its head has passed the read (`take_read`).
+    Reading(Reading),
     Read(StorageRead),
 }
 
@@ -217,13 +215,8 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
             close(fd);
             ReadState::Read(StorageRead::None)
         }
-        // SAFETY: the bytes move into READS, their heap buffer with them, and
-        // are taken no sooner than the turn after this one.
-        Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
-            Ok(bytes) => ReadState::Reading {
-                bytes,
-                asked: turn(),
-            },
+        Opened::Bytes(n) => match read_whole(fd, n) {
+            Ok(reading) => ReadState::Reading(reading),
             Err(refused) => ReadState::Refused(refused),
         },
         // Only its absence says nothing was kept.
@@ -238,18 +231,13 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The client's answer to `open_storage`, for a test with none: `bytes`, read
-/// whole and taken from the next turn on, or an open that came to no bytes.
+/// The client's answer to `open_storage`, for a test with no host: `bytes`,
+/// read whole with the host's head past the read, or an open that came to no
+/// bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
     match answer {
-        Ok(bytes) => set_read_state(
-            file,
-            ReadState::Reading {
-                bytes: bytes.to_vec(),
-                asked: turn(),
-            },
-        ),
+        Ok(bytes) => set_read_state(file, ReadState::Read(storage_of(file, bytes.to_vec()))),
         Err(opened) => on_storage_opened(file, 0, opened),
     }
 }
@@ -257,32 +245,42 @@ pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
 /// What a storage file held, once it is read whole; None until then.
 pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
     let slot = read_state(file);
-    match slot.as_ref()? {
-        &ReadState::Refused(refused) => {
-            if refused.over() {
-                *slot = None;
-                open_storage(file);
-            }
+    match slot.take()? {
+        ReadState::Refused(refused) if refused.over() => {
+            open_storage(file);
             None
         }
-        ReadState::Reading { asked, .. } if turn() <= *asked => None,
-        _ => match slot.take()? {
-            ReadState::Reading { bytes, .. } => Some(storage_of(file, bytes)),
-            ReadState::Read(file) => Some(file),
-            ReadState::Refused(_) => None,
+        ReadState::Reading(reading) => match take_read(reading) {
+            Ok(bytes) => Some(storage_of(file, bytes)),
+            Err(reading) => {
+                set_read_state(file, ReadState::Reading(reading));
+                None
+            }
         },
+        ReadState::Read(read) => Some(read),
+        refused @ ReadState::Refused(_) => {
+            *slot = Some(refused);
+            None
+        }
     }
 }
 
-/// `dst` is filled from the next turn on.
+/// `dst` is filled once the host's head has passed the read: where it was
+/// posted, for `is_consumed`. An open is answered only where there is a host.
 ///
 /// # Safety
-/// As `Door::read`: `dst` outlives this turn, unmoved and unread.
-pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
-    if let Some(door) = door() {
-        // SAFETY: the caller's.
-        unsafe { door.read(fd, dst) };
-    }
+/// As `Door::read`: `dst` stays allocated, unmoved and unread until
+/// `is_consumed` says the host is done with it.
+pub unsafe fn read(fd: Fd, dst: &mut [u8]) -> Pos {
+    let door = door().or_bug(Errno::ENOTRECOVERABLE);
+    // SAFETY: the caller's.
+    unsafe { door.read(fd, dst) }
+}
+
+/// Whether the host's head has passed the read posted at `pos`, so its
+/// buffer is the kernel's again.
+pub fn is_consumed(pos: Pos) -> bool {
+    door().or_bug(Errno::ENOTRECOVERABLE).is_consumed(pos)
 }
 
 /// An opened file of `bytes`, read whole and closed (`Files::read_whole`):
@@ -290,14 +288,17 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
 /// heap refuses its room the read is the owner's to ask again once
 /// `Refusal::over`; no descriptor is kept meanwhile. An open is answered only
 /// where there is a host.
-///
-/// # Safety
-/// The bytes are filled from the next turn on: as `read`, they are neither
-/// read nor dropped before then.
-pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
+pub fn read_whole(fd: Fd, bytes: u32) -> Result<Reading, Refusal> {
     let door = door().or_bug(Errno::ENOTRECOVERABLE);
-    // SAFETY: the caller's.
-    unsafe { files().read_whole(door, fd, bytes) }.map_err(|_| Refusal::now())
+    files()
+        .read_whole(door, fd, bytes)
+        .map_err(|_| Refusal::now())
+}
+
+/// The bytes `reading` holds, once the host's head has passed its read; the
+/// reading again before then.
+pub fn take_read(reading: Reading) -> Result<Vec<u8>, Reading> {
+    reading.take(door().or_bug(Errno::ENOTRECOVERABLE))
 }
 
 pub fn close(fd: Fd) {
@@ -388,8 +389,8 @@ pub fn id_of_path(path: &str) -> Option<u64> {
     Quadrant::of_key(path).map(Quadrant::id)
 }
 
-pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
-    files().held_for(owner)
+pub fn find(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
+    files().find(owner)
 }
 
 /// The turn `write` last wrote in, and how many files it wrote there.
@@ -430,12 +431,12 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 }
 
 /// An open the host completed, read once (`Opened::of`); xpute's table finds
-/// its owner and closes it where it failed. A file larger than the heap every
-/// device is given cannot be held anywhere: it is the client's answer refused,
-/// closed here, and the owner hears EFBIG.
+/// its owner and lets its handle go where it failed. A file larger than the
+/// heap every device is given cannot be held anywhere: it is the client's
+/// answer refused, closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &FsOpened) {
     let FsOpened { fd, detail, .. } = *completed;
-    let Some(owner) = door().and_then(|door| files().complete_open(door, completed)) else {
+    let Some(owner) = door().and_then(|_| files().complete_open(completed)) else {
         return;
     };
     let opened = match Opened::of(completed) {

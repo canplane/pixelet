@@ -18,7 +18,7 @@
 //! - R3. Memory a frame names by its address is the receiver's from the
 //!   moment the frame is published until the receiver stores HEAD past it.
 //!   The sender writes it again only once it has loaded a HEAD past that
-//!   frame (`consumed`).
+//!   frame (`is_consumed`).
 //!
 //! The frames' and slots' own words are plain memory, ordered by the
 //! position words alone. Where a target has no threads, as WebAssembly
@@ -173,7 +173,7 @@ impl Ring {
     /// Whether the consumer has stored its head past the frame published at
     /// `pos`: what that frame named is the producer's again (R3). The
     /// producer's to ask.
-    pub fn consumed(&self, pos: u32) -> bool {
+    pub fn is_consumed(&self, pos: u32) -> bool {
         let tail = self.tail();
         tail.wrapping_sub(self.head()) < tail.wrapping_sub(pos)
     }
@@ -245,11 +245,6 @@ impl Ring {
     ) -> Result<usize, Errno> {
         let at = self.lay(tag, cmd, flags, 0, write)?;
         Ok(self.at + 4 * at)
-    }
-
-    /// Drops every frame not yet read: the writer's, before its reader reads.
-    pub fn clear(&self) {
-        self.pos(TAIL).store(self.head(), Ordering::Release);
     }
 
     /// The frame at the tail, its packet written by `write`: the word where

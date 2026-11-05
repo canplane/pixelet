@@ -17,7 +17,7 @@ import {
 } from "@xpute/host/abi/handle.ts";
 import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
-import { DONE, NONE, op, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
+import { NONE, op, RESULT, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
 import {
   ADDRESS_MODE,
   BLEND_FACTOR,
@@ -99,12 +99,12 @@ type ExternalImageQueue = GPUQueue & {
 /** A run's words read in order, as the guest wrote them: one cursor over
  * the stream, set at each record's first word, so a record makes nothing. */
 class Words {
-  private readonly f: Float32Array;
+  private readonly _f: Float32Array;
   at: u32 = 0;
   readonly w: U32Array;
   constructor(w: U32Array) {
     this.w = w;
-    this.f = new Float32Array(w.buffer, w.byteOffset, w.length);
+    this._f = new Float32Array(w.buffer, w.byteOffset, w.length);
   }
   u(): u32 {
     return this.w[this.at++];
@@ -113,7 +113,7 @@ class Words {
     return this.u() | 0;
   }
   f32(): number {
-    return this.f[this.at++];
+    return this._f[this.at++];
   }
   flag(): boolean {
     return this.u() !== 0;
@@ -147,51 +147,51 @@ function older(a: u32, b: u32): boolean {
 }
 
 export class GpuHost {
-  private readonly objects: (GpuObject | undefined)[] = [];
+  private readonly _objects: (GpuObject | undefined)[] = [];
   /** Each async pipeline still being made, by its handle's slot: its handle,
    * so a slot let go since, or taken by another, waits for it no more. */
-  private readonly making = new Map<u32, u32>();
+  private readonly _making = new Map<u32, u32>();
   /** What a record's call takes, refilled each time rather than made: WebGPU
    * reads a dictionary only during the call it is given to. Two places, as
    * a texture-to-texture copy names two. */
-  private readonly places: [Place, Place] = [place(), place()];
-  private readonly buffer_info: GPUTexelCopyBufferInfo = {
+  private readonly _places: [Place, Place] = [place(), place()];
+  private readonly _buffer_info: GPUTexelCopyBufferInfo = {
     buffer: undefined as unknown as GPUBuffer,
     offset: 0,
     bytesPerRow: 0,
     rowsPerImage: 0,
   };
-  private readonly layout: GPUTexelCopyBufferLayout = {
+  private readonly _layout: GPUTexelCopyBufferLayout = {
     offset: 0,
     bytesPerRow: 0,
     rowsPerImage: 0,
   };
-  private readonly size: number[] = [0, 0, 0];
+  private readonly _size: number[] = [0, 0, 0];
   /** A pass's: its descriptors, its color attachments (as many as one has
    * had), its depth attachment, its timestamps; a submit's buffers. */
-  private readonly pass: GPURenderPassDescriptor = { colorAttachments: [] };
-  private readonly colors: GPURenderPassColorAttachment[] = [];
-  private readonly depth: GPURenderPassDepthStencilAttachment = {
+  private readonly _pass: GPURenderPassDescriptor = { colorAttachments: [] };
+  private readonly _colors: GPURenderPassColorAttachment[] = [];
+  private readonly _depth: GPURenderPassDepthStencilAttachment = {
     view: undefined as unknown as GPUTextureView,
   };
-  private readonly compute: GPUComputePassDescriptor = {};
-  private readonly stamps: GPURenderPassTimestampWrites = {
+  private readonly _compute: GPUComputePassDescriptor = {};
+  private readonly _stamps: GPURenderPassTimestampWrites = {
     querySet: undefined as unknown as GPUQuerySet,
   };
-  private readonly command_bufs: GPUCommandBuffer[] = [];
+  private readonly _command_bufs: GPUCommandBuffer[] = [];
   /** At the slot the guest names each by, with the guest's handle bound there. */
-  private readonly surfaces = new Map<
+  private readonly _surfaces = new Map<
     u32,
     { handle: u32; context: GPUCanvasContext }
   >();
   /** Each slot's newest handle, kept after it is let go: an older one's bind is refused. */
-  private readonly seen = new Map<u32, u32>();
+  private readonly _seen = new Map<u32, u32>();
   /** Where the guest asked the device's block written, for its status. */
-  private block: { address: u32; words: u32 } | undefined;
+  private _block: { address: u32; words: u32 } | undefined;
 
-  private readonly device: GPUDevice;
-  private readonly memory: () => ArrayBufferLike;
-  private readonly wake: () => void;
+  private readonly _device: GPUDevice;
+  private readonly _memory: () => ArrayBufferLike;
+  private readonly _wake: () => void;
 
   /** `wake` asks the host's loop for a turn: a completion written between
    * turns is read only by a turn. */
@@ -200,13 +200,13 @@ export class GpuHost {
     memory: () => ArrayBufferLike,
     wake: () => void,
   ) {
-    this.device = device;
-    this.memory = memory;
-    this.wake = wake;
+    this._device = device;
+    this._memory = memory;
+    this._wake = wake;
     // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
-      this.on_lost();
-      this.wake();
+      this._on_lost();
+      this._wake();
     });
   }
 
@@ -215,12 +215,12 @@ export class GpuHost {
    * bound the slot since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
-    const seen = this.seen.get(slot);
+    const seen = this._seen.get(slot);
     if (seen !== undefined && older(handle, seen)) return false;
-    this.seen.set(slot, handle);
-    const was = this.surfaces.get(slot);
+    this._seen.set(slot, handle);
+    const was = this._surfaces.get(slot);
     if (was && was.context !== context) was.context.unconfigure();
-    this.surfaces.set(slot, { handle, context });
+    this._surfaces.set(slot, { handle, context });
     return true;
   }
 
@@ -228,49 +228,52 @@ export class GpuHost {
    * slot: an older handle unbinds no newer one. */
   unbind(handle: u32): boolean {
     const slot = handle_slot(handle);
-    const bound = this.surfaces.get(slot);
+    const bound = this._surfaces.get(slot);
     if (handle === 0 || bound?.handle !== handle) return false;
     bound.context.unconfigure();
-    this.surfaces.delete(slot);
+    this._surfaces.delete(slot);
     return true;
   }
 
   /** The device went: every object with it, and the guest told in its block. */
-  private on_lost(): void {
-    this.objects.length = 0;
-    this.making.clear();
-    if (this.block) {
-      new Uint32Array(this.memory(), this.block.address, this.block.words)[
-        this.block.words - 1
-      ] = STATUS.LOST;
+  private _on_lost(): void {
+    this._objects.length = 0;
+    this._making.clear();
+    if (this._block) {
+      const block = new Uint32Array(
+        this._memory(),
+        this._block.address,
+        this._block.words,
+      );
+      Atomics.store(block, this._block.words - 1, STATUS.LOST);
     }
   }
 
   /** Runs the stream at `at` as the turn left it, from past the head it says. */
   run(at: u32): void {
     let r: Words | undefined;
-    each_record(this.memory(), at, (code, w, a) => {
+    each_record(this._memory(), at, (code, w, a) => {
       r ??= new Words(w);
       r.at = a;
-      this.record(code, r);
+      this._record(code, r);
     });
   }
 
-  private put(id: u32, o: GpuObject): void {
-    this.objects[handle_slot(id)] = o;
+  private _put(id: u32, o: GpuObject): void {
+    this._objects[handle_slot(id)] = o;
   }
 
-  private get<T extends GpuObject>(id: u32): T {
-    return this.objects[handle_slot(id)] as T;
+  private _get<T extends GpuObject>(id: u32): T {
+    return this._objects[handle_slot(id)] as T;
   }
 
-  private forget(id: u32): void {
-    this.objects[handle_slot(id)] = undefined;
-    this.making.delete(handle_slot(id));
+  private _forget(id: u32): void {
+    this._objects[handle_slot(id)] = undefined;
+    this._making.delete(handle_slot(id));
   }
 
-  private bytesAt(address: u32, size: u32): Uint8Array {
-    return new Uint8Array(this.memory(), address, size);
+  private _bytesAt(address: u32, size: u32): Uint8Array {
+    return new Uint8Array(this._memory(), address, size);
   }
 
   /** An async pipeline's word and ticket, read past the sync op's words
@@ -278,7 +281,7 @@ export class GpuHost {
    * `id` once `made` gives it, where the slot still waits for `id`, and its
    * word written. One the device refuses is made with the sync call, which
    * reports its error as the sync op's does. */
-  private make_async<P extends GPURenderPipeline | GPUComputePipeline>(
+  private _make_async<P extends GPURenderPipeline | GPUComputePipeline>(
     id: u32,
     r: Words,
     made: Promise<P>,
@@ -287,8 +290,8 @@ export class GpuHost {
   ): void {
     const [word, ticket] = [r.u(), r.u()];
     const slot = handle_slot(id);
-    this.making.set(slot, id);
-    const waits = () => this.making.get(slot) === id;
+    this._making.set(slot, id);
+    const waits = () => this._making.get(slot) === id;
     made
       .catch((e: unknown) => {
         // Named, as the sync call's own error names no pipeline on every device.
@@ -299,24 +302,26 @@ export class GpuHost {
       })
       .then((p) => {
         if (p === undefined || !waits()) return;
-        this.making.delete(slot);
-        this.put(id, p);
-        this.write_done(word, ticket);
+        this._making.delete(slot);
+        this._put(id, p);
+        this._signal(word, ticket);
       });
   }
 
-  /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
-  private write_done(word: u32, ticket: u32): void {
-    const w = new Uint32Array(this.memory(), word, 1);
-    if (w[0] !== ticket) return;
-    w[0] = (ticket | DONE) >>> 0;
-    this.wake();
+  /** The request asked with `ticket` answered at the fence `word`
+   * (RESULT): `result` into the word after it first, where the request has
+   * one, then the ticket, with release; and a turn asked to read it. */
+  private _signal(word: u32, ticket: u32, result?: u32): void {
+    const w = new Uint32Array(this._memory(), word, result === undefined ? 1 : 2);
+    if (result !== undefined) w[1] = result;
+    Atomics.store(w, 0, ticket);
+    this._wake();
   }
 
   /** A texture's place read into `p`: one of `places` where WebGPU reads
    * it only during the call, a fresh one where it is kept past it. */
-  private texturePlace(r: Words, p: Place): Place {
-    p.texture = this.get<GPUTexture>(r.u());
+  private _texturePlace(r: Words, p: Place): Place {
+    p.texture = this._get<GPUTexture>(r.u());
     p.mipLevel = r.u();
     p.origin[0] = r.u();
     p.origin[1] = r.u();
@@ -325,34 +330,34 @@ export class GpuHost {
     return p;
   }
 
-  private bufferLayout(r: Words): GPUTexelCopyBufferInfo {
-    const b = this.buffer_info;
-    b.buffer = this.get<GPUBuffer>(r.u());
+  private _bufferLayout(r: Words): GPUTexelCopyBufferInfo {
+    const b = this._buffer_info;
+    b.buffer = this._get<GPUBuffer>(r.u());
     b.offset = r.u();
     b.bytesPerRow = r.u();
     b.rowsPerImage = r.u();
     return b;
   }
 
-  private extent(r: Words): number[] {
-    const e = this.size;
+  private _extent(r: Words): number[] {
+    const e = this._size;
     e[0] = r.u();
     e[1] = r.u();
     e[2] = r.u();
     return e;
   }
 
-  private timestamps(r: Words): GPURenderPassTimestampWrites | undefined {
+  private _timestamps(r: Words): GPURenderPassTimestampWrites | undefined {
     const set = r.opt();
-    const t = this.stamps;
+    const t = this._stamps;
     t.beginningOfPassWriteIndex = r.opt();
     t.endOfPassWriteIndex = r.opt();
     if (set === undefined) return undefined;
-    t.querySet = this.get<GPUQuerySet>(set);
+    t.querySet = this._get<GPUQuerySet>(set);
     return t;
   }
 
-  private stencilFace(r: Words): GPUStencilFaceState {
+  private _stencilFace(r: Words): GPUStencilFaceState {
     return {
       compare: COMPARE_FUNCTION[r.u()],
       failOp: STENCIL_OPERATION[r.u()],
@@ -361,12 +366,12 @@ export class GpuHost {
     };
   }
 
-  private record(code: u32, r: Words): void {
-    const d = this.device;
+  private _record(code: u32, r: Words): void {
+    const d = this._device;
     switch (code) {
       case op.BUFFER: {
         const id = r.u();
-        this.put(
+        this._put(
           id,
           d.createBuffer({
             size: r.u(),
@@ -390,7 +395,7 @@ export class GpuHost {
           { length: r.u() },
           () => TEXTURE_FORMAT[r.u()],
         );
-        this.put(
+        this._put(
           id,
           d.createTexture({
             size,
@@ -406,7 +411,7 @@ export class GpuHost {
       }
       case op.VIEW: {
         const id = r.u();
-        const texture = this.get<GPUTexture>(r.u());
+        const texture = this._get<GPUTexture>(r.u());
         const [f, dim] = [r.opt(), r.opt()];
         const aspect = TEXTURE_ASPECT[r.u()];
         const [baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount] = [
@@ -416,7 +421,7 @@ export class GpuHost {
           r.opt(),
         ];
         const format = f === undefined ? undefined : TEXTURE_FORMAT[f];
-        this.put(id, {
+        this._put(id, {
           view: texture.createView({
             format,
             dimension:
@@ -444,7 +449,7 @@ export class GpuHost {
           r.f32(),
         ];
         const compare = r.opt();
-        this.put(
+        this._put(
           id,
           d.createSampler({
             addressModeU: ADDRESS_MODE[u],
@@ -464,7 +469,7 @@ export class GpuHost {
       }
       case op.SHADER_MODULE: {
         const id = r.u();
-        this.put(id, d.createShaderModule({ code: r.text() }));
+        this._put(id, d.createShaderModule({ code: r.text() }));
         return;
       }
       case op.BIND_GROUP_LAYOUT: {
@@ -520,16 +525,16 @@ export class GpuHost {
             }
           },
         );
-        this.put(id, d.createBindGroupLayout({ entries }));
+        this._put(id, d.createBindGroupLayout({ entries }));
         return;
       }
       case op.PIPELINE_LAYOUT: {
         const id = r.u();
-        this.put(
+        this._put(
           id,
           d.createPipelineLayout({
             bindGroupLayouts: Array.from({ length: r.u() }, () =>
-              this.get<GPUBindGroupLayout>(r.u()),
+              this._get<GPUBindGroupLayout>(r.u()),
             ),
           }),
         );
@@ -537,7 +542,7 @@ export class GpuHost {
       }
       case op.BIND_GROUP: {
         const id = r.u();
-        const layout = this.get<GPUBindGroupLayout>(r.u());
+        const layout = this._get<GPUBindGroupLayout>(r.u());
         const entries = Array.from({ length: r.u() }, (): GPUBindGroupEntry => {
           const [binding, kind, object, offset, size] = [
             r.u(),
@@ -550,7 +555,7 @@ export class GpuHost {
             return {
               binding,
               resource: {
-                buffer: this.get<GPUBuffer>(object),
+                buffer: this._get<GPUBuffer>(object),
                 offset,
                 size: size === NONE ? undefined : size,
               },
@@ -560,11 +565,11 @@ export class GpuHost {
             binding,
             resource:
               kind === 1
-                ? this.get<GPUSampler>(object)
-                : this.get<View>(object).view,
+                ? this._get<GPUSampler>(object)
+                : this._get<View>(object).view,
           };
         });
-        this.put(id, d.createBindGroup({ layout, entries }));
+        this._put(id, d.createBindGroup({ layout, entries }));
         return;
       }
       case op.RENDER_PIPELINE:
@@ -572,7 +577,7 @@ export class GpuHost {
         const id = r.u();
         const layout = r.opt();
         const vertex: GPUVertexState = {
-          module: this.get<GPUShaderModule>(r.u()),
+          module: this._get<GPUShaderModule>(r.u()),
           entryPoint: r.text(),
           buffers: Array.from({ length: r.u() }, (): GPUVertexBufferLayout => ({
             arrayStride: r.u(),
@@ -603,8 +608,8 @@ export class GpuHost {
           format: TEXTURE_FORMAT[depthFormat ?? 0],
           depthWriteEnabled: r.flag(),
           depthCompare: COMPARE_FUNCTION[r.u()],
-          stencilFront: this.stencilFace(r),
-          stencilBack: this.stencilFace(r),
+          stencilFront: this._stencilFace(r),
+          stencilBack: this._stencilFace(r),
           stencilReadMask: r.u(),
           stencilWriteMask: r.u(),
           depthBias: r.i(),
@@ -657,7 +662,7 @@ export class GpuHost {
               ? vertex.entryPoint
               : `${vertex.entryPoint}+${entryPoint}`,
           layout:
-            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+            layout === undefined ? "auto" : this._get<GPUPipelineLayout>(layout),
           vertex,
           primitive,
           depthStencil: depthFormat === undefined ? undefined : depth,
@@ -666,15 +671,15 @@ export class GpuHost {
             module === undefined
               ? undefined
               : {
-                  module: this.get<GPUShaderModule>(module),
+                  module: this._get<GPUShaderModule>(module),
                   entryPoint,
                   targets,
                 },
         };
         if (code === op.RENDER_PIPELINE) {
-          this.put(id, d.createRenderPipeline(desc));
+          this._put(id, d.createRenderPipeline(desc));
         } else {
-          this.make_async(
+          this._make_async(
             id,
             r,
             d.createRenderPipelineAsync(desc),
@@ -688,19 +693,19 @@ export class GpuHost {
       case op.COMPUTE_PIPELINE_ASYNC: {
         const id = r.u();
         const layout = r.opt();
-        const module = this.get<GPUShaderModule>(r.u());
+        const module = this._get<GPUShaderModule>(r.u());
         const entryPoint = r.text();
         // Named by its entry, which a device's error about it names.
         const desc: GPUComputePipelineDescriptor = {
           label: entryPoint,
           layout:
-            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+            layout === undefined ? "auto" : this._get<GPUPipelineLayout>(layout),
           compute: { module, entryPoint },
         };
         if (code === op.COMPUTE_PIPELINE) {
-          this.put(id, d.createComputePipeline(desc));
+          this._put(id, d.createComputePipeline(desc));
         } else {
-          this.make_async(
+          this._make_async(
             id,
             r,
             d.createComputePipelineAsync(desc),
@@ -712,7 +717,7 @@ export class GpuHost {
       }
       case op.QUERY_SET: {
         const id = r.u();
-        this.put(
+        this._put(
           id,
           d.createQuerySet({ type: QUERY_TYPE[r.u()], count: r.u() }),
         );
@@ -720,18 +725,18 @@ export class GpuHost {
       }
       case op.DESTROY: {
         const id = r.u();
-        const o = this.get<GpuObject>(id);
+        const o = this._get<GpuObject>(id);
         if (
           o instanceof GPUBuffer ||
           o instanceof GPUTexture ||
           o instanceof GPUQuerySet
         )
           o.destroy();
-        this.forget(id);
+        this._forget(id);
         return;
       }
       case op.WRITE_BUFFER: {
-        const buffer = this.get<GPUBuffer>(r.u());
+        const buffer = this._get<GPUBuffer>(r.u());
         const offset = r.u();
         const n = r.u();
         d.queue.writeBuffer(
@@ -745,12 +750,12 @@ export class GpuHost {
         return;
       }
       case op.WRITE_BUFFER_AT: {
-        const buffer = this.get<GPUBuffer>(r.u());
+        const buffer = this._get<GPUBuffer>(r.u());
         const offset = r.u();
         d.queue.writeBuffer(
           buffer,
           offset,
-          this.memory() as ArrayBuffer,
+          this._memory() as ArrayBuffer,
           r.u(),
           r.u(),
         );
@@ -758,11 +763,11 @@ export class GpuHost {
       }
       case op.WRITE_TEXTURE:
       case op.WRITE_TEXTURE_AT: {
-        const place = this.texturePlace(r, this.places[0]);
-        const layout = this.layout;
+        const place = this._texturePlace(r, this._places[0]);
+        const layout = this._layout;
         layout.bytesPerRow = r.u();
         layout.rowsPerImage = r.u();
-        const size = this.extent(r);
+        const size = this._extent(r);
         // The bytes where they lie: in the record, a count then them, or at
         // an address and size in the guest's memory; the layout says where.
         let data: ArrayBuffer;
@@ -772,7 +777,7 @@ export class GpuHost {
           layout.offset = r.w.byteOffset + 4 * r.at;
           r.skip(Math.ceil(n / 4));
         } else {
-          data = this.memory() as ArrayBuffer;
+          data = this._memory() as ArrayBuffer;
           layout.offset = r.u();
           r.skip(1);
         }
@@ -780,76 +785,82 @@ export class GpuHost {
         return;
       }
       case op.COPY_EXTERNAL_IMAGE: {
-        const to = this.texturePlace(r, place());
+        const to = this._texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
-        // Copied now: the guest's bytes are only its until the next turn.
-        const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
+        // Copied now: the bytes are the guest's again once the stream is
+        // handed back (xpute-guest ipc/stream.rs R3).
+        const image = new Blob([this._bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
-        // An image the browser cannot decode is left out, its word not written.
+        // One whose texture went, with the device or by the guest, is
+        // answered nothing; one the browser cannot decode, REFUSED.
         createImageBitmap(image, {
           imageOrientation: flipY ? "flipY" : "from-image",
           premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none",
         }).then(
           (source) => {
-            if (this.objects.includes(to.texture)) {
+            if (this._objects.includes(to.texture)) {
               (d.queue as ExternalImageQueue).copyExternalImageToTexture(
                 { source },
                 to,
                 [source.width, source.height],
               );
-              this.write_done(word, ticket);
+              this._signal(word, ticket, RESULT.OK);
             }
             source.close();
           },
-          () => {},
+          () => {
+            if (this._objects.includes(to.texture)) {
+              this._signal(word, ticket, RESULT.REFUSED);
+            }
+          },
         );
         return;
       }
       case op.ENCODER:
-        this.put(r.u(), d.createCommandEncoder());
+        this._put(r.u(), d.createCommandEncoder());
         return;
       case op.COPY_BUFFER_TO_BUFFER: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         e.copyBufferToBuffer(
-          this.get<GPUBuffer>(r.u()),
+          this._get<GPUBuffer>(r.u()),
           r.u(),
-          this.get<GPUBuffer>(r.u()),
+          this._get<GPUBuffer>(r.u()),
           r.u(),
           r.u(),
         );
         return;
       }
       case op.COPY_BUFFER_TO_TEXTURE: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         e.copyBufferToTexture(
-          this.bufferLayout(r),
-          this.texturePlace(r, this.places[0]),
-          this.extent(r),
+          this._bufferLayout(r),
+          this._texturePlace(r, this._places[0]),
+          this._extent(r),
         );
         return;
       }
       case op.COPY_TEXTURE_TO_BUFFER: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         e.copyTextureToBuffer(
-          this.texturePlace(r, this.places[0]),
-          this.bufferLayout(r),
-          this.extent(r),
+          this._texturePlace(r, this._places[0]),
+          this._bufferLayout(r),
+          this._extent(r),
         );
         return;
       }
       case op.COPY_TEXTURE_TO_TEXTURE: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         e.copyTextureToTexture(
-          this.texturePlace(r, this.places[0]),
-          this.texturePlace(r, this.places[1]),
-          this.extent(r),
+          this._texturePlace(r, this._places[0]),
+          this._texturePlace(r, this._places[1]),
+          this._extent(r),
         );
         return;
       }
       case op.CLEAR_BUFFER: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         const [buffer, offset, size] = [
-          this.get<GPUBuffer>(r.u()),
+          this._get<GPUBuffer>(r.u()),
           r.u(),
           r.opt(),
         ];
@@ -857,34 +868,34 @@ export class GpuHost {
         return;
       }
       case op.RESOLVE_QUERY_SET: {
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         e.resolveQuerySet(
-          this.get<GPUQuerySet>(r.u()),
+          this._get<GPUQuerySet>(r.u()),
           r.u(),
           r.u(),
-          this.get<GPUBuffer>(r.u()),
+          this._get<GPUBuffer>(r.u()),
           r.u(),
         );
         return;
       }
       case op.RENDER_PASS: {
         const id = r.u();
-        const e = this.get<GPUCommandEncoder>(r.u());
+        const e = this._get<GPUCommandEncoder>(r.u());
         const n = r.u();
-        const colors = this.pass
+        const colors = this._pass
           .colorAttachments as GPURenderPassColorAttachment[];
         colors.length = 0;
         for (let k = 0; k < n; k++) {
-          const c = (this.colors[k] ??= {
+          const c = (this._colors[k] ??= {
             view: undefined as unknown as GPUTextureView,
             loadOp: "load",
             storeOp: "store",
             clearValue: [0, 0, 0, 0],
           });
-          c.view = this.get<View>(r.u()).view;
+          c.view = this._get<View>(r.u()).view;
           const resolve = r.opt();
           c.resolveTarget =
-            resolve === undefined ? undefined : this.get<View>(resolve).view;
+            resolve === undefined ? undefined : this._get<View>(resolve).view;
           c.loadOp = LOAD_OP[r.u()];
           c.storeOp = STORE_OP[r.u()];
           const clear = c.clearValue as number[];
@@ -900,11 +911,11 @@ export class GpuHost {
           sstore = r.u(),
           sclear = r.u(),
           sro = r.flag();
-        this.pass.depthStencilAttachment = undefined;
+        this._pass.depthStencilAttachment = undefined;
         if (depth !== undefined) {
           // WebGPU refuses ops on an aspect the format lacks, or one read only.
-          const { view, format } = this.get<View>(depth);
-          const a = this.depth;
+          const { view, format } = this._get<View>(depth);
+          const a = this._depth;
           a.view = view;
           const ops = format.startsWith("depth") && !dro;
           a.depthLoadOp = ops ? LOAD_OP[dload] : undefined;
@@ -916,29 +927,29 @@ export class GpuHost {
           a.stencilStoreOp = stencil ? STORE_OP[sstore] : undefined;
           a.stencilClearValue = stencil ? sclear : undefined;
           a.stencilReadOnly = stencil ? undefined : sro;
-          this.pass.depthStencilAttachment = a;
+          this._pass.depthStencilAttachment = a;
         }
-        this.pass.timestampWrites = this.timestamps(r);
+        this._pass.timestampWrites = this._timestamps(r);
         const occlusion = r.opt();
-        this.pass.occlusionQuerySet =
+        this._pass.occlusionQuerySet =
           occlusion === undefined
             ? undefined
-            : this.get<GPUQuerySet>(occlusion);
-        this.put(id, e.beginRenderPass(this.pass));
+            : this._get<GPUQuerySet>(occlusion);
+        this._put(id, e.beginRenderPass(this._pass));
         return;
       }
       case op.COMPUTE_PASS: {
         const id = r.u();
-        const e = this.get<GPUCommandEncoder>(r.u());
-        this.compute.timestampWrites = this.timestamps(r);
-        this.put(id, e.beginComputePass(this.compute));
+        const e = this._get<GPUCommandEncoder>(r.u());
+        this._compute.timestampWrites = this._timestamps(r);
+        this._put(id, e.beginComputePass(this._compute));
         return;
       }
       case op.SET_PIPELINE: {
-        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(
+        const pass = this._get<GPURenderPassEncoder | GPUComputePassEncoder>(
           r.u(),
         );
-        const pipeline = this.get<GPURenderPipeline | GPUComputePipeline>(
+        const pipeline = this._get<GPURenderPipeline | GPUComputePipeline>(
           r.u(),
         );
         if (pass instanceof GPUComputePassEncoder) {
@@ -947,11 +958,11 @@ export class GpuHost {
         return;
       }
       case op.SET_BIND_GROUP: {
-        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(
+        const pass = this._get<GPURenderPassEncoder | GPUComputePassEncoder>(
           r.u(),
         );
         const index = r.u();
-        const group = this.get<GPUBindGroup>(r.u());
+        const group = this._get<GPUBindGroup>(r.u());
         const offsets = r.u();
         // Hundreds a frame: the offsets are read where they lie, no array made.
         pass.setBindGroup(index, group, r.w, r.at, offsets);
@@ -959,14 +970,14 @@ export class GpuHost {
         return;
       }
       case op.SET_VERTEX_BUFFER: {
-        const pass = this.get<GPURenderPassEncoder>(r.u());
-        pass.setVertexBuffer(r.u(), this.get<GPUBuffer>(r.u()), r.u(), r.opt());
+        const pass = this._get<GPURenderPassEncoder>(r.u());
+        pass.setVertexBuffer(r.u(), this._get<GPUBuffer>(r.u()), r.u(), r.opt());
         return;
       }
       case op.SET_INDEX_BUFFER: {
-        const pass = this.get<GPURenderPassEncoder>(r.u());
+        const pass = this._get<GPURenderPassEncoder>(r.u());
         pass.setIndexBuffer(
-          this.get<GPUBuffer>(r.u()),
+          this._get<GPUBuffer>(r.u()),
           INDEX_FORMAT[r.u()],
           r.u(),
           r.opt(),
@@ -974,7 +985,7 @@ export class GpuHost {
         return;
       }
       case op.SET_VIEWPORT:
-        this.get<GPURenderPassEncoder>(r.u()).setViewport(
+        this._get<GPURenderPassEncoder>(r.u()).setViewport(
           r.f32(),
           r.f32(),
           r.f32(),
@@ -984,7 +995,7 @@ export class GpuHost {
         );
         return;
       case op.SET_SCISSOR:
-        this.get<GPURenderPassEncoder>(r.u()).setScissorRect(
+        this._get<GPURenderPassEncoder>(r.u()).setScissorRect(
           r.u(),
           r.u(),
           r.u(),
@@ -992,7 +1003,7 @@ export class GpuHost {
         );
         return;
       case op.SET_BLEND_CONSTANT:
-        this.get<GPURenderPassEncoder>(r.u()).setBlendConstant([
+        this._get<GPURenderPassEncoder>(r.u()).setBlendConstant([
           r.f32(),
           r.f32(),
           r.f32(),
@@ -1000,13 +1011,13 @@ export class GpuHost {
         ]);
         return;
       case op.SET_STENCIL_REFERENCE:
-        this.get<GPURenderPassEncoder>(r.u()).setStencilReference(r.u());
+        this._get<GPURenderPassEncoder>(r.u()).setStencilReference(r.u());
         return;
       case op.DRAW:
-        this.get<GPURenderPassEncoder>(r.u()).draw(r.u(), r.u(), r.u(), r.u());
+        this._get<GPURenderPassEncoder>(r.u()).draw(r.u(), r.u(), r.u(), r.u());
         return;
       case op.DRAW_INDEXED:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndexed(
+        this._get<GPURenderPassEncoder>(r.u()).drawIndexed(
           r.u(),
           r.u(),
           r.u(),
@@ -1015,43 +1026,43 @@ export class GpuHost {
         );
         return;
       case op.DRAW_INDIRECT:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndirect(
-          this.get<GPUBuffer>(r.u()),
+        this._get<GPURenderPassEncoder>(r.u()).drawIndirect(
+          this._get<GPUBuffer>(r.u()),
           r.u(),
         );
         return;
       case op.DRAW_INDEXED_INDIRECT:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndexedIndirect(
-          this.get<GPUBuffer>(r.u()),
+        this._get<GPURenderPassEncoder>(r.u()).drawIndexedIndirect(
+          this._get<GPUBuffer>(r.u()),
           r.u(),
         );
         return;
       case op.DISPATCH:
-        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroups(
+        this._get<GPUComputePassEncoder>(r.u()).dispatchWorkgroups(
           r.u(),
           r.u(),
           r.u(),
         );
         return;
       case op.DISPATCH_INDIRECT:
-        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroupsIndirect(
-          this.get<GPUBuffer>(r.u()),
+        this._get<GPUComputePassEncoder>(r.u()).dispatchWorkgroupsIndirect(
+          this._get<GPUBuffer>(r.u()),
           r.u(),
         );
         return;
       case op.END: {
         const id = r.u();
-        this.get<GPURenderPassEncoder | GPUComputePassEncoder>(id).end();
-        this.forget(id);
+        this._get<GPURenderPassEncoder | GPUComputePassEncoder>(id).end();
+        this._forget(id);
         return;
       }
       case op.SUBMIT: {
         const n = r.u();
-        const command_bufs = this.command_bufs;
+        const command_bufs = this._command_bufs;
         for (let k = 0; k < n; k++) {
           const id = r.u();
-          command_bufs.push(this.get<GPUCommandEncoder>(id).finish());
-          this.forget(id);
+          command_bufs.push(this._get<GPUCommandEncoder>(id).finish());
+          this._forget(id);
         }
         d.queue.submit(command_bufs);
         command_bufs.length = 0;
@@ -1059,35 +1070,37 @@ export class GpuHost {
       }
       case op.MAP_ASYNC: {
         const id = r.u();
-        const buffer = this.get<GPUBuffer>(id);
+        const buffer = this._get<GPUBuffer>(id);
         const offset = r.u();
         const size = r.u();
         const address = r.u();
         const word = r.u();
         const ticket = r.u();
         // Where the device went since (`lost`) it lands nowhere, as the native
-        // host's pending reads are dropped.
+        // host's pending reads are dropped; one the device refused, REFUSED.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
-            if (this.get<GPUBuffer>(id) !== buffer) return;
-            this.bytesAt(address, size).set(
+            if (this._get<GPUBuffer>(id) !== buffer) return;
+            this._bytesAt(address, size).set(
               new Uint8Array(buffer.getMappedRange(offset, size)),
             );
             buffer.unmap();
-            new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
-            this.wake();
+            this._signal(word, ticket, RESULT.OK);
           },
-          () => {},
+          () => {
+            if (this._get<GPUBuffer>(id) !== buffer) return;
+            this._signal(word, ticket, RESULT.REFUSED);
+          },
         );
         return;
       }
       case op.QUEUE_DONE: {
         const [word, ticket] = [r.u(), r.u()];
-        d.queue.onSubmittedWorkDone().then(() => this.write_done(word, ticket));
+        d.queue.onSubmittedWorkDone().then(() => this._signal(word, ticket));
         return;
       }
       case op.CONFIGURE: {
-        const context = this.surfaces.get(r.u())?.context;
+        const context = this._surfaces.get(r.u())?.context;
         const format = r.u();
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
         context?.configure({
@@ -1102,7 +1115,7 @@ export class GpuHost {
         return;
       }
       case op.RESIZE: {
-        const canvas = this.surfaces.get(r.u())?.context.canvas;
+        const canvas = this._surfaces.get(r.u())?.context.canvas;
         const [width, height] = [r.u(), r.u()];
         if (canvas && (canvas.width !== width || canvas.height !== height)) {
           [canvas.width, canvas.height] = [width, height];
@@ -1111,15 +1124,15 @@ export class GpuHost {
       }
       case op.CURRENT: {
         const id = r.u();
-        const texture = this.surfaces.get(r.u())?.context.getCurrentTexture();
+        const texture = this._surfaces.get(r.u())?.context.getCurrentTexture();
         if (!texture) return;
-        this.put(id, { view: texture.createView(), format: texture.format });
+        this._put(id, { view: texture.createView(), format: texture.format });
         return;
       }
       case op.DEVICE: {
         const [address, words] = [r.u(), r.u()];
-        this.block = { address, words };
-        const out = new Uint32Array(this.memory(), address, words);
+        this._block = { address, words };
+        const out = new Uint32Array(this._memory(), address, words);
         LIMIT_NAME.forEach(
           (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
         );
@@ -1130,11 +1143,11 @@ export class GpuHost {
         });
         // WebGPU resolves timestamps in nanoseconds.
         const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
-        new Float32Array(this.memory(), address, words)[period] = 1;
+        new Float32Array(this._memory(), address, words)[period] = 1;
         out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
           navigator.gpu.getPreferredCanvasFormat(),
         );
-        out[words - 1] = STATUS.READY;
+        Atomics.store(out, words - 1, STATUS.READY);
         return;
       }
       default:

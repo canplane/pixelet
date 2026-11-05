@@ -55,6 +55,7 @@ pub fn boot_info(
         heap_stat,
         stop_hook: None,
         admit: None,
+        publish: None,
     }
 }
 

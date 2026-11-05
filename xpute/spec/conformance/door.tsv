@@ -3,7 +3,8 @@
 # observes; every size is the fixture's (spec/conformance/guest.json), none a production one.
 # 
 # A step is `submit TAG CMD ack|noack [NUMBER]` (TAG the frame's whole tag word, the sender's id; CMD
-# one of the guest's own, guest.json `cmd`, or of xpute's, NOP and FS_OPENED, or a number in hex), `ring QUOTA`, or
+# one of the guest's own, guest.json `cmd`, or of xpute's, NOP, FS_OPENAT and FS_CLOSE, or a number in hex),
+# `complete TAG CMD RESULT [NUMBER]` (a frame flagged RES, as a device completes the guest's request), `ring QUOTA`, or
 # `settle` (a turn of no quota after another while a command is left). Per turn t, and for the whole trace: the completion ring as
 # TAG:CMD=RESULT for a reply and TAG:CMD for an event, an event run tagged 0 up written CMD*n; the stream
 # as its records' ops; and what the turn asked for next (next, later, none). Each place is its own
