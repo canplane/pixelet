@@ -377,17 +377,6 @@ impl Grid {
         self.asks_at + place * ASK_WORDS
     }
 
-    /// The first word of the missed pixels' hit numbered `r`.
-    pub fn hit_at(&self, r: u32) -> u32 {
-        self.hits_at + r * HIT_WORDS
-    }
-
-    /// The first word of the ask at `place` among the missed pixels' hits'
-    /// (`ray::MISS_ARGS_ROOM`).
-    pub fn hit_ask_at(&self, place: u32) -> u32 {
-        self.hit_asks_at + place * ASK_WORDS
-    }
-
     /// The beam rays' words: the lines, the cells' starts, the samples'
     /// hits, the boxes' asks and the missed pixels' hits and theirs, as
     /// many as the grid lays, whatever the pixels drawn.
@@ -409,7 +398,7 @@ pub const NODE_WORDS: u32 = 7;
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::Inheritance::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the node cache is its key's
-/// (`node_cache::entry_of`), so a line holds none. How far it hands on
+/// (pxl-render walk_node.wgsl `bucket_of`), so a line holds none. How far it hands on
 /// (`Grid::hand_dist`) lies apart from its line, a word a corner past the
 /// lines (`Grid::hand_at`), which the cells' windows read alone. The light's
 /// beam rays leave the same, their origin after it (pxl-engine

@@ -5,8 +5,12 @@
 // column's spans lie in a brick's scratch (fill.rs `Scratch`). What the spans' pass
 // (way.wgsl), the tree's (way_tree.wgsl) and the levels' (bound.wgsl, spans.wgsl) read.
 
-/// `i32::MIN`, a column's face where it has none (`way::Spans::NONE`).
-const FACE_NONE: i32 = -2147483647i - 1i;
+/// A column's face where it has none, as its spans' head word holds it (fill.rs
+/// `head_word`): i16's lowest, under every face the word holds. The engine's own is
+/// `i32::MIN` (`way::Spans::NONE`), which Safari writes as a C++ long that no `select`
+/// with an int takes (doc/tip/shaders-phones-take.md); every face here is read off the
+/// word, so the word's none answers as the engine's does.
+const FACE_NONE: i32 = -32768i;
 
 /// Whether the leaf cells `run`, `[lo, hi)`, fill cell `z` of the grid's zoom `cell`
 /// (`way::fills`): more than half its height, half a cell or thinner filling none.
@@ -49,10 +53,9 @@ fn near(k: u32) -> vec3<i32> {
   return select(vec3<i32>(0i), vec3<i32>(s), on);
 }
 
-/// A head word's face cell (fill.rs `Scratch::head`).
+/// A head word's face cell, `FACE_NONE` where it has none (fill.rs `Scratch::head`).
 fn head_face(w: u32) -> i32 {
-  let face = i32(w) >> 16u;
-  return select(face, FACE_NONE, face == -32768i);
+  return i32(w) >> 16u;
 }
 
 /// Where column `c`'s spans begin in the scratch from `mine`, `c` in the brick's cells,

@@ -4,10 +4,10 @@
 //! rays asked about, each the world's one query's answer at the zooms it
 //! was asked at and what was handed it after, so a node is asked once, not
 //! once a ray. A table of slots keyed by the node, its zoom and its index,
-//! a bucket of `BUCKET` slots a key's hash (`entry_of`), as voxel hashing
-//! keeps its blocks (Nießner, Zollhöfer, Izadi, Stamminger 2013): a node is
+//! a bucket of `BUCKET` slots a key's hash (pxl-render walk_node.wgsl
+//! `bucket_of`), as voxel hashing keeps its blocks (Nießner, Zollhöfer, Izadi, Stamminger 2013): a node is
 //! found by its key alone, wherever the walk that asks it starts. Only nodes
-//! under the world's roots are kept (`keeps`). What is drawn is the query's
+//! under the world's roots are kept (pxl-render walk_node.wgsl `keeps`). What is drawn is the query's
 //! answer whichever walk read it, so what is kept decides only how much is
 //! asked again, never what is drawn.
 //!
@@ -26,22 +26,22 @@
 //! it atomic.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
-//! its frame and its pass (`tag`), and the zooms it was asked at — then the
+//! its frame and its pass, and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
 //! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
-//! it from another node of the same slot (`forgets` reads its column).
+//! it from another node of the same slot (pxl-render forget.wgsl reads its column).
 //!
 //! A walk that asked the world keeps the node at the zooms asked in a slot of
-//! its bucket: a free one, the first from the node's at those zooms (`probe`);
-//! where none is, one an earlier frame wrote, a forgotten split among them,
-//! the first from the node's own (`victim`); none where every slot is this
-//! frame's, or where a walk of its pass keeps the node at those zooms or claims
-//! it. Which of the nodes a full bucket's walks ask are kept is the order the
-//! walks run in.
+//! its bucket (pxl-render ask.wgsl `keep`): a free one, the first from the
+//! node's at those zooms; where none is, one an earlier frame wrote, a
+//! forgotten split among them, the first from the node's own; none where every
+//! slot is this frame's, or where a walk of its pass keeps the node at those
+//! zooms or claims it. Which of the nodes a full bucket's walks ask are kept is
+//! the order the walks run in.
 //!
 //! A walk writes a slot only once it has claimed it: its key exchanged for
 //! `CLAIMED` and found to be the key it read. It names its claim at once, the
-//! key the claim of the node at the zooms it keeps (`claim`), so another walk
+//! key the claim of the node at the zooms it keeps, so another walk
 //! that keeps alike keeps none; writes the other words; and writes the key
 //! last. A walk that found another key puts back what it took, a key over a
 //! claim and a named claim over `CLAIMED` (pxl-render ask.wgsl `put_back`), and
@@ -49,17 +49,15 @@
 //! named, after reading it again a few times, keeps none, as it may be its
 //! own node's. A walk reads the keys it keeps by as they stand (pxl-render
 //! ask.wgsl `node_cache_now`). A writing walk that read a slot takes what it read
-//! only where it hashes to the entry's stamp (`stamped`), as another walk may
-//! be taking the slot over as it reads.
+//! only where it hashes to the entry's stamp (pxl-render ask.wgsl
+//! `entry_stamp`), as another walk may be taking the slot over as it reads.
 
 use crate::answer::Kind;
-use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
+use crate::clipmap::{self, EYE_CLIP_LEVELS};
 use crate::count;
-use crate::overwrite;
-use crate::overwrite::NodeSlot;
-use crate::overwrite::{cut_box, BOXES};
+use crate::overwrite::BOXES;
 use crate::world::INHERITANCE_WORDS;
-use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
+use crate::ZOOM_BITS;
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
@@ -70,7 +68,8 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 /// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
 /// pxl-render gpu/generator.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
-/// `WRITTEN_CAP` at most, past which all is forgotten (`reads_written`); and
+/// `WRITTEN_CAP` at most, past which all is forgotten (pxl-render forget.wgsl
+/// `reads_written`); and
 /// whether its walks count what they ask, and what they counted (`COUNT_ON`,
 /// `COUNT_AT`).
 pub const FRAME: u32 = 0;
@@ -102,9 +101,9 @@ pub const fn lane_at(observer: u32, lane: u32) -> u32 {
 
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes
-/// over the bricks that moved (`forgets`), over a box of what is placed or
-/// cut that changed (`over_box`), or handed a slot of a child group of what is
-/// placed that was written (`reads_written`).
+/// over the bricks that moved, over a box of what is placed or cut that
+/// changed, or handed a slot of a child group of what is placed that was
+/// written (pxl-render forget.wgsl `forgets`, `over_box`, `reads_written`).
 pub const FORGETS_NONE: u32 = 0;
 pub const FORGETS_ALL: u32 = 1;
 pub const FORGETS_MOVED: u32 = 2;
@@ -141,42 +140,21 @@ pub const WORDS: u32 = MARKS_AT + MARKS;
 /// No entry: a node no slot keeps.
 pub const NONE: u32 = u32::MAX;
 
-/// The key a walk names its claim of a slot with, to keep the node `node` of
-/// `zoom` at `zooms` (`CLAIMED`): a hash of the three under a far zoom of
-/// every bit, which no key holds (`holds`), and a near zoom under 32, which
-/// `CLAIMED`'s and a forgotten split's are not (`forgotten_split`). Two walks
-/// that keep alike claim alike; two that keep apart in a bucket, about one
-/// time in 2^25.
-pub fn claim(zoom: Zoom, node: [i32; 3], zooms: [Zoom; 2]) -> u32 {
-    pair_hash(zoom, node, zooms) & !CLAIM_MASK | CLAIM_FAR
-}
-
-/// The node `node` of `zoom` at `zooms`, hashed.
-fn pair_hash(zoom: Zoom, node: [i32; 3], [far, near]: [Zoom; 2]) -> u32 {
-    let h = mix(hash(zoom, node), far | near << ZOOM_BITS);
-    h ^ h >> 16
-}
-
-/// The bits that say a key is a named claim (`claim`), and what they read in
+/// The bits that say a key is a named claim, and what they read in
 /// one.
 pub const CLAIM_MASK: u32 = CLAIM_FAR | 1 << 31;
 pub const CLAIM_FAR: u32 = ((1 << ZOOM_BITS) - 1) << TAG_BITS;
 
-/// A key one walk has claimed and not yet named (`claim`): no zoom pair a
-/// key holds reads as it (`holds`), and no tag `FRAMES` leaves reads as a
+/// A key one walk has claimed and not yet named: no zoom pair a
+/// key holds reads as it, and no tag `FRAMES` leaves reads as a
 /// forgotten split's.
 pub const CLAIMED: u32 = u32::MAX;
 const _: () = assert!(
-    crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1 && tag(FRAMES, PASSES - 1) < (1 << TAG_BITS) - 1,
+    crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1 && PASSES * FRAMES + PASSES - 1 < (1 << TAG_BITS) - 1,
     "a claim holds no zoom a walk asks, and is no key"
 );
 
-/// Whether a key is a walk's claim, named or not.
-pub const fn claimed(key: u32) -> bool {
-    key == CLAIMED || key & CLAIM_MASK == CLAIM_FAR
-}
-
-/// The writing passes of a frame's cast, each a tag of its own (`tag`): the
+/// The writing passes of a frame's cast, each a tag of its own: the
 /// beam rays, the samples and the pixels that missed; then the light's beam
 /// rays, samples and slots that missed, which ask the same nodes at the
 /// zooms the eye asks them.
@@ -188,156 +166,23 @@ pub const LIGHT_BEAM_PASS: u32 = 3;
 pub const LIGHT_SAMPLES_PASS: u32 = 4;
 pub const LIGHT_MISSED_PASS: u32 = 5;
 
-/// A key's tag's bits, under its two zooms' (`key`).
+/// A key's tag's bits, under its two zooms'.
 pub const TAG_BITS: u32 = 20;
 const _: () = assert!(
     TAG_BITS + 2 * ZOOM_BITS == 32,
     "a key is the tag and two zooms"
 );
 
-/// The frames one clearing's keys tell apart (`tag`), before the next: as
+/// The frames one clearing's keys tell apart, before the next: as
 /// many as the tag's `TAG_BITS` hold `PASSES` tags of.
 pub const FRAMES: u32 = (1 << TAG_BITS) / PASSES - 1;
-
-/// Entry `i`'s first word.
-pub const fn entry_at(i: u32) -> u32 {
-    ENTRIES_AT + i * ENTRY_WORDS
-}
-
-/// Whether a slot may keep the node `node` of `zoom`: one under the
-/// world's roots, on each axis the root over a Q3's sign, 0 or −1, X as the world
-/// names it about the meridian (`wrap_idx`, negative in the west), and Y and Z
-/// (`cast::Node::index`). Past them, off the world, none is kept.
-pub fn keeps(zoom: Zoom, node: [i32; 3]) -> bool {
-    // A node past `UNIT_ZOOM` is finer than any walk asks; an i32 shifted by
-    // 32 would read as unshifted.
-    if zoom >= 32 {
-        return false;
-    }
-    let (x, y, z) = (node[0] >> zoom, node[1] >> zoom, node[2] >> zoom);
-    (x == 0 || x == -1) && (y == 0 || y == -1) && (z == 0 || z == -1)
-}
 
 /// The slots a bucket holds: a node is kept in any of its bucket's, so two
 /// nodes asked every frame whose hashes meet are both kept.
 pub const BUCKET: u32 = 4;
 
-/// The first entry of the bucket of the node `node` of `zoom`: its key's
-/// hash, masked to the table, the same for every walk that asks it.
-pub fn entry_of(zoom: Zoom, node: [i32; 3]) -> u32 {
-    hash(zoom, node) & (ENTRIES - 1) & !(BUCKET - 1)
-}
-
-/// The slot of its bucket the node `node` of `zoom` kept at `zooms` looks
-/// for a free one from, in turn: by its hash, so the node at other zooms,
-/// and another node, mostly look from another.
-pub fn probe(zoom: Zoom, node: [i32; 3], zooms: [Zoom; 2]) -> u32 {
-    pair_hash(zoom, node, zooms) & (BUCKET - 1)
-}
-
-/// The slot of its bucket a node looks from, in turn, for an earlier frame's
-/// to take over where none is free: by its hash, so two nodes of a bucket
-/// take over different slots.
-pub fn victim(zoom: Zoom, node: [i32; 3]) -> u32 {
-    hash(zoom, node) >> 28 & (BUCKET - 1)
-}
-
-fn hash(zoom: Zoom, node: [i32; 3]) -> u32 {
-    let mut h = zoom.wrapping_mul(0x85EB_CA77);
-    h = mix(h, node[0] as u32);
-    h = mix(h, node[1] as u32);
-    h = mix(h, node[2] as u32);
-    h ^ h >> 16
-}
-
-/// One word of a key folded into a hash.
-fn mix(h: u32, v: u32) -> u32 {
-    (h ^ v).wrapping_mul(0x9E37_79B1).rotate_left(15)
-}
-
-/// The key of an entry the walk tagged `tag` wrote, asked at `[far, near]`.
-pub const fn key(tag: u32, [far, near]: [Zoom; 2]) -> u32 {
-    tag | far << TAG_BITS | near << (TAG_BITS + ZOOM_BITS)
-}
-
-/// A walk's tag: its frame's number and its pass, the beam rays' 0, the
-/// samples' 1 and the pixels that missed 2 (`PASSES`). Never 0, which no
-/// key is.
-pub const fn tag(frame: u32, pass: u32) -> u32 {
-    PASSES * frame + pass
-}
-
-/// The tag a key holds.
-pub const fn tag_of(key: u32) -> u32 {
-    key & ((1 << TAG_BITS) - 1)
-}
-
-/// Whether a key says its entry holds the node asked at the `[far, near]` zooms.
-pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
-    key != 0
-        && (key >> TAG_BITS) & ((1 << ZOOM_BITS) - 1) == far
-        && key >> (TAG_BITS + ZOOM_BITS) == near
-}
-
-/// An entry's kind word (`W_KIND`): its kind, under 30 bits that hash what a walk takes of
-/// it, the zooms of its key, its answer, what was handed it and its node. A walk that reads a
-/// slot while another may write it takes it only where the words it read hash to the stamp
-/// it read (`stamp_holds`): atomics hold no order between words, so a key read again would
-/// not say they are one entry's. Words that hash alike but for one word never do; any others
-/// one time in 2^30. A slot written over with the same words passes, and they are its answer.
-/// A walk that reads where nothing writes masks the kind (`KIND_MASK`).
-pub fn stamped(
-    kind: Kind,
-    key: u32,
-    asset: [u32; 2],
-    handed: [u32; 4],
-    zoom: Zoom,
-    c: [i32; 3],
-) -> u32 {
-    stamp(kind_word(kind), key, asset, handed, zoom, c) | kind_word(kind)
-}
-
-/// Whether the entry's words read are one write's (`stamped`).
-pub fn stamp_holds(
-    word: u32,
-    key: u32,
-    asset: [u32; 2],
-    handed: [u32; 4],
-    zoom: Zoom,
-    c: [i32; 3],
-) -> bool {
-    word & !KIND_MASK == stamp(word & KIND_MASK, key, asset, handed, zoom, c)
-}
-
-fn stamp(kind: u32, key: u32, asset: [u32; 2], handed: [u32; 4], zoom: Zoom, c: [i32; 3]) -> u32 {
-    let mut h = hash(zoom, c);
-    h = mix(h, key >> TAG_BITS);
-    h = mix(h, kind);
-    h = mix(h, asset[0]);
-    h = mix(h, asset[1]);
-    h = mix(h, handed[0]);
-    h = mix(h, handed[1]);
-    h = mix(h, handed[2]);
-    h = mix(h, handed[3]);
-    (h ^ h >> 16) & !KIND_MASK
-}
-
-/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
-/// so the walk that asks the world asks again, and is no empty slot, so the walk over
-/// the node cache alone (pxl-render walk.wgsl) still goes through it, taking none of what
-/// it read of the brick. Every moved brick lies under the root and the chain over it:
-/// zeroed, they stop every ray of the frame.
-pub const fn forgotten_split(key: u32) -> u32 {
-    tag_of(key)
-        | ((1 << ZOOM_BITS) - 1) << TAG_BITS
-        | ((1 << ZOOM_BITS) - 1) << (TAG_BITS + ZOOM_BITS)
-}
-
-/// A kind as a word, under an entry's stamp in its kind word (`stamped`), and back.
-pub const fn kind_word(kind: Kind) -> u32 {
-    kind as u32
-}
-
+/// The bits of an entry's kind word (`W_KIND`) its kind takes, under the
+/// stamp that hashes the entry's words.
 pub const KIND_MASK: u32 = 3;
 const _: () = assert!(
     Kind::Split as u32 <= KIND_MASK
@@ -346,276 +191,7 @@ const _: () = assert!(
     "a kind fits under the stamp"
 );
 
-pub const fn kind_of(w: u32) -> Kind {
-    let w = w & KIND_MASK;
-    if w == Kind::Split as u32 {
-        Kind::Split
-    } else if w == Kind::Cell as u32 {
-        Kind::Cell
-    } else {
-        Kind::Lacks
-    }
-}
-
-/// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
-/// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
-/// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
-/// was handed it, read what is placed in its own columns and its
-/// ancestors' alone, so a node no changed box meets answers as it did.
-pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
-    let n = cut_box(zoom, [x, y, 0]);
-    let world = 1i32 << LEAF_CELL;
-    let (nw, bw) = (n[2] - n[0], b[2] - b[0]);
-    // The box's first column from the node's, the short way round.
-    let from = wrap_idx(LEAF_CELL, b[0].wrapping_sub(n[0]));
-    let across = nw >= world
-        || bw >= world
-        || (from < nw && from + bw > 0)
-        || from + bw > world
-        || from + world < nw;
-    across && b[1] < n[3] && b[3] > n[1]
-}
-
-/// Whether what was handed a node of what is placed, its `Inheritance`'s word
-/// `placed` (`overwrite::NodeSlot`), answers from a slot of the child group written
-/// whose first slot is `first`. A write folds up its own path in place, and
-/// that path's nodes stand over its box (`over_box`); but where it splits a
-/// leaf that covered wider than the box, or takes a child group a join let go of,
-/// a node beside the box holds a slot the write changed, and reads another
-/// node's what is placed after it.
-pub fn reads_written(placed: u32, first: u32) -> bool {
-    let slot = NodeSlot::of_word(placed);
-    slot.holds() && slot.slot().wrapping_sub(first) < overwrite::CHILDREN
-}
-
-/// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
-/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them: a node's
-/// answer reads
-/// the bricks under it alone — its cells' and their clip levels' over them
-/// (`clipmap::step`), a wider node's the block of bricks its own size
-/// (`clipmap::bounded`) — and what was handed it found its cells there, so a
-/// node no moved brick lies under answers as it did. A node a clip level's
-/// whole side wide or wider reads every entry of the clip level.
-pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
-    let mut w = 0;
-    while w < EYE_CLIP_LEVELS {
-        let c = eye_cell(w);
-        // The node's cells at the clip level's zoom, first and last, then its
-        // bricks.
-        let (lo, hi) = if zoom <= c {
-            let s = c - zoom;
-            ([x << s, y << s], [((x + 1) << s) - 1, ((y + 1) << s) - 1])
-        } else {
-            let s = zoom - c;
-            ([x >> s, y >> s], [x >> s, y >> s])
-        };
-        let (q0, q1) = (
-            [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
-            [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
-        );
-        // Its entries' bits against the clip level's moved words at once.
-        let mask = entries_of(q0, q1);
-        let at = (w * LEVEL_WORDS) as usize;
-        let mut k = 0;
-        while k < LEVEL_WORDS as usize {
-            if moved[at + k] & mask[k] != 0 {
-                return true;
-            }
-            k += 1;
-        }
-        w += 1;
-    }
-    false
-}
-
-/// A clip level's moved words (`moved_in`): its entries, a bit each, a row
-/// of `clipmap::ACROSS` bits after another.
-const LEVEL_WORDS: u32 = clipmap::ENTRIES / 32;
-const ROWS_A_WORD: u32 = 32 / ACROSS;
-const _: () = assert!(
-    clipmap::ENTRIES.is_multiple_of(32)
-        && 32u32.is_multiple_of(ACROSS)
-        && ACROSS < 32
-        && clipmap::ENTRIES == ACROSS * ACROSS,
-    "a clip level's entries fill whole words, whole rows a word"
-);
-
-/// The entries of a clip level that hold the bricks from `q0` to `q1`, X then
-/// Y, a bit each as its moved words lay them (`clipmap::entry`, `moved_in`):
-/// every one where they span the level's side either way, as the clip level
-/// wraps.
-fn entries_of(q0: [i32; 2], q1: [i32; 2]) -> [u32; LEVEL_WORDS as usize] {
-    let n = [q1[0] - q0[0] + 1, q1[1] - q0[1] + 1];
-    if n[0] >= ACROSS as i32 || n[1] >= ACROSS as i32 {
-        return [u32::MAX; LEVEL_WORDS as usize];
-    }
-    let m = (ACROSS - 1) as i32;
-    // The row's columns, from the first round the clip level.
-    let (run, s) = ((1u32 << n[0]) - 1, (q0[0] & m) as u32);
-    let row = ((run << s) | (run >> (ACROSS - s))) & (u32::MAX >> (32 - ACROSS));
-    let mut mask = [0u32; LEVEL_WORDS as usize];
-    let mut j = 0;
-    while j < n[1] {
-        let r = ((q0[1] + j) & m) as u32;
-        mask[(r / ROWS_A_WORD) as usize] |= row << (ACROSS * (r % ROWS_A_WORD));
-        j += 1;
-    }
-    mask
-}
-
-/// Whether entry `entry` of the eye's clip level `w` moved, among the moved
-/// entries' words.
-#[cfg(test)]
-const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
-    let k = w * clipmap::ENTRIES + entry;
-    moved[(k / 32) as usize] & 1 << (k % 32) != 0
-}
-
 const _: () = assert!(
     crate::FINEST_ZOOM < 1 << ZOOM_BITS,
     "a key holds a zoom in its bits"
 );
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// What the world names on every side of the meridian is kept; past its roots, none.
-    #[test]
-    fn keeps_about_the_meridian() {
-        assert!(keeps(0, [0, 0, 0]));
-        assert!(keeps(24, [(1 << 23) - 1, -(1 << 23), -1]));
-        assert!(keeps(24, [-(1 << 23), (1 << 23) - 1, 0]));
-        assert!(keeps(1, [-1, -1, -1]));
-        assert!(!keeps(24, [1 << 24, 0, 0]));
-        assert!(!keeps(24, [0, 1 << 24, 0]));
-        assert!(!keeps(24, [-(1 << 24) - 1, 0, 0]));
-        assert!(!keeps(32, [0, 0, 0]));
-    }
-
-    /// A claim is no key, no forgotten split and holds no zooms; it is alike
-    /// for walks that keep alike, and tells apart the node and its zooms.
-    #[test]
-    fn claims_tell_apart() {
-        let (z, n, zooms) = (20, [5, -6, 7], [18, 20]);
-        let c = claim(z, n, zooms);
-        assert!(claimed(c) && claimed(CLAIMED) && c != CLAIMED);
-        assert!(!claimed(0));
-        assert!(!claimed(key(
-            tag(FRAMES, PASSES - 1),
-            [crate::FINEST_ZOOM; 2]
-        )));
-        assert!(!claimed(forgotten_split(key(tag(9, 1), zooms))));
-        assert!(
-            (0..=crate::FINEST_ZOOM).all(|f| (f..=crate::FINEST_ZOOM).all(|m| !holds(c, [f, m])))
-        );
-        assert_eq!(c, claim(z, n, zooms));
-        assert_ne!(c, claim(z, n, [18, 19]));
-        assert_ne!(c, claim(z, [5, -6, 8], zooms));
-        assert_ne!(c, claim(z + 1, n, zooms));
-        assert!(probe(z, n, zooms) < BUCKET && victim(z, n) < BUCKET);
-    }
-
-    /// A node stands over a box where their columns meet, X round the
-    /// world, and not beside it.
-    #[test]
-    fn node_over_boxes() {
-        // A leaf cell's own node, and the node four cells a side holding it.
-        let (leaf, wide) = (LEAF_CELL, LEAF_CELL - 2);
-        let b = [10, 20, 11, 21];
-        assert!(over_box(leaf, [10, 20], b));
-        assert!(!over_box(leaf, [11, 20], b), "beside it across");
-        assert!(!over_box(leaf, [10, 21], b), "beside it down");
-        assert!(over_box(wide, [2, 5], b), "the node holding it");
-        assert!(!over_box(wide, [3, 5], b));
-        // A box over the world's last column and its first, round the seam.
-        let world = 1i32 << LEAF_CELL;
-        let seam = [world - 1, 0, world + 1, 1];
-        assert!(over_box(leaf, [0, 0], seam));
-        assert!(over_box(leaf, [-1, 0], seam));
-        assert!(!over_box(leaf, [1, 0], seam));
-        // The world's root holds every box.
-        assert!(over_box(0, [0, 0], b));
-    }
-
-    /// A node reads a written child group where what was handed it answers from
-    /// one of that child group's slots, and not where it holds nothing.
-    #[test]
-    fn node_reads_child_groups() {
-        use crate::overwrite::{NodeSlot, CHILDREN};
-        let held = |slot: u32| NodeSlot::branch(slot, 9).word();
-        assert!(reads_written(held(40), 40));
-        assert!(reads_written(held(40 + CHILDREN - 1), 40));
-        assert!(!reads_written(held(40 + CHILDREN), 40));
-        assert!(!reads_written(held(39), 40));
-        assert!(!reads_written(NodeSlot::NOTHING.word(), 0));
-    }
-
-    /// West of X = 0, a node's X negative as the world names it: forgotten over the entry
-    /// its brick names, its neighbour past the brick not, one bit of the mask that entry's.
-    #[test]
-    fn node_forgets_west_of_the_meridian() {
-        let w = 2;
-        let cell = eye_cell(w);
-        let side = 1i32 << BRICK_SHIFT;
-        for x in [-1, -37, -(1 << 12) - 3, -(1 << (cell - 1))] {
-            let y = 5 * side + 2;
-            let q = [x >> BRICK_SHIFT, y >> BRICK_SHIFT];
-            let e = clipmap::entry(q);
-            let mut moved = [0u32; MOVED_WORDS as usize];
-            let k = w * clipmap::ENTRIES + e;
-            moved[(k / 32) as usize] |= 1 << (k % 32);
-            assert!(forgets(&moved, cell, [x, y]), "{x} over its brick");
-            let past = wrap_idx(cell, x + side);
-            assert!(!forgets(&moved, cell, [past, y]), "{x}'s neighbour {past}");
-            let mask = entries_of(q, q);
-            assert_eq!(mask[(e / 32) as usize], 1 << (e % 32), "{x}'s entry");
-            assert_eq!(
-                mask.iter().map(|m| m.count_ones()).sum::<u32>(),
-                1,
-                "{x}'s one bit"
-            );
-        }
-    }
-
-    /// A node forgets where a brick it reads moved, entry by entry as its
-    /// clip levels hold them, round each level: the words tested at once
-    /// answer as each entry tested alone.
-    #[test]
-    fn node_forgets_entries() {
-        let by_entry = |moved: &[u32; MOVED_WORDS as usize], q0: [i32; 2], q1: [i32; 2], w: u32| {
-            let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
-            if wide {
-                return (0..clipmap::ENTRIES).any(|k| moved_in(moved, w, k));
-            }
-            (q0[1]..=q1[1])
-                .any(|qy| (q0[0]..=q1[0]).any(|qx| moved_in(moved, w, clipmap::entry([qx, qy]))))
-        };
-        let mut h = 0x9E37_79B9u32;
-        let mut next = || {
-            h ^= h << 13;
-            h ^= h >> 17;
-            h ^= h << 5;
-            h
-        };
-        for _ in 0..4000 {
-            let mut moved = [0u32; MOVED_WORDS as usize];
-            for _ in 0..next() % 48 {
-                let k = next() % (EYE_CLIP_LEVELS * clipmap::ENTRIES);
-                moved[(k / 32) as usize] |= 1 << (k % 32);
-            }
-            let q0 = [(next() % 64) as i32 - 32, (next() % 64) as i32 - 32];
-            let q1 = [q0[0] + (next() % 10) as i32, q0[1] + (next() % 10) as i32];
-            for w in 0..EYE_CLIP_LEVELS {
-                let mask = entries_of(q0, q1);
-                let at = (w * LEVEL_WORDS) as usize;
-                let words = (0..LEVEL_WORDS as usize).any(|k| moved[at + k] & mask[k] != 0);
-                assert_eq!(
-                    words,
-                    by_entry(&moved, q0, q1, w),
-                    "{q0:?} {q1:?} level {w}"
-                );
-            }
-        }
-    }
-}

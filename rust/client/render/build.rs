@@ -1261,11 +1261,12 @@ fn read_consts(text: &str) -> String {
     }
 }
 
-/// The faults the S23 showed, refused in every assembled module, compute and render
-/// (doc/experiment/20261104-taking-rust-gpu-out, its faults seen): no struct holds a
-/// struct, directly or in an array; no function's local is a struct, but a vertex or
-/// fragment entry point's local of the type it returns; no function's local is an
-/// array, or holds one.
+/// The faults the S23 and Safari showed, refused in every assembled module, compute and
+/// render (doc/experiment/20261104-taking-rust-gpu-out, its faults seen;
+/// doc/tip/shaders-phones-take.md): no struct holds a struct, directly or in an array; no
+/// function's local is a struct, but a vertex or fragment entry point's local of the
+/// type it returns; no function's local is an array, or holds one; no `i32::MIN`, written
+/// or folded, which Safari writes as a C++ long that no `select` with an int takes.
 fn held_to_faults(module: &naga::Module, name: &str) {
     use naga::TypeInner::{Array, BindingArray, Struct};
     let is_struct = |mut ty: naga::Handle<naga::Type>| loop {
@@ -1325,6 +1326,18 @@ fn held_to_faults(module: &naga::Module, name: &str) {
                 faults.push(format!("{} holds an array", local()));
             }
         }
+    }
+    let i32_min = |e: &naga::Expression| {
+        matches!(e, naga::Expression::Literal(naga::Literal::I32(i32::MIN)))
+    };
+    let functions = module.functions.iter().map(|(_, f)| f);
+    let held_min = module.global_expressions.iter().filter(|(_, e)| i32_min(e)).count()
+        + functions
+            .chain(module.entry_points.iter().map(|e| &e.function))
+            .map(|f| f.expressions.iter().filter(|(_, e)| i32_min(e)).count())
+            .sum::<usize>();
+    if held_min > 0 {
+        faults.push(format!("i32::MIN held {held_min} times"));
     }
     assert!(faults.is_empty(), "{name}: {}", faults.join("; "));
 }

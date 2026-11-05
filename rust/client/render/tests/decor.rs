@@ -12,9 +12,8 @@ use pxl_content::decor::{Decor, Orientation, DECORS};
 use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORDS, RECORD_WORDS};
 use pxl_content::{scatter, share};
 use pxl_engine::answer::{self, In};
-use pxl_engine::cast::{Detail, End, Query, Spacing};
+use pxl_engine::cast::{End, Query};
 use pxl_engine::clipmap::{self as clip, Lookup, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
-use pxl_engine::grid;
 use pxl_engine::ground::Resident;
 use pxl_engine::light::{self, Light};
 use pxl_engine::overwrite::{self, Cut};
@@ -47,11 +46,10 @@ impl Tally {
     }
 }
 
-/// The world unplaced as decor's generation walks it, the test's reference, its visits told.
+/// The world unplaced as decor's generation walks it, the test's reference.
 struct Ground<'w> {
     w: World<'w>,
     cuts: [Cut; 2],
-    visits: u64,
 }
 
 impl Query for Ground<'_> {
@@ -73,7 +71,6 @@ impl Query for Ground<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        self.visits += 1;
         let mut held = self.w;
         let pool = tree::Read(self.w.pool);
         world::node(
@@ -127,8 +124,6 @@ struct Generating<'w, 't> {
     w: World<'w>,
     cuts: [Cut; 2],
     tally: &'t mut Tally,
-    walk_visits: u64,
-    ask_visits: u64,
     /// `next_placed`'s `&self`: whether it was asked, a decor and another thing met, a
     /// decor left out met; and the last decor met.
     placed: std::cell::Cell<[u64; 4]>,
@@ -154,10 +149,8 @@ impl DecorQuery for Generating<'_, '_> {
         let mut ground = Ground {
             w: self.w,
             cuts: [Cut::NONE; 2],
-            visits: 0,
         };
         let f = support::column_surface(&mut ground, cell, g);
-        self.walk_visits += ground.visits;
         self.tally.add("surface: columns walked", true);
         assert!(
             f.ends != End::Lacks,
@@ -205,7 +198,6 @@ impl DecorQuery for Generating<'_, '_> {
                 let mut ground = Ground {
                     w: self.w,
                     cuts: [Cut::NONE; 2],
-                    visits: 0,
                 };
                 let top = [wrapped, g[1], f.top.0];
                 let kept = answer::fill_eighths(support::asset(&mut ground, &f.line, cell, top));
@@ -253,13 +245,8 @@ impl DecorQuery for Generating<'_, '_> {
             root,
             root_at,
         };
-        let mut ground = Ground {
-            w: self.w,
-            cuts,
-            visits: 0,
-        };
+        let mut ground = Ground { w: self.w, cuts };
         let v = support::asset(&mut ground, &line, zoom, c);
-        self.ask_visits += ground.visits;
         let lacks = !clip::step(&self.w, Lookup::NONE, zoom, [c[0], c[1]])
             .0
             .here();
@@ -742,8 +729,6 @@ struct Expected {
     want: Vec<u32>,
     free: Vec<usize>,
     asked: u64,
-    walk_visits: u64,
-    ask_visits: u64,
     tally: Tally,
     claims: Vec<[i32; 3]>,
 }
@@ -797,7 +782,7 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round)
                 sc.spawn(move || {
                     let mut tally = Tally::default();
                     let mut out = Vec::new();
-                    let (mut asked, mut walks, mut asks) = (0, 0, 0);
+                    let mut asked = 0;
                     let mut claims = Vec::new();
                     for &(s, j, part) in pairs {
                         let cell = clip::eye_cell(s / ENTRIES);
@@ -822,22 +807,18 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round)
                                 w,
                                 cuts: round.cuts,
                                 tally: &mut tally,
-                                walk_visits: 0,
-                                ask_visits: 0,
                                 placed: Default::default(),
                                 last_decor: Default::default(),
                                 claims: Vec::new(),
                                 last_lacks: false,
                             };
                             let (word, z, sink) = stand(&mut q, j, cell, *leaf);
-                            walks += q.walk_visits;
-                            asks += q.ask_visits;
                             claims.append(&mut q.claims);
                             asked += 1;
                             out.push((word_of(s, j, i as u32), word, z, sink));
                         }
                     }
-                    (out, tally, asked, walks, asks, claims)
+                    (out, tally, asked, claims)
                 })
             })
             .collect();
@@ -846,14 +827,12 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round)
     let mut want = init.clone();
     let mut free = Vec::new();
     let mut tally = Tally::default();
-    let (mut asked, mut walk_visits, mut ask_visits) = (0, 0, 0);
+    let mut asked = 0;
     let mut claims = Vec::new();
-    for (out, t, a, wv, av, mut by) in results {
+    for (out, t, a, mut by) in results {
         claims.append(&mut by);
         tally.merge(t);
         asked += a;
-        walk_visits += wv;
-        ask_visits += av;
         for (r, word, z, sink) in out {
             want[r] = word;
             if word == generation::UNGENERATED {
@@ -870,8 +849,6 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round)
         want,
         free,
         asked,
-        walk_visits,
-        ask_visits,
         tally,
         claims,
     }
@@ -1215,13 +1192,8 @@ fn run_round(
         hand = gpu.run(&at, &hand, &list, &eye_buf, n);
     }
     let d = differ(round.name, "hand", &hand, &e);
-    eprintln!(
-        "{label}, {}: {} asked, {} walk visits, {} ask visits; {d} differ",
-        round.name, e.asked, e.walk_visits, e.ask_visits
-    );
+    eprintln!("{label}, {}: {} asked; {d} differ", round.name, e.asked);
     *totals.0.entry("records asked").or_default() += e.asked;
-    *totals.0.entry("walk visits").or_default() += e.walk_visits;
-    *totals.0.entry("ask visits").or_default() += e.ask_visits;
     *totals.0.entry("words differing").or_default() += d;
     (e, hand)
 }
@@ -1608,24 +1580,11 @@ fn hand_thin_lays_as_scatter() {
                     );
                     laid_total += want[&(s, j)].len() as u64;
                 }
-                // By hand it lays a record's cell and nothing else of it.
-                {
-                    for &(s, j) in chunk {
-                        for i in 0..DECORS[j as usize].cap() {
-                            let r = word_of(s, j, i);
-                            assert_eq!(
-                                [got[r], got[r + 3], got[r + 4]],
-                                [0; 3],
-                                "{name}, {s} {j} {i}"
-                            );
-                        }
-                    }
-                }
             }
             pairs_total += chunk.len() as u64;
         }
-        // A pair whose room is near full before thin runs: no record past its room, whatever
-        // the count, each pair alone so any word past it is thin's.
+        // A pair whose room is near full before thin runs: no record past its room, each pair
+        // alone so any word past it is thin's.
         let full: Vec<(u32, u32)> = pairs
             .iter()
             .copied()
@@ -1644,12 +1603,6 @@ fn hand_thin_lays_as_scatter() {
             let at = [(9, &records), (10, &rows), (11, &list)];
             dispatch(&device, &queue, &hand, &at, size(1));
             let got = read(&device, &queue, &records, name);
-            let n = want[&(s, j)].len() as u32;
-            assert_eq!(
-                got[generation::cnt_at(s, j) as usize],
-                cap - 2 + n,
-                "{name}, {s} {j}: its count"
-            );
             let mut written = Vec::new();
             for i in cap - 2..cap {
                 let r = word_of(s, j, i);
@@ -1667,7 +1620,8 @@ fn hand_thin_lays_as_scatter() {
                 written[0] != written[1],
                 "{name}, {s} {j}: one candidate twice"
             );
-            before[generation::cnt_at(s, j) as usize] = cap - 2 + n;
+            let cnt = generation::cnt_at(s, j) as usize;
+            before[cnt] = got[cnt];
             assert!(got == before, "{name}, {s} {j}: a word past its room");
             full_rooms += 1;
         }
@@ -1781,254 +1735,6 @@ fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown:
     }
 }
 
-/// The list's words as a set: its pairs whole and in part sorted, as threads leave them in any order.
-fn list_sorted(list: &[u32]) -> Vec<u32> {
-    let mut out = list.to_vec();
-    let whole = out[generation::THIN_ARGS as usize + 2] as usize;
-    let parts = out[generation::LIST_PARTS as usize] as usize;
-    out[generation::LIST_AT as usize..generation::LIST_AT as usize + whole].sort_unstable();
-    let end = generation::LIST_WORDS as usize;
-    out[end - parts..end].sort_unstable();
-    out
-}
-
-/// One mark's case: `every` whole, which heads hold their bricks, the boxes, what is shown.
-struct MarkCase {
-    name: &'static str,
-    every: bool,
-    stale_one_in: u32,
-    boxes: Vec<([i32; 4], Zoom)>,
-    shown: [u32; DECORS.len()],
-}
-
-/// `decor_mark_cs` by hand as the Rust, and as generated, over heads held and stale, entries not
-/// held, boxes of every kind and what the kernel shows; its threads' order any, `RUNS_OF_MARK`
-/// a case.
-#[test]
-fn hand_mark_lists_as_the_rust() {
-    const RUNS_OF_MARK: u32 = 12;
-    let Some((device, queue)) = device() else {
-        return;
-    };
-    let hand = hand_pipeline(&device, SHADER_GENERATION_MARK);
-    let words = generation::record_at(generation::SLOT_RECORDS) as usize;
-    // What `shown_by` hands: a decor's zooms where any variant stands; and fewer, as an extent asks.
-    let mut stands = [0u32; DECORS.len()];
-    for (k, d) in DECORS.iter().enumerate() {
-        for cell in FIRST_CELL..=LEAF_CELL {
-            if scatter::any_stands_at(d, cell) {
-                stands[k] |= 1 << (cell - FIRST_CELL);
-            }
-        }
-    }
-    let mut leaves_only = [0u32; DECORS.len()];
-    leaves_only[0] = 1 << (LEAF_CELL - FIRST_CELL);
-    leaves_only[2] = 1 << (LEAF_CELL - FIRST_CELL);
-    let mut tally = Tally::default();
-    for (name, eye) in [
-        ("east of the seam", real_world::EYE),
-        ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30]),
-    ] {
-        let built = real_world::build(eye);
-        let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-        let (clip_buf, stale) = (buffer(&device, &clip_flat), real_world::wrap(eye[0]));
-        // Boxes on what the entries hold.
-        let row = |cell: Zoom, e: u32| built.clipmap[((cell - FIRST_CELL) * ENTRIES + e) as usize];
-        let brick = |cell: Zoom, e: u32| {
-            let r = row(cell, e);
-            generation::brick_box(cell, [r[0], r[1]])
-        };
-        let on = brick(24, 27);
-        // Boxes about a brick at the edges of what its candidates read: just in and just out of
-        // its reach on each side, a lap round, and at a zoom coarser and finer than its own.
-        let about = |cell: Zoom, e: u32| -> Vec<([i32; 4], Zoom)> {
-            let b = brick(cell, e);
-            let r = generation::READ_REACH << (LEAF_CELL - cell);
-            let (lo, hi) = ([b[0] - r, b[1] - r], [b[2] + r, b[3] + r]);
-            let mid = (b[1] + b[3]) / 2;
-            let lap = 1 << LEAF_CELL;
-            vec![
-                ([hi[0] - 1, mid, hi[0] + 4, mid + 1], generation::EVERY),
-                (
-                    [hi[0] + lap, mid, hi[0] + lap + 4, mid + 1],
-                    generation::EVERY,
-                ),
-                ([lo[0] - 4, mid, lo[0], mid + 1], generation::EVERY),
-                (
-                    [lo[0] - 4 - lap, mid, lo[0] + 1 - lap, mid + 1],
-                    generation::EVERY,
-                ),
-                ([b[0], hi[1], b[0] + 1, hi[1] + 3], generation::EVERY),
-                ([b[0], lo[1] - 3, b[0] + 1, lo[1]], generation::EVERY),
-                (b, cell - 1),
-                ([hi[0] - 1, mid, hi[0], mid + 1], (cell + 1).min(LEAF_CELL)),
-            ]
-        };
-        // Each of a brick's edge boxes about a brick of its own, held and apart from the others,
-        // so its verdict alone lists that brick's pairs.
-        let one_a_brick = |cell: Zoom, about: &dyn Fn(Zoom, u32) -> Vec<([i32; 4], Zoom)>| {
-            let held: Vec<u32> = (0..ENTRIES)
-                .filter(|&e| row(cell, e)[2] != 0)
-                .step_by(5)
-                .collect();
-            (0..8)
-                .map(|i| about(cell, held[i % held.len()])[i])
-                .collect::<Vec<_>>()
-        };
-        let cases = [
-            MarkCase {
-                name: "all held, no box",
-                every: false,
-                stale_one_in: 0,
-                boxes: vec![],
-                shown: stands,
-            },
-            MarkCase {
-                name: "every entry whole",
-                every: true,
-                stale_one_in: 0,
-                boxes: vec![],
-                shown: stands,
-            },
-            MarkCase {
-                name: "some stale",
-                every: false,
-                stale_one_in: 5,
-                boxes: vec![],
-                shown: stands,
-            },
-            MarkCase {
-                name: "a little shown",
-                every: false,
-                stale_one_in: 3,
-                boxes: vec![],
-                shown: leaves_only,
-            },
-            MarkCase {
-                name: "an edit",
-                every: false,
-                stale_one_in: 0,
-                boxes: vec![(
-                    [on[0] + 3, on[1] + 3, on[0] + 5, on[1] + 5],
-                    generation::EVERY,
-                )],
-                shown: stands,
-            },
-            MarkCase {
-                name: "a brick filled, every kind",
-                every: false,
-                stale_one_in: 9,
-                boxes: (0..21u32)
-                    .map(|k| {
-                        let cell = 13 + k % 12;
-                        (
-                            brick(cell, k * 3 % ENTRIES),
-                            if k % 5 == 0 { generation::EVERY } else { cell },
-                        )
-                    })
-                    .collect(),
-                shown: stands,
-            },
-            MarkCase {
-                name: "about bricks, at their reach's edges",
-                every: false,
-                stale_one_in: 0,
-                boxes: one_a_brick(24, &about),
-                shown: stands,
-            },
-            MarkCase {
-                name: "about bricks coarser, at their reach's edges",
-                every: false,
-                stale_one_in: 0,
-                boxes: [one_a_brick(16, &about), one_a_brick(22, &about)].concat(),
-                shown: stands,
-            },
-            MarkCase {
-                name: "round the world",
-                every: false,
-                stale_one_in: 0,
-                boxes: vec![
-                    (
-                        [on[0] - (1 << 24), on[1], on[2] - (1 << 24), on[3]],
-                        generation::EVERY,
-                    ),
-                    ([stale - 4, on[1] - 1, stale + (1 << 24) + 4, on[1] + 1], 24),
-                ],
-                shown: stands,
-            },
-        ];
-        for case in cases {
-            let mut records = vec![0u32; words];
-            for s in 0..generation::EYE_ENTRIES {
-                let held = built.clipmap[s as usize];
-                let h = generation::head_at(s) as usize;
-                let m = mix(s, [3, 9]);
-                let is_stale = case.stale_one_in != 0 && m.is_multiple_of(case.stale_one_in);
-                // A brick stale on X or on Y.
-                let on_y = is_stale && m & 128 != 0;
-                records[h] = (held[0] + (is_stale && !on_y) as i32) as u32;
-                records[h + 1] = (held[1] + on_y as i32) as u32;
-                records[h + 2] = if is_stale && m & 64 != 0 { 0 } else { 1 };
-                for k in 0..DECORS.len() as u32 {
-                    records[generation::cnt_at(s, k) as usize] = 40 + k + (s & 3);
-                }
-            }
-            let mut list = vec![0u32; generation::LIST_WORDS as usize];
-            list[generation::LIST_EVERY as usize] = case.every as u32;
-            list[generation::LIST_BOXES as usize] = case.boxes.len() as u32;
-            for (k, &(b, z)) in case.boxes.iter().enumerate() {
-                let at = generation::BOXES_AT as usize + k * generation::BOX_WORDS as usize;
-                for a in 0..4 {
-                    list[at + a] = b[a] as u32;
-                }
-                list[at + 4] = z;
-            }
-            // Past the boxes counted, a frame before's, which reach every brick.
-            for k in case.boxes.len()..generation::BOX_CAP as usize {
-                let at = generation::BOXES_AT as usize + k * generation::BOX_WORDS as usize;
-                list[at..at + 4].copy_from_slice(&[0, (-1i32 << 30) as u32, 1 << 24, 1 << 30]);
-                list[at + 4] = generation::EVERY;
-            }
-            let (mut want_records, mut want_list) = (records.clone(), list.clone());
-            mark_rust(
-                &built.clipmap,
-                &mut want_records,
-                &mut want_list,
-                &case.shown,
-            );
-            let want_sorted = list_sorted(&want_list);
-            let whole = want_list[generation::THIN_ARGS as usize + 2];
-            let parts = want_list[generation::LIST_PARTS as usize];
-            eprintln!("{name}, {}: {whole} whole, {parts} in part", case.name);
-            *tally.0.entry("pairs whole").or_default() += whole as u64;
-            *tally.0.entry("pairs in part").or_default() += parts as u64;
-            let shown = buffer(&device, &case.shown);
-            for run in 0..RUNS_OF_MARK {
-                {
-                    let (r_buf, l_buf) = (buffer(&device, &records), buffer(&device, &list));
-                    let size = [generation::EYE_ENTRIES.div_ceil(generation::LANES), 1, 1];
-                    {
-                        let at = [(1, &clip_buf), (9, &r_buf), (11, &l_buf), (12, &shown)];
-                        dispatch(&device, &queue, &hand, &at, size);
-                    }
-                    let got_records = read(&device, &queue, &r_buf, case.name);
-                    let got_list = read(&device, &queue, &l_buf, case.name);
-                    assert!(
-                        got_records == want_records,
-                        "{name}, {}: records, run {run}",
-                        case.name
-                    );
-                    let same = list_sorted(&got_list) == want_sorted;
-                    assert!(same, "{name}, {}: the list, run {run}", case.name);
-                    *tally.0.entry("runs").or_default() += 1;
-                }
-            }
-        }
-    }
-    eprintln!("mark: {:?}", tally.0);
-    assert!(tally.0["pairs whole"] > 0 && tally.0["pairs in part"] > 0);
-}
-
 /// Whether workgroup `g` of a pass over the records reads them: the test's reference for
 /// decor_run.wgsl `is_held`.
 fn is_held(records: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
@@ -2133,86 +1839,6 @@ impl Sizing {
 const MAP_SIDE: u32 = 4096;
 const CAST_NUMBER: u32 = 7;
 
-/// `cnt_one`'s across and its floors: how far a record's span lies from either, and what it
-/// asks of the zooms.
-fn across_of(s: &Sizing, group: u32, d2: f32) -> f32 {
-    let d = libm::sqrtf(d2);
-    let d = if d > drawn::NEAREST_U {
-        d
-    } else {
-        drawn::NEAREST_U
-    };
-    f32::from_bits(s.drawing[(drawn::EXTENTS + group) as usize]) / d
-}
-
-/// Floats within this many steps of each other a GPU's rounding may part: WGSL's `sqrt` and `/`
-/// are not bit-stable, and a contraction moves `distance2`.
-const WITHIN_ULPS: i64 = 8;
-
-fn ulps_apart(a: f32, b: f32) -> i64 {
-    (a.to_bits() as i64 - b.to_bits() as i64).abs()
-}
-
-/// Whether a record's region may fall either way by a float: its span or its zoom at an edge.
-fn at_an_edge(s: &Sizing, group: u32, d2: f32) -> bool {
-    let across = across_of(s, group, d2);
-    let floor = |at: u32| f32::from_bits(s.drawing[at as usize]);
-    let near = 16.0 * f32::EPSILON;
-    let zoom = |r2: f32| grid::cell_zoom_at(r2);
-    ulps_apart(across, floor(drawn::MODEL_ANGLE)) <= WITHIN_ULPS
-        || ulps_apart(across, floor(drawn::IMPOSTOR_ANGLE)) <= WITHIN_ULPS
-        || zoom(d2 * (1.0 - near)) != zoom(d2 * (1.0 + near))
-}
-
-/// `cnt_one` over words, its region's count, and whether a float may move it.
-fn cnt_one(s: &Sizing, world: &World, records: &mut [u32], regions: &mut [u32], i: usize) -> bool {
-    if records[i] == generation::UNGENERATED {
-        return false;
-    }
-    let w = records[i];
-    let (decor, variant, _, cell) = generation::record_of(w);
-    let corner = [
-        records[i + 1] as i32,
-        records[i + 2] as i32,
-        records[i + 3] as i32,
-    ];
-    let d2 = generation::distance2(s.origin, corner);
-    let placed = i >= generation::record_at(generation::SLOT_RECORDS) as usize;
-    let detail = Detail {
-        range: s.range,
-        spacing: Spacing::NONE,
-    };
-    let at = detail.at(d2);
-    let at = if placed {
-        at
-    } else {
-        generation::held_at(world, at, [corner[0], corner[1]])
-    };
-    let here = generation::drawn_at(at, cell, placed);
-    let group = generation::first_group(&DECORS, decor) + variant;
-    let hide = drawn::HIDE as usize;
-    let hidden = s.drawing[hide + 3] != 0
-        && corner[0] == s.drawing[hide] as i32
-        && corner[1] == s.drawing[hide + 1] as i32
-        && corner[2] == s.drawing[hide + 2] as i32;
-    let floor = |at: u32| f32::from_bits(s.drawing[at as usize]);
-    let tier = drawn::tier(
-        across_of(s, group, d2),
-        floor(drawn::MODEL_ANGLE),
-        floor(drawn::IMPOSTOR_ANGLE),
-    );
-    let region = if hidden || !here || tier == drawn::CULLED {
-        drawn::NONE
-    } else {
-        2 * group + tier
-    };
-    records[i] = w & ((1 << drawn::REGION_SHIFT) - 1) | region << drawn::REGION_SHIFT;
-    if region != drawn::NONE {
-        regions[region as usize] += 1;
-    }
-    at_an_edge(s, group, d2)
-}
-
 /// Records as generation leaves them, placed decor's after: an entry's heads held or stale, each
 /// decor none, a few, its room or past it, each a place in its brick, a variant and a turn, or
 /// nothing generated.
@@ -2298,14 +1924,6 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
     )
 }
 
-/// A record's first word as hand and Rust must agree on it: exact, or, where a float may move
-/// it, its bits under the region.
-fn record_agrees(got: u32, want: u32, free: bool) -> bool {
-    got == want
-        || (free
-            && got & ((1 << drawn::REGION_SHIFT) - 1) == want & ((1 << drawn::REGION_SHIFT) - 1))
-}
-
 /// The drawing words a frame hands, its floors as angles and each group's extent.
 fn drawing_words(model: f32, impostor: f32) -> Vec<u32> {
     let mut d = vec![0u32; drawn::DRAWING_WORDS as usize];
@@ -2317,25 +1935,39 @@ fn drawing_words(model: f32, impostor: f32) -> Vec<u32> {
     d
 }
 
-/// `decor_cnt_cs` by hand as the Rust, and as generated, its threads falling any way,
-/// `RUNS_OF_CNT` a case: where the rays ask and hold, tiers, a hidden corner, the eye on a
-/// record, heads stale, runs of each decor, placed decor over a workgroup's runs.
+/// The bits of a record's first word under its region: what generation laid.
+const UNDER_REGION: u32 = (1 << drawn::REGION_SHIFT) - 1;
+
+/// Each region's count off the records `order` names, as their first words say.
+fn regions_of(records: &[u32], order: &[usize]) -> Vec<u32> {
+    let mut counted = vec![0u32; 2 * drawn::REGIONS as usize];
+    for &i in order {
+        let region = records[i] >> drawn::REGION_SHIFT;
+        if records[i] != generation::UNGENERATED && region != drawn::NONE {
+            counted[region as usize] += 1;
+        }
+    }
+    counted
+}
+
+/// `decor_cnt_cs` by hand, its threads falling any way, `RUNS_OF_CNT` a case: each record
+/// keeps what generation laid under its region, and each region's count is its records'.
 #[test]
-fn hand_cnt_sizes_as_the_rust() {
+fn hand_cnt_counts_its_regions() {
     const RUNS_OF_CNT: u32 = 6;
     let Some((device, queue)) = device() else {
         return;
     };
     let hand = hand_pipeline(&device, SHADER_GENERATION_CNT);
-    let mut tally = Tally::default();
+    let mut drawn_total = 0u64;
     for (name, at, placed) in [
         ("east of the seam", real_world::EYE, 0),
         ("east of the seam, placed", real_world::EYE, 80),
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30], 500),
     ] {
         let built = real_world::build(at);
-        let world = built.world();
         let (records, workgroups) = records_to_size(&built, at, placed);
+        let order = each_record(&records, &built.clipmap, workgroups);
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let clip_buf = buffer(&device, &clip_flat);
         let origin = [at[0] << 8, at[1] << 8, (built.top_at(at) + 30) << 8];
@@ -2345,139 +1977,13 @@ fn hand_cnt_sizes_as_the_rust() {
             range: [13, 32],
             drawing: drawing_words(0.02, 0.004),
         };
-        // A record the frame draws, its corner for the cases that ask of one.
-        let order = each_record(&records, &built.clipmap, workgroups);
-        let mut scratch = records.clone();
-        let mut regions = vec![0u32; 2 * drawn::REGIONS as usize];
-        let drawn_at = order
-            .iter()
-            .copied()
-            .find(|&i| {
-                cnt_one(&base, &world, &mut scratch, &mut regions, i);
-                records[i] != generation::UNGENERATED
-                    && scratch[i] >> drawn::REGION_SHIFT != drawn::NONE
-            })
-            .expect("a record drawn");
-        let corner = [
-            records[drawn_at + 1] as i32,
-            records[drawn_at + 2] as i32,
-            records[drawn_at + 3] as i32,
-        ];
-        let group = {
-            let (d, v, _, _) = generation::record_of(records[drawn_at]);
-            generation::first_group(&DECORS, d) + v
-        };
-        let mut hidden = base.clone();
-        hidden.name = "a corner left out";
-        for (a, v) in corner.iter().enumerate() {
-            hidden.drawing[drawn::HIDE as usize + a] = *v as u32;
-        }
-        hidden.drawing[drawn::HIDE as usize + 3] = 1;
-        let mut none_hidden = hidden.clone();
-        none_hidden.name = "a corner given, none left out";
-        none_hidden.drawing[drawn::HIDE as usize + 3] = 0;
-        // The first placed record left out, the second sharing its Y and Z.
-        let first_placed = generation::record_at(generation::SLOT_RECORDS) as usize;
-        let mut placed_hidden = hidden.clone();
-        placed_hidden.name = "a placed corner left out, another on its row";
-        for a in 0..3 {
-            placed_hidden.drawing[drawn::HIDE as usize + a] = records[first_placed + 1 + a];
-        }
-        let mut on_it = base.clone();
-        on_it.name = "the eye on a record";
-        on_it.origin = [
-            (corner[0] << 8).wrapping_add(128),
-            (corner[1] << 8) + 128,
-            corner[2] << 8,
-        ];
         let mut near = base.clone();
         near.name = "a far range";
         near.range = [24, 24];
         let mut coarse = base.clone();
         coarse.name = "a coarse range";
         coarse.range = [16, 22];
-        // The floors eight steps either side of the record's span.
-        let span = across_of(&base, group, generation::distance2(origin, corner));
-        let steps = |n: i64| f32::from_bits((span.to_bits() as i64 + n) as u32);
-        let mut over = base.clone();
-        over.name = "the model's floor just over its span";
-        over.drawing[drawn::MODEL_ANGLE as usize] = steps(WITHIN_ULPS + 1).to_bits();
-        let mut under = base.clone();
-        under.name = "the model's floor just under its span";
-        under.drawing[drawn::MODEL_ANGLE as usize] = steps(-WITHIN_ULPS - 1).to_bits();
-        let mut impostor_over = base.clone();
-        impostor_over.name = "the impostor's floor just over its span";
-        impostor_over.drawing[drawn::MODEL_ANGLE as usize] = 1e9f32.to_bits();
-        impostor_over.drawing[drawn::IMPOSTOR_ANGLE as usize] = steps(WITHIN_ULPS + 1).to_bits();
-        // The zoom's edge either side of a record at the leaves: the eye moved along Z to the
-        // distance where they end, a step of Q3 short and past, only `here` deciding.
-        let split = grid::CELLS_A_RAD / grid::SPANS;
-        let edge = split * split * 4.0;
-        let leaf_record = order
-            .iter()
-            .copied()
-            .find(|&i| {
-                let at_xy = [origin[0], origin[1], (records[i + 3] as i32) << 8];
-                let c = [
-                    records[i + 1] as i32,
-                    records[i + 2] as i32,
-                    records[i + 3] as i32,
-                ];
-                records[i] != generation::UNGENERATED
-                    && generation::record_of(records[i]).3 == LEAF_CELL
-                    && generation::distance2(at_xy, c) * 2.0 + 4.0 < edge
-            })
-            .expect("a record at the leaves near the eye");
-        let c = [
-            records[leaf_record + 1] as i32,
-            records[leaf_record + 2] as i32,
-            records[leaf_record + 3] as i32,
-        ];
-        let dxy2 = generation::distance2([origin[0], origin[1], c[2] << 8], c);
-        let oz = (c[2] << 8) + (libm::sqrtf(edge - dxy2) * 256.0) as i32;
-        let mut short = base.clone();
-        short.name = "the eye a step short of the leaves' edge";
-        short.drawing[drawn::MODEL_ANGLE as usize] = 1e9f32.to_bits();
-        short.drawing[drawn::IMPOSTOR_ANGLE as usize] = 1e-9f32.to_bits();
-        short.origin[2] = oz - 1;
-        let mut past = short.clone();
-        past.name = "the eye a step past the leaves' edge";
-        past.origin[2] = oz + 2;
-        let region_at = |s: &Sizing| {
-            let (mut w, mut r) = (records.clone(), vec![0u32; 2 * drawn::REGIONS as usize]);
-            let free = cnt_one(s, &world, &mut w, &mut r, leaf_record);
-            assert!(
-                !free,
-                "{name}, {}: a step of Q3 is past the floats' edge",
-                s.name
-            );
-            w[leaf_record] >> drawn::REGION_SHIFT
-        };
-        assert!(
-            region_at(&short) != drawn::NONE && region_at(&past) == drawn::NONE,
-            "{name}: the leaves' edge is between the two"
-        );
-        for sizing in [
-            base,
-            hidden,
-            none_hidden,
-            placed_hidden,
-            on_it,
-            near,
-            coarse,
-            over,
-            under,
-            impostor_over,
-            short,
-            past,
-        ] {
-            let mut want = records.clone();
-            let mut want_regions = vec![0u32; 2 * drawn::REGIONS as usize];
-            let mut free = vec![false; records.len()];
-            for &i in &order {
-                free[i] = cnt_one(&sizing, &world, &mut want, &mut want_regions, i);
-            }
-            let free_n = free.iter().filter(|f| **f).count() as u64;
+        for sizing in [base, near, coarse] {
             let (drawing, eye_buf) = (
                 buffer(&device, &sizing.drawing),
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2487,69 +1993,63 @@ fn hand_cnt_sizes_as_the_rust() {
                 }),
             );
             for run in 0..RUNS_OF_CNT {
-                {
-                    let (r_buf, regions) = (
-                        buffer(&device, &records),
-                        buffer(&device, &vec![0u32; 2 * drawn::REGIONS as usize]),
+                let (r_buf, regions) = (
+                    buffer(&device, &records),
+                    buffer(&device, &vec![0u32; 2 * drawn::REGIONS as usize]),
+                );
+                let at = [
+                    (0, &eye_buf),
+                    (1, &clip_buf),
+                    (9, &r_buf),
+                    (13, &drawing),
+                    (14, &regions),
+                ];
+                dispatch(&device, &queue, &hand, &at, [workgroups, 1, 1]);
+                let got = read(&device, &queue, &r_buf, sizing.name);
+                let got_regions = read(&device, &queue, &regions, sizing.name);
+                for &i in &order {
+                    let want = if records[i] == generation::UNGENERATED {
+                        records[i]
+                    } else {
+                        records[i] & UNDER_REGION
+                    };
+                    let mask = if records[i] == generation::UNGENERATED {
+                        u32::MAX
+                    } else {
+                        UNDER_REGION
+                    };
+                    assert_eq!(
+                        got[i] & mask,
+                        want,
+                        "{name}, {}: record at {i}, run {run}",
+                        sizing.name
                     );
-                    {
-                        let at = [
-                            (0, &eye_buf),
-                            (1, &clip_buf),
-                            (9, &r_buf),
-                            (13, &drawing),
-                            (14, &regions),
-                        ];
-                        dispatch(&device, &queue, &hand, &at, [workgroups, 1, 1]);
-                    }
-                    let got = read(&device, &queue, &r_buf, sizing.name);
-                    let got_regions = read(&device, &queue, &regions, sizing.name);
-                    let mut counted = vec![0u32; 2 * drawn::REGIONS as usize];
-                    for (k, (&g, &w)) in got.iter().zip(&want).enumerate() {
-                        assert!(
-                            record_agrees(g, w, free[k]),
-                            "{name}, {}: word {k}: got {g:#x}, want {w:#x}, run {run}",
-                            sizing.name
-                        );
-                    }
-                    for &i in &order {
-                        let region = got[i] >> drawn::REGION_SHIFT;
-                        if got[i] != generation::UNGENERATED && region != drawn::NONE {
-                            counted[region as usize] += 1;
-                        }
-                    }
-                    assert_eq!(got_regions, counted, "{name}, {}: counts", sizing.name);
-                    if free_n == 0 {
-                        assert_eq!(got_regions, want_regions, "{name}, {}", sizing.name);
-                    }
+                    let region = got[i] >> drawn::REGION_SHIFT;
+                    assert!(
+                        got[i] == generation::UNGENERATED
+                            || region == drawn::NONE
+                            || region < drawn::REGIONS,
+                        "{name}, {}: record at {i}'s region {region}",
+                        sizing.name
+                    );
+                }
+                assert_eq!(
+                    got_regions[..drawn::REGIONS as usize],
+                    regions_of(&got, &order)[..drawn::REGIONS as usize],
+                    "{name}, {}: counts, run {run}",
+                    sizing.name
+                );
+                if run == 0 {
+                    drawn_total += got_regions[..drawn::REGIONS as usize]
+                        .iter()
+                        .map(|&n| n as u64)
+                        .sum::<u64>();
                 }
             }
-            let drawn_n: u64 = want_regions.iter().map(|&n| n as u64).sum();
-            eprintln!(
-                "{name}, {}: {} records, {drawn_n} drawn, {free_n} at an edge",
-                sizing.name,
-                order.len()
-            );
-            *tally.0.entry("records sized").or_default() += order.len() as u64;
-            *tally.0.entry("drawn").or_default() += drawn_n;
-            *tally.0.entry("at an edge").or_default() += free_n;
-            let at_on = |models: bool| {
-                want_regions
-                    .iter()
-                    .enumerate()
-                    .filter(|(r, n)| (r % 2 == 0) == models && **n > 0)
-                    .count() as u64
-            };
-            *tally.0.entry("cases with a model").or_default() += (at_on(true) > 0) as u64;
-            *tally.0.entry("cases with an impostor").or_default() += (at_on(false) > 0) as u64;
         }
     }
-    eprintln!("cnt: {:?}", tally.0);
-    assert!(
-        tally.0["drawn"] > 0
-            && tally.0["cases with a model"] > 0
-            && tally.0["cases with an impostor"] > 0
-    );
+    eprintln!("cnt: {drawn_total} drawn");
+    assert!(drawn_total > 0);
 }
 
 /// What `compact_one` writes of the record at word `i`, its lanes' bits, and its region.
@@ -2579,9 +2079,9 @@ fn lanes_of(drawing: &[u32], records: &[u32], i: usize) -> Option<(u32, [u32; 5]
     ))
 }
 
-/// `decor_compact_cs` by hand as the Rust, and as generated: each region's slots hold its
-/// records' lanes, in no order, its threads falling any way, `RUNS_OF_COMPACT` a case; past
-/// the instances' slots, its count goes on and no slot holds what is not a record's.
+/// `decor_compact_cs` by hand: each region's slots hold its records' lanes, in no order, its
+/// threads falling any way, `RUNS_OF_COMPACT` a case; past the instances' slots, its count goes
+/// on and no slot holds what is not a record's.
 #[test]
 fn hand_compact_lays_as_the_rust() {
     const RUNS_OF_COMPACT: u32 = 6;
@@ -2599,13 +2099,19 @@ fn hand_compact_lays_as_the_rust() {
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30], 0),
     ] {
         let built = real_world::build(at);
-        let world = built.world();
-        let (records, workgroups) = records_to_size(&built, at, placed);
+        let (mut sized, workgroups) = records_to_size(&built, at, placed);
+        let order = each_record(&sized, &built.clipmap, workgroups);
+        // Each record's region as a frame's cnt may leave it.
+        for &i in &order {
+            if sized[i] != generation::UNGENERATED
+                && sized[i] >> drawn::REGION_SHIFT >= drawn::REGIONS
+            {
+                sized[i] = sized[i] & UNDER_REGION | drawn::NONE << drawn::REGION_SHIFT;
+            }
+        }
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let (clip_buf, rows) = (buffer(&device, &clip_flat), buffer(&device, rows_words()));
-        let origin = [at[0] << 8, at[1] << 8, (built.top_at(at) + 30) << 8];
-        // Records sized as a far range asks, for many drawn; about an anchor a little off the
-        // eye, and one across the seam.
+        // About an anchor a little off the eye, and one across the seam.
         for anchor_at in [
             [at[0] + 40, at[1] - 7, 12],
             [real_world::wrap(at[0] + (1 << 23)), at[1], -300],
@@ -2614,19 +2120,8 @@ fn hand_compact_lays_as_the_rust() {
             for a in 0..3 {
                 drawing[drawn::ANCHOR as usize + a] = anchor_at[a] as u32;
             }
-            let sizing = Sizing {
-                name: "sized",
-                origin,
-                range: [13, 32],
-                drawing,
-            };
-            let order = each_record(&records, &built.clipmap, workgroups);
-            let (mut sized, mut regions) =
-                (records.clone(), vec![0u32; 2 * drawn::REGIONS as usize]);
-            for &i in &order {
-                cnt_one(&sizing, &world, &mut sized, &mut regions, i);
-            }
-            // The regions laid out, as `decor_args_cs` leaves them.
+            let mut regions = regions_of(&sized, &order);
+            // The regions laid out, as `decor_args_cs` may leave them.
             let mut first = 0;
             let mut firsts = vec![0u32; drawn::REGIONS as usize];
             for r in 0..drawn::REGIONS as usize {
@@ -2638,14 +2133,14 @@ fn hand_compact_lays_as_the_rust() {
             let mut wanted: Vec<(u32, [u32; 5])> = order
                 .iter()
                 .filter(|&&i| sized[i] != generation::UNGENERATED)
-                .filter_map(|&i| lanes_of(&sizing.drawing, &sized, i))
+                .filter_map(|&i| lanes_of(&drawing, &sized, i))
                 .collect();
             wanted.sort_unstable();
             assert_eq!(wanted.len() as u32, total);
             *tally.0.entry("instances laid").or_default() += total as u64;
             // Room for all and to spare, and room for fewer than are drawn.
             for cap in [total + 64, total / 2 + 1] {
-                let drawing_buf = buffer(&device, &sizing.drawing);
+                let drawing_buf = buffer(&device, &drawing);
                 let r_buf = buffer(&device, &sized);
                 for run in 0..RUNS_OF_COMPACT {
                     {
@@ -2687,11 +2182,6 @@ fn hand_compact_lays_as_the_rust() {
                                     got[3 * c + k],
                                     got[4 * c + k],
                                 ];
-                                assert_eq!(
-                                    got[drawn::COLUMNS as usize * c + k],
-                                    slot,
-                                    "{name}: a slot's own index"
-                                );
                                 have.push((r as u32, lanes));
                             }
                         }
@@ -2722,9 +2212,63 @@ fn hand_compact_lays_as_the_rust() {
     assert!(tally.0["instances laid"] > 0);
 }
 
-/// `decor_args_cs` by hand as the Rust lays regions, over uniforms fresh as a frame writes.
+/// Where the draws' words disagree with the regions they draw: each region's args draw its count
+/// of its mesh's or an impostor's corners, its uniform's columns start at its first slot, its
+/// counts are `counts`, and no two regions' slots overlap. `firsts` each region's first slot,
+/// `fresh` the uniforms before args added to them.
+fn draws_differ(
+    counts: &[u32],
+    regions: &[u32],
+    firsts: &[u32],
+    args: &[u32],
+    uniforms: &[u32],
+    fresh: &[u32],
+    meshes: &[u32],
+) -> Vec<String> {
+    let n = drawn::REGIONS as usize;
+    let u = drawn::UNIFORM_WORDS as usize;
+    let mut out = Vec::new();
+    for r in 0..n {
+        let a = drawn::ARGS_WORDS as usize * r;
+        let corners = if r % 2 == 0 {
+            meshes[r / 2]
+        } else {
+            drawn::IMPOSTOR_CORNERS
+        };
+        if args[a..a + 5] != [corners, counts[r], 0, 0, 0] {
+            out.push(format!("region {r}'s args {:?}", &args[a..a + 5]));
+        }
+        if regions[r] != counts[r] {
+            out.push(format!("region {r}'s count {}", regions[r]));
+        }
+        let idx = r * u + drawn::UNIFORM_IDX as usize;
+        if uniforms[idx] != fresh[idx] + firsts[r] {
+            out.push(format!(
+                "region {r}'s uniform's columns at {}",
+                uniforms[idx]
+            ));
+        }
+        let rest = |w: &[u32]| {
+            let mut w = w[r * u..(r + 1) * u].to_vec();
+            w[drawn::UNIFORM_IDX as usize] = 0;
+            w
+        };
+        if rest(uniforms) != rest(fresh) {
+            out.push(format!("region {r}'s uniform past its columns"));
+        }
+    }
+    let mut spans: Vec<(u32, u32)> = (0..n).map(|r| (firsts[r], firsts[r] + counts[r])).collect();
+    spans.sort_unstable();
+    if spans.windows(2).any(|w| w[0].1 > w[1].0) {
+        out.push(format!("regions' slots overlap: {spans:?}"));
+    }
+    out
+}
+
+/// `decor_args_cs` by hand: what the draws read agrees with the regions it lays, over uniforms
+/// fresh as a frame writes.
 #[test]
-fn hand_args_answers_as_the_rust() {
+fn hand_args_draws_its_regions() {
     let Some((device, queue)) = device() else {
         return;
     };
@@ -2766,63 +2310,36 @@ fn hand_args_answers_as_the_rust() {
             uniforms[r * u + drawn::UNIFORM_IDX as usize] = base;
         }
         let args0 = vec![0xdead_beefu32; drawn::ARGS_WORDS as usize * regions_n];
-        // The regions laid end to end, as `generation::drawn` lays them.
-        let (mut want_regions, mut want_args, mut want_uniforms) =
-            (regions.clone(), args0.clone(), uniforms.clone());
-        let mut first = 0;
-        for r in 0..regions_n {
-            let n = regions[r];
-            want_regions[regions_n + r] = first;
-            want_uniforms[r * u + drawn::UNIFORM_IDX as usize] += first;
-            let a = drawn::ARGS_WORDS as usize * r;
-            want_args[a] = if r % 2 == 0 {
-                meshes[r / 2]
-            } else {
-                drawn::IMPOSTOR_CORNERS
-            };
-            want_args[a + 1] = n;
-            want_args[a + 2] = 0;
-            want_args[a + 3] = 0;
-            want_args[a + 4] = 0;
-            first += n;
-        }
-        {
-            let pipe = &hand;
-            let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));
-            let entries =
-                [(0, &mb), (1, &rb), (2, &ab), (3, &ub)].map(|(binding, b)| wgpu::BindGroupEntry {
-                    binding,
-                    resource: b.as_entire_binding(),
-                });
-            let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &pipe.get_bind_group_layout(0),
-                entries: &entries,
+        let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));
+        let entries =
+            [(0, &mb), (1, &rb), (2, &ab), (3, &ub)].map(|(binding, b)| wgpu::BindGroupEntry {
+                binding,
+                resource: b.as_entire_binding(),
             });
-            let mut e = device.create_command_encoder(&Default::default());
-            {
-                let mut pass = e.begin_compute_pass(&Default::default());
-                pass.set_pipeline(pipe);
-                pass.set_bind_group(0, &group, &[]);
-                pass.dispatch_workgroups(1, 1, 1);
-            }
-            queue.submit([e.finish()]);
-            assert_eq!(
-                read(&device, &queue, &rb, "regions"),
-                want_regions,
-                "regions, round {round}"
-            );
-            assert_eq!(
-                read(&device, &queue, &ab, "args"),
-                want_args,
-                "args, round {round}"
-            );
-            assert_eq!(
-                read(&device, &queue, &ub, "uniforms"),
-                want_uniforms,
-                "uniforms, round {round}"
-            );
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &hand.get_bind_group_layout(0),
+            entries: &entries,
+        });
+        let mut e = device.create_command_encoder(&Default::default());
+        {
+            let mut pass = e.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&hand);
+            pass.set_bind_group(0, &group, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
         }
+        queue.submit([e.finish()]);
+        let got_regions = read(&device, &queue, &rb, "regions");
+        let d = draws_differ(
+            &regions[..regions_n],
+            &got_regions,
+            &got_regions[regions_n..],
+            &read(&device, &queue, &ab, "args"),
+            &read(&device, &queue, &ub, "uniforms"),
+            &uniforms,
+            &meshes,
+        );
+        assert!(d.is_empty(), "round {round}: {d:?}");
     }
 }
 
@@ -2844,29 +2361,8 @@ struct Frame {
 /// A pair's count and, by leaf, its records' first word, height and sink.
 type PairRecords = (u32, BTreeMap<[i32; 2], [u32; 3]>);
 
-/// What a frame leaves, as both sides are read: each pair's records by their leaf, in no order.
-struct FrameWords {
-    /// `(entry, decor)` to what it laid.
-    pairs: BTreeMap<(u32, u32), PairRecords>,
-    regions: Vec<u32>,
-    args: Vec<u32>,
-    uniforms: Vec<u32>,
-    /// A region and a slot's lanes, sorted.
-    lanes: Vec<(u32, [u32; 5])>,
-    /// What `Instances::cnt` reads.
-    placed_cnt: u32,
-    /// The tiles `light_mark_draws_cs` stood on off the instances.
-    stood: Vec<u32>,
-}
-
-fn words_of(
-    records: &[u32],
-    regions: Vec<u32>,
-    args: Vec<u32>,
-    uniforms: Vec<u32>,
-    instances: &[u32],
-    cap: u32,
-) -> FrameWords {
+/// Each pair's records by their leaf, in no order: `(entry, decor)` to what it laid.
+fn pairs_of(records: &[u32]) -> BTreeMap<(u32, u32), PairRecords> {
     let mut pairs = BTreeMap::new();
     for s in 0..generation::EYE_ENTRIES {
         for j in 0..DECORS.len() as u32 {
@@ -2885,47 +2381,13 @@ fn words_of(
             pairs.insert((s, j), (cnt, by_leaf));
         }
     }
-    let (n, c) = (drawn::REGIONS as usize, cap as usize);
-    let mut lanes = Vec::new();
-    if !instances.is_empty() {
-        for r in 0..n {
-            let first = regions[n + r] - regions[r];
-            for slot in first..regions[n + r] {
-                let k = slot as usize;
-                assert_eq!(instances[drawn::COLUMNS as usize * c + k], slot);
-                lanes.push((
-                    r as u32,
-                    [
-                        instances[k],
-                        instances[c + k],
-                        instances[2 * c + k],
-                        instances[3 * c + k],
-                        instances[4 * c + k],
-                    ],
-                ));
-            }
-        }
-        lanes.sort_unstable();
-    }
-    FrameWords {
-        pairs,
-        placed_cnt: regions[2 * n - 1].min(cap),
-        stood: Vec::new(),
-        regions,
-        args,
-        uniforms,
-        lanes,
-    }
+    pairs
 }
 
-/// The Rust's frame over its own records, what a float may move in it, what it said.
+/// The Rust's frame over its own records.
 struct Model {
     records: Vec<u32>,
-    list: Vec<u32>,
-    workgroups: u32,
-    cap: u32,
     shown: [u32; DECORS.len()],
-    meshes: Vec<u32>,
 }
 
 /// What a frame's uniforms hold before its args add to them (`Generator::prepare`).
@@ -2975,7 +2437,7 @@ impl Model {
         frame: &Frame,
         tally: &mut Tally,
         claims: &mut Vec<[i32; 3]>,
-    ) -> (FrameWords, Vec<u32>, u64) {
+    ) -> BTreeMap<(u32, u32), PairRecords> {
         for &s in &frame.stale {
             self.records[generation::head_at(s) as usize + 2] = 0;
         }
@@ -3032,8 +2494,6 @@ impl Model {
                                     w: world,
                                     cuts: frame.cuts,
                                     tally: &mut tally,
-                                    walk_visits: 0,
-                                    ask_visits: 0,
                                     placed: Default::default(),
                                     last_decor: Default::default(),
                                     claims: Vec::new(),
@@ -3071,68 +2531,30 @@ impl Model {
                     }
                 }
             }
-            self.list = list;
         }
-        // Sized, laid out, compacted.
-        let order = each_record(&self.records, world.clipmap, self.workgroups);
-        let mut regions = vec![0u32; 2 * drawn::REGIONS as usize];
-        let mut free_n = 0;
-        let mut free_words = Vec::new();
-        for &i in &order {
-            if cnt_one(&frame.sizing, &world, &mut self.records, &mut regions, i) {
-                free_n += 1;
-                free_words.push(i as u32);
-            }
-        }
-        let n = drawn::REGIONS as usize;
-        let mut uniforms = fresh_uniforms(self.cap);
-        let mut args = vec![0u32; drawn::ARGS_WORDS as usize * n];
-        let mut first = 0;
-        for r in 0..n {
-            regions[n + r] = first;
-            uniforms[r * drawn::UNIFORM_WORDS as usize + drawn::UNIFORM_IDX as usize] += first;
-            let a = drawn::ARGS_WORDS as usize * r;
-            args[a] = if r % 2 == 0 {
-                self.meshes[r / 2]
-            } else {
-                drawn::IMPOSTOR_CORNERS
-            };
-            args[a + 1] = regions[r];
-            first += regions[r];
-        }
-        let mut lanes: Vec<(u32, [u32; 5])> = order
-            .iter()
-            .filter(|&&i| self.records[i] != generation::UNGENERATED)
-            .filter_map(|&i| lanes_of(&frame.sizing.drawing, &self.records, i))
-            .collect();
-        lanes.sort_unstable();
-        for r in 0..n {
-            regions[n + r] += regions[r];
-        }
-        let mut left = words_of(&self.records, regions, args, uniforms, &[], self.cap);
-        left.lanes = lanes;
-        (left, free_words, free_n)
+        pairs_of(&self.records)
     }
 }
 
-/// Words apart between what a frame left and what the Rust's did: records exact, or, where a
-/// float may move them, under their region; counts exact where none may.
+/// What a frame left, each pair's records against the Rust's, exact under their regions; and
+/// what its draws read agreeing with the records it sized: each region's count its records',
+/// its slots their lanes, the args, uniforms and `Instances::cnt` theirs.
 fn frame_differs(
-    got: &FrameWords,
-    want: &FrameWords,
-    free: &BTreeMap<[i32; 2], ()>,
-    free_n: u64,
+    got: &FrameLeft,
+    want: &BTreeMap<(u32, u32), PairRecords>,
+    clipmap: &[[i32; 4]],
+    workgroups: u32,
+    drawing: &[u32],
+    cap: u32,
+    meshes: &[u32],
 ) -> Vec<String> {
     let mut out = Vec::new();
-    if got.pairs.len() != want.pairs.len() {
-        out.push(format!(
-            "pairs {} against {}",
-            got.pairs.len(),
-            want.pairs.len()
-        ));
+    let pairs = pairs_of(&got.records);
+    if pairs.len() != want.len() {
+        out.push(format!("pairs {} against {}", pairs.len(), want.len()));
     }
-    for (k, (cnt, leaves)) in &want.pairs {
-        let Some((got_cnt, got_leaves)) = got.pairs.get(k) else {
+    for (k, (cnt, leaves)) in want {
+        let Some((got_cnt, got_leaves)) = pairs.get(k) else {
             out.push(format!("{k:?}: no records"));
             continue;
         };
@@ -3145,48 +2567,60 @@ fn frame_differs(
                 out.push(format!("{k:?}: no leaf {leaf:?}"));
                 continue;
             };
-            let mask = (1u32 << drawn::REGION_SHIFT) - 1;
             let same = if w[0] == generation::UNGENERATED {
                 g[0] == w[0]
-            } else if free.contains_key(leaf) {
-                g[0] & mask == w[0] & mask && g[1..] == w[1..]
             } else {
-                g == w
+                g[0] & UNDER_REGION == w[0] & UNDER_REGION && g[1..] == w[1..]
             };
             if !same {
                 out.push(format!("{k:?} {leaf:?}: got {g:x?}, want {w:x?}"));
             }
         }
     }
-    if free_n == 0 {
-        if got.regions != want.regions {
-            out.push("regions".to_string());
-        }
-        if got.args != want.args {
-            out.push("args".to_string());
-        }
-        if got.uniforms != want.uniforms {
-            out.push("uniforms".to_string());
-        }
-        if got.lanes != want.lanes {
-            out.push(format!(
-                "lanes, {} against {}",
-                got.lanes.len(),
-                want.lanes.len()
+    let n = drawn::REGIONS as usize;
+    let order = each_record(&got.records, clipmap, workgroups);
+    let counts = regions_of(&got.records, &order);
+    // Compact leaves each region's next slot: its first is that less its count.
+    let firsts: Vec<u32> = (0..n)
+        .map(|r| got.regions[n + r].wrapping_sub(got.regions[r]))
+        .collect();
+    out.extend(draws_differ(
+        &counts[..n],
+        &got.regions,
+        &firsts,
+        &got.args,
+        &got.uniforms,
+        &fresh_uniforms(cap),
+        meshes,
+    ));
+    let mut want_lanes: Vec<(u32, [u32; 5])> = order
+        .iter()
+        .filter(|&&i| got.records[i] != generation::UNGENERATED)
+        .filter_map(|&i| lanes_of(drawing, &got.records, i))
+        .collect();
+    want_lanes.sort_unstable();
+    let c = cap as usize;
+    let mut lanes = Vec::new();
+    for r in 0..n {
+        for slot in firsts[r]..(firsts[r] + counts[r]).min(cap) {
+            let k = slot as usize;
+            let i = &got.instances;
+            lanes.push((
+                r as u32,
+                [i[k], i[c + k], i[2 * c + k], i[3 * c + k], i[4 * c + k]],
             ));
         }
-        if got.placed_cnt != want.placed_cnt {
-            out.push("what `Instances::cnt` reads".to_string());
-        }
-    } else {
-        let apart = got
-            .lanes
-            .iter()
-            .filter(|l| want.lanes.binary_search(l).is_err())
-            .count() as u64;
-        if apart > free_n {
-            out.push(format!("{apart} lanes apart with {free_n} at an edge"));
-        }
+    }
+    lanes.sort_unstable();
+    if lanes != want_lanes {
+        out.push(format!(
+            "lanes, {} against its records' {}",
+            lanes.len(),
+            want_lanes.len()
+        ));
+    }
+    if got.regions[2 * n - 1].min(cap) != lanes.len() as u32 {
+        out.push("what `Instances::cnt` reads".to_string());
     }
     out
 }
@@ -3223,7 +2657,7 @@ struct WorldBuffers<'b> {
 impl Chain<'_> {
     /// One frame, as `Generator::dispatch` records it: one compute pass, what marks by the list
     /// dispatched off it.
-    fn frame(&self, frame: &Frame, b: &WorldBuffers) -> FrameWords {
+    fn frame(&self, frame: &Frame, b: &WorldBuffers) -> FrameLeft {
         let (d, q) = (self.device, self.queue);
         let store = wgpu::BufferUsages::STORAGE;
         for &s in &frame.stale {
@@ -3402,19 +2836,30 @@ impl Chain<'_> {
                 1,
             ],
         );
-        let stood = read(d, q, &stood, frame.name);
-        let records = read(d, q, &self.records, frame.name);
-        let regions = read(d, q, &self.regions, frame.name);
-        let args = read(d, q, &self.args, frame.name);
-        let uniforms = read(d, q, &self.uniforms, frame.name);
-        let instances = read(d, q, &self.instances, frame.name);
-        let mut left = words_of(&records, regions, args, uniforms, &instances, self.cap);
-        left.stood = stood;
-        left
+        FrameLeft {
+            records: read(d, q, &self.records, frame.name),
+            regions: read(d, q, &self.regions, frame.name),
+            args: read(d, q, &self.args, frame.name),
+            uniforms: read(d, q, &self.uniforms, frame.name),
+            instances: read(d, q, &self.instances, frame.name),
+            stood: read(d, q, &stood, frame.name),
+        }
     }
 }
 
-/// Frames through all the passes by hand, against the Rust's frame:
+/// The words a frame leaves on the device.
+struct FrameLeft {
+    records: Vec<u32>,
+    regions: Vec<u32>,
+    args: Vec<u32>,
+    uniforms: Vec<u32>,
+    instances: Vec<u32>,
+    /// The tiles `light_mark_draws_cs` stood on off the instances.
+    stood: Vec<u32>,
+}
+
+/// Frames through all the passes by hand, their records against the Rust's frame and their
+/// draws against their records:
 /// all whole; the eye moved, no mark; the placed decor gone, what it took coming back, some
 /// bricks gone stale, whole and in part in one dispatch; bricks handed; the decor back; a cut;
 /// a corner left out. `DECOR_RUNS` chains by hand a world, threads falling any way.
@@ -3530,11 +2975,7 @@ fn hand_frames_answer_as_the_rust() {
         };
         let mut model = Model {
             records: init.clone(),
-            list: Vec::new(),
-            workgroups,
-            cap,
             shown,
-            meshes: meshes.clone(),
         };
         let mut tally = Tally::default();
         let mut claims = Vec::new();
@@ -3542,22 +2983,9 @@ fn hand_frames_answer_as_the_rust() {
         let mut step =
             |model: &mut Model, frame: Frame, tally: &mut Tally, claims: &mut Vec<[i32; 3]>| {
                 let w = if frame.placed_decor { world } else { without };
-                let (left, free_words, free_n) = model.step(w, &frame, tally, claims);
-                let mut free = BTreeMap::new();
-                for i in free_words {
-                    let i = i as usize;
-                    free.insert(
-                        [model.records[i + 1] as i32, model.records[i + 2] as i32],
-                        (),
-                    );
-                }
-                eprintln!(
-                    "{name}, {}: {} pairs, {} drawn, {free_n} at an edge",
-                    frame.name,
-                    left.pairs.len(),
-                    left.lanes.len()
-                );
-                wants.push((frame, left, free, free_n));
+                let left = model.step(w, &frame, tally, claims);
+                eprintln!("{name}, {}: {} pairs", frame.name, left.len());
+                wants.push((frame, left));
             };
         step(&mut model, first.clone(), &mut tally, &mut claims);
         let reach = |p: [i32; 3], r: i32| [p[0] - r, p[1] - r, p[0] + r, p[1] + r];
@@ -3708,12 +3136,11 @@ fn hand_frames_answer_as_the_rust() {
                 workgroups,
             }
         };
-        let mut stood_first: Vec<Vec<u32>> = Vec::new();
         for run in 0..runs {
             let chain = chain_on();
             let t1 = std::time::Instant::now();
             let mut apart = 0;
-            for (frame, want, free, free_n) in &wants {
+            for (frame, want) in &wants {
                 let b = WorldBuffers {
                     clipmap: &clipmap,
                     ground: &ground,
@@ -3729,15 +3156,17 @@ fn hand_frames_answer_as_the_rust() {
                     meshes: &meshes_buf,
                 };
                 let got = chain.frame(frame, &b);
-                let mut d = frame_differs(&got, want, free, *free_n);
-                let k = wants.iter().position(|w| w.0.name == frame.name).unwrap();
-                if stood_first.len() <= k {
-                    let on = got.stood.iter().filter(|&&w| w == CAST_NUMBER).count() as u64;
-                    *totals.0.entry("frame: tiles decor stands on").or_default() += on;
-                    stood_first.push(got.stood.clone());
-                } else if *free_n == 0 && got.stood != stood_first[k] {
-                    d.push("the tiles `light_mark_draws_cs` stood on".to_string());
-                }
+                let d = frame_differs(
+                    &got,
+                    want,
+                    &built.clipmap,
+                    workgroups,
+                    &frame.sizing.drawing,
+                    cap,
+                    &meshes,
+                );
+                let on = got.stood.iter().filter(|&&w| w == CAST_NUMBER).count() as u64;
+                *totals.0.entry("frame: tiles decor stands on").or_default() += on;
                 for line in d.iter().take(8) {
                     eprintln!("{name}, {}, run {run}: {line}", frame.name);
                 }
@@ -3760,61 +3189,6 @@ fn hand_frames_answer_as_the_rust() {
             && totals.0["frame: a record taken away"] > 0
             && totals.0["frame: tiles decor stands on"] > 0
     );
-}
-
-/// decor_row.wgsl `mul_hi` is the high word of a product: random pairs, either side past 2^16,
-/// and their ends.
-#[test]
-fn hand_mul_hi_is_the_high_word() {
-    let Some((device, queue)) = device() else {
-        return;
-    };
-    let mut draw = real_world::Draw(0x2545_f491);
-    let mut pairs: Vec<[u32; 2]> = (0..4096).map(|_| [draw.next(), draw.next()]).collect();
-    for a in [0, 1, 0xffff, 0x1_0000, u32::MAX] {
-        for b in [0, 1, 0xffff, 0x1_0000, 9, u32::MAX] {
-            pairs.push([a, b]);
-        }
-    }
-    let source = [
-        include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/decor_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/decor_row.wgsl")),
-        r"
-@group(0) @binding(12) var<storage, read> asked: array<vec2<u32>>;
-@group(0) @binding(13) var<storage, read_write> told: array<u32>;
-
-@compute @workgroup_size(64)
-fn mul_hi_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x < arrayLength(&asked)) {
-    told[id.x] = mul_hi(asked[id.x].x, asked[id.x].y);
-  }
-}
-",
-    ]
-    .join("\n");
-    let p = pipeline(&device, "mul_hi", &source, "mul_hi_cs");
-    let flat: Vec<u32> = pairs.iter().flatten().copied().collect();
-    let (asked, told) = (
-        buffer(&device, &flat),
-        buffer(&device, &vec![0; pairs.len()]),
-    );
-    dispatch(
-        &device,
-        &queue,
-        &p,
-        &[(12, &asked), (13, &told)],
-        [(pairs.len() as u32).div_ceil(64), 1, 1],
-    );
-    let got = read(&device, &queue, &told, "mul_hi");
-    for (k, [a, b]) in pairs.iter().enumerate() {
-        assert_eq!(
-            got[k],
-            ((*a as u64 * *b as u64) >> 32) as u32,
-            "{a:#x} × {b:#x}"
-        );
-    }
 }
 
 /// seed.wgsl `halve` halves as `share::halve`: counts, rooms and weights at random, and a

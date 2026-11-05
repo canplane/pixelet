@@ -15,7 +15,7 @@ const ROWS_A_WORD: u32 = 32u / ACROSS;
 
 /// Word `k` of the entries of a clip level that hold the bricks from `q0` to `q1`, X then Y,
 /// a bit each as its moved words lay them: every one where they span the level's side either
-/// way, as the clip level wraps (`node_cache::entries_of`).
+/// way, as the clip level wraps.
 fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   let n = q1 - q0 + vec2<i32>(1);
   if (n.x >= i32(ACROSS) || n.y >= i32(ACROSS)) {
@@ -37,7 +37,7 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
 }
 
 /// Whether the node of `zoom` at column `c` reads a brick that moved, the moved
-/// entries' words at `MOVED_AT` (`node_cache::forgets`).
+/// entries' words at `MOVED_AT`.
 fn forgets(zoom: u32, c: vec2<i32>) -> bool {
   for (var w = 0u; w < EYE_CLIP_LEVELS; w += 1u) {
     let cell = FIRST_CELL + w;
@@ -66,7 +66,7 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
 }
 
 /// Whether the node of `zoom` at column `c` stands over the box `b` of leaf cells
-/// `[x0, y0, x1, y1)`, X round the world (`node_cache::over_box`, `overwrite::cut_box`).
+/// `[x0, y0, x1, y1)`, X round the world (`overwrite::cut_box`).
 fn over_box(zoom: u32, c: vec2<i32>, b: vec4<i32>) -> bool {
   var n: vec4<i32>;
   if (zoom <= LEAF_CELL) {
@@ -91,14 +91,13 @@ fn over_box(zoom: u32, c: vec2<i32>, b: vec4<i32>) -> bool {
 }
 
 /// Whether what was handed a node of what is placed, its slot word `placed`, answers
-/// from a slot of the child group written whose first slot is `first`
-/// (`node_cache::reads_written`).
+/// from a slot of the child group written whose first slot is `first`.
 fn reads_written(placed: u32, first: u32) -> bool {
   return placed != SLOT_NOTHING && (placed >> SLOT_SHIFT) - first < CHILDREN;
 }
 
 /// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
-/// and is no empty slot (`node_cache::forgotten_split`).
+/// and is no empty slot.
 fn forgotten_split(key: u32) -> u32 {
   let zooms = (1u << ZOOM_BITS) - 1u;
   return (key & ((1u << TAG_BITS) - 1u)) | (zooms << TAG_BITS) | (zooms << (TAG_BITS + ZOOM_BITS));

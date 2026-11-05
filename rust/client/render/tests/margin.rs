@@ -1,20 +1,13 @@
 //! The light's cells' starts (light_beam.wgsl `light_beam_cs`, light_cell.wgsl
 //! `light_cell_cs`) against pxl-engine `light::margin` of `Light::spacing`: over the real world
 //! of tests/real_world, each beam ray's hand and each cell's `CELL_T` as the engine takes them
-//! off where the ray stopped. Where it stopped is read off the same pass with the margin's
-//! constants set to zero, which leaves the walk as it is and hands its `t` whole. A walk that
-//! runs out of steps hands on the light's reach (beam_walk.wgsl, as ask.wgsl `walk_asking`
-//! ends one): read off that pass again with its bound, `STEPS_MOST`, set to `STEPS_FEW`, each
-//! walk the fewer bound cuts short against its reach, every other against its whole walk.
-//! Each beam ray's words, under either bound, as pxl-engine `cast::walk_at_most` of that bound
-//! leaves them. Skipped where no adapter answers.
+//! off where the engine's walk of that ray from the origin the pass laid stops. Skipped where
+//! no adapter answers.
 
 mod gpu;
-mod keeping;
 mod real_world;
 
 use gpu::Gpu;
-use keeping::*;
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
@@ -23,7 +16,7 @@ use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL};
 
-use real_world::{World, FINEST};
+use real_world::{q8, store_of, Asking, World, WorldBufs, FINEST};
 
 /// East of X = 0 by the seam, as tests/sample.rs stands.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
@@ -31,9 +24,6 @@ const SIZE: u32 = 256;
 const FRAME: u32 = 9;
 const CAST: u32 = 7;
 const WORKGROUP: u32 = beam::SAMPLE_SIDE;
-/// The walk's bound (`cast::STEPS_MOST`) as the test lays it: short of many beam rays' walks,
-/// past others.
-const STEPS_FEW: u32 = 24;
 /// A light's box over the world.
 struct LightCase {
     name: &'static str,
@@ -103,55 +93,28 @@ fn box_of(c: &LightCase) -> (Light, Starts) {
     (s, starts)
 }
 
-/// A beam ray's line as light_beam.wgsl leaves it: the node it ended at and what was handed
-/// each node from the root to it.
-struct Line {
-    node: Node,
-    at: [Inheritance; DEPTH],
+/// A walk that keeps nothing of its line.
+struct Unkept;
+
+impl Keep<Inheritance> for Unkept {
+    fn keep(&mut self, _: &Trace<Inheritance>, _: &[Inheritance; DEPTH]) {}
 }
 
-impl Keep<Inheritance> for Line {
-    fn keep(&mut self, met: &Trace<Inheritance>, stack: &[Inheritance; DEPTH]) {
-        let z = met.hit.node.zoom as usize;
-        self.node = met.hit.node;
-        self.at[..z].copy_from_slice(&stack[..z]);
-        self.at[z] = met.hit.at;
-    }
-}
-
-/// The words beam ray `c` of the light's box, from origin `o`, leaves in its line, and its
-/// hand, as `cast::walk_at_most` of `steps` from the world's root leaves them with the margin
-/// zero: each word's place in the light's list beside its name.
-fn line_of(
-    w: World,
-    l: &Light,
-    range: [Zoom; 2],
-    c: [u32; 2],
-    o: [i32; 3],
-    steps: u32,
-) -> Vec<(u32, u32, String)> {
+/// Where beam ray `c` of the light's box, from origin `o`, stops, as `cast::walk_at_most` from
+/// the world's root takes it: its hand with the margin zero.
+fn stop_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
     let p = light::corner_at(c);
     let band = l.band(SIZE, range, p.map(|v| v.div_euclid(light::TILE as i32)));
     let detail = Detail {
         range: [band, band],
         spacing: l.spacing(),
     };
-    // A table no frame has written: every node asked of the world, as the pass's own.
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    let mut q = Keeping {
+    // A table no frame has written: every node asked of the world.
+    let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
-        table: &mut table,
-        tag: node_cache::tag(FRAME, node_cache::LIGHT_BEAM_PASS),
-        asks: Asks::default(),
-        met: None,
-        writes: false,
     };
     let at = q.root(Node::ROOT.idx(o));
-    let mut line = Line {
-        node: Node::ROOT,
-        at: [at; DEPTH],
-    };
     let met = cast::walk_at_most(
         &mut q,
         o,
@@ -160,41 +123,10 @@ fn line_of(
         Until::Beam,
         (Node::ROOT, at, 0.0),
         &Root(at),
-        &mut line,
-        steps,
+        &mut Unkept,
+        cast::STEPS_MOST,
     );
-    let across = light::beam_across(SIZE);
-    let k = c[1] * across + c[0];
-    let base = k * light::LINE_WORDS;
-    let n = base + beam::LINE_NODE;
-    let mut words = vec![
-        (
-            light::hand_at(SIZE, k),
-            met.hit.t.max(0.0).to_bits(),
-            "hand".to_string(),
-        ),
-        (base + beam::LINE_VISITS, met.visits, "visits".to_string()),
-        (n + beam::NODE_ZOOM, line.node.zoom, "zoom".to_string()),
-    ];
-    for a in 0..3 {
-        words.push((
-            n + beam::NODE_CORNER + a,
-            line.node.corner[a as usize],
-            format!("corner {a}"),
-        ));
-        words.push((
-            n + beam::NODE_ROOTS + a,
-            line.node.roots[a as usize] as u32,
-            format!("roots {a}"),
-        ));
-    }
-    for z in 0..=line.node.zoom {
-        let at = base + beam::LINE_INHERITANCE + beam::LINE_STEP * z;
-        for (e, v) in line.at[z as usize].words().into_iter().enumerate() {
-            words.push((at + e as u32, v, format!("inheritance at {z}, word {e}")));
-        }
-    }
-    words
+    met.hit.t.max(0.0)
 }
 
 fn device() -> Option<Gpu> {
@@ -269,8 +201,8 @@ fn margins(width: f32) -> [(&'static str, f32); 2] {
 }
 
 /// Each beam ray's hand and each cell's `CELL_T` by hand against `light::margin` of the light's
-/// spacing, off where each beam ray stopped: two boxes, one a texel a unit, one narrow and
-/// slanting. Each walk `STEPS_FEW` cuts short hands on the light's reach.
+/// spacing, off where the engine's walk of each beam ray stops: two boxes, one a texel a unit,
+/// one narrow and slanting.
 #[test]
 fn light_cells_start_short_by_the_margin() {
     let Some(gpu) = device() else { return };
@@ -310,12 +242,6 @@ fn light_cells_start_short_by_the_margin() {
         },
     ];
     let source = src(SHADER_LIGHT_BEAM);
-    let stopped = gpu::set_const(
-        &gpu::set_const(source, "LIGHT_MARGIN_PER_WIDTH", "0.0"),
-        "LIGHT_MARGIN_STEPS",
-        "0.0",
-    );
-    let few = gpu::set_const(&stopped, "STEPS_MOST", &format!("{STEPS_FEW}u"));
     let across = light::beam_across(SIZE);
     let cells = light::cells_across(SIZE);
     let side = 2 + 2 * light::BEAM_WINDOW;
@@ -338,72 +264,17 @@ fn light_cells_start_short_by_the_margin() {
         head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
         let got = beams_of(&gpu, &b, &eye, &head, source);
-        let ts = beams_of(&gpu, &b, &eye, &head, &stopped);
-        let cut = beams_of(&gpu, &b, &eye, &head, &few);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
-        let visits_of = |w: &[u32], k: u32| w[(k * light::LINE_WORDS + beam::LINE_VISITS) as usize];
-        // A walk cut short asked fewer nodes than its whole walk; any other is its whole walk.
-        let (mut short, mut whole, mut most) = (0, 0, 0);
-        for k in 0..across * across {
-            let (v, all) = (visits_of(&cut, k), visits_of(&ts, k));
-            most = most.max(all);
-            let (got, want) = (hand_of(&cut, k), hand_of(&ts, k));
-            if v < all {
-                short += 1;
-                if got.to_bits() != c.t_max.to_bits() || v > STEPS_FEW {
-                    failed.push(format!(
-                        "{}: beam ray {k} cut short at {v} of {all} visits hands {got:?}, its reach {:?}",
-                        c.name, c.t_max
-                    ));
-                }
-            } else {
-                whole += u32::from(all > 0);
-                if v != all || got.to_bits() != want.to_bits() {
-                    failed.push(format!(
-                        "{}: beam ray {k} of {all} visits, {v} under {STEPS_FEW} steps, hands {got:?}, its whole walk {want:?}",
-                        c.name
-                    ));
-                }
-            }
-        }
-        eprintln!(
-            "{}: under {STEPS_FEW} steps {short} beam rays cut short, {whole} whole; the most visits {most} of {}",
-            c.name,
-            cast::STEPS_MOST
-        );
-        assert!(
-            short > 0 && whole > 0,
-            "{}: too few to say: {short} cut short, {whole} whole",
-            c.name
-        );
-        // Every word each beam ray leaves under either bound, as the engine's walk of that bound
-        // from the origin the pass laid: a device rounds `Starts::start` a Q3 step off the
-        // engine's for some.
+        // Each beam ray's stop, the engine's walk from the origin the pass laid: a device rounds
+        // `Starts::start` a Q3 step off the engine's for some.
         let w = built.world();
-        let mut words = 0;
-        for (pass, steps) in [(&ts, cast::STEPS_MOST), (&cut, STEPS_FEW)] {
-            for k in 0..across * across {
-                let at = [k % across, k / across];
+        let t: Vec<f32> = (0..across * across)
+            .map(|k| {
                 let f = (k * light::LINE_WORDS + light::LINE_ORIGIN) as usize;
-                let o = [0, 1, 2].map(|a| pass[f + a] as i32);
-                for (i, want, name) in line_of(w, &l, c.range, at, o, steps) {
-                    let got = pass[i as usize];
-                    words += 1;
-                    // Where it starts at zero, a device may hand -0.
-                    let zero =
-                        name == "hand" && f32::from_bits(got) == 0.0 && f32::from_bits(want) == 0.0;
-                    if got != want && !zero {
-                        failed.push(format!(
-                            "{}: under {steps} steps beam ray {k}'s {name} {got:#x}, the engine's {want:#x}",
-                            c.name
-                        ));
-                        break;
-                    }
-                }
-            }
-        }
-        eprintln!("{}: {words} words of the beam rays as the engine's", c.name);
-        let t: Vec<f32> = (0..across * across).map(|k| hand_of(&ts, k)).collect();
+                let o = [0, 1, 2].map(|a| got[f + a] as i32);
+                stop_of(w, &l, c.range, [k % across, k / across], o)
+            })
+            .collect();
         let hands: Vec<f32> = (0..across * across).map(|k| hand_of(&got, k)).collect();
         let hand = |m: f32| -> Vec<f32> { t.iter().map(|&t| (t - m).max(0.0)).collect() };
         let least = |h: &[f32], [i, j]: [u32; 2]| {

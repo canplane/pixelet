@@ -2,18 +2,16 @@
 //! way_return.wgsl) against pxl-engine's: bricks of a real world handed as a frame hands
 //! them (tests/real_world), at every eye clip level, the service area's edge and its notch
 //! walling some, their spans word for word (`fill::spans`); their trees by shape and leaf
-//! through each root against `fill::tree`, child groups being taken in whatever order the
-//! workgroups pop them; their records laid as the CPU's mirror lays them
-//! (`way::tree::lay`), every live tree read again there each frame; what each build gave
-//! back; and the free stack's count and ids after each frame. Frames as the renderer runs
-//! them: one pool and stack across them, slots handed again over their old trees, a build
-//! that ran out of the pool or its scratch handed again once either has grown, the pool
-//! grown as the host grows it; a brick past its own most and one whose ways span more of
-//! its nodes along z than its root holds. Skipped where no adapter answers.
+//! through each root against `fill::tree`; their records laid in the CPU's mirror
+//! (`way::tree::lay`), every live tree read again there each frame. Frames as the renderer
+//! runs them: one pool across them, slots handed again over their old trees, a build that
+//! ran out of the pool or its scratch handed again once either has grown, the pool grown as
+//! the host grows it; a brick past its own most and one whose ways span more of its nodes
+//! along z than its root holds. Skipped where no adapter answers.
 
 mod real_world;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::area::Shard;
@@ -252,25 +250,24 @@ struct Frame {
     hands: Vec<(Hand, u32)>,
 }
 
-/// How a build ends (`way_tree_cs`): built, no ways, or refused for the brick's most,
-/// for its scratch or for the pool, with the child groups taken first, given back.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+/// How a build ends (`way_tree_cs`): built, no ways, or refused for the brick's most, for
+/// its scratch or for the pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum End {
     Built,
     Bare,
-    Past(u32),
-    Cramped(u32),
-    Starved(u32),
+    Past,
+    Cramped,
+    Starved,
 }
 
 /// A brick's build as the CPU makes it: its nodes along z and each level's flagged
-/// (`way::tree::flag` over a CPU pool, as `fill::tree` builds); its end with the pool
-/// endless and its scratch holding `room`; its tree built from child group 1 into `pool`,
-/// what it took, held and its root word.
+/// (`way::tree::flag` over a CPU pool, as `fill::tree` builds); its tree built from child
+/// group 1 into `pool`, and its root word.
 struct Want {
     nodes: u32,
     flagged: Vec<u32>,
-    taken_held_root: [u32; 3],
+    root: u32,
 }
 
 fn want(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut Vec<u32>) -> Want {
@@ -310,70 +307,44 @@ fn want(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut Vec<u32>) -> Want 
     if taken != u32::MAX {
         *pool = vec![0; ((taken + 2) * tree::CHILD_GROUP_WORDS) as usize];
     }
-    let taken_held_root = fill::tree(lane, scratch, cell, pool, 1);
+    let [_, _, root] = fill::tree(lane, scratch, cell, pool, 1);
     Want {
         nodes,
         flagged,
-        taken_held_root,
+        root,
     }
 }
 
 impl Want {
-    /// Its end with the pool endless and a scratch of `room`.
-    fn end(&self, room: u32) -> End {
+    /// Its end with the pool and its scratch endless: built, no ways, or past its root or
+    /// its most.
+    fn end(&self) -> End {
         if self.nodes == 0 {
             return End::Bare;
         }
         if self.nodes > tree::ROOT_NODES {
-            return End::Past(0);
+            return End::Past;
         }
         let mut taken = 1;
         for &f in &self.flagged {
             if tree::past(taken, f) {
-                return End::Past(taken);
-            }
-            if tree::is_cramped(room, taken, f) {
-                return End::Cramped(taken);
+                return End::Past;
             }
             taken += f;
         }
         End::Built
     }
-
-    /// The child groups taken before each level, the root's 1 first: what a build that ran
-    /// out of the pool there gave back.
-    fn taken_before(&self) -> Vec<u32> {
-        let mut out = vec![0, 1];
-        let mut taken = 1;
-        for &f in &self.flagged {
-            taken += f;
-            out.push(taken);
-        }
-        out
-    }
 }
 
 /// Whether the trees under child groups `g` of `a` and `c` of `b` are one: each slot a leaf
-/// or a branch alike, its word the same, its branches' alike; `a`'s child groups collected.
-fn same(a: &impl Columns, g: u32, b: &impl Columns, c: u32, ids: &mut BTreeSet<u32>) -> bool {
-    ids.insert(g / CHILDREN);
+/// or a branch alike, its word the same, its branches' alike.
+fn same(a: &impl Columns, g: u32, b: &impl Columns, c: u32) -> bool {
     (0..CHILDREN).all(|k| {
         let (fa, fb) = (a.first_child(g + k), b.first_child(c + k));
         (fa == 0) == (fb == 0)
             && a.data(g + k) == b.data(c + k)
-            && (fa == 0 || same(a, fa & !BRANCH, b, fb & !BRANCH, ids))
+            && (fa == 0 || same(a, fa & !BRANCH, b, fb & !BRANCH))
     })
-}
-
-/// The child groups the tree under child group `g` holds.
-fn held(a: &impl Columns, g: u32, ids: &mut BTreeSet<u32>) {
-    ids.insert(g / CHILDREN);
-    for k in 0..CHILDREN {
-        let f = a.first_child(g + k);
-        if f != 0 {
-            held(a, f & !BRANCH, ids);
-        }
-    }
 }
 
 struct Gpu {
@@ -616,14 +587,9 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
     }
     upload(&run.ground);
     gpu.fill(b, n, 2..4);
-    let (got_scratch, got_ground, got_pool, got_stack) = (
-        gpu.read(&b.scratch),
-        gpu.read(&b.ground),
-        gpu.read(&b.pool),
-        gpu.read(&b.stack),
-    );
+    let (got_scratch, got_ground, got_pool) =
+        (gpu.read(&b.scratch), gpu.read(&b.ground), gpu.read(&b.pool));
     let pool = tree::Read(&got_pool);
-    let mut ends = Vec::new();
     let records_at = tree::records_at(b.room);
     for (k, (h, slot)) in frame.hands.iter().enumerate() {
         let mine = fill::scratch_at(&scratch, k as u32) as usize;
@@ -633,88 +599,62 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
         let mut cpu_pool = run.cpu_pool.clone();
         let w = want(lane, &got_scratch[mine..], h.cell, &mut cpu_pool);
         let root = got_ground[base + ROOT_AT as usize];
-        let count = got_scratch[mine + records_at as usize];
-        let freed = got_scratch[mine + tree::FREED_AT as usize];
-        let end = match count {
-            tree::NONE => End::Past(freed),
-            tree::CRAMPED => End::Cramped(freed),
-            tree::STARVED => End::Starved(freed),
+        let end = match got_scratch[mine + records_at as usize] {
+            tree::NONE => End::Past,
+            tree::CRAMPED => End::Cramped,
+            tree::STARVED => End::Starved,
             0 if root == 0 => End::Bare,
             _ => End::Built,
         };
-        let expected = w.end(b.room);
-        match (end, expected) {
-            (End::Starved(f), End::Built | End::Past(_) | End::Cramped(_)) => {
-                let before = w.taken_before();
-                let last = match expected {
-                    End::Past(t) | End::Cramped(t) => t,
-                    _ => u32::MAX,
-                };
-                assert!(
-                    before.contains(&f) && f <= last,
-                    "{}: starved giving back {f}, taken before a level {before:?}",
-                    h.name
-                );
-            }
-            _ => assert_eq!(end, expected, "{}: how its build ended", h.name),
+        // A build that ran out of the pool or its scratch is handed again once they have
+        // grown; any other ends as the CPU's.
+        let retried = matches!(end, End::Cramped | End::Starved);
+        if !retried {
+            assert_eq!(end, w.end(), "{}: how its build ended", h.name);
         }
-        ends.push(end);
-        run.tally.add(match end {
+        assert!(
+            end != End::Cramped || b.room < tree::BRICK_CHILD_GROUPS,
+            "{}: cramped in a scratch at its most",
+            h.name
+        );
+        run.tally.add(match w.end() {
             End::Built => "built",
             End::Bare => "no ways",
-            End::Past(0) => "past its root",
-            End::Past(_) => "past its most",
-            End::Cramped(_) => "cramped",
-            End::Starved(0) => "starved at its root",
-            End::Starved(_) => "starved",
+            _ if w.nodes > tree::ROOT_NODES => "past its root",
+            _ => "past its most",
         });
         if end != End::Built {
             assert_eq!(root, 0, "{}: a root where none is built", h.name);
-            if let End::Cramped(_) | End::Starved(_) = end {
+            if retried {
                 run.again.push(h.clone());
-                run.ran_out[matches!(end, End::Cramped(_)) as usize] = true;
+                run.ran_out[(end == End::Cramped) as usize] = true;
             }
             run.held.remove(slot);
             continue;
         }
-        let [taken, kept, want_root] = w.taken_held_root;
+        let want_root = w.root;
         assert_eq!(
             root >> tree::ROOT_ID_BITS,
             want_root >> tree::ROOT_ID_BITS,
             "{}: its root's Z",
             h.name
         );
-        assert_eq!(freed, taken - kept, "{}: what its folds gave back", h.name);
-        if freed != 0 {
-            run.tally.add("a fold gave back");
-        }
         let cpu = tree::Read(&cpu_pool);
-        let mut ids = BTreeSet::new();
         assert!(
             same(
                 &pool,
                 tree::root_slot(root).0,
                 &cpu,
                 tree::root_slot(want_root).0,
-                &mut ids
             ),
             "{}: its tree",
             h.name
         );
-        assert_eq!(
-            ids.len() as u32,
-            kept,
-            "{}: the child groups it holds",
-            h.name
+        // Its records, laid in the CPU's mirror.
+        tree::lay(
+            &mut tree::Column(&mut run.mirror),
+            &got_scratch[mine + records_at as usize..],
         );
-        // Its records, as the CPU's mirror lays them.
-        let records = &got_scratch[mine + records_at as usize..];
-        assert_eq!(count, kept, "{}: its records", h.name);
-        let laid: BTreeSet<u32> = (0..count)
-            .map(|r| records[(1 + r * tree::RECORD_WORDS) as usize])
-            .collect();
-        assert_eq!(laid, ids, "{}: its records' child groups", h.name);
-        tree::lay(&mut tree::Column(&mut run.mirror), records);
         run.held
             .insert(*slot, (h.name.clone(), root, cpu_pool, want_root));
     }
@@ -722,14 +662,8 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
         let at = (slot * BRICK_WORDS + ROOT_AT) as usize;
         run.ground[at] = got_ground[at];
     }
-    // A pop that ran out of the pool beside one that fit: a failed pop leaves the count where
-    // it found it, which the stack's count below holds, whichever order the two took.
-    if ends.iter().any(|e| matches!(e, End::Starved(_))) && ends.contains(&End::Built) {
-        run.tally.add("built beside one starved");
-    }
-    // Every slot's tree whole, in the GPU's pool and in the mirror, and none built over another.
+    // Every slot's tree whole, in the GPU's pool and in the mirror.
     let mirror = tree::Read(&run.mirror);
-    let mut live = BTreeSet::new();
     for (slot, (name, root, cpu_pool, want_root)) in &run.held {
         assert_eq!(
             got_ground[(slot * BRICK_WORDS + ROOT_AT) as usize],
@@ -738,21 +672,13 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
         );
         let cpu = tree::Read(cpu_pool);
         let (first, want_first) = (tree::root_slot(*root).0, tree::root_slot(*want_root).0);
-        let mut ids = BTreeSet::new();
         assert!(
-            same(&pool, first, &cpu, want_first, &mut ids),
+            same(&pool, first, &cpu, want_first),
             "{name}: its tree held"
         );
         assert!(
-            same(&mirror, first, &cpu, want_first, &mut BTreeSet::new()),
+            same(&mirror, first, &cpu, want_first),
             "{name}: its tree in the mirror"
-        );
-        let before = live.len();
-        live.extend(ids.iter().copied());
-        assert_eq!(
-            live.len(),
-            before + ids.len(),
-            "{name}: a child group two trees hold"
         );
     }
     for slot in 0..SLOTS {
@@ -760,22 +686,6 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
             assert_eq!(got_ground[(slot * BRICK_WORDS + ROOT_AT) as usize], 0);
         }
     }
-    // The stack: as many taken as the trees hold, and past them every child group they do
-    // not hold, each once. The taken slots' ids are stale where a push wrote past them.
-    let len = got_stack.len() as u32;
-    let id = |i: u32| got_stack[i as usize] ^ i;
-    let taken = got_stack[tree::TAKEN_CNT as usize];
-    assert_eq!(taken as usize, live.len(), "the stack's count");
-    let free: Vec<u32> = (taken + 1..len).map(id).collect();
-    let free_set: BTreeSet<u32> = free.iter().copied().collect();
-    assert_eq!(free.len(), free_set.len(), "a free child group twice");
-    let unheld: BTreeSet<u32> = (1..len).filter(|g| !live.contains(g)).collect();
-    assert_eq!(free_set, unheld, "the stack's free");
-    let mut held_groups = BTreeSet::new();
-    for (_, root, _, _) in run.held.values() {
-        held(&pool, tree::root_slot(*root).0, &mut held_groups);
-    }
-    assert_eq!(held_groups, live);
 }
 
 #[test]
@@ -1110,18 +1020,12 @@ fn hand_ways_fill_as_the_rust() {
         "no ways",
         "past its root",
         "past its most",
-        "starved",
-        "built beside one starved",
-        "a fold gave back",
         "filled over a tree",
-        "the pool grown",
-        "the scratch grown",
         "a column of none",
         "spans past their most",
         "a pier",
         "a bore's air",
         "a deck or a bank",
-        "cramped",
         "spans 1",
         "spans 2",
         "spans 4",

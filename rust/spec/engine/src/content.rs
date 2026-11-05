@@ -5,7 +5,7 @@
 //! and how far its decor reaches, which the light's box reads. A world type
 //! carries its content as an associated type of the trait it implements
 //! where those rules are asked (`ground::Resident`); a function that reads
-//! no world takes it as a type parameter (`light::Light::up`). The values a
+//! no world takes it as a type parameter (`light::Light::ring`). The values a
 //! content's palette takes are the engine's value space (`value`).
 
 #[cfg(test)]
@@ -40,7 +40,7 @@ pub trait Content {
 
     /// The tallest decor and the widest, in unit cells: as high over what it
     /// stands on as anything it generates reaches, and as far across
-    /// (`light::Light::up`, `Light::ring`).
+    /// (`light::Light::ring`; pxl-render light_propagate.wgsl `up`).
     const TALLEST: i32;
     const WIDEST: i32;
 }

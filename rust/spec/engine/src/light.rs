@@ -185,37 +185,6 @@ impl Light {
         (libm::ceilf(half * self.width_inverse()) as i32).max(1)
     }
 
-    /// The way up `C`'s tallest decor (`Content::TALLEST`) on the box, in
-    /// tiles across and down, and the steps it takes a tile apart at most:
-    /// a receiver standing on a tile reads the box up it, decor and the
-    /// actors no taller (pxl-render light_propagate.wgsl). The box is
-    /// orthographic, so it is the same from every tile.
-    pub fn up<C: Content>(&self) -> ([f32; 2], u32) {
-        let (low, top, tile) = (
-            self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, C::TALLEST as f32]),
-            1.0 / TILE as f32,
-        );
-        let way = [(top[0] - low[0]) * tile, (top[1] - low[1]) * tile];
-        let long = libm::fabsf(way[0]).max(libm::fabsf(way[1]));
-        (way, libm::ceilf(long) as u32)
-    }
-
-    /// The `k`-th step of the way `up`, whole tiles from the tile stood on,
-    /// rounded down: a point that far up lies this many tiles over or one
-    /// more, as the point stood on lies anywhere in its tile.
-    pub fn up_at((way, steps): ([f32; 2], u32), k: u32) -> [i32; 2] {
-        let f = if steps == 0 {
-            0.0
-        } else {
-            k as f32 / steps as f32
-        };
-        [
-            libm::floorf(way[0] * f) as i32,
-            libm::floorf(way[1] * f) as i32,
-        ]
-    }
-
     /// Whether box texel `p` of the map `size` a side lies where a receiver
     /// may read it, grown by `pad` texels: within `reach_ndc` of the
     /// box's half-width about its middle, where the eye stands, as past it a
@@ -226,18 +195,6 @@ impl Light {
         let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
         let r = self.reach_ndc * half + pad;
         x * x + y * y <= r * r
-    }
-
-    /// Whether box tile `tile` of the map `size` a side may hold a slot a receiver reads: its
-    /// middle within the disk grown by `TILE_READ_PAD` (`read`; pxl-render
-    /// light_propagate.wgsl).
-    pub fn reads_tile(&self, size: u32, tile: [i32; 2]) -> bool {
-        let (t, half) = (TILE as i32, (TILE / 2) as i32);
-        self.read(
-            size,
-            [tile[0] * t + half, tile[1] * t + half],
-            TILE_READ_PAD,
-        )
     }
 
     /// A texel's width in units, across and down alike, the box's texels
@@ -845,8 +802,8 @@ pub const fn stands_at(size: u32) -> u32 {
 
 /// The tiles a receiver reads, past the stands, as many: the number of the
 /// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
-/// within its taps of the way up from a tile one stands on (`Light::up`;
-/// pxl-render light_propagate.wgsl). A tile this cast's number names is
+/// within its taps of the way up from a tile one stands on (pxl-render
+/// light_propagate.wgsl `up`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
@@ -906,7 +863,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// last cast that listed it, so each is listed once a cast. The passes
 /// that cast tiles take their threads off these (pxl-render light_list.wgsl
 /// `light_item`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
-/// entry `listed_per` of them. A cast that begins an epoch casts every
+/// entry its side's square of them. A cast that begins an epoch casts every
 /// tile a receiver reads, and its passes go whole over the map instead
 /// (`ARGS_WHOLE`).
 pub const LISTED_CORNERS: u32 = 0;
@@ -919,13 +876,6 @@ const _: () = assert!(
     LISTED_LANES == beam::SAMPLE_SIDE * beam::SAMPLE_SIDE,
     "a listed pass's workgroup is the samples' passes' square"
 );
-
-/// The reach a cell or a sample feeds within, in tiles about the tile it lies on, from the
-/// first to the last across and down: a slot reads the cells and samples a tile either way.
-pub const CELL_REACH: [i32; 2] = [-1, 1];
-/// The reach a beam ray's corner feeds within, in tiles about the tile it lies on: the cells
-/// whose window, `2 + 2 · BEAM_WINDOW` beam rays a side, holds it.
-pub const CORNER_REACH: [i32; 2] = [-(BEAM_WINDOW as i32) - 2, BEAM_WINDOW as i32 + 1];
 
 /// The places of list `which` on the map `size` texels a side: every beam
 /// ray's corner, or every tile.
@@ -957,13 +907,6 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
         k += 1;
     }
     at
-}
-
-/// The threads an entry of a list takes in a pass whose thread takes one
-/// of `side` a side of the tile's: a corner or a cell one, a sample
-/// `TILE / SAMPLE` a side, a slot `TILE`.
-pub const fn listed_per(side: u32) -> u32 {
-    side * side
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
@@ -1103,7 +1046,6 @@ mod tests {
                 at: (),
                 asset: [0; 2],
             },
-            visits: 0,
         }
     }
 
@@ -1180,6 +1122,7 @@ mod tests {
         assert_eq!(slope([r, 0.0, r], across, down, deep), [0.0, 0.0]);
     }
 
+    /// The light's words read back are the light.
     #[test]
     fn words_are_fields() {
         let s = Light {
@@ -1187,13 +1130,7 @@ mod tests {
             reach_ndc: 0.75,
             ..down()
         };
-        let w = s.words();
-        assert_eq!(CORNER.map(|k| w[k] as i32), s.corner);
-        assert_eq!(f32::from_bits(w[REACH_NDC]), s.reach_ndc);
-        assert_eq!(f32::from_bits(w[3]), s.t_max);
-        assert_eq!(f32::from_bits(w[4]), s.across[0]);
-        assert_eq!(f32::from_bits(w[18]), s.bias[2]);
-        assert_eq!(Light::of_words(&w), s);
+        assert_eq!(Light::of_words(&s.words()), s);
     }
 
     /// A point lies on the texel whose ray starts above it.
@@ -1235,91 +1172,6 @@ mod tests {
                 (at[0] - p[0] as f32).abs() < 0.05 && (at[1] - p[1] as f32).abs() < 0.05,
                 "{p:?} {at:?}"
             );
-        }
-    }
-
-    /// The way up runs a tile a step, along the light's slant across the box.
-    #[test]
-    fn way_up_tile_steps() {
-        // The light 45 degrees over x, a box 4 units wide in 16 texels: a
-        // unit up moves a point a texel's worth of units across, 4 texels.
-        let r = core::f32::consts::FRAC_1_SQRT_2;
-        let s = Light::of(
-            [
-                [2.0 * r, 0.0, 2.0 * r],
-                [0.0, 2.0, 0.0],
-                [8.0 * r, 0.0, -8.0 * r],
-                [0.0, 0.0, 4.0],
-            ],
-            16,
-            [0, 0],
-            1.0,
-        );
-        let up = s.up::<Sample>();
-        let rise = Sample::TALLEST as f32 * 4.0 / TILE as f32 * r;
-        assert!(
-            (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
-            "{up:?}"
-        );
-        assert_eq!(up.1, libm::ceilf(rise) as u32);
-        assert_eq!(Light::up_at(up, 0), [0, 0]);
-        assert_eq!(Light::up_at(up, up.1), [libm::floorf(rise) as i32, 0]);
-        // A point on the near plane under texel 9's middle stands on tile 1.
-        assert_eq!(s.tile_of([0.0; 3])[1], s.tile_of([0.0, 0.0, -1.0])[1]);
-    }
-
-    /// Every texel a receiver's taps read, at any height up to the tallest
-    /// decor over a point stood on, lies in a tile the propagation reads from the
-    /// tile stood on (pxl-render light_propagate.wgsl: a tile `t` is read
-    /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
-    /// light's slant.
-    #[test]
-    fn propagate_covers_receivers() {
-        for (sx, sz) in [
-            (0.0f32, 1.0f32),
-            (0.3, 0.95),
-            (0.7, 0.7),
-            (0.95, 0.31),
-            (-0.9, 0.44),
-        ] {
-            let n = libm::sqrtf(sx * sx + sz * sz);
-            let dir = [sx / n, 0.0, -sz / n];
-            // The box's axes square to the rays: across in x and z, down y.
-            let across = [sz / n * 2.0, 0.0, sx / n * 2.0];
-            let s = Light::of(
-                [
-                    across,
-                    [0.0, 2.0, 0.0],
-                    dir.map(|v| v * 8.0),
-                    [0.0, 0.0, 4.0],
-                ],
-                64,
-                [0, 0],
-                1.0,
-            );
-            let up = s.up::<Sample>();
-            let texel = libm::sqrtf(dot(s.across, s.across));
-            for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
-                let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, Sample::TALLEST as f32] {
-                    for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
-                        // A tap `(a, b)` texels off the point `h` up.
-                        let p = [
-                            base[0] + s.across[0] / texel * a * texel,
-                            base[1] + s.down[1] / texel * b * texel,
-                            base[2] + h + s.across[2] / texel * a * texel,
-                        ];
-                        let t = s.tile_of(p);
-                        let covered = (0..=up.1).any(|k| {
-                            let o = Light::up_at(up, k);
-                            let d = [t[0] - o[0] - stood[0], t[1] - o[1] - stood[1]];
-                            let read = -READ_TILES[1]..=-READ_TILES[0];
-                            read.contains(&d[0]) && read.contains(&d[1])
-                        });
-                        assert!(covered, "light {sx} {sz} base {base:?} h {h} tap {a} {b}");
-                    }
-                }
-            }
         }
     }
 

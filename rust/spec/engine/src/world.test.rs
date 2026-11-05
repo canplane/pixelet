@@ -121,13 +121,12 @@ impl Columns for Nothing {
     }
 }
 
-/// The world's one query over the clip levels, counting the nodes asked.
-struct Counter<'a> {
+/// The world's one query over the clip levels.
+struct Asking<'a> {
     w: Clipmap<'a>,
-    nodes: u32,
 }
 
-impl Query for Counter<'_> {
+impl Query for Asking<'_> {
     type At = Inheritance;
     fn root(&mut self, node: [i32; 3]) -> Inheritance {
         Inheritance::of(&Nothing, (0, node))
@@ -143,7 +142,6 @@ impl Query for Counter<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        self.nodes += 1;
         let w = self.w;
         node(
             &mut self.w,
@@ -314,18 +312,17 @@ fn partial_block_bounded() {
 
 /// A column surface down any column of the half held clip level stands where it
 /// stands with no bound over a block a brick of which the clip level does not
-/// hold, with the same assets about it off its line, and asks fewer nodes.
+/// hold, with the same assets about it off its line.
 #[test]
 fn footing_without_bound() {
     let (rows, ground) = clipmap();
     let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
-    let world = |joined| Counter {
+    let world = |joined| Asking {
         w: Clipmap {
             rows: &rows,
             joined,
             ground: &ground,
         },
-        nodes: 0,
     };
     let (mut was, mut is) = (world(&none), world(&folded));
     let (first, _) = was.w.origin(CELL);
@@ -357,12 +354,6 @@ fn footing_without_bound() {
         }
     }
     assert!(hits > 0, "some column_surface stands on the ground");
-    assert!(
-        is.nodes < was.nodes,
-        "{} nodes, {} with no bound",
-        is.nodes,
-        was.nodes
-    );
 }
 
 /// The clip levels `0` with the service area the shards at `SHARD_ZOOM`

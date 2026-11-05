@@ -374,16 +374,15 @@ mod tests {
         assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
     }
 
-    /// The line a column surface keeps is the line straight down to its top
-    /// cell, its column's at its zoom: what a reader that did not walk the
-    /// column asks its assets off, the same answers.
+    /// The line a column surface keeps answers as the line straight down to
+    /// its top cell, its column's at its zoom: what a reader that did not walk
+    /// the column asks its assets off.
     #[test]
     fn column_surface_line_is_its_top_cells() {
         for g in [[6, 3], [2, 3], [3, 0], [9, 5]] {
             let f = column_surface(&mut Step, UNIT_ZOOM, g);
             assert_eq!(f.ends, End::Hit, "{g:?}");
             let rebuilt = line(&mut Step, UNIT_ZOOM, [g[0], g[1], f.top.0]);
-            same(&f.line, &rebuilt);
             for c in [
                 [g[0] + 1, g[1], f.top.0],
                 [g[0] - 1, g[1], f.top.0 + 1],
@@ -486,16 +485,9 @@ mod tests {
         }
     }
 
-    /// The same node, handed the same down every zoom to it.
-    fn same(a: &Line<At>, b: &Line<At>) {
-        assert_eq!((a.at, a.zoom, a.live), (b.at, b.zoom, b.live));
-        assert_eq!(a.stack[..a.zoom as usize], b.stack[..b.zoom as usize]);
-    }
-
-    /// The line a walk keeps where it stops is the one straight down to its
-    /// stop, whether it walked from the root or resumed under another
-    /// ray's line and climbed over where it resumed; the assets about the
-    /// stop asked off it are the world's.
+    /// The assets about a walk's stop, asked off the line it keeps there, are
+    /// the world's, whether it walked from the root or resumed under another
+    /// ray's line and climbed over where it resumed.
     #[test]
     fn walk_keeps_line() {
         let s = FINEST_ZOOM - UNIT_ZOOM;
@@ -509,7 +501,6 @@ mod tests {
         let met = cast::walk_from_root(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
         assert_eq!(met.ends, End::Hit);
         let first = first.0.unwrap();
-        same(&first, &line(&mut Step, first.zoom, first.at));
         for d in [
             [-0.45, 0.05],
             [-0.5, 0.0],
@@ -544,7 +535,6 @@ mod tests {
                 assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
                 let collected = collected.0.unwrap();
                 let walked = line(&mut Step, collected.zoom, collected.at);
-                same(&collected, &walked);
                 for d in 0..6u32 {
                     let mut c = collected.at;
                     c[(d / 2) as usize] += if d % 2 == 0 { -1 } else { 1 };

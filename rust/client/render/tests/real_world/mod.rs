@@ -1,13 +1,17 @@
 //! A real world's buffers made on the CPU, as the fill and the store lay them, for what is
 //! tested over the world's one query by hand (tests/world.rs, tests/light_miss.rs): its clip
-//! levels and their bricks, the service area's index, what is placed and the ways' pool.
+//! levels and their bricks, the service area's index, what is placed and the ways' pool; the
+//! query a walk on the CPU asks of them (`Asking`), and the same buffers on the device
+//! (`WorldBufs`).
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
 use pxl_content::cube::ground as palette;
 use pxl_content::decor::DECORS;
 use pxl_content::Pixelet;
+use pxl_engine::answer::In;
 use pxl_engine::area::{self, Area, Shard};
+use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
     self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
     EYE_CLIP_LEVELS, FIRST_CELL, HANDED_WORDS, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT,
@@ -19,7 +23,8 @@ use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
 use pxl_engine::overwrite::{self, Columns, BRANCH};
 use pxl_engine::way::{self, tree, Segment, Stations};
-use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL, SHARD_ZOOM};
+use pxl_engine::world::{self, Inheritance};
+use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL, SHARD_ZOOM};
 
 /// `x` a leaf cell's, as the world names it.
 pub fn wrap(x: i32) -> i32 {
@@ -852,4 +857,84 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         unheld,
         draw,
     }
+}
+
+/// The world's one query asked of every node a walk visits, nothing kept: what a walk answers
+/// whatever the node cache holds.
+pub struct Asking<'a> {
+    pub w: World<'a>,
+    pub cuts: [overwrite::Cut; 2],
+}
+
+impl Query for Asking<'_> {
+    type At = Inheritance;
+
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
+        Inheritance::of(&self.w, (0, node))
+    }
+
+    fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
+        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
+    }
+
+    fn node(
+        &mut self,
+        n: &mut Inheritance,
+        zoom: Zoom,
+        c: [i32; 3],
+        zooms: [Zoom; 2],
+        _: f32,
+    ) -> In<[u32; 2]> {
+        let pool = tree::Read(self.w.pool);
+        let mut held = self.w;
+        world::node(
+            &mut held,
+            &self.w,
+            &self.w,
+            &pool,
+            n,
+            (zoom, c),
+            zooms,
+            self.cuts,
+        )
+    }
+}
+
+/// What the world answers of a node with nothing handed down, what it hands on included:
+/// what a stackless walk asks.
+pub fn truth(
+    w: World,
+    cuts: [overwrite::Cut; 2],
+    zoom: Zoom,
+    c: [i32; 3],
+    zooms: [Zoom; 2],
+) -> (In<[u32; 2]>, [u32; 4]) {
+    let pool = tree::Read(w.pool);
+    let mut held = w;
+    let mut at = Inheritance::of(&w, (zoom, c));
+    let a = world::node(&mut held, &w, &w, &pool, &mut at, (zoom, c), zooms, cuts);
+    (a, at.words())
+}
+
+/// A position `units` off, its fraction off every edge of a step.
+pub fn q8(units: [i32; 3]) -> [i32; 3] {
+    [
+        units[0].wrapping_shl(FRAC_W) | 5,
+        units[1].wrapping_shl(FRAC_W) | 77,
+        units[2].wrapping_shl(FRAC_W) | 13,
+    ]
+}
+
+/// The world's buffers on the device.
+pub struct WorldBufs {
+    pub clip: wgpu::Buffer,
+    pub ground: wgpu::Buffer,
+    pub palette: wgpu::Buffer,
+    pub shards: wgpu::Buffer,
+    pub placed: wgpu::Buffer,
+    pub pool: wgpu::Buffer,
+}
+
+pub fn store_of() -> wgpu::BufferUsages {
+    wgpu::BufferUsages::STORAGE
 }

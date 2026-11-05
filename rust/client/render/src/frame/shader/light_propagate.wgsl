@@ -3,7 +3,7 @@
 // Which tiles of the box a receiver reads in this cast, a thread a tile, after every
 // receiver stood (light_mark.wgsl, light_mark_draws.wgsl), before the beam: one in the
 // disk it reads (`Light::read`), within a tile and its taps of a step up the way up from a
-// tile one stands on (`Light::up`, `Light::up_at`: a point that far up lies that many
+// tile one stands on (`up`, `up_at`: a point that far up lies that many
 // tiles over or one more, its taps a tile either side), as decor and the actors stand on
 // what the eye meets and are no taller. One read that no cast of the epoch read is the
 // cast's to cast: its word names the cast (`light::reads_at`), and its square's
@@ -43,7 +43,7 @@ fn reads_texel(size: u32, p: vec2<i32>, pad: f32) -> bool {
 }
 
 /// The way up decor's tallest on the box, in tiles across and down, and the steps it
-/// takes a tile apart at most (`Light::up`).
+/// takes a tile apart at most.
 struct Up {
   way: vec2<f32>,
   steps: u32,
@@ -56,8 +56,7 @@ fn up() -> Up {
   return Up(way, u32(ceil(max(abs(way.x), abs(way.y)))));
 }
 
-/// The `k`-th step of the way up, whole tiles from the tile stood on, rounded down
-/// (`Light::up_at`).
+/// The `k`-th step of the way up, whole tiles from the tile stood on, rounded down.
 fn up_at(u: Up, k: u32) -> vec2<i32> {
   let f = select(f32(k) / f32(u.steps), 0.0, u.steps == 0u);
   return vec2<i32>(floor(u.way * f));

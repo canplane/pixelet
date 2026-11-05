@@ -25,9 +25,14 @@ own Vulkan driver. Each is a different compiler with its own faults.
   add and give back with a min where it did not fit (way_tree.wgsl `pop`).
   Never give back with a subtract while others take: it overlaps what they
   took.
-- **`i32::MIN` written as a constant.** Safari writes it as a bare literal,
-  a C++ `long`, and a `select` of it and an `int` fails. The fix taken then
-  was a call that returns it; no hand shader holds the constant.
+- **`i32::MIN` written as a constant, or folded into one.** Safari writes it
+  as a bare literal, a C++ `long`, and a `select` of it and an `int` fails:
+  on 2026-11-05 `way_tree_cs` and `bound_cs` were refused so, and the page
+  stood at its loading. A sentinel or a fold's start takes the end of the
+  range its values come from instead (way_rule.wgsl `FACE_NONE`, the head
+  word's i16 none; way_tree.wgsl `RUN_LOWEST`; ground_height.wgsl's `lo` and
+  `hi`). render build.rs `held_to_faults` refuses a module that holds
+  `i32::MIN`.
 - **An atomic in a branch of its own.** naga reads its pointer out of scope;
   ask it of every lane, a no-op where there is nothing to do.
 - **Arrays and structs as values crossing a function**, returned or passed,

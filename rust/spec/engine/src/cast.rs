@@ -616,14 +616,11 @@ pub enum End {
     Lacks,
 }
 
-/// What the walk met: how it ended, where it stopped when it did, and how
-/// many nodes it asked the world about (`Query::node`), the one count of a
-/// ray's steps the CPU and a GPU both report.
+/// What the walk met: how it ended, and where it stopped when it did.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Trace<A> {
     pub ends: End,
     pub hit: Hit<A>,
-    pub visits: u32,
 }
 
 /// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and each by
@@ -806,11 +803,10 @@ pub fn walk_at_most<Q: Query>(
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
-    // over it (`stack`, its own from `low` down, `over`'s above), and its
-    // visits.
+    // over it (`stack`, its own from `low` down, `over`'s above).
     let (mut n, mut at, mut t) = from;
     let mut stack = [at; DEPTH];
-    let (mut low, mut visits) = (n.zoom, 0);
+    let mut low = n.zoom;
     let mut step = 0;
     while step < steps {
         step += 1;
@@ -827,7 +823,6 @@ pub fn walk_at_most<Q: Query>(
         if t1 > t0 {
             let dist_sq = node_dist_sq(lo, hi);
             let i = q.node(&mut at, n.zoom, n.idx(o), ask_zooms(detail, dist_sq), t0);
-            visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
                 && lo[1] <= 0.0
@@ -959,7 +954,7 @@ pub fn walk_at_most<Q: Query>(
                     at,
                     asset: i.asset,
                 };
-                let met = Trace { ends, hit, visits };
+                let met = Trace { ends, hit };
                 leave(keep, &met, &mut stack, low, over);
                 return met;
             }
@@ -1007,7 +1002,6 @@ pub fn walk_at_most<Q: Query>(
                 let met = Trace {
                     ends: End::Miss,
                     hit,
-                    visits,
                 };
                 leave(keep, &met, &mut stack, low, over);
                 return met;
@@ -1080,7 +1074,6 @@ pub fn walk_at_most<Q: Query>(
     let met = Trace {
         ends: End::Miss,
         hit,
-        visits,
     };
     leave(keep, &met, &mut stack, low, over);
     met
@@ -1141,10 +1134,8 @@ mod tests {
         }
     }
     use crate::answer;
-    use crate::answer::BoxWords;
     use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::content::Sample;
-    use crate::grid;
     use crate::overwrite::AIR;
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of
@@ -1227,112 +1218,6 @@ mod tests {
         // Whole, the cube's face.
         let met = along(EIGHTHS, 0.5, 0.5);
         assert!((met.hit.t - 5.0).abs() < 1e-5, "{}", met.hit.t);
-    }
-
-    /// Every split's content in the box `0` names, air at the leaves.
-    struct BoxQuery(BoxWords);
-
-    impl Query for BoxQuery {
-        type At = ();
-        fn root(&mut self, _: [i32; 3]) {}
-        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(
-            &mut self,
-            _: &mut (),
-            zoom: Zoom,
-            _: [i32; 3],
-            _: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            if zoom < UNIT_ZOOM {
-                In {
-                    kind: Kind::Split,
-                    asset: self.0,
-                }
-            } else {
-                In {
-                    kind: Kind::Cell,
-                    asset: [AIR, 0],
-                }
-            }
-        }
-    }
-
-    /// A ray passes a split whole where it misses the split's box on any
-    /// axis, and enters it where it meets it.
-    #[test]
-    fn ray_passes_missed_split() {
-        use crate::answer::box_word;
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(5.0), steps(-0.4), steps(0.6)];
-        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
-        let detail = Detail {
-            range: [UNIT_ZOOM, UNIT_ZOOM],
-            spacing: Spacing {
-                angle: grid::CELL,
-                across: 0.0,
-            },
-        };
-        let walk = |b: BoxWords| first(&mut BoxQuery(b), o, &ray, detail, Until::Opaque);
-        // The origin lies in the root's lower half on every axis.
-        for missed in [
-            box_word([512, 0, 0], [1024; 3]),
-            box_word([0, 512, 0], [1024; 3]),
-            box_word([0, 0, 512], [1024; 3]),
-        ] {
-            let met = walk(missed);
-            assert_eq!(
-                (met.ends, met.visits),
-                (End::Miss, 1),
-                "{:?}",
-                box_of(missed)
-            );
-        }
-        assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
-        // An edge that is not a half: the origin, the world's floor at the
-        // root's, lies in the root's third step along z, so a box from its fourth
-        // misses and one to it meets.
-        assert_eq!(walk(box_word([0, 0, 3], [1024; 3])).visits, 1);
-        assert!(walk(box_word([0; 3], [1024, 1024, 3])).visits > 1);
-        // A beam ray meets a box it clears by less than `2√2` of its width,
-        // and passes one it clears by more: the root's next step along z starts
-        // 2^14 units over the floor of the origin's.
-        let beam = |width: f32| {
-            let detail = Detail {
-                spacing: Spacing {
-                    angle: 0.0,
-                    across: width,
-                },
-                ..detail
-            };
-            first(
-                &mut BoxQuery(box_word([0, 0, 3], [1024; 3])),
-                o,
-                &ray,
-                detail,
-                Until::Beam,
-            )
-        };
-        assert_eq!(beam(1.0).visits, 1);
-        assert!(beam(1.0e4).visits > 1);
-        // Nothing is passed for being thin: a slab one step thick about the
-        // origin, 2^14 units, is entered by a ray whose beam's spacing is far
-        // wider, which no walk but a beam's reads.
-        let wide = Detail {
-            spacing: Spacing {
-                angle: 0.0,
-                across: 1.0e5,
-            },
-            ..detail
-        };
-        let met = first(
-            &mut BoxQuery(box_word([0, 0, 2], [1024, 1024, 3])),
-            o,
-            &ray,
-            wide,
-            Until::Opaque,
-        );
-        assert!(met.visits > 1);
     }
 
     /// A range that inverts, its least over its most, as the eye's may

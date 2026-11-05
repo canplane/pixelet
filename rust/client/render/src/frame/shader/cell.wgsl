@@ -8,7 +8,7 @@
 // The window is f32 as the Rust's, a ceiling over a square root and a division by what varies
 // from cell to cell, `s` taken by its reciprocal, the host's (`Grid::s_inverse`): where
 // what it takes the ceiling of falls within a few ulps of a whole number, a GPU's rounding
-// may take the next window (tests/cell.rs `on_edge`).
+// may take the next window.
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 

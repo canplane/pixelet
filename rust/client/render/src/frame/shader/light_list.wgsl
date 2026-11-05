@@ -66,7 +66,7 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 
 /// What of `level` the thread at `id` of its pass takes: itself where the cast
 /// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of
-/// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry `listed_per` of them; none past
+/// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry its side's square of them; none past
 /// the list.
 fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
   if (head_word(LIGHT_HEAD_EPOCH) == head_word(LIGHT_HEAD_CAST)) {

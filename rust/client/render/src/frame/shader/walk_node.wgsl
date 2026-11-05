@@ -116,7 +116,7 @@ fn mix_hash(h: u32, v: u32) -> u32 {
   return (m << 15u) | (m >> 17u);
 }
 
-/// `node_cache::hash`.
+/// The node `c` of `zoom`, hashed.
 fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
   var h = zoom * 0x85EBCA77u;
   h = mix_hash(h, u32(c.x));
@@ -125,12 +125,12 @@ fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
   return h ^ (h >> 16u);
 }
 
-/// The first slot of its bucket (`node_cache::entry_of`).
+/// The first slot of its bucket.
 fn bucket_of(zoom: u32, c: vec3<i32>) -> u32 {
   return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
 }
 
-/// Only nodes under the world's roots are kept (`node_cache::keeps`).
+/// Only nodes under the world's roots are kept.
 fn keeps(zoom: u32, c: vec3<i32>) -> bool {
   if (zoom >= 32u) {
     return false;

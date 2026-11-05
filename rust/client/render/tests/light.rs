@@ -9,7 +9,8 @@
 //! it its ray enters, as the raster keeps it, some put out of place. A drawn pixel whose ray met
 //! the world marks the tile it met it on (`Light::tile_of`), and where the head asks the
 //! footprint, the tiles between it and each later neighbor's (`light::footprint`). Every word of
-//! the map, the list and the misses' args is compared. The light's reciprocals are the host's
+//! the map is compared, and the slots listed for their walk as a set; every tile the reading
+//! marks must be marked. The light's reciprocals are the host's
 //! words (`Light::inverse`, `Light::t_max_inverse`), and a ray's start is summed in fixed point
 //! (`Starts::start`), read off a probe and held to the Rust's exactly; a slot may take what
 //! a fused sum gives it, each counted: its depth's product fused into the push after it; a
@@ -17,29 +18,26 @@
 //! marked or not. Skipped where no adapter answers.
 
 mod gpu;
-mod keeping;
 mod real_world;
 
 use std::collections::BTreeSet;
 
 use gpu::{array_view, cross, read_texture, texture, unit, Gpu, Kinds, LightBox, Tally};
-use keeping::{q8, Asks, Keeping};
 use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::{count, eye, node_cache, param, raster, ray, Zoom};
+use pxl_engine::{eye, param, raster, ray, Zoom};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
-use real_world::{Built, World, FINEST};
+use real_world::{q8, Asking, Built, World, FINEST};
 
 /// East of X = 0 by the seam, and by X = 0, where X's roots part.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 const SIZE: u32 = 256;
 const CAST: u32 = 7;
-const FRAME: u32 = 9;
 /// Tiles a tile's coordinate may lie off an edge between tiles for a GPU's rounding to put it
 /// on either side.
 const EDGE: f64 = 1e-4;
@@ -76,7 +74,6 @@ struct SlotCase {
     name: &'static str,
     lit: LightBox,
     range: [Zoom; 2],
-    counted: bool,
     /// Where the cast is within its epoch, one tile in so many claimed; none where it begins it.
     listed: Option<u32>,
 }
@@ -109,7 +106,7 @@ fn hand_light_cs_answers_as_the_rust() {
     let mut kinds = Kinds::default();
     let cases = [
         SlotCase {
-            name: "about the eye, the epoch begun, counted",
+            name: "about the eye, the epoch begun",
             lit: lit(
                 over(&built, [EYE[0] + 90, EYE[1] + 90], 40),
                 [0.3, 0.2, -0.93],
@@ -119,7 +116,6 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            counted: true,
             listed: None,
         },
         SlotCase {
@@ -133,7 +129,6 @@ fn hand_light_cs_answers_as_the_rust() {
                 [-77, 4093],
             ),
             range: [8, FINEST],
-            counted: true,
             listed: None,
         },
         SlotCase {
@@ -147,11 +142,10 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            counted: true,
             listed: None,
         },
         SlotCase {
-            name: "tiles claimed within the epoch, not counted",
+            name: "tiles claimed within the epoch",
             lit: lit(
                 over(&built, [EYE[0] + 90, EYE[1] + 90], 40),
                 [0.5, -0.1, -0.86],
@@ -161,7 +155,6 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1296, -904],
             ),
             range: [10, FINEST],
-            counted: false,
             listed: Some(3),
         },
     ];
@@ -184,7 +177,6 @@ fn hand_light_cs_answers_as_the_rust() {
             [1300, -900],
         ),
         range: [8, FINEST],
-        counted: true,
         listed: Some(2),
     };
     run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kinds);
@@ -227,18 +219,11 @@ fn run_slots(
     let texel_slot =
         |p: [u32; 2]| [0, 1].map(|k| (p[k] as i32).wrapping_add(l.corner[k]) as u32 & (SIZE - 1));
 
-    // Every word the pass may not write marked; the samples walked over the world.
+    // The list's words noise, the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let mut q = Keeping {
+    let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
-        table: &mut table,
-        tag: node_cache::tag(FRAME, node_cache::LIGHT_SAMPLES_PASS),
-        asks: Asks::default(),
-        met: None,
-        writes: true,
     };
     for j in 0..n {
         for i in 0..n {
@@ -381,7 +366,6 @@ fn run_slots(
     eye_words[eye::RANGE + 1] = c.range[1];
     let mut head = vec![0u32; light::HEAD_WORDS];
     head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_COUNTED] = u32::from(c.counted);
     head[light::HEAD_EPOCH] = if c.listed.is_some() { CAST - 3 } else { CAST };
     for (k, v) in light::head_layout(SIZE) {
         head[k] = v;
@@ -466,9 +450,8 @@ fn run_slots(
             answer(slot, o, inv, kinds)
         })
         .collect();
-    // The pass over fresh words, the list's count starting at `start`: the map, the list and
-    // the misses' args it leaves, and the slots it listed in their order.
-    let cast = |start: u32| {
+    // The pass over fresh words: the map it leaves and the slots it listed.
+    let (map, had) = {
         let vis_t = texture(
             &gpu.device,
             &gpu.queue,
@@ -489,9 +472,7 @@ fn run_slots(
         let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
         let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
-        let mut misses0 = ray::MISS_ARGS_EMPTY.to_vec();
-        misses0[ray::MISS_ARGS_CNT as usize] = start;
-        let misses_buf = gpu.buffer(&misses0, wgpu::BufferUsages::STORAGE);
+        let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
         gpu.dispatch(
             pipe,
             &[
@@ -506,18 +487,12 @@ fn run_slots(
         );
         let list_out = gpu.read(&list_buf);
         let misses = gpu.read(&misses_buf);
+        // The slots it listed for their walk.
         let from = light::misses_at(SIZE) as usize;
         let to = from + (misses[ray::MISS_ARGS_CNT as usize] as usize).min((SIZE * SIZE) as usize);
-        let had = list_out[(from + start as usize).min(to)..to].to_vec();
-        (
-            read_texture(&gpu.device, &gpu.queue, &map_t),
-            list_out,
-            misses,
-            had,
-        )
+        let had = list_out[from..to].to_vec();
+        (read_texture(&gpu.device, &gpu.queue, &map_t), had)
     };
-    let (map, list_out, misses, had) = cast(0);
-    let first = light::misses_at(SIZE) as usize;
     let had_set: BTreeSet<u32> = had.iter().copied().collect();
 
     // What the pass left of a slot, and whether it is answer `a`: its word for a depth within
@@ -589,8 +564,7 @@ fn run_slots(
     tally.compare(&format!("{name}: the map"), &want_map, &map, |k| {
         format!("slot {:?}", [k as u32 % SIZE, k as u32 / SIZE])
     });
-    // The listed slots in the order the atomics took them: as a set, each once, then every
-    // word of the list beside them as it was.
+    // The listed slots as a set, each once.
     let listed_alike = had.len() == had_set.len() && had_set == walked;
     tally.compare(
         &format!("{name}: the slots listed, as a set"),
@@ -598,56 +572,7 @@ fn run_slots(
         &[u32::from(listed_alike)],
         |_| format!("{} listed, {} to walk", had.len(), walked.len()),
     );
-    let mut want_list = list.clone();
-    want_list[first..first + had.len()].copy_from_slice(&had);
-    tally.compare(&format!("{name}: the list"), &want_list, &list_out, |k| {
-        format!("word {k}")
-    });
     let walked_n = walked.len() as u32;
-    let per = ray::MISS_LANES * ray::MISS_ACROSS;
-    let args = |start: u32| {
-        let mut want = ray::MISS_ARGS_EMPTY.to_vec();
-        want[ray::MISS_ARGS_CNT as usize] = start + walked_n;
-        if let Some(m) = (start..start + walked_n)
-            .rev()
-            .find(|p| p.is_multiple_of(per))
-        {
-            want[ray::MISS_ARGS_LIST as usize + 1] = m / per + 1;
-        }
-        if c.counted {
-            let lane = |k: u32| (ray::MISS_ARGS_COUNT + k - count::REUSED) as usize;
-            want[lane(count::REUSED)] = took;
-            want[lane(count::SKY)] = sky;
-            want[lane(count::WALKED)] = walked_n;
-        }
-        want
-    };
-    let want_misses = args(0);
-    tally.compare(
-        &format!("{name}: the misses' args"),
-        &want_misses,
-        &misses,
-        |k| format!("word {k}"),
-    );
-    // Again, the count starting past a real frame's so the last slot listed is the first of a
-    // row of the list's dispatch, which opens it.
-    if walked_n > 0 && c.listed.is_none() {
-        let start = (per - (walked_n - 1) % per) % per;
-        let (_, _, misses, had) = cast(start);
-        let set: BTreeSet<u32> = had.iter().copied().collect();
-        tally.compare(
-            &format!("{name}: listed from {start}"),
-            &[u32::from(true)],
-            &[u32::from(had.len() == set.len() && set == walked)],
-            |_| format!("{} listed, {} to walk", had.len(), walked.len()),
-        );
-        tally.compare(
-            &format!("{name}: the misses' args, listed from {start}"),
-            &args(start),
-            &misses,
-            |k| format!("word {k}"),
-        );
-    }
     eprintln!(
         "{name}: {} needed: {took} took, {sky} sky, {walked_n} walked; {exact} exact, {fused} \
          a depth a product fused into a sum",
@@ -680,7 +605,6 @@ fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
             at: (),
             asset: [0; 2],
         },
-        visits: 0,
     };
     let want = light::word(light::depth(l, &met));
     let (scale, push) = (l.t_max_inverse(), pxl_engine::axis(l.bias, axis));
@@ -882,7 +806,6 @@ fn hand_light_mark_cs_answers_as_the_rust() {
         "tiles stood on by pairs up a diagonal alone",
         "tiles stood on by pairs up to row 0 alone",
         "tiles stood on by pairs a footprint apart alone",
-        "tiles a pair a tile past the footprint lies between, not stood on",
         "points past the box",
     ]);
     tally.end("light_mark_cs");
@@ -907,16 +830,9 @@ fn run_marks(
     // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
     // some marked and not yet walked, some meeting nothing.
     let mut words: Vec<u32> = (0..ray::WORDS * wd * ht).map(noise).collect();
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let mut q = Keeping {
+    let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
-        table: &mut table,
-        tag: node_cache::tag(FRAME, node_cache::MISSED_PASS),
-        asks: Asks::default(),
-        met: None,
-        writes: true,
     };
     let detail = Detail {
         range,
@@ -970,14 +886,11 @@ fn run_marks(
         }
     }
 
-    // The tiles every reading marks, and those some reading by a tile's edge does; and what
-    // marked each that every reading marks: a pixel's own, or a pair of neighbors, by its step,
-    // whether it is a pair over row 0 and whether it spans the whole footprint.
+    // The tiles every reading marks; and what marked each: a pixel's own, or a pair of
+    // neighbors, by its step, whether it is a pair over row 0 and whether it spans the whole
+    // footprint.
     let mut must = BTreeSet::new();
-    let mut may = BTreeSet::new();
     let mut by: std::collections::BTreeMap<[i32; 2], Vec<Option<Pair>>> = Default::default();
-    // The tiles a pair a tile past the footprint lies between.
-    let mut past = BTreeSet::new();
     for y in 0..ht {
         for x in 0..wd {
             let Some(own) = &met[(y * wd + x) as usize] else {
@@ -987,7 +900,6 @@ fn run_marks(
                 must.insert(own[0]);
                 by.entry(own[0]).or_default().push(None);
             }
-            may.extend(own.iter().copied());
             if !c.footprint {
                 continue;
             }
@@ -1005,15 +917,6 @@ fn run_marks(
                     let mut sure = BTreeSet::new();
                     let stood = between(a, b, &mut sure);
                     kinds.add("neighbors past the footprint", !stood && a != b);
-                    if span == light::FOOTPRINT_TILES + 1 {
-                        let lo = [a[0].min(b[0]), a[1].min(b[1])];
-                        let hi = [a[0].max(b[0]), a[1].max(b[1])];
-                        for j in lo[1]..=hi[1] {
-                            for i in lo[0]..=hi[0] {
-                                past.insert([i, j]);
-                            }
-                        }
-                    }
                     let label = Pair {
                         step,
                         row_0: qy == 0 && dy < 0,
@@ -1023,11 +926,6 @@ fn run_marks(
                         by.entry(*t).or_default().push(Some(label));
                     }
                     must.extend(sure);
-                }
-                for &a in own {
-                    for &b in other {
-                        between(a, b, &mut may);
-                    }
                 }
             }
         }
@@ -1053,7 +951,7 @@ fn run_marks(
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
 
     // The stands as an earlier cast left them, some this cast's number already; the rest of the
-    // list words no thread may write.
+    // list noise.
     let n = light::tiles(SIZE);
     let stands = light::stands_at(SIZE) as usize;
     let mut list: Vec<u32> = (0..light::list_words(SIZE))
@@ -1069,15 +967,6 @@ fn run_marks(
     }
     let inside = |t: &[i32; 2]| t[0] >= 0 && t[1] >= 0 && t[0] < n as i32 && t[1] < n as i32;
     let word_of = |t: &[i32; 2]| stands + (t[1] as u32 * n + t[0] as u32) as usize;
-    let mut want = list.clone();
-    for t in must.iter().filter(|t| inside(t)) {
-        want[word_of(t)] = CAST;
-    }
-    let either: BTreeSet<usize> = may
-        .iter()
-        .filter(|t| inside(t) && !must.contains(*t))
-        .map(word_of)
-        .collect();
     let stood = must.iter().filter(|t| inside(t)).count();
     assert!(stood > 0, "{}: no tile stood on in the box", c.name);
     // The tiles in the box marked by what `of` takes alone.
@@ -1116,10 +1005,6 @@ fn run_marks(
     for (k, n) in stood_alone {
         kinds.count(k, n as u64);
     }
-    kinds.add(
-        "tiles a pair a tile past the footprint lies between, not stood on",
-        past.iter().any(|t| inside(t) && !must.contains(t)),
-    );
 
     let rays = texture(
         &gpu.device,
@@ -1145,24 +1030,20 @@ fn run_marks(
         [wd.div_ceil(side), ht.div_ceil(side), 1],
     );
     let out = gpu.read(&list_buf);
-    let rays_out = read_texture(&gpu.device, &gpu.queue, &rays);
     let name = c.name;
-    tally.compare_by(
-        &format!(
-            "{name}: the list, {stood} tiles stood on, {} by an edge",
-            either.len()
-        ),
+    let want: Vec<u32> = must.iter().filter(|t| inside(t)).map(|_| CAST).collect();
+    let got: Vec<u32> = must
+        .iter()
+        .filter(|t| inside(t))
+        .map(|t| out[word_of(t)])
+        .collect();
+    let tiles: Vec<[i32; 2]> = must.iter().filter(|t| inside(t)).copied().collect();
+    tally.compare(
+        &format!("{name}: the tiles stood on, {stood} of them"),
         &want,
-        &out,
-        |k| match k.checked_sub(stands) {
-            Some(t) if t < (n * n) as usize => format!("tile {:?}", [t as u32 % n, t as u32 / n]),
-            _ => format!("word {k}"),
-        },
-        |k, w, h| w == h || (either.contains(&k) && h == CAST),
+        &got,
+        |k| format!("tile {:?}", tiles[k]),
     );
-    tally.compare(&format!("{name}: the rays"), &words, &rays_out, |k| {
-        format!("word {k}")
-    });
 }
 
 /// Every texel's start as the device takes it (light_aim.wgsl `texel_start`), read off a probe

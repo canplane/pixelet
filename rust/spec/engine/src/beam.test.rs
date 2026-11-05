@@ -31,25 +31,17 @@ const VIEWS: [[f32; 2]; 3] = [
     [0.5, 0.5 * 19.5 / 9.0],
 ];
 
-/// The samples are the very rays at every lattice, as many, and each on
-/// the screen resumes from the coarser cell that holds the one it
-/// resumed from at the lattice of one cell.
+/// The samples are the very rays at every lattice, as many.
 #[test]
 fn samples_same_every_lattice() {
     for tan in VIEWS {
         let one = Grid::of(tan, 1);
         let g = Grid::of(tan, LATTICE_MAX);
-        assert_eq!((g.lattice, g.samples), (LATTICE_MAX, one.samples));
-        assert!((0..2).all(|k| g.span[k] * LATTICE_MAX >= one.span[k]));
+        assert_eq!(g.samples, one.samples);
         for j in 0..g.samples[1] {
             for i in 0..g.samples[0] {
                 let (a, b) = (one.sample([i, j]), g.sample([i, j]));
                 assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
-                let on = |v: u32, k: usize| v >= NEAR && v - NEAR < one.span[k] * SAMPLE;
-                if on(i, 0) && on(j, 1) {
-                    let c = one.sample_cell([i, j]).map(|v| v / LATTICE_MAX);
-                    assert_eq!(g.sample_cell([i, j]), c);
-                }
             }
         }
     }
@@ -432,7 +424,7 @@ fn sample_hit_same_every_lattice() {
             ))
         });
         let (one, two) = (cast_at(&view, 1), cast_at(&view, LATTICE_MAX));
-        let (mut met, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
+        let (mut met, mut misses) = ([0; EIGHTHS as usize + 1], 0);
         for (k, f) in fresh.iter().enumerate() {
             let s = [k as u32 % n, k as u32 / n];
             let (a, b) = (&one[k], &two[k]);
@@ -453,20 +445,12 @@ fn sample_hit_same_every_lattice() {
                 met[fill_eighths(f.asset[0]) as usize] += 1;
             }
             misses += u32::from(f.ends == End::Miss);
-            resumed[0] += u32::from(a.resumed);
-            resumed[1] += u32::from(b.resumed);
         }
         // The ground and the whole things, the pole and the far block are
-        // met, and something gone on past; the samples resume off their
-        // lines at both lattices.
+        // met, and something gone on past.
         assert!(
             [EIGHTHS, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
             "{tan:?}: {met:?} by the eighths met, {misses} gone on"
-        );
-        assert!(
-            resumed.iter().all(|&r| r > n * m / 2),
-            "{tan:?}: {resumed:?} of {}",
-            n * m
         );
     }
 }

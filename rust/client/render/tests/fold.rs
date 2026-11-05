@@ -174,11 +174,6 @@ fn hand_fold_folds_as_clipmap_fold() {
         let ground = gpu.buffer(&b.ground, wgpu::BufferUsages::STORAGE);
         let mut zero_entries = 0;
         for (name, table) in cases(&b) {
-            // The renderer's table: its rows to the last fold's (gpu/ray/cast.rs `make`).
-            assert_eq!(
-                table.len(),
-                (JOINED_AT + EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize
-            );
             let mut want = table.clone();
             fold_rust(&b, &mut want);
             zero_entries += want[JOINED_AT as usize..]

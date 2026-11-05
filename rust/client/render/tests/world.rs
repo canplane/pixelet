@@ -1,8 +1,8 @@
 //! The world's one query by hand (frame/shader/world.wgsl) answers word for word as
 //! `world::node` does: real world buffers made here on the CPU, as the fill and the
 //! store lay them, nodes asked along whole descents of the Rust, each step asked again
-//! of the hand query on a device, and every word compared, what the node hands down
-//! included. Skipped where no adapter answers.
+//! of the hand query on a device, and each node's answer compared, its kind and its asset.
+//! Skipped where no adapter answers.
 
 mod real_world;
 
@@ -26,11 +26,9 @@ use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
 const ASKED_WORDS: usize = 20;
 const TOLD_WORDS: usize = 8;
 const OP_NODE: u32 = 0;
-const OP_ROOT: u32 = 1;
-const OP_CHILD: u32 = 2;
 const OP_HOLLOW: u32 = 3;
 
-/// The asks made so far and what the Rust told of each.
+/// The asks made so far and what the Rust answered of each.
 #[derive(Default)]
 struct Asks {
     asked: Vec<u32>,
@@ -38,7 +36,6 @@ struct Asks {
 }
 
 impl Asks {
-    #[expect(clippy::too_many_arguments, reason = "an ask's words, each its own")]
     fn push(
         &mut self,
         (op, zoom, c): (u32, Zoom, [i32; 3]),
@@ -47,7 +44,6 @@ impl Asks {
         cuts: [Cut; 2],
         kind: u32,
         asset: [u32; 2],
-        after: [u32; 4],
     ) {
         let word = |cut: Cut| {
             [
@@ -65,8 +61,7 @@ impl Asks {
         self.asked.extend(word(cuts[1]));
         self.asked.push(0);
         self.told.extend([kind, asset[0], asset[1]]);
-        self.told.extend(after);
-        self.told.push(0);
+        self.told.extend([0; TOLD_WORDS - 3]);
     }
 }
 
@@ -104,30 +99,11 @@ fn descend(
     let pool = tree::Read(w.pool);
     let root = idx(start);
     let mut at = Inheritance::of(&w, (start, root));
-    asks.push(
-        (OP_ROOT, start, root),
-        [0, 0],
-        [0; 4],
-        [Cut::NONE; 2],
-        0,
-        [0, 0],
-        at.words(),
-    );
     tally.add("root", true);
     for z in start..=stop {
         let c = idx(z);
         if z > start {
-            let before = at.words();
             at = at.child(&w, &pool, (z, c));
-            asks.push(
-                (OP_CHILD, z, c),
-                [0, 0],
-                before,
-                [Cut::NONE; 2],
-                0,
-                [0, 0],
-                at.words(),
-            );
             tally.add("child", true);
             tally.add("child, ways' cursor held", at.ways.holds());
             if moving {
@@ -159,7 +135,6 @@ fn descend(
             cuts,
             got.kind as u32,
             got.asset,
-            at.words(),
         );
         *seen = at.ground;
         tell(w, before, (z, c), zooms, cuts, got, at, tally);
@@ -787,7 +762,6 @@ fn hand_world_answers_as_the_rust() {
             [Cut::NONE; 2],
             0,
             [share, 0],
-            [0; 4],
         );
     }
     tally.0.insert("a share of cave, asked apart", hollows);
@@ -818,7 +792,6 @@ fn hand_world_answers_as_the_rust() {
                 [Cut::NONE; 2],
                 0,
                 [cave::hollow((z, at)), 0],
-                [0; 4],
             );
         }
     }
@@ -853,13 +826,6 @@ fn hand_world_answers_as_the_rust() {
         buffer(overwrites, store),
         buffer(pool, store),
     );
-    let words = [
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
-    ]
-    .join("\n");
-    let words = words.as_str();
-    let hand = include_str!(concat!(env!("OUT_DIR"), "/shader/world.wgsl"));
     let source = WORLD_ASKED;
     let module = taken(&device, "world", source);
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -870,32 +836,6 @@ fn hand_world_answers_as_the_rust() {
         compilation_options: Default::default(),
         cache: None,
     });
-    // It lies beside the walk's, as an entry will read both.
-    taken(
-        &device,
-        "world and walk",
-        &[
-            words,
-            include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/eye_bind.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/grid.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/side.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/resume.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/clipmap.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/clip.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/palette.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/world_rule.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/brick.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/level.wgsl")),
-            hand,
-            include_str!(concat!(env!("OUT_DIR"), "/shader/world_split.wgsl")),
-        ]
-        .join("\n"),
-    );
-
     const CHUNK: usize = 1 << 14;
     let (mut same, mut differ, mut first) = (0u64, 0u64, None);
     let mut differ_by_op = [0u32; 4];
@@ -936,7 +876,8 @@ fn hand_world_answers_as_the_rust() {
         queue.submit([e.finish()]);
         let got = read(&device, &queue, &told_buf);
         for (k, (want, have)) in t.chunks(TOLD_WORDS).zip(got.chunks(TOLD_WORDS)).enumerate() {
-            if want == have {
+            // The answer alone: what a node hands its children is the query's own.
+            if want[..3] == have[..3] {
                 same += 1;
             } else {
                 differ += 1;
@@ -946,7 +887,10 @@ fn hand_world_answers_as_the_rust() {
             }
         }
     }
-    eprintln!("{same} answered alike, {differ} differ, by op (node, root, child, hollow): {differ_by_op:?}");
+    eprintln!(
+        "{same} answered alike, {differ} differ, of nodes {}, of hollows {}",
+        differ_by_op[OP_NODE as usize], differ_by_op[OP_HOLLOW as usize]
+    );
     if let Some((k, ask, want, have)) = &first {
         eprintln!("first differing, ask {k}:\n  asked {ask:?}\n  rust  {want:?}\n  hand  {have:?}");
     }

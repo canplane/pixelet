@@ -22,11 +22,14 @@ fn fills_any(cell: u32, run: vec2<i32>) -> bool {
 }
 
 /// A column's spans' head word (fill.rs `head_word`): its count, `SPANS_PAST` where they
-/// did not fit, its face cell over them.
+/// did not fit, its face cell over them, held above the word's none.
 fn head_word(face: i32, n: u32, fits: bool) -> u32 {
-  let held = select(clamp(face, -32767i, 32767i), -32768i, face == FACE_NONE);
-  return n | select(SPANS_PAST, 0u, fits) | (u32(held) << 16u);
+  return n | select(SPANS_PAST, 0u, fits) | (u32(clamp(face, -32767i, 32767i)) << 16u);
 }
+
+/// The head word of a column with no spans and no face: `FACE_NONE`, i16's lowest, in
+/// its face's half.
+const HEAD_NONE: u32 = 0x80000000u;
 
 // ---- clipmap.rs: a brick as its fill reads it (`Brick`, `Columns`) ----
 
@@ -492,7 +495,7 @@ fn pier_stands(rec: u32, c: vec2<i32>, pier: vec2<i32>, ground: i32, per_m: f32)
 /// writes that fills a cell, a span each as it is made, the head word last.
 fn column(rec: u32, c: vec2<i32>, at: u32) {
   if (palette_idx(rec, c) == VALUE_UNKNOWN || is_walled(rec, c)) {
-    scratch[at] = head_word(FACE_NONE, 0u, true);
+    scratch[at] = HEAD_NONE;
     return;
   }
   let cell = brick_cell(rec);
@@ -546,7 +549,7 @@ fn way_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let at = scratch_at(arrayLength(&scratch), id.z) + SPANS_AT + i * SPANS_COLUMN_WORDS;
   // A corner of the ring, beside no column of the brick: none.
   if (all((c == vec2<i32>(-1i)) | (c == vec2<i32>(i32(BRICK))))) {
-    scratch[at] = head_word(FACE_NONE, 0u, true);
+    scratch[at] = HEAD_NONE;
     return;
   }
   column(rec, c, at);

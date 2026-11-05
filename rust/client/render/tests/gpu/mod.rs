@@ -1,7 +1,7 @@
-//! The device every test of a pass by hand runs it on (tests/fold.rs, tests/fill.rs, the
-//! tests of tests/keeping and the rest): its buffers and textures, a module taken as the
-//! renderer assembles it or from a file a mutant sweep names, and a wait for the device that
-//! gives up, as a shader by hand may loop on; and what the tests share besides: the kinds of
+//! The device every test of a pass by hand runs it on (tests/fold.rs, tests/fill.rs and the
+//! rest): its buffers and textures, a module taken as the renderer assembles it or from a file
+//! a mutant sweep names, and a wait for the device that gives up, as a shader by hand may loop
+//! on; and what the tests share besides: the kinds of
 //! case each met, a light's box as a host lays it, a hash and a few vectors.
 
 #![allow(dead_code, reason = "each test reads its own of it")]
@@ -31,16 +31,6 @@ pub fn source(assembled: &str, entry: &str) -> String {
         }
     }
     assembled.to_string()
-}
-
-/// `source` with constant `name` set to `val`, a WGSL literal of its type: the one line
-/// build.rs lays it on (constant.wgsl), as a test takes a bound or a margin of its own.
-pub fn set_const(source: &str, name: &str, val: &str) -> String {
-    let at = format!("const {name}: ");
-    let lines: Vec<&str> = source.lines().filter(|l| l.starts_with(&at)).collect();
-    assert_eq!(lines.len(), 1, "{name} laid once");
-    let ty = lines[0].split(" = ").next().unwrap();
-    source.replace(lines[0], &format!("{ty} = {val};"))
 }
 
 pub fn bytes(words: &[u32]) -> &[u8] {

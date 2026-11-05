@@ -290,13 +290,17 @@ fn under(slot: u32) -> u32 {
 
 // ---- way.rs: what the ways write in a cell, off the spans kept ----
 
+/// Under every run a bound word holds (world_rule.wgsl `bound_of`, i16 each), so the first
+/// span read is taken, as `way::at`'s `i32::MIN` is under every run.
+const RUN_LOWEST: i32 = -32768i;
+
 /// What the ways write in cell `z` at zoom `cell` of column `c`, its `n` spans kept in the
 /// scratch from `mine`: a deck's slab or its pier, the highest of those over it keeping what
 /// two share; else the first air over it (`AIR_OF` over its way's palette index); else
 /// `WAY_NOTHING` (`way::at`).
 fn way_at(mine: u32, c: vec2<i32>, n: u32, cell: u32, z: i32) -> u32 {
   let at = spans_at(mine, c);
-  var best = vec2<i32>(FACE_NONE);
+  var best = vec2<i32>(RUN_LOWEST);
   var palette_idx = WAY_NOTHING;
   var air = WAY_NOTHING;
   for (var j = 0u; j < n; j++) {
@@ -327,7 +331,8 @@ fn way_cell(mine: u32, c: vec2<i32>, cell: u32, z: i32) -> u32 {
     return select(v, WAY_AIR, (v & AIR_OF) != 0u);
   }
   let face = head_face(head);
-  for (var m = 1u; z < face && m < 7u; m++) {
+  // A face of none lines nothing, as the engine's `i32::MIN` is under every `z`.
+  for (var m = 1u; face != FACE_NONE && z < face && m < 7u; m++) {
     let d = near(m);
     let b = c + d.xy;
     let u = way_at(mine, b, word(spans_at(mine, b)) & SPANS_CNT, cell, z + d.z);

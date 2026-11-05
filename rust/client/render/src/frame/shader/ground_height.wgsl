@@ -43,8 +43,9 @@ fn ground_height(rec: u32, g: vec2<i32>) -> i32 {
   let wx = catmull_rom(wx_at.y);
   let wy = catmull_rom(wy_at.y);
   var sum = vec2<u32>(0u);
-  var lo = 2147483647i;
-  var hi = -2147483647i - 1i;
+  // Past the samples' ends, i16 each (`sample`), so the first sets both.
+  var lo = 32767i;
+  var hi = -32768i;
   for (var j = 0u; j < 4u; j++) {
     let row_at = clamp_idx(wy_at.x + i32(j)) * ELE_PADDED_SPAN;
     var row = vec2<u32>(0u);

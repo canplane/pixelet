@@ -19,7 +19,7 @@ fn node_cache_now(k: u32) -> u32 {
   return atomicOr(&node_cache[k], 0u);
 }
 
-/// This pass's tag (`node_cache::tag`).
+/// This pass's tag: the frame's number by `PASSES`, and the pass.
 fn walk_tag() -> u32 {
   return PASSES * node_cache_word(FRAME) + WALK_PASS;
 }
@@ -42,13 +42,13 @@ fn is_node_now(w: u32, zoom: u32, c: vec3<i32>) -> bool {
     && node_cache_now(n + 3u) == u32(c.z);
 }
 
-/// `node_cache::pair_hash` of the node at `zooms`, far then near over `ZOOM_BITS`.
+/// The node `c` of `zoom` asked at `zooms`, far then near over `ZOOM_BITS`, hashed.
 fn pair_hash(zoom: u32, c: vec3<i32>, zooms: u32) -> u32 {
   let h = mix_hash(node_hash(zoom, c), zooms);
   return h ^ (h >> 16u);
 }
 
-/// Whether a key is a walk's claim, named or not (`node_cache::claimed`).
+/// Whether a key is a walk's claim, named or not (pxl-engine `node_cache::CLAIMED`).
 fn is_claim(key: u32) -> bool {
   return key == CLAIMED || (key & CLAIM_MASK) == CLAIM_FAR;
 }
@@ -57,9 +57,9 @@ fn is_claim(key: u32) -> bool {
 /// claimed it names it next.
 const CLAIM_READS = 8u;
 
-/// `node_cache::stamp` of an entry asked at `zooms`, far then near over `ZOOM_BITS`: a walk reads
-/// and writes at once here, so takes a slot only where the words it read hash to it
-/// (`node_cache::stamped`).
+/// The stamp of an entry asked at `zooms`, far then near over `ZOOM_BITS`, a hash of its
+/// words under its kind (pxl-engine `node_cache::KIND_MASK`): a walk reads and writes at
+/// once here, so takes a slot only where the words it read hash to it.
 fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom: u32, c: vec3<i32>) -> u32 {
   var h = node_hash(zoom, c);
   h = mix_hash(h, zooms);
@@ -133,8 +133,9 @@ fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bo
 }
 
 /// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in a slot
-/// of the bucket from `first` (pxl-engine node_cache.rs): a free one, the first from
-/// `node_cache::probe`; else an earlier frame's, the first from `node_cache::victim`; none where a walk
+/// of the bucket from `first` (pxl-engine node_cache.rs): a free one, the first from the
+/// node's at these zooms (`pair_hash`); else an earlier frame's, the first from the node's own
+/// (`node_hash`); none where a walk
 /// of this pass keeps the node at these zooms or claims it. A lost claim tries again over the
 /// bucket as it then stands.
 fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {

@@ -1,12 +1,12 @@
 //! A handed brick's fill by hand answers as pxl-engine's: `height_cs`
 //! (frame/shader/height.wgsl) as `fill::heights` and `fill::put_palette_word`, `bound_cs`
-//! (frame/shader/bound.wgsl) as `fill::level`, a level a dispatch, over the spans
-//! `fill::spans` keeps. The records are the real world's of tests/real_world, a frame's
-//! handed bricks at once as the renderer hands them (gpu/ray/ground.rs `grids`): every
-//! zoom of the eye's clip levels, bricks at their tile's edges, west and east of the seam,
-//! on the service area's edge, with ways and without, palette indices that tie, steep
-//! ground. Every word of the bricks' lanes and of the palette compared. Skipped where no
-//! adapter answers.
+//! (frame/shader/bound.wgsl) as `fill::level`, a level a dispatch, over the spans the
+//! device's ways' pass (way.wgsl `way_cs`) keeps and `fill::spans` keeps on the CPU. The
+//! records are the real world's of tests/real_world, a frame's handed bricks at once as the
+//! renderer hands them (gpu/ray/ground.rs `grids`): every zoom of the eye's clip levels,
+//! bricks at their tile's edges, west and east of the seam, on the service area's edge, with
+//! ways and without, palette indices that tie, steep ground. Every word of the bricks' lanes
+//! and of the palette compared. Skipped where no adapter answers.
 
 mod gpu;
 mod real_world;
@@ -17,7 +17,9 @@ use pxl_engine::clipmap::{
     FIRST_CELL, HANDED_WORDS, PALETTE_AT, SPANS_COLUMNS, TREE_AT,
 };
 use pxl_engine::{fill, ground, wrap_idx, Zoom, LEAF_CELL};
-use pxl_render::frame::shader::record::{src, SHADER_BOUND, SHADER_HEIGHT, WORLD_ASKED};
+use pxl_render::frame::shader::record::{
+    src, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, WORLD_ASKED,
+};
 use pxl_render::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 
 use gpu::{Gpu, Tally};
@@ -183,6 +185,7 @@ fn hand_fill_answers_as_fill() {
         return;
     };
     let height = gpu.pipeline(src(SHADER_HEIGHT), "height_cs");
+    let spans = gpu.pipeline(src(SHADER_WAY), "way_cs");
     let bound = gpu.pipeline(src(SHADER_BOUND), "bound_cs");
     let store = wgpu::BufferUsages::STORAGE;
     let (mut tops, mut levels) = (Tally::default(), Tally::default());
@@ -252,7 +255,8 @@ fn hand_fill_answers_as_fill() {
                 },
             );
 
-            // The spans as the ways' pass keeps them, then the levels, a dispatch each.
+            // The levels: the Rust's off the spans `fill::spans` keeps, the device's off the
+            // spans its own ways' pass keeps, in whatever form that pass keeps them.
             let mut scratch: Vec<u32> = (0..scratch_len).map(|k| mix(k, [4, 4])).collect();
             for k in 0..n {
                 for i in 0..SPANS_COLUMNS {
@@ -265,7 +269,17 @@ fn hand_fill_answers_as_fill() {
                     lined_columns += u32::from(head & fill::SPANS_CNT != 0);
                 }
             }
-            let (lane_buf, scratch_buf) = (gpu.buffer(&lane, store), gpu.buffer(&scratch, store));
+            let lane_buf = gpu.buffer(&lane, store);
+            let scratch_buf = gpu.buffer(&vec![0; scratch_len as usize], store);
+            gpu.dispatch(
+                &spans,
+                &[
+                    (0, fresh_buf.as_entire_binding()),
+                    (1, lane_buf.as_entire_binding()),
+                    (2, scratch_buf.as_entire_binding()),
+                ],
+                [SPANS_COLUMNS.div_ceil(fill::SPANS_LANES), 1, n],
+            );
             for j in 0..=BRICK_LEVELS {
                 let side_n = BRICK >> j;
                 for k in 0..n {
@@ -296,13 +310,13 @@ fn hand_fill_answers_as_fill() {
                     ],
                     [side_n.div_ceil(LEVEL_SIDE), side_n.div_ceil(LEVEL_SIDE), n],
                 );
-                levels.compare(
-                    &format!("{case}: level {j}"),
-                    &lane,
-                    &gpu.read(&lane_buf),
-                    lane_name,
-                );
             }
+            levels.compare(
+                &format!("{case}: levels"),
+                &lane,
+                &gpu.read(&lane_buf),
+                lane_name,
+            );
         }
     }
     eprintln!("{unknown} cells of no known look, {walled} columns of no face, {lined_columns} columns with spans");
