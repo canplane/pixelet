@@ -782,7 +782,7 @@ fn run_case(
     let w = edited.map_or(w, |e| e.w);
     lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
     let list2 = gpu.buffer(&list, store_of());
-    let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0], store_of());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
     gpu.dispatch(

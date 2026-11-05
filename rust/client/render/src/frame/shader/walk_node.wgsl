@@ -1,8 +1,8 @@
 // pxl-render/walk_node.wgsl
 
 // What a walk works out of a node, every walk's alike, over the eye's words (eye_bind.wgsl):
-// a ray to walk, where it starts and ends, a node's planes and its index, its bucket, the zoom
-// asked at a distance, a ray's span in a box (pxl-engine cast.rs).
+// a ray to walk, where it starts and ends, a node's planes and its index, its bucket, the face
+// it is entered across (zoom.wgsl), a ray's span in a box (pxl-engine cast.rs).
 
 /// A cut as the eye holds it: its index, then its zoom.
 fn eye_cut(k: u32) -> vec4<i32> {
@@ -146,17 +146,10 @@ fn squared(v: vec3<f32>) -> f32 {
   return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
-/// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
-fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
-  return zoom_in_splits(r2 * INV_SPLIT2, range);
-}
-
-/// The zoom asked at `x2`, a distance squared in split distances squared
-/// (`grid::cell_zoom_in_splits`).
-fn zoom_in_splits(x2: f32, range: vec2<u32>) -> u32 {
-  let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
-  let z = u32(clamp(i32(UNIT_ZOOM) - e, 0i, i32(FINEST_ZOOM)));
-  return min(max(z, range.x), range.y);
+/// How foreshortened the face is that the ray along `dir` enters a node across, its near
+/// planes reached at `near` (pxl-engine cast.rs `node_slant`).
+fn node_slant(dir: vec3<f32>, near: vec3<f32>) -> u32 {
+  return slant(dir[crossing(dir, near, true)]);
 }
 
 /// How far apart a beam's rays lie at `d2` from the walk's origin, a distance squared, its

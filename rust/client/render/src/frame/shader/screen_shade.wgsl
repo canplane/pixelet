@@ -60,14 +60,13 @@ fn fs(v: VertexOut) -> FragOut {
 }
 
 // Under the camera gizmo: the solid angle the face of the cell the ray
-// stopped on shows the eye, its cube's side at its zoom squared over the
-// distance squared, foreshortened by the face's cosine to the ray, as a
-// share of a grid cell's, `frame_cell` squared. The zoom rule weighs the
-// side over the distance alone, so a top seen at a grazing angle reads
-// finer than its threshold.
+// stopped on shows the eye as the zoom rule weighs it, its cube's side at its
+// zoom squared over the distance squared, foreshortened by the whole octaves
+// of the face's cosine to the ray (walk_node.wgsl `slant`), as a share of a
+// grid cell's, `frame_cell` squared.
 //
-// A world's cell spans (1, 2] of the view's cells at its distance
-// (pxl-engine grid.rs `cell_zoom_at`, `CELLS_A_RAD` / 2 sides its
+// A world's cell spans (1, 2] of the view's cells at its distance so weighed
+// (pxl-engine grid.rs `cell_zoom_on`, `CELLS_A_RAD` / 2 sides its
 // split distance), so its share of a cell squared is within (1, 4]: green there,
 // finer blue, coarser red (debug_look.json `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
@@ -76,7 +75,7 @@ fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   }
   let side = exp2(f32(i32(UNIT_ZOOM) - i32(ray_zoom(word))));
   let r2 = dot(h.at, h.at);
-  let seen = side * side * abs(dot(h.normal, h.at)) / (r2 * sqrt(r2));
+  let seen = side * side / (r2 * exp2(f32(slant(abs(dot(h.normal, h.at)) * inverseSqrt(r2)))));
   let share = seen / (frame_cell() * frame_cell());
   let tint = select(select(SHARE_WITHIN, SHARE_FINER, share <= SHARE_FINER_MOST), SHARE_COARSER, share > SHARE_WITHIN_MOST);
   return mix(color, tint * 0.6, 0.45);

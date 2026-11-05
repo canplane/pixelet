@@ -1,8 +1,7 @@
 // pxl-render/light_list.wgsl
 
 // The shadow map's lattice as the light's beam, cells and slots take it off its list
-// (pxl-engine light.rs): where a beam ray's line and start, a cell's start and a
-// sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
+// (pxl-engine light.rs): where a beam ray's line and start and a sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
 // place of the lattice the thread at an id takes (`light_item`); and whether the cast needs it
 // (`light_needs`); and the reads, the stands, their squares and each list's marks, as the
 // receivers' passes claim tiles (`light::reads_at`, `stands_at`, `coarse_at`,
@@ -29,11 +28,6 @@ fn light_line(k: u32) -> u32 {
 /// ray, past the lines, before the cells.
 fn light_hand_at(k: u32) -> u32 {
   return head_word(LIGHT_HEAD_HANDS) + k;
-}
-
-/// The first word of cell `c`'s start (`light::cell`).
-fn light_cell_at(c: vec2<u32>) -> u32 {
-  return head_word(LIGHT_HEAD_CELLS) + (c.y * head_word(LIGHT_HEAD_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
 /// The first word of sample `s`, wrapped as the slots are (`light::sample`).
@@ -152,7 +146,9 @@ fn casts_in(lo_at: vec2<i32>, hi_at: vec2<i32>) -> bool {
 }
 
 /// Whether the cast needs what `level` at `at` gives: one of the tiles it feeds, the tile it
-/// lies on and its reach about it, the cells whose window holds a beam ray (`casts_in`).
+/// lies on and its reach about it, the cells whose window holds a beam ray (`casts_in`). Every
+/// place `light_item` hands is one, as its lists hold what feeds a claimed tile by this rule
+/// the other way (light_propagate.wgsl `enlist`); a sample's neighbor may not be (boxes.wgsl).
 fn light_needs(level: u32, at: vec2<u32>) -> bool {
   let on = light_on(level, at);
   var lo = vec2<i32>(0);

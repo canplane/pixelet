@@ -16,27 +16,15 @@
 fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let cells = head_word(LIGHT_HEAD_CELLS_ACROSS);
   let c = light_item(LEVEL_CELL, id.xy);
-  if (c.x >= cells || c.y >= cells || !light_needs(LEVEL_CELL, c)) {
+  if (c.x >= cells || c.y >= cells) {
     return;
   }
-  let across = beam_across();
   let side = 2u + 2u * LIGHT_BEAM_WINDOW;
-  var least_at = c.y * across + c.x;
-  var least = bitcast<f32>(beams[light_hand_at(least_at)]);
-  for (var j = 0u; j < side; j += 1u) {
-    for (var i = 0u; i < side; i += 1u) {
-      let k = (c.y + j) * across + c.x + i;
-      let t = bitcast<f32>(beams[light_hand_at(k)]);
-      if (t < least) {
-        least = t;
-        least_at = k;
-      }
-    }
-  }
+  let least = window_least(light_hand_at(0u), beam_across(), c, side);
   let lo = light_on(LEVEL_CORNER, c);
   let hi = light_on(LEVEL_CORNER, c + vec2<u32>(side - 1u));
   let at = light_cell_at(c);
-  beams[at + CELL_T] = bitcast<u32>(least);
-  beams[at + CELL_CORNER] = least_at;
+  beams[at + CELL_T] = least.x;
+  beams[at + CELL_CORNER] = least.y;
   beams[at + CELL_RESUMES] = u32(tiles_ask(lo, hi, tile_band(light_on(LEVEL_CELL, c))));
 }

@@ -4,18 +4,24 @@
 // One it leaves stays marked, where it was left written (`write_left`), and is listed for
 // `miss_list_cs` (miss.wgsl); one that ends is written as that writes it (miss_word.wgsl).
 
-/// `miss_list_cs`'s dispatch and how many are listed, then the kept hits' dispatch
-/// and how many (`node_cache::HITS_ARGS`, copied there after).
-@group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 8>;
+/// `miss_list_cs`'s dispatch and how many are listed, as list.wgsl's `Left` lays them; then
+/// the kept hits' dispatch and how many (`node_cache::HITS_ARGS`, copied there after).
+struct MissLeft {
+  list: array<atomic<u32>, 3>,
+  cnt: atomic<u32>,
+  hits: array<atomic<u32>, 3>,
+  hits_cnt: atomic<u32>,
+}
+@group(0) @binding(10) var<storage, read_write> args: MissLeft;
 
 /// A hit kept for what lies about its face to be asked once a hit (`keep_hit`).
 fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
-  let r = atomicAdd(&left[7], 1u);
+  let r = atomicAdd(&args.hits_cnt, 1u);
   if (r >= HITS) {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&left[4], r / HIT_LANES + 1u);
+    atomicMax(&args.hits[0], r / HIT_LANES + 1u);
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
@@ -26,7 +32,7 @@ fn miss_hit_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
+  let k = list_place(group.xy, lane.x);
   if (k >= node_cache[MARKS_CNT] || k >= MARKS) {
     return;
   }
@@ -40,11 +46,10 @@ fn miss_hit_cs(
   let w = walk(aim, px_start(aim, id, size), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     write_left(id, w.t, w.visits);
-    let place = atomicAdd(&left[3], 1u);
-    if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
-      atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);
+    let place = enlist(MARKS);
+    if (place < MARKS) {
+      beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
     }
-    beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
     return;
   }
   let face = face_of(aim, w);

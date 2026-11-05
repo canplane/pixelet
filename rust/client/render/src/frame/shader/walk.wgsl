@@ -21,8 +21,8 @@ struct Slot {
 /// and answers for the zooms asked. A split asked finer than itself is a split or air
 /// (`world::node`): a walk that goes in, taking no box of it, meets what its children answer
 /// either way. Air held no finer than asked stays air on nearly every node, and a ray goes past
-/// it (`revisits`). One scan of the bucket: each entry's key and node read together, its kind
-/// and asset only where it holds the node.
+/// it (`revisits`). One scan of the bucket: each entry's key, its node only where the key holds
+/// an entry, its kind and asset only where it holds the node.
 fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Slot {
   // The first at other zooms, held apart: no function's local is a struct (build.rs).
   var other = NONE;
@@ -37,8 +37,11 @@ fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Slot {
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
     let held = node_cache[w];
+    if (held == 0u || held == CLAIMED) {
+      continue;
+    }
     let n = vec4<u32>(node_cache[w + W_NODE], node_cache[w + W_NODE + 1u], node_cache[w + W_NODE + 2u], node_cache[w + W_NODE + 3u]);
-    if (held == 0u || held == CLAIMED || any(n != node)) {
+    if (any(n != node)) {
       continue;
     }
     let kind = node_cache[w + W_KIND] & KIND_MASK;
@@ -112,13 +115,15 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
     var into = false;
     var visited = false;
     if (t1 > t0) {
-      // The zooms asked at its farthest corner and nearest point, squared (`node_dist_sq`);
-      // one range's alone, as the light's is.
+      // The zooms asked at its farthest corner and nearest point, squared, on the face the
+      // ray enters it across (`node_dist_sq`, `node_slant`); one range's alone, as the light's
+      // is.
       var asked_far = range.x;
       var asked_near = range.x;
       if (range.x != range.y) {
-        asked_far = zoom_at(squared(max(-lo, hi)), range);
-        asked_near = zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range);
+        let slant = node_slant(dir, s.near);
+        asked_far = zoom_at(squared(max(-lo, hi)), slant, range);
+        asked_near = zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), slant, range);
       }
       let c = idx_of(corner, zoom, roots, r0);
       let slot = slot_of(zoom, c, asked_far, asked_near);

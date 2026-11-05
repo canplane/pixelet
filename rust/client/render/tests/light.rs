@@ -191,7 +191,6 @@ fn hand_light_cs_answers_as_the_rust() {
         "walked, its visible not entered",
         "walked, its visible another band's",
         "walked, a sample about it another band's",
-        "not needed",
         "past the list",
         "samples gone on",
         "samples stopped",
@@ -311,7 +310,8 @@ fn run_slots(
     }
 
     // The tiles the cast casts, each listed once, the room past them an unlisted tile's: where
-    // it begins its epoch, those read, all but some; else some of those it claimed.
+    // it begins its epoch, those read, all but some; else some of the box, each read, as a
+    // claimed tile is (light_propagate.wgsl).
     let reads_at = light::reads_at(SIZE) as usize;
     let mut threads: Vec<Option<[u32; 2]>> = Vec::new();
     let mut entries = Vec::new();
@@ -321,8 +321,7 @@ fn run_slots(
             let (claimed, word) = match c.listed {
                 Some(every) => {
                     let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
-                    let read = claimed && !(i + j).is_multiple_of(7);
-                    (claimed, if read { CAST } else { CAST - 1 })
+                    (claimed, if claimed { CAST } else { CAST - 1 })
                 }
                 None => {
                     let read = !noise(t ^ 0x77).is_multiple_of(5);

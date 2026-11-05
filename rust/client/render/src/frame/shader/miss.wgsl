@@ -69,14 +69,14 @@ fn miss_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   walk_missed(id.xy, size, false);
 }
 
-/// Each pixel `miss_hit_cs` left, a thread each, `MISS_LANES` a workgroup and `MISS_ACROSS`
-/// workgroups a row, each past the count returning at once.
+/// Each pixel `miss_hit_cs` left, a thread each at its place in their list (list.wgsl),
+/// each past the count returning at once.
 @compute @workgroup_size(MISS_LANES)
 fn miss_list_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
+  let k = list_place(group.xy, lane.x);
   let at = eye_word(GRID + GRID_MISSES_AT);
   if (k >= beams[at]) {
     return;

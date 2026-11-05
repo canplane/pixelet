@@ -72,12 +72,13 @@ fn beam_walk(aim: Aim, spacing: vec2<f32>, base: u32, start: Start) -> Beamed {
     var into = false;
     var ends = false;
     if (t1 > t0) {
-      // The zooms it asks, off its farthest corner and nearest point (`ask_zooms`,
-      // `node_dist_sq`).
+      // The zooms it asks, off its farthest corner and nearest point, on the face it enters
+      // it across (`ask_zooms`, `node_dist_sq`, `node_slant`).
       let far_v = max(-lo, hi);
       let near_v = min(max(lo, vec3<f32>(0.0)), hi);
       let far2 = squared(far_v);
-      let zooms = zoom_at(far2, range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
+      let slant = node_slant(dir, s.near);
+      let zooms = zoom_at(far2, slant, range) | (zoom_at(squared(near_v), slant, range) << ZOOM_BITS);
       let a = ask_node(parent, zoom == 0u, zoom, idx_of(corner, zoom, roots, r0), zooms, false, tag);
       at = a.handed;
       asked = true;

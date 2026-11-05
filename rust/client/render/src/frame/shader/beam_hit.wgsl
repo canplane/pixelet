@@ -5,14 +5,15 @@
 // leaves is listed for `beam_cs` (beam.wgsl), which goes on from there writing what it asks; one
 // that ends is left as that leaves it.
 
-/// `beam_cs`'s dispatch, then how many are listed: only the list's own atomics.
-@group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 4>;
+/// `beam_cs`'s dispatch, then how many are listed (list.wgsl `Left`): only the
+/// list's own words.
+@group(0) @binding(10) var<storage, read_write> args: Left;
 
 @compute @workgroup_size(CORNER_SIDE, CORNER_SIDE, 1)
 fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let c = beam_item(id.xy);
   let lattice = beam_lattice();
-  if (c.x >= lattice.x || c.y >= lattice.y || !beam_needed(c)) {
+  if (c.x >= lattice.x || c.y >= lattice.y) {
     return;
   }
   let base = beam_line(c);
@@ -31,11 +32,8 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let hand = beam_hand_at(c);
   if (w.ends == 4u) {
     // The list holds a place for each beam ray of the lattice, each listed once.
-    let place = atomicAdd(&left[3], 1u);
+    let place = enlist(lattice.x * lattice.y);
     if (place < lattice.x * lattice.y) {
-      if (place % (CORNER_SIDE * CORNER_SIDE) == 0u) {
-        atomicAdd(&left[0], 1u);
-      }
       beams[corners_left_at() + 1u + place] = c.x | (c.y << 16u);
     }
     // How far it came, where `beam_cs` goes on from its line's node (resume.wgsl

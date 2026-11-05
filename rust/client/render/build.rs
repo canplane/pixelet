@@ -423,6 +423,7 @@ fn walk_word() -> String {
         ("VISIBLE_LACK", raster::LACK),
         ("MISS_ARGS_LIST", ray::MISS_ARGS_LIST),
         ("MISS_ARGS_CNT", ray::MISS_ARGS_CNT),
+        ("COUNT_RAYS", count::RAYS),
         ("MISS_ARGS_COUNT", ray::MISS_ARGS_COUNT),
         ("COUNT_REUSED", count::REUSED),
         ("COUNT_SKY", count::SKY),
@@ -877,6 +878,10 @@ fn decor_word() -> String {
         assert!(
             g::TALLEST > 0 && g::WIDEST > 0,
             "decor's tallest and widest are a cell or more"
+        );
+        assert!(
+            pxl_engine::UNIT_ZOOM - world::PLACED_FIRST == 3,
+            "decor_pose.wgsl `overlaps_placed` descends three levels to the unit cells"
         );
     }
     let mut out = String::new();
@@ -1404,6 +1409,49 @@ fn assemble(out: &Path) {
                 4 * word::RASTER_FLOATS,
                 "raster.wgsl's `Raster` against `RASTER_FLOATS`"
             );
+        }
+        // The lists' words as pxl-engine lays them (list.wgsl `MissArgs`, `Left`; miss_hit.wgsl
+        // `MissLeft` begins as `Left`): each member's first word.
+        {
+            use pxl_engine::ray;
+            let words: [(&str, &[u32]); 3] = [
+                (
+                    "MissArgs",
+                    &[
+                        ray::MISS_ARGS_LIST,
+                        ray::MISS_ARGS_WHOLE,
+                        ray::MISS_ARGS_CNT,
+                        ray::MISS_ARGS_COUNT,
+                    ],
+                ),
+                ("Left", &[0, ray::LEFT_CNT]),
+                ("MissLeft", &[0, ray::LEFT_CNT]),
+            ];
+            for (name, want) in words {
+                let Some((_, ty)) = module
+                    .types
+                    .iter()
+                    .find(|(_, t)| t.name.as_deref() == Some(name))
+                else {
+                    continue;
+                };
+                let naga::TypeInner::Struct { ref members, span } = ty.inner else {
+                    panic!("`{name}` is a struct")
+                };
+                let got: Vec<u32> = members.iter().map(|m| m.offset / 4).collect();
+                assert_eq!(
+                    &got[..want.len()],
+                    want,
+                    "`{name}`'s words against pxl-engine's"
+                );
+                if name == "MissArgs" {
+                    assert_eq!(
+                        span as usize,
+                        4 * ray::MISS_ARGS_WORDS,
+                        "`MissArgs` against `ray::MISS_ARGS_WORDS`"
+                    );
+                }
+            }
         }
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)

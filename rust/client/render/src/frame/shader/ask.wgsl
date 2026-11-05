@@ -1,8 +1,9 @@
 // pxl-render/ask.wgsl
 
 // A ray's walk, each node off the node cache or asked of the world there and then and
-// kept (pxl-engine `cast::walk`, `node_cache`). No stack: a node asked of the
-// world finds what is handed it from the top (`world_root`). The node cache's words all atomic, as
+// kept (pxl-engine `cast::walk`, `node_cache`). No stack: a node asked of the world finds what
+// is handed it off its parent's where the walk went into it from its parent, else from the top
+// (`world_root`). The node cache's words all atomic, as
 // a slot's key is exchanged to claim it: no compare-and-swap, which Safari's WGSL compiler
 // writes Metal for that does not compile (doc/experiment/20261103-shaders-on-two-phones). A
 // pass names what its walks count and are tagged by (`WALK_PASS`, `VISITS_COUNT`, `ASKED_COUNT`).
@@ -76,27 +77,14 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom:
   return (h ^ (h >> 16u)) & ~KIND_MASK;
 }
 
-/// What is in the node, as a walk reads it (`answer::In`).
-struct In {
-  kind: u32,
-  asset: vec2<u32>,
-}
-
 /// No node entered: what the walk reads as no answer.
 const KIND_NONE = 0xffffffffu;
 
-/// The node `c` at `zoom`, asked at `zooms` by a walk of `tag`, what is handed it found from the
-/// top where the world is asked (`ask_node`).
-fn ask(zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> In {
-  let a = ask_node(vec4<u32>(0u), true, zoom, c, zooms, true, tag);
-  return In(a.kind, a.asset);
-}
-
-/// The node `c` at `zoom`, asked at `zooms` by a walk of `tag`: off the slot that keeps it, unless
-/// this pass is still writing it; else of the world, and kept (`keep`), what is handed it found
-/// there alone: from the top where `top` (`world_root`), else off what was handed its parent,
-/// `parent` (`world_child`). What it hands its children: the slot's where one kept it. One asked
-/// of the world counts in `ASKED_COUNT` where `counts`.
+/// The node `c` at `zoom`, asked at `zooms` by a walk of `tag`: off the slot that keeps it, of
+/// whichever walk; else of the world, and kept (`keep`), what is handed it found there alone:
+/// from the top where `top` (`world_root`), else off what was handed its parent, `parent`
+/// (`world_child`). What it hands its children: the slot's where one kept it. One asked of the
+/// world counts in `ASKED_COUNT` where `counts`.
 fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool, tag: u32) -> Answer {
   let want = zooms << TAG_BITS;
   var kept = keeps(zoom, c);
@@ -107,21 +95,23 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, c
       let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
       let slot_key = node_cache_word(w);
       if (slot_key != 0u && (slot_key & KEY_ZOOMS) == want && is_node(w, zoom, c)) {
-        if ((slot_key & ~KEY_ZOOMS) != tag) {
-          let at = w + W_INHERITANCE;
-          let held = vec4<u32>(
-            node_cache_word(at),
-            node_cache_word(at + 1u),
-            node_cache_word(at + 2u),
-            node_cache_word(at + 3u),
-          );
-          let word = node_cache_word(w + W_KIND);
-          let asset = vec2<u32>(node_cache_word(w + W_ASSET), node_cache_word(w + W_ASSET + 1u));
-          if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, zooms, asset, held, zoom, c)) {
-            return Answer(word & KIND_MASK, asset, held);
-          }
+        // Its key is written last (`keep`), but a plain load may give the other words from
+        // before that write, or from a write over it since: an entry of any walk, this pass's
+        // as an earlier frame's, is taken only where its words hash to its stamp
+        // (`entry_stamp`), which is all that keeps an entry torn so from answering.
+        let at = w + W_INHERITANCE;
+        let held = vec4<u32>(
+          node_cache_word(at),
+          node_cache_word(at + 1u),
+          node_cache_word(at + 2u),
+          node_cache_word(at + 3u),
+        );
+        let word = node_cache_word(w + W_KIND);
+        let asset = vec2<u32>(node_cache_word(w + W_ASSET), node_cache_word(w + W_ASSET + 1u));
+        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, zooms, asset, held, zoom, c)) {
+          return Answer(word & KIND_MASK, asset, held);
         }
-        // This pass's, or words of two writes: left to the walk that writes it.
+        // Words of two writes: left to the walk that writes it.
         kept = false;
         break;
       }
@@ -239,31 +229,6 @@ fn put_back(w: u32, got: u32) {
   }
 }
 
-/// The zooms the ray, where it is at `t`, asks of the node, far then near over `ZOOM_BITS`
-/// (`ask_zooms`, `node_dist_sq`); `NONE` where it has no span in it: touched at a face or an
-/// edge alone, it is not entered.
-fn zooms_asked(
-  corner: vec3<u32>,
-  zoom: u32,
-  roots: vec3<i32>,
-  og: vec3<u32>,
-  dir: vec3<f32>,
-  inv: vec3<f32>,
-  t: f32,
-  t_max: f32,
-  range: vec2<u32>,
-) -> u32 {
-  let lo = units(corner, og, roots);
-  let hi = far_of(corner, under(zoom), og, roots);
-  let s = span_of(dir, inv, lo, hi, t, t_max);
-  if (min(t_max, smallest(s.far)) <= max(t, largest(s.near))) {
-    return NONE;
-  }
-  let far_v = max(-lo, hi);
-  let near_v = min(max(lo, vec3<f32>(0.0)), hi);
-  return zoom_at(squared(far_v), range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
-}
-
 /// The ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to, from
 /// `start` (`cast::walk`, `Until::Opaque`): its nodes asked here, not counting the nodes its
 /// beam ray visited. Holding across a query only what no node gives again.
@@ -281,27 +246,38 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = t_max;
+  // What was handed the node's parent where the walk went into the node from it (`from_parent`),
+  // as pxl-engine's walk hands it on its stack; else the node is asked from the top, as the
+  // first after a resume is.
+  var parent = vec4<u32>(0u);
+  var from_parent = false;
   // A float gone wrong ends here, at its reach, as `cast::walk_at_most` ends one; the walks of
   // tests/sample.rs take far fewer.
   for (var step = 0u; step < STEPS_MOST; step += 1u) {
-    // Asked first, holding across it only what no node gives again.
-    var kind = KIND_NONE;
-    asset = vec2<u32>(0u);
-    let zooms = zooms_asked(corner, zoom, roots, og, dir, inv, t, t_max, range);
-    if (zooms != NONE) {
-      // The root it starts in (`roots_of`), X's wrapped away as the world names it.
-      let r0 = vec3<i32>(0i, 0i, i32(og.z) >> 31u);
-      let a = ask(zoom, idx_of(corner, zoom, roots, r0), zooms, tag);
-      kind = a.kind;
-      asset = a.asset;
-      visits += 1u;
-    }
     let u = under(zoom);
     let lo = units(corner, og, roots);
     let hi = far_of(corner, u, og, roots);
     let s = span_of(dir, inv, lo, hi, t, t_max);
     let t0 = max(t, largest(s.near));
     let t1 = min(t_max, smallest(s.far));
+    var kind = KIND_NONE;
+    asset = vec2<u32>(0u);
+    // Touched at a face or an edge alone, it is not entered: not asked. Else asked at the zooms
+    // its farthest corner and nearest point ask on the face the ray enters it across, far then
+    // near over `ZOOM_BITS` (`ask_zooms`, `node_dist_sq`, `node_slant`).
+    if (t1 > t0) {
+      let slant = node_slant(dir, s.near);
+      let far_v = max(-lo, hi);
+      let near_v = min(max(lo, vec3<f32>(0.0)), hi);
+      let zooms = zoom_at(squared(far_v), slant, range) | (zoom_at(squared(near_v), slant, range) << ZOOM_BITS);
+      // The root it starts in (`roots_of`), X's wrapped away as the world names it.
+      let r0 = vec3<i32>(0i, 0i, i32(og.z) >> 31u);
+      let a = ask_node(parent, !from_parent, zoom, idx_of(corner, zoom, roots, r0), zooms, true, tag);
+      kind = a.kind;
+      asset = a.asset;
+      parent = a.handed;
+      visits += 1u;
+    }
     var into = false;
     if (kind == KIND_SPLIT) {
       // Whether its span meets the box its content lies in (`meets_box`).
@@ -347,11 +323,13 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
       corner = corner | select(vec3<u32>(0u), vec3<u32>(half), crossed);
       zoom += 1u;
       t = t0;
+      from_parent = true;
     } else {
       if (t1 >= t_max) {
         hit_t = t1;
         break;
       }
+      from_parent = false;
       // ADVANCE: the corner stepped on the axis it leaves by, then POP.
       let e = crossing(dir, s.far, false);
       let up = dir[e] > 0.0;

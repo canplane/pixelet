@@ -2,20 +2,22 @@
 
 @group(0) @binding(13) var exposure_texel: texture_2d<f32>;
 
-// The texel as this invocation read it, once: every light and the sky take it.
+// The texel as this invocation read it, once, its stops raised to the exposure they
+// are: every light and the sky take it.
 var<private> eye_texel: vec4f;
 var<private> eye_texel_read: bool;
 
 fn eye_texel_word() -> vec4f {
   if (!eye_texel_read) {
-    eye_texel = textureLoad(exposure_texel, vec2i(0, 0), 0);
+    let texel = textureLoad(exposure_texel, vec2i(0, 0), 0);
+    eye_texel = vec4f(exp2(texel.r), texel.gba);
     eye_texel_read = true;
   }
   return eye_texel;
 }
 
 fn exposure() -> f32 {
-  return exp2(eye_texel_word().r);
+  return eye_texel_word().r;
 }
 
 // The table's white, as the exposure pass wrote it beside the stops.

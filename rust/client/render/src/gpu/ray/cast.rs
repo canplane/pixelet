@@ -100,7 +100,7 @@ pub(super) struct CastBuffers {
     /// The samples' walk over the node cache alone, ahead of `sample_built`.
     sample_hit_built: Pipeline,
     sample_hit_group: u32,
-    /// `SAMPLE_LEFT_START`'s words, as the pass leaves them.
+    /// `ray::LEFT_EMPTY`'s words, as the pass leaves them.
     sample_left: u32,
     /// The pixels' walk over the node cache alone, ahead of `miss_list_built`.
     miss_hit_built: Pipeline,
@@ -195,7 +195,7 @@ pub(super) struct CastBuffers {
     /// over the node cache alone (`light_miss_hit_cs`).
     light_miss_built: Pipeline,
     light_miss_hit_built: Pipeline,
-    /// `LIGHT_LEFT_EMPTY`'s words, as `light_miss_hit_cs` leaves them.
+    /// `ray::LEFT_EMPTY`'s words, as `light_miss_hit_cs` leaves them.
     light_left: u32,
     /// The tiles of the light's box its receivers stand on in a cast
     /// (pxl-engine `light::stands_at`): where the eye's rays meet the world
@@ -451,8 +451,6 @@ const _: () = assert!(
     floor::holds(&[&LIGHT_GROUP]),
     "the light's slots' group binds past WebGPU's floor"
 );
-/// The samples `sample_hit_cs` left: `sample_cs`'s dispatch, then their count.
-const SAMPLE_LEFT_START: [u32; 4] = [0, 1, 1, 0];
 const MISS_HIT_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -510,9 +508,12 @@ const _: () = assert!(
 /// The claimed tiles' list as a frame's cast starts: `cast_cs`'s dispatch, no tile yet, each
 /// one's workgroups across and down (cast_tiles.wgsl).
 const CAST_TILES_START: [u32; 3] = [0, TILE_CASTS, TILE_CASTS];
-/// The pixels `miss_hit_cs` left: `miss_list_cs`'s dispatch and their count, then
-/// the hits it kept, as `node_cache::HITS_ARGS` lays them.
-const MISS_LEFT_EMPTY: [u32; 8] = [ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0];
+/// The pixels `miss_hit_cs` left: `miss_list_cs`'s dispatch and their count
+/// (`ray::LEFT_EMPTY`), then the hits it kept, as `node_cache::HITS_ARGS` lays them.
+const MISS_LEFT_EMPTY: [u32; 8] = {
+    let l = ray::LEFT_EMPTY;
+    [l[0], l[1], l[2], l[3], 0, 1, 1, 0]
+};
 const LIGHT_MISS_HIT_GROUP: [u32; 18] = [
     0,
     COMPUTE,
@@ -643,8 +644,6 @@ const _: () = assert!(
         && floor::holds(&[&LIGHT_SLIDE_GROUP]),
     "a light receivers' pass's group binds past WebGPU's floor"
 );
-/// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one, then how many it left.
-const LIGHT_LEFT_EMPTY: [u32; 4] = [ray::MISS_ACROSS, 0, 1, 0];
 /// The cast's world's group, over which `cell_cs`, `light_cell_cs`, `fold_cs` and
 /// `forget_cs` run: the eye, the clip levels' table and the bricks' levels the fold reads
 /// and writes, the beam rays' words the cells' starts go into, the node cache, and the
@@ -907,7 +906,7 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             light_left: buf(
-                word_bytes(LIGHT_LEFT_EMPTY.len()),
+                word_bytes(ray::LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
             light_args: 0,
@@ -938,7 +937,7 @@ impl RaysPass {
             miss_hit_group: 0,
             beam_hit_group: 0,
             beam_left: g.buf(
-                word_bytes(SAMPLE_LEFT_START.len()),
+                word_bytes(ray::LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             miss_left: g.buf(
@@ -946,15 +945,15 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             sample_left: g.buf(
-                word_bytes(SAMPLE_LEFT_START.len()),
+                word_bytes(ray::LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             light_sample_left: g.buf(
-                word_bytes(SAMPLE_LEFT_START.len()),
+                word_bytes(ray::LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             light_beam_left: g.buf(
-                word_bytes(SAMPLE_LEFT_START.len()),
+                word_bytes(ray::LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             bindings: [0; 11],
@@ -1843,26 +1842,26 @@ impl RaysPass {
                 let beam_left = span == GpuSpanName::beam;
                 if span == GpuSpanName::beam_hit {
                     group = c.beam_hit_group;
-                    g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
+                    g.write_buf(c.beam_left, 0, bytes(&ray::LEFT_EMPTY));
                 }
                 if beam_left {
                     group = c.ask_group;
                     g.copy_buf(
                         encoder,
-                        (c.beam_left, word_bytes(3)),
+                        (c.beam_left, word_bytes(ray::LEFT_CNT as usize)),
                         (c.beams, word_bytes(c.grid.corners_at as usize)),
                         4,
                     );
                 }
                 if span == GpuSpanName::sample_hit {
                     group = c.sample_hit_group;
-                    g.write_buf(c.sample_left, 0, bytes(&SAMPLE_LEFT_START));
+                    g.write_buf(c.sample_left, 0, bytes(&ray::LEFT_EMPTY));
                 }
                 if span == GpuSpanName::sample {
                     group = c.ask_group;
                     g.copy_buf(
                         encoder,
-                        (c.sample_left, word_bytes(3)),
+                        (c.sample_left, word_bytes(ray::LEFT_CNT as usize)),
                         (c.beams, word_bytes(c.grid.lefts_at as usize)),
                         4,
                     );
@@ -1916,7 +1915,7 @@ impl RaysPass {
             // kept where that goes on from.
             g.copy_buf(
                 encoder,
-                (c.miss_left, word_bytes(3)),
+                (c.miss_left, word_bytes(ray::LEFT_CNT as usize)),
                 (c.beams, word_bytes(c.grid.misses_at as usize)),
                 4,
             );
@@ -2044,14 +2043,14 @@ impl RaysPass {
             // the samples' group, and the cells' starts over the light's
             // world's group, each handed the light's head.
             let args = |w: u32| word_bytes(w as usize);
-            g.write_buf(c.light_beam_left, 0, bytes(&SAMPLE_LEFT_START));
+            g.write_buf(c.light_beam_left, 0, bytes(&ray::LEFT_EMPTY));
             g.set_bind_group(pass, 0, c.light_groups[11], &[]);
             g.set_pipeline(pass, c.light_beam_hit_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
             g.end(pass);
             g.copy_buf(
                 encoder,
-                (c.light_beam_left, word_bytes(3)),
+                (c.light_beam_left, word_bytes(ray::LEFT_CNT as usize)),
                 (
                     c.light_list,
                     word_bytes(light::corners_left_at(shadow::SIZE) as usize),
@@ -2067,7 +2066,7 @@ impl RaysPass {
             g.set_pipeline(pass, c.light_cells_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
             g.end(pass);
-            g.write_buf(c.light_sample_left, 0, bytes(&SAMPLE_LEFT_START));
+            g.write_buf(c.light_sample_left, 0, bytes(&ray::LEFT_EMPTY));
             // The samples, over the node cache alone first: one span.
             let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
@@ -2077,7 +2076,7 @@ impl RaysPass {
             g.end(pass);
             g.copy_buf(
                 encoder,
-                (c.light_sample_left, word_bytes(3)),
+                (c.light_sample_left, word_bytes(ray::LEFT_CNT as usize)),
                 (
                     c.light_list,
                     word_bytes(light::lefts_at(shadow::SIZE) as usize),
@@ -2111,7 +2110,7 @@ impl RaysPass {
                 ),
                 4,
             );
-            g.write_buf(c.light_left, 0, bytes(&LIGHT_LEFT_EMPTY));
+            g.write_buf(c.light_left, 0, bytes(&ray::LEFT_EMPTY));
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_hit).pass());
             g.set_bind_group(pass, 0, c.light_groups[8], &[]);
             g.set_pipeline(pass, c.light_miss_hit_built.id);
@@ -2121,7 +2120,7 @@ impl RaysPass {
             // How many it left where their walk reads them, then that walk over their list.
             g.copy_buf(
                 encoder,
-                (c.light_left, word_bytes(3)),
+                (c.light_left, word_bytes(ray::LEFT_CNT as usize)),
                 (
                     c.light_list,
                     word_bytes(light::misses_left_at(shadow::SIZE) as usize),

@@ -203,7 +203,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     table0[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table0, store());
     let beams = gpu.buffer(&vec![0u32; grid.size() as usize], store());
-    let left = gpu.buffer(&[0, 1, 1, 0], store());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store());
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_BEAM_HIT), "beam_hit_cs"),
         &[
@@ -225,7 +225,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_BEAM), "beam_cs"),
         &world_binds(b, &eye_buf, &beams, &table),
-        [args[0].max(1), 1, 1],
+        [args[0], args[1], 1],
     );
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
@@ -239,7 +239,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
             1,
         ],
     );
-    let left = gpu.buffer(&[0, 1, 1, 0], store());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store());
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs"),
         &[
@@ -262,7 +262,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         gpu.dispatch(
             &gpu.pipeline(src(SHADER_SAMPLE), "sample_cs"),
             &world_binds(b, &eye_buf, &beams, &table),
-            [args[0], 1, 1],
+            [args[0], args[1], 1],
         );
     }
     let samples = grid.samples[0] * grid.samples[1];

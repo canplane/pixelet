@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{cast, FRAC_W};
+use pxl_engine::{cast, ray, FRAC_W};
 use pxl_render::frame::shader::record::{compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT};
 
 /// How long a test waits on the device for one submission before it fails.
@@ -171,7 +171,7 @@ impl Gpu {
         list: &wgpu::Buffer,
         size: u32,
     ) {
-        let left = self.buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
+        let left = self.buffer(&ray::LEFT_EMPTY, wgpu::BufferUsages::STORAGE);
         let mut hit: Vec<_> = world
             .iter()
             .filter(|(b, _)| [0, 8, 9, 11].contains(b))
@@ -194,7 +194,7 @@ impl Gpu {
         let args = self.read(&left);
         let at = u64::from(light::corners_left_at(size)) * 4;
         self.queue.write_buffer(list, at, bytes(&args[3..]));
-        self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM), world, [args[0].max(1), 1, 1]);
+        self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM), world, [args[0], args[1], 1]);
     }
 }
 

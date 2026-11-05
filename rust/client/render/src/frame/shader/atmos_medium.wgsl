@@ -168,7 +168,7 @@ fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   let bottom = atmos_bottom_radius();
   let top = atmos_top_radius();
   let r = min(r_in, top);
-  let h = sqrt(top * top - bottom * bottom);
+  let h = atmos_horizon_to_top();
   let rho = sqrt(max(r * r - bottom * bottom, 0.0));
   let d = to_top(r, mu);
   let d_min = top - r;
@@ -183,7 +183,7 @@ fn transmittance_r_mu(uv: vec2f) -> vec2f {
   let top = atmos_top_radius();
   let x_mu = unit_of(uv.x, TRANSMITTANCE_SIZE.x);
   let x_r = unit_of(uv.y, TRANSMITTANCE_SIZE.y);
-  let h = sqrt(top * top - bottom * bottom);
+  let h = atmos_horizon_to_top();
   let rho = h * x_r;
   let r = sqrt(rho * rho + bottom * bottom);
   let d_min = top - r;

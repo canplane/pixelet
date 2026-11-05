@@ -1,12 +1,17 @@
 // pxl-render/grid.wgsl
 
 // The eye's camera grid as its words lay it among the eye's (pxl-engine `beam::Grid`,
-// `eye::GRID`): where a cell's rays start among the beam rays' words, and the cell a drawn
-// pixel's ray goes through.
+// `eye::GRID`): where a cell's rays start and where a sample's hit lies among the beam rays'
+// words, and the cell a drawn pixel's ray goes through.
 
 /// The first word of the screen's cell `c`'s start (`Grid::cell_at`).
 fn cell_start(c: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_CELLS_AT) + (c.y * eye_word(GRID + GRID_SPAN) + c.x) * CELL_WORDS;
+}
+
+/// The first word of sample `s`'s hit (`Grid::sample_at`).
+fn sample_word(s: vec2<u32>) -> u32 {
+  return eye_word(GRID + GRID_SAMPLES_AT) + (s.y * eye_word(GRID + GRID_SAMPLES) + s.x) * SAMPLE_WORDS;
 }
 
 /// The tangents across and up where drawn pixel `p` of the `size` the rays are takes its

@@ -16,7 +16,7 @@ fn light_miss_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let at = head_word(LIGHT_HEAD_MISSES_LEFT);
-  let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
+  let k = list_place(group.xy, lane.x);
   if (k >= beams[at]) {
     return;
   }

@@ -2,13 +2,14 @@
 
 // The samples `sample_hit_cs` left, either observer's (sample.eye.wgsl, sample.light.wgsl),
 // walked on from where it left them asking the world (ask.wgsl, `beam::SAMPLE_LEFT_T`), a thread
-// each at its place in their list (sample.eye.wgsl, sample.light.wgsl).
+// each at its place in their list (list.wgsl).
 
-@compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
-fn sample_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // A row of workgroups a run of the list, a workgroup's lanes row by row, as sample_hit.wgsl
-  // lists them.
-  let place = (id.x / SAMPLE_SIDE) * SAMPLE_SIDE * SAMPLE_SIDE + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
+@compute @workgroup_size(MISS_LANES, 1, 1)
+fn sample_cs(
+  @builtin(workgroup_id) group: vec3<u32>,
+  @builtin(local_invocation_id) lane: vec3<u32>,
+) {
+  let place = list_place(group.xy, lane.x);
   let at = left_at();
   if (place >= beams[at]) {
     return;

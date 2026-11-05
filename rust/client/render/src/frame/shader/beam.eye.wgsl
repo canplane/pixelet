@@ -16,10 +16,6 @@ fn beam_item(id: vec2<u32>) -> vec2<u32> {
   return id;
 }
 
-fn beam_needed(c: vec2<u32>) -> bool {
-  return true;
-}
-
 fn beam_idx(c: vec2<u32>) -> u32 {
   return c.y * beam_lattice().x + c.x;
 }

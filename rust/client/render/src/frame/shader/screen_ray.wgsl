@@ -126,7 +126,15 @@ fn appearance(c: vec3u) -> Appearance {
   }
   let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
-    let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
+    // The face's own look read once, its index's among the four.
+    var sum = vec3f(0.0);
+    for (var k = 0u; k < 4u; k++) {
+      if (fold[k] == val) {
+        sum += far(l);
+      } else {
+        sum += far(look(fold[k]));
+      }
+    }
     return Appearance(sum * 0.25, NO_LAYER);
   }
   return Appearance(far(l), NO_LAYER);

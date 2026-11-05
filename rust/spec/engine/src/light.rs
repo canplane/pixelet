@@ -849,7 +849,7 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (pxl-render light_miss.wgsl) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
 /// that took their visible sample, by the same listing and dispatch
-/// (pxl-render cast.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
+/// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`node_cache::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.

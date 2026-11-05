@@ -19,10 +19,6 @@ fn sample_needed(s: vec2<u32>) -> bool {
   return true;
 }
 
-fn sample_word(s: vec2<u32>) -> u32 {
-  return eye_word(GRID + GRID_SAMPLES_AT) + (s.y * sample_lattice().x + s.x) * SAMPLE_WORDS;
-}
-
 fn left_at() -> u32 {
   return eye_word(GRID + GRID_LEFTS_AT);
 }

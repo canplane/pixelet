@@ -35,7 +35,9 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (dot(n, shadow_light()) <= 0.0) {
     return 0.0;
   }
-  if (frame_shadow_strength() <= 0.0) {
+  // No map drawn, or past the effects' reach: lit, unprojected and untapped.
+  let strength = frame_shadow_strength() * effect_share(length(world_pos), frame_effect_reach());
+  if (strength <= 0.0) {
     return 1.0;
   }
   // A texel along the normal so a surface does not shadow itself.
@@ -45,7 +47,6 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
     return 1.0;
   }
-  let strength = frame_shadow_strength() * effect_share(length(world_pos), frame_effect_reach());
   let size = vec2f(textureDimensions(shadow_map));
   // A tap a texel and a half off lies where the receiver's plane is that
   // much nearer the light or further: compared at its own depth there

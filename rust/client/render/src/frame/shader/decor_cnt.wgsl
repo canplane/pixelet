@@ -37,7 +37,7 @@ fn cnt_one(i: u32) {
   let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
   let d2 = distance2(origin, corner);
   let placed = i >= PLACED_HEAD + PLACED_HEAD_WORDS;
-  let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+  let ask_zoom = zoom_at(d2, 0u, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
   let zoom = select(held_at(ask_zoom, corner.xy), ask_zoom, placed);
   let cell = record_cell(w);
   var drawn_here = zoom == cell;

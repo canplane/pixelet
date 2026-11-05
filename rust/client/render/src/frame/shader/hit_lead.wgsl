@@ -14,9 +14,13 @@
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(9) var<storage, read> node_cache: array<u32>;
-/// The walk again's words, the faces' pass's count and dispatch among them
-/// (`ray::MISS_ARGS_ROOM`).
-@group(0) @binding(14) var<storage, read_write> marks: array<atomic<u32>>;
+/// The walk again's words (list.wgsl `MissArgs`), none read here, then the faces' pass's
+/// count and dispatch past their room (`ray::MISS_ARGS_ROOM`, `raster::ARGS_WORDS`).
+struct HitArgs {
+  miss: array<u32, MISS_ARGS_ROOM>,
+  faces: array<atomic<u32>>,
+}
+@group(0) @binding(14) var<storage, read_write> marks: HitArgs;
 
 /// Whether the hits at words `a` and `b` are one: one node entered through one face.
 fn alike(a: u32, b: u32) -> bool {
@@ -63,9 +67,9 @@ fn hit_lead_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   // Its place among the asks, and the faces' pass's workgroups raised by the place that
   // opens one.
-  let place = atomicAdd(&marks[MISS_ARGS_ROOM + RASTER_ARGS_INSTANCES], 1u);
+  let place = atomicAdd(&marks.faces[RASTER_ARGS_INSTANCES], 1u);
   if (place % RASTER_FACES_LANES == 0u) {
-    atomicMax(&marks[MISS_ARGS_ROOM + RASTER_ARGS_FACES], place / RASTER_FACES_LANES + 1u);
+    atomicMax(&marks.faces[RASTER_ARGS_FACES], place / RASTER_FACES_LANES + 1u);
   }
   let cell = grid_cell(px_tan(p, textureDimensions(rays)));
   let a = eye_word(GRID + GRID_HIT_ASKS_AT) + place * ASK_WORDS;

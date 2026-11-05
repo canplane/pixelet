@@ -143,13 +143,17 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10
+    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 9 and 10
     /// are free.
     atmos {
         RAYLEIGH_SCATTERING: Vec3 = 0,
         BOTTOM_RADIUS: F32 = 3,
         OZONE_ABSORPTION: Vec3 = 4,
         TOP_RADIUS: F32 = 7,
+        /// How far a level ray from the ground runs to the top, in km, `TOP_RADIUS` and
+        /// `BOTTOM_RADIUS` the sides of its right triangle (atmos_medium.wgsl
+        /// `transmittance_uv`).
+        HORIZON_TO_TOP: F32 = 8,
         RAYLEIGH_SCALE_HEIGHT: F32 = 11,
         SUN_DIR: Vec3 = 12,
         MIE_SCATTERING: F32 = 15,

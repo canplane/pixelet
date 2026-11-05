@@ -20,11 +20,6 @@ fn beam_item(id: vec2<u32>) -> vec2<u32> {
   return light_item(LEVEL_CORNER, id);
 }
 
-/// Whether a cell whose window holds beam ray `c` is one this cast casts (`light_needs`).
-fn beam_needed(c: vec2<u32>) -> bool {
-  return light_needs(LEVEL_CORNER, c);
-}
-
 /// The first word of beam ray `c`'s line (`light::line`).
 fn beam_line(c: vec2<u32>) -> u32 {
   return light_line(c.y * beam_across() + c.x);

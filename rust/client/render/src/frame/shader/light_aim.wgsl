@@ -1,7 +1,8 @@
 // pxl-render/light_aim.wgsl
 
-// The light's head, a texel's ray and band and the word a slot's walk leaves, as the light's
-// passes by hand take them (pxl-engine light.rs `ray`, `Light::band`, `depth`, `word`).
+// The light's head, a cell's start, a texel's ray and band and the word a slot's walk leaves,
+// as the light's passes by hand take them (pxl-engine light.rs `cell`, `ray`, `Light::band`,
+// `depth`, `word`).
 
 @group(0) @binding(11) var<uniform> head: array<vec4<i32>, LIGHT_HEAD_VEC4S>;
 
@@ -37,6 +38,11 @@ fn texel_start(w: vec2<i32>) -> vec3<i32> {
 fn gap(k: i32, half: i32) -> i32 {
   let t = i32(LIGHT_TILE);
   return max(max(k * t - half, half - (k + 1i) * t), 0i);
+}
+
+/// The first word of cell `c`'s start in the light's list (`light::cell`).
+fn light_cell_at(c: vec2<u32>) -> u32 {
+  return head_word(LIGHT_HEAD_CELLS) + (c.y * head_word(LIGHT_HEAD_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
 /// The slot's texel of the box (`Light::texel`).

@@ -72,6 +72,17 @@ const _: () = assert!(
     "the rows over the marked pixels listed fit one dispatch"
 );
 
+/// What a walk over the node cache left, listed for the walk that asks the world (pxl-render
+/// list.wgsl `enlist`; beam_hit.wgsl, sample_hit.wgsl, miss_hit.wgsl, light_miss_hit.wgsl):
+/// its dispatch, laid as `MISS_ARGS_LIST`'s, no row until one is listed, then its count
+/// (`LEFT_CNT`). Every list, these and the walk again's, raises the same row word.
+pub const LEFT_EMPTY: [u32; 4] = [MISS_ACROSS, 0, 1, 0];
+pub const LEFT_CNT: u32 = 3;
+const _: () = assert!(
+    MISS_ARGS_LIST == 0,
+    "a list's rows are its dispatch's second word"
+);
+
 /// The eye's walk again's words past those: the args what lies about the
 /// faces its hits met is asked by, once a square of them (pxl-render
 /// hit_lead.wgsl `hit_lead_cs`, face.wgsl `face_cs`), laid as the boxes' are

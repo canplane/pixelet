@@ -2,13 +2,14 @@
 
 // The beam rays `beam_hit_cs` left, either observer's (beam.eye.wgsl, beam.light.wgsl), each
 // walked on from where that left it asking the world (beam_walk.wgsl, ask.wgsl). A thread each
-// at its place in their list.
+// at its place in their list (list.wgsl).
 
-@compute @workgroup_size(CORNER_SIDE, CORNER_SIDE, 1)
-fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // A row of workgroups a run of the list, a workgroup's lanes row by row, as beam_hit.wgsl
-  // lists them.
-  let place = (id.x / CORNER_SIDE) * CORNER_SIDE * CORNER_SIDE + (id.y % CORNER_SIDE) * CORNER_SIDE + id.x % CORNER_SIDE;
+@compute @workgroup_size(MISS_LANES, 1, 1)
+fn beam_cs(
+  @builtin(workgroup_id) group: vec3<u32>,
+  @builtin(local_invocation_id) lane: vec3<u32>,
+) {
+  let place = list_place(group.xy, lane.x);
   let at = corners_left_at();
   if (place >= beams[at]) {
     return;

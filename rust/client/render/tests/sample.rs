@@ -281,7 +281,7 @@ fn eye_beams(gpu: &Gpu, b: &WorldBufs, obs: &Observed, table: &wgpu::Buffer) -> 
     let eye = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
     let head = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buffer(&obs.words, store_of());
-    let left = gpu.buffer(&[0, 1, 1, 0], store_of());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store_of());
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_BEAM_HIT), "beam_hit_cs"),
         &[
@@ -304,7 +304,7 @@ fn eye_beams(gpu: &Gpu, b: &WorldBufs, obs: &Observed, table: &wgpu::Buffer) -> 
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_BEAM), "beam_cs"),
         &world,
-        [args[0].max(1), 1, 1],
+        [args[0], args[1], 1],
     );
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
@@ -453,22 +453,31 @@ fn light_beams(
         unreachable!()
     };
     if let Some(every) = listed {
-        // Tiles feeding one in `every` of the box, a tile in nine of them read, the box's edges
-        // among them.
+        // Some tiles read, the box's corners among them; listed, the tiles that feed one, as
+        // the propagation lists them (light_propagate.wgsl `enlist`), one in `every` of the
+        // box and its edges.
         obs.head[light::HEAD_EPOCH] = CAST - 3;
         let side = light::TILE / param::light::SAMPLE;
         let at = light::listed_at(size, light::LISTED_FED) as usize;
+        let read = |i: u32, j: u32| {
+            (i % 5 == 1 && j % 4 == 2)
+                || (i == 0 && (j == 0 || j == 13))
+                || (i == tiles - 1 && j == tiles - 1)
+        };
+        let feeds = |i: u32, j: u32| {
+            (i.saturating_sub(1)..=(i + 1).min(tiles - 1))
+                .any(|a| (j.saturating_sub(1)..=(j + 1).min(tiles - 1)).any(|b| read(a, b)))
+        };
         let mut entries = Vec::new();
         for j in 0..tiles {
             for i in 0..tiles {
-                if (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1 {
+                let some = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
+                if some && feeds(i, j) {
                     entries.push(j << 16 | i);
                 }
-                let read = (i % 5 == 1 && j % 4 == 2)
-                    || (i == 0 && (j == 0 || j == 13))
-                    || (i == tiles - 1 && j == tiles - 1);
-                reads[(j * tiles + i) as usize] = read;
-                words[reads_at + (j * tiles + i) as usize] = if read { CAST } else { CAST - 1 };
+                reads[(j * tiles + i) as usize] = read(i, j);
+                words[reads_at + (j * tiles + i) as usize] =
+                    if read(i, j) { CAST } else { CAST - 1 };
             }
         }
         // In reverse, and the room past them an unlisted tile's: a read past the list, or a
@@ -540,7 +549,7 @@ fn run_frame(
     }
     let beams = gpu.buffer(&laid, store_of());
     let table = gpu.buffer(table0, store_of());
-    let left = gpu.buffer(&[0, 1, 1, 0], store_of());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store_of());
     let mut binds = vec![
         (0, eye_buf.as_entire_binding()),
         (8, beams.as_entire_binding()),
@@ -561,7 +570,7 @@ fn run_frame(
         binds.push((11, head_buf.as_entire_binding()));
     }
     if args[3] != 0 {
-        gpu.dispatch(world, &binds, [args[0], 1, 1]);
+        gpu.dispatch(world, &binds, [args[0], args[1], 1]);
     }
     let out = gpu.read(&beams);
 
@@ -1647,7 +1656,7 @@ fn stopped(
     }
     let beams = gpu.buffer(&laid, store_of());
     let table = gpu.buffer(table, store_of());
-    let left = gpu.buffer(&[0, 1, 1, 0], store_of());
+    let left = gpu.buffer(&ray::LEFT_EMPTY, store_of());
     let mut binds = vec![
         (0, eye_buf.as_entire_binding()),
         (8, beams.as_entire_binding()),
@@ -1667,7 +1676,7 @@ fn stopped(
         binds.push((11, head_buf.as_entire_binding()));
     }
     if args[3] != 0 {
-        gpu.dispatch(world, &binds, [args[0], 1, 1]);
+        gpu.dispatch(world, &binds, [args[0], args[1], 1]);
     }
     gpu.read(&beams)
 }
