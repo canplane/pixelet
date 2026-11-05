@@ -34,7 +34,7 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let across = eye_word(GRID + GRID_CORNERS);
   // How far each corner's rays start, a word a corner past the lines (`Grid::hand_at`).
-  let hands = across * eye_word(GRID + GRID_CORNERS + 1u) * LINE_WORDS;
+  let hands = eye_word(GRID + GRID_HANDS_AT);
   // No wider than the last cell's, which the grid's corners are laid for (`Grid::of`'s
   // `past`): a GPU's ceiling may take the next window for it.
   let k = min(cell_window(id.xy), eye_word(GRID + GRID_PAST));

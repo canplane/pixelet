@@ -15,11 +15,12 @@ fn light_miss_hit_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let misses = head_word(LIGHT_HEAD_MISSES);
+  let cnt = beams[head_word(LIGHT_HEAD_MISSES_CNT)];
   let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
-  if (k >= beams[misses]) {
+  if (k >= cnt) {
     return;
   }
-  let listed = beams[misses + 1u + k];
+  let listed = beams[misses + k];
   let slot = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let texel = slot_texel(slot);
   let w = walk(
@@ -32,5 +33,5 @@ fn light_miss_hit_cs(
     return;
   }
   textureStore(light, slot, 0, vec4<u32>(walked_word(w), 0u, 0u, 0u));
-  beams[misses + 1u + k] = LIGHT_MISS_STRUCK;
+  beams[misses + k] = LIGHT_MISS_STRUCK;
 }

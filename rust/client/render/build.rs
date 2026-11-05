@@ -338,7 +338,7 @@ fn walk_word() -> String {
         ("REVISIT_ONE_IN", 16),
         ("LIGHT", eye::LIGHT as u32),
         ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
-        ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
+        ("LIGHT_HEAD_MISSES_CNT", light::HEAD_MISSES_CNT as u32),
         ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
         ("LIGHT_ANCHOR", light::ANCHOR as u32),
         ("LIGHT_STEP_BITS", light::STEP_BITS),
@@ -385,7 +385,13 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_LEFTS", light::HEAD_LEFTS as u32),
         ("LIGHT_HEAD_READS", light::HEAD_READS as u32),
         ("LIGHT_HEAD_TILES", light::HEAD_TILES as u32),
-        ("LIGHT_HEAD_FED", light::HEAD_FED as u32),
+        ("LIGHT_HEAD_HANDS", light::HEAD_HANDS as u32),
+        ("LIGHT_HEAD_STANDS", light::HEAD_STANDS as u32),
+        ("LIGHT_HEAD_COARSE", light::HEAD_COARSE as u32),
+        ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
+        ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
+        ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
+        ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
         ("LIGHT_LISTED_LANES", light::LISTED_LANES),
         ("LIGHT_BEAM", light::BEAM),
@@ -441,6 +447,7 @@ fn walk_word() -> String {
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
         ("GRID_CORNERS_AT", beam::GRID_CORNERS_AT as u32),
+        ("GRID_HANDS_AT", beam::GRID_HANDS_AT as u32),
         ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
         ("GRID_SLOPE", beam::GRID_SLOPE as u32),
         ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
@@ -1254,6 +1261,74 @@ fn read_consts(text: &str) -> String {
     }
 }
 
+/// The faults the S23 showed, refused in every assembled module, compute and render
+/// (doc/experiment/20261104-taking-rust-gpu-out, its faults seen): no struct holds a
+/// struct, directly or in an array; no function's local is a struct, but a vertex or
+/// fragment entry point's local of the type it returns; no function's local is an
+/// array, or holds one.
+fn held_to_faults(module: &naga::Module, name: &str) {
+    use naga::TypeInner::{Array, BindingArray, Struct};
+    let is_struct = |mut ty: naga::Handle<naga::Type>| loop {
+        match module.types[ty].inner {
+            Struct { .. } => return true,
+            Array { base, .. } | BindingArray { base, .. } => ty = base,
+            _ => return false,
+        }
+    };
+    fn holds_array(module: &naga::Module, ty: naga::Handle<naga::Type>) -> bool {
+        match &module.types[ty].inner {
+            Array { .. } | BindingArray { .. } => true,
+            Struct { members, .. } => members.iter().any(|m| holds_array(module, m.ty)),
+            _ => false,
+        }
+    }
+    let mut faults = Vec::new();
+    for (_, ty) in module.types.iter() {
+        let Struct { members, .. } = &ty.inner else {
+            continue;
+        };
+        for m in members {
+            if is_struct(m.ty) {
+                faults.push(format!(
+                    "struct {} holds a struct in {}",
+                    ty.name.as_deref().unwrap_or("?"),
+                    m.name.as_deref().unwrap_or("?")
+                ));
+            }
+        }
+    }
+    let entries = module.entry_points.iter().map(|e| {
+        let output = matches!(
+            e.stage,
+            naga::ShaderStage::Vertex | naga::ShaderStage::Fragment
+        )
+        .then(|| e.function.result.as_ref().map(|r| r.ty))
+        .flatten();
+        (&e.function, output)
+    });
+    let fns = module.functions.iter().map(|(_, f)| (f, None));
+    for (f, output) in fns.chain(entries) {
+        for (_, var) in f.local_variables.iter() {
+            let ty = &module.types[var.ty];
+            let local = || {
+                format!(
+                    "{}'s var {}: {}",
+                    f.name.as_deref().unwrap_or("?"),
+                    var.name.as_deref().unwrap_or("?"),
+                    ty.name.as_deref().unwrap_or("array")
+                )
+            };
+            if matches!(ty.inner, Struct { .. }) && output != Some(var.ty) {
+                faults.push(format!("{} is a struct", local()));
+            }
+            if holds_array(module, var.ty) {
+                faults.push(format!("{} holds an array", local()));
+            }
+        }
+    }
+    assert!(faults.is_empty(), "{name}: {}", faults.join("; "));
+}
+
 /// Every shader assembled from its parts (part.rs `PARTS`), validated as
 /// WebGPU takes it, every capability off; written where record.rs `source`
 /// includes it; and which stages read each of its bindings, read off its
@@ -1296,6 +1371,7 @@ fn assemble(out: &Path) {
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        held_to_faults(&module, &format!("shader {kind} ({parts:?})"));
         let file = format!("{kind}.wgsl");
         std::fs::write(out.join("assembled").join(&file), &text).expect("an assembled shader");
         sources += &format!(
@@ -1392,6 +1468,7 @@ fn assemble(out: &Path) {
     Validator::new(ValidationFlags::all(), Capabilities::empty())
         .validate(&module)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
+    held_to_faults(&module, "world_asked");
     std::fs::write(out.join("assembled").join("world_asked.wgsl"), asked)
         .expect("the world's asked shader");
     let root = out.parent().expect("OUT_DIR");

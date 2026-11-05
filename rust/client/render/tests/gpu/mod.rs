@@ -1,8 +1,8 @@
-//! The device a test of a pass by hand runs it on (tests/fold.rs, tests/fill.rs and the
-//! rest): its buffers and textures, a module taken as the renderer assembles it or from a
-//! file a mutant sweep names, and a wait for the device that gives up, as a shader by hand
-//! may loop on; and what the tests share besides: the kinds of case each met, a light's box
-//! as a host lays it, a hash and a few vectors.
+//! The device every test of a pass by hand runs it on (tests/fold.rs, tests/fill.rs, the
+//! tests of tests/keeping and the rest): its buffers and textures, a module taken as the
+//! renderer assembles it or from a file a mutant sweep names, and a wait for the device that
+//! gives up, as a shader by hand may loop on; and what the tests share besides: the kinds of
+//! case each met, a light's box as a host lays it, a hash and a few vectors.
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
@@ -112,7 +112,8 @@ impl Gpu {
         p
     }
 
-    /// `groups` workgroups of `p` over `binds`, waited for.
+    /// `groups` workgroups of `p` over `binds`, waited for; a command buffer the device
+    /// stopped short fails the test.
     pub fn dispatch(
         &self,
         p: &wgpu::ComputePipeline,
@@ -131,6 +132,19 @@ impl Gpu {
             layout: &p.get_bind_group_layout(0),
             entries: &entries,
         });
+        // A word the same command buffer clears after the pass: one Metal aborts mid-way runs
+        // nothing after, and wgpu counts it done all the same.
+        let ran = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
+        });
+        ran.slice(..)
+            .get_mapped_range_mut()
+            .unwrap()
+            .copy_from_slice(&[0xff; 4]);
+        ran.unmap();
         let mut e = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = e.begin_compute_pass(&Default::default());
@@ -138,8 +152,20 @@ impl Gpu {
             pass.set_bind_group(0, &group, &[]);
             pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
         }
+        e.clear_buffer(&ran, 0, None);
         self.queue.submit([e.finish()]);
+        ran.slice(..).map_async(wgpu::MapMode::Read, |r| r.unwrap());
         self.wait();
+        let cleared = ran
+            .slice(..)
+            .get_mapped_range()
+            .unwrap()
+            .iter()
+            .all(|&b| b == 0);
+        assert!(
+            cleared,
+            "a dispatch of {groups:?} workgroups: the command buffer did not run to its end"
+        );
     }
 }
 

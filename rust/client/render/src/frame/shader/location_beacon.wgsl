@@ -22,9 +22,10 @@ fn vs(@location(0) pos: vec3f, @location(1) normal: vec3f) -> VertexOut {
   let seen = seen_from_eye(world);
   o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
-  o.sun = seen.light.sun;
-  o.other = seen.light.other;
-  o.fill = seen.light.fill;
+  let l = light_of(world);
+  o.sun = l.sun;
+  o.other = l.other;
+  o.fill = l.fill;
   return o;
 }
 
@@ -33,7 +34,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let color = select(LOCATION_BEACON_DAY, LOCATION_BEACON_NIGHT, draw_night() > 0.5);
   let glow = select(LOCATION_BEACON_DAY_GLOW, LOCATION_BEACON_NIGHT_GLOW, draw_night() > 0.5);
   let n = normalize(i.normal);
-  let seen = Air(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill));
-  let lit = shade_metal(color, LOCATION_BEACON_METALNESS, LOCATION_BEACON_ROUGHNESS, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, seen);
+  let seen = Air(i.transmittance, i.scattered);
+  let lit = shade_metal(color, LOCATION_BEACON_METALNESS, LOCATION_BEACON_ROUGHNESS, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, seen, Light(i.sun, i.other, i.fill));
   return vec4f(tone(lit + color * glow * seen.transmittance), 1.0);
 }

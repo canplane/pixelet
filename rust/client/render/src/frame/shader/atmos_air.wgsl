@@ -88,18 +88,14 @@ fn air_before(dir: vec3f, d: f32) -> vec4f {
 // The air before a point as the volume holds it along the point's direction
 // from the eye and at its distance, whichever way it lies from the view. A
 // point past the air's reach reads the air to its end. The lights at a point
-// are the point's own, read where it stands (atmos_view.wgsl `light_of`):
-// they turn with its height, and a froxel stands higher or lower than what
-// is drawn in it.
+// are not the volume's but the point's own, read where it stands
+// (atmos_view.wgsl `light_of`): they turn with its height, and a froxel
+// stands higher or lower than what is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Air {
   let to = world_pos - frame_camera_pos();
   let d = length(to);
   let air = air_before(to / max(d, 1e-6), d);
-  var s: Air;
-  s.scattered = air.rgb;
-  s.transmittance = air.a;
-  s.light = light_of(world_pos);
-  return s;
+  return Air(air.a, air.rgb);
 }
 
 /* sky */
@@ -174,7 +170,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let octaves = log2(d / atmos_earth_dist());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
-  let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
+  let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, light_of(p)) + city_shown(face.a, n);
   let land = clamp(log2(d / atmos_drawn()) + 1.0, 0.0, 1.0);
   return seen.scattered + seen.transmittance * land * lit;
 }

@@ -32,7 +32,8 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
 // much its own edges darken it there (0 to 1), where it is in the world, its
 // texture coordinate with that coordinate's screen gradients, how open it is
 // to the sky there (the screen's ambient occlusion, and its corners' where its
-// caller knows them), and the air between it and the eye.
+// caller knows them). The air between it and the eye and the lights there are
+// `paint`'s own arguments.
 struct Surface {
   rgb: vec3f,
   layers: vec4f,
@@ -43,7 +44,6 @@ struct Surface {
   ddx: vec2f,
   ddy: vec2f,
   ao: f32,
-  seen: Air,
 };
 
 // A cell's face wears its own image for that face, at any depth: a cell
@@ -92,7 +92,7 @@ fn line_at(d: f32, px: f32) -> f32 {
   return t * t * min(w / px, 1.0);
 }
 
-fn paint(s: Surface) -> vec3f {
+fn paint(s: Surface, seen: Air, l: Light) -> vec3f {
   // Only leaf cells carry layers; the taps are skipped.
   let textured = s.layers.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
@@ -105,5 +105,5 @@ fn paint(s: Surface) -> vec3f {
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
   let n = normalize(s.normal);
-  return shade(base, n, s.world_pos, shadow_visibility(s.world_pos, n), s.ao, s.seen);
+  return shade(base, n, s.world_pos, shadow_visibility(s.world_pos, n), s.ao, seen, l);
 }

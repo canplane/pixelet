@@ -44,9 +44,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let falloff = AO_RADIUS * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
   var occlusion = data.r;
   var cnt = 1.0;
-  var disc = DISC;
   for (var k = 0; k < AO_DENOISE_SAMPLES; k++) {
-    let at = uv + (spin * disc[k]) * texel * (AO_DENOISE_RADIUS / f32(AO_DOWNSCALE));
+    let at = uv + (spin * DISC[k]) * texel * (AO_DENOISE_RADIUS / f32(AO_DOWNSCALE));
     let tap = textureSampleLevel(src, src_sampler, at, 0.0);
     let tap_normal = tap.gba * 2.0 - 1.0;
     let tap_depth = depth_at(vec2i(at * ao_half()));

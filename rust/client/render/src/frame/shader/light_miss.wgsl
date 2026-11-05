@@ -15,11 +15,12 @@ fn light_miss_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let misses = head_word(LIGHT_HEAD_MISSES);
+  let cnt = list[head_word(LIGHT_HEAD_MISSES_CNT)];
   let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
-  if (k >= list[misses]) {
+  if (k >= cnt) {
     return;
   }
-  let listed = list[misses + 1u + k];
+  let listed = list[misses + k];
   if (listed == LIGHT_MISS_STRUCK) {
     return;
   }

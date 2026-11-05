@@ -17,7 +17,7 @@ const LEVEL_RAY = 3u;
 
 /// The beam rays across the map, and down (`light::beam_across`).
 fn beam_across() -> u32 {
-  return head_word(LIGHT_HEAD_SIZE) / LIGHT_BEAM + 1u + 2u * LIGHT_BEAM_WINDOW;
+  return head_word(LIGHT_HEAD_BEAM_ACROSS);
 }
 
 /// The first word of beam ray `k`'s line (`light::line`).
@@ -28,8 +28,7 @@ fn light_line(k: u32) -> u32 {
 /// The word of how far the rays about beam ray `k` start (`light::hand_at`): a word a beam
 /// ray, past the lines, before the cells.
 fn light_hand_at(k: u32) -> u32 {
-  let n = beam_across();
-  return head_word(LIGHT_HEAD_CELLS) - n * n + k;
+  return head_word(LIGHT_HEAD_HANDS) + k;
 }
 
 /// The first word of cell `c`'s start (`light::cell`).
@@ -43,19 +42,9 @@ fn light_sample_at(s: vec2<u32>) -> u32 {
   return head_word(LIGHT_HEAD_SAMPLES) + ((s.y % n) * n + s.x % n) * SAMPLE_WORDS;
 }
 
-/// List `which`'s count, its entries after it (`light::listed_at`): the corners' before the
-/// fed's, the claimed's after.
+/// List `which`'s count, its entries after it (`light::listed_at`).
 fn listed_at(which: u32) -> u32 {
-  let fed = head_word(LIGHT_HEAD_FED);
-  if (which == LIGHT_LISTED_CORNERS) {
-    let n = beam_across();
-    return fed - 1u - n * n;
-  }
-  if (which == LIGHT_LISTED_CLAIMED) {
-    let n = head_word(LIGHT_HEAD_TILES);
-    return fed + 1u + n * n;
-  }
-  return fed;
+  return head_word(LIGHT_HEAD_LISTED + which);
 }
 
 /// The list what feeds a claimed tile at `level` is listed in (`light::LISTED_CORNERS`,
@@ -151,7 +140,7 @@ fn casts_in(lo_at: vec2<i32>, hi_at: vec2<i32>) -> bool {
   var row = n;
   if (!few) {
     k = i32(LIGHT_COARSE);
-    first += u32(n * n);
+    first = head_word(LIGHT_HEAD_COARSE);
     row = n / i32(LIGHT_COARSE);
   }
   let number = head_word(LIGHT_HEAD_CAST);
@@ -193,31 +182,18 @@ fn reads_at() -> u32 {
   return head_word(LIGHT_HEAD_READS);
 }
 
-/// The stands, a word a tile before the reads (`light::stands_at`).
+/// The stands, a word a tile (`light::stands_at`).
 fn stands_at() -> u32 {
-  let n = light_tiles();
-  return reads_at() - n * n;
+  return head_word(LIGHT_HEAD_STANDS);
 }
 
-/// The word of the square of `COARSE` tiles a side tile `t` lies in, past the reads
+/// The word of the square of `COARSE` tiles a side tile `t` lies in
 /// (`light::coarse_square`).
 fn coarse_square(t: vec2<u32>) -> u32 {
-  let n = light_tiles();
-  return reads_at() + n * n + (t.y / LIGHT_COARSE) * (n / LIGHT_COARSE) + t.x / LIGHT_COARSE;
+  return head_word(LIGHT_HEAD_COARSE) + (t.y / LIGHT_COARSE) * (light_tiles() / LIGHT_COARSE) + t.x / LIGHT_COARSE;
 }
 
-/// The first of list `which`'s marks, a word a place, past the squares
-/// (`light::listed_marks_at`): the corners', the fed's, the claimed's.
+/// The first of list `which`'s marks, a word a place (`light::listed_marks_at`).
 fn listed_marks_at(which: u32) -> u32 {
-  let n = light_tiles();
-  let c = n / LIGHT_COARSE;
-  let corners = beam_across();
-  var at = reads_at() + n * n + c * c;
-  if (which > LIGHT_LISTED_CORNERS) {
-    at += corners * corners;
-  }
-  if (which > LIGHT_LISTED_FED) {
-    at += n * n;
-  }
-  return at;
+  return head_word(LIGHT_HEAD_MARKS + which);
 }

@@ -11,7 +11,7 @@ mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpu::{cross, read_texture, texture, unit, Kinds, LightBox};
+use gpu::{cross, read_texture, texture, unit, Gpu, Kinds, LightBox};
 use keeping::*;
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
@@ -475,6 +475,7 @@ fn eye_beams(gpu: &Gpu, b: &WorldBufs, obs: &Observed, table: &wgpu::Buffer) -> 
         [
             grid.corners[0].div_ceil(WORKGROUP),
             grid.corners[1].div_ceil(WORKGROUP),
+            1,
         ],
     );
     let args = gpu.read(&left);
@@ -485,7 +486,7 @@ fn eye_beams(gpu: &Gpu, b: &WorldBufs, obs: &Observed, table: &wgpu::Buffer) -> 
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_BEAM), "beam_cs"),
         &world,
-        [args[0].max(1), 1],
+        [args[0].max(1), 1, 1],
     );
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
@@ -493,6 +494,7 @@ fn eye_beams(gpu: &Gpu, b: &WorldBufs, obs: &Observed, table: &wgpu::Buffer) -> 
         [
             grid.span[0].div_ceil(WORKGROUP),
             grid.span[1].div_ceil(WORKGROUP),
+            1,
         ],
     );
     let _ = head;
@@ -613,7 +615,7 @@ fn light_beams(
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_BEAM), "light_beam_cs"),
         &world,
-        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP)],
+        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP), 1],
     );
     let cells = light::cells_across(size);
     gpu.dispatch(
@@ -623,7 +625,7 @@ fn light_beams(
             (8, beams.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP)],
+        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
     );
     let mut words = gpu.read(&beams);
     let Rays::Light {
@@ -789,7 +791,7 @@ fn run_frame(
     if obs.apart {
         binds.push((11, head_buf.as_entire_binding()));
     }
-    gpu.dispatch(hit, &binds, obs.groups);
+    gpu.dispatch(hit, &binds, [obs.groups[0], obs.groups[1], 1]);
     let args = gpu.read(&left);
     let cnt = args[3];
     let opened = args[0];
@@ -808,7 +810,7 @@ fn run_frame(
         binds.push((11, head_buf.as_entire_binding()));
     }
     if cnt != 0 {
-        gpu.dispatch(world, &binds, [args[0], 1]);
+        gpu.dispatch(world, &binds, [args[0], 1, 1]);
     }
     let out = gpu.read(&beams2);
     let table_hand = gpu.read(&table);
@@ -1375,18 +1377,11 @@ fn device() -> Option<Gpu> {
         eprintln!("gave up after 20 minutes");
         std::process::exit(124);
     });
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let gpu = Gpu::new();
+    if gpu.is_none() {
         eprintln!("no adapter: skipped");
-        return None;
-    };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    Some(Gpu { device, queue })
+    }
+    gpu
 }
 
 /// The world's spots the cases stand on: over the ground, on a bridge, down a bore, on what is
@@ -2318,6 +2313,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                     (listed as u32)
                         .div_ceil(ray::MISS_ACROSS * ray::MISS_LANES)
                         .max(1),
+                    1,
                 ],
             );
             let args = gpu.read(&left);
@@ -2331,9 +2327,9 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             if args[1] != 0 {
-                gpu.dispatch(&list_p, &binds, [args[0], args[1]]);
+                gpu.dispatch(&list_p, &binds, [args[0], args[1], 1]);
             }
-            gpu.dispatch(&whole_p, &binds, [wd.div_ceil(8), ht.div_ceil(8)]);
+            gpu.dispatch(&whole_p, &binds, [wd.div_ceil(8), ht.div_ceil(8), 1]);
             let out = read_texture(&gpu.device, &gpu.queue, &rays);
             let out_beams = gpu.read(&beams);
             let out_table = gpu.read(&table_buf);
@@ -2544,7 +2540,7 @@ fn stopped(
     if obs.apart {
         binds.push((11, head_buf.as_entire_binding()));
     }
-    gpu.dispatch(hit, &binds, obs.groups);
+    gpu.dispatch(hit, &binds, [obs.groups[0], obs.groups[1], 1]);
     let args = gpu.read(&left);
     let mut after = gpu.read(&beams);
     after[obs.lefts_at as usize] = args[3];
@@ -2554,7 +2550,7 @@ fn stopped(
         binds.push((11, head_buf.as_entire_binding()));
     }
     if args[3] != 0 {
-        gpu.dispatch(world, &binds, [args[0], 1]);
+        gpu.dispatch(world, &binds, [args[0], 1, 1]);
     }
     gpu.read(&beams)
 }
@@ -2733,7 +2729,7 @@ fn boxes_case(
     if obs.apart {
         binds.push((11, head_buf.as_entire_binding()));
     }
-    gpu.dispatch(pass, &binds, groups);
+    gpu.dispatch(pass, &binds, [groups[0], groups[1], 1]);
     let got_args = gpu.read(&args);
     let got_boxes = gpu.read(&boxes);
     let got = gpu.read(&beams);

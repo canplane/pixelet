@@ -452,8 +452,8 @@ pub const HEAD_CORNER_WAS: usize = 4;
 /// frame's rays mark again, and in the first frame it stands, which the
 /// jitter's frames after it stand on (pxl-render light_mark.wgsl).
 pub const HEAD_FOOTPRINT: usize = 6;
-/// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
-pub const HEAD_MISSES: usize = 7;
+/// Where the slots' misses' count lies in the list (`misses_cnt`), the second vec4's last word.
+pub const HEAD_MISSES_CNT: usize = 7;
 /// Where a pass finds the list's words, and how many a row, as `head_layout` lays them for the
 /// map's side: words of their own past the actors.
 pub const HEAD_CELLS: usize = 4 * (ACTORS_AT + 1 + ACTORS);
@@ -463,14 +463,26 @@ pub const HEAD_SAMPLES_ACROSS: usize = HEAD_CELLS + 3;
 pub const HEAD_LEFTS: usize = HEAD_CELLS + 4;
 pub const HEAD_READS: usize = HEAD_CELLS + 5;
 pub const HEAD_TILES: usize = HEAD_CELLS + 6;
-pub const HEAD_FED: usize = HEAD_CELLS + 7;
-const HEAD_LAID_VEC4S: usize = 2;
+pub const HEAD_HANDS: usize = HEAD_CELLS + 7;
+pub const HEAD_STANDS: usize = HEAD_CELLS + 8;
+pub const HEAD_COARSE: usize = HEAD_CELLS + 9;
+pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 10;
+pub const HEAD_MISSES: usize = HEAD_CELLS + 11;
+/// Each list's marks (`listed_marks_at`), then each list (`listed_at`), a word each in the
+/// lists' order (`LISTED_CORNERS`).
+pub const HEAD_MARKS: usize = HEAD_CELLS + 12;
+pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
+const HEAD_LAID_VEC4S: usize = 5;
+const _: () = assert!(
+    HEAD_LISTED + LISTS as usize <= HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    "the head holds the words it lays"
+);
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 10] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 20] {
     [
         (HEAD_SIZE, size),
-        (HEAD_MISSES, misses_cnt(size)),
+        (HEAD_MISSES_CNT, misses_cnt(size)),
         (HEAD_CELLS, cell(size, [0, 0])),
         (HEAD_CELLS_ACROSS, cells_across(size)),
         (HEAD_SAMPLES, sample(size, 0)),
@@ -478,7 +490,35 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 10] {
         (HEAD_LEFTS, lefts_at(size)),
         (HEAD_READS, reads_at(size)),
         (HEAD_TILES, tiles(size)),
-        (HEAD_FED, listed_at(size, LISTED_FED)),
+        (HEAD_HANDS, hand_at(size, 0)),
+        (HEAD_STANDS, stands_at(size)),
+        (HEAD_COARSE, coarse_at(size)),
+        (HEAD_BEAM_ACROSS, beam_across(size)),
+        (HEAD_MISSES, misses_at(size)),
+        (
+            HEAD_MARKS + LISTED_CORNERS as usize,
+            listed_marks_at(size, LISTED_CORNERS),
+        ),
+        (
+            HEAD_MARKS + LISTED_FED as usize,
+            listed_marks_at(size, LISTED_FED),
+        ),
+        (
+            HEAD_MARKS + LISTED_CLAIMED as usize,
+            listed_marks_at(size, LISTED_CLAIMED),
+        ),
+        (
+            HEAD_LISTED + LISTED_CORNERS as usize,
+            listed_at(size, LISTED_CORNERS),
+        ),
+        (
+            HEAD_LISTED + LISTED_FED as usize,
+            listed_at(size, LISTED_FED),
+        ),
+        (
+            HEAD_LISTED + LISTED_CLAIMED as usize,
+            listed_at(size, LISTED_CLAIMED),
+        ),
     ]
 }
 

@@ -52,13 +52,13 @@ fn view_normal(p: vec2i, c0: f32) -> vec3f {
 // first in its order to hold `depth`.
 fn full_px(hp: vec2i, depth: f32) -> vec2i {
   let fp = hp * i32(AO_DOWNSCALE);
-  var at = array<vec2i, 4>(fp, fp + vec2i(1, 0), fp + vec2i(0, 1), fp + vec2i(1, 1));
   for (var k = 0; k < 3; k++) {
-    if (scene_at(at[k]) == depth) {
-      return at[k];
+    let at = fp + vec2i(k & 1, k >> 1);
+    if (scene_at(at) == depth) {
+      return at;
     }
   }
-  return at[3];
+  return fp + vec2i(1, 1);
 }
 
 fn rot_z(theta: f32) -> mat3x3f {
@@ -90,9 +90,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var total = 0.0;
   var off_move = noise.g;
   let off_step = 1.0 / f32(AO_SAMPLES);
-  var hemisphere = HEMISPHERE;
   for (var k = 0; k < AO_SAMPLES; k++) {
-    let dir = tbn * hemisphere[k];
+    let dir = tbn * HEMISPHERE[k];
     let move_amount = fract(off_move);
     off_move += off_step;
     let sample_pos = pos + AO_RADIUS * move_amount * dir;

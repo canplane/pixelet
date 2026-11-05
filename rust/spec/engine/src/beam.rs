@@ -61,6 +61,9 @@ pub struct Grid {
     /// The lattice, in cells (`grid::CELL`) a side: a power of two from 1 to
     /// `grid::LATTICE_MAX`.
     pub lattice: u32,
+    /// Where how far each beam ray hands on starts among the beam rays' words, past the
+    /// lines (`hand_at`).
+    hands_at: u32,
     /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines and how far each hands on (`hand_at`);
     /// then the boxes' asks, a sample's room
@@ -99,7 +102,8 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// hits and their asks start, `lattice`, and where the lists the walk over
 /// the node cache alone leaves start; then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
-/// (`slope`), f32 bits, each rounded once by the host: whole vec4s.
+/// (`slope`), f32 bits, each rounded once by the host; then where how far each
+/// beam ray hands on starts (`hand_at`): whole vec4s.
 pub const GRID_S: usize = 0;
 
 pub const GRID_KEEP: usize = 1;
@@ -120,6 +124,7 @@ pub const GRID_MISSES_AT: usize = 18;
 pub const GRID_CORNERS_AT: usize = 19;
 pub const GRID_S_INVERSE: usize = 20;
 pub const GRID_SLOPE: usize = 21;
+pub const GRID_HANDS_AT: usize = 23;
 pub const GRID_WORDS: usize = 24;
 
 impl Grid {
@@ -153,6 +158,7 @@ impl Grid {
             corners: [0; 2],
             samples,
             lattice,
+            hands_at: 0,
             cells_at: 0,
             samples_at: 0,
             asks_at: 0,
@@ -164,7 +170,8 @@ impl Grid {
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
-        g.cells_at = g.corners[0] * g.corners[1] * (LINE_WORDS + 1);
+        g.hands_at = g.corners[0] * g.corners[1] * LINE_WORDS;
+        g.cells_at = g.hands_at + g.corners[0] * g.corners[1];
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
@@ -204,6 +211,7 @@ impl Grid {
         w[GRID_LATTICE] = self.lattice;
         (w[GRID_LEFTS_AT], w[GRID_MISSES_AT], w[GRID_CORNERS_AT]) =
             (self.lefts_at, self.misses_at, self.corners_at);
+        w[GRID_HANDS_AT] = self.hands_at;
         let slope = self.slope();
         (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
             self.s_inverse().to_bits(),
@@ -227,6 +235,7 @@ impl Grid {
             corners: [w[GRID_CORNERS], w[GRID_CORNERS + 1]],
             samples: [w[GRID_SAMPLES], w[GRID_SAMPLES + 1]],
             lattice: w[GRID_LATTICE],
+            hands_at: w[GRID_HANDS_AT],
             cells_at: w[GRID_CELLS_AT],
             samples_at: w[GRID_SAMPLES_AT],
             asks_at: w[GRID_ASKS_AT],
@@ -349,7 +358,7 @@ impl Grid {
     /// so a cell's window reads its corners' row by row off a run of words
     /// apiece, not a line apiece.
     pub fn hand_at(&self, c: u32) -> u32 {
-        self.corners[0] * self.corners[1] * LINE_WORDS + c
+        self.hands_at + c
     }
 
     /// The first word of the screen's cell `[x, y]`'s start.

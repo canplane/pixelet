@@ -25,10 +25,7 @@ fn raised_dir(d: vec3f, up: vec3f, h: f32) -> vec3f {
 // The sun, or the moon, raised by `h`, where it is drawn and where it casts.
 fn lights_raised(s: Lights, moon: bool, h: f32) -> Lights {
   let to = raised_dir(select(s.sun, s.moon, moon), frame_up(), h);
-  var r = s;
-  r.sun = select(to, s.sun, moon);
-  r.moon = select(s.moon, to, moon);
-  return r;
+  return Lights(select(to, s.sun, moon), select(s.moon, to, moon), s.moon_color);
 }
 
 // Each light through the air above a point, and the sky's on an up-facing face there.

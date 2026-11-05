@@ -13,6 +13,7 @@ mod gpu;
 mod keeping;
 mod real_world;
 
+use gpu::Gpu;
 use keeping::*;
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
@@ -203,18 +204,11 @@ fn device() -> Option<Gpu> {
         eprintln!("gave up after 170 s");
         std::process::exit(124);
     });
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let gpu = Gpu::new();
+    if gpu.is_none() {
         eprintln!("no adapter: skipped");
-        return None;
-    };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    Some(Gpu { device, queue })
+    }
+    gpu
 }
 
 /// The light's list after `light_beam_cs` of `beam_source` and `light_cell_cs` over a whole
@@ -248,7 +242,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &s
             (9, table.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP)],
+        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP), 1],
     );
     let cells = light::cells_across(SIZE);
     gpu.dispatch(
@@ -258,7 +252,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &s
             (8, beams.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP)],
+        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
     );
     gpu.read(&beams)
 }

@@ -26,9 +26,10 @@ fn vs(v: VertexIn) -> VertexOut {
   let seen = seen_from_eye(p.world);
   o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
-  o.sun = seen.light.sun;
-  o.other = seen.light.other;
-  o.fill = seen.light.fill;
+  let l = light_of(p.world);
+  o.sun = l.sun;
+  o.other = l.other;
+  o.fill = l.fill;
   return o;
 }
 
@@ -36,6 +37,6 @@ fn vs(v: VertexIn) -> VertexOut {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered), Light(i.sun, i.other, i.fill));
   return vec4f(tone(color), draw_opacity());
 }

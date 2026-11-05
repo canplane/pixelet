@@ -10,7 +10,7 @@ fn fs(v: VertexOut) -> FragOut {
   let c = p.c;
   let faces = p.faces;
   let met = p.met;
-  let h = p.h;
+  let h = hit_of(c.xy, d);
   // Taken before any branch: a derivative needs the quad whole.
   let uv = box_uv(h);
   let ddx = dpdx(uv);
@@ -50,12 +50,11 @@ fn fs(v: VertexOut) -> FragOut {
     // The corners' occlusion; the screen's is laid over the color after
     // (ao_apply.wgsl).
     crease.ao,
-    seen_from_eye(h.at),
   );
   // The depth `behind` the face along the ray, so what is laid on it wins.
   let clip = frame_view_proj() * vec4f(h.at * (1.0 + behind(h, steps)), 1.0);
   var o: FragOut;
-  o.color = vec4f(tone(cell_share(paint(s), c.x, h)), 1.0);
+  o.color = vec4f(tone(cell_share(paint(s, seen_from_eye(h.at), light_of(h.at)), c.x, h)), 1.0);
   o.depth = clip.z / clip.w;
   return o;
 }

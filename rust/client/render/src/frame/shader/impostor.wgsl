@@ -28,9 +28,10 @@ fn vs(v: VertexIn) -> VertexOut {
   let seen = seen_from_eye(world);
   o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
-  o.sun = seen.light.sun;
-  o.other = seen.light.other;
-  o.fill = seen.light.fill;
+  let l = light_of(world);
+  o.sun = l.sun;
+  o.other = l.other;
+  o.fill = l.fill;
   return o;
 }
 
@@ -41,6 +42,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     discard;
   }
   let n = normalize(i.normal);
-  let color = shade(texel.rgb, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(texel.rgb, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered), Light(i.sun, i.other, i.fill));
   return vec4f(tone(color), draw_opacity());
 }

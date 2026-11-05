@@ -278,8 +278,8 @@ fn box_uv(h: Hit) -> vec2f {
 
 // This px's ray, through its middle, as the cast formed it, and what it
 // met: its aim, once, for the ray and for the face's step across a px;
-// the ray's words; and the face it stopped on, as the lit pass reads it
-// (screen_shade.wgsl).
+// the ray's words. The face it stopped on is `hit_of`'s, which the lit pass
+// asks of the ray's first two words (screen_shade.wgsl).
 struct Pixel {
   a: vec3f,
   size: vec2f,
@@ -288,7 +288,6 @@ struct Pixel {
   faces: u32,
   // A ray that met nothing leaves its first word zero: no hit is void.
   met: bool,
-  h: Hit,
 };
 
 fn px_ray(clip: vec2f) -> Pixel {
@@ -298,5 +297,5 @@ fn px_ray(clip: vec2f) -> Pixel {
   let at = vec2i(clip);
   let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
   let faces = textureLoad(rays, at, RAY_FACES, 0).x;
-  return Pixel(a, size, d, c, faces, c.x != 0u, hit_of(c.xy, d));
+  return Pixel(a, size, d, c, faces, c.x != 0u);
 }

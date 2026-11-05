@@ -52,22 +52,26 @@ const HALF_FLOORED: [&str; 2] = [
 
 /// The kernel's order (ARCHITECTURE.md, "The kernel is one order of
 /// dependency"): a module names only what is at or below it, and neither
-/// head the other. The top wires everything; the profiler stands beside,
-/// reading anything, and is in no step of it.
+/// head the other. The top wires everything; the machine it asks of its host
+/// and the device transport's decoder, which the device's app calls, are the
+/// bottom, naming none of the kernel. The profiler, reading anything, stands
+/// beside it, in no step of it.
 const KERNEL: &str = "rust/client/kernel/src/";
-const KERNEL_ORDER: [(&str, u8); 12] = [
-    ("turn", 6),
-    ("door", 6),
-    ("shell", 6),
-    ("pointer", 6),
-    ("scene", 5),
-    ("control", 5),
-    ("smooth", 4),
-    ("param", 4),
-    ("view", 3),
-    ("query", 2),
-    ("layer", 1),
-    ("sys", 0),
+const KERNEL_ORDER: [(&str, u8); 14] = [
+    ("turn", 7),
+    ("door", 7),
+    ("shell", 7),
+    ("pointer", 7),
+    ("scene", 6),
+    ("control", 6),
+    ("smooth", 5),
+    ("param", 5),
+    ("view", 4),
+    ("query", 3),
+    ("layer", 2),
+    ("sys", 1),
+    ("machine", 0),
+    ("unpack", 0),
 ];
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
 const KERNEL_BESIDE: [&str; 1] = ["perf"];

@@ -45,15 +45,15 @@ fn light_of(world_pos: vec3f) -> Light {
 
 /* the air before a point */
 
-// The air before a point: what it lets through, what it scatters toward
-// the eye, and the lights there. What it scatters per share it takes varies
-// slowly across directions, which is what lets the air's volume hold it
-// (atmos_air.wgsl); the lights turn with a point's height, and are read
-// where it stands (`light_of`).
+// The air before a point: what it lets through and what it scatters toward
+// the eye. What it scatters per share it takes varies slowly across
+// directions, which is what lets the air's volume hold it (atmos_air.wgsl).
+// The lights there are apart from it: they turn with a point's height, and
+// are read where it stands (`light_of`), and passed beside it, as no struct
+// holds another (build.rs `no_nested_struct`).
 struct Air {
   transmittance: f32,
   scattered: vec3f,
-  light: Light,
 };
 
 /* glare */

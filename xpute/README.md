@@ -30,17 +30,17 @@ its **exports**, which the guest handles.
 └────────────────────────┘                 └────────────────────────┘
 ```
 
-## The shell, the guest and the host
+## The client, the guest and the host
 
 A platform's author sees the world as two parts: the client outside the VM,
 and the VMM under it.
 
-- **The shell and the guest.** The program's **shell**, its screens and
-  components, is the client outside the VM, as an application on a host
-  reaches a guest's service over virtio-vsock: a unikernel has no userspace.
-  The ring pair is the device between them, by io_uring's roles: the shell
-  submits its commands to the guest, and the guest completes them; what the
-  guest sends the shell unasked, more rarely, is an **upcall**. The app's ABI
+- **The client and the guest.** The program's **client**, its screens and
+  components, stands outside the VM, as an application on a host reaches a
+  guest's service over virtio-vsock: a unikernel has no userspace. The ring
+  pair is the device between them, by io_uring's roles: the client submits
+  its commands to the guest, and the guest completes them; what the guest
+  sends the client unasked, more rarely, is an **upcall**. The app's ABI
   is this relation.
 - **The guest and the host.** The host implements the devices the guest's
   machine asks for (the GPU, the file device), by virtio's convention, and
@@ -49,7 +49,7 @@ and the VMM under it.
   xpute's predefined ABI is this relation.
 
 ```text
-  shell  the client         screens, components
+  client outside the VM     screens, components
    │ ▲
    ▼ │   the app's ABI: commands submitted and completed; upcalls
   guest  the unikernel      the program and its library OS; owns no device
@@ -58,11 +58,11 @@ and the VMM under it.
   host   its VMM            memory, clock and turns, GPU, files
 ```
 
-Physically the shell and the host share one JavaScript runtime, and natively
+Physically the client and the host share one JavaScript runtime, and natively
 the host has Rust pieces beside it: the guest's thread, its memory and the
 GPU's run. Both relations ride the same pair of rings, told apart by a
-command's major: the host carries the shell's submissions on the SQ and hands
-the guest's completions and upcalls back. The shell meets the host directly
+command's major: the host carries the client's submissions on the SQ and hands
+the guest's completions and upcalls back. The client meets the host directly
 only for the surfaces (a view lent to the GPU) and the lifecycle (boot,
 visibility), through the host's TypeScript API.
 
@@ -90,7 +90,7 @@ host hands a frame to what answers its command's major.
 ## The rings
 
 The rings are io_uring's, by its roles. The **SQ** is written by the host, the
-side where the outside's interrupts arrive: the shell's submissions and the
+side where the outside's interrupts arrive: the client's submissions and the
 host's own interrupts. The **CQ** is written by the guest: its completions and
 upcalls, and its own calls to its devices, in ublk's manner, whose results
 come back on the SQ. Five rules make the contract:

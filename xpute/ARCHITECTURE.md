@@ -14,22 +14,22 @@ The guest sees one thing outside it, its **world**, whose commands are its
 **imports**, which it calls, and its **exports**, which it handles, as a WIT
 world says; it never names a destination. A platform's author sees the world
 in two parts: the client outside the VM, and the VMM under it. The program's
-**shell**, its screens and components, is the client, as an application on a
-host reaches a guest's service over virtio-vsock: a unikernel has no
-userspace. The ring pair is the device between them. The shell submits
+**client**, its screens and components, stands outside the VM, as an
+application on a host reaches a guest's service over virtio-vsock: a unikernel
+has no userspace. The ring pair is the device between them. The client submits
 commands to the guest and the guest completes them, by io_uring's roles; what
-the guest sends the shell unasked, more rarely, is an upcall. That relation is
+the guest sends the client unasked, more rarely, is an upcall. That relation is
 the app's ABI. The host implements the devices the guest's machine asks for,
 the GPU and the file device, by virtio's convention, and gives the guest its
 memory, its clock and its turns, as a VMM gives a vCPU's time. The guest calls
 its devices, and the host raises interrupts. That relation is xpute's
 predefined ABI.
 
-Physically the shell and the host share one JavaScript runtime, and natively
+Physically the client and the host share one JavaScript runtime, and natively
 the host has Rust pieces beside it: the guest's thread, its memory and the
 GPU's run. Both relations ride the same ring pair, told apart by a command's
-major; the host carries the shell's submissions on the submission ring without
-reading them. The shell meets the host directly only for the surfaces (a view
+major; the host carries the client's submissions on the submission ring without
+reading them. The client meets the host directly only for the surfaces (a view
 lent to the GPU) and the lifecycle (boot, visibility), through the host's
 TypeScript API.
 
@@ -263,7 +263,7 @@ slot, and such a packet crosses by address, in a heap block.
 
 Two rings make a pair, by io_uring's roles. The **SQ**, the submission ring, is
 written by the host, the side where the outside's interrupts arrive: the
-shell's submissions and the host's own interrupts. The **CQ**, the completion
+client's submissions and the host's own interrupts. The **CQ**, the completion
 ring, is written by the guest: its completions and upcalls, and its own calls
 to its devices, posted as ublk's server posts its requests, whose results come
 back on the SQ. Each lies where the header says (`SQ_AT`, `CQ_AT`).
@@ -646,7 +646,7 @@ records waits on the host. wgpu has no async call: the native GPU host makes
 the pipeline at once and writes its fence by the same path.
 
 What a surface shows — a canvas, a view's layer, a window — is lent by the
-shell, bound to the GPU host under the guest's handle for it and let go by that
+client, bound to the GPU host under the guest's handle for it and let go by that
 handle (`bind`, `unbind`); the guest names the surface by the handle's slot in
 its records. Here the GPU host is the side that keeps the object, so it checks
 the generation. On a device the view is xpute's (`@xpute/native`
@@ -901,7 +901,7 @@ where the tree records the source.
 | ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
 | A unikernel (MirageOS, Unikraft) and its library OS         | the guest                        | The program and its library OS as one image, with no userspace                 |
 | A VMM and virtio's devices                                  | the host, the machine            | The host implements the devices the machine asks for; interrupts up            |
-| virtio-vsock                                                | the shell                        | A client outside the VM reaching the guest's service over a device             |
+| virtio-vsock                                                | the client                       | A client outside the VM reaching the guest's service over a device             |
 | WebAssembly's host and guest, a WIT world                   | the two ABIs                     | The names; a world's imports and exports, seen from the guest                  |
 | Aegis                                                       | `sched/policy`                   | The quota as a cooperative counterpart of its CPU slice                        |
 | Linux's scheduling policies (`sched_setscheduler`)          | `sched/policy`                   | Its name: how turns are scheduled, chosen apart from what rings them           |

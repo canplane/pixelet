@@ -23,12 +23,9 @@ fn medium_at(h: f32) -> Medium {
   let r = exp(-h / atmos_rayleigh_scale_height());
   let m = exp(-h / atmos_mie_scale_height());
   let o = max(0.0, 1.0 - abs(h - atmos_ozone_center()) / atmos_ozone_half_width());
-  var out: Medium;
-  out.rayleigh = atmos_rayleigh_scattering() * r;
-  out.mie = vec3f(atmos_mie_scattering() * m);
-  out.scattering = out.rayleigh + out.mie;
-  out.extinction = out.rayleigh + vec3f(atmos_mie_extinction() * m) + atmos_ozone_absorption() * o;
-  return out;
+  let rayleigh = atmos_rayleigh_scattering() * r;
+  let mie = vec3f(atmos_mie_scattering() * m);
+  return Medium(rayleigh, mie, rayleigh + mie, rayleigh + vec3f(atmos_mie_extinction() * m) + atmos_ozone_absorption() * o);
 }
 
 fn rayleigh_phase(c: f32) -> f32 {

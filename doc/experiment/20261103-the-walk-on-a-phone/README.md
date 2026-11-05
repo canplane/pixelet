@@ -6,6 +6,10 @@ what a lattice of 2 buys, and how many nodes the walks visit against what each
 takes on the S23 and on a Mac. What this means for the shaders is in
 [the walk on a phone, and who owns it](../../minutes/20261103-the-walk-on-a-phone-and-who-owns-it.md).
 
+A commit named below as a state measured, where main does not hold it, is a commit of
+the work in progress that was not kept (11-03 and 11-04); what it changed is in the
+commits main holds since.
+
 ## How
 
 - **S23**: SM-S911N, Adreno 740, Chrome 156, viewport 411×750 at a device pixel

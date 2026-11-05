@@ -58,14 +58,11 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   // the subpixel it falls on.
   let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_per_unit()));
 
-  var p: Placement;
-  p.clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
-  p.across = q.x * size_px.x / sprite_w + 0.5;
-  p.q = q;
-  p.anchor_view = anchor_view;
+  let clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
+  let across = q.x * size_px.x / sprite_w + 0.5;
 
   let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  p.push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
   // What hangs under the anchor lies on the level ground through it, where the
   // eye sees it.
   let over = drop + corner.y;
@@ -76,9 +73,8 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   if (over < 0.0 && abs(toward) > 1e-6 && t > 0.0 && t < 1.0) {
     twin = shown * t;
   }
-  let upright = marker_proj() * vec4f(twin + vec3f(0.0, 0.0, p.push), 1.0);
-  p.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
-  return p;
+  let upright = marker_proj() * vec4f(twin + vec3f(0.0, 0.0, push), 1.0);
+  return Placement(clip, clamp(upright.z / upright.w, 0.0, 1.0), across, q, anchor_view, push);
 }
 
 // The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.

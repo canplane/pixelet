@@ -5,11 +5,13 @@
 //! to find next frame. The walk's from the root, as `light_miss_hit_cs`'s is: a walk resumed
 //! from its cell's start is not asked of it. Skipped where no adapter answers.
 
+mod gpu;
 mod keeping;
 mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use gpu::{array_view, read_texture, texture, Gpu};
 use keeping::*;
 
 use pxl_engine::answer::{self, In, Kind};
@@ -481,18 +483,10 @@ fn cases(b: &Built) -> Vec<Case> {
 
 #[test]
 fn hand_light_miss_answers_as_light_miss_cs() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    let gpu = Gpu { device, queue };
 
     let built = real_world::build(EYE);
     let w = built.world();
@@ -637,8 +631,9 @@ fn run_case(
     }
     let mut head = vec![0u32; light::HEAD_WORDS];
     head[light::HEAD_CAST] = 7;
-    head[light::HEAD_SIZE] = SIZE;
-    head[light::HEAD_MISSES] = light::misses_cnt(SIZE);
+    for (k, v) in light::head_layout(SIZE) {
+        head[k] = v;
+    }
     head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
@@ -778,20 +773,17 @@ fn run_case(
     };
 
     // The hand pass, over the same table.
-    let map = gpu.map(SIZE);
-    let view = map.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    });
+    let map = map_of(gpu);
+    let view = array_view(&map);
     let table_buf = gpu.buffer(&table0, store_of());
     let list_buf = gpu.buffer(&list, store_of());
     let rows = n.div_ceil(ray::MISS_LANES * ray::MISS_ACROSS);
     gpu.dispatch(
         miss,
         &miss_binds(b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view),
-        [ray::MISS_ACROSS, rows],
+        [ray::MISS_ACROSS, rows, 1],
     );
-    let got = gpu.read_map(&map);
+    let got = read_texture(&gpu.device, &gpu.queue, &map);
     let table_hand = gpu.read(&table_buf);
     // A slot left claimed: the dispatch did not run to its end, and its words are no answer.
     let claimed_before = left_claimed(&table0).len();
@@ -1019,11 +1011,8 @@ fn run_case(
     let next_buf = gpu.buffer(&next, store_of());
     let list2 = gpu.buffer(&list, store_of());
     let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0], store_of());
-    let map2 = gpu.map(SIZE);
-    let view2 = map2.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    });
+    let map2 = map_of(gpu);
+    let view2 = array_view(&map2);
     gpu.dispatch(
         hit,
         &[
@@ -1034,7 +1023,7 @@ fn run_case(
             (11, head_buf.as_entire_binding()),
             (13, left.as_entire_binding()),
         ],
-        [ray::MISS_ACROSS, rows],
+        [ray::MISS_ACROSS, rows, 1],
     );
     let after = gpu.read(&list2);
     let mut still = vec![false; n as usize];
@@ -1073,9 +1062,9 @@ fn run_case(
     gpu.dispatch(
         miss,
         &miss_binds(b, [&eye_buf, &head_buf, &next_buf, &list2], &view2),
-        [args[0], args[1]],
+        [args[0], args[1], 1],
     );
-    let got2 = gpu.read_map(&map2);
+    let got2 = read_texture(&gpu.device, &gpu.queue, &map2);
     let table_after = gpu.read(&next_buf);
     if left_claimed(&table_after).len() > left_claimed(&next).len() {
         failed.push(format!(
@@ -1248,6 +1237,19 @@ fn tell_slot(
     );
 }
 
+/// The map the passes write a word a texel of, `SIZE` a side, laid with zeros.
+fn map_of(gpu: &Gpu) -> wgpu::Texture {
+    let words = vec![0; (SIZE * SIZE) as usize];
+    texture(
+        &gpu.device,
+        &gpu.queue,
+        [SIZE, SIZE],
+        1,
+        wgpu::TextureUsages::STORAGE_BINDING,
+        &words,
+    )
+}
+
 /// `light_miss_cs`'s group, over the eye, the head, the table and the list.
 fn miss_binds<'a>(
     b: &'a WorldBufs,
@@ -1273,18 +1275,10 @@ fn miss_binds<'a>(
 /// through its stamp, and all else cleared.
 #[test]
 fn forget_reads_a_stamped_kind() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    let gpu = Gpu { device, queue };
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FORGETS as usize] = node_cache::FORGETS_MOVED;
     table[node_cache::MOVED_AT as usize..(node_cache::MOVED_AT + node_cache::MOVED_WORDS) as usize]
@@ -1306,7 +1300,7 @@ fn forget_reads_a_stamped_kind() {
     gpu.dispatch(
         &forget,
         &[(9, buf.as_entire_binding())],
-        [node_cache::ENTRIES / 64, 1],
+        [node_cache::ENTRIES / 64, 1, 1],
     );
     let out = gpu.read(&buf);
     assert_eq!(

@@ -61,18 +61,21 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   let k = id.z;
   let t0 = select(0.0, air_dist((f32(k) - 1.0) / last, e), k > 0u);
   let t1 = air_dist(f32(k) / last, e);
-  var v = gather_between(r, vec3f(0.0, 0.0, 1.0), dir, t0, t1, toward, toward, 0.0, ATMOS_AIR_STRETCH_KNOTS);
+  let v = gather_between(r, vec3f(0.0, 0.0, 1.0), dir, t0, t1, toward, toward, 0.0, ATMOS_AIR_STRETCH_KNOTS);
+  var transmittance = v.transmittance;
+  var scattered = v.scattered;
   for (var step = 1u; step < AIR_FROXELS; step <<= 1u) {
-    column_transmittance[k] = v.transmittance;
-    column_scattered[k] = v.scattered;
+    column_transmittance[k] = transmittance;
+    column_scattered[k] = scattered;
     workgroupBarrier();
     if (k >= step) {
       let before = column_transmittance[k - step];
-      v = Veil(before * v.transmittance, column_scattered[k - step] + before * v.scattered);
+      scattered = column_scattered[k - step] + before * scattered;
+      transmittance = before * transmittance;
     }
     workgroupBarrier();
   }
-  let held = air_held(v);
+  let held = air_held(Veil(transmittance, scattered));
   column_held[k] = held;
   workgroupBarrier();
   var out = held;

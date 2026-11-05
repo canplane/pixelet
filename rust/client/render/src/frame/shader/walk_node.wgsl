@@ -160,7 +160,9 @@ fn zoom_in_splits(x2: f32, range: vec2<u32>) -> u32 {
 }
 
 /// How far apart a beam's rays lie at `d2` from the walk's origin, a distance squared, its
-/// spacing `across` then `angle` (`Spacing::width`).
+/// spacing `across` then `angle` (`Spacing::width`). Only a GPU walks a beam, so it alone
+/// decides this, every pass through this function; its square root may lie off the Rust's
+/// (tests/walk.rs `WIDTH_ULPS`).
 fn spacing_width(spacing: vec2<f32>, d2: f32) -> f32 {
   return spacing.x + spacing.y * sqrt(d2);
 }

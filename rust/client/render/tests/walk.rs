@@ -1012,6 +1012,64 @@ fn hand_narrow_on_its_edge() {
     assert!(differ.is_empty(), "first: {:?}", differ.first());
 }
 
+/// How many last places a device's beam width may lie off the Rust's, a rule a GPU alone
+/// decides (walk_node.wgsl `spacing_width`): WGSL's square root is `1 / inverseSqrt`'s,
+/// 2.5 places and 2, and the product by the angle rounds once more.
+const WIDTH_ULPS: u32 = 5;
+
+/// The width at a distance squared whose root no float holds exactly is `Spacing::width`'s
+/// within `WIDTH_ULPS`, and a split on `NARROW` of the Rust's width, or a few floats either
+/// side of it, is narrow as `cast::narrow` says of the device's own width: each width off
+/// the Rust's counted, and each split whose narrowness that parted from the Rust's.
+#[test]
+fn hand_width_off_a_square_root() {
+    let Some(gpu) = gpu::Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let mut seed = 0x9e37_79b9u32;
+    let mut rand = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        f64::from(seed) / f64::from(u32::MAX)
+    };
+    let width_of = |angle: f32, d2: f32| Spacing { angle, across: 0.0 }.width(libm::sqrtf(d2));
+    let mut cases = Vec::new();
+    for _ in 0..4096 {
+        // A distance 2^-4 to 2^24 units, and the eye's lattice angle or finer.
+        let d2 = libm::exp2(-8.0 + rand() * 56.0) as f32;
+        let angle = libm::exp2(-6.0 - rand() * 8.0) as f32;
+        let side = cast::NARROW * width_of(angle, d2);
+        for n in -3i32..=3 {
+            cases.push([
+                f32::from_bits((side.to_bits() as i32 + n) as u32),
+                angle,
+                d2,
+            ]);
+        }
+    }
+    let have = probe(&gpu, &cases);
+    let (mut off, mut most, mut parted, mut differ) = (0u32, 0u64, 0u32, Vec::new());
+    for (v, h) in cases.iter().zip(&have) {
+        let want = width_of(v[1], v[2]);
+        let got = f32::from_bits(h[5]);
+        let ulps = (i64::from(got.to_bits()) - i64::from(want.to_bits())).unsigned_abs();
+        let narrow = h[6] == 1;
+        off += u32::from(ulps != 0);
+        most = most.max(ulps);
+        parted += u32::from(narrow != cast::narrow(v[0] * v[0], want * want));
+        if ulps > u64::from(WIDTH_ULPS) || narrow != cast::narrow(v[0] * v[0], got * got) {
+            differ.push((*v, want, got, narrow));
+        }
+    }
+    eprintln!(
+        "{} cases, {off} widths off the Rust's, at most {most} places; {parted} splits parted by it",
+        cases.len()
+    );
+    assert!(differ.is_empty(), "first: {:?}", differ.first());
+}
+
 /// Two to the `k`, exact: the float whose exponent is `k`, for `k` a normal float's.
 fn pow2(k: i32) -> f32 {
     f32::from_bits(((127 + k) as u32) << 23)

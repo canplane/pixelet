@@ -38,5 +38,5 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[at + NODE_ROOTS + 2u] = u32(w.roots.z);
   beams[base + LINE_VISITS] = w.visits;
   // How far the rays about it start (`Grid::hand_at`, `Grid::hand_dist`).
-  beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(w.t * eye_f32(GRID + GRID_KEEP));
+  beams[eye_word(GRID + GRID_HANDS_AT) + idx] = bitcast<u32>(w.t * eye_f32(GRID + GRID_KEEP));
 }

@@ -37,6 +37,6 @@ fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     atomicAdd(&node_cache[VISITS_COUNT], met.visits);
   }
   // How far the rays about it start (`Grid::hand_at`, `Grid::hand_dist`).
-  beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(met.t * eye_f32(GRID + GRID_KEEP));
+  beams[eye_word(GRID + GRID_HANDS_AT) + idx] = bitcast<u32>(met.t * eye_f32(GRID + GRID_KEEP));
   beams[base + LINE_VISITS] = met.visits;
 }

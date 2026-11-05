@@ -121,6 +121,6 @@ fn light_cs(
     if (place % per == 0u) {
       atomicMax(&misses[MISS_ARGS_LIST + 1u], place / per + 1u);
     }
-    beams[head_word(LIGHT_HEAD_MISSES) + 1u + place] = (at.y << 16u) | at.x;
+    beams[head_word(LIGHT_HEAD_MISSES) + place] = (at.y << 16u) | at.x;
   }
 }
