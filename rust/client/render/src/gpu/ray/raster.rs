@@ -19,8 +19,8 @@ use pxl_engine::{beam, eye, light, raster, ray};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
-    SHADER_SAMPLE_BOX, STORAGE, STORAGE_RW, UNIFORM,
+    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_SAMPLE_BOX, PIPELINE_RASTER,
+    PIPELINE_RASTER_GATE, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
@@ -127,9 +127,9 @@ const FACE_GROUP: [u32; 24] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
-        && binds(&[SHADER_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
-        && binds(&[SHADER_FACE], &FACE_GROUP),
+    binds(&[COMPUTE_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
+        && binds(&[COMPUTE_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
+        && binds(&[COMPUTE_FACE], &FACE_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 const _: () = assert!(
@@ -143,13 +143,13 @@ impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
-            boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
+            boxes_built: pipelines.build_compute(g, COMPUTE_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
             light_boxes_built: pipelines.build_compute(
                 g,
-                SHADER_LIGHT_SAMPLE_BOX,
+                COMPUTE_LIGHT_SAMPLE_BOX,
                 &LIGHT_SAMPLE_BOX_GROUP,
             ),
-            faces_built: pipelines.build_compute(g, SHADER_FACE, &FACE_GROUP),
+            faces_built: pipelines.build_compute(g, COMPUTE_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
             args: g.buf(

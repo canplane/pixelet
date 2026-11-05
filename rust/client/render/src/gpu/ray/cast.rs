@@ -6,7 +6,7 @@
 
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
-use pxl_engine::{beam, eye, light, node_cache, overwrite, raster, ray};
+use pxl_engine::{beam, eye, light, node_cache, overwrite, raster, ray, LEAF_CELL};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -15,12 +15,13 @@ use super::raster::Raster;
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
-    SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM,
-    SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
-    SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT,
-    SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST, SHADER_SAMPLE,
-    SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
+    binds, COMPUTE, COMPUTE_BEAM, COMPUTE_BEAM_HIT, COMPUTE_CAST, COMPUTE_CELL, COMPUTE_FOLD,
+    COMPUTE_FORGET, COMPUTE_HIT_FACES, COMPUTE_HIT_LEAD, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM,
+    COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MARK, COMPUTE_LIGHT_MARK_DRAWS, COMPUTE_LIGHT_MISS,
+    COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_SAMPLE,
+    COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_MISS, COMPUTE_MISS_HIT,
+    COMPUTE_MISS_LIST, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
+    TEXTURE_UINT_ARRAY, UNIFORM,
 };
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
@@ -260,6 +261,12 @@ pub(super) struct CastBuffers {
     /// Why the map cast this frame, a bit each in LIGHT_MOVED's order
     /// (span.json); 0 where it did not.
     light_moved: u32,
+    /// The world's columns that changed this frame, units from the eye (pxl-engine
+    /// `light::column_of`): the cast sets again only the tiles whose rays may meet them
+    /// (`Light::reaches`), where the epoch goes on.
+    light_columns: Vec<[f32; 4]>,
+    /// Whether this cast's columns set tiles again (`light_slide_cs`).
+    light_reached: bool,
     /// Whether the next cast marks where the eye's rays met the world
     /// (`light_mark_cs`): held until one does; and whether the marks of the
     /// frame the eye stands in, its pixels' footprints, are owed, as the
@@ -530,6 +537,9 @@ const LIGHT_MISS_GROUP: [u32; 33] = [
     7,
     COMPUTE,
     STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
     9,
     COMPUTE,
     STORAGE_RW,
@@ -539,9 +549,6 @@ const LIGHT_MISS_GROUP: [u32; 33] = [
     HEAD_BINDING,
     COMPUTE,
     UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE,
 ];
 const _: () = assert!(
     floor::holds(&[&LIGHT_MISS_GROUP]),
@@ -617,7 +624,7 @@ const _: () = assert!(
         && floor::holds(&[&LIGHT_SLIDE_GROUP]),
     "a light receivers' pass's group binds past WebGPU's floor"
 );
-/// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one.
+/// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one, then how many it left.
 const LIGHT_LEFT_EMPTY: [u32; 4] = [ray::MISS_ACROSS, 0, 1, 0];
 /// The cast's world's group, over which `cell_cs`, `light_cell_cs`, `fold_cs` and
 /// `forget_cs` run: the eye, the clip levels' table and the bricks' levels the fold reads
@@ -725,33 +732,38 @@ const _: () = assert!(
 // Each compute group against what the shaders built over it read, as their declarations take
 // it (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_CAST], &CAST_GROUP)
+    binds(&[COMPUTE_CAST], &CAST_GROUP)
         && binds(
             &[
-                SHADER_BEAM,
-                SHADER_SAMPLE,
-                SHADER_LIGHT_BEAM,
-                SHADER_LIGHT_SAMPLE
+                COMPUTE_BEAM,
+                COMPUTE_SAMPLE,
+                COMPUTE_LIGHT_BEAM,
+                COMPUTE_LIGHT_SAMPLE
             ],
             &ASK_GROUP
         )
         && binds(
-            &[SHADER_CELL, SHADER_LIGHT_CELL, SHADER_FOLD, SHADER_FORGET],
+            &[
+                COMPUTE_CELL,
+                COMPUTE_LIGHT_CELL,
+                COMPUTE_FOLD,
+                COMPUTE_FORGET
+            ],
             &WORLD_GROUP
         )
-        && binds(&[SHADER_SAMPLE_HIT, SHADER_BEAM_HIT], &SAMPLE_HIT_GROUP)
-        && binds(&[SHADER_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
-        && binds(&[SHADER_MISS_HIT], &MISS_HIT_GROUP)
-        && binds(&[SHADER_MISS, SHADER_MISS_LIST], &MISS_GROUP)
-        && binds(&[SHADER_HIT_LEAD], &HIT_LEAD_GROUP)
-        && binds(&[SHADER_HIT_FACES], &HIT_FACES_GROUP)
-        && binds(&[SHADER_LIGHT], &LIGHT_GROUP)
-        && binds(&[SHADER_LIGHT_MISS], &LIGHT_MISS_GROUP)
-        && binds(&[SHADER_LIGHT_MISS_HIT], &LIGHT_MISS_HIT_GROUP)
-        && binds(&[SHADER_LIGHT_MARK], &LIGHT_MARK_GROUP)
-        && binds(&[SHADER_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
-        && binds(&[SHADER_LIGHT_PROPAGATE], &LIGHT_PROPAGATE_GROUP)
-        && binds(&[SHADER_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
+        && binds(&[COMPUTE_SAMPLE_HIT, COMPUTE_BEAM_HIT], &SAMPLE_HIT_GROUP)
+        && binds(&[COMPUTE_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
+        && binds(&[COMPUTE_MISS_HIT], &MISS_HIT_GROUP)
+        && binds(&[COMPUTE_MISS, COMPUTE_MISS_LIST], &MISS_GROUP)
+        && binds(&[COMPUTE_HIT_LEAD], &HIT_LEAD_GROUP)
+        && binds(&[COMPUTE_HIT_FACES], &HIT_FACES_GROUP)
+        && binds(&[COMPUTE_LIGHT], &LIGHT_GROUP)
+        && binds(&[COMPUTE_LIGHT_MISS], &LIGHT_MISS_GROUP)
+        && binds(&[COMPUTE_LIGHT_MISS_HIT], &LIGHT_MISS_HIT_GROUP)
+        && binds(&[COMPUTE_LIGHT_MARK], &LIGHT_MARK_GROUP)
+        && binds(&[COMPUTE_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
+        && binds(&[COMPUTE_LIGHT_PROPAGATE], &LIGHT_PROPAGATE_GROUP)
+        && binds(&[COMPUTE_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
     "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
 );
 
@@ -767,34 +779,34 @@ impl RaysPass {
         self.ground_built = Some(GroundPipelines::new(g, pipelines));
         // One group for every kernel over the cast's world but the pixels'.
         let group = &WORLD_GROUP;
-        let pipeline = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
-        let beam_built = pipelines.build_compute(g, SHADER_BEAM, &ASK_GROUP);
-        let cells_built = pipelines.build_compute(g, SHADER_CELL, group);
-        let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, &ASK_GROUP);
-        let sample_hit_built = pipelines.build_compute(g, SHADER_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
-        let miss_hit_built = pipelines.build_compute(g, SHADER_MISS_HIT, &MISS_HIT_GROUP);
-        let beam_hit_built = pipelines.build_compute(g, SHADER_BEAM_HIT, &SAMPLE_HIT_GROUP);
-        let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, &ASK_GROUP);
-        let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
-        let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &ASK_GROUP);
+        let pipeline = pipelines.build_compute(g, COMPUTE_CAST, &CAST_GROUP);
+        let beam_built = pipelines.build_compute(g, COMPUTE_BEAM, &ASK_GROUP);
+        let cells_built = pipelines.build_compute(g, COMPUTE_CELL, group);
+        let sample_built = pipelines.build_compute(g, COMPUTE_SAMPLE, &ASK_GROUP);
+        let sample_hit_built = pipelines.build_compute(g, COMPUTE_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
+        let miss_hit_built = pipelines.build_compute(g, COMPUTE_MISS_HIT, &MISS_HIT_GROUP);
+        let beam_hit_built = pipelines.build_compute(g, COMPUTE_BEAM_HIT, &SAMPLE_HIT_GROUP);
+        let light_beam_built = pipelines.build_compute(g, COMPUTE_LIGHT_BEAM, &ASK_GROUP);
+        let light_cells_built = pipelines.build_compute(g, COMPUTE_LIGHT_CELL, group);
+        let light_sample_built = pipelines.build_compute(g, COMPUTE_LIGHT_SAMPLE, &ASK_GROUP);
         let light_sample_hit_built =
-            pipelines.build_compute(g, SHADER_LIGHT_SAMPLE_HIT, &LIGHT_SAMPLE_HIT_GROUP);
-        let fold_built = pipelines.build_compute(g, SHADER_FOLD, group);
-        let miss_built = pipelines.build_compute(g, SHADER_MISS, &MISS_GROUP);
-        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, &MISS_GROUP);
-        let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &HIT_LEAD_GROUP);
-        let hit_faces_built = pipelines.build_compute(g, SHADER_HIT_FACES, &HIT_FACES_GROUP);
-        let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
-        let light_built = pipelines.build_compute(g, SHADER_LIGHT, &LIGHT_GROUP);
-        let light_miss_built = pipelines.build_compute(g, SHADER_LIGHT_MISS, &LIGHT_MISS_GROUP);
+            pipelines.build_compute(g, COMPUTE_LIGHT_SAMPLE_HIT, &LIGHT_SAMPLE_HIT_GROUP);
+        let fold_built = pipelines.build_compute(g, COMPUTE_FOLD, group);
+        let miss_built = pipelines.build_compute(g, COMPUTE_MISS, &MISS_GROUP);
+        let miss_list_built = pipelines.build_compute(g, COMPUTE_MISS_LIST, &MISS_GROUP);
+        let hit_lead_built = pipelines.build_compute(g, COMPUTE_HIT_LEAD, &HIT_LEAD_GROUP);
+        let hit_faces_built = pipelines.build_compute(g, COMPUTE_HIT_FACES, &HIT_FACES_GROUP);
+        let forget_built = pipelines.build_compute(g, COMPUTE_FORGET, group);
+        let light_built = pipelines.build_compute(g, COMPUTE_LIGHT, &LIGHT_GROUP);
+        let light_miss_built = pipelines.build_compute(g, COMPUTE_LIGHT_MISS, &LIGHT_MISS_GROUP);
         let light_miss_hit_built =
-            pipelines.build_compute(g, SHADER_LIGHT_MISS_HIT, &LIGHT_MISS_HIT_GROUP);
-        let light_mark_built = pipelines.build_compute(g, SHADER_LIGHT_MARK, &LIGHT_MARK_GROUP);
+            pipelines.build_compute(g, COMPUTE_LIGHT_MISS_HIT, &LIGHT_MISS_HIT_GROUP);
+        let light_mark_built = pipelines.build_compute(g, COMPUTE_LIGHT_MARK, &LIGHT_MARK_GROUP);
         let light_mark_draws_built =
-            pipelines.build_compute(g, SHADER_LIGHT_MARK_DRAWS, &LIGHT_MARK_DRAWS_GROUP);
+            pipelines.build_compute(g, COMPUTE_LIGHT_MARK_DRAWS, &LIGHT_MARK_DRAWS_GROUP);
         let light_propagate_built =
-            pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
-        let light_slide_built = pipelines.build_compute(g, SHADER_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
+            pipelines.build_compute(g, COMPUTE_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
+        let light_slide_built = pipelines.build_compute(g, COMPUTE_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
         let counter = Counter::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
@@ -866,7 +878,7 @@ impl RaysPass {
             ),
             light_left: buf(
                 word_bytes(LIGHT_LEFT_EMPTY.len()),
-                storage | buffer_usage::INDIRECT | buffer_usage::COPY_DST,
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
             light_args: buf(
                 word_bytes(light::ARGS_WORDS as usize),
@@ -887,6 +899,8 @@ impl RaysPass {
             ),
             light_cast: false,
             light_moved: 0,
+            light_columns: Vec::with_capacity(light::COLUMNS + 1),
+            light_reached: false,
             light_world: false,
             light_footprint_owed: false,
             refold: false,
@@ -1142,10 +1156,20 @@ impl RaysPass {
         // every write of what is placed names its box (`DecorFrame::edits`);
         // one that names none, or the lanes made again, forgets all.
         let edits = decor.edits;
+        // The world's columns that changed, units from the eye, as the light's cast reads
+        // them (`light_columns`).
+        let origin = [0, 1, 2].map(|k| eye[eye::ORIGIN + k] as i32);
+        let columns = &mut c.light_columns;
+        columns.clear();
+        let leaf = |b: [i32; 4]| light::column_of(origin, LEAF_CELL, [b[0], b[1]], [b[2], b[3]]);
         for &b in edits {
             hold(&mut c.boxes, &mut c.holding, b);
+            columns.push(leaf(b));
         }
-        cut_boxes(&c.cuts, &cuts, |b| hold(&mut c.boxes, &mut c.holding, b));
+        cut_boxes(&c.cuts, &cuts, |b| {
+            hold(&mut c.boxes, &mut c.holding, b);
+            columns.push(leaf(b));
+        });
         // What the node cache kept is forgotten where the service area
         // or what is placed moved past the boxes; so it is once its frames
         // would outrun a key's tag.
@@ -1180,6 +1204,31 @@ impl RaysPass {
                 }
                 let held = |r: &[i32]| entry(r).brick();
                 let (now, was) = (held(row), was.map(held));
+                // The bricks a query reads otherwise: the one now held present where it was
+                // not, and the one held present before where it no longer is.
+                let (taken, gone) = match was {
+                    Some((brick, present)) => (
+                        now.1 && (!present || brick != now.0),
+                        present && !(now.1 && brick == now.0),
+                    ),
+                    None => (now.1, false),
+                };
+                let cell = clipmap::FIRST_CELL + (k / clipmap::ENTRIES as usize) as u32;
+                let brick = |q: [i32; 2]| {
+                    let s = clipmap::BRICK_SHIFT;
+                    light::column_of(
+                        origin,
+                        cell,
+                        [q[0] << s, q[1] << s],
+                        [(q[0] + 1) << s, (q[1] + 1) << s],
+                    )
+                };
+                if taken {
+                    c.light_columns.push(brick(now.0));
+                }
+                if let (true, Some((q, _))) = (gone, was) {
+                    c.light_columns.push(brick(q));
+                }
                 present_moved |= match was {
                     Some((brick, present)) => {
                         now.1 && (!present || brick != now.0) || present && !now.1 && brick == now.0
@@ -1208,6 +1257,13 @@ impl RaysPass {
                     f[FILL_CELL as usize],
                     clipmap::brick_of_first([f[FILL_FIRST as usize], f[FILL_FIRST as usize + 1]]),
                 );
+                let s = clipmap::BRICK_SHIFT;
+                c.light_columns.push(light::column_of(
+                    origin,
+                    cell,
+                    [q[0] << s, q[1] << s],
+                    [(q[0] + 1) << s, (q[1] + 1) << s],
+                ));
                 let w = cell.wrapping_sub(clipmap::FIRST_CELL);
                 let k = (w * clipmap::ENTRIES + clipmap::entry(q)) as usize;
                 let row = &cast.clipmap[4 * k..4 * k + 4];
@@ -1251,8 +1307,14 @@ impl RaysPass {
         r.begin();
         r.read(&[light_map.1, u32::from(shadows)]);
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
-        r.mark(world_moved);
+        // The world under it moved whole where the node cache forgets it whole, or where no
+        // column or more than a cast is handed says what changed; else only the tiles its
+        // columns reach are cast again.
+        let n = c.light_columns.len();
+        let world_whole = world_moved && (c.forget || n == 0 || n > light::COLUMNS);
+        r.mark(world_whole);
         let held = r.end();
+        let world_columns = world_moved && !world_whole;
         // The box, a tile at a time about the eye: what a tile holds moves
         // with its corner, kept where the slide kept its band
         // (`light_slide_cs`).
@@ -1278,9 +1340,11 @@ impl RaysPass {
                 LightMoved::slide => slid,
                 LightMoved::receivers => !receivers_held,
                 LightMoved::footprint => footprint_owed,
+                LightMoved::world => world_columns,
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
         c.light_slid = held && slid;
+        c.light_reached = held && world_columns;
         if !c.light_ready {
             c.light_content.forget();
         }
@@ -1326,6 +1390,15 @@ impl RaysPass {
             for (k, a) in cast.actors[..n].iter().enumerate() {
                 let w = at + 4 * (1 + k);
                 head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
+            }
+            // The world's columns that changed, where the epoch goes on (`light_slide_cs`).
+            let at = 4 * light::COLUMNS_AT;
+            if c.light_reached {
+                head[at] = c.light_columns.len() as u32;
+                for (k, col) in c.light_columns.iter().enumerate() {
+                    let w = at + 4 * (1 + k);
+                    head[w..w + 4].copy_from_slice(&col.map(f32::to_bits));
+                }
             }
             g.write_buf(c.light_head, 0, bytes(&head));
             g.write_buf(c.light_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
@@ -1678,7 +1751,7 @@ impl RaysPass {
             g.end(pass);
             for (span, pipeline, [x, y], w) in [
                 (
-                    GpuSpanName::beam,
+                    GpuSpanName::beam_hit,
                     &c.beam_hit_built,
                     c.grid.corners,
                     BEAM_WORKGROUP,
@@ -1690,7 +1763,7 @@ impl RaysPass {
                     BEAM_WORKGROUP,
                 ),
                 (
-                    GpuSpanName::beam,
+                    GpuSpanName::cell,
                     &c.cells_built,
                     c.grid.span,
                     [CELL_SIDE, CELL_SIDE, 1],
@@ -1713,9 +1786,8 @@ impl RaysPass {
                     continue;
                 }
                 let mut group = c.group;
-                let beam_hit = pipeline.id == c.beam_hit_built.id;
-                let beam_left = pipeline.id == c.beam_built.id;
-                if beam_hit {
+                let beam_left = span == GpuSpanName::beam;
+                if span == GpuSpanName::beam_hit {
                     group = c.beam_hit_group;
                     g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
                 }
@@ -1860,9 +1932,10 @@ impl RaysPass {
             // missed pixels are: each a pass timed in its own span.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
-            // The tiles the box slid onto or into another band set back to be
-            // read anew first, a thread a tile (`light_slide_cs`).
-            if c.light_slid {
+            // The tiles the box slid onto or into another band, or whose rays
+            // may meet a column of the world that changed, set back to be read
+            // anew first, a thread a tile (`light_slide_cs`).
+            if c.light_slid || c.light_reached {
                 let n = light::tiles(shadow::SIZE);
                 g.set_bind_group(pass, 0, c.light_groups[7], &[]);
                 g.set_pipeline(pass, c.light_slide_built.id);
@@ -1942,6 +2015,16 @@ impl RaysPass {
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
             g.dispatch_indirect(pass, c.light_misses, list);
             g.end(pass);
+            // How many it left where their walk reads them, then that walk over their list.
+            g.copy_buf(
+                encoder,
+                (c.light_left, word_bytes(3)),
+                (
+                    c.light_list,
+                    word_bytes(light::misses_left_at(shadow::SIZE) as usize),
+                ),
+                4,
+            );
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_walk).pass());
             g.set_bind_group(pass, 0, c.light_groups[3], &[]);
             g.set_pipeline(pass, c.light_miss_built.id);

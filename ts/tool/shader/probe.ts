@@ -4,19 +4,19 @@
 
 /**
  * The dev server's shader probe (probe.html): each module as the renderer
- * assembles it is made into a pipeline on this device alone, one at a time.
- * What the device said of it is shown on the page and sent to the dev
- * server's console (remote-console.ts). A compute module's entry is made with
- * its own layout; a module with a vertex and a fragment entry is made into a
- * render pipeline whose targets are as many rgba16float ones as its fragment
- * returns. `?only=a,b` probes the modules whose names start so;
+ * assembles it is made, with every pipeline the renderer makes over it
+ * (pipeline.ts), on this device alone, one at a time. What the device said of
+ * each is shown on the page and sent to the dev server's console
+ * (remote-console.ts). `?only=a,b` probes the modules whose names start so;
  * `?bisect=<name>` finds the line a device refuses; `?src=` a shader under
- * doc/experiment.
+ * doc/experiment, made into a pipeline over its first compute entry, or its
+ * first vertex and fragment entries.
  */
 
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { install } from "../../client/src/remote-console.ts";
+import { entries, make, type Pipeline } from "./pipeline.ts";
 
 /** The experiments' shaders, which `?src=` names by its path under doc/experiment. */
 const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
@@ -24,9 +24,12 @@ const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
   import: "default",
 });
 
-/** Each module as the renderer assembles it, by name, from the dev server's
- * `/__assembled` (vite.config.ts). */
-async function assembled(): Promise<Record<string, string>> {
+/** Each module as the renderer assembles it, by name, and the pipelines it
+ * makes over them, from the dev server's `/__assembled` (vite.config.ts). */
+async function assembled(): Promise<{
+  modules: Record<string, string>;
+  pipelines: Pipeline[];
+}> {
   const r = await fetch("/__assembled");
   if (!r.ok) throw new Error(`no assembled modules: ${await r.text()}`);
   return r.json();
@@ -48,83 +51,71 @@ function entry(code: string, stage: string): string | undefined {
   return code.match(new RegExp(`@${stage}[^]*?\\bfn\\s+(\\w+)\\s*\\(`))?.[1];
 }
 
-/** How many locations the fragment entry `fs` writes: one, or its struct's. */
-function targets(code: string, fs: string): number {
-  const ret = code.match(
-    new RegExp(`\\bfn\\s+${fs}\\s*\\([^]*?\\)\\s*->\\s*([^{]+)\\{`),
-  )?.[1];
-  if (!ret) return 0;
-  if (ret.includes("@location")) return 1;
-  const name = ret.trim();
-  const body = code.match(
-    new RegExp(`struct\\s+${name}\\s*\\{([^}]*)\\}`),
-  )?.[1];
-  return body ? (body.match(/@location/g) ?? []).length : 1;
+/** A shader no pipeline names, `name`'s: a pipeline over its first compute
+ * entry, or its first vertex and fragment entries. */
+function first(name: string, code: string): Pipeline[] {
+  const cs = entry(code, "compute");
+  if (cs) return [{ module: name, compute: cs }];
+  const vertex = entry(code, "vertex");
+  if (!vertex) return [];
+  return [{ module: name, vertex, fragment: entry(code, "fragment") }];
 }
 
+/** Module `name` made, and each of `pipelines` over it, on `device`: whether
+ * it took them all. */
 async function probe(
   device: GPUDevice,
   name: string,
   code: string,
+  pipelines: Pipeline[],
   quiet = false,
 ): Promise<boolean> {
-  const t0 = performance.now();
+  const say = (
+    what: string,
+    errs: (string | null | undefined)[],
+    t0: number,
+  ) => {
+    const ms = round(performance.now() - t0);
+    const said = errs.filter(Boolean);
+    const line =
+      said.length === 0
+        ? `[probe] ${name} ${what}: ok (${ms} ms)`
+        : `[probe] ${name} ${what}: ${said.join(" | ").slice(0, 600)} (${ms} ms)`;
+    if (!quiet) {
+      console[said.length === 0 ? "info" : "error"](line);
+      show(line, said.length === 0);
+    }
+    return said.length === 0;
+  };
+  let t0 = performance.now();
   device.pushErrorScope("validation");
   device.pushErrorScope("internal");
   const module = device.createShaderModule({ label: name, code });
-  const cs = entry(code, "compute");
-  const [vs, fs] = [entry(code, "vertex"), entry(code, "fragment")];
-  let kind: string;
-  let made: Promise<unknown>;
-  if (cs) {
-    kind = cs;
-    made = device.createComputePipelineAsync({
-      label: name,
-      layout: "auto",
-      compute: { module, entryPoint: cs },
-    });
-  } else if (vs) {
-    kind = fs ? `${vs}+${fs}` : vs;
-    const n = fs ? targets(code, fs) : 0;
-    made = device.createRenderPipelineAsync({
-      label: name,
-      layout: "auto",
-      vertex: { module, entryPoint: vs },
-      fragment: fs
-        ? {
-            module,
-            entryPoint: fs,
-            targets: Array.from({ length: n }, () => ({
-              format: "rgba16float" as GPUTextureFormat,
-            })),
-          }
-        : undefined,
-      primitive: { topology: "triangle-list" },
-    });
-  } else {
-    kind = "no entry";
-    made = Promise.resolve();
+  const errors = (await module.getCompilationInfo()).messages
+    .filter((m) => m.type === "error")
+    .map((m) => `${m.lineNum}:${m.linePos}: ${m.message}`);
+  let internal = await device.popErrorScope();
+  let invalid = await device.popErrorScope();
+  if (!say("module", [...errors, internal?.message, invalid?.message], t0)) {
+    return false;
   }
-  let said: string | null = null;
-  try {
-    await made;
-  } catch (e) {
-    const reason = (e as GPUPipelineError).reason ?? "error";
-    said = `${reason}: ${(e as Error).message}`;
+  let ok = true;
+  for (const p of pipelines) {
+    t0 = performance.now();
+    device.pushErrorScope("validation");
+    device.pushErrorScope("internal");
+    let said: string | null = null;
+    try {
+      await make(device, module, code, p);
+    } catch (e) {
+      const reason = (e as GPUPipelineError).reason ?? "error";
+      said = `${reason}: ${(e as Error).message}`;
+    }
+    internal = await device.popErrorScope();
+    invalid = await device.popErrorScope();
+    ok = say(entries(p), [said, internal?.message, invalid?.message], t0) && ok;
   }
-  const internal = await device.popErrorScope();
-  const invalid = await device.popErrorScope();
-  const ms = round(performance.now() - t0);
-  const errs = [said, internal?.message, invalid?.message].filter(Boolean);
-  const line =
-    errs.length === 0
-      ? `[probe] ${name} ${kind}: ok (${ms} ms)`
-      : `[probe] ${name} ${kind}: ${errs.join(" | ").slice(0, 600)} (${ms} ms)`;
-  if (!quiet) {
-    console[errs.length === 0 ? "info" : "error"](line);
-    show(line, errs.length === 0);
-  }
-  return errs.length === 0;
+  return ok;
 }
 
 /** Where in the longest function of `code` a `return;` may stand: before a
@@ -181,6 +172,7 @@ async function bisect(
   device: GPUDevice,
   name: string,
   code: string,
+  pipelines: Pipeline[],
   range?: [number, number],
 ): Promise<void> {
   const lines = code.split("\n");
@@ -194,17 +186,17 @@ async function bisect(
     console[ok ? "info" : "error"](`[probe] bisect ${name}: ${s}`);
     show(s, ok);
   };
-  if (!(await probe(device, name, cut(0), true))) {
+  if (!(await probe(device, name, cut(0), pipelines, true))) {
     return say("refused with nothing past the function's start", false);
   }
-  if (await probe(device, name, cut(at.length), true)) {
+  if (await probe(device, name, cut(at.length), pipelines, true)) {
     return say("taken whole");
   }
   // cut(lo) taken, cut(hi) refused.
   let [lo, hi] = [0, at.length];
   while (hi - lo > 1) {
     const mid = (lo + hi) >> 1;
-    if (await probe(device, name, cut(mid), true)) lo = mid;
+    if (await probe(device, name, cut(mid), pipelines, true)) lo = mid;
     else hi = mid;
     show(`${lo}..${hi} of ${at.length}`, true);
   }
@@ -243,28 +235,36 @@ async function main(): Promise<void> {
     const path = Object.keys(RECORDED).find((p) => p.endsWith(`/${src}`));
     if (!path) return void console.error(`[probe] no recorded shader ${src}`);
     const code = await RECORDED[path]();
-    await probe(device, src.split("/").pop()!, code);
+    const name = src.split("/").pop()!;
+    await probe(device, name, code, first(name, code));
     console.info("[probe] done");
     return show("done", true);
   }
+  const { modules, pipelines } = await assembled();
+  const over = (name: string) => pipelines.filter((p) => p.module === name);
   const target = params.get("bisect");
   if (target) {
-    const code = (await assembled())[target];
+    const code = modules[target];
     if (code === undefined)
       return void console.error(`[probe] no module ${target}`);
     const [a, b] = [params.get("from"), params.get("to")].map(Number);
-    await bisect(device, target, code, a && b ? [a, b] : undefined);
+    await bisect(
+      device,
+      target,
+      code,
+      over(target),
+      a && b ? [a, b] : undefined,
+    );
     console.info("[probe] done");
     return show("done", true);
   }
   const only = params.get("only")?.split(",").filter(Boolean);
-  const modules = await assembled();
   const names = Object.keys(modules)
     .filter((n) => !only || only.some((o) => n.startsWith(o)))
     .sort((a, b) => a.localeCompare(b));
   out.textContent = `${names.length} modules`;
   for (const name of names) {
-    await probe(device, name, modules[name]);
+    await probe(device, name, modules[name], over(name));
   }
   console.info("[probe] done");
   show("done", true);

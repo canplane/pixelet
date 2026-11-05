@@ -12,7 +12,7 @@
 
 use crate::api_spec::stream;
 use crate::frame::shader::record::{
-    compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
+    compute, pipeline as record_of, src, COMPUTES, HEAD, PIPELINES, SHADERS,
 };
 use crate::gpu::api::{room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH};
 use crate::gpu::surface::WORLD_COLOR;
@@ -28,9 +28,9 @@ pub struct Pipeline {
     pub lanes: usize,
 }
 
-/// The most distinct group layouts there are: every pipeline's groups, and
-/// a compute shader's one.
-const LAYOUTS: usize = PIPELINES as usize * GROUPS + SHADERS as usize;
+/// The most distinct group layouts there are: every render pipeline's groups,
+/// and a compute pipeline's one.
+const LAYOUTS: usize = PIPELINES as usize * GROUPS + COMPUTES as usize;
 /// Every pipeline the renderer makes, render and compute, each held to it
 /// as it is made.
 const PIPELINE_CAP: usize = 96;
@@ -215,24 +215,23 @@ impl Pipelines {
         self.keep(place, key, b)
     }
 
-    /// A compute pipeline over shader `kind`'s one compute entry and `group`,
-    /// group 0's (binding, stages, kind) words: kept by both, as a render
-    /// pipeline by its record and targets, so owners asking the same share it.
-    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &'static [u32]) -> Pipeline {
+    /// Compute pipeline `id` (record.rs `compute`) over `group`, group 0's
+    /// (binding, stages, kind) words: kept by both, as a render pipeline by
+    /// its record and targets, so owners asking the same share it.
+    pub fn build_compute(&mut self, g: &Gpu, id: u32, group: &'static [u32]) -> Pipeline {
         // Past every render pipeline's key's first word, a record's number.
         let key = group
             .iter()
-            .fold(fold(0xcbf29ce484222325, PIPELINES + kind), |k, &w| {
-                fold(k, w)
-            });
+            .fold(fold(0xcbf29ce484222325, PIPELINES + id), |k, &w| fold(k, w));
         if let Some(b) = self.existing(key) {
             return b;
         }
-        let module = self.module(kind);
+        let (shader, entry) = compute(id);
+        let module = self.module(shader);
         let mut b = Pipeline::default();
         b.layouts[0] = self.layout(g, group);
         let (place, word, ticket) = self.next();
-        b.id = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1], (word, ticket));
+        b.id = g.compute_pipeline(module, entry, &b.layouts[..1], (word, ticket));
         self.keep(place, key, b)
     }
 

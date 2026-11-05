@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "probe": "vite --host",
-    "test": "vitest run --root .. tool/shader"
+    "test": "vitest run --root ../.. tool/shader"
   },
   "devDependencies": {
     "@pxl/build": "workspace:*",

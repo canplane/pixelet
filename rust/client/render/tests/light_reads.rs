@@ -1,7 +1,9 @@
 //! The light's slide by hand (frame/shader/light_slide.wgsl) against pxl-engine's light:
 //! `light_slide_cs` sets a tile's read to none wherever the box slid it off or into another
 //! band (`Light::keeps` false), so no cast reads a depth cast for another place. A tile it may
-//! keep it may also set to none. Skipped where no adapter answers.
+//! keep it may also set to none. And it sets to none every tile whose rays may meet a column of
+//! the world that changed (`Light::reaches`), the box not slid. Skipped where no adapter
+//! answers.
 
 mod gpu;
 
@@ -56,8 +58,18 @@ fn head_words(current: u32, epoch: u32, was: [i32; 2]) -> Vec<u32> {
 }
 
 fn run(gpu: &Gpu, p: &wgpu::ComputePipeline, l: &Light, list: &[u32], was: [i32; 2]) -> Vec<u32> {
+    run_with(gpu, p, l, list, head_words(40, 37, was))
+}
+
+fn run_with(
+    gpu: &Gpu,
+    p: &wgpu::ComputePipeline,
+    l: &Light,
+    list: &[u32],
+    head: Vec<u32>,
+) -> Vec<u32> {
     let eye = gpu.buffer(&eye_words(l), wgpu::BufferUsages::UNIFORM);
-    let head = gpu.buffer(&head_words(40, 37, was), wgpu::BufferUsages::UNIFORM);
+    let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
     let list = gpu.buffer(list, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         p,
@@ -137,4 +149,80 @@ fn hand_slide_forgets_what_moved() {
     );
     assert!(kept > 0 && off > 0 && banded > 0);
     tally.end("slides");
+}
+
+/// A world's change: its name, the light's direction, and its columns.
+type Change = (&'static str, [f32; 3], &'static [[f32; 4]]);
+
+#[test]
+fn hand_slide_forgets_what_a_world_change_reaches() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let p = gpu.pipeline(src(SHADER_LIGHT_SLIDE), "light_slide_cs");
+    let mut tally = Tally::default();
+    let (mut kept, mut off, mut extra) = (0u32, 0u32, 0u32);
+    let corner = [1304, -896];
+    // Columns from the eye, in units: a brick's, an edit's a few cells wide, one far off the
+    // box, and the world's whole width.
+    let changes: [Change; 4] = [
+        (
+            "a brick under the eye, the light high",
+            [0.3, 0.2, -0.93],
+            &[[0.0, 0.0, 64.0, 64.0]],
+        ),
+        (
+            "two edits, the light low",
+            [0.8, 0.1, -0.3],
+            &[[-20.0, 5.0, -17.0, 9.0], [30.0, -40.0, 31.0, -39.0]],
+        ),
+        (
+            "far off the box",
+            [0.3, 0.2, -0.93],
+            &[[9000.0, 9000.0, 9064.0, 9064.0]],
+        ),
+        (
+            "the world's width",
+            [0.3, 0.2, -0.93],
+            &[[-1.0e30, 10.0, 1.0e30, 74.0]],
+        ),
+    ];
+    for (n, (name, dir, columns)) in changes.into_iter().enumerate() {
+        let l = box_of(dir, 0.0625, 0.75, corner);
+        let list: Vec<u32> = (0..light::list_words(SIZE))
+            .map(|k| mix(k, n as u32) | 1)
+            .collect();
+        let mut head = head_words(40, 37, corner);
+        let at = 4 * light::COLUMNS_AT;
+        head[at] = columns.len() as u32;
+        for (k, c) in columns.iter().enumerate() {
+            head[at + 4 * (1 + k)..at + 4 * (2 + k)].copy_from_slice(&c.map(f32::to_bits));
+        }
+        let have = run_with(&gpu, &p, &l, &list, head);
+        let reads = light::reads_at(SIZE);
+        let (mut want, mut got) = (Vec::new(), Vec::new());
+        let (mut case_kept, mut case_off) = (0, 0);
+        for j in 0..N {
+            for i in 0..N {
+                let word = have[(reads + j * N + i) as usize];
+                if !columns.iter().any(|&c| l.reaches(SIZE, RANGE, [i, j], c)) {
+                    case_kept += 1;
+                    extra += u32::from(word == 0);
+                    continue;
+                }
+                want.push(0);
+                got.push(word);
+                case_off += 1;
+            }
+        }
+        eprintln!("{name}: {case_kept} kept, {case_off} set to none");
+        tally.compare(name, &want, &got, |k| format!("tile set to none {k}"));
+        kept += case_kept;
+        off += case_off;
+    }
+    eprintln!("world changes: {kept} tiles kept, {off} set to none, {extra} kept set to none");
+    assert!(kept > 0 && off > 0, "too few to say");
+    assert!(extra <= 16, "{extra} tiles no column reaches set to none");
+    tally.end("world changes");
 }

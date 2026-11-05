@@ -8,55 +8,107 @@
 
 pub use crate::frame::shader::part::*;
 
-/// A compute shader's one entry point, as its source names it.
-pub fn compute_entry(kind: u32) -> &'static str {
-    match kind {
-        SHADER_CAST => "cast_cs",
-        SHADER_FOLD => "fold_cs",
-        SHADER_ATMOS_FROXEL => "froxel_cs",
-        SHADER_ATMOS_EXPOSURE => "exposure_cs",
-        SHADER_SCREEN_PROPAGATE => "screen_propagate_cs",
-        SHADER_SCREEN_BOUND => "screen_bound_cs",
-        SHADER_SCREEN_MARK => "screen_mark_cs",
-        SHADER_BOUND => "bound_cs",
-        SHADER_HEIGHT => "height_cs",
-        SHADER_GENERATION_MARK => "decor_mark_cs",
-        SHADER_GENERATION_THIN => "decor_thin_cs",
-        SHADER_LIGHT_BEAM => "light_beam_cs",
-        SHADER_LIGHT_CELL => "light_cell_cs",
-        SHADER_LIGHT_SAMPLE => "sample_cs",
-        SHADER_LIGHT_SAMPLE_BOX => "light_sample_box_cs",
-        SHADER_SAMPLE_HIT => "sample_hit_cs",
-        SHADER_MISS_HIT => "miss_hit_cs",
-        SHADER_BEAM_HIT => "beam_hit_cs",
-        SHADER_LIGHT_MISS_HIT => "light_miss_hit_cs",
-        SHADER_LIGHT_SAMPLE_HIT => "sample_hit_cs",
-        SHADER_GENERATION => "decor_cs",
-        SHADER_GENERATION_CNT => "decor_cnt_cs",
-        SHADER_GENERATION_ARGS => "decor_args_cs",
-        SHADER_GENERATION_COMPACT => "decor_compact_cs",
-        SHADER_WAY => "way_cs",
-        SHADER_WAY_FREE => "way_free_cs",
-        SHADER_WAY_TREE => "way_tree_cs",
-        SHADER_WAY_RETURN => "way_return_cs",
-        SHADER_BEAM => "beam_cs",
-        SHADER_CELL => "cell_cs",
-        SHADER_MISS => "miss_cs",
-        SHADER_FORGET => "forget_cs",
-        SHADER_SAMPLE => "sample_cs",
-        SHADER_LIGHT => "light_cs",
-        SHADER_LIGHT_MISS => "light_miss_cs",
-        SHADER_SAMPLE_BOX => "sample_box_cs",
-        SHADER_MISS_LIST => "miss_list_cs",
-        SHADER_FACE => "face_cs",
-        SHADER_LIGHT_MARK => "light_mark_cs",
-        SHADER_LIGHT_MARK_DRAWS => "light_mark_draws_cs",
-        SHADER_LIGHT_PROPAGATE => "light_propagate_cs",
-        SHADER_LIGHT_SLIDE => "light_slide_cs",
-        SHADER_HIT_LEAD => "hit_lead_cs",
-        SHADER_HIT_FACES => "hit_faces_cs",
-        SHADER_BOX_ARGS => "box_args_cs",
-        _ => xpute_kit::bug!(EINVAL, kind),
+/// Each compute pipeline the renderer makes, by its number (`compute`).
+pub const COMPUTE_ATMOS_EXPOSURE: u32 = 0;
+pub const COMPUTE_CAST: u32 = 1;
+pub const COMPUTE_BOUND: u32 = 2;
+pub const COMPUTE_HEIGHT: u32 = 3;
+pub const COMPUTE_GENERATION: u32 = 4;
+pub const COMPUTE_GENERATION_CNT: u32 = 5;
+pub const COMPUTE_GENERATION_ARGS: u32 = 6;
+pub const COMPUTE_GENERATION_COMPACT: u32 = 7;
+pub const COMPUTE_WAY: u32 = 8;
+pub const COMPUTE_GENERATION_MARK: u32 = 9;
+pub const COMPUTE_FOLD: u32 = 10;
+pub const COMPUTE_ATMOS_FROXEL: u32 = 11;
+pub const COMPUTE_WAY_FREE: u32 = 12;
+pub const COMPUTE_WAY_TREE: u32 = 13;
+pub const COMPUTE_WAY_RETURN: u32 = 14;
+pub const COMPUTE_BEAM: u32 = 15;
+pub const COMPUTE_CELL: u32 = 16;
+pub const COMPUTE_MISS: u32 = 17;
+/// The pixels the cast's reading walk missed, walked again from their list
+/// (pxl-engine `node_cache::MARKS_AT`), a thread each, from the module that
+/// walks every one (`SHADER_MISS`).
+pub const COMPUTE_MISS_LIST: u32 = 18;
+pub const COMPUTE_FORGET: u32 = 19;
+pub const COMPUTE_SAMPLE: u32 = 20;
+pub const COMPUTE_LIGHT: u32 = 21;
+pub const COMPUTE_LIGHT_MISS: u32 = 22;
+pub const COMPUTE_SAMPLE_BOX: u32 = 23;
+pub const COMPUTE_FACE: u32 = 24;
+pub const COMPUTE_LIGHT_MARK: u32 = 25;
+pub const COMPUTE_LIGHT_MARK_DRAWS: u32 = 26;
+pub const COMPUTE_LIGHT_PROPAGATE: u32 = 27;
+pub const COMPUTE_GENERATION_THIN: u32 = 28;
+pub const COMPUTE_SCREEN_PROPAGATE: u32 = 29;
+pub const COMPUTE_SCREEN_MARK: u32 = 30;
+pub const COMPUTE_SCREEN_BOUND: u32 = 31;
+pub const COMPUTE_LIGHT_SLIDE: u32 = 32;
+pub const COMPUTE_HIT_LEAD: u32 = 33;
+pub const COMPUTE_HIT_FACES: u32 = 34;
+pub const COMPUTE_BOX_ARGS: u32 = 35;
+pub const COMPUTE_LIGHT_BEAM: u32 = 36;
+pub const COMPUTE_LIGHT_CELL: u32 = 37;
+pub const COMPUTE_LIGHT_SAMPLE: u32 = 38;
+pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 39;
+pub const COMPUTE_SAMPLE_HIT: u32 = 40;
+pub const COMPUTE_MISS_HIT: u32 = 41;
+pub const COMPUTE_BEAM_HIT: u32 = 42;
+pub const COMPUTE_LIGHT_MISS_HIT: u32 = 43;
+pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
+pub const COMPUTES: u32 = 45;
+
+/// Compute pipeline `id`'s shader and the entry point it runs, as the
+/// source names it.
+pub const fn compute(id: u32) -> (u32, &'static str) {
+    match id {
+        COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
+        COMPUTE_CAST => (SHADER_CAST, "cast_cs"),
+        COMPUTE_BOUND => (SHADER_BOUND, "bound_cs"),
+        COMPUTE_HEIGHT => (SHADER_HEIGHT, "height_cs"),
+        COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),
+        COMPUTE_GENERATION_CNT => (SHADER_GENERATION_CNT, "decor_cnt_cs"),
+        COMPUTE_GENERATION_ARGS => (SHADER_GENERATION_ARGS, "decor_args_cs"),
+        COMPUTE_GENERATION_COMPACT => (SHADER_GENERATION_COMPACT, "decor_compact_cs"),
+        COMPUTE_WAY => (SHADER_WAY, "way_cs"),
+        COMPUTE_GENERATION_MARK => (SHADER_GENERATION_MARK, "decor_mark_cs"),
+        COMPUTE_FOLD => (SHADER_FOLD, "fold_cs"),
+        COMPUTE_ATMOS_FROXEL => (SHADER_ATMOS_FROXEL, "froxel_cs"),
+        COMPUTE_WAY_FREE => (SHADER_WAY_FREE, "way_free_cs"),
+        COMPUTE_WAY_TREE => (SHADER_WAY_TREE, "way_tree_cs"),
+        COMPUTE_WAY_RETURN => (SHADER_WAY_RETURN, "way_return_cs"),
+        COMPUTE_BEAM => (SHADER_BEAM, "beam_cs"),
+        COMPUTE_CELL => (SHADER_CELL, "cell_cs"),
+        COMPUTE_MISS => (SHADER_MISS, "miss_cs"),
+        COMPUTE_MISS_LIST => (SHADER_MISS, "miss_list_cs"),
+        COMPUTE_FORGET => (SHADER_FORGET, "forget_cs"),
+        COMPUTE_SAMPLE => (SHADER_SAMPLE, "sample_cs"),
+        COMPUTE_LIGHT => (SHADER_LIGHT, "light_cs"),
+        COMPUTE_LIGHT_MISS => (SHADER_LIGHT_MISS, "light_miss_cs"),
+        COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
+        COMPUTE_FACE => (SHADER_FACE, "face_cs"),
+        COMPUTE_LIGHT_MARK => (SHADER_LIGHT_MARK, "light_mark_cs"),
+        COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
+        COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
+        COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
+        COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
+        COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
+        COMPUTE_SCREEN_BOUND => (SHADER_SCREEN_BOUND, "screen_bound_cs"),
+        COMPUTE_LIGHT_SLIDE => (SHADER_LIGHT_SLIDE, "light_slide_cs"),
+        COMPUTE_HIT_LEAD => (SHADER_HIT_LEAD, "hit_lead_cs"),
+        COMPUTE_HIT_FACES => (SHADER_HIT_FACES, "hit_faces_cs"),
+        COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
+        COMPUTE_LIGHT_BEAM => (SHADER_LIGHT_BEAM, "light_beam_cs"),
+        COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
+        COMPUTE_LIGHT_SAMPLE => (SHADER_LIGHT_SAMPLE, "sample_cs"),
+        COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "light_sample_box_cs"),
+        COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
+        COMPUTE_MISS_HIT => (SHADER_MISS_HIT, "miss_hit_cs"),
+        COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
+        COMPUTE_LIGHT_MISS_HIT => (SHADER_LIGHT_MISS_HIT, "light_miss_hit_cs"),
+        COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
+        _ => panic!("a compute pipeline number with no shader"),
     }
 }
 

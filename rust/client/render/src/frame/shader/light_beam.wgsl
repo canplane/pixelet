@@ -38,7 +38,7 @@ fn light_beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[base + LIGHT_LINE_ORIGIN + 2u] = u32(origin.z);
   let band = tile_band(light_on(LEVEL_CORNER, c));
   // The light's rays are parallel: their spacing its `across` alone (`Light::spacing`).
-  let met = beam_walk(origin, light_v3(LIGHT_DIR), light_inverse(), eye_f32(LIGHT + LIGHT_T_MAX), vec2<u32>(band), vec2<f32>(light_spacing(), 0.0), base);
+  let met = beam_walk(origin, light_v3(LIGHT_DIR), light_inverse(), eye_f32(LIGHT + LIGHT_T_MAX), vec2<u32>(band), vec2<f32>(light_spacing(), 0.0), base, root_start());
   if (node_cache_word(COUNT_ON) != 0u) {
     atomicAdd(&node_cache[VISITS_COUNT], met.visits);
   }

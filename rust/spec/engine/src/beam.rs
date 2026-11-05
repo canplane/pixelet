@@ -447,6 +447,11 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
+/// While a sample is listed for the walk that asks the world (pxl-render sample_hit.wgsl,
+/// sample.wgsl), where its walk over the node cache left it, in its asset's first word: how far
+/// it came, which that walk goes on from off its cell's line (resume.wgsl `resumed_at`); the
+/// nodes it visited in `SAMPLE_VISITS`.
+pub const SAMPLE_LEFT_T: u32 = SAMPLE_ASSET;
 
 /// The side of a workgroup of the passes over the beam rays' corners, a thread a corner, and
 /// of the one over what the first left, a thread a place in the list (pxl-render

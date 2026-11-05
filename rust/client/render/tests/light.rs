@@ -1108,8 +1108,8 @@ fn every_pass_bands_a_tile_alike() {
     use pxl_engine::grid::INV_SPLIT2;
     use pxl_engine::FINEST_ZOOM;
     use pxl_render::frame::shader::record::{
-        compute_entry, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL, SHADER_LIGHT_MISS,
-        SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE,
+        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MISS,
+        COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SLIDE,
     };
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
@@ -1130,19 +1130,19 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     };
     let passes = [
-        SHADER_LIGHT,
-        SHADER_LIGHT_SAMPLE,
-        SHADER_LIGHT_MISS,
-        SHADER_LIGHT_MISS_HIT,
-        SHADER_LIGHT_BEAM,
-        SHADER_LIGHT_CELL,
-        SHADER_LIGHT_SLIDE,
+        COMPUTE_LIGHT,
+        COMPUTE_LIGHT_SAMPLE,
+        COMPUTE_LIGHT_MISS,
+        COMPUTE_LIGHT_MISS_HIT,
+        COMPUTE_LIGHT_BEAM,
+        COMPUTE_LIGHT_CELL,
+        COMPUTE_LIGHT_SLIDE,
     ]
-    .map(|kind| {
-        let entry = compute_entry(kind);
+    .map(|id| {
+        let (shader, entry) = compute(id);
         let module = format!(
             "{}\nconst PROBE_LEAD: u32 = {LEAD}u;\n{PROBE}",
-            gpu::source(src(kind), entry)
+            gpu::source(src(shader), entry)
         );
         (entry, gpu.pipeline(&module, "probe_cs"))
     });

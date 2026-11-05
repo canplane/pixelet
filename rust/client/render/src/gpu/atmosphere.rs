@@ -21,9 +21,9 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    binds, COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
-    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE,
-    SHADER_ATMOS_FROXEL, STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
+    binds, COMPUTE, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
+    PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER,
+    STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -115,8 +115,8 @@ const EXPOSURE_GROUP: [u32; 24] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
-        && binds(&[SHADER_ATMOS_FROXEL], &FROXEL_GROUP),
+    binds(&[COMPUTE_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
+        && binds(&[COMPUTE_ATMOS_FROXEL], &FROXEL_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -416,7 +416,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            exposure: pipelines.build_compute(g, SHADER_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
+            exposure: pipelines.build_compute(g, COMPUTE_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
             groups: [0; TABLES],
             baked: false,
             lights: [0.0f32, 1.0].map(|which| {
@@ -466,7 +466,7 @@ impl Atmosphere {
                 (texture, view)
             },
             volume,
-            froxel: pipelines.build_compute(g, SHADER_ATMOS_FROXEL, &FROXEL_GROUP),
+            froxel: pipelines.build_compute(g, COMPUTE_ATMOS_FROXEL, &FROXEL_GROUP),
             froxel_groups: [0; 2],
         };
         // Every table's group is the air's entries its layout binds, and its own.

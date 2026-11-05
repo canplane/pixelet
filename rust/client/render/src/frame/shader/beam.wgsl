@@ -1,6 +1,6 @@
 // pxl-render/beam.wgsl
 
-// The eye's beam rays `beam_hit_cs` left, each walked from the root asking the world
+// The eye's beam rays `beam_hit_cs` left, each walked on from where that left it asking the world
 // (beam_walk.wgsl), its line left in the eye's beam rays' buffer (pxl-engine
 // `beam::Grid::corners`, eye_bind.wgsl). A thread each at its place in their list.
 
@@ -31,8 +31,10 @@ fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let idx = c.y * corners.x + c.x;
   let base = idx * LINE_WORDS;
   let aim = eye_aim(vec2<f32>(tx, ty));
+  // Where `beam_hit_cs` left it: its line's node at how far it came (resume.wgsl).
+  let start = line_resumed(aim, base, bitcast<f32>(beams[eye_word(GRID + GRID_HANDS_AT) + idx]), NONE);
   // Its beam's rays the lattice's side apart in angle (`cast::Spacing`, `beam::Grid`'s `s`).
-  let met = beam_walk(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, vec2<f32>(0.0, s), base);
+  let met = beam_walk(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, vec2<f32>(0.0, s), base, start);
   if (node_cache_word(COUNT_ON) != 0u) {
     atomicAdd(&node_cache[VISITS_COUNT], met.visits);
   }

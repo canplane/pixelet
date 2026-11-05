@@ -36,13 +36,12 @@ fn sample_aim(s: vec2<u32>) -> Aim {
   return light_aim(slot_texel(s * LIGHT_SAMPLE), mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)));
 }
 
-/// Off the cell of the box its texel lies in (`light::cell`).
+/// Off the cell of the box its texel lies in (light_resume.wgsl).
 fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
-  let cell = slot_texel(s * LIGHT_SAMPLE) / LIGHT_BEAM;
-  return resumed(
-    aim,
-    head_word(LIGHT_HEAD_CELLS) + (cell.y * head_word(LIGHT_HEAD_CELLS_ACROSS) + cell.x) * CELL_WORDS,
-    LIGHT_LINE_WORDS,
-    LIGHT_LINE_ORIGIN,
-  );
+  return light_resumed(aim, slot_texel(s * LIGHT_SAMPLE));
+}
+
+/// Off its cell at `t`, where its walk over the node cache left it.
+fn sample_start_at(aim: Aim, s: vec2<u32>, t: f32) -> Start {
+  return light_resumed_at(aim, slot_texel(s * LIGHT_SAMPLE), t);
 }

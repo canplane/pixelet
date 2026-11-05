@@ -19,18 +19,21 @@ fn node_cache_now(k: u32) -> u32 {
   return atomicOr(&node_cache[k], 0u);
 }
 
-/// This pass's tag: the frame's number by `PASSES`, and the pass.
+/// This pass's tag: the frame's number by `PASSES`, and the pass; a walk reads it once.
 fn walk_tag() -> u32 {
   return PASSES * node_cache_word(FRAME) + WALK_PASS;
 }
 
-/// Whether the entry at word `w` is the node (`is_node`).
+/// Whether the entry at word `w` is the node (`is_node`): its zoom first, its corner's three words
+/// loaded together and compared at once only where that matches, as an entry of another node
+/// mostly differs there already and every word is an atomic load.
 fn is_node(w: u32, zoom: u32, c: vec3<i32>) -> bool {
   let n = w + W_NODE;
-  return node_cache_word(n) == zoom
-    && node_cache_word(n + 1u) == u32(c.x)
-    && node_cache_word(n + 2u) == u32(c.y)
-    && node_cache_word(n + 3u) == u32(c.z);
+  if (node_cache_word(n) != zoom) {
+    return false;
+  }
+  let held = vec3<u32>(node_cache_word(n + 1u), node_cache_word(n + 2u), node_cache_word(n + 3u));
+  return all(held == vec3<u32>(c));
 }
 
 /// `is_node`, its words as they stand.
@@ -82,17 +85,19 @@ struct In {
 /// No node entered: what the walk reads as no answer.
 const KIND_NONE = 0xffffffffu;
 
-/// The node `c` at `zoom`, asked at `zooms`, what is handed it found from the top (`ask_handed`).
-fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
-  let a = ask_handed(world_root(zoom, c), zoom, c, zooms, true);
+/// The node `c` at `zoom`, asked at `zooms` by a walk of `tag`, what is handed it found from the
+/// top where the world is asked (`ask_node`).
+fn ask(zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> In {
+  let a = ask_node(vec4<u32>(0u), true, zoom, c, zooms, true, tag);
   return In(a.kind, a.asset);
 }
 
-/// The node `c` at `zoom`, handed `handed`, asked at `zooms`: off the slot that keeps it, unless
-/// this pass is still writing it; else of the world, and kept (`keep`). What it hands its children:
-/// the slot's where one kept it. One asked of the world counts in `ASKED_COUNT` where `counts`.
-fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
-  let tag = walk_tag();
+/// The node `c` at `zoom`, asked at `zooms` by a walk of `tag`: off the slot that keeps it, unless
+/// this pass is still writing it; else of the world, and kept (`keep`), what is handed it found
+/// there alone: from the top where `top` (`world_root`), else off what was handed its parent,
+/// `parent` (`world_child`). What it hands its children: the slot's where one kept it. One asked
+/// of the world counts in `ASKED_COUNT` where `counts`.
+fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool, tag: u32) -> Answer {
   let want = zooms << TAG_BITS;
   var kept = keeps(zoom, c);
   var first = 0u;
@@ -124,6 +129,12 @@ fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bo
   }
   if (counts && node_cache_word(COUNT_ON) != 0u) {
     atomicAdd(&node_cache[ASKED_COUNT], 1u);
+  }
+  var handed: vec4<u32>;
+  if (top) {
+    handed = world_root(zoom, c);
+  } else {
+    handed = world_child(parent, zoom, c);
   }
   let a = world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
   if (kept) {
@@ -266,6 +277,7 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
   var roots = start.roots;
   var visits = 0u;
   var ends = 3u;
+  let tag = walk_tag();
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = t_max;
@@ -279,7 +291,7 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
     if (zooms != NONE) {
       // The root it starts in (`roots_of`), X's wrapped away as the world names it.
       let r0 = vec3<i32>(0i, 0i, i32(og.z) >> 31u);
-      let a = ask(zoom, idx_of(corner, zoom, roots, r0), zooms);
+      let a = ask(zoom, idx_of(corner, zoom, roots, r0), zooms, tag);
       kind = a.kind;
       asset = a.asset;
       visits += 1u;

@@ -139,7 +139,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let px = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   let s = Surface(
     i.rgb,
-    vec4f(i.layer),
+    i.layer,
     i.normal,
     outline(i.local_pos, i.box_scale, px, i.normal),
     i.world_pos,

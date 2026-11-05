@@ -48,3 +48,8 @@ fn sample_cell_word(s: vec2<u32>) -> u32 {
 fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
   return resumed(aim, sample_cell_word(s), LINE_WORDS, NONE);
 }
+
+/// Off its cell at `t`, where its walk over the node cache left it.
+fn sample_start_at(aim: Aim, s: vec2<u32>, t: f32) -> Start {
+  return resumed_at(aim, sample_cell_word(s), t, LINE_WORDS, NONE);
+}

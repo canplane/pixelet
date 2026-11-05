@@ -40,7 +40,7 @@ fn fs(v: VertexOut) -> FragOut {
   let crease = creases(h, faces, steps);
   let s = Surface(
     painted.rgb,
-    painted.layers,
+    painted.layer,
     h.normal,
     crease.edge,
     h.at,

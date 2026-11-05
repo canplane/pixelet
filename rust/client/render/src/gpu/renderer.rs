@@ -80,8 +80,8 @@ use crate::param::cloud;
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
-    GPU_SPAN_NAMES <= 32,
-    "a span a bit of the mask the host is told"
+    GPU_SPAN_NAMES <= 64,
+    "a span a bit of the mask of the spans a frame wrote (`Gpu::submit_frame`)"
 );
 
 type Frame = [f32; FRAME_FLOATS];

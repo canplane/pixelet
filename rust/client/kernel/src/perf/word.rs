@@ -33,6 +33,12 @@ pub fn as_words_mut<T: Words>(val: &mut T) -> &mut [f64] {
     }
 }
 
+/// A record every word of which is 0.0, which `Default` derives for no array past 32.
+pub fn zeroed<T: Words>() -> T {
+    // SAFETY: `Words` guarantees plain f64s laid end to end, and all bits 0 is 0.0.
+    unsafe { core::mem::zeroed() }
+}
+
 pub fn put<T: Words>(out: &mut [f64], at: u32, val: &T) {
     let words = as_words(val);
     let at = at as usize;

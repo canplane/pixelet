@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const GPU_SPAN_NAMES: usize = 32;
+pub const GPU_SPAN_NAMES: usize = 34;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -33,31 +33,33 @@ pub enum GpuSpanName {
     preview = 9,
     fill = 10,
     cast = 11,
-    beam = 12,
-    sample_hit = 13,
-    sample = 14,
-    sample_box = 15,
-    sraster = 16,
-    px = 17,
-    miss = 18,
-    light_receivers = 19,
-    light_beam = 20,
-    light_sample = 21,
-    light_raster = 22,
-    light_slot = 23,
-    light_hit = 24,
-    light_walk = 25,
-    generate = 26,
-    shadow = 27,
-    face = 28,
-    mark = 29,
-    light_mark = 30,
-    propagate = 31,
+    beam_hit = 12,
+    beam = 13,
+    cell = 14,
+    sample_hit = 15,
+    sample = 16,
+    sample_box = 17,
+    sraster = 18,
+    px = 19,
+    miss = 20,
+    light_receivers = 21,
+    light_beam = 22,
+    light_sample = 23,
+    light_raster = 24,
+    light_slot = 25,
+    light_hit = 26,
+    light_walk = 27,
+    generate = 28,
+    shadow = 29,
+    face = 30,
+    mark = 31,
+    light_mark = 32,
+    propagate = 33,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 32] = [
+    pub const ALL: [GpuSpanName; 34] = [
         GpuSpanName::air,
         GpuSpanName::exposure,
         GpuSpanName::ao,
@@ -70,7 +72,9 @@ impl GpuSpanName {
         GpuSpanName::preview,
         GpuSpanName::fill,
         GpuSpanName::cast,
+        GpuSpanName::beam_hit,
         GpuSpanName::beam,
+        GpuSpanName::cell,
         GpuSpanName::sample_hit,
         GpuSpanName::sample,
         GpuSpanName::sample_box,
@@ -116,10 +120,11 @@ impl GpuSpanName {
         GpuSpanName::propagate,
     ];
     /// The members whose `per_cell` is true, in the JSON's order.
-    pub const PER_CELL: [GpuSpanName; 1] = [GpuSpanName::beam];
+    pub const PER_CELL: [GpuSpanName; 3] =
+        [GpuSpanName::beam_hit, GpuSpanName::beam, GpuSpanName::cell];
 }
 
-pub const LIGHT_MOVED: usize = 4;
+pub const LIGHT_MOVED: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LightMoved {
@@ -127,15 +132,17 @@ pub enum LightMoved {
     slide = 1,
     receivers = 2,
     footprint = 3,
+    world = 4,
 }
 
 impl LightMoved {
     /// Every member, in the JSON's own order.
-    pub const ALL: [LightMoved; 4] = [
+    pub const ALL: [LightMoved; 5] = [
         LightMoved::content,
         LightMoved::slide,
         LightMoved::receivers,
         LightMoved::footprint,
+        LightMoved::world,
     ];
 
     /// The member a number names, or none for a number the set does not

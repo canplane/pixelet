@@ -1,9 +1,8 @@
 // pxl-render/miss.wgsl
 
-// The pixels the walk over the node cache alone left (miss_hit.wgsl), their ray again
-// from their cell's start asking the world (ask.wgsl, miss_word.wgsl):
-// over their list (`miss_list_cs`), and over every pixel where `cast_cs` found the list full
-// (`miss_cs`). The two run after `cast_cs` in the cast's one pass and write every marked
+// The pixels the walk over the node cache alone left (miss_hit.wgsl), their ray asking the world
+// (ask.wgsl, miss_word.wgsl): over their list, on from where that walk left them (`miss_list_cs`),
+// and from their cell's start over every pixel where `cast_cs` found the list full (`miss_cs`). The two run after `cast_cs` in the cast's one pass and write every marked
 // pixel's words whole, so the mark never outlives the pass.
 
 const WALK_PASS: u32 = MISSED_PASS;
@@ -27,14 +26,20 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   return HIT_WAITS | r;
 }
 
-/// Pixel `id`'s ray again, of rays `size` wide and high, and its words written there
+/// Pixel `id`'s ray again, of rays `size` wide and high, on from where the walk over the node cache
+/// `left` it (`write_left`), else from its cell's start, and its words written there
 /// (miss_word.wgsl): what lies about the face it stopped on told at once
 /// where it needs no asking, a cell short of its cube taking its box's (pxl-engine
 /// `face::BOX`), else its hit kept for that to be asked
 /// once a hit (`keep_hit`).
-fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
+fn walk_missed(id: vec2<u32>, size: vec2<u32>, left: bool) {
   let aim = px_aim(id, size);
-  let start = px_start(aim, id, size);
+  var t = bitcast<f32>(beams[cell_start(grid_cell(px_tan(id, size))) + CELL_T]);
+  if (left) {
+    t = bitcast<f32>(textureLoad(rays, id, 1u).x);
+  }
+  let start = px_start_at(aim, id, size, t);
+  let visits = select(start.visits, textureLoad(rays, id, 2u).x, left);
   let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
   let face = face_of(aim, w);
   var faces = 0u;
@@ -45,7 +50,7 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
   } else if (w.ends == 1u) {
     faces = keep_hit(w, face, id);
   }
-  write_ray(id, ray_word(w, w.visits + start.visits, face, faces));
+  write_ray(id, ray_word(w, w.visits + visits, face, faces));
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, a thread a drawn pixel, each but the
@@ -61,7 +66,7 @@ fn miss_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (textureLoad(rays, id.xy, 0u).x != RAY_MISS) {
     return;
   }
-  walk_missed(id.xy, size);
+  walk_missed(id.xy, size, false);
 }
 
 /// Each pixel `miss_hit_cs` left, a thread each, `MISS_LANES` a workgroup and `MISS_ACROSS`
@@ -82,5 +87,5 @@ fn miss_list_cs(
   if (id.x >= size.x || id.y >= size.y) {
     return;
   }
-  walk_missed(id, size);
+  walk_missed(id, size, true);
 }

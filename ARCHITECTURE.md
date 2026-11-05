@@ -720,7 +720,8 @@ was made of, and a bind group is made over it alone: entries other than the
 group's bindings, each once and of its kind, stop the call (`gpu/api.rs`
 `Layout`, `Gpu::bind_group`). No struct of a shader holds a struct, in a
 draw's pass as in the compute entries (build.rs `no_nested_struct`). A test
-compiles each shader with Tint, the compiler a browser runs
+compiles each shader with Tint, the compiler a browser runs, and makes every
+pipeline the renderer makes over it, each by its entry points
 (`ts/tool/shader/shader.test.ts`).
 
 ## Past the pyramid: the sky and the sphere

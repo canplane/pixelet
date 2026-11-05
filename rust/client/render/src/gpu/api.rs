@@ -39,7 +39,7 @@ pub use xpute_gpu::spec::RESULT;
 
 use crate::api_spec::{record, stream};
 use crate::frame::shader::floor::BIND_GROUPS;
-use crate::frame::shader::record::VERTEX_ENTRY;
+use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::pipeline::LANES;
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 
@@ -510,7 +510,7 @@ struct State {
     /// reads are taken in as they were asked; and their times from the last
     /// read in, in ms.
     stamps: Option<(Id, Id, [Id; READS])>,
-    stamps_written: [u32; READS],
+    stamps_written: [u64; READS],
     stamps_out: [u32; READS],
     stamps_asked_cnt: u32,
     /// The read this frame asked: its mapping's ticket is written as it is
@@ -813,7 +813,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     let mut ran = [(0u64, 0u64); SPANS];
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        if written & 1 << k != 0 && e >= b {
+        if written & 1u64 << k != 0 && e >= b {
             *r = (b, e);
         }
     }
@@ -994,7 +994,8 @@ pub fn release(id: Id) {
     }
 }
 
-fn vertex_format(code: u32) -> VertexFormat {
+/// A record's vertex format code as WebGPU's.
+pub fn vertex_format(code: u32) -> VertexFormat {
     match code {
         record::F32X2 => VertexFormat::float32x2,
         record::F32X3 => VertexFormat::float32x3,
@@ -1401,7 +1402,7 @@ impl Gpu {
                 multisample: encode::MULTISAMPLE_NONE,
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
-                    entry: "fs",
+                    entry: FRAGMENT_ENTRY,
                     targets: if format == Format::depth32float {
                         &[]
                     } else {
@@ -1693,7 +1694,7 @@ impl Gpu {
     /// may be asked again: its ticket is the order it was asked in, which
     /// its fence holds once it lands. Which read this frame's spans are
     /// on their way back in.
-    pub fn submit_frame(&self, encoder: Id, written: u32) -> Option<usize> {
+    pub fn submit_frame(&self, encoder: Id, written: u64) -> Option<usize> {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);

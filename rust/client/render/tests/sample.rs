@@ -1308,7 +1308,7 @@ fn px_aim(obs: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail) {
 
 #[test]
 fn hand_missed_pixels_answer_as_cast_walk() {
-    use pxl_render::frame::shader::record::{SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST};
+    use pxl_render::frame::shader::record::{SHADER_MISS, SHADER_MISS_HIT};
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -1365,7 +1365,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
         },
     ];
     let hit_p = gpu.pipeline(src(SHADER_MISS_HIT), "miss_hit_cs");
-    let list_p = gpu.pipeline(src(SHADER_MISS_LIST), "miss_list_cs");
+    let list_p = gpu.pipeline(src(SHADER_MISS), "miss_list_cs");
     let whole_p = gpu.pipeline(src(SHADER_MISS), "miss_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
@@ -2220,5 +2220,203 @@ fn hand_light_boxes_answer_as_raster() {
         failed
             .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
     }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// `beam_hit_cs` then `beam_cs` over a node cache that holds part of what the beam rays meet: a
+/// beam ray the walk over the node cache leaves is walked on from where it was left
+/// (resume.wgsl `line_resumed`), and every corner stops where `cast::walk` from the root stops
+/// the same ray, at the same node and the same distance handed on (`Grid::hand_dist`). The
+/// first frame over an empty cache, the next over that frame's with every other entry finer than
+/// `KEPT_ZOOM` dropped. Resumed from a node that does not hold where it was left, the walk climbs
+/// to one that does (`line_resumed`); resumed past where it was left, it fails here.
+#[test]
+fn hand_beam_rays_answer_as_cast_walk() {
+    const KEPT_ZOOM: Zoom = 12;
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let at = spots(&built);
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let cases = [
+        EyeCase {
+            name: "the eye, over the ground",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+            look: [0.5, 0.4, -0.77],
+            tan: [0.3, 0.2],
+            lattice: 1,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+        },
+        EyeCase {
+            name: "the eye, lattice 2, over the seam",
+            origin: over([EYE[0] + 280, EYE[1] + 90], 40),
+            look: [0.8, 0.2, -0.55],
+            tan: [0.4, 0.3],
+            lattice: 2,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+        },
+        EyeCase {
+            name: "the eye, on a bridge",
+            origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
+            look: [0.5, -0.3, -0.8],
+            tan: [0.3, 0.3],
+            lattice: 1,
+            far: 600.0,
+            range: [LEAF_CELL, FINEST],
+            cuts: none,
+        },
+    ];
+    let mut failed = Vec::new();
+    for c in &cases {
+        let obs = eye_of(c, [0; 3]);
+        let Rays::Eye {
+            origin,
+            axes,
+            far,
+            range,
+            grid,
+        } = &obs.rays
+        else {
+            unreachable!()
+        };
+        let detail = Detail {
+            range: *range,
+            spacing: Spacing {
+                angle: grid.s,
+                across: 0.0,
+            },
+        };
+        let [across, down] = grid.corners;
+        let want: Vec<Trace<Inheritance>> = (0..across * down)
+            .map(|k| {
+                let t = grid.corner([k % across, k / across]);
+                let ray = Ray::new(cast::through(axes[0], axes[1], axes[2], t[0], t[1]), *far);
+                let mut q = Asking { w, cuts: c.cuts };
+                cast::walk_from_root(&mut q, *origin, &ray, detail, Until::Beam, &mut ())
+            })
+            .collect();
+        let table = gpu.buffer(&frame_table(), store_of());
+        let first = eye_beams(&gpu, &b, &obs, &table);
+        // Every other entry finer than `KEPT_ZOOM` dropped: the next frame's walk over the node
+        // cache leaves its rays part of the way down.
+        let mut held = gpu.read(&table);
+        held[node_cache::FRAME as usize] = FRAME + 1;
+        for e in (0..node_cache::ENTRIES).step_by(2) {
+            let w = (node_cache::ENTRIES_AT + e * node_cache::ENTRY_WORDS) as usize;
+            if held[w + node_cache::W_NODE as usize] >= KEPT_ZOOM {
+                held[w] = 0;
+            }
+        }
+        let table = gpu.buffer(&held, store_of());
+        let next = eye_beams(&gpu, &b, &obs, &table);
+        for (what, words) in [("first frame", &first), ("next frame", &next)] {
+            let mut differ = 0u32;
+            let mut first_differ = None;
+            for k in 0..across * down {
+                let n = (k * beam::LINE_WORDS + beam::LINE_NODE) as usize;
+                let got_node = Node {
+                    zoom: words[n + beam::NODE_ZOOM as usize],
+                    corner: [0, 1, 2].map(|i| words[n + beam::NODE_CORNER as usize + i]),
+                    roots: [0, 1, 2].map(|i| words[n + beam::NODE_ROOTS as usize + i] as i32),
+                };
+                let got_t = f32::from_bits(words[grid.hand_at(k) as usize]);
+                let m = &want[k as usize];
+                let want_t = grid.hand_dist(m.hit.t);
+                if got_node != m.hit.node || gpu::ulps(got_t, want_t) > 4 {
+                    differ += 1;
+                    first_differ.get_or_insert((k, got_node, got_t, m.hit.node, want_t));
+                }
+            }
+            eprintln!(
+                "{} ({what}): {differ} of {} corners differ",
+                c.name,
+                across * down
+            );
+            if differ != 0 {
+                failed.push(format!(
+                    "{} ({what}): {differ} corners differ, first {first_differ:?}",
+                    c.name
+                ));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A sample whose walk over the node cache goes blind, into a split the cache holds only at other
+/// zooms, then is left there (walk.wgsl): `sample_cs` goes on from where it was left, and every
+/// sample stops as `cast::walk` from the root stops it. A split's box holds all its descendants
+/// answer at the zooms asked, a lack among them (`world::node`), so the box the walk did not read
+/// passes by nothing a ray stops at. The cache the eye's first frame leaves at coarse zooms, the
+/// next frame asking finer, every other entry finer than `KEPT_ZOOM` dropped.
+#[test]
+fn hand_blind_samples_answer_as_cast_walk() {
+    const KEPT_ZOOM: Zoom = 12;
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let case = |range: [Zoom; 2]| EyeCase {
+        name: "the eye, over the ground, asked coarse then fine",
+        origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 2000.0,
+        range,
+        cuts: [Cut::NONE; 2],
+    };
+    let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    let coarse = eye_of(&case([8, 16]), [0; 3]);
+    let table = gpu.buffer(&frame_table(), store_of());
+    let words = eye_beams(&gpu, &b, &coarse, &table);
+    let after_beam = gpu.read(&table);
+    let mut held = run_frame(
+        &gpu,
+        &b,
+        w,
+        &coarse,
+        &words,
+        &after_beam,
+        "coarse",
+        &mut kinds,
+        &mut failed,
+        &hit,
+        &world,
+    );
+    held[node_cache::FRAME as usize] = FRAME + 1;
+    for e in (0..node_cache::ENTRIES).step_by(2) {
+        let at = (node_cache::ENTRIES_AT + e * node_cache::ENTRY_WORDS) as usize;
+        if held[at + node_cache::W_NODE as usize] >= KEPT_ZOOM {
+            held[at] = 0;
+        }
+    }
+    let fine = eye_of(&case([8, FINEST]), [0; 3]);
+    let table = gpu.buffer(&held, store_of());
+    let words = eye_beams(&gpu, &b, &fine, &table);
+    let after_beam = gpu.read(&table);
+    run_frame(
+        &gpu,
+        &b,
+        w,
+        &fine,
+        &words,
+        &after_beam,
+        "fine",
+        &mut kinds,
+        &mut failed,
+        &hit,
+        &world,
+    );
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

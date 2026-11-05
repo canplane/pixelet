@@ -25,11 +25,11 @@
 // crosses as itself.
 
 export const SETTING = {
-  /** Ground color from the art pack (four taps of the layer array per
+  /** Ground color from the art pack (a tap of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
-   * Low because the four taps are all of it: fill rate, which scales with
+   * Low because the tap is all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
    * already holds. */
@@ -259,11 +259,11 @@ export const SETTING = {
 
 /** SETTING without its `dev` entries: what a production bundle carries in its place. */
 export const SETTING_PRODUCTION = {
-  /** Ground color from the art pack (four taps of the layer array per
+  /** Ground color from the art pack (a tap of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
-   * Low because the four taps are all of it: fill rate, which scales with
+   * Low because the tap is all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
    * already holds. */

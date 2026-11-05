@@ -64,7 +64,7 @@ fn root_start() -> Start {
 }
 
 /// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
-/// its reach, 4 left to the walk that asks.
+/// its reach, 4 left to the walk that asks, at `t`.
 struct Walked {
   ends: u32,
   zoom: u32,

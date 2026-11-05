@@ -16,8 +16,8 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
-    SHADER_WAY_RETURN, SHADER_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
+    binds, dynamic, COMPUTE, COMPUTE_BOUND, COMPUTE_HEIGHT, COMPUTE_WAY, COMPUTE_WAY_FREE,
+    COMPUTE_WAY_RETURN, COMPUTE_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 use crate::gpu::api::{
@@ -158,12 +158,12 @@ pub(super) struct GroundPipelines {
 impl GroundPipelines {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> GroundPipelines {
         GroundPipelines {
-            heights: pipelines.build_compute(g, SHADER_HEIGHT, &HEIGHT_GROUP),
-            bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-            ways: pipelines.build_compute(g, SHADER_WAY, &WAY_GROUP),
-            free: pipelines.build_compute(g, SHADER_WAY_FREE, &WAY_FREE_GROUP),
-            tree: pipelines.build_compute(g, SHADER_WAY_TREE, &WAY_TREE_GROUP),
-            give_back: pipelines.build_compute(g, SHADER_WAY_RETURN, &WAY_RETURN_GROUP),
+            heights: pipelines.build_compute(g, COMPUTE_HEIGHT, &HEIGHT_GROUP),
+            bound: pipelines.build_compute(g, COMPUTE_BOUND, &BOUND_GROUP),
+            ways: pipelines.build_compute(g, COMPUTE_WAY, &WAY_GROUP),
+            free: pipelines.build_compute(g, COMPUTE_WAY_FREE, &WAY_FREE_GROUP),
+            tree: pipelines.build_compute(g, COMPUTE_WAY_TREE, &WAY_TREE_GROUP),
+            give_back: pipelines.build_compute(g, COMPUTE_WAY_RETURN, &WAY_RETURN_GROUP),
         }
     }
 }
@@ -530,12 +530,12 @@ const _: () = assert!(
 // Each fill's and ways' compute group against what its shader reads, as its declarations take
 // it (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_HEIGHT], &HEIGHT_GROUP)
-        && binds(&[SHADER_BOUND], &BOUND_GROUP)
-        && binds(&[SHADER_WAY], &WAY_GROUP)
-        && binds(&[SHADER_WAY_FREE], &WAY_FREE_GROUP)
-        && binds(&[SHADER_WAY_TREE], &WAY_TREE_GROUP)
-        && binds(&[SHADER_WAY_RETURN], &WAY_RETURN_GROUP),
+    binds(&[COMPUTE_HEIGHT], &HEIGHT_GROUP)
+        && binds(&[COMPUTE_BOUND], &BOUND_GROUP)
+        && binds(&[COMPUTE_WAY], &WAY_GROUP)
+        && binds(&[COMPUTE_WAY_FREE], &WAY_FREE_GROUP)
+        && binds(&[COMPUTE_WAY_TREE], &WAY_TREE_GROUP)
+        && binds(&[COMPUTE_WAY_RETURN], &WAY_RETURN_GROUP),
     "a fill's or ways' compute group lays out other than its shader reads (record.rs `binds`)"
 );
 /// A number's slot in the fill's numbers, read at a dynamic offset: every

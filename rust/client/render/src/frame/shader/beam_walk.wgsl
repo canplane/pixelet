@@ -1,10 +1,12 @@
 // pxl-render/beam_walk.wgsl
 
-// A beam ray walked from the world's root to the first cell that fills or lacks, or the first
-// split too narrow to share (`cast::walk`, `Until::Beam`), through the node cache writing
-// what it asks (ask.wgsl), either observer's (beam.wgsl, light_beam.wgsl). Its line is left as
-// it goes (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at
-// that node's zoom, read back where the walk pops to its child, in place of a stack.
+// A beam ray walked from its start, the world's root or where its walk over the node cache left
+// it (beam_hit.wgsl), to the first cell that fills or lacks, or the first split too narrow to
+// share (`cast::walk`, `Until::Beam`), through the node cache writing what it asks (ask.wgsl),
+// either observer's (beam.wgsl, light_beam.wgsl). Its line is left as it goes (pxl-engine
+// `beam::LINE_WORDS`): what was handed each node it goes into is written at that node's zoom,
+// read back where the walk pops to its child, in place of a stack, and where it starts under the
+// root.
 
 /// What was handed the line's node at `zoom`, at `base` (`beam::LINE_INHERITANCE`).
 fn line_handed(base: u32, zoom: u32) -> vec4<u32> {
@@ -28,18 +30,27 @@ struct Beamed {
 
 /// The beam ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to,
 /// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
-/// `base` (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
-fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
+/// `base`, from `start`, every node over it already in the line (`cast::walk_from_root`,
+/// `Until::Beam`; the line's words `beam::LINE_WORDS`).
+fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32, start: Start) -> Beamed {
   let dir = ray_dir(aimed);
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
-  var t = 0.0;
-  var corner = vec3<u32>(0u);
-  var zoom = 0u;
-  var roots = vec3<i32>(0);
-  var at = world_root(0u, idx_of(corner, zoom, roots, r0));
-  var visits = 0u;
+  var t = start.t;
+  var corner = start.corner;
+  var zoom = start.zoom;
+  var roots = start.roots;
+  // What was handed the parent of the node it is at, which what is handed that node is found
+  // off where the world is asked (`ask_node`), or where it ends unasked; none at a root.
+  var parent = vec4<u32>(0u);
+  if (zoom != 0u) {
+    parent = line_handed(base, zoom - 1u);
+  }
+  // Whether what was handed the node it ends at is in the line: where it asked it.
+  var handed_ended = false;
+  let tag = walk_tag();
+  var visits = start.visits;
   // A walk that runs out of steps, a node looked at a step, has gone to its reach, as
   // `cast::walk_at_most` and `walk_asking` end one: it hands on `t_max`, as a ray that reached
   // it does, its line left where it is.
@@ -51,6 +62,9 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
     let s = span_of(dir, inv, lo, hi, t, t_max);
     let t0 = max(t, largest(s.near));
     let t1 = min(t_max, smallest(s.far));
+    // What was handed the node, once it is asked.
+    var at = vec4<u32>(0u);
+    var asked = false;
     // Only touched, at a face or an edge: not entered, nothing in it met.
     var into = false;
     var ends = false;
@@ -61,8 +75,9 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
       let near_v = min(max(lo, vec3<f32>(0.0)), hi);
       let far2 = squared(far_v);
       let zooms = zoom_at(far2, range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
-      let a = ask_handed(at, zoom, idx_of(corner, zoom, roots, r0), zooms, false);
+      let a = ask_node(parent, zoom == 0u, zoom, idx_of(corner, zoom, roots, r0), zooms, false, tag);
       at = a.handed;
+      asked = true;
       visits += 1u;
       if (a.kind == KIND_LACKS) {
         ends = true;
@@ -92,6 +107,8 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
         // Where the ray enters the node (`entry_plane`).
         let axis = crossing(dir, s.near, true);
         hit_t = past_origin(s.near[axis]);
+        line_hand(base, zoom, at);
+        handed_ended = true;
         break;
       }
     }
@@ -108,10 +125,14 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
       corner = corner | select(vec3<u32>(0u), vec3<u32>(half), crossed);
       zoom += 1u;
       t = t0;
-      at = world_child(at, zoom, idx_of(corner, zoom, roots, r0));
+      parent = at;
     } else {
       if (t1 >= t_max) {
         hit_t = t1;
+        if (asked) {
+          line_hand(base, zoom, at);
+          handed_ended = true;
+        }
         break;
       }
       // ADVANCE: the corner stepped on the axis it leaves by, then POP.
@@ -125,13 +146,12 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
         roots[e] += select(-1i, 1i, up);
         corner = vec3<u32>(0u);
         zoom = 0u;
-        at = world_root(0u, idx_of(corner, zoom, roots, r0));
       } else {
         corner[e] = new_c;
         let h = 31u - countLeadingZeros(old ^ new_c);
         corner = corner & vec3<u32>(~((1u << h) - 1u));
         zoom = FINEST_ZOOM - h;
-        at = world_child(line_handed(base, zoom - 1u), zoom, idx_of(corner, zoom, roots, r0));
+        parent = line_handed(base, zoom - 1u);
       }
     }
   }
@@ -144,6 +164,14 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, ra
   beams[n + NODE_ROOTS] = u32(roots.x);
   beams[n + NODE_ROOTS + 1u] = u32(roots.y);
   beams[n + NODE_ROOTS + 2u] = u32(roots.z);
-  line_hand(base, zoom, at);
+  if (!handed_ended) {
+    // Not asked, what was handed it found here.
+    let c = idx_of(corner, zoom, roots, r0);
+    if (zoom == 0u) {
+      line_hand(base, zoom, world_root(0u, c));
+    } else {
+      line_hand(base, zoom, world_child(parent, zoom, c));
+    }
+  }
   return Beamed(hit_t, visits);
 }

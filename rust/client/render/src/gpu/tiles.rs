@@ -20,8 +20,8 @@
 
 use pxl_engine::screen::{self, TILES_WORDS};
 
-use crate::frame::shader::part::{SHADER_BOX_ARGS, SHADER_SCREEN_MARK};
 use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_SCREEN_MARK};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
 };
@@ -73,7 +73,7 @@ const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_BOX_ARGS], &BOX_ARGS_GROUP) && binds(&[SHADER_SCREEN_MARK], &MARK_GROUP),
+    binds(&[COMPUTE_BOX_ARGS], &BOX_ARGS_GROUP) && binds(&[COMPUTE_SCREEN_MARK], &MARK_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -139,7 +139,7 @@ impl Tiles {
                 word_bytes(4),
                 buffer_usage::STORAGE | buffer_usage::INDIRECT,
             );
-            let pass = pipelines.build_compute(g, SHADER_BOX_ARGS, &BOX_ARGS_GROUP);
+            let pass = pipelines.build_compute(g, COMPUTE_BOX_ARGS, &BOX_ARGS_GROUP);
             let group = g.bind_group(
                 pass.layouts[0],
                 &[buf_entry(0, marks_box), buf_entry(1, args)],
@@ -158,7 +158,7 @@ impl Tiles {
             size: [0; 2],
             now: 0,
             marked_at: 0,
-            mark: pipelines.build_compute(g, SHADER_SCREEN_MARK, &MARK_GROUP),
+            mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &MARK_GROUP),
             mark_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,

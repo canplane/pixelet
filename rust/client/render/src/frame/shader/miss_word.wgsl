@@ -18,6 +18,11 @@ fn px_start(aim: Aim, id: vec2<u32>, size: vec2<u32>) -> Start {
   return resumed(aim, cell_start(grid_cell(px_tan(id, size))), LINE_WORDS, NONE);
 }
 
+/// `px_start` at `t`, where its walk over the node cache left it (resume.wgsl `resumed_at`).
+fn px_start_at(aim: Aim, id: vec2<u32>, size: vec2<u32>, t: f32) -> Start {
+  return resumed_at(aim, cell_start(grid_cell(px_tan(id, size))), t, LINE_WORDS, NONE);
+}
+
 /// The face the ray aimed `aim` entered where walk `w` stopped: twice its axis, one more
 /// where the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`'s face).
 fn face_of(aim: Aim, w: Walked) -> u32 {
@@ -59,6 +64,14 @@ fn ray_word(w: Walked, visits: u32, face: u32, faces: u32) -> vec4<u32> {
     select(w.asset.y, visits, steps),
     faces,
   );
+}
+
+/// A marked pixel's words while it waits for the walk that asks (miss_hit.wgsl, miss.wgsl): how
+/// far its walk over the node cache came and the nodes that walk visited, in its
+/// distance's and its visits' words (`ray_word`).
+fn write_left(id: vec2<u32>, t: f32, visits: u32) {
+  textureStore(rays, id, 1u, vec4<u32>(bitcast<u32>(t), 0u, 0u, 0u));
+  textureStore(rays, id, 2u, vec4<u32>(visits, 0u, 0u, 0u));
 }
 
 /// A ray's words written at pixel `id` (`write_ray`).

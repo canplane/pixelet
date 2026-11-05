@@ -31,7 +31,12 @@ are the 07:00 cost.
   or the eye high, the light asks two or three zooms finer than the eye draws
   there. The design's four questions taken as recommended: the column's
   distance, not the receiver's; no floor at the texel; a world change casts the
-  whole map, as before; the run lists and the two run modes kept.
+  whole map, as before (replaced by the user on 2026-11-05: a world change casts
+  again only the tiles it reaches, the changed bricks' and edits' columns tested
+  against each tile's rays at its band, `Light::reaches`; the whole map only
+  where the node cache forgets all or more columns changed than a cast is
+  handed; memory not to grow much, quality not to drop noticeably); the run
+  lists and the two run modes kept.
 - **One reuse rule**: a walk takes another's only where that one asked the same
   `Detail` (`cast::Detail::alike`), for samples and beam lines alike ("고치라.").
 - **The review's findings fixed before it lands** ("하라.").

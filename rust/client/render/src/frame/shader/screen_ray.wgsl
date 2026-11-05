@@ -111,26 +111,25 @@ fn far(l: vec4u) -> vec3f {
 
 struct Appearance {
   rgb: vec3f,
-  layers: vec4f,
+  layer: f32,
 };
 
 // What the cell a px's ray met is drawn as, by its val, whichever
-// source holds it: at the ground's cell or finer, its swatch and its layer
-// in all four taps; coarser, one color as it reads from afar, the ground's
-// the mean of the four palette indices its cell folds where its face's own is among
-// them.
+// source holds it: at the ground's cell or finer, its swatch and its layer;
+// coarser, one color as it reads from afar, the ground's the mean of the four
+// palette indices its cell folds where its face's own is among them.
 fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
   if (ray_zoom(c.x) >= GROUND_CELL) {
-    return Appearance(swatch(l), vec4f(f32(l.y >> 16u)));
+    return Appearance(swatch(l), f32(l.y >> 16u));
   }
   let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
     let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
-    return Appearance(sum * 0.25, vec4f(NO_LAYER));
+    return Appearance(sum * 0.25, NO_LAYER);
   }
-  return Appearance(far(l), vec4f(NO_LAYER));
+  return Appearance(far(l), NO_LAYER);
 }
 
 // Along `axis`, how far the eye is past the start of the cell of side

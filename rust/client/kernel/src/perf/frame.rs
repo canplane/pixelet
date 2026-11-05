@@ -8,14 +8,14 @@ use crate::sys::sched::phase_spec::PHASES;
 use pxl_engine::count;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
-use crate::perf::word::{as_words, as_words_mut, words, Words};
+use crate::perf::word::{as_words, as_words_mut, words, zeroed, Words};
 use crate::sys::sched::tick;
 use crate::turn::spec;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpuSample {
     /// This frame's own read, written back as it lands a frame or two later
     /// (record.rs `perf_record_gpu`): where `read` is 1, its spans, the
@@ -46,6 +46,12 @@ pub struct GpuSample {
     /// again (pxl-render renderer.rs `FrameStat`).
     pub light_moved: f64,
     pub decor_boxes: f64,
+}
+
+impl Default for GpuSample {
+    fn default() -> Self {
+        zeroed::<FrameSample>().gpu
+    }
 }
 
 /// The renderer's upload table, its uploads and their bytes, and its

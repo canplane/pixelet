@@ -2,15 +2,20 @@
 
 //! Every shader by its number, and its parts in order: compiled into the
 //! crate for its numbers, and read by build.rs, which assembles each
-//! (record.rs `source`), validates it, and reads off it which stages read
+//! (record.rs `src`), validates it, and reads off it which stages read
 //! each binding (record.rs `pipeline`), so a pipeline's groups take their
 //! visibility from its shader and from nowhere else. A shader's parts follow
-//! constant.wgsl.
+//! constant.wgsl. A shader is one module, made once, and each pipeline over
+//! it names the entry points it runs: a render pipeline in its record, a
+//! compute pipeline by its number (record.rs `compute`).
 
 /// A shader's vertex entry points, a pipeline naming one by its index (record.rs `Head`), so
 /// build.rs reads which of them reads each binding. The shell holds the same list against
 /// the same numbers.
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
+/// A shader's fragment entry point, which a pipeline with a fragment stage runs (record.rs
+/// `Head`).
+pub const FRAGMENT_ENTRY: &str = "fs";
 
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
@@ -88,8 +93,9 @@ pub const SHADER_BEAM: u32 = 39;
 /// (cell.wgsl): its one compute entry.
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// node cache, and the node cache forgotten (pxl-engine `node_cache`), by
-/// hand (forget.wgsl): a compute entry each.
+/// node cache, every one or those listed (miss.wgsl), and the node cache
+/// forgotten (pxl-engine `node_cache`), by hand (forget.wgsl): compute
+/// entries.
 pub const SHADER_MISS: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
 /// The samples, a thread each, resumed from their cells' starts and walked
@@ -116,99 +122,96 @@ pub const SHADER_CAMERA_GRID: u32 = 48;
 /// cast's pixels read (`SHADER_CAST`).
 pub const SHADER_SAMPLE_BOX: u32 = 49;
 pub const SHADER_RASTER: u32 = 50;
-/// The pixels the cast's reading walk missed, walked again from their list
-/// (pxl-engine `node_cache::MARKS_AT`), a thread each: a compute entry.
-pub const SHADER_MISS_LIST: u32 = 51;
 /// What lies about each box's face, asked once a box (pxl-engine
 /// `raster::ARGS_FACES`), and each missed pixel's hit's, by hand (face.wgsl): its one
 /// compute entry.
-pub const SHADER_FACE: u32 = 52;
+pub const SHADER_FACE: u32 = 51;
 /// The tiles of the light's box its receivers stand on in a cast
 /// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
 /// (`light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.
-pub const SHADER_LIGHT_MARK: u32 = 53;
-pub const SHADER_LIGHT_MARK_DRAWS: u32 = 54;
-pub const SHADER_LIGHT_PROPAGATE: u32 = 55;
+pub const SHADER_LIGHT_MARK: u32 = 52;
+pub const SHADER_LIGHT_MARK_DRAWS: u32 = 53;
+pub const SHADER_LIGHT_PROPAGATE: u32 = 54;
 /// Which candidates of a slot `SHADER_GENERATION_MARK` listed the thinning
 /// retains, a clip level cell a thread, for `SHADER_GENERATION` to generate: its
 /// one compute entry.
-pub const SHADER_GENERATION_THIN: u32 = 56;
+pub const SHADER_GENERATION_THIN: u32 = 55;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
-pub const SHADER_SCREEN_FINISH: u32 = 57;
+pub const SHADER_SCREEN_FINISH: u32 = 56;
 /// The world's color gathered over frames (screen_resolve.wgsl).
-pub const SHADER_SCREEN_RESOLVE: u32 = 58;
+pub const SHADER_SCREEN_RESOLVE: u32 = 57;
 /// The claimed tiles set back to nothing at the far plane, their stencil
 /// raised (screen_gate.wgsl).
-pub const SHADER_SCREEN_GATE: u32 = 59;
+pub const SHADER_SCREEN_GATE: u32 = 58;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (screen_show.wgsl).
-pub const SHADER_SCREEN_SHOW: u32 = 60;
+pub const SHADER_SCREEN_SHOW: u32 = 59;
 /// The light's map's tiles that changed propagated to the screen's
 /// (screen_propagate.wgsl): its one compute entry.
-pub const SHADER_SCREEN_PROPAGATE: u32 = 61;
+pub const SHADER_SCREEN_PROPAGATE: u32 = 60;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (screen_write_back.wgsl).
-pub const SHADER_SCREEN_WRITE_BACK: u32 = 62;
+pub const SHADER_SCREEN_WRITE_BACK: u32 = 61;
 /// The claimed tiles of the samples' raster set back to no sample at the far
 /// plane (raster_gate.wgsl).
-pub const SHADER_RASTER_GATE: u32 = 63;
+pub const SHADER_RASTER_GATE: u32 = 62;
 /// The tiles the frame's one mark covers, or every one, taking its number
 /// (screen_mark.wgsl): its one compute entry.
-pub const SHADER_SCREEN_MARK: u32 = 64;
+pub const SHADER_SCREEN_MARK: u32 = 63;
 /// The world's depth laid in the claimed tiles of the light's map, their
 /// stencil raised (light_gate.wgsl).
-pub const SHADER_LIGHT_GATE: u32 = 65;
+pub const SHADER_LIGHT_GATE: u32 = 64;
 /// Each square of the screen's least and most depth, set in the tiles drawn
 /// (screen_bound.wgsl): its one compute entry.
-pub const SHADER_SCREEN_BOUND: u32 = 66;
+pub const SHADER_SCREEN_BOUND: u32 = 65;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
-pub const SHADER_SKINNED_MARK: u32 = 67;
+pub const SHADER_SKINNED_MARK: u32 = 66;
 /// The tiles of the light's box the box slid onto, or slid into another
 /// band (pxl-engine `Light::keeps`), by hand (light_slide.wgsl): a compute
 /// entry.
-pub const SHADER_LIGHT_SLIDE: u32 = 68;
+pub const SHADER_LIGHT_SLIDE: u32 = 67;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
-pub const SHADER_DECOR_MARK: u32 = 69;
-pub const SHADER_IMPOSTOR_MARK: u32 = 70;
-pub const SHADER_LOCATION_ZONE_MARK: u32 = 71;
-pub const SHADER_LOCATION_BEACON_MARK: u32 = 72;
+pub const SHADER_DECOR_MARK: u32 = 68;
+pub const SHADER_IMPOSTOR_MARK: u32 = 69;
+pub const SHADER_LOCATION_ZONE_MARK: u32 = 70;
+pub const SHADER_LOCATION_BEACON_MARK: u32 = 71;
 /// The missed pixels' hits whose faces are asked once a square of them,
 /// the one of each square that asks listed (pxl-engine `beam::HIT_WORDS`), and
 /// the faces asked put at their pixels, by hand (hit_lead.wgsl,
 /// hit_faces.wgsl): compute entries.
-pub const SHADER_HIT_LEAD: u32 = 73;
-pub const SHADER_HIT_FACES: u32 = 74;
+pub const SHADER_HIT_LEAD: u32 = 72;
+pub const SHADER_HIT_FACES: u32 = 73;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 75;
+pub const SHADER_BOX_ARGS: u32 = 74;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (light_beam.wgsl,
 /// light_cell.wgsl, sample_light.wgsl, light_sample_box.wgsl).
-pub const SHADER_LIGHT_BEAM: u32 = 76;
-pub const SHADER_LIGHT_CELL: u32 = 77;
-pub const SHADER_LIGHT_SAMPLE: u32 = 78;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 79;
+pub const SHADER_LIGHT_BEAM: u32 = 75;
+pub const SHADER_LIGHT_CELL: u32 = 76;
+pub const SHADER_LIGHT_SAMPLE: u32 = 77;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 78;
 /// The samples' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
-pub const SHADER_SAMPLE_HIT: u32 = 80;
+pub const SHADER_SAMPLE_HIT: u32 = 79;
 /// The missed pixels' walk over the node cache alone, by hand: what it does
-/// not end `SHADER_MISS_LIST` walks again.
-pub const SHADER_MISS_HIT: u32 = 81;
+/// not end `COMPUTE_MISS_LIST` walks again.
+pub const SHADER_MISS_HIT: u32 = 80;
 /// The beam rays' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
-pub const SHADER_BEAM_HIT: u32 = 82;
+pub const SHADER_BEAM_HIT: u32 = 81;
 /// The light's missed slots' walk over the node cache alone, by hand: what it does
 /// not end `SHADER_LIGHT_MISS` walks again.
-pub const SHADER_LIGHT_MISS_HIT: u32 = 83;
+pub const SHADER_LIGHT_MISS_HIT: u32 = 82;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
 /// again.
-pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 84;
-pub const SHADERS: u32 = 85;
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 83;
+pub const SHADERS: u32 = 84;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -606,6 +609,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
+        "light_resume",
         "light_miss",
     ],
     // SHADER_AO_APPLY
@@ -627,29 +631,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_RASTER
     &["raster_box", "px", "raster"],
-    // SHADER_MISS_LIST
-    &[
-        "walk_word",
-        "world_word",
-        "eye_bind",
-        "grid",
-        "walk_node",
-        "side",
-        "resume",
-        "clipmap",
-        "seed",
-        "clip",
-        "brick",
-        "level",
-        "palette",
-        "world_rule",
-        "world",
-        "world_split",
-        "ask",
-        "hit",
-        "miss_word",
-        "miss",
-    ],
     // SHADER_FACE
     &[
         "walk_word",
@@ -837,6 +818,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
+        "light_resume",
         "light_list",
         "sample_light",
         "sample_put",
@@ -851,6 +833,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "resume",
         "light_aim",
+        "light_resume",
         "light_list",
         "sample_light",
         "boxes",
@@ -902,6 +885,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "resume",
         "walk",
         "light_aim",
+        "light_resume",
         "light_miss_hit",
     ],
     // SHADER_LIGHT_SAMPLE_HIT
@@ -913,6 +897,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "resume",
         "walk",
         "light_aim",
+        "light_resume",
         "light_list",
         "sample_light",
         "sample_put",

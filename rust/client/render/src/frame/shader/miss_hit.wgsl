@@ -1,8 +1,8 @@
 // pxl-render/miss_hit.wgsl
 
 // The pixels `cast_cs` listed, their walk over the node cache alone (walk.wgsl).
-// One it leaves stays marked and is listed for `miss_list_cs` (miss.wgsl); one that ends is
-// written as that writes it (miss_word.wgsl).
+// One it leaves stays marked, where it was left written (`write_left`), and is listed for
+// `miss_list_cs` (miss.wgsl); one that ends is written as that writes it (miss_word.wgsl).
 
 /// `miss_list_cs`'s dispatch and how many are listed, then the kept hits' dispatch
 /// and how many (`node_cache::HITS_ARGS`, copied there after).
@@ -39,6 +39,7 @@ fn miss_hit_cs(
   let aim = px_aim(id, size);
   let w = walk(aim, px_start(aim, id, size), NONE);
   if (w.ends == 4u) {
+    write_left(id, w.t, w.visits);
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
       atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);

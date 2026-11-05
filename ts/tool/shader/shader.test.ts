@@ -4,10 +4,11 @@
  * Whether the browser's compiler takes the shaders the page hands it: each
  * module as the renderer assembles it (pxl-render examples/assembled.rs), the
  * world's asked one among them, compiled by Tint, the WGSL compiler a
- * browser's WebGPU runs (Dawn's, npm:webgpu), and a compute module's pipeline
- * made with the layout it declares on a device of the default limits, the floor
- * every WebGPU device binds (frame/shader/floor.rs). naga, which writes and
- * validates them, takes modules Tint refuses (a literal past f32's range).
+ * browser's WebGPU runs (Dawn's, npm:webgpu), and every pipeline the renderer
+ * makes over it, render and compute, made by its entry points (pipeline.ts)
+ * on a device of the default limits, the floor every WebGPU device binds
+ * (frame/shader/floor.rs). naga, which writes and validates them, takes
+ * modules Tint refuses (a literal past f32's range).
  */
 
 import { test } from "vitest";
@@ -18,23 +19,34 @@ import * as path from "node:path";
 import { REPO } from "@pxl/build/paths.ts";
 import { create, globals } from "webgpu";
 
-/** Each hand module, assembled here by the renderer's own example. */
-function assembled(): string[] {
+import { entries, make, type Pipeline } from "./pipeline.ts";
+
+/** Each hand module, assembled here by the renderer's own example, by its
+ * path, and the pipelines the renderer makes over them. */
+function assembled(): { modules: string[]; pipelines: Pipeline[] } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pxl-wgsl-"));
   execFileSync(
     "cargo",
     ["run", "-q", "-p", "pxl-render", "--example", "assembled", "--", dir],
     { cwd: path.join(REPO, "rust"), stdio: "inherit" },
   );
-  const files = fs.readdirSync(dir).sort();
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".wgsl"))
+    .sort();
   if (!files.includes("world_asked.wgsl") || files.length < 2) {
     throw new Error(`no hand module under ${dir}`);
   }
-  return files.map((f) => path.join(dir, f));
+  return {
+    modules: files.map((f) => path.join(dir, f)),
+    pipelines: JSON.parse(
+      fs.readFileSync(path.join(dir, "pipelines.json"), "utf8"),
+    ),
+  };
 }
 
 test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
-  const modules = assembled();
+  const { modules, pipelines } = assembled();
 
   Object.assign(globalThis, globals);
   // Held to the end (`void gpu` below): an instance collected while its
@@ -46,9 +58,8 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
   const refused: string[] = [];
   for (const at of modules) {
     const file = path.basename(at);
+    const name = file.replace(/\.wgsl$/, "");
     const code = fs.readFileSync(at, "utf8");
-    // A render module is compiled alone: its pipelines are the renderer's records.
-    const entry = code.match(/@compute[^]*?\bfn\s+(\w+)\s*\(/)?.[1];
     device.pushErrorScope("validation");
     const module = device.createShaderModule({ code });
     const errors = (await module.getCompilationInfo()).messages.filter(
@@ -57,21 +68,28 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
     refused.push(
       ...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`),
     );
-    // Its errors, as the module's past its compile, the scope's.
-    if (entry) {
-      device.createComputePipeline({
-        layout: "auto",
-        compute: { module, entryPoint: entry },
-      });
-    }
-    // A module that does not compile fails its pipeline too: said once.
     const scoped = await device.popErrorScope();
     if (scoped && errors.length === 0) {
       refused.push(`${file}: ${scoped.message.split("\n")[0]}`);
     }
     console.log(
-      `${file}: ${errors.length > 0 || scoped ? "refused" : entry ? "pipeline made" : "compiled"}`,
+      `${file}: ${errors.length > 0 || scoped ? "refused" : "compiled"}`,
     );
+    // A module that does not compile fails its pipelines too: said once.
+    if (errors.length > 0 || scoped) continue;
+    for (const p of pipelines.filter((p) => p.module === name)) {
+      device.pushErrorScope("validation");
+      const said = await make(device, module, code, p).then(
+        () => null,
+        (e: Error) => e.message.split("\n")[0],
+      );
+      const invalid = await device.popErrorScope();
+      const errs = [said, invalid?.message.split("\n")[0]].filter(Boolean);
+      refused.push(...errs.map((m) => `${file} ${entries(p)}: ${m}`));
+      console.log(
+        `${file} ${entries(p)}: ${errs.length > 0 ? "refused" : "pipeline made"}`,
+      );
+    }
   }
   device.destroy();
   void gpu;

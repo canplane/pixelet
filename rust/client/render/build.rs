@@ -304,6 +304,7 @@ fn walk_word() -> String {
         ("NODE_ROOTS", beam::NODE_ROOTS),
         ("SAMPLE_NODE", beam::SAMPLE_NODE),
         ("SAMPLE_ASSET", beam::SAMPLE_ASSET),
+        ("SAMPLE_LEFT_T", beam::SAMPLE_LEFT_T),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
         ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
@@ -344,7 +345,6 @@ fn walk_word() -> String {
         ("LIGHT_STEP_BITS", light::STEP_BITS),
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
-        ("LIGHT_MISS_STRUCK", light::MISS_STRUCK),
         ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
         ("LIGHT_MISSED_PASS", node_cache::LIGHT_MISSED_PASS),
         ("MISSED_PASS", node_cache::MISSED_PASS),
@@ -390,6 +390,7 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_COARSE", light::HEAD_COARSE as u32),
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
+        ("LIGHT_HEAD_MISSES_LEFT", light::HEAD_MISSES_LEFT as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
         ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
@@ -509,6 +510,7 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_FOOTPRINT", light::HEAD_FOOTPRINT as u32),
         ("LIGHT_ACTORS_AT", light::ACTORS_AT as u32),
         ("LIGHT_ACTORS", light::ACTORS as u32),
+        ("LIGHT_COLUMNS_AT", light::COLUMNS_AT as u32),
         ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
         ("LIGHT_ARGS_BEAM", light::ARGS_BEAM),
         ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
@@ -1327,11 +1329,14 @@ fn held_to_faults(module: &naga::Module, name: &str) {
             }
         }
     }
-    let i32_min = |e: &naga::Expression| {
-        matches!(e, naga::Expression::Literal(naga::Literal::I32(i32::MIN)))
-    };
+    let i32_min =
+        |e: &naga::Expression| matches!(e, naga::Expression::Literal(naga::Literal::I32(i32::MIN)));
     let functions = module.functions.iter().map(|(_, f)| f);
-    let held_min = module.global_expressions.iter().filter(|(_, e)| i32_min(e)).count()
+    let held_min = module
+        .global_expressions
+        .iter()
+        .filter(|(_, e)| i32_min(e))
+        .count()
         + functions
             .chain(module.entry_points.iter().map(|e| &e.function))
             .map(|f| f.expressions.iter().filter(|(_, e)| i32_min(e)).count())
@@ -1497,18 +1502,20 @@ fn assemble(out: &Path) {
     .expect("the shaders' stages");
 }
 
-/// Whether a compute group's (binding, stages, kind) words lay out what the shaders over it
-/// read, written beside `STAGES`: every binding one of `shaders` reads is in group 0, has an
-/// entry in `group` seen from the compute stage, and its kind is one its declaration takes
-/// (the number, a buffer's read-only or not, a texture's kind); and every entry of `group` is
-/// read by one of them. Each owner of a compute group asserts it.
+/// Whether a compute group's (binding, stages, kind) words lay out what the shaders of the
+/// pipelines over it read, written beside `STAGES`: every binding the shader of one of
+/// `pipelines` reads is in group 0, has an entry in `group` seen from the compute stage, and
+/// its kind is one its declaration takes (the number, a buffer's read-only or not, a
+/// texture's kind); and every entry of `group` is read by one of them. Each owner of a
+/// compute group asserts it.
 const BINDS: &str = "
 /// Whether `group`, a compute group's (binding, stages, kind) words, lays out exactly what
-/// `shaders` read, each binding as its declaration takes it (build.rs `BINDS`).
-pub const fn binds(shaders: &[u32], group: &[u32]) -> bool {
+/// the shaders of compute pipelines `pipelines` (`compute`) read, each binding as its
+/// declaration takes it (build.rs `BINDS`).
+pub const fn binds(pipelines: &[u32], group: &[u32]) -> bool {
     let mut s = 0;
-    while s < shaders.len() {
-        let entries = STAGES[shaders[s] as usize];
+    while s < pipelines.len() {
+        let entries = STAGES[compute(pipelines[s]).0 as usize];
         let mut k = 0;
         while k < entries.len() {
             let [g, b, by, takes, _] = entries[k];
@@ -1533,8 +1540,8 @@ pub const fn binds(shaders: &[u32], group: &[u32]) -> bool {
     while e < group.len() {
         let mut read = false;
         let mut s = 0;
-        while s < shaders.len() {
-            read |= stages_of(shaders[s], 0, group[e]) != NONE;
+        while s < pipelines.len() {
+            read |= stages_of(compute(pipelines[s]).0, 0, group[e]) != NONE;
             s += 1;
         }
         if !read {

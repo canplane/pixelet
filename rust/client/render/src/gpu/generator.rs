@@ -20,9 +20,9 @@ use pxl_engine::{clipmap, eye, overwrite};
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
-    SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN, STORAGE, STORAGE_RW,
-    UNIFORM,
+    binds, COMPUTE, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT,
+    COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN, STORAGE,
+    STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
@@ -107,12 +107,12 @@ pub const ARGS_GROUP: [u32; 12] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_GENERATION_MARK], &MARK_GROUP)
-        && binds(&[SHADER_GENERATION_THIN], &THIN_GROUP)
-        && binds(&[SHADER_GENERATION], &GENERATE_GROUP)
-        && binds(&[SHADER_GENERATION_CNT], &CNT_GROUP)
-        && binds(&[SHADER_GENERATION_ARGS], &ARGS_GROUP)
-        && binds(&[SHADER_GENERATION_COMPACT], &COMPACT_GROUP),
+    binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
+        && binds(&[COMPUTE_GENERATION_THIN], &THIN_GROUP)
+        && binds(&[COMPUTE_GENERATION], &GENERATE_GROUP)
+        && binds(&[COMPUTE_GENERATION_CNT], &CNT_GROUP)
+        && binds(&[COMPUTE_GENERATION_ARGS], &ARGS_GROUP)
+        && binds(&[COMPUTE_GENERATION_COMPACT], &COMPACT_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 const _: () = assert!(
@@ -213,12 +213,12 @@ impl Generator {
             storage | buffer_usage::UNIFORM,
         );
         Generator {
-            mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &MARK_GROUP),
-            thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &THIN_GROUP),
-            generate: pipelines.build_compute(g, SHADER_GENERATION, &GENERATE_GROUP),
-            cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &CNT_GROUP),
-            args_pipeline: pipelines.build_compute(g, SHADER_GENERATION_ARGS, &ARGS_GROUP),
-            compact: pipelines.build_compute(g, SHADER_GENERATION_COMPACT, &COMPACT_GROUP),
+            mark: pipelines.build_compute(g, COMPUTE_GENERATION_MARK, &MARK_GROUP),
+            thin: pipelines.build_compute(g, COMPUTE_GENERATION_THIN, &THIN_GROUP),
+            generate: pipelines.build_compute(g, COMPUTE_GENERATION, &GENERATE_GROUP),
+            cnt: pipelines.build_compute(g, COMPUTE_GENERATION_CNT, &CNT_GROUP),
+            args_pipeline: pipelines.build_compute(g, COMPUTE_GENERATION_ARGS, &ARGS_GROUP),
+            compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT, &COMPACT_GROUP),
             groups: [0; 6],
             list: buf(
                 word_bytes(generation::LIST_WORDS as usize),

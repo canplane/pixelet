@@ -25,7 +25,7 @@ use crate::eye;
 use crate::grid;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
-use crate::{axis, Zoom, FRAC_W};
+use crate::{axis, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 use core::f32::consts::SQRT_2;
 
 /// The light's cast as the eye's words hold it (`eye::LIGHT`), a frame's
@@ -292,6 +292,53 @@ impl Light {
             && self.band(size, range, from) == self.band(size, range, here)
     }
 
+    /// Whether the rays of box tile `tile`, the map `size` texels a side, asking at its band
+    /// under the eye's zooms `range` (`band`), may meet a cell over `column`: the world's
+    /// columns from `[x0, y0]` to `[x1, y1]`, units from the eye (`column_of`), at every
+    /// height, where what the world's query reads changed. The one rule of what a world's
+    /// change keeps (pxl-render light_slide.wgsl).
+    ///
+    /// A ray's answer is that of its band's cells along it: a split's box and a node of air
+    /// pass over cells of air alone, and a node not held is a split, its cells at the band the
+    /// lack (`ground::node`); a cell's answer reads the columns under it alone, the bricks
+    /// that hold them and what is placed or cut over them (pxl-render forget.wgsl). So a
+    /// tile whose rays meet no cell of its band over the column answers as before. A cell
+    /// over the column lies within it grown by a cell's side, grown by a texel more for the
+    /// rounding of the rays' starts (`Starts`). The tile's rays, seen from above, sweep the
+    /// parallelogram of its texels on the near plane along the light to their reach: a
+    /// hexagon of three edges each twice, which the grown column misses where one of five
+    /// axes parts them, X, Y and across each edge.
+    pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], column: [f32; 4]) -> bool {
+        let band = self.band(size, range, [tile[0] as i32, tile[1] as i32]);
+        let grow = libm::ldexpf(1.0, UNIT_ZOOM as i32 - band as i32) + self.width();
+        let lo = [column[0] - grow, column[1] - grow];
+        let hi = [column[2] + grow, column[3] + grow];
+        let t = TILE as f32;
+        let (i, j) = (tile[0] as f32 * t - 0.5, tile[1] as f32 * t - 0.5);
+        let edges = [
+            [self.across[0] * t, self.across[1] * t],
+            [self.down[0] * t, self.down[1] * t],
+            [self.dir[0] * self.t_max, self.dir[1] * self.t_max],
+        ];
+        let mid = [0, 1].map(|k| {
+            self.first[k]
+                + i * self.across[k]
+                + j * self.down[k]
+                + 0.5 * (edges[0][k] + edges[1][k] + edges[2][k])
+        });
+        let at = [0, 1].map(|k| 0.5 * (lo[k] + hi[k]) - mid[k]);
+        let half = [0, 1].map(|k| 0.5 * (hi[k] - lo[k]));
+        let parts = |n: [f32; 2]| {
+            let swept: f32 = edges
+                .iter()
+                .map(|e| libm::fabsf(e[0] * n[0] + e[1] * n[1]))
+                .sum();
+            let column = libm::fabsf(half[0] * n[0]) + libm::fabsf(half[1] * n[1]);
+            libm::fabsf(at[0] * n[0] + at[1] * n[1]) > 0.5 * swept + column
+        };
+        !(parts([1.0, 0.0]) || parts([0.0, 1.0]) || edges.iter().any(|e| parts([-e[1], e[0]])))
+    }
+
     /// The box's texel a slot of the map holds, `size` a power of two its
     /// side: the slot's world texel, less the box's corner. The light's raster
     /// (`SAMPLE`) is drawn in the box's order, as the map is laid, and a
@@ -377,14 +424,36 @@ pub fn band_texels2(size: u32, tile: [i32; 2]) -> u32 {
     x * x + y * y
 }
 
+/// The world's columns of the nodes at `zoom` from `lo` to `hi`, X then Y, `hi` past the
+/// last (`Node::idx`), as `Light::reaches` reads them: units from `origin`, the eye's steps
+/// (`eye::ORIGIN`), `[x0, y0, x1, y1]`; X the short way round the world, and the whole of it
+/// where they span it, as far as a float's sum stays finite.
+pub fn column_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f32; 4] {
+    let s = FINEST_ZOOM - zoom;
+    let unit = 1.0 / f64::from(1u32 << FRAC_W);
+    let across = i64::from(hi[0] - lo[0]) << s;
+    let (x0, x1) = if across >= 1i64 << 32 {
+        (-1.0e30 / unit, 1.0e30 / unit)
+    } else {
+        let from = ((i64::from(lo[0]) << s) as u32).wrapping_sub(origin[0] as u32) as i32;
+        (f64::from(from), f64::from(from) + across as f64)
+    };
+    let y = |v: i32| ((i64::from(v) << s) - i64::from(origin[1])) as f64;
+    [x0, y(lo[1]), x1, y(hi[1])].map(|v| (v * unit) as f32)
+}
+
+/// How many changed columns a cast is handed (`COLUMNS_AT`); a change of more casts the map
+/// whole.
+pub const COLUMNS: usize = 64;
+
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
 /// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
 /// cast before (`HEAD_CORNER_WAS`), whether its marks take each pixel's
 /// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
 /// `STARTS_AT`), then the actors (`ACTORS_AT`), then the list's places for the passes by hand
-/// (`HEAD_CELLS`).
-pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
+/// (`HEAD_CELLS`), then the world's columns that changed (`COLUMNS_AT`).
+pub const HEAD_VEC4S: usize = COLUMNS_AT + 1 + COLUMNS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// The cast's number, counted up from one each cast, which a tile stood on
 /// and read in it is marked with (`stands_at`, `reads_at`).
@@ -429,14 +498,20 @@ pub const HEAD_MISSES: usize = HEAD_CELLS + 11;
 /// lists' order (`LISTED_CORNERS`).
 pub const HEAD_MARKS: usize = HEAD_CELLS + 12;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
+/// The slots the walk over the node cache left (`misses_left_at`).
+pub const HEAD_MISSES_LEFT: usize = HEAD_LISTED + LISTS as usize;
 const HEAD_LAID_VEC4S: usize = 5;
+/// The world's columns that changed since the cast before, where they did and the epoch goes
+/// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
+/// of four floats, as many as `COLUMNS`.
+pub const COLUMNS_AT: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_LISTED + LISTS as usize <= HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_MISSES_LEFT < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 20] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 21] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -452,6 +527,7 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 20] {
         (HEAD_COARSE, coarse_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
+        (HEAD_MISSES_LEFT, misses_left_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -779,10 +855,6 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`node_cache::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
-/// A slot its walk over the node cache ended is struck from the list with this
-/// (pxl-render light_miss_hit.wgsl), past any slot's X and Y.
-pub const MISS_STRUCK: u32 = u32::MAX;
-
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
@@ -791,13 +863,21 @@ pub const fn misses_at(size: u32) -> u32 {
     misses_cnt(size) + 1
 }
 
+/// The slots their walk over the node cache left (pxl-render light_miss_hit.wgsl), for the
+/// walk that asks the world (light_miss.wgsl), as the eye's are listed apart
+/// (`beam::Grid::misses_at`): how many, copied in once that walk is done, then each, its X and
+/// its Y over 16 bits; the misses' own room, `size²`, as it lists only slots of theirs.
+pub const fn misses_left_at(size: u32) -> u32 {
+    misses_at(size) + size * size
+}
+
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
 /// last cast a receiver stood on it in (`HEAD_CAST`; pxl-render
 /// light_mark.wgsl, light_mark_draws.wgsl): where the eye's pixels meet the
 /// world, and where the decor and the actors drawn stand.
 pub const fn stands_at(size: u32) -> u32 {
-    misses_at(size) + size * size
+    misses_left_at(size) + 1 + size * size
 }
 
 /// The tiles a receiver reads, past the stands, as many: the number of the
@@ -1235,7 +1315,7 @@ mod tests {
             [_, near]: [Zoom; 2],
             _: f32,
         ) -> answer::In<[u32; 2]> {
-            let side = libm::ldexpf(1.0, crate::UNIT_ZOOM as i32 - zoom as i32);
+            let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
             let floor = c[2] as f32 * side;
             let (kind, asset) = if zoom >= near {
                 let mid = |k: usize| (c[k] as f32 + 0.5) * side;
@@ -1297,7 +1377,7 @@ mod tests {
     /// `starts`).
     #[test]
     fn kept_tile_is_fresh_cast() {
-        let (size, range) = (64, [crate::UNIT_ZOOM - 3, crate::UNIT_ZOOM]);
+        let (size, range) = (64, [UNIT_ZOOM - 3, UNIT_ZOOM]);
         let (n, t) = (tiles(size) as i32, TILE as i32);
         let was = over_bumps([512, 512]);
         let st = starts_of([0; 3], &was);

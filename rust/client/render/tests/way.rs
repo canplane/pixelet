@@ -24,7 +24,7 @@ use pxl_engine::overwrite::{Columns, BRANCH, CHILDREN};
 use pxl_engine::way::{self, tree, Segment};
 use pxl_engine::{fill, ground, value, wrap_idx, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
-    self, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN, SHADER_WAY_TREE,
+    self, COMPUTE_WAY, COMPUTE_WAY_FREE, COMPUTE_WAY_RETURN, COMPUTE_WAY_TREE,
 };
 use real_world::{level_first, mix, World, EYE, NOTCH};
 
@@ -701,25 +701,26 @@ fn hand_ways_fill_as_the_rust() {
         ..Default::default()
     }))
     .unwrap();
-    let pipeline = |kind: u32| {
+    let pipeline = |id: u32| {
+        let (shader, entry) = record::compute(id);
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(record::compute_entry(kind)),
-            source: wgpu::ShaderSource::Wgsl(record::src(kind).into()),
+            label: Some(entry),
+            source: wgpu::ShaderSource::Wgsl(record::src(shader).into()),
         });
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some(record::compute_entry(kind)),
+            label: Some(entry),
             layout: None,
             module: &module,
-            entry_point: Some(record::compute_entry(kind)),
+            entry_point: Some(entry),
             compilation_options: Default::default(),
             cache: None,
         })
     };
     let passes = [
-        pipeline(SHADER_WAY_FREE),
-        pipeline(SHADER_WAY),
-        pipeline(SHADER_WAY_TREE),
-        pipeline(SHADER_WAY_RETURN),
+        pipeline(COMPUTE_WAY_FREE),
+        pipeline(COMPUTE_WAY),
+        pipeline(COMPUTE_WAY_TREE),
+        pipeline(COMPUTE_WAY_RETURN),
     ];
     let gpu = Gpu {
         device,

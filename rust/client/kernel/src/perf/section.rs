@@ -6,7 +6,7 @@ use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
 use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILES, STAT, STEP_STAT, STREAM_STAT, WAKES};
-use crate::perf::word::{words, Words};
+use crate::perf::word::{words, zeroed, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::sys::sched::phase_spec::PHASES;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
@@ -40,7 +40,7 @@ words!(RecordingStateSection, NOW::recording_state::WORDS,
 );
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FramesSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
@@ -96,6 +96,12 @@ const _: () = assert!(
     STAT::frames::last + FRAME::WORDS <= STAT::frames::WORDS,
     "the last frame runs past STAT's frames section"
 );
+
+impl Default for FramesSection {
+    fn default() -> Self {
+        zeroed()
+    }
+}
 
 words!(FramesSection, STAT::frames::WORDS,
     present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
