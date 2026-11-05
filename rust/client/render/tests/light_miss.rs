@@ -17,7 +17,7 @@ use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::pyramid::{self, BUCKET};
-use pxl_engine::{eye, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{count, eye, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
 };
@@ -684,7 +684,7 @@ fn run_case(
     drop(empty);
     let mut table0 = vec![0u32; pyramid::WORDS as usize];
     table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::TALLY_ON as usize] = 1;
+    table0[pyramid::COUNT_ON as usize] = 1;
     if case.eye_first {
         let mut q = Keeping {
             w,
@@ -1016,9 +1016,9 @@ fn run_case(
     }
 
     // Its count of what it asked.
-    let lane = pyramid::tally_at(tally::LIGHT, tally::MISS) as usize;
+    let lane = pyramid::lane_at(count::LIGHT, count::MISS) as usize;
     let tallied = u64::from(table_hand[lane]);
-    let asked_lane = pyramid::tally_at(tally::LIGHT, tally::ASKED) as usize;
+    let asked_lane = pyramid::lane_at(count::LIGHT, count::ASKED) as usize;
     let asked = u64::from(table_hand[asked_lane]);
 
     // The next frame: the walk over the table alone first, then this pass for what it left.

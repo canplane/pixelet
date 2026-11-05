@@ -7,7 +7,10 @@ evidence, the reduced cases and the tools are
 [the shaders on two phones](../experiment/20261103-shaders-on-two-phones/).
 These hold whatever language the shaders are written in: they are about the
 WGSL a browser receives and what its compiler and the phone's driver do with
-it, not about Rust.
+it. The shaders were then generated from Rust (rust-gpu, naga, a rewriter);
+they are written by hand in WGSL now
+(`rust/client/render/src/frame/shader/`), and what the rewriter did for the
+phones is a rule the hand WGSL keeps (below).
 
 Desktop Chrome passing proves little here. Chrome on the Mac compiles WGSL
 with Tint to Metal for a desktop GPU; Safari compiles it with WebKit's own
@@ -18,29 +21,33 @@ own Vulkan driver. Each is a different compiler with its own faults.
 
 - **`atomicCompareExchangeWeak`.** Safari writes Metal for it that does not
   compile, on the iPhone and the Mac alike. Claim with an exchange and put
-  back what was not yours (pxl-shader pyramid.rs `pyramid_claim`); take from
-  a counter with an add and give back with a min where it did not fit
-  (way.rs `pop`). Never give back with a subtract while others take: it
-  overlaps what they took.
+  back what was not yours (ask.wgsl `claim`); take from a counter with an
+  add and give back with a min where it did not fit (way_tree.wgsl `pop`).
+  Never give back with a subtract while others take: it overlaps what they
+  took.
 - **`i32::MIN` written as a constant.** Safari writes it as a bare literal,
-  a C++ `long`, and a `select` of it and an `int` fails. pxl-shader-build
-  writes it as a call (`i32_min_called`).
+  a C++ `long`, and a `select` of it and an `int` fails. The fix taken then
+  was a call that returns it; no hand shader holds the constant.
 - **An atomic in a branch of its own.** naga reads its pointer out of scope;
   ask it of every lane, a no-op where there is nothing to do.
 - **Arrays and structs as values crossing a function**, returned or passed,
   and **array- or struct-typed locals assigned in a branch** and read after
   it about loops. Adreno's driver refuses such modules with
   `VK_ERROR_UNKNOWN`; a `vec2`/`vec3`/`vec4` in place of a small array, or
-  the value split into its scalars, is taken. naga writes a Rust `[u32; 2]`
-  or a small struct carried through an `if` as exactly such a local.
-  pxl-shader-build takes care of what it can see (below); what it cannot is
-  the next two.
+  the value split into its scalars, is taken. naga wrote a Rust `[u32; 2]`
+  or a small struct carried through an `if` as exactly such a local. The
+  compute passes by hand keep to this: forget's moved mask is read a word at
+  a time inside its loop, the missed pixel's ray two functions in place of a
+  nested struct. The render passes still pass structs that hold structs
+  (`Air` holding the light, `Surface` holding `Air`, `Pixel` holding the hit),
+  and `Tiles` crosses `tiles_age` and `tiles_claimed` by value; none of it is
+  checked on the S23.
 - **A choice made as the shader runs between two implementations that
-  answer in tuples or structs.** `PassObserver` chose `Eye` or `Map` in every
-  method by the pass's head, so every answer of `Observer` came through a
-  branch. A pass both take is now an entry each over a function generic in
-  its observer (`beam_cs` and `light_beam_cs`, …): choose at the entry, not
-  inside.
+  answer in tuples or structs.** The generated `PassObserver` chose the eye
+  or the light's map in every method by the pass's head, so every answer came
+  through a branch. A pass both observers take is an entry each (`beam_cs`
+  and `light_beam_cs`, `sample_cs` and `light_sample_cs`, …): choose at the
+  entry, not inside.
 - **A table of vectors read at a place found as it runs.** The raster's
   `const array<vec3f, 72>` of box corners, indexed by its axis and vertex,
   was refused (Tint holds such a table as a local; a `var<private>` copy was
@@ -51,16 +58,15 @@ own Vulkan driver. Each is a different compiler with its own faults.
   the entry into passes at a clean seam, as `decor` splits at
   `generation::placement`'s halves (footing, then pose).
 
-## What pxl-shader-build does for the phones
+## What the build does for the phones
 
-Every entry is read inlined, no function of it called (`wgsl_of`), so no
-array or struct crosses a call. naga's WGSL is then rewritten
-(client/shader/build rewrite.rs): `i32::MIN` a call; each array- or
-struct-typed `phi_*` local split into a local a leaf (`split_phis`); every
-small array of a 32-bit scalar outside what a binding lays out a vector
-(`small_arrays_as_vectors`). None of it changes what a shader computes. The
-generated WGSL is about twice what it was, 5.5 MB; the S23 takes 2–5 s to make
-each of the largest pipelines.
+Nothing a shader computes is rewritten. render build.rs strips the comments
+and the indentation, appends the words it writes from pxl-engine, assembles
+each module from its parts (frame/shader/part.rs `PARTS`) and validates it
+with naga as WebGPU takes it, every capability off. The rules above are kept
+in the hand WGSL itself. The 86 modules as assembled are about 1.0 MB, the
+largest (`light_beam`) 57 KB, against 5.5 MB generated. The S23 has not yet
+made the whole set by hand.
 
 ## What the host and a shader share
 
@@ -88,8 +94,9 @@ field read alone did not.
 Two tests held this then, parsing every module with naga
 (`what_a_shader_shares_with_the_host_has_no_room_inside_it`,
 `every_block_reads_each_field_from_where_it_lies`); they are not on main.
-The generated shaders' blocks break the rule today (a `vec2<f32>` and a
-`vec2<u32>` among `vec4`s in `cell`'s uniform), unchecked on the S23.
+Two hand blocks break the rule today, each a `var<uniform>` holding
+`mat4x4f`s (`Resolve` in screen_resolve.wgsl, `Propagate` in
+screen_propagate.wgsl), unchecked on the S23.
 
 ## Check
 

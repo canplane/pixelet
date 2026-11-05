@@ -257,8 +257,8 @@ fn planes() -> &'static mut Planes {
 }
 
 /// The eye's clip levels' levels over their bricks folded again, a level at a
-/// time, as the GPU folds its own (pxl-engine `clipmap::fold`; pxl-shader
-/// `fold_cs`), over the bricks as they are held here. The writers of a brick
+/// time, as the GPU folds its own (pxl-engine `clipmap::fold`; pxl-render
+/// fold.wgsl `fold_cs`), over the bricks as they are held here. The writers of a brick
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
 /// (`on_resident`), folded once after all of them (`refold`): no read of a
@@ -666,7 +666,7 @@ pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
 }
 
 /// The clip levels' entries and their first bricks, as the GPU's cast reads
-/// them (pxl-shader `World::present`, `World::origin`): a row an entry
+/// them (pxl-render clip.wgsl `step_to`, `held_of`): a row an entry
 /// (pxl-engine `clipmap::Entry`), then a row a clip level
 /// (`clipmap::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {

@@ -7,15 +7,18 @@
 //! asks and over asks crossed onto other lines and faces, the count and the asks past it held.
 //!
 //! `cast_cs`: each drawn pixel's words as `cast::entry` takes them off the visible sample
-//! the test lays at it, the sky where the four samples about it went on, the rest marked and
-//! listed, a tile not claimed passed by, a cell past the eye's reach not entered; the walk
-//! again's words and the tally; and screens of lacks far past the list's room, one past it,
-//! and one pixel. The pixel's ray and the four samples about it are the device's own
-//! (`probe_cs`, the module's functions untouched by a mutant): the Rust is asked along the ray
-//! the device took, and that ray is held near `cast::through`'s. The device divides as it
-//! will, so a plane's t is held within a few ulps, more along a small component of the way,
-//! and a pixel its rounding takes across an edge of its cell goes either way, one in a
-//! thousand at most.
+//! the test lays at it, the sky where the four samples about it (`Grid::sample_before`) went
+//! on, the rest marked and listed, a tile not claimed passed by, a cell past the eye's reach
+//! not entered; the walk again's words and the tally; and screens of lacks far past the list's
+//! room, one past it, and one pixel. The device's own tangents, way and reciprocal of each
+//! pixel are read off a probe appended to the module (`probe_cs`), which calls what `cast_cs`
+//! calls, a mutant's too: its tangents and way are held near `px_tan`'s and `cast::through`'s
+//! (`RAY_OFF`), its reciprocal near `Ray::inverse` (`INV_ULPS`), the four samples it takes to
+//! `Grid::sample_before`'s exactly; and the Rust's entry is taken along that ray and that
+//! reciprocal (`cast::entry_with`), as the device divides as it will. A plane's t is held
+//! within a few ulps, more along a small component of the way, and a pixel its rounding
+//! takes across an edge between the planes of two axes goes either way, one in a thousand of
+//! a run's at most.
 //!
 //! Every word of the beam rays', the rays', the walk again's and the pyramid's compared;
 //! each kind the test says something of counted, and too few of one fails. Skipped where no
@@ -25,18 +28,18 @@ mod gpu;
 mod keeping;
 mod real_world;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use gpu::{Gpu, Tally};
+use gpu::{array_view, cross, mix, read_texture, texture, ulps, unit, Gpu, Kinds, Tally};
 use keeping::{q8, WorldBufs};
 use pxl_engine::answer::{self, In};
 use pxl_engine::beam::{self, Grid};
-use pxl_engine::cast::{self, Node, Query, Ray};
+use pxl_engine::cast::{self, Entry, Node, Query, Ray};
 use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{eye, face, pyramid, raster, ray, screen, tally, Zoom, LEAF_CELL};
+use pxl_engine::{count, eye, face, pyramid, raster, ray, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE,
     SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
@@ -59,6 +62,14 @@ const UNTOUCHED: u32 = 0xdead_beef;
 /// rounding takes (`slack`).
 const T_ULPS: u32 = 4;
 const EDGE_ULPS: u32 = 16;
+/// The ulps the device's reciprocal of a pixel's way may lie off the Rust's correctly rounded
+/// one: WGSL's bound on a division, 2.5 ulps, taken up to a whole ulp. Metal measured 1 here.
+const INV_ULPS: u32 = 3;
+/// How far the device's tangents and way of a pixel may lie off `px_tan`'s and
+/// `cast::through`'s, on a component of at most 1: the division of a tangent, and the square
+/// root, the sum and the division of the way, each within WGSL's 2.5 ulps of 1, summed and
+/// taken up. Metal measured 1.5.
+const RAY_OFF: f32 = 8.0 * f32::EPSILON;
 /// The words the probe leaves a pixel: its tangents, its ray's way and inverse, the first of
 /// the four samples about it.
 const PROBE_WORDS: u32 = 10;
@@ -116,26 +127,6 @@ struct Cast {
     beams: Vec<u32>,
     table: Vec<u32>,
     boxes: u32,
-}
-
-fn unit(v: [f32; 3]) -> [f32; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    v.map(|x| x / l)
-}
-
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn mix(a: u32, b: u32) -> u32 {
-    let mut h = a.wrapping_mul(0x9E37_79B1) ^ b.wrapping_mul(0x85EB_CA77);
-    h ^= h >> 15;
-    h = h.wrapping_mul(0x2C1B_3C6D);
-    h ^ h >> 12
 }
 
 fn device() -> Option<Gpu> {
@@ -457,64 +448,36 @@ impl Ancestors<Inheritance> for BeamLine<'_> {
     }
 }
 
-/// Ancestor of `c` at `zoom` on the way down to `z`.
-fn over(c: [i32; 3], zoom: Zoom, z: Zoom) -> [i32; 3] {
-    ancestor_at(zoom, c, zoom - z)
-}
-
 /// The ask at word `a` as the Rust asks it (`Want`).
 fn face_want(q: &mut Asking, beams: &[u32], origin: [i32; 3], a: u32) -> Want {
     let w = |k: u32| beams[(a + k) as usize];
     let hit = node_at(beams, w(beam::ASK_NODE));
     let (zoom, c) = (hit.zoom, hit.idx(origin));
+    let face_of = w(beam::ASK_FACE);
     let base = BeamLine::of(beams, w(beam::ASK_LINE), origin);
-    let held = over(base.at, base.zoom, 0) == over(c, zoom, 0);
     let below = support::sub_line(q, &base, zoom, c);
     let line = below.joined(&base);
-    let bits = face::word(w(beam::ASK_FACE), |d| {
+    let bits = face::word(face_of, |d| {
         answer::whole(support::asset(q, &line, zoom, face::beside(zoom, c, d)))
-    });
-    let seam = (0..27).any(|m| {
-        let d = [m % 3 - 1, (m / 3) % 3 - 1, m / 9 - 1];
-        face::beside(zoom, c, d)[0] != c[0] + d[0]
     });
     // The same asked with the carve and the hide each other's.
     let cuts = q.cuts;
     q.cuts = [cuts[1], cuts[0]];
-    let swapped = face::word(w(beam::ASK_FACE), |d| {
+    let swapped = face::word(face_of, |d| {
         answer::whole(support::asset(q, &line, zoom, face::beside(zoom, c, d)))
     });
     q.cuts = cuts;
     Want {
         bits,
-        held,
-        seam,
         cut: swapped != bits,
     }
 }
 
-/// An ask's bits as the Rust asks them; whether its line holds a node over its hit, whether a
-/// cell beside it lies over X's seam, and whether the carve and the hide swapped change them.
+/// An ask's bits as the Rust asks them, and whether the carve and the hide swapped change
+/// them.
 struct Want {
     bits: u32,
-    held: bool,
-    seam: bool,
     cut: bool,
-}
-
-type Kinds = BTreeMap<&'static str, u64>;
-
-fn add(kinds: &mut Kinds, what: &'static str, yes: bool) {
-    *kinds.entry(what).or_default() += u64::from(yes);
-}
-
-/// The kinds each test needs some of to say anything, and how many.
-fn enough(kinds: &Kinds, least: &[(&str, u64)]) -> Vec<String> {
-    least
-        .iter()
-        .filter(|(what, n)| kinds.get(what).copied().unwrap_or(0) < *n)
-        .map(|(what, n)| format!("too few of {what}: {:?}, wanted {n}", kinds.get(what)))
-        .collect()
 }
 
 /// The eyes both tests stand on: over the ground, a lattice of two over the seam, cut and
@@ -682,34 +645,19 @@ fn hand_faces_answer_as_face_word() {
         for i in 0..cast.boxes {
             let a = g.ask_at(i);
             let to = cast.asked[(a + beam::ASK_TO) as usize];
-            add(&mut kinds, "boxes", true);
-            add(&mut kinds, "boxes, none asked", to == beam::ASK_NONE);
+            kinds.add("boxes", true);
+            kinds.add("boxes, none asked", to == beam::ASK_NONE);
             if to == beam::ASK_NONE {
                 continue;
             }
-            let Want {
-                bits,
-                held,
-                seam,
-                cut,
-            } = face_want(&mut q, &cast.asked, cast.origin, a);
-            add(&mut kinds, "asked, over X's seam", seam);
-            add(&mut kinds, "asked, the cuts swapped answer otherwise", cut);
+            let Want { bits, cut } = face_want(&mut q, &cast.asked, cast.origin, a);
+            kinds.add("asked, the cuts swapped answer otherwise", cut);
             want[to as usize] = bits;
-            add(&mut kinds, "asked", true);
-            add(&mut kinds, "asked, its line in another root", !held);
-            add(&mut kinds, "asked, a rise", bits & 0xf != 0);
-            add(
-                &mut kinds,
-                "asked, a line",
-                bits >> face::LINE_SHIFT & 0xf != 0,
-            );
-            add(
-                &mut kinds,
-                "asked, a corner",
-                bits >> face::CORNER_SHIFT != 0,
-            );
-            add(&mut kinds, "asked, none set", bits == 0);
+            kinds.add("asked", true);
+            kinds.add("asked, a rise", bits & 0xf != 0);
+            kinds.add("asked, a line", bits >> face::LINE_SHIFT & 0xf != 0);
+            kinds.add("asked, a corner", bits >> face::CORNER_SHIFT != 0);
+            kinds.add("asked, none set", bits == 0);
         }
         tally.compare(
             &format!("{}, the boxes' asks", c.name),
@@ -761,19 +709,14 @@ fn hand_faces_answer_as_face_word() {
             let a = at + i * beam::ASK_WORDS;
             let to = laid[(a + beam::ASK_TO) as usize];
             if to == beam::ASK_NONE {
-                add(&mut kinds, "crossed, none asked", true);
+                kinds.add("crossed, none asked", true);
                 continue;
             }
-            let Want { bits, held, .. } = face_want(&mut q, &laid, cast.origin, a);
+            let Want { bits, .. } = face_want(&mut q, &laid, cast.origin, a);
             want[to as usize] = bits;
-            add(&mut kinds, "crossed", true);
-            add(&mut kinds, "crossed, its line in another root", !held);
-            add(&mut kinds, "crossed, a rise", bits & 0xf != 0);
-            add(
-                &mut kinds,
-                "crossed, a corner",
-                bits >> face::CORNER_SHIFT != 0,
-            );
+            kinds.add("crossed", true);
+            kinds.add("crossed, a rise", bits & 0xf != 0);
+            kinds.add("crossed, a corner", bits >> face::CORNER_SHIFT != 0);
         }
         let eye_buf = gpu.buffer(&cast.eye, wgpu::BufferUsages::UNIFORM);
         let beams = gpu.buffer(&laid, store());
@@ -794,25 +737,19 @@ fn hand_faces_answer_as_face_word() {
         );
     }
     eprintln!("  KINDS faces {kinds:?}");
-    let short = enough(
-        &kinds,
-        &[
-            ("asked", 1000),
-            ("boxes, none asked", 1),
-            ("asked, a rise", 1),
-            ("asked, a line", 1),
-            ("asked, a corner", 1),
-            ("asked, none set", 1),
-            ("asked, its line in another root", 1),
-            ("asked, over X's seam", 1),
-            ("asked, the cuts swapped answer otherwise", 1),
-            ("crossed", 1000),
-            ("crossed, none asked", 1),
-            ("crossed, a rise", 1),
-            ("crossed, a corner", 1),
-            ("crossed, its line in another root", 1),
-        ],
-    );
+    let short = kinds.short(&[
+        ("asked", 1000),
+        ("boxes, none asked", 1),
+        ("asked, a rise", 1),
+        ("asked, a line", 1),
+        ("asked, a corner", 1),
+        ("asked, none set", 1),
+        ("asked, the cuts swapped answer otherwise", 1),
+        ("crossed", 1000),
+        ("crossed, none asked", 1),
+        ("crossed, a rise", 1),
+        ("crossed, a corner", 1),
+    ]);
     tally.end("faces");
     assert!(short.is_empty(), "{}", short.join("\n"));
 }
@@ -831,72 +768,6 @@ struct Screen {
     lacks: bool,
 }
 
-/// A texture of `layers` R32Uint layers at `size`, laid with `words`, a layer after another.
-fn texture(gpu: &Gpu, size: [u32; 2], layers: u32, words: &[u32]) -> wgpu::Texture {
-    let t = gpu.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: wgpu::Extent3d {
-            width: size[0],
-            height: size[1],
-            depth_or_array_layers: layers,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R32Uint,
-        usage: wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
-    gpu.queue.write_texture(
-        t.as_image_copy(),
-        gpu::bytes(words),
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(size[0] * 4),
-            rows_per_image: Some(size[1]),
-        },
-        t.size(),
-    );
-    t
-}
-
-fn read_texture(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
-    let [w, h, layers] = [t.width(), t.height(), t.depth_or_array_layers()];
-    let row = (w * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-    let staging = gpu.buffer(
-        &vec![0u32; (row / 4 * h * layers) as usize],
-        wgpu::BufferUsages::empty(),
-    );
-    let mut e = gpu.device.create_command_encoder(&Default::default());
-    e.copy_texture_to_buffer(
-        t.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &staging,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(row),
-                rows_per_image: Some(h),
-            },
-        },
-        t.size(),
-    );
-    gpu.queue.submit([e.finish()]);
-    gpu.read(&staging)
-        .chunks((row / 4) as usize)
-        .flat_map(|r| r[..w as usize].to_vec())
-        .collect()
-}
-
-fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
-    t.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    })
-}
-
 /// The tangents of pixel `p`'s ray, as `cast_cs` takes them (grid.wgsl `px_tan`).
 fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
     let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
@@ -904,19 +775,9 @@ fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
     [ndc_x * tan[0], ndc_y * tan[1]]
 }
 
-/// Where a pixel's ray enters a cell (`cast::entry`), and how near its rounding stands to
-/// deciding otherwise: the ulps between where it enters and leaves, or between the two last
-/// planes it reaches where they part the axis.
-struct Entry {
-    t: f32,
-    axis: u32,
-    enters: bool,
-    near: [f32; 3],
-    edge: u32,
-}
-
 /// The ulps a plane's t may move by as the device works out the ray's way `d` along an axis
-/// itself: a sum of terms about 1, a few ulps of 1 off, is a large share of a small way.
+/// itself: a sum of terms about 1, a few ulps of 1 off, is a large share of a small way. As
+/// many as a u32 holds where the way is so small its share has no bound.
 fn slack(d: f32) -> u32 {
     if d == 0.0 {
         0
@@ -925,66 +786,23 @@ fn slack(d: f32) -> u32 {
     }
 }
 
-/// The ulps between `a` and `b`, by their order as floats.
-fn ulps(a: f32, b: f32) -> u32 {
-    let key = |v: f32| {
-        let i = v.to_bits() as i32;
-        if i < 0 {
-            i32::MIN.wrapping_sub(i)
-        } else {
-            i
-        }
+/// Whether the device's rounding may decide entry `e` otherwise along the way `dir`: where it
+/// enters lies within `EDGE_ULPS` of where it leaves, or the plane it enters across within
+/// `EDGE_ULPS` of another axis's near plane, each past what the two planes' own axes' slack
+/// takes (`slack`); a bound the origin or the ray's reach sets moves by none.
+fn at_edge(e: &Entry, dir: [f32; 3]) -> bool {
+    let moves = |a: usize| dir[a] != 0.0;
+    let room = |a: Option<usize>, b: Option<usize>| {
+        let s = |a: Option<usize>| a.map_or(0, |a| slack(dir[a]));
+        EDGE_ULPS.saturating_add(s(a)).saturating_add(s(b))
     };
-    key(a).abs_diff(key(b))
-}
-
-/// Where the ray of `at` from `o` enters the cell `asset` at node `n`, as `cast::entry` takes
-/// it over the box it asks (`cast::asset_box`), along the device's own reciprocal of its way.
-fn entry_by(o: [i32; 3], at: &Probed, t_max: f32, n: &Node, asset: u32) -> Entry {
-    let (lo, hi) = cast::asset_box(o, n, asset);
-    let span = |a: usize| {
-        let (d, inv) = (at.dir[a], at.inv[a]);
-        if d > 0.0 {
-            (lo[a] * inv, hi[a] * inv)
-        } else if d < 0.0 {
-            (hi[a] * inv, lo[a] * inv)
-        } else if lo[a] <= 0.0 && 0.0 < hi[a] {
-            (0.0, t_max)
-        } else {
-            (t_max, 0.0)
-        }
-    };
-    let s = [span(0), span(1), span(2)];
-    let greater = |a: f32, b: f32| if a > b { a } else { b };
-    let lesser = |a: f32, b: f32| if a < b { a } else { b };
-    let t0 = greater(greater(greater(0.0, s[0].0), s[1].0), s[2].0);
-    let t1 = lesser(lesser(lesser(t_max, s[0].1), s[1].1), s[2].1);
-    // The axis entered across: the last near plane of those it moves along, the lowest at a
-    // tie (`cast::crossing`).
-    let moves = |a: usize| at.dir[a] != 0.0;
-    let mut e = if moves(0) {
-        0
-    } else if moves(1) {
-        1
-    } else {
-        2
-    };
-    for a in [1, 2] {
-        if a > e && moves(a) && s[a].0 > s[e].0 {
-            e = a;
-        }
-    }
-    let edge = (0..3)
-        .filter(|&a| a != e && moves(a))
-        .map(|a| ulps(s[a].0, s[e].0))
-        .fold(ulps(t0, t1), u32::min);
-    Entry {
-        t: greater(s[e].0, 0.0),
-        axis: e as u32,
-        enters: t1 > t0,
-        near: [s[0].0, s[1].0, s[2].0],
-        edge,
-    }
+    let enter = (0..3).find(|&a| moves(a) && e.near[a] == e.span[0]);
+    let leave = (0..3).find(|&a| moves(a) && e.far[a] == e.span[1]);
+    let axis = e.axis as usize;
+    ulps(e.span[0], e.span[1]) <= room(enter, leave)
+        || (0..3)
+            .filter(|&a| a != axis && moves(a))
+            .any(|a| ulps(e.near[a], e.near[axis]) <= room(Some(a), Some(axis)))
 }
 
 /// What the probe left of each pixel: its tangents, its ray and the first of the four
@@ -1032,7 +850,10 @@ fn hand_pixels_answer_as_cast_entry() {
     let Some(gpu) = device() else { return };
     let face_p = gpu.pipeline(src(SHADER_FACE), "face_cs");
     let cast_p = gpu.pipeline(src(SHADER_CAST), "cast_cs");
-    let probe_p = gpu.pipeline(&format!("{}\n{PROBE}", src(SHADER_CAST)), "probe_cs");
+    let probe_p = gpu.pipeline(
+        &format!("{}\n{PROBE}", gpu::source(src(SHADER_CAST), "cast_cs")),
+        "probe_cs",
+    );
     let screens = [
         Screen {
             size: [256, 160],
@@ -1068,7 +889,7 @@ fn hand_pixels_answer_as_cast_entry() {
     ];
     let mut tally = Tally::default();
     let mut kinds = Kinds::new();
-    let (mut dir_off, mut px_off) = (0f32, 0f32);
+    let (mut dir_off, mut px_off, mut inv_off) = (0f32, 0f32, 0u32);
     let worlds = worlds();
     let mut runs: Vec<(&Built, &EyeCase, &Screen)> = Vec::new();
     for (built, cases) in &worlds {
@@ -1131,24 +952,34 @@ fn hand_pixels_answer_as_cast_entry() {
         let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
             .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
             .collect();
-        let rays = texture(&gpu, s.size, ray::WORDS, &ray_words);
+        let rays = texture(
+            &gpu.device,
+            &gpu.queue,
+            s.size,
+            ray::WORDS,
+            wgpu::TextureUsages::STORAGE_BINDING,
+            &ray_words,
+        );
         let rays_view = array_view(&rays);
         let probed = probe(&gpu, &probe_p, &eye_buf, &rays_view, s.size);
 
-        // The device's ray against the Rust's for the same pixel.
+        // The device's ray against the Rust's for the same pixel, and the four samples about
+        // it, which the Rust takes off the device's tangents.
+        let before: Vec<[u32; 2]> = probed.iter().map(|at| g.sample_before(at.px)).collect();
         for (p, at) in probed.iter().enumerate() {
-            let p = [p as u32 % wd, p as u32 / wd];
-            let t = px_tan(s, g.tan, p);
+            let px = [p as u32 % wd, p as u32 / wd];
+            let t = px_tan(s, g.tan, px);
             px_off = px_off.max((t[0] - at.px[0]).abs().max((t[1] - at.px[1]).abs()));
             let d = cast::through(cast.axes[0], cast.axes[1], cast.axes[2], t[0], t[1]);
             dir_off = (0..3).fold(dir_off, |m, a| m.max((d[a] - at.dir[a]).abs()));
-            let inv_alike = (0..3)
-                .all(|a| at.dir[a] == 0.0 && at.inv[a] == 0.0 || at.inv[a] == 1.0 / at.dir[a]);
-            add(&mut kinds, "probe, an inverse not the Rust's", !inv_alike);
-            add(
-                &mut kinds,
+            let inv = Ray::new(at.dir, far).inverse();
+            let off = (0..3).map(|a| ulps(at.inv[a], inv[a])).max().unwrap_or(0);
+            inv_off = inv_off.max(off);
+            kinds.add("probe, an inverse not the Rust's", off != 0);
+            kinds.add("probe, an inverse past INV_ULPS", off > INV_ULPS);
+            kinds.add(
                 "probe, the samples about it not the Rust's",
-                g.sample_before(at.px) != at.before,
+                before[p] != at.before,
             );
         }
 
@@ -1167,8 +998,8 @@ fn hand_pixels_answer_as_cast_entry() {
                     return raster::id_of(p % (n * g.samples[1]), true);
                 }
                 let h = mix(p, 0xca57);
-                let before = probed[p as usize].before;
-                let at = [before[0] + (h >> 8) % 2, before[1] + (h >> 9) % 2];
+                let s0 = before[p as usize];
+                let at = [s0[0] + (h >> 8) % 2, s0[1] + (h >> 9) % 2];
                 let i = match h % 16 {
                     0 => return 0,
                     1 if !stopped.is_empty() => stopped[(h as usize >> 12) % stopped.len()],
@@ -1182,7 +1013,14 @@ fn hand_pixels_answer_as_cast_entry() {
                 raster::id_of(i, w(beam::SAMPLE_LACKS) != 0 || h % 16 == 2)
             })
             .collect();
-        let vis = texture(&gpu, s.size, 1, &visible);
+        let vis = texture(
+            &gpu.device,
+            &gpu.queue,
+            s.size,
+            1,
+            wgpu::TextureUsages::TEXTURE_BINDING,
+            &visible,
+        );
         let vis_view = array_view(&vis);
 
         // The tiles: one in so many not claimed this frame.
@@ -1209,7 +1047,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
 
         let mut table = cast.table.clone();
-        table[pyramid::TALLY_ON as usize] = u32::from(s.tally);
+        table[pyramid::COUNT_ON as usize] = u32::from(s.tally);
         let table_buf = gpu.buffer(&table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
         let beams = gpu.buffer(&cast.beams, store());
@@ -1229,14 +1067,15 @@ fn hand_pixels_answer_as_cast_entry() {
         );
 
         // The Rust, pixel by pixel, along the device's ray.
-        let got = read_texture(&gpu, &rays);
+        let got = read_texture(&gpu.device, &gpu.queue, &rays);
         let mut want = ray_words.clone();
         let mut walked = BTreeSet::new();
         let mut counts = [0u32; 3];
+        let mut edges = 0u64;
         for (p, at) in probed.iter().enumerate() {
             let px = [p as u32 % wd, p as u32 / wd];
             if !claimed(px) {
-                add(&mut kinds, "pixels, not claimed", true);
+                kinds.add("pixels, not claimed", true);
                 continue;
             }
             let put = |want: &mut Vec<u32>, w: [u32; 4]| {
@@ -1255,34 +1094,30 @@ fn hand_pixels_answer_as_cast_entry() {
                 // The entry along the device's reciprocal, its plane's t a few ulps off as the
                 // device divides; a pixel at an edge as the device rounds it.
                 let axis_was = w(beam::SAMPLE_AXIS);
-                let e = entry_by(cast.origin, at, far, &node, asset[0]);
+                let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
                 let (_, rust_axis, rust_enters) = cast::entry(cast.origin, &r, &node, asset[0]);
-                add(
-                    &mut kinds,
+                kinds.add(
                     "the Rust's reciprocal decides otherwise",
                     (rust_enters && rust_axis == axis_was) != (e.enters && e.axis == axis_was),
                 );
                 let mut takes = e.enters && e.axis == axis_was;
                 let took = got[p] != ray::MISS;
-                let most = (0..3).map(|a| slack(at.dir[a])).max().unwrap_or(0);
-                if takes != took && e.edge <= EDGE_ULPS + most {
+                if takes != took && at_edge(&e, at.dir) {
                     takes = took;
-                    add(&mut kinds, "decided at an edge", true);
+                    edges += 1;
                 }
                 if takes {
-                    let face = 2 * axis_was + u32::from(at.dir[axis_was as usize] > 0.0);
+                    let face = ray::face(at.dir, axis_was);
                     let t = e.near[axis_was as usize].max(0.0);
                     let had = f32::from_bits(got[texels + p]);
-                    let t = if ulps(t, had) <= T_ULPS + slack(at.dir[axis_was as usize]) {
+                    let t = if ulps(t, had)
+                        <= T_ULPS.saturating_add(slack(at.dir[axis_was as usize]))
+                    {
                         had
                     } else {
                         t
                     };
-                    add(
-                        &mut kinds,
-                        "took, t a few ulps off",
-                        t.to_bits() != e.t.to_bits(),
-                    );
+                    kinds.add("took, t a few ulps off", t.to_bits() != e.t.to_bits());
                     put(
                         &mut want,
                         [
@@ -1297,21 +1132,21 @@ fn hand_pixels_answer_as_cast_entry() {
                         ],
                     );
                     counts[0] += 1;
-                    add(&mut kinds, "took", true);
-                    add(
-                        &mut kinds,
+                    kinds.add("took", true);
+                    kinds.add(
                         "took, short of its cube",
                         answer::fill_eighths(asset[0]) != answer::EIGHTHS,
                     );
                     continue;
                 }
-                add(&mut kinds, "walked, not entered as its sample", true);
-                add(&mut kinds, "walked, entered past the eye's reach", {
-                    let e = entry_by(cast.origin, at, f32::INFINITY, &node, asset[0]);
+                kinds.add("walked, not entered as its sample", true);
+                kinds.add("walked, entered past the eye's reach", {
+                    let r = Ray::new(at.dir, f32::INFINITY);
+                    let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
                     e.enters && e.axis == axis_was
                 });
             } else if v == 0 {
-                let s0 = at.before;
+                let s0 = before[p];
                 let went_on = |d: [u32; 2]| {
                     let k = g.sample_at([s0[0] + d[0], s0[1] + d[1]]);
                     cast.beams[(k + beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize]
@@ -1321,12 +1156,12 @@ fn hand_pixels_answer_as_cast_entry() {
                     let visits = cast.beams[(g.sample_at(s0) + beam::SAMPLE_VISITS) as usize];
                     put(&mut want, [0, 0, if s.steps { visits } else { 0 }, 0]);
                     counts[2] += 1;
-                    add(&mut kinds, "sky", true);
+                    kinds.add("sky", true);
                     continue;
                 }
-                add(&mut kinds, "walked, none visible and not the sky", true);
+                kinds.add("walked, none visible and not the sky", true);
             } else {
-                add(&mut kinds, "walked, a lack", true);
+                kinds.add("walked, a lack", true);
             }
             want[p] = ray::MISS;
             counts[1] += 1;
@@ -1345,15 +1180,15 @@ fn hand_pixels_answer_as_cast_entry() {
         if cnt > pyramid::MARKS {
             args[ray::MISS_ARGS_WHOLE as usize] = wd.div_ceil(ray::CAST_SIDE);
             args[ray::MISS_ARGS_WHOLE as usize + 1] = ht.div_ceil(ray::CAST_SIDE);
-            add(&mut kinds, "past the list's room", true);
+            kinds.add("past the list's room", true);
         }
         args[ray::MISS_ARGS_CNT as usize] = cnt;
         if s.tally {
-            for (lane, v) in [tally::TOOK, tally::WALKED, tally::SKY]
+            for (lane, v) in [count::REUSED, count::WALKED, count::SKY]
                 .into_iter()
                 .zip([counts[0], counts[1], counts[2]])
             {
-                args[(ray::MISS_ARGS_TALLY + lane - tally::TOOK) as usize] = v;
+                args[(ray::MISS_ARGS_COUNT + lane - count::REUSED) as usize] = v;
             }
         }
         tally.compare(
@@ -1372,7 +1207,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let mut want_table = table.clone();
         want_table[at..at + listed].copy_from_slice(&out[at..at + listed]);
         let whole = list.len() == listed && list.is_subset(&walked);
-        add(&mut kinds, "listed", whole);
+        kinds.add("listed", whole);
         if !whole {
             eprintln!("{name}: the list is not the walked pixels, each once");
             tally.differ.push((format!("{name}: list"), 1));
@@ -1387,37 +1222,46 @@ fn hand_pixels_answer_as_cast_entry() {
             |k| format!("word {k}"),
         );
         eprintln!(
-            "{name}: took {}, walked {}, sky {}",
+            "{name}: took {}, walked {}, sky {}, {edges} decided at an edge",
             counts[0], counts[1], counts[2]
         );
+        kinds.count("decided at an edge", edges);
+        if edges * 1000 > u64::from(counts[0]) {
+            eprintln!(
+                "{name}: {edges} pixels decided at an edge of {} taken",
+                counts[0]
+            );
+            tally.differ.push((format!("{name}: edges"), edges));
+        }
     }
     eprintln!(
-        "  KINDS pixels {kinds:?}; the ray {dir_off:e} off the Rust's, its tangents {px_off:e}"
+        "  KINDS pixels {kinds:?}; the ray {dir_off:e} off the Rust's, its tangents {px_off:e}, \
+         its reciprocal {inv_off} ulps"
     );
-    let short = enough(
-        &kinds,
-        &[
-            ("took", 1000),
-            ("took, short of its cube", 1),
-            ("sky", 100),
-            ("walked, not entered as its sample", 100),
-            ("walked, none visible and not the sky", 10),
-            ("walked, a lack", 100),
-            ("walked, entered past the eye's reach", 10),
-            ("pixels, not claimed", 100),
-            ("past the list's room", 2),
-            ("listed", 1),
-        ],
-    );
+    let short = kinds.short(&[
+        ("took", 1000),
+        ("took, short of its cube", 1),
+        ("sky", 100),
+        ("walked, not entered as its sample", 100),
+        ("walked, none visible and not the sky", 10),
+        ("walked, a lack", 100),
+        ("walked, entered past the eye's reach", 10),
+        ("pixels, not claimed", 100),
+        ("past the list's room", 2),
+        ("listed", 1),
+    ]);
     tally.end("pixels");
     assert!(short.is_empty(), "{}", short.join("\n"));
-    let edges = kinds.get("decided at an edge").copied().unwrap_or(0);
     assert!(
-        edges * 1000 < kinds["took"],
-        "{edges} pixels decided at an edge"
+        dir_off <= RAY_OFF && px_off <= RAY_OFF,
+        "the device's ray {dir_off:e} off the Rust's, its tangents {px_off:e}"
     );
     assert!(
-        dir_off <= 1e-6 && px_off <= 1e-6,
-        "the device's ray {dir_off:e} off the Rust's, its tangents {px_off:e}"
+        kinds.get("probe, an inverse past INV_ULPS") == 0,
+        "the device's reciprocal {inv_off} ulps off the Rust's"
+    );
+    assert!(
+        kinds.get("probe, the samples about it not the Rust's") == 0,
+        "the device's four samples about a pixel not `Grid::sample_before`'s"
     );
 }

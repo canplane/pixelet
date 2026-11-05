@@ -1,11 +1,14 @@
 // @pxl/shader/probe.ts
 
+/// <reference types="vite/client" />
+
 /**
  * The dev server's shader probe (probe.html): each module as the renderer
- * assembles it made into a pipeline on this device alone, one at a time, and what the device said of it, on the page and to the dev server's
- * console (remote-console.ts). A compute module's entry is made with its own
- * layout; a module with a vertex and a fragment entry is made into a render
- * pipeline whose targets are as many rgba16float ones as its fragment
+ * assembles it is made into a pipeline on this device alone, one at a time.
+ * What the device said of it is shown on the page and sent to the dev
+ * server's console (remote-console.ts). A compute module's entry is made with
+ * its own layout; a module with a vertex and a fragment entry is made into a
+ * render pipeline whose targets are as many rgba16float ones as its fragment
  * returns. `?only=a,b` probes the modules whose names start so;
  * `?bisect=<name>` finds the line a device refuses; `?src=` a shader under
  * doc/experiment.
@@ -16,17 +19,20 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { install } from "../../client/src/remote-console.ts";
 
 /** The experiments' shaders, which `?src=` names by its path under doc/experiment. */
-const RECORDED = import.meta.glob<string>(
-  "../../../doc/experiment/**/*.wgsl",
-  { query: "?raw", import: "default" },
-);
+const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
+  query: "?raw",
+  import: "default",
+});
 
-/** Each module as the renderer assembles it, by name (vite.config.ts `ASSEMBLED`). */
+/** Each module as the renderer assembles it, by name, from the dev server's
+ * `/__assembled` (vite.config.ts). */
 async function assembled(): Promise<Record<string, string>> {
   const r = await fetch("/__assembled");
   if (!r.ok) throw new Error(`no assembled modules: ${await r.text()}`);
   return r.json();
 }
+
+install();
 
 const out = document.getElementById("out")!;
 
@@ -244,7 +250,8 @@ async function main(): Promise<void> {
   const target = params.get("bisect");
   if (target) {
     const code = (await assembled())[target];
-    if (code === undefined) return void console.error(`[probe] no module ${target}`);
+    if (code === undefined)
+      return void console.error(`[probe] no module ${target}`);
     const [a, b] = [params.get("from"), params.get("to")].map(Number);
     await bisect(device, target, code, a && b ? [a, b] : undefined);
     console.info("[probe] done");

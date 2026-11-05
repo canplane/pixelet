@@ -16,6 +16,8 @@
 //! every sample's, leaving its sample's number (`id_of`): the pixel's cell
 //! where a hit, and where a lack, a node it walks itself.
 
+use crate::beam;
+
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
@@ -67,6 +69,14 @@ pub const fn id_of(sample: u32, lacks: bool) -> u32 {
 /// The sample an id names (`id_of`), none for 0.
 pub const fn sample_of(id: u32) -> u32 {
     (id & !LACK) - 1
+}
+
+/// Whether the samples whose words begin at `a` and `b` of `words` stopped alike, so the later
+/// draws no box of its own: alike in every word a pixel reads of them, those before
+/// `beam::SAMPLE_FACES` (pxl-render boxes.wgsl `alike`).
+pub fn alike(words: &[u32], a: usize, b: usize) -> bool {
+    let read = beam::SAMPLE_FACES as usize;
+    words[a..a + read] == words[b..b + read]
 }
 
 /// The raster's reversed depth: a face at view depth `w` drawn at `NEAR /

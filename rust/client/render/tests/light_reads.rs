@@ -1,12 +1,14 @@
 //! The light's reads by hand (frame/shader/light_propagate.wgsl, light_slide.wgsl) against
-//! pxl-engine's light: `light_propagate_cs` claims each tile a receiver reads (`Light::read`,
-//! `Light::up`, `Light::up_at`, `light::READ_TILES`) that no cast of the epoch read, marks it
-//! and its square (`light::reads_at`, `light::coarse_square`), and either copies the whole
-//! dispatch in (`light::ARGS_WHOLE`) or lists what feeds it at each level, as the beam's,
-//! the cells' and the slots' passes ask it the other way (light_list.wgsl `light_needs`,
-//! taken here as the Rust's rule); `light_slide_cs` sets a tile's read to none where the box
-//! slid it off or into another band (`Light::keeps`). Every word of the list's buffer and of
-//! the args compared, a list's entries in their order of claim apart, which the GPU's
+//! pxl-engine's light: `light_propagate_cs` claims each tile a receiver reads
+//! (`Light::reads_tile`, `Light::up`, `Light::up_at`, `light::READ_TILES`) that no cast of the
+//! epoch read, marks it and its square (`light::reads_at`, `light::coarse_square`), and either
+//! copies the whole dispatch in (`light::ARGS_WHOLE`) or lists what feeds it at each level
+//! within the reach each feeds (`light::CELL_REACH`, `light::CORNER_REACH`), as the beam's, the
+//! cells' and the slots' passes ask it the other way (light_list.wgsl `light_needs`); the
+//! lists' rows and their marks are this test's own reading of light_propagate.wgsl `enlist`,
+//! which pxl-engine has no function for. `light_slide_cs` sets a tile's read to none where the
+//! box slid it off or into another band (`Light::keeps`). Every word of the list's buffer and
+//! of the args compared, a list's entries in their order of claim apart, which the GPU's
 //! atomics decide. Skipped where no adapter answers.
 
 mod gpu;
@@ -19,60 +21,27 @@ use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGH
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_render::gpu::shadow;
 
-use gpu::{Gpu, Tally};
+use gpu::{mix, Gpu, LightBox, Tally};
 
 /// The shipped map's side, and its tiles a side.
 const SIZE: u32 = shadow::SIZE;
 const N: u32 = light::tiles(SIZE);
 /// The eye's zooms, which every band is held to.
 const RANGE: [Zoom; 2] = [8, LEAF_CELL + 3];
-/// How far past the disk a tile's middle may lie and the tile hold a slot a receiver reads,
-/// as build.rs lays `LIGHT_TILE_READ_PAD`.
-const TILE_PAD: f32 = light::READ_PAD + light::TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
-
-fn mix(a: u32, b: u32) -> u32 {
-    let mut h = a.wrapping_mul(0x9E37_79B1) ^ b.wrapping_mul(0x85EB_CA77);
-    h ^= h >> 15;
-    h = h.wrapping_mul(0x2C1B_3C6D);
-    h ^ h >> 12
-}
-
-fn unit(v: [f32; 3]) -> [f32; 3] {
-    let l = libm::sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    v.map(|x| x / l)
-}
-
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
 /// A light box along `dir` about the eye, `side` units a texel, its corner at `corner` and
-/// its receivers reading within `reach_ndc` of its half-width, as gpu/shadow.rs `aim` lays one.
+/// its receivers reading within `reach_ndc` of its half-width.
 fn box_of(dir: [f32; 3], side: f32, reach_ndc: f32, corner: [i32; 2]) -> Light {
-    let dir = unit(dir);
-    let a = cross(dir, [0.0, 0.0, 1.0]);
-    let a = if a == [0.0; 3] {
-        [1.0, 0.0, 0.0]
-    } else {
-        unit(a)
-    };
-    let across = a.map(|v| v * side);
-    let down = unit(cross(dir, a)).map(|v| v * side);
-    let half = SIZE as f32 / 2.0;
-    Light {
-        first: [0, 1, 2].map(|k| -half * (across[k] + down[k]) - 60.0 * dir[k]),
-        t_max: 400.0,
-        across,
-        down,
+    let b = LightBox {
+        size: SIZE,
+        origin: [0; 3],
         dir,
-        bias: [0.00025, 0.0005, 0.00075],
+        side,
+        back: 60.0,
+        t_max: 400.0,
         corner,
         reach_ndc,
-    }
+    };
+    b.lay().0
 }
 
 fn eye_words(l: &Light) -> Vec<u32> {
@@ -173,8 +142,8 @@ fn read_before(list: &mut [u32], current: u32, epoch: u32, seed: u32) {
     }
 }
 
-/// Each list's marks as earlier casts left them, the places this cast listed already among
-/// its entries, in no order, and the rows the args opened for them.
+/// Each list's marks as earlier casts left them, one a later cast's, the places this cast
+/// listed already among its entries, in no order, and the rows the args opened for them.
 fn mark_before(list: &mut [u32], args: &mut [u32], current: u32, seed: u32) {
     for which in [
         light::LISTED_CORNERS,
@@ -196,6 +165,7 @@ fn mark_before(list: &mut [u32], args: &mut [u32], current: u32, seed: u32) {
                 0 => current,
                 1..=4 => current.wrapping_sub(1),
                 5 => current.wrapping_sub(9),
+                6 => current.wrapping_add(1),
                 _ => 0,
             };
             if h.is_multiple_of(16) {
@@ -265,6 +235,8 @@ struct Told {
     listed: [u32; 3],
     /// Tiles read through a step of the way up past the tile stood on.
     read_up: u32,
+    /// Entries listed where a later cast's mark stood.
+    over_mark: u32,
 }
 
 /// The propagation as pxl-engine's light lays its rule, over `c`'s buffers.
@@ -280,8 +252,7 @@ fn propagate(c: &Case) -> (Vec<u32>, Vec<u32>, Told) {
     for j in 0..N {
         for i in 0..N {
             let t = [i as i32, j as i32];
-            let middle = [t[0] * light::TILE as i32 + 4, t[1] * light::TILE as i32 + 4];
-            if !l.read(SIZE, middle, TILE_PAD) {
+            if !l.reads_tile(SIZE, t) {
                 told.past += 1;
                 continue;
             }
@@ -323,7 +294,6 @@ fn propagate(c: &Case) -> (Vec<u32>, Vec<u32>, Told) {
                 .any(|i| claimed[(j as u32 * N + i as u32) as usize])
         })
     };
-    let w = light::BEAM_WINDOW as i32;
     let per = light::LIST_ACROSS * light::LISTED_LANES;
     let s = light::TILE / SAMPLE;
     for (n, which) in [
@@ -345,19 +315,22 @@ fn propagate(c: &Case) -> (Vec<u32>, Vec<u32>, Told) {
             let q = [p % across, p / across];
             let needed = if which == light::LISTED_CORNERS {
                 let on = light::corner_at(q).map(|v| v.div_euclid(light::TILE as i32));
-                any_claimed(
-                    [on[0] - w - 2, on[1] - w - 2],
-                    [on[0] + w + 1, on[1] + w + 1],
-                )
+                let [lo, hi] = light::CORNER_REACH;
+                any_claimed([on[0] + lo, on[1] + lo], [on[0] + hi, on[1] + hi])
             } else if which == light::LISTED_FED {
                 let on = [q[0] as i32, q[1] as i32];
-                any_claimed([on[0] - 1, on[1] - 1], [on[0] + 1, on[1] + 1])
+                let [lo, hi] = light::CELL_REACH;
+                any_claimed([on[0] + lo, on[1] + lo], [on[0] + hi, on[1] + hi])
             } else {
                 claimed[p as usize]
             };
-            let mark = &mut list[marks + p as usize];
-            if needed && *mark != current {
-                *mark = (*mark).max(current);
+            let was = if needed {
+                std::mem::replace(&mut list[marks + p as usize], current)
+            } else {
+                current
+            };
+            if was != current {
+                told.over_mark += u32::from(was > current);
                 let e = list[at] as usize;
                 list[at] += 1;
                 list[at + 1 + e] = (q[1] << 16) | q[0];
@@ -508,12 +481,14 @@ fn hand_propagation_claims_as_the_rust() {
         steps_most = steps_most.max(l.up::<Pixelet>().1);
         let seed = n as u32 * 31 + 5;
         // The epoch begun, within it, within it with no tile left to claim, and with one,
-        // the list it claims onto a whole number of its pass's rows full.
+        // the list it claims onto a whole number of its pass's rows full; and the cast's number
+        // by the last a word holds, a later cast's mark past it.
         for (kind, current, epoch) in [
             ("begins its epoch", 40, 40),
             ("within its epoch", 40, 37),
             ("all held", 40, 3),
             ("one read anew", 40, 3),
+            ("its number by the last", u32::MAX - 1, u32::MAX - 4),
         ] {
             let mut list = vec![0u32; light::list_words(SIZE) as usize];
             let mut args = args_start();
@@ -563,6 +538,7 @@ fn hand_propagation_claims_as_the_rust() {
             all.held += told.held;
             all.claimed += told.claimed;
             all.read_up += told.read_up;
+            all.over_mark += told.over_mark;
             for k in 0..3 {
                 all.listed[k] += told.listed[k];
             }
@@ -572,6 +548,7 @@ fn hand_propagation_claims_as_the_rust() {
     assert!(all.past > 0 && all.unread > 0, "{all:?}");
     assert!(all.listed.iter().all(|&k| k > 0), "{all:?}");
     assert!(all.read_up > 0 && steps_most > 1, "{all:?}");
+    assert!(all.over_mark > 0, "{all:?}");
     tally.end("propagation");
 }
 

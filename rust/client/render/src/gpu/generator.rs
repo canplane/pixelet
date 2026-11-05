@@ -20,7 +20,7 @@ use pxl_engine::{clipmap, eye, overwrite};
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    COMPUTE, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
+    binds, COMPUTE, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
     SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN, STORAGE, STORAGE_RW,
     UNIFORM,
 };
@@ -100,6 +100,18 @@ pub const COMPACT_GROUP: [u32; 18] = [
 pub const ARGS_GROUP: [u32; 12] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
 ];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_GENERATION_MARK], &MARK_GROUP)
+        && binds(&[SHADER_GENERATION_THIN], &THIN_GROUP)
+        && binds(&[SHADER_GENERATION], &GENERATE_GROUP)
+        && binds(&[SHADER_GENERATION_CNT], &CNT_GROUP)
+        && binds(&[SHADER_GENERATION_ARGS], &ARGS_GROUP)
+        && binds(&[SHADER_GENERATION_COMPACT], &COMPACT_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 const _: () = assert!(
     floor::holds(&[&GENERATE_GROUP])
         && floor::holds(&[&MARK_GROUP])

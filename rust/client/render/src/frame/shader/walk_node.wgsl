@@ -131,12 +131,38 @@ fn keeps(zoom: u32, c: vec3<i32>) -> bool {
   return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
 }
 
+/// A vector's length squared, summed in pxl-engine's order (cast.rs `squared`). A device may
+/// fuse a product into the sum, which puts it a last place off the Rust's (tests/walk.rs
+/// `hand_zoom_on_a_split_distance`).
+fn squared(v: vec3<f32>) -> f32 {
+  return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
   let x2 = r2 * INV_SPLIT2;
   let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
   let z = u32(clamp(i32(UNIT_ZOOM) - e, 0i, i32(FINEST_ZOOM)));
   return min(max(z, range.x), range.y);
+}
+
+/// How far apart a beam's rays lie at `d2` from the walk's origin, a distance squared, its
+/// spacing `across` then `angle` (`Spacing::width`).
+fn spacing_width(spacing: vec2<f32>, d2: f32) -> f32 {
+  return spacing.x + spacing.y * sqrt(d2);
+}
+
+/// Whether a split `side` wide is too narrow for a beam ray to share where its beam's rays lie
+/// `width` apart (`cast::narrow`). The bound is pxl-engine's `NARROW_SQUARED`, 8, not
+/// `NARROW` squared in f32, which rounds a place under it.
+fn narrow(side: f32, width: f32) -> bool {
+  return side * side < NARROW_SQUARED * (width * width);
+}
+
+/// Where a ray enters a plane it reaches at `t`, no nearer than the origin, +0 there as
+/// pxl-engine's `greater(t, 0.0)` gives it where `max` may give −0 (`entry_plane`).
+fn past_origin(t: f32) -> f32 {
+  return select(0.0, t, t > 0.0);
 }
 
 /// Near and far on each axis (`planes`), branchless: an axis it runs beside gives

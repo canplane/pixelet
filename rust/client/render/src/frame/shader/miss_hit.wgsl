@@ -21,7 +21,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   return HIT_WAITS | r;
 }
 
-@compute @workgroup_size(64, 1, 1)
+@compute @workgroup_size(MISS_LANES, 1, 1)
 fn miss_hit_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,

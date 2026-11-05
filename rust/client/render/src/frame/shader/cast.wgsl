@@ -1,7 +1,7 @@
 // pxl-render/cast.wgsl
 
 // Each drawn pixel's ray off the visible sample the raster kept at it (pxl-engine `raster`;
-// gpu/ray/raster.rs), or the sky, a thread a pixel, as light.wgsl's `took` and `sky` take a
+// gpu/ray/raster.rs), or the sky, a thread a pixel, as light.wgsl's `visible_entry` and `sky` take a
 // slot's. The cell
 // it takes is the visible sample's, where its ray enters that sample's cell across the axis the
 // sample entered by, tested again exactly where a GPU's f32 may part the two (`cast::entry`),
@@ -17,17 +17,17 @@
 /// Each drawn pixel's visible sample (gpu/ray/raster.rs): its number (`raster::id_of`), 0
 /// where it kept none, read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
-/// The walk again's words: its dispatches, the count it lists by and the tally
+/// The walk again's words: its dispatches, the count it lists by and the counts' lanes
 /// (`ray::MISS_ARGS_WORDS`).
 @group(0) @binding(14) var<storage, read_write> marks: array<atomic<u32>>;
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;
 @group(0) @binding(31) var<uniform> tiles: Tiles;
 
-/// `v` added to the tally's lane `lane` (pxl-engine `tally::TOOK` on), where it counts
-/// (`ray::MISS_ARGS_TALLY`).
+/// `v` added to the counts' lane `lane` (pxl-engine `count::REUSED` on), where it counts
+/// (`ray::MISS_ARGS_COUNT`).
 fn add_cnt(on: bool, lane: u32) {
   if (on) {
-    atomicAdd(&marks[MISS_ARGS_TALLY + lane - TALLY_TOOK], 1u);
+    atomicAdd(&marks[MISS_ARGS_COUNT + lane - COUNT_REUSED], 1u);
   }
 }
 
@@ -91,10 +91,10 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let dir = ray_dir(aim.dir);
   let visible = textureLoad(visibility, vec2<i32>(id.xy), 0i, 0i).x;
   let steps = eye_word(ORIGIN + 3u) != 0u;
-  let on = pyramid[TALLY_ON] != 0u;
+  let on = pyramid[COUNT_ON] != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
     // The cell off its visible sample, where its ray enters that sample's box across the axis
-    // the sample entered by (`took`, `visible_cell`, `cast::entry`).
+    // the sample entered by (`visible_entry`, `visible_cell`, `cast::entry`).
     let n = eye_word(GRID + GRID_SAMPLES);
     let s = (visible & ~VISIBLE_LACK) - 1u;
     let k = sample_word(vec2<u32>(s % n, s / n));
@@ -114,12 +114,12 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     if (enters && axis == beams[k + SAMPLE_AXIS]) {
       // Its words, with what lies about its face and the nodes its walk visited, the sample's
       // (`word`, `ray::first_word`).
-      add_cnt(on, TALLY_TOOK);
+      add_cnt(on, COUNT_REUSED);
       let face = 2u * axis + select(0u, 1u, dir[axis] > 0.0);
       let fill = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
       write_ray(id.xy, vec4<u32>(
         (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
-        bitcast<u32>(max(b.near[axis], 0.0)),
+        bitcast<u32>(past_origin(b.near[axis])),
         select(asset.y, beams[k + SAMPLE_VISITS], steps),
         beams[k + SAMPLE_FACES],
       ));
@@ -131,14 +131,14 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     // walk of its own, as a thing thinner than their spacing goes unseen.
     let s = sample_before(px);
     if (went_on(s) && went_on(s + vec2<u32>(1u, 0u)) && went_on(s + vec2<u32>(0u, 1u)) && went_on(s + vec2<u32>(1u))) {
-      add_cnt(on, TALLY_SKY);
+      add_cnt(on, COUNT_SKY);
       write_ray(id.xy, vec4<u32>(0u, 0u, select(0u, beams[sample_word(s) + SAMPLE_VISITS], steps), 0u));
       return;
     }
   }
   // Neither: marked and listed for its walk (miss_hit.wgsl), which reads and writes the
   // pyramid.
-  add_cnt(on, TALLY_WALKED);
+  add_cnt(on, COUNT_WALKED);
   textureStore(rays, id.xy, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));
   let at = enlist((size + vec2<u32>(CAST_SIDE - 1u)) / CAST_SIDE);
   if (at < MARKS) {

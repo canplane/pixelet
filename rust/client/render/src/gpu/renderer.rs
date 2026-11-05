@@ -234,7 +234,7 @@ pub struct FrameStat {
     pub light_moved: f64,
     pub decor_boxes: f64,
     /// The eye's cast's and the light's counts of an earlier frame, landed
-    /// with this one, by that frame's number (gpu/ray/tally.rs `RayCounts`).
+    /// with this one, by that frame's number (gpu/ray/count.rs `RayCounts`).
     pub rays: Option<RayCounts>,
 }
 
@@ -311,7 +311,7 @@ static REDRAW: Global<bool> = Global::new();
 static DRAWN_FRAMES: Global<f64> = Global::new();
 
 /// The number the frame being made takes as it is encoded, which a pass
-/// that counts it names its counts by (gpu/ray/tally.rs `Frame`): a frame
+/// that counts it names its counts by (gpu/ray/count.rs `Frame`): a frame
 /// that stands takes none, and none counts.
 fn next_frame() -> f64 {
     *DRAWN_FRAMES.get(|| 0.0) + 1.0
@@ -1058,7 +1058,7 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
-        self.screen.tally_back(g);
+        self.screen.counts_back(g);
         if clouds_moved {
             self.clouds.write(g);
         }

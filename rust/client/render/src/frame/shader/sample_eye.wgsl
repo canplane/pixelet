@@ -4,14 +4,14 @@
 // every one needed, a ray at the screen's tangents.
 
 const WALK_PASS: u32 = SAMPLES_PASS;
-const VISITS_TALLY: u32 = EYE_SAMPLE_TALLY;
-const ASKED_TALLY: u32 = EYE_ASKED_TALLY;
+const VISITS_COUNT: u32 = EYE_SAMPLE_COUNT;
+const ASKED_COUNT: u32 = EYE_ASKED_COUNT;
 
 fn sample_lattice() -> vec2<u32> {
   return vec2<u32>(eye_word(GRID + GRID_SAMPLES), eye_word(GRID + GRID_SAMPLES + 1u));
 }
 
-fn sample_taken(id: vec2<u32>) -> vec2<u32> {
+fn sample_item(id: vec2<u32>) -> vec2<u32> {
   return id;
 }
 

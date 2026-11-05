@@ -5,11 +5,13 @@
 //! sample's words as the Rust's `sample_put`, what it left in the observed pyramid as `Writing`
 //! leaves it, and the next frame off that. Skipped where no adapter answers.
 
+mod gpu;
 mod keeping;
 mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use gpu::{cross, read_texture, texture, unit, Kinds, LightBox};
 use keeping::*;
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
@@ -19,7 +21,7 @@ use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
 use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, raster, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{count, eye, face, raster, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
     SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
@@ -393,19 +395,6 @@ struct LightCase {
     least: &'static [(&'static str, u32)],
 }
 
-fn unit(v: [f32; 3]) -> [f32; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    v.map(|x| x / l)
-}
-
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
 /// The eye's words at `c`, one step moved along each axis by `moved`.
 fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
     let forward = unit(c.look);
@@ -447,8 +436,8 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
         apart: false,
         passes: [pyramid::SAMPLES_PASS, pyramid::BEAM_PASS],
         lanes: [
-            pyramid::tally_at(tally::EYE, tally::SAMPLE),
-            pyramid::tally_at(tally::EYE, tally::ASKED),
+            pyramid::lane_at(count::EYE, count::SAMPLE),
+            pyramid::lane_at(count::EYE, count::ASKED),
         ],
         groups: [
             grid.samples[0].div_ceil(WORKGROUP),
@@ -528,52 +517,21 @@ fn world_binds<'a>(
     ]
 }
 
-/// A light box and where its rays start, as a host lays them (light.rs `Starts`).
+/// A light box and where its rays start, its corner moved by `moved`.
 fn box_of(c: &LightCase, moved: [i32; 2]) -> (Light, Starts, [i32; 2]) {
-    let dir = unit(c.dir);
-    let a = cross(dir, [0.0, 0.0, 1.0]);
-    let a = if a == [0.0; 3] {
-        [1.0, 0.0, 0.0]
-    } else {
-        unit(a)
-    };
-    let across = a.map(|v| v * c.side);
-    let down = unit(cross(dir, a)).map(|v| v * c.side);
-    let half = c.size as f32 / 2.0;
     let corner = [c.corner[0] + moved[0], c.corner[1] + moved[1]];
-    let s = Light {
-        first: [0, 1, 2].map(|k| -half * (across[k] + down[k]) - c.back * dir[k]),
+    let b = LightBox {
+        size: c.size,
+        origin: c.origin,
+        dir: c.dir,
+        side: c.side,
+        back: c.back,
         t_max: c.t_max,
-        across,
-        down,
-        dir,
-        bias: [0.00025, 0.0005, 0.00075],
         corner,
         reach_ndc: 1.0,
     };
-    let base = corner.map(|v| v.div_euclid(light::ANCHOR) * light::ANCHOR);
-    let q = (1u32 << FRAC_W) as f32;
-    let anchor = |k: usize| {
-        let w = [
-            base[0] + (k % 2) as i32 * light::ANCHOR,
-            base[1] + (k / 2) as i32 * light::ANCHOR,
-        ];
-        let (i, j) = ((w[0] - corner[0]) as f32, (w[1] - corner[1]) as f32);
-        let v = |a: usize| (s.first[a] + i * across[a] + j * down[a]) * q;
-        (
-            [0, 1, 2].map(|a| c.origin[a].wrapping_add(v(a).round_ties_even() as i32)),
-            [0, 1, 2].map(|a| v(a) - v(a).round_ties_even()),
-        )
-    };
-    let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-    let starts = Starts {
-        base,
-        across: across.map(|v| v * q),
-        down: down.map(|v| v * q),
-        at: [a0.0, a1.0, a2.0, a3.0],
-        frac: [a0.1, a1.1, a2.1, a3.1],
-    };
-    (s, starts, corner)
+    let (l, starts) = b.lay();
+    (l, starts, corner)
 }
 
 /// The light's words at `c`, its lines and cells yet to be laid: each cast tile a third of them.
@@ -609,8 +567,8 @@ fn light_of(c: &LightCase, moved: [i32; 2]) -> Observed {
         apart: true,
         passes: [pyramid::LIGHT_SAMPLES_PASS, pyramid::LIGHT_BEAM_PASS],
         lanes: [
-            pyramid::tally_at(tally::LIGHT, tally::SAMPLE),
-            pyramid::tally_at(tally::LIGHT, tally::ASKED),
+            pyramid::lane_at(count::LIGHT, count::SAMPLE),
+            pyramid::lane_at(count::LIGHT, count::ASKED),
         ],
         groups: [n.div_ceil(WORKGROUP), n.div_ceil(WORKGROUP)],
         cuts: c.cuts,
@@ -727,9 +685,6 @@ fn light_beams(
     }
     words
 }
-
-/// What each kind of end of a walk it took, for what the test may say.
-type Kinds = BTreeMap<&'static str, u64>;
 
 /// One frame over `table`: the hit pass, the left walked, each sample's words against the
 /// reference, what it kept against `Writing`'s. The table the hand left.
@@ -894,11 +849,12 @@ fn run_frame(
     for (place, &s) in taken.iter().enumerate() {
         // Taken by a thread of a later row of the list's workgroups.
         let row = light::LIST_ACROSS * light::LISTED_LANES;
-        *kinds.entry("listed, past a row").or_default() +=
-            u64::from(listed_case && place as u32 >= row);
+        kinds.add("listed, past a row", listed_case && place as u32 >= row);
         // Taken by a thread of a row's last workgroup's last row of lanes.
-        *kinds.entry("listed, a row's last lanes").or_default() +=
-            u64::from(listed_case && place as u32 % row >= row - beam::SAMPLE_SIDE);
+        kinds.add(
+            "listed, a row's last lanes",
+            listed_case && place as u32 % row >= row - beam::SAMPLE_SIDE,
+        );
         let at = obs.sample_at(s) as usize;
         let node = at + beam::SAMPLE_NODE as usize;
         let zoom_word = node + beam::NODE_ZOOM as usize;
@@ -985,7 +941,7 @@ fn run_frame(
         // What the test may say.
         let hits = met.ends == End::Hit;
         let a = met.hit.asset[0];
-        let mut add = |k: &'static str, yes: bool| *kinds.entry(k).or_default() += u64::from(yes);
+        let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
         add("samples", true);
         add("a step over", false);
         add("left", was_left);
@@ -1106,14 +1062,14 @@ fn run_frame(
         .keys()
         .filter(|k| !hand_kept.contains_key(*k))
         .count();
-    *kinds.entry("not needed").or_default() += none_put;
-    *kinds.entry("kept").or_default() += hand_kept.len() as u64;
-    *kinds.entry("kept, filled").or_default() += filled;
+    kinds.count("not needed", none_put);
+    kinds.count("kept", hand_kept.len() as u64);
+    kinds.count("kept, filled", filled);
     let zooms_apart = hand_kept.keys().filter(|k| {
         let z = key_zooms(k.2);
         z[0] != z[1]
     });
-    *kinds.entry("kept, far and near apart").or_default() += zooms_apart.count() as u64;
+    kinds.count("kept, far and near apart", zooms_apart.count() as u64);
 
     // The slots laid, as the rule leaves each: where its node alone is asked in its bucket, by
     // rays enough that none is a grazing a GPU's rounding may enter or not.
@@ -1276,7 +1232,7 @@ fn two_frames(
     let mut kinds = Kinds::new();
     let mut table0 = vec![0u32; pyramid::WORDS as usize];
     table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::TALLY_ON as usize] = 1;
+    table0[pyramid::COUNT_ON as usize] = 1;
     let table_buf = gpu.buffer(&table0, store_of());
     let words = lines(first, &table_buf);
     let mut after_beam = gpu.read(&table_buf);
@@ -1355,7 +1311,7 @@ fn two_frames(
     );
     eprintln!("  KINDS {} {kinds:?}", first.name);
     for (what, n) in least {
-        let got = kinds.get(what).copied().unwrap_or(0);
+        let got = kinds.get(what);
         if got < u64::from(*n) {
             failed.push(format!(
                 "{}: too few of {what} to say: {got}, wanted {n}",
@@ -2164,64 +2120,6 @@ struct Screen {
     listed: u32,
 }
 
-/// The ray texture's words, a layer each (`ray::WORDS`), read back whole.
-fn rays_texture(gpu: &Gpu, size: [u32; 2], words: &[u32]) -> wgpu::Texture {
-    let t = gpu.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: wgpu::Extent3d {
-            width: size[0],
-            height: size[1],
-            depth_or_array_layers: ray::WORDS,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R32Uint,
-        usage: wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
-    gpu.queue.write_texture(
-        t.as_image_copy(),
-        bytes(words),
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(size[0] * 4),
-            rows_per_image: Some(size[1]),
-        },
-        t.size(),
-    );
-    t
-}
-
-fn read_rays(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
-    let [w, h, layers] = [t.width(), t.height(), t.depth_or_array_layers()];
-    let row = (w * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-    let staging = gpu.buffer(
-        &vec![0u32; (row / 4 * h * layers) as usize],
-        wgpu::BufferUsages::COPY_DST,
-    );
-    let mut e = gpu.device.create_command_encoder(&Default::default());
-    e.copy_texture_to_buffer(
-        t.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &staging,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(row),
-                rows_per_image: Some(h),
-            },
-        },
-        t.size(),
-    );
-    gpu.queue.submit([e.finish()]);
-    gpu.read(&staging)
-        .chunks((row / 4) as usize)
-        .flat_map(|r| r[..w as usize].to_vec())
-        .collect()
-}
-
 /// The tangents across and up of pixel `p`'s ray through its jittered middle, row 0 at the
 /// top: the rule every pass that walks a drawn pixel takes it by (grid.wgsl `px_tan`).
 fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
@@ -2357,7 +2255,14 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             }
 
             // The walk over the pyramid alone, what it left listed, then the walks that ask.
-            let rays = rays_texture(&gpu, s.size, &ray_words);
+            let rays = texture(
+                &gpu.device,
+                &gpu.queue,
+                s.size,
+                ray::WORDS,
+                wgpu::TextureUsages::STORAGE_BINDING,
+                &ray_words,
+            );
             let view = rays.create_view(&wgpu::TextureViewDescriptor {
                 dimension: Some(wgpu::TextureViewDimension::D2Array),
                 ..Default::default()
@@ -2396,7 +2301,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 gpu.dispatch(&list_p, &binds, [args[0], args[1]]);
             }
             gpu.dispatch(&whole_p, &binds, [wd.div_ceil(8), ht.div_ceil(8)]);
-            let out = read_rays(&gpu, &rays);
+            let out = read_texture(&gpu.device, &gpu.queue, &rays);
             let out_beams = gpu.read(&beams);
             let out_table = gpu.read(&table_buf);
             let claimed = left_claimed(&out_table);
@@ -2506,8 +2411,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                         "{name}: {px:?} differs"
                     );
                 }
-                let mut add =
-                    |k: &'static str, yes: bool| *kinds.entry(k).or_default() += u64::from(yes);
+                let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
                 add("pixels", true);
                 add("left by the walk over the pyramid", was_left);
                 add(
@@ -2556,7 +2460,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
         ("hit, its faces kept to ask", 1),
         ("past its reach", 1),
     ] {
-        if kinds.get(what).copied().unwrap_or(0) < n {
+        if kinds.get(what) < n {
             failed.push(format!("too few of {what} to say"));
         }
     }
@@ -2628,7 +2532,8 @@ type BoxWords = ([u32; raster::BOX_WORDS as usize], usize);
 
 /// Each box the samples' words `words` draw from `origin`, by its sample's id
 /// (`raster::id_of`): a sample that stopped, unless the one across or up before it that the
-/// cast needs stopped alike in every word a pixel reads; the cell as the cast stops on it
+/// cast needs stopped alike (`raster::alike`), which one before is asked and in what order
+/// this test's own reading of boxes.wgsl `sample_box`; the cell as the cast stops on it
 /// (`cast::asset_box`), and `raster::EYED` where `tan` is the screen's and it lies about the
 /// eye (`raster::is_eyed`).
 fn boxes_want(
@@ -2640,9 +2545,8 @@ fn boxes_want(
 ) -> BTreeMap<u32, BoxWords> {
     let mut want = BTreeMap::new();
     let n = obs.lattice;
-    let read = beam::SAMPLE_FACES as usize;
-    let alike = |a: usize, b: usize| words[a..a + read] == words[b..b + read];
-    let mut add = |k: &'static str, yes: bool| *kinds.entry(k).or_default() += u64::from(yes);
+    let alike = |a: usize, b: usize| raster::alike(words, a, b);
+    let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
     for s in obs.taken() {
         let k = obs.sample_at(s) as usize;
         let node = k + beam::SAMPLE_NODE as usize;
@@ -2678,6 +2582,23 @@ fn boxes_want(
         };
         let asset = words[k + beam::SAMPLE_ASSET as usize];
         let (lo, hi) = cast::asset_box(origin, &cell, asset);
+        // boxes.wgsl insets a cell as `lo + (hi - lo) · by`, which a device may fuse; a fused
+        // sum rounds as the Rust's product and sum apart wherever the product is exact, as a
+        // node's side, a power of two, times `by` is. Each inset's product held exact, so the
+        // planes are compared word for word.
+        let eighths = answer::fill_eighths(asset);
+        if eighths != answer::EIGHTHS {
+            let whole = asset & !(((1 << answer::FILL_BITS) - 1) << answer::FILL_SHIFT);
+            let (node_lo, node_hi) = cast::asset_box(origin, &cell, whole);
+            let by = 0.5 * (1.0 - answer::side(eighths));
+            for a in 0..3 {
+                let side = node_hi[a] - node_lo[a];
+                add(
+                    "boxes, an inset's product rounded",
+                    f64::from(side * by) != f64::from(side) * f64::from(by),
+                );
+            }
+        }
         let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
         let eyed = tan.is_some_and(|t| raster::is_eyed(lo, hi, t));
         let id = raster::id_of(s[1] * n[0] + s[0], lacks);
@@ -2827,7 +2748,7 @@ fn boxes_case(
         if lacks || answer::fill_eighths(asset) < answer::EIGHTHS {
             want_beams[k + beam::SAMPLE_FACES as usize] = if lacks { 0 } else { face::BOX };
             want_beams[a + beam::ASK_TO as usize] = beam::ASK_NONE;
-            *kinds.entry("asks none").or_default() += 1;
+            kinds.count("asks none", 1);
         } else {
             let s = raster::sample_of(id);
             let s = [s % obs.lattice[0], s / obs.lattice[0]];
@@ -2835,8 +2756,7 @@ fn boxes_case(
             let axis = words[k + beam::SAMPLE_AXIS as usize];
             let cell = obs.cell_at(s) as usize;
             want_beams[a + beam::ASK_NODE as usize] = (k + beam::SAMPLE_NODE as usize) as u32;
-            want_beams[a + beam::ASK_FACE as usize] =
-                2 * axis + u32::from(ray.dir[axis as usize] > 0.0);
+            want_beams[a + beam::ASK_FACE as usize] = ray::face(ray.dir, axis);
             want_beams[a + beam::ASK_LINE as usize] =
                 words[cell + beam::CELL_CORNER as usize] * beam::LINE_WORDS;
             want_beams[a + beam::ASK_TO as usize] = (k + beam::SAMPLE_FACES as usize) as u32;
@@ -2850,9 +2770,9 @@ fn boxes_case(
     let words_apart: Vec<usize> = (0..got.len())
         .filter(|&i| got[i] != want_beams[i])
         .collect();
-    *kinds.entry("boxes compared").or_default() += same + differ;
-    *kinds.entry("asks compared").or_default() += asked;
-    *kinds.entry("words compared").or_default() += got.len() as u64;
+    kinds.count("boxes compared", same + differ);
+    kinds.count("asks compared", asked);
+    kinds.count("words compared", got.len() as u64);
     eprintln!(
         "{name}: {same} boxes alike, {differ} differ of {} wanted, {cnt} written; {asked} asked; {} words apart, {unwritten} written past the boxes",
         want.len(),
@@ -2938,7 +2858,7 @@ fn coarser(obs: &Observed, words: &mut [u32]) -> u64 {
 fn frame_table() -> Vec<u32> {
     let mut t = vec![0u32; pyramid::WORDS as usize];
     t[pyramid::FRAME as usize] = FRAME;
-    t[pyramid::TALLY_ON as usize] = 1;
+    t[pyramid::COUNT_ON as usize] = 1;
     t
 }
 
@@ -3063,7 +2983,7 @@ fn hand_eye_boxes_answer_as_raster() {
                 obs.name += ", its boxes one past a multiple of the lanes";
             }
             Laid::Zoom => {
-                *kinds.entry("alike but the zoom").or_default() += coarser(&obs, &mut words);
+                kinds.count("alike but the zoom", coarser(&obs, &mut words));
                 obs.name += ", a sample's node coarser at its corner";
             }
         }
@@ -3173,9 +3093,13 @@ fn hand_eye_boxes_answer_as_raster() {
         "asks none",
         "asks compared",
     ] {
-        if kinds.get(what).copied().unwrap_or(0) == 0 {
+        if kinds.get(what) == 0 {
             failed.push(format!("none of {what} to say"));
         }
+    }
+    if kinds.get("boxes, an inset's product rounded") != 0 {
+        failed
+            .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
@@ -3289,7 +3213,7 @@ fn hand_light_boxes_answer_as_raster() {
         } else {
             obs.lattice.map(|n| n.div_ceil(SQUARE_SIDE))
         };
-        *kinds.entry("listed").or_default() += u64::from(c.listed.is_some());
+        kinds.add("listed", c.listed.is_some());
         boxes_case(
             &gpu,
             &pass,
@@ -3329,12 +3253,16 @@ fn hand_light_boxes_answer_as_raster() {
         "listed",
         "a sample before not needed, alike as it stood",
     ] {
-        if kinds.get(what).copied().unwrap_or(0) == 0 {
+        if kinds.get(what) == 0 {
             failed.push(format!("none of {what} to say"));
         }
     }
-    if kinds.get("boxes, eyed").copied().unwrap_or(0) != 0 {
+    if kinds.get("boxes, eyed") != 0 {
         failed.push("a light's box said eyed".to_string());
+    }
+    if kinds.get("boxes, an inset's product rounded") != 0 {
+        failed
+            .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

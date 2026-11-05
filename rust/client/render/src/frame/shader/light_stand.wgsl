@@ -2,7 +2,7 @@
 
 // The light's list (pxl-engine light.rs `list_words`) as the passes that mark, read and claim
 // its tiles write it, bound apart from `beams` (light_list.wgsl): a word read or written whole,
-// added to or raised, none past the buffer; and the tiles a receiver stands on
+// added to or swapped, none past the buffer; and the tiles a receiver stands on
 // (`light::stands_at`).
 
 @group(0) @binding(12) var<storage, read_write> list: array<atomic<u32>>;
@@ -31,10 +31,10 @@ fn list_add(i: u32, v: u32) -> u32 {
   return 0u;
 }
 
-/// Word `i` raised to `v`: what it held, `v` past the buffer.
-fn list_raise(i: u32, v: u32) -> u32 {
+/// Word `i` set to `v`: what it held, `v` past the buffer.
+fn list_swap(i: u32, v: u32) -> u32 {
   if (i < arrayLength(&list)) {
-    return atomicMax(&list[i], v);
+    return atomicExchange(&list[i], v);
   }
   return v;
 }

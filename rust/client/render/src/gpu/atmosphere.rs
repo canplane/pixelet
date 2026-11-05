@@ -21,9 +21,9 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW,
-    PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE, SHADER_ATMOS_FROXEL, STORAGE_RW,
-    STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, TEXTURE_ARRAY, UNIFORM,
+    binds, COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
+    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE,
+    SHADER_ATMOS_FROXEL, STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -86,22 +86,17 @@ const FROXEL_GROUP: [u32; 18] = [
     UNIFORM,
 ];
 
-/// What the exposure's maker binds: the texel it writes, the frame's words,
-/// the air but the texel and the volume, its own words and what it measures.
-const EXPOSURE_GROUP: [u32; 39] = [
+/// What the exposure's maker binds: the texel it writes, the air's words, its
+/// transmittance, sampler, multiscattering and irradiance, its own words and
+/// what it measures.
+const EXPOSURE_GROUP: [u32; 24] = [
     1,
     COMPUTE,
     STORAGE_TEXTURE_2D,
-    0,
-    COMPUTE,
-    UNIFORM,
     8,
     COMPUTE,
     UNIFORM,
     9,
-    COMPUTE,
-    TEXTURE,
-    10,
     COMPUTE,
     TEXTURE,
     11,
@@ -110,25 +105,24 @@ const EXPOSURE_GROUP: [u32; 39] = [
     12,
     COMPUTE,
     TEXTURE,
-    15,
-    COMPUTE,
-    TEXTURE,
-    16,
-    COMPUTE,
-    TEXTURE_ARRAY,
-    17,
-    COMPUTE,
-    TEXTURE_ARRAY,
-    18,
-    COMPUTE,
-    TEXTURE,
     14,
     COMPUTE,
     UNIFORM,
+    18,
+    COMPUTE,
+    TEXTURE,
     20,
     COMPUTE,
     STORAGE_RW,
 ];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
+        && binds(&[SHADER_ATMOS_FROXEL], &FROXEL_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 
 /// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
 pub const EARTH_LAYERS: u32 = GROUND_DEMAND_TILES;
@@ -484,11 +478,6 @@ impl Atmosphere {
         let lights = atmosphere.lights;
         let light = |k: usize| buf_entry(14, lights[k]);
         // The exposure reads the air but what it writes, and the volume made of it.
-        let unexposed: Vec<u32> = air
-            .iter()
-            .map(|e| e.binding)
-            .filter(|&b| b != 13 && b != 22)
-            .collect();
         let reads: [(usize, Vec<Entry>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&MEDIUM, &[])),
@@ -522,10 +511,9 @@ impl Atmosphere {
             (
                 EXPOSURE_TEXEL,
                 of(
-                    &unexposed,
+                    &[8, 9, 11, 12, 18],
                     &[
                         view_entry(1, views[EXPOSURE_TEXEL]),
-                        frame,
                         buf_entry(14, atmosphere.exposure_words),
                         buf_entry(20, atmosphere.slopes.0),
                     ],

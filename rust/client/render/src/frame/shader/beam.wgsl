@@ -5,8 +5,8 @@
 // `beam::Grid::corners`, eye_bind.wgsl). A thread each at its place in their list.
 
 const WALK_PASS: u32 = BEAM_PASS;
-const VISITS_TALLY: u32 = EYE_BEAM_TALLY;
-const ASKED_TALLY: u32 = EYE_ASKED_TALLY;
+const VISITS_COUNT: u32 = EYE_BEAM_COUNT;
+const ASKED_COUNT: u32 = EYE_ASKED_COUNT;
 
 @compute @workgroup_size(CORNER_SIDE, CORNER_SIDE, 1)
 fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -33,8 +33,8 @@ fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let aim = eye_aim(vec2<f32>(tx, ty));
   // Its beam's rays the lattice's side apart in angle (`cast::Spacing`, `beam::Grid`'s `s`).
   let met = beam_walk(aim.origin, aim.dir, aim.t_max, aim.range, vec2<f32>(0.0, s), base);
-  if (pyramid_word(TALLY_ON) != 0u) {
-    atomicAdd(&pyramid[VISITS_TALLY], met.visits);
+  if (pyramid_word(COUNT_ON) != 0u) {
+    atomicAdd(&pyramid[VISITS_COUNT], met.visits);
   }
   // How far the rays about it start (`Grid::hand_at`, `Grid::hand_dist`).
   beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(met.t * eye_f32(GRID + GRID_KEEP));

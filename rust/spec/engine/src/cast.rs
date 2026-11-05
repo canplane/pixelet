@@ -108,7 +108,7 @@ pub fn narrow(side2: f32, width2: f32) -> bool {
 /// The spacings a node is narrow under (`narrow`): twice the width that
 /// holds one ray for certain, `2√2`; and its brick, exact.
 pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
-const NARROW_SQUARED: f32 = 8.0;
+pub const NARROW_SQUARED: f32 = 8.0;
 const _: () = assert!(
     NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
     "`NARROW_SQUARED` is `NARROW`'s brick"
@@ -172,6 +172,11 @@ impl Ray {
             t_max,
             inverse: [inv(dir[0]), inv(dir[1]), inv(dir[2])],
         }
+    }
+
+    /// Its direction's reciprocal on each axis, 0 where it does not move along one.
+    pub fn inverse(&self) -> [f32; 3] {
+        self.inverse
     }
 }
 
@@ -484,13 +489,43 @@ pub fn asset_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
 /// where that span begins (`entry_plane`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, asset_box(o, n, asset), 0.0);
+    let e = entry_with(o, ray, ray.inverse, n, asset);
+    (e.t, e.axis, e.enters)
+}
+
+/// Where a ray enters a cell, as `entry` takes it, and the planes that decided it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Entry {
+    /// The t of the plane it enters across, no nearer than the origin.
+    pub t: f32,
+    pub axis: u32,
+    /// Whether it enters within its interval, `span[1] > span[0]`.
+    pub enters: bool,
+    /// The t at each axis's near plane and far plane (`planes`).
+    pub near: [f32; 3],
+    pub far: [f32; 3],
+    /// Where its interval in the cell begins and ends.
+    pub span: [f32; 2],
+}
+
+/// `entry` along `ray` with `inverse` for its direction's reciprocal: what a device that
+/// divides as it will takes, its own reciprocal handed in.
+pub fn entry_with(o: [i32; 3], ray: &Ray, inverse: [f32; 3], n: &Node, asset: u32) -> Entry {
+    let ray = Ray { inverse, ..*ray };
+    let (x, y, z) = spans(&ray, asset_box(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
     );
-    let (t, e) = entry_plane(ray, [x.0, y.0, z.0]);
-    (t, e, t1 > t0)
+    let (t, e) = entry_plane(&ray, [x.0, y.0, z.0]);
+    Entry {
+        t,
+        axis: e,
+        enters: t1 > t0,
+        near: [x.0, y.0, z.0],
+        far: [x.1, y.1, z.1],
+        span: [t0, t1],
+    }
 }
 
 /// Whether the ray, at `t`, has crossed the mid plane `mid` units from the

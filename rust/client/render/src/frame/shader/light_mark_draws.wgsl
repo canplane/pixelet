@@ -66,8 +66,7 @@ fn sees(v: vec3<f32>, radius: f32) -> bool {
 
 /// How many tiles either side of its own a drawn receiver stands on (`Light::ring`).
 fn ring() -> i32 {
-  let across = light_v3(LIGHT_ACROSS);
-  let tile = f32(LIGHT_TILE) * sqrt(dot(across, across));
+  let tile = f32(LIGHT_TILE) * eye_f32(LIGHT + LIGHT_WIDTH);
   return max(i32(ceil(f32(WIDEST) / 2.0 / tile)), 1i);
 }
 

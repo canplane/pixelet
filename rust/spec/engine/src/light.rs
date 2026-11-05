@@ -34,9 +34,9 @@ use core::f32::consts::SQRT_2;
 /// next texel across and down; the rays' one direction; and how far a hit
 /// on a face across each axis is pushed back in depth. Their fourth words
 /// hold the clipmap's: the world texel index of the box's texel (0, 0),
-/// `corner`, X then Y, Y counted down the rows; and the share of the box's
+/// `corner`, X then Y, Y counted down the rows; the share of the box's
 /// half-width a receiver reads the map within, `reach_ndc`
-/// (`Light::read`).
+/// (`Light::read`); and a texel's width (`width`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
@@ -172,7 +172,7 @@ impl Light {
     /// decor of `C`'s (`Content::WIDEST`) spans, at least one, as its tile is
     /// one a point of it lies in.
     pub fn ring<C: Content>(&self) -> i32 {
-        let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
+        let across = TILE as f32 * self.width();
         let half = C::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
@@ -220,12 +220,31 @@ impl Light {
         x * x + y * y <= r * r
     }
 
+    /// Whether box tile `tile` of the map `size` a side may hold a slot a receiver reads: its
+    /// middle within the disk grown by `TILE_READ_PAD` (`read`; pxl-render
+    /// light_propagate.wgsl).
+    pub fn reads_tile(&self, size: u32, tile: [i32; 2]) -> bool {
+        let (t, half) = (TILE as i32, (TILE / 2) as i32);
+        self.read(
+            size,
+            [tile[0] * t + half, tile[1] * t + half],
+            TILE_READ_PAD,
+        )
+    }
+
+    /// A texel's width in units, across and down alike, the box's texels
+    /// square: `across`'s length, which the host rounds and hands the
+    /// shaders in a word (`W_WIDTH`).
+    pub fn width(&self) -> f32 {
+        length(self.across)
+    }
+
     /// How far apart its beam rays lie, `BEAM` of the map's texels
     /// (`cast::Spacing`).
     pub fn spacing(&self) -> Spacing {
         Spacing {
             angle: 0.0,
-            across: BEAM as f32 * length(self.across),
+            across: BEAM as f32 * self.width(),
         }
     }
 
@@ -237,6 +256,16 @@ impl Light {
     /// wherever the eye stands in it, and as fine as the eye asks anywhere in
     /// the column.
     pub fn band(&self, size: u32, range: [Zoom; 2], tile: [i32; 2]) -> Zoom {
+        let held = cast::Detail {
+            range,
+            spacing: Spacing::NONE,
+        };
+        held.at(self.band_dist2(size, tile))
+    }
+
+    /// The distance squared a band is asked at (`band`): from the box's middle to the
+    /// nearest point of box tile `tile`'s column, in units.
+    pub fn band_dist2(&self, size: u32, tile: [i32; 2]) -> f32 {
         let (half, t) = (size as f32 / 2.0, TILE as f32);
         // Texels from the middle to the tile's span on one axis, none within it.
         let gap = |k: i32| {
@@ -249,13 +278,9 @@ impl Light {
                 0.0
             }
         };
-        let x = gap(tile[0]) * length(self.across);
-        let y = gap(tile[1]) * length(self.down);
-        let held = cast::Detail {
-            range,
-            spacing: Spacing::NONE,
-        };
-        held.at(x * x + y * y)
+        let x = gap(tile[0]) * self.width();
+        let y = gap(tile[1]) * self.width();
+        x * x + y * y
     }
 
     /// Whether box tile `tile`, the map `size` texels a side, keeps what a
@@ -316,7 +341,7 @@ impl Light {
             v(self.across, self.corner[0] as u32),
             v(self.down, self.corner[1] as u32),
             v(self.dir, self.reach_ndc.to_bits()),
-            v(self.bias, 0),
+            v(self.bias, self.width().to_bits()),
         ];
         let mut out = [0; eye::LIGHT_WORDS];
         let mut k = 0;
@@ -334,6 +359,7 @@ pub const W_ACROSS: usize = 4;
 pub const W_DOWN: usize = 8;
 pub const W_DIR: usize = 12;
 pub const W_BIAS: usize = 16;
+pub const W_WIDTH: usize = 19;
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
@@ -571,6 +597,10 @@ pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
 pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
 const FILTER: f32 = 1.0;
 
+/// How far past the disk a receiver reads a tile's middle may lie and the tile still hold a
+/// slot it reads (`Light::reads_tile`): `READ_PAD` and half the tile's diagonal.
+pub const TILE_READ_PAD: f32 = READ_PAD + TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
+
 /// The tiles a receiver that reads a slot may stand in, across and down from
 /// the slot's tile, from the first to the last: a tap reads that far
 /// (pxl-render light_propagate.wgsl).
@@ -648,6 +678,18 @@ pub const fn sample(size: u32, idx: u32) -> u32 {
     samples_at(size) + idx * beam::SAMPLE_WORDS
 }
 
+/// The four samples about slot `slot`, box texel `p` of the map `size` a side, that a slot
+/// takes the sky off where each went on to its reach (pxl-render light.wgsl `sky`): the sample
+/// over the slot and the next across, down and both; none where they lie not about the texel,
+/// within a sample of the box's edge.
+pub fn samples_about(size: u32, slot: [u32; 2], p: [u32; 2]) -> Option<[[u32; 2]; 4]> {
+    let d = SAMPLE;
+    let r = [slot[0] % d, slot[1] % d];
+    let about = p[0] >= r[0] && p[0] - r[0] + d < size && p[1] >= r[1] && p[1] - r[1] + d < size;
+    let s = [slot[0] / d, slot[1] / d];
+    about.then_some([s, [s[0] + 1, s[1]], [s[0], s[1] + 1], [s[0] + 1, s[1] + 1]])
+}
+
 pub(crate) const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
@@ -703,6 +745,16 @@ pub const fn tiles(size: u32) -> u32 {
 /// where the eye stands (`HEAD_FOOTPRINT`).
 pub const FOOTPRINT_TILES: i32 = 3;
 
+/// The tiles a pair of neighbors that met the world on tiles `a` and `b` marks between them
+/// (pxl-render light_mark.wgsl `stand_between`), its lowest and its highest corner: none where
+/// they met on one tile or further apart than `FOOTPRINT_TILES` on either axis.
+pub fn footprint(a: [i32; 2], b: [i32; 2]) -> Option<[[i32; 2]; 2]> {
+    let lo = [a[0].min(b[0]), a[1].min(b[1])];
+    let hi = [a[0].max(b[0]), a[1].max(b[1])];
+    let apart = hi[0] - lo[0] > FOOTPRINT_TILES || hi[1] - lo[1] > FOOTPRINT_TILES;
+    (!apart && lo != hi).then_some([lo, hi])
+}
+
 /// The reads by the square of `COARSE` tiles a side, past them, `coarse`
 /// a row: the cast's number where a tile in the square is the cast's to
 /// cast, read in place of the tiles where a span of them is asked
@@ -733,7 +785,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// j << 16` each; before the lists, a word for every place of each, the
 /// last cast that listed it, so each is listed once a cast. The passes
 /// that cast tiles take their threads off these (pxl-render light_list.wgsl
-/// `light_take`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
+/// `light_item`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
 /// entry `listed_per` of them. A cast that begins an epoch casts every
 /// tile a receiver reads, and its passes go whole over the map instead
 /// (`ARGS_WHOLE`).
@@ -747,6 +799,13 @@ const _: () = assert!(
     LISTED_LANES == beam::SAMPLE_SIDE * beam::SAMPLE_SIDE,
     "a listed pass's workgroup is the samples' passes' square"
 );
+
+/// The reach a cell or a sample feeds within, in tiles about the tile it lies on, from the
+/// first to the last across and down: a slot reads the cells and samples a tile either way.
+pub const CELL_REACH: [i32; 2] = [-1, 1];
+/// The reach a beam ray's corner feeds within, in tiles about the tile it lies on: the cells
+/// whose window, `2 + 2 · BEAM_WINDOW` beam rays a side, holds it.
+pub const CORNER_REACH: [i32; 2] = [-(BEAM_WINDOW as i32) - 2, BEAM_WINDOW as i32 + 1];
 
 /// The places of list `which` on the map `size` texels a side: every beam
 /// ray's corner, or every tile.

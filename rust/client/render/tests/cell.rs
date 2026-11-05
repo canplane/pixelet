@@ -7,7 +7,7 @@
 
 mod gpu;
 
-use pxl_engine::beam::Grid;
+use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{Detail, Spacing};
 use pxl_engine::eye;
 use pxl_engine::grid::LATTICE_MAX;
@@ -121,6 +121,92 @@ fn on_edge(g: &Grid, c: [u32; 2]) -> bool {
     (v - v.round_ties_even()).abs() <= EDGE_ULPS * ulp
 }
 
+/// What the cases met: cells, windows whose least the next window's holds too, windows on
+/// the edge and those of them the device took the next of, and windows held to the grid's.
+#[derive(Default)]
+struct Met {
+    cells: u32,
+    ties: u32,
+    edges: u32,
+    edges_apart: u32,
+    held: u32,
+}
+
+/// `cell_cs` over grid `g`, its windows held to the last cell's (`past`), checked against
+/// `start`; the beam rays' words made up from `seed`.
+fn case(
+    gpu: &Gpu,
+    p: &wgpu::ComputePipeline,
+    tally: &mut Tally,
+    met: &mut Met,
+    g: &Grid,
+    seed: u32,
+    name: &str,
+) {
+    let past = g.words()[beam::GRID_PAST];
+    let mut words: Vec<u32> = (0..g.size()).map(|k| mix(k, !seed)).collect();
+    for c in 0..g.corners[0] * g.corners[1] {
+        words[g.hand_at(c) as usize] = hand(c, seed).to_bits();
+    }
+    let eye_buf = gpu.buffer(&eye_words(g), wgpu::BufferUsages::UNIFORM);
+    let beams_buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
+    gpu.dispatch(
+        p,
+        &[
+            (0, eye_buf.as_entire_binding()),
+            (8, beams_buf.as_entire_binding()),
+        ],
+        [
+            g.span[0].div_ceil(CELL_SIDE),
+            g.span[1].div_ceil(CELL_SIDE),
+            1,
+        ],
+    );
+    let have = gpu.read(&beams_buf);
+    // Each cell's start, and where its window is on the edge, the start of the
+    // windows either side.
+    let mut want = words.clone();
+    let mut either = vec![None; words.len()];
+    for y in 0..g.span[1] {
+        for x in 0..g.span[0] {
+            let (c, at) = ([x, y], g.cell_at([x, y]) as usize);
+            let wide = g.cell_window(c);
+            met.held += u32::from(wide > past);
+            let k = wide.min(past);
+            let s = start(g, &words, c, k);
+            want[at..at + 3].copy_from_slice(&s);
+            met.cells += 1;
+            assert!(fits(g, c, k), "cell {c:?}'s window lies in the grid");
+            if fits(g, c, k + 1) {
+                met.ties += u32::from(start(g, &words, c, k + 1)[0] == s[0]);
+            }
+            if on_edge(g, c) {
+                met.edges += 1;
+                let near = |k: u32| {
+                    if fits(g, c, k) {
+                        start(g, &words, c, k)
+                    } else {
+                        s
+                    }
+                };
+                let other = [near(k.wrapping_sub(1)), near(k + 1)];
+                met.edges_apart += u32::from(have[at..at + 3] != s);
+                for w in 0..3 {
+                    either[at + w] = Some([other[0][w], other[1][w]]);
+                }
+            }
+        }
+    }
+    let case = format!("{name}, {} cells", g.span[0] * g.span[1]);
+    tally.compare_by(
+        &case,
+        &want,
+        &have,
+        |k| format!("word {k}"),
+        |k, w, h| w == h || either[k].is_some_and(|o: [u32; 2]| o.contains(&h)),
+    );
+}
+
 #[test]
 fn hand_cell_starts_as_observer_cell() {
     let Some(gpu) = Gpu::new() else {
@@ -129,75 +215,102 @@ fn hand_cell_starts_as_observer_cell() {
     };
     let p = gpu.pipeline(src(SHADER_CELL), "cell_cs");
     let mut tally = Tally::default();
-    let (mut cells, mut edges, mut edges_apart, mut ties) = (0u32, 0u32, 0u32, 0u32);
+    let mut met = Met::default();
     for (n, tan) in TANS.into_iter().enumerate() {
         for lattice in 1..=LATTICE_MAX {
             let g = Grid::of(tan, lattice);
             let seed = n as u32 * 16 + lattice;
-            let mut words: Vec<u32> = (0..g.size()).map(|k| mix(k, !seed)).collect();
-            for c in 0..g.corners[0] * g.corners[1] {
-                words[g.hand_at(c) as usize] = hand(c, seed).to_bits();
-            }
-            let eye_buf = gpu.buffer(&eye_words(&g), wgpu::BufferUsages::UNIFORM);
-            let beams_buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
-            gpu.dispatch(
+            case(
+                &gpu,
                 &p,
-                &[
-                    (0, eye_buf.as_entire_binding()),
-                    (8, beams_buf.as_entire_binding()),
-                ],
-                [
-                    g.span[0].div_ceil(CELL_SIDE),
-                    g.span[1].div_ceil(CELL_SIDE),
-                    1,
-                ],
-            );
-            let have = gpu.read(&beams_buf);
-            // Each cell's start, and where its window is on the edge, the start of the
-            // windows either side.
-            let mut want = words.clone();
-            let mut either = vec![None; words.len()];
-            for y in 0..g.span[1] {
-                for x in 0..g.span[0] {
-                    let (c, at) = ([x, y], g.cell_at([x, y]) as usize);
-                    let k = g.cell_window(c);
-                    let s = start(&g, &words, c, k);
-                    want[at..at + 3].copy_from_slice(&s);
-                    cells += 1;
-                    assert!(fits(&g, c, k), "cell {c:?}'s window lies in the grid");
-                    if fits(&g, c, k + 1) {
-                        ties += u32::from(start(&g, &words, c, k + 1)[0] == s[0]);
-                    }
-                    if on_edge(&g, c) {
-                        edges += 1;
-                        let near = |k: u32| {
-                            if fits(&g, c, k) {
-                                start(&g, &words, c, k)
-                            } else {
-                                s
-                            }
-                        };
-                        let other = [near(k.wrapping_sub(1)), near(k + 1)];
-                        edges_apart += u32::from(have[at..at + 3] != s);
-                        for w in 0..3 {
-                            either[at + w] = Some([other[0][w], other[1][w]]);
-                        }
-                    }
-                }
-            }
-            let case = format!(
-                "tan {tan:?}, lattice {lattice}, {} cells",
-                g.span[0] * g.span[1]
-            );
-            tally.compare_by(
-                &case,
-                &want,
-                &have,
-                |k| format!("word {k}"),
-                |k, w, h| w == h || either[k].is_some_and(|o: [u32; 2]| o.contains(&h)),
+                &mut tally,
+                &mut met,
+                &g,
+                seed,
+                &format!("tan {tan:?}, lattice {lattice}"),
             );
         }
     }
+    let Met {
+        cells,
+        ties,
+        edges,
+        edges_apart,
+        ..
+    } = met;
     eprintln!("{cells} cells, {ties} whose least is the next window's too, {edges} windows on the edge, {edges_apart} of them the next");
+    assert_eq!(
+        met.held, 0,
+        "a window past the last cell's on the grid as laid"
+    );
     tally.end("cells");
+}
+
+/// Where the device's ceiling takes the next window for the last cell, its window is held to
+/// the one the grid's corners are laid for (`Grid::of`'s `past`), and no corner past the grid
+/// is read. The eye's radius is grown for the case until the last cell's window, as the Rust
+/// takes it too, lies half a corner past `past`.
+#[test]
+fn hand_cell_window_held_to_the_grid() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let p = gpu.pipeline(src(SHADER_CELL), "cell_cs");
+    let mut tally = Tally::default();
+    let mut met = Met::default();
+    for (n, tan) in TANS.into_iter().enumerate() {
+        for lattice in 1..=LATTICE_MAX {
+            let laid = Grid::of(tan, lattice);
+            let mut w = laid.words();
+            let past = w[beam::GRID_PAST];
+            let last = [laid.span[0] - 1, laid.span[1] - 1];
+            // The last cell's ceiling's argument, less its constant, is the radius's multiple.
+            let f = |k: usize| f64::from(f32::from_bits(w[k]));
+            let (s, radius, radius_tan) = (
+                f(beam::GRID_S),
+                f(beam::GRID_RADIUS),
+                f(beam::GRID_RADIUS_TAN),
+            );
+            let far = |t: f32, x: u32| {
+                let t = f64::from(t);
+                (-t + f64::from(x) * s)
+                    .abs()
+                    .max((-t + f64::from(x + 1) * s).abs())
+            };
+            let at = [far(tan[0], last[0]), far(tan[1], last[1])];
+            let edge = (at[0] * at[0] + at[1] * at[1]).sqrt();
+            let beyond = (edge + radius_tan) / (1.0 - edge * radius_tan);
+            let by = (1.0 + beyond * beyond) / s;
+            let grown = (f64::from(past) + 0.5 - std::f64::consts::FRAC_1_SQRT_2) / by;
+            assert!(grown > radius, "the radius grows");
+            w[beam::GRID_RADIUS] = (grown as f32).to_bits();
+            let g = Grid::of_words(tan, w);
+            assert_eq!(
+                g.cell_window(last),
+                past + 1,
+                "tan {tan:?}, lattice {lattice}: the last cell's window rounds up"
+            );
+            let seed = n as u32 * 16 + lattice + 100;
+            case(
+                &gpu,
+                &p,
+                &mut tally,
+                &mut met,
+                &g,
+                seed,
+                &format!("tan {tan:?}, lattice {lattice}, radius grown"),
+            );
+        }
+    }
+    eprintln!(
+        "{} cells, {} windows held to the grid's, {} on the edge, {} of them the next",
+        met.cells, met.held, met.edges, met.edges_apart
+    );
+    assert!(
+        met.held >= TANS.len() as u32 * LATTICE_MAX,
+        "too few held: {}",
+        met.held
+    );
+    tally.end("cells held");
 }

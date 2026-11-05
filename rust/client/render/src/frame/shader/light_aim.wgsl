@@ -49,8 +49,9 @@ fn light_corner() -> vec2<i32> {
 /// The band of box tile `tile`, which may lie past the box (`Light::band`).
 fn tile_band(tile: vec2<i32>) -> u32 {
   let half = f32(head_word(LIGHT_HEAD_SIZE)) / 2.0;
-  let x = gap(tile.x, half) * length(light_v3(LIGHT_ACROSS));
-  let y = gap(tile.y, half) * length(light_v3(LIGHT_DOWN));
+  let width = eye_f32(LIGHT + LIGHT_WIDTH);
+  let x = gap(tile.x, half) * width;
+  let y = gap(tile.y, half) * width;
   return zoom_at(x * x + y * y, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
 }
 

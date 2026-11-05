@@ -3,8 +3,8 @@
 // The slots `light_miss_hit_cs` left, their walk from the root, asking the world (ask.wgsl).
 
 const WALK_PASS: u32 = LIGHT_MISSED_PASS;
-const VISITS_TALLY: u32 = LIGHT_MISS_TALLY;
-const ASKED_TALLY: u32 = LIGHT_ASKED_TALLY;
+const VISITS_COUNT: u32 = LIGHT_MISS_COUNT;
+const ASKED_COUNT: u32 = LIGHT_ASKED_COUNT;
 
 @group(0) @binding(10) var light: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(12) var<storage, read> list: array<u32>;

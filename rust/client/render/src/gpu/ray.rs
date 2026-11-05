@@ -7,9 +7,9 @@
 //! stops handed to the rasterizer (ray/raster.rs).
 
 mod cast;
+mod count;
 mod ground;
 mod raster;
-mod tally;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
@@ -20,12 +20,12 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 pub use cast::{Cast, Overwrites};
+pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 pub use ground::{
     BrickFill, CellsBack, GroundBricks, OnResident, Resident, TerrainUpload, TerrainWrite,
     RECORD_ROOMS_BYTES,
 };
 use ground::{GroundBuffers, GroundPipelines};
-pub use tally::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
 /// samples that stand: the rays, their depth and where they met the world

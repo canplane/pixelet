@@ -114,7 +114,7 @@ fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, eyed: bo
 /// `NO_BOX` where it wrote none.
 fn sample_box(id: vec2<u32>, origin: vec3<i32>, eyed: bool, tan_xy: vec2<f32>) -> u32 {
   let n = sample_lattice();
-  let s = sample_taken(id);
+  let s = sample_item(id);
   if (s.x >= n.x || s.y >= n.y) {
     return NO_BOX;
   }

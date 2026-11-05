@@ -9,7 +9,7 @@
 
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let s = sample_taken(id.xy);
+  let s = sample_item(id.xy);
   let lattice = sample_lattice();
   if (s.x >= lattice.x || s.y >= lattice.y) {
     return;

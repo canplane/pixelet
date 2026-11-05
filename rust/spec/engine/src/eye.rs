@@ -37,7 +37,8 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// and every ray's reach, the step to the next texel across and down, the
 /// rays' direction, and a hit's push in depth by its face's axis, a vec4
 /// each, f32 bits, the last four's fourth words the clipmap's corners
-/// (`light::CORNER`, `light::KEPT`). All zero where no shadow is cast. The renderer writes
+/// (`light::CORNER`), the share of the box a receiver reads
+/// (`light::REACH_NDC`) and a texel's width (`light::W_WIDTH`). All zero where no shadow is cast. The renderer writes
 /// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
 /// leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;

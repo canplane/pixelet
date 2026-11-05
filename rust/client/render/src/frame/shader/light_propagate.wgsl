@@ -82,7 +82,7 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
   for (var j = first.y; j <= last.y; j += 1i) {
     for (var i = first.x; i <= last.x; i += 1i) {
       if (i >= 0i && j >= 0i && i < across && j < across
-        && list_raise(marks + u32(j * across + i), current) != current) {
+        && list_swap(marks + u32(j * across + i), current) != current) {
         let e = list_add(at, 1u);
         list_put(at + 1u + e, (u32(j) << 16u) | u32(i));
         if (which == LIGHT_LISTED_CLAIMED) {

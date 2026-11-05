@@ -609,7 +609,7 @@ where that one asked as it does: the cell a sample stopped at, the sky past the
 samples about it, and its cell's start and line, where every beam ray of the
 cell's window did; else it walks on its own, from the world's root where it
 was the window (`pxl-engine cast.rs` `Detail::alike`; pxl-render
-`light.wgsl` `took`, `sky`, `cell.wgsl`, `light_cell.wgsl`). A band is the tile's place in the box
+`light.wgsl` `visible_entry`, `sky`, `cell.wgsl`, `light_cell.wgsl`). A band is the tile's place in the box
 alone, so what a tile holds moves with the light, the eye's zooms and the world
 under it, and no walk reads where the eye stands: the eye and the light run the
 same entries (`beam_cs`, `sample_cs`) over one walk. The eye moving keeps every
@@ -691,12 +691,17 @@ whether to cast: the propagation runs only in a frame whose casters mark the
 screen's tiles drawn, which the CPU counts as marked, so nothing it marks is
 read back.
 
-The compute entries are WGSL by hand, assembled from parts
-(`frame/shader/part.rs`), each held word for word to pxl-engine's Rust by a
-test over a real world's buffers (`rust/client/render/tests/`); the layouts
-and numbers they read are generated from pxl-engine by the renderer's build.
-The build validates every shader with naga, and a test compiles each with
-Tint, the compiler a browser runs (`ts/tool/shader/shader.test.ts`).
+The shaders are WGSL by hand, assembled from parts (`frame/shader/part.rs`);
+the layouts and numbers they read are generated from pxl-engine by the
+renderer's build. The compute entries over the world (the cast and its
+pyramid, the light's, the fill's, the ways' and decor's) are each held word
+for word to pxl-engine's Rust by a test over a real world's buffers
+(`rust/client/render/tests/`). The screen's tiles' passes (`screen_*`,
+`box_args_cs`), the air's (`atmos_*`), the clouds and the location indicator
+are held by none. The build validates every shader with naga and checks each
+compute group against the bindings its shaders read; a test compiles each
+shader with Tint, the compiler a browser runs
+(`ts/tool/shader/shader.test.ts`).
 
 ## Past the pyramid: the sky and the sphere
 

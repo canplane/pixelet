@@ -42,7 +42,7 @@ type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
 /** The `ray_counts` setting's counts over the window, the kernel's sums of
  * its frames' (perf.json FRAME's rays columns): an observer's line each where
  * it cast — the nodes its beam rays, its samples and its walk again asked a
- * cast, those its walks by hand asked of the world, its pixels or slots cast again, those that took the visible sample,
+ * cast, those its walks by hand asked of the world, its pixels or slots cast again, those that reused the visible sample,
  * that walked and that took the sky, each as a share of its pixels or its
  * map's slots, the nodes its walk again asked a walking one, and the boxes
  * it drew a cast. */
@@ -55,13 +55,13 @@ const raysText = (f: RayCounts) => {
     const rays = at("rays");
     const part = (n: number) =>
       rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
-    const again = at("took") + at("walked") + at("sky");
+    const again = at("reused") + at("walked") + at("sky");
     return [
       `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
         at("beam"),
       )}  sample ${perCast(at("sample"))}  miss ${perCast(
         at("miss"),
-      )} (${perCast(at("asked"))} asked of the world)   cast again ${part(again)}: took ${part(at("took"))}  walked ${part(
+      )} (${perCast(at("asked"))} asked of the world)   cast again ${part(again)}: reused ${part(at("reused"))}  walked ${part(
         at("walked"),
       )} (${n1(
         at("miss") / Math.max(1, at("walked")),
