@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{beam, cast, FRAC_W};
+use pxl_engine::{cast, FRAC_W};
 use pxl_render::frame::shader::record::{compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT};
 
 /// How long a test waits on the device for one submission before it fails.
@@ -161,7 +161,7 @@ impl Gpu {
 
     /// The light's beam as the cast runs it over the map `size` texels a side (beam_hit.wgsl,
     /// beam.wgsl, beam.light.wgsl): the walk over the node cache alone, a thread a beam ray of
-    /// the whole map, as where the head's cast begins its epoch (light_list.wgsl `light_item`),
+    /// the whole map listed (light_list.wgsl `light_item`),
     /// then the beam rays it left walked asking the world, their count copied into `list`
     /// between, as gpu/ray/cast.rs copies it. `world` binds the walk that asks: the list at 8,
     /// the node cache at 9, the head at 11.
@@ -178,17 +178,46 @@ impl Gpu {
             .cloned()
             .collect();
         hit.push((10, left.as_entire_binding()));
-        let across = light::beam_across(size).div_ceil(beam::CORNER_SIDE);
+        // Every beam ray of the map listed (`list_every`).
+        let mut words = self.read(list);
+        let groups = list_every(&mut words, size, light::LISTED_CORNERS, 1);
+        self.queue.write_buffer(list, 0, bytes(&words));
         let pipeline = |id| {
             let (shader, entry) = compute(id);
             self.pipeline(src(shader), entry)
         };
-        self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM_HIT), &hit, [across, across, 1]);
+        self.dispatch(
+            &pipeline(COMPUTE_LIGHT_BEAM_HIT),
+            &hit,
+            [groups[0], groups[1], 1],
+        );
         let args = self.read(&left);
         let at = u64::from(light::corners_left_at(size)) * 4;
         self.queue.write_buffer(list, at, bytes(&args[3..]));
         self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM), world, [args[0].max(1), 1, 1]);
     }
+}
+
+/// List `which` of the light's list `words` over a map `size` texels a side holding every item
+/// of its level, as a cast that claims every tile lays it (light_propagate.wgsl `enlist`); and
+/// the workgroups a pass takes it over whose entries are `per` items a side
+/// (light_list.wgsl `light_item`).
+pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
+    let across = if which == light::LISTED_CORNERS {
+        light::beam_across(size)
+    } else {
+        light::tiles(size)
+    };
+    let at = light::listed_at(size, which) as usize;
+    words[at] = across * across;
+    for k in 0..across * across {
+        words[at + 1 + k as usize] = ((k / across) << 16) | (k % across);
+    }
+    let threads = across * across * per * per;
+    [
+        light::LIST_ACROSS,
+        threads.div_ceil(light::LIST_ACROSS * light::LISTED_LANES),
+    ]
 }
 
 /// Every submission on `device` done, or the test failed.

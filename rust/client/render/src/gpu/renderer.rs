@@ -1253,9 +1253,9 @@ impl Renderer {
         // the world it was cast with, then decor's and the actors' drawn over
         // it; through its gate where `map_gated`, its stencil numbered as the
         // world's pass's.
-        if map_drawn {
+        if let Some(reads) = self.screen.light_reads().filter(|_| map_drawn) {
             let tiles = &mut self.light_tiles;
-            let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_gated);
+            let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_gated, reads);
             let light = self.shadow.light_group;
             self.decor
                 .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);

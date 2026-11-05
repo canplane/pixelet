@@ -169,9 +169,11 @@ fn main() {
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     // A light slot's word read as its depth, a share of the light box's, as
     // pxl-engine light.rs `word` lays it: the one place a word's depth is
-    // read.
+    // read; and a box tile's slots a side, which the lay reads a tile's read word by.
     use pxl_engine::light::DEPTH_ONE;
-    let light = format!("fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\n");
+    let light = format!(
+        "fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\nconst LAY_TILE: u32 = {LIGHT_TILE}u;\n"
+    );
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
@@ -344,6 +346,7 @@ fn walk_word() -> String {
         ("JITTER", eye::JITTER as u32),
         ("REVISIT_ONE_IN", 16),
         ("LIGHT", eye::LIGHT as u32),
+        ("LIGHT_CLAIM_BUDGET", light::CLAIM_BUDGET),
         ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
         ("LIGHT_HEAD_MISSES_CNT", light::HEAD_MISSES_CNT as u32),
         ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
@@ -525,7 +528,8 @@ fn walk_word() -> String {
         ("LIGHT_ARGS_SAMPLE", light::ARGS_SAMPLE),
         ("LIGHT_ARGS_SAMPLE_BOX", light::ARGS_SAMPLE_BOX),
         ("LIGHT_ARGS_SLOT", light::ARGS_SLOT),
-        ("LIGHT_ARGS_WHOLE", light::ARGS_WHOLE),
+        ("LIGHT_ARGS_PASSES", light::ARGS_PASSES),
+        ("LIGHT_LISTS", light::LISTS),
         ("ASK_NODE", beam::ASK_NODE),
         ("ASK_FACE", beam::ASK_FACE),
         ("ASK_LINE", beam::ASK_LINE),

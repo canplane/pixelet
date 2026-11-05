@@ -34,7 +34,6 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
-use pxl_engine::param::light::SAMPLE;
 
 /// The GPU's cast this frame (frame/shader/cast.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -234,8 +233,9 @@ pub(super) struct CastBuffers {
     /// The misses' walk's dispatch and count, as the eye's are
     /// (pxl-engine `ray::MISS_ARGS_WORDS`).
     light_misses: u32,
-    /// The workgroups of the passes that cast its tiles (pxl-engine
-    /// `light::ARGS_WORDS`): none, or each whole where a tile is claimed.
+    /// The workgroups of the passes that cast its tiles, none, or each whole
+    /// where a tile is claimed, and what propagation claims and counts
+    /// (pxl-engine `light::args_words`), made as `light_list` is.
     light_args: u32,
     /// What a tile of the shadow map holds follows, as the light's cast last
     /// read it (`Read`): the light's frame (`Shadow::generation`), whether
@@ -910,10 +910,7 @@ impl RaysPass {
                 word_bytes(LIGHT_LEFT_EMPTY.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
-            light_args: buf(
-                word_bytes(light::ARGS_WORDS as usize),
-                storage | buffer_usage::INDIRECT,
-            ),
+            light_args: 0,
             light_content: Read::default(),
             light_slid: false,
             light_corner: [0; 2],
@@ -1446,12 +1443,6 @@ impl RaysPass {
             g.write_buf(c.light_head, 0, bytes(&head));
             g.write_buf(c.light_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
             g.write_buf(c.light_args, 0, bytes(&light_args()));
-            // The lists of what feeds the tiles it claims empty
-            // (`light::listed_at`).
-            for which in 0..light::LISTS {
-                let at = light::listed_at(shadow::SIZE, which);
-                g.write_buf(c.light_list, word_bytes(at as usize), bytes(&[0u32]));
-            }
             c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
         }
         // The eye's words with the grid its cast laid (`grid`).
@@ -2030,6 +2021,24 @@ impl RaysPass {
             g.set_pipeline(pass, c.light_propagate_built.id);
             let n = light::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(SQUARE_SIDE), n.div_ceil(SQUARE_SIDE), 1);
+            g.end(pass);
+            // The lists' counts where the passes that take them read them.
+            for which in 0..light::LISTS {
+                g.copy_buf(
+                    encoder,
+                    (
+                        c.light_args,
+                        word_bytes((light::ARGS_COUNTS + which) as usize),
+                    ),
+                    (
+                        c.light_list,
+                        word_bytes(light::listed_at(shadow::SIZE, which) as usize),
+                    ),
+                    4,
+                );
+            }
+            let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
+            let pass = g.compute_pass(encoder, stamp);
             // The beam over the node cache alone, as many workgroups as the
             // propagation left it (`light::ARGS_WORDS`); then what it left over
             // the samples' group, and the cells' starts over the light's
@@ -2148,6 +2157,7 @@ impl RaysPass {
             if !c.light_ready {
                 if c.light_list == 0 {
                     c.light_list = light_list(g);
+                    c.light_args = light_args_buf(g);
                 }
                 c.light_ready = c.raster.light_made(g, shadow::SIZE);
             }
@@ -2157,7 +2167,8 @@ impl RaysPass {
             }
             (c.light_groups, c.light_bound) = ([0; 12], [0; 12]);
             release(c.light_list);
-            c.light_list = 0;
+            release(c.light_args);
+            (c.light_list, c.light_args) = (0, 0);
             c.raster.light_release();
             c.light_ready = false;
         }
@@ -2177,6 +2188,15 @@ impl RaysPass {
 
     pub fn light_casts(&self) -> bool {
         self.cast.as_ref().is_some_and(|c| c.light_cast)
+    }
+
+    /// The light's list, whose reads tell the tiles its epoch cast, and the epoch's first
+    /// cast (`light::reads_at`, `light::HEAD_EPOCH`), while the light's cast is made.
+    pub fn light_reads(&self) -> Option<(u32, u32)> {
+        self.cast
+            .as_ref()
+            .filter(|c| c.light_list != 0)
+            .map(|c| (c.light_list, c.light_epoch))
     }
 
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
@@ -2316,13 +2336,9 @@ const _: () = assert!(
     "the map's tiles are a whole number of squares a side (`light::coarse_square`)"
 );
 
-/// The workgroups of the passes that cast the light's tiles as a cast starts:
-/// none, a list's row across and no row, then each whole
-/// (`light::ARGS_WORDS`).
+/// The workgroups of the passes that cast the light's tiles as a cast starts: none, a list's
+/// row across and no row (`light::ARGS_WORDS`).
 fn light_args() -> [u32; light::ARGS_WORDS as usize] {
-    let across = |n: u32, w: [u32; 3]| [n.div_ceil(w[0]), n.div_ceil(w[1]), 1];
-    let samples = shadow::SIZE / SAMPLE;
-    let tiles = shadow::SIZE / light::TILE;
     let mut args = [0; light::ARGS_WORDS as usize];
     for w in [
         light::ARGS_BEAM,
@@ -2333,26 +2349,18 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     ] {
         args[w as usize..w as usize + 3].copy_from_slice(&[light::LIST_ACROSS, 0, 1]);
     }
-    for (w, whole) in [
-        (
-            light::ARGS_BEAM,
-            across(light::beam_across(shadow::SIZE), BEAM_WORKGROUP),
-        ),
-        (
-            light::ARGS_CELLS,
-            across(light::cells_across(shadow::SIZE), SAMPLE_WORKGROUP),
-        ),
-        (light::ARGS_SAMPLE, across(samples, SAMPLE_WORKGROUP)),
-        (
-            light::ARGS_SAMPLE_BOX,
-            across(samples, [SQUARE_SIDE, SQUARE_SIDE, 1]),
-        ),
-        (light::ARGS_SLOT, [tiles, tiles, 1]),
-    ] {
-        let at = (light::ARGS_WHOLE + w) as usize;
-        args[at..at + 3].copy_from_slice(&whole);
-    }
     args
+}
+
+/// The light's args (`light::args_words`).
+fn light_args_buf(g: &Gpu) -> u32 {
+    g.buf(
+        word_bytes(light::args_words(shadow::SIZE) as usize),
+        buffer_usage::STORAGE
+            | buffer_usage::COPY_DST
+            | buffer_usage::INDIRECT
+            | buffer_usage::COPY_SRC,
+    )
 }
 
 /// The light's list: the beam's lines and the cells' starts, the raster's

@@ -74,7 +74,8 @@ struct SlotCase {
     name: &'static str,
     lit: LightBox,
     range: [Zoom; 2],
-    /// Where the cast is within its epoch, one tile in so many claimed; none where it begins it.
+    /// Where the cast is within its epoch, one tile in so many claimed; none where it begins
+    /// it, every tile read claimed.
     listed: Option<u32>,
 }
 
@@ -309,56 +310,57 @@ fn run_slots(
         }
     }
 
-    // The tiles the cast casts: all but some where it begins its epoch, else some of those it
-    // claimed, each listed once, the room past them an unlisted tile's.
+    // The tiles the cast casts, each listed once, the room past them an unlisted tile's: where
+    // it begins its epoch, those read, all but some; else some of those it claimed.
     let reads_at = light::reads_at(SIZE) as usize;
     let mut threads: Vec<Option<[u32; 2]>> = Vec::new();
-    let groups = if let Some(every) = c.listed {
-        let mut entries = Vec::new();
-        for j in 0..tiles {
-            for i in 0..tiles {
-                let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
-                if claimed {
-                    entries.push(j << 16 | i);
+    let mut entries = Vec::new();
+    for j in 0..tiles {
+        for i in 0..tiles {
+            let t = j * tiles + i;
+            let (claimed, word) = match c.listed {
+                Some(every) => {
+                    let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
+                    let read = claimed && !(i + j).is_multiple_of(7);
+                    (claimed, if read { CAST } else { CAST - 1 })
                 }
-                let read = claimed && !(i + j).is_multiple_of(7);
-                list[reads_at + (j * tiles + i) as usize] = if read { CAST } else { CAST - 1 };
+                None => {
+                    let read = !noise(t ^ 0x77).is_multiple_of(5);
+                    (read, if read { CAST } else { CAST - 1 })
+                }
+            };
+            if claimed {
+                entries.push(j << 16 | i);
+            }
+            list[reads_at + t as usize] = word;
+        }
+    }
+    entries.reverse();
+    let at = light::listed_at(SIZE, light::LISTED_CLAIMED) as usize;
+    list[at] = entries.len() as u32;
+    list[at + 1..at + 1 + entries.len()].copy_from_slice(&entries);
+    let room = light::listed_room(SIZE, light::LISTED_CLAIMED) as usize;
+    let unlisted = (0..tiles * tiles)
+        .map(|k| ((k / tiles) << 16) | (k % tiles))
+        .find(|e| !entries.contains(e))
+        .expect("a tile not claimed");
+    list[at + 1 + entries.len()..at + 1 + room].fill(unlisted);
+    // Read, so a thread that took the room past the list would cast it.
+    let u = (unlisted >> 16) * tiles + (unlisted & 0xffff);
+    list[reads_at + u as usize] = CAST;
+    let rows = (entries.len() as u32).div_ceil(light::LIST_ACROSS);
+    for gy in 0..rows {
+        for gx in 0..light::LIST_ACROSS {
+            let e = (gy * light::LIST_ACROSS + gx) as usize;
+            for k in 0..light::TILE * light::TILE {
+                threads.push(entries.get(e).map(|&t| {
+                    let p = texel_slot([(t & 0xffff) * light::TILE, (t >> 16) * light::TILE]);
+                    [p[0] + k % light::TILE, p[1] + k / light::TILE]
+                }));
             }
         }
-        entries.reverse();
-        let at = light::listed_at(SIZE, light::LISTED_CLAIMED) as usize;
-        list[at] = entries.len() as u32;
-        list[at + 1..at + 1 + entries.len()].copy_from_slice(&entries);
-        let room = light::listed_room(SIZE, light::LISTED_CLAIMED) as usize;
-        let unlisted = (0..tiles * tiles)
-            .map(|k| ((k / tiles) << 16) | (k % tiles))
-            .find(|e| !entries.contains(e))
-            .expect("a tile not claimed");
-        list[at + 1 + entries.len()..at + 1 + room].fill(unlisted);
-        // Read, so a thread that took the room past the list would cast it.
-        let u = (unlisted >> 16) * tiles + (unlisted & 0xffff);
-        list[reads_at + u as usize] = CAST;
-        let rows = (entries.len() as u32).div_ceil(light::LIST_ACROSS);
-        for gy in 0..rows {
-            for gx in 0..light::LIST_ACROSS {
-                let e = (gy * light::LIST_ACROSS + gx) as usize;
-                for k in 0..light::TILE * light::TILE {
-                    threads.push(entries.get(e).map(|&t| {
-                        let p = texel_slot([(t & 0xffff) * light::TILE, (t >> 16) * light::TILE]);
-                        [p[0] + k % light::TILE, p[1] + k / light::TILE]
-                    }));
-                }
-            }
-        }
-        [light::LIST_ACROSS, rows, 1]
-    } else {
-        for t in 0..tiles * tiles {
-            let read = !noise(t ^ 0x77).is_multiple_of(5);
-            list[reads_at + t as usize] = if read { CAST } else { CAST + 1 };
-        }
-        threads.extend((0..SIZE * SIZE).map(|k| Some([k % SIZE, k / SIZE])));
-        [tiles, tiles, 1]
-    };
+    }
+    let groups = [light::LIST_ACROSS, rows, 1];
 
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());

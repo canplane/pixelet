@@ -17,8 +17,17 @@
 @group(0) @binding(0) var<storage, read> fresh: array<u32>;
 @group(0) @binding(1) var<storage, read_write> ground: array<u32>;
 @group(0) @binding(2) var<storage, read_write> pool: array<u32>;
-@group(0) @binding(3) var<storage, read_write> stack: array<atomic<u32>>;
-@group(0) @binding(4) var<storage, read_write> scratch: array<atomic<u32>>;
+@group(0) @binding(3) var<storage, read_write> stack: Stack;
+/// The bricks' scratch, a workgroup's its own brick's alone: the spans the pass before wrote,
+/// read; each child group given back and each record written at the place its count's add
+/// took; the two counts written once, by the first lane, from the workgroup's (`freed`,
+/// `kept`). No word of it atomic.
+@group(0) @binding(4) var<storage, read_write> scratch: array<u32>;
+
+/// The child groups the build gave back and the records it kept so far, each place a lane
+/// takes off them its own; written to the scratch once the build is done.
+var<workgroup> freed: atomic<u32>;
+var<workgroup> kept: atomic<u32>;
 
 /// A scan's sums, a lane's own.
 var<workgroup> sums: array<u32, WAY_LANES>;
@@ -107,12 +116,12 @@ fn slot_of(ids_at: u32, c: u32) -> u32 {
 /// end of what the pops that fit took. Both atomics asked of every pop, a no-op where it has
 /// nothing to take or give back.
 fn pop(taken: u32, n: u32) -> u32 {
-  let len = arrayLength(&stack);
+  let len = stack_len();
   let past = is_past(taken, n);
-  let gone = atomicAdd(&stack[TAKEN_CNT], select(n, 0u, past));
+  let gone = atomicAdd(&stack.taken, select(n, 0u, past));
   // Past the stack while another pop's add stands: none free.
   let ok = !past && gone < len && n <= len - 1u - gone;
-  atomicMin(&stack[TAKEN_CNT], select(gone, 0xffffffffu, ok || past));
+  atomicMin(&stack.taken, select(gone, 0xffffffffu, ok || past));
   return select(0u, 1u + gone, ok);
 }
 
@@ -123,17 +132,17 @@ fn is_past(taken: u32, flagged: u32) -> bool {
 }
 
 fn put(i: u32, v: u32) {
-  atomicStore(&scratch[i], v);
+  scratch[i] = v;
 }
 
 fn word(i: u32) -> u32 {
-  return atomicLoad(&scratch[i]);
+  return scratch[i];
 }
 
 /// Child group `first / 8`'s record, its id and its sixteen words, the next of the records
 /// at `records` (`tree::records_at`), as `tree::lay` reads them.
 fn record(records: u32, first: u32) {
-  let r = atomicAdd(&scratch[records], 1u);
+  let r = atomicAdd(&kept, 1u);
   let w = records + 1u + r * RECORD_WORDS;
   put(w, first / CHILDREN);
   for (var k = 0u; k < CHILDREN; k++) {
@@ -144,7 +153,7 @@ fn record(records: u32, first: u32) {
 
 /// Child group `child_group` the build gave back, into the scratch from `mine`.
 fn give_back(mine: u32, child_group: u32) {
-  let r = atomicAdd(&scratch[mine + FREED_AT], 1u);
+  let r = atomicAdd(&freed, 1u);
   put(mine + FREED_AT + 1u + r, child_group);
 }
 
@@ -357,8 +366,8 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
   let room = scratch_child_groups(arrayLength(&scratch) / FILL_CAP);
   let records = mine + records_at(room);
   if (t == 0u) {
-    put(mine + FREED_AT, 0u);
-    put(records, 0u);
+    atomicStore(&freed, 0u);
+    atomicStore(&kept, 0u);
     let cell = fresh[rec + FILL_CELL];
     // The brick's own nodes along z its ways meet (fill.rs `root_span`, `tree::span`).
     let top = level_entry(base, BRICK_LEVELS, vec2<u32>(0u));
@@ -492,12 +501,17 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
     }
   }
   settle();
+  // Every lane's adds to the counts made before the first lane reads them.
+  workgroupBarrier();
   if (t == 0u) {
     let child_group = stack_id(first);
     let state = levels[STATE_AT];
     if (ok) {
       record(records, CHILDREN * child_group);
-    } else if (state == 0u) {
+    }
+    put(mine + FREED_AT, atomicLoad(&freed));
+    put(records, atomicLoad(&kept));
+    if (state == 0u) {
       // Past what the pool holds: its count `TREE_STARVED`, the pool's to grow (pxl-render
       // `Short`).
       put(records, TREE_STARVED);

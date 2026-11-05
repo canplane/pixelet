@@ -14,7 +14,10 @@
 // (gpu/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> own: vec4f;
 @group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, SLOPE_WORDS>;
+// The views' words, plain here: each word this pass writes is one thread's alone, the
+// ground's the first's and a light's its own, and read once the pass is done
+// (gpu/atmosphere.rs `slopes`).
+@group(0) @binding(20) var<storage, read_write> slopes: array<u32, SLOPE_WORDS>;
 
 // How far the radius moves over one row of the transmittance table, which
 // the land's light is read through, from radius `r`: the larger side.
@@ -50,8 +53,8 @@ fn ground() {
     moved = max(moved, most(abs(levels(lit1 * albedo) - levels(lit0 * albedo))));
   }
   if (dr > 0.0) {
-    atomicStore(&slopes[GROUND_SLOPES], bitcast<u32>(max(moved, 1.0) / dr));
-    atomicStore(&slopes[GROUND_SLOPES + 1u], bitcast<u32>(dr));
+    slopes[GROUND_SLOPES] = bitcast<u32>(max(moved, 1.0) / dr);
+    slopes[GROUND_SLOPES + 1u] = bitcast<u32>(dr);
   }
 }
 
@@ -87,8 +90,8 @@ fn reach(k: u32) {
   let h = height_step(camera_r(), mu);
   let shown0 = shows(k, mu, eye_stops(now));
   let shown1 = shows(k, mu + h, eye_stops(lights_raised(now, k == 1u, h)));
-  atomicStore(&slopes[LIGHT_SLOPES * k + 3u], bitcast<u32>(shown0));
-  atomicStore(&slopes[LIGHT_SLOPES * k + 4u], bitcast<u32>(max(abs(shown1 - shown0), 1.0) / max(h, 1e-6)));
+  slopes[LIGHT_SLOPES * k + 3u] = bitcast<u32>(shown0);
+  slopes[LIGHT_SLOPES * k + 4u] = bitcast<u32>(max(abs(shown1 - shown0), 1.0) / max(h, 1e-6));
 }
 
 @compute @workgroup_size(3)

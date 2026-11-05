@@ -7,31 +7,19 @@
 // tiles over or one more, its taps a tile either side), as decor and the actors stand on
 // what the eye meets and are no taller. One read that no cast of the epoch read is the
 // cast's to cast: its word names the cast (`light::reads_at`), and its square's
-// (`light::coarse_at`). A tile's words are its own thread's alone. One claimed where the
-// cast begins its epoch sets the passes that cast tiles whole (`light::ARGS_WORDS`), each
-// claim writing the same words; else what feeds it is listed for them (`enlist`).
+// (`light::coarse_at`), where it lies within the epoch's budget (`within_budget`); what
+// feeds it is listed for the passes that cast it (`enlist`). A tile's words are its own
+// thread's alone.
 
-/// The workgroups of the passes that cast tiles (`light::ARGS_WORDS`).
-@group(0) @binding(21) var<storage, read_write> args: array<atomic<u32>>;
-
-fn args_at(i: u32) -> u32 {
-  if (i < arrayLength(&args)) {
-    return atomicLoad(&args[i]);
-  }
-  return 0u;
+/// The workgroups of the passes that cast tiles; the lists' counts and marks
+/// (`light::ARGS_WORDS`). A claim reads and writes the passes', the counts and the marks at once.
+struct Args {
+  passes: array<atomic<u32>, LIGHT_ARGS_PASSES>,
+  counts: array<atomic<u32>, LIGHT_LISTS>,
+  marks: array<atomic<u32>>,
 }
 
-fn args_put(i: u32, v: u32) {
-  if (i < arrayLength(&args)) {
-    atomicStore(&args[i], v);
-  }
-}
-
-fn args_most(i: u32, v: u32) {
-  if (i < arrayLength(&args)) {
-    atomicMax(&args[i], v);
-  }
-}
+@group(0) @binding(21) var<storage, read_write> args: Args;
 
 /// Whether box texel `p` lies where a receiver may read it, grown by `pad` texels
 /// (`Light::read`).
@@ -66,7 +54,7 @@ fn up_at(u: Up, k: u32) -> vec2<i32> {
 /// `across` a side of the entry's tile each (pxl-engine `light::LIST_ACROSS`).
 fn opened(w: u32, e: u32, across: u32) {
   let per = LIGHT_LIST_ACROSS * LIGHT_LISTED_LANES;
-  args_most(w + 1u, ((e + 1u) * across * across + per - 1u) / per);
+  atomicMax(&args.passes[w + 1u], ((e + 1u) * across * across + per - 1u) / per);
 }
 
 /// The places of list `which`, `across` a row, whose reach `lo`..`hi` about the tile
@@ -81,8 +69,8 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
   for (var j = first.y; j <= last.y; j += 1i) {
     for (var i = first.x; i <= last.x; i += 1i) {
       if (i >= 0i && j >= 0i && i < across && j < across
-        && list_swap(marks + u32(j * across + i), current) != current) {
-        let e = list_add(at, 1u);
+        && atomicExchange(&args.marks[marks + u32(j * across + i)], current) != current) {
+        let e = atomicAdd(&args.counts[which], 1u);
         list_put(at + 1u + e, (u32(j) << 16u) | u32(i));
         if (which == LIGHT_LISTED_CLAIMED) {
           opened(LIGHT_ARGS_SLOT, e, LIGHT_TILE);
@@ -114,6 +102,16 @@ fn enlist(current: u32, t: vec2<i32>) {
   );
 }
 
+/// Whether tile `t` lies within what the epoch's casts so far may claim (`light::CLAIM_BUDGET`):
+/// the disk about the box's middle holding that many tiles for each cast of the epoch, this
+/// one's included.
+fn within_budget(t: vec2<i32>, current: u32, epoch: u32) -> bool {
+  let half = f32(light_tiles()) * 0.5;
+  let d = vec2<f32>(t) + vec2<f32>(0.5) - vec2<f32>(half);
+  let casts = f32(current - epoch + 1u);
+  return 3.14159265 * dot(d, d) <= casts * f32(LIGHT_CLAIM_BUDGET);
+}
+
 @compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
 fn light_propagate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let size = light_size();
@@ -143,17 +141,12 @@ fn light_propagate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       }
     }
   }
-  // Read, and read first in the epoch: the cast's to cast.
+  // Read, read first in the epoch and within its budget: the cast's to cast. One past the
+  // budget is left to a later cast, its word as it was.
   let w = reads_at() + id.y * n + id.x;
-  if (is_read && list_at(w) < epoch) {
+  if (is_read && list_at(w) < epoch && within_budget(t, current, epoch)) {
     list_put(w, current);
     list_put(coarse_square(id.xy), current);
-    if (current == epoch) {
-      for (var k = 0u; k < LIGHT_ARGS_WHOLE; k += 1u) {
-        args_put(k, args_at(LIGHT_ARGS_WHOLE + k));
-      }
-    } else {
-      enlist(current, t);
-    }
+    enlist(current, t);
   }
 }

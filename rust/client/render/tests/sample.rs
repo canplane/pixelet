@@ -10,7 +10,7 @@ mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpu::{cross, margins, read_texture, texture, unit, Gpu, Kinds, LightBox};
+use gpu::{cross, list_every, margins, read_texture, texture, unit, Gpu, Kinds, LightBox};
 use pxl_engine::answer;
 use pxl_engine::area::Shard;
 use pxl_engine::beam::{self, Grid};
@@ -420,11 +420,19 @@ fn light_beams(
     let coarse_at = light::coarse_at(size) as usize;
     let squares = light::coarse(size) * light::coarse(size);
     list[coarse_at..coarse_at + squares as usize].fill(CAST);
+    // Every tile fed, as a cast that claims them all lists them; its samples' passes over the
+    // list, a tile's samples a side each (`list_every`).
+    let fed = list_every(&mut list, size, light::LISTED_FED, 1);
+    obs.groups = list_every(
+        &mut list,
+        size,
+        light::LISTED_FED,
+        light::TILE / param::light::SAMPLE,
+    );
     let beams = gpu.buffer(&list, store_of());
     let mut world = world_binds(b, &eye, &beams, table);
     world.push((11, head.as_entire_binding()));
     gpu.light_beam(&world, &beams, size);
-    let cells = light::cells_across(size);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
         &[
@@ -432,7 +440,7 @@ fn light_beams(
             (8, beams.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
+        [fed[0], fed[1], 1],
     );
     let mut words = gpu.read(&beams);
     let Rays::Light {
@@ -498,10 +506,11 @@ fn light_beams(
 
 /// One frame over `table0`: the hit pass, then the walk of the samples it left, each sample's
 /// stop against `cast::walk`'s for its ray, and no sample put that no thread takes. The table
-/// the passes left.
+/// the passes left. The asking walk over `asked`, where it is not the table the walk over the node
+/// cache alone read.
 #[expect(
     clippy::too_many_arguments,
-    reason = "a frame's device, world, observer, words, table, what it tells and its passes"
+    reason = "a frame's device, world, observer, words, tables, what it tells and its passes"
 )]
 fn run_frame(
     gpu: &Gpu,
@@ -510,6 +519,7 @@ fn run_frame(
     obs: &Observed,
     words: &[u32],
     table0: &[u32],
+    asked: Option<&[u32]>,
     what: &str,
     kinds: &mut Kinds,
     failed: &mut Vec<String>,
@@ -545,6 +555,7 @@ fn run_frame(
     let mut after = gpu.read(&beams);
     after[obs.lefts_at as usize] = args[3];
     let beams = gpu.buffer(&after, store_of());
+    let table = asked.map_or(table, |t| gpu.buffer(t, store_of()));
     let mut binds = world_binds(b, &eye_buf, &beams, &table);
     if obs.apart {
         binds.push((11, head_buf.as_entire_binding()));
@@ -689,6 +700,7 @@ fn two_frames(
         first,
         &words,
         &after_beam,
+        None,
         "first frame",
         kinds,
         failed,
@@ -706,6 +718,7 @@ fn two_frames(
         next,
         &words1,
         &after_beam1,
+        None,
         "next frame",
         kinds,
         failed,
@@ -991,6 +1004,84 @@ fn hand_eye_samples_answer_as_cast_walk() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
+/// A walk that asks reads a slot as another walk may be writing it, its key no order over its
+/// words (pxl-engine node_cache.rs): an entry holding words of two writes answers nothing. Every
+/// entry a first frame kept has one word of its answer changed, its key and its node standing, and
+/// the next frame's samples, all left to their asking walk off a table that kept nothing, answer
+/// as `cast::walk` still.
+#[test]
+fn entry_of_two_writes_answers_nothing() {
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let c = EyeCase {
+        name: "the eye, its entries written twice",
+        origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 2000.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
+    let (mut kinds, mut failed) = (Kinds::new(), Vec::new());
+    let obs = eye_of(&c, [0; 3]);
+    let empty = frame_table();
+    let table = gpu.buffer(&empty, store_of());
+    let words = eye_beams(&gpu, &b, &obs, &table);
+    let first = gpu.read(&table);
+    let mut torn = run_frame(
+        &gpu,
+        &b,
+        w,
+        &obs,
+        &words,
+        &first,
+        None,
+        "first frame",
+        &mut kinds,
+        &mut failed,
+        &hit,
+        &world,
+    );
+    torn[node_cache::FRAME as usize] = FRAME + 1;
+    let answer_words = node_cache::W_NODE - node_cache::W_KIND;
+    let mut changed = 0u32;
+    for e in 0..node_cache::ENTRIES {
+        let slot = node_cache::ENTRIES_AT + e * node_cache::ENTRY_WORDS;
+        if torn[(slot + node_cache::W_KEY) as usize] != 0 {
+            let at = slot + node_cache::W_KIND + e % answer_words;
+            torn[at as usize] ^= 1 << 8;
+            changed += 1;
+        }
+    }
+    assert!(changed > 1000, "{changed} entries kept to change");
+    let mut next_empty = empty;
+    next_empty[node_cache::FRAME as usize] = FRAME + 1;
+    let table = gpu.buffer(&next_empty, store_of());
+    let words = eye_beams(&gpu, &b, &obs, &table);
+    let next_first = gpu.read(&table);
+    run_frame(
+        &gpu,
+        &b,
+        w,
+        &obs,
+        &words,
+        &next_first,
+        Some(&torn),
+        "next frame",
+        &mut kinds,
+        &mut failed,
+        &hit,
+        &world,
+    );
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
 #[test]
 fn hand_light_samples_answer_as_cast_walk() {
     let Some(gpu) = device() else { return };
@@ -1009,7 +1100,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             back: 60.0,
             t_max: 400.0,
             range: [8, FINEST],
-            corner: [1300, -900],
+            corner: [1304, -896],
             cuts: none,
             size: SIZE,
             listed: None,
@@ -1061,7 +1152,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             back: 60.0,
             t_max: 400.0,
             range: [LEAF_CELL, LEAF_CELL],
-            corner: [1300, -900],
+            corner: [1304, -896],
             cuts: none,
             size: SIZE,
             listed: None,
@@ -1087,7 +1178,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             back: 200.0,
             t_max: 4000.0,
             range: [8, FINEST],
-            corner: [77, 5],
+            corner: [80, 8],
             cuts: none,
             size: SIZE,
             listed: None,
@@ -1172,7 +1263,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         back: 60.0,
         t_max: 400.0,
         range: [LEAF_CELL, LEAF_CELL],
-        corner: [1300, -900],
+        corner: [1304, -896],
         cuts: none,
         size: SIZE,
         listed: None,
@@ -1205,7 +1296,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         back: 60.0,
         t_max: 400.0,
         range: [LEAF_CELL, LEAF_CELL],
-        corner: [1300, -900],
+        corner: [1304, -896],
         cuts: none,
         size: SIZE,
         listed: None,
@@ -2061,7 +2152,6 @@ fn hand_eye_boxes_answer_as_raster() {
 #[test]
 fn hand_light_boxes_answer_as_raster() {
     use pxl_render::frame::shader::record::SHADER_LIGHT_SAMPLE_BOX;
-    use pxl_render::frame::shader::word::SQUARE_SIDE;
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -2075,7 +2165,7 @@ fn hand_light_boxes_answer_as_raster() {
         back: 60.0,
         t_max: 400.0,
         range: [8, FINEST],
-        corner: [1300, -900],
+        corner: [1304, -896],
         cuts: none,
         size: SIZE,
         listed: None,
@@ -2118,7 +2208,7 @@ fn hand_light_boxes_answer_as_raster() {
             side: 32.0,
             back: 200.0,
             t_max: 4000.0,
-            corner: [77, 5],
+            corner: [80, 8],
             ..about
         },
     ];
@@ -2160,12 +2250,8 @@ fn hand_light_boxes_answer_as_raster() {
         };
         // Every box from box texel (0, 0)'s start.
         let origin = light::ray(l, starts, [0, 0]).0;
-        // Whole, a thread a sample; listed, the rows the list's entries open, as the sample pass's.
-        let groups = if c.listed.is_some() {
-            obs.groups
-        } else {
-            obs.lattice.map(|n| n.div_ceil(SQUARE_SIDE))
-        };
+        // The rows the list's entries open, as the sample pass's.
+        let groups = obs.groups;
         kinds.add("listed", c.listed.is_some());
         boxes_case(
             &gpu,
@@ -2382,7 +2468,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
             back: 60.0,
             t_max: 400.0,
             range: [8, FINEST],
-            corner: [1300, -900],
+            corner: [1304, -896],
             cuts: none,
             size: SIZE,
             listed: None,
@@ -2527,6 +2613,7 @@ fn hand_blind_samples_answer_as_cast_walk() {
         &coarse,
         &words,
         &after_beam,
+        None,
         "coarse",
         &mut kinds,
         &mut failed,
@@ -2551,6 +2638,7 @@ fn hand_blind_samples_answer_as_cast_walk() {
         &fine,
         &words,
         &after_beam,
+        None,
         "fine",
         &mut kinds,
         &mut failed,

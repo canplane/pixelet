@@ -9,7 +9,7 @@
 @group(0) @binding(0) var<storage, read> fresh: array<u32>;
 @group(0) @binding(1) var<storage, read> ground: array<u32>;
 @group(0) @binding(2) var<storage, read> pool: array<u32>;
-@group(0) @binding(3) var<storage, read_write> stack: array<atomic<u32>>;
+@group(0) @binding(3) var<storage, read_write> stack: Stack;
 
 /// Digit `d` of `path`: the next of its level's eight to look under.
 fn path_at(path: u32, d: u32) -> u32 {

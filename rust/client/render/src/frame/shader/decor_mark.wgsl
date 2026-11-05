@@ -7,11 +7,23 @@
 // (pxl-content `generation::LIST_AT`, `part_at`).
 
 @group(0) @binding(9) var<storage, read_write> records: array<u32>;
-@group(0) @binding(11) var<storage, read_write> list: array<atomic<u32>>;
+/// What the pass lists (pxl-content `generation::THIN_ARGS`): the words before the boxes
+/// atomic, the counts its threads add to among them; the boxes and the pairs plain. The
+/// boxes are the host's, only read here; a pair is written by the one thread whose add took
+/// its place, and read by the passes after.
+struct List {
+  head: array<atomic<u32>, BOXES_AT>,
+  words: array<u32>,
+}
+
+@group(0) @binding(11) var<storage, read_write> list: List;
 @group(0) @binding(12) var<storage, read> shown: array<u32>;
 
 fn list_word(k: u32) -> u32 {
-  return atomicLoad(&list[k]);
+  if (k < BOXES_AT) {
+    return atomicLoad(&list.head[k]);
+  }
+  return list.words[k - BOXES_AT];
 }
 
 @compute @workgroup_size(LANES)
@@ -41,10 +53,10 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   for (var j = 0u; j < DECORS; j += 1u) {
     if (((shown[j] >> (cell - FIRST_CELL)) & 1u) != 0u) {
       let count_at = select(LIST_PARTS, THIN_ARGS + 2u, whole);
-      let n = atomicAdd(&list[count_at], 1u);
-      atomicAdd(&list[GENERATE_ARGS + 2u], 1u);
+      let n = atomicAdd(&list.head[count_at], 1u);
+      atomicAdd(&list.head[GENERATE_ARGS + 2u], 1u);
       let w = select(part_at(n), LIST_AT + n, whole);
-      atomicStore(&list[w], pair_word(s, j));
+      list.words[w - BOXES_AT] = pair_word(s, j);
     }
   }
 }

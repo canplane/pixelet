@@ -81,15 +81,16 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 /// and its depth alone, as the lit passes read it; the world's depth from
 /// the light as its cast leaves it, a word a slot of the clipmap (pxl-engine
 /// `light::word`), which `light_cs` writes and `PIPELINE_LIGHT_MAP` lays
-/// into the map off the box's corner; and the group the world is laid in
-/// over, the world and the corner.
+/// into the map off the box's corner; and the group the world is laid in over, the world, the
+/// corner and the light's list whose reads hold the epoch's uncast tiles lit, made again
+/// exactly when the list is another.
 struct Targets {
     map: u32,
     map_view: u32,
     map_depth_view: u32,
     world: u32,
     world_view: u32,
-    lay_group: u32,
+    lay_group: (u32, u32),
 }
 
 pub struct Shadow {
@@ -210,7 +211,7 @@ impl Shadow {
         match self.targets.take() {
             Some(t) => {
                 for id in [
-                    t.lay_group,
+                    t.lay_group.0,
                     t.world_view,
                     t.world,
                     t.map_depth_view,
@@ -244,10 +245,7 @@ impl Shadow {
                     map_depth_view: g.depth_only_view(map),
                     world,
                     world_view,
-                    lay_group: g.bind_group(
-                        self.lay.layouts[0],
-                        &[view_entry(0, world_view), buf_entry(1, self.corner)],
-                    ),
+                    lay_group: (0, 0),
                 });
             }
         }
@@ -442,16 +440,9 @@ impl Shadow {
     }
 
     /// The light's frame, where the casters' depth pipelines read their
-    /// view, and the box's corner the world's depth is laid in off.
+    /// view.
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.light_frame, 0, bytes(&self.light));
-        let corner = [
-            self.light_words[light::CORNER[0]],
-            self.light_words[light::CORNER[1]],
-            0,
-            0,
-        ];
-        g.write_buf(self.corner, 0, bytes(&corner));
     }
 
     /// The map's pass, timed in the span `shadow`, the world's depth laid in first
@@ -465,14 +456,38 @@ impl Shadow {
     /// counted (`Tiles::box_args`). The casters are drawn into it next,
     /// through the stencil, then it ends.
     pub fn begin<'a>(
-        &self,
+        &mut self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
         tiles: &mut Tiles,
         gated: bool,
+        (reads, epoch): (u32, u32),
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
+        let (lay, corner_buf) = (self.lay.layouts[0], self.corner);
+        let t = self.targets.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        if t.lay_group.1 != reads {
+            release(t.lay_group.0);
+            let group = g.bind_group(
+                lay,
+                &[
+                    view_entry(0, t.world_view),
+                    buf_entry(1, corner_buf),
+                    buf_entry(2, reads),
+                ],
+            );
+            t.lay_group = (group, reads);
+        }
         let t = self.targets();
+        // The box's corner the world's depth is laid in off, and the reads that tell the
+        // tiles the light's epoch cast from those it has not yet (light_lay.wgsl).
+        let corner = [
+            self.light_words[light::CORNER[0]],
+            self.light_words[light::CORNER[1]],
+            epoch,
+            light::reads_at(SIZE),
+        ];
+        g.write_buf(self.corner, 0, bytes(&corner));
         let stamp = ctx.stamp(GpuSpanName::shadow);
         let load = if gated { Load::Load } else { Load::Clear };
         let desc = pass_desc(0, Load::Clear, t.map_view, load, 1.0, stamp.pass());
@@ -487,6 +502,7 @@ impl Shadow {
                 &[
                     view_entry(0, t.world_view),
                     buf_entry(1, self.corner),
+                    buf_entry(2, reads),
                     buf_entry(30, words),
                     buf_entry(31, uniform),
                     buf_entry(33, tiles.marks_box()),
@@ -501,7 +517,7 @@ impl Shadow {
             release(group);
         } else if cast {
             pass.set_pipeline(self.lay.id);
-            pass.set_bind_group(0, t.lay_group, &[]);
+            pass.set_bind_group(0, t.lay_group.0, &[]);
             pass.draw(3, 1, 0, 0);
         }
         pass

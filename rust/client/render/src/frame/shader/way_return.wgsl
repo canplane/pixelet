@@ -5,7 +5,7 @@
 // A workgroup a brick, a lane a child group.
 
 @group(0) @binding(0) var<storage, read> scratch: array<u32>;
-@group(0) @binding(1) var<storage, read_write> stack: array<atomic<u32>>;
+@group(0) @binding(1) var<storage, read_write> stack: Stack;
 
 @compute @workgroup_size(WAY_LANES)
 fn way_return_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {

@@ -7,7 +7,7 @@
 mod gpu;
 mod real_world;
 
-use gpu::{margins, Gpu};
+use gpu::{list_every, margins, Gpu};
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
@@ -23,7 +23,6 @@ const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const SIZE: u32 = 256;
 const FRAME: u32 = 9;
 const CAST: u32 = 7;
-const WORKGROUP: u32 = beam::SAMPLE_SIDE;
 /// A light's box over the world.
 struct LightCase {
     name: &'static str,
@@ -158,6 +157,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
     let coarse_at = light::coarse_at(SIZE) as usize;
     let squares = light::coarse(SIZE) * light::coarse(SIZE);
     list[coarse_at..coarse_at + squares as usize].fill(CAST);
+    let fed = list_every(&mut list, SIZE, light::LISTED_FED, 1);
     let beams = gpu.buffer(&list, store_of());
     gpu.light_beam(
         &[
@@ -175,7 +175,6 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
         &beams,
         SIZE,
     );
-    let cells = light::cells_across(SIZE);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
         &[
@@ -183,7 +182,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
             (8, beams.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
+        [fed[0], fed[1], 1],
     );
     gpu.read(&beams)
 }

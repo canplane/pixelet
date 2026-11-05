@@ -698,6 +698,13 @@ impl Starts {
 /// slots' pass (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
+/// The tiles a cast claims at most for each cast of its epoch so far, nearest the eye first
+/// (pxl-render light_propagate.wgsl `within_budget`): an epoch's first cast claims the read
+/// tiles within the disk of that many tiles about the box's middle, each cast after one more
+/// such share, so a new light frame is cast over several frames, never more a frame. A read
+/// tile past it is claimed by a later cast; until then the map holds it lit (light_lay.wgsl).
+pub const CLAIM_BUDGET: u32 = 4096;
+
 /// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
@@ -942,13 +949,14 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
 /// (`LISTED_FED`), and the tiles claimed, whose slots it casts
 /// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
-/// j << 16` each; before the lists, a word for every place of each, the
-/// last cast that listed it, so each is listed once a cast. The passes
+/// j << 16` each, in the list's buffer, the count copied in once propagation
+/// is done (`ARGS_COUNTS`), as the eye's is (`node_cache::MARKS_CNT`); and a word
+/// for every place of each, the last cast that listed it, so each is listed once
+/// a cast, in the args' buffer (`listed_marks_at`). The passes
 /// that cast tiles take their threads off these (pxl-render light_list.wgsl
 /// `light_item`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
-/// entry its side's square of them. A cast that begins an epoch casts every
-/// tile a receiver reads, and its passes go whole over the map instead
-/// (`ARGS_WHOLE`).
+/// entry its side's square of them, a cast that begins an epoch as any other
+/// (`CLAIM_BUDGET`).
 pub const LISTED_CORNERS: u32 = 0;
 pub const LISTED_FED: u32 = 1;
 pub const LISTED_CLAIMED: u32 = 2;
@@ -970,9 +978,10 @@ pub const fn listed_room(size: u32, which: u32) -> u32 {
     }
 }
 
-/// The first of list `which`'s marks, a word a place (`LISTED_CORNERS`).
+/// The first of list `which`'s marks past the args' `ARGS_WORDS`, a word a place
+/// (`LISTED_CORNERS`).
 pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
-    let mut at = coarse_at(size) + coarse(size) * coarse(size);
+    let mut at = 0;
     let mut k = 0;
     while k < which {
         at += listed_room(size, k);
@@ -983,7 +992,7 @@ pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
 
 /// List `which`'s count, its entries after it (`LISTED_CORNERS`).
 pub const fn listed_at(size: u32, which: u32) -> u32 {
-    let mut at = listed_marks_at(size, LISTS);
+    let mut at = coarse_at(size) + coarse(size) * coarse(size);
     let mut k = 0;
     while k < which {
         at += 1 + listed_room(size, k);
@@ -1015,20 +1024,26 @@ pub const fn corners_left_at(size: u32) -> u32 {
 }
 
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
-/// pass's three words (x, y, z) from its `ARGS_*` word, then each whole from
-/// `ARGS_WHOLE`. A cast starts with none, `LIST_ACROSS` workgroups a row
-/// and no row; a tile claimed as the cast's to cast (pxl-render
-/// light_propagate.wgsl) copies the whole in where the cast begins its
-/// epoch, else opens the rows what it lists takes (`listed_at`); a cast
-/// that claims none, as where the receivers moved only within the tiles
-/// cast, casts none.
+/// pass's three words (x, y, z) from its `ARGS_*` word, `ARGS_PASSES` in all;
+/// each list's count (`ARGS_COUNTS`). A cast starts with none,
+/// `LIST_ACROSS` workgroups a row and no row, no list holding any; a tile
+/// claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the
+/// rows what it lists takes (`listed_at`); a cast that claims none, as where the receivers moved
+/// only within the tiles cast, casts none. Past `ARGS_WORDS`, which a cast
+/// writes, the lists' marks, which last from cast to cast (`args_words`).
 pub const ARGS_BEAM: u32 = 0;
 pub const ARGS_CELLS: u32 = 3;
 pub const ARGS_SAMPLE: u32 = 6;
 pub const ARGS_SAMPLE_BOX: u32 = 9;
 pub const ARGS_SLOT: u32 = 12;
-pub const ARGS_WHOLE: u32 = 15;
-pub const ARGS_WORDS: u32 = 2 * ARGS_WHOLE;
+pub const ARGS_PASSES: u32 = 15;
+pub const ARGS_COUNTS: u32 = ARGS_PASSES;
+pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
+
+/// The args' buffer's words on the map `size` texels a side.
+pub const fn args_words(size: u32) -> u32 {
+    ARGS_WORDS + listed_marks_at(size, LISTS)
+}
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on
 /// the near plane, rounded to a Q3 step as its anchor lays it (`Starts`);

@@ -64,14 +64,11 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
   return vec2<u32>(vec2<i32>(p) + light_corner()) & vec2<u32>(head_word(LIGHT_HEAD_SIZE) - 1u);
 }
 
-/// What of `level` the thread at `id` of its pass takes: itself where the cast
-/// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of
+/// What of `level` the thread at `id` of its pass takes: off the list of what feeds the tiles
+/// the cast claimed, a workgroup of
 /// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry its side's square of them; none past
 /// the list.
 fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
-  if (head_word(LIGHT_HEAD_EPOCH) == head_word(LIGHT_HEAD_CAST)) {
-    return id;
-  }
   let place = ((id.y / SAMPLE_SIDE) * LIGHT_LIST_ACROSS + id.x / SAMPLE_SIDE) * LIGHT_LISTED_LANES
     + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
   var across = 1u;
@@ -193,7 +190,8 @@ fn coarse_square(t: vec2<u32>) -> u32 {
   return head_word(LIGHT_HEAD_COARSE) + (t.y / LIGHT_COARSE) * (light_tiles() / LIGHT_COARSE) + t.x / LIGHT_COARSE;
 }
 
-/// The first of list `which`'s marks, a word a place (`light::listed_marks_at`).
+/// The first of list `which`'s marks among the args' (light_propagate.wgsl), a word a place
+/// (`light::listed_marks_at`).
 fn listed_marks_at(which: u32) -> u32 {
   return head_word(LIGHT_HEAD_MARKS + which);
 }
