@@ -320,6 +320,8 @@ fn walk_word() -> String {
         ("W_NODE", node_cache::W_NODE),
         ("NONE", node_cache::NONE),
         ("CLAIMED", node_cache::CLAIMED),
+        ("CLAIM_MASK", node_cache::CLAIM_MASK),
+        ("CLAIM_FAR", node_cache::CLAIM_FAR),
         ("TAG_BITS", node_cache::TAG_BITS),
         ("KEY_ZOOMS", !((1u32 << node_cache::TAG_BITS) - 1)),
         ("KIND_SPLIT", answer::Kind::Split as u32),
@@ -368,6 +370,7 @@ fn walk_word() -> String {
         ("LIGHT_ACROSS2_INVERSE", light::W_ACROSS2_INVERSE as u32),
         ("LIGHT_DOWN2_INVERSE", light::W_DOWN2_INVERSE as u32),
         ("LIGHT_WIDTH_INVERSE", light::W_WIDTH_INVERSE as u32),
+        ("LIGHT_BAND_SCALE", light::W_BAND_SCALE as u32),
         ("LIGHT_CORNER_X", light::CORNER[0] as u32),
         ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
         ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
@@ -713,6 +716,7 @@ fn way_word() -> String {
         ("ELE_AT", clip::ELE_AT),
         ("ELE_PAD", ground::ELE_PAD),
         ("ELE_PADDED_SPAN", ground::ELE_PADDED_SPAN),
+        ("CELL_STEPS", ground::CELL_STEPS as u32),
         ("LINES_AT", clip::LINES_AT),
         ("LINES_ENTRIES_AT", clip::LINES_ENTRIES_AT),
         ("LINES_SEGMENTS_AT", clip::LINES_SEGMENTS_AT),
@@ -724,6 +728,9 @@ fn way_word() -> String {
         ("HEADER_PHASE", way::HEADER_PHASE as u32),
         ("HEADER_LEAF", way::HEADER_LEAF as u32),
         ("SEGMENT_WORDS", way::SEGMENT_WORDS as u32),
+        ("SEGMENT_DIR", way::SEGMENT_DIR as u32),
+        ("DIR_BITS", way::DIR_BITS),
+        ("POINT_SCALE", way::POINT_SCALE as u32),
         ("BRIDGE", way::BRIDGE),
         ("TUNNEL", way::TUNNEL),
         ("WAY_NOTHING", way::NOTHING),
@@ -752,13 +759,9 @@ fn way_word() -> String {
         ("WAY_LANES", tree::LANES),
     ];
     let floats: &[(&str, f32)] = &[
-        ("POINT_SCALE", way::POINT_SCALE),
-        ("CELL_STEP", ground::CELL_STEP),
-        ("CELL_CENTER", lattice::CELL_CENTER),
         ("DECK_THICKNESS_M", param::DECK_THICKNESS_M),
         ("PIER_MIN_RISE_M", param::PIER_MIN_RISE_M),
         ("LOWER_DECK_GAP_M", way::LOWER_DECK_GAP_M),
-        ("HALF_DIAGONAL", core::f32::consts::FRAC_1_SQRT_2),
     ];
     let mut out = String::new();
     for (name, v) in words {

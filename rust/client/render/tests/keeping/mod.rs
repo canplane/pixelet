@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::cast::Query;
+use pxl_engine::node_cache::{self, BUCKET};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::node_cache::{self, BUCKET, CLAIMED, NONE};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, Zoom, FRAC_W};
@@ -79,62 +79,44 @@ impl Query for Keeping<'_> {
             *met.entry((zoom, c, zooms)).or_default() += 1;
         }
         let t = &mut *self.table;
-        let (mut to, mut key) = (NONE, CLAIMED);
         let mut other_zooms = false;
         let mut own_pass = false;
         let mut unstamped = false;
         let keeps = node_cache::keeps(zoom, c);
+        let first = node_cache::entry_of(zoom, c);
         if keeps {
-            let first = node_cache::entry_of(zoom, c);
-            let mut free = NONE;
-            let mut k = 0;
-            while k < BUCKET {
+            for k in 0..BUCKET {
                 let w = node_cache::entry_at(first + k) as usize;
                 let held = t[w];
-                if held != CLAIMED && held != 0 && is_node(t, w, zoom, c) {
-                    if node_cache::holds(held, zooms) {
-                        if node_cache::tag_of(held) == self.tag {
-                            // Kept by a walk of this pass: asked of the world, as its words
-                            // may be half written, and left to that walk.
-                            own_pass = true;
-                            to = NONE;
-                            free = NONE;
-                            break;
-                        }
-                        let a = w + node_cache::W_INHERITANCE as usize;
-                        let handed = [t[a], t[a + 1], t[a + 2], t[a + 3]];
-                        let at = w + node_cache::W_ASSET as usize;
-                        let asset = [t[at], t[at + 1]];
-                        let word = t[w + node_cache::W_KIND as usize];
-                        if node_cache::stamp_holds(word, held, asset, handed, zoom, c) {
-                            *n = Inheritance::of_words(handed);
-                            self.asks.kept += 1;
-                            return In {
-                                kind: node_cache::kind_of(word),
-                                asset,
-                            };
-                        }
-                        // Words of two writes: asked of the world, and left to the walk that
-                        // writes.
-                        unstamped = true;
-                        to = NONE;
-                        free = NONE;
-                        break;
-                    }
-                    other_zooms = true;
-                    if node_cache::tag_of(held) / node_cache::PASSES < self.tag / node_cache::PASSES {
-                        (to, key) = (first + k, held);
-                    }
-                } else if held == 0 && free == NONE {
-                    free = first + k;
+                if held == 0 || node_cache::claimed(held) || !is_node(t, w, zoom, c) {
+                    continue;
                 }
-                k += 1;
-            }
-            if to == NONE && free != NONE {
-                (to, key) = (free, 0);
-            } else if to == NONE && k == BUCKET {
-                let v = first + node_cache::victim(zoom, c);
-                (to, key) = (v, t[node_cache::entry_at(v) as usize]);
+                if !node_cache::holds(held, zooms) {
+                    other_zooms = true;
+                    continue;
+                }
+                if node_cache::tag_of(held) == self.tag {
+                    // Kept by a walk of this pass: asked of the world, as its words may be half
+                    // written, and left to that walk.
+                    own_pass = true;
+                    break;
+                }
+                let a = w + node_cache::W_INHERITANCE as usize;
+                let handed = [t[a], t[a + 1], t[a + 2], t[a + 3]];
+                let at = w + node_cache::W_ASSET as usize;
+                let asset = [t[at], t[at + 1]];
+                let word = t[w + node_cache::W_KIND as usize];
+                if node_cache::stamp_holds(word, held, asset, handed, zoom, c) {
+                    *n = Inheritance::of_words(handed);
+                    self.asks.kept += 1;
+                    return In {
+                        kind: node_cache::kind_of(word),
+                        asset,
+                    };
+                }
+                // Words of two writes: asked of the world, and left to the walk that writes.
+                unstamped = true;
+                break;
             }
         }
         let which = if !keeps {
@@ -161,19 +143,54 @@ impl Query for Keeping<'_> {
             zooms,
             self.cuts,
         );
-        if self.writes && to != NONE && key != CLAIMED {
-            put_entry(
-                t,
-                to,
-                zoom,
-                c,
-                node_cache::key(self.tag, zooms),
-                &answer,
-                n.words(),
-            );
+        if self.writes && keeps && !own_pass && !unstamped {
+            if let Some(to) = slot_to_keep(t, zoom, c, zooms, self.tag) {
+                put_entry(
+                    t,
+                    first + to,
+                    zoom,
+                    c,
+                    node_cache::key(self.tag, zooms),
+                    &answer,
+                    n.words(),
+                );
+            }
         }
         answer
     }
+}
+
+/// The slot of its bucket a walk tagged `tag` keeps the node `c` of `zoom` asked at `zooms` in, as
+/// pxl-engine node_cache.rs says, by the keys alone: a free one, the first from
+/// `node_cache::probe`; else an earlier frame's, the first from `node_cache::victim`; none where a
+/// walk of its pass keeps the node at those zooms or claims it, or a claim is not yet named.
+pub fn slot_to_keep(t: &[u32], zoom: Zoom, c: [i32; 3], zooms: [Zoom; 2], tag: u32) -> Option<u32> {
+    let first = node_cache::entry_of(zoom, c);
+    let (mine, key) = (
+        node_cache::claim(zoom, c, zooms),
+        node_cache::key(tag, zooms),
+    );
+    let held = |k: u32| t[node_cache::entry_at(first + k) as usize];
+    if (0..BUCKET).any(|k| {
+        let w = node_cache::entry_at(first + k) as usize;
+        held(k) == node_cache::CLAIMED
+            || held(k) == mine
+            || (held(k) == key && is_node(t, w, zoom, c))
+    }) {
+        return None;
+    }
+    let from = |start: u32, take: &dyn Fn(u32) -> bool| {
+        (0..BUCKET)
+            .map(|k| (start + k) & (BUCKET - 1))
+            .find(|&k| take(held(k)))
+    };
+    let old = |key: u32| {
+        key != 0
+            && !node_cache::claimed(key)
+            && node_cache::tag_of(key) / node_cache::PASSES < tag / node_cache::PASSES
+    };
+    from(node_cache::probe(zoom, c, zooms), &|key| key == 0)
+        .or_else(|| from(node_cache::victim(zoom, c), &old))
 }
 
 pub fn put_entry(
@@ -197,6 +214,11 @@ pub fn put_entry(
     t[n + 1] = c[0] as u32;
     t[n + 2] = c[1] as u32;
     t[n + 3] = c[2] as u32;
+}
+
+/// Slot `slot` of `t` claimed `claim` by a walk that has written none of its other words yet.
+pub fn put_claim(t: &mut [u32], slot: u32, claim: u32) {
+    t[node_cache::entry_at(slot) as usize] = claim;
 }
 
 /// What the world answers of a node with nothing handed down, what it hands on included:
@@ -405,9 +427,11 @@ impl Gpu {
 /// What a slot's kept before the walks, and what it must be after.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum Trap {
-    /// Held at other zooms by an earlier frame: written over.
+    /// Held at other zooms by an earlier frame, at `probe`: stands, the node kept in the next
+    /// free slot.
     OtherFrame,
-    /// Held at other zooms by this frame's samples: stands, the node kept beside it.
+    /// Held at other zooms by this frame's samples, at `probe`: stands, the node kept in the
+    /// next free slot.
     Beside,
     /// Kept by this pass, a false answer: not read, and not written.
     OwnPass,
@@ -420,18 +444,28 @@ pub enum Trap {
     KeptThisFrame,
     /// Kept by this frame's samples, a false answer: what the walk takes, and stands.
     KeptFalse,
-    /// A split a moved brick lay under: at no zooms, written over.
+    /// A split a moved brick lay under, two past `victim`, in a bucket of other nodes this
+    /// frame's samples kept: at no zooms, written over, the rest stand.
     Forgotten,
-    /// A walk's claim: no key to read, and it stands; the node kept in the next free slot.
+    /// Another node's claim at `probe`, its key not yet written: it stands; the node kept in the
+    /// next free slot.
     Claimed,
-    /// Its bucket full of other nodes: the one its hash names written over, the rest stand.
+    /// Its own claim at the zooms asked: another walk of its pass keeps it, so none written.
+    ClaimedAlike,
+    /// Its bucket full of other nodes of an earlier frame: the one at `victim` written over,
+    /// the rest stand.
     Victim,
-    /// Its bucket all claimed: none written.
+    /// Its bucket full of other nodes, the one at `victim` this frame's samples', the rest an
+    /// earlier frame's: the one past `victim` written over, the rest stand.
+    PastVictim,
+    /// Its bucket full of other nodes this frame's samples kept: none written.
+    FullThisFrame,
+    /// Its bucket all other nodes' claims: none written.
     AllClaimed,
-    /// Its first slot another node's: the next free one taken.
+    /// Another node's slot at `probe`: the next free one taken.
     NextFree,
-    /// Its bucket full of nodes a word apart at the zooms asked, false: none read, the one
-    /// its hash names written over.
+    /// Its bucket full of nodes a word apart at the zooms asked, false, of an earlier frame:
+    /// none read, the one at `victim` written over.
     NotIt,
 }
 
@@ -456,7 +490,7 @@ pub fn lay_traps(
     nodes: &Met,
     [earlier, this_samples, own]: [u32; 3],
 ) -> Vec<TrapAt> {
-    const KINDS: [Trap; 13] = [
+    const KINDS: [Trap; 16] = [
         Trap::OtherFrame,
         Trap::Beside,
         Trap::OwnPass,
@@ -466,7 +500,10 @@ pub fn lay_traps(
         Trap::KeptFalse,
         Trap::Forgotten,
         Trap::Claimed,
+        Trap::ClaimedAlike,
         Trap::Victim,
+        Trap::PastVictim,
+        Trap::FullThisFrame,
         Trap::AllClaimed,
         Trap::NextFree,
         Trap::NotIt,
@@ -519,11 +556,13 @@ pub fn lay_traps(
         table[bucket..bucket + (BUCKET * node_cache::ENTRY_WORDS) as usize].fill(0);
         // Another node of the bucket, at a zoom no walk here asks.
         let stranger = |k: i32| [c[0] ^ (k + 1), c[1], c[2]];
+        // The bucket's slots from where the node looks for a free one.
+        let at = |k: u32| first + ((node_cache::probe(zoom, c, zooms) + k) & (BUCKET - 1));
         match trap {
             Trap::OtherFrame => {
                 put_entry(
                     table,
-                    first + 1,
+                    at(0),
                     zoom,
                     c,
                     node_cache::key(earlier, other),
@@ -534,7 +573,7 @@ pub fn lay_traps(
             Trap::Beside => {
                 put_entry(
                     table,
-                    first,
+                    at(0),
                     zoom,
                     c,
                     node_cache::key(this_samples, other),
@@ -628,11 +667,19 @@ pub fn lay_traps(
                 );
             }
             Trap::Forgotten => {
+                for k in 0..BUCKET {
+                    let key = node_cache::key(this_samples, zooms);
+                    put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
+                }
+                let at = first + ((node_cache::victim(zoom, c) + 2) & (BUCKET - 1));
                 let key = node_cache::forgotten_split(node_cache::key(earlier, zooms));
-                put_entry(table, first, zoom, c, key, &a, words);
+                put_entry(table, at, zoom, c, key, &a, words);
             }
             Trap::Claimed => {
-                put_entry(table, first, zoom, c, CLAIMED, &a, words);
+                put_claim(table, at(0), node_cache::claim(40, stranger(0), zooms));
+            }
+            Trap::ClaimedAlike => {
+                put_claim(table, at(0), node_cache::claim(zoom, c, zooms));
             }
             Trap::Victim => {
                 for k in 0..BUCKET {
@@ -640,14 +687,32 @@ pub fn lay_traps(
                     put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
                 }
             }
+            Trap::PastVictim => {
+                let v = node_cache::victim(zoom, c);
+                for k in 0..BUCKET {
+                    let tag = if k == v { this_samples } else { earlier };
+                    let key = node_cache::key(tag, zooms);
+                    put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
+                }
+            }
+            Trap::FullThisFrame => {
+                for k in 0..BUCKET {
+                    let key = node_cache::key(this_samples, zooms);
+                    put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
+                }
+            }
             Trap::AllClaimed => {
                 for k in 0..BUCKET {
-                    put_entry(table, first + k, zoom, c, CLAIMED, &a, words);
+                    put_claim(
+                        table,
+                        first + k,
+                        node_cache::claim(40, stranger(k as i32), zooms),
+                    );
                 }
             }
             Trap::NextFree => {
                 let key = node_cache::key(earlier, zooms);
-                put_entry(table, first, 40, stranger(0), key, &a, words);
+                put_entry(table, at(0), 40, stranger(0), key, &a, words);
             }
             Trap::NotIt => {
                 // False but for the one a walk writes over, which a thread may read as it does.
@@ -686,7 +751,7 @@ pub fn strike_traps(table: &mut [u32], traps: &[TrapAt], tag: u32) {
         ) {
             for k in 0..BUCKET {
                 let w = node_cache::entry_at(l.first + k) as usize;
-                if table[w] != CLAIMED
+                if !node_cache::claimed(table[w])
                     && (l.trap == Trap::OwnPass || node_cache::tag_of(table[w]) != tag)
                 {
                     table[w] = 0;
@@ -702,16 +767,16 @@ pub fn slots_of(table: &[u32], l: &TrapAt, tag: u32) -> Vec<u32> {
         .filter(|&k| {
             let w = node_cache::entry_at(l.first + k) as usize;
             let key = table[w];
-            key != CLAIMED
-                && node_cache::tag_of(key) == tag
+            node_cache::tag_of(key) == tag
                 && node_cache::holds(key, l.zooms)
                 && is_node(table, w, l.zoom, l.c)
         })
         .collect()
 }
 
-/// Whether `table` holds to what `l` was laid for, no other node asked in its bucket. Two
-/// walks may keep a node twice, one finding the other's slot claimed, as `Writing`'s do.
+/// Whether `table` holds to what `l` was laid for, no other node asked in its bucket: the node
+/// kept in the one slot its trap says and every other slot as it stood, a free one free, or none
+/// written.
 pub fn trap_holds(table: &[u32], before: &[u32], l: &TrapAt, tag: u32) -> bool {
     let same = |k: u32| {
         let w = node_cache::entry_at(l.first + k) as usize;
@@ -719,20 +784,22 @@ pub fn trap_holds(table: &[u32], before: &[u32], l: &TrapAt, tag: u32) -> bool {
         table[w..w + n] == before[w..w + n]
     };
     let new = slots_of(table, l, tag);
+    let only = |k: u32| (0..BUCKET).all(|j| j == k || same(j)) && new == [k];
+    let at = |k: u32| (node_cache::probe(l.zoom, l.c, l.zooms) + k) & (BUCKET - 1);
+    let victim = node_cache::victim(l.zoom, l.c);
     match l.trap {
-        Trap::OtherFrame => new.contains(&1),
-        Trap::Forgotten => new.contains(&0),
-        Trap::Beside | Trap::Claimed | Trap::NextFree => same(0) && new.contains(&1),
+        Trap::OtherFrame | Trap::Beside | Trap::Claimed | Trap::NextFree => only(at(1)),
+        Trap::Forgotten => only((victim + 2) & (BUCKET - 1)),
+        Trap::Victim | Trap::NotIt => only(victim),
+        Trap::PastVictim => only((victim + 1) & (BUCKET - 1)),
         Trap::OwnPass
         | Trap::TornWords
         | Trap::Kept
         | Trap::KeptThisFrame
         | Trap::KeptFalse
+        | Trap::ClaimedAlike
+        | Trap::FullThisFrame
         | Trap::AllClaimed => (0..BUCKET).all(same),
-        Trap::Victim | Trap::NotIt => {
-            let v = node_cache::victim(l.zoom, l.c);
-            (0..BUCKET).all(|k| k == v || same(k)) && new == [v]
-        }
     }
 }
 
@@ -764,7 +831,8 @@ pub fn left_claimed(table: &[u32]) -> Vec<(u32, Vec<u32>)> {
     (0..node_cache::ENTRIES)
         .filter_map(|e| {
             let w = node_cache::entry_at(e) as usize;
-            (table[w] == CLAIMED).then(|| (e, table[w..w + node_cache::ENTRY_WORDS as usize].to_vec()))
+            node_cache::claimed(table[w])
+                .then(|| (e, table[w..w + node_cache::ENTRY_WORDS as usize].to_vec()))
         })
         .collect()
 }

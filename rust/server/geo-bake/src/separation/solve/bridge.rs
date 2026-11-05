@@ -83,7 +83,7 @@ fn effective_layer(r: &Stretch) -> i64 {
 struct Obstacle {
     a: [f64; 2],
     b: [f64; 2],
-    /// In cells: what it covers is as the client's way covers (pxl-engine `covers`).
+    /// In cells: what it covers is as the client's way covers (`covers`).
     width: f32,
     headroom: i32,
     nodes: Vec<End>,
@@ -254,6 +254,15 @@ fn crosses(heading: [f64; 2], o: &Obstacle) -> bool {
     let s = [o.b[0] - o.a[0], o.b[1] - o.a[1]];
     let norms = libm::hypot(heading[0], heading[1]) * libm::hypot(s[0], s[1]);
     norms <= 0.0 || (heading[0] * s[0] + heading[1] * s[1]).abs() / norms < 0.866
+}
+
+/// Whether obstacle `o`'s way covers point `p`, as the client's way covers a
+/// column (pxl-engine `way::on_way`), its points and width in eighths of a
+/// cell (`way::eighths`).
+fn covers(o: &Obstacle, p: [f64; 2]) -> bool {
+    let at = |v: [f64; 2]| v.map(way::eighths);
+    let width = way::eighths(f64::from(o.width)).max(0) as u32;
+    way::on_way([at(o.a), at(o.b)], width, [false; 2], at(p)).1
 }
 
 fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -869,7 +878,7 @@ fn road_decks(
                 );
                 for o in obstacles.at(c) {
                     // a way meeting the structure runs at its level, not under it
-                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if covers(o, c)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| group_nodes.contains(n))
                     {
@@ -1109,7 +1118,7 @@ fn rail_decks(
                     r.cell[(j + 1).min(r.cell.len() - 1)],
                 );
                 for o in obstacles.at(c) {
-                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if covers(o, c)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| r.nodes.contains(n))
                     {

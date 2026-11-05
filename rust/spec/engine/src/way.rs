@@ -16,7 +16,12 @@
 //! slab or a bore fills a cell where it holds half its height or more, and
 //! a pier, a leaf cell brick, stands only in columns no more than two leaf
 //! cells wide. Index loops, no `Option` (a crossing none is is `Crossing::NONE`), words
-//! for tags, nothing a GPU lacks (`hypot`).
+//! for tags. Where a column is crossed, its road's tops and its pier (`on_way`,
+//! `crossing`, `pier_covers`) are exact, in integers over the wire's own (points in
+//! eighths of a cell, tops in leaf cells, stations in leaf cells), so the CPU and a GPU
+//! decide them alike whatever they fuse or reorder (doc/tip/cpu-and-gpu-agree.md): no
+//! division but a rational's floor, and the one root, a segment's direction, rounded once
+//! by the CPU and handed a GPU in a word (`Segment::dir`).
 
 pub mod tree;
 
@@ -55,9 +60,11 @@ pub const NOTHING: u32 = u32::MAX;
 /// What a bore's air is where the ways write it (`way_cell`): the ground's void.
 pub const AIR: u32 = value::VOID;
 
-/// A vector's length, as a GPU takes one: no `hypot` there.
-fn length(v: [f32; 2]) -> f32 {
-    libm::sqrtf(v[0] * v[0] + v[1] * v[1])
+/// A length in a tile's cells as its eighths (`POINT_SCALE`), rounded half to
+/// even: a point or a width the wire has not already put in eighths, as the
+/// rule takes it (`on_way`).
+pub fn eighths(v: f64) -> i32 {
+    libm::rint(v * f64::from(POINT_SCALE)) as i32
 }
 
 /// Whether a way of `width` cells is none at those cells: its width rounds
@@ -92,8 +99,25 @@ pub fn half_width(width: f32) -> f32 {
     (width * 0.5).max(core::f32::consts::FRAC_1_SQRT_2)
 }
 
-pub fn covers(width: f32, dist: f32) -> bool {
-    dist <= half_width(width)
+/// How far from its line a way `width` eighths of a cell wide covers a cell's
+/// center, squared, in sixteenths of a cell: half its width, and at least
+/// half a cell's diagonal, `½ · 16²`, so a diagonal way stays
+/// side-connected (`half_width`).
+pub fn reach2(width: u32) -> i64 {
+    let w = i64::from(width);
+    (w * w).max(128)
+}
+
+/// `base + num / den` rounded half to even, `den > 0`: exact, in integers.
+/// Its twin on the GPU (pxl-render way.wgsl `nearest`) starts from a float's
+/// estimate of the quotient and corrects it by up to four each way, so it
+/// agrees only while the quotient's magnitude stays under 2^20: every caller
+/// counts its quotient beside its bits (`surface`, `pier_covers`).
+pub fn nearest(num: i64, den: i64, base: i32) -> i32 {
+    let (q, r) = (num.div_euclid(den), num.rem_euclid(den));
+    let z = i64::from(base) + q;
+    let up = 2 * r > den || 2 * r == den && z & 1 == 1;
+    (z + i64::from(up)) as i32
 }
 
 /// How far from its line a way reaches anything drawn, in its tile's cells:
@@ -109,29 +133,64 @@ pub(crate) fn slab_depth(per_m: f32) -> i32 {
     cells_of_m(DECK_THICKNESS_M, per_m).max(1)
 }
 
-/// One segment of a line, in its tile's cells: from `a` to `b`, its road
-/// surface `tops` there in leaf cells, its width in cells, the palette index it shows,
-/// its form, its tunnel's clear height in leaf cells, whether it is its
-/// line's first or last, where the line ends square, and whether the one
-/// stored before it is its line's one before it.
+/// One segment of a line, in eighths of its tile's cell (`POINT_SCALE`):
+/// from `a` to `b`, its road surface `tops` there in leaf cells, its width,
+/// the palette index it shows, its form, its tunnel's clear height in leaf
+/// cells, whether it is its line's first or last, where the line ends
+/// square, and whether the one stored before it is its line's one before
+/// it; and its direction (`dir`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
-    pub a: [f32; 2],
-    pub b: [f32; 2],
-    pub tops: [f32; 2],
-    pub width: f32,
+    pub a: [i32; 2],
+    pub b: [i32; 2],
+    pub tops: [i32; 2],
+    pub width: u32,
     pub kind: u32,
     pub form: u32,
     pub clear: u32,
     pub first: u32,
     pub last: u32,
     pub continues: u32,
+    pub dir: [i32; 2],
 }
 
 /// A segment's words: `a` and `b` each two `i16` eighths of a cell, the tops
 /// two `i16`, then width (eighths), kind, form with first, last and
-/// continues over it, and clear, a byte each.
-pub const SEGMENT_WORDS: usize = 4;
+/// continues over it, and clear, a byte each; then its direction, two `i16`,
+/// at `SEGMENT_DIR`.
+pub const SEGMENT_WORDS: usize = SEGMENT_DIR + 1;
+pub const SEGMENT_DIR: usize = 4;
+
+/// A direction's bits: a unit vector times `1 << DIR_BITS`, which an `i16`
+/// holds.
+pub const DIR_BITS: u32 = 14;
+
+/// The axis a run `d` is longest along, x where the two are equal.
+fn major(d: [i32; 2]) -> usize {
+    if d[0].abs() >= d[1].abs() {
+        0
+    } else {
+        1
+    }
+}
+
+/// Run `d`'s direction, `d` over its length times `1 << DIR_BITS`, each
+/// taken in doubles and rounded half to even, none for a run of no length:
+/// the CPU's alone, handed a GPU in a segment's words (`Segment::words`), a
+/// root no integer holds. A pier's section is measured along it
+/// (`pier_covers`).
+pub fn dir(d: [i32; 2]) -> [i32; 2] {
+    let [x, y] = d.map(f64::from);
+    let length = libm::sqrt(x * x + y * y);
+    if length == 0.0 {
+        return [0, 0];
+    }
+    let one = f64::from(1u32 << DIR_BITS);
+    [
+        libm::rint(x * one / length) as i32,
+        libm::rint(y * one / length) as i32,
+    ]
+}
 
 /// A segment's form with whether it is its line's first and last and
 /// continues the one stored before it, a byte.
@@ -139,9 +198,9 @@ pub fn flags(form: u32, first: bool, last: bool, continues: bool) -> u8 {
     ((form & 3) | u32::from(first) << 2 | u32::from(last) << 3 | u32::from(continues) << 4) as u8
 }
 
-/// A word's two `i16`, sign-extended in words, as a GPU has no `i16`.
-fn i16_pair(w: u32) -> [f32; 2] {
-    [((w << 16) as i32 >> 16) as f32, (w as i32 >> 16) as f32]
+/// A word's two `i16`, sign-extended, as a GPU has no `i16`.
+fn i16_pair(w: u32) -> [i32; 2] {
+    [(w << 16) as i32 >> 16, w as i32 >> 16]
 }
 
 fn pair_word(lo: i16, hi: i16) -> u32 {
@@ -150,30 +209,31 @@ fn pair_word(lo: i16, hi: i16) -> u32 {
 
 impl Segment {
     pub fn of(w: [u32; SEGMENT_WORDS]) -> Segment {
-        let [a, b] = [i16_pair(w[0]), i16_pair(w[1])];
         let byte = |k: u32| (w[3] >> (8 * k)) & 0xff;
         Segment {
-            a: [a[0] / POINT_SCALE, a[1] / POINT_SCALE],
-            b: [b[0] / POINT_SCALE, b[1] / POINT_SCALE],
+            a: i16_pair(w[0]),
+            b: i16_pair(w[1]),
             tops: i16_pair(w[2]),
-            width: byte(0) as f32 / POINT_SCALE,
+            width: byte(0),
             kind: byte(1),
             form: byte(2) & 3,
             first: (byte(2) >> 2) & 1,
             last: (byte(2) >> 3) & 1,
             continues: (byte(2) >> 4) & 1,
             clear: byte(3),
+            dir: i16_pair(w[SEGMENT_DIR]),
         }
     }
 
     /// Its words, from the wire's integers: its two points in eighths, tops in
     /// leaf cells, and its bytes — width in eighths, kind, `flags` (`flags`),
-    /// clear.
+    /// clear; then its run's direction (`dir`).
     pub fn words(
         [a, b]: [[i16; 2]; 2],
         tops: [i16; 2],
         [width, kind, flags, clear]: [u8; 4],
     ) -> [u32; SEGMENT_WORDS] {
+        let d = dir([0, 1].map(|k| i32::from(b[k]) - i32::from(a[k])));
         [
             pair_word(a[0], a[1]),
             pair_word(b[0], b[1]),
@@ -182,32 +242,34 @@ impl Segment {
                 | u32::from(kind) << 8
                 | u32::from(flags) << 16
                 | u32::from(clear) << 24,
+            pair_word(d[0] as i16, d[1] as i16),
         ]
     }
 }
 
-/// Where a tile's piers may stand: the bents' lattice along each axis, a
-/// step of `step[w]` cells for the narrow (`w` 0) and the wide (1) beam, and
-/// where the tile's corner lies inside a step, `phase[w][axis]`, so a station
-/// is the world's and not the tile's; and the leaf cells a tile's cell
-/// spans a side, which a pier's section is measured in. Made once a tile in
-/// doubles (pxl-spec procedural.rs `Frame::stations`), as a corner is far
-/// past where a float holds a cell.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// Where a tile's piers may stand, in leaf cells: the bents' lattice along
+/// each axis, a step of `step[w]` for the narrow (`w` 0) and the wide (1)
+/// beam, and where the tile's corner lies inside a step, `phase[w][axis]`,
+/// so a station is the world's and not the tile's; and the leaf cells a
+/// tile's cell spans a side, `leaf`, which a pier's section is measured in.
+/// Whole leaf cells, as every length given in meters is (`cells_of_m`), so
+/// a station is exact. Made once a tile (pxl-spec procedural.rs
+/// `Frame::stations`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Stations {
-    pub step: [f32; 2],
-    pub phase: [[f32; 2]; 2],
-    pub leaf: f32,
+    pub step: [i32; 2],
+    pub phase: [[i32; 2]; 2],
+    pub leaf: u32,
 }
 
 /// A bent's spacing for the narrow beam (`w` 0) and the wide (1), meters.
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
 
 /// What a brick's lines open with (pxl-engine clipmap.rs `LINES_*`): its
-/// tile's leaf cells a ground meter (pxl-spec `Frame::per_m`), then its
-/// stations, step, phase and leaf, each a float's bits: where each lies,
-/// the step the narrow beam's then the wide's, the phase `phase[w][axis]`
-/// at `HEADER_PHASE + 2w + axis`.
+/// tile's leaf cells a ground meter (pxl-spec `Frame::per_m`), a float's
+/// bits, then its stations (`Stations`), a word each: the step the narrow
+/// beam's then the wide's, the phase `phase[w][axis]` at
+/// `HEADER_PHASE + 2w + axis`, and the leaf cells a cell.
 pub const HEADER_PER_M: usize = 0;
 pub const HEADER_STEP: usize = 1;
 pub const HEADER_PHASE: usize = 3;
@@ -218,27 +280,27 @@ pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
     let [[p0, p1], [p2, p3]] = st.phase;
     let mut w = [0; HEADER_WORDS as usize];
     w[HEADER_PER_M] = per_m.to_bits();
-    w[HEADER_STEP] = st.step[0].to_bits();
-    w[HEADER_STEP + 1] = st.step[1].to_bits();
-    w[HEADER_PHASE] = p0.to_bits();
-    w[HEADER_PHASE + 1] = p1.to_bits();
-    w[HEADER_PHASE + 2] = p2.to_bits();
-    w[HEADER_PHASE + 3] = p3.to_bits();
-    w[HEADER_LEAF] = st.leaf.to_bits();
+    w[HEADER_STEP] = st.step[0] as u32;
+    w[HEADER_STEP + 1] = st.step[1] as u32;
+    w[HEADER_PHASE] = p0 as u32;
+    w[HEADER_PHASE + 1] = p1 as u32;
+    w[HEADER_PHASE + 2] = p2 as u32;
+    w[HEADER_PHASE + 3] = p3 as u32;
+    w[HEADER_LEAF] = st.leaf;
     w
 }
 
 pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
-    let f = |k: usize| f32::from_bits(w[k]);
+    let i = |k: usize| w[k] as i32;
     let st = Stations {
-        step: [f(HEADER_STEP), f(HEADER_STEP + 1)],
+        step: [i(HEADER_STEP), i(HEADER_STEP + 1)],
         phase: [
-            [f(HEADER_PHASE), f(HEADER_PHASE + 1)],
-            [f(HEADER_PHASE + 2), f(HEADER_PHASE + 3)],
+            [i(HEADER_PHASE), i(HEADER_PHASE + 1)],
+            [i(HEADER_PHASE + 2), i(HEADER_PHASE + 3)],
         ],
-        leaf: f(HEADER_LEAF),
+        leaf: w[HEADER_LEAF],
     };
-    (f(HEADER_PER_M), st)
+    (f32::from_bits(w[HEADER_PER_M]), st)
 }
 
 /// A bent's columns across the deck, from its line: the middle, both edges,
@@ -251,46 +313,56 @@ fn bent(half: i32) -> ([i32; 3], u32) {
     }
 }
 
-/// Whether the column of `side` about `at` holds the pier at the station
-/// nearest `near` on `[a, a + d)`, in the tile's cells; half-open, so a
-/// joint's station is one segment's. A pier is a leaf cell brick, its bent
-/// laid out in leaf cells: a column more than two leaf cells wide holds none,
-/// as it is under half of it; one of two holds it where one of its four leaf
-/// cells does.
-pub(crate) fn pier_covers(
-    st: &Stations,
-    width: f32,
-    a: [f32; 2],
-    d: [f32; 2],
-    near: [f32; 2],
-    at: [f32; 2],
-    side: f32,
-) -> bool {
-    let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
-    let leaves = side * st.leaf;
-    if d[k] == 0.0 || leaves > 2.0 {
+/// Whether the column about `at`, a cell a side, holds the pier at the
+/// station nearest the column's foot on segment `s`, the share `n / len2` of
+/// it (`on_way`), from `a` to before `b`; half-open, so a joint's station is
+/// one segment's. All in eighths of a cell. A pier is a leaf cell brick, its
+/// bent laid out in leaf cells: a column more than two leaf cells wide holds
+/// none, as it is under half of it; one of two holds it where one of its
+/// four leaf cells does.
+///
+/// Exact, its bits counted for points within 2^16 eighths of each other and
+/// a step under 2^12 eighths: the station nearest the foot is a rational's
+/// nearest integer (`nearest`), its numerator under 2^51 and its quotient,
+/// the foot in steps, under 2^17 with a step of an eighth or more; the station's
+/// share of the run, `u / d[k]`, is whole along the major axis `k`. A leaf
+/// cell's center `p` lies from the station's foot `rel / d[k]`, `rel`
+/// whole: its major axis's `(p[k] − station) · d[k]`, the other's
+/// `(p[l] − a[l]) · d[k] − d[l] · u`, under 2^33. The bent is no more than
+/// 126 eighths from the foot, so a center more than 128 from it on either
+/// axis holds none, and `rel` stays under 2^23; along and across the
+/// segment, `rel` against the direction (`dir`), under 2^38, each compared
+/// with half a leaf cell times `d[k]`'s size times the direction's one.
+pub(crate) fn pier_covers(st: &Stations, s: &Segment, [n, len2]: [i64; 2], at: [i32; 2]) -> bool {
+    let d = [s.b[0] - s.a[0], s.b[1] - s.a[1]];
+    let (k, l) = (major(d), 1 - major(d));
+    let leaf = st.leaf as i32;
+    if d[k] == 0 || leaf > 2 {
         return false;
     }
-    let half = half_cells(width * st.leaf);
+    // A leaf cell, in eighths.
+    let cell = POINT_SCALE as i32 / leaf;
+    let half = half_cells((s.width * st.leaf) as f32 / POINT_SCALE);
     let w = if half <= 2 { 0 } else { 1 };
-    let (step, phase) = (st.step[w], st.phase[w][k]);
-    let station = libm::rintf((phase + near[k]) / step) * step - phase;
-    let t = (station - a[k]) / d[k];
-    if !(0.0..1.0).contains(&t) {
+    let (step, phase) = (st.step[w] * cell, st.phase[w][k] * cell);
+    // The station nearest the foot, `a + d · n / len2`, along the major axis.
+    let foot = i64::from(phase + s.a[k]) * len2 + i64::from(d[k]) * n;
+    let station = nearest(foot, i64::from(step) * len2, 0) * step - phase;
+    let u = station - s.a[k];
+    let on = if d[k] > 0 {
+        0 <= u && u < d[k]
+    } else {
+        d[k] < u && u <= 0
+    };
+    if !on {
         return false;
     }
-    let len = length(d);
-    let dir = [d[0] / len, d[1] / len];
-    let foot = [a[0] + d[0] * t, a[1] + d[1] * t];
-    // A leaf cell, and the centers of the leaf cells the column holds: its
-    // own where it is one or finer, else its four.
-    let leaf = 1.0 / st.leaf;
-    let (off, m) = if leaves >= 2.0 {
-        (leaf / 2.0, 4)
-    } else {
-        (0.0, 1)
-    };
-    let (sides, n) = bent(half);
+    // The centers of the leaf cells the column holds: its own where it is
+    // one, else its four.
+    let (off, m) = if leaf == 2 { (cell / 2, 4) } else { (0, 1) };
+    let (sides, cnt) = bent(half);
+    let (run, one) = (i64::from(d[k]), i64::from(d[k].abs()) << DIR_BITS);
+    let reach = i64::from(cell / 2) * one;
     let mut covered = false;
     let mut j = 0;
     while j < m {
@@ -298,15 +370,21 @@ pub(crate) fn pier_covers(
             at[0] + if j & 1 == 0 { -off } else { off },
             at[1] + if j & 2 == 0 { -off } else { off },
         ];
-        let rel = [p[0] - foot[0], p[1] - foot[1]];
-        let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
-        let across = rel[0] * dir[1] - rel[1] * dir[0];
-        // an edge column stands a leaf cell in from the edge
-        let mut i = 0;
-        while i < n as usize {
-            covered |= along <= leaf / 2.0
-                && (across - (sides[i] * (half - 1).max(0)) as f32 * leaf).abs() <= leaf / 2.0;
-            i += 1;
+        let x = p[k] - station;
+        let y = i64::from(p[l] - s.a[l]) * run - i64::from(d[l]) * i64::from(u);
+        if x.abs() <= 128 && y.abs() <= 128 * run.abs() {
+            let mut rel = [0; 2];
+            (rel[k], rel[l]) = (i64::from(x) * run, y);
+            let dir = s.dir.map(i64::from);
+            let along = rel[0] * dir[0] + rel[1] * dir[1];
+            let across = rel[0] * dir[1] - rel[1] * dir[0];
+            // an edge column stands a leaf cell in from the edge
+            let mut i = 0;
+            while i < cnt as usize {
+                let side = (i64::from(sides[i] * (half - 1).max(0) * cell) * run) << DIR_BITS;
+                covered |= along.abs() <= reach && (across - side).abs() <= reach;
+                i += 1;
+            }
         }
         j += 1;
     }
@@ -314,11 +392,12 @@ pub(crate) fn pier_covers(
 }
 
 /// A segment over one column: the lowest and highest its road surface runs
-/// across the column, in leaf cells, and whether its pier's section covers it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// across the column, in leaf cells, each rounded half to even, and whether
+/// its pier's section covers it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Crossing {
-    pub low: f32,
-    pub top: f32,
+    pub low: i32,
+    pub top: i32,
     pub kind: u32,
     pub form: u32,
     pub pier: u32,
@@ -328,8 +407,8 @@ pub struct Crossing {
 impl Crossing {
     /// No crossing: of kind `NOTHING`.
     pub const NONE: Crossing = Crossing {
-        low: 0.0,
-        top: 0.0,
+        low: 0,
+        top: 0,
         kind: NOTHING,
         form: 0,
         pier: 0,
@@ -342,59 +421,84 @@ impl Crossing {
     }
 }
 
-/// The road surface of `s` at the share `t` of it, clamped to its ends.
-fn surface(s: &Segment, t: f32) -> f32 {
-    s.tops[0] + (s.tops[1] - s.tops[0]) * t.clamp(0.0, 1.0)
+/// The road surface of `s` at the share `n / len2` of it, clamped to its
+/// ends, in leaf cells rounded half to even: `tops[0] + Δ · n / len2`, its
+/// numerator under 2^51 and its quotient within the rise `Δ`, under 2^17,
+/// the tops each an `i16` (`nearest`).
+fn surface(s: &Segment, n: i64, len2: i64) -> i32 {
+    let rise = i64::from(s.tops[1] - s.tops[0]);
+    nearest(rise * n.clamp(0, len2), len2, s.tops[0])
 }
 
-/// Where `at` lies along the segment from `a` to `b` of a way `width` cells
-/// wide, as a share of it clamped to it, and whether the way covers `at`
-/// there: a line ends square where it begins (`ends[0]`) and ends
-/// (`ends[1]`), as the ground cuts a way; its joints stay round. What the
-/// ground's cells and the ways' columns are covered by alike.
-pub fn on_way(a: [f32; 2], b: [f32; 2], width: f32, ends: [bool; 2], at: [f32; 2]) -> (f32, bool) {
-    let d = [b[0] - a[0], b[1] - a[1]];
-    let len2 = d[0] * d[0] + d[1] * d[1];
-    let t = if len2 > 0.0 {
-        ((at[0] - a[0]) * d[0] + (at[1] - a[1]) * d[1]) / len2
-    } else {
-        0.0
+/// Where `at` lies along the segment from `a` to `b` of a way `width`
+/// eighths wide, all in eighths of a cell, and whether the way covers `at`
+/// there (`reach2`): a line ends square where it begins (`ends[0]`) and ends
+/// (`ends[1]`), as the ground cuts a way; its joints stay round. Where it
+/// lies is the share `n / len2` of the segment clamped to it, `len2` its
+/// squared length; a segment of no length puts `at` at its start, `[0, 1]`.
+/// What the ground's cells and the ways' columns are covered by alike.
+///
+/// Exact, its bits counted for points within 2^16 eighths of each other (an
+/// `i16`'s) and a width under 2^8: `len2` and `n` under 2^34. Off an end,
+/// the end is nearest, and the way covers `at` only within `max(width, 12)`
+/// sixteenths of it on each axis, so its squared distance stays under 2^17.
+/// Between the ends, its squared distance is `cross² / len2`, `cross` the
+/// run's cross product with `at`'s, under 2^34, and the way covers it only
+/// where `2 · |cross| ≤ max(width, 12) · (|dx| + |dy|)`, which holds `cross`
+/// under 2^24, so `4 · cross²` and `reach2 · len2` stay under 2^50.
+pub fn on_way(
+    [a, b]: [[i32; 2]; 2],
+    width: u32,
+    ends: [bool; 2],
+    at: [i32; 2],
+) -> ([i64; 2], bool) {
+    let d = [i64::from(b[0] - a[0]), i64::from(b[1] - a[1])];
+    let r = [i64::from(at[0] - a[0]), i64::from(at[1] - a[1])];
+    let (len2, dot) = (d[0] * d[0] + d[1] * d[1], r[0] * d[0] + r[1] * d[1]);
+    let cut = (ends[0] && dot < 0) || (ends[1] && dot > len2);
+    let (reach, span) = (reach2(width), i64::from(width.max(12)));
+    let near = |v: [i64; 2]| {
+        2 * v[0].abs().max(v[1].abs()) <= span && 4 * (v[0] * v[0] + v[1] * v[1]) <= reach
     };
-    let cut = (ends[0] && t < 0.0) || (ends[1] && t > 1.0);
-    let t = t.clamp(0.0, 1.0);
-    let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    (
-        t,
-        !cut && covers(width, length([at[0] - near[0], at[1] - near[1]])),
-    )
+    let (n, covered) = if dot <= 0 {
+        (0, near(r))
+    } else if dot >= len2 {
+        (len2, near([r[0] - d[0], r[1] - d[1]]))
+    } else {
+        let cross = r[0] * d[1] - r[1] * d[0];
+        let l1 = d[0].abs() + d[1].abs();
+        (
+            dot,
+            2 * cross.abs() <= span * l1 && 4 * cross * cross <= reach * len2,
+        )
+    };
+    ([n, len2.max(1)], !cut && covered)
 }
 
-/// What segment `s` is over the column of `side` cells about `at`, `NONE`
-/// unless its way covers `at` (`on_way`): the surface it runs through
-/// across the column, and whether the column holds the section of a pier at
-/// a station of it.
-pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing {
-    let (a, b) = (s.a, s.b);
-    let (t, on) = on_way(a, b, s.width, [s.first == 1, s.last == 1], at);
+/// What segment `s` is over the column about `at`, a cell a side, in eighths
+/// of a cell, `NONE` unless its way covers `at` (`on_way`): the surface it
+/// runs through across the column, and whether the column holds the section
+/// of a pier at a station of it. Once a column and segment as a brick lands:
+/// some ten 64-bit products, and a quotient for each of the two surfaces and
+/// the station (`nearest`), which a GPU estimates in floats and corrects by a
+/// 64-bit product; a GPU makes each of 32-bit halves (pxl-render i64.wgsl).
+pub fn crossing(s: &Segment, at: [i32; 2], st: &Stations) -> Crossing {
+    let ends = [s.first == 1, s.last == 1];
+    let ([n, len2], on) = on_way([s.a, s.b], s.width, ends, at);
     if !on {
         return Crossing::NONE;
     }
-    let d = [b[0] - a[0], b[1] - a[1]];
-    let len2 = d[0] * d[0] + d[1] * d[1];
-    let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    // the column's brick spans this much of the segment either side of `t`
-    let half_span = if len2 > 0.0 {
-        side / 2.0 * (d[0].abs() + d[1].abs()) / len2
-    } else {
-        0.0
-    };
-    let (z0, z1) = (surface(s, t - half_span), surface(s, t + half_span));
+    // The column spans half a cell, 4 eighths, either side of `at` along each
+    // axis: `4 · (|dx| + |dy|) / len2` of the segment.
+    let d = [s.b[0] - s.a[0], s.b[1] - s.a[1]];
+    let half = 4 * (i64::from(d[0].abs()) + i64::from(d[1].abs()));
+    let (z0, z1) = (surface(s, n - half, len2), surface(s, n + half, len2));
     Crossing {
         low: z0.min(z1),
         top: z0.max(z1),
         kind: s.kind,
         form: s.form,
-        pier: u32::from(s.form != TUNNEL && pier_covers(st, s.width, a, d, near, at, side)),
+        pier: u32::from(s.form != TUNNEL && pier_covers(st, s, [n, len2], at)),
         clear: s.clear,
     }
 }
@@ -423,7 +527,7 @@ pub struct Occupancy {
 /// cells a ground meter: all the surface sweeps across the column, so a slab
 /// or a bore steps down to the next column's without a gap however steep.
 pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
-    let (low, top) = (libm::rintf(c.low) as i32, libm::rintf(c.top) as i32);
+    let (low, top) = (c.low, c.top);
     let none = [0, 0];
     match c.form {
         BRIDGE => {
@@ -474,8 +578,8 @@ pub trait Columns {
     /// How many segments may be over column `c`, and the `k`-th of them.
     fn cnt(&self, c: [i32; 2]) -> u32;
     fn segment(&self, c: [i32; 2], k: u32) -> Segment;
-    /// The column's center in its tile's cells, a cell a side.
-    fn center(&self, c: [i32; 2]) -> [f32; 2];
+    /// The column's center in eighths of its tile's cells, a cell a side.
+    fn center(&self, c: [i32; 2]) -> [i32; 2];
     fn stations(&self) -> Stations;
     fn palette_idx(&self, c: [i32; 2]) -> u32;
     /// Whether the column is the service area's wall (pxl-engine
@@ -489,7 +593,7 @@ pub trait Columns {
 
 /// The `k`-th segment's crossing of column `c`.
 fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
-    crossing(&cols.segment(c, k), cols.center(c), 1.0, &cols.stations())
+    crossing(&cols.segment(c, k), cols.center(c), &cols.stations())
 }
 
 /// The visit of a line over column `c` from its `k`-th segment there: the

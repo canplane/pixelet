@@ -10,7 +10,7 @@ use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use pxl_engine::way::{Stations, INTERVAL_M};
-use pxl_engine::LEAF_CELL;
+use pxl_engine::{cells_of_m, LEAF_CELL};
 
 // ---- scatter: pxl-engine's, for the CPU's readers of one cell ----
 
@@ -43,17 +43,19 @@ impl Frame {
         (u_per_m(self.corner[1]) / units(LEAF_CELL)) as f32
     }
 
-    /// Where its piers may stand, in its cells (pxl-engine way.rs
+    /// Where its piers may stand, in leaf cells (pxl-engine way.rs
     /// `Stations`): each beam's lattice of stations, at its spacing in
-    /// ground meters where the tile lies, and where its corner falls in it;
-    /// and the leaf cells its cell spans.
+    /// ground meters where the tile lies, in whole leaf cells
+    /// (`cells_of_m`), and where its corner falls in it; and the leaf cells
+    /// its cell spans.
     pub(crate) fn stations(self) -> Stations {
-        let corner = self.corner.map(|v| v / self.cell);
-        let step = INTERVAL_M.map(|m| f64::from(m) * u_per_m(self.corner[1]) / self.cell);
+        let leaf = units(LEAF_CELL);
+        let corner = self.corner.map(|v| (v / leaf).round_ties_even() as i64);
+        let step = INTERVAL_M.map(|m| cells_of_m(m, self.per_m()).max(1));
         Stations {
-            step: step.map(|s| s as f32),
-            phase: step.map(|s| corner.map(|c| c.rem_euclid(s) as f32)),
-            leaf: (self.cell / units(LEAF_CELL)) as f32,
+            step,
+            phase: step.map(|s| corner.map(|c| c.rem_euclid(i64::from(s)) as i32)),
+            leaf: (self.cell / leaf).round_ties_even() as u32,
         }
     }
 }

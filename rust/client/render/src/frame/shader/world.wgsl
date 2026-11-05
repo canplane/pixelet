@@ -742,7 +742,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
     let way = tree_val(WAYS, trail, NO_CUT, zoom, c);
     if (way != VALUE_VOID) {
       let got = cover(fill, way, FULL);
-      if (got.theirs || !fills(val)) {
+      if (got.theirs) {
         val = way;
         four = four_of(way);
       }
@@ -751,7 +751,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   }
   if (over != VALUE_VOID) {
     let got = cover(fill, over, over_fill);
-    if (got.theirs || !fills(val)) {
+    if (got.theirs) {
       val = PLACED_ASSET | over;
       four = over_four;
     }

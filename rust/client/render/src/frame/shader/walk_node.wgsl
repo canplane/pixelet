@@ -148,7 +148,12 @@ fn squared(v: vec3<f32>) -> f32 {
 
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
-  let x2 = r2 * INV_SPLIT2;
+  return zoom_in_splits(r2 * INV_SPLIT2, range);
+}
+
+/// The zoom asked at `x2`, a distance squared in split distances squared
+/// (`grid::cell_zoom_in_splits`).
+fn zoom_in_splits(x2: f32, range: vec2<u32>) -> u32 {
   let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
   let z = u32(clamp(i32(UNIT_ZOOM) - e, 0i, i32(FINEST_ZOOM)));
   return min(max(z, range.x), range.y);

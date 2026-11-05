@@ -6,10 +6,10 @@
 //! once a ray. A table of slots keyed by the node, its zoom and its index,
 //! a bucket of `BUCKET` slots a key's hash (`entry_of`), as voxel hashing
 //! keeps its blocks (Nießner, Zollhöfer, Izadi, Stamminger 2013): a node is
-//! found by its key alone, wherever the walk that asks it starts, in a free
-//! slot of its bucket, or where none is, taking one over (`victim`). Only nodes under the world's roots are kept (`keeps`). What
-//! is drawn is the query's answer whichever walk read it, so what is kept
-//! decides only how much is asked again, never what is drawn.
+//! found by its key alone, wherever the walk that asks it starts. Only nodes
+//! under the world's roots are kept (`keeps`). What is drawn is the query's
+//! answer whichever walk read it, so what is kept decides only how much is
+//! asked again, never what is drawn.
 //!
 //! One buffer of words:
 //!
@@ -29,14 +29,28 @@
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
 //! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
-//! it from another node of the same slot (`forgets` reads its column). A
-//! walk writes a slot only once it has claimed it, its key exchanged for
-//! `CLAIMED` and found to be the one it read, and writes the key last; a
-//! walk that found another put back what it took (pxl-render ask.wgsl `claim`), the
-//! slot claimed in between; a writing
-//! walk that read a slot takes what it read only where it hashes to the
-//! entry's stamp (`stamped`), as another walk may be taking the slot over as
-//! it reads.
+//! it from another node of the same slot (`forgets` reads its column).
+//!
+//! A walk that asked the world keeps the node at the zooms asked in a slot of
+//! its bucket: a free one, the first from the node's at those zooms (`probe`);
+//! where none is, one an earlier frame wrote, a forgotten split among them,
+//! the first from the node's own (`victim`); none where every slot is this
+//! frame's, or where a walk of its pass keeps the node at those zooms or claims
+//! it. Which of the nodes a full bucket's walks ask are kept is the order the
+//! walks run in.
+//!
+//! A walk writes a slot only once it has claimed it: its key exchanged for
+//! `CLAIMED` and found to be the key it read. It names its claim at once, the
+//! key the claim of the node at the zooms it keeps (`claim`), so another walk
+//! that keeps alike keeps none; writes the other words; and writes the key
+//! last. A walk that found another key puts back what it took, a key over a
+//! claim and a named claim over `CLAIMED` (pxl-render ask.wgsl `put_back`), and
+//! tries the bucket again as it then stands. A walk that finds a claim not yet
+//! named, after reading it again a few times, keeps none, as it may be its
+//! own node's. A walk reads the keys it keeps by as they stand (pxl-render
+//! ask.wgsl `node_cache_now`). A writing walk that read a slot takes what it read
+//! only where it hashes to the entry's stamp (`stamped`), as another walk may
+//! be taking the slot over as it reads.
 
 use crate::answer::Kind;
 use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
@@ -127,13 +141,40 @@ pub const WORDS: u32 = MARKS_AT + MARKS;
 /// No entry: a node no slot keeps.
 pub const NONE: u32 = u32::MAX;
 
-/// A key one walk has claimed and is writing the slot under: no zoom
-/// pair a key holds reads as it (`holds`).
+/// The key a walk names its claim of a slot with, to keep the node `node` of
+/// `zoom` at `zooms` (`CLAIMED`): a hash of the three under a far zoom of
+/// every bit, which no key holds (`holds`), and a near zoom under 32, which
+/// `CLAIMED`'s and a forgotten split's are not (`forgotten_split`). Two walks
+/// that keep alike claim alike; two that keep apart in a bucket, about one
+/// time in 2^25.
+pub fn claim(zoom: Zoom, node: [i32; 3], zooms: [Zoom; 2]) -> u32 {
+    pair_hash(zoom, node, zooms) & !CLAIM_MASK | CLAIM_FAR
+}
+
+/// The node `node` of `zoom` at `zooms`, hashed.
+fn pair_hash(zoom: Zoom, node: [i32; 3], [far, near]: [Zoom; 2]) -> u32 {
+    let h = mix(hash(zoom, node), far | near << ZOOM_BITS);
+    h ^ h >> 16
+}
+
+/// The bits that say a key is a named claim (`claim`), and what they read in
+/// one.
+pub const CLAIM_MASK: u32 = CLAIM_FAR | 1 << 31;
+pub const CLAIM_FAR: u32 = ((1 << ZOOM_BITS) - 1) << TAG_BITS;
+
+/// A key one walk has claimed and not yet named (`claim`): no zoom pair a
+/// key holds reads as it (`holds`), and no tag `FRAMES` leaves reads as a
+/// forgotten split's.
 pub const CLAIMED: u32 = u32::MAX;
 const _: () = assert!(
-    crate::FINEST_ZOOM < 63,
-    "a claimed key holds no zoom a walk asks"
+    crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1 && tag(FRAMES, PASSES - 1) < (1 << TAG_BITS) - 1,
+    "a claim holds no zoom a walk asks, and is no key"
 );
+
+/// Whether a key is a walk's claim, named or not.
+pub const fn claimed(key: u32) -> bool {
+    key == CLAIMED || key & CLAIM_MASK == CLAIM_FAR
+}
 
 /// The writing passes of a frame's cast, each a tag of its own (`tag`): the
 /// beam rays, the samples and the pixels that missed; then the light's beam
@@ -187,8 +228,16 @@ pub fn entry_of(zoom: Zoom, node: [i32; 3]) -> u32 {
     hash(zoom, node) & (ENTRIES - 1) & !(BUCKET - 1)
 }
 
-/// Which slot of its bucket a node takes over where none is free: one by
-/// its hash, so two nodes of a bucket take over different slots.
+/// The slot of its bucket the node `node` of `zoom` kept at `zooms` looks
+/// for a free one from, in turn: by its hash, so the node at other zooms,
+/// and another node, mostly look from another.
+pub fn probe(zoom: Zoom, node: [i32; 3], zooms: [Zoom; 2]) -> u32 {
+    pair_hash(zoom, node, zooms) & (BUCKET - 1)
+}
+
+/// The slot of its bucket a node looks from, in turn, for an earlier frame's
+/// to take over where none is free: by its hash, so two nodes of a bucket
+/// take over different slots.
 pub fn victim(zoom: Zoom, node: [i32; 3]) -> u32 {
     hash(zoom, node) >> 28 & (BUCKET - 1)
 }
@@ -442,6 +491,29 @@ mod tests {
         assert!(!keeps(24, [0, 1 << 24, 0]));
         assert!(!keeps(24, [-(1 << 24) - 1, 0, 0]));
         assert!(!keeps(32, [0, 0, 0]));
+    }
+
+    /// A claim is no key, no forgotten split and holds no zooms; it is alike
+    /// for walks that keep alike, and tells apart the node and its zooms.
+    #[test]
+    fn claims_tell_apart() {
+        let (z, n, zooms) = (20, [5, -6, 7], [18, 20]);
+        let c = claim(z, n, zooms);
+        assert!(claimed(c) && claimed(CLAIMED) && c != CLAIMED);
+        assert!(!claimed(0));
+        assert!(!claimed(key(
+            tag(FRAMES, PASSES - 1),
+            [crate::FINEST_ZOOM; 2]
+        )));
+        assert!(!claimed(forgotten_split(key(tag(9, 1), zooms))));
+        assert!(
+            (0..=crate::FINEST_ZOOM).all(|f| (f..=crate::FINEST_ZOOM).all(|m| !holds(c, [f, m])))
+        );
+        assert_eq!(c, claim(z, n, zooms));
+        assert_ne!(c, claim(z, n, [18, 19]));
+        assert_ne!(c, claim(z, [5, -6, 8], zooms));
+        assert_ne!(c, claim(z + 1, n, zooms));
+        assert!(probe(z, n, zooms) < BUCKET && victim(z, n) < BUCKET);
     }
 
     /// A node stands over a box where their columns meet, X round the

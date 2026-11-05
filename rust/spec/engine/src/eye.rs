@@ -42,7 +42,8 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// reciprocals the light's rules multiply by, each rounded once by the
 /// renderer: the rays' direction's and the reach's, a vec4, and the squares
 /// of the steps across and down and the width's (`light::W_INVERSE` to
-/// `light::W_WIDTH_INVERSE`). All zero where no shadow is cast. The renderer
+/// `light::W_WIDTH_INVERSE`); then the width squared over the split distance
+/// squared (`light::W_BAND_SCALE`). All zero where no shadow is cast. The renderer
 /// writes them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the
 /// kernel leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;

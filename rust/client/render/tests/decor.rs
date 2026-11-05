@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use pxl_content::decor::{Decor, Orientation, DECORS};
 use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORDS, RECORD_WORDS};
-use pxl_content::scatter;
+use pxl_content::{scatter, share};
 use pxl_engine::answer::{self, In};
 use pxl_engine::cast::{Detail, End, Query, Spacing};
 use pxl_engine::clipmap::{self as clip, Lookup, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
@@ -1439,6 +1439,10 @@ fn hand_decor_answers_as_placement() {
     // reads void, on which no decor stands, so it never comes to an edit there.
     assert!(DECORS.iter().all(|d| !d.allows(value::VOID)));
     assert_eq!(totals.0["edit: asked over a column not held"], 0);
+    // A decor stands no coarser than two zooms over the leaves, where the ground's top, the
+    // ways and the caves under a face keep an even share of a cube, so the walk meets no odd one.
+    assert!(DECORS.iter().all(|d| scatter::root(d) >= LEAF_CELL - 2));
+    assert_eq!(totals.0["walk: met an odd part of its cube"], 0);
     let zero: Vec<_> = totals
         .0
         .iter()
@@ -3809,6 +3813,74 @@ fn mul_hi_cs(@builtin(global_invocation_id) id: vec3<u32>) {
             got[k],
             ((*a as u64 * *b as u64) >> 32) as u32,
             "{a:#x} × {b:#x}"
+        );
+    }
+}
+
+/// seed.wgsl `halve` halves as `share::halve`: counts, rooms and weights at random, and a
+/// fraction that meets its draw exactly, which goes to the second half.
+#[test]
+fn hand_halve_as_the_rust() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let mut draw = real_world::Draw(0x4a1f_e5d3);
+    let mut asks: Vec<[u32; 4]> = (0..4096)
+        .map(|_| {
+            let rooms = [draw.next() % 3000, draw.next() % 3000];
+            [
+                draw.next() % (rooms[0] + rooms[1] + 1),
+                rooms[0],
+                rooms[1],
+                draw.next(),
+            ]
+        })
+        .collect();
+    asks.extend([
+        [1, 1, 1, 0x8000_8000],
+        [3, 3, 3, 0x5555_ffff],
+        [0, 0, 0, 0],
+        [1, 1, 0, u32::MAX],
+        [0xffff, 0xffff, 0xffff, u32::MAX],
+        [0xffff, 0xffff, 0xffff, 0],
+    ]);
+    let source = [
+        include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/decor_word.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
+        r"
+@group(0) @binding(12) var<storage, read> asked: array<vec4<u32>>;
+@group(0) @binding(13) var<storage, read_write> told: array<u32>;
+
+@compute @workgroup_size(64)
+fn halve_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  if (id.x < arrayLength(&asked)) {
+    let a = asked[id.x];
+    told[id.x] = halve(a.x, a.y, a.z, a.w);
+  }
+}
+",
+    ]
+    .join("\n");
+    let p = pipeline(&device, "halve", &source, "halve_cs");
+    let flat: Vec<u32> = asks.iter().flatten().copied().collect();
+    let (asked, told) = (
+        buffer(&device, &flat),
+        buffer(&device, &vec![0; asks.len()]),
+    );
+    dispatch(
+        &device,
+        &queue,
+        &p,
+        &[(12, &asked), (13, &told)],
+        [(asks.len() as u32).div_ceil(64), 1, 1],
+    );
+    let got = read(&device, &queue, &told, "halve");
+    for (k, &[n, room_0, room_1, w]) in asks.iter().enumerate() {
+        assert_eq!(
+            got[k],
+            share::halve(n, [room_0, room_1], w),
+            "{n} {room_0} {room_1} {w:#x}"
         );
     }
 }

@@ -206,21 +206,23 @@ impl Separation {
         )
     }
 
-    /// Every line over each column of a grid (`segments_over`), each segment
-    /// its own crossing, piers at the stations of the tile at `frame`.
+    /// Every line over each column of a grid of the tile's cells from
+    /// `origin` (`segments_over`), each segment its own crossing, piers at
+    /// the stations of the tile at `frame`.
     pub(crate) fn crossing_grid(
         &self,
         frame: Frame,
-        origin: [f64; 2],
-        step: f64,
+        origin: [i32; 2],
         size: [i64; 2],
         mut each: impl FnMut(i64, i64, usize, Crossing),
     ) {
         let stations = frame.stations();
-        self.segments_over(origin, step, size, |i, j, p| {
-            let at = [i, j].map(|v| v as f64 + f64::from(CELL_CENTER));
-            let at = [origin[0] + at[0] * step, origin[1] + at[1] * step];
-            if let Some(over) = crossing_at(&self.segment(p), at, step, &stations) {
+        let eighths = POINT_SCALE as i32;
+        let center = (CELL_CENTER * way::POINT_SCALE) as i32;
+        self.segments_over(origin.map(f64::from), 1.0, size, |i, j, p| {
+            let at = [i, j].map(|v| v as i32);
+            let at = [0, 1].map(|k| (origin[k] + at[k]) * eighths + center);
+            if let Some(over) = crossing_at(&self.segment(p), at, &stations) {
                 each(i, j, p, over);
             }
         });
@@ -293,16 +295,10 @@ impl Line<'_> {
     }
 }
 
-/// What segment `s` is over the column of side `side` about `at` in its
-/// tile's cells (pxl-engine way.rs `crossing`).
-fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
-    Some(way::crossing(
-        s,
-        at.map(|v| v as f32),
-        side as f32,
-        stations,
-    ))
-    .filter(Crossing::is)
+/// What segment `s` is over the column about `at`, in eighths of its tile's
+/// cells (pxl-engine way.rs `crossing`).
+fn crossing_at(s: &Segment, at: [i32; 2], stations: &Stations) -> Option<Crossing> {
+    Some(way::crossing(s, at, stations)).filter(Crossing::is)
 }
 
 pub fn footprint(width: f64) -> f64 {

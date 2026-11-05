@@ -16,11 +16,10 @@ pub fn halve(n: u32, rooms: [u32; 2], w: u32) -> u32 {
     let scaled = n * (w >> 16);
     let share = (scaled >> 16) + ((scaled & 0xffff) > (w & 0xffff)) as u32;
     let least = n.saturating_sub(rooms[1]);
-    let most = if n < rooms[0] { n } else { rooms[0] };
     if share < least {
         least
-    } else if share > most {
-        most
+    } else if share > rooms[0] {
+        rooms[0]
     } else {
         share
     }

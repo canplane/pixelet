@@ -443,13 +443,15 @@ impl<Q: Brick> Columns for Q {
     fn segment(&self, c: [i32; 2], k: u32) -> Segment {
         segment_at(self, entry_of(self, bin_of(self, c).0 + k))
     }
-    /// In its tile's cells: the brick's first, then the cell's middle.
-    fn center(&self, c: [i32; 2]) -> [f32; 2] {
+    /// In eighths of its tile's cells: the brick's first, then the cell's
+    /// middle.
+    fn center(&self, c: [i32; 2]) -> [i32; 2] {
         let p = self.place();
-        let center = lattice::CELL_CENTER;
+        let eighths = way::POINT_SCALE as i32;
+        let center = (lattice::CELL_CENTER * way::POINT_SCALE) as i32;
         [
-            (p[0] * BRICK) as f32 + c[0] as f32 + center,
-            (p[1] * BRICK) as f32 + c[1] as f32 + center,
+            ((p[0] * BRICK) as i32 + c[0]) * eighths + center,
+            ((p[1] * BRICK) as i32 + c[1]) * eighths + center,
         ]
     }
     /// The wall's one rule (`area::is_wall`), the ring's columns too.

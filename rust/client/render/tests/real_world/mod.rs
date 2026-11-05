@@ -301,15 +301,11 @@ pub fn handed(
     }
     // The tile's lines, every one in every bin of the brick: a bridge, a bore and an
     // approach, each two segments that continue.
-    let leaf_side = (1u32 << s) as f32;
     let per_m = 1.0f32;
     let stations = Stations {
-        step: [
-            way::INTERVAL_M[0] * per_m / leaf_side,
-            way::INTERVAL_M[1] * per_m / leaf_side,
-        ],
-        phase: [[0.0; 2], [3.0, 5.0]],
-        leaf: leaf_side,
+        step: way::INTERVAL_M.map(|m| pxl_engine::cells_of_m(m, per_m)),
+        phase: [[0; 2], [3 << s, 5 << s]],
+        leaf: 1 << s,
     };
     fresh[LINES_AT as usize..(LINES_AT + way::HEADER_WORDS) as usize]
         .copy_from_slice(&way::header(per_m, &stations));

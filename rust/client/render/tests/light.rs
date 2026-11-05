@@ -12,8 +12,8 @@
 //! the map, the list and the misses' args is compared. The light's reciprocals are the host's
 //! words (`Light::inverse`, `Light::t_max_inverse`), and a ray's start is summed in fixed point
 //! (`Starts::start`), read off a probe and held to the Rust's exactly; a slot may take what
-//! a fused sum gives it, each counted: its depth's product fused into the push after it, a
-//! band's distance squared an ulp off; a tile a pixel meets the world within `EDGE` of may be
+//! a fused sum gives it, each counted: its depth's product fused into the push after it; a
+//! slot's band is exact (`Light::band`); a tile a pixel meets the world within `EDGE` of may be
 //! marked or not. Skipped where no adapter answers.
 
 mod gpu;
@@ -412,14 +412,16 @@ fn run_slots(
         }
     }
 
-    // Each needed slot's answer from its ray's start `o`, every band's distance squared `k`
-    // ulps off (`band_by`).
+    // Each needed slot's answer from its ray's start `o`.
     let gone_on = |s: [u32; 2]| {
         let k = light::sample(SIZE, (s[1] % n) * n + s[0] % n) + beam::SAMPLE_NODE;
         list[(k + beam::NODE_ZOOM) as usize] == beam::SAMPLE_NONE
     };
-    let answer = |slot: [u32; 2], o: [i32; 3], k: i32, inv: [f32; 3], kinds: &mut Kinds| {
-        let band_of = |p: [u32; 2]| band_by(&l, c.range, p, k);
+    let answer = |slot: [u32; 2], o: [i32; 3], inv: [f32; 3], kinds: &mut Kinds| {
+        let band_of = |p: [u32; 2]| {
+            let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
+            l.band(SIZE, c.range, tile)
+        };
         let sample_band = |s: [u32; 2]| band_of(l.texel(SIZE, [s[0] * d, s[1] * d]));
         let p = l.texel(SIZE, slot);
         let r = Ray::new(l.dir, l.t_max);
@@ -461,7 +463,7 @@ fn run_slots(
         .iter()
         .map(|&slot| {
             let (o, _) = light::ray(&l, &starts, l.texel(SIZE, slot));
-            answer(slot, o, 0, inv, kinds)
+            answer(slot, o, inv, kinds)
         })
         .collect();
     // The pass over fresh words, the list's count starting at `start`: the map, the list and
@@ -539,15 +541,12 @@ fn run_slots(
     let mut want_map = map0.clone();
     let mut walked = BTreeSet::new();
     let (mut took, mut sky) = (0u32, 0u32);
-    let (mut exact, mut fused, mut banded) = (0u32, 0u32, 0u32);
-    let mut nothing = Kinds::default();
+    let (mut exact, mut fused) = (0u32, 0u32);
     for (&slot, &want) in needed.iter().zip(&wants) {
-        let p = l.texel(SIZE, slot);
-        let (o, _) = light::ray(&l, &starts, p);
         let at = (slot[1] * SIZE + slot[0]) as usize;
         let g = got(at, slot);
-        // The answer the slot is held to: its own, or where a GPU's fused sum in its depth or
-        // its band may give another, the one the hand gave.
+        // The answer the slot is held to: its own, or where a GPU's fused sum in its depth may
+        // give another word, the one the hand gave.
         let held = if matches(want, g) {
             match want {
                 Answer::Entry(t, e) => {
@@ -560,12 +559,6 @@ fn run_slots(
                 }
                 _ => exact += 1,
             }
-            g
-        } else if [-BAND_ULPS, BAND_ULPS]
-            .iter()
-            .any(|&k| matches(answer(slot, o, k, inv, &mut nothing), g))
-        {
-            banded += 1;
             g
         } else {
             match want {
@@ -657,11 +650,10 @@ fn run_slots(
     }
     eprintln!(
         "{name}: {} needed: {took} took, {sky} sky, {walked_n} walked; {exact} exact, {fused} \
-         a depth a product fused into a sum, {banded} a band's distance as a GPU rounds it",
+         a depth a product fused into a sum",
         needed.len()
     );
     kinds.count("slots a depth a product fused into a sum", u64::from(fused));
-    assert!(banded <= BANDS_OVER, "{name}: {banded} slots a band over");
 }
 
 /// A slot's answer: the depth `t` along its ray and the axis it enters its visible sample's
@@ -673,24 +665,6 @@ enum Answer {
     Walk,
     Word(u32),
 }
-
-/// Ulps a band's distance squared is taken off either way: its sum of squares may be fused
-/// (light_aim.wgsl `tile_band`).
-const BAND_ULPS: i32 = 1;
-
-/// The band of box texel `p`'s tile (`Light::band`), its distance squared `k` ulps off.
-fn band_by(l: &Light, range: [Zoom; 2], p: [u32; 2], k: i32) -> Zoom {
-    let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
-    let held = Detail {
-        range,
-        spacing: Spacing::NONE,
-    };
-    let r2 = l.band_dist2(SIZE, tile);
-    held.at(f32::from_bits(r2.to_bits().wrapping_add_signed(k)))
-}
-
-/// Slots a case may hold to a band's distance squared an ulp off (`run_slots`), at most.
-const BANDS_OVER: u32 = 16;
 
 /// The word of a slot that took its visible sample `t` along its ray across `axis`
 /// (`light::depth`, `light::word`), and every word a GPU may leave for it: its share of the
@@ -1240,4 +1214,136 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         })
         .count();
     assert_eq!(off, 0, "{off} texels' starts not the Rust's");
+}
+
+/// Every pass that reads a tile's band (light_aim.wgsl `tile_band`) gives each tile the band
+/// pxl-engine's `Light::band` gives it, so no two passes split over one: a slot's against its
+/// samples' and its walk's, a cell's against its beam rays', a slide's against the cast it
+/// keeps. A probe appended to each pass's module reads every tile of a box, and of the beam
+/// rays' window past it, over boxes of every side, their texels' width at random and where a
+/// tile's distance squared lands on a split distance's.
+#[test]
+fn every_pass_bands_a_tile_alike() {
+    use pxl_engine::grid::INV_SPLIT2;
+    use pxl_engine::FINEST_ZOOM;
+    use pxl_render::frame::shader::record::{
+        compute_entry, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL, SHADER_LIGHT_MISS,
+        SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE,
+    };
+    const PROBE: &str = r"
+@group(0) @binding(40) var<storage, read_write> probe: array<u32>;
+
+@compute @workgroup_size(8, 8, 1)
+fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  let across = head_word(LIGHT_HEAD_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
+  if (id.x >= across || id.y >= across) {
+    return;
+  }
+  probe[id.y * across + id.x] = tile_band(vec2<i32>(id.xy) - vec2<i32>(i32(PROBE_LEAD)));
+}
+";
+    /// Tiles probed before the box's first, as far as the beam rays' window reaches.
+    const LEAD: u32 = light::BEAM_WINDOW + 1;
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let passes = [
+        SHADER_LIGHT,
+        SHADER_LIGHT_SAMPLE,
+        SHADER_LIGHT_MISS,
+        SHADER_LIGHT_MISS_HIT,
+        SHADER_LIGHT_BEAM,
+        SHADER_LIGHT_CELL,
+        SHADER_LIGHT_SLIDE,
+    ]
+    .map(|kind| {
+        let entry = compute_entry(kind);
+        let module = format!(
+            "{}\nconst PROBE_LEAD: u32 = {LEAD}u;\n{PROBE}",
+            gpu::source(src(kind), entry)
+        );
+        (entry, gpu.pipeline(&module, "probe_cs"))
+    });
+    // The texel widths: at random over four octaves either side of one, and where a tile
+    // `g` texels off the middle on each axis lies a split distance off, a last place either
+    // side.
+    let mut widths: Vec<f32> = (0..24)
+        .map(|k| f32::from_bits(0x3e00_0000 + noise(k) % 0x0200_0000))
+        .collect();
+    for (k, g) in [[24u32, 32], [40, 96], [64, 120], [8, 8], [16, 56], [48, 48]]
+        .into_iter()
+        .enumerate()
+    {
+        let split2 = f64::from(1u32 << (2 * (k % 3))) / f64::from(INV_SPLIT2);
+        let w = (split2 / f64::from(g[0] * g[0] + g[1] * g[1])).sqrt() as f32;
+        widths.extend([w.next_down(), w, w.next_up()]);
+    }
+    let sides = [64u32, 256, 1024, 4096];
+    let ranges: [[Zoom; 2]; 2] = [[0, FINEST_ZOOM], [12, 26]];
+    let (mut tiles, mut off, mut split) = (0u64, 0u64, 0u64);
+    for (b, &width) in widths.iter().enumerate() {
+        let size = sides[b % sides.len()];
+        let range = ranges[b % ranges.len()];
+        let l = Light {
+            first: [0.0; 3],
+            t_max: 100.0,
+            across: [width, 0.0, 0.0],
+            down: [0.0, width, 0.0],
+            dir: [0.0, 0.0, -1.0],
+            bias: [0.0; 3],
+            corner: [0, 0],
+            reach_ndc: 1.0,
+        };
+        let mut eye_words = vec![0u32; eye::WORDS];
+        eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
+        eye_words[eye::RANGE] = range[0];
+        eye_words[eye::RANGE + 1] = range[1];
+        let mut head = vec![0u32; light::HEAD_WORDS];
+        head[light::HEAD_SIZE] = size;
+        let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
+        let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let across = light::tiles(size) + 2 * LEAD;
+        let want: Vec<u32> = (0..across * across)
+            .map(|k| {
+                let t = [
+                    (k % across) as i32 - LEAD as i32,
+                    (k / across) as i32 - LEAD as i32,
+                ];
+                l.band(size, range, t)
+            })
+            .collect();
+        let got: Vec<Vec<u32>> = passes
+            .iter()
+            .map(|(_, p)| {
+                let out = gpu.buffer(&vec![u32::MAX; want.len()], wgpu::BufferUsages::STORAGE);
+                gpu.dispatch(
+                    p,
+                    &[
+                        (0, eye_buf.as_entire_binding()),
+                        (11, head_buf.as_entire_binding()),
+                        (40, out.as_entire_binding()),
+                    ],
+                    [across.div_ceil(8), across.div_ceil(8), 1],
+                );
+                gpu.read(&out)
+            })
+            .collect();
+        for k in 0..want.len() {
+            tiles += 1;
+            off += u64::from(got.iter().any(|g| g[k] != want[k]));
+            split += u64::from(got.iter().any(|g| g[k] != got[0][k]));
+        }
+    }
+    let names: Vec<&str> = passes.iter().map(|(e, _)| *e).collect();
+    eprintln!(
+        "{tiles} tiles over {} boxes in {names:?}: {off} off pxl-engine's band, {split} split \
+         between passes",
+        widths.len()
+    );
+    assert_eq!(
+        (off, split),
+        (0, 0),
+        "tiles off the engine's band, split between passes"
+    );
 }

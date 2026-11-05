@@ -91,6 +91,8 @@ fn top_of(cell: u32, h: i32) -> Top {
   return Top(cells + 1i, part);
 }
 
+/// `ground::face_height`: past the leaves the leaf cell top `t`'s cell lies in, rounded down
+/// under sea level as over it; under them the cells scaled.
 fn face_height(cell: u32, t: i32) -> i32 {
   if (cell >= LEAF_CELL) {
     return t >> (cell - LEAF_CELL);

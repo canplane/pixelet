@@ -32,11 +32,11 @@ fn texel_start(w: vec2<i32>) -> vec3<i32> {
   return at + high + (low >> s);
 }
 
-/// The texels from the box's middle to tile `k`'s span on one axis (`Light::band`).
-fn gap(k: i32, half: f32) -> f32 {
-  let a = f32(k) * f32(LIGHT_TILE);
-  let b = f32(k + 1i) * f32(LIGHT_TILE);
-  return max(max(a - half, half - b), 0.0);
+/// The texels from the box's middle, `half` texels in, to tile `k`'s span on one axis, a whole
+/// number (`light::band_texels2`).
+fn gap(k: i32, half: i32) -> i32 {
+  let t = i32(LIGHT_TILE);
+  return max(max(k * t - half, half - (k + 1i) * t), 0i);
 }
 
 /// The slot's texel of the box (`Light::texel`).
@@ -48,13 +48,15 @@ fn light_corner() -> vec2<i32> {
   return vec2<i32>(i32(eye_word(LIGHT + LIGHT_CORNER_X)), i32(eye_word(LIGHT + LIGHT_CORNER_Y)));
 }
 
-/// The band of box tile `tile`, which may lie past the box (`Light::band`).
+/// The band of box tile `tile`, which may lie past the box (`Light::band`): its texels squared, a
+/// whole number under 2^24, times the host's scale, one product, so every pass gives a tile
+/// the same band.
 fn tile_band(tile: vec2<i32>) -> u32 {
-  let half = f32(head_word(LIGHT_HEAD_SIZE)) * 0.5;
-  let width = eye_f32(LIGHT + LIGHT_WIDTH);
-  let x = gap(tile.x, half) * width;
-  let y = gap(tile.y, half) * width;
-  return zoom_at(x * x + y * y, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+  let half = i32(head_word(LIGHT_HEAD_SIZE) / 2u);
+  let x = gap(tile.x, half);
+  let y = gap(tile.y, half);
+  let s2 = f32(x * x + y * y) * eye_f32(LIGHT + LIGHT_BAND_SCALE);
+  return zoom_in_splits(s2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
 }
 
 /// The band of the tile a texel lies on (`Light::band`).

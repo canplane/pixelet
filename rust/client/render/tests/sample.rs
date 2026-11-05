@@ -1047,6 +1047,81 @@ fn run_frame(
         .keys()
         .filter(|k| !hand_kept.contains_key(*k))
         .count();
+
+    // What is kept is a cache of what the rays asked: which of the nodes a full bucket's walks
+    // ask are kept is the order the walks run in (pxl-engine node_cache.rs). On each side, whatever
+    // the order: no slot written that this frame wrote or a walk claims; no node kept twice at one
+    // zoom pair; no node asked here gone while its bucket has a free slot; and a node one side
+    // alone kept lies in a bucket the side without it left full. A node a GPU's rounding has a
+    // ray of the left enter, where the Rust's does not, or not enter, is a grazing. The last two
+    // are how full the cache is kept, not what is drawn: the Rust, one walk at a time, holds
+    // them; the GPU's claims racing may drop a node with room left (a walk that reads a slot
+    // claimed for another node through its re-reads keeps none), so its count is told, not
+    // failed.
+    let key_of = |t: &[u32], e: u32| t[node_cache::entry_at(e) as usize];
+    let full = |t: &[u32], b: u32| (b..b + BUCKET).all(|e| key_of(t, e) != 0);
+    // Whether a slot of `t` but `but` holds the node at `zooms`, or a claim laid to keep it.
+    let holds_node = |t: &[u32], zoom: Zoom, c: [i32; 3], zooms: [Zoom; 2], but: u32| {
+        let b = node_cache::entry_of(zoom, c);
+        (b..b + BUCKET).any(|e| {
+            let w = node_cache::entry_at(e) as usize;
+            e != but
+                && (t[w] == node_cache::claim(zoom, c, zooms)
+                    || node_cache::holds(t[w], zooms) && is_node(t, w, zoom, c))
+        })
+    };
+    let grazing = |zoom: Zoom, c: [i32; 3], zooms: [Zoom; 2]| {
+        visits_off != 0 && met_ref.get(&(zoom, c, zooms)).copied().unwrap_or(0) < SURE
+    };
+    // Each side's slots taken that stand, nodes kept twice, nodes asked and gone from a bucket
+    // with room, and nodes it lacks that the other kept, in a bucket with room.
+    let mut wrong = [[0u64; 4]; 2];
+    let mut first_wrong = None;
+    for (side, (t, kept, other)) in [
+        (&table_hand, &hand_kept, &ref_kept),
+        (&table_ref, &ref_kept, &hand_kept),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut note = |what: usize, at: (Zoom, [i32; 3], [Zoom; 2])| {
+            wrong[side][what] += 1;
+            if side == 1 || what < 2 {
+                first_wrong.get_or_insert((side, what, at));
+            }
+        };
+        for (&(zoom, c, key), &(e, _)) in kept {
+            let held = key_of(table0, e);
+            if held != 0
+                && (node_cache::claimed(held)
+                    || node_cache::tag_of(held) / node_cache::PASSES >= frame)
+            {
+                note(0, (zoom, c, key_zooms(key)));
+            }
+            if holds_node(t, zoom, c, key_zooms(key), e) {
+                note(1, (zoom, c, key_zooms(key)));
+            }
+        }
+        for &(zoom, c, zooms) in met_ref.keys() {
+            let b = node_cache::entry_of(zoom, c);
+            if node_cache::keeps(zoom, c)
+                && !holds_node(t, zoom, c, zooms, node_cache::NONE)
+                && !full(t, b)
+                && !(side == 0 && grazing(zoom, c, zooms))
+            {
+                note(2, (zoom, c, zooms));
+            }
+        }
+        for &(zoom, c, key) in other.keys() {
+            let zooms = key_zooms(key);
+            if !holds_node(t, zoom, c, zooms, node_cache::NONE)
+                && !full(t, node_cache::entry_of(zoom, c))
+                && !grazing(zoom, c, zooms)
+            {
+                note(3, (zoom, c, zooms));
+            }
+        }
+    }
     kinds.count("not needed", none_put);
     kinds.count("kept", hand_kept.len() as u64);
     kinds.count("kept, filled", filled);
@@ -1124,11 +1199,16 @@ fn run_frame(
     if bad != 0 {
         fail(format!("{bad} kept wrong, first {first_bad:?}"));
     }
-    // Walks at once may each ask a node one before the other would have read, and claim apart:
-    // a few kept by one side alone, never many.
-    if only_hand as usize > hand_kept.len() / 25 + 16 || only_ref > ref_kept.len() / 4 + 16 {
+    kinds.count(
+        "kept: asked and lost with room, the claims racing",
+        wrong[0][2] + wrong[0][3],
+    );
+    let (lost, other_lacked) = (wrong[0][2], wrong[0][3]);
+    wrong[0][2] = 0;
+    wrong[0][3] = 0;
+    if wrong != [[0; 4]; 2] {
         fail(format!(
-            "kept apart: {only_hand} by the hand alone of {}, {only_ref} by the Rust alone of {}",
+            "kept against the rule, the hand's then the Rust's (slots taken that stand, nodes kept twice, asked and gone with room, the other's kept and lacked with room; the hand's last two told: {lost}, {other_lacked}): {wrong:?}, first (side, which, node) {first_wrong:?}; {only_hand} kept by the hand alone of {}, {only_ref} by the Rust alone of {}",
             hand_kept.len(),
             ref_kept.len()
         ));
@@ -1551,7 +1631,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
         least: &[
             ("hit", 25438),
             ("hit, on x", 120),
-            ("hit, on y", 58),
+            ("hit, on y", 29),
             ("hit, placed", 25222),
             ("kept", 7),
             ("kept, far and near apart", 2),
@@ -1735,9 +1815,9 @@ fn hand_light_samples_answer_as_cast_walk() {
             listed: Some(23),
             least: &[
                 ("from the root", 2392),
-                ("hit", 11272),
+                ("hit", 11256),
                 ("hit, a way's", 357),
-                ("hit, short of its cube", 2716),
+                ("hit, short of its cube", 2704),
                 ("kept", 4400),
                 ("left", 3500),
                 ("left, past its reach", 50),
@@ -1927,7 +2007,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         name: "the light along an axis, one band, resumed where its node is left",
         range: [LEAF_CELL, LEAF_CELL],
         least: &[
-            ("hit", 7897),
+            ("hit", 7894),
             ("left", 4100),
             ("left, climbing", 250),
             ("resumed", 8192),

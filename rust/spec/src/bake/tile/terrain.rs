@@ -32,7 +32,6 @@ use pxl_engine::clipmap::Brick;
 pub use pxl_engine::clipmap::{WAYS_ACROSS, WAYS_SHIFT};
 use pxl_engine::fill;
 use pxl_engine::ground;
-use pxl_engine::lattice;
 use pxl_engine::way;
 
 /// The most a packet takes: every column at its longest, a palette index a cell four
@@ -238,9 +237,8 @@ fn laid<'a>(
         ground::word(four_palette_indices(&ground.cells, c).map(u32::from))
     };
     let height = move |c: [i32; 2]| {
-        let at =
-            [0, 1].map(|a| (place[a] * clipmap::BRICK) as f32 + c[a] as f32 + lattice::CELL_CENTER);
-        ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
+        let at = [0, 1].map(|a| (place[a] * clipmap::BRICK) as i32 + c[a]);
+        ground::height(|j| i32::from(ele[j]), at)
     };
     let cell = GROUND.cell_zoom(tile.zoom);
     TileBrick {

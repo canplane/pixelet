@@ -133,7 +133,8 @@ pub(crate) fn render_polygon<T: Copy>(
 
 /// Every cell whose center the way covers along a segment (pxl-engine
 /// way.rs `on_way`, the rule a column is crossed by), its line cut square
-/// where `cut` says at its first and last.
+/// where `cut` says at its first and last; its points and width in eighths
+/// of a cell, as the rule takes them (`way::eighths`).
 fn render_linear_feat(
     points: &[P],
     val: GroundId,
@@ -142,14 +143,18 @@ fn render_linear_feat(
     cut: [bool; 2],
     mask: Sea,
 ) {
-    let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
-    let half_width = f64::from(way::half_width(width));
+    let width = way::eighths(width_cell).max(0) as u32;
+    let scale = f64::from(way::POINT_SCALE);
+    let half_width = f64::from(way::half_width(width as f32 / way::POINT_SCALE));
+    let (eighths, center) = (way::POINT_SCALE as i32, f64::from(CELL_CENTER));
+    let middle = (CELL_CENTER * way::POINT_SCALE) as i32;
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
-        let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
+        let ab = [w[0], w[1]].map(|p| [way::eighths(p[0]), way::eighths(p[1])]);
         let span = |k: usize| {
-            let lo = (a[k].min(b[k]) - half_width - center).ceil().max(0.0) as i64;
-            let hi = (a[k].max(b[k]) + half_width - center)
+            let (a, b) = (f64::from(ab[0][k]) / scale, f64::from(ab[1][k]) / scale);
+            let lo = (a.min(b) - half_width - center).ceil().max(0.0) as i64;
+            let hi = (a.max(b) + half_width - center)
                 .floor()
                 .min((SPAN - 1) as f64) as i64;
             lo..=hi
@@ -157,8 +162,8 @@ fn render_linear_feat(
         let ends = [s == 0 && cut[0], s == last && cut[1]];
         for y in span(1) {
             for x in span(0) {
-                let at = [x as f64 + center, y as f64 + center].map(|v| v as f32);
-                if way::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
+                let at = [x as i32 * eighths + middle, y as i32 * eighths + middle];
+                if way::on_way(ab, width, ends, at).1 {
                     put(cells, mask, cell_idx(x, y), val);
                 }
             }

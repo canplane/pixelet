@@ -21,7 +21,7 @@ use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGH
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_render::gpu::shadow;
 
-use gpu::{mix, Gpu, LightBox, Tally};
+use gpu::{mix, ulps, Gpu, LightBox, Tally};
 
 /// The shipped map's side, and its tiles a side.
 const SIZE: u32 = shadow::SIZE;
@@ -467,6 +467,26 @@ fn lights() -> [(&'static str, Light); 4] {
     ]
 }
 
+/// The ulps of a step's way up from a whole number of tiles within which the device's
+/// division, `k` over the steps, may floor it to the other tile: WGSL's bound on a division,
+/// 2.5 ulps, past the 13 measured on Metal.
+const EDGE_ULPS: u32 = 16;
+
+/// The steps of the way `up` whose offset along an axis lies within `EDGE_ULPS` of a whole
+/// number of tiles other than none, which the device's division leaves none (`Light::up_at`).
+fn steps_at_edge(up: ([f32; 2], u32)) -> u32 {
+    let (way, steps) = up;
+    (1..=steps)
+        .filter(|&k| {
+            let f = k as f32 / steps as f32;
+            way.iter().any(|&w| {
+                let v = w * f;
+                v != 0.0 && ulps(v, v.round_ties_even()) <= EDGE_ULPS
+            })
+        })
+        .count() as u32
+}
+
 #[test]
 fn hand_propagation_claims_as_the_rust() {
     let Some(gpu) = Gpu::new() else {
@@ -477,8 +497,10 @@ fn hand_propagation_claims_as_the_rust() {
     let mut tally = Tally::default();
     let mut all = Told::default();
     let mut steps_most = 0;
+    let mut at_edge = 0;
     for (n, (name, l)) in lights().into_iter().enumerate() {
         steps_most = steps_most.max(l.up::<Pixelet>().1);
+        at_edge += steps_at_edge(l.up::<Pixelet>());
         let seed = n as u32 * 31 + 5;
         // The epoch begun, within it, within it with no tile left to claim, and with one,
         // the list it claims onto a whole number of its pass's rows full; and the cast's number
@@ -544,11 +566,14 @@ fn hand_propagation_claims_as_the_rust() {
             }
         }
     }
-    eprintln!("all: {all:?}, the longest way up {steps_most} steps");
+    eprintln!("all: {all:?}, the longest way up {steps_most} steps, {at_edge} at an edge");
     assert!(all.past > 0 && all.unread > 0, "{all:?}");
     assert!(all.listed.iter().all(|&k| k > 0), "{all:?}");
     assert!(all.read_up > 0 && steps_most > 1, "{all:?}");
     assert!(all.over_mark > 0, "{all:?}");
+    // The device's division moves no step of these lights to another tile, so their words
+    // compare exactly.
+    assert_eq!(at_edge, 0, "steps within EDGE_ULPS of a whole tile");
     tally.end("propagation");
 }
 

@@ -53,14 +53,13 @@ fn up() -> Up {
   let low = texel_at(vec3<f32>(0.0));
   let top = texel_at(vec3<f32>(0.0, 0.0, f32(TALLEST)));
   let way = (top - low) * (1.0 / f32(LIGHT_TILE));
-  let steps = u32(ceil(max(abs(way.x), abs(way.y))));
-  return Up(way, select(1u << (32u - countLeadingZeros(steps - 1u)), 0u, steps == 0u));
+  return Up(way, u32(ceil(max(abs(way.x), abs(way.y)))));
 }
 
 /// The `k`-th step of the way up, whole tiles from the tile stood on, rounded down
 /// (`Light::up_at`).
 fn up_at(u: Up, k: u32) -> vec2<i32> {
-  let f = ldexp(f32(k), -i32(countTrailingZeros(u.steps)));
+  let f = select(f32(k) / f32(u.steps), 0.0, u.steps == 0u);
   return vec2<i32>(floor(u.way * f));
 }
 

@@ -54,7 +54,6 @@ fn bytes(words: &[u32]) -> &[u8] {
 struct Hand {
     fresh: Vec<u32>,
     cell: Zoom,
-    shard: Shard,
     name: String,
 }
 
@@ -97,7 +96,6 @@ fn hand(
     Hand {
         fresh,
         cell,
-        shard,
         name: format!("cell {cell} brick {q:?}"),
     }
 }
@@ -119,9 +117,11 @@ fn bins(fresh: &mut [u32], n: u32, place: [u32; 2]) {
         let first = entries.len() as u32;
         for k in 0..n {
             let s = Segment::of(segment(fresh, k as usize));
-            let reach = way::footprint(s.width);
+            let cells = |v: i32| v as f32 / way::POINT_SCALE;
+            let reach = way::footprint(cells(s.width as i32));
             let reaches = (0..2).all(|i| {
-                s.a[i].min(s.b[i]) - reach <= hi[i] && s.a[i].max(s.b[i]) + reach >= lo[i]
+                cells(s.a[i].min(s.b[i])) - reach <= hi[i]
+                    && cells(s.a[i].max(s.b[i])) + reach >= lo[i]
             });
             if reaches {
                 entries.push(k);
@@ -202,142 +202,9 @@ fn ground_at(h: &Hand, q: [i32; 2]) -> i16 {
     ground::height(samples, place) as i16
 }
 
-/// A handed brick as its fill reads it (`clipmap::Brick`): its record, its ground and its
-/// shard.
-struct Handed<'a> {
-    fresh: &'a [u32],
-    ground: &'a [u32],
-    base: u32,
-    shard: Shard,
-}
-
-impl Handed<'_> {
-    fn sample(&self, i: usize) -> i32 {
-        ((self.fresh[clip::ELE_AT as usize + i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16
-    }
-}
-
-impl clip::Brick for Handed<'_> {
-    fn cell(&self) -> Zoom {
-        self.fresh[clip::FILL_CELL as usize]
-    }
-    fn place(&self) -> [u32; 2] {
-        let w = self.fresh[clip::FILL_PLACE as usize];
-        [w & 0xffff, w >> 16]
-    }
-    fn first(&self) -> [i32; 2] {
-        let at = clip::FILL_FIRST as usize;
-        [self.fresh[at] as i32, self.fresh[at + 1] as i32]
-    }
-    fn shard(&self) -> Shard {
-        self.shard
-    }
-    fn line(&self, k: u32) -> u32 {
-        self.fresh[(LINES_AT + k) as usize]
-    }
-    fn laid(&self, i: u32) -> u32 {
-        fill::laid_of(self.ground, self.base, i)
-    }
-    fn height(&self, c: [i32; 2]) -> i32 {
-        if c[0] >= 0 && c[1] >= 0 && c[0] < BRICK as i32 && c[1] < BRICK as i32 {
-            let i = clip::idx_of([c[0] as u32, c[1] as u32]);
-            return clip::column_top(fill::column_of(self.ground, self.base, i));
-        }
-        let p = clip::Brick::place(self);
-        let g = [(p[0] * BRICK) as i32 + c[0], (p[1] * BRICK) as i32 + c[1]];
-        ground::height(|i| self.sample(i), g)
-    }
-}
-
-/// `h` with its columns' middles `ulps` off along each axis, and a ring column's height
-/// drawn at a point `ring` ulps off its middle: what a GPU's float an ulp off the CPU's
-/// reads where the CPU's lies on a rounding's or a comparison's edge.
-struct Nudged<'a> {
-    h: &'a Handed<'a>,
-    ulps: [i32; 2],
-    ring: i32,
-}
-
-fn nudge(v: f32, ulps: i32) -> f32 {
-    f32::from_bits((v.to_bits() as i32 + ulps) as u32)
-}
-
-impl way::Columns for Nudged<'_> {
-    fn cell(&self) -> Zoom {
-        way::Columns::cell(self.h)
-    }
-    fn per_m(&self) -> f32 {
-        way::Columns::per_m(self.h)
-    }
-    fn cnt(&self, c: [i32; 2]) -> u32 {
-        way::Columns::cnt(self.h, c)
-    }
-    fn segment(&self, c: [i32; 2], k: u32) -> Segment {
-        way::Columns::segment(self.h, c, k)
-    }
-    fn center(&self, c: [i32; 2]) -> [f32; 2] {
-        let p = way::Columns::center(self.h, c);
-        [nudge(p[0], self.ulps[0]), nudge(p[1], self.ulps[1])]
-    }
-    fn stations(&self) -> way::Stations {
-        way::Columns::stations(self.h)
-    }
-    fn palette_idx(&self, c: [i32; 2]) -> u32 {
-        way::Columns::palette_idx(self.h, c)
-    }
-    fn is_walled(&self, c: [i32; 2]) -> bool {
-        way::Columns::is_walled(self.h, c)
-    }
-    fn face(&self, c: [i32; 2]) -> i32 {
-        let side = BRICK as i32;
-        let own = c[0] >= 0 && c[1] >= 0 && c[0] < side && c[1] < side;
-        let held = c.iter().all(|&v| (-1..=side).contains(&v));
-        if own || !held || self.ring == 0 {
-            return way::Columns::face(self.h, c);
-        }
-        let cell = way::Columns::cell(self.h);
-        let p = clip::Brick::place(self.h);
-        let t = |k: usize| nudge((p[k] * BRICK) as f32 + c[k] as f32 + 0.5, self.ring);
-        let h = ground::bicubic(|i| self.h.sample(i), t(0), t(1));
-        ground::face_height(cell, ground::cells(cell, h as f32))
-    }
-    fn joins(&self, c: [i32; 2], k: u32) -> bool {
-        way::Columns::joins(self.h, c, k)
-    }
-}
-
-/// Column `c`'s spans' words as its fill keeps them (fill.rs `keep`).
-fn kept((s, fits): (way::Spans, bool)) -> Vec<u32> {
-    let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
-    let face = if s.face == i32::MIN {
-        i16::MIN as i32
-    } else {
-        held(s.face).max(i16::MIN as i32 + 1)
-    };
-    let mut w = vec![s.n | if fits { 0 } else { fill::SPANS_PAST } | (face as u32) << 16];
-    for j in 0..s.n as usize {
-        let run = [held(s.run[j][0]), held(s.run[j][1])];
-        w.push((run[0] & 0xffff | run[1] << 16) as u32);
-        w.push(s.val[j]);
-    }
-    w
-}
-
-/// Brick `h`'s spans from `mine` as the GPU kept them, `got`, against the CPU's, `want`: a
-/// column's alike, or alike the CPU's an ulp off where its float lies on an edge (`Nudged`).
-fn spans_alike(
-    want: &[u32],
-    got: &[u32],
-    mine: usize,
-    (h, slot, ground): (&Hand, u32, &[u32]),
-    tally: &mut Tally,
-) {
-    let handed = Handed {
-        fresh: &h.fresh,
-        ground,
-        base: slot * BRICK_WORDS,
-        shard: h.shard,
-    };
+/// Brick `h`'s spans from `mine` as the GPU kept them, `got`, against the CPU's, `want`,
+/// word for word: a column apart counted.
+fn spans_alike(want: &[u32], got: &[u32], mine: usize, h: &Hand, tally: &mut Tally) {
     for i in 0..SPANS_COLUMNS as usize {
         let at = mine + (SPANS_AT + i as u32 * SPANS_COLUMN_WORDS) as usize;
         let len = 1 + 2 * (want[at] & fill::SPANS_CNT) as usize;
@@ -347,26 +214,13 @@ fn spans_alike(
             (i as u32 / (BRICK + 2)) as i32 - 1,
         ];
         if got[at..at + got_len] != want[at..at + len] {
-            let near = (-1..=1).any(|ulps_x| {
-                (-1..=1).any(|ulps_y| {
-                    (-1..=1).any(|ring| {
-                        let n = Nudged {
-                            h: &handed,
-                            ulps: [ulps_x, ulps_y],
-                            ring,
-                        };
-                        kept(way::column(&n, c)) == got[at..at + got_len]
-                    })
-                })
-            });
-            assert!(
-                near,
+            eprintln!(
                 "{}: column {c:?}'s spans {:?}, the CPU's {:?}",
                 h.name,
                 &got[at..at + got_len],
                 &want[at..at + len]
             );
-            tally.add("spans an ulp off");
+            tally.add("spans apart");
         }
         let spans = want[at] & fill::SPANS_CNT;
         tally.add("a column");
@@ -737,15 +591,9 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
     upload(&run.ground);
     gpu.fill(b, n, 0..2);
     let got_scratch = gpu.read(&b.scratch);
-    for (k, (h, slot)) in frame.hands.iter().enumerate() {
+    for (k, (h, _)) in frame.hands.iter().enumerate() {
         let mine = fill::scratch_at(&scratch, k as u32) as usize;
-        spans_alike(
-            &scratch,
-            &got_scratch,
-            mine,
-            (h, *slot, &run.ground),
-            &mut run.tally,
-        );
+        spans_alike(&scratch, &got_scratch, mine, h, &mut run.tally);
     }
     for (k, (h, slot)) in frame.hands.iter().enumerate() {
         let spans = fill::Scratch {
@@ -1107,6 +955,53 @@ fn hand_ways_fill_as_the_rust() {
         h.name += " ending inside";
         bricks.push(h);
     }
+    // Bridges whose edge passes exactly through a column's center at a third or a fifth of
+    // their run, a share no float holds, so whether the column is covered turns on the last
+    // bit of a float's distance (`way::on_way`): each run four ways about, the column on
+    // either side, at the leaves and a zoom over.
+    for (k, cell) in [(0, LEAF_CELL), (1, LEAF_CELL - 1)] {
+        let first = level_first(EYE, cell);
+        let q = [first[0] + 6 + k, first[1] + 5];
+        let h = hand(EYE, &area, (cell, q), false, &[]);
+        let g = ground_at(&h, q) as i32;
+        let origin = [(q[0] & 7) * 64, (q[1] & 7) * 64];
+        let mut more = Vec::new();
+        for (j, (run, share)) in [
+            ([72, 96], [1, 3]),
+            ([72, 96], [2, 3]),
+            ([360, 480], [1, 5]),
+            ([360, 480], [2, 5]),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for turn in 0..4 {
+                for side in [-1, 1] {
+                    // The run and, 10 eighths off it, its normal, a quarter turn at a time.
+                    let rot = |v: [i32; 2]| (0..turn).fold(v, |v, _| [-v[1], v[0]]);
+                    let (d, normal) = (rot(run), rot([-8 * side, 6 * side]));
+                    let cell_at = [12 + 10 * j as i32, 8 + 12 * turn + 3 * (side + 1)];
+                    let c = [0, 1].map(|i| (origin[i] + cell_at[i]) * 8 + 4);
+                    let a = [0, 1].map(|i| c[i] - d[i] * share[0] / share[1] - normal[i]);
+                    let b = [a[0] + d[0], a[1] + d[1]];
+                    let kind = value::TRANSPORTS[0] + more.len() as u32 % 19;
+                    more.push(Segment::words(
+                        [a.map(|v| v as i16), b.map(|v| v as i16)],
+                        [(g + 30) as i16; 2],
+                        [
+                            20,
+                            kind as u8,
+                            way::flags(way::BRIDGE, true, true, false),
+                            0,
+                        ],
+                    ));
+                }
+            }
+        }
+        let mut h = hand(EYE, &area, (cell, q), false, &more);
+        h.name += " on its edges";
+        bricks.push(h);
+    }
     // Bores stacked over the same columns, more than a column's spans hold.
     {
         let q = [leaf[0] + 1, leaf[1] + 5];
@@ -1204,11 +1099,12 @@ fn hand_ways_fill_as_the_rust() {
     for (name, n) in &run.tally.0 {
         eprintln!("  {name}: {n}");
     }
-    let off = run.tally.0.get("spans an ulp off").copied().unwrap_or(0);
-    assert!(
-        off * 2000 < run.tally.0["a column"],
-        "{off} columns' spans an ulp off"
+    let apart = run.tally.0.get("spans apart").copied().unwrap_or(0);
+    eprintln!(
+        "{apart} of {} columns' spans apart from the CPU's",
+        run.tally.0["a column"]
     );
+    assert_eq!(apart, 0, "every column's spans the CPU's");
     for name in [
         "built",
         "no ways",

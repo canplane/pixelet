@@ -22,6 +22,7 @@ use crate::cast::Spacing;
 use crate::cast::{End, Ray, Trace};
 use crate::content::Content;
 use crate::eye;
+use crate::grid;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
 use crate::{axis, Zoom, FRAC_W};
@@ -40,8 +41,9 @@ use core::f32::consts::SQRT_2;
 /// a rule both the CPU and a GPU decide multiplies by in place of a division,
 /// each rounded once by the host (`words`): the rays' direction's (`inverse`)
 /// and the reach's (`t_max_inverse`), a vec4; then the squares of the steps
-/// across and down (`across2_inverse`, `down2_inverse`) and the width's
-/// (`width_inverse`).
+/// across and down (`across2_inverse`, `down2_inverse`), the width's
+/// (`width_inverse`) and the width squared over the split distance squared
+/// (`band_scale`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
@@ -184,10 +186,9 @@ impl Light {
     }
 
     /// The way up `C`'s tallest decor (`Content::TALLEST`) on the box, in
-    /// tiles across and down, and the steps it takes a tile apart at most, a
-    /// power of two, so a step's share of the way is a power of two's scaling
-    /// (`up_at`): a receiver standing on a tile reads the box up it, decor and
-    /// the actors no taller (pxl-render light_propagate.wgsl). The box is
+    /// tiles across and down, and the steps it takes a tile apart at most:
+    /// a receiver standing on a tile reads the box up it, decor and the
+    /// actors no taller (pxl-render light_propagate.wgsl). The box is
     /// orthographic, so it is the same from every tile.
     pub fn up<C: Content>(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
@@ -197,23 +198,18 @@ impl Light {
         );
         let way = [(top[0] - low[0]) * tile, (top[1] - low[1]) * tile];
         let long = libm::fabsf(way[0]).max(libm::fabsf(way[1]));
-        let steps = libm::ceilf(long) as u32;
-        (
-            way,
-            if steps == 0 {
-                0
-            } else {
-                steps.next_power_of_two()
-            },
-        )
+        (way, libm::ceilf(long) as u32)
     }
 
     /// The `k`-th step of the way `up`, whole tiles from the tile stood on,
     /// rounded down: a point that far up lies this many tiles over or one
-    /// more, as the point stood on lies anywhere in its tile. Its share of the
-    /// way, `k` over the steps, is `k` scaled by a power of two.
+    /// more, as the point stood on lies anywhere in its tile.
     pub fn up_at((way, steps): ([f32; 2], u32), k: u32) -> [i32; 2] {
-        let f = libm::ldexpf(k as f32, -(steps.trailing_zeros() as i32));
+        let f = if steps == 0 {
+            0.0
+        } else {
+            k as f32 / steps as f32
+        };
         [
             libm::floorf(way[0] * f) as i32,
             libm::floorf(way[1] * f) as i32,
@@ -296,32 +292,28 @@ impl Light {
     /// `range` (`eye::RANGE`). The tile's place in the box alone, the same
     /// wherever the eye stands in it, and as fine as the eye asks anywhere in
     /// the column.
+    ///
+    /// Every pass that reads a tile's band must give it the same one: a slot
+    /// takes a sample walked at its own band, a cell resumes from beam rays
+    /// walked at its, a slide keeps a tile cast at its. So the band is exact:
+    /// the distance squared is a whole number of texels squared
+    /// (`band_texels2`) times `band_scale`, one product, which no device
+    /// fuses or reorders.
     pub fn band(&self, size: u32, range: [Zoom; 2], tile: [i32; 2]) -> Zoom {
         let held = cast::Detail {
             range,
             spacing: Spacing::NONE,
         };
-        held.at(self.band_dist2(size, tile))
+        held.hold(grid::cell_zoom_in_splits(
+            band_texels2(size, tile) as f32 * self.band_scale(),
+        ))
     }
 
-    /// The distance squared a band is asked at (`band`): from the box's middle to the
-    /// nearest point of box tile `tile`'s column, in units.
-    pub fn band_dist2(&self, size: u32, tile: [i32; 2]) -> f32 {
-        let (half, t) = (size as f32 / 2.0, TILE as f32);
-        // Texels from the middle to the tile's span on one axis, none within it.
-        let gap = |k: i32| {
-            let (a, b) = (k as f32 * t, (k + 1) as f32 * t);
-            if half < a {
-                a - half
-            } else if half > b {
-                half - b
-            } else {
-                0.0
-            }
-        };
-        let x = gap(tile[0]) * self.width();
-        let y = gap(tile[1]) * self.width();
-        x * x + y * y
+    /// A texel's width squared over the split distance squared, the scale of
+    /// a band's texels squared (`band`), rounded once by the host and handed
+    /// the shaders in a word (`W_BAND_SCALE`).
+    pub fn band_scale(&self) -> f32 {
+        self.width() * self.width() * grid::INV_SPLIT2
     }
 
     /// Whether box tile `tile`, the map `size` texels a side, keeps what a
@@ -388,7 +380,7 @@ impl Light {
                 self.across2_inverse().to_bits(),
                 self.down2_inverse().to_bits(),
                 self.width_inverse().to_bits(),
-                0,
+                self.band_scale().to_bits(),
             ],
         ];
         let mut out = [0; eye::LIGHT_WORDS];
@@ -413,6 +405,20 @@ pub const W_T_MAX_INVERSE: usize = 23;
 pub const W_ACROSS2_INVERSE: usize = 24;
 pub const W_DOWN2_INVERSE: usize = 25;
 pub const W_WIDTH_INVERSE: usize = 26;
+pub const W_BAND_SCALE: usize = 27;
+
+/// The texels squared from the middle of a box `size` a side to the nearest
+/// point of box tile `tile`'s column (`Light::band`), each axis's gap a whole
+/// number of texels, as the middle and the tiles' edges lie on texels' edges.
+/// A side of at most 4096 and the beam rays' window past it keep a gap under
+/// 2^11.5, so the sum stays under 2^24 and is a float exactly: twice `ANCHOR`,
+/// the host's side at most.
+pub fn band_texels2(size: u32, tile: [i32; 2]) -> u32 {
+    let (half, t) = ((size / 2) as i32, TILE as i32);
+    let gap = |k: i32| (k * t - half).max(half - (k + 1) * t).max(0).unsigned_abs();
+    let (x, y) = (gap(tile[0]), gap(tile[1]));
+    x * x + y * y
+}
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
@@ -499,6 +505,10 @@ pub struct Starts {
 }
 
 pub const ANCHOR: i32 = 2048;
+const _: () = assert!(
+    2 * (ANCHOR as u32 + (BEAM_WINDOW + 1) * TILE).pow(2) < 1 << 24,
+    "a band's texels squared are a float exactly (`band_texels2`)"
+);
 
 /// The fractional bits of a Q3 step a start's steps and remainders hold
 /// (`Starts`), where `start` splits each step: its whole steps, under 2^14
@@ -1211,7 +1221,7 @@ mod tests {
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
         );
-        assert_eq!(up.1, (libm::ceilf(rise) as u32).next_power_of_two());
+        assert_eq!(up.1, libm::ceilf(rise) as u32);
         assert_eq!(Light::up_at(up, 0), [0, 0]);
         assert_eq!(Light::up_at(up, up.1), [libm::floorf(rise) as i32, 0]);
         // A point on the near plane under texel 9's middle stands on tile 1.

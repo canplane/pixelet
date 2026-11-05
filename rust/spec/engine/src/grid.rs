@@ -73,7 +73,13 @@ pub const INV_SPLIT2: f32 = 1.0 / ((CELLS_A_RAD / SPANS) * (CELLS_A_RAD / SPANS)
 /// scales to `4^k` exactly and begins its zoom (pxl-spec
 /// space/camera/grid.test.rs `zoom_cell_dist`).
 pub fn cell_zoom_at(r2: f32) -> Zoom {
-    let x2 = r2 * INV_SPLIT2;
+    cell_zoom_in_splits(r2 * INV_SPLIT2)
+}
+
+/// The camera grid's cell zoom at `x2`, a distance squared in split
+/// distances squared (`cell_zoom_at`), for a rule that scales it by a word of
+/// its own (pxl-engine light.rs `Light::band`).
+pub fn cell_zoom_in_splits(x2: f32) -> Zoom {
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }

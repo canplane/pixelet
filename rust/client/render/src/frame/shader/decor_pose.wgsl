@@ -243,7 +243,8 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let v = world_cell(vec4<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide).asset.x;
     if (stage == STAGE_WALK) {
       if (fills(v)) {
-        eighths = fill_eighths(v);
+        // The eighths of its cube the cell keeps, 0 for all eight, which `sink_share` reads as eight.
+        eighths = v >> FILL_SHIFT;
         stage = STAGE_MET;
       } else {
         z -= 1i;
@@ -286,10 +287,4 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   } else {
     records[r] = record_word(j, variant, turn, cell);
   }
-}
-
-/// `answer::fill_eighths`.
-fn fill_eighths(asset: u32) -> u32 {
-  let k = (asset >> FILL_SHIFT) & (EIGHTHS - 1u);
-  return select(k, EIGHTHS, k == 0u);
 }

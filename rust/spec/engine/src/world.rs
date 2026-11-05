@@ -253,14 +253,14 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             // A way's palette index four times where one wrote it, whatever its value.
             let w = tree::read(way);
             let (f, theirs) = cover(fill, w, overwrite::fill_share(pool, *trail));
-            if theirs || !fills(val) {
+            if theirs {
                 (val, four) = (w, ground::word([w; 4]));
             }
             fill = f;
         }
         if over.says == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
-            if theirs || !fills(val) {
+            if theirs {
                 [val, four] = laid;
             }
             fill = f;

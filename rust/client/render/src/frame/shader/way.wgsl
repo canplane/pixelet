@@ -6,8 +6,8 @@
 // its levels and its ways' tree read its cells and its neighbors' off. Over `height_cs`'s
 // tops: a way is told from their faces. Each brick's record as handed whole: where it lies
 // and its shard say the wall (`area::is_wall`). A column's spans written as each is made,
-// none held. Floats as the Rust takes them, in its order: a column's ring height
-// (`ground::height`) and a segment's crossing (`way::crossing`).
+// none held. A column's ring height (`ground::height`) and a segment's crossing
+// (`way::crossing`) exact, in integers, the Rust's bits (i64.wgsl).
 
 @group(0) @binding(0) var<storage, read> fresh: array<u32>;
 @group(0) @binding(1) var<storage, read> ground: array<u32>;
@@ -88,9 +88,14 @@ fn segment_at(rec: u32, at: u32) -> vec4<u32> {
   return vec4<u32>(line(rec, b), line(rec, b + 1u), line(rec, b + 2u), line(rec, b + 3u));
 }
 
-/// The `k`-th segment over column `c` (`Columns::segment`).
-fn segment(rec: u32, c: vec2<i32>, k: u32) -> vec4<u32> {
-  return segment_at(rec, entry_of(rec, bin_of(rec, c).x + k));
+/// The direction of the brick's segment at `at` (`Segment::dir`).
+fn seg_dir(rec: u32, at: u32) -> vec2<i32> {
+  return i16_pair(line(rec, LINES_SEGMENTS_AT + at * SEGMENT_WORDS + SEGMENT_DIR));
+}
+
+/// The place of the `k`-th segment over column `c` among the brick's (`Columns::segment`).
+fn segment(rec: u32, c: vec2<i32>, k: u32) -> u32 {
+  return entry_of(rec, bin_of(rec, c).x + k);
 }
 
 /// Whether the `k`-th segment over column `c` continues the one before it there
@@ -104,9 +109,9 @@ fn joins(rec: u32, c: vec2<i32>, k: u32) -> bool {
   return e == entry_of(rec, first + k - 1u) + 1u && seg_continues(segment_at(rec, e)) == 1u;
 }
 
-/// Column `c`'s center in its tile's cells (`Columns::center`).
-fn center(rec: u32, c: vec2<i32>) -> vec2<f32> {
-  return vec2<f32>(brick_place(rec) * BRICK) + vec2<f32>(c) + CELL_CENTER;
+/// Column `c`'s center in eighths of its tile's cells (`Columns::center`).
+fn center(rec: u32, c: vec2<i32>) -> vec2<i32> {
+  return (vec2<i32>(brick_place(rec) * BRICK) + c) * i32(POINT_SCALE) + i32(POINT_SCALE / 2u);
 }
 
 /// Whether column `c` is the service area's wall (`Columns::is_walled`).
@@ -149,24 +154,24 @@ fn seg_byte(s: vec4<u32>, k: u32) -> u32 {
 }
 
 /// A word's two `i16`, low first.
-fn i16_pair(w: u32) -> vec2<f32> {
-  return vec2<f32>(f32(i32(w << 16u) >> 16u), f32(i32(w) >> 16u));
+fn i16_pair(w: u32) -> vec2<i32> {
+  return vec2<i32>(i32(w << 16u) >> 16u, i32(w) >> 16u);
 }
 
-fn seg_a(s: vec4<u32>) -> vec2<f32> {
-  return i16_pair(s.x) / POINT_SCALE;
+fn seg_a(s: vec4<u32>) -> vec2<i32> {
+  return i16_pair(s.x);
 }
 
-fn seg_b(s: vec4<u32>) -> vec2<f32> {
-  return i16_pair(s.y) / POINT_SCALE;
+fn seg_b(s: vec4<u32>) -> vec2<i32> {
+  return i16_pair(s.y);
 }
 
-fn seg_tops(s: vec4<u32>) -> vec2<f32> {
+fn seg_tops(s: vec4<u32>) -> vec2<i32> {
   return i16_pair(s.z);
 }
 
-fn seg_width(s: vec4<u32>) -> f32 {
-  return f32(seg_byte(s, 0u)) / POINT_SCALE;
+fn seg_width(s: vec4<u32>) -> u32 {
+  return seg_byte(s, 0u);
 }
 
 fn seg_kind(s: vec4<u32>) -> u32 {
@@ -193,15 +198,35 @@ fn seg_clear(s: vec4<u32>) -> u32 {
   return seg_byte(s, 3u);
 }
 
-/// A vector's length, as the Rust takes it.
-fn span_length(v: vec2<f32>) -> f32 {
-  return sqrt(v.x * v.x + v.y * v.y);
+/// `base + num / den` rounded half to even, `den > 0` (`nearest`): a float's estimate of
+/// the quotient, which the exact remainder then corrects by up to four each way. The
+/// estimate is off by the words' floats and the division, some 16 ulps at most (the
+/// division 13 measured on Metal), a share of 2^-20 of the quotient, so the correction
+/// holds only while the quotient's magnitude stays under 2^20; at `surface` and `pier_covers` it stays under 2^17 (pxl-engine
+/// way.rs, beside each one's bits).
+fn nearest(num: vec2<u32>, den: vec2<u32>, base: i32) -> i32 {
+  var q = i32(floor(i64_f32(num) / i64_f32(den)));
+  var r = i64_sub(num, i64_mul(i64_of(q), den));
+  for (var k = 0u; k < 4u && i64_lt(r, vec2<u32>(0u)); k++) {
+    q -= 1i;
+    r = i64_add(r, den);
+  }
+  for (var k = 0u; k < 4u && !i64_lt(r, den); k++) {
+    q += 1i;
+    r = i64_sub(r, den);
+  }
+  let z = base + q;
+  let twice = i64_add(r, r);
+  let up = i64_lt(den, twice) || (all(twice == den) && (z & 1i) == 1i);
+  return z + select(0i, 1i, up);
 }
 
-/// The road surface of `s` at the share `t` of it, clamped to its ends (`surface`).
-fn surface(s: vec4<u32>, t: f32) -> f32 {
+/// The road surface of `s` at the share `n / len2` of it, clamped to its ends, rounded
+/// half to even (`surface`).
+fn surface(s: vec4<u32>, n: vec2<u32>, len2: vec2<u32>) -> i32 {
   let tops = seg_tops(s);
-  return tops.x + (tops.y - tops.x) * clamp(t, 0.0, 1.0);
+  let m = select(select(n, len2, i64_lt(len2, n)), vec2<u32>(0u), i64_lt(n, vec2<u32>(0u)));
+  return nearest(i64_mul(i64_of(tops.y - tops.x), m), len2, tops.x);
 }
 
 /// Bent column `i` of a deck `half` cells wide a side, across it from its line (`bent`).
@@ -220,47 +245,63 @@ fn bent_cnt(half: i32) -> u32 {
   return select(select(3u, 2u, half <= 4i), 1u, half <= 2i);
 }
 
-/// Whether the column about `at` holds the pier at the station nearest `near` on
-/// `[a, a + d)`, a cell a side (`pier_covers`); the stations off the brick's lines.
-fn pier_covers(rec: u32, width: f32, a: vec2<f32>, d: vec2<f32>, near: vec2<f32>, at: vec2<f32>) -> bool {
+/// Whether the column about `at`, a cell a side, holds the pier at the station nearest
+/// the column's foot on the brick's segment `s` at `e`, the share `n / len2` of it, from
+/// `a` to before `b`, in eighths of a cell (`pier_covers`); the stations off the brick's
+/// lines.
+fn pier_covers(rec: u32, e: u32, s: vec4<u32>, n: vec2<u32>, len2: vec2<u32>, at: vec2<i32>) -> bool {
+  let a = seg_a(s);
+  let d = seg_b(s) - a;
   let k = select(1u, 0u, abs(d.x) >= abs(d.y));
-  // The leaf cells the column spans a side, a cell's.
-  let leaves = line_float(rec, HEADER_LEAF);
-  if (d[k] == 0.0 || leaves > 2.0) {
+  let l = 1u - k;
+  let leaf = i32(line(rec, HEADER_LEAF));
+  if (d[k] == 0i || leaf > 2i) {
     return false;
   }
-  let half = i32(round(width * line_float(rec, HEADER_LEAF) / 2.0));
+  // A leaf cell, in eighths.
+  let cell = i32(POINT_SCALE) / leaf;
+  let half = i32(round(f32(seg_width(s) * u32(leaf)) / f32(POINT_SCALE) / 2.0));
   let w = select(1u, 0u, half <= 2i);
-  let step = line_float(rec, HEADER_STEP + w);
-  let phase = line_float(rec, HEADER_PHASE + 2u * w + k);
-  let station = round((phase + near[k]) / step) * step - phase;
-  let t = (station - a[k]) / d[k];
-  if (!(t >= 0.0 && t < 1.0)) {
+  let step = i32(line(rec, HEADER_STEP + w)) * cell;
+  let phase = i32(line(rec, HEADER_PHASE + 2u * w + k)) * cell;
+  // The station nearest the foot, `a + d · n / len2`, along the major axis.
+  let foot = i64_add(i64_mul(i64_of(phase + a[k]), len2), i64_mul(i64_of(d[k]), n));
+  let station = nearest(foot, i64_mul(i64_of(step), len2), 0i) * step - phase;
+  let u = station - a[k];
+  let run = d[k];
+  let forward = 0i <= u && u < run;
+  let backward = run < u && u <= 0i;
+  if (!select(backward, forward, run > 0i)) {
     return false;
   }
-  let len = span_length(d);
-  let dir = vec2<f32>(d.x / len, d.y / len);
-  let foot = vec2<f32>(a.x + d.x * t, a.y + d.y * t);
-  // A leaf cell, and the centers of the leaf cells the column holds: its own where it is
-  // one or finer, else its four.
-  let leaf = 1.0 / line_float(rec, HEADER_LEAF);
-  var off = 0.0;
+  // The centers of the leaf cells the column holds: its own where it is one, else its
+  // four.
+  var off = 0i;
   var m = 1u;
-  if (leaves >= 2.0) {
-    off = leaf / 2.0;
+  if (leaf == 2i) {
+    off = cell / 2i;
     m = 4u;
   }
-  let n = bent_cnt(half);
+  let cnt = bent_cnt(half);
+  let reach = i64_mul32(cell / 2i, abs(run) << DIR_BITS);
+  let dir = seg_dir(rec, e);
   var covered = false;
   for (var j = 0u; j < m; j++) {
-    let p = vec2<f32>(at.x + select(off, -off, (j & 1u) == 0u), at.y + select(off, -off, (j & 2u) == 0u));
-    let rel = vec2<f32>(p.x - foot.x, p.y - foot.y);
-    let along = abs(rel.x * dir.x + rel.y * dir.y);
-    let across = rel.x * dir.y - rel.y * dir.x;
-    // an edge column stands a leaf cell in from the edge
-    for (var i = 0u; i < n; i++) {
-      covered = covered || (along <= leaf / 2.0
-        && abs(across - f32(bent_side(half, i) * max(half - 1i, 0i)) * leaf) <= leaf / 2.0);
+    let p = vec2<i32>(at.x + select(off, -off, (j & 1u) == 0u), at.y + select(off, -off, (j & 2u) == 0u));
+    let x = p[k] - station;
+    let y = i64_sub(i64_mul32(p[l] - a[l], run), i64_mul32(d[l], u));
+    if (abs(x) <= 128i && !i64_lt(i64_mul32(128i, abs(run)), i64_abs(y))) {
+      var rel = vec2<i32>(0i);
+      rel[k] = x * run;
+      rel[l] = i32(y.x);
+      let along = i64_add(i64_mul32(rel.x, dir.x), i64_mul32(rel.y, dir.y));
+      let across = i64_sub(i64_mul32(rel.x, dir.y), i64_mul32(rel.y, dir.x));
+      // an edge column stands a leaf cell in from the edge
+      for (var i = 0u; i < cnt; i++) {
+        let side = i64_mul32(bent_side(half, i) * max(half - 1i, 0i) * cell, run << DIR_BITS);
+        covered = covered || (!i64_lt(reach, i64_abs(along))
+          && !i64_lt(reach, i64_abs(i64_sub(across, side))));
+      }
     }
   }
   return covered;
@@ -270,8 +311,8 @@ fn pier_covers(rec: u32, width: f32, a: vec2<f32>, d: vec2<f32>, near: vec2<f32>
 /// leaf cells, and whether its pier's section covers it (`Crossing`); `kind` `WAY_NOTHING`
 /// for none. A visit's: where the next starts (`visit`).
 struct Crossing {
-  low: f32,
-  top: f32,
+  low: i32,
+  top: i32,
   kind: u32,
   form: u32,
   pier: u32,
@@ -279,32 +320,66 @@ struct Crossing {
   next: u32,
 }
 
-/// What segment `s` is over the column about `at`, a cell a side (`crossing`, `on_way`).
-fn crossing(rec: u32, s: vec4<u32>, at: vec2<f32>) -> Crossing {
+/// Whether a point `v` eighths from an end of a way, `reach` its `reach2` and `span` its
+/// width or 12, is within it (`on_way`).
+fn near_end(v: vec2<i32>, reach: i32, span: i32) -> bool {
+  return 2i * max(abs(v.x), abs(v.y)) <= span && 4i * (v.x * v.x + v.y * v.y) <= reach;
+}
+
+/// Where `at` lies along the segment from `a` to `b` of a way `width` eighths wide, all
+/// in eighths of a cell: the share `n / len2` of it, and whether the way covers `at`
+/// there (`on_way`).
+struct OnWay {
+  n: vec2<u32>,
+  len2: vec2<u32>,
+  covered: bool,
+}
+
+/// `on_way`.
+fn on_way(a: vec2<i32>, b: vec2<i32>, width: u32, ends: vec2<bool>, at: vec2<i32>) -> OnWay {
+  let zero = vec2<u32>(0u);
+  let d = b - a;
+  let r = at - a;
+  let len2 = i64_add(i64_mul32(d.x, d.x), i64_mul32(d.y, d.y));
+  let dot = i64_add(i64_mul32(r.x, d.x), i64_mul32(r.y, d.y));
+  let cut = (ends.x && i64_lt(dot, zero)) || (ends.y && i64_lt(len2, dot));
+  let reach = max(i32(width * width), 128i);
+  let span = max(i32(width), 12i);
+  var n = dot;
+  var covered = false;
+  if (!i64_lt(zero, dot)) {
+    n = zero;
+    covered = near_end(r, reach, span);
+  } else if (!i64_lt(dot, len2)) {
+    n = len2;
+    covered = near_end(r - d, reach, span);
+  } else {
+    let cross = i64_abs(i64_sub(i64_mul32(r.x, d.y), i64_mul32(r.y, d.x)));
+    if (!i64_lt(i64_of(span * (abs(d.x) + abs(d.y))), i64_add(cross, cross))) {
+      let c = 2i * i32(cross.x);
+      covered = !i64_lt(i64_mul(i64_of(reach), len2), i64_mul32(c, c));
+    }
+  }
+  return OnWay(n, select(len2, vec2<u32>(1u, 0u), all(len2 == zero)), !cut && covered);
+}
+
+/// What the brick's segment at `e` is over the column about `at`, a cell a side, in
+/// eighths (`crossing`).
+fn crossing(rec: u32, e: u32, at: vec2<i32>) -> Crossing {
+  let s = segment_at(rec, e);
   let a = seg_a(s);
   let d = seg_b(s) - a;
-  let len2 = d.x * d.x + d.y * d.y;
-  var t = 0.0;
-  if (len2 > 0.0) {
-    t = ((at.x - a.x) * d.x + (at.y - a.y) * d.y) / len2;
+  let ends = vec2<bool>(seg_first(s) == 1u, seg_last(s) == 1u);
+  let o = on_way(a, seg_b(s), seg_width(s), ends, at);
+  if (!o.covered) {
+    return Crossing(0i, 0i, WAY_NOTHING, 0u, 0u, 0u, 0u);
   }
-  let cut = (seg_first(s) == 1u && t < 0.0) || (seg_last(s) == 1u && t > 1.0);
-  t = clamp(t, 0.0, 1.0);
-  let near = vec2<f32>(a.x + d.x * t, a.y + d.y * t);
-  let width = seg_width(s);
-  let dist = span_length(vec2<f32>(at.x - near.x, at.y - near.y));
-  if (cut || !(dist <= max(width * 0.5, HALF_DIAGONAL))) {
-    return Crossing(0.0, 0.0, WAY_NOTHING, 0u, 0u, 0u, 0u);
-  }
-  // the column's brick spans this much of the segment either side of `t`
-  var half_span = 0.0;
-  if (len2 > 0.0) {
-    half_span = 1.0 / 2.0 * (abs(d.x) + abs(d.y)) / len2;
-  }
-  let z0 = surface(s, t - half_span);
-  let z1 = surface(s, t + half_span);
+  // The column spans half a cell, 4 eighths, either side of `at` along each axis.
+  let half = i64_of(4i * (abs(d.x) + abs(d.y)));
+  let z0 = surface(s, i64_sub(o.n, half), o.len2);
+  let z1 = surface(s, i64_add(o.n, half), o.len2);
   let form = seg_form(s);
-  let pier = form != TUNNEL && pier_covers(rec, width, a, d, near, at);
+  let pier = form != TUNNEL && pier_covers(rec, e, s, o.n, o.len2, at);
   return Crossing(min(z0, z1), max(z0, z1), seg_kind(s), form, u32(pier), seg_clear(s), 0u);
 }
 
@@ -360,8 +435,8 @@ struct Occupancy {
 
 /// `occupies`.
 fn occupies(x: Crossing, ground: i32, per_m: f32) -> Occupancy {
-  let low = i32(round(x.low));
-  let top = i32(round(x.top));
+  let low = x.low;
+  let top = x.top;
   let none = vec2<i32>(0i);
   if (x.form == BRIDGE) {
     let lo = low - slab_depth(per_m);

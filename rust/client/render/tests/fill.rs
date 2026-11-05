@@ -16,9 +16,8 @@ use pxl_engine::clipmap::{
     self as clip, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT, BRICK_WORDS, ELE_AT, FILL_CAP,
     FIRST_CELL, HANDED_WORDS, PALETTE_AT, SPANS_COLUMNS, TREE_AT,
 };
-use pxl_engine::lattice::CELL_CENTER;
 use pxl_engine::{fill, ground, wrap_idx, Zoom, LEAF_CELL};
-use pxl_render::frame::shader::record::{src, SHADER_BOUND, SHADER_HEIGHT};
+use pxl_render::frame::shader::record::{src, SHADER_BOUND, SHADER_HEIGHT, WORLD_ASKED};
 use pxl_render::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 
 use gpu::{Gpu, Tally};
@@ -148,42 +147,6 @@ fn fresh(b: &Built, eye: [i32; 2], frame: &[Hand]) -> Vec<u32> {
     fresh
 }
 
-/// The ulps of its sum from a half within which a top may round to either whole cell.
-const EDGE_ULPS: f32 = 4.0;
-
-/// Whether column `i` of `h`'s brick, handed in the record at `rec`, draws its top off a
-/// sum within `EDGE_ULPS` of a half (`ground::bicubic`, its sum taken in f64 here): the
-/// Rust rounds each product and each sum in f32, a GPU that fuses a product into its sum
-/// (Metal does) rounds once, and the two land on either side of the half.
-fn on_edge(fresh: &[u32], rec: usize, h: &Hand, i: u32) -> bool {
-    let ele =
-        |s: usize| ((fresh[rec + ELE_AT as usize + s / 2] >> (16 * (s % 2))) << 16) as i32 >> 16;
-    let [x, y] = clip::of_idx(i);
-    let place = [(h.q[0] & 7) as u32, (h.q[1] & 7) as u32];
-    let c = [place[0] * BRICK + x, place[1] * BRICK + y].map(|v| v as f32 + CELL_CENTER);
-    let ((x0, fx), (y0, fy)) = (ground::window(c[0]), ground::window(c[1]));
-    let (wx, wy) = (ground::catmull_rom(fx), ground::catmull_rom(fy));
-    let (mut sum, mut lo, mut hi) = (0f64, i32::MAX, i32::MIN);
-    for j in 0..4 {
-        let mut row = 0f64;
-        for k in 0..4 {
-            let v = ele(ground::ele_idx(
-                ground::clamp_idx(x0 + k),
-                ground::clamp_idx(y0 + j),
-            ));
-            (lo, hi) = (lo.min(v), hi.max(v));
-            row += f64::from(v) * f64::from(wx[k as usize]);
-        }
-        sum += row * f64::from(wy[j as usize]);
-    }
-    let held = sum.clamp(f64::from(lo), f64::from(hi));
-    let ulp = {
-        let f = held.abs() as f32;
-        f64::from(f32::from_bits(f.to_bits() + 1) - f)
-    };
-    (held - (held.floor() + 0.5)).abs() <= f64::from(EDGE_ULPS) * ulp
-}
-
 /// Word `k` of the bricks' lanes, by the slot and what it holds.
 fn lane_name(k: usize) -> String {
     let (slot, w) = (k as u32 / BRICK_WORDS, k as u32 % BRICK_WORDS);
@@ -223,8 +186,7 @@ fn hand_fill_answers_as_fill() {
     let bound = gpu.pipeline(src(SHADER_BOUND), "bound_cs");
     let store = wgpu::BufferUsages::STORAGE;
     let (mut tops, mut levels) = (Tally::default(), Tally::default());
-    let (mut unknown, mut walled, mut lined_columns, mut edges, mut edges_apart) =
-        (0u32, 0u32, 0u32, 0u32, 0u32);
+    let (mut unknown, mut walled, mut lined_columns) = (0u32, 0u32, 0u32);
     // A brick's scratch is a `FILL_CAP`th of the frame's, past its spans by some.
     let scratch_len = FILL_CAP * (TREE_AT + 37);
     for (side, eye) in [
@@ -247,7 +209,6 @@ fn hand_fill_answers_as_fill() {
                 gpu.buffer(&palette, store),
                 gpu.buffer(&fresh, store),
             );
-            let mut edge = vec![false; lane.len()];
             for k in 0..n {
                 for y in 0..BRICK {
                     for x in 0..BRICK {
@@ -256,13 +217,6 @@ fn hand_fill_answers_as_fill() {
                     }
                 }
                 let rec = (k * HANDED_WORDS) as usize;
-                let h = &frame[k as usize];
-                for i in 0..BRICK_CELLS {
-                    if on_edge(&fresh, rec, h, i) {
-                        edge[(h.slot * BRICK_WORDS + clip::COLUMNS_AT + i) as usize] = true;
-                        edges += 1;
-                    }
-                }
                 unknown += (0..BRICK_CELLS)
                     .filter(|&i| {
                         let cell = fresh[rec + clip::FILL_CELL as usize];
@@ -279,17 +233,11 @@ fn hand_fill_answers_as_fill() {
                 ],
                 [BRICK.div_ceil(HEIGHT_SIDE), BRICK.div_ceil(HEIGHT_SIDE), n],
             );
-            // A top on the edge rounds to either whole cell: within one, as an i16.
-            let got = gpu.read(&lane_buf);
-            edges_apart += (0..lane.len())
-                .filter(|&k| edge[k] && lane[k] != got[k])
-                .count() as u32;
-            tops.compare_by(
+            tops.compare(
                 &format!("{case}: tops"),
                 &lane,
-                &got,
+                &gpu.read(&lane_buf),
                 lane_name,
-                |k, w, h| w == h || edge[k] && (w as i16).abs_diff(h as i16) == 1,
             );
             tops.compare(
                 &format!("{case}: palette"),
@@ -357,11 +305,68 @@ fn hand_fill_answers_as_fill() {
             }
         }
     }
-    eprintln!("{unknown} cells of no known look, {walled} columns of no face, {lined_columns} columns with spans, {edges} tops within {EDGE_ULPS} ulps of a half, {edges_apart} of them rounded the other way");
+    eprintln!("{unknown} cells of no known look, {walled} columns of no face, {lined_columns} columns with spans");
     assert!(
         unknown > 0 && walled > 0 && lined_columns > 0,
         "every kind of column met"
     );
     tops.end("tops");
     levels.end("levels");
+}
+
+/// `face_height` (world_rule.wgsl) over each case's zoom and top, a thread a case, beside the
+/// world query that reads it.
+const FACE_PROBE: &str = r"
+@group(0) @binding(40) var<storage, read_write> probe: array<i32>;
+
+@compute @workgroup_size(64, 1, 1)
+fn face_probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  if (id.x >= u32(probe[0])) {
+    return;
+  }
+  let k = 1u + id.x * 3u;
+  probe[k + 2u] = face_height(u32(probe[k]), probe[k + 1u]);
+}
+";
+
+/// The face of a top as the hand rule draws it, past the leaves and under them, over sea level
+/// and under it on and off a whole leaf cell, as pxl-engine's `ground::face_height`.
+#[test]
+fn hand_face_height_as_the_rust() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let source = format!("{WORLD_ASKED}\n{FACE_PROBE}");
+    let p = gpu.pipeline(&source, "face_probe_cs");
+    let cells = [
+        LEAF_CELL - 3,
+        LEAF_CELL,
+        LEAF_CELL + 1,
+        LEAF_CELL + 2,
+        LEAF_CELL + 5,
+    ];
+    let tops = [-97, -64, -9, -8, -1, 0, 1, 7, 8, 9, 97];
+    let cases: Vec<(Zoom, i32)> = cells
+        .iter()
+        .flat_map(|&c| tops.iter().map(move |&t| (c, t)))
+        .collect();
+    let mut words = vec![cases.len() as u32];
+    for &(c, t) in &cases {
+        words.extend([c, t as u32, 0]);
+    }
+    let buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
+    gpu.dispatch(
+        &p,
+        &[(40, buf.as_entire_binding())],
+        [(cases.len() as u32).div_ceil(64), 1, 1],
+    );
+    let have = gpu.read(&buf);
+    for (k, &(c, t)) in cases.iter().enumerate() {
+        assert_eq!(
+            have[1 + k * 3 + 2] as i32,
+            ground::face_height(c, t),
+            "zoom {c}, top {t}"
+        );
+    }
 }

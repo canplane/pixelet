@@ -83,7 +83,12 @@ impl Detail {
     /// At `d2`, a distance squared. Held by `max` then `min`, not `clamp`,
     /// which aborts where `range` inverts (lib.rs): there, its finest.
     pub fn at(self, d2: f32) -> Zoom {
-        cell_zoom_at(d2).max(self.range[0]).min(self.range[1])
+        self.hold(cell_zoom_at(d2))
+    }
+
+    /// Zoom `z` held to `range`, as `at` holds it.
+    pub fn hold(self, z: Zoom) -> Zoom {
+        z.max(self.range[0]).min(self.range[1])
     }
 
     /// Whether a walk asking it may take what one asking `other` met: the
