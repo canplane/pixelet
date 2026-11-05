@@ -23,6 +23,19 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
+/// An orthographic box's steps, the world's along each of its first three
+/// axes a unit of its clip space, in `Mat3`'s columns at `at`: row `r` of
+/// `m` over its length squared, each in f32 as a shader reads `m`.
+pub(crate) fn put_steps(out: &mut [f32], at: usize, m: &Mat4) {
+    for r in 0..3 {
+        let row = [m[r] as f32, m[4 + r] as f32, m[8 + r] as f32];
+        let l = row[0] * row[0] + row[1] * row[1] + row[2] * row[2];
+        for (o, v) in out[at + 4 * r..at + 4 * r + 3].iter_mut().zip(row) {
+            *o = v / l;
+        }
+    }
+}
+
 /// Grown to the next power of two when a frame needs more, never shrunk.
 #[derive(Default)]
 pub struct Scratch {

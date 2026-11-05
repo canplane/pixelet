@@ -13,6 +13,24 @@ only once the ground's textures have landed (whether they had was a confound bef
   p50 21–24 ms, `sample` p95 5.6–7.0 (133). Three runs in a row, the phone 43 to 48 °C
   and fps drifting down: a reference, not a fixed number.
 
+## The day, morning against night
+
+a449637a35 against c3847db899 on the S23, both from the shelf, alternating ×2, the
+phone warming to thermal 1 alike on both sides (data out/s23/day*):
+
+| | morning | night |
+|---|---|---|
+| shadows off, fps | 33 / 30 | 42 / 38 |
+| shadows off, busy p95 | 40–46 ms | 29–32 ms |
+| shadows on, fps | 16 / 15.5 | 24 / 24 |
+| shadows on, busy p95 | 110–115 ms | 50–52 ms |
+| drive, cast frames' busy p95 | 175–240 ms | 122–136 ms |
+| first load to the world | 9.9 / 5.2 s | 6.9 / 5.7 s |
+
+The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −55%,
+`sample` −65%, `world` −25–30%; eye nodes a cast sample 57k to 12–15k, miss 20k to
+2–4k; the light beam's 114–153k to 7k.
+
 ## Worked
 
 - **Safari loads again** (e0b0fadcdc): `FACE_NONE`, `i32::MIN` folded, reached Metal

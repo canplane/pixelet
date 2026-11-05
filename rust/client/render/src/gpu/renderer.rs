@@ -28,8 +28,8 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, GIZMO, JITTER,
-    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
-    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    LIGHT_STEPS, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON,
+    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -60,7 +60,7 @@ use crate::gpu::pass::preview::Preview;
 use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
-use crate::gpu::put::put_mat;
+use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
@@ -687,6 +687,7 @@ impl Renderer {
             self.shadow
                 .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
+            put_steps(u, LIGHT_STEPS, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
         }
 

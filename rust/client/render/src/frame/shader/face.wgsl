@@ -46,12 +46,53 @@ fn node_idx(k: u32) -> vec4<i32> {
   return vec4<i32>(idx_of(corner, zoom, roots, r0), i32(zoom));
 }
 
+/// The hit's own descent from where it leaves the line (`support::sub_line`): what was handed
+/// its nodes at the two zooms over the hit, `up`'s, each the descent's first where that lies no
+/// deeper (`descent`).
+struct Descent {
+  up: vec2<u32>,
+  grand_handed: vec4<u32>,
+  parent_handed: vec4<u32>,
+}
+
+/// The hit `c` at `zoom`'s descent from `low`, handed `low_handed` there, each node under handed
+/// down by its parent, worked out once for every cell beside it (`hides`).
+fn descent(c: vec3<i32>, zoom: u32, low: u32, low_handed: vec4<u32>) -> Descent {
+  var up = vec2<u32>(low);
+  var grand = low_handed;
+  var parent = low_handed;
+  var at = low_handed;
+  for (var z = low + 1u; z < zoom; z += 1u) {
+    at = world_child(at, z, over(c, zoom, z));
+    if (z + 2u == zoom) {
+      up.x = z;
+      grand = at;
+    }
+    if (z + 1u == zoom) {
+      up.y = z;
+      parent = at;
+    }
+  }
+  return Descent(up, grand, parent);
+}
+
 /// Whether the cell `n` at `zoom` beside the hit hides its cube whole (`answer::whole`), as
 /// the world answers it at that zoom, asked off the line down to the hit `c`: over `low` the
-/// beam ray's line at word `line`, from `low` the hit's own descent, handed `low_handed` there
-/// (`support::sub_line`, `JoinedLine`). From the deepest node of that line holding it, each node
-/// under handed down by its parent; from its own root where none does (`support::asset`).
-fn hides(line: u32, low: u32, low_handed: vec4<u32>, c: vec3<i32>, zoom: u32, n: vec3<i32>) -> bool {
+/// beam ray's line at word `line`, from there the hit's own descent, handed `low_handed` at
+/// `low` and `grand_handed`, `parent_handed` at `up` (`descent`; `support::sub_line`,
+/// `JoinedLine`). From the deepest node of that line holding it, each node under handed down by
+/// its parent; from its own root where none does (`support::asset`).
+fn hides(
+  line: u32,
+  low: u32,
+  low_handed: vec4<u32>,
+  up: vec2<u32>,
+  grand_handed: vec4<u32>,
+  parent_handed: vec4<u32>,
+  c: vec3<i32>,
+  zoom: u32,
+  n: vec3<i32>,
+) -> bool {
   let meet = shared_zoom(c, zoom, n, zoom);
   var z = 0u;
   var at = world_root(0u, over(n, zoom, 0u));
@@ -59,6 +100,12 @@ fn hides(line: u32, low: u32, low_handed: vec4<u32>, c: vec3<i32>, zoom: u32, n:
     if (meet.x < low) {
       z = meet.x;
       at = line_handed(line, z);
+    } else if (meet.x >= up.y) {
+      z = up.y;
+      at = parent_handed;
+    } else if (meet.x >= up.x) {
+      z = up.x;
+      at = grand_handed;
     } else {
       z = low;
       at = low_handed;
@@ -85,7 +132,17 @@ fn edge(u: u32, v: u32, k: u32) -> vec3<i32> {
 /// The bits of face `face` of the hit `c` at `zoom` (`face::word`), each cell asked off the
 /// line down to it (`hides`): bit `i` answers the `i`th cell asked, and a cell is not asked
 /// where a bit already set decides it.
-fn face_word(face: u32, line: u32, low: u32, low_handed: vec4<u32>, c: vec3<i32>, zoom: u32) -> u32 {
+fn face_word(
+  face: u32,
+  line: u32,
+  low: u32,
+  low_handed: vec4<u32>,
+  up: vec2<u32>,
+  grand_handed: vec4<u32>,
+  parent_handed: vec4<u32>,
+  c: vec3<i32>,
+  zoom: u32,
+) -> u32 {
   let axis = face / 2u;
   let n = unit(axis, 1i - 2i * i32(face & 1u));
   let u = (axis + 1u) % 3u;
@@ -110,7 +167,7 @@ fn face_word(face: u32, line: u32, low: u32, low_handed: vec4<u32>, c: vec3<i32>
     // does (`face::beside`).
     if (open) {
       let beside = vec3<i32>(wrap_idx(zoom, c.x + d.x), c.y + d.y, c.z + d.z);
-      if (hides(line, low, low_handed, c, zoom, beside) != (field == 1u)) {
+      if (hides(line, low, low_handed, up, grand_handed, parent_handed, c, zoom, beside) != (field == 1u)) {
         w |= 1u << i;
       }
     }
@@ -142,5 +199,6 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     low = meet.x;
     low_handed = line_handed(line, low);
   }
-  beams[to] = face_word(beams[a + ASK_FACE], line, low, low_handed, c, zoom);
+  let d = descent(c, zoom, low, low_handed);
+  beams[to] = face_word(beams[a + ASK_FACE], line, low, low_handed, d.up, d.grand_handed, d.parent_handed, c, zoom);
 }

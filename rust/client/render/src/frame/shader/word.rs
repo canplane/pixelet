@@ -113,6 +113,11 @@ uniform! {
         SCREEN: Vec2 = 52,
         /// 1 where the shadow map is cast from the moon (`LIGHT_VIEW_PROJ`).
         SHADOW_MOON: F32 = 54,
+        /// The light box's steps, the world's along each of its axes a unit of
+        /// its clip space, across, up and deep: each row of `LIGHT_VIEW_PROJ`
+        /// over its length squared, the box orthographic (shadow.wgsl
+        /// `light_slope`).
+        LIGHT_STEPS: Mat3 = 56,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-engine `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
@@ -120,7 +125,7 @@ uniform! {
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
         /// Last: the words before it are what a frame reads as moved
         /// (gpu/renderer.rs `frame`).
-        JITTER: Vec2 = 56,
+        JITTER: Vec2 = 68,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);

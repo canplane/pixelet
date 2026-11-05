@@ -12,21 +12,17 @@
 // How much the depth of a plane with normal `n` changes a texel across and
 // a texel down the map, as a share of the box's depth: pxl-engine
 // `light::slope`, the one statement of it, which the casters' push takes too
-// (`Light::of`, `param::light::SLOPE_BIAS`). Its steps are the light box's own: the
-// box is orthographic, so each row of its matrix is the world's step along
-// that axis of the box over its length squared, a texel's across and down
-// and the box's whole depth along the light's rays.
+// (`Light::of`, `param::light::SLOPE_BIAS`). Its steps are the light box's own,
+// the frame's (`LIGHT_STEPS`): a texel's across and down and the box's whole
+// depth along the light's rays.
 fn light_slope(n: vec3f, texel: f32) -> vec2f {
-  let m = frame_light_view_proj();
-  let across = vec3f(m[0].x, m[1].x, m[2].x);
-  let up = vec3f(m[0].y, m[1].y, m[2].y);
-  let deep = vec3f(m[0].z, m[1].z, m[2].z);
-  let d = dot(n, deep / dot(deep, deep));
+  let steps = frame_light_steps();
+  let d = dot(n, steps[2]);
   // A face along the rays, which no ray enters across.
   if (d == 0.0) {
     return vec2f(0.0);
   }
-  return -vec2f(dot(n, across / dot(across, across)), -dot(n, up / dot(up, up))) * texel / d;
+  return -vec2f(dot(n, steps[0]), -dot(n, steps[1])) * texel / d;
 }
 
 // Where the map is cast from: the sun, or the moon (renderer.rs `prepare`).
