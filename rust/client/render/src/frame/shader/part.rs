@@ -7,6 +7,11 @@
 //! visibility from its shader and from nowhere else. A shader's parts follow
 //! constant.wgsl.
 
+/// A shader's vertex entry points, a pipeline naming one by its index (record.rs `Head`), so
+/// build.rs reads which of them reads each binding. The shell holds the same list against
+/// the same numbers.
+pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
+
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;
@@ -83,7 +88,7 @@ pub const SHADER_BEAM: u32 = 39;
 /// (cell.wgsl): its one compute entry.
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid, and the pyramid forgotten (pxl-engine `pyramid`), by
+/// node cache, and the node cache forgotten (pxl-engine `node_cache`), by
 /// hand (forget.wgsl): a compute entry each.
 pub const SHADER_MISS: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
@@ -112,7 +117,7 @@ pub const SHADER_CAMERA_GRID: u32 = 48;
 pub const SHADER_SAMPLE_BOX: u32 = 49;
 pub const SHADER_RASTER: u32 = 50;
 /// The pixels the cast's reading walk missed, walked again from their list
-/// (pxl-engine `pyramid::MARKS_AT`), a thread each: a compute entry.
+/// (pxl-engine `node_cache::MARKS_AT`), a thread each: a compute entry.
 pub const SHADER_MISS_LIST: u32 = 51;
 /// What lies about each box's face, asked once a box (pxl-engine
 /// `raster::ARGS_FACES`), and each missed pixel's hit's, by hand (face.wgsl): its one
@@ -188,16 +193,16 @@ pub const SHADER_LIGHT_BEAM: u32 = 76;
 pub const SHADER_LIGHT_CELL: u32 = 77;
 pub const SHADER_LIGHT_SAMPLE: u32 = 78;
 pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 79;
-/// The samples' walk over the observed pyramid alone, by hand: what it does not
+/// The samples' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
 pub const SHADER_SAMPLE_HIT: u32 = 80;
-/// The missed pixels' walk over the observed pyramid alone, by hand: what it does
+/// The missed pixels' walk over the node cache alone, by hand: what it does
 /// not end `SHADER_MISS_LIST` walks again.
 pub const SHADER_MISS_HIT: u32 = 81;
-/// The beam rays' walk over the observed pyramid alone, by hand: what it does not
+/// The beam rays' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
 pub const SHADER_BEAM_HIT: u32 = 82;
-/// The light's missed slots' walk over the observed pyramid alone, by hand: what it does
+/// The light's missed slots' walk over the node cache alone, by hand: what it does
 /// not end `SHADER_LIGHT_MISS` walks again.
 pub const SHADER_LIGHT_MISS_HIT: u32 = 83;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks

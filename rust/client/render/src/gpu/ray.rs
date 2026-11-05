@@ -22,7 +22,7 @@ use cast::CastBuffers;
 pub use cast::{Cast, Overwrites};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 pub use ground::{
-    BrickFill, CellsBack, GroundBricks, OnResident, Resident, TerrainUpload, TerrainWrite,
+    BrickFill, CellsBack, Filled, GroundBricks, OnFilled, TerrainUpload, TerrainWrite,
     RECORD_ROOMS_BYTES,
 };
 use ground::{GroundBuffers, GroundPipelines};

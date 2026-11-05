@@ -1,0 +1,95 @@
+base
+step known: coarser than above's clip ||| let known = above != LOOKUP_NONE && cell >= lookup_clip(above); ||| let known = above != LOOKUP_NONE;
+step stop: asks only above's cell ||| stop = lookup_cell(above); ||| stop = cell - 1u;
+held_of not laid ||| if (origin.z == 0i) { ||| if (false) {
+held_of far past d.x ||| d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i ||| d.y >= across || d.x + side <= 0i || d.y + side <= 0i
+held_of all: l<=JOINED ||| return Held(b, l <= JOINED_LEVELS && all(d ||| return Held(b, all(d
+held_of unbounded true ||| if (b.x == UNBOUNDED_LO && b.y == UNBOUNDED_HI) { ||| if (false) {
+held_of key y ||| || u32(e.y) != (u32(origin.y) ^ 0x80000000u) ||| 
+bound_over open ||| let open = b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI; ||| let open = false;
+bound_over from FIRST ||| if (open || all_of || got.clip == FIRST_CELL) { ||| if (open || all_of) {
+bound_over select ||| select(BOUNDS_OPEN, b, all_of || open) ||| b
+bound_over keep place only top ||| if (z == top) { ||| if (true) {
+slot bits: lookup_slot one bit fewer ||| return l & ((1u << LOOKUP_SLOT_BITS) - 1u); ||| return l & ((1u << (LOOKUP_SLOT_BITS - 1u)) - 1u);
+shard row low ||| if (own.y >= 0i && own.y < (1i << SHARD_ZOOM)) { ||| if (own.y < (1i << SHARD_ZOOM)) {
+shard row high ||| if (own.y >= 0i && own.y < (1i << SHARD_ZOOM)) { ||| if (own.y >= 0i) {
+wall served all ||| if (cell < LEAF_CELL || served == SHARD_ALL) { ||| if (cell < LEAF_CELL) {
+wall wrap x ||| let dx = vec2<i32>(wrap_idx(SHARD_ZOOM, lo.x), wrap_idx(SHARD_ZOOM, hi.x)) + 1i; ||| let dx = vec2<i32>(lo.x, hi.x) + 1i;
+wall hi corner ||| dy.y * 3i + dx.y)); ||| dy.y * 3i + dx.x));
+past earth ||| let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z < SEA_LEVEL); ||| let earth = VALUE_UNKNOWN;
+past split zoom ||| if (c.z >= SEA_LEVEL && zoom > SHARD_ZOOM) { ||| if (c.z >= SEA_LEVEL) {
+beach filler ||| if (idx == STRATA_SAND || idx == STRATA_BEACH) { ||| if (idx == STRATA_SAND) {
+sand filler ||| if (idx == STRATA_SAND || idx == STRATA_BEACH) { ||| if (idx == STRATA_BEACH) {
+water filler ||| filler = STRATA_WATER; ||| filler = STRATA_SOIL;
+sandstone scaled ||| if (z >= filled - sandstone * s) { ||| if (z >= filled - sandstone) {
+filler scaled ||| let filled = face - STRATA_FILLER_DEPTH * s; ||| let filled = face - STRATA_FILLER_DEPTH;
+rock min sea ||| return top_of(cell, min(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells; ||| return top_of(cell, face - STRATA_BEDROCK_DEPTH).cells;
+opens part ||| - i32(col.part < FULL); ||| ;
+opens unknown ||| return col.idx != VALUE_UNKNOWN && z < under ||| return z < under
+top eighths ||| if (eighths(part) == 0u) { ||| if (part == 0u) {
+top n past bits ||| select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS) ||| rest << ((FULL_BITS - n) & 31u)
+face neg ||| return select(t >> d, -((-t) >> d), t < 0i); ||| return t >> d;
+slab sea ||| let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM); ||| let hi = relief_hi;
+meets e ||| let e = max(near, LEAF_CELL) - LEAF_CELL; ||| let e = 0u;
+zstep shift eq ||| shift >= BOX_BITS); ||| shift > BOX_BITS);
+box past select ||| z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS); ||| z_step(span.y - 1i, z, shift) + 1i, shift > BOX_BITS);
+way slab empty ||| if (bound.x >= bound.y) { ||| if (false) {
+way slab round hi ||| -(((half - bound.y) >> k) << k) ||| ((bound.y + half) >> k) << k
+way slab first ||| let ways = way_slab(g.ways, coarsest(zoom, far), near); ||| let ways = way_slab(g.ways, near, near);
+bore air read ||| let w = select(way, WAY_AIR, way == VALUE_AIR); ||| let w = way;
+way fold share ||| let got = cover(fill, w, fill_share(WAYS, trail)); ||| let got = cover(fill, w, FULL);
+way theirs ||| if (got.theirs || !fills(val)) {\n        val = w; ||| if (got.theirs) {
+        val = w;\nway cursor k low ||| if (k < 0i || k >= i32(ROOT_NODES)) { ||| if (k >= i32(ROOT_NODES)) {
+way cursor k high ||| if (k < 0i || k >= i32(ROOT_NODES)) { ||| if (k < 0i) {
+way cursor zoom<top ||| if (root == 0u || zoom < top) { ||| if (root == 0u) {
+way cursor root0 ||| if (root == 0u || zoom < top) { ||| if (zoom < top) {
+ways_at same brick ||| if (((place ^ before) & LOOKUP_WHERE) == 0u) { ||| if (place == before) {
+ways_at not here ||| if (!lookup_here(place)) {\n    return SLOT_NOTHING;\n  } ||| 
+ways only here cell ||| if (g.kind == KIND_CELL && lookup_here(g.place)) { ||| if (g.kind == KIND_CELL) {
+placed four hide child ||| var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, ||| var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), NO_CUT, zoom + 1u,
+placed four byte ||| if (c >= 256u) {\n      return 0u;\n    } ||| 
+placed four leaf byte ||| return select(0u, four_of(v), v < 256u); ||| return four_of(v);
+hide on folded ||| } else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) { ||| } else if (cut_holds(hide, zoom, at)) {
+fold zero share ||| if ((word >> 16u) == 0u) {\n      return VALUE_VOID;\n    } ||| 
+carve fill whole ||| over_fill = fill_share(PLACED, put); ||| over_fill = FULL;
+cells_by leaf voxel ||| return voxel(word & 0xffffu); ||| return true;
+cells_by plus two ||| return (word >> 16u) + 2u > ||| return (word >> 16u) + 1u >
+cells_by shift cap ||| select(0u, FULL >> (shift & 31u), shift <= FULL_BITS) ||| (FULL >> (shift & 31u))
+whole carve none ||| if (cz == 0xffffffffu || cz <= zoom) { ||| if (cz <= zoom) {
+whole carve path ||| return any(path(zoom, carve.xyz >> vec3<u32>(cz - zoom)) != path(zoom, at)); ||| return true;
+object box low ||| low |= ~k & 7u; ||| low |= k;
+object box leaf ||| return vec2<u32>(BOX_WHOLE_0, BOX_WHOLE_1);\n  }\n  let base = first_child(PLACED, s >> SLOT_SHIFT) & ~BRANCH;\n  var low ||| return vec2<u32>(0u);
+  }\n  let base = first_child(PLACED, s >> SLOT_SHIFT) & ~BRANCH;\n  var low\ncover take floor ||| let taken = (over / (FULL / EIGHTHS)) * (FULL / EIGHTHS); ||| let taken = over;
+cover ge ||| over >= under_fill); ||| over > under_fill);
+placed air asset ||| select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over == VALUE_AIR) ||| VALUE_VOID
+kept mod ||| ((filled % EIGHTHS) << FILL_SHIFT) ||| (filled << FILL_SHIFT)
+four coarse fold ||| zoom >= LEAF_CELL || val != g.col.idx ||| val != g.col.idx
+four strata ||| zoom >= LEAF_CELL || val != g.col.idx ||| zoom >= LEAF_CELL
+ground share part ||| let share = select(FULL, g.col.part, c.z == g.col.top - 1i); ||| let share = FULL;
+cave only opens ||| if (asset != VALUE_VOID && opens(col, zoom, c.z)) { ||| if (asset != VALUE_VOID) {
+cave all void ||| select(asset, VALUE_VOID, cave >= FULL) ||| asset
+spawn small ||| if (s < 4i) { ||| if (s < 2i) {
+spawn clamp ||| clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 1i) ||| ez + i32((g >> 16u) % reach) - q / 4i
+spawn mirror ||| select(mx - dx, mx + dx, mx < 2i * q) ||| mx - dx
+aside bit ||| ((h >> 1u) & 1u) == 0u); ||| ((h >> 1u) & 1u) == 1u);
+walk rot ||| let r = (h >> 2u) % 3u; ||| let r = (h >> 3u) % 3u;
+hand cross i ||| let h = node_seed(CAVE_CROSS ^ i, zoom, c); ||| let h = node_seed(CAVE_CROSS, zoom, c);
+hand side ||| side = 2u * axis + u32(!up); ||| side = 2u * axis + u32(up);
+hand side out ||| part.side_out = 2u * axis + u32(up); ||| part.side_out = 2u * axis;
+hand trunc div ||| let was = (cur + p.leave) / 2i + ||| let was = ((cur + p.leave) >> vec3<u32>(1u)) +
+hand rot ||| rotl(wh, 7u * i + 3u) ||| rotl(wh, 7u * i + 4u)
+hand weight cap ||| let weight = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu); ||| let weight = (cnt << 16u) / max(cnt + rest, 1u);
+tunnels room ||| let room = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom); ||| let room = 1u << (2u * ((class_zoom - child) & 15u));
+tunnels keep on ||| var keep = 0xffu & ~on; ||| var keep = 0xffu;
+tunnels rot ||| rotl(h, 11u * axis + 5u) ||| rotl(h, 11u * axis + 6u)
+holds early ||| if (z == zoom || z == CAVE_PIPE || (piece.blocks == 0u && none)) { ||| if (z == zoom || z == CAVE_PIPE) {
+key t ge l ||| d = (pp - 2i * t + l) * l; ||| d = pp * l;
+key l zero ||| if (l == 0i || t <= 0i) { ||| if (t <= 0i) {
+block tie ||| if (k < mine || (k == mine && o < b)) { ||| if (k < mine) {
+block full ||| if (p.blocks >= CELL_BLOCKS) {\n    return true;\n  } ||| 
+blocks finer cap ||| if (zoom >= CAVE_BLOCK) { ||| if (zoom > CAVE_BLOCK) {
+hollow finer than leaf ||| if (zoom > LEAF_CELL) { ||| if (false) {
+hollow root ||| if (zoom <= CAVE_ROOT) { ||| if (zoom < CAVE_ROOT) {
+hollow cap ||| return min(n << u32(shift), FULL); ||| return n << u32(shift);
+root line ||| let slot = OBJECT_ROOT + child_idx(p >> vec3<u32>(zoom)); ||| let slot = OBJECT_ROOT;
+child path ||| tree_child(PLACED, at.x, zoom, path(zoom, c)) ||| tree_child(PLACED, at.x, zoom, c)

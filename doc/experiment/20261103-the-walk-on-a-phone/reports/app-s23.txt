@@ -1,0 +1,973 @@
+boot|window 411.42857142857144x891.4285714285714 world loop 3
+world|shown 23.822 s
+off|=== perf @ t=462245960.6ms  build e8d616ba4-dirty e8d616ba4-dirty (2026-11-03T18:31:13.472Z) ===
+off|frames n=371  over 24.9s  fps 14.8  moving 371  still 0   refresh 24.6 ms   paced 24.6 ms   scale 1.00   lattice 1   turns 515
+off|  kinds   cast 371   wakes next 371
+off|  interval p50 34.0  p95 227.0  max 558.0 ms   missed 186 (50% of moving frames)
+off|  busy    p50 1.7  p95 7.1  max 11.5 ms   (the interval's turns, rise to fall)
+off|  long    0 (turns past their interval)
+off|  tick    p50 1.1  p95 1.6  max 10.8 ms   overran 3   budget 0.0   phase p95 interaction 0.6  visible 1.2  content 0.0  cosmetic 0.0  report 0.0
+off|  effects p50 0.0  p95 3.3  max 7.2 ms   p95 navigation 0.0  bootstrap 0.0  orient 0.0  follow 0.0  dst 0.0  decor 0.0  objects 0.0  location 3.3  settings 0.0
+off|  stage   p50 0.3  p95 2.3  max 6.6 ms   (the pump, the stage's write and the render)
+off|  tasks   p50 0.0  p95 0.0  max 0.2 ms
+off|  perf p50 0.0  p95 0.4  max 0.7 ms   (its own record and the shell's reads)
+off|  rest    p50 0.1  p95 0.2  max 0.4 ms   (busy unmeasured: the door's commands, rise and fall)
+off|  gpu     p50 31.5  p95 229.2  max 507.4 ms busy   (over the 370 frames a read timed)
+off|  busy by kind  cast p50 31.5 p95 229.2 (370) ms   (n: the kind's frames a read timed)
+off|  spans   p95 exposure 1.0 (6)  world 8.7 (370)  resolve 1.4 (370)  finish 1.1 (370)  fill 0.7 (102)  cast 1.9 (370)  beam 60.0 (370)  sample_hit 2.1 (370)  sample 95.6 (370)  sample_box 0.3 (370)  sraster 1.6 (370)  px 1.6 (370)  miss 51.6 (370)  generate 26.1 (370)  face 7.5 (370)  mark 0.0 (370) ms   (n: the frames a read timed that ran each)
+off|  view    pivot 38.11727°, 128.46313° 1604.0 m  distance 16.0 u  polar 60.0°  azimuth -45.4°   drawn 2.5 Mpx
+off|  steps   visible/scene 0.6/2.6  visible/demand 0.3/9.7  interaction/input 0.2/0.5  interaction/camera 0.1/0.4  interaction/companion 0.0/0.8  interaction/environment 0.0/0.1  interaction/ghost 0.0/0.1  interaction/edit 0.0/0.0  interaction/preview 0.0/0.0  interaction/controller 0.0/0.0   (ms a run and max, since the recording started)
+off|  heap used Δ +0 MiB   (the high-water mark)
+off|  since   heap max live 149.9 MiB  run 44.2 MiB  slot 41.6 MiB  range 428.7 MiB   largest free min 64 MiB   refusals 0   ring peak cq 1 sq 22 left 0   body slots peak 5   terrain refused 0   (over the 372 frames since the recording started)
+off|tasks n=72
+off|  terrain  network  n=54   p50 242.3  p95 2776.9 ms   ok 54  ab 0  err 0
+off|                    mean net 221.3  bytes 745598  decode 0.0
+off|  division network  n=9   p50 12571.2  p95 13333.1 ms   ok 9  ab 0  err 0
+off|                    mean net 907.7  bytes 1429744
+off|  asset    ?        n=5   p50 27131.6  p95 28109.2 ms   ok 5  ab 0  err 0
+off|  earth    ?        n=4   p50 9300.2  p95 10696.6 ms   ok 4  ab 0  err 0
+off|                    mean net 832.6  bytes 1048616
+off|long frames n=160 (LoAF unsupported; longtask only)
+off|--- last 20 tasks ---
+off|[  46209.1] terrain:0103321303033             ok        119.6ms  q 0.6 + run 119.0 p0  [net 72.4 bytes 1051392 decode 0.0]
+off|[  46209.1] terrain:01033213030330            ok        119.6ms  q 0.6 + run 119.0 p0  [net 72.4 bytes 1051448 decode 0.0]
+off|[  46209.1] terrain:01033213030               ok        287.7ms  q 92.1 + run 195.6 p0  [net 100.8 bytes 1051392 decode 0.0]
+off|[  47718.9] terrain:010332130303321           ok        142.2ms  q 0.5 + run 141.7 p0  [net 64.2 bytes 264960 decode 0.0]
+off|[  47718.9] terrain:0103321303033             ok        194.9ms  q 0.5 + run 194.3 p0  [net 64.2 bytes 1051392 decode 0.0]
+off|[  47718.9] terrain:01033213031               ok        237.2ms  q 0.5 + run 236.7 p1537.64453125  [net 64.2 bytes 1051648 decode 0.0]
+off|[  47718.9] terrain:010332130303303           ok        317.6ms  q 0.5 + run 317.1 p0  [net 64.2 bytes 264960 decode 0.1]
+off|[  49189.7] terrain:010332130303321           ok        748.8ms  q 0.4 + run 748.4 p0  [net 388.6 bytes 264960 decode 0.0]
+off|[  49189.7] terrain:01033213032               ok        960.8ms  q 0.4 + run 960.4 p1023.7109375  [net 388.6 bytes 1051560 decode 0.0]
+off|[  50757.8] terrain:010332130303              ok        747.0ms  q 0.4 + run 746.6 p0  [net 448.2 bytes 1051392 decode 0.0]
+off|[  52202.4] terrain:010332130303302           ok         87.3ms  q 0.7 + run 86.6 p0  [net 43.6 bytes 264960 decode 0.0]
+off|[  52202.4] terrain:010332130303303           ok         87.3ms  q 0.7 + run 86.6 p0  [net 43.6 bytes 264960 decode 0.0]
+off|[  52202.4] terrain:0103321303033             ok         87.3ms  q 0.7 + run 86.6 p0  [net 43.6 bytes 1051392 decode 0.0]
+off|[  52202.4] terrain:01033213030330            ok         87.3ms  q 0.7 + run 86.6 p0  [net 43.6 bytes 1051448 decode 0.0]
+off|[  52202.4] terrain:010332130303              ok         87.3ms  q 0.7 + run 86.6 p0  [net 43.6 bytes 1051392 decode 0.0]
+off|[  52202.4] terrain:01033213030               ok        183.6ms  q 88.0 + run 95.5 p0  [net 40.8 bytes 1051392 decode 0.0]
+off|[  53709.6] terrain:010332130303321           ok        158.1ms  q 0.5 + run 157.5 p0  [net 73.4 bytes 264960 decode 0.0]
+off|[  53709.6] terrain:0103321303033             ok        211.0ms  q 0.5 + run 210.4 p0  [net 73.4 bytes 1051392 decode 0.0]
+off|[  53709.6] terrain:01033213031               ok        253.1ms  q 0.5 + run 252.5 p1537.796875  [net 73.4 bytes 1051648 decode 0.0]
+off|[  53709.6] terrain:010332130303303           ok        333.9ms  q 0.5 + run 333.3 p0  [net 73.4 bytes 264960 decode 0.0]
+off|--- worst 12 moving frames since recording ---
+off|[  29884.2] cast  interval 558.0 = 4 turns 2.3 + off-turn 555.7  effects 1.0  worst location 1.0  tick 0.5/0.0  stage 0.5  tasks 0.0  perf 0.0  gpu busy 214.5  draws 7 tris 43k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  32425.2] cast  interval 499.0 = 4 turns 4.5 + off-turn 494.5  effects 1.5  worst location 1.5  tick 0.8/0.0  stage 2.0  tasks 0.0  perf 0.1  gpu busy 424.5  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  33338.2] cast  interval 490.0 = 4 turns 7.6 + off-turn 482.4  effects 2.6  worst location 2.6  tick 1.4/0.0  stage 3.5  tasks 0.0  perf 0.1  gpu busy 302.0  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  31501.3] cast  interval 488.0 = 1 turns 3.5 + off-turn 484.5  effects 1.6  worst location 1.6  tick 1.1/0.0  stage 0.7  tasks 0.0  perf 0.0  gpu busy 507.4  draws 13 tris 62k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  31993.6] cast  interval 435.0 = 4 turns 5.8 + off-turn 429.2  effects 3.3  worst location 3.3  tick 1.7/0.0  stage 0.6  tasks 0.0  perf 0.1  gpu busy 502.1  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  32922.9] cast  interval 409.0 = 1 turns 2.9 + off-turn 406.1  effects 1.5  worst location 1.5  tick 1.1/0.0  stage 0.2  tasks 0.0  perf 0.0  gpu busy 481.7  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  33821.5] cast  interval 409.0 = 4 turns 3.0 + off-turn 406.0  effects 0.0  worst navigation 0.0  tick 0.7/0.0  stage 2.0  tasks 0.0  perf 0.1  gpu busy 125.2  draws 13 tris 70k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  31173.5] cast  interval 329.0 = 4 turns 5.1 + off-turn 323.9  effects 1.7  worst location 1.7  tick 0.9/0.0  stage 2.4  tasks 0.0  perf 0.0  gpu busy 389.9  draws 10 tris 52k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  38188.9] cast  interval 297.0 = 4 turns 2.4 + off-turn 294.6  effects 0.0  worst navigation 0.0  tick 1.5/0.0  stage 0.3  tasks 0.0  perf 0.3  gpu busy 246.0  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  39277.7] cast  interval 295.0 = 4 turns 10.3 + off-turn 284.7  effects 3.2  worst location 3.2  tick 4.4/0.0  stage 2.2  tasks 0.0  perf 0.2  gpu busy 184.8  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  38987.2] cast  interval 283.0 = 1 turns 3.2 + off-turn 279.8  effects 0.0  worst decor 0.0  tick 1.8/0.0  stage 1.3  tasks 0.0  perf 0.0  gpu busy 276.7  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|[  38486.2] cast  interval 281.0 = 1 turns 2.1 + off-turn 278.9  effects 0.0  worst decor 0.0  tick 1.6/0.0  stage 0.3  tasks 0.0  perf 0.0  gpu busy 250.4  draws 13 tris 68k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+off|--- long frames ---
+off|[462191294.1] longtask 266.0 ms  blocking 216.0  script 0.0  render 0.0
+off|[462193463.9] longtask 71.4 ms  blocking 21.4  script 0.0  render 0.0
+off|[462193811.6] longtask 52.7 ms  blocking 2.7  script 0.0  render 0.0
+off|[462193979.3] longtask 51.6 ms  blocking 1.6  script 0.0  render 0.0
+off|[462194049.0] longtask 59.4 ms  blocking 9.4  script 0.0  render 0.0
+off|[462194130.0] longtask 54.0 ms  blocking 4.0  script 0.0  render 0.0
+off|[462194214.5] longtask 64.1 ms  blocking 14.1  script 0.0  render 0.0
+off|[462194362.6] longtask 51.0 ms  blocking 1.0  script 0.0  render 0.0
+off|[462194420.6] longtask 51.4 ms  blocking 1.4  script 0.0  render 0.0
+off|[462194495.7] longtask 63.6 ms  blocking 13.6  script 0.0  render 0.0
+off|[462194570.4] longtask 18348.6 ms  blocking 18298.6  script 0.0  render 0.0
+off|[462212944.4] longtask 88.9 ms  blocking 38.9  script 0.0  render 0.0
+off|[462214584.2] longtask 208.4 ms  blocking 158.4  script 0.0  render 0.0
+off|[462214806.8] longtask 963.1 ms  blocking 913.1  script 0.0  render 0.0
+off|[462215803.3] longtask 210.1 ms  blocking 160.1  script 0.0  render 0.0
+off|[462216078.6] longtask 192.1 ms  blocking 142.1  script 0.0  render 0.0
+off|[462216671.1] longtask 177.3 ms  blocking 127.3  script 0.0  render 0.0
+off|[462216856.4] longtask 74.1 ms  blocking 24.1  script 0.0  render 0.0
+off|[462216938.1] longtask 204.3 ms  blocking 154.3  script 0.0  render 0.0
+off|[462217146.3] longtask 198.0 ms  blocking 148.0  script 0.0  render 0.0
+off|[462217348.9] longtask 189.4 ms  blocking 139.4  script 0.0  render 0.0
+off|[462217549.4] longtask 180.5 ms  blocking 130.5  script 0.0  render 0.0
+off|[462217739.2] longtask 201.7 ms  blocking 151.7  script 0.0  render 0.0
+off|[462217947.5] longtask 201.0 ms  blocking 151.0  script 0.0  render 0.0
+off|[462218156.6] longtask 185.0 ms  blocking 135.0  script 0.0  render 0.0
+off|[462218347.8] longtask 197.7 ms  blocking 147.7  script 0.0  render 0.0
+off|[462218915.6] longtask 190.8 ms  blocking 140.8  script 0.0  render 0.0
+off|[462219140.7] longtask 194.0 ms  blocking 144.0  script 0.0  render 0.0
+off|[462219482.7] longtask 215.0 ms  blocking 165.0  script 0.0  render 0.0
+off|[462219742.6] longtask 188.8 ms  blocking 138.8  script 0.0  render 0.0
+off|[462220067.3] longtask 60.5 ms  blocking 10.5  script 0.0  render 0.0
+off|[462220214.2] longtask 168.0 ms  blocking 118.0  script 0.0  render 0.0
+off|[462220397.5] longtask 122.6 ms  blocking 72.6  script 0.0  render 0.0
+off|[462220534.9] longtask 222.8 ms  blocking 172.8  script 0.0  render 0.0
+off|[462220783.7] longtask 132.1 ms  blocking 82.1  script 0.0  render 0.0
+off|[462220926.6] longtask 78.9 ms  blocking 28.9  script 0.0  render 0.0
+off|[462221010.1] longtask 59.9 ms  blocking 9.9  script 0.0  render 0.0
+off|[462221076.3] longtask 64.5 ms  blocking 14.5  script 0.0  render 0.0
+off|[462221143.0] longtask 73.2 ms  blocking 23.2  script 0.0  render 0.0
+off|[462221218.4] longtask 113.6 ms  blocking 63.6  script 0.0  render 0.0
+off|[462221349.7] longtask 500.9 ms  blocking 450.9  script 0.0  render 0.0
+off|[462221908.6] longtask 176.7 ms  blocking 126.7  script 0.0  render 0.0
+off|[462222096.5] longtask 271.3 ms  blocking 221.3  script 0.0  render 0.0
+off|[462222373.1] longtask 253.8 ms  blocking 203.8  script 0.0  render 0.0
+off|[462222635.8] longtask 317.9 ms  blocking 267.9  script 0.0  render 0.0
+off|[462222965.3] longtask 386.0 ms  blocking 336.0  script 0.0  render 0.0
+off|[462223453.1] longtask 412.6 ms  blocking 362.6  script 0.0  render 0.0
+off|[462223888.0] longtask 483.7 ms  blocking 433.7  script 0.0  render 0.0
+off|[462224387.4] longtask 407.2 ms  blocking 357.2  script 0.0  render 0.0
+off|[462224796.1] longtask 482.3 ms  blocking 432.3  script 0.0  render 0.0
+off|[462225286.0] longtask 297.8 ms  blocking 247.8  script 0.0  render 0.0
+off|[462226029.6] longtask 54.2 ms  blocking 4.2  script 0.0  render 0.0
+off|[462226138.0] longtask 50.4 ms  blocking 0.4  script 0.0  render 0.0
+off|[462226189.0] longtask 55.8 ms  blocking 5.8  script 0.0  render 0.0
+off|[462226297.3] longtask 63.3 ms  blocking 13.3  script 0.0  render 0.0
+off|[462226360.8] longtask 51.1 ms  blocking 1.1  script 0.0  render 0.0
+off|[462227290.3] longtask 50.2 ms  blocking 0.2  script 0.0  render 0.0
+off|[462227340.9] longtask 53.3 ms  blocking 3.3  script 0.0  render 0.0
+off|[462227402.4] longtask 55.6 ms  blocking 5.6  script 0.0  render 0.0
+off|[462227460.9] longtask 99.0 ms  blocking 49.0  script 0.0  render 0.0
+off|[462227565.3] longtask 81.0 ms  blocking 31.0  script 0.0  render 0.0
+off|[462227649.0] longtask 82.4 ms  blocking 32.4  script 0.0  render 0.0
+off|[462227731.8] longtask 106.0 ms  blocking 56.0  script 0.0  render 0.0
+off|[462227841.2] longtask 67.8 ms  blocking 17.8  script 0.0  render 0.0
+off|[462227917.0] longtask 62.7 ms  blocking 12.7  script 0.0  render 0.0
+off|[462227982.4] longtask 72.4 ms  blocking 22.4  script 0.0  render 0.0
+off|[462228058.6] longtask 59.9 ms  blocking 9.9  script 0.0  render 0.0
+off|[462228125.0] longtask 74.2 ms  blocking 24.2  script 0.0  render 0.0
+off|[462228200.7] longtask 76.5 ms  blocking 26.5  script 0.0  render 0.0
+off|[462228283.1] longtask 112.7 ms  blocking 62.7  script 0.0  render 0.0
+off|[462228400.3] longtask 114.0 ms  blocking 64.0  script 0.0  render 0.0
+off|[462228522.8] longtask 110.4 ms  blocking 60.4  script 0.0  render 0.0
+off|[462228633.8] longtask 135.1 ms  blocking 85.1  script 0.0  render 0.0
+off|[462228769.5] longtask 140.2 ms  blocking 90.2  script 0.0  render 0.0
+off|[462228910.6] longtask 239.9 ms  blocking 189.9  script 0.0  render 0.0
+off|[462229164.3] longtask 223.2 ms  blocking 173.2  script 0.0  render 0.0
+off|[462229393.1] longtask 252.7 ms  blocking 202.7  script 0.0  render 0.0
+off|[462229654.2] longtask 286.3 ms  blocking 236.3  script 0.0  render 0.0
+off|[462229951.3] longtask 236.1 ms  blocking 186.1  script 0.0  render 0.0
+off|[462230232.5] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+off|[462230451.2] longtask 281.4 ms  blocking 231.4  script 0.0  render 0.0
+off|[462230733.8] longtask 273.5 ms  blocking 223.5  script 0.0  render 0.0
+off|[462231029.1] longtask 168.9 ms  blocking 118.9  script 0.0  render 0.0
+off|[462231220.4] longtask 121.8 ms  blocking 71.8  script 0.0  render 0.0
+off|[462231344.6] longtask 92.1 ms  blocking 42.1  script 0.0  render 0.0
+off|[462231825.7] longtask 67.2 ms  blocking 17.2  script 0.0  render 0.0
+off|[462231927.3] longtask 65.6 ms  blocking 15.6  script 0.0  render 0.0
+off|[462232036.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+off|[462233403.5] longtask 54.5 ms  blocking 4.5  script 0.0  render 0.0
+off|[462233471.4] longtask 65.7 ms  blocking 15.7  script 0.0  render 0.0
+off|[462233537.5] longtask 75.3 ms  blocking 25.3  script 0.0  render 0.0
+off|[462233613.2] longtask 77.7 ms  blocking 27.7  script 0.0  render 0.0
+off|[462233695.3] longtask 90.3 ms  blocking 40.3  script 0.0  render 0.0
+off|[462233787.3] longtask 75.4 ms  blocking 25.4  script 0.0  render 0.0
+off|[462233863.1] longtask 55.8 ms  blocking 5.8  script 0.0  render 0.0
+off|[462234022.0] longtask 63.8 ms  blocking 13.8  script 0.0  render 0.0
+off|[462234137.5] longtask 51.4 ms  blocking 1.4  script 0.0  render 0.0
+off|[462234189.3] longtask 56.2 ms  blocking 6.2  script 0.0  render 0.0
+off|[462234245.8] longtask 82.0 ms  blocking 32.0  script 0.0  render 0.0
+off|[462234329.4] longtask 86.2 ms  blocking 36.2  script 0.0  render 0.0
+off|[462234417.1] longtask 80.5 ms  blocking 30.5  script 0.0  render 0.0
+off|[462234506.5] longtask 78.8 ms  blocking 28.8  script 0.0  render 0.0
+off|[462234588.2] longtask 94.1 ms  blocking 44.1  script 0.0  render 0.0
+off|[462234688.2] longtask 99.1 ms  blocking 49.1  script 0.0  render 0.0
+off|[462234787.9] longtask 167.0 ms  blocking 117.0  script 0.0  render 0.0
+off|[462234956.7] longtask 158.5 ms  blocking 108.5  script 0.0  render 0.0
+off|[462235125.8] longtask 151.7 ms  blocking 101.7  script 0.0  render 0.0
+off|[462235280.8] longtask 198.0 ms  blocking 148.0  script 0.0  render 0.0
+off|[462235488.8] longtask 174.2 ms  blocking 124.2  script 0.0  render 0.0
+off|[462235664.5] longtask 221.7 ms  blocking 171.7  script 0.0  render 0.0
+off|[462235889.5] longtask 204.3 ms  blocking 154.3  script 0.0  render 0.0
+off|[462236101.0] longtask 189.6 ms  blocking 139.6  script 0.0  render 0.0
+off|[462236291.4] longtask 202.4 ms  blocking 152.4  script 0.0  render 0.0
+off|[462236502.3] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+off|[462236714.6] longtask 146.3 ms  blocking 96.3  script 0.0  render 0.0
+off|[462236865.7] longtask 137.9 ms  blocking 87.9  script 0.0  render 0.0
+off|[462237009.9] longtask 100.1 ms  blocking 50.1  script 0.0  render 0.0
+off|[462237116.3] longtask 67.6 ms  blocking 17.6  script 0.0  render 0.0
+off|[462237184.4] longtask 75.1 ms  blocking 25.1  script 0.0  render 0.0
+off|[462237260.0] longtask 56.5 ms  blocking 6.5  script 0.0  render 0.0
+off|[462237316.8] longtask 58.4 ms  blocking 8.4  script 0.0  render 0.0
+off|[462237816.5] longtask 50.8 ms  blocking 0.8  script 0.0  render 0.0
+off|[462237900.1] longtask 56.3 ms  blocking 6.3  script 0.0  render 0.0
+off|[462239419.1] longtask 78.3 ms  blocking 28.3  script 0.0  render 0.0
+off|[462239502.0] longtask 56.8 ms  blocking 6.8  script 0.0  render 0.0
+off|[462239567.1] longtask 64.1 ms  blocking 14.1  script 0.0  render 0.0
+off|[462239636.3] longtask 76.2 ms  blocking 26.2  script 0.0  render 0.0
+off|[462239713.0] longtask 59.3 ms  blocking 9.3  script 0.0  render 0.0
+off|[462239777.5] longtask 87.9 ms  blocking 37.9  script 0.0  render 0.0
+off|[462239912.4] longtask 52.4 ms  blocking 2.4  script 0.0  render 0.0
+off|[462240111.4] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+off|[462240219.5] longtask 81.2 ms  blocking 31.2  script 0.0  render 0.0
+off|[462240303.4] longtask 74.5 ms  blocking 24.5  script 0.0  render 0.0
+off|[462240378.3] longtask 87.4 ms  blocking 37.4  script 0.0  render 0.0
+off|[462240469.3] longtask 77.2 ms  blocking 27.2  script 0.0  render 0.0
+off|[462240546.9] longtask 99.6 ms  blocking 49.6  script 0.0  render 0.0
+off|[462240656.5] longtask 88.8 ms  blocking 38.8  script 0.0  render 0.0
+off|[462240745.8] longtask 182.6 ms  blocking 132.6  script 0.0  render 0.0
+off|[462240930.5] longtask 108.9 ms  blocking 58.9  script 0.0  render 0.0
+off|[462241045.2] longtask 197.9 ms  blocking 147.9  script 0.0  render 0.0
+off|[462241251.1] longtask 147.7 ms  blocking 97.7  script 0.0  render 0.0
+off|[462241404.4] longtask 200.6 ms  blocking 150.6  script 0.0  render 0.0
+off|[462241614.2] longtask 184.4 ms  blocking 134.4  script 0.0  render 0.0
+off|[462241805.0] longtask 226.0 ms  blocking 176.0  script 0.0  render 0.0
+off|[462242031.9] longtask 182.3 ms  blocking 132.3  script 0.0  render 0.0
+off|[462242221.7] longtask 183.9 ms  blocking 133.9  script 0.0  render 0.0
+off|[462242406.4] longtask 245.3 ms  blocking 195.3  script 0.0  render 0.0
+off|[462242673.7] longtask 134.1 ms  blocking 84.1  script 0.0  render 0.0
+off|[462242816.9] longtask 133.6 ms  blocking 83.6  script 0.0  render 0.0
+off|[462242970.7] longtask 125.6 ms  blocking 75.6  script 0.0  render 0.0
+off|[462243111.5] longtask 57.2 ms  blocking 7.2  script 0.0  render 0.0
+off|[462243188.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+off|[462243898.7] longtask 60.1 ms  blocking 10.1  script 0.0  render 0.0
+off|[462243966.1] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+off|[462245425.5] longtask 79.1 ms  blocking 29.1  script 0.0  render 0.0
+off|[462245509.3] longtask 59.7 ms  blocking 9.7  script 0.0  render 0.0
+off|[462245569.4] longtask 72.8 ms  blocking 22.8  script 0.0  render 0.0
+off|[462245648.9] longtask 76.7 ms  blocking 26.7  script 0.0  render 0.0
+off|[462245726.0] longtask 55.6 ms  blocking 5.6  script 0.0  render 0.0
+off|[462245784.3] longtask 70.8 ms  blocking 20.8  script 0.0  render 0.0
+on|=== perf @ t=462283015.1ms  build e8d616ba4-dirty e8d616ba4-dirty (2026-11-03T18:31:13.472Z) ===
+on|frames n=106  over 24.6s  fps 4.3  moving 106  still 0   refresh 24.9 ms   paced 24.9 ms   scale 1.00   lattice 1   turns 250
+on|  kinds   cast 99  gated 7   wakes next 99  timer 7
+on|  interval p50 206.0  p95 473.0  max 591.0 ms   missed 99 (93% of moving frames)
+on|  busy    p50 3.2  p95 8.7  max 12.1 ms   (the interval's turns, rise to fall)
+on|  long    0 (turns past their interval)
+on|  tick    p50 1.4  p95 1.9  max 3.7 ms   overran 0   budget 0.0   phase p95 interaction 0.6  visible 1.3  content 0.0  cosmetic 0.0  report 0.0
+on|  effects p50 1.7  p95 3.8  max 8.1 ms   p95 navigation 0.0  bootstrap 0.0  orient 0.0  follow 0.0  dst 0.0  decor 0.0  objects 0.0  location 3.8  settings 0.0
+on|  stage   p50 0.5  p95 3.6  max 5.3 ms   (the pump, the stage's write and the render)
+on|  tasks   p50 0.0  p95 0.0  max 0.0 ms
+on|  perf p50 0.0  p95 0.2  max 0.3 ms   (its own record and the shell's reads)
+on|  rest    p50 0.1  p95 0.2  max 0.3 ms   (busy unmeasured: the door's commands, rise and fall)
+on|  gpu     p50 211.7  p95 465.2  max 514.0 ms busy   (over the 105 frames a read timed)
+on|  busy by kind  cast p50 215.9 p95 465.8 (98)  gated p50 12.0 p95 18.6 (7) ms   (n: the kind's frames a read timed)
+on|  spans   p95 world 10.7 (105)  resolve 1.8 (105)  finish 1.0 (105)  fill 0.5 (68)  cast 1.6 (105)  beam 65.6 (98)  sample_hit 2.1 (98)  sample 158.0 (98)  sample_box 0.3 (98)  sraster 3.1 (105)  px 2.7 (105)  miss 73.3 (105)  light_receivers 0.8 (98)  light_beam 91.7 (98)  light_sample 103.8 (98)  light_raster 0.7 (98)  light_slot 1.6 (98)  light_hit 0.8 (98)  light_walk 20.9 (98)  generate 35.3 (98)  shadow 0.4 (105)  face 6.7 (98)  mark 0.5 (105)  light_mark 0.1 (7)  propagate 0.4 (7) ms   (n: the frames a read timed that ran each)
+on|  view    pivot 38.11727°, 128.46313° 1604.0 m  distance 16.0 u  polar 60.0°  azimuth -82.1°   drawn 2.5 Mpx
+on|  steps   visible/scene 0.6/2.5  visible/demand 0.3/0.8  interaction/input 0.2/0.4  interaction/camera 0.1/0.2  interaction/companion 0.1/0.3  interaction/environment 0.0/0.1  interaction/ghost 0.0/0.0  interaction/edit 0.0/0.0  interaction/preview 0.0/0.0  interaction/controller 0.0/0.0   (ms a run and max, since the recording started)
+on|  heap used Δ +0 MiB   (the high-water mark)
+on|  since   heap max live 145.9 MiB  run 44.2 MiB  slot 41.6 MiB  range 428.7 MiB   largest free min 64 MiB   refusals 0   ring peak cq 1 sq 21 left 0   body slots peak 6   terrain refused 0   (over the 107 frames since the recording started)
+on|tasks n=43
+on|  terrain  network  n=43   p50 1165.0  p95 2013.5 ms   ok 43  ab 0  err 0
+on|                    mean net 461.0  bytes 758805  decode 0.0
+on|long frames n=216 (LoAF unsupported; longtask only)
+on|--- last 20 tasks ---
+on|[  79773.2] terrain:01033213032               ok       1802.0ms  q 0.6 + run 1801.4 p1022.20703125  [net 813.1 bytes 1051560 decode 0.0]
+on|[  81575.3] terrain:010332130303              ok       1262.0ms  q 0.6 + run 1261.4 p0  [net 862.0 bytes 1051392 decode 0.0]
+on|[  82729.0] terrain:010332130303302           ok        383.4ms  q 0.6 + run 382.8 p0  [net 173.0 bytes 264960 decode 0.0]
+on|[  82729.0] terrain:010332130303303           ok        512.7ms  q 0.6 + run 512.1 p0  [net 173.0 bytes 264960 decode 0.0]
+on|[  82729.0] terrain:01033213030330            ok        653.4ms  q 0.6 + run 652.8 p0  [net 173.0 bytes 1051448 decode 0.0]
+on|[  82729.0] terrain:0103321303033             ok        835.0ms  q 0.6 + run 834.4 p0  [net 173.0 bytes 1051392 decode 0.0]
+on|[  82729.0] terrain:01033213030               ok        995.3ms  q 108.8 + run 886.4 p0  [net 132.8 bytes 1051392 decode 0.0]
+on|[  84125.2] terrain:0103321303033             ok       1165.0ms  q 0.6 + run 1164.4 p0  [net 604.4 bytes 1051392 decode 0.0]
+on|[  84125.2] terrain:010332130303303           ok       1380.6ms  q 0.6 + run 1380.0 p0  [net 604.4 bytes 264960 decode 0.0]
+on|[  84125.2] terrain:01033213031               ok       1615.7ms  q 0.6 + run 1615.1 p1535.71484375  [net 604.4 bytes 1051648 decode 0.0]
+on|[  84125.2] terrain:010332130303321           ok       2013.5ms  q 0.6 + run 2012.9 p0  [net 604.4 bytes 264960 decode 0.0]
+on|[  85506.0] terrain:01033213032               ok       1536.3ms  q 0.6 + run 1535.7 p1023.69140625  [net 630.3 bytes 1051560 decode 0.0]
+on|[  87542.3] terrain:010332130303              ok       1271.5ms  q 0.7 + run 1270.7 p0  [net 997.3 bytes 1051392 decode 0.0]
+on|[  88575.4] terrain:010332130303303           ok        386.6ms  q 0.6 + run 386.0 p0  [net 236.7 bytes 264960 decode 0.0]
+on|[  88575.4] terrain:010332130303302           ok        521.4ms  q 0.6 + run 520.8 p0  [net 236.7 bytes 264960 decode 0.0]
+on|[  88575.4] terrain:01033213030330            ok        657.5ms  q 0.6 + run 656.9 p0  [net 236.7 bytes 1051448 decode 0.0]
+on|[  88575.4] terrain:0103321303033             ok        805.8ms  q 0.6 + run 805.2 p0  [net 236.7 bytes 1051392 decode 0.0]
+on|[  88575.4] terrain:01033213030               ok        988.2ms  q 239.2 + run 748.9 p0  [net 146.6 bytes 1051392 decode 0.0]
+on|[  90140.6] terrain:010332130303321           ok        992.9ms  q 0.6 + run 992.3 p0  [net 528.4 bytes 264960 decode 0.0]
+on|[  90140.6] terrain:0103321303033             ok       1201.2ms  q 0.6 + run 1200.7 p0  [net 528.4 bytes 1051392 decode 0.0]
+on|--- worst 12 moving frames since recording ---
+on|[  80600.5] cast  interval 591.0 = 4 turns 4.1 + off-turn 586.9  effects 2.2  worst location 2.2  tick 1.1/0.0  stage 0.6  tasks 0.0  perf 0.2  gpu busy 492.6  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  74775.3] cast  interval 515.0 = 4 turns 3.7 + off-turn 511.3  effects 1.8  worst location 1.8  tick 0.9/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy 404.8  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  87043.8] cast  interval 502.0 = 4 turns 5.6 + off-turn 496.4  effects 3.3  worst location 3.3  tick 1.3/0.0  stage 0.6  tasks 0.0  perf 0.2  gpu busy 362.9  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  86140.2] cast  interval 480.0 = 4 turns 2.2 + off-turn 477.8  effects 0.0  worst decor 0.0  tick 1.4/0.0  stage 0.6  tasks 0.0  perf 0.2  gpu busy 465.8  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  81576.3] cast  interval 474.0 = 4 turns 5.0 + off-turn 469.0  effects 2.8  worst location 2.8  tick 1.6/0.0  stage 0.3  tasks 0.0  perf 0.1  gpu busy 406.6  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  74000.3] cast  interval 473.0 = 4 turns 3.6 + off-turn 469.4  effects 1.8  worst location 1.8  tick 1.1/0.0  stage 0.4  tasks 0.0  perf 0.1  gpu busy 307.8  draws 10 tris 52k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  80154.1] cast  interval 450.0 = 4 turns 5.3 + off-turn 444.7  effects 1.9  worst location 1.9  tick 1.7/0.0  stage 1.5  tasks 0.0  perf 0.1  gpu busy 478.1  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  75703.3] cast  interval 433.0 = 1 turns 3.2 + off-turn 429.8  effects 1.7  worst location 1.7  tick 0.8/0.0  stage 0.5  tasks 0.0  perf 0.0  gpu busy 380.1  draws 10 tris 58k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  87910.0] cast  interval 425.0 = 4 turns 6.6 + off-turn 418.4  effects 4.5  worst location 4.5  tick 1.1/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy 219.3  draws 13 tris 70k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  86629.4] cast  interval 421.0 = 4 turns 12.1 + off-turn 408.9  effects 4.4  worst location 4.4  tick 2.0/0.0  stage 5.3  tasks 0.0  perf 0.2  gpu busy 495.6  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  75288.7] cast  interval 413.0 = 4 turns 2.7 + off-turn 410.3  effects 0.0  worst decor 0.0  tick 1.6/0.0  stage 0.7  tasks 0.0  perf 0.3  gpu busy 424.3  draws 10 tris 58k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|[  82049.7] cast  interval 410.0 = 4 turns 3.7 + off-turn 406.3  effects 1.9  worst location 1.9  tick 1.0/0.0  stage 0.5  tasks 0.0  perf 0.1  gpu busy 274.6  draws 13 tris 70k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+on|--- long frames ---
+on|[462222635.8] longtask 317.9 ms  blocking 267.9  script 0.0  render 0.0
+on|[462222965.3] longtask 386.0 ms  blocking 336.0  script 0.0  render 0.0
+on|[462223453.1] longtask 412.6 ms  blocking 362.6  script 0.0  render 0.0
+on|[462223888.0] longtask 483.7 ms  blocking 433.7  script 0.0  render 0.0
+on|[462224387.4] longtask 407.2 ms  blocking 357.2  script 0.0  render 0.0
+on|[462224796.1] longtask 482.3 ms  blocking 432.3  script 0.0  render 0.0
+on|[462225286.0] longtask 297.8 ms  blocking 247.8  script 0.0  render 0.0
+on|[462226029.6] longtask 54.2 ms  blocking 4.2  script 0.0  render 0.0
+on|[462226138.0] longtask 50.4 ms  blocking 0.4  script 0.0  render 0.0
+on|[462226189.0] longtask 55.8 ms  blocking 5.8  script 0.0  render 0.0
+on|[462226297.3] longtask 63.3 ms  blocking 13.3  script 0.0  render 0.0
+on|[462226360.8] longtask 51.1 ms  blocking 1.1  script 0.0  render 0.0
+on|[462227290.3] longtask 50.2 ms  blocking 0.2  script 0.0  render 0.0
+on|[462227340.9] longtask 53.3 ms  blocking 3.3  script 0.0  render 0.0
+on|[462227402.4] longtask 55.6 ms  blocking 5.6  script 0.0  render 0.0
+on|[462227460.9] longtask 99.0 ms  blocking 49.0  script 0.0  render 0.0
+on|[462227565.3] longtask 81.0 ms  blocking 31.0  script 0.0  render 0.0
+on|[462227649.0] longtask 82.4 ms  blocking 32.4  script 0.0  render 0.0
+on|[462227731.8] longtask 106.0 ms  blocking 56.0  script 0.0  render 0.0
+on|[462227841.2] longtask 67.8 ms  blocking 17.8  script 0.0  render 0.0
+on|[462227917.0] longtask 62.7 ms  blocking 12.7  script 0.0  render 0.0
+on|[462227982.4] longtask 72.4 ms  blocking 22.4  script 0.0  render 0.0
+on|[462228058.6] longtask 59.9 ms  blocking 9.9  script 0.0  render 0.0
+on|[462228125.0] longtask 74.2 ms  blocking 24.2  script 0.0  render 0.0
+on|[462228200.7] longtask 76.5 ms  blocking 26.5  script 0.0  render 0.0
+on|[462228283.1] longtask 112.7 ms  blocking 62.7  script 0.0  render 0.0
+on|[462228400.3] longtask 114.0 ms  blocking 64.0  script 0.0  render 0.0
+on|[462228522.8] longtask 110.4 ms  blocking 60.4  script 0.0  render 0.0
+on|[462228633.8] longtask 135.1 ms  blocking 85.1  script 0.0  render 0.0
+on|[462228769.5] longtask 140.2 ms  blocking 90.2  script 0.0  render 0.0
+on|[462228910.6] longtask 239.9 ms  blocking 189.9  script 0.0  render 0.0
+on|[462229164.3] longtask 223.2 ms  blocking 173.2  script 0.0  render 0.0
+on|[462229393.1] longtask 252.7 ms  blocking 202.7  script 0.0  render 0.0
+on|[462229654.2] longtask 286.3 ms  blocking 236.3  script 0.0  render 0.0
+on|[462229951.3] longtask 236.1 ms  blocking 186.1  script 0.0  render 0.0
+on|[462230232.5] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+on|[462230451.2] longtask 281.4 ms  blocking 231.4  script 0.0  render 0.0
+on|[462230733.8] longtask 273.5 ms  blocking 223.5  script 0.0  render 0.0
+on|[462231029.1] longtask 168.9 ms  blocking 118.9  script 0.0  render 0.0
+on|[462231220.4] longtask 121.8 ms  blocking 71.8  script 0.0  render 0.0
+on|[462231344.6] longtask 92.1 ms  blocking 42.1  script 0.0  render 0.0
+on|[462231825.7] longtask 67.2 ms  blocking 17.2  script 0.0  render 0.0
+on|[462231927.3] longtask 65.6 ms  blocking 15.6  script 0.0  render 0.0
+on|[462232036.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+on|[462233403.5] longtask 54.5 ms  blocking 4.5  script 0.0  render 0.0
+on|[462233471.4] longtask 65.7 ms  blocking 15.7  script 0.0  render 0.0
+on|[462233537.5] longtask 75.3 ms  blocking 25.3  script 0.0  render 0.0
+on|[462233613.2] longtask 77.7 ms  blocking 27.7  script 0.0  render 0.0
+on|[462233695.3] longtask 90.3 ms  blocking 40.3  script 0.0  render 0.0
+on|[462233787.3] longtask 75.4 ms  blocking 25.4  script 0.0  render 0.0
+on|[462233863.1] longtask 55.8 ms  blocking 5.8  script 0.0  render 0.0
+on|[462234022.0] longtask 63.8 ms  blocking 13.8  script 0.0  render 0.0
+on|[462234137.5] longtask 51.4 ms  blocking 1.4  script 0.0  render 0.0
+on|[462234189.3] longtask 56.2 ms  blocking 6.2  script 0.0  render 0.0
+on|[462234245.8] longtask 82.0 ms  blocking 32.0  script 0.0  render 0.0
+on|[462234329.4] longtask 86.2 ms  blocking 36.2  script 0.0  render 0.0
+on|[462234417.1] longtask 80.5 ms  blocking 30.5  script 0.0  render 0.0
+on|[462234506.5] longtask 78.8 ms  blocking 28.8  script 0.0  render 0.0
+on|[462234588.2] longtask 94.1 ms  blocking 44.1  script 0.0  render 0.0
+on|[462234688.2] longtask 99.1 ms  blocking 49.1  script 0.0  render 0.0
+on|[462234787.9] longtask 167.0 ms  blocking 117.0  script 0.0  render 0.0
+on|[462234956.7] longtask 158.5 ms  blocking 108.5  script 0.0  render 0.0
+on|[462235125.8] longtask 151.7 ms  blocking 101.7  script 0.0  render 0.0
+on|[462235280.8] longtask 198.0 ms  blocking 148.0  script 0.0  render 0.0
+on|[462235488.8] longtask 174.2 ms  blocking 124.2  script 0.0  render 0.0
+on|[462235664.5] longtask 221.7 ms  blocking 171.7  script 0.0  render 0.0
+on|[462235889.5] longtask 204.3 ms  blocking 154.3  script 0.0  render 0.0
+on|[462236101.0] longtask 189.6 ms  blocking 139.6  script 0.0  render 0.0
+on|[462236291.4] longtask 202.4 ms  blocking 152.4  script 0.0  render 0.0
+on|[462236502.3] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+on|[462236714.6] longtask 146.3 ms  blocking 96.3  script 0.0  render 0.0
+on|[462236865.7] longtask 137.9 ms  blocking 87.9  script 0.0  render 0.0
+on|[462237009.9] longtask 100.1 ms  blocking 50.1  script 0.0  render 0.0
+on|[462237116.3] longtask 67.6 ms  blocking 17.6  script 0.0  render 0.0
+on|[462237184.4] longtask 75.1 ms  blocking 25.1  script 0.0  render 0.0
+on|[462237260.0] longtask 56.5 ms  blocking 6.5  script 0.0  render 0.0
+on|[462237316.8] longtask 58.4 ms  blocking 8.4  script 0.0  render 0.0
+on|[462237816.5] longtask 50.8 ms  blocking 0.8  script 0.0  render 0.0
+on|[462237900.1] longtask 56.3 ms  blocking 6.3  script 0.0  render 0.0
+on|[462239419.1] longtask 78.3 ms  blocking 28.3  script 0.0  render 0.0
+on|[462239502.0] longtask 56.8 ms  blocking 6.8  script 0.0  render 0.0
+on|[462239567.1] longtask 64.1 ms  blocking 14.1  script 0.0  render 0.0
+on|[462239636.3] longtask 76.2 ms  blocking 26.2  script 0.0  render 0.0
+on|[462239713.0] longtask 59.3 ms  blocking 9.3  script 0.0  render 0.0
+on|[462239777.5] longtask 87.9 ms  blocking 37.9  script 0.0  render 0.0
+on|[462239912.4] longtask 52.4 ms  blocking 2.4  script 0.0  render 0.0
+on|[462240111.4] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+on|[462240219.5] longtask 81.2 ms  blocking 31.2  script 0.0  render 0.0
+on|[462240303.4] longtask 74.5 ms  blocking 24.5  script 0.0  render 0.0
+on|[462240378.3] longtask 87.4 ms  blocking 37.4  script 0.0  render 0.0
+on|[462240469.3] longtask 77.2 ms  blocking 27.2  script 0.0  render 0.0
+on|[462240546.9] longtask 99.6 ms  blocking 49.6  script 0.0  render 0.0
+on|[462240656.5] longtask 88.8 ms  blocking 38.8  script 0.0  render 0.0
+on|[462240745.8] longtask 182.6 ms  blocking 132.6  script 0.0  render 0.0
+on|[462240930.5] longtask 108.9 ms  blocking 58.9  script 0.0  render 0.0
+on|[462241045.2] longtask 197.9 ms  blocking 147.9  script 0.0  render 0.0
+on|[462241251.1] longtask 147.7 ms  blocking 97.7  script 0.0  render 0.0
+on|[462241404.4] longtask 200.6 ms  blocking 150.6  script 0.0  render 0.0
+on|[462241614.2] longtask 184.4 ms  blocking 134.4  script 0.0  render 0.0
+on|[462241805.0] longtask 226.0 ms  blocking 176.0  script 0.0  render 0.0
+on|[462242031.9] longtask 182.3 ms  blocking 132.3  script 0.0  render 0.0
+on|[462242221.7] longtask 183.9 ms  blocking 133.9  script 0.0  render 0.0
+on|[462242406.4] longtask 245.3 ms  blocking 195.3  script 0.0  render 0.0
+on|[462242673.7] longtask 134.1 ms  blocking 84.1  script 0.0  render 0.0
+on|[462242816.9] longtask 133.6 ms  blocking 83.6  script 0.0  render 0.0
+on|[462242970.7] longtask 125.6 ms  blocking 75.6  script 0.0  render 0.0
+on|[462243111.5] longtask 57.2 ms  blocking 7.2  script 0.0  render 0.0
+on|[462243188.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+on|[462243898.7] longtask 60.1 ms  blocking 10.1  script 0.0  render 0.0
+on|[462243966.1] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+on|[462245425.5] longtask 79.1 ms  blocking 29.1  script 0.0  render 0.0
+on|[462245509.3] longtask 59.7 ms  blocking 9.7  script 0.0  render 0.0
+on|[462245569.4] longtask 72.8 ms  blocking 22.8  script 0.0  render 0.0
+on|[462245648.9] longtask 76.7 ms  blocking 26.7  script 0.0  render 0.0
+on|[462245726.0] longtask 55.6 ms  blocking 5.6  script 0.0  render 0.0
+on|[462245784.3] longtask 70.8 ms  blocking 20.8  script 0.0  render 0.0
+on|[462245901.0] longtask 56.6 ms  blocking 6.6  script 0.0  render 0.0
+on|[462252016.5] longtask 327.8 ms  blocking 277.8  script 0.0  render 0.0
+on|[462258215.4] longtask 202.5 ms  blocking 152.5  script 0.0  render 0.0
+on|[462258427.8] longtask 53.2 ms  blocking 3.2  script 0.0  render 0.0
+on|[462258482.8] longtask 180.2 ms  blocking 130.2  script 0.0  render 0.0
+on|[462258666.1] longtask 183.0 ms  blocking 133.0  script 0.0  render 0.0
+on|[462258863.2] longtask 183.4 ms  blocking 133.4  script 0.0  render 0.0
+on|[462259050.4] longtask 239.6 ms  blocking 189.6  script 0.0  render 0.0
+on|[462259295.4] longtask 374.9 ms  blocking 324.9  script 0.0  render 0.0
+on|[462259680.8] longtask 289.0 ms  blocking 239.0  script 0.0  render 0.0
+on|[462260030.7] longtask 318.9 ms  blocking 268.9  script 0.0  render 0.0
+on|[462260353.7] longtask 349.5 ms  blocking 299.5  script 0.0  render 0.0
+on|[462260743.8] longtask 285.1 ms  blocking 235.1  script 0.0  render 0.0
+on|[462261062.0] longtask 383.7 ms  blocking 333.7  script 0.0  render 0.0
+on|[462261447.4] longtask 370.0 ms  blocking 320.0  script 0.0  render 0.0
+on|[462261852.3] longtask 177.8 ms  blocking 127.8  script 0.0  render 0.0
+on|[462262045.5] longtask 171.8 ms  blocking 121.8  script 0.0  render 0.0
+on|[462262228.4] longtask 71.2 ms  blocking 21.2  script 0.0  render 0.0
+on|[462262304.8] longtask 132.1 ms  blocking 82.1  script 0.0  render 0.0
+on|[462262437.9] longtask 133.7 ms  blocking 83.7  script 0.0  render 0.0
+on|[462262581.1] longtask 123.2 ms  blocking 73.2  script 0.0  render 0.0
+on|[462262704.9] longtask 139.4 ms  blocking 89.4  script 0.0  render 0.0
+on|[462262846.9] longtask 168.7 ms  blocking 118.7  script 0.0  render 0.0
+on|[462263021.7] longtask 147.0 ms  blocking 97.0  script 0.0  render 0.0
+on|[462263177.4] longtask 190.1 ms  blocking 140.1  script 0.0  render 0.0
+on|[462263372.8] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+on|[462263591.0] longtask 311.0 ms  blocking 261.0  script 0.0  render 0.0
+on|[462263903.6] longtask 364.7 ms  blocking 314.7  script 0.0  render 0.0
+on|[462264282.7] longtask 382.0 ms  blocking 332.0  script 0.0  render 0.0
+on|[462264671.3] longtask 243.1 ms  blocking 193.1  script 0.0  render 0.0
+on|[462264951.9] longtask 226.8 ms  blocking 176.8  script 0.0  render 0.0
+on|[462265188.1] longtask 267.0 ms  blocking 217.0  script 0.0  render 0.0
+on|[462265460.5] longtask 460.9 ms  blocking 410.9  script 0.0  render 0.0
+on|[462265933.6] longtask 296.6 ms  blocking 246.6  script 0.0  render 0.0
+on|[462266239.0] longtask 507.6 ms  blocking 457.6  script 0.0  render 0.0
+on|[462266753.7] longtask 402.6 ms  blocking 352.6  script 0.0  render 0.0
+on|[462267167.5] longtask 413.7 ms  blocking 363.7  script 0.0  render 0.0
+on|[462267599.9] longtask 366.1 ms  blocking 316.1  script 0.0  render 0.0
+on|[462267990.2] longtask 148.9 ms  blocking 98.9  script 0.0  render 0.0
+on|[462268154.3] longtask 164.2 ms  blocking 114.2  script 0.0  render 0.0
+on|[462268328.1] longtask 55.2 ms  blocking 5.2  script 0.0  render 0.0
+on|[462268390.3] longtask 130.5 ms  blocking 80.5  script 0.0  render 0.0
+on|[462268521.5] longtask 129.7 ms  blocking 79.7  script 0.0  render 0.0
+on|[462268653.9] longtask 136.2 ms  blocking 86.2  script 0.0  render 0.0
+on|[462268796.8] longtask 146.2 ms  blocking 96.2  script 0.0  render 0.0
+on|[462268945.8] longtask 159.3 ms  blocking 109.3  script 0.0  render 0.0
+on|[462269105.9] longtask 179.3 ms  blocking 129.3  script 0.0  render 0.0
+on|[462269292.7] longtask 186.5 ms  blocking 136.5  script 0.0  render 0.0
+on|[462269480.0] longtask 245.4 ms  blocking 195.4  script 0.0  render 0.0
+on|[462269730.3] longtask 262.5 ms  blocking 212.5  script 0.0  render 0.0
+on|[462269996.6] longtask 373.3 ms  blocking 323.3  script 0.0  render 0.0
+on|[462270377.6] longtask 338.7 ms  blocking 288.7  script 0.0  render 0.0
+on|[462270749.4] longtask 205.1 ms  blocking 155.1  script 0.0  render 0.0
+on|[462270955.2] longtask 272.7 ms  blocking 222.7  script 0.0  render 0.0
+on|[462271236.2] longtask 374.7 ms  blocking 324.7  script 0.0  render 0.0
+on|[462271613.6] longtask 441.5 ms  blocking 391.5  script 0.0  render 0.0
+on|[462272063.9] longtask 476.5 ms  blocking 426.5  script 0.0  render 0.0
+on|[462272654.9] longtask 376.9 ms  blocking 326.9  script 0.0  render 0.0
+on|[462273038.8] longtask 452.9 ms  blocking 402.9  script 0.0  render 0.0
+on|[462273513.3] longtask 388.4 ms  blocking 338.4  script 0.0  render 0.0
+on|[462273922.9] longtask 256.5 ms  blocking 206.5  script 0.0  render 0.0
+on|[462274193.8] longtask 102.8 ms  blocking 52.8  script 0.0  render 0.0
+on|[462274298.2] longtask 64.2 ms  blocking 14.2  script 0.0  render 0.0
+on|[462274374.8] longtask 59.2 ms  blocking 9.2  script 0.0  render 0.0
+on|[462274436.1] longtask 138.6 ms  blocking 88.6  script 0.0  render 0.0
+on|[462274577.8] longtask 125.4 ms  blocking 75.4  script 0.0  render 0.0
+on|[462274703.7] longtask 134.7 ms  blocking 84.7  script 0.0  render 0.0
+on|[462274844.2] longtask 175.2 ms  blocking 125.2  script 0.0  render 0.0
+on|[462275027.9] longtask 154.8 ms  blocking 104.8  script 0.0  render 0.0
+on|[462275186.1] longtask 184.0 ms  blocking 134.0  script 0.0  render 0.0
+on|[462275371.2] longtask 207.8 ms  blocking 157.8  script 0.0  render 0.0
+on|[462275588.3] longtask 269.9 ms  blocking 219.9  script 0.0  render 0.0
+on|[462275862.1] longtask 301.3 ms  blocking 251.3  script 0.0  render 0.0
+on|[462276197.7] longtask 320.1 ms  blocking 270.1  script 0.0  render 0.0
+on|[462276545.4] longtask 201.1 ms  blocking 151.1  script 0.0  render 0.0
+on|[462276755.9] longtask 205.7 ms  blocking 155.7  script 0.0  render 0.0
+on|[462276968.3] longtask 234.5 ms  blocking 184.5  script 0.0  render 0.0
+on|[462277203.7] longtask 388.8 ms  blocking 338.8  script 0.0  render 0.0
+on|[462277605.5] longtask 424.9 ms  blocking 374.9  script 0.0  render 0.0
+on|[462278084.7] longtask 414.2 ms  blocking 364.2  script 0.0  render 0.0
+on|[462278505.8] longtask 493.0 ms  blocking 443.0  script 0.0  render 0.0
+on|[462279008.5] longtask 358.7 ms  blocking 308.7  script 0.0  render 0.0
+on|[462279368.4] longtask 416.1 ms  blocking 366.1  script 0.0  render 0.0
+on|[462279793.5] longtask 212.8 ms  blocking 162.8  script 0.0  render 0.0
+on|[462280041.2] longtask 155.9 ms  blocking 105.9  script 0.0  render 0.0
+on|[462280198.2] longtask 73.8 ms  blocking 23.8  script 0.0  render 0.0
+on|[462280279.3] longtask 77.4 ms  blocking 27.4  script 0.0  render 0.0
+on|[462280357.7] longtask 64.5 ms  blocking 14.5  script 0.0  render 0.0
+on|[462280426.7] longtask 126.4 ms  blocking 76.4  script 0.0  render 0.0
+on|[462280560.3] longtask 130.6 ms  blocking 80.6  script 0.0  render 0.0
+on|[462280693.6] longtask 146.9 ms  blocking 96.9  script 0.0  render 0.0
+on|[462280843.3] longtask 174.7 ms  blocking 124.7  script 0.0  render 0.0
+on|[462281026.8] longtask 155.4 ms  blocking 105.4  script 0.0  render 0.0
+on|[462281185.7] longtask 190.9 ms  blocking 140.9  script 0.0  render 0.0
+on|[462281377.4] longtask 218.7 ms  blocking 168.7  script 0.0  render 0.0
+on|[462281603.4] longtask 230.8 ms  blocking 180.8  script 0.0  render 0.0
+on|[462281838.6] longtask 295.3 ms  blocking 245.3  script 0.0  render 0.0
+on|[462282142.8] longtask 228.9 ms  blocking 178.9  script 0.0  render 0.0
+on|[462282379.2] longtask 214.8 ms  blocking 164.8  script 0.0  render 0.0
+on|[462282600.4] longtask 198.2 ms  blocking 148.2  script 0.0  render 0.0
+counts|=== perf @ t=462292757.7ms  build e8d616ba4-dirty e8d616ba4-dirty (2026-11-03T18:31:13.472Z) ===
+counts|frames n=30  over 7.5s  fps 3.9  moving 30  still 0   refresh 24.9 ms   paced 24.9 ms   scale 1.00   lattice 1   turns 75
+counts|  kinds   cast 30   wakes next 30
+counts|  interval p50 240.0  p95 437.0  max 442.0 ms   missed 30 (100% of moving frames)
+counts|  busy    p50 3.7  p95 8.4  max 8.8 ms   (the interval's turns, rise to fall)
+counts|  long    0 (turns past their interval)
+counts|  tick    p50 1.4  p95 1.8  max 2.2 ms   overran 0   budget 0.0   phase p95 interaction 0.6  visible 1.6  content 0.0  cosmetic 0.0  report 0.0
+counts|  effects p50 2.1  p95 3.6  max 4.4 ms   p95 navigation 0.1  bootstrap 0.0  orient 0.0  follow 0.0  dst 0.0  decor 0.0  objects 0.0  location 3.6  settings 0.0
+counts|  stage   p50 0.5  p95 3.6  max 3.7 ms   (the pump, the stage's write and the render)
+counts|  tasks   p50 0.0  p95 0.0  max 0.0 ms
+counts|  perf p50 0.0  p95 0.1  max 0.2 ms   (its own record and the shell's reads)
+counts|  rest    p50 0.1  p95 0.2  max 0.3 ms   (busy unmeasured: the door's commands, rise and fall)
+counts|  gpu     p50 237.4  p95 423.5  max 496.7 ms busy   (over the 29 frames a read timed)
+counts|  busy by kind  cast p50 237.4 p95 423.5 (29) ms   (n: the kind's frames a read timed)
+counts|  spans   p95 world 9.0 (29)  resolve 1.8 (29)  finish 1.0 (29)  fill 0.5 (21)  cast 1.7 (29)  beam 60.4 (29)  sample_hit 2.3 (29)  sample 142.2 (29)  sample_box 0.3 (29)  sraster 1.4 (29)  px 4.2 (29)  miss 73.1 (29)  light_receivers 0.8 (29)  light_beam 88.7 (29)  light_sample 102.1 (29)  light_raster 0.7 (29)  light_slot 1.8 (29)  light_hit 0.8 (29)  light_walk 15.5 (29)  generate 35.8 (29)  shadow 0.4 (29)  face 6.4 (29)  mark 0.0 (29) ms   (n: the frames a read timed that ran each)
+counts|  eye     cast in 15 frames   nodes a cast: beam 98459.6  sample 172731.0  miss 74537.4   cast again 100.00%: took 99.39%  walked 0.61% (4.8 nodes each)  sky 0.00%   boxes 4850.1 a cast
+counts|  light   cast in 15 frames   nodes a cast: beam 230888.1  sample 343284.8  miss 20420.7   cast again 4.13%: took 3.92%  walked 0.20% (2.4 nodes each)  sky 0.00%   boxes 5471.2 a cast
+counts|  view    pivot 38.11727°, 128.46313° 1604.0 m  distance 16.0 u  polar 60.0°  azimuth -175.5°   drawn 2.5 Mpx
+counts|  steps   visible/scene 0.7/1.4  visible/demand 0.3/0.8  interaction/input 0.2/0.4  interaction/camera 0.1/0.1  interaction/companion 0.1/0.3  interaction/environment 0.0/0.0  interaction/ghost 0.0/0.0  interaction/edit 0.0/0.0  interaction/preview 0.0/0.0  interaction/controller 0.0/0.0   (ms a run and max, since the recording started)
+counts|  heap used Δ +0 MiB   (the high-water mark)
+counts|  since   heap max live 145.9 MiB  run 44.2 MiB  slot 41.6 MiB  range 428.7 MiB   largest free min 64 MiB   refusals 0   ring peak cq 1 sq 17 left 0   body slots peak 6   terrain refused 0   (over the 31 frames since the recording started)
+counts|tasks n=12
+counts|  terrain  network  n=12   p50 1062.5  p95 2034.7 ms   ok 12  ab 0  err 0
+counts|                    mean net 335.0  bytes 723752  decode 0.0
+counts|long frames n=209 (LoAF unsupported; longtask only)
+counts|--- last 12 tasks ---
+counts|[  93450.7] terrain:010332130303321           ok        826.9ms  q 1.0 + run 825.9 p0  [net 113.0 bytes 264960 decode 0.0]
+counts|[  93450.7] terrain:01033213032               ok       1062.5ms  q 1.0 + run 1061.5 p1023.30859375  [net 113.0 bytes 1051560 decode 0.0]
+counts|[  95261.1] terrain:010332130303              ok       1137.9ms  q 0.6 + run 1137.3 p0  [net 434.3 bytes 1051392 decode 0.0]
+counts|[  96399.2] terrain:010332130303303           ok        489.2ms  q 0.6 + run 488.7 p0  [net 218.1 bytes 264960 decode 0.0]
+counts|[  96399.2] terrain:010332130303302           ok        621.2ms  q 0.6 + run 620.6 p0  [net 218.2 bytes 264960 decode 0.0]
+counts|[  96399.2] terrain:01033213030330            ok        765.0ms  q 0.6 + run 764.4 p0  [net 218.2 bytes 1051448 decode 0.0]
+counts|[  96399.2] terrain:01033213030               ok        950.4ms  q 0.6 + run 949.9 p0  [net 218.2 bytes 1051392 decode 0.0]
+counts|[  96399.2] terrain:0103321303033             ok       1117.8ms  q 0.6 + run 1117.2 p0  [net 218.2 bytes 1051392 decode 0.0]
+counts|[  97925.9] terrain:010332130303321           ok       1145.4ms  q 0.6 + run 1144.8 p0  [net 562.5 bytes 264960 decode 0.0]
+counts|[  97925.9] terrain:0103321303033             ok       1371.6ms  q 0.6 + run 1371.0 p0  [net 569.0 bytes 1051392 decode 0.0]
+counts|[  97925.9] terrain:01033213031               ok       1609.3ms  q 0.6 + run 1608.7 p1535.80078125  [net 569.0 bytes 1051648 decode 0.0]
+counts|[  97925.9] terrain:010332130303303           ok       2034.7ms  q 0.6 + run 2034.2 p0  [net 569.0 bytes 264960 decode 0.0]
+counts|--- worst 12 moving frames since recording ---
+counts|[  99962.1] cast  interval 442.0 = 1 turns 2.1 + off-turn 439.9  effects 0.0  worst decor 0.0  tick 1.4/0.0  stage 0.6  tasks 0.0  perf 0.0  gpu busy 496.7  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  95262.2] cast  interval 437.0 = 4 turns 2.4 + off-turn 434.6  effects 0.0  worst navigation 0.0  tick 1.7/0.0  stage 0.5  tasks 0.0  perf 0.1  gpu busy 407.4  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[ 100412.7] cast  interval 437.0 = 4 turns 8.8 + off-turn 428.2  effects 3.5  worst location 3.5  tick 1.5/0.0  stage 3.4  tasks 0.0  perf 0.2  gpu busy -  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  94828.4] cast  interval 434.0 = 1 turns 3.3 + off-turn 430.7  effects 0.0  worst navigation 0.0  tick 1.8/0.0  stage 1.3  tasks 0.0  perf 0.0  gpu busy 423.5  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  99537.0] cast  interval 428.0 = 4 turns 5.2 + off-turn 422.8  effects 2.7  worst location 2.7  tick 1.2/0.0  stage 1.0  tasks 0.0  perf 0.1  gpu busy 374.5  draws 10 tris 51k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  93567.0] cast  interval 377.0 = 4 turns 1.8 + off-turn 375.2  effects 0.9  worst location 0.9  tick 0.6/0.0  stage 0.2  tasks 0.0  perf 0.0  gpu busy 231.2  draws 10 tris 51k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  95701.5] cast  interval 374.0 = 4 turns 5.1 + off-turn 368.9  effects 2.7  worst location 2.7  tick 1.7/0.0  stage 0.4  tasks 0.0  perf 0.1  gpu busy 308.5  draws 16 tris 78k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  98500.9] cast  interval 360.0 = 4 turns 5.0 + off-turn 355.0  effects 3.3  worst location 3.2  tick 1.4/0.0  stage 0.2  tasks 0.0  perf 0.1  gpu busy 235.2  draws 16 tris 76k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  93941.1] cast  interval 335.0 = 1 turns 1.0 + off-turn 334.0  effects 0.0  worst navigation 0.0  tick 0.8/0.0  stage 0.2  tasks 0.0  perf 0.0  gpu busy 338.6  draws 13 tris 67k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  96071.9] cast  interval 328.0 = 4 turns 1.7 + off-turn 326.3  effects 0.0  worst navigation 0.0  tick 1.2/0.0  stage 0.3  tasks 0.0  perf 0.1  gpu busy 138.7  draws 13 tris 70k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  94516.9] cast  interval 315.0 = 4 turns 7.2 + off-turn 307.8  effects 2.8  worst location 2.8  tick 1.3/0.0  stage 2.9  tasks 0.0  perf 0.1  gpu busy 406.4  draws 10 tris 59k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|[  98196.4] cast  interval 312.0 = 4 turns 3.7 + off-turn 308.3  effects 2.1  worst location 2.0  tick 1.3/0.0  stage 0.2  tasks 0.0  perf 0.1  gpu busy 343.1  draws 13 tris 60k  uploads 73  heap used 192 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+counts|--- long frames ---
+counts|[462231825.7] longtask 67.2 ms  blocking 17.2  script 0.0  render 0.0
+counts|[462231927.3] longtask 65.6 ms  blocking 15.6  script 0.0  render 0.0
+counts|[462232036.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+counts|[462233403.5] longtask 54.5 ms  blocking 4.5  script 0.0  render 0.0
+counts|[462233471.4] longtask 65.7 ms  blocking 15.7  script 0.0  render 0.0
+counts|[462233537.5] longtask 75.3 ms  blocking 25.3  script 0.0  render 0.0
+counts|[462233613.2] longtask 77.7 ms  blocking 27.7  script 0.0  render 0.0
+counts|[462233695.3] longtask 90.3 ms  blocking 40.3  script 0.0  render 0.0
+counts|[462233787.3] longtask 75.4 ms  blocking 25.4  script 0.0  render 0.0
+counts|[462233863.1] longtask 55.8 ms  blocking 5.8  script 0.0  render 0.0
+counts|[462234022.0] longtask 63.8 ms  blocking 13.8  script 0.0  render 0.0
+counts|[462234137.5] longtask 51.4 ms  blocking 1.4  script 0.0  render 0.0
+counts|[462234189.3] longtask 56.2 ms  blocking 6.2  script 0.0  render 0.0
+counts|[462234245.8] longtask 82.0 ms  blocking 32.0  script 0.0  render 0.0
+counts|[462234329.4] longtask 86.2 ms  blocking 36.2  script 0.0  render 0.0
+counts|[462234417.1] longtask 80.5 ms  blocking 30.5  script 0.0  render 0.0
+counts|[462234506.5] longtask 78.8 ms  blocking 28.8  script 0.0  render 0.0
+counts|[462234588.2] longtask 94.1 ms  blocking 44.1  script 0.0  render 0.0
+counts|[462234688.2] longtask 99.1 ms  blocking 49.1  script 0.0  render 0.0
+counts|[462234787.9] longtask 167.0 ms  blocking 117.0  script 0.0  render 0.0
+counts|[462234956.7] longtask 158.5 ms  blocking 108.5  script 0.0  render 0.0
+counts|[462235125.8] longtask 151.7 ms  blocking 101.7  script 0.0  render 0.0
+counts|[462235280.8] longtask 198.0 ms  blocking 148.0  script 0.0  render 0.0
+counts|[462235488.8] longtask 174.2 ms  blocking 124.2  script 0.0  render 0.0
+counts|[462235664.5] longtask 221.7 ms  blocking 171.7  script 0.0  render 0.0
+counts|[462235889.5] longtask 204.3 ms  blocking 154.3  script 0.0  render 0.0
+counts|[462236101.0] longtask 189.6 ms  blocking 139.6  script 0.0  render 0.0
+counts|[462236291.4] longtask 202.4 ms  blocking 152.4  script 0.0  render 0.0
+counts|[462236502.3] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+counts|[462236714.6] longtask 146.3 ms  blocking 96.3  script 0.0  render 0.0
+counts|[462236865.7] longtask 137.9 ms  blocking 87.9  script 0.0  render 0.0
+counts|[462237009.9] longtask 100.1 ms  blocking 50.1  script 0.0  render 0.0
+counts|[462237116.3] longtask 67.6 ms  blocking 17.6  script 0.0  render 0.0
+counts|[462237184.4] longtask 75.1 ms  blocking 25.1  script 0.0  render 0.0
+counts|[462237260.0] longtask 56.5 ms  blocking 6.5  script 0.0  render 0.0
+counts|[462237316.8] longtask 58.4 ms  blocking 8.4  script 0.0  render 0.0
+counts|[462237816.5] longtask 50.8 ms  blocking 0.8  script 0.0  render 0.0
+counts|[462237900.1] longtask 56.3 ms  blocking 6.3  script 0.0  render 0.0
+counts|[462239419.1] longtask 78.3 ms  blocking 28.3  script 0.0  render 0.0
+counts|[462239502.0] longtask 56.8 ms  blocking 6.8  script 0.0  render 0.0
+counts|[462239567.1] longtask 64.1 ms  blocking 14.1  script 0.0  render 0.0
+counts|[462239636.3] longtask 76.2 ms  blocking 26.2  script 0.0  render 0.0
+counts|[462239713.0] longtask 59.3 ms  blocking 9.3  script 0.0  render 0.0
+counts|[462239777.5] longtask 87.9 ms  blocking 37.9  script 0.0  render 0.0
+counts|[462239912.4] longtask 52.4 ms  blocking 2.4  script 0.0  render 0.0
+counts|[462240111.4] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+counts|[462240219.5] longtask 81.2 ms  blocking 31.2  script 0.0  render 0.0
+counts|[462240303.4] longtask 74.5 ms  blocking 24.5  script 0.0  render 0.0
+counts|[462240378.3] longtask 87.4 ms  blocking 37.4  script 0.0  render 0.0
+counts|[462240469.3] longtask 77.2 ms  blocking 27.2  script 0.0  render 0.0
+counts|[462240546.9] longtask 99.6 ms  blocking 49.6  script 0.0  render 0.0
+counts|[462240656.5] longtask 88.8 ms  blocking 38.8  script 0.0  render 0.0
+counts|[462240745.8] longtask 182.6 ms  blocking 132.6  script 0.0  render 0.0
+counts|[462240930.5] longtask 108.9 ms  blocking 58.9  script 0.0  render 0.0
+counts|[462241045.2] longtask 197.9 ms  blocking 147.9  script 0.0  render 0.0
+counts|[462241251.1] longtask 147.7 ms  blocking 97.7  script 0.0  render 0.0
+counts|[462241404.4] longtask 200.6 ms  blocking 150.6  script 0.0  render 0.0
+counts|[462241614.2] longtask 184.4 ms  blocking 134.4  script 0.0  render 0.0
+counts|[462241805.0] longtask 226.0 ms  blocking 176.0  script 0.0  render 0.0
+counts|[462242031.9] longtask 182.3 ms  blocking 132.3  script 0.0  render 0.0
+counts|[462242221.7] longtask 183.9 ms  blocking 133.9  script 0.0  render 0.0
+counts|[462242406.4] longtask 245.3 ms  blocking 195.3  script 0.0  render 0.0
+counts|[462242673.7] longtask 134.1 ms  blocking 84.1  script 0.0  render 0.0
+counts|[462242816.9] longtask 133.6 ms  blocking 83.6  script 0.0  render 0.0
+counts|[462242970.7] longtask 125.6 ms  blocking 75.6  script 0.0  render 0.0
+counts|[462243111.5] longtask 57.2 ms  blocking 7.2  script 0.0  render 0.0
+counts|[462243188.3] longtask 59.1 ms  blocking 9.1  script 0.0  render 0.0
+counts|[462243898.7] longtask 60.1 ms  blocking 10.1  script 0.0  render 0.0
+counts|[462243966.1] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+counts|[462245425.5] longtask 79.1 ms  blocking 29.1  script 0.0  render 0.0
+counts|[462245509.3] longtask 59.7 ms  blocking 9.7  script 0.0  render 0.0
+counts|[462245569.4] longtask 72.8 ms  blocking 22.8  script 0.0  render 0.0
+counts|[462245648.9] longtask 76.7 ms  blocking 26.7  script 0.0  render 0.0
+counts|[462245726.0] longtask 55.6 ms  blocking 5.6  script 0.0  render 0.0
+counts|[462245784.3] longtask 70.8 ms  blocking 20.8  script 0.0  render 0.0
+counts|[462245901.0] longtask 56.6 ms  blocking 6.6  script 0.0  render 0.0
+counts|[462252016.5] longtask 327.8 ms  blocking 277.8  script 0.0  render 0.0
+counts|[462258215.4] longtask 202.5 ms  blocking 152.5  script 0.0  render 0.0
+counts|[462258427.8] longtask 53.2 ms  blocking 3.2  script 0.0  render 0.0
+counts|[462258482.8] longtask 180.2 ms  blocking 130.2  script 0.0  render 0.0
+counts|[462258666.1] longtask 183.0 ms  blocking 133.0  script 0.0  render 0.0
+counts|[462258863.2] longtask 183.4 ms  blocking 133.4  script 0.0  render 0.0
+counts|[462259050.4] longtask 239.6 ms  blocking 189.6  script 0.0  render 0.0
+counts|[462259295.4] longtask 374.9 ms  blocking 324.9  script 0.0  render 0.0
+counts|[462259680.8] longtask 289.0 ms  blocking 239.0  script 0.0  render 0.0
+counts|[462260030.7] longtask 318.9 ms  blocking 268.9  script 0.0  render 0.0
+counts|[462260353.7] longtask 349.5 ms  blocking 299.5  script 0.0  render 0.0
+counts|[462260743.8] longtask 285.1 ms  blocking 235.1  script 0.0  render 0.0
+counts|[462261062.0] longtask 383.7 ms  blocking 333.7  script 0.0  render 0.0
+counts|[462261447.4] longtask 370.0 ms  blocking 320.0  script 0.0  render 0.0
+counts|[462261852.3] longtask 177.8 ms  blocking 127.8  script 0.0  render 0.0
+counts|[462262045.5] longtask 171.8 ms  blocking 121.8  script 0.0  render 0.0
+counts|[462262228.4] longtask 71.2 ms  blocking 21.2  script 0.0  render 0.0
+counts|[462262304.8] longtask 132.1 ms  blocking 82.1  script 0.0  render 0.0
+counts|[462262437.9] longtask 133.7 ms  blocking 83.7  script 0.0  render 0.0
+counts|[462262581.1] longtask 123.2 ms  blocking 73.2  script 0.0  render 0.0
+counts|[462262704.9] longtask 139.4 ms  blocking 89.4  script 0.0  render 0.0
+counts|[462262846.9] longtask 168.7 ms  blocking 118.7  script 0.0  render 0.0
+counts|[462263021.7] longtask 147.0 ms  blocking 97.0  script 0.0  render 0.0
+counts|[462263177.4] longtask 190.1 ms  blocking 140.1  script 0.0  render 0.0
+counts|[462263372.8] longtask 208.5 ms  blocking 158.5  script 0.0  render 0.0
+counts|[462263591.0] longtask 311.0 ms  blocking 261.0  script 0.0  render 0.0
+counts|[462263903.6] longtask 364.7 ms  blocking 314.7  script 0.0  render 0.0
+counts|[462264282.7] longtask 382.0 ms  blocking 332.0  script 0.0  render 0.0
+counts|[462264671.3] longtask 243.1 ms  blocking 193.1  script 0.0  render 0.0
+counts|[462264951.9] longtask 226.8 ms  blocking 176.8  script 0.0  render 0.0
+counts|[462265188.1] longtask 267.0 ms  blocking 217.0  script 0.0  render 0.0
+counts|[462265460.5] longtask 460.9 ms  blocking 410.9  script 0.0  render 0.0
+counts|[462265933.6] longtask 296.6 ms  blocking 246.6  script 0.0  render 0.0
+counts|[462266239.0] longtask 507.6 ms  blocking 457.6  script 0.0  render 0.0
+counts|[462266753.7] longtask 402.6 ms  blocking 352.6  script 0.0  render 0.0
+counts|[462267167.5] longtask 413.7 ms  blocking 363.7  script 0.0  render 0.0
+counts|[462267599.9] longtask 366.1 ms  blocking 316.1  script 0.0  render 0.0
+counts|[462267990.2] longtask 148.9 ms  blocking 98.9  script 0.0  render 0.0
+counts|[462268154.3] longtask 164.2 ms  blocking 114.2  script 0.0  render 0.0
+counts|[462268328.1] longtask 55.2 ms  blocking 5.2  script 0.0  render 0.0
+counts|[462268390.3] longtask 130.5 ms  blocking 80.5  script 0.0  render 0.0
+counts|[462268521.5] longtask 129.7 ms  blocking 79.7  script 0.0  render 0.0
+counts|[462268653.9] longtask 136.2 ms  blocking 86.2  script 0.0  render 0.0
+counts|[462268796.8] longtask 146.2 ms  blocking 96.2  script 0.0  render 0.0
+counts|[462268945.8] longtask 159.3 ms  blocking 109.3  script 0.0  render 0.0
+counts|[462269105.9] longtask 179.3 ms  blocking 129.3  script 0.0  render 0.0
+counts|[462269292.7] longtask 186.5 ms  blocking 136.5  script 0.0  render 0.0
+counts|[462269480.0] longtask 245.4 ms  blocking 195.4  script 0.0  render 0.0
+counts|[462269730.3] longtask 262.5 ms  blocking 212.5  script 0.0  render 0.0
+counts|[462269996.6] longtask 373.3 ms  blocking 323.3  script 0.0  render 0.0
+counts|[462270377.6] longtask 338.7 ms  blocking 288.7  script 0.0  render 0.0
+counts|[462270749.4] longtask 205.1 ms  blocking 155.1  script 0.0  render 0.0
+counts|[462270955.2] longtask 272.7 ms  blocking 222.7  script 0.0  render 0.0
+counts|[462271236.2] longtask 374.7 ms  blocking 324.7  script 0.0  render 0.0
+counts|[462271613.6] longtask 441.5 ms  blocking 391.5  script 0.0  render 0.0
+counts|[462272063.9] longtask 476.5 ms  blocking 426.5  script 0.0  render 0.0
+counts|[462272654.9] longtask 376.9 ms  blocking 326.9  script 0.0  render 0.0
+counts|[462273038.8] longtask 452.9 ms  blocking 402.9  script 0.0  render 0.0
+counts|[462273513.3] longtask 388.4 ms  blocking 338.4  script 0.0  render 0.0
+counts|[462273922.9] longtask 256.5 ms  blocking 206.5  script 0.0  render 0.0
+counts|[462274193.8] longtask 102.8 ms  blocking 52.8  script 0.0  render 0.0
+counts|[462274298.2] longtask 64.2 ms  blocking 14.2  script 0.0  render 0.0
+counts|[462274374.8] longtask 59.2 ms  blocking 9.2  script 0.0  render 0.0
+counts|[462274436.1] longtask 138.6 ms  blocking 88.6  script 0.0  render 0.0
+counts|[462274577.8] longtask 125.4 ms  blocking 75.4  script 0.0  render 0.0
+counts|[462274703.7] longtask 134.7 ms  blocking 84.7  script 0.0  render 0.0
+counts|[462274844.2] longtask 175.2 ms  blocking 125.2  script 0.0  render 0.0
+counts|[462275027.9] longtask 154.8 ms  blocking 104.8  script 0.0  render 0.0
+counts|[462275186.1] longtask 184.0 ms  blocking 134.0  script 0.0  render 0.0
+counts|[462275371.2] longtask 207.8 ms  blocking 157.8  script 0.0  render 0.0
+counts|[462275588.3] longtask 269.9 ms  blocking 219.9  script 0.0  render 0.0
+counts|[462275862.1] longtask 301.3 ms  blocking 251.3  script 0.0  render 0.0
+counts|[462276197.7] longtask 320.1 ms  blocking 270.1  script 0.0  render 0.0
+counts|[462276545.4] longtask 201.1 ms  blocking 151.1  script 0.0  render 0.0
+counts|[462276755.9] longtask 205.7 ms  blocking 155.7  script 0.0  render 0.0
+counts|[462276968.3] longtask 234.5 ms  blocking 184.5  script 0.0  render 0.0
+counts|[462277203.7] longtask 388.8 ms  blocking 338.8  script 0.0  render 0.0
+counts|[462277605.5] longtask 424.9 ms  blocking 374.9  script 0.0  render 0.0
+counts|[462278084.7] longtask 414.2 ms  blocking 364.2  script 0.0  render 0.0
+counts|[462278505.8] longtask 493.0 ms  blocking 443.0  script 0.0  render 0.0
+counts|[462279008.5] longtask 358.7 ms  blocking 308.7  script 0.0  render 0.0
+counts|[462279368.4] longtask 416.1 ms  blocking 366.1  script 0.0  render 0.0
+counts|[462279793.5] longtask 212.8 ms  blocking 162.8  script 0.0  render 0.0
+counts|[462280041.2] longtask 155.9 ms  blocking 105.9  script 0.0  render 0.0
+counts|[462280198.2] longtask 73.8 ms  blocking 23.8  script 0.0  render 0.0
+counts|[462280279.3] longtask 77.4 ms  blocking 27.4  script 0.0  render 0.0
+counts|[462280357.7] longtask 64.5 ms  blocking 14.5  script 0.0  render 0.0
+counts|[462280426.7] longtask 126.4 ms  blocking 76.4  script 0.0  render 0.0
+counts|[462280560.3] longtask 130.6 ms  blocking 80.6  script 0.0  render 0.0
+counts|[462280693.6] longtask 146.9 ms  blocking 96.9  script 0.0  render 0.0
+counts|[462280843.3] longtask 174.7 ms  blocking 124.7  script 0.0  render 0.0
+counts|[462281026.8] longtask 155.4 ms  blocking 105.4  script 0.0  render 0.0
+counts|[462281185.7] longtask 190.9 ms  blocking 140.9  script 0.0  render 0.0
+counts|[462281377.4] longtask 218.7 ms  blocking 168.7  script 0.0  render 0.0
+counts|[462281603.4] longtask 230.8 ms  blocking 180.8  script 0.0  render 0.0
+counts|[462281838.6] longtask 295.3 ms  blocking 245.3  script 0.0  render 0.0
+counts|[462282142.8] longtask 228.9 ms  blocking 178.9  script 0.0  render 0.0
+counts|[462282379.2] longtask 214.8 ms  blocking 164.8  script 0.0  render 0.0
+counts|[462282600.4] longtask 198.2 ms  blocking 148.2  script 0.0  render 0.0
+counts|[462282803.9] longtask 207.3 ms  blocking 157.3  script 0.0  render 0.0
+counts|[462283030.8] longtask 368.2 ms  blocking 318.2  script 0.0  render 0.0
+counts|[462283406.1] longtask 286.4 ms  blocking 236.4  script 0.0  render 0.0
+counts|[462283699.8] longtask 301.5 ms  blocking 251.5  script 0.0  render 0.0
+counts|[462284029.6] longtask 302.0 ms  blocking 252.0  script 0.0  render 0.0
+counts|[462284356.9] longtask 234.2 ms  blocking 184.2  script 0.0  render 0.0
+counts|[462284608.5] longtask 298.4 ms  blocking 248.4  script 0.0  render 0.0
+counts|[462284916.5] longtask 84.2 ms  blocking 34.2  script 0.0  render 0.0
+counts|[462285030.5] longtask 367.9 ms  blocking 317.9  script 0.0  render 0.0
+counts|[462285407.5] longtask 220.6 ms  blocking 170.6  script 0.0  render 0.0
+counts|[462285742.3] longtask 227.0 ms  blocking 177.0  script 0.0  render 0.0
+counts|[462285977.1] longtask 306.5 ms  blocking 256.5  script 0.0  render 0.0
+counts|[462286292.5] longtask 397.3 ms  blocking 347.3  script 0.0  render 0.0
+counts|[462286725.7] longtask 389.8 ms  blocking 339.8  script 0.0  render 0.0
+counts|[462287163.2] longtask 367.3 ms  blocking 317.3  script 0.0  render 0.0
+counts|[462287537.5] longtask 302.3 ms  blocking 252.3  script 0.0  render 0.0
+counts|[462287865.5] longtask 132.7 ms  blocking 82.7  script 0.0  render 0.0
+counts|[462288000.2] longtask 71.4 ms  blocking 21.4  script 0.0  render 0.0
+counts|[462288084.4] longtask 121.4 ms  blocking 71.4  script 0.0  render 0.0
+counts|[462288206.4] longtask 139.3 ms  blocking 89.3  script 0.0  render 0.0
+counts|[462288352.4] longtask 126.4 ms  blocking 76.4  script 0.0  render 0.0
+counts|[462288482.5] longtask 142.7 ms  blocking 92.7  script 0.0  render 0.0
+counts|[462288626.0] longtask 179.5 ms  blocking 129.5  script 0.0  render 0.0
+counts|[462288813.3] longtask 156.8 ms  blocking 106.8  script 0.0  render 0.0
+counts|[462288974.3] longtask 194.5 ms  blocking 144.5  script 0.0  render 0.0
+counts|[462289174.1] longtask 206.6 ms  blocking 156.6  script 0.0  render 0.0
+counts|[462289389.4] longtask 258.0 ms  blocking 208.0  script 0.0  render 0.0
+counts|[462289651.2] longtask 301.9 ms  blocking 251.9  script 0.0  render 0.0
+counts|[462289963.3] longtask 339.5 ms  blocking 289.5  script 0.0  render 0.0
+counts|[462290323.2] longtask 212.3 ms  blocking 162.3  script 0.0  render 0.0
+counts|[462290536.5] longtask 217.4 ms  blocking 167.4  script 0.0  render 0.0
+counts|[462290759.2] longtask 234.2 ms  blocking 184.2  script 0.0  render 0.0
+counts|[462290999.3] longtask 418.8 ms  blocking 368.8  script 0.0  render 0.0
+counts|[462291427.4] longtask 368.0 ms  blocking 318.0  script 0.0  render 0.0
+drive|=== perf @ t=462342690.4ms  build e8d616ba4-dirty e8d616ba4-dirty (2026-11-03T18:31:13.472Z) ===
+drive|frames n=41  over 23.7s  fps 1.7  moving 41  still 0   refresh 8.6 ms   paced 17.1 ms   scale 1.00   lattice 1   turns 176
+drive|  kinds   cast 40  gated 1   wakes next 41
+drive|  interval p50 624.0  p95 1037.0  max 1713.0 ms   missed 40 (98% of moving frames)
+drive|  busy    p50 3.0  p95 6.8  max 8.8 ms   (the interval's turns, rise to fall)
+drive|  long    0 (turns past their interval)
+drive|  tick    p50 1.1  p95 2.9  max 3.9 ms   overran 0   budget 0.0   phase p95 interaction 1.1  visible 1.8  content 0.0  cosmetic 0.0  report 0.0
+drive|  effects p50 1.1  p95 3.3  max 3.5 ms   p95 navigation 0.0  bootstrap 0.0  orient 0.0  follow 0.0  dst 0.0  decor 0.0  objects 0.0  location 3.3  settings 0.0
+drive|  stage   p50 0.6  p95 1.8  max 2.0 ms   (the pump, the stage's write and the render)
+drive|  tasks   p50 0.0  p95 0.0  max 0.0 ms
+drive|  perf p50 0.1  p95 0.1  max 0.1 ms   (its own record and the shell's reads)
+drive|  rest    p50 0.1  p95 0.2  max 0.3 ms   (busy unmeasured: the door's commands, rise and fall)
+drive|  gpu     p50 617.6  p95 1025.4  max 1128.7 ms busy   (over the 40 frames a read timed)
+drive|  busy by kind  cast p50 619.1 p95 1078.6 (39)  gated p50 30.5 p95 30.5 (1) ms   (n: the kind's frames a read timed)
+drive|  spans   p95 air 0.7 (37)  exposure 0.9 (39)  world 8.4 (40)  resolve 1.7 (40)  finish 0.9 (40)  fill 0.7 (39)  cast 4.0 (40)  beam 104.0 (39)  sample_hit 0.8 (39)  sample 163.3 (39)  sample_box 0.2 (39)  sraster 0.9 (40)  px 1.4 (40)  miss 794.3 (40)  light_receivers 0.8 (39)  light_beam 92.5 (39)  light_sample 83.3 (39)  light_raster 0.6 (39)  light_slot 2.2 (39)  light_hit 1.1 (39)  light_walk 118.5 (39)  generate 0.5 (39)  shadow 0.5 (39)  face 14.2 (39)  mark 0.0 (39) ms   (n: the frames a read timed that ran each)
+drive|  view    pivot 38.11727°, 128.46313° 963.1 m  distance 5446.8 u  polar 90.4°  azimuth -142.4°   drawn 2.5 Mpx
+drive|  steps   visible/scene 0.5/1.2  visible/demand 0.4/1.1  interaction/input 0.3/1.9  interaction/camera 0.1/0.2  interaction/companion 0.1/0.2  interaction/environment 0.0/0.0  interaction/ghost 0.0/0.0  interaction/edit 0.0/0.0  interaction/preview 0.0/0.0  interaction/controller 0.0/0.0   (ms a run and max, since the recording started)
+drive|  heap used Δ +0 MiB   (the high-water mark)
+drive|  since   heap max live 146.1 MiB  run 44.3 MiB  slot 41.6 MiB  range 428.7 MiB   largest free min 64 MiB   refusals 0   ring peak cq 1 sq 44 left 0   body slots peak 6   terrain refused 0   (over the 42 frames since the recording started)
+drive|tasks n=83
+drive|  terrain  network  n=83   p50 3432.0  p95 6951.2 ms   ok 15  ab 68  err 0
+drive|                    mean net 1442.0  bytes 1051396  decode 0.0
+drive|long frames n=155 (LoAF unsupported; longtask only)
+drive|--- last 20 tasks ---
+drive|[ 144555.5] terrain:01033211123               aborted   719.4ms  q 0.3 + run 719.1 p234.51171875
+drive|[ 142098.5] terrain:0103321                   aborted  3176.4ms  q 650.5 + run 2525.9 p0
+drive|[ 145274.1] terrain:0103330211                aborted   343.1ms  q 0.7 + run 342.4 p0
+drive|[ 145274.1] terrain:010333021                 aborted   343.1ms  q 0.7 + run 342.4 p0
+drive|[ 145616.3] terrain:01033302222010            aborted    74.7ms  q 1.0 + run 73.7 p174.4453125
+drive|[ 145616.3] terrain:0103330222201             aborted    74.7ms  q 1.0 + run 73.7 p174.4453125
+drive|[ 145274.1] terrain:01033302                  aborted   416.8ms  q 0.7 + run 416.0 p0
+drive|[ 144555.5] terrain:0103330                   ok       2121.5ms  q 719.4 + run 1402.1 p0  [net 335.0 bytes 1051392 decode 0.0]
+drive|[ 143225.4] terrain:010333                    aborted  3451.9ms  q 2049.5 + run 1402.4 p0
+drive|[ 146677.0] terrain:0103321320                aborted   724.9ms  q 0.3 + run 724.6 p0
+drive|[ 146677.0] terrain:010332132                 aborted   724.9ms  q 0.3 + run 724.6 p0
+drive|[ 145616.3] terrain:01033213                  aborted  2866.8ms  q 74.7 + run 2792.1 p0
+drive|[ 146677.0] terrain:010332130                 aborted  1806.0ms  q 724.9 + run 1081.1 p0
+drive|[ 145616.3] terrain:010332                    ok       3586.1ms  q 74.7 + run 3511.4 p0  [net 2163.9 bytes 1051392 decode 0.0]
+drive|[ 148482.6] terrain:010332111                 aborted   720.7ms  q 0.5 + run 720.3 p0
+drive|[ 145616.3] terrain:0103321                   ok       3792.0ms  q 74.7 + run 3717.3 p0  [net 2163.9 bytes 1051392 decode 0.0]
+drive|[ 148482.6] terrain:01033211                  aborted   926.2ms  q 0.5 + run 925.7 p0
+drive|[ 145690.6] terrain:0103                      ok       4687.9ms  q 1711.3 + run 2976.6 p0  [net 1075.4 bytes 1051392 decode 0.0]
+drive|[ 149202.6] terrain:010332131                 aborted  1176.3ms  q 0.7 + run 1175.6 p0
+drive|[ 149408.4] terrain:0103321312                aborted   970.5ms  q 0.4 + run 970.2 p171.22265625
+drive|--- worst 12 moving frames since recording ---
+drive|[ 126897.3] cast  interval 1713.0 = 4 turns 2.6 + off-turn 1710.4  effects 1.0  worst location 1.0  tick 1.1/0.0  stage 0.2  tasks 0.0  perf 0.1  gpu busy 702.5  draws 22 tris 76k  uploads 68  heap used 192 MiB  Δuploads -2 Δuploads bytes 0 MiB Δheap used +0 MiB
+drive|[ 137636.2] cast  interval 1128.0 = 7 turns 2.9 + off-turn 1125.1  effects 1.1  worst location 1.0  tick 1.2/0.0  stage 0.5  tasks 0.0  perf 0.1  gpu busy 262.1  draws 15 tris 60k  uploads 58  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 125859.8] cast  interval 1037.0 = 4 turns 1.2 + off-turn 1035.8  effects 0.0  worst navigation 0.0  tick 0.8/4.3  stage 0.2  tasks 0.0  perf 0.0  gpu busy 1025.4  draws 24 tris 78k  uploads 70  heap used 192 MiB  Δuploads +0 Δuploads bytes 0 MiB Δheap used +0 MiB
+drive|[ 145691.5] cast  interval 986.0 = 7 turns 2.8 + off-turn 983.2  effects 1.1  worst location 1.1  tick 0.9/0.0  stage 0.6  tasks 0.0  perf 0.1  gpu busy 728.0  draws 19 tris 67k  uploads 50  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 136654.6] cast  interval 982.0 = 7 turns 3.5 + off-turn 978.5  effects 1.0  worst location 1.0  tick 1.5/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy 1128.7  draws 20 tris 69k  uploads 57  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 149409.6] cast  interval 970.0 = 7 turns 2.9 + off-turn 967.1  effects 0.9  worst location 0.9  tick 0.9/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy -  draws 9 tris 39k  uploads 52  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 143605.6] cast  interval 950.0 = 4 turns 2.4 + off-turn 947.6  effects 1.0  worst location 1.0  tick 0.8/0.0  stage 0.4  tasks 0.0  perf 0.1  gpu busy 700.5  draws 17 tris 64k  uploads 60  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 141211.0] cast  interval 889.0 = 7 turns 3.2 + off-turn 885.8  effects 0.9  worst location 0.9  tick 1.2/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy 651.5  draws 22 tris 68k  uploads 56  heap used 192 MiB  Δuploads +0 Δuploads bytes 0 MiB Δheap used +0 MiB
+drive|[ 132287.5] cast  interval 806.0 = 4 turns 4.4 + off-turn 801.6  effects 1.3  worst location 1.3  tick 1.1/0.0  stage 1.8  tasks 0.0  perf 0.0  gpu busy 773.5  draws 20 tris 79k  uploads 57  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 133091.6] cast  interval 774.0 = 7 turns 2.8 + off-turn 771.2  effects 1.0  worst location 1.0  tick 0.8/0.0  stage 0.8  tasks 0.0  perf 0.1  gpu busy 555.1  draws 15 tris 76k  uploads 58  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 146677.5] cast  interval 725.0 = 4 turns 2.7 + off-turn 722.3  effects 1.0  worst location 1.0  tick 1.3/0.0  stage 0.2  tasks 0.0  perf 0.1  gpu busy 457.9  draws 10 tris 56k  uploads 51  heap used 192 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+drive|[ 144556.4] cast  interval 717.0 = 7 turns 2.8 + off-turn 714.2  effects 0.9  worst location 0.9  tick 1.1/0.0  stage 0.6  tasks 0.0  perf 0.1  gpu busy 281.4  draws 21 tris 80k  uploads 55  heap used 192 MiB  Δuploads -5 Δuploads bytes 0 MiB Δheap used +0 MiB
+drive|--- long frames ---
+drive|[462280041.2] longtask 155.9 ms  blocking 105.9  script 0.0  render 0.0
+drive|[462280198.2] longtask 73.8 ms  blocking 23.8  script 0.0  render 0.0
+drive|[462280279.3] longtask 77.4 ms  blocking 27.4  script 0.0  render 0.0
+drive|[462280357.7] longtask 64.5 ms  blocking 14.5  script 0.0  render 0.0
+drive|[462280426.7] longtask 126.4 ms  blocking 76.4  script 0.0  render 0.0
+drive|[462280560.3] longtask 130.6 ms  blocking 80.6  script 0.0  render 0.0
+drive|[462280693.6] longtask 146.9 ms  blocking 96.9  script 0.0  render 0.0
+drive|[462280843.3] longtask 174.7 ms  blocking 124.7  script 0.0  render 0.0
+drive|[462281026.8] longtask 155.4 ms  blocking 105.4  script 0.0  render 0.0
+drive|[462281185.7] longtask 190.9 ms  blocking 140.9  script 0.0  render 0.0
+drive|[462281377.4] longtask 218.7 ms  blocking 168.7  script 0.0  render 0.0
+drive|[462281603.4] longtask 230.8 ms  blocking 180.8  script 0.0  render 0.0
+drive|[462281838.6] longtask 295.3 ms  blocking 245.3  script 0.0  render 0.0
+drive|[462282142.8] longtask 228.9 ms  blocking 178.9  script 0.0  render 0.0
+drive|[462282379.2] longtask 214.8 ms  blocking 164.8  script 0.0  render 0.0
+drive|[462282600.4] longtask 198.2 ms  blocking 148.2  script 0.0  render 0.0
+drive|[462282803.9] longtask 207.3 ms  blocking 157.3  script 0.0  render 0.0
+drive|[462283030.8] longtask 368.2 ms  blocking 318.2  script 0.0  render 0.0
+drive|[462283406.1] longtask 286.4 ms  blocking 236.4  script 0.0  render 0.0
+drive|[462283699.8] longtask 301.5 ms  blocking 251.5  script 0.0  render 0.0
+drive|[462284029.6] longtask 302.0 ms  blocking 252.0  script 0.0  render 0.0
+drive|[462284356.9] longtask 234.2 ms  blocking 184.2  script 0.0  render 0.0
+drive|[462284608.5] longtask 298.4 ms  blocking 248.4  script 0.0  render 0.0
+drive|[462284916.5] longtask 84.2 ms  blocking 34.2  script 0.0  render 0.0
+drive|[462285030.5] longtask 367.9 ms  blocking 317.9  script 0.0  render 0.0
+drive|[462285407.5] longtask 220.6 ms  blocking 170.6  script 0.0  render 0.0
+drive|[462285742.3] longtask 227.0 ms  blocking 177.0  script 0.0  render 0.0
+drive|[462285977.1] longtask 306.5 ms  blocking 256.5  script 0.0  render 0.0
+drive|[462286292.5] longtask 397.3 ms  blocking 347.3  script 0.0  render 0.0
+drive|[462286725.7] longtask 389.8 ms  blocking 339.8  script 0.0  render 0.0
+drive|[462287163.2] longtask 367.3 ms  blocking 317.3  script 0.0  render 0.0
+drive|[462287537.5] longtask 302.3 ms  blocking 252.3  script 0.0  render 0.0
+drive|[462287865.5] longtask 132.7 ms  blocking 82.7  script 0.0  render 0.0
+drive|[462288000.2] longtask 71.4 ms  blocking 21.4  script 0.0  render 0.0
+drive|[462288084.4] longtask 121.4 ms  blocking 71.4  script 0.0  render 0.0
+drive|[462288206.4] longtask 139.3 ms  blocking 89.3  script 0.0  render 0.0
+drive|[462288352.4] longtask 126.4 ms  blocking 76.4  script 0.0  render 0.0
+drive|[462288482.5] longtask 142.7 ms  blocking 92.7  script 0.0  render 0.0
+drive|[462288626.0] longtask 179.5 ms  blocking 129.5  script 0.0  render 0.0
+drive|[462288813.3] longtask 156.8 ms  blocking 106.8  script 0.0  render 0.0
+drive|[462288974.3] longtask 194.5 ms  blocking 144.5  script 0.0  render 0.0
+drive|[462289174.1] longtask 206.6 ms  blocking 156.6  script 0.0  render 0.0
+drive|[462289389.4] longtask 258.0 ms  blocking 208.0  script 0.0  render 0.0
+drive|[462289651.2] longtask 301.9 ms  blocking 251.9  script 0.0  render 0.0
+drive|[462289963.3] longtask 339.5 ms  blocking 289.5  script 0.0  render 0.0
+drive|[462290323.2] longtask 212.3 ms  blocking 162.3  script 0.0  render 0.0
+drive|[462290536.5] longtask 217.4 ms  blocking 167.4  script 0.0  render 0.0
+drive|[462290759.2] longtask 234.2 ms  blocking 184.2  script 0.0  render 0.0
+drive|[462290999.3] longtask 418.8 ms  blocking 368.8  script 0.0  render 0.0
+drive|[462291427.4] longtask 368.0 ms  blocking 318.0  script 0.0  render 0.0
+drive|[462291868.9] longtask 428.4 ms  blocking 378.4  script 0.0  render 0.0
+drive|[462292306.6] longtask 445.7 ms  blocking 395.7  script 0.0  render 0.0
+drive|[462292790.3] longtask 373.4 ms  blocking 323.4  script 0.0  render 0.0
+drive|[462293166.9] longtask 428.4 ms  blocking 378.4  script 0.0  render 0.0
+drive|[462293618.4] longtask 368.8 ms  blocking 318.8  script 0.0  render 0.0
+drive|[462293987.9] longtask 309.8 ms  blocking 259.8  script 0.0  render 0.0
+drive|[462294303.5] longtask 426.4 ms  blocking 376.4  script 0.0  render 0.0
+drive|[462294730.7] longtask 313.5 ms  blocking 263.5  script 0.0  render 0.0
+drive|[462295164.1] longtask 324.5 ms  blocking 274.5  script 0.0  render 0.0
+drive|[462295494.1] longtask 368.7 ms  blocking 318.7  script 0.0  render 0.0
+drive|[462295877.5] longtask 481.5 ms  blocking 431.5  script 0.0  render 0.0
+drive|[462296388.7] longtask 367.1 ms  blocking 317.1  script 0.0  render 0.0
+drive|[462296779.2] longtask 321.9 ms  blocking 271.9  script 0.0  render 0.0
+drive|[462297106.6] longtask 422.1 ms  blocking 372.1  script 0.0  render 0.0
+drive|[462297537.5] longtask 403.5 ms  blocking 353.5  script 0.0  render 0.0
+drive|[462297946.3] longtask 398.5 ms  blocking 348.5  script 0.0  render 0.0
+drive|[462298346.1] longtask 490.1 ms  blocking 440.1  script 0.0  render 0.0
+drive|[462298859.3] longtask 411.6 ms  blocking 361.6  script 0.0  render 0.0
+drive|[462299278.6] longtask 402.0 ms  blocking 352.0  script 0.0  render 0.0
+drive|[462299690.4] longtask 426.7 ms  blocking 376.7  script 0.0  render 0.0
+drive|[462300123.0] longtask 341.3 ms  blocking 291.3  script 0.0  render 0.0
+drive|[462300466.3] longtask 487.2 ms  blocking 437.2  script 0.0  render 0.0
+drive|[462300962.4] longtask 369.6 ms  blocking 319.6  script 0.0  render 0.0
+drive|[462301353.6] longtask 508.7 ms  blocking 458.7  script 0.0  render 0.0
+drive|[462301879.0] longtask 403.8 ms  blocking 353.8  script 0.0  render 0.0
+drive|[462302291.4] longtask 379.0 ms  blocking 329.0  script 0.0  render 0.0
+drive|[462302683.7] longtask 404.7 ms  blocking 354.7  script 0.0  render 0.0
+drive|[462303092.8] longtask 368.5 ms  blocking 318.5  script 0.0  render 0.0
+drive|[462303486.9] longtask 313.3 ms  blocking 263.3  script 0.0  render 0.0
+drive|[462303807.2] longtask 355.6 ms  blocking 305.6  script 0.0  render 0.0
+drive|[462304166.3] longtask 350.1 ms  blocking 300.1  script 0.0  render 0.0
+drive|[462304522.8] longtask 340.9 ms  blocking 290.9  script 0.0  render 0.0
+drive|[462304901.0] longtask 310.0 ms  blocking 260.0  script 0.0  render 0.0
+drive|[462305242.4] longtask 378.3 ms  blocking 328.3  script 0.0  render 0.0
+drive|[462305641.1] longtask 417.8 ms  blocking 367.8  script 0.0  render 0.0
+drive|[462306064.5] longtask 432.0 ms  blocking 382.0  script 0.0  render 0.0
+drive|[462306613.6] longtask 308.3 ms  blocking 258.3  script 0.0  render 0.0
+drive|[462306931.0] longtask 393.1 ms  blocking 343.1  script 0.0  render 0.0
+drive|[462307368.4] longtask 309.4 ms  blocking 259.4  script 0.0  render 0.0
+drive|[462307694.4] longtask 312.8 ms  blocking 262.8  script 0.0  render 0.0
+drive|[462308042.5] longtask 276.1 ms  blocking 226.1  script 0.0  render 0.0
+drive|[462308320.5] longtask 225.1 ms  blocking 175.1  script 0.0  render 0.0
+drive|[462308566.1] longtask 167.5 ms  blocking 117.5  script 0.0  render 0.0
+drive|[462308734.4] longtask 187.9 ms  blocking 137.9  script 0.0  render 0.0
+drive|[462308929.1] longtask 163.2 ms  blocking 113.2  script 0.0  render 0.0
+drive|[462309093.4] longtask 165.2 ms  blocking 115.2  script 0.0  render 0.0
+drive|[462309259.6] longtask 164.9 ms  blocking 114.9  script 0.0  render 0.0
+drive|[462309432.3] longtask 156.9 ms  blocking 106.9  script 0.0  render 0.0
+drive|[462309589.8] longtask 167.5 ms  blocking 117.5  script 0.0  render 0.0
+drive|[462309757.9] longtask 165.5 ms  blocking 115.5  script 0.0  render 0.0
+drive|[462309931.9] longtask 78.5 ms  blocking 28.5  script 0.0  render 0.0
+drive|[462310011.3] longtask 91.8 ms  blocking 41.8  script 0.0  render 0.0
+drive|[462310103.7] longtask 66.5 ms  blocking 16.5  script 0.0  render 0.0
+drive|[462310170.8] longtask 69.6 ms  blocking 19.6  script 0.0  render 0.0
+drive|[462310241.1] longtask 61.8 ms  blocking 11.8  script 0.0  render 0.0
+drive|[462310303.6] longtask 82.9 ms  blocking 32.9  script 0.0  render 0.0
+drive|[462310418.0] longtask 72.4 ms  blocking 22.4  script 0.0  render 0.0
+drive|[462310709.5] longtask 159.1 ms  blocking 109.1  script 0.0  render 0.0
+drive|[462310870.1] longtask 243.6 ms  blocking 193.6  script 0.0  render 0.0
+drive|[462311118.8] longtask 110.3 ms  blocking 60.3  script 0.0  render 0.0
+drive|[462311236.3] longtask 432.1 ms  blocking 382.1  script 0.0  render 0.0
+drive|[462312361.8] longtask 89.2 ms  blocking 39.2  script 0.0  render 0.0
+drive|[462312457.6] longtask 176.0 ms  blocking 126.0  script 0.0  render 0.0
+drive|[462312641.1] longtask 214.8 ms  blocking 164.8  script 0.0  render 0.0
+drive|[462312863.6] longtask 188.0 ms  blocking 138.0  script 0.0  render 0.0
+drive|[462313058.1] longtask 306.3 ms  blocking 256.3  script 0.0  render 0.0
+drive|[462313373.0] longtask 346.9 ms  blocking 296.9  script 0.0  render 0.0
+drive|[462313725.3] longtask 119.6 ms  blocking 69.6  script 0.0  render 0.0
+drive|[462317232.2] longtask 93.3 ms  blocking 43.3  script 0.0  render 0.0
+drive|[462317325.6] longtask 1021.1 ms  blocking 971.1  script 0.0  render 0.0
+drive|[462318362.3] longtask 1011.2 ms  blocking 961.2  script 0.0  render 0.0
+drive|[462320162.2] longtask 323.9 ms  blocking 273.9  script 0.0  render 0.0
+drive|[462320488.2] longtask 627.1 ms  blocking 577.1  script 0.0  render 0.0
+drive|[462321123.2] longtask 370.1 ms  blocking 320.1  script 0.0  render 0.0
+drive|[462321496.4] longtask 533.5 ms  blocking 483.5  script 0.0  render 0.0
+drive|[462322041.4] longtask 546.5 ms  blocking 496.5  script 0.0  render 0.0
+drive|[462322595.2] longtask 597.4 ms  blocking 547.4  script 0.0  render 0.0
+drive|[462323229.4] longtask 512.9 ms  blocking 462.9  script 0.0  render 0.0
+drive|[462323750.6] longtask 798.5 ms  blocking 748.5  script 0.0  render 0.0
+drive|[462324556.4] longtask 761.9 ms  blocking 711.9  script 0.0  render 0.0
+drive|[462325330.1] longtask 547.3 ms  blocking 497.3  script 0.0  render 0.0
+drive|[462325882.5] longtask 612.8 ms  blocking 562.8  script 0.0  render 0.0
+drive|[462326506.1] longtask 661.7 ms  blocking 611.7  script 0.0  render 0.0
+drive|[462327183.0] longtask 289.6 ms  blocking 239.6  script 0.0  render 0.0
+drive|[462327487.4] longtask 626.5 ms  blocking 576.5  script 0.0  render 0.0
+drive|[462328118.7] longtask 953.6 ms  blocking 903.6  script 0.0  render 0.0
+drive|[462329100.8] longtask 1111.0 ms  blocking 1061.0  script 0.0  render 0.0
+drive|[462330229.5] longtask 253.6 ms  blocking 203.6  script 0.0  render 0.0
+drive|[462330493.6] longtask 364.0 ms  blocking 314.0  script 0.0  render 0.0
+drive|[462330859.9] longtask 582.4 ms  blocking 532.4  script 0.0  render 0.0
+drive|[462331557.6] longtask 404.4 ms  blocking 354.4  script 0.0  render 0.0
+drive|[462331969.1] longtask 702.4 ms  blocking 652.4  script 0.0  render 0.0
+drive|[462332675.4] longtask 879.1 ms  blocking 829.1  script 0.0  render 0.0
+drive|[462333564.3] longtask 640.9 ms  blocking 590.9  script 0.0  render 0.0
+drive|[462334214.5] longtask 470.7 ms  blocking 420.7  script 0.0  render 0.0
+drive|[462334691.3] longtask 373.7 ms  blocking 323.7  script 0.0  render 0.0
+drive|[462335070.8] longtask 941.8 ms  blocking 891.8  script 0.0  render 0.0
+drive|[462336021.3] longtask 702.5 ms  blocking 652.5  script 0.0  render 0.0
+drive|[462336738.1] longtask 280.6 ms  blocking 230.6  script 0.0  render 0.0
+drive|[462337076.7] longtask 50.4 ms  blocking 0.4  script 0.0  render 0.0
+drive|[462337156.2] longtask 974.0 ms  blocking 924.0  script 0.0  render 0.0
+drive|[462338142.4] longtask 718.3 ms  blocking 668.3  script 0.0  render 0.0
+drive|[462338867.1] longtask 452.2 ms  blocking 402.2  script 0.0  render 0.0
+drive|[462339328.5] longtask 613.1 ms  blocking 563.1  script 0.0  render 0.0
+drive|[462339948.1] longtask 675.8 ms  blocking 625.8  script 0.0  render 0.0

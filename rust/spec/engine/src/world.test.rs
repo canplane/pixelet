@@ -7,9 +7,9 @@ use crate::area::{self, Area, Shard};
 use crate::cast::{End, Query};
 use crate::clipmap::{
     self, bound_over, column_top, entry, fold, join, joined_idx, level_idx, of_idx, Entry,
-    Presence, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
-    COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
-    LAID_AT, LAID_CELLS, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
+    Presence, ACROSS, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT,
+    BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL,
+    JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LAID_CELLS, ORIGIN_AT,
 };
 use crate::content::Sample;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, LoneBrick};
@@ -66,7 +66,7 @@ impl Bricks for Clipmap<'_> {
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, slot * BRICK_WORDS, j, at)
     }
     fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {
@@ -200,12 +200,12 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + LAID_AT + i / LAID_CELLS) as usize];
                 *w |= (Sample::GROUND) << (8 * (i % LAID_CELLS));
-                let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(0, [x, y]);
+                let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * level_idx(0, [x, y]);
                 let b = ground::bounds_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
                 put(&mut ground, e + 1, b[1] as u32);
             }
-            for j in 1..=LEVELS {
+            for j in 1..=BRICK_LEVELS {
                 let side = BRICK >> j;
                 for k in 0..side * side {
                     let at = [k % side, k / side];
@@ -219,7 +219,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                         j,
                         at,
                     );
-                    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(j, at);
+                    let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * level_idx(j, at);
                     put(&mut ground, e, b[0] as u32);
                     put(&mut ground, e + 1, b[1] as u32);
                 }
@@ -279,7 +279,7 @@ fn partial_block_bounded() {
         ground: &ground,
     };
     let (first, _) = w.origin(CELL);
-    let (zoom, side) = (CELL - LEVELS - 1, 2 * BRICK as i32);
+    let (zoom, side) = (CELL - BRICK_LEVELS - 1, 2 * BRICK as i32);
     let mut unheld = 0;
     for k in 0..ENTRIES / 4 {
         let c = [
@@ -386,8 +386,8 @@ impl Bricks for WestOf<'_> {
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
         self.0.column(cell, slot, i)
     }
-    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        self.0.level(cell, slot, j, at)
+    fn bound_level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        self.0.bound_level(cell, slot, j, at)
     }
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
         self.0.laid(cell, slot, i)

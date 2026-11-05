@@ -6,7 +6,7 @@
 //! its samples, its walk again, its pixels or slots taking the visible
 //! sample or walking, and the boxes its samples drew (pxl-render
 //! gpu/ray/count.rs). A pass adds where it can write: a walk that writes
-//! the observed pyramid into its head (`pyramid::lane_at`), as no binding
+//! the node cache into its head (`node_cache::lane_at`), as no binding
 //! more fits beside it; a pixel or a slot into its walk again's args
 //! (`ray::MISS_ARGS_COUNT`), which it adds to already, listing itself; the
 //! boxes off the raster's draw (`raster::ARGS_INSTANCES`). The frame's last
@@ -35,7 +35,7 @@ pub const BOXES: u32 = 7;
 pub const LANES: u32 = 8;
 pub const WORDS: u32 = OBSERVERS * LANES;
 
-/// The lanes a walk writing the pyramid adds to, from the first
+/// The lanes a walk writing the node cache adds to, from the first
 /// (`BEAM` to `ASKED`), and those a pixel or a slot does (`REUSED` to
 /// `SKY`), each a run where it adds.
 pub const WALKS: u32 = 4;

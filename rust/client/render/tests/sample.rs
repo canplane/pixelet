@@ -2,7 +2,7 @@
 //! and the light's (sample_eye.wgsl, sample_light.wgsl), answer as `cast::walk` resumed off the
 //! beam (resume.wgsl) through `Writing` (tests/keeping): over the real world
 //! of tests/real_world, off the lines and cells' starts the beam's passes leave there, each
-//! sample's words as the Rust's `sample_put`, what it left in the observed pyramid as `Writing`
+//! sample's words as the Rust's `sample_put`, what it left in the node cache as `Writing`
 //! leaves it, and the next frame off that. Skipped where no adapter answers.
 
 mod gpu;
@@ -17,9 +17,9 @@ use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Detail, End, Node, Over, Query, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::node_cache::{self, BUCKET};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
-use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::world::Inheritance;
 use pxl_engine::{count, eye, face, raster, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
@@ -39,7 +39,8 @@ const SIZE: u32 = 256;
 const FRAME: u32 = 9;
 const CAST: u32 = 7;
 const WORKGROUP: u32 = beam::SAMPLE_SIDE;
-/// Samples apart from the reference tried from a start a step over (`a_step_over`), at most.
+/// Missed pixels apart from the reference tried from a start a step over, at most: what the
+/// GPU's own way of an eye's ray (walk_node.wgsl `eye_aim`) takes across an edge.
 const STEPS_TRIED: u32 = 32;
 /// Rays that visit a node for it to be no grazing's.
 const SURE: u32 = 9;
@@ -434,10 +435,10 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
         lefts_at: grid.lefts_at,
         line_words: beam::LINE_WORDS,
         apart: false,
-        passes: [pyramid::SAMPLES_PASS, pyramid::BEAM_PASS],
+        passes: [node_cache::SAMPLES_PASS, node_cache::BEAM_PASS],
         lanes: [
-            pyramid::lane_at(count::EYE, count::SAMPLE),
-            pyramid::lane_at(count::EYE, count::ASKED),
+            node_cache::lane_at(count::EYE, count::SAMPLE),
+            node_cache::lane_at(count::EYE, count::ASKED),
         ],
         groups: [
             grid.samples[0].div_ceil(WORKGROUP),
@@ -565,10 +566,10 @@ fn light_of(c: &LightCase, moved: [i32; 2]) -> Observed {
         lefts_at: light::lefts_at(c.size),
         line_words: light::LINE_WORDS,
         apart: true,
-        passes: [pyramid::LIGHT_SAMPLES_PASS, pyramid::LIGHT_BEAM_PASS],
+        passes: [node_cache::LIGHT_SAMPLES_PASS, node_cache::LIGHT_BEAM_PASS],
         lanes: [
-            pyramid::lane_at(count::LIGHT, count::SAMPLE),
-            pyramid::lane_at(count::LIGHT, count::ASKED),
+            node_cache::lane_at(count::LIGHT, count::SAMPLE),
+            node_cache::lane_at(count::LIGHT, count::ASKED),
         ],
         groups: [n.div_ceil(WORKGROUP), n.div_ceil(WORKGROUP)],
         cuts: c.cuts,
@@ -708,7 +709,7 @@ fn run_frame(
     world: &wgpu::ComputePipeline,
 ) -> Vec<u32> {
     let name = format!("{} ({what})", obs.name);
-    let tag = pyramid::tag(frame, obs.passes[0]);
+    let tag = node_cache::tag(frame, obs.passes[0]);
     let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
 
@@ -743,13 +744,13 @@ fn run_frame(
     }
     let beams = gpu.buffer(&laid, store_of());
     let table = gpu.buffer(table0, store_of());
-    // A pass over the pyramid alone runs with no thread writing it: what only a pass that writes
+    // A pass over the node cache alone runs with no thread writing it: what only a pass that writes
     // meets is not there. And it goes through a split held at other zooms taking no box of it,
     // which a false answer outside that box would stop.
     let mut quiet = table0.to_vec();
     for l in traps {
         if matches!(l.trap, Trap::OwnPass | Trap::TornWords | Trap::KeptFalse) {
-            let e = pyramid::entry_at(l.first) as usize;
+            let e = node_cache::entry_at(l.first) as usize;
             quiet[e] = 0;
         }
     }
@@ -843,7 +844,7 @@ fn run_frame(
 
     // Each sample's words: ended by the hit, or walked after it.
     let (mut same, mut differ, mut none_put) = (0u64, 0u64, 0u64);
-    let (mut axis_over, mut stepped, mut visits_off) = (0u64, 0u64, 0u64);
+    let (mut axis_over, mut visits_off) = (0u64, 0u64);
     let mut first = None;
     let listed_case = matches!(obs.rays, Rays::Light { taken: Some(_), .. });
     for (place, &s) in taken.iter().enumerate() {
@@ -911,21 +912,6 @@ fn run_frame(
         ok = ok && out[at + beam::SAMPLE_FACES as usize] == UNTOUCHED;
         // Left: ended by the second pass, none of it put by the first.
         ok = ok && (!was_left || ended[zoom_word] == UNTOUCHED);
-        if !ok
-            && stepped + differ <= u64::from(STEPS_TRIED)
-            && a_step_over(
-                w,
-                obs,
-                words,
-                table0,
-                tag,
-                s,
-                &out[at..at + beam::SAMPLE_WORDS as usize],
-            )
-        {
-            ok = true;
-            stepped += 1;
-        }
         if ok {
             same += 1;
         } else {
@@ -943,7 +929,6 @@ fn run_frame(
         let a = met.hit.asset[0];
         let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
         add("samples", true);
-        add("a step over", false);
         add("left", was_left);
         add("ended", !was_left);
         add("hit", hits);
@@ -999,17 +984,17 @@ fn run_frame(
     // What it left, each slot it wrote: in its node's bucket, at this pass's tag, what the
     // world answers word for word, and what `Writing` wrote where that wrote it.
     let entry = |t: &[u32], e: u32| {
-        let w = pyramid::entry_at(e) as usize;
-        t[w..w + pyramid::ENTRY_WORDS as usize].to_vec()
+        let w = node_cache::entry_at(e) as usize;
+        t[w..w + node_cache::ENTRY_WORDS as usize].to_vec()
     };
     let by_node = |t: &[u32], before: &[u32]| {
         let mut m = BTreeMap::new();
-        for e in 0..pyramid::ENTRIES {
+        for e in 0..node_cache::ENTRIES {
             let v = entry(t, e);
             if v != entry(before, e) {
-                let k = pyramid::W_NODE as usize;
+                let k = node_cache::W_NODE as usize;
                 let c = [v[k + 1] as i32, v[k + 2] as i32, v[k + 3] as i32];
-                m.insert((v[k], c, v[pyramid::W_KEY as usize]), (e, v));
+                m.insert((v[k], c, v[node_cache::W_KEY as usize]), (e, v));
             }
         }
         m
@@ -1017,18 +1002,18 @@ fn run_frame(
     let (hand_kept, ref_kept) = (by_node(&table_hand, table0), by_node(&table_ref, table0));
     let (mut bad, mut only_hand, mut filled) = (0u64, 0u64, 0u64);
     let mut first_bad = None;
-    let k = pyramid::W_INHERITANCE as usize;
-    let at = pyramid::W_ASSET as usize;
+    let k = node_cache::W_INHERITANCE as usize;
+    let at = node_cache::W_ASSET as usize;
     for ((zoom, c, key), (e, v)) in &hand_kept {
         let (zoom, c, key) = (*zoom, *c, *key);
-        let first = pyramid::entry_of(zoom, c);
+        let first = node_cache::entry_of(zoom, c);
         let zooms = key_zooms(key);
         let (a, handed) = truth(w, obs.cuts, zoom, c, zooms);
-        let ok = pyramid::keeps(zoom, c)
+        let ok = node_cache::keeps(zoom, c)
             && (*e >= first && *e < first + BUCKET)
-            && pyramid::tag_of(key) == tag
-            && v[pyramid::W_KIND as usize]
-                == pyramid::stamped(a.kind, key, a.asset, handed, zoom, c)
+            && node_cache::tag_of(key) == tag
+            && v[node_cache::W_KIND as usize]
+                == node_cache::stamped(a.kind, key, a.asset, handed, zoom, c)
             && v[at..at + 2] == a.asset
             && v[k..k + 4] == handed;
         if !ok {
@@ -1038,8 +1023,8 @@ fn run_frame(
         filled += u64::from(a.kind == Kind::Cell && !answer::transparent(a.asset[0]));
         match ref_kept.get(&(zoom, c, key)) {
             Some((_, r)) => {
-                let alike = v[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-                    == r[pyramid::W_KIND as usize] & pyramid::KIND_MASK
+                let alike = v[node_cache::W_KIND as usize] & node_cache::KIND_MASK
+                    == r[node_cache::W_KIND as usize] & node_cache::KIND_MASK
                     && v[at..at + 2] == r[at..at + 2]
                     && v[k..k + 2] == r[k..k + 2];
                 if !alike {
@@ -1075,8 +1060,8 @@ fn run_frame(
     // rays enough that none is a grazing a GPU's rounding may enter or not.
     let mut asked_in: BTreeMap<u32, u32> = BTreeMap::new();
     for &(z, c, _) in met_ref.keys() {
-        if pyramid::keeps(z, c) {
-            *asked_in.entry(pyramid::entry_of(z, c)).or_default() += 1;
+        if node_cache::keeps(z, c) {
+            *asked_in.entry(node_cache::entry_of(z, c)).or_default() += 1;
         }
     }
     let mut trap_cnt: BTreeMap<Trap, (u32, u32, u32)> = BTreeMap::new();
@@ -1097,7 +1082,7 @@ fn run_frame(
     let tallied = u64::from(table_hand[lane]);
     let asked = u64::from(table_hand[obs.lanes[1] as usize]);
     eprintln!(
-        "{name}: {same} alike ({axis_over} an axis over, {stepped} a step over, {visits_off} visits off), {differ} differ of {} samples, {none_put} not needed, {stray} stray; {cnt} left, {left_unasked} asking nothing; tally {tallied} visits {asked} asked",
+        "{name}: {same} alike ({axis_over} an axis over, {visits_off} visits off), {differ} differ of {} samples, {none_put} not needed, {stray} stray; {cnt} left, {left_unasked} asking nothing; tally {tallied} visits {asked} asked",
         taken.len()
     );
     eprintln!(
@@ -1131,9 +1116,9 @@ fn run_frame(
     if stray != 0 {
         fail(format!("{stray} samples put that no thread takes"));
     }
-    if stepped > 32 || axis_over > 256 || visits_off > 16 {
+    if axis_over > 256 || visits_off > 16 {
         fail(format!(
-            "too many a step over: {stepped}, an axis over: {axis_over}, visits off: {visits_off}"
+            "too many an axis over: {axis_over}, visits off: {visits_off}"
         ));
     }
     if bad != 0 {
@@ -1171,38 +1156,6 @@ fn run_frame(
     table_hand
 }
 
-/// Whether the words `got` of sample `s` are what its ray ends at from a start a step over, as a
-/// GPU rounds it.
-fn a_step_over(
-    w: World,
-    obs: &Observed,
-    beams: &[u32],
-    table: &[u32],
-    tag: u32,
-    s: [u32; 2],
-    got: &[u32],
-) -> bool {
-    let (o, r, d) = obs.aim(s);
-    (0..27).any(|m| {
-        let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
-        let mut q = Keeping {
-            w,
-            cuts: obs.cuts,
-            table: &mut table.to_vec(),
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: None,
-        };
-        let (met, _) = obs.walk_from(&mut q, beams, s, from, &r, d);
-        let node = beam::SAMPLE_NODE as usize;
-        met.ends != End::Miss
-            && got[node + beam::NODE_ZOOM as usize] == met.hit.node.zoom
-            && (0..3).all(|a| got[node + beam::NODE_CORNER as usize + a] == met.hit.node.corner[a])
-            && got[beam::SAMPLE_ASSET as usize] == met.hit.asset[0]
-    })
-}
-
 /// An observer's two frames, the second a step moved.
 #[expect(
     clippy::too_many_arguments,
@@ -1230,15 +1183,15 @@ fn two_frames(
         )
     };
     let mut kinds = Kinds::new();
-    let mut table0 = vec![0u32; pyramid::WORDS as usize];
-    table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::COUNT_ON as usize] = 1;
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
+    table0[node_cache::COUNT_ON as usize] = 1;
     let table_buf = gpu.buffer(&table0, store_of());
     let words = lines(first, &table_buf);
     let mut after_beam = gpu.read(&table_buf);
 
     // What the walks meet, the traps laid on them.
-    let tag = pyramid::tag(FRAME, first.passes[0]);
+    let tag = node_cache::tag(FRAME, first.passes[0]);
     let mut met = BTreeMap::new();
     {
         let mut empty = after_beam.clone();
@@ -1263,8 +1216,8 @@ fn two_frames(
         first.cuts,
         &met,
         [
-            pyramid::tag(FRAME - 1, first.passes[1]),
-            pyramid::tag(FRAME, first.passes[1]),
+            node_cache::tag(FRAME - 1, first.passes[1]),
+            node_cache::tag(FRAME, first.passes[1]),
             tag,
         ],
     );
@@ -1287,7 +1240,7 @@ fn two_frames(
 
     // The next frame, the eye a little moved: off what this one kept, its false answers gone.
     let mut table1 = hand;
-    table1[pyramid::FRAME as usize] = FRAME + 1;
+    table1[node_cache::FRAME as usize] = FRAME + 1;
     table1[first.lanes[0] as usize] = 0;
     table1[first.lanes[1] as usize] = 0;
     strike_traps(&mut table1, &traps, tag);
@@ -2225,8 +2178,8 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             for k in 0..2 {
                 obs.eye[eye::JITTER + k] = s.jitter[k].to_bits();
             }
-            let mut table0 = vec![0u32; pyramid::WORDS as usize];
-            table0[pyramid::FRAME as usize] = FRAME;
+            let mut table0 = vec![0u32; node_cache::WORDS as usize];
+            table0[node_cache::FRAME as usize] = FRAME;
             let table_buf = gpu.buffer(&table0, store_of());
             let words = eye_beams(&gpu, &b, &obs, &table_buf);
             let mut table = gpu.read(&table_buf);
@@ -2243,9 +2196,9 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             let mut marked: Vec<u32> = (0..wd * ht).filter(|&p| mark(p)).collect();
             marked.sort_by_key(|&p| p.wrapping_mul(0x85eb_ca77).rotate_left(13));
             let listed = marked.len().min(s.listed as usize);
-            table[pyramid::MARKS_CNT as usize] = listed as u32;
+            table[node_cache::MARKS_CNT as usize] = listed as u32;
             for (k, &p) in marked[..listed].iter().enumerate() {
-                table[(pyramid::MARKS_AT + k as u32) as usize] = ((p / wd) << 16) | (p % wd);
+                table[(node_cache::MARKS_AT + k as u32) as usize] = ((p / wd) << 16) | (p % wd);
             }
             let mut ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
                 .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
@@ -2254,7 +2207,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 ray_words[p as usize] = ray::MISS;
             }
 
-            // The walk over the pyramid alone, what it left listed, then the walks that ask.
+            // The walk over the node cache alone, what it left listed, then the walks that ask.
             let rays = texture(
                 &gpu.device,
                 &gpu.queue,
@@ -2291,7 +2244,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             let mut after = gpu.read(&beams);
             after[grid.misses_at as usize] = args[3];
             let mut table = gpu.read(&table_buf);
-            table[pyramid::HITS_ARGS as usize..(pyramid::HITS_CNT + 1) as usize]
+            table[node_cache::HITS_ARGS as usize..(node_cache::HITS_CNT + 1) as usize]
                 .copy_from_slice(&args[4..8]);
             let beams = gpu.buffer(&after, store_of());
             let table_buf = gpu.buffer(&table, store_of());
@@ -2310,9 +2263,9 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 continue;
             }
 
-            // Each marked pixel's words as `cast::walk` writing the pyramid leaves them, its hit
+            // Each marked pixel's words as `cast::walk` writing the node cache leaves them, its hit
             // kept where its faces are to be asked.
-            let tag = pyramid::tag(FRAME, pyramid::MISSED_PASS);
+            let tag = node_cache::tag(FRAME, node_cache::MISSED_PASS);
             let mut table_ref = table0.clone();
             let mut q = Keeping {
                 w,
@@ -2413,7 +2366,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 }
                 let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
                 add("pixels", true);
-                add("left by the walk over the pyramid", was_left);
+                add("left by the walk over the node cache", was_left);
                 add(
                     "past the list, walked over every pixel",
                     !marked[..listed].contains(&p),
@@ -2431,7 +2384,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 );
             }
             // The hits kept are numbered from 0, one each, as many as the count.
-            let cnt = out_table[pyramid::HITS_CNT as usize];
+            let cnt = out_table[node_cache::HITS_CNT as usize];
             if hits.len() as u32 != cnt || hits.iter().copied().max().is_some_and(|m| m + 1 != cnt)
             {
                 failed.push(format!(
@@ -2455,7 +2408,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
     }
     eprintln!("  KINDS missed {kinds:?}");
     for (what, n) in [
-        ("left by the walk over the pyramid", 1),
+        ("left by the walk over the node cache", 1),
         ("past the list, walked over every pixel", 1),
         ("hit, its faces kept to ask", 1),
         ("past its reach", 1),
@@ -2856,9 +2809,9 @@ fn coarser(obs: &Observed, words: &mut [u32]) -> u64 {
 
 /// The table a frame's beam passes start over.
 fn frame_table() -> Vec<u32> {
-    let mut t = vec![0u32; pyramid::WORDS as usize];
-    t[pyramid::FRAME as usize] = FRAME;
-    t[pyramid::COUNT_ON as usize] = 1;
+    let mut t = vec![0u32; node_cache::WORDS as usize];
+    t[node_cache::FRAME as usize] = FRAME;
+    t[node_cache::COUNT_ON as usize] = 1;
     t
 }
 

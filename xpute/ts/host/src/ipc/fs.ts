@@ -4,7 +4,10 @@
  * The file device, Major FS (abi/fs.json): a guest's opens, reads, writes
  * and closes, each a frame taken after the turn returns and before the next
  * begins, so whatever it names in guest memory is written before the guest
- * reads it. What a file is, the program's `Fs` says.
+ * reads it. An open and a close are completed once each, by their tag, the
+ * descriptor: an open with ECANCELED where its close came first. A write's
+ * bytes are read where the guest keeps them, at the close. What a file is,
+ * the program's `Fs` says.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -12,16 +15,19 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
-import type {
-  FsCloseEvent,
-  FsImports,
-  FsOpenatEvent,
-  FsReadEvent,
-  FsWriteEvent,
+import {
+  Command,
+  encode_fs_openat_reply,
+  type FsCloseEvent,
+  type FsImports,
+  type FsOpenatEvent,
+  type FsReadEvent,
+  type FsWriteEvent,
 } from "@xpute/host/abi/fs.spec.ts";
+import type { Encode } from "./doorbell.ts";
 import { flag } from "./fs.spec.ts";
 
-/** Why an open did not answer with a file: an errno, and whatever number the
+/** Why an open did not complete with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
 export class FileError extends Error {
   readonly errnum: i32;
@@ -43,16 +49,29 @@ export interface Fs {
     path: string,
     signal: AbortSignal,
   ): U8Array | Promise<U8Array>;
-  /** All a file opened for writing was given, once it is closed. */
+  /** All a file opened for writing was given, once it is closed; a
+   * FileError where it could not be replaced. `bytes` are the host's. */
   commit(root: u32, path: string, bytes: U8Array): void;
 }
+
+/** A guest's request completed: its tag and command, its result and the
+ * completion's packet. */
+export type Complete = (
+  tag: u32,
+  cmd: u32,
+  res: i32,
+  encode: Encode | null,
+) => void;
 
 interface File {
   root: u32;
   path: string;
   controller: AbortController;
+  /** Its open is completed. */
+  opened: boolean;
   bytes: U8Array | null;
-  written: U8Array[] | null;
+  /** Where each write's bytes lie in the guest's memory, in order. */
+  written: [at: u32, len: u32][] | null;
 }
 
 /** No name empty, `.` or `..`, so a path never leaves its root. */
@@ -65,73 +84,98 @@ function walks_down(path: string): boolean {
 export class FsServer implements FsImports {
   readonly files = new Map<u32, File>();
 
-  private readonly fs: Fs;
-  private readonly mem: ArrayBuffer;
-  private readonly answer_open: (fd: u32, res: i32, detail: u32) => void;
+  private readonly _fs: Fs;
+  private readonly _mem: ArrayBuffer;
+  private readonly _complete: Complete;
 
-  /** `mem` is the guest's, which a read writes and a write reads;
-   * `answer_open` answers an open: a size, or an errno and the host's detail. */
-  constructor(
-    fs: Fs,
-    mem: ArrayBufferLike,
-    answer_open: (fd: u32, res: i32, detail: u32) => void,
-  ) {
-    this.fs = fs;
-    this.mem = mem as ArrayBuffer;
-    this.answer_open = answer_open;
+  /** `mem` is the guest's, which a read writes and a close reads. */
+  constructor(fs: Fs, mem: ArrayBufferLike, complete: Complete) {
+    this._fs = fs;
+    this._mem = mem as ArrayBuffer;
+    this._complete = complete;
   }
 
   fs_openat(e: FsOpenatEvent): void {
-    this.openat(e.fd, e.root, e.flags, e.path);
+    this._openat(e.fd, e.root, e.flags, e.path);
   }
 
   fs_read(e: FsReadEvent): void {
     const bytes = this.files.get(e.fd)?.bytes;
     if (!bytes) throw new InvariantError(Errno.EBADF);
     const len = Math.min(e.len, bytes.byteLength);
-    new Uint8Array(this.mem, e.at, len).set(bytes.subarray(0, len));
+    new Uint8Array(this._mem, e.at, len).set(bytes.subarray(0, len));
   }
 
+  /** A write to an open that failed is dropped: the guest posts it before it
+   * learns, and hears it from the open's completion and the close's. */
   fs_write(e: FsWriteEvent): void {
-    const written = this.files.get(e.fd)?.written;
-    if (!written) throw new InvariantError(Errno.EBADF);
-    // A copy: the guest keeps the range only until its next turn.
-    written.push(new Uint8Array(this.mem, e.at, e.len).slice());
+    const file = this.files.get(e.fd);
+    if (!file) return;
+    if (!file.written) throw new InvariantError(Errno.EBADF);
+    file.written.push([e.at, e.len]);
   }
 
   fs_close(e: FsCloseEvent): void {
     const file = this.files.get(e.fd);
-    if (!file) return;
+    if (!file) {
+      this._complete(e.fd, Command.FS_CLOSE, Errno.EBADF, null);
+      return;
+    }
     this.files.delete(e.fd);
-    file.controller.abort();
-    if (file.written) {
-      const whole = new Uint8Array(
-        file.written.reduce((n, b) => n + b.byteLength, 0),
+    if (!file.opened) {
+      file.controller.abort();
+      this._complete_open(e.fd, Errno.ECANCELED, 0);
+    }
+    this._complete(e.fd, Command.FS_CLOSE, this._commit(file), null);
+  }
+
+  /** What `file` was written, read where the guest keeps it and handed to
+   * `Fs.commit`: 0, or the errno it refused with. */
+  private _commit(file: File): i32 {
+    if (!file.written) return Errno.OK;
+    const whole = new Uint8Array(
+      file.written.reduce((n, [, len]) => n + len, 0),
+    );
+    let off = 0;
+    for (const [at, len] of file.written) {
+      whole.set(new Uint8Array(this._mem, at, len), off);
+      off += len;
+    }
+    try {
+      this._fs.commit(file.root, file.path, whole);
+      return Errno.OK;
+    } catch (err) {
+      if (err instanceof FileError) return err.errnum;
+      console.warn(
+        `[xpute/fs] commit ${file.root}/${file.path}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       );
-      let off = 0;
-      for (const b of file.written) {
-        whole.set(b, off);
-        off += b.byteLength;
-      }
-      this.fs.commit(file.root, file.path, whole);
+      return Errno.EIO;
     }
   }
 
-  private openat(fd: u32, root: u32, flags: u32, path: string): void {
+  private _complete_open(fd: u32, res: i32, detail: u32): void {
+    this._complete(fd, Command.FS_OPENAT, res, (room) =>
+      encode_fs_openat_reply(room, detail),
+    );
+  }
+
+  private _openat(fd: u32, root: u32, flags: u32, path: string): void {
     const file: File = {
       root,
       path,
       controller: new AbortController(),
+      opened: false,
       bytes: null,
       written: null,
     };
     this.files.set(fd, file);
-    // An answer is a submission, and a full ring rings a turn, which the
-    // completion ring being read forbids, so answers wait until it ends.
     const answer = (res: i32, detail: u32) => {
       if (this.files.get(fd) !== file) return;
+      file.opened = true;
       if (res < 0) this.files.delete(fd);
-      this.answer_open(fd, res, detail);
+      this._complete_open(fd, res, detail);
     };
     const failed = (err: unknown) => {
       if (!(err instanceof FileError)) {
@@ -145,24 +189,23 @@ export class FsServer implements FsImports {
         err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
       answer(errnum, detail);
     };
+    if (!walks_down(path)) return failed(new FileError(Errno.EACCES));
+    if (flags === flag.O_WRONLY) {
+      file.written = [];
+      return answer(0, 0);
+    }
+    let got: U8Array | Promise<U8Array>;
+    try {
+      got = this._fs.open(root, path, file.controller.signal);
+    } catch (err) {
+      return failed(err);
+    }
     const read = (bytes: U8Array) => {
       if (this.files.get(fd) !== file) return;
       file.bytes = bytes;
       answer(bytes.byteLength, 0);
     };
-    if (!walks_down(path)) {
-      return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
-    }
-    if (flags === flag.O_WRONLY) {
-      file.written = [];
-      return queueMicrotask(() => answer(0, 0));
-    }
-    let got: U8Array | Promise<U8Array>;
-    try {
-      got = this.fs.open(root, path, file.controller.signal);
-    } catch (err) {
-      return queueMicrotask(() => failed(err));
-    }
-    Promise.resolve(got).then(read, failed);
+    if (got instanceof Promise) got.then(read, failed);
+    else read(got);
   }
 }

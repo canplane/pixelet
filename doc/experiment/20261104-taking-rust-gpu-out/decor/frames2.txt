@@ -1,0 +1,96 @@
+   Compiling pxl-render v0.0.0 (/Users/sanghoon/git/canplane/pixelet-decor/rust/client/render)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.33s
+     Running tests/decor.rs (target/session/dd264d10-d7bf-4986-97f1-da00580bf1cd/debug/deps/decor-70b590083297ee7f)
+
+running 1 test
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam, first, every entry whole: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the eye moved: 506 pairs, 132 drawn, 0 at an edge
+east of the seam, the placed decor gone, some stale: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, bricks handed: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the placed decor back: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a cut: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a corner left out: 506 pairs, 123 drawn, 0 at an edge
+east of the seam: the Rust's frames in 3.137805417s
+east of the seam: run 0, by hand true: 0 apart, 1.756159083s
+east of the seam: run 1, by hand true: 0 apart, 1.452876584s
+east of the seam: run 2, by hand true: 0 apart, 1.388069666s
+east of the seam: run 3, by hand true: 0 apart, 1.293277s
+east of the seam: run 4, by hand true: 0 apart, 1.302000833s
+east of the seam: run 5, by hand true: 0 apart, 1.28943575s
+east of the seam: run 6, by hand true: 0 apart, 1.270198041s
+east of the seam: run 7, by hand true: 0 apart, 1.320934458s
+east of the seam: run 8, by hand true: 0 apart, 1.238541333s
+east of the seam: run 9, by hand true: 0 apart, 1.270767333s
+east of the seam: run 10, by hand true: 0 apart, 1.327138458s
+east of the seam: run 11, by hand true: 0 apart, 1.257958875s
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388535, 2621601]: got [fffdfe8f, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388534, 2621614]: got [fffdfe85, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388521, 2621518]: got [fffc0d4d, ffffff40, bd], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 12, by hand false: (576, 1) [-8388517, 2621643]: got [fffdfe85, ffffff3c, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388535, 2621601]: got [fffdfe8f, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388534, 2621614]: got [fffdfe85, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388521, 2621518]: got [fffc0d4d, ffffff40, bd], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 12, by hand false: (576, 1) [-8388517, 2621643]: got [fffdfe85, ffffff3c, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388535, 2621601]: got [fffdfe8f, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388534, 2621614]: got [fffdfe85, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388521, 2621518]: got [fffc0d4d, ffffff40, bd], want [ffffffff, 0, 0]
+east of the seam, a cut, run 12, by hand false: (576, 1) [-8388517, 2621643]: got [fffdfe85, ffffff3c, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388535, 2621601]: got [fffdfe8f, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388534, 2621614]: got [fffdfe85, ffffff3c, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388521, 2621518]: got [fffc0d4d, ffffff40, bd], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 12, by hand false: (576, 1) [-8388517, 2621643]: got [fffdfe85, ffffff3c, 0], want [ffffffff, 0, 0]
+east of the seam: run 12, by hand false: 6218 apart, 6.013314041s
+east of the seam: run 12, by hand false: 0 apart, 6.896489709s
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+west of the seam, first, every entry whole: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the eye moved: 476 pairs, 105 drawn, 0 at an edge
+west of the seam, the placed decor gone, some stale: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, bricks handed: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the placed decor back: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a cut: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a corner left out: 476 pairs, 108 drawn, 0 at an edge
+west of the seam: the Rust's frames in 3.283295541s
+west of the seam: run 0, by hand true: 0 apart, 1.65000175s
+west of the seam: run 1, by hand true: 0 apart, 1.408119666s
+west of the seam: run 2, by hand true: 0 apart, 1.45386825s
+west of the seam: run 3, by hand true: 0 apart, 1.425595833s
+west of the seam: run 4, by hand true: 0 apart, 1.383126375s
+west of the seam: run 5, by hand true: 0 apart, 1.37418725s
+west of the seam: run 6, by hand true: 0 apart, 1.703407625s
+west of the seam: run 7, by hand true: 0 apart, 1.934359708s
+west of the seam: run 8, by hand true: 0 apart, 2.09351525s
+west of the seam: run 9, by hand true: 0 apart, 1.719068334s
+west of the seam: run 10, by hand true: 0 apart, 1.943810167s
+west of the seam: run 11, by hand true: 0 apart, 1.905375917s
+test hand_frames_answer_as_the_rust has been running for over 60 seconds
+west of the seam: run 12, by hand false: 0 apart, 5.714640917s
+           0 apart by hand
+           0 apart generated
+          24 chains by hand
+           2 chains generated
+           3 frame: a record comes back
+           5 frame: a record taken away
+        6974 frame: tiles decor stands on
+test hand_frames_answer_as_the_rust ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 62.47s
+

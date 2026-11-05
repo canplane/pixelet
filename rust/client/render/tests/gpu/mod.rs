@@ -33,6 +33,16 @@ pub fn source(assembled: &str, entry: &str) -> String {
     assembled.to_string()
 }
 
+/// `source` with constant `name` set to `val`, a WGSL literal of its type: the one line
+/// build.rs lays it on (constant.wgsl), as a test takes a bound or a margin of its own.
+pub fn set_const(source: &str, name: &str, val: &str) -> String {
+    let at = format!("const {name}: ");
+    let lines: Vec<&str> = source.lines().filter(|l| l.starts_with(&at)).collect();
+    assert_eq!(lines.len(), 1, "{name} laid once");
+    let ty = lines[0].split(" = ").next().unwrap();
+    source.replace(lines[0], &format!("{ty} = {val};"))
+}
+
 pub fn bytes(words: &[u32]) -> &[u8] {
     // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
     unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len() * 4) }
@@ -342,10 +352,10 @@ impl LightBox {
         let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
         let starts = Starts {
             base,
-            across: across.map(|v| v * q),
-            down: down.map(|v| v * q),
+            across: across.map(|v| light::fixed(v * q)),
+            down: down.map(|v| light::fixed(v * q)),
             at: [a0.0, a1.0, a2.0, a3.0],
-            frac: [a0.1, a1.1, a2.1, a3.1],
+            frac: [a0.1, a1.1, a2.1, a3.1].map(|f| f.map(light::fixed)),
         };
         (l, starts)
     }

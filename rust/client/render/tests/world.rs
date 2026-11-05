@@ -143,7 +143,7 @@ fn descend(
             }
         }
         let zooms = [far, near];
-        // Some handed where another descent's cells were held, as a pyramid's kept word may
+        // Some handed where another descent's cells were held, as a node cache's kept word may
         // name a brick since gone.
         if moving && *seen != Lookup::NONE && draw.next().is_multiple_of(16) {
             at.ground = *seen;
@@ -184,18 +184,18 @@ fn tell(
     // What was asked of the clip levels against what a node over it found.
     let asked = clip::held_to(if z >= zooms[1] { z } else { zooms[1] });
     let above = before.ground;
-    if above != Lookup::NONE && asked <= z + clip::LEVELS {
+    if above != Lookup::NONE && asked <= z + clip::BRICK_LEVELS {
         t.add("asked coarser than above's cell", asked < above.cell());
         t.add("asked coarser than above's clip", asked < above.from());
         t.add("asked finer by 2 or more", asked >= above.cell() + 2);
     }
-    if asked > z + clip::LEVELS && !UNLAID.contains(&asked) {
+    if asked > z + clip::BRICK_LEVELS && !UNLAID.contains(&asked) {
         let up = asked - z;
         let g = [
             wrap_idx(asked, c[0] << up) >> BRICK_SHIFT,
             (c[1] << up) >> BRICK_SHIFT,
         ];
-        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::LEVELS));
+        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_LEVELS));
         let d = [
             wrap_idx(clip::bricks_zoom(asked), g[0] - first[0]),
             g[1] - first[1],
@@ -207,7 +207,7 @@ fn tell(
     }
     t.add(
         "asked of a level not laid",
-        asked > z + clip::LEVELS && UNLAID.contains(&asked),
+        asked > z + clip::BRICK_LEVELS && UNLAID.contains(&asked),
     );
     if (pxl_engine::TOP_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;

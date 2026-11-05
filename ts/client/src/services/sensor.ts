@@ -5,13 +5,13 @@
  * behind a prompt that must be raised inside the gesture.
  */
 
-import type { SensorHeard } from "./types.ts";
+import type { SensorListener } from "./types.ts";
 
 /** Set once at boot, before any sensor starts. */
-let heard: SensorHeard;
+let listener: SensorListener;
 
-export function hear(given: SensorHeard): void {
-  heard = given;
+export function listen(given: SensorListener): void {
+  listener = given;
 }
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
@@ -54,7 +54,7 @@ function geo_prompt_wait(): void {
     navigator.permissions?.query({ name: "geolocation" }).then(
       (status) => {
         if (geo_watch !== null && status.state === "prompt") {
-          heard.positionError("timeout");
+          listener.positionError("timeout");
         }
       },
       () => {},
@@ -80,7 +80,7 @@ function geo_start(): void {
         heading,
       } = pos.coords;
       // An altitude with no accuracy is none measured: a desktop's location gives 0.
-      heard.position(
+      listener.position(
         longitude,
         latitude,
         altitudeAccuracy === null ? null : altitude,
@@ -95,16 +95,16 @@ function geo_start(): void {
       switch (err.code) {
         case err.PERMISSION_DENIED:
           geo_stop();
-          heard.positionError("denied");
+          listener.positionError("denied");
           break;
         case err.POSITION_UNAVAILABLE:
-          heard.positionError("unavailable");
+          listener.positionError("unavailable");
           break;
         case err.TIMEOUT:
-          heard.positionError("timeout");
+          listener.positionError("timeout");
           break;
         default:
-          heard.positionError("other");
+          listener.positionError("other");
       }
     },
     // No timeout: one would raise TIMEOUT on a clock while no fix comes
@@ -118,7 +118,7 @@ let orient_event: string | null = null;
 
 function on_orient(e: Event): void {
   const o = e as IosOrientationEvent;
-  heard.orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
+  listener.orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
 }
 
 function orient_listen(name: string): void {
@@ -140,7 +140,7 @@ export function follow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
   const on_change = () =>
-    heard.permission(
+    listener.permission(
       "geolocation",
       status?.state === "granted" ? "granted" : "denied",
     );
@@ -163,17 +163,17 @@ function orient_permit(): Promise<boolean> {
   if (!orient_gated() || orient_event !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IosOrientationEventCtor)
     .requestPermission!();
-  heard.permission("orientation", "asking");
+  listener.permission("orientation", "asking");
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) orient_listen("deviceorientation");
-      heard.permission("orientation", granted ? "granted" : "denied");
+      listener.permission("orientation", granted ? "granted" : "denied");
       return granted;
     },
     (err) => {
       console.error("[sensor] orientation permission error:", err);
-      heard.permission("orientation", "failed");
+      listener.permission("orientation", "failed");
       return false;
     },
   );

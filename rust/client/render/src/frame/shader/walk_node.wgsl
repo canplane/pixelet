@@ -9,22 +9,30 @@ fn eye_cut(k: u32) -> vec4<i32> {
   return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
 }
 
-/// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
-/// and other frames', says which asks again (walk.wgsl `revisits`).
+/// A ray to walk: from `origin`, at the zooms `range` holds it to; `inv` its direction's
+/// reciprocal on each axis, 0 where it does not move along one (`Ray::inverse`), the eye's
+/// worked out once by the GPU (`eye_aim`), the light's the host's (light_aim.wgsl
+/// `light_aim`); `seed`, other rays' and other frames', says which asks again (walk.wgsl
+/// `revisits`).
 struct Aim {
   origin: vec3<i32>,
   dir: vec3<f32>,
+  inv: vec3<f32>,
   t_max: f32,
   range: vec2<u32>,
   seed: u32,
 }
 
-/// The eye's ray at the tangents `tan_at`.
+/// The eye's ray at the tangents `tan_at`: the one place a GPU works out the eye's way and its
+/// reciprocal, a division and a square root its own (`cast::through`, `Ray::new`), so every
+/// pass that walks or marks an eye's ray takes it here.
 fn eye_aim(tan_at: vec2<f32>) -> Aim {
   let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
+  let dir = aimed / length(aimed);
   return Aim(
     vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
-    aimed / length(aimed),
+    dir,
+    ray_inv(ray_dir(dir)),
     eye_f32(FAR),
     vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
     mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
@@ -56,7 +64,7 @@ fn root_start() -> Start {
 }
 
 /// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
-/// its reach, anything else left.
+/// its reach, 4 left to the walk that asks.
 struct Walked {
   ends: u32,
   zoom: u32,
@@ -74,7 +82,7 @@ fn units(p: vec3<u32>, og: vec3<u32>, roots: vec3<i32>) -> vec3<f32> {
   let whole = vec3<i32>(p >> vec3<u32>(FRAC_W)) - vec3<i32>(og >> vec3<u32>(FRAC_W))
     + (roots << vec3<u32>(UNIT_ZOOM));
   let frac = vec3<i32>(p & vec3<u32>(255u)) - vec3<i32>(og & vec3<u32>(255u));
-  return vec3<f32>(whole) + vec3<f32>(frac) / f32(1u << FRAC_W);
+  return vec3<f32>(whole) + vec3<f32>(frac) * (1.0 / f32(1u << FRAC_W));
 }
 
 /// A node's side at `zoom` less one (`under`).
@@ -108,7 +116,7 @@ fn mix_hash(h: u32, v: u32) -> u32 {
   return (m << 15u) | (m >> 17u);
 }
 
-/// `pyramid::hash`.
+/// `node_cache::hash`.
 fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
   var h = zoom * 0x85EBCA77u;
   h = mix_hash(h, u32(c.x));
@@ -117,12 +125,12 @@ fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
   return h ^ (h >> 16u);
 }
 
-/// The first slot of its bucket (`pyramid::entry_of`).
+/// The first slot of its bucket (`node_cache::entry_of`).
 fn bucket_of(zoom: u32, c: vec3<i32>) -> u32 {
   return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
 }
 
-/// Only nodes under the world's roots are kept (`pyramid::keeps`).
+/// Only nodes under the world's roots are kept (`node_cache::keeps`).
 fn keeps(zoom: u32, c: vec3<i32>) -> bool {
   if (zoom >= 32u) {
     return false;

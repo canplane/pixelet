@@ -32,9 +32,9 @@ fn beam_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let base = idx * LINE_WORDS;
   let aim = eye_aim(vec2<f32>(tx, ty));
   // Its beam's rays the lattice's side apart in angle (`cast::Spacing`, `beam::Grid`'s `s`).
-  let met = beam_walk(aim.origin, aim.dir, aim.t_max, aim.range, vec2<f32>(0.0, s), base);
-  if (pyramid_word(COUNT_ON) != 0u) {
-    atomicAdd(&pyramid[VISITS_COUNT], met.visits);
+  let met = beam_walk(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, vec2<f32>(0.0, s), base);
+  if (node_cache_word(COUNT_ON) != 0u) {
+    atomicAdd(&node_cache[VISITS_COUNT], met.visits);
   }
   // How far the rays about it start (`Grid::hand_at`, `Grid::hand_dist`).
   beams[corners.x * corners.y * LINE_WORDS + idx] = bitcast<u32>(met.t * eye_f32(GRID + GRID_KEEP));

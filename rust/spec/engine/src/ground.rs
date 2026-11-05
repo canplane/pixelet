@@ -59,7 +59,7 @@ pub(crate) const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2
 
 /// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
-/// lowest and past the highest (`clipmap::LEVEL_WORDS`, `fill::level`).
+/// lowest and past the highest (`clipmap::BOUND_WORDS`, `fill::level`).
 pub type Bounds = [[i32; 2]; 2];
 
 /// Bounds as their two bound words.

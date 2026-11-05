@@ -14,7 +14,7 @@ use crate::api_spec::stream;
 use crate::frame::shader::record::{
     compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{room, shader_bytes, Format, Gpu, Stencil, DONE, GATED_DEPTH};
+use crate::gpu::api::{room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH};
 use crate::gpu::surface::WORLD_COLOR;
 
 pub const GROUPS: usize = 4;
@@ -23,7 +23,7 @@ pub const LANES: usize = 8;
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
     pub id: u32,
-    pub layouts: [u32; GROUPS],
+    pub layouts: [Layout; GROUPS],
     pub strides: [u32; LANES],
     pub lanes: usize,
 }
@@ -41,12 +41,12 @@ pub struct Pipelines {
     /// and their sources' bytes.
     modules_made: u32,
     module_bytes: usize,
-    layouts: [(u64, u32); LAYOUTS],
+    layouts: [(u64, Layout); LAYOUTS],
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
-    /// Each pipeline's word, by its place in `pipelines`, where the host
-    /// writes `ticket | DONE` once it is made: boxed, so it stays where the
+    /// Each pipeline's fence, by its place in `pipelines`, where the
+    /// host stores `TICKET` once it is made: boxed, so it stays where the
     /// records named it. Let go with the renderer, on a lost device alone,
     /// whose host writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
@@ -59,6 +59,10 @@ impl Default for Pipelines {
         Self::new()
     }
 }
+
+/// Each pipeline's ticket: its fence's first, as each word is asked
+/// once.
+const TICKET: u32 = 1;
 
 fn fold(key: u64, word: u32) -> u64 {
     (key ^ word as u64).wrapping_mul(0x100000001b3)
@@ -75,7 +79,7 @@ impl Pipelines {
             modules: [0; SHADERS as usize],
             modules_made: 0,
             module_bytes: 0,
-            layouts: [(0, 0); LAYOUTS],
+            layouts: [(0, Layout::default()); LAYOUTS],
             layout_len: 0,
             pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
             pipeline_len: 0,
@@ -111,19 +115,19 @@ impl Pipelines {
         m
     }
 
-    fn layout(&mut self, g: &Gpu, entries: &[u32]) -> u32 {
-        let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
-        if let Some(&(_, id)) = self.layouts[..self.layout_len]
+    fn layout(&mut self, g: &Gpu, group: &'static [u32]) -> Layout {
+        let key = group.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
+        if let Some(&(_, layout)) = self.layouts[..self.layout_len]
             .iter()
             .find(|(k, _)| *k == key)
         {
-            return id;
+            return layout;
         }
         xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
-        let id = g.layout(entries);
-        self.layouts[self.layout_len] = (key, id);
+        let layout = g.layout(group);
+        self.layouts[self.layout_len] = (key, layout);
         self.layout_len += 1;
-        id
+        layout
     }
 
     /// The pipeline made under `key`, where one is.
@@ -134,13 +138,13 @@ impl Pipelines {
             .map(|&(_, b)| b)
     }
 
-    /// The next pipeline's place, its word and its ticket: none once the
-    /// renderer draws, as every pipeline it draws with is made before.
-    fn next(&mut self) -> (usize, &mut u32, u32) {
+    /// The next pipeline's place, its fence and its ticket: none once
+    /// the renderer draws, as every pipeline it draws with is made before.
+    fn next(&self) -> (usize, &u32, u32) {
         let at = self.pipeline_len;
         xpute_kit::ensure!(!self.is_made(), EBUSY, at);
         xpute_kit::ensure!(at < PIPELINE_CAP, ENOSPC, PIPELINE_CAP);
-        (at, &mut self.words[at], at as u32 + 1)
+        (at, &self.words[at], TICKET)
     }
 
     fn keep(&mut self, at: usize, key: u64, b: Pipeline) -> Pipeline {
@@ -222,7 +226,7 @@ impl Pipelines {
     /// A compute pipeline over shader `kind`'s one compute entry and `group`,
     /// group 0's (binding, stages, kind) words: kept by both, as a render
     /// pipeline by its record and targets, so owners asking the same share it.
-    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &[u32]) -> Pipeline {
+    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &'static [u32]) -> Pipeline {
         // Past every render pipeline's key's first word, a record's number.
         let key = group
             .iter()
@@ -240,7 +244,7 @@ impl Pipelines {
         self.keep(place, key, b)
     }
 
-    /// Whether every pipeline asked for is made, its word holding `DONE`:
+    /// Whether every pipeline asked for is made, its fence holding its ticket:
     /// the renderer draws only once it is.
     pub fn is_made(&self) -> bool {
         self.made_cnt == self.pipeline_len && self.pipeline_len != 0
@@ -249,7 +253,7 @@ impl Pipelines {
     /// The pipelines whose word says they are made since this last ran,
     /// counted; whether all are (`is_made`).
     pub fn made(&mut self) -> bool {
-        while self.made_cnt < self.pipeline_len && self.words[self.made_cnt] & DONE != 0 {
+        while self.made_cnt < self.pipeline_len && signaled(&self.words[self.made_cnt], TICKET) {
             self.made_cnt += 1;
         }
         self.is_made()

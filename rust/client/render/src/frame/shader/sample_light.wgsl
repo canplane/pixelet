@@ -33,14 +33,7 @@ fn left_at() -> u32 {
 }
 
 fn sample_aim(s: vec2<u32>) -> Aim {
-  let texel = slot_texel(s * LIGHT_SAMPLE);
-  return Aim(
-    texel_start(light_corner() + vec2<i32>(texel)),
-    light_v3(LIGHT_DIR),
-    eye_f32(LIGHT + LIGHT_T_MAX),
-    vec2<u32>(texel_band(texel)),
-    mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)),
-  );
+  return light_aim(slot_texel(s * LIGHT_SAMPLE), mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)));
 }
 
 /// Off the cell of the box its texel lies in (`light::cell`).

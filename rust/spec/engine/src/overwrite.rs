@@ -38,7 +38,7 @@ pub const EDITS: u32 = 8;
 /// the edits, and a preview's cut and left-out leaf as they were and as they
 /// are; past them the rest is joined into the last (pxl-render gpu/generator.rs
 /// `hold`). What reads those columns asks them again: decor's generation, the
-/// observed pyramid's forgetting.
+/// node cache's forgetting.
 pub const BOXES: u32 = EDITS + 4;
 
 /// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.

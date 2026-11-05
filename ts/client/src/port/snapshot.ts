@@ -48,7 +48,8 @@ export function set_snapshot(bytes: U8Array): void {
 }
 
 /** The kernel's SHELL_SNAPSHOT: too large for a ring frame, so it names where
- * the snapshot lies in the guest's memory, valid until the next, a turn away. */
+ * the snapshot lies in the guest's memory, the host's until its head passes
+ * the event, and read whole before then. */
 export function snapshot_posted({ at, len }: ShellSnapshotEvent): void {
   set_snapshot(new Uint8Array(host.guest.mem, at, len));
 }

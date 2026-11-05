@@ -167,14 +167,14 @@ pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
 /// each entry the lowest and highest of the 2^j × 2^j cells under it, the
 /// ground's and the ways' apart (`ground::Bounds`) — level 0 a cell's own
 /// column (`fill::level`).
-pub const fn level_at(j: u32) -> u32 {
+pub const fn bound_level_at(j: u32) -> u32 {
     (4 * BRICK_CELLS - ((4 * BRICK_CELLS) >> (2 * j))) / 3
 }
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
 /// its cells are (`idx_of`).
 pub(crate) const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
-    level_at(j) + idx_of(at)
+    bound_level_at(j) + idx_of(at)
 }
 
 /// Cell `[x, y]`'s index among a brick's cells (or a level's entries), the
@@ -209,10 +209,10 @@ const fn gather(v: u32) -> u32 {
     (v | v >> 8) & 0x0000_ffff
 }
 const _: () = assert!(BRICK <= 1 << 16, "a brick's side spreads in sixteen bits");
-pub const LEVELS: u32 = BRICK_SHIFT;
+pub const BRICK_LEVELS: u32 = BRICK_SHIFT;
 /// A level entry's words: its bounds' (`ground::Bounds`), each a bound word.
-pub const LEVEL_ENTRY_WORDS: u32 = 2;
-pub const LEVEL_WORDS: u32 = LEVEL_ENTRY_WORDS * level_at(LEVELS + 1);
+pub const BOUND_ENTRY_WORDS: u32 = 2;
+pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_level_at(BRICK_LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
 /// `1 << WAYS_SHIFT` cells: a brick lays its lines by them (`LINES_AT`),
@@ -289,8 +289,8 @@ pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
 /// clip levels' bricks are one storage buffer bound whole, under WebGPU's
 /// floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
-pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
-pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
+pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
+pub const LAID_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// Its ways' tree's root word: the child group of its own nodes along z in the
 /// pool and the first one's Z (`way::tree::root_word`); 0, child group 0, never
 /// handed out, where it has none.
@@ -337,7 +337,7 @@ pub trait Bricks: Presence {
     /// Entry `at` of level `j` of the brick in `slot`, its bounds
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
-    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
+    fn bound_level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i`'s own palette index as its fill laid it (`LAID_WORDS`,
     /// `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
@@ -658,8 +658,9 @@ pub fn ground(
 /// written before: the join of the four under it, each source's its own
 /// (`ground::joined`), as bound words.
 pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let under =
-        |q: u32| ground::bounds_of(w.level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
+    let under = |q: u32| {
+        ground::bounds_of(w.bound_level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
+    };
     let mut b = under(0);
     let mut q = 1;
     while q < 4 {
@@ -671,13 +672,13 @@ pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) ->
 
 /// Levels a clip level bounds a node over, its bricks' own and then theirs
 /// joined, to the clip level whole.
-pub(crate) const BOUND_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
+pub(crate) const BOUND_LEVELS: u32 = BRICK_LEVELS + ACROSS.trailing_zeros();
 
 /// The levels over a clip level's bricks, from one over a brick
-/// (`LEVELS + 1`) to the clip level whole: a node wider than a brick bounded
+/// (`BRICK_LEVELS + 1`) to the clip level whole: a node wider than a brick bounded
 /// by the join of the bricks it covers, folded where the clip levels' entries
 /// are written (`fold`) and read as one entry (`bounded`).
-pub const JOINED_LEVELS: u32 = BOUND_LEVELS - LEVELS;
+pub const JOINED_LEVELS: u32 = BOUND_LEVELS - BRICK_LEVELS;
 /// A clip level's entries: level `l` over a brick has `(ACROSS >> l)²`, an
 /// aligned block of `2^l` bricks a side each.
 pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
@@ -831,7 +832,7 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
 /// clip levels fold in any order.
 fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
     let mut place = Lookup::NONE;
-    let (b, _, here, _) = bounded(w, &mut place, cell, (cell - LEVELS, q));
+    let (b, _, here, _) = bounded(w, &mut place, cell, (cell - BRICK_LEVELS, q));
     if here {
         b
     } else {
@@ -839,8 +840,8 @@ fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
     }
 }
 const _: () = assert!(
-    FIRST_CELL >= LEVELS,
-    "a brick is a node at its cells' zoom less `LEVELS`"
+    FIRST_CELL >= BRICK_LEVELS,
+    "a brick is a node at its cells' zoom less `BRICK_LEVELS`"
 );
 
 /// The joins an entry `e` holds of a clip level whose first brick is `q`
@@ -964,8 +965,8 @@ fn bounded(
         crate::idx_at(zoom, c[0], cell),
         crate::idx_at(zoom, c[1], cell),
     ];
-    if cell > zoom + LEVELS {
-        let (b, all) = held_of(w, cell, g, cell - zoom - LEVELS);
+    if cell > zoom + BRICK_LEVELS {
+        let (b, all) = held_of(w, cell, g, cell - zoom - BRICK_LEVELS);
         return (b, cell, true, all);
     }
     let (f, p) = step(w, *place, cell, g);
@@ -976,7 +977,7 @@ fn bounded(
     }
     let (j, at) = entry_at(zoom, from, p);
     (
-        ground::bounds_of(w.level(from, slot, j, at)),
+        ground::bounds_of(w.bound_level(from, slot, j, at)),
         from,
         true,
         true,

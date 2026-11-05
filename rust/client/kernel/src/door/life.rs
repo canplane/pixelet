@@ -23,7 +23,7 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
             settings_open();
             // The shell holds the kernel's state from its first render on.
             edge::request_world_tick();
-            s.asked = true;
+            s.snapshot_due = true;
         }
         // The last sure moment to save: the objects written, and the
         // position no longer watched while nothing shows it.

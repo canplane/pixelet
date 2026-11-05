@@ -1,8 +1,8 @@
 // pxl-kernel/domain/layer/upload.rs
 
 //! What of a layer's tiles goes to the GPU off the packet it came in: per
-//! frame, the packet the GPU does not hold yet, kept until the turn's stream
-//! takes it and freed then, and the device it went to; a frame taken again
+//! slot, the packet the GPU does not hold yet, kept until the turn's stream
+//! takes it and freed then, and the device it went to; a slot taken again
 //! replaces it. A packet is freed unkept past the layer's bound (`keep`),
 //! and freed unsent past a full stream once nothing wants it (`send`).
 
@@ -11,7 +11,7 @@ use xpute_guest::mem::heap::Block;
 use crate::sys::io::fetch::{body, release};
 
 #[derive(Clone, Copy)]
-enum Frame {
+enum Upload {
     Empty,
     Waiting(Block),
     /// Sent to the device of this generation (`device_generation`).
@@ -30,43 +30,43 @@ pub enum Uptake {
 }
 
 pub struct Uploads {
-    frames: Vec<Frame>,
-    /// The frames `Waiting`.
+    slots: Vec<Upload>,
+    /// The slots `Waiting`.
     waiting: u32,
 }
 
 impl Uploads {
-    pub fn new(frames: u32) -> Uploads {
+    pub fn new(slots: u32) -> Uploads {
         Uploads {
-            frames: vec![Frame::Empty; frames as usize],
+            slots: vec![Upload::Empty; slots as usize],
             waiting: 0,
         }
     }
 
-    /// The packet a tile came in, kept for the frame `record` took it into
-    /// while fewer than `most` are kept besides; freed where no frame took
-    /// it or `most` are, the frame then holding nothing to send.
-    pub fn keep(&mut self, record: Option<u32>, block: Block, most: u32) {
-        let Some(record) = record else {
+    /// The packet a tile came in, kept for the slot `slot` took it into
+    /// while fewer than `most` are kept besides; freed where no slot took
+    /// it or `most` are, the slot then holding nothing to send.
+    pub fn keep(&mut self, slot: Option<u32>, block: Block, most: u32) {
+        let Some(slot) = slot else {
             return release(Some(block));
         };
-        let frame = &mut self.frames[record as usize];
-        match *frame {
-            Frame::Waiting(was) => release(Some(was)),
+        let slot = &mut self.slots[slot as usize];
+        match *slot {
+            Upload::Waiting(was) => release(Some(was)),
             _ if self.waiting >= most => {
-                *frame = Frame::Empty;
+                *slot = Upload::Empty;
                 return release(Some(block));
             }
             _ => self.waiting += 1,
         }
-        *frame = Frame::Waiting(block);
+        *slot = Upload::Waiting(block);
     }
 
-    /// Frame `record`'s packet, if one is kept, freed, leaving the frame
+    /// Slot `slot`'s packet, if one is kept, freed, leaving the slot
     /// nothing to send.
-    pub fn forget(&mut self, record: u32) {
-        let frame = &mut self.frames[record as usize];
-        if let Frame::Waiting(was) = core::mem::replace(frame, Frame::Empty) {
+    pub fn forget(&mut self, slot: u32) {
+        let slot = &mut self.slots[slot as usize];
+        if let Upload::Waiting(was) = core::mem::replace(slot, Upload::Empty) {
             release(Some(was));
             self.waiting -= 1;
         }
@@ -77,20 +77,20 @@ impl Uploads {
         self.waiting
     }
 
-    /// Whether frame `record`'s packet is still to be sent.
-    pub fn waiting(&self, record: u32) -> bool {
-        matches!(self.frames[record as usize], Frame::Waiting(_))
+    /// Whether slot `slot`'s packet is still to be sent.
+    pub fn waiting(&self, slot: u32) -> bool {
+        matches!(self.slots[slot as usize], Upload::Waiting(_))
     }
 
-    /// The device frame `record`'s tile was sent to, once it was.
-    pub fn sent_on(&self, record: u32) -> Option<u32> {
-        match self.frames[record as usize] {
-            Frame::Sent(on) => Some(on),
+    /// The device slot `slot`'s tile was sent to, once it was.
+    pub fn sent_on(&self, slot: u32) -> Option<u32> {
+        match self.slots[slot as usize] {
+            Upload::Sent(on) => Some(on),
             _ => None,
         }
     }
 
-    /// Each waiting packet to `send` with its frame, freed once taken whole
+    /// Each waiting packet to `send` with its slot, freed once taken whole
     /// by the device `on`, until the stream runs out; past that, each one
     /// nothing wants any more (`wanted`) is freed unsent, so the packets
     /// given back do not wait on the stream when the slots are short.
@@ -101,24 +101,24 @@ impl Uploads {
         wanted: &dyn Fn(u32) -> bool,
     ) {
         let mut full = false;
-        for (record, frame) in self.frames.iter_mut().enumerate() {
-            let Frame::Waiting(block) = *frame else {
+        for slot in 0..self.slots.len() {
+            let Upload::Waiting(block) = self.slots[slot] else {
                 continue;
             };
             if full {
-                if !wanted(record as u32) {
+                if !wanted(slot as u32) {
                     release(Some(block));
-                    *frame = Frame::Empty;
+                    self.slots[slot] = Upload::Empty;
                     self.waiting -= 1;
                 }
                 continue;
             }
-            match send(record as u32, body(block)) {
+            match send(slot as u32, body(block)) {
                 Uptake::Full => full = true,
                 Uptake::Part => {}
                 Uptake::Taken => {
                     release(Some(block));
-                    *frame = Frame::Sent(on);
+                    self.slots[slot] = Upload::Sent(on);
                     self.waiting -= 1;
                 }
             }

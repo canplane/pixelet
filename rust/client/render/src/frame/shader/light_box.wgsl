@@ -28,15 +28,15 @@ fn footprint() -> bool {
 /// from texel (0, 0)'s middle (`Light::texel_at`).
 fn texel_at(v: vec3<f32>) -> vec2<f32> {
   let d = v - light_v3(0u);
-  let across = light_v3(LIGHT_ACROSS);
-  let down = light_v3(LIGHT_DOWN);
-  return vec2<f32>(dot(d, across) / dot(across, across), dot(d, down) / dot(down, down));
+  let across = dot(d, light_v3(LIGHT_ACROSS)) * eye_f32(LIGHT + LIGHT_ACROSS2_INVERSE);
+  let down = dot(d, light_v3(LIGHT_DOWN)) * eye_f32(LIGHT + LIGHT_DOWN2_INVERSE);
+  return vec2<f32>(across, down);
 }
 
 /// The tile of the box a receiver standing `v` units from the eye stands on
 /// (`Light::tile_of`).
 fn tile_of(v: vec3<f32>) -> vec2<i32> {
-  return vec2<i32>(floor((texel_at(v) + vec2<f32>(0.5)) / f32(LIGHT_TILE)));
+  return vec2<i32>(floor((texel_at(v) + vec2<f32>(0.5)) * (1.0 / f32(LIGHT_TILE))));
 }
 
 /// Whether box tile `tile` keeps what a cast left in it where the box slid to its

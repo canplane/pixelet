@@ -95,7 +95,7 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("world", 2),
     ("cast", 2),
     ("support", 2),
-    ("pyramid", 2),
+    ("node_cache", 2),
     ("beam", 3),
     ("eye", 3),
     ("raster", 3),

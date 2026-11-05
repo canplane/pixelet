@@ -40,7 +40,7 @@ fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
         // It keeps nothing across its life, and draws nothing.
         Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
         // It opens no file.
-        Submission::Opened(_) => Ok(None),
+        Submission::Opened(_) | Submission::Closed(_) => Ok(None),
         Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
     });
     if door.pending() {

@@ -279,14 +279,14 @@ pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
 /// Whether the candidate at `slot`, a node of `zoom`, takes a child group for
 /// its children: it is coarser than the brick's cells at `cell`, and its
 /// Z meets where the brick's ways write under it, the ways' bound of the
-/// brick's levels at its size (`clipmap::Bricks::level`, its slot `s`).
+/// brick's levels at its size (`clipmap::Bricks::bound_level`, its slot `s`).
 pub fn flag(pool: &impl Pool, w: &impl Bricks, s: u32, cell: Zoom, zoom: Zoom, slot: u32) -> bool {
     let at = unpack(pool.data(slot));
     if zoom >= cell {
         return false;
     }
     let e = [at[0] as u32, at[1] as u32];
-    let [lo, hi] = ground::bounds_of(w.level(cell, s, cell - zoom, e))[1];
+    let [lo, hi] = ground::bounds_of(w.bound_level(cell, s, cell - zoom, e))[1];
     let d = LEAF_CELL - zoom;
     lo < (at[2] + 1) << d && hi > at[2] << d
 }

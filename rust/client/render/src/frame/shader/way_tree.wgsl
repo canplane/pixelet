@@ -498,7 +498,7 @@ fn way_tree_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocatio
       put(records, TREE_STARVED);
     } else if (state == PAST) {
       // Past the brick's own most, which no pool's growth lets it build: its count
-      // `TREE_NONE`, refused at once (pxl-render `Resident`).
+      // `TREE_NONE`, refused at once (pxl-render `Filled`).
       put(records, TREE_NONE);
     } else if (state == CRAMPED) {
       // Past what its scratch holds: its count `TREE_CRAMPED`, the scratch's to grow.

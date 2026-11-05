@@ -45,7 +45,7 @@ export interface Viewport {
 }
 
 /** What the sensors hear, in the platform's words: handed in once, at boot. */
-export interface SensorHeard {
+export interface SensorListener {
   position(
     lon: f64,
     lat: f64,

@@ -279,7 +279,7 @@ impl Raster {
                 release(group);
             }
             // The faces' pass over the boxes' asks, its args the raster's,
-            // or over the missed pixels' hits', theirs in the pyramid's
+            // or over the missed pixels' hits', theirs in the node cache's
             // head: one pass, bound to either's args.
             let faces = |args: u32, at: u32| {
                 g.bind_group(

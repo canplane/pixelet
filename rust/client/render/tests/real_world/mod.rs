@@ -211,7 +211,7 @@ impl Bricks for World<'_> {
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         fill::column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         fill::level_of(self.ground, slot * BRICK_WORDS, j, at)
     }
     fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {

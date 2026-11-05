@@ -9,6 +9,8 @@
 //! words, then into the room the stream reserved for them, so nothing is
 //! built on the heap first.
 
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::stream::{Stream, WORD};
 use xpute_guest::mem::off_of_slice;
@@ -24,6 +26,21 @@ use crate::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
 
 /// An object the guest made: a handle of the table its encoder holds.
 pub type Id = u32;
+
+/// A word a record named for the host to answer (a fence, a device
+/// block's STATUS), loaded with acquire: what the host wrote before it is
+/// seen (ipc/stream.rs R4).
+pub fn load_acquire(word: &u32) -> u32 {
+    // SAFETY: a live, aligned word, which the host stores into only
+    // atomically; nothing here writes through it.
+    unsafe { AtomicU32::from_ptr(core::ptr::from_ref(word).cast_mut()) }.load(Ordering::Acquire)
+}
+
+/// Whether the request asked with `ticket` on the fence `fence` is
+/// answered (spec RESULT): the host stored that ticket there.
+pub fn signaled(fence: &u32, ticket: u32) -> bool {
+    load_acquire(fence) == ticket
+}
 
 /// Where a record's words go: counted, or written.
 trait Sink {
@@ -721,17 +738,16 @@ impl<const N: usize> Gpu<N> {
     }
 
     /// As `render_pipeline`, made where the host can without holding its
-    /// thread: `word` holds `ticket | DONE` once it is made, and no record
-    /// names it before.
+    /// thread: the host stores `ticket` at the fence `fence` once it is
+    /// made (spec RESULT), and no record names it before.
     pub fn render_pipeline_async(
         &mut self,
         stream: &mut Stream,
         d: &RenderPipelineDescriptor,
-        word: &mut u32,
+        fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        *word = ticket;
-        let at = off_of_slice(core::slice::from_ref(word)) as u32;
+        let at = off_of_slice(core::slice::from_ref(fence)) as u32;
         self.make_as(
             stream,
             op::RENDER_PIPELINE_ASYNC,
@@ -758,11 +774,10 @@ impl<const N: usize> Gpu<N> {
         &mut self,
         stream: &mut Stream,
         d: &ComputePipelineDescriptor,
-        word: &mut u32,
+        fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        *word = ticket;
-        let at = off_of_slice(core::slice::from_ref(word)) as u32;
+        let at = off_of_slice(core::slice::from_ref(fence)) as u32;
         self.make_as(
             stream,
             op::COMPUTE_PIPELINE_ASYNC,
@@ -930,7 +945,7 @@ pub mod call {
     }
 
     /// The bytes read where they lie in the guest's memory when the host
-    /// runs the stream, so they must stay until it has.
+    /// runs the stream, no copy made (ipc/stream.rs R3).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         words(
             stream,
@@ -995,20 +1010,20 @@ pub mod call {
     }
 
     /// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
-    /// decoded into `to`; `word` where `ticket | DONE` lands once it is there.
+    /// decoded into `to`; `fence` its fence and result (spec RESULT),
+    /// `ticket` landing there once it is in or refused.
     pub fn copy_external_image(
         stream: &mut Stream,
         to: &TexelCopyTexture,
         flip_y: bool,
         premultiplied: bool,
         image: &[u8],
-        word: &mut u32,
+        fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        *word = ticket;
         let (image_at, word_at) = (
             off_of_slice(image) as u32,
-            off_of_slice(core::slice::from_ref(word)) as u32,
+            off_of_slice(fence.as_slice()) as u32,
         );
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
             texture_place(s, to);
@@ -1260,17 +1275,17 @@ pub mod call {
     }
 
     /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
-    /// before) read into the guest's memory at `into`; `ticket | DONE` lands
-    /// at `word` once the bytes are there and the buffer is unmapped.
+    /// before) read into the guest's memory at `into`; `fence` its fence
+    /// and result (spec RESULT), `ticket` landing there once the bytes are
+    /// there and the buffer is unmapped, or the mapping refused.
     pub fn map_async(
         stream: &mut Stream,
         buffer: Id,
         offset: u32,
         into: &mut [u8],
-        word: &mut u32,
+        fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        *word = ticket;
         words(
             stream,
             op::MAP_ASYNC,
@@ -1279,19 +1294,19 @@ pub mod call {
                 offset,
                 into.len() as u32,
                 off_of_slice(into) as u32,
-                off_of_slice(core::slice::from_ref(word)) as u32,
+                off_of_slice(fence.as_slice()) as u32,
                 ticket,
             ],
         )
     }
 
-    /// `ticket | DONE` at `word` once what was submitted before is done.
-    pub fn queue_done(stream: &mut Stream, word: &mut u32, ticket: u32) -> bool {
-        *word = ticket;
+    /// `ticket` at the fence `fence` once what was submitted before is
+    /// done (spec RESULT).
+    pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
         words(
             stream,
             op::QUEUE_DONE,
-            &[off_of_slice(core::slice::from_ref(word)) as u32, ticket],
+            &[off_of_slice(core::slice::from_ref(fence)) as u32, ticket],
         )
     }
 

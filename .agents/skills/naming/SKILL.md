@@ -32,6 +32,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Mind a loose word where several modules use it for different things.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
   React shell's own names stay whole (`let cfg: Config`).
+- In TypeScript, a `private` member takes a leading `_` (`private _cap`,
+  `private _grow()`), `protected` is for a class that is extended, and no
+  field is `#`.
 - Use a plural for a collection, and a unit suffix on a length (`_u` the
   world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
   ground), on the value where a person sees it (`29.0 m`).

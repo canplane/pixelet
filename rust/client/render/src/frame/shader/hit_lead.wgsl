@@ -1,7 +1,7 @@
 // pxl-render/hit_lead.wgsl
 
 // Each hit the walks again kept (miss_hit.wgsl `keep_hit`), a thread each, dispatched off
-// their count (pxl-engine `pyramid::HITS_ARGS`): the one that asks what lies about its face
+// their count (pxl-engine `node_cache::HITS_ARGS`): the one that asks what lies about its face
 // is one whose pixel's neighbors to the left and above wait for no hit alike within its
 // square of `HIT_SQUARE` a side, so a patch of hits alike is asked once a square, and which
 // of them asks is a function of the pixels alone. It is listed with its ask for the faces'
@@ -13,7 +13,7 @@
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
-@group(0) @binding(9) var<storage, read> pyramid: array<u32>;
+@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 /// The walk again's words, the faces' pass's count and dispatch among them
 /// (`ray::MISS_ARGS_ROOM`).
 @group(0) @binding(14) var<storage, read_write> marks: array<atomic<u32>>;
@@ -44,7 +44,7 @@ fn alike_hit(k: u32, p: vec2<u32>) -> u32 {
 
 @compute @workgroup_size(HIT_LANES)
 fn hit_lead_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= min(pyramid[HITS_CNT], HITS)) {
+  if (id.x >= min(node_cache[HITS_CNT], HITS)) {
     return;
   }
   let k = hit_at(id.x);

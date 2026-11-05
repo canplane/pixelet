@@ -9,7 +9,7 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::ray::{Cast, GroundBricks, Resident};
+use pxl_render::gpu::ray::{Cast, Filled, GroundBricks};
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
@@ -172,9 +172,9 @@ pub fn stage_render(pace: Pace) {
     let eye = o.as_ref().and_then(cast::eye);
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
-    let mut on_resident = |b: u32, ticket: u32, resident: Resident<'_>| {
+    let mut on_filled = |b: u32, ticket: u32, filled: Filled<'_>| {
         landed.set(true);
-        clipmap::on_resident(b, ticket, resident);
+        clipmap::on_filled(b, ticket, filled);
     };
     // The draws the scene bounds, and whether what it animates stepped.
     let (bounded, animated) = region::take();
@@ -194,7 +194,7 @@ pub fn stage_render(pace: Pace) {
         },
         ground: GroundBricks {
             upload: &mut terrain_upload,
-            on_resident: &mut on_resident,
+            on_filled: &mut on_filled,
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
             scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,

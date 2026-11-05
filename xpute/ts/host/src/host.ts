@@ -36,7 +36,8 @@ import { open } from "./platform";
 
 /** The guest as its platform opened it: its memory, which never moves or
  * grows; its entry, `run`, a turn that returns when it wants the next, in
- * ms; and where its hostcalls are answered.
+ * ms; where its hostcalls are answered; and, where it runs on a thread of
+ * its own, that thread.
  * The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
   mem: ArrayBuffer;
@@ -44,6 +45,22 @@ export interface Guest {
   /** `answer` answers each call from here on: a frame laid at an offset of
    * `mem`, answered before the call returns. ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
+  /** The guest's own thread, which runs while it has work and sleeps until
+   * it is kicked or the time it asked for comes (a native app's): `kick`
+   * wakes it after a submission, its next turn given at least `quota_ms`,
+   * none of its own where negative, and returns at once; `listen`'s `ack`
+   * is called on this thread once it has posted or asked since, with when it
+   * wants the next turn (0 also where its wake time began one, as the thread
+   * keeps that time; NaN once it has stopped) and the longest turn it ran.
+   * `pause` stops every turn but one `run` rings, and `resume` lets
+   * kicks and the wake time run turns again. `run` is then a turn waited
+   * for. None where the guest runs only inside `run` (a page's). */
+  thread?: {
+    kick(quota_ms: f64): void;
+    pause(): void;
+    resume(): void;
+    listen(ack: (wake_ms: f64, turn_ms: f64) => void): void;
+  };
 }
 
 /** What a guest asks of the GPU it is granted (its machine's `gpu`): a power
@@ -55,8 +72,9 @@ export interface GpuAsk {
 }
 
 /** A platform's GPU, granted to a guest: it opens a device as the guest asks,
- * runs the guest's stream on it as each turn returns, and says when a device
- * has answered. What `after_turn` throws ends the guest, as a trap does. */
+ * runs the guest's stream on it as each turn returns (a native one, as the
+ * guest publishes it), and says when a device has answered. What
+ * `after_turn` throws ends the guest, as a trap does. */
 export interface Gpu {
   grant(to: GpuGrant): void;
   after_turn(): void;
@@ -114,7 +132,7 @@ export interface Config<G extends Grant = Grant> {
   lay?: Front;
   /** What backs the file device (Major FS), where it is given. */
   fs?: Fs;
-  /** The guest's report as it aborts (port 0's SYS_ABORT); logged where
+  /** The guest's report as it aborts (SYS_ABORT); logged where
    * none takes it. */
   onabort?(report: Abort): void;
   /** The GPU granted and what the guest asks of it (set by `boot` from the
@@ -176,14 +194,27 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
       gpu?.after_turn();
       return wake;
     },
+    guest.thread ? (quota_ms) => guest.thread?.kick(quota_ms) : null,
   );
+  guest.thread?.listen((wake_ms, turn_ms) => doorbell.ack(wake_ms, turn_ms));
   const strobe = new Strobe(doorbell, cfg.policy, cfg.submit);
   let resumed = false;
   let shown = true;
-  const steer = () => (resumed && shown ? strobe.resume() : strobe.pause());
+  const steer = () => {
+    if (resumed && shown) {
+      guest.thread?.resume();
+      strobe.resume();
+    } else {
+      strobe.pause();
+      guest.thread?.pause();
+    }
+  };
+  // A guest on its own thread runs no turn of its own before `resume`, as a
+  // page's is rung for none.
+  guest.thread?.pause();
   const send = (cmd: u32, encode?: Encode) => {
     doorbell.send(cmd, encode);
-    strobe.request();
+    strobe.kick();
   };
   const own = new Map<u32, OnEvent>([
     [
@@ -194,17 +225,17 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
     ],
   ]);
   if (cfg.fs) {
-    const files = new FsServer(cfg.fs, guest.mem, (fd, res, detail) =>
-      send(fs.Command.FS_OPENED, (room) =>
-        fs.encode_fs_opened(room, fd, res, detail),
-      ),
-    );
+    const files = new FsServer(cfg.fs, guest.mem, (tag, cmd, res, encode) => {
+      doorbell.complete(tag, cmd, res, encode);
+      strobe.kick();
+    });
     own.set(fs.Major.FS, fs.fs_imports(files));
   }
-  doorbell.hear((tag, cmd, f) => {
+  doorbell.listen((tag, cmd, f) => {
     const major = frame.major_of(cmd);
-    const heard = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
-    return heard ? heard(tag, cmd, f) : Errno.ENOSYS;
+    const listener = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
+    if (listener) return listener(tag, cmd, f);
+    return major === fs.Major.FS ? Errno.ENODEV : Errno.ENOSYS;
   });
   guest.answer_with((at) => doorbell.answer(at));
   if (cfg.gpu) {
@@ -234,7 +265,7 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host {
       }
       return result;
     });
-    strobe.request();
+    strobe.kick();
     return out;
   }
   // The guest hears a host attach before anything else it is sent.
@@ -273,6 +304,8 @@ export interface Machine extends Front {
   mem_bytes: readonly u32[];
   region_bytes: u32;
   head_at: u32;
+  /** Whether it asks for the file device. */
+  fs: boolean;
   gpu: GpuAsk | null;
 }
 
@@ -287,8 +320,10 @@ export interface ModuleSource {
 
 /** The guest opened as `machine` declares, by this build's platform
  * (platform.ts, platform.native.ts), from `guest` on a page; the host
- * mounted on it, its front laid, and granted `gpu` where its machine asks for
- * one. */
+ * mounted on it, its front laid, the file device backed by `fs` and the GPU
+ * granted by `gpu` where its machine asks for them. A machine that asks for
+ * files is refused a boot without `fs`, and one that does not is refused one
+ * with it. */
 export async function boot<G extends Grant>(
   machine: Machine,
   cfg: Omit<Config<G>, "head_at" | "lay" | "gpu"> & {
@@ -297,6 +332,13 @@ export async function boot<G extends Grant>(
   },
 ): Promise<Host> {
   const { guest, gpu, ...rest } = cfg;
+  if (machine.fs !== (rest.fs !== undefined)) {
+    throw new Error(
+      machine.fs
+        ? "the machine asks for the file device, and the program backs none"
+        : "the program backs a file device the machine does not ask for",
+    );
+  }
   return mount(await open(machine, guest), {
     ...rest,
     head_at: machine.head_at,

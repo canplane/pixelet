@@ -33,7 +33,7 @@ fn compact_one(i: u32) {
   instances[slot] = bitcast<u32>(from_anchor(i, 0u) + f32(size.x) / 2.0);
   instances[cap + slot] = bitcast<u32>(from_anchor(i, 1u) + f32(size.y) / 2.0);
   // Its base as drawn: under its box's corner by its column surface's kept top.
-  instances[2u * cap + slot] = bitcast<u32>(from_anchor(i, 2u) - f32(records[i + 4u]) / f32(1u << FRAC_W));
+  instances[2u * cap + slot] = bitcast<u32>(from_anchor(i, 2u) - f32(records[i + 4u]) * (1.0 / f32(1u << FRAC_W)));
   instances[3u * cap + slot] = turn_spin(turn);
   instances[4u * cap + slot] = bitcast<u32>(1.0f);
   instances[DRAWN_COLUMNS * cap + slot] = slot;

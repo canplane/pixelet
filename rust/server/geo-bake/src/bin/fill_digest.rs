@@ -149,9 +149,9 @@ fn walk(
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
 fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
-    let at = clipmap::LEVELS_AT as usize;
+    let at = clipmap::BOUNDS_AT as usize;
     let mut levels = FnvHasher::default();
-    for w in &b.column[at..at + clipmap::LEVEL_WORDS as usize] {
+    for w in &b.column[at..at + clipmap::BOUND_WORDS as usize] {
         levels.write_u32(*w);
     }
     let (z0, nodes) = fill::root_span(b.column, 0, b.cell);

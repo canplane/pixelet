@@ -1,0 +1,2091 @@
+MUT SURVIVED	ID0	differ 0 at  max 63 ms total 1889 ms
+MUT SURVIVED	row:1221:lt:9	differ 0 at  max 25 ms total 1792 ms
+MUT killed	row:1221:eq:73	differ 75646 at east round 0 every pair whole (100707 asked) max 19 ms total 203 ms
+MUT killed	row:1221:and:16	differ 71099 at east round 0 every pair whole (100707 asked) max 20 ms total 208 ms
+MUT killed	row:1221:add:39	differ 2036 at east round 0 every pair whole (100707 asked) max 20 ms total 204 ms
+MUT killed	row:1221:shr:45	differ 5057 at east round 0 every pair whole (100707 asked) max 15 ms total 171 ms
+MUT killed	row:1221:shr:53	differ 4349 at east round 0 every pair whole (100707 asked) max 18 ms total 121 ms
+MUT killed	row:1221:band:58	differ 5057 at east round 0 every pair whole (100707 asked) max 24 ms total 124 ms
+MUT killed	row:1221:band:66	differ 65068 at east round 0 every pair whole (100707 asked) max 15 ms total 145 ms
+MUT SURVIVED	row:1221:lit:11	differ 0 at  max 21 ms total 1699 ms
+MUT killed	row:1221:lit:48	differ 4974 at east round 0 every pair whole (100707 asked) max 17 ms total 150 ms
+MUT killed	row:1221:lit:61	differ 6974 at east round 0 every pair whole (100707 asked) max 23 ms total 151 ms
+MUT killed	row:1221:lit:69	differ 5057 at east round 0 every pair whole (100707 asked) max 33 ms total 209 ms
+MUT killed	row:1221:lit:76	differ 5057 at east round 0 every pair whole (100707 asked) max 15 ms total 186 ms
+MUT SURVIVED	world:1001:ge:11	differ 0 at  max 33 ms total 2348 ms
+MUT SURVIVED	world:524:ift:0	differ 0 at  max 41 ms total 1736 ms
+MUT killed	world:524:iff:0	differ 2390 at east round 0 every pair whole (100707 asked) max 9 ms total 107 ms
+MUT killed	world:525:del:0	differ 2390 at east round 0 every pair whole (100707 asked) max 6 ms total 96 ms
+MUT killed	world:527:lnot:4	differ 5918 at east round 0 every pair whole (100707 asked) max 1 ms total 35 ms
+MUT killed	world:527:ift:0	differ 5918 at east round 0 every pair whole (100707 asked) max 7 ms total 76 ms
+MUT SURVIVED	world:527:iff:0	differ 0 at  max 20 ms total 1551 ms
+MUT SURVIVED	world:528:f:35	differ 0 at  max 31 ms total 1610 ms
+MUT SURVIVED	world:528:f:42	differ 0 at  max 24 ms total 1776 ms
+MUT SURVIVED	world:528:lit:27	differ 0 at  max 23 ms total 2410 ms
+MUT SURVIVED	world:530:min:14	differ 0 at  max 37 ms total 2361 ms
+MUT killed	world:530:min:52	differ 1849 at east round 0 every pair whole (100707 asked) max 11 ms total 164 ms
+MUT SURVIVED	world:530:max:33	differ 0 at  max 113 ms total 2755 ms
+MUT killed	world:530:max:71	differ 1849 at east round 0 every pair whole (100707 asked) max 10 ms total 150 ms
+MUT killed	world:530:del:0	differ 1849 at east round 0 every pair whole (100707 asked) max 10 ms total 138 ms
+MUT SURVIVED	world:531:le:9	differ 0 at  max 28 ms total 2484 ms
+MUT killed	world:1001:ift:0	differ 3 at west round 0 every pair whole (89184 asked) max 45 ms total 1229 ms
+MUT SURVIVED	world:1001:iff:0	differ 0 at  max 62 ms total 1806 ms
+MUT SURVIVED	world:1002:t:7	differ 0 at  max 35 ms total 1686 ms
+MUT SURVIVED	world:1005:sub:27	differ 0 at  max 22 ms total 1701 ms
+MUT SURVIVED	world:1008:lit:13	differ 0 at  max 29 ms total 1742 ms
+MUT SURVIVED	world:1009:lt:19	differ 0 at  max 18 ms total 1737 ms
+MUT SURVIVED	world:1009:lt:43	differ 0 at  max 26 ms total 2422 ms
+MUT SURVIVED	world:1009:and:33	differ 0 at  max 46 ms total 2382 ms
+MUT killed	world:1009:adda:55	differ 3 at west round 0 every pair whole (89184 asked) max 42 ms total 1207 ms
+MUT SURVIVED	world:1009:lit:13	differ 0 at  max 48 ms total 2320 ms
+MUT SURVIVED	world:1009:lit:58	differ 0 at  max 68 ms total 2196 ms
+MUT SURVIVED	world:1011:lt:6	differ 0 at  max 40 ms total 2286 ms
+MUT SURVIVED	world:1011:lt:32	differ 0 at  max 25 ms total 2281 ms
+MUT SURVIVED	world:1011:eq:19	differ 0 at  max 42 ms total 2356 ms
+MUT SURVIVED	world:1011:and:27	differ 0 at  max 25 ms total 2293 ms
+MUT killed	world:1011:or:13	differ 3 at west round 0 every pair whole (89184 asked) max 57 ms total 1203 ms
+MUT SURVIVED	world:1011:ift:0	differ 0 at  max 50 ms total 1810 ms
+MUT killed	world:1011:iff:0	differ 3 at west round 0 every pair whole (89184 asked) max 21 ms total 958 ms
+MUT SURVIVED	world:1012:adda:7	differ 0 at  max 30 ms total 1765 ms
+MUT killed	world:1012:lit:10	differ 2 at west round 0 every pair whole (89184 asked) max 25 ms total 899 ms
+MUT killed	world:1012:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 15 ms total 902 ms
+MUT killed	world:1015:lt:14	differ 3 at west round 0 every pair whole (89184 asked) max 18 ms total 925 ms
+MUT killed	world:464:shr:28	differ 1849 at east round 0 every pair whole (100707 asked) max 15 ms total 143 ms
+MUT LIMIT	world:464:shr:38	differ 0 at east round 0: limit max 60010 ms total 60020 ms
+MUT SURVIVED	world:503:sub:42	differ 0 at  max 69 ms total 2399 ms
+MUT killed	world:507:lnot:4	differ 5918 at east round 0 every pair whole (100707 asked) max 14 ms total 113 ms
+MUT killed	world:507:ift:0	differ 5918 at east round 0 every pair whole (100707 asked) max 2 ms total 54 ms
+MUT SURVIVED	world:507:iff:0	differ 0 at  max 71 ms total 2314 ms
+MUT SURVIVED	world:508:f:38	differ 0 at  max 38 ms total 2357 ms
+MUT SURVIVED	world:508:f:45	differ 0 at  max 48 ms total 2183 ms
+MUT SURVIVED	world:508:lit:27	differ 0 at  max 41 ms total 2165 ms
+MUT SURVIVED	world:510:lt:37	differ 0 at  max 33 ms total 2164 ms
+MUT SURVIVED	world:510:sub:23	differ 0 at  max 62 ms total 2230 ms
+MUT SURVIVED	world:510:sel:0	differ 0 at  max 25 ms total 2133 ms
+MUT SURVIVED	world:510:lit:15	differ 0 at  max 27 ms total 2164 ms
+MUT SURVIVED	world:511:shr:14	differ 0 at  max 32 ms total 2139 ms
+MUT killed	world:512:sub:32	differ 1107 at east round 0 every pair whole (100707 asked) max 172 ms total 1646 ms
+MUT killed	world:512:mul:18	differ 1003 at west round 0 every pair whole (89184 asked) max 369 ms total 15613 ms
+MUT killed	world:512:mul:39	differ 961 at east round 0 every pair whole (100707 asked) max 40 ms total 616 ms
+MUT SURVIVED	world:501:ge:94	differ 0 at  max 124 ms total 2422 ms
+MUT SURVIVED	world:501:sub:35	differ 0 at  max 48 ms total 2424 ms
+MUT killed	world:501:sub:72	differ 15160 at east round 0 every pair whole (100707 asked) max 8 ms total 95 ms
+MUT SURVIVED	world:501:shr:17	differ 0 at  max 25 ms total 2305 ms
+MUT SURVIVED	world:501:shl:54	differ 0 at  max 191 ms total 2884 ms
+MUT SURVIVED	world:501:band:43	differ 0 at  max 55 ms total 2954 ms
+MUT killed	world:501:band:80	differ 15171 at east round 0 every pair whole (100707 asked) max 6 ms total 106 ms
+MUT SURVIVED	world:501:sel:0	differ 0 at  max 316 ms total 2941 ms
+MUT SURVIVED	world:501:lit:46	differ 0 at  max 56 ms total 2776 ms
+MUT SURVIVED	world:501:lit:83	differ 0 at  max 25 ms total 2518 ms
+MUT SURVIVED	world:502:gt:9	differ 0 at  max 73 ms total 2675 ms
+MUT killed	world:502:add:15	differ 2390 at east round 0 every pair whole (100707 asked) max 1238 ms total 16182 ms
+MUT killed	world:502:ift:0	differ 2390 at east round 0 every pair whole (100707 asked) max 1122 ms total 13862 ms
+MUT SURVIVED	world:502:iff:0	differ 0 at  max 42 ms total 2568 ms
+MUT SURVIVED	world:503:sub:35	differ 0 at  max 72 ms total 2844 ms
+MUT killed	world:514:lit:58	differ 1849 at east round 0 every pair whole (100707 asked) max 20 ms total 85 ms
+MUT killed	world:644:ge:6	differ 4408 at east round 0 every pair whole (100707 asked) max 15 ms total 115 ms
+MUT SURVIVED	ID120	differ 0 at  max 17 ms total 1385 ms
+MUT killed	world:644:ift:0	differ 5200 at east round 0 every pair whole (100707 asked) max 111 ms total 1265 ms
+MUT killed	world:644:iff:0	differ 5198 at east round 0 every pair whole (100707 asked) max 15 ms total 78 ms
+MUT SURVIVED	world:647:lt:9	differ 0 at  max 16 ms total 1325 ms
+MUT SURVIVED	world:647:eq:36	differ 0 at  max 17 ms total 1425 ms
+MUT killed	world:647:or:21	differ 1 at east round 0 every pair whole (100707 asked) max 16 ms total 107 ms
+MUT SURVIVED	world:647:ift:0	differ 0 at  max 17 ms total 1390 ms
+MUT killed	world:647:iff:0	differ 1 at east round 0 every pair whole (100707 asked) max 18 ms total 112 ms
+MUT SURVIVED	world:652:lit:16	differ 0 at  max 17 ms total 1365 ms
+MUT SURVIVED	world:653:eq:16	differ 0 at  max 21 ms total 1702 ms
+MUT SURVIVED	world:653:eq:46	differ 0 at  max 24 ms total 1596 ms
+MUT SURVIVED	world:653:or:31	differ 0 at  max 29 ms total 1621 ms
+MUT SURVIVED	world:653:ift:0	differ 0 at  max 30 ms total 1601 ms
+MUT SURVIVED	world:653:iff:0	differ 0 at  max 54 ms total 2763 ms
+MUT SURVIVED	world:654:del:0	differ 0 at  max 62 ms total 2429 ms
+MUT SURVIVED	world:655:del:0	differ 0 at  max 48 ms total 2573 ms
+MUT SURVIVED	world:656:eq:23	differ 0 at  max 40 ms total 2555 ms
+MUT SURVIVED	world:656:ift:0	differ 0 at  max 41 ms total 2531 ms
+MUT SURVIVED	world:656:iff:0	differ 0 at  max 71 ms total 2439 ms
+MUT SURVIVED	world:657:del:0	differ 0 at  max 47 ms total 2499 ms
+MUT killed	world:659:sub:12	differ 1666 at east round 0 every pair whole (100707 asked) max 46 ms total 247 ms
+MUT SURVIVED	world:660:sub:17	differ 0 at  max 107 ms total 2667 ms
+MUT SURVIVED	world:660:mul:39	differ 0 at  max 73 ms total 2633 ms
+MUT killed	world:661:ge:6	differ 1666 at east round 0 every pair whole (100707 asked) max 20 ms total 214 ms
+MUT SURVIVED	world:661:ift:0	differ 0 at  max 78 ms total 2633 ms
+MUT killed	world:661:iff:0	differ 1666 at east round 0 every pair whole (100707 asked) max 23 ms total 258 ms
+MUT SURVIVED	world:664:ge:6	differ 0 at  max 60 ms total 2604 ms
+MUT SURVIVED	world:664:ift:0	differ 0 at  max 42 ms total 2695 ms
+MUT SURVIVED	world:664:iff:0	differ 0 at  max 34 ms total 1661 ms
+MUT SURVIVED	world:667:ge:6	differ 0 at  max 22 ms total 1551 ms
+MUT SURVIVED	world:667:sub:15	differ 0 at  max 21 ms total 1605 ms
+MUT SURVIVED	world:667:mul:27	differ 0 at  max 21 ms total 1613 ms
+MUT SURVIVED	world:667:ift:0	differ 0 at  max 19 ms total 1389 ms
+MUT SURVIVED	world:667:iff:0	differ 0 at  max 18 ms total 1375 ms
+MUT SURVIVED	world:670:ge:45	differ 0 at  max 20 ms total 1407 ms
+MUT SURVIVED	world:670:sel:0	differ 0 at  max 18 ms total 1412 ms
+MUT SURVIVED	world:1018:le:9	differ 0 at  max 19 ms total 1379 ms
+MUT SURVIVED	world:1018:ift:0	differ 0 at  max 16 ms total 1392 ms
+MUT SURVIVED	world:1018:iff:0	differ 0 at  max 18 ms total 1405 ms
+MUT SURVIVED	world:1020:add:16	differ 0 at  max 20 ms total 1399 ms
+MUT SURVIVED	world:1020:mul:25	differ 0 at  max 18 ms total 1395 ms
+MUT SURVIVED	world:1020:lit:42	differ 0 at  max 18 ms total 1406 ms
+MUT SURVIVED	world:1021:add:36	differ 0 at  max 17 ms total 1378 ms
+MUT SURVIVED	world:1025:lit:16	differ 0 at  max 35 ms total 1439 ms
+MUT SURVIVED	world:1025:ift:0	differ 0 at  max 7 ms total 1392 ms
+MUT SURVIVED	world:1025:iff:0	differ 0 at  max 18 ms total 1510 ms
+MUT SURVIVED	ID180	differ 0 at  max 15 ms total 1608 ms
+MUT killed	world:1026:lit:7	differ 3 at east round 0 every pair whole (100707 asked) max 16 ms total 115 ms
+MUT killed	world:1028:sub:65	differ 1 at west round 0 every pair whole (89184 asked) max 19 ms total 911 ms
+MUT killed	world:1028:shr:48	differ 1 at west round 0 every pair whole (89184 asked) max 19 ms total 939 ms
+MUT SURVIVED	world:1029:ge:9	differ 0 at  max 18 ms total 1656 ms
+MUT SURVIVED	world:1029:ift:0	differ 0 at  max 17 ms total 1597 ms
+MUT SURVIVED	world:1029:iff:0	differ 0 at  max 20 ms total 1607 ms
+MUT SURVIVED	world:1030:sub:38	differ 0 at  max 18 ms total 1539 ms
+MUT SURVIVED	world:1030:shr:21	differ 0 at  max 25 ms total 1964 ms
+MUT SURVIVED	world:1030:band:53	differ 0 at  max 28 ms total 1658 ms
+MUT killed	world:1030:lit:66	differ 2 at west round 0 every pair whole (89184 asked) max 18 ms total 836 ms
+MUT SURVIVED	world:1031:shl:73	differ 0 at  max 17 ms total 1485 ms
+MUT SURVIVED	world:1021:mul:16	differ 0 at  max 53 ms total 2563 ms
+MUT SURVIVED	world:1021:mul:50	differ 0 at  max 39 ms total 2564 ms
+MUT SURVIVED	world:1021:adda:2	differ 0 at  max 32 ms total 2530 ms
+MUT SURVIVED	world:1021:lit:33	differ 0 at  max 62 ms total 2435 ms
+MUT SURVIVED	world:1021:lit:67	differ 0 at  max 51 ms total 2565 ms
+MUT SURVIVED	world:1021:del:0	differ 0 at  max 58 ms total 2580 ms
+MUT SURVIVED	world:1022:add:8	differ 0 at  max 51 ms total 2630 ms
+MUT SURVIVED	world:1022:add:42	differ 0 at  max 86 ms total 4058 ms
+MUT SURVIVED	world:1022:mul:22	differ 0 at  max 52 ms total 3396 ms
+MUT SURVIVED	world:1022:mul:56	differ 0 at  max 60 ms total 3031 ms
+MUT SURVIVED	world:1022:lit:39	differ 0 at  max 54 ms total 3218 ms
+MUT SURVIVED	world:1022:lit:73	differ 0 at  max 51 ms total 3209 ms
+MUT SURVIVED	world:1024:sub:49	differ 0 at  max 49 ms total 3090 ms
+MUT SURVIVED	world:1024:shr:32	differ 0 at  max 74 ms total 3125 ms
+MUT SURVIVED	world:1025:eq:13	differ 0 at  max 48 ms total 2798 ms
+MUT SURVIVED	world:531:le:62	differ 0 at  max 43 ms total 1928 ms
+MUT SURVIVED	ID60	differ 0 at  max 17 ms total 1427 ms
+MUT SURVIVED	world:531:ge:32	differ 0 at  max 35 ms total 1520 ms
+MUT SURVIVED	world:531:and:25	differ 0 at  max 24 ms total 1578 ms
+MUT SURVIVED	world:531:and:72	differ 0 at  max 30 ms total 1665 ms
+MUT LIMIT	world:531:or:49	differ 0 at west round 41: limit max 3600 ms total 150946 ms
+MUT SURVIVED	world:1031:shl:88	differ 0 at  max 135 ms total 3506 ms
+MUT SURVIVED	world:1031:bor:64	differ 0 at  max 115 ms total 3858 ms
+MUT SURVIVED	world:1031:bor:79	differ 0 at  max 101 ms total 3331 ms
+MUT killed	world:1031:lit:76	differ 1 at west round 0 every pair whole (89184 asked) max 132 ms total 1633 ms
+MUT SURVIVED	world:1031:lit:91	differ 0 at  max 75 ms total 3090 ms
+MUT SURVIVED	world:1033:sub:18	differ 0 at  max 78 ms total 3138 ms
+MUT SURVIVED	world:1034:shl:14	differ 0 at  max 42 ms total 2939 ms
+MUT killed	world:1034:lit:11	differ 1 at west round 0 every pair whole (89184 asked) max 191 ms total 1721 ms
+MUT SURVIVED	world:1035:shl:21	differ 0 at  max 154 ms total 3184 ms
+MUT SURVIVED	world:1035:band:37	differ 0 at  max 89 ms total 2679 ms
+MUT killed	world:1035:lit:50	differ 1 at west round 0 every pair whole (89184 asked) max 64 ms total 1601 ms
+MUT SURVIVED	world:1036:lit:8	differ 0 at  max 58 ms total 3106 ms
+MUT SURVIVED	world:1037:lt:19	differ 0 at  max 27 ms total 2596 ms
+MUT SURVIVED	world:1037:mul:25	differ 0 at  max 24 ms total 2854 ms
+MUT SURVIVED	world:1037:mul:32	differ 0 at  max 28 ms total 2616 ms
+MUT SURVIVED	world:1037:adda:43	differ 0 at  max 45 ms total 1515 ms
+MUT SURVIVED	world:1037:lit:13	differ 0 at  max 17 ms total 1480 ms
+MUT SURVIVED	world:1037:lit:46	differ 0 at  max 17 ms total 1469 ms
+MUT SURVIVED	world:1038:sub:28	differ 0 at  max 18 ms total 1433 ms
+MUT SURVIVED	world:1038:sub:52	differ 0 at  max 18 ms total 1440 ms
+MUT SURVIVED	world:1038:mul:68	differ 0 at  max 19 ms total 1548 ms
+MUT SURVIVED	world:1038:shr:39	differ 0 at  max 18 ms total 1574 ms
+MUT SURVIVED	world:1038:shr:62	differ 0 at  max 19 ms total 1785 ms
+MUT SURVIVED	world:1038:band:20	differ 0 at  max 18 ms total 1681 ms
+MUT SURVIVED	world:1038:band:44	differ 0 at  max 19 ms total 1756 ms
+MUT SURVIVED	world:1038:lit:31	differ 0 at  max 22 ms total 2044 ms
+MUT SURVIVED	world:1038:lit:55	differ 0 at  max 18 ms total 1706 ms
+MUT SURVIVED	world:1038:lit:66	differ 0 at  max 19 ms total 1792 ms
+MUT SURVIVED	world:1039:add:12	differ 0 at  max 19 ms total 1834 ms
+MUT SURVIVED	world:1040:shl:73	differ 0 at  max 17 ms total 1874 ms
+MUT SURVIVED	world:936:sub:9	differ 0 at  max 40 ms total 1586 ms
+MUT SURVIVED	world:937:lt:6	differ 0 at  max 20 ms total 1753 ms
+MUT SURVIVED	world:937:lt:60	differ 0 at  max 18 ms total 1776 ms
+MUT SURVIVED	world:937:gt:48	differ 0 at  max 29 ms total 1939 ms
+MUT SURVIVED	ID240	differ 0 at  max 20 ms total 1978 ms
+MUT SURVIVED	world:937:gt:79	differ 0 at  max 26 ms total 1887 ms
+MUT SURVIVED	world:937:eq:21	differ 0 at  max 14 ms total 1681 ms
+MUT SURVIVED	world:937:eq:34	differ 0 at  max 19 ms total 1924 ms
+MUT killed	world:937:and:11	differ 3 at east round 0 every pair whole (100707 asked) max 36 ms total 149 ms
+MUT killed	world:937:and:27	differ 2 at east round 0 every pair whole (100707 asked) max 31 ms total 161 ms
+MUT killed	world:937:and:40	differ 2 at east round 0 every pair whole (100707 asked) max 25 ms total 148 ms
+MUT SURVIVED	world:937:and:65	differ 0 at  max 25 ms total 1809 ms
+MUT SURVIVED	world:937:or:54	differ 0 at  max 108 ms total 2314 ms
+MUT SURVIVED	world:937:lit:8	differ 0 at  max 17 ms total 1903 ms
+MUT SURVIVED	world:937:lit:24	differ 0 at  max 14 ms total 1741 ms
+MUT SURVIVED	world:1040:shl:89	differ 0 at  max 83 ms total 2760 ms
+MUT SURVIVED	world:1040:bor:63	differ 0 at  max 70 ms total 3000 ms
+MUT SURVIVED	world:1040:bor:79	differ 0 at  max 38 ms total 2808 ms
+MUT killed	world:1040:adda:2	differ 1 at west round 0 every pair whole (89184 asked) max 54 ms total 1544 ms
+MUT SURVIVED	world:1040:lit:76	differ 0 at  max 46 ms total 2644 ms
+MUT SURVIVED	world:1040:lit:92	differ 0 at  max 35 ms total 2851 ms
+MUT SURVIVED	world:1040:del:0	differ 0 at  max 29 ms total 2629 ms
+MUT SURVIVED	world:926:lit:22	differ 0 at  max 39 ms total 2645 ms
+MUT SURVIVED	world:927:lit:22	differ 0 at  max 42 ms total 3032 ms
+MUT SURVIVED	world:928:lit:14	differ 0 at  max 141 ms total 3605 ms
+MUT SURVIVED	world:929:lit:15	differ 0 at  max 140 ms total 3285 ms
+MUT killed	world:930:lit:13	differ 1 at west round 0 every pair whole (89184 asked) max 76 ms total 1543 ms
+MUT SURVIVED	world:934:le:9	differ 0 at  max 45 ms total 2922 ms
+MUT SURVIVED	world:935:sub:30	differ 0 at  max 47 ms total 3055 ms
+MUT SURVIVED	world:935:shr:13	differ 0 at  max 45 ms total 2787 ms
+MUT killed	world:512:mul:61	differ 953 at east round 0 every pair whole (100707 asked) max 177 ms total 1629 ms
+MUT SURVIVED	world:512:div:68	differ 0 at  max 55 ms total 2744 ms
+MUT SURVIVED	world:512:shr:55	differ 0 at  max 78 ms total 2661 ms
+MUT killed	world:512:lit:16	differ 1416 at east round 0 every pair whole (100707 asked) max 50 ms total 434 ms
+MUT killed	world:512:lit:37	differ 1003 at west round 0 every pair whole (89184 asked) max 771 ms total 26641 ms
+MUT SURVIVED	world:512:lit:59	differ 0 at  max 53 ms total 2491 ms
+MUT SURVIVED	world:512:lit:71	differ 0 at  max 41 ms total 2860 ms
+MUT killed	world:513:add:42	differ 754 at east round 0 every pair whole (100707 asked) max 132 ms total 1064 ms
+MUT killed	world:513:add:54	differ 930 at east round 0 every pair whole (100707 asked) max 123 ms total 1356 ms
+MUT killed	world:513:add:86	differ 930 at east round 0 every pair whole (100707 asked) max 65 ms total 909 ms
+MUT killed	world:513:mul:28	differ 1849 at east round 0 every pair whole (100707 asked) max 14 ms total 181 ms
+MUT killed	world:513:mul:74	differ 1846 at east round 0 every pair whole (100707 asked) max 24 ms total 250 ms
+MUT killed	world:514:add:55	differ 352 at east round 0 every pair whole (100707 asked) max 17 ms total 248 ms
+MUT killed	world:514:t:71	differ 5918 at east round 0 every pair whole (100707 asked) max 14 ms total 155 ms
+MUT SURVIVED	world:514:t:77	differ 0 at  max 2209 ms total 122701 ms
+MUT SURVIVED	world:945:suba:5	differ 0 at  max 251 ms total 2746 ms
+MUT SURVIVED	world:945:lit:8	differ 0 at  max 33 ms total 1973 ms
+MUT SURVIVED	world:945:del:0	differ 0 at  max 18 ms total 1685 ms
+MUT SURVIVED	world:947:suba:11	differ 0 at  max 18 ms total 1840 ms
+MUT SURVIVED	world:947:lit:14	differ 0 at  max 18 ms total 1517 ms
+MUT SURVIVED	world:947:del:0	differ 0 at  max 19 ms total 1474 ms
+MUT SURVIVED	world:950:eq:64	differ 0 at  max 16 ms total 1518 ms
+MUT SURVIVED	world:950:add:20	differ 0 at  max 17 ms total 1523 ms
+MUT SURVIVED	world:950:add:32	differ 0 at  max 17 ms total 1421 ms
+MUT SURVIVED	world:950:add:44	differ 0 at  max 19 ms total 1573 ms
+MUT SURVIVED	world:950:add:56	differ 0 at  max 18 ms total 1681 ms
+MUT SURVIVED	world:950:lit:67	differ 0 at  max 25 ms total 1752 ms
+MUT killed	world:951:eq:6	differ 3 at east round 0 every pair whole (100707 asked) max 7 ms total 98 ms
+MUT killed	world:951:eq:25	differ 3 at east round 0 every pair whole (100707 asked) max 12 ms total 120 ms
+MUT killed	world:951:and:31	differ 3 at east round 0 every pair whole (100707 asked) max 12 ms total 100 ms
+MUT SURVIVED	world:937:lit:37	differ 0 at  max 64 ms total 2755 ms
+MUT SURVIVED	world:937:lit:50	differ 0 at  max 58 ms total 2645 ms
+MUT SURVIVED	world:937:lit:62	differ 0 at  max 48 ms total 2854 ms
+MUT killed	world:937:lit:81	differ 1 at west round 0 every pair whole (89184 asked) max 25 ms total 2111 ms
+MUT killed	world:937:ift:0	differ 3 at east round 0 every pair whole (100707 asked) max 15 ms total 230 ms
+MUT SURVIVED	world:937:iff:0	differ 0 at  max 141 ms total 4024 ms
+MUT killed	world:939:del:0	differ 1 at west round 0 every pair whole (89184 asked) max 106 ms total 1936 ms
+MUT SURVIVED	world:940:del:0	differ 0 at  max 40 ms total 2641 ms
+MUT SURVIVED	world:941:del:0	differ 0 at  max 46 ms total 2690 ms
+MUT SURVIVED	world:942:del:0	differ 0 at  max 66 ms total 2940 ms
+MUT SURVIVED	world:943:del:0	differ 0 at  max 20 ms total 2590 ms
+MUT SURVIVED	world:944:eq:6	differ 0 at  max 46 ms total 2870 ms
+MUT SURVIVED	world:944:lit:9	differ 0 at  max 24 ms total 2016 ms
+MUT SURVIVED	world:944:ift:0	differ 0 at  max 19 ms total 1743 ms
+MUT SURVIVED	world:944:iff:0	differ 0 at  max 30 ms total 1823 ms
+MUT SURVIVED	world:951:or:14	differ 0 at  max 59 ms total 2896 ms
+MUT SURVIVED	world:951:lit:28	differ 0 at  max 41 ms total 2941 ms
+MUT killed	world:951:ift:0	differ 3 at east round 0 every pair whole (100707 asked) max 28 ms total 260 ms
+MUT SURVIVED	world:951:iff:0	differ 0 at  max 141 ms total 3117 ms
+MUT SURVIVED	world:954:add:42	differ 0 at  max 35 ms total 2375 ms
+MUT killed	world:954:sub:37	differ 3 at east round 0 every pair whole (100707 asked) max 26 ms total 116 ms
+MUT SURVIVED	world:954:shr:20	differ 0 at  max 23 ms total 1721 ms
+MUT SURVIVED	world:954:lit:45	differ 0 at  max 29 ms total 1795 ms
+MUT SURVIVED	world:955:lit:9	differ 0 at  max 22 ms total 1899 ms
+MUT killed	world:956:ne:11	differ 3 at east round 0 every pair whole (100707 asked) max 13 ms total 109 ms
+MUT SURVIVED	world:956:lit:14	differ 0 at  max 25 ms total 1902 ms
+MUT SURVIVED	world:956:ift:0	differ 0 at  max 18 ms total 1756 ms
+MUT killed	world:956:iff:0	differ 3 at east round 0 every pair whole (100707 asked) max 11 ms total 138 ms
+MUT SURVIVED	world:958:del:0	differ 0 at  max 28 ms total 2036 ms
+MUT killed	world:959:del:0	differ 2 at west round 0 every pair whole (89184 asked) max 56 ms total 1040 ms
+MUT killed	world:984:sub:84	differ 2 at west round 0 every pair whole (89184 asked) max 40 ms total 1053 ms
+MUT SURVIVED	world:984:mul:73	differ 0 at  max 18 ms total 1736 ms
+MUT SURVIVED	world:984:shr:39	differ 0 at  max 16 ms total 1789 ms
+MUT SURVIVED	world:984:shr:60	differ 0 at  max 19 ms total 1945 ms
+MUT killed	world:984:band:24	differ 2 at west round 0 every pair whole (89184 asked) max 27 ms total 1051 ms
+MUT killed	world:984:band:45	differ 2 at west round 0 every pair whole (89184 asked) max 29 ms total 1202 ms
+MUT SURVIVED	world:984:band:66	differ 0 at  max 51 ms total 1981 ms
+MUT SURVIVED	world:984:lit:27	differ 0 at  max 36 ms total 1830 ms
+MUT killed	world:984:lit:42	differ 1 at west round 0 every pair whole (89184 asked) max 26 ms total 915 ms
+MUT SURVIVED	world:984:lit:48	differ 0 at  max 31 ms total 1711 ms
+MUT killed	world:984:lit:63	differ 2 at west round 0 every pair whole (89184 asked) max 20 ms total 1037 ms
+MUT SURVIVED	world:984:lit:69	differ 0 at  max 53 ms total 1762 ms
+MUT SURVIVED	world:984:lit:76	differ 0 at  max 24 ms total 1809 ms
+MUT SURVIVED	world:984:lit:82	differ 0 at  max 22 ms total 1740 ms
+MUT SURVIVED	world:987:eq:26	differ 0 at  max 36 ms total 1738 ms
+MUT killed	world:992:add:16	differ 2 at west round 0 every pair whole (89184 asked) max 52 ms total 983 ms
+MUT SURVIVED	world:992:sub:7	differ 0 at  max 20 ms total 1891 ms
+MUT SURVIVED	world:992:mul:12	differ 0 at  max 30 ms total 2084 ms
+MUT killed	world:992:mul:21	differ 2 at west round 0 every pair whole (89184 asked) max 28 ms total 1128 ms
+MUT killed	world:992:lit:10	differ 2 at west round 0 every pair whole (89184 asked) max 49 ms total 1046 ms
+MUT SURVIVED	world:992:del:0	differ 0 at  max 23 ms total 1741 ms
+MUT SURVIVED	world:994:mul:14	differ 0 at  max 28 ms total 1786 ms
+MUT SURVIVED	world:994:xor:9	differ 0 at  max 28 ms total 1714 ms
+MUT killed	world:994:hex:17	differ 1 at west round 0 every pair whole (89184 asked) max 26 ms total 1034 ms
+MUT SURVIVED	world:995:shr:7	differ 0 at  max 46 ms total 1757 ms
+MUT killed	world:995:lit:10	differ 1 at west round 0 every pair whole (89184 asked) max 30 ms total 956 ms
+MUT SURVIVED	world:995:del:0	differ 0 at  max 23 ms total 1694 ms
+MUT killed	world:996:hex:5	differ 1 at west round 0 every pair whole (89184 asked) max 23 ms total 1010 ms
+MUT killed	world:996:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 17 ms total 746 ms
+MUT killed	world:997:shr:7	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 754 ms
+MUT killed	row:1216:add:26	differ 1894 at east round 0 every pair whole (100707 asked) max 33 ms total 129 ms
+MUT killed	row:1216:lit:29	differ 1553 at east round 0 every pair whole (100707 asked) max 16 ms total 112 ms
+MUT killed	row:1217:add:26	differ 355 at east round 0 every pair whole (100707 asked) max 16 ms total 113 ms
+MUT killed	row:1217:lit:29	differ 281 at east round 0 every pair whole (100707 asked) max 30 ms total 359 ms
+MUT killed	row:1218:eq:66	differ 602 at east round 0 every pair whole (100707 asked) max 15 ms total 109 ms
+MUT killed	row:1218:band:59	differ 236 at east round 0 every pair whole (100707 asked) max 14 ms total 106 ms
+MUT killed	row:1218:sel:0	differ 602 at east round 0 every pair whole (100707 asked) max 15 ms total 100 ms
+MUT killed	row:1218:lit:62	differ 287 at east round 0 every pair whole (100707 asked) max 15 ms total 106 ms
+MUT killed	row:1218:lit:69	differ 602 at east round 0 every pair whole (100707 asked) max 14 ms total 99 ms
+MUT killed	world:249:shl:38	differ 4654 at east round 0 every pair whole (100707 asked) max 5 ms total 93 ms
+MUT killed	world:249:shl:60	differ 4400 at east round 0 every pair whole (100707 asked) max 16 ms total 112 ms
+MUT killed	world:249:band:16	differ 3935 at east round 0 every pair whole (100707 asked) max 14 ms total 104 ms
+MUT killed	world:249:band:31	differ 4518 at east round 0 every pair whole (100707 asked) max 12 ms total 102 ms
+MUT killed	world:249:band:53	differ 4170 at east round 0 every pair whole (100707 asked) max 5 ms total 94 ms
+MUT killed	world:249:bor:22	differ 4654 at east round 0 every pair whole (100707 asked) max 5 ms total 94 ms
+MUT SURVIVED	world:987:sel:0	differ 0 at  max 44 ms total 1794 ms
+MUT SURVIVED	world:987:lit:20	differ 0 at  max 22 ms total 1708 ms
+MUT SURVIVED	world:987:lit:29	differ 0 at  max 18 ms total 1896 ms
+MUT killed	world:988:sub:14	differ 3 at west round 0 every pair whole (89184 asked) max 17 ms total 937 ms
+MUT killed	world:988:mul:10	differ 3 at west round 0 every pair whole (89184 asked) max 19 ms total 843 ms
+MUT SURVIVED	world:988:mul:18	differ 0 at  max 42 ms total 2345 ms
+MUT SURVIVED	world:989:le:6	differ 0 at  max 32 ms total 2581 ms
+MUT SURVIVED	world:989:lit:9	differ 0 at  max 37 ms total 2610 ms
+MUT SURVIVED	world:989:ift:0	differ 0 at  max 45 ms total 2724 ms
+MUT SURVIVED	world:989:iff:0	differ 0 at  max 24 ms total 2506 ms
+MUT killed	world:990:mul:6	differ 2 at west round 0 every pair whole (89184 asked) max 33 ms total 1281 ms
+MUT SURVIVED	world:990:del:0	differ 0 at  max 24 ms total 2509 ms
+MUT SURVIVED	world:991:ge:13	differ 0 at  max 26 ms total 2413 ms
+MUT SURVIVED	world:991:ift:0	differ 0 at  max 54 ms total 2523 ms
+MUT SURVIVED	world:991:iff:0	differ 0 at  max 52 ms total 2555 ms
+MUT killed	world:249:bor:44	differ 4654 at east round 0 every pair whole (100707 asked) max 36 ms total 242 ms
+MUT killed	world:249:lit:19	differ 4218 at east round 0 every pair whole (100707 asked) max 18 ms total 243 ms
+MUT killed	world:249:lit:34	differ 4654 at east round 0 every pair whole (100707 asked) max 26 ms total 252 ms
+MUT killed	world:249:lit:41	differ 4655 at east round 0 every pair whole (100707 asked) max 19 ms total 253 ms
+MUT killed	world:249:lit:56	differ 4592 at east round 0 every pair whole (100707 asked) max 15 ms total 248 ms
+MUT killed	world:249:lit:63	differ 4468 at east round 0 every pair whole (100707 asked) max 19 ms total 244 ms
+MUT killed	record:1177:add:21	differ 79443 at east round 0 every pair whole (100707 asked) max 17 ms total 193 ms
+MUT killed	record:1177:add:30	differ 48470 at east round 0 every pair whole (100707 asked) max 12 ms total 189 ms
+MUT killed	record:1177:mul:8	differ 110821 at east round 0 every pair whole (100707 asked) max 10 ms total 141 ms
+MUT killed	world:176:ift:0	differ 235 at east round 0 every pair whole (100707 asked) max 25 ms total 267 ms
+MUT killed	world:176:iff:0	differ 2135 at east round 0 every pair whole (100707 asked) max 32 ms total 287 ms
+MUT killed	world:177:ge:48	differ 267 at east round 0 every pair whole (100707 asked) max 20 ms total 232 ms
+MUT killed	world:177:min:13	differ 4 at west round 0 every pair whole (89184 asked) max 46 ms total 1382 ms
+MUT killed	world:177:add:27	differ 423 at east round 0 every pair whole (100707 asked) max 20 ms total 289 ms
+MUT killed	world:179:mul:37	differ 979 at east round 0 every pair whole (100707 asked) max 14 ms total 240 ms
+MUT killed	pose:1327:hex:24	differ 33308 at east round 0 every pair whole (100707 asked) max 20 ms total 122 ms
+MUT killed	pose:1328:ge:9	differ 294 at east round 0 every pair whole (100707 asked) max 14 ms total 105 ms
+MUT killed	pose:1328:min:12	differ 51981 at east round 0 every pair whole (100707 asked) max 42 ms total 231 ms
+MUT killed	pose:1328:ift:0	differ 110821 at east round 0 every pair whole (100707 asked) max 24 ms total 190 ms
+MUT killed	pose:1328:iff:0	differ 106634 at east round 0 every pair whole (100707 asked) max 38 ms total 293 ms
+MUT killed	pose:1332:add:21	differ 15171 at east round 0 every pair whole (100707 asked) max 28 ms total 125 ms
+MUT killed	pose:1332:div:29	differ 11965 at east round 0 every pair whole (100707 asked) max 15 ms total 162 ms
+MUT killed	pose:1333:add:34	differ 12562 at east round 0 every pair whole (100707 asked) max 8 ms total 72 ms
+MUT killed	pose:1333:add:56	differ 11915 at east round 0 every pair whole (100707 asked) max 13 ms total 51 ms
+MUT killed	pose:1333:lit:37	differ 11913 at east round 0 every pair whole (100707 asked) max 2 ms total 35 ms
+MUT killed	pose:1333:lit:59	differ 11915 at east round 0 every pair whole (100707 asked) max 6 ms total 104 ms
+MUT killed	pose:1334:and:9	differ 110821 at east round 0 every pair whole (100707 asked) max 20 ms total 62 ms
+MUT killed	pose:1334:lnot:12	differ 2073 at east round 37 whole and in part (372 asked) max 46 ms total 799 ms
+MUT killed	pose:1334:ift:0	differ 110821 at east round 0 every pair whole (100707 asked) max 11 ms total 150 ms
+MUT killed	pose:1334:iff:0	differ 2068 at east round 37 whole and in part (372 asked) max 20 ms total 760 ms
+MUT killed	pose:1323:add:26	differ 110821 at east round 0 every pair whole (100707 asked) max 28 ms total 212 ms
+MUT killed	pose:1323:lit:29	differ 110821 at east round 0 every pair whole (100707 asked) max 9 ms total 151 ms
+MUT killed	pose:1324:ge:16	differ 5 at east round 37 whole and in part (372 asked) max 38 ms total 844 ms
+MUT killed	pose:1325:add:30	differ 94468 at east round 0 every pair whole (100707 asked) max 10 ms total 147 ms
+MUT killed	pose:1325:sub:49	differ 356 at east round 41 whole and in part (14957 asked) max 16 ms total 994 ms
+MUT killed	pose:1325:sub:54	differ 7 at east round 38 whole and in part (4704 asked) max 37 ms total 898 ms
+MUT killed	pose:1325:sub:62	differ 5 at east round 37 whole and in part (372 asked) max 19 ms total 890 ms
+MUT SURVIVED	ID420	differ 0 at  max 55 ms total 2617 ms
+MUT killed	pose:1325:sel:0	differ 110821 at east round 0 every pair whole (100707 asked) max 10 ms total 168 ms
+MUT killed	pose:1325:lit:52	differ 5 at east round 37 whole and in part (372 asked) max 18 ms total 827 ms
+MUT killed	pose:1326:band:16	differ 110821 at east round 0 every pair whole (100707 asked) max 9 ms total 134 ms
+MUT killed	pose:1326:hex:19	differ 56620 at east round 0 every pair whole (100707 asked) max 17 ms total 204 ms
+MUT killed	pose:1327:shr:14	differ 48470 at east round 0 every pair whole (100707 asked) max 18 ms total 207 ms
+MUT killed	pose:1327:band:21	differ 112415 at east round 0 every pair whole (100707 asked) max 13 ms total 160 ms
+MUT killed	pose:1327:lit:17	differ 32907 at east round 0 every pair whole (100707 asked) max 17 ms total 196 ms
+MUT killed	world:179:div:17	differ 548 at east round 0 every pair whole (100707 asked) max 23 ms total 116 ms
+MUT killed	world:179:div:25	differ 548 at east round 0 every pair whole (100707 asked) max 5 ms total 89 ms
+MUT killed	world:179:div:45	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 867 ms
+MUT SURVIVED	world:180:gt:50	differ 0 at  max 17 ms total 1383 ms
+MUT killed	world:180:sub:30	differ 211 at east round 0 every pair whole (100707 asked) max 6 ms total 91 ms
+MUT SURVIVED	world:180:f:65	differ 0 at  max 17 ms total 1453 ms
+MUT killed	world:180:sel:0	differ 5665 at east round 0 every pair whole (100707 asked) max 278 ms total 2229 ms
+MUT SURVIVED	world:180:lit:40	differ 0 at  max 27 ms total 1461 ms
+MUT killed	world:268:gt:7	differ 1 at east round 3 a cut over a record (176 asked) max 16 ms total 217 ms
+MUT killed	world:268:ift:0	differ 1 at east round 3 a cut over a record (176 asked) max 139 ms total 396 ms
+MUT killed	world:268:iff:0	differ 577 at east round 0 every pair whole (100707 asked) max 33 ms total 244 ms
+MUT killed	world:269:f:7	differ 7175 at east round 0 every pair whole (100707 asked) max 53 ms total 682 ms
+MUT killed	world:271:eq:48	differ 57 at east round 1 a cut over a record (1440 asked) max 43 ms total 240 ms
+MUT killed	world:271:sub:40	differ 1 at east round 3 a cut over a record (176 asked) max 15 ms total 300 ms
+MUT killed	world:271:shr:23	differ 59 at east round 4 a cut over a record (1140 asked) max 37 ms total 293 ms
+MUT killed	world:960:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 54 ms total 936 ms
+MUT killed	world:961:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 16 ms total 964 ms
+MUT killed	world:962:del:0	differ 3 at east round 0 every pair whole (100707 asked) max 21 ms total 113 ms
+MUT SURVIVED	world:963:del:0	differ 0 at  max 21 ms total 1745 ms
+MUT SURVIVED	world:966:lit:22	differ 0 at  max 18 ms total 1608 ms
+MUT SURVIVED	ID300	differ 0 at  max 22 ms total 1639 ms
+MUT SURVIVED	world:967:lit:22	differ 0 at  max 19 ms total 1730 ms
+MUT SURVIVED	world:968:lit:22	differ 0 at  max 19 ms total 1836 ms
+MUT SURVIVED	world:969:lit:22	differ 0 at  max 17 ms total 1691 ms
+MUT SURVIVED	world:971:lit:29	differ 0 at  max 22 ms total 1921 ms
+MUT killed	world:971:del:0	differ 3 at east round 0 every pair whole (100707 asked) max 28 ms total 114 ms
+MUT killed	world:972:adda:2	differ 2 at east round 0 every pair whole (100707 asked) max 17 ms total 111 ms
+MUT killed	world:972:lit:5	differ 3 at east round 0 every pair whole (100707 asked) max 17 ms total 111 ms
+MUT LIMIT	world:972:del:0	differ 0 at east round 0: limit max 60010 ms total 60021 ms
+MUT killed	pose:1364:del:0	differ 15171 at east round 0 every pair whole (100707 asked) max 52 ms total 165 ms
+MUT killed	pose:1366:eq:7	differ 12997 at east round 0 every pair whole (100707 asked) max 10 ms total 143 ms
+MUT killed	pose:1366:ift:0	differ 1002 at east round 0 every pair whole (100707 asked) max 35 ms total 186 ms
+MUT killed	pose:1366:iff:0	differ 15171 at east round 0 every pair whole (100707 asked) max 28 ms total 167 ms
+MUT killed	pose:1367:eq:10	differ 9750 at east round 0 every pair whole (100707 asked) max 16 ms total 199 ms
+MUT killed	pose:1367:ift:0	differ 1152 at east round 0 every pair whole (100707 asked) max 19 ms total 193 ms
+MUT killed	pose:1367:iff:0	differ 10146 at east round 0 every pair whole (100707 asked) max 46 ms total 244 ms
+MUT killed	pose:1368:sub:17	differ 6888 at east round 0 every pair whole (100707 asked) max 17 ms total 204 ms
+MUT SURVIVED	ID480	differ 0 at  max 168 ms total 2525 ms
+MUT killed	pose:1369:add:9	differ 103812 at east round 0 every pair whole (100707 asked) max 44 ms total 270 ms
+MUT killed	pose:1369:add:24	differ 5082 at east round 0 every pair whole (100707 asked) max 28 ms total 194 ms
+MUT killed	pose:1369:mul:30	differ 5079 at east round 0 every pair whole (100707 asked) max 16 ms total 212 ms
+MUT killed	pose:1369:shl:37	differ 3587 at east round 0 every pair whole (100707 asked) max 20 ms total 218 ms
+MUT killed	pose:1369:lit:12	differ 5089 at east round 0 every pair whole (100707 asked) max 33 ms total 295 ms
+MUT killed	pose:1369:lit:27	differ 5078 at east round 0 every pair whole (100707 asked) max 28 ms total 125 ms
+MUT killed	pose:1375:del:0	differ 773 at east round 0 every pair whole (100707 asked) max 178 ms total 344 ms
+MUT killed	pose:1377:del:0	differ 5048 at east round 0 every pair whole (100707 asked) max 15 ms total 122 ms
+MUT killed	pose:1378:lit:67	differ 4965 at east round 0 every pair whole (100707 asked) max 15 ms total 213 ms
+MUT killed	pose:1379:lit:28	differ 4432 at east round 0 every pair whole (100707 asked) max 70 ms total 372 ms
+MUT killed	pose:1379:del:0	differ 4578 at east round 0 every pair whole (100707 asked) max 38 ms total 291 ms
+MUT killed	pose:1380:eq:33	differ 2588 at east round 0 every pair whole (100707 asked) max 28 ms total 233 ms
+MUT killed	pose:1380:ift:0	differ 2221 at east round 0 every pair whole (100707 asked) max 17 ms total 188 ms
+MUT killed	pose:1380:iff:0	differ 367 at east round 0 every pair whole (100707 asked) max 66 ms total 300 ms
+MUT killed	pose:1381:shr:22	differ 354 at east round 0 every pair whole (100707 asked) max 40 ms total 246 ms
+MUT killed	pose:1381:lit:18	differ 357 at east round 0 every pair whole (100707 asked) max 82 ms total 351 ms
+MUT REFUSED	pose:1381:lit:25	Validation Error
+MUT killed	pose:1381:del:0	differ 354 at east round 0 every pair whole (100707 asked) max 47 ms total 157 ms
+MUT killed	pose:1382:mul:11	differ 153 at east round 0 every pair whole (100707 asked) max 18 ms total 205 ms
+MUT killed	pose:1382:lit:9	differ 134 at east round 0 every pair whole (100707 asked) max 41 ms total 184 ms
+MUT killed	pose:1382:del:0	differ 593 at east round 0 every pair whole (100707 asked) max 71 ms total 280 ms
+MUT killed	pose:1338:sub:17	differ 5057 at east round 0 every pair whole (100707 asked) max 35 ms total 203 ms
+MUT SURVIVED	pose:1341:lit:8	differ 0 at  max 454 ms total 2919 ms
+MUT SURVIVED	pose:1342:lit:12	differ 0 at  max 70 ms total 2372 ms
+MUT SURVIVED	pose:1343:lit:11	differ 0 at  max 178 ms total 2650 ms
+MUT SURVIVED	pose:1344:lit:14	differ 0 at  max 122 ms total 2472 ms
+MUT SURVIVED	pose:1345:lit:11	differ 0 at  max 242 ms total 3844 ms
+MUT SURVIVED	pose:1346:lit:11	differ 0 at  max 129 ms total 2744 ms
+MUT killed	pose:1347:lit:13	differ 3311 at east round 0 every pair whole (100707 asked) max 18 ms total 210 ms
+MUT killed	pose:1348:lit:17	differ 171 at east round 0 every pair whole (100707 asked) max 64 ms total 315 ms
+MUT killed	pose:1349:lit:15	differ 164 at east round 0 every pair whole (100707 asked) max 50 ms total 314 ms
+MUT SURVIVED	pose:1350:lit:18	differ 0 at  max 206 ms total 2674 ms
+MUT SURVIVED	pose:1351:lit:11	differ 0 at  max 212 ms total 2713 ms
+MUT killed	pose:1352:lit:10	differ 71697 at east round 0 every pair whole (100707 asked) max 17 ms total 197 ms
+MUT killed	pose:1353:f:13	differ 71697 at east round 0 every pair whole (100707 asked) max 39 ms total 140 ms
+MUT killed	pose:1355:eq:7	differ 15171 at east round 0 every pair whole (100707 asked) max 6 ms total 102 ms
+MUT killed	pose:1398:sub:50	differ 1237 at east round 0 every pair whole (100707 asked) max 60 ms total 157 ms
+MUT killed	pose:1398:sub:82	differ 1237 at east round 0 every pair whole (100707 asked) max 8 ms total 156 ms
+MUT killed	pose:1398:shr:37	differ 948 at east round 0 every pair whole (100707 asked) max 110 ms total 328 ms
+MUT killed	pose:1398:shr:69	differ 948 at east round 0 every pair whole (100707 asked) max 19 ms total 163 ms
+MUT killed	pose:1398:del:0	differ 3378 at east round 0 every pair whole (100707 asked) max 861 ms total 8018 ms
+MUT killed	pose:1399:lnot:11	differ 26172 at east round 0 every pair whole (100707 asked) max 17 ms total 206 ms
+MUT killed	pose:1399:ift:0	differ 5057 at east round 0 every pair whole (100707 asked) max 395 ms total 661 ms
+MUT killed	pose:1399:iff:0	differ 21799 at east round 0 every pair whole (100707 asked) max 224 ms total 356 ms
+MUT killed	pose:1400:add:16	differ 275 at east round 0 every pair whole (100707 asked) max 579 ms total 918 ms
+MUT SURVIVED	ID540	differ 0 at  max 18 ms total 1407 ms
+MUT killed	pose:1400:div:11	differ 297 at east round 0 every pair whole (100707 asked) max 19 ms total 206 ms
+MUT killed	pose:1400:lit:14	differ 64 at east round 0 every pair whole (100707 asked) max 91 ms total 337 ms
+MUT killed	pose:1400:lit:19	differ 109 at east round 0 every pair whole (100707 asked) max 105 ms total 285 ms
+MUT SURVIVED	pose:1401:eq:37	differ 0 at  max 95 ms total 2050 ms
+MUT killed	pose:1401:band:30	differ 289 at east round 0 every pair whole (100707 asked) max 18 ms total 119 ms
+MUT LIMIT	pose:1355:ift:0	differ 0 at east round 0: limit max 60010 ms total 60021 ms
+MUT killed	world:997:lit:10	differ 1 at west round 0 every pair whole (89184 asked) max 47 ms total 1416 ms
+MUT killed	world:997:del:0	differ 1 at west round 0 every pair whole (89184 asked) max 41 ms total 1399 ms
+MUT killed	world:998:add:8	differ 1 at west round 0 every pair whole (89184 asked) max 43 ms total 1421 ms
+MUT SURVIVED	world:998:mul:30	differ 0 at  max 35 ms total 2627 ms
+MUT SURVIVED	world:998:rem:16	differ 0 at  max 38 ms total 2557 ms
+MUT killed	world:433:sub:12	differ 14934 at east round 0 every pair whole (100707 asked) max 10 ms total 133 ms
+MUT SURVIVED	ID360	differ 0 at  max 21 ms total 2566 ms
+MUT killed	world:434:shr:36	differ 6626 at east round 0 every pair whole (100707 asked) max 25 ms total 236 ms
+MUT killed	world:434:shr:47	differ 7596 at east round 0 every pair whole (100707 asked) max 14 ms total 211 ms
+MUT killed	world:415:shl:36	differ 11913 at east round 0 every pair whole (100707 asked) max 12 ms total 181 ms
+MUT killed	world:415:bor:19	differ 16831 at east round 0 every pair whole (100707 asked) max 14 ms total 204 ms
+MUT killed	world:415:lit:39	differ 11913 at east round 0 every pair whole (100707 asked) max 19 ms total 188 ms
+MUT LIMIT	row:1214:add:18	differ 0 at east round 0: limit max 60010 ms total 88614 ms
+MUT SURVIVED	pose:1401:sel:0	differ 0 at  max 98 ms total 2710 ms
+MUT killed	pose:1401:lit:33	differ 269 at east round 0 every pair whole (100707 asked) max 22 ms total 205 ms
+MUT SURVIVED	pose:1401:lit:40	differ 0 at  max 47 ms total 2385 ms
+MUT killed	pose:1402:eq:81	differ 597 at east round 0 every pair whole (100707 asked) max 65 ms total 300 ms
+MUT SURVIVED	pose:1402:add:8	differ 0 at  max 64 ms total 2566 ms
+MUT killed	pose:1402:band:74	differ 460 at east round 0 every pair whole (100707 asked) max 19 ms total 235 ms
+MUT killed	pose:1402:sel:0	differ 597 at east round 0 every pair whole (100707 asked) max 23 ms total 227 ms
+MUT killed	pose:1402:lit:28	differ 38 at east round 0 every pair whole (100707 asked) max 31 ms total 231 ms
+MUT killed	pose:1402:lit:39	differ 307 at east round 0 every pair whole (100707 asked) max 19 ms total 213 ms
+MUT killed	pose:1402:lit:61	differ 105 at east round 0 every pair whole (100707 asked) max 30 ms total 298 ms
+MUT killed	pose:1402:lit:65	differ 450 at east round 0 every pair whole (100707 asked) max 36 ms total 290 ms
+MUT killed	pose:1402:lit:77	differ 195 at east round 0 every pair whole (100707 asked) max 106 ms total 328 ms
+MUT killed	pose:1402:lit:84	differ 460 at east round 0 every pair whole (100707 asked) max 69 ms total 304 ms
+MUT killed	pose:1402:del:0	differ 460 at east round 0 every pair whole (100707 asked) max 14 ms total 200 ms
+MUT killed	pose:1404:eq:6	differ 93470 at east round 0 every pair whole (100707 asked) max 27 ms total 269 ms
+MUT SURVIVED	pose:1404:and:12	differ 0 at  max 75 ms total 2619 ms
+MUT killed	pose:1404:lnot:15	differ 93470 at east round 0 every pair whole (100707 asked) max 26 ms total 260 ms
+MUT killed	pose:1404:lit:9	differ 93470 at east round 0 every pair whole (100707 asked) max 27 ms total 214 ms
+MUT SURVIVED	pose:1404:ift:0	differ 0 at  max 108 ms total 2321 ms
+MUT killed	pose:1404:iff:0	differ 93470 at east round 0 every pair whole (100707 asked) max 25 ms total 204 ms
+MUT killed	pose:1405:gt:11	differ 3311 at east round 0 every pair whole (100707 asked) max 41 ms total 273 ms
+MUT SURVIVED	pose:1405:lit:13	differ 0 at  max 27 ms total 2243 ms
+MUT killed	pose:1405:ift:0	differ 3311 at east round 0 every pair whole (100707 asked) max 38 ms total 285 ms
+MUT killed	pose:1405:iff:0	differ 593 at east round 0 every pair whole (100707 asked) max 33 ms total 159 ms
+MUT killed	pose:1406:gt:22	differ 171 at east round 0 every pair whole (100707 asked) max 20 ms total 116 ms
+MUT killed	pose:1406:add:33	differ 354 at east round 0 every pair whole (100707 asked) max 31 ms total 206 ms
+MUT killed	pose:1406:mul:38	differ 729 at east round 0 every pair whole (100707 asked) max 45 ms total 318 ms
+MUT killed	pose:1406:lit:36	differ 399 at east round 0 every pair whole (100707 asked) max 129 ms total 318 ms
+MUT killed	pose:1406:del:0	differ 593 at east round 0 every pair whole (100707 asked) max 83 ms total 177 ms
+MUT killed	pose:1409:shl:14	differ 7102 at east round 0 every pair whole (100707 asked) max 21 ms total 262 ms
+MUT killed	pose:1412:ge:6	differ 1428 at east round 0 every pair whole (100707 asked) max 33 ms total 267 ms
+MUT killed	pose:1412:mul:12	differ 1409 at east round 0 every pair whole (100707 asked) max 53 ms total 239 ms
+MUT killed	pose:1412:mul:18	differ 1371 at east round 0 every pair whole (100707 asked) max 56 ms total 290 ms
+MUT killed	pose:1412:ift:0	differ 92931 at east round 0 every pair whole (100707 asked) max 110 ms total 349 ms
+MUT killed	pose:1412:iff:0	differ 5057 at east round 0 every pair whole (100707 asked) max 17 ms total 233 ms
+MUT killed	pose:1413:del:0	differ 5057 at east round 0 every pair whole (100707 asked) max 25 ms total 222 ms
+MUT killed	pose:1415:add:8	differ 4960 at east round 0 every pair whole (100707 asked) max 26 ms total 276 ms
+MUT killed	pose:1415:mul:46	differ 136 at east round 0 every pair whole (100707 asked) max 15 ms total 108 ms
+MUT killed	pose:1415:div:23	differ 149 at east round 0 every pair whole (100707 asked) max 29 ms total 197 ms
+MUT killed	pose:1415:div:39	differ 2356 at east round 0 every pair whole (100707 asked) max 48 ms total 161 ms
+MUT SURVIVED	ID600	differ 0 at  max 60 ms total 1987 ms
+MUT killed	pose:1415:rem:30	differ 377 at east round 0 every pair whole (100707 asked) max 18 ms total 229 ms
+MUT killed	pose:1415:rem:56	differ 1705 at east round 0 every pair whole (100707 asked) max 17 ms total 112 ms
+MUT killed	pose:1415:del:0	differ 92929 at east round 0 every pair whole (100707 asked) max 33 ms total 225 ms
+MUT killed	pose:1416:ift:0	differ 74727 at east round 0 every pair whole (100707 asked) max 62 ms total 190 ms
+MUT killed	pose:1409:lit:11	differ 51370 at east round 0 every pair whole (100707 asked) max 461 ms total 2227 ms
+MUT killed	pose:1410:add:19	differ 33366 at east round 0 every pair whole (100707 asked) max 20 ms total 241 ms
+MUT killed	pose:1410:add:41	differ 34431 at east round 0 every pair whole (100707 asked) max 39 ms total 280 ms
+MUT killed	pose:1410:add:54	differ 83553 at east round 0 every pair whole (100707 asked) max 29 ms total 271 ms
+MUT killed	pose:1410:add:93	differ 51587 at east round 0 every pair whole (100707 asked) max 24 ms total 237 ms
+MUT killed	pose:1410:sub:29	differ 3085 at east round 0 every pair whole (100707 asked) max 39 ms total 310 ms
+MUT killed	pose:1410:sub:63	differ 25 at east round 0 every pair whole (100707 asked) max 25 ms total 225 ms
+MUT killed	pose:1410:sub:86	differ 56066 at east round 0 every pair whole (100707 asked) max 1890 ms total 11309 ms
+MUT killed	pose:1410:mul:47	differ 7100 at east round 0 every pair whole (100707 asked) max 24 ms total 236 ms
+MUT killed	pose:1410:shr:70	differ 20513 at east round 0 every pair whole (100707 asked) max 1788 ms total 8450 ms
+MUT killed	pose:1410:lit:32	differ 65668 at east round 0 every pair whole (100707 asked) max 55 ms total 310 ms
+MUT killed	pose:1410:lit:44	differ 21 at east round 0 every pair whole (100707 asked) max 39 ms total 277 ms
+MUT killed	pose:1410:lit:66	differ 517 at east round 0 every pair whole (100707 asked) max 38 ms total 292 ms
+MUT killed	pose:1410:lit:96	differ 2598 at east round 0 every pair whole (100707 asked) max 42 ms total 292 ms
+MUT killed	pose:1410:del:0	differ 92931 at east round 0 every pair whole (100707 asked) max 46 ms total 274 ms
+MUT REFUSED	pose:1384:sub:29	Validation Error
+MUT killed	pose:1384:shr:22	differ 3311 at east round 0 every pair whole (100707 asked) max 45 ms total 290 ms
+MUT killed	pose:1384:lit:18	differ 3321 at east round 0 every pair whole (100707 asked) max 35 ms total 311 ms
+MUT killed	pose:1384:lit:26	differ 3316 at east round 0 every pair whole (100707 asked) max 17 ms total 229 ms
+MUT killed	pose:1384:del:0	differ 3311 at east round 0 every pair whole (100707 asked) max 40 ms total 296 ms
+MUT SURVIVED	pose:1386:del:0	differ 0 at  max 68 ms total 2411 ms
+MUT SURVIVED	pose:1388:lit:18	differ 0 at  max 51 ms total 2544 ms
+MUT killed	pose:1393:shr:26	differ 20690 at east round 0 every pair whole (100707 asked) max 22 ms total 229 ms
+MUT killed	pose:1394:ge:16	differ 93470 at east round 0 every pair whole (100707 asked) max 36 ms total 244 ms
+MUT killed	pose:1395:sub:11	differ 21932 at east round 0 every pair whole (100707 asked) max 36 ms total 284 ms
+MUT killed	pose:1395:mul:20	differ 93470 at east round 0 every pair whole (100707 asked) max 43 ms total 259 ms
+MUT LIMIT	pose:1396:eq:7	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	pose:1369:lit:34	differ 5088 at east round 0 every pair whole (100707 asked) max 41 ms total 208 ms
+MUT killed	pose:1369:del:0	differ 5089 at east round 0 every pair whole (100707 asked) max 38 ms total 218 ms
+MUT killed	pose:1370:add:9	differ 103685 at east round 0 every pair whole (100707 asked) max 44 ms total 236 ms
+MUT killed	pose:1370:add:52	differ 1800 at east round 0 every pair whole (100707 asked) max 32 ms total 227 ms
+MUT killed	pose:1370:add:63	differ 1800 at east round 0 every pair whole (100707 asked) max 16 ms total 196 ms
+MUT killed	pose:1370:mul:37	differ 5057 at east round 0 every pair whole (100707 asked) max 36 ms total 231 ms
+MUT killed	pose:1370:shl:47	differ 1800 at east round 0 every pair whole (100707 asked) max 19 ms total 225 ms
+MUT killed	pose:1370:lit:12	differ 8894 at east round 0 every pair whole (100707 asked) max 22 ms total 242 ms
+MUT killed	pose:1370:lit:44	differ 1800 at east round 0 every pair whole (100707 asked) max 34 ms total 224 ms
+MUT killed	pose:1370:del:0	differ 5057 at east round 0 every pair whole (100707 asked) max 47 ms total 249 ms
+MUT LIMIT	pose:1372:ne:10	differ 0 at east round 0: limit max 60010 ms total 107035 ms
+MUT LIMIT	pose:1428:eq:7	differ 0 at east round 0: limit max 60010 ms total 60020 ms
+MUT killed	pose:1416:iff:0	differ 1859 at east round 0 every pair whole (100707 asked) max 39 ms total 220 ms
+MUT killed	pose:1417:del:0	differ 1 at east round 3 a cut over a record (176 asked) max 20 ms total 273 ms
+MUT SURVIVED	pose:1418:del:0	differ 0 at  max 58 ms total 2923 ms
+MUT killed	pose:1419:del:0	differ 1859 at east round 0 every pair whole (100707 asked) max 25 ms total 258 ms
+MUT killed	pose:1420:eq:71	differ 1859 at east round 0 every pair whole (100707 asked) max 168 ms total 436 ms
+MUT killed	pose:1420:and:31	differ 1859 at east round 0 every pair whole (100707 asked) max 30 ms total 333 ms
+MUT killed	pose:1420:lnot:4	differ 1 at east round 3 a cut over a record (176 asked) max 48 ms total 308 ms
+MUT killed	pose:1420:ift:0	differ 1859 at east round 0 every pair whole (100707 asked) max 35 ms total 260 ms
+MUT SURVIVED	pose:1420:iff:0	differ 0 at  max 22 ms total 2302 ms
+MUT killed	pose:1421:f:9	differ 636 at east round 0 every pair whole (100707 asked) max 72 ms total 307 ms
+MUT killed	pose:1421:del:0	differ 636 at east round 0 every pair whole (100707 asked) max 21 ms total 259 ms
+MUT LIMIT	pose:1422:adda:4	differ 0 at east round 0: limit max 60009 ms total 60018 ms
+MUT killed	pose:1441:ift:0	differ 93337 at east round 0 every pair whole (100707 asked) max 51 ms total 308 ms
+MUT LIMIT	pose:1441:iff:0	differ 0 at east round 0: limit max 60010 ms total 60151 ms
+MUT killed	pose:1457:band:13	differ 460 at east round 0 every pair whole (100707 asked) max 25951 ms total 27508 ms
+MUT killed	pose:1457:band:51	differ 460 at east round 0 every pair whole (100707 asked) max 1941 ms total 2151 ms
+MUT killed	pose:1457:ift:0	differ 460 at east round 0 every pair whole (100707 asked) max 16 ms total 186 ms
+MUT killed	pose:1457:iff:0	differ 460 at east round 0 every pair whole (100707 asked) max 91 ms total 286 ms
+MUT killed	pose:1458:eq:15	differ 597 at east round 0 every pair whole (100707 asked) max 16 ms total 193 ms
+MUT killed	pose:1458:band:8	differ 460 at east round 0 every pair whole (100707 asked) max 26 ms total 246 ms
+MUT killed	pose:1458:lit:11	differ 455 at east round 0 every pair whole (100707 asked) max 17 ms total 193 ms
+MUT killed	pose:1458:lit:18	differ 460 at east round 0 every pair whole (100707 asked) max 15 ms total 111 ms
+MUT killed	pose:1458:ift:0	differ 308 at east round 0 every pair whole (100707 asked) max 15 ms total 118 ms
+MUT killed	pose:1458:iff:0	differ 460 at east round 0 every pair whole (100707 asked) max 15 ms total 117 ms
+MUT killed	pose:1459:adda:11	differ 460 at east round 0 every pair whole (100707 asked) max 15 ms total 108 ms
+MUT killed	pose:1459:lit:14	differ 285 at east round 0 every pair whole (100707 asked) max 15 ms total 118 ms
+MUT killed	pose:1459:del:0	differ 460 at east round 0 every pair whole (100707 asked) max 15 ms total 116 ms
+MUT killed	pose:1461:adda:9	differ 308 at east round 0 every pair whole (100707 asked) max 15 ms total 117 ms
+MUT killed	pose:1461:lit:12	differ 392 at east round 0 every pair whole (100707 asked) max 15 ms total 113 ms
+MUT killed	pose:1449:lnot:4	differ 5057 at east round 0 every pair whole (100707 asked) max 67 ms total 259 ms
+MUT killed	pose:1449:sel:0	differ 5057 at east round 0 every pair whole (100707 asked) max 22 ms total 217 ms
+MUT killed	pose:1449:ift:0	differ 5057 at east round 0 every pair whole (100707 asked) max 24 ms total 217 ms
+MUT killed	pose:1449:iff:0	differ 74893 at east round 0 every pair whole (100707 asked) max 50 ms total 378 ms
+MUT killed	pose:1450:del:0	differ 91327 at east round 0 every pair whole (100707 asked) max 28 ms total 251 ms
+MUT killed	pose:1453:lnot:4	differ 68 at east round 0 every pair whole (100707 asked) max 31 ms total 219 ms
+MUT killed	pose:1453:ift:0	differ 2 at east round 0 every pair whole (100707 asked) max 21 ms total 230 ms
+MUT killed	pose:1453:iff:0	differ 1859 at east round 0 every pair whole (100707 asked) max 16 ms total 232 ms
+MUT LIMIT	pose:1454:t:9	differ 0 at east round 0: limit max 60000 ms total 60009 ms
+MUT killed	world:169:div:23	differ 10451 at east round 0 every pair whole (100707 asked) max 1015 ms total 4880 ms
+MUT killed	record:1180:add:15	differ 110822 at east round 0 every pair whole (100707 asked) max 1 ms total 34 ms
+MUT killed	record:1180:add:36	differ 70409 at east round 0 every pair whole (100707 asked) max 6 ms total 94 ms
+MUT killed	record:1180:add:60	differ 105940 at east round 0 every pair whole (100707 asked) max 7 ms total 82 ms
+MUT killed	record:1180:mul:20	differ 112211 at east round 0 every pair whole (100707 asked) max 1 ms total 32 ms
+MUT killed	record:1180:mul:65	differ 210224 at east round 0 every pair whole (100707 asked) max 1 ms total 31 ms
+MUT REFUSED	pose:1315:lt:14	Validation Error
+MUT killed	pose:1315:div:31	differ 1304 at east round 0 every pair whole (100707 asked) max 15 ms total 116 ms
+MUT killed	pose:1315:lit:34	differ 1304 at east round 0 every pair whole (100707 asked) max 15 ms total 119 ms
+MUT SURVIVED	world:579:ge:9	differ 0 at  max 18 ms total 1427 ms
+MUT SURVIVED	world:579:ift:0	differ 0 at  max 7 ms total 1277 ms
+MUT SURVIVED	world:579:iff:0	differ 0 at  max 50 ms total 2463 ms
+MUT killed	world:580:sub:17	differ 2 at east round 0 every pair whole (100707 asked) max 26 ms total 214 ms
+MUT SURVIVED	world:580:shr:9	differ 0 at  max 25 ms total 1671 ms
+MUT killed	world:582:sub:22	differ 14 at east round 0 every pair whole (100707 asked) max 18 ms total 181 ms
+MUT SURVIVED	world:582:shl:9	differ 0 at  max 31 ms total 2469 ms
+MUT killed	pose:1474:sub:40	differ 162 at east round 0 every pair whole (100707 asked) max 21 ms total 298 ms
+MUT killed	pose:1474:shr:15	differ 162 at east round 0 every pair whole (100707 asked) max 24 ms total 274 ms
+MUT killed	pose:1474:band:29	differ 1059 at east round 0 every pair whole (100707 asked) max 21 ms total 266 ms
+MUT SURVIVED	pose:1474:lit:43	differ 0 at  max 55 ms total 2576 ms
+MUT killed	pose:1475:eq:28	differ 162 at east round 0 every pair whole (100707 asked) max 18 ms total 238 ms
+MUT killed	pose:1475:sel:0	differ 162 at east round 0 every pair whole (100707 asked) max 28 ms total 213 ms
+MUT SURVIVED	pose:1475:lit:31	differ 0 at  max 42 ms total 2582 ms
+MUT killed	world:289:ift:0	differ 1831 at east round 0 every pair whole (100707 asked) max 43 ms total 319 ms
+MUT killed	world:289:iff:0	differ 4 at west round 0 every pair whole (89184 asked) max 113 ms total 1589 ms
+MUT killed	world:290:shr:27	differ 17 at east round 0 every pair whole (100707 asked) max 38 ms total 397 ms
+MUT killed	world:290:shr:42	differ 4 at west round 0 every pair whole (89184 asked) max 44 ms total 2024 ms
+MUT SURVIVED	ID720	differ 0 at  max 48 ms total 2911 ms
+MUT killed	world:290:lit:45	differ 4 at east round 0 every pair whole (100707 asked) max 20 ms total 258 ms
+MUT killed	world:165:band:13	differ 1042 at east round 0 every pair whole (100707 asked) max 14 ms total 179 ms
+MUT killed	world:166:ne:9	differ 5616 at east round 0 every pair whole (100707 asked) max 19 ms total 72 ms
+MUT killed	world:166:ne:28	differ 6713 at east round 0 every pair whole (100707 asked) max 285 ms total 3809 ms
+MUT killed	world:166:and:23	differ 1042 at east round 0 every pair whole (100707 asked) max 18 ms total 128 ms
+MUT killed	world:216:eq:9	differ 3275 at east round 0 every pair whole (100707 asked) max 38 ms total 198 ms
+MUT killed	world:216:ift:0	differ 1892 at east round 0 every pair whole (100707 asked) max 18 ms total 187 ms
+MUT killed	world:216:iff:0	differ 2842 at east round 0 every pair whole (100707 asked) max 37 ms total 175 ms
+MUT SURVIVED	world:183:shl:14	differ 0 at  max 22 ms total 2428 ms
+MUT SURVIVED	world:183:shl:26	differ 0 at  max 46 ms total 2350 ms
+MUT SURVIVED	world:183:shl:39	differ 0 at  max 48 ms total 2357 ms
+MUT SURVIVED	world:183:bor:8	differ 0 at  max 22 ms total 2039 ms
+MUT SURVIVED	world:183:bor:20	differ 0 at  max 53 ms total 2275 ms
+MUT SURVIVED	world:183:bor:33	differ 0 at  max 61 ms total 2123 ms
+MUT SURVIVED	world:183:lit:17	differ 0 at  max 20 ms total 1669 ms
+MUT SURVIVED	world:183:lit:29	differ 0 at  max 20 ms total 1765 ms
+MUT SURVIVED	world:183:lit:42	differ 0 at  max 23 ms total 1775 ms
+MUT killed	world:706:iff:0	differ 5200 at east round 0 every pair whole (100707 asked) max 166 ms total 1577 ms
+MUT killed	world:707:del:0	differ 5200 at east round 0 every pair whole (100707 asked) max 190 ms total 1726 ms
+MUT SURVIVED	world:709:lit:11	differ 0 at  max 21 ms total 2014 ms
+MUT SURVIVED	world:710:ne:10	differ 0 at  max 64 ms total 2397 ms
+MUT killed	world:710:and:24	differ 43 at east round 0 every pair whole (100707 asked) max 59 ms total 316 ms
+MUT killed	world:710:ift:0	differ 43 at east round 0 every pair whole (100707 asked) max 87 ms total 809 ms
+MUT SURVIVED	world:710:iff:0	differ 0 at  max 17 ms total 1487 ms
+MUT SURVIVED	world:711:del:0	differ 0 at  max 18 ms total 1647 ms
+MUT SURVIVED	world:547:lit:11	differ 0 at  max 19 ms total 1808 ms
+MUT SURVIVED	world:548:lit:13	differ 0 at  max 31 ms total 1697 ms
+MUT SURVIVED	world:550:ift:0	differ 0 at  max 18 ms total 1411 ms
+MUT killed	world:550:iff:0	differ 13265 at east round 0 every pair whole (100707 asked) max 5 ms total 77 ms
+MUT killed	world:553:mul:15	differ 12650 at east round 0 every pair whole (100707 asked) max 227 ms total 2495 ms
+MUT SURVIVED	world:554:add:38	differ 0 at  max 20 ms total 1608 ms
+MUT SURVIVED	world:554:mul:24	differ 0 at  max 31 ms total 1583 ms
+MUT killed	pose:1461:del:0	differ 306 at east round 0 every pair whole (100707 asked) max 38 ms total 286 ms
+MUT LIMIT	pose:1464:adda:4	differ 0 at east round 0: limit max 60008 ms total 60018 ms
+MUT SURVIVED	world:554:del:0	differ 0 at  max 50 ms total 2784 ms
+MUT SURVIVED	world:555:add:20	differ 0 at  max 50 ms total 2690 ms
+MUT killed	world:555:add:33	differ 9875 at east round 0 every pair whole (100707 asked) max 281 ms total 4048 ms
+MUT killed	world:555:del:0	differ 10920 at east round 0 every pair whole (100707 asked) max 20 ms total 216 ms
+MUT killed	world:556:add:18	differ 9244 at east round 0 every pair whole (100707 asked) max 16 ms total 202 ms
+MUT killed	world:556:add:28	differ 5591 at east round 0 every pair whole (100707 asked) max 24 ms total 214 ms
+MUT killed	world:556:mul:53	differ 5145 at east round 0 every pair whole (100707 asked) max 17 ms total 211 ms
+MUT killed	world:556:div:32	differ 6964 at east round 0 every pair whole (100707 asked) max 15 ms total 201 ms
+MUT killed	world:556:rem:58	differ 606 at east round 0 every pair whole (100707 asked) max 16 ms total 235 ms
+MUT killed	world:556:shr:47	differ 9712 at east round 0 every pair whole (100707 asked) max 14 ms total 191 ms
+MUT killed	world:556:band:74	differ 5042 at east round 0 every pair whole (100707 asked) max 306 ms total 2977 ms
+MUT killed	world:556:lit:51	differ 6428 at east round 0 every pair whole (100707 asked) max 34 ms total 264 ms
+MUT killed	world:556:hex:77	differ 8318 at east round 0 every pair whole (100707 asked) max 35 ms total 247 ms
+MUT SURVIVED	ID780	differ 0 at  max 44 ms total 2501 ms
+MUT killed	world:556:del:0	differ 13265 at east round 0 every pair whole (100707 asked) max 7 ms total 90 ms
+MUT killed	world:693:ift:0	differ 5715 at east round 0 every pair whole (100707 asked) max 26 ms total 171 ms
+MUT SURVIVED	world:693:iff:0	differ 0 at  max 91 ms total 2633 ms
+MUT SURVIVED	world:694:lt:50	differ 0 at  max 84 ms total 3032 ms
+MUT SURVIVED	world:694:sel:0	differ 0 at  max 51 ms total 3318 ms
+MUT SURVIVED	world:695:lit:47	differ 0 at  max 54 ms total 2689 ms
+MUT SURVIVED	world:697:lt:9	differ 0 at  max 55 ms total 2609 ms
+MUT killed	world:697:ift:0	differ 7175 at east round 0 every pair whole (100707 asked) max 100 ms total 1300 ms
+MUT SURVIVED	world:697:iff:0	differ 0 at  max 53 ms total 2720 ms
+MUT killed	world:701:lnot:4	differ 7175 at east round 0 every pair whole (100707 asked) max 313 ms total 3606 ms
+MUT killed	world:701:ift:0	differ 7175 at east round 0 every pair whole (100707 asked) max 320 ms total 2730 ms
+MUT SURVIVED	world:701:iff:0	differ 0 at  max 38 ms total 2480 ms
+MUT SURVIVED	world:702:lit:53	differ 0 at  max 43 ms total 2490 ms
+MUT SURVIVED	world:706:eq:20	differ 0 at  max 48 ms total 2460 ms
+MUT killed	world:706:or:37	differ 5200 at east round 0 every pair whole (100707 asked) max 219 ms total 2154 ms
+MUT SURVIVED	world:706:ift:0	differ 0 at  max 19 ms total 1556 ms
+MUT killed	world:558:shr:40	differ 10920 at east round 0 every pair whole (100707 asked) max 24 ms total 132 ms
+MUT killed	world:558:shl:32	differ 10920 at east round 0 every pair whole (100707 asked) max 54 ms total 282 ms
+MUT killed	world:558:lit:35	differ 7711 at east round 0 every pair whole (100707 asked) max 36 ms total 285 ms
+MUT killed	world:558:lit:43	differ 10476 at east round 0 every pair whole (100707 asked) max 25 ms total 254 ms
+MUT killed	world:559:sel:0	differ 4397 at east round 0 every pair whole (100707 asked) max 5 ms total 79 ms
+MUT SURVIVED	world:690:lit:43	differ 0 at  max 18 ms total 1644 ms
+MUT SURVIVED	world:690:lit:53	differ 0 at  max 23 ms total 1608 ms
+MUT killed	world:159:le:31	differ 3 at east round 0 every pair whole (100707 asked) max 16 ms total 98 ms
+MUT killed	world:159:ge:9	differ 3121 at east round 0 every pair whole (100707 asked) max 92 ms total 703 ms
+MUT killed	world:159:and:26	differ 8 at east round 0 every pair whole (100707 asked) max 22 ms total 102 ms
+MUT killed	world:759:mul:14	differ 3 at west round 0 every pair whole (89184 asked) max 26 ms total 811 ms
+MUT SURVIVED	world:759:shr:20	differ 0 at  max 33 ms total 1747 ms
+MUT killed	world:759:lit:23	differ 1 at east round 0 every pair whole (100707 asked) max 19 ms total 190 ms
+MUT SURVIVED	world:760:gt:52	differ 0 at  max 27 ms total 1923 ms
+MUT SURVIVED	world:760:add:26	differ 0 at  max 42 ms total 1839 ms
+MUT killed	world:760:shr:19	differ 2 at east round 0 every pair whole (100707 asked) max 36 ms total 119 ms
+MUT SURVIVED	world:760:band:40	differ 0 at  max 17 ms total 1437 ms
+MUT SURVIVED	world:760:band:56	differ 0 at  max 17 ms total 1499 ms
+MUT SURVIVED	world:760:lit:22	differ 0 at  max 18 ms total 1499 ms
+MUT SURVIVED	world:760:hex:43	differ 0 at  max 32 ms total 1504 ms
+MUT SURVIVED	world:760:hex:59	differ 0 at  max 18 ms total 1524 ms
+MUT SURVIVED	world:761:gt:37	differ 0 at  max 27 ms total 1507 ms
+MUT killed	world:761:sub:24	differ 2 at east round 0 every pair whole (100707 asked) max 21 ms total 155 ms
+MUT killed	world:761:sel:0	differ 3 at east round 0 every pair whole (100707 asked) max 18 ms total 190 ms
+MUT SURVIVED	world:761:lit:19	differ 0 at  max 48 ms total 1818 ms
+MUT SURVIVED	world:762:lt:9	differ 0 at  max 35 ms total 1933 ms
+MUT killed	world:762:ift:0	differ 3 at west round 0 every pair whole (89184 asked) max 35 ms total 871 ms
+MUT SURVIVED	world:762:iff:0	differ 0 at  max 30 ms total 1634 ms
+MUT SURVIVED	world:765:min:7	differ 0 at  max 15 ms total 1565 ms
+MUT SURVIVED	world:765:min:17	differ 0 at  max 33 ms total 2832 ms
+MUT killed	world:840:lit:33	differ 2 at west round 0 every pair whole (89184 asked) max 53 ms total 1102 ms
+MUT SURVIVED	world:840:lit:37	differ 0 at  max 49 ms total 1801 ms
+MUT SURVIVED	world:841:lit:9	differ 0 at  max 27 ms total 1856 ms
+MUT SURVIVED	world:842:lit:27	differ 0 at  max 22 ms total 1612 ms
+MUT SURVIVED	world:843:lit:27	differ 0 at  max 35 ms total 1572 ms
+MUT SURVIVED	world:844:lit:14	differ 0 at  max 19 ms total 1558 ms
+MUT SURVIVED	world:845:lit:15	differ 0 at  max 19 ms total 1566 ms
+MUT SURVIVED	world:846:lit:9	differ 0 at  max 25 ms total 1641 ms
+MUT killed	world:847:lit:22	differ 2 at west round 0 every pair whole (89184 asked) max 22 ms total 913 ms
+MUT killed	world:850:lt:19	differ 2 at west round 0 every pair whole (89184 asked) max 31 ms total 864 ms
+MUT killed	world:850:adda:26	differ 2 at west round 0 every pair whole (89184 asked) max 14 ms total 783 ms
+MUT SURVIVED	world:850:lit:13	differ 0 at  max 20 ms total 1519 ms
+MUT killed	world:850:lit:29	differ 2 at east round 0 every pair whole (100707 asked) max 16 ms total 157 ms
+MUT SURVIVED	world:852:shl:9	differ 0 at  max 30 ms total 1505 ms
+MUT SURVIVED	world:852:ora:3	differ 0 at  max 36 ms total 1506 ms
+MUT killed	world:835:add:44	differ 2 at west round 0 every pair whole (89184 asked) max 38 ms total 853 ms
+MUT SURVIVED	world:835:sub:35	differ 0 at  max 45 ms total 1800 ms
+MUT SURVIVED	world:835:sub:64	differ 0 at  max 30 ms total 1912 ms
+MUT SURVIVED	world:835:div:73	differ 0 at  max 17 ms total 1842 ms
+MUT killed	world:835:shl:13	differ 2 at west round 0 every pair whole (89184 asked) max 17 ms total 834 ms
+MUT killed	world:835:shl:51	differ 2 at west round 0 every pair whole (89184 asked) max 30 ms total 901 ms
+MUT SURVIVED	world:835:lit:48	differ 0 at  max 17 ms total 1504 ms
+MUT SURVIVED	world:835:lit:76	differ 0 at  max 26 ms total 1582 ms
+MUT SURVIVED	world:836:ge:20	differ 0 at  max 30 ms total 1627 ms
+MUT SURVIVED	world:836:ge:45	differ 0 at  max 21 ms total 1608 ms
+MUT SURVIVED	world:836:ge:77	differ 0 at  max 40 ms total 1538 ms
+MUT SURVIVED	world:836:shl:55	differ 0 at  max 25 ms total 1534 ms
+MUT SURVIVED	world:836:shl:87	differ 0 at  max 29 ms total 1438 ms
+MUT SURVIVED	world:836:bor:29	differ 0 at  max 21 ms total 1497 ms
+MUT SURVIVED	world:836:bor:61	differ 0 at  max 22 ms total 1489 ms
+MUT SURVIVED	world:852:lit:6	differ 0 at  max 34 ms total 1715 ms
+MUT SURVIVED	world:852:del:0	differ 0 at  max 32 ms total 1849 ms
+MUT SURVIVED	world:857:lt:11	differ 0 at  max 43 ms total 1860 ms
+MUT SURVIVED	world:857:add:5	differ 0 at  max 31 ms total 1909 ms
+MUT killed	world:857:lit:8	differ 1 at east round 0 every pair whole (100707 asked) max 29 ms total 148 ms
+MUT SURVIVED	world:857:ift:0	differ 0 at  max 23 ms total 2030 ms
+MUT SURVIVED	world:857:iff:0	differ 0 at  max 46 ms total 2722 ms
+MUT SURVIVED	world:858:sub:28	differ 0 at  max 83 ms total 3225 ms
+MUT SURVIVED	world:858:div:37	differ 0 at  max 48 ms total 3093 ms
+MUT SURVIVED	world:858:shl:15	differ 0 at  max 53 ms total 3001 ms
+MUT killed	world:858:lit:12	differ 2 at west round 0 every pair whole (89184 asked) max 40 ms total 1712 ms
+MUT SURVIVED	world:858:lit:40	differ 0 at  max 32 ms total 3030 ms
+MUT killed	world:859:add:43	differ 2 at west round 0 every pair whole (89184 asked) max 61 ms total 1696 ms
+MUT SURVIVED	world:859:sub:34	differ 0 at  max 29 ms total 2991 ms
+MUT SURVIVED	world:859:mul:50	differ 0 at  max 58 ms total 3784 ms
+MUT SURVIVED	world:859:shr:83	differ 0 at  max 31 ms total 1328 ms
+MUT SURVIVED	world:859:shr:103	differ 0 at  max 17 ms total 1518 ms
+MUT SURVIVED	world:859:shl:12	differ 0 at  max 15 ms total 1415 ms
+MUT killed	world:859:band:68	differ 1 at east round 0 every pair whole (100707 asked) max 15 ms total 126 ms
+MUT killed	world:859:band:89	differ 3 at west round 0 every pair whole (89184 asked) max 16 ms total 735 ms
+MUT SURVIVED	world:859:lit:71	differ 0 at  max 17 ms total 1435 ms
+MUT killed	world:859:lit:86	differ 1 at west round 0 every pair whole (89184 asked) max 25 ms total 838 ms
+MUT killed	world:859:lit:92	differ 3 at west round 0 every pair whole (89184 asked) max 17 ms total 816 ms
+MUT SURVIVED	world:859:lit:106	differ 0 at  max 16 ms total 1466 ms
+MUT killed	world:860:add:32	differ 2 at west round 0 every pair whole (89184 asked) max 18 ms total 787 ms
+MUT SURVIVED	world:860:lit:35	differ 0 at  max 29 ms total 1519 ms
+MUT SURVIVED	world:861:xor:31	differ 0 at  max 28 ms total 1592 ms
+MUT killed	world:862:eq:31	differ 1 at east round 0 every pair whole (100707 asked) max 22 ms total 147 ms
+MUT SURVIVED	world:862:shr:16	differ 0 at  max 24 ms total 2151 ms
+MUT killed	world:862:band:24	differ 2 at west round 0 every pair whole (89184 asked) max 18 ms total 1078 ms
+MUT SURVIVED	ID900	differ 0 at  max 42 ms total 1540 ms
+MUT SURVIVED	world:865:div:44	differ 0 at  max 18 ms total 1449 ms
+MUT killed	world:865:div:56	differ 1 at east round 0 every pair whole (100707 asked) max 16 ms total 102 ms
+MUT SURVIVED	world:865:div:71	differ 0 at  max 18 ms total 1438 ms
+MUT SURVIVED	world:865:lit:26	differ 0 at  max 17 ms total 1435 ms
+MUT SURVIVED	world:865:lit:47	differ 0 at  max 17 ms total 1484 ms
+MUT SURVIVED	world:865:lit:52	differ 0 at  max 17 ms total 1468 ms
+MUT SURVIVED	world:865:lit:59	differ 0 at  max 18 ms total 1424 ms
+MUT SURVIVED	world:865:lit:74	differ 0 at  max 30 ms total 1542 ms
+MUT SURVIVED	world:866:add:30	differ 0 at  max 20 ms total 1604 ms
+MUT SURVIVED	world:866:sub:37	differ 0 at  max 19 ms total 1776 ms
+MUT SURVIVED	world:866:lit:40	differ 0 at  max 17 ms total 1329 ms
+MUT SURVIVED	world:866:del:0	differ 0 at  max 17 ms total 1312 ms
+MUT SURVIVED	world:867:add:44	differ 0 at  max 19 ms total 1400 ms
+MUT SURVIVED	world:867:sub:51	differ 0 at  max 18 ms total 1397 ms
+MUT killed	world:871:lnot:23	differ 2 at west round 0 every pair whole (89184 asked) max 31 ms total 745 ms
+MUT killed	world:871:lit:7	differ 1 at west round 0 every pair whole (89184 asked) max 17 ms total 816 ms
+MUT killed	world:871:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 18 ms total 802 ms
+MUT SURVIVED	world:873:add:44	differ 0 at  max 13 ms total 1292 ms
+MUT SURVIVED	world:873:lit:47	differ 0 at  max 16 ms total 1301 ms
+MUT SURVIVED	world:873:del:0	differ 0 at  max 12 ms total 1287 ms
+MUT killed	world:874:eq:6	differ 1 at east round 0 every pair whole (100707 asked) max 14 ms total 99 ms
+MUT killed	world:874:ift:0	differ 3 at east round 0 every pair whole (100707 asked) max 14 ms total 97 ms
+MUT SURVIVED	world:874:iff:0	differ 0 at  max 12 ms total 1276 ms
+MUT SURVIVED	world:875:del:0	differ 0 at  max 16 ms total 1322 ms
+MUT killed	world:876:del:0	differ 1 at east round 0 every pair whole (100707 asked) max 15 ms total 100 ms
+MUT killed	world:877:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 17 ms total 706 ms
+MUT killed	world:878:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 16 ms total 699 ms
+MUT SURVIVED	world:879:del:0	differ 0 at  max 12 ms total 1267 ms
+MUT SURVIVED	world:882:lit:18	differ 0 at  max 19 ms total 1341 ms
+MUT SURVIVED	world:862:lit:27	differ 0 at  max 43 ms total 2947 ms
+MUT SURVIVED	world:862:lit:34	differ 0 at  max 35 ms total 2990 ms
+MUT SURVIVED	world:863:xor:32	differ 0 at  max 61 ms total 3048 ms
+MUT SURVIVED	world:864:shr:36	differ 0 at  max 57 ms total 3023 ms
+MUT SURVIVED	world:864:shr:46	differ 0 at  max 40 ms total 2948 ms
+MUT killed	world:864:band:53	differ 1 at east round 0 every pair whole (100707 asked) max 34 ms total 302 ms
+MUT SURVIVED	world:864:lit:39	differ 0 at  max 80 ms total 3744 ms
+MUT SURVIVED	world:864:lit:49	differ 0 at  max 71 ms total 3306 ms
+MUT SURVIVED	world:864:hex:66	differ 0 at  max 57 ms total 3097 ms
+MUT SURVIVED	world:865:add:14	differ 0 at  max 39 ms total 3191 ms
+MUT SURVIVED	world:865:add:28	differ 0 at  max 42 ms total 3063 ms
+MUT SURVIVED	world:865:add:49	differ 0 at  max 77 ms total 3211 ms
+MUT killed	world:865:sub:64	differ 1 at east round 0 every pair whole (100707 asked) max 30 ms total 284 ms
+MUT SURVIVED	world:865:mul:36	differ 0 at  max 85 ms total 3021 ms
+MUT SURVIVED	world:865:div:23	differ 0 at  max 59 ms total 3218 ms
+MUT SURVIVED	world:836:lit:58	differ 0 at  max 33 ms total 1530 ms
+MUT SURVIVED	world:836:lit:90	differ 0 at  max 18 ms total 1467 ms
+MUT killed	world:837:ge:20	differ 1 at west round 0 every pair whole (89184 asked) max 17 ms total 824 ms
+MUT killed	world:837:ge:45	differ 2 at west round 0 every pair whole (89184 asked) max 17 ms total 841 ms
+MUT SURVIVED	world:837:ge:77	differ 0 at  max 22 ms total 1527 ms
+MUT killed	world:837:shl:55	differ 2 at west round 0 every pair whole (89184 asked) max 49 ms total 906 ms
+MUT SURVIVED	world:837:shl:87	differ 0 at  max 25 ms total 1627 ms
+MUT SURVIVED	world:837:bor:29	differ 0 at  max 32 ms total 1766 ms
+MUT SURVIVED	world:837:bor:61	differ 0 at  max 45 ms total 1874 ms
+MUT killed	world:837:lit:58	differ 1 at east round 0 every pair whole (100707 asked) max 22 ms total 172 ms
+MUT SURVIVED	world:837:lit:90	differ 0 at  max 36 ms total 1927 ms
+MUT SURVIVED	world:839:xor:9	differ 0 at  max 18 ms total 1627 ms
+MUT LIMIT	world:840:add:30	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	world:867:sel:0	differ 1 at east round 0 every pair whole (100707 asked) max 36 ms total 241 ms
+MUT SURVIVED	world:867:lit:54	differ 0 at  max 52 ms total 2968 ms
+MUT SURVIVED	world:867:del:0	differ 0 at  max 47 ms total 3000 ms
+MUT killed	world:868:add:20	differ 2 at west round 0 every pair whole (89184 asked) max 44 ms total 1656 ms
+MUT killed	world:868:mul:13	differ 3 at west round 0 every pair whole (89184 asked) max 61 ms total 1677 ms
+MUT killed	world:868:lit:11	differ 2 at west round 0 every pair whole (89184 asked) max 46 ms total 1690 ms
+MUT killed	world:868:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 29 ms total 1674 ms
+MUT killed	world:869:del:0	differ 2 at west round 0 every pair whole (89184 asked) max 60 ms total 1655 ms
+MUT SURVIVED	world:870:adda:10	differ 0 at  max 33 ms total 2941 ms
+MUT SURVIVED	world:870:sel:0	differ 0 at  max 64 ms total 3112 ms
+MUT SURVIVED	world:870:lit:21	differ 0 at  max 31 ms total 2060 ms
+MUT SURVIVED	world:870:lit:25	differ 0 at  max 24 ms total 1587 ms
+MUT SURVIVED	world:870:del:0	differ 0 at  max 24 ms total 1678 ms
+MUT SURVIVED	world:871:add:16	differ 0 at  max 29 ms total 1766 ms
+MUT killed	world:871:mul:9	differ 2 at west round 0 every pair whole (89184 asked) max 19 ms total 902 ms
+MUT SURVIVED	world:883:add:18	differ 0 at  max 61 ms total 2726 ms
+MUT SURVIVED	world:883:add:28	differ 0 at  max 43 ms total 2890 ms
+MUT SURVIVED	world:883:add:38	differ 0 at  max 28 ms total 2791 ms
+MUT SURVIVED	world:885:lt:19	differ 0 at  max 82 ms total 2889 ms
+MUT SURVIVED	world:885:le:28	differ 0 at  max 29 ms total 2720 ms
+MUT SURVIVED	world:885:and:23	differ 0 at  max 44 ms total 2734 ms
+MUT SURVIVED	world:885:adda:37	differ 0 at  max 23 ms total 1610 ms
+MUT SURVIVED	world:885:lit:13	differ 0 at  max 16 ms total 1577 ms
+MUT SURVIVED	world:885:lit:40	differ 0 at  max 22 ms total 1921 ms
+MUT SURVIVED	world:887:suba:5	differ 0 at  max 20 ms total 1717 ms
+MUT killed	world:887:del:0	differ 2 at west round 0 every pair whole (89184 asked) max 48 ms total 944 ms
+MUT SURVIVED	world:888:min:13	differ 0 at  max 25 ms total 1691 ms
+MUT SURVIVED	world:888:max:32	differ 0 at  max 46 ms total 1927 ms
+MUT killed	world:888:add:39	differ 3 at west round 0 every pair whole (89184 asked) max 26 ms total 1730 ms
+MUT SURVIVED	world:888:div:29	differ 0 at  max 22 ms total 2105 ms
+MUT killed	world:888:shl:22	differ 3 at west round 0 every pair whole (89184 asked) max 30 ms total 709 ms
+MUT SURVIVED	ID960	differ 0 at  max 17 ms total 1287 ms
+MUT SURVIVED	world:888:lit:25	differ 0 at  max 16 ms total 1362 ms
+MUT SURVIVED	world:888:lit:48	differ 0 at  max 17 ms total 1353 ms
+MUT SURVIVED	world:888:hex:53	differ 0 at  max 24 ms total 1575 ms
+MUT SURVIVED	world:889:add:95	differ 0 at  max 35 ms total 1802 ms
+MUT SURVIVED	world:889:mul:25	differ 0 at  max 24 ms total 1518 ms
+MUT SURVIVED	world:889:mul:45	differ 0 at  max 27 ms total 1485 ms
+MUT SURVIVED	world:889:mul:91	differ 0 at  max 31 ms total 1512 ms
+MUT killed	world:889:shl:69	differ 3 at west round 0 every pair whole (89184 asked) max 17 ms total 889 ms
+MUT SURVIVED	world:889:band:101	differ 0 at  max 34 ms total 2103 ms
+MUT killed	world:889:bor:76	differ 3 at west round 0 every pair whole (89184 asked) max 14 ms total 980 ms
+MUT SURVIVED	world:889:lit:72	differ 0 at  max 22 ms total 1987 ms
+MUT SURVIVED	world:889:lit:89	differ 0 at  max 275 ms total 4323 ms
+MUT SURVIVED	world:889:lit:98	differ 0 at  max 18 ms total 1819 ms
+MUT SURVIVED	world:889:hex:104	differ 0 at  max 34 ms total 1619 ms
+MUT killed	world:890:eq:6	differ 3 at east round 0 every pair whole (100707 asked) max 14 ms total 138 ms
+MUT killed	world:890:ift:0	differ 3 at east round 0 every pair whole (100707 asked) max 17 ms total 160 ms
+MUT SURVIVED	world:890:iff:0	differ 0 at  max 24 ms total 1628 ms
+MUT SURVIVED	world:891:del:0	differ 0 at  max 23 ms total 1738 ms
+MUT killed	world:893:suba:5	differ 3 at west round 0 every pair whole (89184 asked) max 18 ms total 935 ms
+MUT killed	world:893:del:0	differ 3 at west round 0 every pair whole (89184 asked) max 28 ms total 941 ms
+MUT SURVIVED	world:479:add:30	differ 0 at  max 28 ms total 1690 ms
+MUT SURVIVED	world:479:sub:37	differ 0 at  max 30 ms total 1933 ms
+MUT SURVIVED	world:480:eq:13	differ 0 at  max 30 ms total 2422 ms
+MUT SURVIVED	world:480:lit:16	differ 0 at  max 28 ms total 2814 ms
+MUT SURVIVED	world:480:ift:0	differ 0 at  max 276 ms total 3482 ms
+MUT SURVIVED	world:480:iff:0	differ 0 at  max 17 ms total 1545 ms
+MUT SURVIVED	world:481:t:37	differ 0 at  max 25 ms total 1696 ms
+MUT SURVIVED	world:481:f:43	differ 0 at  max 371 ms total 2749 ms
+MUT SURVIVED	world:483:shr:44	differ 0 at  max 31 ms total 1536 ms
+MUT SURVIVED	world:484:sub:31	differ 0 at  max 19 ms total 1804 ms
+MUT SURVIVED	world:484:sub:50	differ 0 at  max 22 ms total 1532 ms
+MUT SURVIVED	world:484:sub:67	differ 0 at  max 27 ms total 1460 ms
+MUT SURVIVED	world:485:shl:14	differ 0 at  max 17 ms total 1482 ms
+MUT SURVIVED	world:485:lit:11	differ 0 at  max 19 ms total 1606 ms
+MUT SURVIVED	world:487:le:49	differ 0 at  max 31 ms total 2144 ms
+MUT SURVIVED	world:487:le:69	differ 0 at  max 41 ms total 2394 ms
+MUT SURVIVED	world:487:ge:8	differ 0 at  max 286 ms total 3630 ms
+MUT SURVIVED	world:487:ge:25	differ 0 at  max 112 ms total 2100 ms
+MUT SURVIVED	world:487:or:18	differ 0 at  max 18 ms total 1803 ms
+MUT SURVIVED	world:487:or:35	differ 0 at  max 381 ms total 3537 ms
+MUT SURVIVED	world:487:or:55	differ 0 at  max 485 ms total 3600 ms
+MUT SURVIVED	world:487:add:41	differ 0 at  max 37 ms total 2190 ms
+MUT SURVIVED	world:487:add:61	differ 0 at  max 27 ms total 1719 ms
+MUT SURVIVED	world:487:lit:52	differ 0 at  max 35 ms total 1737 ms
+MUT SURVIVED	world:487:lit:72	differ 0 at  max 46 ms total 2483 ms
+MUT SURVIVED	world:487:ift:0	differ 0 at  max 21 ms total 2197 ms
+MUT SURVIVED	world:487:iff:0	differ 0 at  max 289 ms total 3280 ms
+MUT SURVIVED	world:488:t:37	differ 0 at  max 20 ms total 1589 ms
+MUT SURVIVED	world:488:f:43	differ 0 at  max 18 ms total 1666 ms
+MUT SURVIVED	world:490:min:12	differ 0 at  max 384 ms total 2803 ms
+MUT SURVIVED	world:491:sub:39	differ 0 at  max 21 ms total 1525 ms
+MUT SURVIVED	world:491:shr:47	differ 0 at  max 298 ms total 2445 ms
+MUT SURVIVED	world:491:band:20	differ 0 at  max 24 ms total 1582 ms
+MUT SURVIVED	world:491:lit:42	differ 0 at  max 17 ms total 1563 ms
+MUT SURVIVED	world:492:sub:28	differ 0 at  max 18 ms total 1502 ms
+MUT SURVIVED	world:492:shr:19	differ 0 at  max 19 ms total 1487 ms
+MUT SURVIVED	world:492:lit:31	differ 0 at  max 22 ms total 1673 ms
+MUT SURVIVED	world:493:add:25	differ 0 at  max 18 ms total 1599 ms
+MUT killed	world:494:hex:33	differ 309485 at east round 0 every pair whole (100707 asked) max 67 ms total 119 ms
+MUT killed	world:494:hex:78	differ 87825 at west round 0 every pair whole (89184 asked) max 13 ms total 775 ms
+MUT killed	world:494:ift:0	differ 87825 at west round 0 every pair whole (89184 asked) max 537 ms total 1857 ms
+MUT killed	world:494:iff:0	differ 87825 at west round 0 every pair whole (89184 asked) max 18 ms total 828 ms
+MUT killed	world:495:t:36	differ 87825 at west round 0 every pair whole (89184 asked) max 15 ms total 875 ms
+MUT killed	world:495:t:42	differ 87825 at west round 0 every pair whole (89184 asked) max 16 ms total 765 ms
+MUT killed	world:498:le:72	differ 87825 at west round 0 every pair whole (89184 asked) max 15 ms total 796 ms
+MUT killed	world:498:ge:38	differ 87825 at west round 0 every pair whole (89184 asked) max 15 ms total 757 ms
+MUT killed	world:498:and:56	differ 87825 at west round 0 every pair whole (89184 asked) max 14 ms total 857 ms
+MUT killed	world:498:add:64	differ 87825 at west round 0 every pair whole (89184 asked) max 15 ms total 754 ms
+MUT killed	world:498:t:26	differ 87825 at west round 0 every pair whole (89184 asked) max 27 ms total 728 ms
+MUT killed	world:498:lit:51	differ 87825 at west round 0 every pair whole (89184 asked) max 20 ms total 933 ms
+MUT killed	world:1047:gt:9	differ 87825 at west round 0 every pair whole (89184 asked) max 14 ms total 798 ms
+MUT killed	world:1047:ift:0	differ 87825 at west round 0 every pair whole (89184 asked) max 18 ms total 828 ms
+MUT killed	world:1047:iff:0	differ 87825 at west round 0 every pair whole (89184 asked) max 15 ms total 835 ms
+MUT SURVIVED	world:493:add:64	differ 0 at  max 49 ms total 2030 ms
+MUT SURVIVED	world:493:add:105	differ 0 at  max 19 ms total 1708 ms
+MUT SURVIVED	ID1020	differ 0 at  max 382 ms total 3617 ms
+MUT SURVIVED	world:493:sub:33	differ 0 at  max 486 ms total 3600 ms
+MUT SURVIVED	world:493:sub:83	differ 0 at  max 48 ms total 2345 ms
+MUT SURVIVED	world:493:mul:47	differ 0 at  max 21 ms total 1765 ms
+MUT SURVIVED	world:493:mul:74	differ 0 at  max 23 ms total 1621 ms
+MUT SURVIVED	world:493:mul:91	differ 0 at  max 20 ms total 1579 ms
+MUT SURVIVED	world:493:div:100	differ 0 at  max 31 ms total 1629 ms
+MUT SURVIVED	world:493:lit:103	differ 0 at  max 45 ms total 1722 ms
+MUT SURVIVED	world:494:ne:13	differ 0 at  max 41 ms total 1798 ms
+MUT SURVIVED	world:494:ne:58	differ 0 at  max 28 ms total 1706 ms
+MUT SURVIVED	world:494:or:46	differ 0 at  max 21 ms total 1614 ms
+MUT SURVIVED	world:494:xor:30	differ 0 at  max 44 ms total 1839 ms
+MUT SURVIVED	world:494:xor:75	differ 0 at  max 37 ms total 2200 ms
+MUT SURVIVED	world:1048:sub:23	differ 0 at  max 45 ms total 2782 ms
+MUT SURVIVED	world:1048:shr:6	differ 0 at  max 43 ms total 1924 ms
+MUT SURVIVED	world:1048:del:0	differ 0 at  max 29 ms total 1731 ms
+MUT SURVIVED	world:1049:del:0	differ 0 at  max 32 ms total 1555 ms
+MUT SURVIVED	world:1052:le:9	differ 0 at  max 29 ms total 1588 ms
+MUT SURVIVED	world:1052:ift:0	differ 0 at  max 15 ms total 1540 ms
+MUT SURVIVED	world:1052:iff:0	differ 0 at  max 24 ms total 1744 ms
+MUT SURVIVED	world:1053:del:0	differ 0 at  max 43 ms total 1793 ms
+MUT killed	world:1055:del:0	differ 3 at east round 0 every pair whole (100707 asked) max 10 ms total 96 ms
+MUT SURVIVED	world:1057:add:14	differ 0 at  max 27 ms total 1766 ms
+MUT killed	world:1057:sub:31	differ 1 at west round 0 every pair whole (89184 asked) max 21 ms total 985 ms
+MUT SURVIVED	world:1057:sub:52	differ 0 at  max 44 ms total 1953 ms
+MUT killed	world:1057:mul:36	differ 1 at west round 0 every pair whole (89184 asked) max 51 ms total 1015 ms
+MUT SURVIVED	world:1057:lit:12	differ 0 at  max 124 ms total 3201 ms
+MUT SURVIVED	world:1057:lit:34	differ 0 at  max 20 ms total 1599 ms
+MUT killed	pose:1308:add:24	differ 26251 at east round 38 whole and in part (4704 asked) max 40 ms total 615 ms
+MUT killed	pose:1308:add:58	differ 4 at east round 39 whole and in part (1884 asked) max 14 ms total 644 ms
+MUT killed	pose:1308:lit:27	differ 8095 at east round 39 whole and in part (1884 asked) max 20 ms total 627 ms
+MUT killed	pose:1308:lit:61	differ 3 at east round 40 whole and in part (436 asked) max 14 ms total 612 ms
+MUT killed	pose:1308:ift:0	differ 2068 at east round 37 whole and in part (372 asked) max 14 ms total 562 ms
+MUT killed	pose:1308:iff:0	differ 5 at east round 37 whole and in part (372 asked) max 19 ms total 587 ms
+MUT killed	pose:1309:t:7	differ 5 at east round 37 whole and in part (372 asked) max 19 ms total 596 ms
+MUT killed	pose:1312:f:7	differ 2068 at east round 37 whole and in part (372 asked) max 29 ms total 1009 ms
+MUT killed	world:228:ne:9	differ 3275 at east round 0 every pair whole (100707 asked) max 37 ms total 159 ms
+MUT killed	world:228:ne:46	differ 3275 at east round 0 every pair whole (100707 asked) max 30 ms total 203 ms
+MUT killed	world:228:and:25	differ 4622 at east round 0 every pair whole (100707 asked) max 6 ms total 104 ms
+MUT killed	world:228:band:30	differ 4622 at east round 0 every pair whole (100707 asked) max 16 ms total 139 ms
+MUT killed	world:228:lit:49	differ 4622 at east round 0 every pair whole (100707 asked) max 9 ms total 111 ms
+MUT killed	world:385:eq:82	differ 11913 at east round 0 every pair whole (100707 asked) max 1 ms total 42 ms
+MUT SURVIVED	world:385:ne:29	differ 0 at  max 23 ms total 1524 ms
+MUT SURVIVED	world:805:lit:48	differ 0 at  max 33 ms total 1660 ms
+MUT SURVIVED	world:805:lit:55	differ 0 at  max 26 ms total 1798 ms
+MUT killed	pose:1305:lt:19	differ 1938 at east round 39 whole and in part (1884 asked) max 20 ms total 719 ms
+MUT SURVIVED	ID1080	differ 0 at  max 27 ms total 1796 ms
+MUT killed	pose:1305:adda:30	differ 7 at east round 39 whole and in part (1884 asked) max 17 ms total 638 ms
+MUT killed	pose:1305:lit:13	differ 5 at east round 37 whole and in part (372 asked) max 22 ms total 672 ms
+MUT killed	pose:1305:lit:33	differ 5 at east round 39 whole and in part (1884 asked) max 47 ms total 2140 ms
+MUT killed	pose:1306:add:16	differ 4702 at east round 39 whole and in part (1884 asked) max 15 ms total 753 ms
+MUT killed	pose:1306:mul:28	differ 5 at east round 37 whole and in part (372 asked) max 18 ms total 673 ms
+MUT killed	pose:1307:add:45	differ 76 at east round 37 whole and in part (372 asked) max 16 ms total 537 ms
+MUT killed	pose:1307:add:64	differ 6 at east round 37 whole and in part (372 asked) max 15 ms total 538 ms
+MUT killed	pose:1307:add:83	differ 5 at east round 37 whole and in part (372 asked) max 14 ms total 626 ms
+MUT killed	pose:1307:lit:48	differ 76 at east round 37 whole and in part (372 asked) max 25 ms total 542 ms
+MUT killed	pose:1307:lit:67	differ 6 at east round 37 whole and in part (372 asked) max 14 ms total 585 ms
+MUT killed	pose:1307:lit:86	differ 5 at east round 37 whole and in part (372 asked) max 24 ms total 586 ms
+MUT SURVIVED	world:1058:ge:10	differ 0 at  max 36 ms total 1784 ms
+MUT SURVIVED	world:1058:lit:13	differ 0 at  max 19 ms total 1624 ms
+MUT SURVIVED	world:1058:ift:0	differ 0 at  max 23 ms total 1493 ms
+MUT SURVIVED	world:1058:iff:0	differ 0 at  max 18 ms total 1404 ms
+MUT killed	world:1059:min:7	differ 3 at east round 0 every pair whole (100707 asked) max 15 ms total 105 ms
+MUT SURVIVED	world:1059:shl:13	differ 0 at  max 17 ms total 1503 ms
+MUT SURVIVED	world:1061:shr:9	differ 0 at  max 17 ms total 1460 ms
+MUT SURVIVED	world:805:eq:34	differ 0 at  max 27 ms total 1489 ms
+MUT SURVIVED	world:805:eq:52	differ 0 at  max 47 ms total 1774 ms
+MUT SURVIVED	world:805:ne:9	differ 0 at  max 30 ms total 2131 ms
+MUT SURVIVED	world:805:and:15	differ 0 at  max 17 ms total 1426 ms
+MUT SURVIVED	world:805:and:40	differ 0 at  max 25 ms total 1581 ms
+MUT SURVIVED	world:805:band:45	differ 0 at  max 30 ms total 1544 ms
+MUT SURVIVED	world:805:lit:12	differ 0 at  max 31 ms total 1540 ms
+MUT SURVIVED	world:805:lit:37	differ 0 at  max 35 ms total 1439 ms
+MUT killed	world:385:and:35	differ 11913 at east round 0 every pair whole (100707 asked) max 22 ms total 68 ms
+MUT killed	world:385:shr:46	differ 11913 at east round 0 every pair whole (100707 asked) max 2 ms total 34 ms
+MUT SURVIVED	world:385:band:13	differ 0 at  max 21 ms total 1468 ms
+MUT SURVIVED	world:385:band:68	differ 0 at  max 31 ms total 1502 ms
+MUT SURVIVED	world:385:lit:32	differ 0 at  max 20 ms total 1456 ms
+MUT SURVIVED	world:385:lit:85	differ 0 at  max 35 ms total 1668 ms
+MUT killed	world:388:shr:19	differ 1799 at east round 0 every pair whole (100707 asked) max 32 ms total 149 ms
+MUT killed	world:389:lt:9	differ 20 at east round 0 every pair whole (100707 asked) max 16 ms total 148 ms
+MUT killed	world:389:ift:0	differ 20 at east round 0 every pair whole (100707 asked) max 14 ms total 146 ms
+MUT killed	world:389:iff:0	differ 2592 at east round 0 every pair whole (100707 asked) max 8 ms total 93 ms
+MUT killed	world:390:f:7	differ 2592 at east round 0 every pair whole (100707 asked) max 7 ms total 94 ms
+MUT killed	world:392:sub:30	differ 1799 at east round 0 every pair whole (100707 asked) max 17 ms total 93 ms
+MUT SURVIVED	world:392:shr:13	differ 0 at  max 17 ms total 1557 ms
+MUT killed	world:393:sub:29	differ 1529 at east round 0 every pair whole (100707 asked) max 15 ms total 104 ms
+MUT killed	world:393:shr:12	differ 1799 at east round 0 every pair whole (100707 asked) max 18 ms total 98 ms
+MUT REFUSED	world:394:sub:21	Validation Error
+MUT killed	world:395:sub:15	differ 20 at east round 0 every pair whole (100707 asked) max 32 ms total 138 ms
+MUT killed	world:395:sub:42	differ 1799 at east round 0 every pair whole (100707 asked) max 21 ms total 146 ms
+MUT killed	world:395:shr:22	differ 1799 at east round 0 every pair whole (100707 asked) max 14 ms total 121 ms
+MUT killed	world:395:lit:18	differ 17 at east round 0 every pair whole (100707 asked) max 17 ms total 149 ms
+MUT SURVIVED	world:396:add:15	differ 0 at  max 18 ms total 1553 ms
+MUT killed	world:396:sub:42	differ 1799 at east round 0 every pair whole (100707 asked) max 16 ms total 138 ms
+MUT killed	world:396:shr:22	differ 1799 at east round 0 every pair whole (100707 asked) max 17 ms total 118 ms
+MUT SURVIVED	world:396:lit:18	differ 0 at  max 17 ms total 1466 ms
+MUT killed	world:397:add:30	differ 1799 at east round 0 every pair whole (100707 asked) max 16 ms total 91 ms
+MUT SURVIVED	world:397:lit:33	differ 0 at  max 19 ms total 1542 ms
+MUT killed	world:398:add:30	differ 1799 at east round 0 every pair whole (100707 asked) max 15 ms total 90 ms
+MUT killed	world:398:lit:33	differ 20 at east round 0 every pair whole (100707 asked) max 14 ms total 131 ms
+MUT killed	world:399:add:40	differ 1799 at east round 0 every pair whole (100707 asked) max 15 ms total 99 ms
+MUT killed	world:399:add:58	differ 1799 at east round 0 every pair whole (100707 asked) max 14 ms total 149 ms
+MUT killed	pose:1289:shr:31	differ 32 at east round 0 every pair whole (100707 asked) max 39 ms total 145 ms
+MUT killed	pose:1289:del:0	differ 32 at east round 0 every pair whole (100707 asked) max 17 ms total 154 ms
+MUT killed	pose:1291:eq:6	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 120 ms
+MUT killed	pose:1291:ne:62	differ 32 at east round 0 every pair whole (100707 asked) max 15 ms total 123 ms
+MUT SURVIVED	pose:1291:or:22	differ 0 at  max 16 ms total 1533 ms
+MUT SURVIVED	pose:1291:or:38	differ 0 at  max 18 ms total 1486 ms
+MUT killed	pose:1291:band:43	differ 32 at east round 0 every pair whole (100707 asked) max 28 ms total 116 ms
+MUT killed	pose:1291:ift:0	differ 32 at east round 0 every pair whole (100707 asked) max 16 ms total 123 ms
+MUT SURVIVED	pose:1291:iff:0	differ 0 at  max 26 ms total 1570 ms
+MUT killed	pose:1292:f:7	differ 1203 at east round 0 every pair whole (100707 asked) max 19 ms total 159 ms
+MUT killed	pose:1294:sub:54	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 104 ms
+MUT killed	pose:1294:shr:29	differ 32 at east round 0 every pair whole (100707 asked) max 24 ms total 117 ms
+MUT killed	pose:1294:band:43	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 123 ms
+MUT killed	pose:1294:hex:46	differ 3 at east round 0 every pair whole (100707 asked) max 14 ms total 109 ms
+MUT SURVIVED	pose:1295:ge:6	differ 0 at  max 23 ms total 1836 ms
+MUT killed	world:400:lit:70	differ 1799 at east round 0 every pair whole (100707 asked) max 31 ms total 108 ms
+MUT SURVIVED	world:585:ge:57	differ 0 at  max 22 ms total 1517 ms
+MUT SURVIVED	world:585:sub:30	differ 0 at  max 24 ms total 1517 ms
+MUT SURVIVED	world:585:shl:21	differ 0 at  max 16 ms total 1464 ms
+MUT killed	world:585:band:43	differ 1346 at east round 0 every pair whole (100707 asked) max 19 ms total 144 ms
+MUT killed	world:585:sel:0	differ 10 at east round 0 every pair whole (100707 asked) max 9 ms total 99 ms
+MUT SURVIVED	world:585:lit:14	differ 0 at  max 26 ms total 1362 ms
+MUT SURVIVED	world:585:lit:18	differ 0 at  max 22 ms total 1491 ms
+MUT SURVIVED	world:585:lit:46	differ 0 at  max 16 ms total 1419 ms
+MUT SURVIVED	pose:1287:lt:9	differ 0 at  max 16 ms total 1438 ms
+MUT SURVIVED	pose:1287:and:21	differ 0 at  max 30 ms total 1648 ms
+MUT killed	pose:1288:adda:2	differ 32 at east round 0 every pair whole (100707 asked) max 17 ms total 152 ms
+MUT killed	pose:1288:lit:5	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 165 ms
+MUT killed	pose:1288:del:0	differ 32 at east round 0 every pair whole (100707 asked) max 15 ms total 163 ms
+MUT killed	pose:1289:sub:53	differ 32 at east round 0 every pair whole (100707 asked) max 15 ms total 156 ms
+MUT killed	world:399:add:76	differ 1799 at east round 0 every pair whole (100707 asked) max 43 ms total 133 ms
+MUT killed	world:399:add:94	differ 1799 at east round 0 every pair whole (100707 asked) max 14 ms total 91 ms
+MUT SURVIVED	world:399:mul:35	differ 0 at  max 38 ms total 1667 ms
+MUT SURVIVED	world:399:mul:53	differ 0 at  max 36 ms total 1515 ms
+MUT SURVIVED	ID1140	differ 0 at  max 16 ms total 1402 ms
+MUT SURVIVED	world:399:mul:71	differ 0 at  max 21 ms total 1501 ms
+MUT SURVIVED	world:399:mul:89	differ 0 at  max 18 ms total 1510 ms
+MUT SURVIVED	world:399:lit:38	differ 0 at  max 19 ms total 1488 ms
+MUT SURVIVED	world:399:lit:56	differ 0 at  max 23 ms total 1493 ms
+MUT SURVIVED	world:399:lit:74	differ 0 at  max 23 ms total 1567 ms
+MUT SURVIVED	world:399:lit:92	differ 0 at  max 19 ms total 1685 ms
+MUT killed	world:400:eq:57	differ 1799 at east round 0 every pair whole (100707 asked) max 19 ms total 140 ms
+MUT killed	world:400:shr:31	differ 1799 at east round 0 every pair whole (100707 asked) max 16 ms total 135 ms
+MUT killed	world:400:band:39	differ 20 at east round 0 every pair whole (100707 asked) max 18 ms total 201 ms
+MUT SURVIVED	world:400:lit:52	differ 0 at  max 36 ms total 2484 ms
+MUT killed	pose:1295:ift:0	differ 32 at east round 0 every pair whole (100707 asked) max 34 ms total 127 ms
+MUT killed	pose:1295:iff:0	differ 1 at west round 0 every pair whole (89184 asked) max 16 ms total 855 ms
+MUT killed	pose:1296:f:7	differ 65 at east round 0 every pair whole (100707 asked) max 14 ms total 103 ms
+MUT killed	pose:1299:lit:29	differ 3 at east round 0 every pair whole (100707 asked) max 15 ms total 125 ms
+MUT REFUSED	pose:1300:sub:52	Validation Error
+MUT killed	pose:1300:shr:45	differ 6 at east round 0 every pair whole (100707 asked) max 19 ms total 103 ms
+MUT killed	pose:1300:lit:41	differ 18 at east round 0 every pair whole (100707 asked) max 14 ms total 106 ms
+MUT killed	pose:1300:lit:49	differ 6 at east round 0 every pair whole (100707 asked) max 15 ms total 109 ms
+MUT SURVIVED	pose:1301:lt:13	differ 0 at  max 18 ms total 1531 ms
+MUT killed	pose:1301:lt:36	differ 46 at east round 0 every pair whole (100707 asked) max 18 ms total 121 ms
+MUT killed	pose:1301:and:26	differ 129 at east round 0 every pair whole (100707 asked) max 15 ms total 161 ms
+MUT killed	pose:1301:add:17	differ 32 at east round 0 every pair whole (100707 asked) max 24 ms total 164 ms
+MUT killed	pose:1301:add:39	differ 32 at east round 0 every pair whole (100707 asked) max 27 ms total 166 ms
+MUT SURVIVED	world:418:shl:13	differ 0 at  max 37 ms total 1523 ms
+MUT killed	world:418:shl:43	differ 11980 at east round 0 every pair whole (100707 asked) max 13 ms total 94 ms
+MUT SURVIVED	row:1211:lit:64	differ 0 at  max 54 ms total 2580 ms
+MUT SURVIVED	row:1211:lit:81	differ 0 at  max 49 ms total 2667 ms
+MUT SURVIVED	world:677:lt:71	differ 0 at  max 28 ms total 2920 ms
+MUT killed	world:677:sub:36	differ 43 at east round 0 every pair whole (100707 asked) max 23 ms total 243 ms
+MUT killed	world:677:sub:55	differ 24 at east round 0 every pair whole (100707 asked) max 14 ms total 209 ms
+MUT killed	world:678:lt:45	differ 19 at east round 0 every pair whole (100707 asked) max 36 ms total 294 ms
+MUT SURVIVED	ID1260	differ 0 at  max 41 ms total 3083 ms
+MUT SURVIVED	world:678:ge:58	differ 0 at  max 500 ms total 3925 ms
+MUT SURVIVED	world:678:ne:23	differ 0 at  max 30 ms total 2581 ms
+MUT killed	world:678:and:40	differ 43 at east round 0 every pair whole (100707 asked) max 35 ms total 373 ms
+MUT killed	world:678:and:53	differ 43 at east round 0 every pair whole (100707 asked) max 38 ms total 342 ms
+MUT killed	pose:1255:sub:11	differ 32 at east round 0 every pair whole (100707 asked) max 25 ms total 234 ms
+MUT killed	pose:1256:add:11	differ 32 at east round 0 every pair whole (100707 asked) max 23 ms total 266 ms
+MUT SURVIVED	pose:1256:sub:18	differ 0 at  max 499 ms total 3823 ms
+MUT killed	pose:1256:lit:21	differ 27 at east round 0 every pair whole (100707 asked) max 42 ms total 234 ms
+MUT killed	world:418:shl:78	differ 15171 at east round 0 every pair whole (100707 asked) max 20 ms total 67 ms
+MUT killed	world:418:bor:34	differ 11980 at east round 0 every pair whole (100707 asked) max 2 ms total 41 ms
+MUT killed	world:418:bor:64	differ 15171 at east round 0 every pair whole (100707 asked) max 9 ms total 75 ms
+MUT killed	world:418:bor:98	differ 15171 at east round 0 every pair whole (100707 asked) max 4 ms total 51 ms
+MUT SURVIVED	world:421:shr:9	differ 0 at  max 31 ms total 1654 ms
+MUT SURVIVED	ID1200	differ 0 at  max 29 ms total 1670 ms
+MUT LIMIT	world:424:sub:52	differ 0 at east round 0: limit max 60010 ms total 60036 ms
+MUT killed	row:1209:mul:32	differ 4580 at east round 0 every pair whole (100707 asked) max 42 ms total 214 ms
+MUT LIMIT	row:1209:mul:63	differ 0 at east round 0: limit max 60010 ms total 60045 ms
+MUT SURVIVED	row:1210:lit:20	differ 0 at  max 46 ms total 1928 ms
+MUT SURVIVED	row:1210:hex:38	differ 0 at  max 19 ms total 1911 ms
+MUT SURVIVED	row:1210:hex:60	differ 0 at  max 36 ms total 2105 ms
+MUT LIMIT	row:1211:add:30	differ 0 at east round 0: limit max 60001 ms total 60036 ms
+MUT killed	world:430:lit:13	differ 6472 at east round 0 every pair whole (100707 asked) max 25 ms total 123 ms
+MUT SURVIVED	world:430:lit:41	differ 0 at  max 18 ms total 1392 ms
+MUT killed	world:427:sub:36	differ 13336 at east round 0 every pair whole (100707 asked) max 195 ms total 2018 ms
+MUT killed	world:427:shl:16	differ 13336 at east round 0 every pair whole (100707 asked) max 166 ms total 1937 ms
+MUT killed	world:427:band:8	differ 13336 at east round 0 every pair whole (100707 asked) max 184 ms total 1931 ms
+MUT killed	world:427:lit:13	differ 13336 at east round 0 every pair whole (100707 asked) max 720 ms total 3581 ms
+MUT killed	world:427:lit:39	differ 7655 at east round 0 every pair whole (100707 asked) max 19 ms total 159 ms
+MUT SURVIVED	world:831:sub:13	differ 0 at  max 503 ms total 3201 ms
+MUT SURVIVED	world:832:add:14	differ 0 at  max 497 ms total 3975 ms
+MUT SURVIVED	world:832:add:20	differ 0 at  max 222 ms total 3251 ms
+MUT SURVIVED	row:1208:mul:23	differ 0 at  max 26 ms total 2624 ms
+MUT LIMIT	row:1208:band:12	differ 0 at east round 0: limit max 60008 ms total 60064 ms
+MUT REFUSED	pose:1257:sub:27	Validation Error
+MUT killed	pose:1258:shr:15	differ 32 at east round 0 every pair whole (100707 asked) max 55 ms total 376 ms
+MUT LIMIT	pose:1259:shr:14	differ 0 at east round 0: limit max 60009 ms total 60019 ms
+MUT killed	pose:1272:le:24	differ 19 at east round 0 every pair whole (100707 asked) max 33 ms total 284 ms
+MUT LIMIT	pose:1272:adda:37	differ 0 at east round 0: limit max 60010 ms total 60018 ms
+MUT SURVIVED	pose:1266:del:0	differ 0 at  max 322 ms total 5600 ms
+MUT killed	pose:1268:max:12	differ 1 at east round 0 every pair whole (100707 asked) max 15 ms total 99 ms
+MUT killed	pose:1268:shl:25	differ 32 at east round 0 every pair whole (100707 asked) max 13 ms total 93 ms
+MUT killed	pose:1269:min:11	differ 5 at east round 0 every pair whole (100707 asked) max 14 ms total 102 ms
+MUT killed	pose:1269:add:25	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 96 ms
+MUT killed	pose:1269:sub:37	differ 5 at east round 0 every pair whole (100707 asked) max 14 ms total 96 ms
+MUT killed	pose:1269:shl:32	differ 32 at east round 0 every pair whole (100707 asked) max 14 ms total 93 ms
+MUT killed	pose:1269:lit:28	differ 5 at east round 0 every pair whole (100707 asked) max 14 ms total 95 ms
+MUT killed	pose:1269:lit:40	differ 5 at east round 0 every pair whole (100707 asked) max 14 ms total 94 ms
+MUT killed	pose:1270:le:24	differ 9 at east round 0 every pair whole (100707 asked) max 15 ms total 96 ms
+MUT LIMIT	pose:1270:adda:37	differ 0 at east round 0: limit max 60010 ms total 60018 ms
+MUT SURVIVED	world:295:lnot:4	differ 0 at  max 287 ms total 5215 ms
+MUT SURVIVED	world:295:ift:0	differ 0 at  max 294 ms total 5497 ms
+MUT SURVIVED	world:295:iff:0	differ 0 at  max 39 ms total 2893 ms
+MUT SURVIVED	world:296:lt:32	differ 0 at  max 74 ms total 3380 ms
+MUT SURVIVED	world:296:sel:0	differ 0 at  max 79 ms total 4091 ms
+MUT SURVIVED	world:296:lit:14	differ 0 at  max 103 ms total 3820 ms
+MUT SURVIVED	world:296:lit:34	differ 0 at  max 503 ms total 4643 ms
+MUT SURVIVED	ID1320	differ 0 at  max 79 ms total 3259 ms
+MUT SURVIVED	world:298:shr:33	differ 0 at  max 255 ms total 4258 ms
+MUT SURVIVED	world:298:band:47	differ 0 at  max 59 ms total 3560 ms
+MUT SURVIVED	world:298:not:50	differ 0 at  max 53 ms total 3728 ms
+MUT SURVIVED	world:299:lit:11	differ 0 at  max 77 ms total 3644 ms
+MUT SURVIVED	world:300:lt:19	differ 0 at  max 48 ms total 3285 ms
+MUT SURVIVED	world:300:adda:27	differ 0 at  max 30 ms total 2142 ms
+MUT SURVIVED	world:300:lit:13	differ 0 at  max 22 ms total 2154 ms
+MUT SURVIVED	world:300:lit:21	differ 0 at  max 128 ms total 3945 ms
+MUT SURVIVED	world:300:lit:30	differ 0 at  max 101 ms total 4017 ms
+MUT SURVIVED	world:301:add:28	differ 0 at  max 503 ms total 3885 ms
+MUT SURVIVED	world:301:add:53	differ 0 at  max 261 ms total 4315 ms
+MUT SURVIVED	world:301:mul:21	differ 0 at  max 69 ms total 3323 ms
+MUT SURVIVED	world:301:mul:46	differ 0 at  max 302 ms total 3961 ms
+MUT SURVIVED	world:301:shr:62	differ 0 at  max 46 ms total 3431 ms
+MUT SURVIVED	world:301:band:36	differ 0 at  max 114 ms total 3716 ms
+MUT SURVIVED	world:301:lit:19	differ 0 at  max 24 ms total 2280 ms
+MUT SURVIVED	world:301:lit:39	differ 0 at  max 18 ms total 1947 ms
+MUT SURVIVED	world:301:lit:44	differ 0 at  max 24 ms total 2084 ms
+MUT SURVIVED	world:301:lit:65	differ 0 at  max 215 ms total 2970 ms
+MUT SURVIVED	world:302:add:45	differ 0 at  max 22 ms total 1736 ms
+MUT SURVIVED	world:302:add:49	differ 0 at  max 20 ms total 1768 ms
+MUT SURVIVED	world:302:add:60	differ 0 at  max 28 ms total 1636 ms
+MUT SURVIVED	world:302:add:78	differ 0 at  max 122 ms total 2896 ms
+MUT SURVIVED	world:302:add:108	differ 0 at  max 255 ms total 3704 ms
+MUT SURVIVED	world:302:mul:101	differ 0 at  max 63 ms total 2763 ms
+MUT SURVIVED	world:302:lit:52	differ 0 at  max 41 ms total 2982 ms
+MUT SURVIVED	world:302:lit:63	differ 0 at  max 29 ms total 3184 ms
+MUT SURVIVED	world:302:lit:81	differ 0 at  max 64 ms total 3281 ms
+MUT SURVIVED	world:302:lit:99	differ 0 at  max 29 ms total 2010 ms
+MUT SURVIVED	world:302:lit:111	differ 0 at  max 21 ms total 1970 ms
+MUT SURVIVED	world:303:lnot:4	differ 0 at  max 29 ms total 2073 ms
+MUT SURVIVED	world:303:ift:0	differ 0 at  max 24 ms total 2089 ms
+MUT SURVIVED	world:303:iff:0	differ 0 at  max 23 ms total 2103 ms
+MUT SURVIVED	world:304:add:41	differ 0 at  max 217 ms total 2926 ms
+MUT SURVIVED	world:304:add:51	differ 0 at  max 40 ms total 2242 ms
+MUT SURVIVED	world:304:add:69	differ 0 at  max 27 ms total 1675 ms
+MUT SURVIVED	world:304:mul:92	differ 0 at  max 20 ms total 1458 ms
+MUT SURVIVED	world:312:ora:5	differ 0 at  max 42 ms total 2133 ms
+MUT SURVIVED	world:312:lit:14	differ 0 at  max 209 ms total 3557 ms
+MUT SURVIVED	world:312:del:0	differ 0 at  max 36 ms total 2445 ms
+MUT killed	record:1186:lt:26	differ 153 at west round 39 whole and in part (1349 asked) max 17 ms total 1429 ms
+MUT killed	record:1186:ne:9	differ 5 at east round 37 whole and in part (372 asked) max 16 ms total 507 ms
+MUT killed	record:1186:and:18	differ 5 at east round 37 whole and in part (372 asked) max 14 ms total 584 ms
+MUT killed	record:1186:ift:0	differ 5 at east round 37 whole and in part (372 asked) max 19 ms total 506 ms
+MUT SURVIVED	record:1186:iff:0	differ 0 at  max 17 ms total 1458 ms
+MUT SURVIVED	ID1380	differ 0 at  max 18 ms total 1621 ms
+MUT killed	record:1187:f:7	differ 23437 at east round 38 whole and in part (4704 asked) max 18 ms total 627 ms
+MUT killed	record:1189:eq:44	differ 5 at east round 37 whole and in part (372 asked) max 16 ms total 548 ms
+MUT killed	record:1189:sub:17	differ 2068 at east round 37 whole and in part (372 asked) max 13 ms total 553 ms
+MUT killed	record:1189:sel:0	differ 5 at east round 37 whole and in part (372 asked) max 14 ms total 536 ms
+MUT killed	record:1190:shl:19	differ 2 at east round 37 whole and in part (372 asked) max 24 ms total 544 ms
+MUT killed	record:1191:sub:51	differ 5 at east round 37 whole and in part (372 asked) max 15 ms total 541 ms
+MUT killed	record:1191:shr:18	differ 5 at east round 37 whole and in part (372 asked) max 37 ms total 691 ms
+MUT killed	record:1191:shl:35	differ 5 at east round 37 whole and in part (372 asked) max 18 ms total 694 ms
+MUT killed	record:1192:add:43	differ 15 at east round 39 whole and in part (1884 asked) max 14 ms total 764 ms
+MUT killed	record:1192:add:66	differ 5 at east round 37 whole and in part (372 asked) max 15 ms total 709 ms
+MUT killed	record:1192:sub:20	differ 3 at east round 40 whole and in part (436 asked) max 16 ms total 719 ms
+MUT killed	record:1192:shr:27	differ 5 at east round 37 whole and in part (372 asked) max 17 ms total 618 ms
+MUT killed	record:1192:shl:50	differ 5 at east round 37 whole and in part (372 asked) max 16 ms total 592 ms
+MUT killed	record:1192:lit:23	differ 4 at east round 39 whole and in part (1884 asked) max 14 ms total 603 ms
+MUT killed	record:1192:lit:46	differ 3 at east round 40 whole and in part (436 asked) max 25 ms total 659 ms
+MUT killed	record:1193:sub:34	differ 5 at east round 37 whole and in part (372 asked) max 15 ms total 595 ms
+MUT killed	record:1194:sub:15	differ 5 at east round 37 whole and in part (372 asked) max 16 ms total 608 ms
+MUT killed	record:1195:shl:13	differ 87 at east round 37 whole and in part (372 asked) max 15 ms total 560 ms
+MUT killed	record:1195:lit:10	differ 1314 at east round 41 whole and in part (14957 asked) max 20 ms total 681 ms
+MUT killed	record:1196:lt:35	differ 3 at west round 37 whole and in part (10202 asked) max 22 ms total 1450 ms
+MUT SURVIVED	record:1196:ge:19	differ 0 at  max 19 ms total 1842 ms
+MUT SURVIVED	world:304:lit:54	differ 0 at  max 44 ms total 2029 ms
+MUT SURVIVED	world:304:lit:72	differ 0 at  max 19 ms total 2055 ms
+MUT SURVIVED	world:304:lit:90	differ 0 at  max 242 ms total 2961 ms
+MUT SURVIVED	world:304:del:0	differ 0 at  max 21 ms total 1797 ms
+MUT SURVIVED	world:305:lnot:4	differ 0 at  max 20 ms total 1877 ms
+MUT SURVIVED	world:305:ift:0	differ 0 at  max 24 ms total 1701 ms
+MUT SURVIVED	world:305:iff:0	differ 0 at  max 18 ms total 1513 ms
+MUT SURVIVED	world:306:del:0	differ 0 at  max 27 ms total 1510 ms
+MUT SURVIVED	world:309:ge:6	differ 0 at  max 17 ms total 1516 ms
+MUT SURVIVED	world:309:lit:9	differ 0 at  max 30 ms total 1587 ms
+MUT SURVIVED	world:309:ift:0	differ 0 at  max 26 ms total 1689 ms
+MUT SURVIVED	world:309:iff:0	differ 0 at  max 38 ms total 1909 ms
+MUT SURVIVED	world:310:lit:7	differ 0 at  max 23 ms total 1694 ms
+MUT SURVIVED	world:312:mul:16	differ 0 at  max 28 ms total 1739 ms
+MUT SURVIVED	world:312:shl:10	differ 0 at  max 32 ms total 1794 ms
+MUT killed	record:1196:gt:68	differ 6 at west round 37 whole and in part (10202 asked) max 31 ms total 1493 ms
+MUT SURVIVED	record:1196:gt:90	differ 0 at  max 27 ms total 1524 ms
+MUT killed	record:1196:and:52	differ 87 at east round 37 whole and in part (372 asked) max 22 ms total 526 ms
+MUT killed	record:1196:or:26	differ 5 at east round 37 whole and in part (372 asked) max 15 ms total 550 ms
+MUT killed	record:1196:or:74	differ 5 at east round 37 whole and in part (372 asked) max 25 ms total 542 ms
+MUT killed	record:1196:add:59	differ 1 at east round 37 whole and in part (372 asked) max 14 ms total 526 ms
+MUT SURVIVED	record:1196:add:81	differ 0 at  max 16 ms total 1501 ms
+MUT killed	record:1196:sub:43	differ 5 at east round 37 whole and in part (372 asked) max 21 ms total 583 ms
+MUT killed	record:1196:lit:70	differ 1 at east round 37 whole and in part (372 asked) max 20 ms total 572 ms
+MUT killed	record:1197:lt:21	differ 16 at east round 41 whole and in part (14957 asked) max 18 ms total 714 ms
+MUT killed	record:1197:gt:37	differ 121 at east round 41 whole and in part (14957 asked) max 25 ms total 670 ms
+MUT killed	record:1197:and:14	differ 199 at east round 37 whole and in part (372 asked) max 14 ms total 591 ms
+MUT killed	record:1197:and:30	differ 1157 at east round 37 whole and in part (372 asked) max 29 ms total 591 ms
+MUT killed	record:1183:shl:24	differ 4414 at east round 0 every pair whole (100707 asked) max 14 ms total 107 ms
+MUT killed	record:1183:shl:39	differ 3772 at east round 0 every pair whole (100707 asked) max 17 ms total 121 ms
+MUT SURVIVED	world:756:lit:45	differ 0 at  max 46 ms total 1601 ms
+MUT killed	row:1202:add:25	differ 65184 at east round 0 every pair whole (100707 asked) max 50 ms total 173 ms
+MUT killed	row:1202:mul:13	differ 6227 at east round 0 every pair whole (100707 asked) max 15 ms total 106 ms
+MUT killed	world:743:add:20	differ 4972 at east round 0 every pair whole (100707 asked) max 17 ms total 112 ms
+MUT killed	world:743:xor:13	differ 4920 at east round 0 every pair whole (100707 asked) max 18 ms total 109 ms
+MUT killed	world:744:mul:20	differ 4955 at east round 0 every pair whole (100707 asked) max 17 ms total 131 ms
+MUT killed	world:744:shr:12	differ 4955 at east round 0 every pair whole (100707 asked) max 15 ms total 124 ms
+MUT killed	world:744:xor:6	differ 4953 at east round 0 every pair whole (100707 asked) max 34 ms total 158 ms
+MUT killed	world:744:lit:15	differ 4940 at east round 0 every pair whole (100707 asked) max 15 ms total 109 ms
+MUT SURVIVED	ID1440	differ 0 at  max 31 ms total 1735 ms
+MUT killed	world:744:del:0	differ 4908 at east round 0 every pair whole (100707 asked) max 15 ms total 127 ms
+MUT killed	world:745:mul:20	differ 4959 at east round 0 every pair whole (100707 asked) max 15 ms total 146 ms
+MUT killed	world:745:shr:12	differ 4976 at east round 0 every pair whole (100707 asked) max 19 ms total 161 ms
+MUT killed	world:745:xor:6	differ 4933 at east round 0 every pair whole (100707 asked) max 22 ms total 116 ms
+MUT killed	world:745:lit:15	differ 4976 at east round 0 every pair whole (100707 asked) max 23 ms total 126 ms
+MUT SURVIVED	world:380:lit:30	differ 0 at  max 52 ms total 2010 ms
+MUT CRASH	world:380:del:0	rc 101 'ber of bindings in bind group descriptor (9) does not match the number of bindings defined in the bind group layout (8)\n\n\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n'
+MUT killed	record:1183:shl:62	differ 5057 at east round 0 every pair whole (100707 asked) max 34 ms total 139 ms
+MUT killed	record:1183:bor:12	differ 4649 at east round 0 every pair whole (100707 asked) max 13 ms total 114 ms
+MUT killed	record:1183:bor:30	differ 4918 at east round 0 every pair whole (100707 asked) max 19 ms total 113 ms
+MUT killed	record:1183:bor:53	differ 5057 at east round 0 every pair whole (100707 asked) max 17 ms total 146 ms
+MUT killed	record:1183:lit:27	differ 4414 at east round 0 every pair whole (100707 asked) max 15 ms total 147 ms
+MUT SURVIVED	world:673:min:20	differ 0 at  max 22 ms total 1680 ms
+MUT SURVIVED	world:673:sub:40	differ 0 at  max 39 ms total 1948 ms
+MUT SURVIVED	world:756:sub:37	differ 0 at  max 23 ms total 1707 ms
+MUT killed	world:756:shr:29	differ 2 at east round 0 every pair whole (100707 asked) max 27 ms total 149 ms
+MUT SURVIVED	world:756:shl:10	differ 0 at  max 30 ms total 1815 ms
+MUT SURVIVED	world:756:band:15	differ 0 at  max 50 ms total 1862 ms
+MUT SURVIVED	world:756:band:42	differ 0 at  max 19 ms total 1623 ms
+MUT SURVIVED	world:756:bor:23	differ 0 at  max 21 ms total 1656 ms
+MUT SURVIVED	world:756:lit:18	differ 0 at  max 49 ms total 1927 ms
+MUT SURVIVED	world:756:lit:34	differ 0 at  max 25 ms total 1632 ms
+MUT killed	world:745:del:0	differ 4977 at east round 0 every pair whole (100707 asked) max 46 ms total 181 ms
+MUT killed	world:746:shr:14	differ 4912 at east round 0 every pair whole (100707 asked) max 28 ms total 198 ms
+MUT killed	world:746:xor:8	differ 4987 at east round 0 every pair whole (100707 asked) max 23 ms total 171 ms
+MUT killed	world:746:lit:17	differ 4958 at east round 0 every pair whole (100707 asked) max 26 ms total 197 ms
+MUT SURVIVED	world:373:lt:40	differ 0 at  max 31 ms total 1724 ms
+MUT killed	world:373:ne:26	differ 1799 at east round 0 every pair whole (100707 asked) max 30 ms total 105 ms
+MUT SURVIVED	world:373:or:32	differ 0 at  max 21 ms total 1671 ms
+MUT killed	world:373:band:10	differ 1799 at east round 0 every pair whole (100707 asked) max 19 ms total 120 ms
+MUT killed	world:373:lit:29	differ 1799 at east round 0 every pair whole (100707 asked) max 14 ms total 86 ms
+MUT killed	world:373:ift:0	differ 1799 at east round 0 every pair whole (100707 asked) max 13 ms total 113 ms
+MUT SURVIVED	world:373:iff:0	differ 0 at  max 65 ms total 2046 ms
+MUT killed	world:376:sub:29	differ 10753 at east round 0 every pair whole (100707 asked) max 23 ms total 99 ms
+MUT killed	world:376:shr:12	differ 11771 at east round 0 every pair whole (100707 asked) max 14 ms total 68 ms
+MUT SURVIVED	world:377:lit:11	differ 0 at  max 22 ms total 1530 ms
+MUT SURVIVED	world:378:lt:25	differ 0 at  max 19 ms total 1585 ms
+MUT SURVIVED	world:378:ge:10	differ 0 at  max 40 ms total 1764 ms
+MUT SURVIVED	world:378:and:16	differ 0 at  max 22 ms total 1654 ms
+MUT killed	world:378:shl:31	differ 11913 at east round 0 every pair whole (100707 asked) max 12 ms total 51 ms
+MUT SURVIVED	world:378:lit:13	differ 0 at  max 20 ms total 1545 ms
+MUT SURVIVED	world:378:lit:28	differ 0 at  max 19 ms total 1525 ms
+MUT SURVIVED	world:378:ift:0	differ 0 at  max 23 ms total 1809 ms
+MUT killed	world:378:iff:0	differ 11913 at east round 0 every pair whole (100707 asked) max 12 ms total 52 ms
+MUT killed	world:379:sub:63	differ 11913 at east round 0 every pair whole (100707 asked) max 4 ms total 59 ms
+MUT killed	world:379:shl:49	differ 10753 at east round 0 every pair whole (100707 asked) max 25 ms total 89 ms
+MUT killed	world:379:band:32	differ 11913 at east round 0 every pair whole (100707 asked) max 6 ms total 49 ms
+MUT killed	world:379:lit:46	differ 10753 at east round 0 every pair whole (100707 asked) max 15 ms total 78 ms
+MUT SURVIVED	world:379:lit:66	differ 0 at  max 43 ms total 1972 ms
+MUT killed	world:380:div:17	differ 11913 at east round 0 every pair whole (100707 asked) max 17 ms total 128 ms
+MUT killed	world:380:rem:27	differ 20 at east round 0 every pair whole (100707 asked) max 19 ms total 209 ms
+MUT killed	world:380:lit:20	differ 11913 at east round 0 every pair whole (100707 asked) max 8 ms total 50 ms
+MUT SURVIVED	world:979:lit:26	differ 0 at  max 40 ms total 1796 ms
+MUT killed	world:979:lit:39	differ 2 at west round 0 every pair whole (89184 asked) max 19 ms total 878 ms
+MUT killed	world:979:lit:46	differ 2 at west round 0 every pair whole (89184 asked) max 20 ms total 926 ms
+MUT killed	world:979:del:0	differ 1 at west round 0 every pair whole (89184 asked) max 40 ms total 943 ms
+MUT killed	world:231:ne:28	differ 3275 at east round 0 every pair whole (100707 asked) max 30 ms total 304 ms
+MUT killed	world:231:lit:31	differ 4622 at east round 0 every pair whole (100707 asked) max 19 ms total 224 ms
+MUT killed	world:231:ift:0	differ 4622 at east round 0 every pair whole (100707 asked) max 15 ms total 148 ms
+MUT killed	world:231:iff:0	differ 3275 at east round 0 every pair whole (100707 asked) max 31 ms total 260 ms
+MUT killed	world:232:shl:13	differ 4658 at east round 0 every pair whole (100707 asked) max 13 ms total 132 ms
+MUT killed	world:232:bor:27	differ 4654 at east round 0 every pair whole (100707 asked) max 15 ms total 151 ms
+MUT SURVIVED	ID1500	differ 0 at  max 35 ms total 1693 ms
+MUT killed	world:232:bor:41	differ 3275 at east round 0 every pair whole (100707 asked) max 35 ms total 146 ms
+MUT killed	world:234:eq:26	differ 4622 at east round 0 every pair whole (100707 asked) max 11 ms total 143 ms
+MUT killed	world:234:ift:0	differ 4622 at east round 0 every pair whole (100707 asked) max 18 ms total 182 ms
+MUT SURVIVED	world:234:iff:0	differ 0 at  max 38 ms total 2300 ms
+MUT killed	world:237:shl:13	differ 4109 at east round 0 every pair whole (100707 asked) max 28 ms total 130 ms
+MUT killed	world:237:bor:27	differ 4622 at east round 0 every pair whole (100707 asked) max 13 ms total 129 ms
+MUT SURVIVED	world:776:sub:32	differ 0 at  max 17 ms total 1480 ms
+MUT SURVIVED	world:776:shl:10	differ 0 at  max 12 ms total 1416 ms
+MUT SURVIVED	world:777:sub:24	differ 0 at  max 15 ms total 1549 ms
+MUT killed	world:777:shl:11	differ 1 at west round 0 every pair whole (89184 asked) max 19 ms total 813 ms
+MUT killed	world:777:lit:8	differ 2 at west round 0 every pair whole (89184 asked) max 19 ms total 887 ms
+MUT SURVIVED	world:779:xor:32	differ 0 at  max 23 ms total 1578 ms
+MUT SURVIVED	world:779:lit:35	differ 0 at  max 18 ms total 1708 ms
+MUT SURVIVED	world:780:lt:6	differ 0 at  max 30 ms total 2136 ms
+MUT SURVIVED	world:780:lit:8	differ 0 at  max 28 ms total 1828 ms
+MUT killed	world:780:ift:0	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 1065 ms
+MUT SURVIVED	world:780:iff:0	differ 0 at  max 36 ms total 3166 ms
+MUT SURVIVED	world:781:shr:41	differ 0 at  max 27 ms total 2008 ms
+MUT SURVIVED	world:781:shr:62	differ 0 at  max 57 ms total 2041 ms
+MUT killed	world:784:div:9	differ 1 at west round 0 every pair whole (89184 asked) max 40 ms total 860 ms
+MUT killed	world:784:lit:12	differ 1 at east round 0 every pair whole (100707 asked) max 16 ms total 132 ms
+MUT killed	world:786:eq:61	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 830 ms
+MUT SURVIVED	world:786:add:29	differ 0 at  max 17 ms total 1549 ms
+MUT SURVIVED	world:786:mul:41	differ 0 at  max 25 ms total 1640 ms
+MUT killed	world:786:rem:23	differ 1 at west round 0 every pair whole (89184 asked) max 17 ms total 1023 ms
+MUT SURVIVED	world:786:shr:17	differ 0 at  max 36 ms total 2202 ms
+MUT killed	world:786:band:54	differ 1 at west round 0 every pair whole (89184 asked) max 23 ms total 1024 ms
+MUT killed	world:786:sel:0	differ 1 at west round 0 every pair whole (89184 asked) max 30 ms total 1083 ms
+MUT SURVIVED	world:786:lit:20	differ 0 at  max 61 ms total 2717 ms
+MUT SURVIVED	world:786:lit:39	differ 0 at  max 34 ms total 1916 ms
+MUT SURVIVED	world:786:lit:48	differ 0 at  max 26 ms total 1875 ms
+MUT killed	world:786:lit:57	differ 1 at west round 0 every pair whole (89184 asked) max 29 ms total 921 ms
+MUT killed	world:786:lit:64	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 857 ms
+MUT SURVIVED	world:787:eq:69	differ 0 at  max 18 ms total 1647 ms
+MUT SURVIVED	world:781:band:26	differ 0 at  max 33 ms total 1729 ms
+MUT SURVIVED	world:781:band:47	differ 0 at  max 27 ms total 1699 ms
+MUT SURVIVED	world:781:band:68	differ 0 at  max 67 ms total 1975 ms
+MUT SURVIVED	world:781:lit:29	differ 0 at  max 23 ms total 1659 ms
+MUT SURVIVED	world:781:lit:44	differ 0 at  max 23 ms total 1709 ms
+MUT SURVIVED	world:781:lit:50	differ 0 at  max 25 ms total 1868 ms
+MUT SURVIVED	world:781:lit:65	differ 0 at  max 26 ms total 2217 ms
+MUT SURVIVED	world:781:lit:71	differ 0 at  max 35 ms total 1888 ms
+MUT SURVIVED	world:782:add:14	differ 0 at  max 25 ms total 2236 ms
+MUT SURVIVED	world:782:add:24	differ 0 at  max 40 ms total 2017 ms
+MUT SURVIVED	world:782:sub:29	differ 0 at  max 24 ms total 1670 ms
+MUT SURVIVED	world:782:lit:27	differ 0 at  max 23 ms total 1669 ms
+MUT SURVIVED	world:782:lit:38	differ 0 at  max 22 ms total 1673 ms
+MUT SURVIVED	world:782:lit:42	differ 0 at  max 47 ms total 1983 ms
+MUT SURVIVED	world:782:lit:64	differ 0 at  max 38 ms total 1921 ms
+MUT SURVIVED	world:787:add:29	differ 0 at  max 37 ms total 1950 ms
+MUT SURVIVED	world:787:mul:41	differ 0 at  max 28 ms total 2076 ms
+MUT SURVIVED	world:787:rem:23	differ 0 at  max 20 ms total 1928 ms
+MUT SURVIVED	world:787:shr:17	differ 0 at  max 27 ms total 2915 ms
+MUT SURVIVED	world:787:shr:56	differ 0 at  max 22 ms total 1773 ms
+MUT SURVIVED	world:787:band:62	differ 0 at  max 19 ms total 1701 ms
+MUT SURVIVED	world:787:sel:0	differ 0 at  max 20 ms total 1647 ms
+MUT SURVIVED	world:787:lit:20	differ 0 at  max 19 ms total 1738 ms
+MUT SURVIVED	world:787:lit:39	differ 0 at  max 25 ms total 1838 ms
+MUT SURVIVED	world:787:lit:48	differ 0 at  max 19 ms total 1863 ms
+MUT SURVIVED	world:787:lit:59	differ 0 at  max 28 ms total 1912 ms
+MUT SURVIVED	ID1560	differ 0 at  max 17 ms total 1848 ms
+MUT SURVIVED	world:787:lit:65	differ 0 at  max 17 ms total 1799 ms
+MUT SURVIVED	world:787:lit:72	differ 0 at  max 32 ms total 2064 ms
+MUT SURVIVED	world:788:rem:23	differ 0 at  max 30 ms total 2145 ms
+MUT killed	world:409:bor:10	differ 16831 at east round 0 every pair whole (100707 asked) max 30 ms total 99 ms
+MUT killed	world:409:lit:19	differ 10753 at east round 0 every pair whole (100707 asked) max 17 ms total 121 ms
+MUT killed	world:409:hex:26	differ 2110 at east round 0 every pair whole (100707 asked) max 19 ms total 140 ms
+MUT killed	world:410:shl:12	differ 11913 at east round 0 every pair whole (100707 asked) max 3 ms total 47 ms
+MUT killed	world:410:band:19	differ 11913 at east round 0 every pair whole (100707 asked) max 3 ms total 46 ms
+MUT killed	world:410:bor:6	differ 16831 at east round 0 every pair whole (100707 asked) max 5 ms total 91 ms
+MUT killed	world:410:lit:15	differ 11913 at east round 0 every pair whole (100707 asked) max 12 ms total 107 ms
+MUT killed	world:410:hex:22	differ 2110 at east round 0 every pair whole (100707 asked) max 16 ms total 200 ms
+MUT killed	world:410:del:0	differ 11913 at east round 0 every pair whole (100707 asked) max 2 ms total 47 ms
+MUT killed	world:411:shl:12	differ 11913 at east round 0 every pair whole (100707 asked) max 6 ms total 80 ms
+MUT killed	world:411:band:19	differ 11913 at east round 0 every pair whole (100707 asked) max 6 ms total 90 ms
+MUT killed	world:411:bor:6	differ 16831 at east round 0 every pair whole (100707 asked) max 16 ms total 94 ms
+MUT SURVIVED	ID1620	differ 0 at  max 20 ms total 1887 ms
+MUT killed	world:411:lit:15	differ 11913 at east round 0 every pair whole (100707 asked) max 5 ms total 58 ms
+MUT killed	world:411:hex:22	differ 2110 at east round 0 every pair whole (100707 asked) max 24 ms total 116 ms
+MUT SURVIVED	world:788:shr:16	differ 0 at  max 54 ms total 3212 ms
+MUT SURVIVED	world:788:lit:19	differ 0 at  max 46 ms total 2045 ms
+MUT SURVIVED	world:789:add:19	differ 0 at  max 27 ms total 2047 ms
+MUT killed	world:789:div:14	differ 1 at east round 0 every pair whole (100707 asked) max 20 ms total 167 ms
+MUT SURVIVED	world:789:lit:17	differ 0 at  max 25 ms total 1643 ms
+MUT SURVIVED	world:789:lit:22	differ 0 at  max 18 ms total 1612 ms
+MUT SURVIVED	world:790:sub:10	differ 0 at  max 20 ms total 1558 ms
+MUT killed	world:790:sub:15	differ 1 at west round 0 every pair whole (89184 asked) max 35 ms total 1001 ms
+MUT SURVIVED	world:790:lit:13	differ 0 at  max 36 ms total 1855 ms
+MUT SURVIVED	world:791:sub:10	differ 0 at  max 26 ms total 1869 ms
+MUT SURVIVED	world:791:sub:15	differ 0 at  max 28 ms total 1886 ms
+MUT SURVIVED	world:791:lit:13	differ 0 at  max 35 ms total 2122 ms
+MUT killed	world:792:rem:14	differ 1 at west round 0 every pair whole (89184 asked) max 24 ms total 1019 ms
+MUT SURVIVED	world:793:rem:22	differ 0 at  max 26 ms total 1873 ms
+MUT SURVIVED	world:793:shr:16	differ 0 at  max 32 ms total 1826 ms
+MUT SURVIVED	world:793:lit:19	differ 0 at  max 51 ms total 1990 ms
+MUT killed	world:795:add:1	differ 1 at west round 0 every pair whole (89184 asked) max 39 ms total 1092 ms
+MUT killed	world:796:add:1	differ 1 at west round 0 every pair whole (89184 asked) max 18 ms total 986 ms
+MUT SURVIVED	world:797:lt:28	differ 0 at  max 20 ms total 1813 ms
+MUT SURVIVED	world:797:add:18	differ 0 at  max 20 ms total 1975 ms
+MUT SURVIVED	world:797:sub:9	differ 0 at  max 33 ms total 1948 ms
+MUT SURVIVED	world:797:mul:32	differ 0 at  max 34 ms total 2169 ms
+MUT SURVIVED	world:797:sel:0	differ 0 at  max 18 ms total 1938 ms
+MUT SURVIVED	world:797:lit:30	differ 0 at  max 19 ms total 1622 ms
+MUT SURVIVED	world:798:lt:28	differ 0 at  max 19 ms total 1581 ms
+MUT SURVIVED	world:798:add:18	differ 0 at  max 31 ms total 1722 ms
+MUT SURVIVED	world:798:sub:9	differ 0 at  max 24 ms total 1698 ms
+MUT SURVIVED	world:798:mul:32	differ 0 at  max 19 ms total 1831 ms
+MUT SURVIVED	world:798:sel:0	differ 0 at  max 26 ms total 1652 ms
+MUT SURVIVED	world:798:lit:30	differ 0 at  max 39 ms total 2228 ms
+MUT SURVIVED	world:799:add:8	differ 0 at  max 40 ms total 1981 ms
+MUT SURVIVED	world:799:sub:34	differ 0 at  max 21 ms total 1822 ms
+MUT SURVIVED	world:799:sub:50	differ 0 at  max 33 ms total 1856 ms
+MUT SURVIVED	world:799:div:38	differ 0 at  max 27 ms total 2012 ms
+MUT SURVIVED	world:799:rem:25	differ 0 at  max 34 ms total 2072 ms
+MUT SURVIVED	world:799:shr:18	differ 0 at  max 28 ms total 1941 ms
+MUT SURVIVED	world:799:lit:21	differ 0 at  max 25 ms total 1816 ms
+MUT SURVIVED	world:799:lit:41	differ 0 at  max 19 ms total 1589 ms
+MUT SURVIVED	world:799:lit:45	differ 0 at  max 18 ms total 1668 ms
+MUT SURVIVED	world:799:lit:53	differ 0 at  max 19 ms total 1709 ms
+MUT SURVIVED	world:801:lit:0	differ 0 at  max 29 ms total 2594 ms
+MUT SURVIVED	world:801:lit:4	differ 0 at  max 111 ms total 2552 ms
+MUT SURVIVED	world:801:lit:26	differ 0 at  max 24 ms total 2275 ms
+MUT SURVIVED	world:409:shl:16	differ 0 at  max 55 ms total 2565 ms
+MUT killed	world:409:band:23	differ 11913 at east round 0 every pair whole (100707 asked) max 13 ms total 151 ms
+MUT killed	world:411:del:0	differ 11913 at east round 0 every pair whole (100707 asked) max 34 ms total 94 ms
+MUT killed	world:412:shl:15	differ 11913 at east round 0 every pair whole (100707 asked) max 7 ms total 92 ms
+MUT killed	world:412:band:22	differ 11913 at east round 0 every pair whole (100707 asked) max 11 ms total 87 ms
+MUT killed	world:412:bor:9	differ 16831 at east round 0 every pair whole (100707 asked) max 5 ms total 62 ms
+MUT killed	world:412:lit:18	differ 14267 at east round 0 every pair whole (100707 asked) max 14 ms total 125 ms
+MUT killed	world:412:hex:25	differ 2110 at east round 0 every pair whole (100707 asked) max 16 ms total 104 ms
+MUT SURVIVED	world:441:ge:41	differ 0 at  max 21 ms total 1657 ms
+MUT SURVIVED	world:441:ne:18	differ 0 at  max 20 ms total 1710 ms
+MUT SURVIVED	world:441:and:33	differ 0 at  max 53 ms total 2710 ms
+MUT SURVIVED	world:442:sub:21	differ 0 at  max 38 ms total 2584 ms
+MUT SURVIVED	world:442:lit:24	differ 0 at  max 29 ms total 2488 ms
+MUT SURVIVED	world:443:f:37	differ 0 at  max 26 ms total 2515 ms
+MUT SURVIVED	world:443:lit:33	differ 0 at  max 60 ms total 2657 ms
+MUT SURVIVED	world:444:ift:0	differ 0 at  max 21 ms total 2543 ms
+MUT SURVIVED	world:444:iff:0	differ 0 at  max 36 ms total 2597 ms
+MUT killed	pose:1245:shl:17	differ 935 at east round 0 every pair whole (100707 asked) max 43 ms total 219 ms
+MUT SURVIVED	pose:1245:lit:14	differ 0 at  max 44 ms total 2429 ms
+MUT SURVIVED	pose:1245:lit:35	differ 0 at  max 23 ms total 2343 ms
+MUT killed	pose:1246:eq:52	differ 534 at east round 0 every pair whole (100707 asked) max 156 ms total 1554 ms
+MUT killed	pose:1246:shr:30	differ 6 at west round 0 every pair whole (89184 asked) max 33 ms total 1431 ms
+MUT killed	pose:1246:sel:0	differ 534 at east round 0 every pair whole (100707 asked) max 278 ms total 1994 ms
+MUT killed	pose:1247:max:29	differ 1867 at east round 0 every pair whole (100707 asked) max 20 ms total 206 ms
+MUT SURVIVED	pose:1247:sub:39	differ 0 at  max 34 ms total 2683 ms
+MUT SURVIVED	pose:1247:sub:59	differ 0 at  max 41 ms total 2849 ms
+MUT killed	pose:1247:shr:46	differ 684 at east round 0 every pair whole (100707 asked) max 77 ms total 436 ms
+MUT killed	pose:1247:lit:42	differ 720 at east round 0 every pair whole (100707 asked) max 17 ms total 219 ms
+MUT killed	pose:1247:lit:62	differ 254 at east round 0 every pair whole (100707 asked) max 29 ms total 259 ms
+MUT SURVIVED	pose:1247:lit:67	differ 0 at  max 41 ms total 2602 ms
+MUT killed	pose:1249:eq:20	differ 12065 at east round 0 every pair whole (100707 asked) max 23 ms total 190 ms
+MUT killed	pose:1249:ift:0	differ 12055 at east round 0 every pair whole (100707 asked) max 18 ms total 218 ms
+MUT killed	world:458:sub:80	differ 15243 at east round 0 every pair whole (100707 asked) max 208 ms total 953 ms
+MUT killed	world:458:band:57	differ 10691 at east round 0 every pair whole (100707 asked) max 322 ms total 3769 ms
+MUT killed	world:458:lit:83	differ 2110 at east round 0 every pair whole (100707 asked) max 17 ms total 194 ms
+MUT killed	pose:1238:ift:0	differ 11905 at east round 0 every pair whole (100707 asked) max 15 ms total 165 ms
+MUT SURVIVED	pose:1238:iff:0	differ 0 at  max 34 ms total 2488 ms
+MUT SURVIVED	pose:1239:sub:37	differ 0 at  max 30 ms total 2548 ms
+MUT SURVIVED	pose:1239:lit:40	differ 0 at  max 24 ms total 2508 ms
+MUT SURVIVED	pose:1239:lit:53	differ 0 at  max 35 ms total 2727 ms
+MUT killed	pose:1243:sub:17	differ 1479 at east round 0 every pair whole (100707 asked) max 33 ms total 279 ms
+MUT SURVIVED	pose:1244:lt:10	differ 0 at  max 35 ms total 2712 ms
+MUT SURVIVED	pose:1244:ift:0	differ 0 at  max 26 ms total 2804 ms
+MUT killed	pose:1244:iff:0	differ 1849 at east round 0 every pair whole (100707 asked) max 8 ms total 145 ms
+MUT SURVIVED	pose:1245:sub:32	differ 0 at  max 49 ms total 2548 ms
+MUT SURVIVED	ID1680	differ 0 at  max 23 ms total 2552 ms
+MUT SURVIVED	pose:1245:sub:37	differ 0 at  max 47 ms total 2500 ms
+MUT killed	world:452:mul:34	differ 15171 at east round 0 every pair whole (100707 asked) max 28 ms total 76 ms
+MUT killed	world:452:mul:55	differ 15171 at east round 0 every pair whole (100707 asked) max 1 ms total 40 ms
+MUT killed	world:453:eq:25	differ 19168 at east round 0 every pair whole (100707 asked) max 23 ms total 112 ms
+MUT killed	world:453:eq:41	differ 15171 at east round 0 every pair whole (100707 asked) max 16 ms total 74 ms
+MUT LIMIT	world:453:ne:10	differ 0 at east round 0: limit max 60010 ms total 60020 ms
+MUT killed	world:573:lit:21	differ 2317 at east round 0 every pair whole (100707 asked) max 61 ms total 249 ms
+MUT killed	world:573:ift:0	differ 3696 at east round 0 every pair whole (100707 asked) max 17 ms total 198 ms
+MUT killed	world:573:iff:0	differ 2317 at east round 0 every pair whole (100707 asked) max 19 ms total 218 ms
+MUT killed	world:576:add:16	differ 1865 at east round 0 every pair whole (100707 asked) max 16 ms total 197 ms
+MUT killed	world:576:lit:19	differ 2113 at east round 0 every pair whole (100707 asked) max 17 ms total 223 ms
+MUT killed	world:252:lnot:4	differ 3275 at east round 0 every pair whole (100707 asked) max 32 ms total 250 ms
+MUT killed	world:252:ift:0	differ 3275 at east round 0 every pair whole (100707 asked) max 31 ms total 279 ms
+MUT SURVIVED	world:252:iff:0	differ 0 at  max 304 ms total 2639 ms
+MUT killed	world:255:add:72	differ 4588 at east round 0 every pair whole (100707 asked) max 20 ms total 208 ms
+MUT killed	world:255:shr:47	differ 4654 at east round 0 every pair whole (100707 asked) max 22 ms total 222 ms
+MUT killed	world:255:band:61	differ 4654 at east round 0 every pair whole (100707 asked) max 6 ms total 103 ms
+MUT killed	world:255:not:64	differ 4654 at east round 0 every pair whole (100707 asked) max 6 ms total 99 ms
+MUT killed	world:222:eq:9	differ 6076 at east round 0 every pair whole (100707 asked) max 8 ms total 100 ms
+MUT killed	world:222:ift:0	differ 4114 at east round 0 every pair whole (100707 asked) max 15 ms total 99 ms
+MUT SURVIVED	ID1740	differ 0 at  max 17 ms total 1423 ms
+MUT killed	world:571:shl:25	differ 3812 at east round 0 every pair whole (100707 asked) max 30 ms total 235 ms
+MUT killed	world:571:band:17	differ 3812 at east round 0 every pair whole (100707 asked) max 11 ms total 181 ms
+MUT killed	world:571:lit:22	differ 1984 at east round 0 every pair whole (100707 asked) max 17 ms total 197 ms
+MUT killed	world:571:lit:33	differ 3442 at east round 0 every pair whole (100707 asked) max 21 ms total 209 ms
+MUT SURVIVED	world:572:le:86	differ 0 at  max 31 ms total 2253 ms
+MUT SURVIVED	world:572:sub:29	differ 0 at  max 59 ms total 2442 ms
+MUT killed	world:572:sub:70	differ 2121 at east round 0 every pair whole (100707 asked) max 194 ms total 399 ms
+MUT SURVIVED	world:572:shr:23	differ 0 at  max 231 ms total 2989 ms
+MUT killed	world:572:shl:56	differ 3696 at east round 0 every pair whole (100707 asked) max 60 ms total 373 ms
+MUT SURVIVED	world:572:band:42	differ 0 at  max 105 ms total 2969 ms
+MUT killed	world:572:band:75	differ 2216 at east round 0 every pair whole (100707 asked) max 24 ms total 300 ms
+MUT killed	world:572:sel:0	differ 3696 at east round 0 every pair whole (100707 asked) max 57 ms total 366 ms
+MUT SURVIVED	world:572:lit:45	differ 0 at  max 70 ms total 2855 ms
+MUT killed	world:572:lit:78	differ 3696 at east round 0 every pair whole (100707 asked) max 27 ms total 327 ms
+MUT killed	world:573:eq:18	differ 5995 at east round 0 every pair whole (100707 asked) max 35 ms total 301 ms
+MUT killed	world:222:iff:0	differ 2390 at east round 0 every pair whole (100707 asked) max 47 ms total 293 ms
+MUT killed	world:223:add:35	differ 2384 at east round 0 every pair whole (100707 asked) max 35 ms total 330 ms
+MUT killed	world:223:div:30	differ 2390 at east round 0 every pair whole (100707 asked) max 29 ms total 260 ms
+MUT killed	world:223:lit:33	differ 2535 at east round 0 every pair whole (100707 asked) max 17 ms total 278 ms
+MUT killed	world:225:add:47	differ 1905 at east round 0 every pair whole (100707 asked) max 37 ms total 282 ms
+MUT killed	world:225:div:42	differ 1892 at east round 0 every pair whole (100707 asked) max 32 ms total 333 ms
+MUT killed	world:225:lit:45	differ 2050 at east round 0 every pair whole (100707 asked) max 70 ms total 324 ms
+MUT killed	world:260:lt:9	differ 36 at east round 0 every pair whole (100707 asked) max 23 ms total 275 ms
+MUT killed	world:260:and:16	differ 36 at east round 0 every pair whole (100707 asked) max 36 ms total 306 ms
+MUT killed	world:261:adda:2	differ 4260 at east round 0 every pair whole (100707 asked) max 33 ms total 311 ms
+MUT killed	world:261:lit:5	differ 4180 at east round 0 every pair whole (100707 asked) max 32 ms total 312 ms
+MUT killed	world:261:del:0	differ 4654 at east round 0 every pair whole (100707 asked) max 41 ms total 307 ms
+MUT killed	world:262:sub:47	differ 4654 at east round 0 every pair whole (100707 asked) max 10 ms total 192 ms
+MUT killed	world:262:shr:30	differ 4654 at east round 0 every pair whole (100707 asked) max 18 ms total 247 ms
+MUT killed	world:262:del:0	differ 3275 at east round 0 every pair whole (100707 asked) max 43 ms total 338 ms
+MUT killed	world:274:eq:6	differ 4619 at east round 0 every pair whole (100707 asked) max 24 ms total 144 ms
+MUT killed	world:274:ift:0	differ 4619 at east round 0 every pair whole (100707 asked) max 4 ms total 88 ms
+MUT SURVIVED	world:274:iff:0	differ 0 at  max 17 ms total 1410 ms
+MUT killed	world:277:shr:29	differ 4619 at east round 0 every pair whole (100707 asked) max 6 ms total 111 ms
+MUT killed	world:278:band:12	differ 4619 at east round 0 every pair whole (100707 asked) max 4 ms total 90 ms
+MUT killed	world:278:hex:15	differ 423 at east round 0 every pair whole (100707 asked) max 15 ms total 113 ms
+MUT killed	world:279:ift:0	differ 4585 at east round 0 every pair whole (100707 asked) max 6 ms total 100 ms
+MUT SURVIVED	world:279:iff:0	differ 0 at  max 17 ms total 1358 ms
+MUT killed	world:280:eq:18	differ 27 at east round 0 every pair whole (100707 asked) max 16 ms total 109 ms
+MUT SURVIVED	world:280:shr:10	differ 0 at  max 18 ms total 1436 ms
+MUT SURVIVED	world:280:lit:13	differ 0 at  max 23 ms total 1526 ms
+MUT SURVIVED	world:280:lit:21	differ 0 at  max 23 ms total 1727 ms
+MUT killed	world:280:ift:0	differ 27 at east round 0 every pair whole (100707 asked) max 17 ms total 156 ms
+MUT SURVIVED	world:280:iff:0	differ 0 at  max 52 ms total 1807 ms
+MUT SURVIVED	world:283:eq:23	differ 0 at  max 35 ms total 1827 ms
+MUT killed	world:810:band:68	differ 1 at west round 0 every pair whole (89184 asked) max 39 ms total 904 ms
+MUT SURVIVED	world:810:band:85	differ 0 at  max 25 ms total 1711 ms
+MUT SURVIVED	world:810:bor:25	differ 0 at  max 31 ms total 1764 ms
+MUT SURVIVED	world:810:bor:55	differ 0 at  max 30 ms total 1827 ms
+MUT SURVIVED	world:810:sel:0	differ 0 at  max 18 ms total 1446 ms
+MUT SURVIVED	world:810:lit:22	differ 0 at  max 18 ms total 1490 ms
+MUT SURVIVED	world:810:lit:34	differ 0 at  max 19 ms total 1482 ms
+MUT SURVIVED	world:810:lit:41	differ 0 at  max 18 ms total 1461 ms
+MUT SURVIVED	world:810:lit:52	differ 0 at  max 21 ms total 1480 ms
+MUT SURVIVED	world:810:lit:64	differ 0 at  max 17 ms total 1484 ms
+MUT SURVIVED	world:810:lit:71	differ 0 at  max 19 ms total 1476 ms
+MUT SURVIVED	world:810:lit:82	differ 0 at  max 20 ms total 1461 ms
+MUT SURVIVED	world:810:lit:88	differ 0 at  max 20 ms total 1470 ms
+MUT SURVIVED	world:810:lit:95	differ 0 at  max 18 ms total 1613 ms
+MUT REFUSED	world:812:lit:5	Validation Error
+MUT killed	pose:1249:iff:0	differ 20 at east round 0 every pair whole (100707 asked) max 54 ms total 263 ms
+MUT SURVIVED	pose:1250:lit:29	differ 0 at  max 72 ms total 3146 ms
+MUT SURVIVED	pose:1250:lit:33	differ 0 at  max 42 ms total 2816 ms
+MUT SURVIVED	pose:1250:lit:37	differ 0 at  max 41 ms total 2868 ms
+MUT killed	pose:1252:sub:35	differ 7857 at east round 0 every pair whole (100707 asked) max 31 ms total 258 ms
+MUT killed	pose:1252:lit:38	differ 7857 at east round 0 every pair whole (100707 asked) max 18 ms total 245 ms
+MUT SURVIVED	pose:1252:lit:61	differ 0 at  max 29 ms total 2730 ms
+MUT SURVIVED	world:566:ge:9	differ 0 at  max 37 ms total 2487 ms
+MUT LIMIT	world:566:ift:0	differ 0 at east round 0: limit max 60006 ms total 60015 ms
+MUT killed	world:283:and:47	differ 2 at east round 22 a placed decor left out (7771 asked) max 38 ms total 711 ms
+MUT SURVIVED	world:283:band:28	differ 0 at  max 50 ms total 2709 ms
+MUT killed	world:283:ift:0	differ 4588 at east round 0 every pair whole (100707 asked) max 32 ms total 273 ms
+MUT SURVIVED	world:283:iff:0	differ 0 at  max 31 ms total 2711 ms
+MUT killed	world:286:sel:0	differ 4625 at east round 0 every pair whole (100707 asked) max 33 ms total 264 ms
+MUT killed	world:808:xor:9	differ 2 at west round 0 every pair whole (89184 asked) max 31 ms total 1394 ms
+MUT killed	world:809:ift:0	differ 3 at west round 0 every pair whole (89184 asked) max 43 ms total 1394 ms
+MUT SURVIVED	world:809:iff:0	differ 0 at  max 53 ms total 2728 ms
+MUT SURVIVED	world:810:eq:92	differ 0 at  max 43 ms total 2710 ms
+MUT SURVIVED	world:810:shr:31	differ 0 at  max 58 ms total 2838 ms
+MUT SURVIVED	world:810:shr:61	differ 0 at  max 54 ms total 2780 ms
+MUT SURVIVED	world:810:shr:79	differ 0 at  max 37 ms total 2745 ms
+MUT SURVIVED	world:810:shl:19	differ 0 at  max 28 ms total 2764 ms
+MUT SURVIVED	world:810:shl:49	differ 0 at  max 42 ms total 3009 ms
+MUT SURVIVED	world:810:band:38	differ 0 at  max 54 ms total 2944 ms
+MUT SURVIVED	world:445:del:0	differ 0 at  max 47 ms total 1738 ms
+MUT SURVIVED	world:446:shl:32	differ 0 at  max 19 ms total 1679 ms
+MUT killed	world:446:band:10	differ 10691 at east round 0 every pair whole (100707 asked) max 104 ms total 847 ms
+MUT killed	world:446:bor:23	differ 13265 at east round 0 every pair whole (100707 asked) max 14 ms total 100 ms
+MUT killed	world:446:del:0	differ 13265 at east round 0 every pair whole (100707 asked) max 7 ms total 82 ms
+MUT SURVIVED	world:448:gt:21	differ 0 at  max 20 ms total 1708 ms
+MUT LIMIT	world:448:suba:31	differ 0 at east round 0: limit max 60005 ms total 131248 ms
+MUT killed	world:821:lit:13	differ 1 at west round 0 every pair whole (89184 asked) max 34 ms total 805 ms
+MUT SURVIVED	world:821:lit:21	differ 0 at  max 16 ms total 1444 ms
+MUT killed	world:821:lit:45	differ 2 at west round 0 every pair whole (89184 asked) max 20 ms total 790 ms
+MUT SURVIVED	world:822:add:19	differ 0 at  max 17 ms total 1435 ms
+MUT killed	world:822:rem:24	differ 1 at west round 0 every pair whole (89184 asked) max 15 ms total 766 ms
+MUT killed	world:822:shl:13	differ 1 at west round 0 every pair whole (89184 asked) max 15 ms total 746 ms
+MUT killed	world:822:lit:10	differ 1 at west round 0 every pair whole (89184 asked) max 26 ms total 827 ms
+MUT SURVIVED	world:822:lit:27	differ 0 at  max 29 ms total 1656 ms
+MUT killed	world:823:ne:14	differ 2 at west round 0 every pair whole (89184 asked) max 19 ms total 931 ms
+MUT SURVIVED	world:823:band:6	differ 0 at  max 22 ms total 1690 ms
+MUT killed	world:823:lit:17	differ 1 at west round 0 every pair whole (89184 asked) max 46 ms total 1015 ms
+MUT SURVIVED	world:823:ift:0	differ 0 at  max 33 ms total 2191 ms
+MUT killed	world:823:iff:0	differ 2 at west round 0 every pair whole (89184 asked) max 43 ms total 1307 ms
+MUT killed	world:824:del:0	differ 2 at west round 0 every pair whole (89184 asked) max 47 ms total 1269 ms
+MUT killed	world:825:adda:8	differ 1 at west round 0 every pair whole (89184 asked) max 37 ms total 2113 ms
+MUT SURVIVED	ID1800	differ 0 at  max 95 ms total 2900 ms
+MUT SURVIVED	world:813:xor:19	differ 0 at  max 65 ms total 2884 ms
+MUT REFUSED	world:813:lit:5	Validation Error
+MUT SURVIVED	world:814:xor:19	differ 0 at  max 72 ms total 2864 ms
+MUT SURVIVED	world:814:xor:23	differ 0 at  max 104 ms total 2877 ms
+MUT SURVIVED	world:814:lit:5	differ 0 at  max 70 ms total 2919 ms
+MUT killed	world:818:rem:17	differ 1 at west round 0 every pair whole (89184 asked) max 35 ms total 1538 ms
+MUT killed	world:818:shr:11	differ 1 at west round 0 every pair whole (89184 asked) max 33 ms total 1694 ms
+MUT SURVIVED	world:818:lit:14	differ 0 at  max 45 ms total 3162 ms
+MUT killed	world:818:lit:20	differ 1 at west round 0 every pair whole (89184 asked) max 34 ms total 1810 ms
+MUT SURVIVED	world:820:lit:14	differ 0 at  max 61 ms total 3296 ms
+MUT SURVIVED	world:821:lt:19	differ 0 at  max 51 ms total 3361 ms
+MUT SURVIVED	world:821:lt:35	differ 0 at  max 98 ms total 5116 ms
+MUT SURVIVED	world:821:and:24	differ 0 at  max 169 ms total 6079 ms
+MUT killed	world:821:adda:42	differ 1 at west round 0 every pair whole (89184 asked) max 29 ms total 916 ms
+MUT killed	world:825:lit:11	differ 1 at west round 0 every pair whole (89184 asked) max 52 ms total 1708 ms
+MUT SURVIVED	world:825:del:0	differ 0 at  max 35 ms total 3013 ms
+MUT SURVIVED	world:898:eq:12	differ 0 at  max 44 ms total 3083 ms
+MUT SURVIVED	world:898:lit:15	differ 0 at  max 47 ms total 3270 ms
+MUT SURVIVED	world:898:ift:0	differ 0 at  max 90 ms total 3863 ms
+MUT SURVIVED	world:898:iff:0	differ 0 at  max 215 ms total 6297 ms
+MUT killed	world:899:lit:7	differ 2 at east round 0 every pair whole (100707 asked) max 60 ms total 643 ms
+MUT SURVIVED	world:901:add:26	differ 0 at  max 24 ms total 1585 ms
+MUT SURVIVED	world:902:add:16	differ 0 at  max 35 ms total 1851 ms
+MUT SURVIVED	world:902:lit:19	differ 0 at  max 33 ms total 1891 ms
+MUT SURVIVED	world:903:gt:71	differ 0 at  max 24 ms total 1831 ms
+MUT SURVIVED	world:903:sub:42	differ 0 at  max 26 ms total 1779 ms
+MUT SURVIVED	world:903:mul:27	differ 0 at  max 38 ms total 1762 ms
+MUT SURVIVED	world:903:shl:21	differ 0 at  max 20 ms total 1791 ms
+MUT SURVIVED	world:903:band:51	differ 0 at  max 24 ms total 1794 ms
+MUT killed	world:907:lit:37	differ 2 at east round 0 every pair whole (100707 asked) max 54 ms total 244 ms
+MUT SURVIVED	ID1860	differ 0 at  max 23 ms total 1874 ms
+MUT killed	world:907:lit:49	differ 2 at east round 0 every pair whole (100707 asked) max 26 ms total 152 ms
+MUT SURVIVED	world:908:eq:45	differ 0 at  max 33 ms total 1787 ms
+MUT SURVIVED	world:908:eq:65	differ 0 at  max 26 ms total 1765 ms
+MUT SURVIVED	world:908:sel:0	differ 0 at  max 27 ms total 1772 ms
+MUT SURVIVED	world:908:sel:1	differ 0 at  max 24 ms total 1821 ms
+MUT SURVIVED	world:908:lit:48	differ 0 at  max 24 ms total 1756 ms
+MUT SURVIVED	world:908:lit:68	differ 0 at  max 21 ms total 1622 ms
+MUT SURVIVED	world:908:hex:26	differ 0 at  max 17 ms total 1594 ms
+MUT SURVIVED	world:908:hex:33	differ 0 at  max 18 ms total 1599 ms
+MUT SURVIVED	world:908:hex:53	differ 0 at  max 31 ms total 1638 ms
+MUT SURVIVED	world:909:add:20	differ 0 at  max 20 ms total 1525 ms
+MUT SURVIVED	world:909:mul:33	differ 0 at  max 18 ms total 1581 ms
+MUT SURVIVED	world:909:mul:51	differ 0 at  max 18 ms total 1603 ms
+MUT SURVIVED	world:911:mul:45	differ 0 at  max 69 ms total 1853 ms
+MUT SURVIVED	world:911:mul:80	differ 0 at  max 21 ms total 1781 ms
+MUT SURVIVED	world:911:band:35	differ 0 at  max 22 ms total 1768 ms
+MUT SURVIVED	world:911:band:71	differ 0 at  max 19 ms total 1698 ms
+MUT SURVIVED	world:911:not:38	differ 0 at  max 21 ms total 1747 ms
+MUT SURVIVED	world:912:eq:31	differ 0 at  max 21 ms total 1722 ms
+MUT SURVIVED	world:912:shr:16	differ 0 at  max 18 ms total 1542 ms
+MUT SURVIVED	world:912:band:24	differ 0 at  max 20 ms total 1575 ms
+MUT SURVIVED	world:912:lit:27	differ 0 at  max 18 ms total 1547 ms
+MUT SURVIVED	world:912:lit:34	differ 0 at  max 19 ms total 1602 ms
+MUT killed	world:913:sub:16	differ 2 at east round 0 every pair whole (100707 asked) max 35 ms total 138 ms
+MUT SURVIVED	world:913:sel:0	differ 0 at  max 16 ms total 1555 ms
+MUT killed	world:913:del:0	differ 2 at east round 0 every pair whole (100707 asked) max 27 ms total 129 ms
+MUT SURVIVED	world:914:anda:5	differ 0 at  max 20 ms total 1611 ms
+MUT SURVIVED	world:914:not:15	differ 0 at  max 21 ms total 1471 ms
+MUT killed	world:366:sub:22	differ 2036 at east round 0 every pair whole (100707 asked) max 36 ms total 126 ms
+MUT killed	world:366:sub:30	differ 2389 at east round 0 every pair whole (100707 asked) max 6 ms total 99 ms
+MUT SURVIVED	ID1920	differ 0 at  max 20 ms total 1498 ms
+MUT killed	world:366:shr:14	differ 2388 at east round 0 every pair whole (100707 asked) max 7 ms total 141 ms
+MUT killed	world:366:shr:44	differ 2390 at east round 0 every pair whole (100707 asked) max 9 ms total 126 ms
+MUT killed	world:367:lt:6	differ 1277 at east round 0 every pair whole (100707 asked) max 15 ms total 130 ms
+MUT SURVIVED	world:367:ge:16	differ 0 at  max 22 ms total 1808 ms
+MUT killed	world:367:or:11	differ 2 at east round 0 every pair whole (100707 asked) max 18 ms total 106 ms
+MUT killed	world:367:lit:8	differ 1277 at east round 0 every pair whole (100707 asked) max 14 ms total 115 ms
+MUT killed	world:367:ift:0	differ 2390 at east round 0 every pair whole (100707 asked) max 5 ms total 90 ms
+MUT killed	world:367:iff:0	differ 2 at east round 0 every pair whole (100707 asked) max 16 ms total 118 ms
+MUT killed	world:370:add:67	differ 1126 at east round 0 every pair whole (100707 asked) max 6 ms total 97 ms
+MUT killed	world:370:sub:60	differ 2389 at east round 0 every pair whole (100707 asked) max 6 ms total 102 ms
+MUT killed	world:370:mul:31	differ 2940 at east round 0 every pair whole (100707 asked) max 10 ms total 116 ms
+MUT killed	world:370:band:39	differ 2390 at east round 0 every pair whole (100707 asked) max 5 ms total 97 ms
+MUT SURVIVED	world:909:shr:27	differ 0 at  max 42 ms total 1871 ms
+MUT SURVIVED	world:909:band:42	differ 0 at  max 17 ms total 1637 ms
+MUT killed	world:909:lit:31	differ 2 at east round 0 every pair whole (100707 asked) max 22 ms total 131 ms
+MUT SURVIVED	world:909:hex:13	differ 0 at  max 35 ms total 2651 ms
+MUT SURVIVED	world:909:hex:45	differ 0 at  max 55 ms total 2947 ms
+MUT SURVIVED	world:909:hex:54	differ 0 at  max 31 ms total 2897 ms
+MUT killed	world:910:add:45	differ 2 at west round 0 every pair whole (89184 asked) max 34 ms total 1568 ms
+MUT SURVIVED	world:910:mul:38	differ 0 at  max 29 ms total 2795 ms
+MUT SURVIVED	world:910:shl:16	differ 0 at  max 42 ms total 2827 ms
+MUT SURVIVED	world:910:band:51	differ 0 at  max 50 ms total 2994 ms
+MUT SURVIVED	world:910:bor:23	differ 0 at  max 35 ms total 2791 ms
+MUT SURVIVED	world:910:lit:19	differ 0 at  max 52 ms total 2955 ms
+MUT SURVIVED	world:910:lit:35	differ 0 at  max 56 ms total 3491 ms
+MUT SURVIVED	world:910:lit:48	differ 0 at  max 62 ms total 2949 ms
+MUT SURVIVED	world:910:hex:54	differ 0 at  max 42 ms total 2918 ms
+MUT SURVIVED	world:914:sel:0	differ 0 at  max 91 ms total 2903 ms
+MUT SURVIVED	world:914:del:0	differ 0 at  max 50 ms total 2876 ms
+MUT killed	world:162:le:64	differ 6 at west round 0 every pair whole (89184 asked) max 51 ms total 1573 ms
+MUT SURVIVED	world:162:ge:42	differ 0 at  max 58 ms total 2831 ms
+MUT killed	world:162:eq:9	differ 566 at east round 0 every pair whole (100707 asked) max 13 ms total 234 ms
+MUT killed	world:162:and:59	differ 8 at east round 0 every pair whole (100707 asked) max 24 ms total 247 ms
+MUT killed	world:162:or:22	differ 2421 at east round 0 every pair whole (100707 asked) max 26 ms total 262 ms
+MUT killed	world:162:or:36	differ 3784 at east round 0 every pair whole (100707 asked) max 19 ms total 282 ms
+MUT killed	world:362:sub:14	differ 2390 at east round 0 every pair whole (100707 asked) max 20 ms total 277 ms
+MUT SURVIVED	world:363:lt:23	differ 0 at  max 50 ms total 3457 ms
+MUT killed	world:363:eq:9	differ 2390 at east round 0 every pair whole (100707 asked) max 25 ms total 308 ms
+MUT SURVIVED	world:363:or:15	differ 0 at  max 57 ms total 2907 ms
+MUT SURVIVED	world:363:lit:12	differ 0 at  max 37 ms total 2827 ms
+MUT killed	world:363:ift:0	differ 2390 at east round 0 every pair whole (100707 asked) max 14 ms total 219 ms
+MUT SURVIVED	world:363:iff:0	differ 0 at  max 48 ms total 2968 ms
+MUT killed	world:370:lit:63	differ 938 at east round 0 every pair whole (100707 asked) max 29 ms total 245 ms
+MUT killed	world:1072:eq:35	differ 2390 at east round 0 every pair whole (100707 asked) max 24 ms total 281 ms
+MUT SURVIVED	world:1072:band:21	differ 0 at  max 83 ms total 3638 ms
+MUT killed	world:1072:xor:11	differ 2390 at east round 0 every pair whole (100707 asked) max 16 ms total 237 ms
+MUT SURVIVED	world:1072:lit:38	differ 0 at  max 49 ms total 2944 ms
+MUT killed	world:1072:ift:0	differ 2390 at east round 0 every pair whole (100707 asked) max 19 ms total 229 ms
+MUT SURVIVED	world:1072:iff:0	differ 0 at  max 47 ms total 2916 ms
+MUT killed	world:1075:lnot:4	differ 2390 at east round 0 every pair whole (100707 asked) max 24 ms total 282 ms
+MUT killed	world:1075:ift:0	differ 2390 at east round 0 every pair whole (100707 asked) max 28 ms total 289 ms
+MUT SURVIVED	world:1075:iff:0	differ 0 at  max 65 ms total 3047 ms
+MUT killed	world:1078:add:57	differ 2729 at east round 0 every pair whole (100707 asked) max 67 ms total 350 ms
+MUT killed	world:1078:mul:43	differ 2390 at east round 0 every pair whole (100707 asked) max 24 ms total 241 ms
+MUT killed	world:1084:lnot:4	differ 7175 at east round 0 every pair whole (100707 asked) max 72 ms total 943 ms
+MUT killed	world:1084:ift:0	differ 1 at east round 3 a cut over a record (176 asked) max 18 ms total 305 ms
+MUT killed	world:1084:iff:0	differ 7175 at east round 0 every pair whole (100707 asked) max 79 ms total 904 ms
+MUT SURVIVED	world:903:sel:0	differ 0 at  max 36 ms total 1647 ms
+MUT SURVIVED	world:903:lit:18	differ 0 at  max 33 ms total 1657 ms
+MUT SURVIVED	world:903:lit:25	differ 0 at  max 21 ms total 1656 ms
+MUT SURVIVED	world:903:lit:54	differ 0 at  max 20 ms total 1910 ms
+MUT SURVIVED	world:903:lit:61	differ 0 at  max 67 ms total 2904 ms
+MUT killed	world:905:xor:32	differ 2 at east round 0 every pair whole (100707 asked) max 46 ms total 253 ms
+MUT SURVIVED	world:906:band:16	differ 0 at  max 51 ms total 2687 ms
+MUT SURVIVED	world:906:not:19	differ 0 at  max 26 ms total 1498 ms
+MUT SURVIVED	world:906:hex:11	differ 0 at  max 20 ms total 1727 ms
+MUT SURVIVED	world:907:lt:25	differ 0 at  max 37 ms total 1707 ms
+MUT SURVIVED	world:907:gt:35	differ 0 at  max 19 ms total 1642 ms
+MUT LIMIT	world:907:and:30	differ 0 at east round 0: limit max 60009 ms total 60018 ms
+MUT killed	world:1085:del:0	differ 7175 at east round 0 every pair whole (100707 asked) max 34 ms total 315 ms
+MUT killed	world:1086:del:0	differ 4 at west round 0 every pair whole (89184 asked) max 17 ms total 794 ms
+MUT SURVIVED	world:1088:lit:16	differ 0 at  max 20 ms total 1483 ms
+MUT killed	world:1089:ne:9	differ 7175 at east round 0 every pair whole (100707 asked) max 18 ms total 281 ms
+MUT killed	world:1089:ift:0	differ 7175 at east round 0 every pair whole (100707 asked) max 16 ms total 286 ms
+MUT SURVIVED	world:1089:iff:0	differ 0 at  max 30 ms total 2178 ms
+MUT SURVIVED	world:1090:ift:0	differ 0 at  max 22 ms total 1482 ms
+MUT SURVIVED	world:1090:iff:0	differ 0 at  max 20 ms total 1910 ms
+MUT SURVIVED	world:1091:del:0	differ 0 at  max 24 ms total 1824 ms
+MUT killed	world:1093:eq:14	differ 4 at west round 0 every pair whole (89184 asked) max 23 ms total 1013 ms
+MUT killed	world:1093:ift:0	differ 4 at west round 0 every pair whole (89184 asked) max 17 ms total 868 ms
+MUT SURVIVED	world:1093:iff:0	differ 0 at  max 28 ms total 1651 ms
+MUT killed	world:1094:bor:47	differ 1831 at east round 0 every pair whole (100707 asked) max 16 ms total 140 ms
+MUT killed	world:1100:eq:11	differ 2371 at east round 0 every pair whole (100707 asked) max 17 ms total 174 ms
+MUT SURVIVED	world:1100:eq:33	differ 0 at  max 69 ms total 2338 ms
+MUT killed	world:1100:and:25	differ 2371 at east round 0 every pair whole (100707 asked) max 37 ms total 278 ms
+MUT killed	world:1100:ift:0	differ 2399 at east round 0 every pair whole (100707 asked) max 23 ms total 243 ms
+MUT SURVIVED	world:1100:iff:0	differ 0 at  max 54 ms total 3002 ms
+MUT killed	world:1104:eq:11	differ 5200 at east round 0 every pair whole (100707 asked) max 568 ms total 4469 ms
+MUT SURVIVED	world:1104:ift:0	differ 0 at  max 29 ms total 3129 ms
+MUT killed	world:1104:iff:0	differ 5200 at east round 0 every pair whole (100707 asked) max 537 ms total 3483 ms
+MUT killed	world:1105:del:0	differ 5200 at east round 0 every pair whole (100707 asked) max 244 ms total 1997 ms
+MUT SURVIVED	world:1107:lit:11	differ 0 at  max 31 ms total 2470 ms
+MUT SURVIVED	world:1108:lit:11	differ 0 at  max 42 ms total 2482 ms
+MUT killed	world:1109:ift:0	differ 4 at west round 0 every pair whole (89184 asked) max 39 ms total 1298 ms
+MUT killed	world:1109:iff:0	differ 5200 at east round 0 every pair whole (100707 asked) max 710 ms total 4396 ms
+MUT killed	world:1110:eq:37	differ 162 at east round 0 every pair whole (100707 asked) max 48 ms total 242 ms
+MUT killed	world:1110:sub:45	differ 162 at east round 0 every pair whole (100707 asked) max 16 ms total 182 ms
+MUT killed	world:1110:sel:0	differ 162 at east round 0 every pair whole (100707 asked) max 69 ms total 268 ms
+MUT killed	world:1110:lit:48	differ 162 at east round 0 every pair whole (100707 asked) max 26 ms total 243 ms
+MUT killed	world:1111:del:0	differ 5200 at east round 0 every pair whole (100707 asked) max 275 ms total 2130 ms
+MUT SURVIVED	world:1112:ge:41	differ 0 at  max 19 ms total 1504 ms
+MUT SURVIVED	world:1112:ne:61	differ 0 at  max 17 ms total 1846 ms
+MUT SURVIVED	ID1980	differ 0 at  max 20 ms total 1826 ms
+MUT SURVIVED	world:1112:or:54	differ 0 at  max 18 ms total 1861 ms
+MUT SURVIVED	world:1112:sel:0	differ 0 at  max 33 ms total 2031 ms
+MUT SURVIVED	world:1112:del:0	differ 0 at  max 30 ms total 1762 ms
+MUT killed	world:1114:eq:11	differ 2390 at east round 0 every pair whole (100707 asked) max 12 ms total 128 ms
+MUT SURVIVED	world:1114:and:24	differ 0 at  max 27 ms total 2328 ms
+MUT SURVIVED	world:1114:ift:0	differ 0 at  max 104 ms total 2584 ms
+MUT killed	world:1114:iff:0	differ 2390 at east round 0 every pair whole (100707 asked) max 12 ms total 232 ms
+MUT killed	world:1116:ne:8	differ 7158 at east round 0 every pair whole (100707 asked) max 476 ms total 5723 ms
+MUT killed	world:1116:ift:0	differ 5200 at east round 0 every pair whole (100707 asked) max 282 ms total 2578 ms
+MUT killed	world:1116:iff:0	differ 2390 at east round 0 every pair whole (100707 asked) max 9 ms total 112 ms
+MUT killed	world:1118:or:15	differ 268 at east round 0 every pair whole (100707 asked) max 14 ms total 121 ms
+MUT SURVIVED	world:1129:del:0	differ 0 at  max 47 ms total 2057 ms
+MUT killed	world:1131:del:0	differ 17 at east round 0 every pair whole (100707 asked) max 19 ms total 127 ms
+MUT killed	world:1134:eq:11	differ 6705 at east round 0 every pair whole (100707 asked) max 233 ms total 3238 ms
+MUT killed	world:1134:lit:14	differ 480 at east round 0 every pair whole (100707 asked) max 16 ms total 215 ms
+MUT killed	world:1134:ift:0	differ 7175 at east round 0 every pair whole (100707 asked) max 511 ms total 5471 ms
+MUT killed	world:1134:iff:0	differ 476 at east round 0 every pair whole (100707 asked) max 29 ms total 285 ms
+MUT killed	world:1135:eq:11	differ 444 at east round 0 every pair whole (100707 asked) max 15 ms total 216 ms
+MUT killed	world:1135:ift:0	differ 444 at east round 0 every pair whole (100707 asked) max 18 ms total 197 ms
+MUT SURVIVED	world:1135:iff:0	differ 0 at  max 22 ms total 1831 ms
+MUT killed	world:1138:eq:85	differ 5057 at east round 0 every pair whole (100707 asked) max 27 ms total 120 ms
+MUT killed	world:1138:bor:66	differ 10 at east round 0 every pair whole (100707 asked) max 29 ms total 117 ms
+MUT killed	world:1138:sel:0	differ 5057 at east round 0 every pair whole (100707 asked) max 15 ms total 104 ms
+MUT SURVIVED	world:1138:lit:100	differ 0 at  max 16 ms total 1508 ms
+MUT killed	world:1140:rem:26	differ 1059 at east round 0 every pair whole (100707 asked) max 16 ms total 103 ms
+MUT killed	world:1140:shl:38	differ 162 at east round 0 every pair whole (100707 asked) max 14 ms total 93 ms
+MUT SURVIVED	world:1118:lnot:18	differ 0 at  max 78 ms total 2933 ms
+MUT SURVIVED	world:1118:ift:0	differ 0 at  max 45 ms total 2373 ms
+MUT killed	world:1118:iff:0	differ 1962 at east round 0 every pair whole (100707 asked) max 19 ms total 154 ms
+MUT killed	world:1119:del:0	differ 1962 at east round 0 every pair whole (100707 asked) max 16 ms total 159 ms
+MUT SURVIVED	world:1120:del:0	differ 0 at  max 26 ms total 2237 ms
+MUT killed	world:1122:del:0	differ 2390 at east round 0 every pair whole (100707 asked) max 12 ms total 121 ms
+MUT killed	world:1125:ne:9	differ 7175 at east round 0 every pair whole (100707 asked) max 686 ms total 5754 ms
+MUT killed	world:1125:ift:0	differ 7175 at east round 0 every pair whole (100707 asked) max 548 ms total 5782 ms
+MUT killed	world:1125:iff:0	differ 17 at east round 0 every pair whole (100707 asked) max 15 ms total 107 ms
+MUT SURVIVED	world:1127:or:15	differ 0 at  max 29 ms total 1867 ms
+MUT SURVIVED	world:1127:lnot:18	differ 0 at  max 27 ms total 1573 ms
+MUT SURVIVED	world:1127:ift:0	differ 0 at  max 33 ms total 1578 ms
+MUT killed	world:1127:iff:0	differ 17 at east round 0 every pair whole (100707 asked) max 15 ms total 97 ms
+MUT killed	world:1128:bor:18	differ 17 at east round 0 every pair whole (100707 asked) max 26 ms total 133 ms
+MUT killed	world:1128:del:0	differ 17 at east round 0 every pair whole (100707 asked) max 16 ms total 131 ms
+MUT killed	world:1140:bor:15	differ 7175 at east round 0 every pair whole (100707 asked) max 893 ms total 8776 ms
+MUT SURVIVED	world:1065:add:22	differ 0 at  max 21 ms total 2014 ms
+MUT SURVIVED	world:1065:shr:37	differ 0 at  max 24 ms total 1597 ms
+MUT killed	world:1066:lit:41	differ 1892 at east round 0 every pair whole (100707 asked) max 27 ms total 133 ms
+MUT killed	world:403:eq:9	differ 11913 at east round 0 every pair whole (100707 asked) max 1 ms total 37 ms
+MUT SURVIVED	world:403:lit:12	differ 0 at  max 17 ms total 1558 ms
+MUT killed	world:403:ift:0	differ 11913 at east round 0 every pair whole (100707 asked) max 3 ms total 36 ms
+MUT SURVIVED	world:403:iff:0	differ 0 at  max 17 ms total 1527 ms
+MUT SURVIVED	world:404:lit:7	differ 0 at  max 20 ms total 1450 ms
+MUT killed	world:406:sub:17	differ 12122 at east round 0 every pair whole (100707 asked) max 2 ms total 38 ms
+MUT killed	world:406:sub:34	differ 11913 at east round 0 every pair whole (100707 asked) max 4 ms total 46 ms
+MUT killed	world:406:shr:27	differ 12407 at east round 0 every pair whole (100707 asked) max 1 ms total 35 ms
+MUT killed	world:406:shl:10	differ 11913 at east round 0 every pair whole (100707 asked) max 1 ms total 35 ms
+MUT killed	world:406:lit:14	differ 11913 at east round 0 every pair whole (100707 asked) max 3 ms total 43 ms
+MUT killed	world:406:lit:31	differ 11913 at east round 0 every pair whole (100707 asked) max 13 ms total 54 ms
+MUT killed	world:240:eq:55	differ 1892 at east round 0 every pair whole (100707 asked) max 33 ms total 162 ms
+MUT killed	world:240:sub:30	differ 1892 at east round 0 every pair whole (100707 asked) max 15 ms total 99 ms
+MUT killed	world:240:shl:21	differ 1892 at east round 0 every pair whole (100707 asked) max 14 ms total 104 ms
+MUT killed	world:240:band:36	differ 1892 at east round 0 every pair whole (100707 asked) max 13 ms total 96 ms
+MUT SURVIVED	ID2040	differ 0 at  max 17 ms total 1506 ms
+MUT killed	world:240:sel:0	differ 1892 at east round 0 every pair whole (100707 asked) max 19 ms total 125 ms
+MUT killed	world:240:lit:18	differ 1892 at east round 0 every pair whole (100707 asked) max 15 ms total 97 ms
+MUT killed	world:240:lit:33	differ 1892 at east round 0 every pair whole (100707 asked) max 25 ms total 107 ms
+MUT killed	world:240:lit:39	differ 1892 at east round 0 every pair whole (100707 asked) max 23 ms total 101 ms
+MUT SURVIVED	world:240:lit:46	differ 0 at  max 21 ms total 1356 ms
+MUT SURVIVED	world:240:lit:58	differ 0 at  max 21 ms total 1517 ms
+MUT SURVIVED	world:243:le:68	differ 0 at  max 23 ms total 1624 ms
+MUT killed	world:243:sub:30	differ 1892 at east round 0 every pair whole (100707 asked) max 18 ms total 124 ms
+MUT killed	world:243:sub:43	differ 1892 at east round 0 every pair whole (100707 asked) max 32 ms total 151 ms
+MUT killed	world:243:shl:21	differ 1892 at east round 0 every pair whole (100707 asked) max 14 ms total 140 ms
+MUT SURVIVED	world:532:t:29	differ 0 at  max 39 ms total 1614 ms
+MUT SURVIVED	world:534:sub:12	differ 0 at  max 29 ms total 1590 ms
+MUT SURVIVED	world:534:lit:15	differ 0 at  max 19 ms total 1531 ms
+MUT SURVIVED	world:534:del:0	differ 0 at  max 27 ms total 1567 ms
+MUT SURVIVED	world:536:t:42	differ 0 at  max 25 ms total 2478 ms
+MUT SURVIVED	world:536:t:48	differ 0 at  max 94 ms total 3474 ms
+MUT killed	world:984:add:79	differ 1 at west round 0 every pair whole (89184 asked) max 36 ms total 1386 ms
+MUT killed	pose:1355:iff:0	differ 15171 at east round 0 every pair whole (100707 asked) max 10 ms total 113 ms
+MUT killed	pose:1356:sub:69	differ 11905 at east round 0 every pair whole (100707 asked) max 9 ms total 125 ms
+MUT killed	pose:1356:sub:101	differ 11905 at east round 0 every pair whole (100707 asked) max 7 ms total 137 ms
+MUT killed	pose:1356:shr:56	differ 8243 at east round 0 every pair whole (100707 asked) max 47 ms total 252 ms
+MUT killed	pose:1356:shr:88	differ 8243 at east round 0 every pair whole (100707 asked) max 12 ms total 188 ms
+MUT killed	pose:1357:eq:10	differ 15171 at east round 0 every pair whole (100707 asked) max 7 ms total 119 ms
+MUT killed	pose:1357:ift:0	differ 15171 at east round 0 every pair whole (100707 asked) max 9 ms total 102 ms
+MUT SURVIVED	pose:1357:iff:0	differ 0 at  max 46 ms total 2496 ms
+MUT killed	world:243:band:49	differ 1892 at east round 0 every pair whole (100707 asked) max 33 ms total 125 ms
+MUT killed	world:243:sel:0	differ 1892 at east round 0 every pair whole (100707 asked) max 14 ms total 102 ms
+MUT killed	world:243:lit:18	differ 1892 at east round 0 every pair whole (100707 asked) max 18 ms total 169 ms
+MUT killed	world:243:lit:46	differ 1892 at east round 0 every pair whole (100707 asked) max 21 ms total 152 ms
+MUT killed	world:243:lit:52	differ 1892 at east round 0 every pair whole (100707 asked) max 14 ms total 91 ms
+MUT SURVIVED	world:243:lit:59	differ 0 at  max 24 ms total 1514 ms
+MUT killed	world:464:shl:20	differ 1849 at east round 0 every pair whole (100707 asked) max 23 ms total 103 ms
+MUT killed	world:464:lit:23	differ 1189 at west round 0 every pair whole (89184 asked) max 17 ms total 758 ms
+MUT killed	world:464:lit:31	differ 1841 at east round 0 every pair whole (100707 asked) max 14 ms total 97 ms
+MUT killed	world:464:lit:41	differ 1215 at west round 0 every pair whole (89184 asked) max 15 ms total 724 ms
+MUT SURVIVED	world:522:ge:9	differ 0 at  max 16 ms total 1402 ms
+MUT killed	world:524:eq:6	differ 2390 at east round 0 every pair whole (100707 asked) max 11 ms total 99 ms
+MUT SURVIVED	world:531:ift:0	differ 0 at  max 27 ms total 1766 ms
+MUT killed	world:531:iff:0	differ 11655 at east round 0 every pair whole (100707 asked) max 2886 ms total 31777 ms
+MUT killed	world:532:t:23	differ 7175 at east round 0 every pair whole (100707 asked) max 697 ms total 7313 ms
+MUT killed	pose:1358:del:0	differ 2024 at east round 0 every pair whole (100707 asked) max 31 ms total 117 ms
+MUT killed	pose:1361:del:0	differ 8360 at east round 0 every pair whole (100707 asked) max 6 ms total 87 ms
+MUT killed	pose:1362:del:0	differ 950 at east round 0 every pair whole (100707 asked) max 17 ms total 103 ms
+MUT killed	pose:1363:del:0	differ 1638 at east round 0 every pair whole (100707 asked) max 24 ms total 115 ms
+MUT killed	pose:1364:eq:35	differ 1002 at east round 0 every pair whole (100707 asked) max 13 ms total 77 ms
+MUT killed	pose:1364:sel:0	differ 1002 at east round 0 every pair whole (100707 asked) max 4 ms total 70 ms
+MUT killed	row:1214:mul:23	differ 1463 at east round 0 every pair whole (100707 asked) max 14 ms total 102 ms
+MUT killed	row:1214:lit:21	differ 15800 at east round 0 every pair whole (100707 asked) max 14 ms total 101 ms
+MUT LIMIT	pose:1396:ift:0	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT LIMIT	pose:1422:del:0	differ 0 at east round 0: limit max 60010 ms total 60034 ms
+MUT LIMIT	pose:1454:del:0	differ 0 at east round 0: limit max 60010 ms total 60021 ms
+MUT LIMIT	pose:1428:ift:0	differ 0 at east round 0: limit max 60010 ms total 82885 ms
+MUT SURVIVED	row:1211:shr:10	differ 0 at  max 60 ms total 2258 ms
+MUT killed	row:1211:shr:23	differ 91249 at east round 0 every pair whole (100707 asked) max 46 ms total 304 ms
+MUT killed	row:1211:shr:42	differ 91276 at east round 0 every pair whole (100707 asked) max 47 ms total 310 ms
+MUT SURVIVED	row:1211:shr:61	differ 0 at  max 46 ms total 2397 ms
+MUT killed	row:1211:shr:78	differ 91257 at east round 0 every pair whole (100707 asked) max 32 ms total 258 ms
+MUT SURVIVED	row:1211:lit:13	differ 0 at  max 39 ms total 2271 ms
+MUT SURVIVED	row:1211:lit:26	differ 0 at  max 44 ms total 2364 ms
+MUT killed	row:1211:lit:45	differ 4479 at east round 0 every pair whole (100707 asked) max 51 ms total 276 ms
+MUT LIMIT	row:1208:band:28	differ 0 at east round 0: limit max 60010 ms total 60039 ms
+MUT LIMIT	pose:1261:adda:40	differ 0 at east round 0: limit max 60000 ms total 60011 ms
+MUT killed	row:1205:mul:24	differ 4927 at east round 0 every pair whole (100707 asked) max 37 ms total 239 ms
+MUT killed	row:1205:lit:38	differ 4905 at east round 0 every pair whole (100707 asked) max 18 ms total 196 ms
+MUT killed	world:169:min:7	differ 3804 at east round 0 every pair whole (100707 asked) max 14 ms total 185 ms
+MUT killed	world:169:div:15	differ 1800 at east round 0 every pair whole (100707 asked) max 17 ms total 208 ms
+MUT killed	world:840:sel:0	differ 2 at west round 0 every pair whole (89184 asked) max 30 ms total 1268 ms
+MUT SURVIVED	ID840	differ 0 at  max 30 ms total 2320 ms
+MUT killed	world:424:shr:10	differ 11980 at east round 0 every pair whole (100707 asked) max 8 ms total 117 ms
+MUT LIMIT	world:424:shl:39	differ 0 at east round 0: limit max 60002 ms total 105478 ms
+MUT killed	world:246:add:74	differ 1892 at east round 0 every pair whole (100707 asked) max 47 ms total 270 ms
+MUT killed	world:246:sub:40	differ 1892 at east round 0 every pair whole (100707 asked) max 40 ms total 282 ms
+MUT killed	world:246:shl:32	differ 1892 at east round 0 every pair whole (100707 asked) max 44 ms total 298 ms
+MUT killed	world:246:band:21	differ 1892 at east round 0 every pair whole (100707 asked) max 32 ms total 274 ms
+MUT killed	world:246:lit:29	differ 1892 at east round 0 every pair whole (100707 asked) max 37 ms total 257 ms
+MUT killed	world:246:lit:43	differ 39 at east round 0 every pair whole (100707 asked) max 63 ms total 313 ms
+MUT killed	pose:1270:lit:40	differ 8 at east round 0 every pair whole (100707 asked) max 46 ms total 320 ms
+MUT killed	pose:1271:le:24	differ 17 at east round 0 every pair whole (100707 asked) max 38 ms total 253 ms
+MUT LIMIT	pose:1271:adda:37	differ 0 at east round 0: limit max 60005 ms total 60014 ms
+MUT killed	row:1209:shr:69	differ 91251 at east round 0 every pair whole (100707 asked) max 17245 ms total 36731 ms
+MUT LIMIT	row:1209:band:37	differ 0 at east round 0: limit max 60007 ms total 61543 ms
+MUT killed	world:454:lit:32	differ 15626 at east round 0 every pair whole (100707 asked) max 55 ms total 534 ms
+MUT killed	world:454:del:0	differ 15171 at east round 0 every pair whole (100707 asked) max 26 ms total 276 ms
+MUT killed	world:455:del:0	differ 24660 at east round 0 every pair whole (100707 asked) max 32 ms total 195 ms
+MUT SURVIVED	world:566:iff:0	differ 0 at  max 202 ms total 5006 ms
+MUT LIMIT	world:567:sub:21	differ 0 at east round 0: limit max 60000 ms total 60389 ms
+MUT SURVIVED	world:978:ift:0	differ 0 at  max 78 ms total 2474 ms
+MUT killed	world:978:iff:0	differ 1 at west round 0 every pair whole (89184 asked) max 31 ms total 1278 ms
+MUT SURVIVED	world:979:eq:43	differ 0 at  max 46 ms total 2448 ms
+MUT killed	world:979:div:6	differ 2 at west round 0 every pair whole (89184 asked) max 64 ms total 1531 ms
+MUT SURVIVED	world:979:band:36	differ 0 at  max 40 ms total 2526 ms
+MUT SURVIVED	world:979:sel:0	differ 0 at  max 58 ms total 2449 ms
+MUT SURVIVED	world:979:lit:9	differ 0 at  max 16 ms total 1318 ms
+MUT SURVIVED	world:979:lit:22	differ 0 at  max 15 ms total 1370 ms
+MUT LIMIT	world:453:and:16	differ 0 at east round 0: limit max 60010 ms total 60046 ms
+MUT killed	pose:1464:lit:7	differ 715 at east round 0 every pair whole (100707 asked) max 33 ms total 266 ms
+MUT LIMIT	pose:1464:del:0	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	pose:1442:ift:0	differ 4 at west round 0 every pair whole (89184 asked) max 31 ms total 818 ms
+MUT killed	pose:1442:iff:0	differ 1859 at east round 0 every pair whole (100707 asked) max 1431 ms total 3777 ms
+MUT killed	pose:1443:del:0	differ 2117 at east round 0 every pair whole (100707 asked) max 1145 ms total 6475 ms
+MUT SURVIVED	pose:1446:f:9	differ 0 at  max 1917 ms total 49854 ms
+MUT SURVIVED	pose:1446:del:0	differ 0 at  max 18 ms total 1396 ms
+MUT killed	pose:1447:ift:0	differ 619 at east round 0 every pair whole (100707 asked) max 17 ms total 108 ms
+MUT killed	pose:1447:iff:0	differ 92931 at east round 0 every pair whole (100707 asked) max 25 ms total 256 ms
+MUT killed	pose:1448:eq:16	differ 5057 at east round 0 every pair whole (100707 asked) max 32 ms total 278 ms
+MUT killed	pose:1449:eq:15	differ 5057 at east round 0 every pair whole (100707 asked) max 26 ms total 243 ms
+MUT killed	pose:1449:band:41	differ 5057 at east round 0 every pair whole (100707 asked) max 22 ms total 281 ms
+MUT killed	pose:1455:del:0	differ 336 at east round 0 every pair whole (100707 asked) max 22 ms total 279 ms
+MUT SURVIVED	ID660	differ 0 at  max 33 ms total 2731 ms
+MUT SURVIVED	pose:1457:le:64	differ 0 at  max 36 ms total 2848 ms
+MUT SURVIVED	pose:1457:ge:26	differ 0 at  max 28 ms total 2980 ms
+MUT killed	pose:1457:and:46	differ 460 at east round 0 every pair whole (100707 asked) max 19 ms total 276 ms
+MUT killed	world:452:add:64	differ 24620 at east round 0 every pair whole (100707 asked) max 324 ms total 1535 ms
+MUT killed	world:452:sub:20	differ 15171 at east round 0 every pair whole (100707 asked) max 21 ms total 245 ms
+MUT killed	world:907:adda:46	differ 2 at east round 0 every pair whole (100707 asked) max 31 ms total 276 ms
+MUT killed	world:907:lit:16	differ 2 at east round 0 every pair whole (100707 asked) max 26 ms total 303 ms
+MUT SURVIVED	world:907:lit:27	differ 0 at  max 26 ms total 3003 ms
+MUT killed	pose:1396:iff:0	differ 2993 at east round 0 every pair whole (100707 asked) max 3123 ms total 12111 ms
+MUT killed	pose:1397:del:0	differ 30 at east round 0 every pair whole (100707 asked) max 32 ms total 339 ms
+MUT LIMIT	pose:1372:ift:0	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	pose:1433:lit:5	differ 563 at east round 0 every pair whole (100707 asked) max 31 ms total 321 ms
+MUT LIMIT	pose:1433:del:0	differ 0 at east round 0: limit max 60010 ms total 60018 ms
+MUT killed	pose:1262:le:26	differ 32 at east round 0 every pair whole (100707 asked) max 31 ms total 136 ms
+MUT LIMIT	pose:1262:adda:40	differ 0 at east round 0: limit max 60000 ms total 60009 ms
+MUT killed	world:424:lit:55	differ 8267 at east round 0 every pair whole (100707 asked) max 46 ms total 220 ms
+MUT killed	world:430:ne:38	differ 15171 at east round 0 every pair whole (100707 asked) max 9 ms total 129 ms
+MUT killed	world:430:shl:16	differ 15171 at east round 0 every pair whole (100707 asked) max 7 ms total 117 ms
+MUT SURVIVED	world:430:band:9	differ 0 at  max 19 ms total 2223 ms
+MUT LIMIT	row:1209:shr:25	differ 0 at east round 0: limit max 60007 ms total 61300 ms
+MUT killed	world:450:sub:29	differ 12912 at east round 0 every pair whole (100707 asked) max 28 ms total 237 ms
+MUT killed	world:450:lit:32	differ 16224 at east round 0 every pair whole (100707 asked) max 15 ms total 218 ms
+MUT killed	world:451:band:19	differ 15171 at east round 0 every pair whole (100707 asked) max 10 ms total 242 ms
+MUT killed	world:452:add:49	differ 12917 at east round 0 every pair whole (100707 asked) max 23 ms total 244 ms
+MUT LIMIT	world:453:and:32	differ 0 at east round 0: limit max 60009 ms total 60060 ms
+MUT killed	pose:1470:del:0	differ 5057 at east round 0 every pair whole (100707 asked) max 530 ms total 2927 ms
+MUT killed	row:1205:add:20	differ 4928 at east round 0 every pair whole (100707 asked) max 421 ms total 1966 ms
+MUT LIMIT	pose:1428:iff:0	differ 0 at east round 0: limit max 60008 ms total 60017 ms
+MUT killed	pose:1434:lt:6	differ 6 at east round 0 every pair whole (100707 asked) max 426 ms total 4413 ms
+MUT killed	pose:1434:ift:0	differ 1251 at east round 0 every pair whole (100707 asked) max 520 ms total 1590 ms
+MUT LIMIT	pose:1434:iff:0	differ 0 at east round 0: limit max 60008 ms total 60017 ms
+MUT SURVIVED	world:978:lt:9	differ 0 at  max 50 ms total 3487 ms
+MUT SURVIVED	world:978:lit:11	differ 0 at  max 33 ms total 3579 ms
+MUT SURVIVED	row:1209:band:52	differ 0 at  max 55 ms total 3714 ms
+MUT killed	row:1209:lit:28	differ 4479 at east round 0 every pair whole (100707 asked) max 98 ms total 435 ms
+MUT SURVIVED	row:1209:lit:72	differ 0 at  max 79 ms total 4394 ms
+MUT killed	row:1209:hex:40	differ 2051 at east round 0 every pair whole (100707 asked) max 60 ms total 425 ms
+MUT LIMIT	world:453:lit:13	differ 0 at east round 0: limit max 60008 ms total 60017 ms
+MUT SURVIVED	row:1209:hex:55	differ 0 at  max 29 ms total 3065 ms
+MUT killed	row:1210:add:24	differ 91277 at east round 0 every pair whole (100707 asked) max 16 ms total 266 ms
+MUT SURVIVED	row:1210:add:46	differ 0 at  max 861 ms total 18627 ms
+MUT killed	row:1210:shr:17	differ 91251 at east round 0 every pair whole (100707 asked) max 52732 ms total 83712 ms
+MUT LIMIT	row:1210:band:35	differ 0 at east round 0: limit max 60002 ms total 60045 ms
+MUT killed	pose:1265:ift:0	differ 32 at east round 0 every pair whole (100707 asked) max 454 ms total 1586 ms
+MUT SURVIVED	pose:1265:iff:0	differ 0 at  max 986 ms total 10116 ms
+MUT killed	pose:1272:lit:40	differ 18 at east round 0 every pair whole (100707 asked) max 91 ms total 455 ms
+MUT killed	pose:1273:ift:0	differ 1203 at east round 0 every pair whole (100707 asked) max 66 ms total 490 ms
+MUT killed	pose:1273:iff:0	differ 32 at east round 0 every pair whole (100707 asked) max 60 ms total 440 ms
+MUT killed	pose:1274:t:7	differ 32 at east round 0 every pair whole (100707 asked) max 34 ms total 415 ms
+MUT killed	pose:1282:f:7	differ 5057 at east round 0 every pair whole (100707 asked) max 107 ms total 479 ms
+MUT SURVIVED	world:145:lit:7	differ 0 at  max 96 ms total 4255 ms
+MUT killed	world:246:add:52	differ 1892 at east round 0 every pair whole (100707 asked) max 116 ms total 479 ms
+MUT killed	world:424:band:31	differ 11798 at east round 0 every pair whole (100707 asked) max 7592 ms total 32940 ms
+MUT LIMIT	world:424:lit:36	differ 0 at east round 0: limit max 60010 ms total 60018 ms
+MUT killed	pose:1271:lit:40	differ 14 at east round 0 every pair whole (100707 asked) max 40 ms total 231 ms
+MUT killed	world:382:shl:27	differ 20 at east round 0 every pair whole (100707 asked) max 22 ms total 260 ms
+MUT killed	world:382:bor:18	differ 1799 at east round 0 every pair whole (100707 asked) max 15 ms total 249 ms
+MUT SURVIVED	world:977:lit:18	differ 0 at  max 25 ms total 3072 ms
+MUT killed	pose:1435:del:0	differ 150 at east round 0 every pair whole (100707 asked) max 52 ms total 402 ms
+MUT killed	pose:1439:del:0	differ 5064 at east round 0 every pair whole (100707 asked) max 25 ms total 345 ms
+MUT killed	pose:1422:lit:7	differ 285 at east round 0 every pair whole (100707 asked) max 33 ms total 380 ms
+MUT SURVIVED	row:1208:hex:15	differ 0 at  max 59 ms total 3490 ms
+MUT SURVIVED	row:1208:hex:31	differ 0 at  max 44 ms total 3509 ms
+MUT killed	pose:1260:le:26	differ 26 at east round 0 every pair whole (100707 asked) max 33 ms total 360 ms
+MUT LIMIT	pose:1260:adda:40	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	pose:1260:lit:43	differ 16 at east round 0 every pair whole (100707 asked) max 39 ms total 258 ms
+MUT killed	pose:1261:le:26	differ 32 at east round 0 every pair whole (100707 asked) max 21 ms total 241 ms
+MUT killed	pose:1261:lit:43	differ 20 at east round 0 every pair whole (100707 asked) max 22 ms total 265 ms
+MUT killed	pose:1262:lit:43	differ 14 at east round 0 every pair whole (100707 asked) max 27 ms total 260 ms
+MUT killed	pose:1265:eq:9	differ 32 at east round 0 every pair whole (100707 asked) max 20 ms total 269 ms
+MUT LIMIT	world:453:ift:0	differ 0 at east round 0: limit max 60000 ms total 60133 ms
+MUT killed	pose:1468:del:0	differ 32 at east round 0 every pair whole (100707 asked) max 849 ms total 2170 ms
+MUT killed	pose:1429:ift:0	differ 935 at east round 0 every pair whole (100707 asked) max 157 ms total 1021 ms
+MUT killed	pose:1429:iff:0	differ 3378 at east round 0 every pair whole (100707 asked) max 24486 ms total 36085 ms
+MUT killed	pose:1430:del:0	differ 162 at east round 0 every pair whole (100707 asked) max 15 ms total 99 ms
+MUT LIMIT	pose:1431:del:0	differ 0 at east round 0: limit max 60010 ms total 60019 ms
+MUT killed	world:453:iff:0	differ 15171 at east round 0 every pair whole (100707 asked) max 28 ms total 293 ms
+MUT killed	world:454:sub:29	differ 15396 at east round 0 every pair whole (100707 asked) max 142 ms total 722 ms
+MUT killed	world:454:t:37	differ 15171 at east round 0 every pair whole (100707 asked) max 36 ms total 221 ms
+MUT killed	pose:1466:add:24	differ 32 at east round 0 every pair whole (100707 asked) max 22 ms total 309 ms
+MUT killed	pose:1466:lit:27	differ 32 at east round 0 every pair whole (100707 asked) max 32 ms total 312 ms
+MUT killed	pose:1467:ift:0	differ 5057 at east round 0 every pair whole (100707 asked) max 23 ms total 343 ms
+MUT killed	pose:1467:iff:0	differ 32 at east round 0 every pair whole (100707 asked) max 21 ms total 272 ms
+MUT LIMIT	row:1210:band:57	differ 0 at east round 0: limit max 60009 ms total 64413 ms
+MUT LIMIT	pose:1433:suba:2	differ 0 at east round 0: limit max 60010 ms total 60021 ms
+MUT SURVIVED	row:1211:add:49	differ 0 at  max 33 ms total 3368 ms
+MUT killed	row:1211:add:68	differ 1 at east round 0 every pair whole (100707 asked) max 24 ms total 318 ms
+MUT LIMIT	row:1211:mul:17	differ 0 at east round 0: limit max 60009 ms total 60166 ms
+MUT SURVIVED	world:567:shl:13	differ 0 at  max 27 ms total 1335 ms
+MUT killed	world:569:sub:17	differ 7527 at east round 0 every pair whole (100707 asked) max 7 ms total 99 ms
+MUT killed	world:570:shr:14	differ 3494 at east round 0 every pair whole (100707 asked) max 19 ms total 153 ms
+MUT killed	world:571:sub:30	differ 2141 at east round 0 every pair whole (100707 asked) max 14 ms total 100 ms
+MUT killed	world:448:lit:34	differ 3803 at east round 0 every pair whole (100707 asked) max 16 ms total 113 ms
+MUT killed	world:449:shr:28	differ 15171 at east round 0 every pair whole (100707 asked) max 1 ms total 32 ms
+MUT killed	pose:1372:iff:0	differ 773 at east round 0 every pair whole (100707 asked) max 33 ms total 295 ms
+MUT LIMIT	pose:1373:del:0	differ 0 at east round 0: limit max 60010 ms total 60018 ms
+MUT killed	pose:1374:del:0	differ 773 at east round 0 every pair whole (100707 asked) max 36 ms total 105 ms
+MUT killed	pose:1423:del:0	differ 74 at east round 0 every pair whole (100707 asked) max 176 ms total 466 ms
+MUT killed	pose:1442:ne:23	differ 1858 at east round 0 every pair whole (100707 asked) max 67 ms total 332 ms
+MUT killed	pose:1442:band:6	differ 4 at west round 0 every pair whole (89184 asked) max 23 ms total 1217 ms
+MUT killed	pose:1442:lit:26	differ 4 at west round 0 every pair whole (89184 asked) max 84 ms total 1860 ms

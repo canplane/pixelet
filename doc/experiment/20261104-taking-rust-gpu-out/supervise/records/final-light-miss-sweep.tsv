@@ -1,0 +1,179 @@
+refused	154	return bitcast<f32>=(eye_word(k));	|was	return bitcast<f32>(eye_word(k));
+killed	157	return vec3<f32>(eye_f32(k), eye_f32(k + 2u), eye_f32(k + 2u));	|was	return vec3<f32>(eye_f32(k), eye_f32(k + 1u), eye_f32(k + 2u));
+killed	160	let whole = vec3<i32>(p << vec3<u32>(FRAC_W)) - vec3<i32>(og >> vec3<u32>(FRAC_W))	|was	let whole = vec3<i32>(p >> vec3<u32>(FRAC_W)) - vec3<i32>(og >> vec3<u32>(FRAC_W))
+killed	160	let whole = vec3<i32>(p >> vec3<u32>(FRAC_W)) - vec3<i32>(og << vec3<u32>(FRAC_W))	|was	let whole = vec3<i32>(p >> vec3<u32>(FRAC_W)) - vec3<i32>(og >> vec3<u32>(FRAC_W))
+SURVIVED	166	return select(0xffffffffu >> zoom, 0u, zoom > FINEST_ZOOM);	|was	return select(0xffffffffu >> zoom, 0u, zoom >= FINEST_ZOOM);
+killed	166	return select(0xffffffffu << zoom, 0u, zoom >= FINEST_ZOOM);	|was	return select(0xffffffffu >> zoom, 0u, zoom >= FINEST_ZOOM);
+killed	170	let over = select(vec3<i32>(0), vec3<i32>(1), last != vec3<u32>(0xffffffffu));	|was	let over = select(vec3<i32>(0), vec3<i32>(1), last == vec3<u32>(0xffffffffu));
+SURVIVED	175	let high = select(vec3<u32>(root << vec3<u32>(zoom & 31u)), vec3<u32>(0u), zoom > FINEST_ZOOM);	|was	let high = select(vec3<u32>(root << vec3<u32>(zoom & 31u)), vec3<u32>(0u), zoom >= FINEST_ZOOM);
+killed	176	let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom != 0u);	|was	let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
+killed	176	let low = select(corner << vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);	|was	let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
+killed	178	let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom != 0u);	|was	let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom == 0u);
+killed	178	let x = select((n.x << ((32u - zoom) & 31u)) << ((32u - zoom) & 31u), 0i, zoom == 0u);	|was	let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom == 0u);
+killed	179	let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom != 0u);	|was	let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom == 0u);
+killed	179	let y_start = select(1i << ((zoom - 2u) & 31u), 0i, zoom == 0u);	|was	let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom == 0u);
+killed	180	let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom < SHARD_ZOOM);	|was	let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom <= SHARD_ZOOM);
+killed	180	let z_start = select(1i << ((zoom - SHARD_ZOOM - 2u) & 31u), 0i, zoom <= SHARD_ZOOM);	|was	let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom <= SHARD_ZOOM);
+killed	185	return (m << 15u) | (m << 17u);	|was	return (m << 15u) | (m >> 17u);
+killed	192	return h ^ (h << 16u);	|was	return h ^ (h >> 16u);
+SURVIVED	195	return node_hash(zoom, c) & (ENTRIES - 2u) & ~(BUCKET - 1u);	|was	return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
+killed	195	return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 2u);	|was	return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
+SURVIVED	198	if (zoom > 32u) {	|was	if (zoom >= 32u) {
+killed	201	let v = c << vec3<u32>(zoom);	|was	let v = c >> vec3<u32>(zoom);
+killed	202	return (v.x != 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x != -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y != 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y != -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z != 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z != -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) || (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) || (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i && v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i && v.y == -1i) && (v.z == 0i || v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+killed	202	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i && v.z == -1i);	|was	return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
+refused	206	let e = (i32((bitcast<u32>=(x2) >> 23u) & 255u) - 127i) >> 1u;	|was	let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
+killed	206	let e = (i32((bitcast<u32>(x2) << 23u) & 255u) - 127i) >> 1u;	|was	let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
+killed	206	let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) << 1u;	|was	let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
+killed	208	return max(max(z, range.x), range.y);	|was	return min(max(z, range.x), range.y);
+killed	208	return min(min(z, range.x), range.y);	|was	return min(max(z, range.x), range.y);
+SURVIVED	217	let up = d >= vec3<f32>(0.0);	|was	let up = d > vec3<f32>(0.0);
+killed	218	let moves = d == vec3<f32>(0.0);	|was	let moves = d != vec3<f32>(0.0);
+SURVIVED	219	let inside = (lo <= vec3<f32>(0.0)) & (vec3<f32>(0.0) <= hi);	|was	let inside = (lo <= vec3<f32>(0.0)) & (vec3<f32>(0.0) < hi);
+killed	219	let inside = (lo < vec3<f32>(0.0)) & (vec3<f32>(0.0) < hi);	|was	let inside = (lo <= vec3<f32>(0.0)) & (vec3<f32>(0.0) < hi);
+killed	228	return min(max(v.x, v.y), v.z);	|was	return max(max(v.x, v.y), v.z);
+killed	228	return max(min(v.x, v.y), v.z);	|was	return max(max(v.x, v.y), v.z);
+killed	231	return max(min(v.x, v.y), v.z);	|was	return min(min(v.x, v.y), v.z);
+killed	231	return min(max(v.x, v.y), v.z);	|was	return min(min(v.x, v.y), v.z);
+killed	235	if (d.x == 0.0) {	|was	if (d.x != 0.0) {
+killed	237	} else if (d.y == 0.0) {	|was	} else if (d.y != 0.0) {
+SURVIVED	240	if (e <= 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+SURVIVED	240	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y <= t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y != 0.0 && ((last && t.y >= t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y == 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u || d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y != 0.0 || ((last && t.y > t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y != 0.0 && ((last || t.y > t[e]) || (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last || t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+killed	240	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) && (!last && t.y < t[e]))) {	|was	if (e < 1u && d.y != 0.0 && ((last && t.y > t[e]) || (!last && t.y < t[e]))) {
+SURVIVED	243	if (e <= 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+SURVIVED	243	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z <= t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+SURVIVED	243	if (e < 2u && d.z != 0.0 && ((last && t.z >= t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u && d.z == 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u || d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u && d.z != 0.0 || ((last && t.z > t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u && d.z != 0.0 && ((last || t.z > t[e]) || (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last || t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+killed	243	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) && (!last && t.z < t[e]))) {	|was	if (e < 2u && d.z != 0.0 && ((last && t.z > t[e]) || (!last && t.z < t[e]))) {
+SURVIVED	261	if (u > BOX_STEPS - 1u) {	|was	if (u >= BOX_STEPS - 1u) {
+SURVIVED	261	if (u >= BOX_STEPS - 2u) {	|was	if (u >= BOX_STEPS - 1u) {
+killed	262	return e * ((u >> BOX_BITS) + 2u);	|was	return e * ((u >> BOX_BITS) + 1u);
+killed	262	return e * ((u << BOX_BITS) + 1u);	|was	return e * ((u >> BOX_BITS) + 1u);
+SURVIVED	264	return (e * (u + 2u) + vec3<u32>(out)) >> vec3<u32>(BOX_BITS);	|was	return (e * (u + 1u) + vec3<u32>(out)) >> vec3<u32>(BOX_BITS);
+killed	264	return (e * (u + 1u) + vec3<u32>(out)) << vec3<u32>(BOX_BITS);	|was	return (e * (u + 1u) + vec3<u32>(out)) >> vec3<u32>(BOX_BITS);
+refused	1302	return vec3<f32>(bitcast<f32>=(v.x), bitcast<f32>(v.y), bitcast<f32>(v.z));	|was	return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>(v.y), bitcast<f32>(v.z));
+refused	1302	return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>=(v.y), bitcast<f32>(v.z));	|was	return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>(v.y), bitcast<f32>(v.z));
+refused	1302	return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>(v.y), bitcast<f32>=(v.z));	|was	return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>(v.y), bitcast<f32>(v.z));
+SURVIVED	1307	let k = d > vec2<i32>(i32(LIGHT_ANCHOR));	|was	let k = d >= vec2<i32>(i32(LIGHT_ANCHOR));
+killed	1316	let b = f32((k + 2u) * LIGHT_TILE);	|was	let b = f32((k + 1u) * LIGHT_TILE);
+killed	1317	return min(max(a - half, half - b), 0.0);	|was	return max(max(a - half, half - b), 0.0);
+killed	1317	return max(min(a - half, half - b), 0.0);	|was	return max(max(a - half, half - b), 0.0);
+killed	1324	return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(size - 2u);	|was	return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(size - 1u);
+killed	1334	return zoom_at(x * x + y * y, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 2u)));	|was	return zoom_at(x * x + y * y, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+killed	1337	return depth_word(max(t / eye_f32(LIGHT + LIGHT_T_MAX) + light_v3(LIGHT_BIAS)[axis], 1.0));	|was	return depth_word(min(t / eye_f32(LIGHT + LIGHT_T_MAX) + light_v3(LIGHT_BIAS)[axis], 1.0));
+killed	1340	return max(u32(d * f32(LIGHT_DEPTH_ONE) + 0.5), LIGHT_DEPTH_ONE);	|was	return min(u32(d * f32(LIGHT_DEPTH_ONE) + 0.5), LIGHT_DEPTH_ONE);
+killed	1352	return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 2u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));	|was	return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
+killed	1356	return pyramid_word(n) != zoom	|was	return pyramid_word(n) == zoom
+killed	1357	&& pyramid_word(n + 1u) != u32(c.x)	|was	&& pyramid_word(n + 1u) == u32(c.x)
+killed	1357	|| pyramid_word(n + 1u) == u32(c.x)	|was	&& pyramid_word(n + 1u) == u32(c.x)
+killed	1357	&& pyramid_word(n + 2u) == u32(c.x)	|was	&& pyramid_word(n + 1u) == u32(c.x)
+killed	1358	&& pyramid_word(n + 2u) != u32(c.y)	|was	&& pyramid_word(n + 2u) == u32(c.y)
+killed	1358	|| pyramid_word(n + 2u) == u32(c.y)	|was	&& pyramid_word(n + 2u) == u32(c.y)
+killed	1359	&& pyramid_word(n + 3u) != u32(c.z);	|was	&& pyramid_word(n + 3u) == u32(c.z);
+killed	1359	|| pyramid_word(n + 3u) == u32(c.z);	|was	&& pyramid_word(n + 3u) == u32(c.z);
+killed	1363	if (got == was && got != CLAIMED) {	|was	if (got != was && got != CLAIMED) {
+killed	1363	if (got != was && got == CLAIMED) {	|was	if (got != was && got != CLAIMED) {
+killed	1363	if (got != was || got != CLAIMED) {	|was	if (got != was && got != CLAIMED) {
+killed	1366	return got != was;	|was	return got == was;
+killed	1378	return (h ^ (h << 16u)) & ~KIND_MASK;	|was	return (h ^ (h >> 16u)) & ~KIND_MASK;
+killed	1394	for (; k <= BUCKET; k += 1u) {	|was	for (; k < BUCKET; k += 1u) {
+killed	1397	if (slot_key == CLAIMED && slot_key != 0u && is_node(w, zoom, c)) {	|was	if (slot_key != CLAIMED && slot_key != 0u && is_node(w, zoom, c)) {
+killed	1397	if (slot_key != CLAIMED && slot_key == 0u && is_node(w, zoom, c)) {	|was	if (slot_key != CLAIMED && slot_key != 0u && is_node(w, zoom, c)) {
+killed	1397	if (slot_key != CLAIMED || slot_key != 0u && is_node(w, zoom, c)) {	|was	if (slot_key != CLAIMED && slot_key != 0u && is_node(w, zoom, c)) {
+killed	1397	if (slot_key != CLAIMED && slot_key != 0u || is_node(w, zoom, c)) {	|was	if (slot_key != CLAIMED && slot_key != 0u && is_node(w, zoom, c)) {
+killed	1398	if ((slot_key & KEY_ZOOMS) != want) {	|was	if ((slot_key & KEY_ZOOMS) == want) {
+killed	1399	if ((slot_key & ~KEY_ZOOMS) == tag) {	|was	if ((slot_key & ~KEY_ZOOMS) != tag) {
+killed	1401	let handed = vec4<u32>(pyramid_word(at), pyramid_word(at + 2u), pyramid_word(at + 2u), pyramid_word(at + 3u));	|was	let handed = vec4<u32>(pyramid_word(at), pyramid_word(at + 1u), pyramid_word(at + 2u), pyramid_word(at + 3u));
+killed	1403	let asset = vec2<u32>(pyramid_word(w + W_ASSET), pyramid_word(w + W_ASSET + 2u));	|was	let asset = vec2<u32>(pyramid_word(w + W_ASSET), pyramid_word(w + W_ASSET + 1u));
+killed	1404	if ((word & ~KIND_MASK) != entry_stamp(word & KIND_MASK, band, asset, handed, zoom, c)) {	|was	if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, band, asset, handed, zoom, c)) {
+killed	1412	if ((slot_key & ~KEY_ZOOMS) / PASSES <= tag / PASSES) {	|was	if ((slot_key & ~KEY_ZOOMS) / PASSES < tag / PASSES) {
+killed	1416	} else if (slot_key != 0u && free == NONE) {	|was	} else if (slot_key == 0u && free == NONE) {
+killed	1416	} else if (slot_key == 0u && free != NONE) {	|was	} else if (slot_key == 0u && free == NONE) {
+killed	1416	} else if (slot_key == 0u || free == NONE) {	|was	} else if (slot_key == 0u && free == NONE) {
+killed	1420	if (to != NONE && free != NONE) {	|was	if (to == NONE && free != NONE) {
+killed	1420	if (to == NONE && free == NONE) {	|was	if (to == NONE && free != NONE) {
+killed	1420	if (to == NONE || free != NONE) {	|was	if (to == NONE && free != NONE) {
+killed	1423	} else if (to != NONE && k == BUCKET) {	|was	} else if (to == NONE && k == BUCKET) {
+killed	1423	} else if (to == NONE && k != BUCKET) {	|was	} else if (to == NONE && k == BUCKET) {
+killed	1423	} else if (to == NONE || k == BUCKET) {	|was	} else if (to == NONE && k == BUCKET) {
+killed	1424	to = first + ((node_hash(zoom, c) >> 28u) & (BUCKET - 2u));	|was	to = first + ((node_hash(zoom, c) >> 28u) & (BUCKET - 1u));
+killed	1424	to = first + ((node_hash(zoom, c) << 28u) & (BUCKET - 1u));	|was	to = first + ((node_hash(zoom, c) >> 28u) & (BUCKET - 1u));
+killed	1428	if (pyramid_word(TALLY_ON) == 0u) {	|was	if (pyramid_word(TALLY_ON) != 0u) {
+killed	1432	if (to == NONE && key != CLAIMED) {	|was	if (to != NONE && key != CLAIMED) {
+killed	1432	if (to != NONE && key == CLAIMED) {	|was	if (to != NONE && key != CLAIMED) {
+killed	1432	if (to != NONE || key != CLAIMED) {	|was	if (to != NONE && key != CLAIMED) {
+killed	1437	atomicStore(&pyramid[w + W_ASSET + 2u], a.asset.y);	|was	atomicStore(&pyramid[w + W_ASSET + 1u], a.asset.y);
+killed	1439	atomicStore(&pyramid[w + W_INHERITANCE + 2u], a.handed.y);	|was	atomicStore(&pyramid[w + W_INHERITANCE + 1u], a.handed.y);
+killed	1443	atomicStore(&pyramid[w + W_NODE + 2u], u32(c.x));	|was	atomicStore(&pyramid[w + W_NODE + 1u], u32(c.x));
+SURVIVED	1453	return select(raw, vec3<f32>(0.0), abs(raw) <= vec3<f32>(1.17549435e-38));	|was	return select(raw, vec3<f32>(0.0), abs(raw) < vec3<f32>(1.17549435e-38));
+killed	1456	return select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir != vec3<f32>(0.0));	|was	return select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
+killed	1462	return min(t_max, smallest(s.far)) >= max(t, largest(s.near));	|was	return min(t_max, smallest(s.far)) > max(t, largest(s.near));
+killed	1462	return max(t_max, smallest(s.far)) > max(t, largest(s.near));	|was	return min(t_max, smallest(s.far)) > max(t, largest(s.near));
+SURVIVED	1462	return min(t_max, smallest(s.far)) > min(t, largest(s.near));	|was	return min(t_max, smallest(s.far)) > max(t, largest(s.near));
+SURVIVED	1472	for (var step = 0u; step <= STEPS_MOST; step += 1u) {	|was	for (var step = 0u; step < STEPS_MOST; step += 1u) {
+SURVIVED	1476	let r0 = vec3<i32>(0i, 0i, i32(og.z) << 31u);	|was	let r0 = vec3<i32>(0i, 0i, i32(og.z) >> 31u);
+killed	1489	let t0 = min(t, largest(s.near));	|was	let t0 = max(t, largest(s.near));
+killed	1490	let t1 = max(t_max, smallest(s.far));	|was	let t1 = min(t_max, smallest(s.far));
+killed	1492	if (kind != KIND_SPLIT) {	|was	if (kind == KIND_SPLIT) {
+SURVIVED	1496	units(corner + box_step(past, u, BOX_STEPS - 2u), og, roots),	|was	units(corner + box_step(past, u, BOX_STEPS - 1u), og, roots),
+killed	1498	past > vec3<u32>(BOX_STEPS),	|was	past >= vec3<u32>(BOX_STEPS),
+killed	1501	into = max(t0, largest(b.near)) <= min(t1, smallest(b.far));	|was	into = max(t0, largest(b.near)) < min(t1, smallest(b.far));
+killed	1501	into = max(t0, largest(b.near)) < max(t1, smallest(b.far));	|was	into = max(t0, largest(b.near)) < min(t1, smallest(b.far));
+killed	1501	into = min(t0, largest(b.near)) < min(t1, smallest(b.far));	|was	into = max(t0, largest(b.near)) < min(t1, smallest(b.far));
+killed	1502	} else if (kind != KIND_CELL) {	|was	} else if (kind == KIND_CELL) {
+killed	1503	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) <= hi))) {	|was	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {
+killed	1503	if (fills(asset.x) && !(all(lo < vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {	|was	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {
+killed	1503	if (fills(asset.x) || !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {	|was	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {
+killed	1503	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) || all(vec3<f32>(0.0) < hi))) {	|was	if (fills(asset.x) && !(all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi))) {
+killed	1504	let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 2u);	|was	let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
+killed	1504	let k = (asset.x << FILL_SHIFT) & (EIGHTHS - 1u);	|was	let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
+SURVIVED	1507	if (k == 0u || min(t_max, smallest(b.far)) >= max(t, largest(b.near))) {	|was	if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+killed	1507	if (k != 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {	|was	if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+killed	1507	if (k == 0u && min(t_max, smallest(b.far)) > max(t, largest(b.near))) {	|was	if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+killed	1507	if (k == 0u || max(t_max, smallest(b.far)) > max(t, largest(b.near))) {	|was	if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+killed	1507	if (k == 0u || min(t_max, smallest(b.far)) > min(t, largest(b.near))) {	|was	if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+killed	1508	let near = select(b.near, s.near, k != 0u);	|was	let near = select(b.near, s.near, k == 0u);
+killed	1510	word = stop_word(min(near[axis], 0.0), axis);	|was	word = stop_word(max(near[axis], 0.0), axis);
+killed	1514	} else if (kind != KIND_LACKS) {	|was	} else if (kind == KIND_LACKS) {
+killed	1518	let half = (u >> 1u) + 2u;	|was	let half = (u >> 1u) + 1u;
+killed	1518	let half = (u << 1u) + 1u;	|was	let half = (u >> 1u) + 1u;
+killed	1521	select(mid <= vec3<f32>(0.0), mid * inv > vec3<f32>(t0), dir <= vec3<f32>(0.0)),	|was	select(mid <= vec3<f32>(0.0), mid * inv > vec3<f32>(t0), dir < vec3<f32>(0.0)),
+refused	1521	select(mid < vec3<f32>(0.0), mid * inv > vec3<f32>(t0), dir < vec3<f32>(0.0)),	|was	select(mid <= vec3<f32>(0.0), mid * inv > vec3<f32>(t0), dir < vec3<f32>(0.0)),
+SURVIVED	1521	select(mid <= vec3<f32>(0.0), mid * inv >= vec3<f32>(t0), dir < vec3<f32>(0.0)),	|was	select(mid <= vec3<f32>(0.0), mid * inv > vec3<f32>(t0), dir < vec3<f32>(0.0)),
+refused	1522	mid * inv < vec3<f32>(t0),	|was	mid * inv <= vec3<f32>(t0),
+killed	1523	dir >= vec3<f32>(0.0),	|was	dir > vec3<f32>(0.0),
+SURVIVED	1529	if (t1 > t_max) {	|was	if (t1 >= t_max) {
+SURVIVED	1533	let up = dir[e] >= 0.0;	|was	let up = dir[e] > 0.0;
+SURVIVED	1535	let new_c = select(old - u - 1u, old + u + 2u, up);	|was	let new_c = select(old - u - 1u, old + u + 1u, up);
+killed	1535	let new_c = select(old - u - 2u, old + u + 1u, up);	|was	let new_c = select(old - u - 1u, old + u + 1u, up);
+SURVIVED	1536	t = min(t, t1);	|was	t = max(t, t1);
+killed	1537	if ((up && old + u != 0xffffffffu) || (!up && old == 0u)) {	|was	if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+killed	1537	if ((up && old + u == 0xffffffffu) || (!up && old != 0u)) {	|was	if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+killed	1537	if ((up || old + u == 0xffffffffu) || (!up && old == 0u)) {	|was	if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+killed	1537	if ((up && old + u == 0xffffffffu) || (!up || old == 0u)) {	|was	if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+killed	1537	if ((up && old + u == 0xffffffffu) && (!up && old == 0u)) {	|was	if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+SURVIVED	1544	corner = corner & vec3<u32>(~((1u << h) - 2u));	|was	corner = corner & vec3<u32>(~((1u << h) - 1u));
+killed	1549	if (pyramid_word(TALLY_ON) == 0u) {	|was	if (pyramid_word(TALLY_ON) != 0u) {
+killed	1561	if (k > list[misses]) {	|was	if (k >= list[misses]) {
+killed	1564	let listed = list[misses + 2u + k];	|was	let listed = list[misses + 1u + k];
+killed	1565	if (listed != LIGHT_MISS_STRUCK) {	|was	if (listed == LIGHT_MISS_STRUCK) {
+killed	1568	let slot = vec2<u32>(listed & 0xffffu, listed << 16u);	|was	let slot = vec2<u32>(listed & 0xffffu, listed >> 16u);

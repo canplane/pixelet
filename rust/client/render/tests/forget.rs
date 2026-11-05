@@ -1,5 +1,5 @@
-//! What a cast forgets of the observed pyramid when a clip level's rows move (pxl-render
-//! gpu/ray/cast.rs, `clipmap::Entry::moved_from`, `pyramid::forgets`): over the real world of
+//! What a cast forgets of the node cache when a clip level's rows move (pxl-render
+//! gpu/ray/cast.rs, `clipmap::Entry::moved_from`, `node_cache::forgets`): over the real world of
 //! tests/real_world, every node a ray down over a brick visits is forgotten where that brick
 //! turns present or its slot changes, and none where only a fill's ticket changed, whose
 //! answers stand; and where a clip level slides, its entries let go never filled, every node
@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use keeping::*;
 use pxl_engine::cast::{self, Detail, Ray, Spacing, Until};
 use pxl_engine::clipmap::{self, Entry, ACROSS, ENTRIES, FIRST_CELL, ORIGIN_AT};
+use pxl_engine::node_cache::{self, MOVED_WORDS};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, MOVED_WORDS};
 use pxl_engine::{wrap_idx, Zoom, LEAF_CELL};
 use real_world::{Built, World, FINEST, UNLAID};
 
@@ -37,13 +37,13 @@ fn moved_of(was: &[[i32; 4]], now: &[[i32; 4]]) -> [u32; MOVED_WORDS as usize] {
 /// Every node rays down over brick `q` of the clip level at `cell` visit, at the zooms they ask,
 /// each from over the ground `b` holds where it starts.
 fn over_brick(b: &Built, w: World, cell: Zoom, q: [i32; 2]) -> Met {
-    let mut table = vec![0u32; pyramid::WORDS as usize];
+    let mut table = vec![0u32; node_cache::WORDS as usize];
     let mut met = BTreeMap::new();
     let mut k = Keeping {
         w,
         cuts: [Cut::NONE; 2],
         table: &mut table,
-        tag: pyramid::tag(3, pyramid::MISSED_PASS),
+        tag: node_cache::tag(3, node_cache::MISSED_PASS),
         asks: Asks::default(),
         met: Some(&mut met),
         writes: true,
@@ -90,7 +90,7 @@ fn a_moved_brick_forgets_what_reads_it_and_a_ticket_none() {
     let moved = moved_of(&was, now);
     let kept: Vec<_> = nodes
         .iter()
-        .filter(|n| !pyramid::forgets(&moved, n.0, [n.1[0], n.1[1]]))
+        .filter(|n| !node_cache::forgets(&moved, n.0, [n.1[0], n.1[1]]))
         .collect();
     assert!(kept.is_empty(), "turning present kept {kept:?}");
 
@@ -100,7 +100,7 @@ fn a_moved_brick_forgets_what_reads_it_and_a_ticket_none() {
     let moved = moved_of(&was, now);
     let kept: Vec<_> = nodes
         .iter()
-        .filter(|n| !pyramid::forgets(&moved, n.0, [n.1[0], n.1[1]]))
+        .filter(|n| !node_cache::forgets(&moved, n.0, [n.1[0], n.1[1]]))
         .collect();
     assert!(kept.is_empty(), "a slot moved kept {kept:?}");
 
@@ -186,7 +186,8 @@ fn a_slide_forgets_every_answer_it_moves() {
             let stale: Vec<_> = nodes
                 .keys()
                 .filter(|n| {
-                    pyramid::keeps(n.0, n.1) && !pyramid::forgets(&moved, n.0, [n.1[0], n.1[1]])
+                    node_cache::keeps(n.0, n.1)
+                        && !node_cache::forgets(&moved, n.0, [n.1[0], n.1[1]])
                 })
                 .filter(|n| {
                     let (a, h) = truth(before, cuts, n.0, n.1, n.2);

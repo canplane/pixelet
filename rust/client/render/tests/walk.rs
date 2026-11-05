@@ -1,5 +1,5 @@
 //! The walks by hand (frame/shader/walk.wgsl) answer as `cast::walk` does: a world
-//! made up here, the Rust walk over it recording what it asks, the observed pyramid
+//! made up here, the Rust walk over it recording what it asks, the node cache
 //! filled with those answers, the hand passes run on a device, and each ray compared.
 //! Skipped where no adapter answers.
 
@@ -13,7 +13,7 @@ use pxl_engine::cast::{
     self, Detail, End, Keep, Node, Query, Ray, Root, Spacing, Trace, Until, DEPTH,
 };
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{eye, grid, pyramid, ray, Zoom, FRAC_W};
+use pxl_engine::{eye, grid, node_cache, ray, Zoom, FRAC_W};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM_HIT, SHADER_LIGHT_MISS_HIT, SHADER_SAMPLE_HIT,
 };
@@ -66,7 +66,7 @@ fn outside_a_box(zoom: Zoom, c: [i32; 3]) -> bool {
     })
 }
 
-/// The made-up world, every answer it gave kept for the pyramid.
+/// The made-up world, every answer it gave kept for the node cache.
 /// A node and the zooms it was asked at.
 type Asked = (Zoom, [i32; 3], [Zoom; 2]);
 
@@ -153,18 +153,18 @@ impl Keep<()> for Line {
     fn keep(&mut self, _: &Trace<()>, _: &[(); DEPTH]) {}
 }
 
-/// The pyramid with every answer kept, as `Writing` keeps one; how many found no slot.
-fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
-    let mut w = vec![0u32; pyramid::WORDS as usize];
+/// The node cache with every answer kept, as `Writing` keeps one; how many found no slot.
+fn node_cache_of(world: &World) -> (Vec<u32>, u32) {
+    let mut w = vec![0u32; node_cache::WORDS as usize];
     let mut dropped = 0;
-    let tag = pyramid::tag(1, 0);
+    let tag = node_cache::tag(1, 0);
     for (&(zoom, c, zooms), a) in &world.asked {
-        if !pyramid::keeps(zoom, c) {
+        if !node_cache::keeps(zoom, c) {
             continue;
         }
-        let first = pyramid::entry_of(zoom, c);
-        let Some(slot) = (first..first + pyramid::BUCKET)
-            .map(|s| pyramid::ENTRIES_AT + s * pyramid::ENTRY_WORDS)
+        let first = node_cache::entry_of(zoom, c);
+        let Some(slot) = (first..first + node_cache::BUCKET)
+            .map(|s| node_cache::ENTRIES_AT + s * node_cache::ENTRY_WORDS)
             .find(|&e| w[e as usize] == 0)
         else {
             dropped += 1;
@@ -179,17 +179,18 @@ fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
             zooms
         };
         // Some splits as a moved brick leaves them: forgotten, gone through alike.
-        let key = pyramid::key(tag, held);
+        let key = node_cache::key(tag, held);
         let forgotten = matches!(a.kind, Kind::Split) && mix(zoom, c).is_multiple_of(9);
-        w[s + pyramid::W_KEY as usize] = if forgotten {
-            pyramid::forgotten_split(key)
+        w[s + node_cache::W_KEY as usize] = if forgotten {
+            node_cache::forgotten_split(key)
         } else {
             key
         };
-        w[s + pyramid::W_KIND as usize] = pyramid::stamped(a.kind, key, a.asset, [0; 4], zoom, c);
-        w[s + pyramid::W_ASSET as usize] = a.asset[0];
-        w[s + pyramid::W_ASSET as usize + 1] = a.asset[1];
-        let n = s + pyramid::W_NODE as usize;
+        w[s + node_cache::W_KIND as usize] =
+            node_cache::stamped(a.kind, key, a.asset, [0; 4], zoom, c);
+        w[s + node_cache::W_ASSET as usize] = a.asset[0];
+        w[s + node_cache::W_ASSET as usize + 1] = a.asset[1];
+        let n = s + node_cache::W_NODE as usize;
         w[n] = zoom;
         w[n + 1] = c[0] as u32;
         w[n + 2] = c[1] as u32;
@@ -439,7 +440,7 @@ fn hand_walk_answers_as_cast_walk() {
         world.asked.insert(h, a);
     }
     eprintln!("{stale} splits only the earlier eye asked, {reasked} held at its zooms alone");
-    let (table, dropped) = pyramid_of(&world);
+    let (table, dropped) = node_cache_of(&world);
     use wgpu::util::DeviceExt as _;
     let buffer = |words: &[u32], usage: wgpu::BufferUsages| {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -451,13 +452,13 @@ fn hand_walk_answers_as_cast_walk() {
     };
     let eye_buf = buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
     let beams_buf = buffer(&beams_gpu, wgpu::BufferUsages::STORAGE);
-    let pyramid_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
+    let node_cache_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
     let left = buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
     let sample_src = src(SHADER_SAMPLE_HIT);
     let binds = [
         (0, eye_buf.as_entire_binding()),
         (8, beams_buf.as_entire_binding()),
-        (9, pyramid_buf.as_entire_binding()),
+        (9, node_cache_buf.as_entire_binding()),
         (10, left.as_entire_binding()),
     ];
     run(
@@ -489,7 +490,7 @@ fn hand_walk_answers_as_cast_walk() {
         &[
             (0, eye_buf.as_entire_binding()),
             (8, beam_buf.as_entire_binding()),
-            (9, pyramid_buf.as_entire_binding()),
+            (9, node_cache_buf.as_entire_binding()),
             (10, beam_left.as_entire_binding()),
         ],
         [
@@ -605,7 +606,9 @@ fn hand_light_walk_answers_as_cast_walk() {
     .unwrap();
 
     const SIZE: u32 = 256;
-    const WITHIN: u32 = 1024;
+    // A word's step each for the depth's two products fused into the sums after them
+    // (light_miss.rs `WITHIN`). Nothing is divided.
+    const WITHIN: u32 = 2;
     let origin = [(3000 << 8) | 5, (2000 << 8) | 77, (45 << 8) | 13];
     let range = [4u32, 24];
     let unit = |v: [f32; 3]| {
@@ -652,10 +655,10 @@ fn hand_light_walk_answers_as_cast_walk() {
     let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
     let starts = Starts {
         base,
-        across: across.map(|v| v * q3),
-        down: down.map(|v| v * q3),
+        across: across.map(|v| light::fixed(v * q3)),
+        down: down.map(|v| light::fixed(v * q3)),
         at: [a0.0, a1.0, a2.0, a3.0],
-        frac: [a0.1, a1.1, a2.1, a3.1],
+        frac: [a0.1, a1.1, a2.1, a3.1].map(|f| f.map(light::fixed)),
     };
 
     let mut eye_words = vec![0u32; eye::WORDS];
@@ -690,7 +693,7 @@ fn hand_light_walk_answers_as_cast_walk() {
             list.push(x | (y << 16));
         }
     }
-    let (table, _) = pyramid_of(&world);
+    let (table, _) = node_cache_of(&world);
 
     use wgpu::util::DeviceExt as _;
     let buffer = |words: &[u32], usage: wgpu::BufferUsages| {
@@ -704,7 +707,7 @@ fn hand_light_walk_answers_as_cast_walk() {
     let eye_buf = buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
     let head_buf = buffer(&head, wgpu::BufferUsages::UNIFORM);
     let list_buf = buffer(&list, wgpu::BufferUsages::STORAGE);
-    let pyramid_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
+    let node_cache_buf = buffer(&table, wgpu::BufferUsages::STORAGE);
     let left = buffer(&[ray::MISS_ACROSS, 0, 1, 0], wgpu::BufferUsages::STORAGE);
     let map = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -733,7 +736,7 @@ fn hand_light_walk_answers_as_cast_walk() {
         &[
             (0, eye_buf.as_entire_binding()),
             (8, list_buf.as_entire_binding()),
-            (9, pyramid_buf.as_entire_binding()),
+            (9, node_cache_buf.as_entire_binding()),
             (10, wgpu::BindingResource::TextureView(&view)),
             (11, head_buf.as_entire_binding()),
             (13, left.as_entire_binding()),
@@ -779,7 +782,6 @@ fn hand_light_walk_answers_as_cast_walk() {
         .collect();
     let after = read(&device, &queue, &list_buf);
     let (mut same, mut differ, mut slots_left, mut hits) = (0, 0, 0, 0);
-    let mut steps_over = 0;
     let mut first = None;
     for k in 0..(SIZE * SIZE) as usize {
         if after[k + 1] != light::MISS_STRUCK {
@@ -787,40 +789,18 @@ fn hand_light_walk_answers_as_cast_walk() {
             assert_eq!(got[k], 0, "a slot left wrote its word");
             continue;
         }
-        // Far under the bias: a GPU rounds a division and a sum its own way, as
-        // `light_miss_cs` does. A ray's start a Q3 step over moves a grazing hit most.
+        // Within the fused sums' steps: the device takes the light's words and starts as the Rust.
         if got[k].abs_diff(want[k]) <= WITHIN {
             same += 1;
             hits += u32::from(want[k] < light::DEPTH_ONE);
         } else {
-            // A start a Q3 step over, which may clear a cube's edge and stop behind it.
-            let p = s.texel(SIZE, [k as u32 % SIZE, k as u32 / SIZE]);
-            let (o, r) = light::ray(&s, &starts, p);
-            let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
-            let band = s.band(SIZE, range, tile);
-            let detail = Detail {
-                range: [band, band],
-                spacing: s.spacing(),
-            };
-            let mut over = false;
-            for n in 0..27 {
-                let at = [o[0] + n % 3 - 1, o[1] + (n / 3) % 3 - 1, o[2] + n / 9 - 1];
-                let met = cast::first(&mut world, at, &r, detail, Until::Opaque);
-                over |= light::word(light::depth(&s, &met)).abs_diff(got[k]) <= WITHIN;
-            }
-            if over {
-                steps_over += 1;
-            } else {
-                differ += 1;
-                first.get_or_insert((k, got[k], want[k]));
-            }
+            differ += 1;
+            first.get_or_insert((k, got[k], want[k]));
         }
     }
     eprintln!(
         "light: {same} alike ({hits} hits), {differ} differ, {slots_left} left, {stopped} stopped"
     );
-    eprintln!("{steps_over} ended as a start a Q3 step over ends");
-    assert!(steps_over < 32, "too many a step over: {steps_over}");
     assert!(slots_left < SIZE * SIZE / 4, "too many left: {slots_left}");
     assert!(slots_left > 13_000, "too few left: {slots_left}");
     assert!(same > 30_000, "too few slots to say: {same}");

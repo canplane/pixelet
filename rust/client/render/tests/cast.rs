@@ -20,7 +20,7 @@
 //! takes across an edge between the planes of two axes goes either way, one in a thousand of
 //! a run's at most.
 //!
-//! Every word of the beam rays', the rays', the walk again's and the pyramid's compared;
+//! Every word of the beam rays', the rays', the walk again's and the node cache's compared;
 //! each kind the test says something of counted, and too few of one fails. Skipped where no
 //! adapter answers.
 
@@ -39,7 +39,7 @@ use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{count, eye, face, pyramid, raster, ray, screen, Zoom, LEAF_CELL};
+use pxl_engine::{count, eye, face, node_cache, raster, ray, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE,
     SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
@@ -114,7 +114,7 @@ struct EyeCase {
 }
 
 /// What the eye's passes leave: its words and grid, the beam rays' words with the samples'
-/// boxes' asks answered, the pyramid, and the boxes' count.
+/// boxes' asks answered, the node cache, and the boxes' count.
 struct Cast {
     eye: Vec<u32>,
     grid: Grid,
@@ -213,8 +213,8 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
 fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
     let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
-    let mut table0 = vec![0u32; pyramid::WORDS as usize];
-    table0[pyramid::FRAME as usize] = FRAME;
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table0, store());
     let beams = gpu.buffer(&vec![0u32; grid.size() as usize], store());
     let left = gpu.buffer(&[0, 1, 1, 0], store());
@@ -1047,7 +1047,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
 
         let mut table = cast.table.clone();
-        table[pyramid::COUNT_ON as usize] = u32::from(s.tally);
+        table[node_cache::COUNT_ON as usize] = u32::from(s.tally);
         let table_buf = gpu.buffer(&table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
         let beams = gpu.buffer(&cast.beams, store());
@@ -1176,8 +1176,8 @@ fn hand_pixels_answer_as_cast_entry() {
         let cnt = counts[1];
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
         let mut args = ray::MISS_ARGS_EMPTY;
-        args[(ray::MISS_ARGS_LIST + 1) as usize] = cnt.min(pyramid::MARKS).div_ceil(per);
-        if cnt > pyramid::MARKS {
+        args[(ray::MISS_ARGS_LIST + 1) as usize] = cnt.min(node_cache::MARKS).div_ceil(per);
+        if cnt > node_cache::MARKS {
             args[ray::MISS_ARGS_WHOLE as usize] = wd.div_ceil(ray::CAST_SIDE);
             args[ray::MISS_ARGS_WHOLE as usize + 1] = ht.div_ceil(ray::CAST_SIDE);
             kinds.add("past the list's room", true);
@@ -1198,11 +1198,11 @@ fn hand_pixels_answer_as_cast_entry() {
             |k| format!("word {k}"),
         );
 
-        // The list: each walked pixel once, as many as it holds, the rest of the pyramid as
+        // The list: each walked pixel once, as many as it holds, the rest of the node cache as
         // it stood; the beam rays' words as they stood.
         let out = gpu.read(&table_buf);
-        let listed = cnt.min(pyramid::MARKS) as usize;
-        let at = pyramid::MARKS_AT as usize;
+        let listed = cnt.min(node_cache::MARKS) as usize;
+        let at = node_cache::MARKS_AT as usize;
         let list: BTreeSet<u32> = out[at..at + listed].iter().copied().collect();
         let mut want_table = table.clone();
         want_table[at..at + listed].copy_from_slice(&out[at..at + listed]);
@@ -1212,7 +1212,7 @@ fn hand_pixels_answer_as_cast_entry() {
             eprintln!("{name}: the list is not the walked pixels, each once");
             tally.differ.push((format!("{name}: list"), 1));
         }
-        tally.compare(&format!("{name}: pyramid"), &want_table, &out, |k| {
+        tally.compare(&format!("{name}: node cache"), &want_table, &out, |k| {
             format!("word {k}")
         });
         tally.compare(

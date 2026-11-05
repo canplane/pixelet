@@ -13,21 +13,23 @@ fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }
 
-fn head_v3(k: u32) -> vec3<f32> {
-  let v = head[LIGHT_STARTS_AT + k];
-  return vec3<f32>(bitcast<f32>(v.x), bitcast<f32>(v.y), bitcast<f32>(v.z));
-}
-
-/// Where the ray of world texel `w` starts (`Starts::start`).
+/// Where the ray of world texel `w` starts (`Starts::start`): its steps summed in fixed
+/// point, exactly, each split into its whole steps and its fraction.
 fn texel_start(w: vec2<i32>) -> vec3<i32> {
   let base = head[LIGHT_STARTS_AT].xy;
   let d = w - base;
   let k = d >= vec2<i32>(i32(LIGHT_ANCHOR));
-  let ij = vec2<f32>(d - select(vec2<i32>(0), vec2<i32>(i32(LIGHT_ANCHOR)), k));
+  let ij = d - select(vec2<i32>(0), vec2<i32>(i32(LIGHT_ANCHOR)), k);
   let anchor = u32(k.x) + 2u * u32(k.y);
   let at = head[LIGHT_STARTS_AT + STARTS_ANCHORS + anchor].xyz;
-  let step = round(head_v3(STARTS_FRACS + anchor) + ij.x * head_v3(STARTS_ACROSS) + ij.y * head_v3(STARTS_DOWN));
-  return at + vec3<i32>(step);
+  let a = head[LIGHT_STARTS_AT + STARTS_ACROSS].xyz;
+  let b = head[LIGHT_STARTS_AT + STARTS_DOWN].xyz;
+  let frac = head[LIGHT_STARTS_AT + STARTS_FRACS + anchor].xyz;
+  let m = vec3<i32>((1i << LIGHT_STEP_BITS) - 1i);
+  let s = vec3<u32>(LIGHT_STEP_BITS);
+  let low = ij.x * (a & m) + ij.y * (b & m) + frac + vec3<i32>(1i << (LIGHT_STEP_BITS - 1u));
+  let high = ij.x * (a >> s) + ij.y * (b >> s);
+  return at + high + (low >> s);
 }
 
 /// The texels from the box's middle to tile `k`'s span on one axis (`Light::band`).
@@ -48,7 +50,7 @@ fn light_corner() -> vec2<i32> {
 
 /// The band of box tile `tile`, which may lie past the box (`Light::band`).
 fn tile_band(tile: vec2<i32>) -> u32 {
-  let half = f32(head_word(LIGHT_HEAD_SIZE)) / 2.0;
+  let half = f32(head_word(LIGHT_HEAD_SIZE)) * 0.5;
   let width = eye_f32(LIGHT + LIGHT_WIDTH);
   let x = gap(tile.x, half) * width;
   let y = gap(tile.y, half) * width;
@@ -60,10 +62,28 @@ fn texel_band(texel: vec2<u32>) -> u32 {
   return tile_band(vec2<i32>(texel / LIGHT_TILE));
 }
 
-/// The word of a walk that stopped at `t` on `axis`: a share of the box's depth, pushed
-/// back as its face's axis is (`light::depth`, `light::word`).
+/// The word of a walk that stopped at `t` on `axis`: a share of the box's depth, its t times
+/// the reach's reciprocal, the host's, pushed back as its face's axis is (`light::depth`,
+/// `light::word`).
 fn stop_word(t: f32, axis: u32) -> u32 {
-  return depth_word(min(t / eye_f32(LIGHT + LIGHT_T_MAX) + light_v3(LIGHT_BIAS)[axis], 1.0));
+  return depth_word(min(t * eye_f32(LIGHT + LIGHT_T_MAX_INVERSE) + light_v3(LIGHT_BIAS)[axis], 1.0));
+}
+
+/// The reciprocal of the light's rays' direction on each axis, the host's (`Light::inverse`).
+fn light_inverse() -> vec3<f32> {
+  return light_v3(LIGHT_INVERSE);
+}
+
+/// The ray of box texel `texel`, `seed` its asks' (`light::ray`, walk_node.wgsl `Aim`).
+fn light_aim(texel: vec2<u32>, seed: u32) -> Aim {
+  return Aim(
+    texel_start(light_corner() + vec2<i32>(texel)),
+    light_v3(LIGHT_DIR),
+    light_inverse(),
+    eye_f32(LIGHT + LIGHT_T_MAX),
+    vec2<u32>(texel_band(texel)),
+    seed,
+  );
 }
 
 fn depth_word(d: f32) -> u32 {

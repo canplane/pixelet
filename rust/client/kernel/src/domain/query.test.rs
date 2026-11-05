@@ -667,10 +667,10 @@ fn box_placed_matches_store() {
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, CpuClipmap};
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
+    use crate::domain::layer::terrain::clipmap::{on_filled, refold, test::unland, CpuClipmap};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_LEVELS, CLIP_SIZE};
     use pxl_engine::LEAF_CELL;
-    use pxl_render::gpu::ray::Resident;
+    use pxl_render::gpu::ray::Filled;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -715,7 +715,7 @@ fn late_brick_spike() {
     let held = met(&World::new(&tile_cache, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
     // As the stage lands a read-back: each landing, then one fold.
-    on_resident(b, ticket, Resident::Built(&[0]));
+    on_filled(b, ticket, Filled::Built(&[0]));
     refold();
     assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
     let q = cells::brick_of(spike).0;
@@ -726,7 +726,7 @@ fn late_brick_spike() {
             q[1] * BRICK as i32 + (k / BRICK) as i32,
         ];
         let h = top(g);
-        for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
+        for zoom in TOP_ZOOM..LEAF_CELL - BRICK_LEVELS {
             let s = LEAF_CELL - zoom;
             let (b, _, _) = cells::bound_over(
                 &CpuClipmap,
@@ -747,13 +747,13 @@ fn late_brick_spike() {
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, LEVELS};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_LEVELS};
     use pxl_engine::ground::UNBOUNDED;
     use pxl_engine::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
     let (first, _) = CpuClipmap.origin(LEAF_CELL);
-    let zoom = LEAF_CELL - LEVELS - 1;
+    let zoom = LEAF_CELL - BRICK_LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
         let g = [

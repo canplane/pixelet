@@ -17,7 +17,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
-    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
+    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Layout, Load, RenderContext,
     TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -157,15 +157,12 @@ impl ScreenAo {
         let view = view_entry;
         let sampler = sampler_entry(4, self.sampler);
         let run = buf_range_entry(5, self.run, 0, self.stride);
-        // The AO's uniform at 6; the frame's at 0 where a pass reads the screen's size.
-        let group = |layout: u32, frame: bool, between: &[Entry]| {
+        // The frame's at 0 where a pass reads the screen's size; the AO's uniform at 6 where it
+        // reads its words.
+        let uniform = buf_entry(6, self.uniform);
+        let group = |layout: Layout, frame: bool, between: &[Entry]| {
             let frame = frame.then(|| buf_entry(0, self.frame_buf));
-            let e: Vec<Entry> = frame
-                .iter()
-                .chain(between)
-                .chain(&[buf_entry(6, self.uniform)])
-                .copied()
-                .collect();
+            let e: Vec<Entry> = frame.iter().chain(between).copied().collect();
 
             g.bind_group(layout, &e)
         };
@@ -181,6 +178,7 @@ impl ScreenAo {
                 view(1, self.half_view),
                 view(2, self.noise_view),
                 view(3, self.depth_view),
+                uniform,
             ],
         );
         let blur = self.ping_view.map(|src| {
@@ -193,6 +191,7 @@ impl ScreenAo {
                     view(3, src),
                     sampler,
                     run,
+                    uniform,
                 ],
             )
         });

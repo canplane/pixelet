@@ -25,7 +25,9 @@ use crate::frame::shader::record::{
     UNIFORM,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::{buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
+use crate::gpu::api::{
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu, Layout,
+};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 
@@ -38,8 +40,9 @@ pub struct DecorFrame<'a> {
     pub drawing: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells, its base
-    /// sunk under it by none, as it stands where it is placed; read where
-    /// it lies, unwritten until the page replays the turn.
+    /// sunk under it by none, as it stands where it is placed; handed where
+    /// they lie, their writer asking `held` (gpu/api.rs) before it writes
+    /// them again.
     pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
     /// The anchor the lanes are about, less the frame's eye: where the decor's
     /// instances are drawn.
@@ -149,7 +152,7 @@ pub struct Generator {
     /// The draws' bind groups over the uniforms, a region's at a dynamic
     /// offset, and over the instances, in the layouts the decor and impostor
     /// draws share (record.rs `DRAW`, `UPLOAD`): made with their buffers.
-    draw_layouts: [u32; 2],
+    draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
     cap: u32,
@@ -400,7 +403,7 @@ impl Generator {
                 bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
             );
             if !f.placed_records.is_empty() {
-                // Read where the kernel holds them, one record however many.
+                // One record however many.
                 g.upload_buf(
                     self.records,
                     generation::record_at(generation::SLOT_RECORDS) * 4,
@@ -678,7 +681,7 @@ impl IndirectDraw {
 }
 
 /// Box `b` held among the `holding` boxes of `pending_boxes`, past the room joined
-/// into the last: what decor's generation (`Generator`) and the observed pyramid's
+/// into the last: what decor's generation (`Generator`) and the node cache's
 /// forgetting (ray/cast.rs) are asked over.
 pub(crate) fn hold(pending_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
     if *holding < pending_boxes.len() {

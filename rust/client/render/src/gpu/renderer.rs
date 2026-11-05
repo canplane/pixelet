@@ -444,7 +444,7 @@ impl Renderer {
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buf);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buf);
+        let atmosphere = Atmosphere::new(g, &mut pipelines);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buf, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
@@ -458,6 +458,7 @@ impl Renderer {
             view_entry(2, moon.view),
             sampler_entry(3, moon.sampler),
         ];
+        sky_entries.extend(atmosphere.sky_entries());
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buf = g.buf(
@@ -949,7 +950,7 @@ impl Renderer {
             self.box_groups(g);
         }
         if !uniforms.is_empty() && (grew || uniforms_moved) {
-            // Read where the draw list holds them, one record however many.
+            // One record however many.
             g.upload_buf(self.draws_buf, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
@@ -1764,3 +1765,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], b
     let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
     (lists.draws, lists.uniforms, moved)
 }
+
+#[cfg(test)]
+#[path = "renderer.test.rs"]
+mod test;

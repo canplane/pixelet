@@ -45,7 +45,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// still heard.
 fn ask_turn(s: &mut State) -> Outcome {
     edge::request_world_tick();
-    s.asked = true;
+    s.snapshot_due = true;
     Ok(Some(0))
 }
 

@@ -98,8 +98,9 @@ fn fits(g: &Grid, c: [u32; 2], k: u32) -> bool {
 }
 
 /// Whether cell `c`'s window takes the ceiling of a number within `EDGE_ULPS` of a whole
-/// one (`Grid::cell_window`, taken in f64 here): a GPU's square root and divisions are not
-/// the Rust's to the last place, and a product it fuses into a sum is rounded once.
+/// one (`Grid::cell_window`, taken in f64 here): a GPU's square root and its division by
+/// what varies from cell to cell are not the Rust's to the last place, and a product it fuses
+/// into a sum is rounded once. `s` is taken by the host's reciprocal (`Grid::s_inverse`).
 fn on_edge(g: &Grid, c: [u32; 2]) -> bool {
     let w = g.words();
     let f = |k: usize| f64::from(f32::from_bits(w[k]));
@@ -113,7 +114,8 @@ fn on_edge(g: &Grid, c: [u32; 2]) -> bool {
     let at = [far(g.tan[0], c[0]), far(g.tan[1], c[1])];
     let edge = (at[0] * at[0] + at[1] * at[1]).sqrt();
     let beyond = (edge + radius_tan) / (1.0 - edge * radius_tan);
-    let v = std::f64::consts::FRAC_1_SQRT_2 + radius * (1.0 + beyond * beyond) / s;
+    let s_inverse = f(beam::GRID_S_INVERSE);
+    let v = std::f64::consts::FRAC_1_SQRT_2 + radius * (1.0 + beyond * beyond) * s_inverse;
     let ulp = {
         let x = v as f32;
         f64::from(f32::from_bits(x.to_bits() + 1) - x)

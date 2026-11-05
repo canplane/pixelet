@@ -5,8 +5,8 @@
 //! its tree's records read back where the CPU looks them up.
 
 use pxl_engine::clipmap::{
-    self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FILL_BRICK, FILL_CAP,
-    FILL_WORDS, HANDED_WORDS, LEVELS, LINES_AT, PALETTE_AT, SLOTS,
+    self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_WORDS, COLUMNS_AT, ELE_AT,
+    FILL_BRICK, FILL_CAP, FILL_WORDS, HANDED_WORDS, LINES_AT, PALETTE_AT, SLOTS,
 };
 use pxl_engine::{fill, way};
 use xpute_guest::mem::off_of;
@@ -21,8 +21,8 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
-    Gpu, RenderContext, DONE, UNIFORM_ALIGN_MAX,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, room, signaled, word_bytes,
+    write_buffer_bytes, Gpu, RenderContext, RESULT, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -35,7 +35,7 @@ pub struct GroundBricks<'a> {
     pub upload: &'a mut TerrainUpload,
     /// Told each brick whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
-    pub on_resident: &'a mut OnResident<'a>,
+    pub on_filled: &'a mut OnFilled<'a>,
     /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
     /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
@@ -51,15 +51,16 @@ pub struct GroundBricks<'a> {
     pub records: u32,
 }
 
-/// How a brick's fill landed: its cells are back in every case.
-pub enum Resident<'a> {
+/// How a brick's fill landed: its cells are back in every case but a read
+/// the device refused.
+pub enum Filled<'a> {
     /// Its ways' tree built: the child groups it holds, their count first, a
     /// record each (pxl-engine `way::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
     /// built, the pool or the scratch it was built in having run out
     /// (`Short`), or built but its records past its read's room, the tree
-    /// the refill frees.
+    /// the refill frees; or its read refused by the device.
     Again,
     /// Its tree refused, the pool or the scratch at its most having run out,
     /// or the brick past its own (`way::tree::past`): the brick stays
@@ -82,7 +83,7 @@ pub const RECORD_ROOMS_BYTES: u64 =
 /// A brick whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
 /// borrow its caller's for the frame.
-pub type OnResident<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
+pub type OnFilled<'a> = dyn FnMut(u32, u32, Filled<'_>) + 'a;
 
 /// Where a brick's cells, which the GPU draws, come back to in the
 /// kernel's memory: its columns, levels, laid cells and root
@@ -192,22 +193,24 @@ pub(super) struct GroundBuffers {
     pub(super) handed: [[u32; FILL_WORDS as usize]; FILL_CAP as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands bricks a mapping still out a frame more (`READS`);
-    /// each one's brick and the fill it carries (`FREE` where none), and
-    /// its mapping's own word (`read_back`), which the host writes: held
-    /// where the guest's allocator puts it, inside the region the host
-    /// addresses, as an arriving image's word is. A static is outside it on
-    /// a device.
+    /// each one's brick and the fill it carries (`FREE` where none), its
+    /// mapping's own fence and result (`read_back`), which the host
+    /// writes, held where the guest's allocator puts it, inside the region
+    /// the host addresses, as an arriving image's are (a static is outside
+    /// it on a device), and the ticket it was last mapped with, the
+    /// kernel's, one mapping out at a time.
     reads: [u32; READS],
     brick_fills: [(u32, u32); READS],
-    mapping: Box<[u32; READS]>,
+    mapping: Box<[[u32; 2]; READS]>,
+    tickets: [u32; READS],
     /// Each read's records, mapped beside its brick's words into its room
     /// on the heap, as many bytes as the room holds, the buffer of its size
-    /// (none before its first read), and its mapping's word: a read lands
-    /// with both. Every room is made `record_bytes` as its read is next
+    /// (none before its first read), and its mapping's fence and
+    /// result, under the same ticket: a read lands with both. Every room is made `record_bytes` as its read is next
     /// taken, the heap granting it; else it keeps the room it has.
     record_reads: [u32; READS],
     record_rooms: [Box<[u32]>; READS],
-    record_mapping: Box<[u32; READS]>,
+    record_mapping: Box<[[u32; 2]; READS]>,
     record_bytes: u32,
     /// What each read's brick was built in, indexed by `Short`: the pool's
     /// child groups and the child groups a brick's scratch held (`ran_out`).
@@ -565,10 +568,10 @@ impl RaysPass {
             );
             // Each slot's number in it, written once: `bound_cs`'s level.
             let slots = buf(
-                (LEVELS + 1) * SLOT_STRIDE,
+                (BRICK_LEVELS + 1) * SLOT_STRIDE,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
-            for k in 0..=LEVELS {
+            for k in 0..=BRICK_LEVELS {
                 g.write_buf(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
             let scratch = scratch_buf(g, scratch_child_groups);
@@ -589,10 +592,11 @@ impl RaysPass {
                     )
                 }),
                 brick_fills: [(FREE, 0); READS],
-                mapping: Box::new([0; READS]),
+                mapping: Box::new([[0; 2]; READS]),
+                tickets: [0; READS],
                 record_reads: [0; READS],
                 record_rooms: core::array::from_fn(|_| Box::default()),
-                record_mapping: Box::new([0; READS]),
+                record_mapping: Box::new([[0; 2]; READS]),
                 built_in: [[0; 2]; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(
                     word_bytes(1 + way::tree::RECORD_WORDS as usize),
@@ -697,7 +701,7 @@ impl RaysPass {
             c.fresh_len,
         );
         g.set_pipeline(pass, c.bound_built.id);
-        for j in 0..=LEVELS {
+        for j in 0..=BRICK_LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
             let side = (BRICK >> j).div_ceil(LEVEL_SIDE);
             g.dispatch(pass, side, side, c.fresh_len);
@@ -723,7 +727,7 @@ impl RaysPass {
     ///
     /// A brick asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the
-    /// brick's latest fill is told `on_resident`. One that landed for an earlier
+    /// brick's latest fill is told `on_filled`. One that landed for an earlier
     /// fill is discarded: its bytes went into the brick's cells while the
     /// kernel holds the brick on its way (or absent, if it moved), which
     /// nothing reads, and the latest fill's landing writes them again before
@@ -738,14 +742,15 @@ impl RaysPass {
     /// `snatchable_lock` across the fence wait, `Surface::present` writes
     /// it), so none waits.
     pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundBricks) {
-        let on_resident = &mut *ground.on_resident;
+        let on_filled = &mut *ground.on_filled;
         let most = [way::tree::POOL_CHILD_GROUPS, way::tree::BRICK_CHILD_GROUPS];
         let Some(c) = self.ground.as_mut() else {
             return;
         };
         // A read lands with its brick's words and its records both: told
         // where it is of the brick's latest fill, discarded where a later
-        // fill asked again, whose own read brings it. A build that ran out
+        // fill asked again, whose own read brings it; one the device refused
+        // brought nothing, and the brick is filled again. A build that ran out
         // of the pool or the scratch it was built in keeps no record, its
         // count saying which (`short_of`), which grows ahead of the next
         // turn's bricks where it is as built still and may (`ran_out`,
@@ -754,7 +759,10 @@ impl RaysPass {
         // filled again, every read's room grown past them.
         for k in 0..READS {
             let (s, ticket) = c.brick_fills[k];
-            if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
+            if s == FREE
+                || !signaled(&c.mapping[k][0], c.tickets[k])
+                || !signaled(&c.record_mapping[k][0], c.tickets[k])
+            {
                 continue;
             }
             c.brick_fills[k] = (FREE, 0);
@@ -765,17 +773,20 @@ impl RaysPass {
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
             let words = 1 + n.min(way::tree::BRICK_CHILD_GROUPS) * way::tree::RECORD_WORDS;
-            let landing = if n == way::tree::NONE {
-                Resident::Refused
+            let refused = c.mapping[k][1] != RESULT::OK || c.record_mapping[k][1] != RESULT::OK;
+            let landing = if refused {
+                Filled::Again
+            } else if n == way::tree::NONE {
+                Filled::Refused
             } else if let Some(short) = short_of(n) {
                 let (i, now) = (short as usize, [c.child_groups, c.scratch_child_groups]);
                 match ran_out(c.built_in[k][i], now[i], most[i]) {
-                    RanOut::Again => Resident::Again,
+                    RanOut::Again => Filled::Again,
                     RanOut::Grow => {
                         c.ran_out[i] = true;
-                        Resident::Again
+                        Filled::Again
                     }
-                    RanOut::Refused => Resident::Refused,
+                    RanOut::Refused => Filled::Refused,
                 }
             } else if words as usize > room.len() {
                 c.record_bytes = c.record_bytes.max(
@@ -783,11 +794,11 @@ impl RaysPass {
                         .next_power_of_two()
                         .min(way::tree::RECORDS_BYTES),
                 );
-                Resident::Again
+                Filled::Again
             } else {
-                Resident::Built(&room[..words as usize])
+                Filled::Built(&room[..words as usize])
             };
-            on_resident(s, ticket, landing);
+            on_filled(s, ticket, landing);
         }
         // Each brick the frame handed, its words and its build's records
         // copied in its frame, into a read `hand` kept free for it: as much
@@ -831,23 +842,24 @@ impl RaysPass {
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
-            let (s, ticket) = c.brick_fills[k];
+            let s = c.brick_fills[k].0;
+            c.tickets[k] = c.tickets[k].wrapping_add(1);
             g.map_read(
                 c.reads[k],
                 0,
                 BACK_WORDS * 4,
                 c.cells_back[s as usize].cells,
-                &mut c.mapping[k],
-                ticket,
+                &c.mapping[k],
+                c.tickets[k],
             );
-            let room = &mut c.record_rooms[k];
+            let room = &c.record_rooms[k];
             g.map_read(
                 c.record_reads[k],
                 0,
                 word_bytes(room.len()),
                 off_of(room.as_ptr()) as u32,
-                &mut c.record_mapping[k],
-                ticket,
+                &c.record_mapping[k],
+                c.tickets[k],
             );
         }
     }

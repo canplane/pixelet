@@ -41,7 +41,7 @@ use pxl_render::gpu::surface;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::door::{DoorStat, Posted, Submission};
+use xpute_guest::ipc::door::{DoorStat, Pos, Submission};
 use xpute_guest::machine::{self, door};
 use xpute_guest::mem::off_of_slice;
 use xpute_guest::mem::section::PAGE_BYTES;
@@ -54,12 +54,12 @@ struct State {
     last_snapshot: SnapshotMemo,
     /// Where the last snapshot's event was posted: `SNAPSHOT` is the host's
     /// until its head has passed it (xpute_guest ipc/door.rs R3).
-    snapshot_posted: Option<Posted>,
+    snapshot_pos: Option<Pos>,
     /// A snapshot was put off while the host still held the last: the next
     /// turn comes at once and posts it.
-    snapshot_owed: bool,
+    snapshot_pending: bool,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
-    asked: bool,
+    snapshot_due: bool,
 }
 
 /// The kernel's text call, made of the shell's protocol as TEXT_LAYOUT or
@@ -128,9 +128,9 @@ static STATE: Global<State> = Global::new();
 fn state() -> &'static mut State {
     STATE.get(|| State {
         last_snapshot: Default::default(),
-        snapshot_posted: None,
-        snapshot_owed: false,
-        asked: false,
+        snapshot_pos: None,
+        snapshot_pending: false,
+        snapshot_due: false,
     })
 }
 
@@ -211,6 +211,7 @@ pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
             file::on_opened(&opened);
             Ok(Some(0))
         }
+        Submission::Closed(_) => Ok(Some(0)),
         Submission::Program(number, pkt) => cmd::shell::apply(s, number, &pkt),
     });
     let drained = now();
@@ -220,8 +221,8 @@ pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     let polled = now();
     // Once a turn, where a frame was drawn, a UI command applied or a
     // snapshot put off.
-    let asked = core::mem::take(&mut s.asked);
-    if take_world_drawn() || asked || core::mem::take(&mut s.snapshot_owed) {
+    let due = core::mem::take(&mut s.snapshot_due);
+    if take_world_drawn() || due || core::mem::take(&mut s.snapshot_pending) {
         post_shell(s);
         dispatch::run();
     }
@@ -229,7 +230,7 @@ pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     let fall = edge::world_fall();
     // What the completion ring had no room for is still in the submission
     // ring, and a snapshot put off waits for the next turn.
-    let wake = if door().pending() || s.snapshot_owed {
+    let wake = if door().pending() || s.snapshot_pending {
         0.0
     } else {
         fall
@@ -246,7 +247,7 @@ pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
 /// It is rewritten only once the host's head has passed the event that named
-/// it (`State::snapshot_posted`); until then a snapshot that moved is put off.
+/// it (`State::snapshot_pos`); until then a snapshot that moved is put off.
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
@@ -271,9 +272,9 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
-    if s.snapshot_posted.is_some_and(|p| !door().consumed(p)) {
+    if s.snapshot_pos.is_some_and(|p| !door().is_consumed(p)) {
         // The memo is left as it was, so what moved is posted once the host lets go.
-        s.snapshot_owed = true;
+        s.snapshot_pending = true;
     } else if let Some(shown) = s.last_snapshot.take_moved() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
@@ -287,6 +288,6 @@ fn post_shell(s: &mut State) {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         });
-        s.snapshot_posted = Some(door().posted());
+        s.snapshot_pos = Some(door().last_pos());
     }
 }

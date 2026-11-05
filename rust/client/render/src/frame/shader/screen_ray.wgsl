@@ -140,7 +140,7 @@ fn eye_phase(axis: u32, k: i32) -> f32 {
   let bits = u32(k + i32(FRAC_W));
   let steps = eye_word(EYE_ORIGIN + axis);
   let low = select(steps, steps & ((1u << bits) - 1u), bits < 32u);
-  return f32(low) / f32(1u << FRAC_W);
+  return f32(low) * (1.0 / f32(1u << FRAC_W));
 }
 
 // Where a ray meets the face it entered, from the eye, kept on the cell

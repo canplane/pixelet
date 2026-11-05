@@ -28,11 +28,9 @@ fn left_at() -> u32 {
 }
 
 fn sample_aim(s: vec2<u32>) -> Aim {
-  let cell_samples = SAMPLE * eye_word(GRID + GRID_LATTICE);
-  let spacing = eye_f32(GRID + GRID_S) / f32(cell_samples);
   return eye_aim(vec2<f32>(
-    -eye_f32(TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * spacing,
-    eye_f32(TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * spacing,
+    -eye_f32(TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
+    eye_f32(TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
   ));
 }
 

@@ -178,24 +178,24 @@ class Host {
   /** The header's words. */
   readonly head: Uint32Array;
   readonly sq: Ring;
-  private readonly cq: Ring;
-  private readonly stream_at: number;
-  private readonly writer = new PacketWriter();
+  private readonly _cq: Ring;
+  private readonly _stream_at: number;
+  private readonly _writer = new PacketWriter();
 
-  private readonly guest: Opened;
+  private readonly _guest: Opened;
 
   constructor(guest: Opened) {
-    this.guest = guest;
+    this._guest = guest;
     const mem = guest.mem;
     const head = new Head(mem, guest.head_at);
     this.head = new Uint32Array(mem, guest.head_at, WORDS);
     this.sq = new Ring(mem, head.sq_at);
-    this.cq = new Ring(mem, head.cq_at);
-    this.stream_at = head.gpu_at;
+    this._cq = new Ring(mem, head.cq_at);
+    this._stream_at = head.gpu_at;
     // The fixture's one call, INC: the frame the guest laid unpublished at
     // `at` in its completion ring.
     guest.answer_with((at) => {
-      const cq = this.cq;
+      const cq = this._cq;
       const e = cq.entry_of(at);
       if (cq.cmd(e) !== cmd.INC) return Errno.ENOSYS;
       const pkt = cq.pkt(e);
@@ -209,32 +209,47 @@ class Host {
   }
 
   submit(tag: number, cmd: number, ack: boolean, args: number[]): void {
+    this._push(tag, cmd, ack ? frame.ACKREQ : 0, 0, args);
+  }
+
+  /** The guest's request tagged `tag` completed, as a device completes it. */
+  complete(tag: number, cmd: number, result: number, args: number[]): void {
+    this._push(tag, cmd, frame.RES, result, args);
+  }
+
+  private _push(
+    tag: number,
+    cmd: number,
+    flags: number,
+    result: number,
+    args: number[],
+  ): void {
     const sq = this.sq;
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
       assert.ok(
-        sq.write(this.writer, args.length),
+        sq.write(this._writer, args.length),
         "a full ring takes no packet",
       );
       // A negative number, such as an open's -errno, as the i32 it is.
       for (const a of args) {
-        if (a < 0) this.writer.i32(a);
-        else this.writer.u32(a);
+        if (a < 0) this._writer.i32(a);
+        else this._writer.u32(a);
       }
-      pkt = this.writer;
+      pkt = this._writer;
     }
     assert.deepStrictEqual(
-      sq.push(tag, cmd, ack ? frame.ACKREQ : 0, pkt),
+      sq.push(tag, cmd, flags, pkt, result),
       Errno.OK,
     );
   }
 
   ring(quota_ms: number): Turn {
-    const wake = this.guest.run(quota_ms);
+    const wake = this._guest.run(quota_ms);
     const stream: number[] = [];
-    each_record(this.guest.mem, this.stream_at, (op) => stream.push(op));
+    each_record(this._guest.mem, this._stream_at, (op) => stream.push(op));
     const completions: Completion[] = [];
-    const cq = this.cq;
+    const cq = this._cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {
       // An event of xpute's own, the host's control or the file device's,
       // which no trace's host takes.
@@ -282,10 +297,11 @@ const CMD_NAMES = Object.entries(cmd).filter(
   ([, v]) => typeof v === "number",
 ) as [string, number][];
 
-/** xpute's own a trace sends: the host's control's and the file device's. */
+/** xpute's own a trace sends or completes: the host's control's and the file device's. */
 const HOST_NAMES: [string, number][] = [
   ["NOP", Command.NOP],
-  ["FS_OPENED", fs.Command.FS_OPENED],
+  ["FS_OPENAT", fs.Command.FS_OPENAT],
+  ["FS_CLOSE", fs.Command.FS_CLOSE],
 ];
 
 /** The fixture's numbers a header's size words say again. */
@@ -430,6 +446,15 @@ function run(
           Number(step[1]),
           cmd_number(step[2]),
           step[3] === "ack",
+          step.slice(4).map((t) => val(t, vars)),
+        );
+        break;
+      }
+      case "complete": {
+        host.complete(
+          val(step[1], vars),
+          cmd_number(step[2]),
+          val(step[3], vars),
           step.slice(4).map((t) => val(t, vars)),
         );
         break;

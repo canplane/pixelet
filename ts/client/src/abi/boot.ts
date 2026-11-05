@@ -28,7 +28,7 @@ import { follow_refused_files } from "@/sys/fs/refusal.ts";
 
 import { host, kernel, set_host } from "@/host/kernel.ts";
 import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
-import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/port/sensor.ts";
+import { SENSOR_LISTENER, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import { submit_grant } from "@/port/surface.ts";
 import { onabort } from "@/sys/abort.ts";
 import { text_layout, text_raster } from "@/port/text.ts";
@@ -139,7 +139,7 @@ async function open(): Promise<void> {
     onterminated: () => set(BOOT_TERMINATED),
   });
   set_host(booted, pacing);
-  sensor.hear(SENSOR_HEARD);
+  sensor.listen(SENSOR_LISTENER);
   gpu.watch((state) => set_gpu(GPU_STATE[state]));
   online.watch(set_online);
   // The host tells the kernel it is hidden or shown, and holds the turns

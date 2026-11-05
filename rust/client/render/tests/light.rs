@@ -9,12 +9,12 @@
 //! it its ray enters, as the raster keeps it, some put out of place. A drawn pixel whose ray met
 //! the world marks the tile it met it on (`Light::tile_of`), and where the head asks the
 //! footprint, the tiles between it and each later neighbor's (`light::footprint`). Every word of
-//! the map, the list and the misses' args is compared. The light's reciprocal is the device's,
-//! read off a probe and held near `Ray::inverse`; a slot may take what a GPU's rounding gives
-//! it, each counted: its depth's quotient a few ulps off, its ray's start a step over where its
-//! steps sum to within a few ulps of a half, a band's distance squared an ulp off; a tile a
-//! pixel meets the world within `EDGE` of may be marked or not. Skipped where no adapter
-//! answers.
+//! the map, the list and the misses' args is compared. The light's reciprocals are the host's
+//! words (`Light::inverse`, `Light::t_max_inverse`), and a ray's start is summed in fixed point
+//! (`Starts::start`), read off a probe and held to the Rust's exactly; a slot may take what
+//! a fused sum gives it, each counted: its depth's product fused into the push after it, a
+//! band's distance squared an ulp off; a tile a pixel meets the world within `EDGE` of may be
+//! marked or not. Skipped where no adapter answers.
 
 mod gpu;
 mod keeping;
@@ -22,13 +22,13 @@ mod real_world;
 
 use std::collections::BTreeSet;
 
-use gpu::{array_view, cross, read_texture, texture, ulps, unit, Gpu, Kinds, LightBox, Tally};
+use gpu::{array_view, cross, read_texture, texture, unit, Gpu, Kinds, LightBox, Tally};
 use keeping::{q8, Asks, Keeping};
 use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
-use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::light::{self, Light};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::{count, eye, param, pyramid, raster, ray, Zoom};
+use pxl_engine::{count, eye, node_cache, param, raster, ray, Zoom};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
@@ -215,7 +215,8 @@ fn run_slots(
     kinds: &mut Kinds,
 ) {
     let (l, starts) = c.lit.lay();
-    let inv = light_inverse(gpu, &l);
+    let inv = l.inverse();
+    starts_alike(gpu, &l, &starts);
     let d = param::light::SAMPLE;
     let n = SIZE / d;
     let tiles = light::tiles(SIZE);
@@ -228,13 +229,13 @@ fn run_slots(
 
     // Every word the pass may not write marked; the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    let mut table = vec![0u32; pyramid::WORDS as usize];
-    table[pyramid::FRAME as usize] = FRAME;
+    let mut table = vec![0u32; node_cache::WORDS as usize];
+    table[node_cache::FRAME as usize] = FRAME;
     let mut q = Keeping {
         w,
         cuts: [Cut::NONE; 2],
         table: &mut table,
-        tag: pyramid::tag(FRAME, pyramid::LIGHT_SAMPLES_PASS),
+        tag: node_cache::tag(FRAME, node_cache::LIGHT_SAMPLES_PASS),
         asks: Asks::default(),
         met: None,
         writes: true,
@@ -538,46 +539,27 @@ fn run_slots(
     let mut want_map = map0.clone();
     let mut walked = BTreeSet::new();
     let (mut took, mut sky) = (0u32, 0u32);
-    let (mut exact, mut rounded, mut stepped, mut banded) = (0u32, 0u32, 0u32, 0u32);
-    let (mut fused, mut flipped, mut division_most) = (0u32, 0u32, 0i32);
-    let rust_inv = Ray::new(l.dir, l.t_max).inverse();
+    let (mut exact, mut fused, mut banded) = (0u32, 0u32, 0u32);
     let mut nothing = Kinds::default();
     for (&slot, &want) in needed.iter().zip(&wants) {
         let p = l.texel(SIZE, slot);
         let (o, _) = light::ray(&l, &starts, p);
         let at = (slot[1] * SIZE + slot[0]) as usize;
         let g = got(at, slot);
-        flipped += u32::from(answer(slot, o, 0, rust_inv, &mut nothing) != want);
-        // The answer the slot is held to: its own, or where a GPU's rounding of its start or
-        // its depth may give another, the one the hand gave.
+        // The answer the slot is held to: its own, or where a GPU's fused sum in its depth or
+        // its band may give another, the one the hand gave.
         let held = if matches(want, g) {
-            if let Answer::Entry(t, e) = want {
-                let (w, all) = words_of(t, e);
-                if g == Answer::Word(w) || (w == light::word(1.0) && g == Answer::Sky) {
-                    exact += 1;
-                } else {
-                    rounded += 1;
-                    let fused_word = all[2 * DIVISION_ULPS as usize + 1];
-                    fused += u32::from(g == Answer::Word(fused_word) && fused_word != w);
-                    let had = (-DIVISION_ULPS..=DIVISION_ULPS)
-                        .filter(|&k| {
-                            let i = 2 * (k + DIVISION_ULPS) as usize;
-                            g == Answer::Word(all[i]) || g == Answer::Word(all[i + 1])
-                        })
-                        .map(i32::abs)
-                        .min()
-                        .unwrap_or(0);
-                    division_most = division_most.max(had);
+            match want {
+                Answer::Entry(t, e) => {
+                    let (w, _) = words_of(t, e);
+                    if g == Answer::Word(w) || (w == light::word(1.0) && g == Answer::Sky) {
+                        exact += 1;
+                    } else {
+                        fused += 1;
+                    }
                 }
-            } else {
-                exact += 1;
+                _ => exact += 1,
             }
-            g
-        } else if starts_about(&starts, l.corner, p)
-            .into_iter()
-            .any(|from| matches(answer(slot, from, 0, inv, &mut nothing), g))
-        {
-            stepped += 1;
             g
         } else if [-BAND_ULPS, BAND_ULPS]
             .iter()
@@ -674,19 +656,12 @@ fn run_slots(
         );
     }
     eprintln!(
-        "{name}: {} needed: {took} took, {sky} sky, {walked_n} walked; {exact} exact, {rounded} \
-         a depth rounded as a GPU does, {division_most} ulps of its share at most, {stepped} a \
-         start a step over, {banded} a band's distance as a GPU rounds it; {fused} of the \
-         rounded a product fused into a sum; {flipped} answered otherwise along the Rust's \
-         reciprocal",
+        "{name}: {} needed: {took} took, {sky} sky, {walked_n} walked; {exact} exact, {fused} \
+         a depth a product fused into a sum, {banded} a band's distance as a GPU rounds it",
         needed.len()
     );
-    kinds.count(
-        "slots answered otherwise along the Rust's reciprocal",
-        u64::from(flipped),
-    );
-    assert!(stepped <= STEPS_OVER, "{name}: {stepped} slots a step over");
-    assert!(banded <= STEPS_OVER, "{name}: {banded} slots a band over");
+    kinds.count("slots a depth a product fused into a sum", u64::from(fused));
+    assert!(banded <= BANDS_OVER, "{name}: {banded} slots a band over");
 }
 
 /// A slot's answer: the depth `t` along its ray and the axis it enters its visible sample's
@@ -714,107 +689,13 @@ fn band_by(l: &Light, range: [Zoom; 2], p: [u32; 2], k: i32) -> Zoom {
     held.at(f32::from_bits(r2.to_bits().wrapping_add_signed(k)))
 }
 
-/// Slots a case may hold to a start a step over (`run_slots`), at most.
-const STEPS_OVER: u32 = 16;
-
-/// Ulps of the largest a texel's steps from its anchor sum to on an axis within which a GPU's
-/// rounding may take the sum across a half (`Starts::start`; light_aim.wgsl `texel_start`):
-/// its two products each rounded or fused into the sum, half an ulp each, and the two sums'
-/// own roundings.
-const START_ULPS: f32 = 2.0;
-
-/// The starts other than the Rust's a GPU may give box texel `p` of a box cornered at
-/// `corner`: on each axis whose steps from its anchor sum to within `START_ULPS` of a half,
-/// the start on the half's other side, and each mix of those across the axes.
-fn starts_about(starts: &Starts, corner: [i32; 2], p: [u32; 2]) -> Vec<[i32; 3]> {
-    let w = [
-        corner[0].wrapping_add(p[0] as i32),
-        corner[1].wrapping_add(p[1] as i32),
-    ];
-    let o = starts.start(w);
-    let mut sides: Vec<Vec<i32>> = (0..3).map(|a| vec![o[a]]).collect();
-    for a in 0..3 {
-        // The largest the sum may be on this axis: a remainder and under `ANCHOR` steps each.
-        let most = 0.5 + light::ANCHOR as f32 * (starts.across[a].abs() + starts.down[a].abs());
-        let ulp = f32::from_bits(most.to_bits() + 1) - most;
-        for sign in [-1.0, 1.0] {
-            let mut moved = *starts;
-            for f in &mut moved.frac {
-                f[a] += sign * START_ULPS * ulp;
-            }
-            let v = moved.start(w)[a];
-            if !sides[a].contains(&v) {
-                sides[a].push(v);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    for &x in &sides[0] {
-        for &y in &sides[1] {
-            for &z in &sides[2] {
-                if [x, y, z] != o {
-                    out.push([x, y, z]);
-                }
-            }
-        }
-    }
-    out
-}
-
-/// The light's reciprocal of its way as the device takes it, read off a probe appended to
-/// light.wgsl (or the mutant's module) that calls what `visible_entry` calls; held within `INV_ULPS`
-/// of `Ray::inverse`'s.
-fn light_inverse(gpu: &Gpu, l: &Light) -> [f32; 3] {
-    const PROBE: &str = r"
-@group(0) @binding(40) var<storage, read_write> probe: array<u32>;
-
-@compute @workgroup_size(1, 1, 1)
-fn probe_cs() {
-  let inv = ray_inv(ray_dir(light_v3(LIGHT_DIR)));
-  for (var a = 0u; a < 3u; a += 1u) {
-    probe[a] = bitcast<u32>(inv[a]);
-  }
-}
-";
-    let module = format!("{}\n{PROBE}", gpu::source(src(SHADER_LIGHT), "light_cs"));
-    let p = gpu.pipeline(&module, "probe_cs");
-    let mut eye_words = vec![0u32; eye::WORDS];
-    eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
-    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let out = gpu.buffer(&[0; 3], wgpu::BufferUsages::STORAGE);
-    gpu.dispatch(
-        &p,
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (40, out.as_entire_binding()),
-        ],
-        [1, 1, 1],
-    );
-    let w = gpu.read(&out);
-    let inv = [0, 1, 2].map(|a| f32::from_bits(w[a]));
-    let rust = Ray::new(l.dir, l.t_max).inverse();
-    let off = (0..3).map(|a| ulps(inv[a], rust[a])).max().unwrap_or(0);
-    eprintln!("the light's reciprocal {off} ulps off the Rust's");
-    assert!(
-        off <= INV_ULPS,
-        "the device's reciprocal {inv:?}, the Rust's {rust:?}"
-    );
-    inv
-}
-
-/// The ulps the device's reciprocal of the light's way may lie off the Rust's correctly
-/// rounded one: WGSL's bound on a division, 2.5 ulps, taken up to a whole ulp.
-const INV_ULPS: u32 = 3;
-
-/// Ulps a GPU's quotient leaves a depth's share of the box off either way: its t is taken along
-/// the device's own reciprocal (`light_inverse`), so the share's division alone, within WGSL's
-/// 2.5 ulps, taken up. Metal measured 1.
-const DIVISION_ULPS: i32 = 3;
+/// Slots a case may hold to a band's distance squared an ulp off (`run_slots`), at most.
+const BANDS_OVER: u32 = 16;
 
 /// The word of a slot that took its visible sample `t` along its ray across `axis`
 /// (`light::depth`, `light::word`), and every word a GPU may leave for it: its share of the
-/// box's depth `DIVISION_ULPS` off either way, the product with `DEPTH_ONE` rounded or fused
-/// into the half added.
+/// box's depth, `t` times the reach's reciprocal, rounded or fused into the push added, and
+/// the product with `DEPTH_ONE` rounded or fused into the half added. Nothing is divided.
 fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
     let met = Trace {
         ends: End::Hit,
@@ -828,12 +709,11 @@ fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
         visits: 0,
     };
     let want = light::word(light::depth(l, &met));
-    let q = t / l.t_max;
+    let (scale, push) = (l.t_max_inverse(), pxl_engine::axis(l.bias, axis));
     let one = light::DEPTH_ONE as f32;
     let mut all = Vec::new();
-    for k in -DIVISION_ULPS..=DIVISION_ULPS {
-        let q = f32::from_bits(q.to_bits().wrapping_add_signed(k));
-        let d = (q + pxl_engine::axis(l.bias, axis)).min(1.0);
+    for d in [t * scale + push, t.mul_add(scale, push)] {
+        let d = d.min(1.0);
         for v in [d * one + 0.5, d.mul_add(one, 0.5)] {
             all.push((v as u32).min(light::DEPTH_ONE));
         }
@@ -1053,13 +933,13 @@ fn run_marks(
     // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
     // some marked and not yet walked, some meeting nothing.
     let mut words: Vec<u32> = (0..ray::WORDS * wd * ht).map(noise).collect();
-    let mut table = vec![0u32; pyramid::WORDS as usize];
-    table[pyramid::FRAME as usize] = FRAME;
+    let mut table = vec![0u32; node_cache::WORDS as usize];
+    table[node_cache::FRAME as usize] = FRAME;
     let mut q = Keeping {
         w,
         cuts: [Cut::NONE; 2],
         table: &mut table,
-        tag: pyramid::tag(FRAME, pyramid::MISSED_PASS),
+        tag: node_cache::tag(FRAME, node_cache::MISSED_PASS),
         asks: Asks::default(),
         met: None,
         writes: true,
@@ -1309,4 +1189,55 @@ fn run_marks(
     tally.compare(&format!("{name}: the rays"), &words, &rays_out, |k| {
         format!("word {k}")
     });
+}
+
+/// Every texel's start as the device takes it (light_aim.wgsl `texel_start`), read off a probe
+/// appended to light.wgsl, is `Starts::start`'s: summed in fixed point, nothing rounds apart.
+fn starts_alike(gpu: &Gpu, l: &Light, starts: &light::Starts) {
+    const PROBE: &str = r"
+@group(0) @binding(40) var<storage, read_write> probe: array<i32>;
+
+@compute @workgroup_size(16, 16, 1)
+fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  let o = texel_start(light_corner() + vec2<i32>(id.xy));
+  let k = 3u * (id.y * PROBE_SIZE + id.x);
+  probe[k] = o.x;
+  probe[k + 1u] = o.y;
+  probe[k + 2u] = o.z;
+}
+";
+    let module = format!(
+        "{}\nconst PROBE_SIZE: u32 = {SIZE}u;\n{PROBE}",
+        gpu::source(src(SHADER_LIGHT), "light_cs")
+    );
+    let p = gpu.pipeline(&module, "probe_cs");
+    let mut eye_words = vec![0u32; eye::WORDS];
+    eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
+    let mut head = vec![0u32; light::HEAD_WORDS];
+    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+        .copy_from_slice(&starts.words());
+    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let out = gpu.buffer(
+        &vec![0u32; 3 * (SIZE * SIZE) as usize],
+        wgpu::BufferUsages::STORAGE,
+    );
+    gpu.dispatch(
+        &p,
+        &[
+            (0, eye_buf.as_entire_binding()),
+            (11, head_buf.as_entire_binding()),
+            (40, out.as_entire_binding()),
+        ],
+        [SIZE / 16, SIZE / 16, 1],
+    );
+    let w = gpu.read(&out);
+    let off = (0..(SIZE * SIZE) as usize)
+        .filter(|&k| {
+            let p = [k as i32 % SIZE as i32, k as i32 / SIZE as i32];
+            let want = starts.start([l.corner[0] + p[0], l.corner[1] + p[1]]);
+            want != [0, 1, 2].map(|a| w[3 * k + a] as i32)
+        })
+        .count();
+    assert_eq!(off, 0, "{off} texels' starts not the Rust's");
 }

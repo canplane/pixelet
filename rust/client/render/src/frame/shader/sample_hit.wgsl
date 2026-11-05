@@ -1,6 +1,6 @@
 // pxl-render/sample_hit.wgsl
 
-// The samples' walk over the observed pyramid alone (walk.wgsl), either observer's
+// The samples' walk over the node cache alone (walk.wgsl), either observer's
 // (sample_eye.wgsl, sample_light.wgsl). One it leaves is listed for `sample_cs`; one that ends
 // is put as that puts it (sample_put.wgsl).
 
@@ -22,7 +22,7 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let aim = sample_aim(s);
   let w = walk(aim, sample_start(aim, s), NONE);
-  if (w.ends == 0u || w.ends == 4u) {
+  if (w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (SAMPLE_SIDE * SAMPLE_SIDE) == 0u) {
       atomicAdd(&left[0], 1u);

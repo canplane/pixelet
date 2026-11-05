@@ -18,8 +18,8 @@ use std::time::Duration;
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{
-    self as clip, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES, FILL_CAP,
-    FILL_WORDS, FIRST_CELL, HANDED_WORDS, LEVELS, LINES_AT, LINES_ENTRIES_AT, LINES_SEGMENTS_AT,
+    self as clip, ACROSS, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
+    FILL_CAP, FILL_WORDS, FIRST_CELL, HANDED_WORDS, LINES_AT, LINES_ENTRIES_AT, LINES_SEGMENTS_AT,
     PALETTE_AT, ROOT_AT, SPANS_AT, SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
 use pxl_engine::overwrite::{Columns, BRANCH, CHILDREN};
@@ -752,7 +752,7 @@ fn run_frame(gpu: &Gpu, b: &mut Bufs, run: &mut Run, frame: &Frame) {
             words: &got_scratch,
             at: fill::scratch_at(&got_scratch, k as u32),
         };
-        for j in 0..=LEVELS {
+        for j in 0..=BRICK_LEVELS {
             let side = BRICK >> j;
             for e in 0..side * side {
                 fill::level(

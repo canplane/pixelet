@@ -23,7 +23,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::object::store::{apply, Entry, Write, AIR, VOID};
+use crate::domain::layer::object::store::{Entry, Write, AIR, VOID};
 use crate::domain::query::changes;
 use crate::domain::query::World;
 use pxl_engine::answer;
@@ -52,9 +52,7 @@ fn submit(write: Write) {
     if !World::now().editable(&cube(zoom, at)) {
         return;
     }
-    if apply([write.clone()]) {
-        repository::send(write);
-    }
+    repository::edit(write);
 }
 
 /// Whether a whole-cell pick only undoes a carve: the cell holds an AIR leaf, and

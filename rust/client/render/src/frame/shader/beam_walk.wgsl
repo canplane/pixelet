@@ -1,7 +1,7 @@
 // pxl-render/beam_walk.wgsl
 
 // A beam ray walked from the world's root to the first cell that fills or lacks, or the first
-// split too narrow to share (`cast::walk`, `Until::Beam`), through the observed pyramid writing
+// split too narrow to share (`cast::walk`, `Until::Beam`), through the node cache writing
 // what it asks (ask.wgsl), either observer's (beam.wgsl, light_beam.wgsl). Its line is left as
 // it goes (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at
 // that node's zoom, read back where the walk pops to its child, in place of a stack.
@@ -26,12 +26,11 @@ struct Beamed {
   visits: u32,
 }
 
-/// The beam ray from `origin` aimed `aimed`, reaching `t_max` at the zooms `range` holds it to,
+/// The beam ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to,
 /// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
 /// `base` (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
-fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
+fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
   let dir = ray_dir(aimed);
-  let inv = ray_inv(dir);
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
@@ -41,8 +40,9 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, 
   var roots = vec3<i32>(0);
   var at = world_root(0u, idx_of(corner, zoom, roots, r0));
   var visits = 0u;
-  // A walk that runs out of steps has gone to its reach, as `walk_asking` ends one: it hands on
-  // `t_max`, as a ray that reached it does.
+  // A walk that runs out of steps, a node looked at a step, has gone to its reach, as
+  // `cast::walk_at_most` and `walk_asking` end one: it hands on `t_max`, as a ray that reached
+  // it does, its line left where it is.
   var hit_t = t_max;
   for (var step = 0u; step < STEPS_MOST; step += 1u) {
     let u = under(zoom);

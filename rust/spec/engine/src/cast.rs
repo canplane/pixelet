@@ -621,9 +621,10 @@ pub struct Trace<A> {
     pub visits: u32,
 }
 
-/// The most steps a walk by hand takes (pxl-render walk.wgsl, light_miss.wgsl): a float gone
-/// wrong ends there, on a phone where a walk that does not end loses the device. Far more
-/// than a ray takes.
+/// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and each by
+/// hand (pxl-render beam_walk.wgsl, ask.wgsl, walk.wgsl) end there, gone to their reach. A
+/// float gone wrong ends there, on a phone where a walk that does not end loses the device.
+/// Far more than a ray takes.
 pub const STEPS_MOST: u32 = 4096;
 
 /// The descent's stack, a zoom an entry, every zoom's: what the query
@@ -763,7 +764,8 @@ impl<A: Copy> Keep<A> for () {
 /// Karras 2010 §3). Past a node the corner steps on the axis the ray leaves
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
-/// (POP), or past a root, in the next root, from its top. One loop.
+/// (POP), or past a root, in the next root, from its top. One loop, of at most
+/// `STEPS_MOST` steps (`walk_at_most`).
 #[expect(
     clippy::too_many_arguments,
     reason = "the walk's query, origin, ray, detail, stop and start, the line over its start and what keeps its own, each its own (Laine & Karras 2010)"
@@ -778,6 +780,24 @@ pub fn walk<Q: Query>(
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
 ) -> Trace<Q::At> {
+    walk_at_most(q, o, ray, detail, until, from, over, keep, STEPS_MOST)
+}
+
+/// `walk` of at most `steps` steps, a node it looks at a step, as the walks by hand count
+/// theirs: a walk that runs out of them has gone to its reach, `ray.t_max`, its line left
+/// where it is to `keep`, at the node it would look at next.
+#[expect(clippy::too_many_arguments, reason = "`walk`'s, and its bound")]
+pub fn walk_at_most<Q: Query>(
+    q: &mut Q,
+    o: [i32; 3],
+    ray: &Ray,
+    detail: Detail,
+    until: Until,
+    from: (Node, Q::At, f32),
+    over: &impl Over<Q::At>,
+    keep: &mut impl Keep<Q::At>,
+    steps: u32,
+) -> Trace<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
@@ -786,7 +806,9 @@ pub fn walk<Q: Query>(
     let (mut n, mut at, mut t) = from;
     let mut stack = [at; DEPTH];
     let (mut low, mut visits) = (n.zoom, 0);
-    loop {
+    let mut step = 0;
+    while step < steps {
+        step += 1;
         let u = under(n.zoom);
         let (lo, hi) = bounds(&n, og);
         // The ray's span in it.
@@ -1042,6 +1064,21 @@ pub fn walk<Q: Query>(
             q.child(&parent, n.zoom, node)
         };
     }
+    // Out of steps: gone to its reach, no hit, which no asker reads.
+    let hit = Hit {
+        t: ray.t_max,
+        axis: 0,
+        node: n,
+        at,
+        asset: AIR,
+    };
+    let met = Trace {
+        ends: End::Miss,
+        hit,
+        visits,
+    };
+    leave(keep, &met, &mut stack, low, over);
+    met
 }
 
 /// The walk's line left to `keep` where it ends at `met`: its stack, under

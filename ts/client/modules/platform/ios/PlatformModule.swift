@@ -98,8 +98,8 @@ public class PlatformModule: Module {
       Prop("rest") { (view: KeyboardDock, rest: Double) in
         view.rest = rest
       }
-      Prop("applied") { (view: KeyboardDock, applied: Double) in
-        view.applied = applied
+      Prop("layoutLift") { (view: KeyboardDock, layoutLift: Double) in
+        view.layoutLift = layoutLift
       }
     }
 

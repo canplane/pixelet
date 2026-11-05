@@ -38,11 +38,15 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// rays' direction, and a hit's push in depth by its face's axis, a vec4
 /// each, f32 bits, the last four's fourth words the clipmap's corners
 /// (`light::CORNER`), the share of the box a receiver reads
-/// (`light::REACH_NDC`) and a texel's width (`light::W_WIDTH`). All zero where no shadow is cast. The renderer writes
-/// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
-/// leaves them zero.
+/// (`light::REACH_NDC`) and a texel's width (`light::W_WIDTH`); then the
+/// reciprocals the light's rules multiply by, each rounded once by the
+/// renderer: the rays' direction's and the reach's, a vec4, and the squares
+/// of the steps across and down and the width's (`light::W_INVERSE` to
+/// `light::W_WIDTH_INVERSE`). All zero where no shadow is cast. The renderer
+/// writes them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the
+/// kernel leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;
-pub const LIGHT_WORDS: usize = 20;
+pub const LIGHT_WORDS: usize = 28;
 /// Where each pixel's ray goes through it this frame, its offset from the
 /// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
 /// words unused, as the eye is laid out in fours. The renderer's to write;
@@ -78,12 +82,19 @@ const _: () = assert!(
 /// at all in the view of the eye looking along `forward`, `right` across
 /// and `up`, the screen's half-angles' tangents `tan`: before it, and past
 /// none of its sides by more than its radius, each side's distance to a
-/// point its offset over the side's slope (`√(1 + tan²)`).
-pub fn sees([forward, right, up]: [[f32; 3]; 3], tan: [f32; 2], v: [f32; 3], radius: f32) -> bool {
+/// point its offset over the side's slope, `√(1 + tan²)`, which the host
+/// rounds once (`beam::Grid::slope`).
+pub fn sees(
+    [forward, right, up]: [[f32; 3]; 3],
+    tan: [f32; 2],
+    slope: [f32; 2],
+    v: [f32; 3],
+    radius: f32,
+) -> bool {
     let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let f = dot(v, forward);
-    let side = |o: f32, t: f32| libm::fabsf(o) - t * f <= radius * libm::sqrtf(1.0 + t * t);
-    f >= -radius && side(dot(v, right), tan[0]) && side(dot(v, up), tan[1])
+    let side = |o: f32, t: f32, s: f32| libm::fabsf(o) - t * f <= radius * s;
+    f >= -radius && side(dot(v, right), tan[0], slope[0]) && side(dot(v, up), tan[1], slope[1])
 }
 
 #[cfg(test)]
@@ -96,12 +107,14 @@ mod tests {
     fn eye_sees_view() {
         let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
         let tan = [1.0, 0.5];
-        assert!(sees(axes, tan, [0.0, 10.0, 0.0], 0.0));
-        assert!(sees(axes, tan, [9.9, 10.0, 0.0], 0.0));
-        assert!(!sees(axes, tan, [12.0, 10.0, 0.0], 1.0));
-        assert!(sees(axes, tan, [12.0, 10.0, 0.0], 2.0));
-        assert!(!sees(axes, tan, [0.0, 10.0, 6.0], 0.5));
-        assert!(!sees(axes, tan, [0.0, -3.0, 0.0], 2.0));
-        assert!(sees(axes, tan, [0.0, -1.0, 0.0], 2.0));
+        let slope = beam::Grid::of(tan, 1).slope();
+        let sees = |v: [f32; 3], r: f32| sees(axes, tan, slope, v, r);
+        assert!(sees([0.0, 10.0, 0.0], 0.0));
+        assert!(sees([9.9, 10.0, 0.0], 0.0));
+        assert!(!sees([12.0, 10.0, 0.0], 1.0));
+        assert!(sees([12.0, 10.0, 0.0], 2.0));
+        assert!(!sees([0.0, 10.0, 6.0], 0.5));
+        assert!(!sees([0.0, -3.0, 0.0], 2.0));
+        assert!(sees([0.0, -1.0, 0.0], 2.0));
     }
 }

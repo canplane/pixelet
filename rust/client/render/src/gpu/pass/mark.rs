@@ -17,7 +17,9 @@
 use crate::frame::draw::{uniform_of, DRAW_WORDS};
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::{buf_entry, buffer_usage, release, Format, Gpu, Stencil, TrackedRenderPass};
+use crate::gpu::api::{
+    buf_entry, buffer_usage, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
+};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
@@ -83,7 +85,7 @@ impl Marks {
 
     /// Group 0's layout (tile_mark.wgsl): the frame, the tiles' words, their
     /// uniform and the box of the tiles the frame's marks cover.
-    pub fn layout(&self) -> u32 {
+    pub fn layout(&self) -> Layout {
         self.pipeline.layouts[0]
     }
 
@@ -212,7 +214,7 @@ struct Copy {
 pub struct UploadCopies {
     copies: Vec<Copy>,
     let_go: Vec<(u32, u32)>,
-    layout: u32,
+    layout: Option<Layout>,
 }
 
 impl UploadCopies {
@@ -236,11 +238,9 @@ impl UploadCopies {
                 }
                 None => {}
             }
-            if self.layout == 0 {
-                self.layout = g.layout(&UPLOAD_LAYOUT);
-            }
+            let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
             let buf = g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-            let group = g.bind_group(self.layout, &[buf_entry(0, buf)]);
+            let group = g.bind_group(layout, &[buf_entry(0, buf)]);
             self.copies.push(Copy {
                 handle: h,
                 buf,

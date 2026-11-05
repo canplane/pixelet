@@ -37,7 +37,7 @@ pub const FILL_SHIFT: u32 = ZOOM_SHIFT + ZOOM_BITS;
 const _: () = assert!(FILL_SHIFT + FILL_BITS < 32);
 
 /// The first word the cast's reading walk leaves a pixel it could not
-/// finish from the observed pyramid alone, for the walk that writes it to
+/// finish from the node cache alone, for the walk that writes it to
 /// find (pxl-render cast.wgsl `cast_cs`, miss.wgsl `miss_cs`): no hit's, as
 /// `first_word` sets no bit past the fill share's, and not the zero of one that
 /// met nothing. It lives within the cast's one pass: the walk again runs
@@ -49,7 +49,7 @@ const _: () = assert!(MISS >> (FILL_SHIFT + FILL_BITS) != 0);
 
 /// The walk again's dispatches, as the reading walk counts what it marks
 /// (pxl-render cast.wgsl `cast_cs`): over the marked pixels listed
-/// (`pyramid::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
+/// (`node_cache::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
 /// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the

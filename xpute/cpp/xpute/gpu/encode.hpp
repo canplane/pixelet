@@ -493,10 +493,10 @@ template <std::size_t N> class Gpu {
     }
 
     // As render_pipeline, made where the host can without holding its thread:
-    // `word` holds `ticket | DONE` once it is made, and no record names it before.
-    std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, std::uint32_t &word, std::uint32_t ticket) noexcept {
-        word = ticket;
-        std::uint32_t at = stream.mem().off_of(&word);
+    // the host stores `ticket` at the fence `fence` once it is made (spec
+    // RESULT), and no record names it before.
+    std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
+        std::uint32_t at = stream.mem().off_of(&fence);
         return make_as(stream, op::RENDER_PIPELINE_ASYNC, op::RENDER_PIPELINE, [&](auto &s) {
             detail::render_pipeline_words(s, d);
             detail::words(s, {at, ticket});
@@ -508,9 +508,8 @@ template <std::size_t N> class Gpu {
     }
 
     // As compute_pipeline, its word as render_pipeline_async's.
-    std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, std::uint32_t &word, std::uint32_t ticket) noexcept {
-        word = ticket;
-        std::uint32_t at = stream.mem().off_of(&word);
+    std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
+        std::uint32_t at = stream.mem().off_of(&fence);
         return make_as(stream, op::COMPUTE_PIPELINE_ASYNC, op::COMPUTE_PIPELINE, [&](auto &s) {
             detail::compute_pipeline_words(s, d);
             detail::words(s, {at, ticket});
@@ -647,7 +646,7 @@ bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<con
 // writing several asks once.
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
 // The bytes read where they lie in the guest's memory when the host runs the
-// stream, so they must stay until it has.
+// stream, no copy made (ipc/stream.hpp R3).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout`: bytes per row, rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
@@ -655,8 +654,9 @@ bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std
 std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 // An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
-// decoded into `to`; `word` where `ticket | DONE` lands once it is there.
-bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, std::uint32_t &word, std::uint32_t ticket) noexcept;
+// decoded into `to`; `fence` its fence and result (spec RESULT), `ticket`
+// landing there once it is in or refused.
+bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
 // `from` and `to`: a buffer and its offset.
 bool copy_buffer_to_buffer(Stream &stream, Id encoder, std::array<std::uint32_t, 2> from, std::array<std::uint32_t, 2> to, std::uint32_t size) noexcept;
 bool copy_buffer_to_texture(Stream &stream, Id encoder, const TexelCopyBuffer &from, const TexelCopyTexture &to, std::array<std::uint32_t, 3> size) noexcept;
@@ -681,11 +681,13 @@ bool draw_indexed_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t off
 bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) noexcept;
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
 // `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted before)
-// read into the guest's memory at `into`; `ticket | DONE` lands at `word` once
-// the bytes are there and the buffer is unmapped.
-bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept;
-// `ticket | DONE` at `word` once what was submitted before is done.
-bool queue_done(Stream &stream, std::uint32_t &word, std::uint32_t ticket) noexcept;
+// read into the guest's memory at `into`; `fence` its fence and result
+// (spec RESULT), `ticket` landing there once the bytes are there and the
+// buffer is unmapped, or the mapping refused.
+bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
+// `ticket` at the fence `fence` once what was submitted before is done
+// (spec RESULT).
+bool queue_done(Stream &stream, const std::uint32_t &fence, std::uint32_t ticket) noexcept;
 // `format` none for the format the host's surface prefers.
 bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureFormat> format, std::uint32_t usage, CanvasAlphaMode alpha) noexcept;
 bool resize(Stream &stream, std::uint32_t surface, std::array<std::uint32_t, 2> size) noexcept;

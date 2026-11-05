@@ -1,6 +1,6 @@
 // pxl-render/miss.wgsl
 
-// The pixels the walk over the observed pyramid alone left (miss_hit.wgsl), their ray again
+// The pixels the walk over the node cache alone left (miss_hit.wgsl), their ray again
 // from their cell's start asking the world (ask.wgsl, miss_word.wgsl):
 // over their list (`miss_list_cs`), and over every pixel where `cast_cs` found the list full
 // (`miss_cs`). The two run after `cast_cs` in the cast's one pass and write every marked
@@ -12,16 +12,16 @@ const ASKED_COUNT: u32 = EYE_ASKED_COUNT;
 
 /// The hit at pixel `id`, entered through `face`, kept for what lies about that face to be
 /// asked once a hit (miss_word.wgsl `hit_put`): numbered as the walks take them
-/// (`pyramid::HITS_CNT`), the dispatch over them raised by the number that opens a workgroup
-/// (`pyramid::HITS_ARGS`), and its number marked waiting (`beam::HIT_WAITS`) as its pixel's
+/// (`node_cache::HITS_CNT`), the dispatch over them raised by the number that opens a workgroup
+/// (`node_cache::HITS_ARGS`), and its number marked waiting (`beam::HIT_WAITS`) as its pixel's
 /// last word until its faces are put there (`hit_faces_cs`); none past `beam::HITS`.
 fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
-  let r = atomicAdd(&pyramid[HITS_CNT], 1u);
+  let r = atomicAdd(&node_cache[HITS_CNT], 1u);
   if (r >= HITS) {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&pyramid[HITS_ARGS], r / HIT_LANES + 1u);
+    atomicMax(&node_cache[HITS_ARGS], r / HIT_LANES + 1u);
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
@@ -35,7 +35,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
   let aim = px_aim(id, size);
   let start = px_start(aim, id, size);
-  let w = walk_asking(aim.origin, aim.dir, aim.t_max, aim.range, start);
+  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
   let face = face_of(aim, w);
   var faces = 0u;
   // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both

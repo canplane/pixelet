@@ -1,6 +1,6 @@
-// pxl-engine/pyramid.rs
+// pxl-engine/node_cache.rs
 
-//! gpu-portable: the observed pyramid, as a GPU holds it: the nodes the eye's
+//! gpu-portable: the node cache, as a GPU holds it: the nodes the eye's
 //! rays asked about, each the world's one query's answer at the zooms it
 //! was asked at and what was handed it after, so a node is asked once, not
 //! once a ray. A table of slots keyed by the node, its zoom and its index,
@@ -17,12 +17,12 @@
 //!   clip levels' entries that moved (`HEAD_WORDS`);
 //! - the entries, a slot each (`ENTRIES_AT`);
 //! - the pixels the frame's reading walk marked missed, listed for the walk
-//!   that writes the pyramid (`MARKS_AT`).
+//!   that writes the node cache (`MARKS_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
 //! marked in their own rays (`ray::MISS`) and listed here by plain writes,
 //! their count kept apart (`ray::MISS_ARGS_CNT`) and copied in after
-//! (`MARKS_CNT`), so a walk that only reads the pyramid types no word of
+//! (`MARKS_CNT`), so a walk that only reads the node cache types no word of
 //! it atomic.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
@@ -275,7 +275,7 @@ fn stamp(kind: u32, key: u32, asset: [u32; 2], handed: [u32; 4], zoom: Zoom, c: 
 
 /// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
 /// so the walk that asks the world asks again, and is no empty slot, so the walk over
-/// the pyramid alone (pxl-render walk.wgsl) still goes through it, taking none of what
+/// the node cache alone (pxl-render walk.wgsl) still goes through it, taking none of what
 /// it read of the brick. Every moved brick lies under the root and the chain over it:
 /// zeroed, they stop every ray of the frame.
 pub const fn forgotten_split(key: u32) -> u32 {

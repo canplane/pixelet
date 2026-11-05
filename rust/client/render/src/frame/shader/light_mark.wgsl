@@ -29,8 +29,7 @@ fn met_tile(p: vec2<u32>, drawn: vec2<u32>) -> Met {
   }
   let t = bitcast<f32>(textureLoad(rays, p, 1u).x);
   let tan_at = px_tan(p, drawn);
-  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
-  return Met(true, tile_of(aimed / length(aimed) * t));
+  return Met(true, tile_of(eye_aim(tan_at).dir * t));
 }
 
 /// The tiles between `a` and `b` marked stood on, where they lie within a footprint of

@@ -12,7 +12,7 @@ use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
-use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
@@ -53,9 +53,11 @@ impl StarPass {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(catalog, 0, bytes(&stars));
+        // The air's entries its layout binds.
+        let layout = pipeline.layouts[0];
         let mut frame = vec![buf_entry(0, frame_buf)];
-        frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
-        let frame_group = g.bind_group(pipeline.layouts[0], &frame);
+        frame.extend(air.iter().filter(|e| layout.binds(e.binding)));
+        let frame_group = g.bind_group(layout, &frame);
         let group = g.bind_group(
             pipeline.layouts[1],
             &[buf_entry(0, uniform), buf_entry(1, catalog)],

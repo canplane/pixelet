@@ -16,7 +16,7 @@
 // - R3. Memory a frame names by its address is the receiver's from the
 //   moment the frame is published until the receiver stores HEAD past it.
 //   The sender writes it again only once it has loaded a HEAD past that
-//   frame (`consumed`).
+//   frame (`is_consumed`).
 //
 // The frames' and slots' own words are plain memory, ordered by the position
 // words alone. Where a target has no threads, as WebAssembly without its
@@ -63,7 +63,7 @@ class Ring {
     // Whether the consumer has stored its head past the frame published at
     // `pos`: what that frame named is the producer's again (R3). The
     // producer's to ask.
-    bool consumed(std::uint32_t pos) const noexcept {
+    bool is_consumed(std::uint32_t pos) const noexcept {
         std::uint32_t t = tail();
         return t - head() < t - pos;
     }
@@ -99,8 +99,6 @@ class Ring {
         return entry(tag, cmd, flags, 0, slot);
     }
 
-    // Drops every frame not yet read: the writer's, before its reader reads.
-    void clear() const noexcept { pos(ring::TAIL).store(head(), std::memory_order_release); }
 
     // The head's frame, none when empty. Read it, then `advance`.
     std::optional<Frame> peek() const noexcept;

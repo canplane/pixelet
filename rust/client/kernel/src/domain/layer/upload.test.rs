@@ -10,8 +10,8 @@ fn block() -> Block {
 #[test]
 fn keeps_at_most() {
     let mut k = Uploads::new(4);
-    for record in 0..3 {
-        k.keep(Some(record), block(), 2);
+    for slot in 0..3 {
+        k.keep(Some(slot), block(), 2);
     }
     assert_eq!(k.cnt(), 2);
     assert!(
@@ -20,11 +20,11 @@ fn keeps_at_most() {
     );
     assert_eq!(k.sent_on(2), None);
     k.keep(Some(0), block(), 2);
-    assert_eq!(k.cnt(), 2, "a frame's packet replaced is still one");
+    assert_eq!(k.cnt(), 2, "a slot's packet replaced is still one");
     k.send(
         7,
-        &mut |record, _| {
-            if record == 0 {
+        &mut |slot, _| {
+            if slot == 0 {
                 Uptake::Taken
             } else {
                 Uptake::Part
@@ -46,17 +46,17 @@ fn keeps_at_most() {
 #[test]
 fn full_stream_frees_unwanted() {
     let mut k = Uploads::new(4);
-    for record in 0..4 {
-        k.keep(Some(record), block(), 4);
+    for slot in 0..4 {
+        k.keep(Some(slot), block(), 4);
     }
     let mut offered = Vec::new();
     k.send(
         3,
-        &mut |record, _| {
-            offered.push(record);
+        &mut |slot, _| {
+            offered.push(slot);
             Uptake::Full
         },
-        &|record| record == 2,
+        &|slot| slot == 2,
     );
     assert_eq!(offered, [0], "nothing offered past the stream's end");
     assert!(
@@ -71,7 +71,7 @@ fn full_stream_frees_unwanted() {
 }
 
 #[test]
-fn forgotten_frame_empty() {
+fn forgotten_slot_empty() {
     let mut k = Uploads::new(2);
     k.keep(Some(0), block(), 2);
     k.forget(0);

@@ -183,7 +183,7 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
     for (std::uint32_t &off : at) off += range;
     Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
-        .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
+        .door = std::move(door), .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
     // The stream lies where a GPU stream would: the host runs it after every turn.
     write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .gpu_at = at[STREAM]});
     return at[HEAD];
@@ -193,10 +193,11 @@ double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.door.rise();
     s.door.receive(
-        [&s](const abi::fs::FsOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.door, opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
+        [&s](const FsOpened &opened) {
+            if (std::optional<std::uint32_t> owner = s.files.complete_open(opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
             return Outcome{};
         },
+        [](const FsClosed &) {},
         [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
     s.stream.publish();
     return s.door.pending() ? 0.0 : NO_WAKE;

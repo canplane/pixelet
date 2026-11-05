@@ -41,8 +41,9 @@ use crate::frame::shader::word::{
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
-    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, signaled, texture_usage,
+    view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Layout, Load, RenderContext,
+    RESULT,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -55,13 +56,8 @@ use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// Bindings 8 through 18 but the sky view's own 14, and the air's volume at
-/// 22: eleven entries.
-pub const AIR_ENTRIES: usize = 11;
-
-/// The air's words, its transmittance and its sampler: what a pass lit
-/// through the air reads of it (atmos_medium.wgsl).
-pub const MEDIUM: [u32; 3] = [8, 9, 11];
+/// The air's entries every painter and the sky read (record.rs `AIR`).
+pub const AIR_ENTRIES: usize = 6;
 
 /// What the volume's maker binds: the volume it writes, the air's words and
 /// the tables it marches through, and which light, as its sky view's.
@@ -297,10 +293,14 @@ pub struct Atmosphere {
     /// copied and on their way (`Measure::bit`).
     pending: u32,
     flying: u32,
-    /// The words as they land, and their word (`DONE` once in): on the heap, as
-    /// the host writes them and a native build's statics are outside its memory.
+    /// The words as they land, and their fence and result: on the heap,
+    /// as the host writes them and a native build's statics are outside its
+    /// memory; the ticket the mapping was last asked with, the kernel's, and
+    /// whether one is out or landed and not yet taken.
     landed_words: Box<[u32; SLOPES]>,
-    landed_word: Box<u32>,
+    mapping: Box<[u32; 2]>,
+    ticket: u32,
+    mapped: bool,
     plan: Plan,
     sun_mu: f32,
     moon_mu: f32,
@@ -323,7 +323,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Atmosphere {
         let uniform = g.buf(
             word_bytes(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -444,7 +444,9 @@ impl Atmosphere {
             pending: 0,
             flying: 0,
             landed_words: Box::new([0; SLOPES]),
-            landed_word: Box::new(0),
+            mapping: Box::new([0; 2]),
+            ticket: 0,
+            mapped: false,
             plan: Plan::default(),
             read: Read::default(),
             exposure_read: Read::default(),
@@ -467,87 +469,74 @@ impl Atmosphere {
             froxel: pipelines.build_compute(g, SHADER_ATMOS_FROXEL, &FROXEL_GROUP),
             froxel_groups: [0; 2],
         };
-        // Every table's group is the air's entries it reads and its own.
+        // Every table's group is the air's entries its layout binds, and its own.
         let air = atmosphere.entries();
-        let of = |bindings: &[u32], own: &[Entry]| -> Vec<Entry> {
-            let shared = air.iter().filter(|e| bindings.contains(&e.binding));
+        let of = |layout: Layout, own: &[Entry]| -> Vec<Entry> {
+            let shared = air.iter().filter(|e| layout.binds(e.binding));
             shared.chain(own).copied().collect()
         };
         let multiscatter = view_entry(12, views[MULTISCATTER]);
-        let frame = buf_entry(0, frame_buf);
         let lights = atmosphere.lights;
         let light = |k: usize| buf_entry(14, lights[k]);
         // The exposure reads the air but what it writes, and the volume made of it.
-        let reads: [(usize, Vec<Entry>); TABLES] = [
-            (TRANSMITTANCE, of(&[8], &[])),
-            (MULTISCATTER, of(&MEDIUM, &[])),
-            (IRRADIANCE, of(&MEDIUM, &[multiscatter])),
-            // The views are measured from the frame's up, and take their
-            // slopes off the land's light too.
+        let own: [(usize, Vec<Entry>); TABLES] = [
+            (TRANSMITTANCE, vec![]),
+            (MULTISCATTER, vec![]),
+            (IRRADIANCE, vec![multiscatter]),
+            // The views take their slopes off the land's light too.
             (
                 SKY_VIEW,
-                of(
-                    &[8, 9, 11, 18],
-                    &[
-                        multiscatter,
-                        light(0),
-                        frame,
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![multiscatter, light(0), buf_entry(20, atmosphere.slopes.0)],
             ),
             (
                 MOON_VIEW,
-                of(
-                    &[8, 9, 11, 18],
-                    &[
-                        multiscatter,
-                        light(1),
-                        frame,
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![multiscatter, light(1), buf_entry(20, atmosphere.slopes.0)],
             ),
             (
                 EXPOSURE_TEXEL,
-                of(
-                    &[8, 9, 11, 12, 18],
-                    &[
-                        view_entry(1, views[EXPOSURE_TEXEL]),
-                        buf_entry(14, atmosphere.exposure_words),
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![
+                    multiscatter,
+                    view_entry(1, views[EXPOSURE_TEXEL]),
+                    buf_entry(14, atmosphere.exposure_words),
+                    buf_entry(20, atmosphere.slopes.0),
+                ],
             ),
         ];
-        for (k, entries) in reads {
+        for (k, own) in own {
             let layout = if k == EXPOSURE_TEXEL {
                 atmosphere.exposure.layouts[0]
             } else {
                 atmosphere.passes[pass_of(k)].layouts[0]
             };
-            atmosphere.groups[k] = g.bind_group(layout, &entries);
+            atmosphere.groups[k] = g.bind_group(layout, &of(layout, &own));
         }
+        let froxel = atmosphere.froxel.layouts[0];
         for k in 0..2 {
-            let froxel = of(&[8, 9, 11, 12], &[view_entry(1, volume), light(k)]);
-            atmosphere.froxel_groups[k] = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
+            let own = [multiscatter, view_entry(1, volume), light(k)];
+            atmosphere.froxel_groups[k] = g.bind_group(froxel, &of(froxel, &own));
         }
         atmosphere
     }
 
+    /// The air every painter and the sky read (record.rs `AIR`).
     pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
         [
             buf_entry(8, self.uniform),
             view_entry(9, self.views[TRANSMITTANCE]),
-            view_entry(10, self.views[SKY_VIEW]),
             sampler_entry(11, self.sampler),
             view_entry(13, self.views[EXPOSURE_TEXEL]),
+            view_entry(18, self.views[IRRADIANCE]),
+            view_entry(22, self.volume),
+        ]
+    }
+
+    /// The air the sky alone reads (record.rs `SKY_AIR`).
+    pub fn sky_entries(&self) -> [Entry; 4] {
+        [
+            view_entry(10, self.views[SKY_VIEW]),
             view_entry(15, self.views[MOON_VIEW]),
             view_entry(16, self.earth.view),
             view_entry(17, self.earth_tiles.1),
-            view_entry(18, self.views[IRRADIANCE]),
-            view_entry(12, self.views[MULTISCATTER]),
-            view_entry(22, self.volume),
         ]
     }
 
@@ -753,7 +742,7 @@ impl Atmosphere {
         if exposed {
             self.dispatch_exposure(ctx);
         }
-        let copied = self.pending != 0 && self.flying == 0 && *self.landed_word == 0;
+        let copied = self.pending != 0 && self.flying == 0;
         if copied {
             g.copy_buf(
                 encoder,
@@ -769,16 +758,18 @@ impl Atmosphere {
     /// What the tables measured, mapped back once the copy's encoder is
     /// submitted; its landing wakes the turn that reads it.
     pub fn read_back(&mut self, g: &Gpu) {
-        if self.flying != 0 && *self.landed_word == 0 {
+        if self.flying != 0 && !self.mapped {
             let addr = off_of(self.landed_words.as_ptr()) as u32;
+            self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.slopes.1,
                 0,
                 SLOPES_BYTES,
                 addr,
-                &mut self.landed_word,
-                1,
+                &self.mapping,
+                self.ticket,
             );
+            self.mapped = true;
         }
     }
 
@@ -787,7 +778,13 @@ impl Atmosphere {
     /// and the sample it was taken over; and whether each light reaches the
     /// air.
     fn take_slopes(&mut self) {
-        if *self.landed_word != 1 | DONE {
+        if !self.mapped || !signaled(&self.mapping[0], self.ticket) {
+            return;
+        }
+        self.mapped = false;
+        // A mapping refused measured nothing: what it carried is measured again.
+        if self.mapping[1] != RESULT::OK {
+            self.pending |= core::mem::take(&mut self.flying);
             return;
         }
         let (w, flying) = (*self.landed_words, self.flying);
@@ -811,7 +808,7 @@ impl Atmosphere {
             self.ground.step = Some(1.0 / word(GROUND_WORDS));
             self.ground.sample = word(GROUND_WORDS + 1);
         }
-        (self.flying, *self.landed_word) = (0, 0);
+        self.flying = 0;
     }
 
     /// Each light's step (`LightMemo::step`), the sun's first: in reach, the

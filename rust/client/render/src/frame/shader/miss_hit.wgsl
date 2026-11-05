@@ -1,11 +1,11 @@
 // pxl-render/miss_hit.wgsl
 
-// The pixels `cast_cs` listed, their walk over the observed pyramid alone (walk.wgsl).
+// The pixels `cast_cs` listed, their walk over the node cache alone (walk.wgsl).
 // One it leaves stays marked and is listed for `miss_list_cs` (miss.wgsl); one that ends is
 // written as that writes it (miss_word.wgsl).
 
 /// `miss_list_cs`'s dispatch and how many are listed, then the kept hits' dispatch
-/// and how many (`pyramid::HITS_ARGS`, copied there after).
+/// and how many (`node_cache::HITS_ARGS`, copied there after).
 @group(0) @binding(10) var<storage, read_write> left: array<atomic<u32>, 8>;
 
 /// A hit kept for what lies about its face to be asked once a hit (`keep_hit`).
@@ -27,10 +27,10 @@ fn miss_hit_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
-  if (k >= pyramid[MARKS_CNT] || k >= MARKS) {
+  if (k >= node_cache[MARKS_CNT] || k >= MARKS) {
     return;
   }
-  let listed = pyramid[MARKS_AT + k];
+  let listed = node_cache[MARKS_AT + k];
   let id = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let size = textureDimensions(rays);
   if (id.x >= size.x || id.y >= size.y) {
@@ -38,7 +38,7 @@ fn miss_hit_cs(
   }
   let aim = px_aim(id, size);
   let w = walk(aim, px_start(aim, id, size), NONE);
-  if (w.ends == 0u || w.ends == 4u) {
+  if (w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
       atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);

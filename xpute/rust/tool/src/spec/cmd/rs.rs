@@ -257,7 +257,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.pkt.iter().chain(c.event.iter()).flatten())
+        .flat_map(|c| c.pkt.iter().chain(c.event.iter()).chain(c.reply.iter()).flatten())
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
@@ -319,8 +319,15 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         rs_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
     }
     for c in spec.commands()? {
-        let name = pascal(&c.name);
-        if let Some(pkt) = &c.pkt {
+        let pascal_name = pascal(&c.name);
+        let pkts = [
+            (c.pkt.as_ref(), pascal_name.clone(), "packet"),
+            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{pascal_name}Reply"), "completion's packet"),
+        ];
+        for (pkt, name, what) in pkts {
+            let Some(pkt) = pkt else {
+                continue;
+            };
             let mut borrows = false;
             for f in pkt {
                 borrows |= f.list || spec.kind(&f.ty)? == Kind::Str;
@@ -328,7 +335,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             let lt = if borrows { "<'a>" } else { "" };
             out.extend([
                 String::new(),
-                format!("/// Command::{}'s packet.", c.name),
+                format!("/// Command::{}'s {what}.", c.name),
                 "#[derive(Clone, Copy, Debug)]".to_string(),
                 format!("pub struct {name}{lt} {{"),
             ]);
@@ -358,6 +365,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "}".to_string(),
             ]);
         }
+        let name = pascal_name;
         if let Some(event) = &c.event {
             let doc = [format!("Command::{}'s event.", c.name)];
             rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;

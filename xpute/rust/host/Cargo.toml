@@ -38,6 +38,10 @@ path = "src/native.test.rs"
 name = "native-alloc"
 path = "src/native/alloc.test.rs"
 
+[[test]]
+name = "native-pause"
+path = "src/native/pause.test.rs"
+
 [lints.clippy]
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"

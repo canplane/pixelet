@@ -1,4 +1,4 @@
-//! What the tests of a walk that writes the observed pyramid share (tests/light_miss.rs,
+//! What the tests of a walk that writes the node cache share (tests/light_miss.rs,
 //! tests/forget.rs, tests/sample.rs): `Writing`'s rule over a table of words, what the world
 //! answers of a node, what a table is laid with, and the device.
 
@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::cast::Query;
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, BUCKET, CLAIMED, NONE};
+use pxl_engine::node_cache::{self, BUCKET, CLAIMED, NONE};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, Zoom, FRAC_W};
@@ -38,7 +38,7 @@ impl Asks {
 }
 
 pub fn is_node(t: &[u32], w: usize, zoom: Zoom, c: [i32; 3]) -> bool {
-    let n = w + pyramid::W_NODE as usize;
+    let n = w + node_cache::W_NODE as usize;
     t[n] == zoom && t[n + 1] == c[0] as u32 && t[n + 2] == c[1] as u32 && t[n + 3] == c[2] as u32
 }
 
@@ -83,17 +83,17 @@ impl Query for Keeping<'_> {
         let mut other_zooms = false;
         let mut own_pass = false;
         let mut unstamped = false;
-        let keeps = pyramid::keeps(zoom, c);
+        let keeps = node_cache::keeps(zoom, c);
         if keeps {
-            let first = pyramid::entry_of(zoom, c);
+            let first = node_cache::entry_of(zoom, c);
             let mut free = NONE;
             let mut k = 0;
             while k < BUCKET {
-                let w = pyramid::entry_at(first + k) as usize;
+                let w = node_cache::entry_at(first + k) as usize;
                 let held = t[w];
                 if held != CLAIMED && held != 0 && is_node(t, w, zoom, c) {
-                    if pyramid::holds(held, zooms) {
-                        if pyramid::tag_of(held) == self.tag {
+                    if node_cache::holds(held, zooms) {
+                        if node_cache::tag_of(held) == self.tag {
                             // Kept by a walk of this pass: asked of the world, as its words
                             // may be half written, and left to that walk.
                             own_pass = true;
@@ -101,16 +101,16 @@ impl Query for Keeping<'_> {
                             free = NONE;
                             break;
                         }
-                        let a = w + pyramid::W_INHERITANCE as usize;
+                        let a = w + node_cache::W_INHERITANCE as usize;
                         let handed = [t[a], t[a + 1], t[a + 2], t[a + 3]];
-                        let at = w + pyramid::W_ASSET as usize;
+                        let at = w + node_cache::W_ASSET as usize;
                         let asset = [t[at], t[at + 1]];
-                        let word = t[w + pyramid::W_KIND as usize];
-                        if pyramid::stamp_holds(word, held, asset, handed, zoom, c) {
+                        let word = t[w + node_cache::W_KIND as usize];
+                        if node_cache::stamp_holds(word, held, asset, handed, zoom, c) {
                             *n = Inheritance::of_words(handed);
                             self.asks.kept += 1;
                             return In {
-                                kind: pyramid::kind_of(word),
+                                kind: node_cache::kind_of(word),
                                 asset,
                             };
                         }
@@ -122,7 +122,7 @@ impl Query for Keeping<'_> {
                         break;
                     }
                     other_zooms = true;
-                    if pyramid::tag_of(held) / pyramid::PASSES < self.tag / pyramid::PASSES {
+                    if node_cache::tag_of(held) / node_cache::PASSES < self.tag / node_cache::PASSES {
                         (to, key) = (first + k, held);
                     }
                 } else if held == 0 && free == NONE {
@@ -133,8 +133,8 @@ impl Query for Keeping<'_> {
             if to == NONE && free != NONE {
                 (to, key) = (free, 0);
             } else if to == NONE && k == BUCKET {
-                let v = first + pyramid::victim(zoom, c);
-                (to, key) = (v, t[pyramid::entry_at(v) as usize]);
+                let v = first + node_cache::victim(zoom, c);
+                (to, key) = (v, t[node_cache::entry_at(v) as usize]);
             }
         }
         let which = if !keeps {
@@ -167,7 +167,7 @@ impl Query for Keeping<'_> {
                 to,
                 zoom,
                 c,
-                pyramid::key(self.tag, zooms),
+                node_cache::key(self.tag, zooms),
                 &answer,
                 n.words(),
             );
@@ -185,14 +185,14 @@ pub fn put_entry(
     a: &In<[u32; 2]>,
     words: [u32; 4],
 ) {
-    let w = pyramid::entry_at(slot) as usize;
-    t[w + pyramid::W_KEY as usize] = key;
-    t[w + pyramid::W_KIND as usize] = pyramid::stamped(a.kind, key, a.asset, words, zoom, c);
-    t[w + pyramid::W_ASSET as usize] = a.asset[0];
-    t[w + pyramid::W_ASSET as usize + 1] = a.asset[1];
-    let h = w + pyramid::W_INHERITANCE as usize;
+    let w = node_cache::entry_at(slot) as usize;
+    t[w + node_cache::W_KEY as usize] = key;
+    t[w + node_cache::W_KIND as usize] = node_cache::stamped(a.kind, key, a.asset, words, zoom, c);
+    t[w + node_cache::W_ASSET as usize] = a.asset[0];
+    t[w + node_cache::W_ASSET as usize + 1] = a.asset[1];
+    let h = w + node_cache::W_INHERITANCE as usize;
     t[h..h + 4].copy_from_slice(&words);
-    let n = w + pyramid::W_NODE as usize;
+    let n = w + node_cache::W_NODE as usize;
     t[n] = zoom;
     t[n + 1] = c[0] as u32;
     t[n + 2] = c[1] as u32;
@@ -477,8 +477,8 @@ pub fn lay_traps(
     }
     let mut in_bucket: BTreeMap<u32, u32> = BTreeMap::new();
     for &(z, c, _) in nodes.keys() {
-        if pyramid::keeps(z, c) {
-            *in_bucket.entry(pyramid::entry_of(z, c)).or_default() += 1;
+        if node_cache::keeps(z, c) {
+            *in_bucket.entry(node_cache::entry_of(z, c)).or_default() += 1;
         }
     }
     let mut laid = Vec::new();
@@ -487,10 +487,10 @@ pub fn lay_traps(
     let mut torn = 0u32;
     for (n, &(zoom, c, zooms)) in nodes.keys().enumerate() {
         // Below the top, whose nodes every ray meets, one in so many.
-        if zoom < 12 || !pyramid::keeps(zoom, c) || n % 13 != 0 {
+        if zoom < 12 || !node_cache::keeps(zoom, c) || n % 13 != 0 {
             continue;
         }
-        let first = pyramid::entry_of(zoom, c);
+        let first = node_cache::entry_of(zoom, c);
         if in_bucket[&first] != 1 || !buckets.insert(first) {
             continue;
         }
@@ -515,8 +515,8 @@ pub fn lay_traps(
             },
         };
         // What walks before these kept in its bucket gone.
-        let bucket = pyramid::entry_at(first) as usize;
-        table[bucket..bucket + (BUCKET * pyramid::ENTRY_WORDS) as usize].fill(0);
+        let bucket = node_cache::entry_at(first) as usize;
+        table[bucket..bucket + (BUCKET * node_cache::ENTRY_WORDS) as usize].fill(0);
         // Another node of the bucket, at a zoom no walk here asks.
         let stranger = |k: i32| [c[0] ^ (k + 1), c[1], c[2]];
         match trap {
@@ -526,7 +526,7 @@ pub fn lay_traps(
                     first + 1,
                     zoom,
                     c,
-                    pyramid::key(earlier, other),
+                    node_cache::key(earlier, other),
                     &at_other,
                     words_other,
                 );
@@ -537,7 +537,7 @@ pub fn lay_traps(
                     first,
                     zoom,
                     c,
-                    pyramid::key(this_samples, other),
+                    node_cache::key(this_samples, other),
                     &at_other,
                     words_other,
                 );
@@ -548,7 +548,7 @@ pub fn lay_traps(
                     first,
                     zoom,
                     c,
-                    pyramid::key(own, zooms),
+                    node_cache::key(own, zooms),
                     &wrong,
                     words,
                 );
@@ -556,26 +556,27 @@ pub fn lay_traps(
             Trap::TornWords => {
                 // A false answer and its stamp, then one word its stamp covers over: taken if
                 // that word goes unread.
-                let key = pyramid::key(this_samples, zooms);
+                let key = node_cache::key(this_samples, zooms);
                 put_entry(table, first, zoom, c, key, &wrong, words);
-                let e = pyramid::entry_at(first) as usize;
-                let kind = e + pyramid::W_KIND as usize;
-                let asset = e + pyramid::W_ASSET as usize;
-                let handed = e + pyramid::W_INHERITANCE as usize;
-                let stamp =
-                    |key, zoom, c| pyramid::stamped(wrong.kind, key, wrong.asset, words, zoom, c);
+                let e = node_cache::entry_at(first) as usize;
+                let kind = e + node_cache::W_KIND as usize;
+                let asset = e + node_cache::W_ASSET as usize;
+                let handed = e + node_cache::W_INHERITANCE as usize;
+                let stamp = |key, zoom, c| {
+                    node_cache::stamped(wrong.kind, key, wrong.asset, words, zoom, c)
+                };
                 torn += 1;
                 match torn % 13 {
                     0 => {
                         table[kind] = stamp(
-                            pyramid::key(this_samples, [zooms[0] - 1, zooms[1]]),
+                            node_cache::key(this_samples, [zooms[0] - 1, zooms[1]]),
                             zoom,
                             c,
                         );
                     }
                     1 => {
                         table[kind] = stamp(
-                            pyramid::key(this_samples, [zooms[0], zooms[1] - 1]),
+                            node_cache::key(this_samples, [zooms[0], zooms[1] - 1]),
                             zoom,
                             c,
                         );
@@ -599,7 +600,7 @@ pub fn lay_traps(
                     first + 1,
                     zoom,
                     c,
-                    pyramid::key(earlier, zooms),
+                    node_cache::key(earlier, zooms),
                     &a,
                     words,
                 );
@@ -610,7 +611,7 @@ pub fn lay_traps(
                     first,
                     zoom,
                     c,
-                    pyramid::key(this_samples, zooms),
+                    node_cache::key(this_samples, zooms),
                     &a,
                     words,
                 );
@@ -621,13 +622,13 @@ pub fn lay_traps(
                     first,
                     zoom,
                     c,
-                    pyramid::key(this_samples, zooms),
+                    node_cache::key(this_samples, zooms),
                     &wrong,
                     words,
                 );
             }
             Trap::Forgotten => {
-                let key = pyramid::forgotten_split(pyramid::key(earlier, zooms));
+                let key = node_cache::forgotten_split(node_cache::key(earlier, zooms));
                 put_entry(table, first, zoom, c, key, &a, words);
             }
             Trap::Claimed => {
@@ -635,7 +636,7 @@ pub fn lay_traps(
             }
             Trap::Victim => {
                 for k in 0..BUCKET {
-                    let key = pyramid::key(earlier, zooms);
+                    let key = node_cache::key(earlier, zooms);
                     put_entry(table, first + k, 40, stranger(k as i32), key, &a, words);
                 }
             }
@@ -645,13 +646,13 @@ pub fn lay_traps(
                 }
             }
             Trap::NextFree => {
-                let key = pyramid::key(earlier, zooms);
+                let key = node_cache::key(earlier, zooms);
                 put_entry(table, first, 40, stranger(0), key, &a, words);
             }
             Trap::NotIt => {
                 // False but for the one a walk writes over, which a thread may read as it does.
-                let key = pyramid::key(earlier, zooms);
-                let v = pyramid::victim(zoom, c);
+                let key = node_cache::key(earlier, zooms);
+                let v = node_cache::victim(zoom, c);
                 let apart = [
                     (zoom + 1, c),
                     (zoom, [c[0] ^ 1, c[1], c[2]]),
@@ -684,9 +685,9 @@ pub fn strike_traps(table: &mut [u32], traps: &[TrapAt], tag: u32) {
             Trap::OwnPass | Trap::TornWords | Trap::KeptFalse | Trap::NotIt
         ) {
             for k in 0..BUCKET {
-                let w = pyramid::entry_at(l.first + k) as usize;
+                let w = node_cache::entry_at(l.first + k) as usize;
                 if table[w] != CLAIMED
-                    && (l.trap == Trap::OwnPass || pyramid::tag_of(table[w]) != tag)
+                    && (l.trap == Trap::OwnPass || node_cache::tag_of(table[w]) != tag)
                 {
                     table[w] = 0;
                 }
@@ -699,11 +700,11 @@ pub fn strike_traps(table: &mut [u32], traps: &[TrapAt], tag: u32) {
 pub fn slots_of(table: &[u32], l: &TrapAt, tag: u32) -> Vec<u32> {
     (0..BUCKET)
         .filter(|&k| {
-            let w = pyramid::entry_at(l.first + k) as usize;
+            let w = node_cache::entry_at(l.first + k) as usize;
             let key = table[w];
             key != CLAIMED
-                && pyramid::tag_of(key) == tag
-                && pyramid::holds(key, l.zooms)
+                && node_cache::tag_of(key) == tag
+                && node_cache::holds(key, l.zooms)
                 && is_node(table, w, l.zoom, l.c)
         })
         .collect()
@@ -713,8 +714,8 @@ pub fn slots_of(table: &[u32], l: &TrapAt, tag: u32) -> Vec<u32> {
 /// walks may keep a node twice, one finding the other's slot claimed, as `Writing`'s do.
 pub fn trap_holds(table: &[u32], before: &[u32], l: &TrapAt, tag: u32) -> bool {
     let same = |k: u32| {
-        let w = pyramid::entry_at(l.first + k) as usize;
-        let n = pyramid::ENTRY_WORDS as usize;
+        let w = node_cache::entry_at(l.first + k) as usize;
+        let n = node_cache::ENTRY_WORDS as usize;
         table[w..w + n] == before[w..w + n]
     };
     let new = slots_of(table, l, tag);
@@ -729,7 +730,7 @@ pub fn trap_holds(table: &[u32], before: &[u32], l: &TrapAt, tag: u32) -> bool {
         | Trap::KeptFalse
         | Trap::AllClaimed => (0..BUCKET).all(same),
         Trap::Victim | Trap::NotIt => {
-            let v = pyramid::victim(l.zoom, l.c);
+            let v = node_cache::victim(l.zoom, l.c);
             (0..BUCKET).all(|k| k == v || same(k)) && new == [v]
         }
     }
@@ -752,18 +753,18 @@ pub fn store_of() -> wgpu::BufferUsages {
 /// The zooms a key holds, far then near.
 pub fn key_zooms(key: u32) -> [Zoom; 2] {
     [
-        (key >> pyramid::TAG_BITS) & ((1 << pxl_engine::ZOOM_BITS) - 1),
-        key >> (pyramid::TAG_BITS + pxl_engine::ZOOM_BITS),
+        (key >> node_cache::TAG_BITS) & ((1 << pxl_engine::ZOOM_BITS) - 1),
+        key >> (node_cache::TAG_BITS + pxl_engine::ZOOM_BITS),
     ]
 }
 
 /// The slots a pass left claimed, which one that ran to its end never does: a claim writes
 /// every word, then the key. Each slot's number and words.
 pub fn left_claimed(table: &[u32]) -> Vec<(u32, Vec<u32>)> {
-    (0..pyramid::ENTRIES)
+    (0..node_cache::ENTRIES)
         .filter_map(|e| {
-            let w = pyramid::entry_at(e) as usize;
-            (table[w] == CLAIMED).then(|| (e, table[w..w + pyramid::ENTRY_WORDS as usize].to_vec()))
+            let w = node_cache::entry_at(e) as usize;
+            (table[w] == CLAIMED).then(|| (e, table[w..w + node_cache::ENTRY_WORDS as usize].to_vec()))
         })
         .collect()
 }

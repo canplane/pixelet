@@ -16,9 +16,9 @@
 use crate::answer;
 use crate::area::Shard;
 use crate::clipmap::{
-    self, column_top, handed_at, Bricks, Presence, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT,
-    ELE_AT, FILL_BRICK, FILL_CELL, FILL_FIRST, FILL_PLACE, FILL_SHARD, FILL_WORDS, LAID_AT,
-    LAID_CELLS, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS,
+    self, column_top, handed_at, Bricks, Presence, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK,
+    BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FILL_BRICK, FILL_CELL, FILL_FIRST, FILL_PLACE,
+    FILL_SHARD, FILL_WORDS, LAID_AT, LAID_CELLS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS,
     SPANS_AT, SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
 use crate::{at, ground, way, Zoom};
@@ -38,9 +38,9 @@ pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
 }
 
 /// Entry `at` of level `j` off the brick at `base`, its two bound words
-/// (`clipmap::LEVEL_ENTRY_WORDS`).
+/// (`clipmap::BOUND_ENTRY_WORDS`).
 pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * clipmap::level_idx(j, [x, y]);
+    let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * clipmap::level_idx(j, [x, y]);
     [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
@@ -85,7 +85,7 @@ pub fn cell_of(fresh: &[u32], k: u32) -> Zoom {
 /// `cell`, off its levels' whole bound (`way::tree::span`): what its ways'
 /// tree's root holds, the first one's Z and how many.
 pub fn root_span(ground: &[u32], base: u32, cell: Zoom) -> (i32, u32) {
-    let ways = ground::bounds_of(level_of(ground, base, clipmap::LEVELS, [0, 0]))[1];
+    let ways = ground::bounds_of(level_of(ground, base, clipmap::BRICK_LEVELS, [0, 0]))[1];
     way::tree::span(ways, cell)
 }
 
@@ -119,7 +119,7 @@ impl Bricks for LoneBrick<'_> {
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
         column_of(self.ground, self.base, i)
     }
-    fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, self.base, j, at)
     }
     fn laid(&self, _: u32, _: u32, i: u32) -> u32 {
@@ -399,7 +399,7 @@ pub fn level(
             at,
         )
     };
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * clipmap::level_idx(j, at);
+    let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * clipmap::level_idx(j, at);
     put(ground, e, w[0] as u32);
     put(ground, e + 1, w[1] as u32);
 }
@@ -442,7 +442,7 @@ pub fn brick(
         words: scratch,
         at: 0,
     };
-    for j in 0..=clipmap::LEVELS {
+    for j in 0..=clipmap::BRICK_LEVELS {
         let side = BRICK >> j;
         for k in 0..side * side {
             level(lane, 0, &column_spans, cell, j, [k % side, k / side]);
@@ -605,7 +605,7 @@ mod tests {
                 words: &scratch,
                 at: 0,
             };
-            for j in 0..=clipmap::LEVELS {
+            for j in 0..=clipmap::BRICK_LEVELS {
                 let side = BRICK >> j;
                 for k in 0..side * side {
                     level(&mut lane, 0, &column_spans, cell, j, [k % side, k / side]);

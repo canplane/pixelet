@@ -12,10 +12,10 @@
 mod gpu;
 
 use pxl_engine::beam::{
-    self, Grid, ASK_FACE, ASK_LINE, ASK_NODE, ASK_TO, ASK_WORDS, CELL_CORNER, HITS, HIT_FACE,
+    Grid, ASK_FACE, ASK_LINE, ASK_NODE, ASK_TO, ASK_WORDS, CELL_CORNER, HITS, HIT_FACE,
     HIT_FOLLOWS, HIT_LANES, HIT_NODE, HIT_OUT, HIT_PX, HIT_SQUARE, HIT_WAITS,
 };
-use pxl_engine::{eye, pyramid, raster, ray};
+use pxl_engine::{eye, node_cache, raster, ray};
 use pxl_render::frame::shader::record::{src, SHADER_HIT_FACES, SHADER_HIT_LEAD};
 
 use gpu::{Gpu, Tally};
@@ -91,7 +91,8 @@ const SCREENS: [Screen; 5] = [
 ];
 
 /// The ulps of a cell's quotient from a whole number within which the pixel's ray may lie
-/// in the next cell.
+/// in the next cell: the GPU's own division of the pixel's tangent (grid.wgsl `px_tan`) and
+/// the sum it may fuse; the quotient itself is a product by the host's `Grid::s_inverse`.
 const EDGE_ULPS: f64 = 8.0;
 
 /// The patch pixel `p` of `seed`'s screen lies in: rectangles of a few to tens of pixels,
@@ -201,7 +202,7 @@ fn cells_of(g: &Grid, s: &Screen, p: [u32; 2]) -> [[u32; 2]; 2] {
             (f64::from(p[a]) + 0.5 + f64::from(s.jitter[a])) / f64::from(s.size[a]) * 2.0 - 1.0;
         let t = f64::from(s.tan[a]);
         // Across, `tx + tan`; up, `tan - ty`, `ty` the negated `ndc`'s: alike.
-        let v = (ndc * t + t) / f64::from(f32::from_bits(g.words()[beam::GRID_S]));
+        let v = (ndc * t + t) * f64::from(g.s_inverse());
         let ulp = {
             let x = v.abs() as f32;
             f64::from(f32::from_bits(x.to_bits() + 1) - x)
@@ -374,9 +375,9 @@ fn hand_hits_answer_as_hit_lead_and_faces() {
         // A workgroup more than the hits fill, as no dispatch is short of them.
         let groups = [hits.div_ceil(HIT_LANES) + 1, 1, 1];
         let eye_buf = gpu.buffer(&eye_words(&g, s), wgpu::BufferUsages::UNIFORM);
-        let mut head = vec![0u32; (pyramid::HITS_CNT + 1) as usize];
-        head[pyramid::HITS_CNT as usize] = k.cnt;
-        let pyramid_buf = gpu.buffer(&head, store);
+        let mut head = vec![0u32; (node_cache::HITS_CNT + 1) as usize];
+        head[node_cache::HITS_CNT as usize] = k.cnt;
+        let node_cache_buf = gpu.buffer(&head, store);
         let mut marks = vec![0u32; (ray::MISS_ARGS_ROOM + raster::ARGS_WORDS) as usize];
         marks[(ray::MISS_ARGS_ROOM + raster::ARGS_FACES + 1) as usize] = 1;
         marks[(ray::MISS_ARGS_ROOM + raster::ARGS_FACES + 2) as usize] = 1;
@@ -395,7 +396,7 @@ fn hand_hits_answer_as_hit_lead_and_faces() {
                 (0, eye_buf.as_entire_binding()),
                 (3, wgpu::BindingResource::TextureView(&view)),
                 (8, beams_buf.as_entire_binding()),
-                (9, pyramid_buf.as_entire_binding()),
+                (9, node_cache_buf.as_entire_binding()),
                 (14, marks_buf.as_entire_binding()),
             ],
             groups,
@@ -478,7 +479,7 @@ fn hand_hits_answer_as_hit_lead_and_faces() {
                 (0, eye_buf.as_entire_binding()),
                 (3, wgpu::BindingResource::TextureView(&view)),
                 (8, asked_buf.as_entire_binding()),
-                (9, pyramid_buf.as_entire_binding()),
+                (9, node_cache_buf.as_entire_binding()),
             ],
             groups,
         );

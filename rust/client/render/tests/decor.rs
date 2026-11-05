@@ -231,11 +231,13 @@ impl DecorQuery for Generating<'_, '_> {
             f.here() && f.from() >= cell,
             "a listed pair's brick holds its leaf columns, at its clip level or finer"
         );
-        if f.here() && f.from() > cell {
-            f.from()
-        } else {
-            cell
-        }
+        self.tally.add(
+            "finest: a finer clip level holds the leaf column",
+            f.from() > cell,
+        );
+        self.tally
+            .add("finest: its own clip level is the finest", f.from() == cell);
+        f.from()
     }
 
     fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {

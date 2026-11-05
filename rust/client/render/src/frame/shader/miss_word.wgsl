@@ -1,7 +1,7 @@
 // pxl-render/miss_word.wgsl
 
 // A missed pixel's ray and the words its walk leaves there, as the walk over the observed
-// pyramid alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
+// node cache alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
 // (grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;

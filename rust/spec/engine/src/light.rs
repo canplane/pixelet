@@ -36,7 +36,12 @@ use core::f32::consts::SQRT_2;
 /// hold the clipmap's: the world texel index of the box's texel (0, 0),
 /// `corner`, X then Y, Y counted down the rows; the share of the box's
 /// half-width a receiver reads the map within, `reach_ndc`
-/// (`Light::read`); and a texel's width (`width`).
+/// (`Light::read`); and a texel's width (`width`). Past them, the reciprocals
+/// a rule both the CPU and a GPU decide multiplies by in place of a division,
+/// each rounded once by the host (`words`): the rays' direction's (`inverse`)
+/// and the reach's (`t_max_inverse`), a vec4; then the squares of the steps
+/// across and down (`across2_inverse`, `down2_inverse`) and the width's
+/// (`width_inverse`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
@@ -152,8 +157,8 @@ impl Light {
             v[2] - self.first[2],
         ];
         [
-            dot(d, self.across) / dot(self.across, self.across),
-            dot(d, self.down) / dot(self.down, self.down),
+            dot(d, self.across) * self.across2_inverse(),
+            dot(d, self.down) * self.down2_inverse(),
         ]
     }
 
@@ -170,38 +175,45 @@ impl Light {
     /// How many tiles either side of its own a drawn receiver stands on
     /// (pxl-render light_mark_draws.wgsl): as many as half the widest
     /// decor of `C`'s (`Content::WIDEST`) spans, at least one, as its tile is
-    /// one a point of it lies in.
+    /// one a point of it lies in. Half the widest over a tile's texels is a
+    /// power of two's scaling; over the width, a product by its reciprocal
+    /// (`width_inverse`).
     pub fn ring<C: Content>(&self) -> i32 {
-        let across = TILE as f32 * self.width();
-        let half = C::WIDEST as f32 / 2.0;
-        (libm::ceilf(half / across) as i32).max(1)
+        let half = C::WIDEST as f32 * (0.5 / TILE as f32);
+        (libm::ceilf(half * self.width_inverse()) as i32).max(1)
     }
 
     /// The way up `C`'s tallest decor (`Content::TALLEST`) on the box, in
-    /// tiles across and down, and the steps it takes a tile apart at most:
-    /// a receiver standing on a tile reads the box up it, decor and the
-    /// actors no taller (pxl-render light_propagate.wgsl). The box is
+    /// tiles across and down, and the steps it takes a tile apart at most, a
+    /// power of two, so a step's share of the way is a power of two's scaling
+    /// (`up_at`): a receiver standing on a tile reads the box up it, decor and
+    /// the actors no taller (pxl-render light_propagate.wgsl). The box is
     /// orthographic, so it is the same from every tile.
     pub fn up<C: Content>(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
             self.texel_at([0.0, 0.0, C::TALLEST as f32]),
-            TILE as f32,
+            1.0 / TILE as f32,
         );
-        let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
+        let way = [(top[0] - low[0]) * tile, (top[1] - low[1]) * tile];
         let long = libm::fabsf(way[0]).max(libm::fabsf(way[1]));
-        (way, libm::ceilf(long) as u32)
+        let steps = libm::ceilf(long) as u32;
+        (
+            way,
+            if steps == 0 {
+                0
+            } else {
+                steps.next_power_of_two()
+            },
+        )
     }
 
     /// The `k`-th step of the way `up`, whole tiles from the tile stood on,
     /// rounded down: a point that far up lies this many tiles over or one
-    /// more, as the point stood on lies anywhere in its tile.
+    /// more, as the point stood on lies anywhere in its tile. Its share of the
+    /// way, `k` over the steps, is `k` scaled by a power of two.
     pub fn up_at((way, steps): ([f32; 2], u32), k: u32) -> [i32; 2] {
-        let f = if steps == 0 {
-            0.0
-        } else {
-            k as f32 / steps as f32
-        };
+        let f = libm::ldexpf(k as f32, -(steps.trailing_zeros() as i32));
         [
             libm::floorf(way[0] * f) as i32,
             libm::floorf(way[1] * f) as i32,
@@ -237,6 +249,35 @@ impl Light {
     /// shaders in a word (`W_WIDTH`).
     pub fn width(&self) -> f32 {
         length(self.across)
+    }
+
+    /// The reciprocals the rules multiply by, each rounded once here, on
+    /// the host, and handed the shaders in a word (`words`): the width's
+    /// (`W_WIDTH_INVERSE`, `ring`); the reach's, which scales a depth along a
+    /// ray to its share of the box's (`W_T_MAX_INVERSE`, `depth`); and the
+    /// squares of the steps across and down, which scale a step's dot with
+    /// each to texels (`W_ACROSS2_INVERSE`, `W_DOWN2_INVERSE`, `texel_at`).
+    pub fn width_inverse(&self) -> f32 {
+        1.0 / self.width()
+    }
+
+    pub fn t_max_inverse(&self) -> f32 {
+        1.0 / self.t_max
+    }
+
+    pub fn across2_inverse(&self) -> f32 {
+        1.0 / dot(self.across, self.across)
+    }
+
+    pub fn down2_inverse(&self) -> f32 {
+        1.0 / dot(self.down, self.down)
+    }
+
+    /// The reciprocal of the rays' one direction on each axis, as every
+    /// light ray takes it (`Ray::inverse`), rounded once here and handed the
+    /// shaders in a word (`W_INVERSE`).
+    pub fn inverse(&self) -> [f32; 3] {
+        Ray::new(self.dir, self.t_max).inverse()
     }
 
     /// How far apart its beam rays lie, `BEAM` of the map's texels
@@ -342,6 +383,13 @@ impl Light {
             v(self.down, self.corner[1] as u32),
             v(self.dir, self.reach_ndc.to_bits()),
             v(self.bias, self.width().to_bits()),
+            v(self.inverse(), self.t_max_inverse().to_bits()),
+            [
+                self.across2_inverse().to_bits(),
+                self.down2_inverse().to_bits(),
+                self.width_inverse().to_bits(),
+                0,
+            ],
         ];
         let mut out = [0; eye::LIGHT_WORDS];
         let mut k = 0;
@@ -360,6 +408,11 @@ pub const W_DOWN: usize = 8;
 pub const W_DIR: usize = 12;
 pub const W_BIAS: usize = 16;
 pub const W_WIDTH: usize = 19;
+pub const W_INVERSE: usize = 20;
+pub const W_T_MAX_INVERSE: usize = 23;
+pub const W_ACROSS2_INVERSE: usize = 24;
+pub const W_DOWN2_INVERSE: usize = 25;
+pub const W_WIDTH_INVERSE: usize = 26;
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
@@ -428,20 +481,36 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 10] {
 /// `ANCHOR` texels apart on the world's texel grid, each a start on the near
 /// plane worked out once on the host, its Q3 position and what rounding to
 /// it left (`frac`), and a texel's step across and down in Q3 steps, so a
-/// start is the anchor's and the steps from it rounded, an f32 sum of the
-/// same numbers each frame (`start`). `base` is the world texel index of
-/// anchor `at[0]`; `at[1]` is the next across, `at[2]` the next down,
-/// `at[3]` both, the box lying in the four (`ANCHOR` its side at least).
+/// start is the anchor's and the steps from it rounded, the same sum each
+/// frame (`start`). `base` is the world texel index of anchor `at[0]`;
+/// `at[1]` is the next across, `at[2]` the next down, `at[3]` both, the box
+/// lying in the four (`ANCHOR` its side at least). The steps and the
+/// remainders are fixed point, `STEP_BITS` fractional bits of a Q3 step
+/// (`fixed`), so a start is summed in integers, exactly, and a GPU that
+/// fuses, reorders or simplifies a float sum (Metal's fast math) takes the
+/// same one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Starts {
     pub base: [i32; 2],
-    pub across: [f32; 3],
-    pub down: [f32; 3],
+    pub across: [i32; 3],
+    pub down: [i32; 3],
     pub at: [[i32; 3]; 4],
-    pub frac: [[f32; 3]; 4],
+    pub frac: [[i32; 3]; 4],
 }
 
 pub const ANCHOR: i32 = 2048;
+
+/// The fractional bits of a Q3 step a start's steps and remainders hold
+/// (`Starts`), where `start` splits each step: its whole steps, under 2^14
+/// a texel (64 units), times a whole number under `ANCHOR`, and its fraction
+/// times one, each sum within an i32.
+pub const STEP_BITS: u32 = 16;
+const _: () = assert!((ANCHOR as u32).trailing_zeros() + STEP_BITS + 2 <= 31);
+
+/// `v` Q3 steps in fixed point, `STEP_BITS` fractional bits, to the nearest.
+pub fn fixed(v: f32) -> i32 {
+    libm::rintf(libm::ldexpf(v, STEP_BITS as i32)) as i32
+}
 
 /// The starts' words in the cast's head (`HEAD_VEC4S`), a
 /// vec4 each from `STARTS_AT`: the base, the steps across and down, the
@@ -471,8 +540,8 @@ impl Starts {
         );
         let (kx, ky) = (dx >= ANCHOR, dy >= ANCHOR);
         let (i, j) = (
-            (dx - if kx { ANCHOR } else { 0 }) as f32,
-            (dy - if ky { ANCHOR } else { 0 }) as f32,
+            dx - if kx { ANCHOR } else { 0 },
+            dy - if ky { ANCHOR } else { 0 },
         );
         // [naga] each anchor by name, not an array a dynamic index reads.
         let (at, frac) = match (kx, ky) {
@@ -481,7 +550,16 @@ impl Starts {
             (false, true) => (self.at[2], self.frac[2]),
             (true, true) => (self.at[3], self.frac[3]),
         };
-        let step = |k: usize| libm::rintf(frac[k] + i * self.across[k] + j * self.down[k]) as i32;
+        // Each step split into its whole steps and its fraction, the fractions' products
+        // summed with the remainder and the half that rounds to the nearest, the whole steps'
+        // apart, so no sum leaves an i32; the fractions' whole steps, a floor, added.
+        let m = (1 << STEP_BITS) - 1;
+        let step = |k: usize| {
+            let (a, d) = (self.across[k], self.down[k]);
+            let low = i * (a & m) + j * (d & m) + frac[k] + (1 << (STEP_BITS - 1));
+            let high = i * (a >> STEP_BITS) + j * (d >> STEP_BITS);
+            high + (low >> STEP_BITS)
+        };
         // [naga] each axis by itself, not a loop (seed.rs `node_seed`).
         [
             at[0].wrapping_add(step(0)),
@@ -492,20 +570,19 @@ impl Starts {
 
     /// Its words (`STARTS_VEC4S` vec4s), as `of_words` reads them.
     pub fn words(&self) -> [u32; 4 * STARTS_VEC4S] {
-        let f = |v: [f32; 3]| [v[0].to_bits(), v[1].to_bits(), v[2].to_bits(), 0];
         let i = |v: [i32; 3]| [v[0] as u32, v[1] as u32, v[2] as u32, 0];
         let rows = [
             [self.base[0] as u32, self.base[1] as u32, 0, 0],
-            f(self.across),
-            f(self.down),
+            i(self.across),
+            i(self.down),
             i(self.at[0]),
             i(self.at[1]),
             i(self.at[2]),
             i(self.at[3]),
-            f(self.frac[0]),
-            f(self.frac[1]),
-            f(self.frac[2]),
-            f(self.frac[3]),
+            i(self.frac[0]),
+            i(self.frac[1]),
+            i(self.frac[2]),
+            i(self.frac[3]),
         ];
         let mut out = [0; 4 * STARTS_VEC4S];
         let mut k = 0;
@@ -519,21 +596,14 @@ impl Starts {
     /// The starts its vec4s `w` lay, `w(k)` the `k`-th, as `words` lays
     /// them.
     pub fn of_words(w: impl Fn(usize) -> [i32; 4]) -> Starts {
-        let f = |v: [i32; 4]| {
-            [
-                f32::from_bits(v[0] as u32),
-                f32::from_bits(v[1] as u32),
-                f32::from_bits(v[2] as u32),
-            ]
-        };
         let i = |v: [i32; 4]| [v[0], v[1], v[2]];
         let b = w(0);
         Starts {
             base: [b[0], b[1]],
-            across: f(w(1)),
-            down: f(w(2)),
+            across: i(w(1)),
+            down: i(w(2)),
             at: [i(w(3)), i(w(4)), i(w(5)), i(w(6))],
-            frac: [f(w(7)), f(w(8)), f(w(9)), f(w(10))],
+            frac: [i(w(7)), i(w(8)), i(w(9)), i(w(10))],
         }
     }
 }
@@ -701,8 +771,8 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (pxl-render cast.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
-/// A slot its walk over the observed pyramid ended is struck from the list with this
+/// (`node_cache::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+/// A slot its walk over the node cache ended is struck from the list with this
 /// (pxl-render light_miss_hit.wgsl), past any slot's X and Y.
 pub const MISS_STRUCK: u32 = u32::MAX;
 
@@ -852,7 +922,7 @@ pub const fn list_words(size: u32) -> u32 {
     lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
 }
 
-/// The samples their walk over the observed pyramid left, for the walk that asks the world
+/// The samples their walk over the node cache left, for the walk that asks the world
 /// (pxl-render sample_hit.wgsl, sample.wgsl), past the lists, as the eye's are past its words
 /// (`beam::Grid::lefts_at`): how many, copied in once it is done, then each, its X and its Y
 /// over 16 bits.
@@ -887,13 +957,14 @@ pub fn ray(s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3], Ray) {
     (o, Ray::new(s.dir, s.t_max))
 }
 /// The depth a texel's walk `met` leaves in the map: where it stopped
-/// along its ray, as a share of the box's depth, pushed back as its face's
-/// axis is (`Light::bias`); the far plane, 1, where it stopped at nothing.
+/// along its ray, as a share of the box's depth, its t times the reach's
+/// reciprocal (`Light::t_max_inverse`), pushed back as its face's axis is
+/// (`Light::bias`); the far plane, 1, where it stopped at nothing.
 pub fn depth<A>(s: &Light, met: &Trace<A>) -> f32 {
     if met.ends != End::Hit {
         return 1.0;
     }
-    let d = met.hit.t / s.t_max + axis(s.bias, met.hit.axis);
+    let d = met.hit.t * s.t_max_inverse() + axis(s.bias, met.hit.axis);
     if d < 1.0 {
         d
     } else {
@@ -937,10 +1008,10 @@ mod tests {
         let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
         Starts {
             base,
-            across: s.across.map(|v| v * q3),
-            down: s.down.map(|v| v * q3),
+            across: s.across.map(|v| fixed(v * q3)),
+            down: s.down.map(|v| fixed(v * q3)),
             at: [a0.0, a1.0, a2.0, a3.0],
-            frac: [a0.1, a1.1, a2.1, a3.1],
+            frac: [a0.1, a1.1, a2.1, a3.1].map(|f| f.map(fixed)),
         }
     }
 
@@ -1140,7 +1211,7 @@ mod tests {
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
         );
-        assert_eq!(up.1, libm::ceilf(rise) as u32);
+        assert_eq!(up.1, (libm::ceilf(rise) as u32).next_power_of_two());
         assert_eq!(Light::up_at(up, 0), [0, 0]);
         assert_eq!(Light::up_at(up, up.1), [libm::floorf(rise) as i32, 0]);
         // A point on the near plane under texel 9's middle stands on tile 1.

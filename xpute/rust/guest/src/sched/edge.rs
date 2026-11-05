@@ -6,6 +6,12 @@
 //! A parked task is woken at `rise`, never by itself: an executor that
 //! re-reads its queue within one poll would run a self-woken task again past
 //! the quota. N is the guest's task count; a task parks at most once.
+//!
+//! A task parked for the next turn asks for it at once (`next_turn`); one
+//! that waits on its host asks for none (`host_turn`): the host begins the
+//! next turn itself once it has done what the task waits for, as its read of
+//! the completion ring kicks one, so a guest on its own thread does not spin
+//! while the host has not read.
 
 use core::future::{poll_fn, Future};
 use core::task::{Poll, Waker};
@@ -21,7 +27,9 @@ pub struct Edge<const N: usize> {
     until: f64,
     parked: [Option<Waker>; N],
     parked_len: usize,
-    asked: bool,
+    host_parked: [Option<Waker>; N],
+    host_parked_len: usize,
+    resched: bool,
     wake_at: f64,
 }
 
@@ -33,7 +41,9 @@ impl<const N: usize> Edge<N> {
             until: 0.0,
             parked: [const { None }; N],
             parked_len: 0,
-            asked: false,
+            host_parked: [const { None }; N],
+            host_parked_len: 0,
+            resched: false,
             wake_at: f64::INFINITY,
         }
     }
@@ -42,21 +52,24 @@ impl<const N: usize> Edge<N> {
         self.edge_at = now();
         self.quota_ms = quota_ms;
         self.until = self.edge_at + quota_ms;
-        for waker in self.parked[..self.parked_len].iter_mut() {
+        let host_parked = self.host_parked[..self.host_parked_len].iter_mut();
+        for waker in self.parked[..self.parked_len].iter_mut().chain(host_parked) {
             if let Some(w) = waker.take() {
                 w.wake();
             }
         }
         self.parked_len = 0;
+        self.host_parked_len = 0;
     }
 
-    /// Ms from now until the next turn is wanted: 0 when asked or parked, else
-    /// the earliest `wake_at`, else NO_WAKE. Reading clears it.
+    /// Ms from now until the next turn is wanted: 0 when asked or parked for
+    /// the next turn, else the earliest `wake_at`, else NO_WAKE. Reading
+    /// clears it.
     pub fn fall(&mut self) -> f64 {
-        let asked = core::mem::take(&mut self.asked) || self.parked_len > 0;
+        let resched = core::mem::take(&mut self.resched) || self.parked_len > 0;
         let at = core::mem::replace(&mut self.wake_at, f64::INFINITY);
         match () {
-            _ if asked => 0.0,
+            _ if resched => 0.0,
             _ if at.is_finite() => (at - now()).max(0.0),
             _ => NO_WAKE,
         }
@@ -81,7 +94,7 @@ impl<const N: usize> Edge<N> {
     }
 
     pub fn ask_next(&mut self) {
-        self.asked = true;
+        self.resched = true;
     }
 
     /// The earliest asked wins.
@@ -90,13 +103,22 @@ impl<const N: usize> Edge<N> {
     }
 
     pub fn park(&mut self, waker: &Waker) {
-        match self.parked.get_mut(self.parked_len) {
-            Some(slot) => {
-                *slot = Some(waker.clone());
-                self.parked_len += 1;
-            }
-            None => xpute_kit::bug!(ENOSPC, N),
+        lay(&mut self.parked, &mut self.parked_len, waker);
+    }
+
+    /// Parked until a turn the host begins: `fall` asks for none for it.
+    pub fn park_host(&mut self, waker: &Waker) {
+        lay(&mut self.host_parked, &mut self.host_parked_len, waker);
+    }
+}
+
+fn lay<const N: usize>(wakers: &mut [Option<Waker>; N], len: &mut usize, waker: &Waker) {
+    match wakers.get_mut(*len) {
+        Some(slot) => {
+            *slot = Some(waker.clone());
+            *len += 1;
         }
+        None => xpute_kit::bug!(ENOSPC, N),
     }
 }
 
@@ -114,6 +136,19 @@ pub fn yield_if_spent<const N: usize>(
 
 pub fn next_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {
     park_if(edge, |_| true)
+}
+
+/// Parked until the next turn the host begins, asking for none.
+pub fn host_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {
+    let mut parked = false;
+    poll_fn(move |cx| {
+        if parked {
+            return Poll::Ready(());
+        }
+        parked = true;
+        edge().park_host(cx.waker());
+        Poll::Pending
+    })
 }
 
 /// Parked until the next rise when `wait` says so. `edge` is a fn so no

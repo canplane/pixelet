@@ -17,11 +17,11 @@ XPUTE_TEST(file_descriptor_owner) {
     Fd a = files.open(door, 7, "a", "first");
     files.close(door, a);
     Fd b = files.open(door, 7, "b", "second");
-    XPUTE_CHECK(files.held_for([](const std::string &o) { return o == "second"; }) == b);
+    XPUTE_CHECK(files.find([](const std::string &o) { return o == "second"; }) == b);
 }
 
-XPUTE_TEST(file_answer_read_once) {
-    auto answer = [](std::int32_t res) { return abi::fs::FsOpened{.fd = 1, .res = res, .detail = 404}; };
+XPUTE_TEST(file_completion_read_once) {
+    auto answer = [](std::int32_t res) { return FsOpened{.fd = 1, .res = res, .detail = 404}; };
     XPUTE_CHECK((Opened::of(answer(5)) == Opened{.kind = Opened::Kind::bytes, .bytes = 5}));
     XPUTE_CHECK((Opened::of(answer(-2)) == Opened{.kind = Opened::Kind::absent}));
     XPUTE_CHECK((Opened::of(answer(-5)) == Opened{.kind = Opened::Kind::failed, .errnum = Errno::eio, .detail = 404}));
@@ -36,7 +36,23 @@ XPUTE_TEST(file_read_whole_closes) {
     Files<std::string, 8> files;
     Fd fd = files.open(door, 7, "a", "first");
     // None of the heap lies in the test's memory, so the file is empty.
-    Result<Bytes> bytes = files.read_whole(door, fd, 0);
-    XPUTE_CHECK(bytes && bytes->size() == 0);
+    Result<Reading> read = files.read_whole(door, fd, 0);
+    XPUTE_CHECK(read.ok());
     XPUTE_CHECK(files.owner(fd) == nullptr);
+}
+
+// The bytes are the host's until its head has passed the read, and are
+// handed over then.
+XPUTE_TEST(file_read_whole_held_until_consumed) {
+    std::vector<std::uint64_t> words(1024);
+    Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
+    Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
+    Files<std::string, 8> files;
+    Fd fd = files.open(door, 7, "a", "first");
+    Result<Reading> read = files.read_whole(door, fd, 0);
+    XPUTE_CHECK(read.ok());
+    XPUTE_CHECK(!read->take(door).has_value());
+    while (door.cq().peek()) door.cq().advance();
+    std::optional<Bytes> bytes = read->take(door);
+    XPUTE_CHECK(bytes && bytes->size() == 0);
 }

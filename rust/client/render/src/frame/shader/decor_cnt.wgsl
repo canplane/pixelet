@@ -15,7 +15,7 @@
 fn distance2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
   let half = 1i << (FRAC_W - 1u);
   let steps = (at << vec3<u32>(FRAC_W)) + vec3<i32>(half, half, 0i) - origin;
-  let d = vec3<f32>(steps) / f32(1u << FRAC_W);
+  let d = vec3<f32>(steps) * (1.0 / f32(1u << FRAC_W));
   return d.x * d.x + d.y * d.y + d.z * d.z;
 }
 

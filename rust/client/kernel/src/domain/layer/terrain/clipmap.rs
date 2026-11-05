@@ -7,14 +7,14 @@
 //! however many clipmap levels want it (`Slot`). It is filled from its tile as it
 //! lands: its four palette indices and its tile's samples handed to the GPU, which
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
-//! brick is present from then on (`on_resident`). Nothing of a tile is kept for
+//! brick is present from then on (`on_filled`). Nothing of a tile is kept for
 //! a brick still to come: one that enters asks its tile again
 //! (`TileCache::again`).
 
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
-    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
-    EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL, LEVELS, SLOTS,
+    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT, CLIP_LEVELS,
+    ENTRIES, EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL, SLOTS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::word;
@@ -39,8 +39,7 @@ use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use pxl_render::gpu::api::DONE;
-use pxl_render::gpu::ray::{BrickFill, CellsBack, Resident};
+use pxl_render::gpu::ray::{BrickFill, CellsBack, Filled};
 use xpute_guest::mem::range::arr;
 
 /// Who a clip level is about.
@@ -94,9 +93,30 @@ struct Slot {
     cell: Zoom,
     brick: [i32; 2],
     present: bool,
-    /// The fill its cells are on their way from, 0 where none is, or
-    /// `REFUSED`, or `WAITING`.
-    ticket: u32,
+    fill: Fill,
+}
+
+/// Where a slot's brick stands with its fills.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fill {
+    /// No fill on its way, nor refused or waiting.
+    Idle,
+    /// Its cells on their way from the fill of this ticket
+    /// (`CellsBack::ticket`).
+    Pending(u32),
+    /// Its ways' tree refused, the pool or the scratch at its cap (pxl-render
+    /// gpu/ray/ground.rs `Short`), the brick past its own most or its child
+    /// groups past the mirror's cap (`on_filled`), none of which asking again
+    /// changes: not absent, so the brick is not handed again every turn, nor
+    /// its tile asked or kept for it, while a clip level wants it
+    /// (`assign_slots`). A reader reads the coarser clip level's, as for any
+    /// brick absent.
+    Refused,
+    /// Its child groups refused the mirror's room by the heap
+    /// (`mirror::Unlaid::Heap`): not absent, as `Refused`, until the heap
+    /// gives a page back (`Clipmap::heap`), when it is absent again and
+    /// handed again (`step`).
+    Waiting,
 }
 
 const _: () = assert!(FIRST_CELL > 0, "a free slot's zoom is no clip level's");
@@ -106,7 +126,7 @@ impl Slot {
         cell: 0,
         brick: [i32::MIN; 2],
         present: false,
-        ticket: 0,
+        fill: Fill::Idle,
     };
 
     fn is_free(&self) -> bool {
@@ -121,7 +141,7 @@ impl Slot {
     /// Wanted, its tile not yet handed it: holding a brick, neither present
     /// nor on its way nor refused.
     fn is_absent(&self) -> bool {
-        !self.is_free() && !self.present && self.ticket == 0
+        !self.is_free() && !self.present && self.fill == Fill::Idle
     }
 }
 
@@ -164,7 +184,7 @@ struct Clipmap {
     /// The slots this turn hands the fill (`due`).
     due: List<u32, { FILL_CAP as usize }>,
     /// The heap as it was when it first refused a brick's child groups the
-    /// mirror's room, while one waits on it (`WAITING`).
+    /// mirror's room, while one waits on it (`Fill::Waiting`).
     heap: Option<Refusal>,
 }
 
@@ -261,7 +281,7 @@ fn planes() -> &'static mut Planes {
 /// fold.wgsl `fold_cs`), over the bricks as they are held here. The writers of a brick
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
-/// (`on_resident`), folded once after all of them (`refold`): no read of a
+/// (`on_filled`), folded once after all of them (`refold`): no read of a
 /// bound (`CpuClipmap`) comes between a write and its fold, so none finds one
 /// of other bricks than its read of the cells does. Read through the clip
 /// levels it is handed (`Holding`), which its writer holds while it runs.
@@ -416,21 +436,21 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
 
 /// Each brick waiting on the heap absent again, to be handed again, where
 /// the heap gave a page back since it refused one the mirror's room
-/// (`WAITING`): true where it did.
+/// (`Fill::Waiting`): true where it did.
 fn wake(w: &mut Clipmap) -> bool {
     if !w.heap.is_some_and(|h| h.over()) {
         return false;
     }
     w.heap = None;
-    for held in w.slots.iter_mut().filter(|b| b.ticket == WAITING) {
-        held.ticket = 0;
+    for held in w.slots.iter_mut().filter(|b| b.fill == Fill::Waiting) {
+        held.fill = Fill::Idle;
     }
     true
 }
 
 /// Each brick a laid clip level wants held in one slot: the device that went
 /// took every slot's cells; a slot no clip level wants any more is given up,
-/// a fill on its way to it laying nothing (`on_resident`); and a brick wanted
+/// a fill on its way to it laying nothing (`on_filled`); and a brick wanted
 /// that no slot holds takes a free one of its entry's, its clip level's own
 /// first, absent. Then every entry's row shows its slot (`show`), and the
 /// clip levels are folded over them (`fold`).
@@ -449,7 +469,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
         if !(0..CLIP_LEVELS).any(wants) {
             w.slots[b] = Slot::FREE;
         } else if lost {
-            (w.slots[b].present, w.slots[b].ticket) = (false, 0);
+            (w.slots[b].present, w.slots[b].fill) = (false, Fill::Idle);
         }
     }
     for clip_level in 0..CLIP_LEVELS {
@@ -473,7 +493,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
                 cell,
                 brick: q,
                 present: false,
-                ticket: 0,
+                fill: Fill::Idle,
             };
         }
     }
@@ -489,8 +509,8 @@ fn slot_of(w: &Clipmap, cell: Zoom, q: [i32; 2]) -> Option<u32> {
 }
 
 /// Entry `i`'s row of the table: its brick, and its slot's state, present
-/// there (`Entry::present`, the slot plus one), on its way, refused or
-/// absent; absent while its clip level is not laid out.
+/// there (`Entry::present`, the slot plus one), on its way (`Entry::ticket`)
+/// or neither; absent while its clip level is not laid out.
 fn show(w: &mut Clipmap, i: u32) {
     let (clip_level, brick) = (i / ENTRIES, w.entries[i as usize].brick);
     let held = first_of(w, clip_level)
@@ -503,59 +523,47 @@ fn show(w: &mut Clipmap, i: u32) {
             } else {
                 0
             },
-            ticket: w.slots[b as usize].ticket,
+            ticket: match w.slots[b as usize].fill {
+                Fill::Pending(ticket) => ticket,
+                _ => 0,
+            },
         },
         None => Entry::absent(brick),
     };
 }
 
-/// A slot's ticket while its brick's ways' tree is refused, the pool or the
-/// scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the brick past
-/// its own most or its child groups past the mirror's cap (`on_resident`), none
-/// of which asking again changes: never a fill's (`fill`), and not absent, so
-/// the brick is not handed again every turn, nor its tile asked or kept for it,
-/// while a clip level wants it (`assign_slots`). A reader reads the coarser
-/// clip level's, as for any brick absent.
-const REFUSED: u32 = u32::MAX;
-/// A slot's ticket while the heap refused its brick's child groups the
-/// mirror's room (`mirror::Unlaid::Heap`): not absent, as `REFUSED`, until
-/// the heap gives a page back (`Clipmap::heap`), when it is absent again
-/// and handed again (`step`).
-const WAITING: u32 = u32::MAX - 1;
-const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
-
 /// Slot `b`'s cells back from its fill `ticket` (pxl-render `read_back`), and
 /// how its ways' tree landed, where the slot still waits on that fill: built,
 /// its child groups laid into the pool's mirror at their entries, it is present
 /// and what is read over its tile moved; to be filled again
-/// (`Resident::Again`), it is absent, handed again; refused, or its child
-/// groups past the mirror's cap, it is absent and `REFUSED` while a clip level
+/// (`Filled::Again`), it is absent, handed again; refused, or its child
+/// groups past the mirror's cap, it is absent and `Refused` while a clip level
 /// wants it; its child groups refused the mirror's room by the heap, it is
-/// absent and `WAITING` on the heap. A fill no slot waits on lays nothing: its
+/// absent and `Waiting` on the heap. A fill no slot waits on lays nothing: its
 /// child groups may be another's by now. Every clip level's entry holding the
 /// brick shows it (`show`). The clip levels are folded over it once the
 /// read-back's landings are all in (`refold`).
-pub fn on_resident(b: u32, ticket: u32, resident: Resident) {
+pub fn on_filled(b: u32, ticket: u32, filled: Filled) {
     let w = clipmap();
     let held = &mut w.slots[b as usize];
-    if held.ticket != ticket {
+    if held.fill != Fill::Pending(ticket) {
         return;
     }
-    held.ticket = match resident {
-        Resident::Built(records) => match mirror().lay(records) {
+    held.fill = match filled {
+        Filled::Built(records) => match mirror().lay(records) {
             Ok(()) => {
                 held.present = true;
                 TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.brick).0);
-                0
+                Fill::Idle
             }
             Err(Unlaid::Heap) => {
                 w.heap.get_or_insert_with(Refusal::now);
-                WAITING
+                Fill::Waiting
             }
-            Err(Unlaid::Cap) => REFUSED,
+            Err(Unlaid::Cap) => Fill::Refused,
         },
-        Resident::Again => 0,
-        Resident::Refused => REFUSED,
+        Filled::Again => Fill::Idle,
+        Filled::Refused => Fill::Refused,
     };
     // Absent again: what is due moves.
     w.filled |= !held.present;
@@ -565,7 +573,7 @@ pub fn on_resident(b: u32, ticket: u32, resident: Resident) {
 }
 
 /// The clip levels folded again over the bricks a frame's read-back landed
-/// (`on_resident`), once after all of them: the stage's, as soon as the frame it
+/// (`on_filled`), once after all of them: the stage's, as soon as the frame it
 /// renders returns (domain/scene/stage.rs `stage_render`), between whose
 /// landings nothing reads a bound here, the renderer reading only the GPU's.
 pub fn refold() {
@@ -687,14 +695,14 @@ pub enum TileContent<'a> {
 /// A brick's four palette indices a cell, cut from its tile's, the tile's own
 /// expanded where it holds one a cell, and its lines and the room they are
 /// laid in: arrays of `.fixed.terrain` (fixed.rs `FILL_ARRAY_BYTES`).
-struct Fill {
+struct FillScratch {
     room: &'static mut [GroundId],
     cut: &'static mut [GroundId],
     lines: &'static mut [u32],
     scratch: &'static mut [(u32, u32)],
 }
 
-static FILL: Global<Fill> = Global::new();
+static FILL: Global<FillScratch> = Global::new();
 
 /// A void tile's samples.
 static ZEROS: [i16; ELE_COLUMN] = [0; ELE_COLUMN];
@@ -738,7 +746,7 @@ pub fn fill(
         let r = RANGE.get();
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
-            Fill {
+            FillScratch {
                 room: arr(r, fill_off(0), PALETTE_COLUMN),
                 cut: arr(r, fill_off(1), 4 * BRICK_CELLS as usize),
                 lines: arr(r, fill_off(2), clipmap::LINES_WORDS as usize),
@@ -784,10 +792,8 @@ pub fn fill(
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&indices[from..from + 4]);
         }
         let written = brick_lines(tile, &held.separation, place, scratch, lines);
-        // Under `DONE`, which a read's word holds once it lands, so no
-        // ticket reads as landed before it is: 1 to `DONE` − 1, never
-        // `REFUSED`, which is past them.
-        w.ticket = w.ticket % (DONE - 1) + 1;
+        // Never 0, which names no fill (`CellsBack::ticket`).
+        w.ticket = w.ticket % u32::MAX + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(b)) as u32,
             ticket: w.ticket,
@@ -809,7 +815,7 @@ pub fn fill(
         if !taken {
             return Uptake::Full;
         }
-        w.slots[b as usize].ticket = back.ticket;
+        w.slots[b as usize].fill = Fill::Pending(back.ticket);
         for i in of_entry(b % ENTRIES) {
             show(w, i);
         }
@@ -879,7 +885,7 @@ impl Bricks for Holding<'_> {
         fill::column_of(cells(b), 0, i)
     }
 
-    fn level(&self, _: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         fill::level_of(cells(b), 0, j, at)
     }
 
@@ -914,15 +920,15 @@ impl Bricks for CpuClipmap {
     fn column(&self, cell: Zoom, b: u32, i: u32) -> u32 {
         Holding(clipmap()).column(cell, b, i)
     }
-    fn level(&self, cell: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        Holding(clipmap()).level(cell, b, j, at)
+    fn bound_level(&self, cell: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        Holding(clipmap()).bound_level(cell, b, j, at)
     }
     fn root(&self, cell: Zoom, b: u32) -> u32 {
         Holding(clipmap()).root(cell, b)
     }
 }
 
-const _: () = assert!(LEVELS <= BRICK_SHIFT);
+const _: () = assert!(BRICK_LEVELS <= BRICK_SHIFT);
 
 #[cfg(test)]
 #[path = "clipmap.test.rs"]

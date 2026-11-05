@@ -25,12 +25,7 @@ fn light_miss_cs(
   }
   let slot = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let texel = slot_texel(slot);
-  let w = walk_asking(
-    texel_start(light_corner() + vec2<i32>(texel)),
-    light_v3(LIGHT_DIR),
-    eye_f32(LIGHT + LIGHT_T_MAX),
-    vec2<u32>(texel_band(texel)),
-    root_start(),
-  );
+  let aim = light_aim(texel, 0u);
+  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, root_start());
   textureStore(light, slot, 0, vec4<u32>(walked_word(w), 0u, 0u, 0u));
 }

@@ -36,7 +36,7 @@ fn args_most(i: u32, v: u32) {
 /// Whether box texel `p` lies where a receiver may read it, grown by `pad` texels
 /// (`Light::read`).
 fn reads_texel(size: u32, p: vec2<i32>, pad: f32) -> bool {
-  let half = f32(size) / 2.0;
+  let half = f32(size) * 0.5;
   let d = vec2<f32>(p) + vec2<f32>(0.5) - vec2<f32>(half);
   let r = eye_f32(LIGHT + LIGHT_REACH_NDC) * half + pad;
   return d.x * d.x + d.y * d.y <= r * r;
@@ -52,14 +52,15 @@ struct Up {
 fn up() -> Up {
   let low = texel_at(vec3<f32>(0.0));
   let top = texel_at(vec3<f32>(0.0, 0.0, f32(TALLEST)));
-  let way = (top - low) / f32(LIGHT_TILE);
-  return Up(way, u32(ceil(max(abs(way.x), abs(way.y)))));
+  let way = (top - low) * (1.0 / f32(LIGHT_TILE));
+  let steps = u32(ceil(max(abs(way.x), abs(way.y))));
+  return Up(way, select(1u << (32u - countLeadingZeros(steps - 1u)), 0u, steps == 0u));
 }
 
 /// The `k`-th step of the way up, whole tiles from the tile stood on, rounded down
 /// (`Light::up_at`).
 fn up_at(u: Up, k: u32) -> vec2<i32> {
-  let f = select(f32(k) / f32(u.steps), 0.0, u.steps == 0u);
+  let f = ldexp(f32(k), -i32(countTrailingZeros(u.steps)));
   return vec2<i32>(floor(u.way * f));
 }
 

@@ -7,13 +7,13 @@
 // sample entered by, tested again exactly where a GPU's f32 may part the two (`cast::entry`),
 // with what lies about its face, the sample's; the sky where no sample about it met anything.
 // Any other pixel takes no walk here: its first word is the mark the walk again goes by
-// (`ray::MISS`; miss_hit.wgsl), and it is listed for that walk (`pyramid::MARKS_AT`) by a plain
+// (`ray::MISS`; miss_hit.wgsl), and it is listed for that walk (`node_cache::MARKS_AT`) by a plain
 // write, its place taken off the count in its dispatch's words (`ray::MISS_ARGS_CNT`); one past
 // the list's room has the walk over every pixel dispatched instead.
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read> beams: array<u32>;
-@group(0) @binding(9) var<storage, read_write> pyramid: array<u32>;
+@group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 /// Each drawn pixel's visible sample (gpu/ray/raster.rs): its number (`raster::id_of`), 0
 /// where it kept none, read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
@@ -61,10 +61,8 @@ fn went_on(s: vec2<u32>) -> bool {
 /// The first of the four samples about the screen's point at the tangents `at`
 /// (`Grid::sample_before`).
 fn sample_before(at: vec2<f32>) -> vec2<u32> {
-  let d = eye_f32(GRID + GRID_S) / f32(SAMPLE * eye_word(GRID + GRID_LATTICE));
-  let n = vec2<u32>(eye_word(GRID + GRID_SAMPLES), eye_word(GRID + GRID_SAMPLES + 1u));
   let v = vec2<f32>(at.x + eye_f32(TAN), eye_f32(TAN + 1u) - at.y);
-  return min(vec2<u32>(max(floor(v / d), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES), n - vec2<u32>(2u));
+  return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
 /// The ray's words at pixel `p`.
@@ -91,7 +89,7 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let dir = ray_dir(aim.dir);
   let visible = textureLoad(visibility, vec2<i32>(id.xy), 0i, 0i).x;
   let steps = eye_word(ORIGIN + 3u) != 0u;
-  let on = pyramid[COUNT_ON] != 0u;
+  let on = node_cache[COUNT_ON] != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
     // The cell off its visible sample, where its ray enters that sample's box across the axis
     // the sample entered by (`visible_entry`, `visible_cell`, `cast::entry`).
@@ -108,7 +106,7 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let lo = units(corner, og, roots);
     let hi = far_of(corner, under(zoom), og, roots);
     let inset = (hi - lo) * (0.5 * (1.0 - side((asset.x >> FILL_SHIFT) & (EIGHTHS - 1u))));
-    let b = span_of(dir, ray_inv(dir), lo + inset, hi - inset, 0.0, aim.t_max);
+    let b = span_of(dir, aim.inv, lo + inset, hi - inset, 0.0, aim.t_max);
     let axis = crossing(dir, b.near, true);
     let enters = min(aim.t_max, smallest(b.far)) > max(0.0, largest(b.near));
     if (enters && axis == beams[k + SAMPLE_AXIS]) {
@@ -137,11 +135,11 @@ fn cast_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
   }
   // Neither: marked and listed for its walk (miss_hit.wgsl), which reads and writes the
-  // pyramid.
+  // node cache.
   add_cnt(on, COUNT_WALKED);
   textureStore(rays, id.xy, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));
   let at = enlist((size + vec2<u32>(CAST_SIDE - 1u)) / CAST_SIDE);
   if (at < MARKS) {
-    pyramid[MARKS_AT + at] = (id.y << 16u) | id.x;
+    node_cache[MARKS_AT + at] = (id.y << 16u) | id.x;
   }
 }

@@ -237,11 +237,18 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
         return Err(format!("{}: a C++ guest writes no record", t.json));
     }
     for c in spec.commands()? {
-        let name = pascal(&c.name);
-        if let Some(pkt) = &c.pkt {
+        let pascal_name = pascal(&c.name);
+        let pkts = [
+            (c.pkt.as_ref(), pascal_name.clone(), "packet"),
+            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{pascal_name}Reply"), "completion's packet"),
+        ];
+        for (pkt, name, what) in pkts {
+            let Some(pkt) = pkt else {
+                continue;
+            };
             out.extend([
                 String::new(),
-                format!("// Command::{}'s packet.", c.name),
+                format!("// Command::{}'s {what}.", c.name),
                 format!("struct {name} {{"),
             ]);
             for f in pkt {

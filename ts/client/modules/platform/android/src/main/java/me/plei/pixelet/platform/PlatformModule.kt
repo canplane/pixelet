@@ -98,7 +98,7 @@ class PlatformModule : Module() {
       // the screen's.
       Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
       Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
-      Prop("applied") { view: KeyboardDock, applied: Double -> view.applied = view.px(applied) }
+      Prop("layoutLift") { view: KeyboardDock, layoutLift: Double -> view.layoutLift = view.px(layoutLift) }
     }
   }
 

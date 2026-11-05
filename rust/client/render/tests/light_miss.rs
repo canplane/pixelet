@@ -1,6 +1,6 @@
 //! `light_miss_cs` by hand (frame/shader/light_miss.wgsl) answers as `cast::walk` writing the
-//! observed pyramid (tests/keeping `Writing`): over the real world of tests/real_world, each slot's word as
-//! `light::word(light::depth(..))` of its walk, and what it leaves in the observed pyramid
+//! node cache (tests/keeping `Writing`): over the real world of tests/real_world, each slot's
+//! word as `light::word(light::depth(..))` of its walk, and what it leaves in the node cache
 //! as `Writing` leaves it (`Keeping` here, its rule over the same words), kept for the walk
 //! to find next frame. The walk's from the root, as `light_miss_hit_cs`'s is: a walk resumed
 //! from its cell's start is not asked of it. Skipped where no adapter answers.
@@ -15,8 +15,8 @@ use keeping::*;
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
 use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::node_cache::{self, BUCKET};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::{count, eye, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
@@ -33,8 +33,10 @@ const EYE_WEST: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 
 const SIZE: u32 = 256;
-/// A word a GPU's rounding may move, as tests/walk.rs takes it.
-const WITHIN: u32 = 1024;
+/// A word a GPU's rounding may move, as tests/walk.rs takes it: its depth's product fused into
+/// the push after it, and its product with `light::DEPTH_ONE` into the half after it, a word's
+/// step each. Nothing is divided: the light's reciprocals and starts are the host's.
+const WITHIN: u32 = 2;
 const FRAME: u32 = 9;
 /// Slots told of a case that differs, its table a copy each; those past some times as many
 /// are read as they are, a wrong shader differing nearly everywhere.
@@ -95,10 +97,10 @@ fn box_of(c: &Case) -> (Light, Starts) {
     let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
     let starts = Starts {
         base,
-        across: across.map(|v| v * q),
-        down: down.map(|v| v * q),
+        across: across.map(|v| light::fixed(v * q)),
+        down: down.map(|v| light::fixed(v * q)),
         at: [a0.0, a1.0, a2.0, a3.0],
-        frac: [a0.1, a1.1, a2.1, a3.1],
+        frac: [a0.1, a1.1, a2.1, a3.1].map(|f| f.map(light::fixed)),
     };
     (s, starts)
 }
@@ -621,7 +623,7 @@ fn run_case(
 ) {
     let name = case.name;
     let (s, starts) = box_of(case);
-    let tag = pyramid::tag(FRAME, pyramid::LIGHT_MISSED_PASS);
+    let tag = node_cache::tag(FRAME, node_cache::LIGHT_MISSED_PASS);
 
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&s.words());
@@ -662,7 +664,7 @@ fn run_case(
     }
 
     // What the walks meet, on a table of nothing: the nodes the traps are laid on.
-    let mut empty = vec![0u32; pyramid::WORDS as usize];
+    let mut empty = vec![0u32; node_cache::WORDS as usize];
     let mut met = BTreeMap::new();
     {
         let mut q = Keeping {
@@ -682,15 +684,15 @@ fn run_case(
         }
     }
     drop(empty);
-    let mut table0 = vec![0u32; pyramid::WORDS as usize];
-    table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::COUNT_ON as usize] = 1;
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
+    table0[node_cache::COUNT_ON as usize] = 1;
     if case.eye_first {
         let mut q = Keeping {
             w,
             cuts: case.cuts,
             table: &mut table0,
-            tag: pyramid::tag(FRAME, pyramid::MISSED_PASS),
+            tag: node_cache::tag(FRAME, node_cache::MISSED_PASS),
             asks: Asks::default(),
             writes: true,
             met: None,
@@ -723,8 +725,8 @@ fn run_case(
         case.cuts,
         &met,
         [
-            pyramid::tag(FRAME - 1, pyramid::LIGHT_SAMPLES_PASS),
-            pyramid::tag(FRAME, pyramid::LIGHT_SAMPLES_PASS),
+            node_cache::tag(FRAME - 1, node_cache::LIGHT_SAMPLES_PASS),
+            node_cache::tag(FRAME, node_cache::LIGHT_SAMPLES_PASS),
             tag,
         ],
     );
@@ -804,8 +806,7 @@ fn run_case(
     }
 
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
-    let mut read_only = table0.clone();
-    let (mut same, mut stepped, mut axis_over, mut differ) = (0u32, 0u32, 0u32, 0u32);
+    let (mut same, mut axis_over, mut differ) = (0u32, 0u32, 0u32);
     let mut first_differ = None;
     for k in 0..n as usize {
         if !walked[k] {
@@ -821,18 +822,6 @@ fn run_case(
         }
         if an_axis_over(&s, got[k], want[k]) {
             axis_over += 1;
-        } else if stepped + differ <= TELLS * 8
-            && a_step_over(
-                w,
-                case,
-                &s,
-                &starts,
-                (&mut read_only, tag),
-                k as u32,
-                got[k],
-            )
-        {
-            stepped += 1;
         } else {
             differ += 1;
             first_differ.get_or_insert((k, got[k], want[k]));
@@ -853,18 +842,18 @@ fn run_case(
     // What it left, each slot it wrote: in its node's bucket, at this pass's tag, what the
     // world answers word for word, and what `Writing` wrote where that wrote it.
     let entry = |t: &[u32], e: u32| {
-        let w = pyramid::entry_at(e) as usize;
-        t[w..w + pyramid::ENTRY_WORDS as usize].to_vec()
+        let w = node_cache::entry_at(e) as usize;
+        t[w..w + node_cache::ENTRY_WORDS as usize].to_vec()
     };
     let by_node = |t: &[u32], before: &[u32]| {
         let mut m = BTreeMap::new();
-        for e in 0..pyramid::ENTRIES {
+        for e in 0..node_cache::ENTRIES {
             let v = entry(t, e);
             if v != entry(before, e) {
-                let k = pyramid::W_NODE as usize;
+                let k = node_cache::W_NODE as usize;
                 let z = v[k];
                 let c = [v[k + 1] as i32, v[k + 2] as i32, v[k + 3] as i32];
-                m.insert((z, c, v[pyramid::W_KEY as usize]), (e, v));
+                m.insert((z, c, v[node_cache::W_KEY as usize]), (e, v));
             }
         }
         m
@@ -877,17 +866,17 @@ fn run_case(
     let mut filled_kept = 0u32;
     for ((zoom, c, key), (e, v)) in &hand_kept {
         let (zoom, c, key) = (*zoom, *c, *key);
-        let first = pyramid::entry_of(zoom, c);
+        let first = node_cache::entry_of(zoom, c);
         let [far, near] = key_zooms(key);
         let (a, words) = truth(w, case.cuts, zoom, c, [far, near]);
-        let k = pyramid::W_INHERITANCE as usize;
-        let at = pyramid::W_ASSET as usize;
-        let ok = pyramid::keeps(zoom, c)
+        let k = node_cache::W_INHERITANCE as usize;
+        let at = node_cache::W_ASSET as usize;
+        let ok = node_cache::keeps(zoom, c)
             && (*e >= first && *e < first + BUCKET)
-            && pyramid::tag_of(key) == tag
+            && node_cache::tag_of(key) == tag
             && far == near
-            && v[pyramid::W_KIND as usize]
-                == pyramid::stamped(a.kind, key, a.asset, words, zoom, c)
+            && v[node_cache::W_KIND as usize]
+                == node_cache::stamped(a.kind, key, a.asset, words, zoom, c)
             && v[at..at + 2] == a.asset
             && v[k..k + 4] == words;
         if !ok {
@@ -900,8 +889,8 @@ fn run_case(
                 // What is placed and its shard are one whatever was handed; where its
                 // ground's cells were held and the ways' cursor are found again from
                 // nothing, where the Rust carries down its parents'.
-                let same_answer = v[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-                    == r[pyramid::W_KIND as usize] & pyramid::KIND_MASK
+                let same_answer = v[node_cache::W_KIND as usize] & node_cache::KIND_MASK
+                    == r[node_cache::W_KIND as usize] & node_cache::KIND_MASK
                     && v[at..at + 2] == r[at..at + 2]
                     && v[k..k + 2] == r[k..k + 2];
                 if !same_answer {
@@ -931,8 +920,8 @@ fn run_case(
     // word for word what `Writing` left, but for what is found again.
     let mut asked_in: BTreeMap<u32, u32> = BTreeMap::new();
     for &(z, c, _) in met_ref.keys() {
-        if pyramid::keeps(z, c) {
-            *asked_in.entry(pyramid::entry_of(z, c)).or_default() += 1;
+        if node_cache::keeps(z, c) {
+            *asked_in.entry(node_cache::entry_of(z, c)).or_default() += 1;
         }
     }
     let by_hand: BTreeSet<_> = hand_kept
@@ -946,8 +935,8 @@ fn run_case(
         .map(|(f, _)| *f)
         .collect();
     for k in met_ref.keys().chain(by_hand.iter()) {
-        if grazed(k) && pyramid::keeps(k.0, k.1) {
-            alone.remove(&pyramid::entry_of(k.0, k.1));
+        if grazed(k) && node_cache::keeps(k.0, k.1) {
+            alone.remove(&node_cache::entry_of(k.0, k.1));
         }
     }
     let (mut alone_differ, mut twice) = (0u32, 0u32);
@@ -957,12 +946,12 @@ fn run_case(
             let mut slots: Vec<_> = (first..first + BUCKET)
                 .map(|e| {
                     let mut v = entry(t, e);
-                    let k = pyramid::W_INHERITANCE as usize;
+                    let k = node_cache::W_INHERITANCE as usize;
                     v[k + 2..k + 4].fill(0);
-                    v[pyramid::W_KIND as usize] &= pyramid::KIND_MASK;
+                    v[node_cache::W_KIND as usize] &= node_cache::KIND_MASK;
                     v
                 })
-                .filter(|v| v[pyramid::W_KEY as usize] != 0)
+                .filter(|v| v[node_cache::W_KEY as usize] != 0)
                 .collect();
             slots.sort();
             let all = slots.len();
@@ -1004,26 +993,26 @@ fn run_case(
     // What it found again where the Rust carried down: only what a cell placed whole hands
     // on, its parent's, which names nothing of it, as it hands nothing on.
     let mut found_otherwise = 0u32;
-    let k = pyramid::W_INHERITANCE as usize;
+    let k = node_cache::W_INHERITANCE as usize;
     for (key, (_, v)) in &hand_kept {
         let Some((_, r)) = ref_kept.get(key) else {
             continue;
         };
-        let placed = v[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-            == pyramid::kind_word(Kind::Cell)
-            && answer::is_placed(v[pyramid::W_ASSET as usize]);
+        let placed = v[node_cache::W_KIND as usize] & node_cache::KIND_MASK
+            == node_cache::kind_word(Kind::Cell)
+            && answer::is_placed(v[node_cache::W_ASSET as usize]);
         found_otherwise += u32::from(v[k + 2..k + 4] != r[k + 2..k + 4] && !placed);
     }
 
     // Its count of what it asked.
-    let lane = pyramid::lane_at(count::LIGHT, count::MISS) as usize;
+    let lane = node_cache::lane_at(count::LIGHT, count::MISS) as usize;
     let tallied = u64::from(table_hand[lane]);
-    let asked_lane = pyramid::lane_at(count::LIGHT, count::ASKED) as usize;
+    let asked_lane = node_cache::lane_at(count::LIGHT, count::ASKED) as usize;
     let asked = u64::from(table_hand[asked_lane]);
 
     // The next frame: the walk over the table alone first, then this pass for what it left.
     let mut next = table_hand.clone();
-    next[pyramid::FRAME as usize] = FRAME + 1;
+    next[node_cache::FRAME as usize] = FRAME + 1;
     next[lane] = 0;
     next[asked_lane] = 0;
     strike_traps(&mut next, &traps, tag);
@@ -1066,7 +1055,7 @@ fn run_case(
         w,
         cuts: case.cuts,
         table: &mut table_next,
-        tag: pyramid::tag(FRAME + 1, pyramid::LIGHT_MISSED_PASS),
+        tag: node_cache::tag(FRAME + 1, node_cache::LIGHT_MISSED_PASS),
         asks: Asks::default(),
         writes: true,
         met: None,
@@ -1095,26 +1084,12 @@ fn run_case(
         return;
     }
     let mut next_differ = 0u32;
-    let mut next_stepped = 0u32;
+    let mut next_axis_over = 0u32;
     let mut first_next = None;
     for k in 0..n as usize {
         if still[k] && got2[k].abs_diff(want2[k]) > WITHIN {
-            if an_axis_over(&s, got2[k], want2[k])
-                || next_stepped + next_differ <= TELLS * 8
-                    && a_step_over(
-                        w,
-                        case,
-                        &s,
-                        &starts,
-                        (
-                            &mut table_next,
-                            pyramid::tag(FRAME + 1, pyramid::LIGHT_MISSED_PASS),
-                        ),
-                        k as u32,
-                        got2[k],
-                    )
-            {
-                next_stepped += 1;
+            if an_axis_over(&s, got2[k], want2[k]) {
+                next_axis_over += 1;
             } else {
                 next_differ += 1;
                 first_next.get_or_insert((k, got2[k], want2[k]));
@@ -1132,11 +1107,14 @@ fn run_case(
             }
         }
     }
-    let rewritten = (0..pyramid::ENTRIES)
+    let rewritten = (0..node_cache::ENTRIES)
         .filter(|&e| entry(&table_after, e) != entry(&next, e))
         .count() as u64;
 
-    eprintln!("{name}: {same} alike, {axis_over} an axis over, {stepped} a step over, {differ} differ of {} ; {kinds:?}", kinds["slots"]);
+    eprintln!(
+        "{name}: {same} alike, {axis_over} an axis over, {differ} differ of {} ; {kinds:?}",
+        kinds["slots"]
+    );
     let line = |name: &str, a: &Asks| {
         eprintln!(
             "  {name}: asks {} of {} visits: {} past the roots, {} absent, {} at other zooms, {} its own; {} off a slot",
@@ -1153,7 +1131,7 @@ fn run_case(
     );
     eprintln!("  buckets of one ask: {}, {alone_differ} differ, {twice} slots a node's twice; the Rust's alone visited by {only_ref_most} rays at most; traps (laid, Rust's, hand's): {trap_cnt:?}", alone.len());
     eprintln!(
-        "  next frame: {struck} ended by the table, {slots_left} left, {next_stepped} a step over, {next_differ} differ, {rewritten} slots written; tally {} asked",
+        "  next frame: {struck} ended by the table, {slots_left} left, {next_axis_over} an axis over, {next_differ} differ, {rewritten} slots written; tally {} asked",
         table_after[asked_lane]
     );
     line("next frame", &asks_next);
@@ -1173,10 +1151,8 @@ fn run_case(
     if differ != 0 {
         fail(format!("{differ} slots differ, first {first_differ:?}"));
     }
-    if stepped > 32 || axis_over > 256 {
-        fail(format!(
-            "too many a step over: {stepped}, an axis over: {axis_over}"
-        ));
+    if axis_over > 256 {
+        fail(format!("too many an axis over: {axis_over}"));
     }
     if bad_entry != 0 {
         fail(format!("{bad_entry} kept wrong, first {first_bad:?}"));
@@ -1239,78 +1215,6 @@ fn an_axis_over(s: &Light, got: u32, want: u32) -> bool {
     })
 }
 
-/// Whether the word `got` of slot `k` is what its ray ends at from a start a step over, or,
-/// on a tile whose distance lies on a boundary of the zooms asked, at the band a GPU's
-/// rounding of its `length` takes it to.
-fn a_step_over(
-    w: World,
-    case: &Case,
-    s: &Light,
-    starts: &Starts,
-    (table, tag): (&mut [u32], u32),
-    k: u32,
-    got: u32,
-) -> bool {
-    let slot = [k % SIZE, k / SIZE];
-    let (o, r, d) = slot_ray(case, s, starts, slot);
-    let mut ends_at = |from: [i32; 3], r: &Ray, d: Detail| {
-        let mut q = Keeping {
-            w,
-            cuts: case.cuts,
-            table: &mut *table,
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: None,
-        };
-        let t = cast::first(&mut q, from, r, d, Until::Opaque);
-        let word = light::word(light::depth(s, &t));
-        word.abs_diff(got) <= WITHIN || an_axis_over(s, got, word)
-    };
-    let mut asks = vec![d];
-    for by in [1.000001f32, 0.999999] {
-        let moved = Light {
-            across: s.across.map(|v| v * by),
-            down: s.down.map(|v| v * by),
-            ..*s
-        };
-        asks.push(slot_ray(case, &moved, starts, slot).2);
-    }
-    asks.dedup_by(|a, b| a.range == b.range);
-    let stepped = asks.iter().any(|&d| {
-        (0..27).any(|m| {
-            let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
-            ends_at(from, &r, d)
-        })
-    });
-    if stepped {
-        return true;
-    }
-    // A cell whose edge it stops at, its span in it a few of the steps its start is rounded
-    // to: starts two steps apart on two axes pass by.
-    let mut q = Keeping {
-        w,
-        cuts: case.cuts,
-        table: &mut *table,
-        tag,
-        asks: Asks::default(),
-        writes: true,
-        met: None,
-    };
-    let t = cast::first(&mut q, o, &r, d, Until::Opaque);
-    let og = cast::grid_of(o);
-    let side = (1u64 << (32 - t.hit.node.zoom)) as f32 / (1u32 << FRAC_W) as f32;
-    let leaves = (0..3)
-        .filter(|&a| r.dir[a] != 0.0)
-        .map(|a| {
-            let from =
-                t.hit.node.corner[a].wrapping_sub(og[a]) as i32 as f32 / (1u32 << FRAC_W) as f32;
-            (if r.dir[a] > 0.0 { from + side } else { from }) / r.dir[a]
-        })
-        .fold(f32::MAX, f32::min);
-    t.ends == End::Hit && leaves - t.hit.t < 4.0 / (1u32 << FRAC_W) as f32
-}
-
 /// A slot that differs said where it can be read: its words, the node its reference walk
 /// stopped on, and that node's bucket before the walks and after.
 fn tell_slot(
@@ -1327,7 +1231,7 @@ fn tell_slot(
         w,
         cuts: case.cuts,
         table: &mut before.to_vec(),
-        tag: pyramid::tag(FRAME + 2, pyramid::LIGHT_MISSED_PASS),
+        tag: node_cache::tag(FRAME + 2, node_cache::LIGHT_MISSED_PASS),
         asks: Asks::default(),
         writes: true,
         met: None,
@@ -1335,8 +1239,8 @@ fn tell_slot(
     let t = cast::first(&mut q, o, &r, d, Until::Opaque);
     let (z, c) = (t.hit.node.zoom, t.hit.node.idx(o));
     let bucket = |table: &[u32]| {
-        let first = pyramid::entry_at(pyramid::entry_of(z, c)) as usize;
-        table[first..first + (BUCKET * pyramid::ENTRY_WORDS) as usize].to_vec()
+        let first = node_cache::entry_at(node_cache::entry_of(z, c)) as usize;
+        table[first..first + (BUCKET * node_cache::ENTRY_WORDS) as usize].to_vec()
     };
     eprintln!(
         "DIFFERS {} slot {k} got {got} want {want} band {:?}: its walk stops {:?} z{z} {c:?} t {} axis {} asset {:#x}; before {:?}; after {:?}",
@@ -1381,11 +1285,11 @@ fn forget_reads_a_stamped_kind() {
     }))
     .unwrap();
     let gpu = Gpu { device, queue };
-    let mut table = vec![0u32; pyramid::WORDS as usize];
-    table[pyramid::FORGETS as usize] = pyramid::FORGETS_MOVED;
-    table[pyramid::MOVED_AT as usize..(pyramid::MOVED_AT + pyramid::MOVED_WORDS) as usize]
+    let mut table = vec![0u32; node_cache::WORDS as usize];
+    table[node_cache::FORGETS as usize] = node_cache::FORGETS_MOVED;
+    table[node_cache::MOVED_AT as usize..(node_cache::MOVED_AT + node_cache::MOVED_WORDS) as usize]
         .fill(u32::MAX);
-    let key = pyramid::key(pyramid::tag(3, pyramid::BEAM_PASS), [20, 20]);
+    let key = node_cache::key(node_cache::tag(3, node_cache::BEAM_PASS), [20, 20]);
     let (zoom, c) = (18, [5, 7, 9]);
     let split = In {
         kind: Kind::Split,
@@ -1402,12 +1306,12 @@ fn forget_reads_a_stamped_kind() {
     gpu.dispatch(
         &forget,
         &[(9, buf.as_entire_binding())],
-        [pyramid::ENTRIES / 64, 1],
+        [node_cache::ENTRIES / 64, 1],
     );
     let out = gpu.read(&buf);
     assert_eq!(
-        out[pyramid::entry_at(40) as usize],
-        pyramid::forgotten_split(key)
+        out[node_cache::entry_at(40) as usize],
+        node_cache::forgotten_split(key)
     );
-    assert_eq!(out[pyramid::entry_at(44) as usize], 0);
+    assert_eq!(out[node_cache::entry_at(44) as usize], 0);
 }

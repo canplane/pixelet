@@ -266,14 +266,15 @@ const _: () = assert!(
      and SQUARE_SIDE are each that side"
 );
 
-/// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
+/// What the walk over the node cache reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
     use pxl_engine::area::Shard;
     use pxl_engine::clipmap::{self, Lookup};
     use pxl_engine::overwrite::NodeSlot;
     use pxl_engine::{
-        answer, beam, cast, count, eye, face, light, param, pyramid, raster, ray, value, SHARD_ZOOM,
+        answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, value,
+        SHARD_ZOOM,
     };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
@@ -309,18 +310,18 @@ fn walk_word() -> String {
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
         ("SAMPLE_SIDE", SAMPLE_SIDE),
-        ("ENTRIES", pyramid::ENTRIES),
-        ("ENTRIES_AT", pyramid::ENTRIES_AT),
-        ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
-        ("BUCKET", pyramid::BUCKET),
-        ("W_KIND", pyramid::W_KIND),
-        ("KIND_MASK", pyramid::KIND_MASK),
-        ("W_ASSET", pyramid::W_ASSET),
-        ("W_NODE", pyramid::W_NODE),
-        ("NONE", pyramid::NONE),
-        ("CLAIMED", pyramid::CLAIMED),
-        ("TAG_BITS", pyramid::TAG_BITS),
-        ("KEY_ZOOMS", !((1u32 << pyramid::TAG_BITS) - 1)),
+        ("ENTRIES", node_cache::ENTRIES),
+        ("ENTRIES_AT", node_cache::ENTRIES_AT),
+        ("ENTRY_WORDS", node_cache::ENTRY_WORDS),
+        ("BUCKET", node_cache::BUCKET),
+        ("W_KIND", node_cache::W_KIND),
+        ("KIND_MASK", node_cache::KIND_MASK),
+        ("W_ASSET", node_cache::W_ASSET),
+        ("W_NODE", node_cache::W_NODE),
+        ("NONE", node_cache::NONE),
+        ("CLAIMED", node_cache::CLAIMED),
+        ("TAG_BITS", node_cache::TAG_BITS),
+        ("KEY_ZOOMS", !((1u32 << node_cache::TAG_BITS) - 1)),
         ("KIND_SPLIT", answer::Kind::Split as u32),
         ("KIND_CELL", answer::Kind::Cell as u32),
         ("VAL_MASK", answer::PLACED_ASSET - 1),
@@ -338,19 +339,23 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
         ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
         ("LIGHT_ANCHOR", light::ANCHOR as u32),
+        ("LIGHT_STEP_BITS", light::STEP_BITS),
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
         ("LIGHT_MISS_STRUCK", light::MISS_STRUCK),
         ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
-        ("LIGHT_MISSED_PASS", pyramid::LIGHT_MISSED_PASS),
-        ("MISSED_PASS", pyramid::MISSED_PASS),
-        ("EYE_MISS_COUNT", pyramid::lane_at(count::EYE, count::MISS)),
-        ("HITS_ARGS", pyramid::HITS_ARGS),
-        ("HITS_CNT", pyramid::HITS_CNT),
+        ("LIGHT_MISSED_PASS", node_cache::LIGHT_MISSED_PASS),
+        ("MISSED_PASS", node_cache::MISSED_PASS),
+        (
+            "EYE_MISS_COUNT",
+            node_cache::lane_at(count::EYE, count::MISS),
+        ),
+        ("HITS_ARGS", node_cache::HITS_ARGS),
+        ("HITS_CNT", node_cache::HITS_CNT),
         ("RAY_MISS", ray::MISS),
         (
             "LIGHT_ASKED_COUNT",
-            pyramid::lane_at(count::LIGHT, count::ASKED),
+            node_cache::lane_at(count::LIGHT, count::ASKED),
         ),
         ("LIGHT_T_MAX", light::W_T_MAX as u32),
         ("LIGHT_ACROSS", light::W_ACROSS as u32),
@@ -358,6 +363,11 @@ fn walk_word() -> String {
         ("LIGHT_DIR", light::W_DIR as u32),
         ("LIGHT_BIAS", light::W_BIAS as u32),
         ("LIGHT_WIDTH", light::W_WIDTH as u32),
+        ("LIGHT_INVERSE", light::W_INVERSE as u32),
+        ("LIGHT_T_MAX_INVERSE", light::W_T_MAX_INVERSE as u32),
+        ("LIGHT_ACROSS2_INVERSE", light::W_ACROSS2_INVERSE as u32),
+        ("LIGHT_DOWN2_INVERSE", light::W_DOWN2_INVERSE as u32),
+        ("LIGHT_WIDTH_INVERSE", light::W_WIDTH_INVERSE as u32),
         ("LIGHT_CORNER_X", light::CORNER[0] as u32),
         ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
         ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
@@ -385,10 +395,10 @@ fn walk_word() -> String {
         ("LIGHT_LISTED_FED", light::LISTED_FED),
         ("LIGHT_LISTED_CLAIMED", light::LISTED_CLAIMED),
         ("LIGHT_HEAD_COUNTED", light::HEAD_COUNTED as u32),
-        ("LIGHT_BEAM_PASS", pyramid::LIGHT_BEAM_PASS),
+        ("LIGHT_BEAM_PASS", node_cache::LIGHT_BEAM_PASS),
         (
             "LIGHT_BEAM_COUNT",
-            pyramid::lane_at(count::LIGHT, count::BEAM),
+            node_cache::lane_at(count::LIGHT, count::BEAM),
         ),
         ("VISIBLE_LACK", raster::LACK),
         ("MISS_ARGS_LIST", ray::MISS_ARGS_LIST),
@@ -397,19 +407,19 @@ fn walk_word() -> String {
         ("COUNT_REUSED", count::REUSED),
         ("COUNT_SKY", count::SKY),
         ("COUNT_WALKED", count::WALKED),
-        ("SAMPLES_PASS", pyramid::SAMPLES_PASS),
-        ("LIGHT_SAMPLES_PASS", pyramid::LIGHT_SAMPLES_PASS),
+        ("SAMPLES_PASS", node_cache::SAMPLES_PASS),
+        ("LIGHT_SAMPLES_PASS", node_cache::LIGHT_SAMPLES_PASS),
         (
             "EYE_SAMPLE_COUNT",
-            pyramid::lane_at(count::EYE, count::SAMPLE),
+            node_cache::lane_at(count::EYE, count::SAMPLE),
         ),
         (
             "EYE_ASKED_COUNT",
-            pyramid::lane_at(count::EYE, count::ASKED),
+            node_cache::lane_at(count::EYE, count::ASKED),
         ),
         (
             "LIGHT_SAMPLE_COUNT",
-            pyramid::lane_at(count::LIGHT, count::SAMPLE),
+            node_cache::lane_at(count::LIGHT, count::SAMPLE),
         ),
         ("GRID_S", beam::GRID_S as u32),
         ("GRID_KEEP", beam::GRID_KEEP as u32),
@@ -428,19 +438,21 @@ fn walk_word() -> String {
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
         ("GRID_CORNERS_AT", beam::GRID_CORNERS_AT as u32),
+        ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
+        ("GRID_SLOPE", beam::GRID_SLOPE as u32),
         ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
         ("STARTS_DOWN", light::STARTS_DOWN as u32),
         ("STARTS_ANCHORS", light::STARTS_ANCHORS as u32),
         ("STARTS_FRACS", light::STARTS_FRACS as u32),
         (
             "LIGHT_MISS_COUNT",
-            pyramid::lane_at(count::LIGHT, count::MISS),
+            node_cache::lane_at(count::LIGHT, count::MISS),
         ),
         ("CARVE", eye::CARVE as u32),
         ("HIDE", eye::HIDE as u32),
-        ("FRAME", pyramid::FRAME),
-        ("PASSES", pyramid::PASSES),
-        ("COUNT_ON", pyramid::COUNT_ON),
+        ("FRAME", node_cache::FRAME),
+        ("PASSES", node_cache::PASSES),
+        ("COUNT_ON", node_cache::COUNT_ON),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),
@@ -449,12 +461,12 @@ fn walk_word() -> String {
         ("SLOT_NOTHING", NodeSlot::NOTHING.word()),
         ("LINE_INHERITANCE", beam::LINE_INHERITANCE),
         ("LINE_STEP", beam::LINE_STEP),
-        ("W_INHERITANCE", pyramid::W_INHERITANCE),
+        ("W_INHERITANCE", node_cache::W_INHERITANCE),
         ("MISS_ACROSS", ray::MISS_ACROSS),
         ("MISS_LANES", ray::MISS_LANES),
-        ("MARKS", pyramid::MARKS),
-        ("MARKS_AT", pyramid::MARKS_AT),
-        ("MARKS_CNT", pyramid::MARKS_CNT),
+        ("MARKS", node_cache::MARKS),
+        ("MARKS_AT", node_cache::MARKS_AT),
+        ("MARKS_CNT", node_cache::MARKS_CNT),
         ("HITS", beam::HITS),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
@@ -475,8 +487,11 @@ fn walk_word() -> String {
         ("SCREEN_TILE", screen::TILE),
         ("SAMPLE_FACES", beam::SAMPLE_FACES),
         ("CORNER_SIDE", CORNER_SIDE),
-        ("BEAM_PASS", pyramid::BEAM_PASS),
-        ("EYE_BEAM_COUNT", pyramid::lane_at(count::EYE, count::BEAM)),
+        ("BEAM_PASS", node_cache::BEAM_PASS),
+        (
+            "EYE_BEAM_COUNT",
+            node_cache::lane_at(count::EYE, count::BEAM),
+        ),
         ("RASTER_ARGS_INSTANCES", raster::ARGS_INSTANCES),
         ("RASTER_ARGS_ASKS", raster::ARGS_ASKS),
         ("RASTER_FACES_LANES", raster::FACES_LANES),
@@ -501,13 +516,13 @@ fn walk_word() -> String {
         ("FACE_EDGES", face::EDGES),
         ("FACE_RISE_SHIFT", face::RISE_SHIFT),
         ("RASTER_ARGS_FACES", raster::ARGS_FACES),
-        ("PYRAMID_FORGETS", pyramid::FORGETS),
-        ("FORGETS_ALL", pyramid::FORGETS_ALL),
-        ("PYRAMID_MOVED_AT", pyramid::MOVED_AT),
-        ("PYRAMID_BOXES_AT", pyramid::BOXES_AT),
-        ("PYRAMID_WRITTEN_AT", pyramid::WRITTEN_AT),
-        ("W_KEY", pyramid::W_KEY),
-        ("W_PLACED", pyramid::W_PLACED),
+        ("NODE_CACHE_FORGETS", node_cache::FORGETS),
+        ("FORGETS_ALL", node_cache::FORGETS_ALL),
+        ("NODE_CACHE_MOVED_AT", node_cache::MOVED_AT),
+        ("NODE_CACHE_BOXES_AT", node_cache::BOXES_AT),
+        ("NODE_CACHE_WRITTEN_AT", node_cache::WRITTEN_AT),
+        ("W_KEY", node_cache::W_KEY),
+        ("W_PLACED", node_cache::W_PLACED),
         ("EYE_CLIP_LEVELS", clipmap::EYE_CLIP_LEVELS),
     ];
     // How far short of where a beam ray of the light stopped its cells' rays start: a share of
@@ -516,7 +531,7 @@ fn walk_word() -> String {
     // half the tile's diagonal (`light::TILE_READ_PAD`, light_propagate.wgsl).
     let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\n",
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\n",
         grid::INV_SPLIT2,
         cast::NARROW,
         cast::NARROW_SQUARED,
@@ -526,6 +541,8 @@ fn walk_word() -> String {
         light::READ_TILES[0],
         light::READ_TILES[1],
         core::f32::consts::FRAC_1_SQRT_2,
+        beam::SAMPLE_SPACING,
+        beam::SAMPLE_SPACING_INVERSE,
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
@@ -586,7 +603,7 @@ fn world_word() -> String {
         ("BRICK_SHIFT", clip::BRICK_SHIFT),
         ("BRICK_CELLS", clip::BRICK_CELLS),
         ("BRICK_WORDS", clip::BRICK_WORDS),
-        ("BRICK_LEVELS", clip::LEVELS),
+        ("BRICK_LEVELS", clip::BRICK_LEVELS),
         ("ACROSS", clip::ACROSS),
         ("CLIP_ENTRIES", clip::ENTRIES),
         ("FIRST_CELL", clip::FIRST_CELL),
@@ -595,8 +612,8 @@ fn world_word() -> String {
         ("JOINED_ENTRIES", clip::JOINED_ENTRIES),
         ("JOINED_LEVELS", clip::JOINED_LEVELS),
         ("COLUMNS_AT", clip::COLUMNS_AT),
-        ("LEVELS_AT", clip::LEVELS_AT),
-        ("LEVEL_ENTRY_WORDS", clip::LEVEL_ENTRY_WORDS),
+        ("BOUNDS_AT", clip::BOUNDS_AT),
+        ("BOUND_ENTRY_WORDS", clip::BOUND_ENTRY_WORDS),
         ("LAID_AT", clip::LAID_AT),
         ("LAID_CELLS", clip::LAID_CELLS),
         ("ROOT_AT", clip::ROOT_AT),
@@ -667,13 +684,13 @@ fn world_word() -> String {
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
     );
-    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
-    let cases: String = (0..=clip::LEVELS)
-        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
+    // Where a brick's level `j` begins among its levels, in entries (`clipmap::bound_level_at`).
+    let cases: String = (0..=clip::BRICK_LEVELS)
+        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::bound_level_at(j)))
         .collect();
     out + &format!(
-        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
-        clip::level_at(clip::LEVELS + 1)
+        "fn bound_level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
+        clip::bound_level_at(clip::BRICK_LEVELS + 1)
     )
 }
 
@@ -1283,7 +1300,7 @@ fn assemble(out: &Path) {
         );
         // Each binding, the stages whose entry points read it, and the layout kinds that take
         // it as it is declared.
-        let mut read_by: Vec<(u32, u32, Vec<&str>, String)> = Vec::new();
+        let mut read_by: Vec<(u32, u32, Vec<&str>, String, u32)> = Vec::new();
         for (handle, var) in module.global_variables.iter() {
             let Some(b) = var.binding else { continue };
             let takes = layout_kinds(&module, var).unwrap_or_else(|| {
@@ -1292,15 +1309,30 @@ fn assemble(out: &Path) {
                     b.group, b.binding
                 )
             });
-            let mut by = Vec::new();
+            let (mut by, mut vertex) = (Vec::new(), 0u32);
             for (i, entry) in module.entry_points.iter().enumerate() {
                 let stage = match entry.stage {
                     naga::ShaderStage::Vertex => "VERTEX",
                     naga::ShaderStage::Fragment => "FRAGMENT",
                     _ => "COMPUTE",
                 };
-                if !info.get_entry_point(i)[handle].is_empty() && !by.contains(&stage) {
+                if info.get_entry_point(i)[handle].is_empty() {
+                    continue;
+                }
+                if !by.contains(&stage) {
                     by.push(stage);
+                }
+                if entry.stage == naga::ShaderStage::Vertex {
+                    let k = part::VERTEX_ENTRY
+                        .iter()
+                        .position(|&n| n == entry.name)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "shader {kind}: vertex entry {} not in VERTEX_ENTRY",
+                                entry.name
+                            )
+                        });
+                    vertex |= 1 << k;
                 }
             }
             // Two parts may declare one binding, one of them unread: the binding is the one read.
@@ -1309,20 +1341,20 @@ fn assemble(out: &Path) {
                 .find(|r| (r.0, r.1) == (b.group, b.binding))
             {
                 Some(_) if by.is_empty() => {}
-                Some(r) if r.2.is_empty() => *r = (b.group, b.binding, by, takes),
+                Some(r) if r.2.is_empty() => *r = (b.group, b.binding, by, takes, vertex),
                 Some(_) => panic!(
                     "shader {kind} ({parts:?}): binding {}:{} read twice",
                     b.group, b.binding
                 ),
-                None => read_by.push((b.group, b.binding, by, takes)),
+                None => read_by.push((b.group, b.binding, by, takes, vertex)),
             }
         }
         read_by.sort();
         let entries: Vec<String> = read_by
             .iter()
-            .map(|(g, b, by, takes)| {
+            .map(|(g, b, by, takes, vertex)| {
                 format!(
-                    "[{g}, {b}, {}, {takes}]",
+                    "[{g}, {b}, {}, {takes}, {vertex}]",
                     if by.is_empty() {
                         "NONE".to_string()
                     } else {
@@ -1367,7 +1399,7 @@ fn assemble(out: &Path) {
     .expect("the shaders' sources");
     std::fs::write(
         root.join("stages.rs"),
-        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared], read off it by build.rs.\npub const STAGES: [&[[u32; 4]]; SHADERS as usize] = [\n{stages}];\n{BINDS}"),
+        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADERS as usize] = [\n{stages}];\n{BINDS}"),
     )
     .expect("the shaders' stages");
 }
@@ -1386,7 +1418,7 @@ pub const fn binds(shaders: &[u32], group: &[u32]) -> bool {
         let entries = STAGES[shaders[s] as usize];
         let mut k = 0;
         while k < entries.len() {
-            let [g, b, by, takes] = entries[k];
+            let [g, b, by, takes, _] = entries[k];
             if by != NONE {
                 let mut found = false;
                 let mut e = 0;

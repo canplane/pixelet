@@ -9,11 +9,11 @@
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read> beams: array<u32>;
-@group(0) @binding(9) var<storage, read> pyramid: array<u32>;
+@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 
 @compute @workgroup_size(HIT_LANES)
 fn hit_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= min(pyramid[HITS_CNT], HITS)) {
+  if (id.x >= min(node_cache[HITS_CNT], HITS)) {
     return;
   }
   let k = hit_at(id.x);

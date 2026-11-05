@@ -1,12 +1,12 @@
 // pxl-render/walk.wgsl
 
-// A ray's walk over what the observed pyramid keeps, by hand: no stack, no atomics
+// A ray's walk over what the node cache keeps, by hand: no stack, no atomics
 // and no query of the world, so a thread holds little across its loop
 // (doc/experiment/20261103-the-walk-on-a-phone). A walk that meets a node no slot
 // keeps ends left, for the walk that asks the world to do again whole. What it
 // reads no thread of it writes.
 
-@group(0) @binding(9) var<storage, read> pyramid: array<u32>;
+@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 
 /// The word of the slot holding the node at the zooms asked; `NONE` where none does.
 fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
@@ -17,12 +17,12 @@ fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
   let first = bucket_of(zoom, c);
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
-    let held = pyramid[w];
+    let held = node_cache[w];
     if (held != 0u && held != CLAIMED && (held & KEY_ZOOMS) == want
-      && pyramid[w + W_NODE] == zoom
-      && pyramid[w + W_NODE + 1u] == u32(c.x)
-      && pyramid[w + W_NODE + 2u] == u32(c.y)
-      && pyramid[w + W_NODE + 3u] == u32(c.z)) {
+      && node_cache[w + W_NODE] == zoom
+      && node_cache[w + W_NODE + 1u] == u32(c.x)
+      && node_cache[w + W_NODE + 2u] == u32(c.y)
+      && node_cache[w + W_NODE + 3u] == u32(c.z)) {
       return w;
     }
   }
@@ -41,14 +41,14 @@ fn slot_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
   let first = bucket_of(zoom, c);
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
-    let held = pyramid[w];
+    let held = node_cache[w];
     if (held != 0u && held != CLAIMED
-      && pyramid[w + W_NODE] == zoom
-      && pyramid[w + W_NODE + 1u] == u32(c.x)
-      && pyramid[w + W_NODE + 2u] == u32(c.y)
-      && pyramid[w + W_NODE + 3u] == u32(c.z)) {
-      let kind = pyramid[w + W_KIND] & KIND_MASK;
-      let v = pyramid[w + W_ASSET] & VAL_MASK;
+      && node_cache[w + W_NODE] == zoom
+      && node_cache[w + W_NODE + 1u] == u32(c.x)
+      && node_cache[w + W_NODE + 2u] == u32(c.y)
+      && node_cache[w + W_NODE + 3u] == u32(c.z)) {
+      let kind = node_cache[w + W_KIND] & KIND_MASK;
+      let v = node_cache[w + W_ASSET] & VAL_MASK;
       let air = kind == KIND_CELL && (v == VALUE_VOID || v == VALUE_AIR);
       let split = kind == KIND_SPLIT && zoom < near;
       if (split || (air && (held >> (TAG_BITS + ZOOM_BITS)) <= near)) {
@@ -71,7 +71,7 @@ fn revisits(seed: u32) -> bool {
 fn walk(aim: Aim, start: Start, line: u32) -> Walked {
   let beam = line != NONE;
   let dir = ray_dir(aim.dir);
-  let inv = ray_inv(dir);
+  let inv = aim.inv;
   let t_max = aim.t_max;
   let range = aim.range;
   let origin = aim.origin;
@@ -112,7 +112,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       if (other_zooms) {
         w = slot_at_other_zooms(zoom, c, asked_near);
       }
-      if (w == NONE || (other_zooms && (pyramid[w + W_KIND] & KIND_MASK) == KIND_CELL && revisits(aim.seed))) {
+      if (w == NONE || (other_zooms && (node_cache[w + W_KIND] & KIND_MASK) == KIND_CELL && revisits(aim.seed))) {
         ends = 4u;
         break;
       }
@@ -123,13 +123,13 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         // next that asks finds it again (`Inheritance::of`), as a moved brick's may
         // be gone.
         let held = line + LINE_INHERITANCE + LINE_STEP * zoom;
-        beams[held] = pyramid[w + W_INHERITANCE];
-        beams[held + 1u] = select(pyramid[w + W_INHERITANCE + 1u], SHARD_UNKNOWN, other_zooms);
-        beams[held + 2u] = select(pyramid[w + W_INHERITANCE + 2u], LOOKUP_NONE, other_zooms);
-        beams[held + 3u] = select(pyramid[w + W_INHERITANCE + 3u], SLOT_NOTHING, other_zooms);
+        beams[held] = node_cache[w + W_INHERITANCE];
+        beams[held + 1u] = select(node_cache[w + W_INHERITANCE + 1u], SHARD_UNKNOWN, other_zooms);
+        beams[held + 2u] = select(node_cache[w + W_INHERITANCE + 2u], LOOKUP_NONE, other_zooms);
+        beams[held + 3u] = select(node_cache[w + W_INHERITANCE + 3u], SLOT_NOTHING, other_zooms);
       }
-      let kind = pyramid[w + W_KIND] & KIND_MASK;
-      asset = vec2<u32>(pyramid[w + W_ASSET], pyramid[w + W_ASSET + 1u]);
+      let kind = node_cache[w + W_KIND] & KIND_MASK;
+      asset = vec2<u32>(node_cache[w + W_ASSET], node_cache[w + W_ASSET + 1u]);
       var near_at = s.near;
       if (other_zooms && kind == KIND_CELL) {
         // Air: gone past.
@@ -233,6 +233,10 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         zoom = FINEST_ZOOM - h;
       }
     }
+  }
+  // Out of steps, it is left to the walk that asks, as one that meets a node no slot keeps.
+  if (ends == 0u) {
+    ends = 4u;
   }
   return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
 }

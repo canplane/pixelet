@@ -13,8 +13,8 @@ mod real_world;
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{
-    self as clip, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ELE_AT, FILL_CAP, FIRST_CELL,
-    HANDED_WORDS, LEVELS, PALETTE_AT, SPANS_COLUMNS, TREE_AT,
+    self as clip, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT, BRICK_WORDS, ELE_AT, FILL_CAP,
+    FIRST_CELL, HANDED_WORDS, PALETTE_AT, SPANS_COLUMNS, TREE_AT,
 };
 use pxl_engine::lattice::CELL_CENTER;
 use pxl_engine::{fill, ground, wrap_idx, Zoom, LEAF_CELL};
@@ -187,10 +187,10 @@ fn on_edge(fresh: &[u32], rec: usize, h: &Hand, i: u32) -> bool {
 /// Word `k` of the bricks' lanes, by the slot and what it holds.
 fn lane_name(k: usize) -> String {
     let (slot, w) = (k as u32 / BRICK_WORDS, k as u32 % BRICK_WORDS);
-    let what = if w < clip::LEVELS_AT {
+    let what = if w < clip::BOUNDS_AT {
         format!("column {}", w - clip::COLUMNS_AT)
     } else if w < clip::LAID_AT {
-        format!("level word {}", w - clip::LEVELS_AT)
+        format!("level word {}", w - clip::BOUNDS_AT)
     } else if w < clip::ROOT_AT {
         format!("laid word {}", w - clip::LAID_AT)
     } else {
@@ -318,7 +318,7 @@ fn hand_fill_answers_as_fill() {
                 }
             }
             let (lane_buf, scratch_buf) = (gpu.buffer(&lane, store), gpu.buffer(&scratch, store));
-            for j in 0..=LEVELS {
+            for j in 0..=BRICK_LEVELS {
                 let side_n = BRICK >> j;
                 for k in 0..n {
                     let h = &frame[k as usize];

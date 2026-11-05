@@ -74,7 +74,7 @@ fn visible_entry(origin: vec3<i32>, visible: u32, band: u32) -> Entry {
   let inset = (hi - lo) * (0.5 * (1.0 - side((asset >> FILL_SHIFT) & (EIGHTHS - 1u))));
   let dir = ray_dir(light_v3(LIGHT_DIR));
   let t_max = eye_f32(LIGHT + LIGHT_T_MAX);
-  let b = span_of(dir, ray_inv(dir), lo + inset, hi - inset, 0.0, t_max);
+  let b = span_of(dir, light_inverse(), lo + inset, hi - inset, 0.0, t_max);
   let t0 = max(0.0, largest(b.near));
   let t1 = min(t_max, smallest(b.far));
   let axis = crossing(dir, b.near, true);

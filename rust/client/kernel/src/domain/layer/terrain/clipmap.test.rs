@@ -101,11 +101,11 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
 
 /// The brick at `cell` holding cell `g` absent, a fill on its way to it,
 /// and the clip levels folded without it, as a turn's step leaves them before
-/// it lands: its slot and that fill's ticket, which `on_resident` takes.
+/// it lands: its slot and that fill's ticket, which `on_filled` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = clipmap();
     let b = slot_of(w, cell, clipmap::brick_of(g).0).expect("held");
-    (w.slots[b as usize].present, w.slots[b as usize].ticket) = (false, 7);
+    (w.slots[b as usize].present, w.slots[b as usize].fill) = (false, Fill::Pending(7));
     for i in of_entry(b % ENTRIES) {
         show(w, i);
     }
@@ -198,7 +198,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
                 .map(|j| u32::from(palette_of[at(n * k + j)]) << (8 * j))
                 .sum();
         }
-        for j in 0..=LEVELS {
+        for j in 0..=BRICK_LEVELS {
             for y in 0..BRICK >> j {
                 for x in 0..BRICK >> j {
                     fill::level(
@@ -433,16 +433,16 @@ fn landing_shows_everywhere() {
     lay(w, leaf(CENTER), leaf(CENTER));
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
-    w.slots[b as usize].ticket = 7;
+    w.slots[b as usize].fill = Fill::Pending(7);
     for i in of_entry(0) {
         show(w, i);
     }
-    on_resident(b, 6, Resident::Refused);
-    assert_eq!(
-        w.slots[b as usize].ticket, 7,
+    on_filled(b, 6, Filled::Refused);
+    assert!(
+        w.slots[b as usize].fill == Fill::Pending(7),
         "another fill's landing lays nothing"
     );
-    on_resident(b, 7, Resident::Built(&[0]));
+    on_filled(b, 7, Filled::Built(&[0]));
     refold();
     for clip_level in [eye, pivot] {
         let row = w.entries[(clip_level * ENTRIES) as usize];
@@ -451,13 +451,13 @@ fn landing_shows_everywhere() {
     // Refused while a clip level wants it, then given up with the last.
     w.slots[b as usize] = Slot {
         present: false,
-        ticket: REFUSED,
+        fill: Fill::Refused,
         ..w.slots[b as usize]
     };
     let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
     lay(w, leaf(CENTER), far);
-    assert_eq!(
-        w.slots[b as usize].ticket, REFUSED,
+    assert!(
+        w.slots[b as usize].fill == Fill::Refused,
         "the eye still wants it"
     );
     assert!(
@@ -485,12 +485,12 @@ fn heap_wait_rehanded() {
     let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
-    // As `on_resident` leaves it where the heap refused the mirror its chunk.
-    (w.slots[b as usize].ticket, w.heap) = (WAITING, Some(Refusal::now()));
+    // As `on_filled` leaves it where the heap refused the mirror its chunk.
+    (w.slots[b as usize].fill, w.heap) = (Fill::Waiting, Some(Refusal::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTER), leaf(CENTER));
-    assert_eq!(
-        w.slots[b as usize].ticket, WAITING,
+    assert!(
+        w.slots[b as usize].fill == Fill::Waiting,
         "unhanded while it waits"
     );
     assert!(

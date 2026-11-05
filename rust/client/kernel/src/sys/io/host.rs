@@ -2,8 +2,9 @@
 //
 // What the kernel asks of its host and the client beside it: its files and
 // its report, frames of xpute's own commands that the host takes after the
-// turn returns, so they are done before the next turn rises; and the client's
-// text, called with the shell's commands and answered before the call returns.
+// turn returns, what each names the host's until its head has passed it; and
+// the client's text, called with the shell's commands and answered before the
+// call returns.
 
 use core::panic::Location;
 
@@ -58,7 +59,7 @@ pub fn call(text: &TextCall<'_>) -> Option<Result<u32, Errno>> {
 
 static TURN: Global<u64> = Global::new();
 
-/// What a frame asked for on turn `n` is done on any turn after it.
+/// The turn's number, counted by `rise`.
 pub fn turn() -> u64 {
     *TURN.get(|| 0)
 }
