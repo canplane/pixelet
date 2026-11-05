@@ -87,7 +87,7 @@ pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
 pub const SHADER_WAY_RETURN: u32 = 38;
 /// The camera grid's beam rays `SHADER_BEAM_HIT` left, a thread each, walked asking the
-/// world, by hand (beam.wgsl): its one compute entry.
+/// world, by hand (beam.wgsl, beam_eye.wgsl): its one compute entry.
 pub const SHADER_BEAM: u32 = 39;
 /// Where each of the camera grid's cells' rays start off its beam rays, by hand
 /// (cell.wgsl): its one compute entry.
@@ -190,7 +190,7 @@ pub const SHADER_HIT_FACES: u32 = 73;
 pub const SHADER_BOX_ARGS: u32 = 74;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
-/// `SHADER_SAMPLE_BOX` for the light's map (light_beam.wgsl,
+/// `SHADER_SAMPLE_BOX` for the light's map (beam_light.wgsl,
 /// light_cell.wgsl, sample_light.wgsl, light_sample_box.wgsl).
 pub const SHADER_LIGHT_BEAM: u32 = 75;
 pub const SHADER_LIGHT_CELL: u32 = 76;
@@ -211,7 +211,9 @@ pub const SHADER_LIGHT_MISS_HIT: u32 = 82;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
 /// again.
 pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 83;
-pub const SHADERS: u32 = 84;
+/// `SHADER_BEAM_HIT` for the light's map: what it does not end `SHADER_LIGHT_BEAM` walks again.
+pub const SHADER_LIGHT_BEAM_HIT: u32 = 84;
+pub const SHADERS: u32 = 85;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -526,6 +528,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "beam_walk",
+        "beam_eye",
         "beam",
     ],
     // SHADER_CELL
@@ -788,7 +791,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_list",
         "beam_walk",
-        "light_beam",
+        "beam_light",
+        "beam",
     ],
     // SHADER_LIGHT_CELL
     &[
@@ -873,6 +877,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "resume",
         "walk",
+        "beam_eye",
         "beam_hit",
     ],
     // SHADER_LIGHT_MISS_HIT
@@ -902,5 +907,18 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample_light",
         "sample_put",
         "sample_hit",
+    ],
+    // SHADER_LIGHT_BEAM_HIT
+    &[
+        "walk_word",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "resume",
+        "walk",
+        "light_aim",
+        "light_list",
+        "beam_light",
+        "beam_hit",
     ],
 ];

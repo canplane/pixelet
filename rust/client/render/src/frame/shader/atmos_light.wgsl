@@ -35,9 +35,13 @@ struct Light {
   fill: vec3f,
 };
 
-// Before the eye: what the exposure meters.
-fn light_unexposed_in(r: f32, up: vec3f, s: Lights) -> Light {
-  let sky = sky_ground(r, dot(up, s.sun)).rgb + sky_ground(r, dot(up, s.moon)).rgb * atmos_moon_light();
+// Before the eye: what the exposure meters. The moon's sky only where
+// `moon_sky`, its table unread elsewhere; its direct light everywhere.
+fn light_unexposed_in(r: f32, up: vec3f, s: Lights, moon_sky: bool) -> Light {
+  var sky = sky_ground(r, dot(up, s.sun)).rgb;
+  if (moon_sky) {
+    sky += sky_ground(r, dot(up, s.moon)).rgb * atmos_moon_light();
+  }
   return Light(
     atmos_white() * sun_transmittance(r, dot(up, s.sun)),
     s.moon_color * sun_transmittance(r, dot(up, s.moon)),
@@ -45,8 +49,10 @@ fn light_unexposed_in(r: f32, up: vec3f, s: Lights) -> Light {
   );
 }
 
+// At a point: the moon's sky where it reaches the air (atmos_medium.wgsl
+// `reaches`), as its air is.
 fn light_unexposed(r: f32, up: vec3f) -> Light {
-  return light_unexposed_in(r, up, lights_now());
+  return light_unexposed_in(r, up, lights_now(), reaches(1u));
 }
 
 // The ground under a down-facing face, at the Earth's mean albedo.
@@ -113,7 +119,7 @@ fn noon() -> f32 {
 // under; the eye takes back the rest. In stops.
 fn eye_stops_at(land_r: f32, s: Lights) -> f32 {
   let up = frame_up();
-  let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, s), s), LUMA);
+  let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, s, true), s), LUMA);
   let stops = log2(max(land, 1e-30) / noon());
   let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
   return log2(atmos_exposure()) + shown - stops;

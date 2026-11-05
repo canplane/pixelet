@@ -62,7 +62,17 @@ only once the ground's textures have landed (whether they had was a confound bef
 - **Readbacks ruled out:** timestamps off, `map_async`s 1.2 to 0.2–0.4 a frame, the
   gaps unchanged.
 
+- **The light's beam split as the eye's** (880b154d54): `light_beam` 7.2/13 to
+  4.3/6.3 ms, busy p95 −7, the drive's cast frames p95 200 to 141. One beam_hit/beam
+  for both observers, each its own part.
+- **A cell's window band in three evaluations** (514cda20b3): the `light_beam` span,
+  where light_cell runs, p50 −1.5 to −2 ms. The moon's fill gated where its air
+  reaches; its direct light kept (the bound proves the fill only).
+
 ## Did not work
+
+- **The receivers' stands in workgroup memory** (light_propagate): `light_receivers`
+  ~7 ms either way on the S23; 1 KB and barriers for nothing, dropped.
 
 - **The node cache without claims or atomics** (stamp-checked, plain loads): shadows
   on, fps 15.8 to 11.7, busy p95 112–131 to 212–230. Taking an entry only at the
@@ -81,12 +91,14 @@ only once the ground's textures have landed (whether they had was a confound bef
 - **The light misses resumed from their cell alone:** drive `light_walk` 116–125 to
   101, where the build with a list of the slots left reached 11–14. The list kept.
 
+- **The cold start after a view jump, with the asking resume** (2135d70883, one
+  fresh-load drive a build, ray counts from the start): the first casts' `miss` peak
+  74 to 26 ms, nodes a walked pixel 11–28 to 6–8, 1.1 M to 0.5 M a cast. What is left
+  is the refill itself, ~70k pixels and ~250k nodes asked a frame for ~0.5 s, spread
+  over `miss`, `sample` and `beam`.
+
 ## Unsettled
 
-- **The asking walks' resume as committed** (without the blind restart) is measured
-  on test worlds (beam's visits main's) but not yet on the S23.
-- **Cold miss spikes after a view jump** (74, 63, 46 ms in the first casts): the
-  resume should cut the 11–28 nodes a pixel; a fresh-load drive on main is owed.
 - **`light_receivers`** 6.9–8.1 ms every frame with an actor walking, the largest
   light cost now; receivers.patch is being measured.
 - **Lighting not run under decor** (a depth-only screen draw, decor clearing a

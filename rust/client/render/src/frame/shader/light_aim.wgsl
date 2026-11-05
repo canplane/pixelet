@@ -59,6 +59,19 @@ fn tile_band(tile: vec2<i32>) -> u32 {
   return zoom_in_splits(s2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
 }
 
+/// Whether every tile from `lo` to `hi`, each axis's both included, asks band `band`
+/// (`tile_band`). A tile's band falls as its texels squared grow, a positive scale of them
+/// taking the zoom off their exponent, and they are the sum of its axes' gaps squared, each
+/// axis's gap nothing at the middle's tile and growing either way from it: so each tile
+/// between asks a band between those of the one nearest the middle, the middle's clamped
+/// on each axis, and the one farthest from it, each axis's end of the larger gap.
+fn tiles_ask(lo: vec2<i32>, hi: vec2<i32>, band: u32) -> bool {
+  let half = i32(head_word(LIGHT_HEAD_SIZE) / 2u);
+  let near = clamp(vec2<i32>(half / i32(LIGHT_TILE)), lo, hi);
+  let far = select(lo, hi, vec2<bool>(gap(hi.x, half) > gap(lo.x, half), gap(hi.y, half) > gap(lo.y, half)));
+  return tile_band(near) == band && tile_band(far) == band;
+}
+
 /// The band of the tile a texel lies on (`Light::band`).
 fn texel_band(texel: vec2<u32>) -> u32 {
   return tile_band(vec2<i32>(texel / LIGHT_TILE));
@@ -76,16 +89,22 @@ fn light_inverse() -> vec3<f32> {
   return light_v3(LIGHT_INVERSE);
 }
 
-/// The ray of box texel `texel`, `seed` its asks' (`light::ray`, walk_node.wgsl `Aim`).
-fn light_aim(texel: vec2<u32>, seed: u32) -> Aim {
+/// The ray of box texel `p`, which may lie past the box, asked at `band`, `seed` its asks'
+/// (`light::ray`, walk_node.wgsl `Aim`).
+fn light_ray(p: vec2<i32>, band: u32, seed: u32) -> Aim {
   return Aim(
-    texel_start(light_corner() + vec2<i32>(texel)),
+    texel_start(light_corner() + p),
     light_v3(LIGHT_DIR),
     light_inverse(),
     eye_f32(LIGHT + LIGHT_T_MAX),
-    vec2<u32>(texel_band(texel)),
+    vec2<u32>(band),
     seed,
   );
+}
+
+/// The ray of box texel `texel`, at its tile's band.
+fn light_aim(texel: vec2<u32>, seed: u32) -> Aim {
+  return light_ray(vec2<i32>(texel), texel_band(texel), seed);
 }
 
 fn depth_word(d: f32) -> u32 {

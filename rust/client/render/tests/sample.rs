@@ -10,19 +10,21 @@ mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpu::{cross, read_texture, texture, unit, Gpu, Kinds, LightBox};
+use gpu::{cross, margins, read_texture, texture, unit, Gpu, Kinds, LightBox};
 use pxl_engine::answer;
+use pxl_engine::area::Shard;
 use pxl_engine::beam::{self, Grid};
-use pxl_engine::cast::{self, Detail, End, Node, Ray, Spacing, Trace, Until};
+use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
+use pxl_engine::clipmap::Lookup;
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::node_cache;
-use pxl_engine::overwrite::Cut;
+use pxl_engine::overwrite::{Cut, NodeSlot};
 use pxl_engine::param;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, raster, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
-    src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
-    SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
+    src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_CELL, SHADER_LIGHT_SAMPLE,
+    SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
 };
 use pxl_render::gpu::shadow;
 
@@ -419,14 +421,9 @@ fn light_beams(
     let squares = light::coarse(size) * light::coarse(size);
     list[coarse_at..coarse_at + squares as usize].fill(CAST);
     let beams = gpu.buffer(&list, store_of());
-    let across = light::beam_across(size);
     let mut world = world_binds(b, &eye, &beams, table);
     world.push((11, head.as_entire_binding()));
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_LIGHT_BEAM), "light_beam_cs"),
-        &world,
-        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP), 1],
-    );
+    gpu.light_beam(&world, &beams, size);
     let cells = light::cells_across(size);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
@@ -2341,6 +2338,148 @@ fn hand_beam_rays_answer_as_cast_walk() {
             if differ != 0 {
                 failed.push(format!(
                     "{} ({what}): {differ} corners differ, first {first_differ:?}",
+                    c.name
+                ));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// What a beam ray's walk handed each node from the root to the one it stopped at (`Keep`).
+struct Handed(Vec<Inheritance>);
+
+impl Keep<Inheritance> for Handed {
+    fn keep(&mut self, met: &Trace<Inheritance>, stack: &[Inheritance; DEPTH]) {
+        let z = met.hit.node.zoom as usize;
+        self.0 = stack[..z].iter().copied().chain([met.hit.at]).collect();
+    }
+}
+
+/// `beam_hit_cs` then `beam_cs` for the light's map (beam_light.wgsl) over a node cache that
+/// holds part of what its beam rays meet: every beam ray stops where `cast::walk` from the root
+/// stops the same ray from the origin the pass laid, at the same node, hands on the same
+/// distance (`light::margin`, under a rounding a device may take, `margins`), and holds in its
+/// line what that walk handed the node and every node over it, or, through a node the node cache
+/// keeps at other zooms, what was handed it with the rest marked unknown (walk.wgsl `hand`). The
+/// first frame over an empty cache, the next over that frame's with every other entry finer than
+/// `KEPT_ZOOM` dropped.
+#[test]
+fn hand_light_beam_rays_answer_as_cast_walk() {
+    const KEPT_ZOOM: Zoom = 12;
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let cases = [
+        LightCase {
+            name: "the light, about the eye",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 40),
+            dir: [0.3, 0.2, -0.93],
+            side: 1.0,
+            back: 60.0,
+            t_max: 400.0,
+            range: [8, FINEST],
+            corner: [1300, -900],
+            cuts: none,
+            size: SIZE,
+            listed: None,
+        },
+        LightCase {
+            name: "the light, narrow and slanting",
+            origin: over([EYE[0] + 40, EYE[1] - 20], 25),
+            dir: [0.6, -0.3, -0.74],
+            side: 0.37,
+            back: 120.0,
+            t_max: 500.0,
+            range: [LEAF_CELL, FINEST],
+            corner: [-16, 32],
+            cuts: none,
+            size: SIZE,
+            listed: None,
+        },
+    ];
+    // What a line holds past a node the node cache keeps at other zooms (walk.wgsl `hand`).
+    let unknown = [
+        Shard::UNKNOWN.word(),
+        Lookup::NONE.word(),
+        NodeSlot::NOTHING.word(),
+    ];
+    let mut failed = Vec::new();
+    for c in &cases {
+        let mut obs = light_of(c, [0, 0]);
+        let table = gpu.buffer(&frame_table(), store_of());
+        let first = light_beams(&gpu, &b, &mut obs, &table, None);
+        let mut held = gpu.read(&table);
+        held[node_cache::FRAME as usize] = FRAME + 1;
+        for e in (0..node_cache::ENTRIES).step_by(2) {
+            let at = (node_cache::ENTRIES_AT + e * node_cache::ENTRY_WORDS) as usize;
+            if held[at + node_cache::W_NODE as usize] >= KEPT_ZOOM {
+                held[at] = 0;
+            }
+        }
+        let table = gpu.buffer(&held, store_of());
+        let next = light_beams(&gpu, &b, &mut obs, &table, None);
+        let Rays::Light {
+            light: l,
+            range,
+            size,
+            ..
+        } = &obs.rays
+        else {
+            unreachable!()
+        };
+        let across = light::beam_across(*size);
+        let margins = margins(l.spacing().across);
+        for (what, words) in [("first frame", &first), ("next frame", &next)] {
+            let mut differ = 0u32;
+            let mut first_differ = None;
+            for k in 0..across * across {
+                let line = light::line(*size, k);
+                let at = |a: u32| words[(line + a) as usize];
+                let o = [0, 1, 2].map(|a| at(light::LINE_ORIGIN + a) as i32);
+                let tile = light::corner_at([k % across, k / across])
+                    .map(|v| v.div_euclid(light::TILE as i32));
+                let band = l.band(*size, *range, tile);
+                let detail = Detail {
+                    range: [band, band],
+                    spacing: l.spacing(),
+                };
+                let mut q = Asking { w, cuts: c.cuts };
+                let mut handed = Handed(Vec::new());
+                let ray = Ray::new(l.dir, l.t_max);
+                let m = cast::walk_from_root(&mut q, o, &ray, detail, Until::Beam, &mut handed);
+                let n = beam::LINE_NODE;
+                let got_node = Node {
+                    zoom: at(n + beam::NODE_ZOOM),
+                    corner: [0, 1, 2].map(|i| at(n + beam::NODE_CORNER + i)),
+                    roots: [0, 1, 2].map(|i| at(n + beam::NODE_ROOTS + i) as i32),
+                };
+                let got_t = f32::from_bits(words[light::hand_at(*size, k) as usize]);
+                let hands = margins.map(|(_, margin)| (m.hit.t - margin).max(0.0));
+                let hand_alike = hands.iter().any(|h| h.to_bits() == got_t.to_bits());
+                let line_alike = got_node == m.hit.node
+                    && handed.0.iter().enumerate().all(|(z, h)| {
+                        let g = [0, 1, 2, 3]
+                            .map(|i| at(beam::LINE_INHERITANCE + beam::LINE_STEP * z as u32 + i));
+                        let want = h.words();
+                        g == want || (g[0] == want[0] && g[1..] == unknown)
+                    });
+                if !hand_alike || !line_alike {
+                    differ += 1;
+                    first_differ.get_or_insert((k, got_node, got_t, m.hit.node, hands[0]));
+                }
+            }
+            eprintln!(
+                "{} ({what}): {differ} of {} beam rays differ",
+                c.name,
+                across * across
+            );
+            if differ != 0 {
+                failed.push(format!(
+                    "{} ({what}): {differ} beam rays differ, first {first_differ:?}",
                     c.name
                 ));
             }

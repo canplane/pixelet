@@ -1108,8 +1108,8 @@ fn every_pass_bands_a_tile_alike() {
     use pxl_engine::grid::INV_SPLIT2;
     use pxl_engine::FINEST_ZOOM;
     use pxl_render::frame::shader::record::{
-        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MISS,
-        COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SLIDE,
+        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT, COMPUTE_LIGHT_CELL,
+        COMPUTE_LIGHT_MISS, COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SLIDE,
     };
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
@@ -1134,6 +1134,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         COMPUTE_LIGHT_SAMPLE,
         COMPUTE_LIGHT_MISS,
         COMPUTE_LIGHT_MISS_HIT,
+        COMPUTE_LIGHT_BEAM_HIT,
         COMPUTE_LIGHT_BEAM,
         COMPUTE_LIGHT_CELL,
         COMPUTE_LIGHT_SLIDE,

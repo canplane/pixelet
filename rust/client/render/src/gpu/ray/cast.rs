@@ -17,8 +17,8 @@ use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     binds, COMPUTE, COMPUTE_BEAM, COMPUTE_BEAM_HIT, COMPUTE_CAST, COMPUTE_CELL, COMPUTE_FOLD,
     COMPUTE_FORGET, COMPUTE_HIT_FACES, COMPUTE_HIT_LEAD, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM,
-    COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MARK, COMPUTE_LIGHT_MARK_DRAWS, COMPUTE_LIGHT_MISS,
-    COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_SAMPLE,
+    COMPUTE_LIGHT_BEAM_HIT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_MARK, COMPUTE_LIGHT_MARK_DRAWS,
+    COMPUTE_LIGHT_MISS, COMPUTE_LIGHT_MISS_HIT, COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_SAMPLE,
     COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_MISS, COMPUTE_MISS_HIT,
     COMPUTE_MISS_LIST, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
     TEXTURE_UINT_ARRAY, UNIFORM,
@@ -113,12 +113,16 @@ pub(super) struct CastBuffers {
     beam_hit_built: Pipeline,
     beam_hit_group: u32,
     beam_left: u32,
-    /// The same passes for the shadow map, an entry each (light_beam.wgsl,
+    /// The same passes for the shadow map, an entry each (beam_light.wgsl,
     /// light_cell.wgsl, sample_light.wgsl): the cells over the same group, the
     /// beam rays and the samples over `ASK_GROUP`.
     light_beam_built: Pipeline,
     light_cells_built: Pipeline,
     light_sample_built: Pipeline,
+    /// The light's beam rays' walk over the node cache alone, ahead of `light_beam_built`.
+    light_beam_hit_built: Pipeline,
+    /// What it left: `light_beam_built`'s dispatch, then their count.
+    light_beam_left: u32,
     /// The light's samples' walk over the node cache alone, ahead of `light_sample_built`.
     light_sample_hit_built: Pipeline,
     /// What it left: `light_sample_built`'s dispatch, then their count.
@@ -205,7 +209,7 @@ pub(super) struct CastBuffers {
     light_slide_built: Pipeline,
     /// The light's cast's groups (`light_groups`), and the buffers they bind:
     /// made again exactly when one of them is another.
-    light_groups: [u32; 11],
+    light_groups: [u32; 12],
     light_bound: [u32; 12],
     /// A word bound where decor is off, the decor's buffers the drawn mark
     /// reads none (`light_mark_draws_cs`).
@@ -354,7 +358,8 @@ pub(super) const HEAD_BINDING: u32 = 11;
 const SAMPLE_HIT_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
 ];
-/// `SAMPLE_HIT_GROUP` with the light's head.
+/// `SAMPLE_HIT_GROUP` with the light's head: `sample_hit_cs`'s and `beam_hit_cs`'s for the
+/// light's map.
 const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -374,11 +379,10 @@ const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
 ];
 /// `sample_hit_cs`'s and `sample_cs`'s (sample_hit.wgsl, sample.wgsl).
 const SAMPLE_WORKGROUP: [u32; 3] = [beam::SAMPLE_SIDE, beam::SAMPLE_SIDE, 1];
-/// `beam_hit_cs`'s, `beam_cs`'s and `light_beam_cs`'s (beam_hit.wgsl, beam.wgsl,
-/// light_beam.wgsl).
+/// `beam_hit_cs`'s and `beam_cs`'s, either observer's (beam_hit.wgsl, beam.wgsl).
 const BEAM_WORKGROUP: [u32; 3] = [beam::CORNER_SIDE, beam::CORNER_SIDE, 1];
-/// The walks that ask the world (ask.wgsl): either observer's beam rays (`beam_cs`,
-/// `light_beam_cs`) and samples (`sample_cs`): its world's, its words, the node cache it writes,
+/// The walks that ask the world (ask.wgsl): either observer's beam rays (`beam_cs`) and
+/// samples (`sample_cs`): its world's, its words, the node cache it writes,
 /// its head.
 const ASK_GROUP: [u32; 30] = [
     0,
@@ -752,7 +756,10 @@ const _: () = assert!(
             &WORLD_GROUP
         )
         && binds(&[COMPUTE_SAMPLE_HIT, COMPUTE_BEAM_HIT], &SAMPLE_HIT_GROUP)
-        && binds(&[COMPUTE_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
+        && binds(
+            &[COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_BEAM_HIT],
+            &LIGHT_SAMPLE_HIT_GROUP
+        )
         && binds(&[COMPUTE_MISS_HIT], &MISS_HIT_GROUP)
         && binds(&[COMPUTE_MISS, COMPUTE_MISS_LIST], &MISS_GROUP)
         && binds(&[COMPUTE_HIT_LEAD], &HIT_LEAD_GROUP)
@@ -791,6 +798,8 @@ impl RaysPass {
         let light_sample_built = pipelines.build_compute(g, COMPUTE_LIGHT_SAMPLE, &ASK_GROUP);
         let light_sample_hit_built =
             pipelines.build_compute(g, COMPUTE_LIGHT_SAMPLE_HIT, &LIGHT_SAMPLE_HIT_GROUP);
+        let light_beam_hit_built =
+            pipelines.build_compute(g, COMPUTE_LIGHT_BEAM_HIT, &LIGHT_SAMPLE_HIT_GROUP);
         let fold_built = pipelines.build_compute(g, COMPUTE_FOLD, group);
         let miss_built = pipelines.build_compute(g, COMPUTE_MISS, &MISS_GROUP);
         let miss_list_built = pipelines.build_compute(g, COMPUTE_MISS_LIST, &MISS_GROUP);
@@ -823,6 +832,7 @@ impl RaysPass {
             light_cells_built,
             light_sample_built,
             light_sample_hit_built,
+            light_beam_hit_built,
             beams: 0,
             // Never written: a buffer is made zeroed.
             eye_head: buf(word_bytes(light::HEAD_WORDS), buffer_usage::UNIFORM),
@@ -864,7 +874,7 @@ impl RaysPass {
             light_mark_draws_built,
             light_propagate_built,
             light_slide_built,
-            light_groups: [0; 11],
+            light_groups: [0; 12],
             light_bound: [0; 12],
             light_none: buf(word_bytes(2 * generation::drawn::REGIONS as usize), storage),
             light_number: 0,
@@ -923,6 +933,10 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             light_sample_left: g.buf(
+                word_bytes(SAMPLE_LEFT_START.len()),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
+            light_beam_left: g.buf(
                 word_bytes(SAMPLE_LEFT_START.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
@@ -1658,6 +1672,7 @@ impl RaysPass {
                     &c.light_miss_hit_built,
                     &c.light_sample_hit_built,
                     &c.light_sample_built,
+                    &c.light_beam_hit_built,
                 ],
                 light_bound,
                 [
@@ -1671,6 +1686,7 @@ impl RaysPass {
                     c.light_args,
                     c.light_left,
                     c.light_sample_left,
+                    c.light_beam_left,
                 ],
             );
             c.light_bound = light_bound;
@@ -1953,13 +1969,30 @@ impl RaysPass {
             g.set_pipeline(pass, c.light_propagate_built.id);
             let n = light::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(SQUARE_SIDE), n.div_ceil(SQUARE_SIDE), 1);
-            // The beam over the samples' group and the cells' starts over the
-            // light's world's group, each handed the light's head. Each as
-            // many workgroups as the propagation left it (`light::ARGS_WORDS`).
+            // The beam over the node cache alone, as many workgroups as the
+            // propagation left it (`light::ARGS_WORDS`); then what it left over
+            // the samples' group, and the cells' starts over the light's
+            // world's group, each handed the light's head.
             let args = |w: u32| word_bytes(w as usize);
+            g.write_buf(c.light_beam_left, 0, bytes(&SAMPLE_LEFT_START));
+            g.set_bind_group(pass, 0, c.light_groups[11], &[]);
+            g.set_pipeline(pass, c.light_beam_hit_built.id);
+            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
+            g.end(pass);
+            g.copy_buf(
+                encoder,
+                (c.light_beam_left, word_bytes(3)),
+                (
+                    c.light_list,
+                    word_bytes(light::corners_left_at(shadow::SIZE) as usize),
+                ),
+                4,
+            );
+            let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
+            let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[10], &[]);
             g.set_pipeline(pass, c.light_beam_built.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
+            g.dispatch_indirect(pass, c.light_beam_left, 0);
             g.set_bind_group(pass, 0, c.light_groups[1], &[]);
             g.set_pipeline(pass, c.light_cells_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
@@ -2277,8 +2310,11 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// its world's (the beam, the cells' starts and the samples, the eye's
 /// passes, over `WORLD_GROUP`, its list where the eye's beam rays' buffer
 /// lies and its head where the eye's), its boxes' (the eye's raster's
-/// pass), the misses' walk's, the two marks', the propagation's and the
-/// slide's; the boxes' none before its raster's buffers are made.
+/// pass), the misses' walk's, the two marks', the propagation's, the
+/// slide's, the misses' and the samples' walks over the node cache alone, the
+/// samples' and the beam rays' walks that ask, one group, and the beam rays'
+/// walk over the node cache alone; the boxes' none before its raster's buffers
+/// are made.
 fn light_groups(
     g: &Gpu,
     [
@@ -2293,11 +2329,12 @@ fn light_groups(
         miss_hit,
         sample_hit,
         sample,
-    ]: [&Pipeline; 11],
+        beam_hit,
+    ]: [&Pipeline; 12],
     bindings: [u32; 12],
-    [node_cache, head, list, boxes, visibility, args, misses, light_args, left, sample_left]: [u32;
-        10],
-) -> [u32; 11] {
+    [node_cache, head, list, boxes, visibility, args, misses, light_args, left, sample_left, beam_left]: [u32;
+        11],
+) -> [u32; 12] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bindings;
     let entries = [
@@ -2324,7 +2361,20 @@ fn light_groups(
         buf_entry(20, instances),
         buf_entry(21, light_args),
     ];
-    // Each group takes the entries its layout binds.
+    // Each group takes the entries its layout binds; the samples' and the beam rays' walks
+    // over the node cache alone, each its own list's atomics at 10.
+    let hit = |p: &Pipeline, left: u32| {
+        g.bind_group(
+            p.layouts[0],
+            &[
+                buf_entry(0, eye),
+                buf_entry(8, list),
+                buf_entry(9, node_cache),
+                buf_entry(10, left),
+                buf_entry(HEAD_BINDING, head),
+            ],
+        )
+    };
     let of = |p: &Pipeline| {
         let layout = p.layouts[0];
         let e: Vec<Entry> = entries
@@ -2357,16 +2407,8 @@ fn light_groups(
         of(propagate),
         of(slide),
         of(miss_hit),
-        g.bind_group(
-            sample_hit.layouts[0],
-            &[
-                buf_entry(0, eye),
-                buf_entry(8, list),
-                buf_entry(9, node_cache),
-                buf_entry(10, sample_left),
-                buf_entry(HEAD_BINDING, head),
-            ],
-        ),
+        hit(sample_hit, sample_left),
         of(sample),
+        hit(beam_hit, beam_left),
     ]
 }

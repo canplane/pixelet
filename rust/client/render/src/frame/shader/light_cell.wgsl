@@ -8,8 +8,10 @@
 /// Cell `c`'s start: the least of the beam rays' starts within its window, `2 + 2 ·
 /// BEAM_WINDOW` beam rays a side from its own corner, and that beam ray, whose line its rays
 /// resume from; and whether they do, only where every beam ray of the window asked the band
-/// its rays ask (`cast::Detail::alike`): the beam's spacing is one, so only its band tells. A
-/// workgroup is a square of the light's list's lanes, as `light_item` reads them.
+/// its rays ask (`cast::Detail::alike`): the beam's spacing is one, so only its band tells.
+/// A beam ray lies a tile from the next (`light::BEAM`), so the window's beam rays lie on
+/// every tile from its first's to its last's (`tiles_ask`). A workgroup is a square of the
+/// light's list's lanes, as `light_item` reads them.
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let cells = head_word(LIGHT_HEAD_CELLS_ACROSS);
@@ -19,10 +21,8 @@ fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let across = beam_across();
   let side = 2u + 2u * LIGHT_BEAM_WINDOW;
-  let asks = tile_band(light_on(LEVEL_CELL, c));
   var least_at = c.y * across + c.x;
   var least = bitcast<f32>(beams[light_hand_at(least_at)]);
-  var alike = true;
   for (var j = 0u; j < side; j += 1u) {
     for (var i = 0u; i < side; i += 1u) {
       let k = (c.y + j) * across + c.x + i;
@@ -31,11 +31,12 @@ fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         least = t;
         least_at = k;
       }
-      alike = alike && tile_band(light_on(LEVEL_CORNER, c + vec2<u32>(i, j))) == asks;
     }
   }
+  let lo = light_on(LEVEL_CORNER, c);
+  let hi = light_on(LEVEL_CORNER, c + vec2<u32>(side - 1u));
   let at = light_cell_at(c);
   beams[at + CELL_T] = bitcast<u32>(least);
   beams[at + CELL_CORNER] = least_at;
-  beams[at + CELL_RESUMES] = u32(alike);
+  beams[at + CELL_RESUMES] = u32(tiles_ask(lo, hi, tile_band(light_on(LEVEL_CELL, c))));
 }

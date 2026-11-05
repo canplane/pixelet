@@ -37,7 +37,7 @@ fn miss_hit_cs(
     return;
   }
   let aim = px_aim(id, size);
-  let w = walk(aim, px_start(aim, id, size), NONE);
+  let w = walk(aim, px_start(aim, id, size), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     write_left(id, w.t, w.visits);
     let place = atomicAdd(&left[3], 1u);

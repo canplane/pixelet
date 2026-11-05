@@ -3,10 +3,10 @@
 // A beam ray walked from its start, the world's root or where its walk over the node cache left
 // it (beam_hit.wgsl), to the first cell that fills or lacks, or the first split too narrow to
 // share (`cast::walk`, `Until::Beam`), through the node cache writing what it asks (ask.wgsl),
-// either observer's (beam.wgsl, light_beam.wgsl). Its line is left as it goes (pxl-engine
-// `beam::LINE_WORDS`): what was handed each node it goes into is written at that node's zoom,
-// read back where the walk pops to its child, in place of a stack, and where it starts under the
-// root.
+// either observer's (beam.wgsl, beam_eye.wgsl, beam_light.wgsl). Its line is left as it goes
+// (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at that
+// node's zoom, read back where the walk pops to its child, in place of a stack, and where it
+// starts under the root.
 
 /// What was handed the line's node at `zoom`, at `base` (`beam::LINE_INHERITANCE`).
 fn line_handed(base: u32, zoom: u32) -> vec4<u32> {
@@ -28,12 +28,15 @@ struct Beamed {
   visits: u32,
 }
 
-/// The beam ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to,
-/// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
-/// `base`, from `start`, every node over it already in the line (`cast::walk_from_root`,
-/// `Until::Beam`; the line's words `beam::LINE_WORDS`).
-fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32, start: Start) -> Beamed {
-  let dir = ray_dir(aimed);
+/// The beam ray `aim` (walk_node.wgsl `Aim`), its beam's rays `spacing` apart, `across` then
+/// `angle` (`cast::Spacing`), its line left at `base`, from `start`, every node over it already
+/// in the line (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
+fn beam_walk(aim: Aim, spacing: vec2<f32>, base: u32, start: Start) -> Beamed {
+  let origin = aim.origin;
+  let inv = aim.inv;
+  let t_max = aim.t_max;
+  let range = aim.range;
+  let dir = ray_dir(aim.dir);
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);

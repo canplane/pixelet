@@ -28,7 +28,7 @@ fn radius_step(r: f32) -> f32 {
 // the eye's exposure off it.
 fn land_shown(r: f32, s: Lights) -> vec3f {
   let up = frame_up();
-  return surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(r, up, s), s) * exp2(eye_stops_at(r, s));
+  return surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(r, up, s, true), s) * exp2(eye_stops_at(r, s));
 }
 
 // The exposure's slope in the ground's height under the eye, as the lights'

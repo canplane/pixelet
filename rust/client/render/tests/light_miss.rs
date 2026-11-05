@@ -5,7 +5,7 @@
 //! that list, each slot's word as the world's again; and where
 //! bricks changed between the frames, the next frame's after the app's forgetting (`forget_cs`)
 //! as the changed world's. Every walk resumes off its cell's line, the cells laid as the cast
-//! lays them each frame (light_beam.wgsl, light_cell.wgsl): the next frame's where the walk over
+//! lays them each frame (beam_light.wgsl, light_cell.wgsl): the next frame's where the walk over
 //! the node cache left it, which its slot's word holds; the first frame's at 0, the map's words
 //! laid none. Skipped where no adapter answers.
 
@@ -24,8 +24,7 @@ use pxl_engine::node_cache::{self, MOVED_WORDS};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::{beam, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
-    src, SHADER_FORGET, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL, SHADER_LIGHT_MISS,
-    SHADER_LIGHT_MISS_HIT,
+    src, SHADER_FORGET, SHADER_LIGHT_CELL, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
 };
 use pxl_render::frame::shader::word::ROW_LANES;
 
@@ -550,7 +549,7 @@ const SKIPPED_EVERY: u32 = 11;
 /// The cast the head names, its epoch begun with it: every tile read.
 const CAST: u32 = 7;
 
-/// The beam's lines and each cell's start laid in `list` as the cast lays them (light_beam.wgsl,
+/// The beam's lines and each cell's start laid in `list` as the cast lays them (beam_light.wgsl,
 /// light_cell.wgsl), every tile read, its beam over a table of its own.
 fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
@@ -564,9 +563,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
     let table = gpu.buffer(&table, store_of());
     let buf = gpu.buffer(list, store_of());
     let side = beam::CORNER_SIDE;
-    let across = light::beam_across(SIZE);
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_LIGHT_BEAM), "light_beam_cs"),
+    gpu.light_beam(
         &[
             (0, eye.as_entire_binding()),
             (1, b.clip.as_entire_binding()),
@@ -579,7 +576,8 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
             (9, table.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [across.div_ceil(side), across.div_ceil(side), 1],
+        &buf,
+        SIZE,
     );
     let cells = light::cells_across(SIZE);
     gpu.dispatch(

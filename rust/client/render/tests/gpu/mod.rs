@@ -1,7 +1,7 @@
 //! The device every test of a pass by hand runs it on (tests/fold.rs, tests/fill.rs and the
 //! rest): its buffers and textures, a module taken as the renderer assembles it or from a file
 //! a mutant sweep names, and a wait for the device that gives up, as a shader by hand may loop
-//! on; and what the tests share besides: the kinds of
+//! on; and what the tests share besides: the light's beam as the cast runs it, the kinds of
 //! case each met, a light's box as a host lays it, a hash and a few vectors.
 
 #![allow(dead_code, reason = "each test reads its own of it")]
@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::FRAC_W;
+use pxl_engine::{beam, cast, FRAC_W};
+use pxl_render::frame::shader::record::{compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT};
 
 /// How long a test waits on the device for one submission before it fails.
 const WAIT: Duration = Duration::from_secs(60);
@@ -156,6 +157,37 @@ impl Gpu {
             cleared,
             "a dispatch of {groups:?} workgroups: the command buffer did not run to its end"
         );
+    }
+
+    /// The light's beam as the cast runs it over the map `size` texels a side (beam_hit.wgsl,
+    /// beam.wgsl, beam_light.wgsl): the walk over the node cache alone, a thread a beam ray of
+    /// the whole map, as where the head's cast begins its epoch (light_list.wgsl `light_item`),
+    /// then the beam rays it left walked asking the world, their count copied into `list`
+    /// between, as gpu/ray/cast.rs copies it. `world` binds the walk that asks: the list at 8,
+    /// the node cache at 9, the head at 11.
+    pub fn light_beam(
+        &self,
+        world: &[(u32, wgpu::BindingResource)],
+        list: &wgpu::Buffer,
+        size: u32,
+    ) {
+        let left = self.buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
+        let mut hit: Vec<_> = world
+            .iter()
+            .filter(|(b, _)| [0, 8, 9, 11].contains(b))
+            .cloned()
+            .collect();
+        hit.push((10, left.as_entire_binding()));
+        let across = light::beam_across(size).div_ceil(beam::CORNER_SIDE);
+        let pipeline = |id| {
+            let (shader, entry) = compute(id);
+            self.pipeline(src(shader), entry)
+        };
+        self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM_HIT), &hit, [across, across, 1]);
+        let args = self.read(&left);
+        let at = u64::from(light::corners_left_at(size)) * 4;
+        self.queue.write_buffer(list, at, bytes(&args[3..]));
+        self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM), world, [args[0].max(1), 1, 1]);
     }
 }
 
@@ -375,6 +407,17 @@ impl LightBox {
         };
         (l, starts)
     }
+}
+
+/// The margins a device may take for `light::margin` of a beam `width` wide, a rounding each,
+/// named: the engine's, and the product fused into the sum (beam_light.wgsl `beam_hand`). The
+/// width is the host's word (`Light::width`), so nothing else rounds apart.
+pub fn margins(width: f32) -> [(&'static str, f32); 2] {
+    let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));
+    [
+        ("the engine's", light::margin(width)),
+        ("a fused sum's", fused),
+    ]
 }
 
 pub fn unit(v: [f32; 3]) -> [f32; 3] {

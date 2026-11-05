@@ -24,7 +24,7 @@ fn light_miss_hit_cs(
   let slot = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let texel = slot_texel(slot);
   let aim = light_aim(texel, mix_hash(head_word(LIGHT_HEAD_CAST), listed));
-  let w = walk(aim, light_resumed(aim, texel), NONE);
+  let w = walk(aim, light_resumed(aim, texel), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     textureStore(light, slot, 0, vec4<u32>(bitcast<u32>(w.t), 0u, 0u, 0u));
     // Its place in the list, the rows of the walk over it raised by the place that opens each.

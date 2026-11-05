@@ -257,8 +257,8 @@ fn strip_comments(text: &str) -> String {
 
 // light_list.wgsl's `light_item` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes
 // of one entry of the list, and every pass that calls it declares its workgroup by a side of its
-// own: light_beam.wgsl by `CORNER_SIDE`, light_cell.wgsl by `SAMPLE_SIDE`, light_sample_box.wgsl
-// (through `sample_item`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
+// own: beam_hit.wgsl (through `beam_item`) by `CORNER_SIDE`, light_cell.wgsl by `SAMPLE_SIDE`,
+// light_sample_box.wgsl (through `sample_item`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
 // whole dispatch by that pass's own side (gpu/ray/cast.rs `light_args`), so each is that side.
 const _: () = assert!(
     LIGHT_TILE == SAMPLE_SIDE && CORNER_SIDE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
@@ -391,6 +391,7 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
         ("LIGHT_HEAD_MISSES_LEFT", light::HEAD_MISSES_LEFT as u32),
+        ("LIGHT_HEAD_CORNERS_LEFT", light::HEAD_CORNERS_LEFT as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
         ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),

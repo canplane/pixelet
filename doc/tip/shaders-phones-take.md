@@ -50,9 +50,11 @@ own Vulkan driver. Each is a different compiler with its own faults.
 - **A choice made as the shader runs between two implementations that
   answer in tuples or structs.** The generated `PassObserver` chose the eye
   or the light's map in every method by the pass's head, so every answer came
-  through a branch. A pass both observers take is an entry each (`beam_cs`
-  and `light_beam_cs`, `sample_cs` and `light_sample_cs`, …): choose at the
-  entry, not inside.
+  through a branch. A pass both observers take is a shader each, built from
+  the same entry and the observer's own part (`beam_hit_cs` and `beam_cs` with
+  beam_eye.wgsl or beam_light.wgsl, `sample_hit_cs` and `sample_cs` with
+  sample_eye.wgsl or sample_light.wgsl, render build.rs): choose when the
+  shader is put together, not inside.
 - **A table of vectors read at a place found as it runs.** The raster's
   `const array<vec3f, 72>` of box corners, indexed by its axis and vertex,
   was refused (Tint holds such a table as a local; a `var<private>` copy was

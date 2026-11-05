@@ -57,7 +57,8 @@ pub const COMPUTE_MISS_HIT: u32 = 41;
 pub const COMPUTE_BEAM_HIT: u32 = 42;
 pub const COMPUTE_LIGHT_MISS_HIT: u32 = 43;
 pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
-pub const COMPUTES: u32 = 45;
+pub const COMPUTE_LIGHT_BEAM_HIT: u32 = 45;
+pub const COMPUTES: u32 = 46;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -99,7 +100,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_HIT_LEAD => (SHADER_HIT_LEAD, "hit_lead_cs"),
         COMPUTE_HIT_FACES => (SHADER_HIT_FACES, "hit_faces_cs"),
         COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
-        COMPUTE_LIGHT_BEAM => (SHADER_LIGHT_BEAM, "light_beam_cs"),
+        COMPUTE_LIGHT_BEAM => (SHADER_LIGHT_BEAM, "beam_cs"),
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
         COMPUTE_LIGHT_SAMPLE => (SHADER_LIGHT_SAMPLE, "sample_cs"),
         COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "light_sample_box_cs"),
@@ -108,6 +109,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
         COMPUTE_LIGHT_MISS_HIT => (SHADER_LIGHT_MISS_HIT, "light_miss_hit_cs"),
         COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
+        COMPUTE_LIGHT_BEAM_HIT => (SHADER_LIGHT_BEAM_HIT, "beam_hit_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }

@@ -1,4 +1,4 @@
-//! The light's cells' starts (light_beam.wgsl `light_beam_cs`, light_cell.wgsl
+//! The light's cells' starts (beam_light.wgsl `beam_hand`, light_cell.wgsl
 //! `light_cell_cs`) against pxl-engine `light::margin` of `Light::spacing`: over the real world
 //! of tests/real_world, each beam ray's hand and each cell's `CELL_T` as the engine takes them
 //! off where the engine's walk of that ray from the origin the pass laid stops. Skipped where
@@ -7,14 +7,14 @@
 mod gpu;
 mod real_world;
 
-use gpu::Gpu;
+use gpu::{margins, Gpu};
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL};
+use pxl_render::frame::shader::record::{src, SHADER_LIGHT_CELL};
 
 use real_world::{q8, store_of, Asking, World, WorldBufs, FINEST};
 
@@ -143,9 +143,9 @@ fn device() -> Option<Gpu> {
     gpu
 }
 
-/// The light's list after `light_beam_cs` of `beam_source` and `light_cell_cs` over a whole
-/// cast, from a table no frame has written.
-fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &str) -> Vec<u32> {
+/// The light's list after its beam and `light_cell_cs` over a whole cast, from a table no frame
+/// has written.
+fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
     let eye = gpu.buffer(eye, wgpu::BufferUsages::UNIFORM);
     let head = gpu.buffer(head, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
@@ -159,9 +159,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &s
     let squares = light::coarse(SIZE) * light::coarse(SIZE);
     list[coarse_at..coarse_at + squares as usize].fill(CAST);
     let beams = gpu.buffer(&list, store_of());
-    let across = light::beam_across(SIZE);
-    gpu.dispatch(
-        &gpu.pipeline(beam_source, "light_beam_cs"),
+    gpu.light_beam(
         &[
             (0, eye.as_entire_binding()),
             (1, b.clip.as_entire_binding()),
@@ -174,7 +172,8 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &s
             (9, table.as_entire_binding()),
             (11, head.as_entire_binding()),
         ],
-        [across.div_ceil(WORKGROUP), across.div_ceil(WORKGROUP), 1],
+        &beams,
+        SIZE,
     );
     let cells = light::cells_across(SIZE);
     gpu.dispatch(
@@ -187,17 +186,6 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32], beam_source: &s
         [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
     );
     gpu.read(&beams)
-}
-
-/// The margins a device may take for `light::margin` of a beam `width` wide, a rounding each,
-/// named: the engine's, and the product fused into the sum. The width is the host's word
-/// (`Light::width`), so nothing else rounds apart.
-fn margins(width: f32) -> [(&'static str, f32); 2] {
-    let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));
-    [
-        ("the engine's", light::margin(width)),
-        ("a fused sum's", fused),
-    ]
 }
 
 /// Each beam ray's hand and each cell's `CELL_T` by hand against `light::margin` of the light's
@@ -241,7 +229,6 @@ fn light_cells_start_short_by_the_margin() {
             corner: [-16, 32],
         },
     ];
-    let source = src(SHADER_LIGHT_BEAM);
     let across = light::beam_across(SIZE);
     let cells = light::cells_across(SIZE);
     let side = 2 + 2 * light::BEAM_WINDOW;
@@ -263,7 +250,7 @@ fn light_cells_start_short_by_the_margin() {
         }
         head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
-        let got = beams_of(&gpu, &b, &eye, &head, source);
+        let got = beams_of(&gpu, &b, &eye, &head);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
         // Each beam ray's stop, the engine's walk from the origin the pass laid: a device rounds
         // `Starts::start` a Q3 step off the engine's for some.

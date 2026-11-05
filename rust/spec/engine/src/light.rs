@@ -500,18 +500,20 @@ pub const HEAD_MARKS: usize = HEAD_CELLS + 12;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
 /// The slots the walk over the node cache left (`misses_left_at`).
 pub const HEAD_MISSES_LEFT: usize = HEAD_LISTED + LISTS as usize;
+/// The beam rays the same walk left (`corners_left_at`).
+pub const HEAD_CORNERS_LEFT: usize = HEAD_MISSES_LEFT + 1;
 const HEAD_LAID_VEC4S: usize = 5;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_MISSES_LEFT < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_CORNERS_LEFT < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 21] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 22] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -528,6 +530,7 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 21] {
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
         (HEAD_MISSES_LEFT, misses_left_at(size)),
+        (HEAD_CORNERS_LEFT, corners_left_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -695,7 +698,7 @@ impl Starts {
 /// slots' pass (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-render light_beam.wgsl `light_beam_cs`, light_cell.wgsl
+/// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam_light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
@@ -990,9 +993,10 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares, the lists, the samples left.
+/// stands, the reads, their squares, the lists, the samples left, the beam
+/// rays left.
 pub const fn list_words(size: u32) -> u32 {
-    lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
+    corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
 }
 
 /// The samples their walk over the node cache left, for the walk that asks the world
@@ -1001,6 +1005,13 @@ pub const fn list_words(size: u32) -> u32 {
 /// over 16 bits.
 pub const fn lefts_at(size: u32) -> u32 {
     listed_at(size, LISTS)
+}
+
+/// The beam rays the same walk left (pxl-render beam_hit.wgsl, beam.wgsl, beam_light.wgsl), past
+/// the samples left, as the eye's are (`beam::Grid::corners_at`): how many, copied in once it is
+/// done, then each, its X and its Y over 16 bits.
+pub const fn corners_left_at(size: u32) -> u32 {
+    lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
 }
 
 /// The workgroups of the passes that cast tiles, a buffer of their own: each

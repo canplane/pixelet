@@ -22,7 +22,7 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let aim = sample_aim(s);
-  let w = walk(aim, sample_start(aim, s), NONE);
+  let w = walk(aim, sample_start(aim, s), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     beams[base + SAMPLE_LEFT_T] = bitcast<u32>(w.t);
     beams[base + SAMPLE_VISITS] = w.visits;

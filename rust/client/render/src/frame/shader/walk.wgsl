@@ -78,9 +78,9 @@ fn hand(line: u32, zoom: u32, w: u32, other_zooms: bool) {
 }
 
 /// The ray `aim`, from `start`; or, where `line` is a beam ray's line and not `NONE`, from the
-/// root (`Until::Beam`), what was handed each node it goes into and the one it ends at written
-/// there at once, in place of a stack.
-fn walk(aim: Aim, start: Start, line: u32) -> Walked {
+/// root (`Until::Beam`), its beam's rays `spacing` apart (`cast::Spacing`), what was handed each
+/// node it goes into and the one it ends at written there at once, in place of a stack.
+fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
   let beam = line != NONE;
   let dir = ray_dir(aim.dir);
   let inv = aim.inv;
@@ -139,7 +139,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       } else if (other_zooms) {
         // No box of it read. A beam ray stops at a split too narrow to share, which
         // a box would decide: left.
-        let width = spacing_width(vec2<f32>(0.0, eye_f32(GRID + GRID_S)), squared(max(-lo, hi)));
+        let width = spacing_width(spacing, squared(max(-lo, hi)));
         if (beam && narrow(hi.x - lo.x, width)) {
           ends = 4u;
           hit_t = t;
@@ -154,7 +154,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         let past = vec3<u32>((asset.x >> BOX_BITS) & m, asset.y & m, (asset.y >> (2u * BOX_BITS)) & m) + vec3<u32>(1u);
         // A beam ray's width at its far corner: it stops at a split it may not
         // share with the rays about it, and clears one it clears by that.
-        let width = select(0.0, spacing_width(vec2<f32>(0.0, eye_f32(GRID + GRID_S)), squared(max(-lo, hi))), beam);
+        let width = select(0.0, spacing_width(spacing, squared(max(-lo, hi))), beam);
         let too_narrow = beam && narrow(hi.x - lo.x, width);
         let grown = NARROW * width;
         let box_lo = units(corner + box_step(first, u, 0u), og, roots) - vec3<f32>(grown);
