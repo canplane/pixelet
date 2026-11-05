@@ -1,7 +1,7 @@
 // pxl-render/sample_hit.wgsl
 
 // The samples' walk over the node cache alone (walk.wgsl), either observer's
-// (sample_eye.wgsl, sample_light.wgsl). One it leaves is listed for `sample_cs`, which goes on
+// (sample.eye.wgsl, sample.light.wgsl). One it leaves is listed for `sample_cs`, which goes on
 // from where it was left (pxl-engine `beam::SAMPLE_LEFT_T`); one that ends is put as that puts it
 // (sample_put.wgsl).
 

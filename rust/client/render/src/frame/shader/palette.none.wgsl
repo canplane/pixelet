@@ -1,4 +1,4 @@
-// pxl-render/no_palette.wgsl
+// pxl-render/palette.none.wgsl
 
 // A world asked by a pass that reads no asset's second word binds no palette (palette.wgsl
 // is the binding's form).

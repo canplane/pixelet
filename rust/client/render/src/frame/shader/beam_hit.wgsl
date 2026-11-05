@@ -1,7 +1,7 @@
 // pxl-render/beam_hit.wgsl
 
-// The beam rays' walk over the node cache alone (walk.wgsl), either observer's (beam_eye.wgsl,
-// beam_light.wgsl), its line kept as it goes, the node it ended or was left at among it. One it
+// The beam rays' walk over the node cache alone (walk.wgsl), either observer's (beam.eye.wgsl,
+// beam.light.wgsl), its line kept as it goes, the node it ended or was left at among it. One it
 // leaves is listed for `beam_cs` (beam.wgsl), which goes on from there writing what it asks; one
 // that ends is left as that leaves it.
 

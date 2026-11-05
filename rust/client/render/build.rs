@@ -33,6 +33,12 @@ mod word;
 fn main() {
     let dir = Path::new("src/frame/shader");
     let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("shader");
+    // Written afresh each run: a part no longer in src/frame/shader is not
+    // found in an older run's copy.
+    match std::fs::remove_dir_all(&out) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => panic!("the shader directory: {e}"),
+        _ => {}
+    }
     std::fs::create_dir_all(out.join("assembled")).expect("the shader directory");
     for entry in std::fs::read_dir(dir).expect("the shaders") {
         let path = entry.expect("a shader").path();

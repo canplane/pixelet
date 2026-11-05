@@ -1,7 +1,7 @@
 // pxl-render/sample_box.wgsl
 
 // Each sample of the camera grid, a thread each, written as a box for the raster's draw
-// (boxes.wgsl, the eye as sample_eye.wgsl takes it), the one across and up before it each
+// (boxes.wgsl, the eye as sample.eye.wgsl takes it), the one across and up before it each
 // sampled; and what lies about its face asked once a box (`ask`), as its pixels draw the
 // face (pxl-engine `raster`). The shadow map's is light_sample_box.wgsl,
 // which asks none.

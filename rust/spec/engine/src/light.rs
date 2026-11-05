@@ -698,7 +698,7 @@ impl Starts {
 /// slots' pass (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam_light.wgsl, light_cell.wgsl
+/// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
@@ -1007,7 +1007,7 @@ pub const fn lefts_at(size: u32) -> u32 {
     listed_at(size, LISTS)
 }
 
-/// The beam rays the same walk left (pxl-render beam_hit.wgsl, beam.wgsl, beam_light.wgsl), past
+/// The beam rays the same walk left (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl), past
 /// the samples left, as the eye's are (`beam::Grid::corners_at`): how many, copied in once it is
 /// done, then each, its X and its Y over 16 bits.
 pub const fn corners_left_at(size: u32) -> u32 {

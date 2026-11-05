@@ -84,7 +84,7 @@ The line runs between the world's state and its drawing:
   value apart at an edge. A value several pipelines read and decide at an edge
   is therefore exact: the light ray's start is in integers (light_aim.wgsl
   `texel_start`, read by light_beam, light, light_miss, light_miss_hit,
-  light_sample_box and sample_light); so is the light's band, which seven
+  light_sample_box and sample.light); so is the light's band, which seven
   passes read: its gap is whole texels summed in integers, times one word the
   host rounds (`light::band_texels2`, `W_BAND_SCALE`; tests/light.rs
   `every_pass_bands_a_tile_alike`).

@@ -1,5 +1,5 @@
 //! `sample_hit_cs` and `sample_cs` by hand (frame/shader/sample_hit.wgsl, sample.wgsl), the eye's
-//! and the light's (sample_eye.wgsl, sample_light.wgsl), answer as `cast::walk` from the root
+//! and the light's (sample.eye.wgsl, sample.light.wgsl), answer as `cast::walk` from the root
 //! answers the same ray: over the real world of tests/real_world, off what the beam's passes
 //! leave there, each sample's stop as the Rust's, and the next frame off the node cache the first
 //! left. The missed pixels' walks and the boxes the samples draw answer alike. Skipped where no
@@ -2356,7 +2356,7 @@ impl Keep<Inheritance> for Handed {
     }
 }
 
-/// `beam_hit_cs` then `beam_cs` for the light's map (beam_light.wgsl) over a node cache that
+/// `beam_hit_cs` then `beam_cs` for the light's map (beam.light.wgsl) over a node cache that
 /// holds part of what its beam rays meet: every beam ray stops where `cast::walk` from the root
 /// stops the same ray from the origin the pass laid, at the same node, hands on the same
 /// distance (`light::margin`, under a rounding a device may take, `margins`), and holds in its

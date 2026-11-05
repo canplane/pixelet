@@ -1,3 +1,5 @@
+// pxl-render/atmos_eye.unit.wgsl
+
 // The eye at one, for the exposure pass, which measures before it.
 
 fn exposure() -> f32 {

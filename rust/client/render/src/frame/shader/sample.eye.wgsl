@@ -1,4 +1,4 @@
-// pxl-render/sample_eye.wgsl
+// pxl-render/sample.eye.wgsl
 
 // The eye as the samples' walks take it (eye_bind.wgsl): each sample its thread's,
 // every one needed, a ray at the screen's tangents.

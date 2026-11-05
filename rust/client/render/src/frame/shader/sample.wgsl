@@ -1,8 +1,8 @@
 // pxl-render/sample.wgsl
 
-// The samples `sample_hit_cs` left, either observer's (sample_eye.wgsl, sample_light.wgsl),
+// The samples `sample_hit_cs` left, either observer's (sample.eye.wgsl, sample.light.wgsl),
 // walked on from where it left them asking the world (ask.wgsl, `beam::SAMPLE_LEFT_T`), a thread
-// each at its place in their list (sample_eye.wgsl, sample_light.wgsl).
+// each at its place in their list (sample.eye.wgsl, sample.light.wgsl).
 
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn sample_cs(@builtin(global_invocation_id) id: vec3<u32>) {

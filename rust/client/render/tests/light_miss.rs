@@ -5,7 +5,7 @@
 //! that list, each slot's word as the world's again; and where
 //! bricks changed between the frames, the next frame's after the app's forgetting (`forget_cs`)
 //! as the changed world's. Every walk resumes off its cell's line, the cells laid as the cast
-//! lays them each frame (beam_light.wgsl, light_cell.wgsl): the next frame's where the walk over
+//! lays them each frame (beam.light.wgsl, light_cell.wgsl): the next frame's where the walk over
 //! the node cache left it, which its slot's word holds; the first frame's at 0, the map's words
 //! laid none. Skipped where no adapter answers.
 
@@ -549,7 +549,7 @@ const SKIPPED_EVERY: u32 = 11;
 /// The cast the head names, its epoch begun with it: every tile read.
 const CAST: u32 = 7;
 
-/// The beam's lines and each cell's start laid in `list` as the cast lays them (beam_light.wgsl,
+/// The beam's lines and each cell's start laid in `list` as the cast lays them (beam.light.wgsl,
 /// light_cell.wgsl), every tile read, its beam over a table of its own.
 fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;

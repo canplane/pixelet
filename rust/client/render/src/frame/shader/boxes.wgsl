@@ -2,7 +2,7 @@
 
 // A stopped sample's box written for the raster's draw (raster.wgsl), the eye's samples'
 // and the light's alike, over the samples' words (resume.wgsl `beams`) and their observer
-// (sample_eye.wgsl, sample_light.wgsl) (pxl-engine raster.rs): the boxes and the raster's
+// (sample.eye.wgsl, sample.light.wgsl) (pxl-engine raster.rs): the boxes and the raster's
 // args.
 
 @group(0) @binding(14) var<storage, read_write> boxes: array<u32>;

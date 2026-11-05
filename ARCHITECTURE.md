@@ -578,8 +578,8 @@ Shadows are read off the shadow map, the world's depth from the sun in a square
 box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
 and held in a map slot by its index modulo the map's side (`pxl-engine
 light.rs` `Light`). The sun is an observer as the eye is: one set of passes,
-written once over a part each observer gives (pxl-render `sample_eye.wgsl`,
-`sample_light.wgsl` and the like), asks the world, each tile of the box at one zoom, its band: the
+written once over a part each observer gives (pxl-render `sample.eye.wgsl`,
+`sample.light.wgsl` and the like), asks the world, each tile of the box at one zoom, its band: the
 camera grid's cell zoom at the tile column's nearest point to the eye. This
 contract was changed on purpose. The light asked at the eye's zooms, so a
 shadow had the detail of what it falls on, and a tile was cast again as the eye

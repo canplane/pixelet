@@ -113,8 +113,8 @@ pub(super) struct CastBuffers {
     beam_hit_built: Pipeline,
     beam_hit_group: u32,
     beam_left: u32,
-    /// The same passes for the shadow map, an entry each (beam_light.wgsl,
-    /// light_cell.wgsl, sample_light.wgsl): the cells over the same group, the
+    /// The same passes for the shadow map, an entry each (beam.light.wgsl,
+    /// light_cell.wgsl, sample.light.wgsl): the cells over the same group, the
     /// beam rays and the samples over `ASK_GROUP`.
     light_beam_built: Pipeline,
     light_cells_built: Pipeline,

@@ -87,7 +87,7 @@ pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
 pub const SHADER_WAY_RETURN: u32 = 38;
 /// The camera grid's beam rays `SHADER_BEAM_HIT` left, a thread each, walked asking the
-/// world, by hand (beam.wgsl, beam_eye.wgsl): its one compute entry.
+/// world, by hand (beam.wgsl, beam.eye.wgsl): its one compute entry.
 pub const SHADER_BEAM: u32 = 39;
 /// Where each of the camera grid's cells' rays start off its beam rays, by hand
 /// (cell.wgsl): its one compute entry.
@@ -190,8 +190,8 @@ pub const SHADER_HIT_FACES: u32 = 73;
 pub const SHADER_BOX_ARGS: u32 = 74;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
-/// `SHADER_SAMPLE_BOX` for the light's map (beam_light.wgsl,
-/// light_cell.wgsl, sample_light.wgsl, light_sample_box.wgsl).
+/// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl,
+/// light_cell.wgsl, sample.light.wgsl, light_sample_box.wgsl).
 pub const SHADER_LIGHT_BEAM: u32 = 75;
 pub const SHADER_LIGHT_CELL: u32 = 76;
 pub const SHADER_LIGHT_SAMPLE: u32 = 77;
@@ -289,7 +289,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_bind",
         "atmos_lut",
         "atmos_ground",
-        "atmos_eye_unit",
+        "atmos_eye.unit",
         "atmos_light",
         "atmos_pass",
         "atmos_march",
@@ -304,7 +304,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_bind",
         "atmos_lut",
         "atmos_sky",
-        "atmos_eye_unit",
+        "atmos_eye.unit",
         "atmos_march",
         "atmos_light",
         "atmos_view",
@@ -341,7 +341,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
-        "atmos_eye_unit",
+        "atmos_eye.unit",
         "atmos_pass",
         "atmos_march",
         "atmos_irradiance",
@@ -407,7 +407,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "brick",
         "level",
-        "no_palette",
+        "palette.none",
         "world_rule",
         "world",
         "decor_record",
@@ -528,7 +528,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "beam_walk",
-        "beam_eye",
+        "beam.eye",
         "beam",
     ],
     // SHADER_CELL
@@ -577,7 +577,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world",
         "world_split",
         "ask",
-        "sample_eye",
+        "sample.eye",
         "sample_put",
         "sample",
     ],
@@ -628,7 +628,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_node",
         "side",
         "resume",
-        "sample_eye",
+        "sample.eye",
         "boxes",
         "sample_box",
     ],
@@ -645,7 +645,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "brick",
         "level",
-        "no_palette",
+        "palette.none",
         "world_rule",
         "world",
         "world_split",
@@ -791,7 +791,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_list",
         "beam_walk",
-        "beam_light",
+        "beam.light",
         "beam",
     ],
     // SHADER_LIGHT_CELL
@@ -824,7 +824,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_resume",
         "light_list",
-        "sample_light",
+        "sample.light",
         "sample_put",
         "sample",
     ],
@@ -839,7 +839,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_resume",
         "light_list",
-        "sample_light",
+        "sample.light",
         "boxes",
         "light_sample_box",
     ],
@@ -852,7 +852,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "resume",
         "walk",
-        "sample_eye",
+        "sample.eye",
         "sample_put",
         "sample_hit",
     ],
@@ -877,7 +877,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "resume",
         "walk",
-        "beam_eye",
+        "beam.eye",
         "beam_hit",
     ],
     // SHADER_LIGHT_MISS_HIT
@@ -904,7 +904,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_resume",
         "light_list",
-        "sample_light",
+        "sample.light",
         "sample_put",
         "sample_hit",
     ],
@@ -918,7 +918,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "light_aim",
         "light_list",
-        "beam_light",
+        "beam.light",
         "beam_hit",
     ],
 ];

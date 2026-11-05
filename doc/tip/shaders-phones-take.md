@@ -52,8 +52,8 @@ own Vulkan driver. Each is a different compiler with its own faults.
   or the light's map in every method by the pass's head, so every answer came
   through a branch. A pass both observers take is a shader each, built from
   the same entry and the observer's own part (`beam_hit_cs` and `beam_cs` with
-  beam_eye.wgsl or beam_light.wgsl, `sample_hit_cs` and `sample_cs` with
-  sample_eye.wgsl or sample_light.wgsl, render build.rs): choose when the
+  beam.eye.wgsl or beam.light.wgsl, `sample_hit_cs` and `sample_cs` with
+  sample.eye.wgsl or sample.light.wgsl, render build.rs): choose when the
   shader is put together, not inside.
 - **A table of vectors read at a place found as it runs.** The raster's
   `const array<vec3f, 72>` of box corners, indexed by its axis and vertex,

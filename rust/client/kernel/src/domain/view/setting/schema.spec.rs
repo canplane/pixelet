@@ -131,7 +131,8 @@ impl AoMode {
 ///           control is (rust/client/kernel/src/domain/view/frame/resolution.rs).
 ///           The lattice changes no pixel drawn.
 ///   fixed — the display's, on the cell's lattice, whatever the frames cost.
-///   low   — one, on the cell's lattice.
+///   low   — half the display's each way, auto's floor (RES_MIN), on the
+///           cell's lattice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ResMode {

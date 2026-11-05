@@ -91,7 +91,7 @@ pub struct Grid {
 /// the very f32 at every lattice (`Grid::sample`); and its reciprocal, which
 /// a tangent is scaled by to count samples (`Grid::sample_before`), the
 /// same constant on the CPU and the GPU (pxl-render cast.wgsl
-/// `sample_before`, sample_eye.wgsl).
+/// `sample_before`, sample.eye.wgsl).
 pub const SAMPLE_SPACING: f32 = CELL / SAMPLE as f32;
 pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 

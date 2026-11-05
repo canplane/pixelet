@@ -1,4 +1,4 @@
-//! The light's cells' starts (beam_light.wgsl `beam_hand`, light_cell.wgsl
+//! The light's cells' starts (beam.light.wgsl `beam_hand`, light_cell.wgsl
 //! `light_cell_cs`) against pxl-engine `light::margin` of `Light::spacing`: over the real world
 //! of tests/real_world, each beam ray's hand and each cell's `CELL_T` as the engine takes them
 //! off where the engine's walk of that ray from the origin the pass laid stops. Skipped where

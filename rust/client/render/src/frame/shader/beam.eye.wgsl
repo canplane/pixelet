@@ -1,4 +1,4 @@
-// pxl-render/beam_eye.wgsl
+// pxl-render/beam.eye.wgsl
 
 // The eye as its beam rays' walks take it (eye_bind.wgsl): a beam ray a corner of the camera
 // grid (pxl-engine `beam::Grid::corners`), every one needed, each its thread's, its line in the

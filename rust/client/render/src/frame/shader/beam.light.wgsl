@@ -1,4 +1,4 @@
-// pxl-render/beam_light.wgsl
+// pxl-render/beam.light.wgsl
 
 // The shadow map as its beam rays' walks take it, off its list (light_list.wgsl): a beam ray
 // every `light::BEAM` texels, `BEAM_WINDOW` of them before the box's first, taken off what the

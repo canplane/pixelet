@@ -38,6 +38,12 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Use a plural for a collection, and a unit suffix on a length (`_u` the
   world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
   ground), on the value where a person sees it (`29.0 m`).
+- Name a symmetric pair's part, one side of a base both share, with the base,
+  a dot and its side, as `x.native.ts` marks a variant (`sample.eye.wgsl`,
+  `sample.light.wgsl` beside `sample.wgsl`), and a stand-in that replaces a part
+  at assembly with the part, a dot and what it stands in as
+  (`atmos_eye.unit.wgsl` for `atmos_eye.wgsl` at exposure 1, `palette.none.wgsl`
+  for `palette.wgsl`); the user's decisions of 2026-11-05.
 - Name a new concept the parts share with the user, and use the names already
   chosen with the user:
 

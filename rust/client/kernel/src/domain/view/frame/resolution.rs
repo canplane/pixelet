@@ -6,7 +6,7 @@
 //! them up to the canvas's, the display's (pxl-render gpu/finish.rs): render
 //! resolution apart from display resolution where a screen outgrows its GPU
 //! (Unreal's screen percentage). `fixed` draws
-//! whole, `low` a device pixel a CSS pixel, each with the camera grid's
+//! whole, `low` at `RES_MIN`, `auto`'s floor, each with the camera grid's
 //! beam rays on the cell's own lattice, and `auto` one of `RES_STEPS`
 //! steps between whole and `RES_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids, and a lattice up to
@@ -261,13 +261,13 @@ fn share(step: i32) -> f64 {
     )
 }
 
-/// The share of the display's pixels, each way, the world is drawn at on a
-/// display of `device` pixels a CSS pixel: the setting's, `auto`'s by its step.
-fn scale(device: f64) -> f64 {
+/// The share of the display's pixels, each way, the world is drawn at: the
+/// setting's, `auto`'s by its step.
+fn scale() -> f64 {
     match settings_store().res {
         ResMode::auto => share(state().step),
         ResMode::fixed => 1.0,
-        ResMode::low => 1.0 / device,
+        ResMode::low => param::RES_MIN,
     }
 }
 
@@ -309,7 +309,7 @@ fn world() -> Option<&'static mut Surface> {
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {
-        surface_role::WORLD => device * scale(device),
+        surface_role::WORLD => device * scale(),
         surface_role::PREVIEW => {
             device.min(param::CASE_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1)))
         }

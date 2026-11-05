@@ -160,7 +160,7 @@ impl Gpu {
     }
 
     /// The light's beam as the cast runs it over the map `size` texels a side (beam_hit.wgsl,
-    /// beam.wgsl, beam_light.wgsl): the walk over the node cache alone, a thread a beam ray of
+    /// beam.wgsl, beam.light.wgsl): the walk over the node cache alone, a thread a beam ray of
     /// the whole map, as where the head's cast begins its epoch (light_list.wgsl `light_item`),
     /// then the beam rays it left walked asking the world, their count copied into `list`
     /// between, as gpu/ray/cast.rs copies it. `world` binds the walk that asks: the list at 8,
@@ -410,7 +410,7 @@ impl LightBox {
 }
 
 /// The margins a device may take for `light::margin` of a beam `width` wide, a rounding each,
-/// named: the engine's, and the product fused into the sum (beam_light.wgsl `beam_hand`). The
+/// named: the engine's, and the product fused into the sum (beam.light.wgsl `beam_hand`). The
 /// width is the host's word (`Light::width`), so nothing else rounds apart.
 pub fn margins(width: f32) -> [(&'static str, f32); 2] {
     let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));

@@ -3,7 +3,7 @@
 // A beam ray walked from its start, the world's root or where its walk over the node cache left
 // it (beam_hit.wgsl), to the first cell that fills or lacks, or the first split too narrow to
 // share (`cast::walk`, `Until::Beam`), through the node cache writing what it asks (ask.wgsl),
-// either observer's (beam.wgsl, beam_eye.wgsl, beam_light.wgsl). Its line is left as it goes
+// either observer's (beam.wgsl, beam.eye.wgsl, beam.light.wgsl). Its line is left as it goes
 // (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at that
 // node's zoom, read back where the walk pops to its child, in place of a stack, and where it
 // starts under the root.

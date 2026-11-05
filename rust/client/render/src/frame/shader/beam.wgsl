@@ -1,6 +1,6 @@
 // pxl-render/beam.wgsl
 
-// The beam rays `beam_hit_cs` left, either observer's (beam_eye.wgsl, beam_light.wgsl), each
+// The beam rays `beam_hit_cs` left, either observer's (beam.eye.wgsl, beam.light.wgsl), each
 // walked on from where that left it asking the world (beam_walk.wgsl, ask.wgsl). A thread each
 // at its place in their list.
 

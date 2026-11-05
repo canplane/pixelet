@@ -47,6 +47,20 @@ and ended on whether a program outside this tree can take xpute today.
   `3baa9e9fd5` (originally `98f298bcb9`), is `small`'s; what it was and how
   it was fixed is in
   [taking rust-gpu out](../experiment/20261104-taking-rust-gpu-out/journal.md).
+- **Frame pacing stays in xpute, whole** (`@xpute/host` `sched/frame_pacing.ts`),
+  as the agents advised and the user took. The display's part, the refresh
+  read off the animation frames and turns a whole number of refreshes apart,
+  is every page program's; the rule of a turn interactive after input or
+  where the guest asks the next edge, else spanning `batch_frames`, is every
+  interactive page program's; the numbers (`pace_hz`, `margin_share`,
+  `settle_ms`, `batch_frames`) are the program's and come in through
+  `FramePacingConfig` at boot. The strobe knows only `SchedulingPolicy`, so
+  the 20261030 rule, pacing a policy injected at boot, holds. It is split
+  only when a second program needs another rhythm than input and the asked
+  edge.
+- **`Reading::take` keeps its name**: Rust's standard library has `take` for
+  taking out what a holder holds, or nothing (`Option::take`, `HashSet::take`,
+  `OnceCell::take`), and no `take` that waits sets a `try_` one apart.
 - **xpute is not fixed now.** Running the web and the app comes after `main`
   and `small` are merged.
 

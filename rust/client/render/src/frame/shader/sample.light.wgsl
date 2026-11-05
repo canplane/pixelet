@@ -1,4 +1,4 @@
-// pxl-render/sample_light.wgsl
+// pxl-render/sample.light.wgsl
 
 // The shadow map as the samples' walks take it, off its list (light_list.wgsl): a sample every
 // `LIGHT_SAMPLE` slots, taken off what the cast casts, each ray at its tile's band.

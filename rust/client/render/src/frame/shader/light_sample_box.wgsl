@@ -1,7 +1,7 @@
 // pxl-render/light_sample_box.wgsl
 
 // Each sample of the shadow map the cast takes, a thread each, written as a box for the
-// raster's draw (boxes.wgsl, the map as sample_light.wgsl takes it), from where box texel
+// raster's draw (boxes.wgsl, the map as sample.light.wgsl takes it), from where box texel
 // (0, 0)'s ray starts and none about an eye, as every ray starts on the near plane
 // (pxl-engine light.rs, raster.rs); none asks its faces.
 

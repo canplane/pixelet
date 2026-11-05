@@ -69,6 +69,30 @@ only once the ground's textures have landed (whether they had was a confound bef
   where light_cell runs, p50 −1.5 to −2 ms. The moon's fill gated where its air
   reaches; its direct light kept (the bound proves the fill only).
 
+- **Pixel-bound at full resolution** (main 82efe02944, `res` fixed 1080×1969 against
+  low, ×0.38 a side; the phone hot, thermal 1; ×2 alternating): world 13.7 to 4.5,
+  light_receivers 11.5 to 2.0, px, sraster, resolve and miss fall with the pixels;
+  beam_hit, beam, sample_hit, sample and the light's walks (the angle lattice's) do
+  not. Busy halves; fps 21.6 to 36.4 shadows off, 12.1 to 21.2 on. Of a hot shadows-on
+  frame's ~80 ms, ~38 are per pixel and ~25 the lattice's. No scale between the two
+  without code.
+- **light_receivers is the stands' stores** (bisected with scratch variants of
+  light_mark): footprint off and a store without its read change nothing; no stand
+  gives 1.05 ms of 7–8. Every drawn pixel's thread stores into a few hundred tile
+  words, 2.1 M atomic stores serialized.
+
+- **The receivers' stands once a tile a workgroup** (repeats.patch on c83fd6f67b, the
+  shelf, the S23 hot, ×2 alternating): `light_receivers` 14.4 to 4.4 ms with an actor
+  walking, busy −10 ms; shadow edges and exposure the same. A root line shared by
+  every beam ray bought nothing (`beam_hit` even) and goes.
+- **The page's GPU memory, read from the code** (main 417494fe4a): 437 MiB on the Mac
+  (428 on the S23) with shadows never on, 565 once on (none of it given back), ~780
+  at every cap with load transients — under the 1.4–1.5 GB Safari's GPU process died
+  at, the rest unaccounted. Five loops or GPU-written counts had no hard cap,
+  way_free.wgsl:31 the worst (a one-lane walk of the ways pool that leaves only at
+  depth 0). After our pages Safari's GPU process stayed stuck exiting and the Mac's GPU
+  at 100%, Finder, the Dock and the menu bar frozen.
+
 ## Did not work
 
 - **The receivers' stands in workgroup memory** (light_propagate): `light_receivers`
