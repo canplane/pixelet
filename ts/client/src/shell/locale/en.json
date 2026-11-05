@@ -213,12 +213,12 @@
     }
   },
   "progress": {
+    "app": "Downloading the app…",
     "gpu": "Connecting to WebGPU…",
     "offline": "Waiting for the network…",
     "server": "Waiting for the server…",
-    "source": "Checking the server…",
     "location": "Waiting for your location…",
-    "shaders": "Generating shaders…",
+    "shaders": "Compiling shaders…",
     "area": "Loading area…"
   },
   "failed": {

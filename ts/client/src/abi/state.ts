@@ -3,13 +3,15 @@
 /** What the client reports beside the kernel and the shell shows: numbers
  * both read, as a kernel's uapi headers are, so neither reaches into the other. */
 
-/** Where the client's boot stands: starting, loading (the kernel runs, a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
-export const BOOT_STARTING = 0;
-export const BOOT_LOADING = 1;
-export const BOOT_STARTED = 2;
-export const BOOT_FAILED = 3;
-export const BOOT_TERMINATED = 4;
+/** Where the client's boot stands: opening (the guest's module fetched and compiled, before any GPU is asked for), starting (the kernel runs, while a GPU and the source are asked for), loading (a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
+export const BOOT_OPENING = 0;
+export const BOOT_STARTING = 1;
+export const BOOT_LOADING = 2;
+export const BOOT_STARTED = 3;
+export const BOOT_FAILED = 4;
+export const BOOT_TERMINATED = 5;
 export type Boot =
+  | typeof BOOT_OPENING
   | typeof BOOT_STARTING
   | typeof BOOT_LOADING
   | typeof BOOT_STARTED

@@ -213,12 +213,12 @@
     }
   },
   "progress": {
+    "app": "正在下載應用程式。",
     "gpu": "正在連線 WebGPU。",
     "offline": "正在等待網路連線。",
     "server": "正在等待伺服器連線。",
-    "source": "正在確認伺服器資訊。",
     "location": "正在等待位置資訊。",
-    "shaders": "正在產生著色器。",
+    "shaders": "正在編譯著色器。",
     "area": "正在載入空間。"
   },
   "failed": {

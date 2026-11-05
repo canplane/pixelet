@@ -7,6 +7,7 @@ import { Message } from "@/abi/cmd.spec.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
+  BOOT_OPENING,
   BOOT_STARTED,
   BOOT_STARTING,
   BOOT_TERMINATED,
@@ -60,7 +61,8 @@ test("coverOf - before it ran: failed where it will not, progress while it waits
     [{ gpu: GPU_WAITING }, "progress.gpu"],
     [{ online: false }, "progress.offline"],
     [{ source: SOURCE_FAILING }, "progress.server"],
-    [{ gpu: GPU_PRESENT }, "progress.source"],
+    // The source is asked for beside the GPU, no step of its own.
+    [{ gpu: GPU_PRESENT }, "progress.shaders"],
   ] as const) {
     expect(of(s)).toEqual({
       kind: "progress",
@@ -68,6 +70,14 @@ test("coverOf - before it ran: failed where it will not, progress while it waits
       share: expect.any(Number),
     });
   }
+});
+
+test("coverOf - opening the guest: its own step, before any GPU is asked for", () => {
+  expect(coverOf({ ...starting, boot: BOOT_OPENING })).toEqual({
+    kind: "progress",
+    of: "progress.app",
+    share: expect.any(Number),
+  });
 });
 
 test("coverOf - loading, the world under it: what it waits on, then a panic if broken", () => {

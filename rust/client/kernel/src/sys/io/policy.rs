@@ -4,8 +4,11 @@
 //! ranked against the others. It changes how soon the view is right, never
 //! what it is.
 //!
-//! 1. By layer, the order a view builds up: terrain, then the catalog assets
-//!    decor draws with, then places. The objects' shards ride the ground's
+//! 1. By layer, the order a view builds up: terrain, then the pictures before
+//!    the models (a picture, the Earth's sphere, the moon's face, the ground's
+//!    pack or a skin, is drawn whole wherever it shows; a model is one thing
+//!    decor draws), the Earth's tiles with the pictures as the far view's,
+//!    then the catalog's models, then places. The objects' shards ride the ground's
 //!    order: each of the ground's shells, seen then unseen, is followed by the
 //!    objects' of the same shell, so what is placed in view comes before
 //!    ground out of it.
@@ -19,8 +22,10 @@
 use crate::sys::io::demand::Order;
 use crate::sys::io::demand::{Ask, Stream};
 use crate::sys::io::failure::Failure;
+use crate::sys::io::loader::of_id;
 use crate::sys::io::param;
 use crate::sys::io::request::{Fault, Rank, Serve};
+use crate::sys::load::LoadKind;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 use xpute_kit::status::errno::Errno;
@@ -32,7 +37,10 @@ const SHELLS: u8 = 2;
 const TERRAIN: u8 = 0;
 const OBJECT: u8 = TERRAIN + 1;
 const GROUND_SHELL: u8 = 2;
-const ASSET: u8 = TERRAIN + SHELLS * GROUND_SHELL;
+/// The pictures, and the Earth's tiles seen then unseen: what decides it is a
+/// picture's or a model's file, not which file.
+const PICTURE: u8 = TERRAIN + SHELLS * GROUND_SHELL;
+const ASSET: u8 = PICTURE + SHELLS;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
@@ -63,6 +71,7 @@ fn tile(layer: Stream, id: u64, ask: Ask) -> Rank {
     let (class, detail) = match layer {
         Stream::terrain => (TERRAIN + unseen * GROUND_SHELL, zoom()),
         Stream::object => (OBJECT + unseen * GROUND_SHELL, 0),
+        Stream::earth => (PICTURE + unseen, zoom()),
         _ => (PLACE + unseen, zoom()),
     };
     Rank {
@@ -79,7 +88,10 @@ impl Serve for Policy {
                 tile(stream, id, ask)
             }
             Stream::asset => Rank {
-                class: ASSET,
+                class: match of_id(id) {
+                    Some((LoadKind::Image, _)) => PICTURE,
+                    _ => ASSET,
+                },
                 dist: 0.0,
                 detail: 0,
             },

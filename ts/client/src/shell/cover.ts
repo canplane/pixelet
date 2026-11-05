@@ -4,6 +4,7 @@ import { Message } from "@/abi/cmd.spec.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
+  BOOT_OPENING,
   BOOT_STARTED,
   BOOT_STARTING,
   BOOT_TERMINATED,
@@ -93,15 +94,18 @@ function blockOf(s: Standing): Cover | null {
   return null;
 }
 
-/** What the world being made waits on, once nothing blocks it. */
+/** What the world being made waits on, once nothing blocks it: the pipelines
+ * the renderer makes as soon as a GPU answers, the source asked for beside
+ * them; then the view's place and its area. */
 function waitOf(s: Standing): Cover {
   if (s.made < 1) return progress(s, "progress.shaders");
   return progress(s, s.placed ? "progress.area" : "progress.location");
 }
 
-/** The one place that says it. Broken once the kernel ran, a panic. Before the
- * app shows, failed or progress, which holds until the boot shows it
- * (abi/boot.ts), so neither ever comes over the app. None once it shows. */
+/** The one place that says it, step by step: the guest opened, a GPU and the
+ * source asked for, the world made. Broken once the kernel ran, a panic.
+ * Before the app shows, failed or progress, which holds until the boot shows
+ * it (abi/boot.ts), so neither ever comes over the app. None once it shows. */
 export function coverOf(s: Standing): Cover | null {
   switch (s.boot) {
     case BOOT_TERMINATED:
@@ -113,6 +117,8 @@ export function coverOf(s: Standing): Cover | null {
     case BOOT_LOADING:
       return panicOf(s) ?? blockOf(s) ?? waitOf(s);
     case BOOT_STARTING:
-      return blockOf(s) ?? progress(s, "progress.source");
+      return blockOf(s) ?? waitOf(s);
+    case BOOT_OPENING:
+      return progress(s, "progress.app");
   }
 }

@@ -47,6 +47,7 @@ import { GPU_STATE, gpu_present, set_gpu } from "@/port/gpu.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
+  BOOT_OPENING,
   BOOT_STARTED,
   BOOT_STARTING,
   BOOT_TERMINATED,
@@ -58,7 +59,7 @@ import { snapshot_posted } from "@/port/snapshot.ts";
 import * as snapshot from "@/port/snapshot.ts";
 
 let called = false;
-let state: Boot = BOOT_STARTING;
+let state: Boot = BOOT_OPENING;
 const listeners = new Listeners();
 
 function set(next: Boot): void {
@@ -112,13 +113,14 @@ export function boot(): void {
     },
     (err) => {
       console.error("[boot] the client did not start:", err);
-      if (state === BOOT_STARTING) set(BOOT_FAILED);
+      if (state === BOOT_OPENING || state === BOOT_STARTING) set(BOOT_FAILED);
     },
   );
 }
 
-/** Whether the client can run: settled once the kernel runs, a GPU has answered
- * and the world's source is declared; never where no GPU answers. */
+/** Whether the client can run: starting once the guest is open and the kernel
+ * runs; settled once a GPU has answered and the world's source is declared;
+ * never where no GPU answers. */
 async function open(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const sizes = MACHINE.mem_bytes;
@@ -145,6 +147,7 @@ async function open(): Promise<void> {
     onterminated: () => set(BOOT_TERMINATED),
   });
   set_host(booted, pacing);
+  if (state === BOOT_OPENING) set(BOOT_STARTING);
   sensor.listen(SENSOR_LISTENER);
   gpu.watch((state) => set_gpu(GPU_STATE[state]));
   online.watch(set_online);

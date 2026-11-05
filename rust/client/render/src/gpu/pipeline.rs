@@ -37,10 +37,8 @@ const PIPELINE_CAP: usize = 96;
 
 pub struct Pipelines {
     modules: [u32; SHADERS as usize],
-    /// The shaders whose module is made, the first `modules_made` by kind,
-    /// and their sources' bytes.
+    /// The shaders whose module is made, the first `modules_made` by kind.
     modules_made: u32,
-    module_bytes: usize,
     layouts: [(u64, Layout); LAYOUTS],
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
@@ -50,7 +48,8 @@ pub struct Pipelines {
     /// records named it. Let go with the renderer, on a lost device alone,
     /// whose host writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
-    /// The first `made_cnt` pipelines are made.
+    /// How many of the pipelines are made, in whatever order WebGPU made
+    /// them, as `made` last counted.
     made_cnt: usize,
 }
 
@@ -68,17 +67,11 @@ fn fold(key: u64, word: u32) -> u64 {
     (key ^ word as u64).wrapping_mul(0x100000001b3)
 }
 
-/// Every shader's sources' bytes, which the modules' half of `share` counts.
-fn all_module_bytes() -> usize {
-    (0..SHADERS).map(|kind| src(kind).len()).sum()
-}
-
 impl Pipelines {
     pub fn new() -> Self {
         Pipelines {
             modules: [0; SHADERS as usize],
             modules_made: 0,
-            module_bytes: 0,
             layouts: [(0, Layout::default()); LAYOUTS],
             layout_len: 0,
             pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
@@ -103,7 +96,6 @@ impl Pipelines {
             }
             self.modules[self.modules_made as usize] = g.shader(code);
             self.modules_made += 1;
-            self.module_bytes += code.len();
             turn_bytes = Some(turn_bytes.unwrap_or(0) + code.len());
         }
         self.modules_made == SHADERS
@@ -250,25 +242,26 @@ impl Pipelines {
         self.made_cnt == self.pipeline_len && self.pipeline_len != 0
     }
 
-    /// The pipelines whose word says they are made since this last ran,
-    /// counted; whether all are (`is_made`).
+    /// The pipelines whose word says they are made, counted; whether all
+    /// are (`is_made`).
     pub fn made(&mut self) -> bool {
-        while self.made_cnt < self.pipeline_len && signaled(&self.words[self.made_cnt], TICKET) {
-            self.made_cnt += 1;
-        }
+        self.made_cnt = self.words[..self.pipeline_len]
+            .iter()
+            .filter(|w| signaled(w, TICKET))
+            .count();
         self.is_made()
     }
 
     /// How much of what the renderer makes before it draws is made, 0 to 1:
-    /// the modules by their sources' bytes, the first half; the pipelines
-    /// made of those asked for, the second, none before they are asked.
+    /// the pipelines made of those asked for, 0 before any is asked.
     pub fn share(&self) -> f64 {
-        let modules = self.module_bytes as f64 / all_module_bytes().max(1) as f64;
-        let pipelines = if self.pipeline_len == 0 {
-            0.0
-        } else {
-            self.made_cnt as f64 / self.pipeline_len as f64
-        };
-        (modules + pipelines) / 2.0
+        if self.pipeline_len == 0 {
+            return 0.0;
+        }
+        self.made_cnt as f64 / self.pipeline_len as f64
     }
 }
+
+#[cfg(test)]
+#[path = "pipeline.test.rs"]
+mod test;
