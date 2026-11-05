@@ -7,8 +7,8 @@
 // pixel's words whole, so the mark never outlives the pass.
 
 const WALK_PASS: u32 = MISSED_PASS;
-const VISITS_TALLY: u32 = EYE_MISS_TALLY;
-const ASKED_TALLY: u32 = EYE_ASKED_TALLY;
+const VISITS_COUNT: u32 = EYE_MISS_COUNT;
+const ASKED_COUNT: u32 = EYE_ASKED_COUNT;
 
 /// The hit at pixel `id`, entered through `face`, kept for what lies about that face to be
 /// asked once a hit (miss_word.wgsl `hit_put`): numbered as the walks take them
@@ -35,7 +35,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
   let aim = px_aim(id, size);
   let start = px_start(aim, id, size);
-  let w = walk_asking(aim.origin, aim.dir, aim.t_max, aim.range, start);
+  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
   let face = face_of(aim, w);
   var faces = 0u;
   // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both
@@ -52,7 +52,7 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>) {
 /// marked returning at once, dispatched only where the list was full
 /// (`ray::MISS_ARGS_WHOLE`), after the list's walk, so a listed pixel it finds is no longer
 /// marked.
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
 fn miss_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let size = textureDimensions(rays);
   if (id.x >= size.x || id.y >= size.y) {

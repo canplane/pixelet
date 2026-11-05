@@ -7,6 +7,11 @@
 //! visibility from its shader and from nowhere else. A shader's parts follow
 //! constant.wgsl.
 
+/// A shader's vertex entry points, a pipeline naming one by its index (record.rs `Head`), so
+/// build.rs reads which of them reads each binding. The shell holds the same list against
+/// the same numbers.
+pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
+
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;

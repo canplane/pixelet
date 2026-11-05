@@ -5,7 +5,7 @@
 // world finds what is handed it from the top (`world_root`). The pyramid's words all atomic, as
 // a slot's key is exchanged to claim it: no compare-and-swap, which Safari's WGSL compiler
 // writes Metal for that does not compile (doc/experiment/20261103-shaders-on-two-phones). A
-// pass names what its walks count and are tagged by (`WALK_PASS`, `VISITS_TALLY`, `ASKED_TALLY`).
+// pass names what its walks count and are tagged by (`WALK_PASS`, `VISITS_COUNT`, `ASKED_COUNT`).
 
 @group(0) @binding(9) var<storage, read_write> pyramid: array<atomic<u32>>;
 
@@ -71,7 +71,7 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
 /// The node `c` at `zoom`, handed `handed`, asked at `zooms`: off the slot that keeps it, unless
 /// this pass is still writing it; else of the world, and kept where this walk claims a slot
 /// (pxl-engine pyramid.rs, its claim `claim` here). What it hands its children: the slot's where one kept it. One asked of
-/// the world counts in `ASKED_TALLY` where `counts`.
+/// the world counts in `ASKED_COUNT` where `counts`.
 fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
   let tag = walk_tag();
   let want = zooms << TAG_BITS;
@@ -119,8 +119,8 @@ fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bo
       key = pyramid_word(ENTRIES_AT + to * ENTRY_WORDS);
     }
   }
-  if (counts && pyramid_word(TALLY_ON) != 0u) {
-    atomicAdd(&pyramid[ASKED_TALLY], 1u);
+  if (counts && pyramid_word(COUNT_ON) != 0u) {
+    atomicAdd(&pyramid[ASKED_COUNT], 1u);
   }
   let a = world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
   if (to != NONE && key != CLAIMED) {
@@ -165,15 +165,14 @@ fn zooms_asked(
   }
   let far_v = max(-lo, hi);
   let near_v = min(max(lo, vec3<f32>(0.0)), hi);
-  return zoom_at(dot(far_v, far_v), range) | (zoom_at(dot(near_v, near_v), range) << ZOOM_BITS);
+  return zoom_at(squared(far_v), range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
 }
 
-/// The ray from `origin` aimed `aimed`, reaching `t_max` at the zooms `range` holds it to, from
+/// The ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to, from
 /// `start` (`cast::walk`, `Until::Opaque`): its nodes asked here, not counting the nodes its
 /// beam ray visited. Holding across a query only what no node gives again.
-fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, start: Start) -> Walked {
+fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, start: Start) -> Walked {
   let dir = ray_dir(aimed);
-  let inv = ray_inv(dir);
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   var t = start.t;
@@ -185,7 +184,8 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = t_max;
-  // A float gone wrong ends here, at its reach; the walks of tests/sample.rs take far fewer.
+  // A float gone wrong ends here, at its reach, as `cast::walk_at_most` ends one; the walks of
+  // tests/sample.rs take far fewer.
   for (var step = 0u; step < STEPS_MOST; step += 1u) {
     // Asked first, holding across it only what no node gives again.
     var kind = KIND_NONE;
@@ -227,14 +227,14 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>
         if (k == 0u || min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
           let near = select(b.near, s.near, k == 0u);
           axis = crossing(dir, near, true);
-          hit_t = max(near[axis], 0.0);
+          hit_t = past_origin(near[axis]);
           ends = 1u;
           break;
         }
       }
     } else if (kind == KIND_LACKS) {
       axis = crossing(dir, s.near, true);
-      hit_t = max(s.near[axis], 0.0);
+      hit_t = past_origin(s.near[axis]);
       ends = 2u;
       break;
     }
@@ -273,8 +273,8 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>
       }
     }
   }
-  if (pyramid_word(TALLY_ON) != 0u) {
-    atomicAdd(&pyramid[VISITS_TALLY], visits);
+  if (pyramid_word(COUNT_ON) != 0u) {
+    atomicAdd(&pyramid[VISITS_COUNT], visits);
   }
   return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
 }

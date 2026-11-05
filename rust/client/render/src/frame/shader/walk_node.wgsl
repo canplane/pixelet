@@ -9,22 +9,30 @@ fn eye_cut(k: u32) -> vec4<i32> {
   return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
 }
 
-/// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
-/// and other frames', says which asks again (walk.wgsl `revisits`).
+/// A ray to walk: from `origin`, at the zooms `range` holds it to; `inv` its direction's
+/// reciprocal on each axis, 0 where it does not move along one (`Ray::inverse`), the eye's
+/// worked out once by the GPU (`eye_aim`), the light's the host's (light_aim.wgsl
+/// `light_aim`); `seed`, other rays' and other frames', says which asks again (walk.wgsl
+/// `revisits`).
 struct Aim {
   origin: vec3<i32>,
   dir: vec3<f32>,
+  inv: vec3<f32>,
   t_max: f32,
   range: vec2<u32>,
   seed: u32,
 }
 
-/// The eye's ray at the tangents `tan_at`.
+/// The eye's ray at the tangents `tan_at`: the one place a GPU works out the eye's way and its
+/// reciprocal, a division and a square root its own (`cast::through`, `Ray::new`), so every
+/// pass that walks or marks an eye's ray takes it here.
 fn eye_aim(tan_at: vec2<f32>) -> Aim {
   let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
+  let dir = aimed / length(aimed);
   return Aim(
     vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
-    aimed / length(aimed),
+    dir,
+    ray_inv(ray_dir(dir)),
     eye_f32(FAR),
     vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
     mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
@@ -56,7 +64,7 @@ fn root_start() -> Start {
 }
 
 /// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
-/// its reach, anything else left.
+/// its reach, 4 left to the walk that asks.
 struct Walked {
   ends: u32,
   zoom: u32,
@@ -74,7 +82,7 @@ fn units(p: vec3<u32>, og: vec3<u32>, roots: vec3<i32>) -> vec3<f32> {
   let whole = vec3<i32>(p >> vec3<u32>(FRAC_W)) - vec3<i32>(og >> vec3<u32>(FRAC_W))
     + (roots << vec3<u32>(UNIT_ZOOM));
   let frac = vec3<i32>(p & vec3<u32>(255u)) - vec3<i32>(og & vec3<u32>(255u));
-  return vec3<f32>(whole) + vec3<f32>(frac) / f32(1u << FRAC_W);
+  return vec3<f32>(whole) + vec3<f32>(frac) * (1.0 / f32(1u << FRAC_W));
 }
 
 /// A node's side at `zoom` less one (`under`).
@@ -131,12 +139,38 @@ fn keeps(zoom: u32, c: vec3<i32>) -> bool {
   return (v.x == 0i || v.x == -1i) && (v.y == 0i || v.y == -1i) && (v.z == 0i || v.z == -1i);
 }
 
+/// A vector's length squared, summed in pxl-engine's order (cast.rs `squared`). A device may
+/// fuse a product into the sum, which puts it a last place off the Rust's (tests/walk.rs
+/// `hand_zoom_on_a_split_distance`).
+fn squared(v: vec3<f32>) -> f32 {
+  return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
-  let x2 = r2 / (ZOOM_SPLIT * ZOOM_SPLIT);
+  let x2 = r2 * INV_SPLIT2;
   let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;
   let z = u32(clamp(i32(UNIT_ZOOM) - e, 0i, i32(FINEST_ZOOM)));
   return min(max(z, range.x), range.y);
+}
+
+/// How far apart a beam's rays lie at `d2` from the walk's origin, a distance squared, its
+/// spacing `across` then `angle` (`Spacing::width`).
+fn spacing_width(spacing: vec2<f32>, d2: f32) -> f32 {
+  return spacing.x + spacing.y * sqrt(d2);
+}
+
+/// Whether a split `side` wide is too narrow for a beam ray to share where its beam's rays lie
+/// `width` apart (`cast::narrow`). The bound is pxl-engine's `NARROW_SQUARED`, 8, not
+/// `NARROW` squared in f32, which rounds a place under it.
+fn narrow(side: f32, width: f32) -> bool {
+  return side * side < NARROW_SQUARED * (width * width);
+}
+
+/// Where a ray enters a plane it reaches at `t`, no nearer than the origin, +0 there as
+/// pxl-engine's `greater(t, 0.0)` gives it where `max` may give −0 (`entry_plane`).
+fn past_origin(t: f32) -> f32 {
+  return select(0.0, t, t > 0.0);
 }
 
 /// Near and far on each axis (`planes`), branchless: an axis it runs beside gives

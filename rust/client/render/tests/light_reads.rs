@@ -142,8 +142,8 @@ fn read_before(list: &mut [u32], current: u32, epoch: u32, seed: u32) {
     }
 }
 
-/// Each list's marks as earlier casts left them, the places this cast listed already among
-/// its entries, in no order, and the rows the args opened for them.
+/// Each list's marks as earlier casts left them, one a later cast's, the places this cast
+/// listed already among its entries, in no order, and the rows the args opened for them.
 fn mark_before(list: &mut [u32], args: &mut [u32], current: u32, seed: u32) {
     for which in [
         light::LISTED_CORNERS,
@@ -165,6 +165,7 @@ fn mark_before(list: &mut [u32], args: &mut [u32], current: u32, seed: u32) {
                 0 => current,
                 1..=4 => current.wrapping_sub(1),
                 5 => current.wrapping_sub(9),
+                6 => current.wrapping_add(1),
                 _ => 0,
             };
             if h.is_multiple_of(16) {
@@ -234,6 +235,8 @@ struct Told {
     listed: [u32; 3],
     /// Tiles read through a step of the way up past the tile stood on.
     read_up: u32,
+    /// Entries listed where a later cast's mark stood.
+    over_mark: u32,
 }
 
 /// The propagation as pxl-engine's light lays its rule, over `c`'s buffers.
@@ -321,9 +324,13 @@ fn propagate(c: &Case) -> (Vec<u32>, Vec<u32>, Told) {
             } else {
                 claimed[p as usize]
             };
-            let mark = &mut list[marks + p as usize];
-            if needed && *mark != current {
-                *mark = (*mark).max(current);
+            let was = if needed {
+                std::mem::replace(&mut list[marks + p as usize], current)
+            } else {
+                current
+            };
+            if was != current {
+                told.over_mark += u32::from(was > current);
                 let e = list[at] as usize;
                 list[at] += 1;
                 list[at + 1 + e] = (q[1] << 16) | q[0];
@@ -474,12 +481,14 @@ fn hand_propagation_claims_as_the_rust() {
         steps_most = steps_most.max(l.up::<Pixelet>().1);
         let seed = n as u32 * 31 + 5;
         // The epoch begun, within it, within it with no tile left to claim, and with one,
-        // the list it claims onto a whole number of its pass's rows full.
+        // the list it claims onto a whole number of its pass's rows full; and the cast's number
+        // by the last a word holds, a later cast's mark past it.
         for (kind, current, epoch) in [
             ("begins its epoch", 40, 40),
             ("within its epoch", 40, 37),
             ("all held", 40, 3),
             ("one read anew", 40, 3),
+            ("its number by the last", u32::MAX - 1, u32::MAX - 4),
         ] {
             let mut list = vec![0u32; light::list_words(SIZE) as usize];
             let mut args = args_start();
@@ -529,6 +538,7 @@ fn hand_propagation_claims_as_the_rust() {
             all.held += told.held;
             all.claimed += told.claimed;
             all.read_up += told.read_up;
+            all.over_mark += told.over_mark;
             for k in 0..3 {
                 all.listed[k] += told.listed[k];
             }
@@ -538,6 +548,7 @@ fn hand_propagation_claims_as_the_rust() {
     assert!(all.past > 0 && all.unread > 0, "{all:?}");
     assert!(all.listed.iter().all(|&k| k > 0), "{all:?}");
     assert!(all.read_up > 0 && steps_most > 1, "{all:?}");
+    assert!(all.over_mark > 0, "{all:?}");
     tally.end("propagation");
 }
 

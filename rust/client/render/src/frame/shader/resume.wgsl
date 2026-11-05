@@ -27,7 +27,7 @@ fn resumed(aim: Aim, at_cell: u32, line_words: u32, line_origin: u32) -> Start {
     return root_start();
   }
   let dir = ray_dir(aim.dir);
-  let inv = ray_inv(dir);
+  let inv = aim.inv;
   let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
   let line = beams[at_cell + CELL_CORNER] * line_words;
   let visits = beams[line + LINE_VISITS];

@@ -52,6 +52,10 @@ pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 /// very f32 at every one (`beam::Grid::sample`).
 pub const LATTICE_MAX: u32 = 2;
 
+/// One over the split distance squared, `CELLS_A_RAD / SPANS` sides: what a
+/// distance squared is scaled by to read its zoom (`cell_zoom_at`).
+pub const INV_SPLIT2: f32 = 1.0 / ((CELLS_A_RAD / SPANS) * (CELLS_A_RAD / SPANS));
+
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared, in
 /// units: the widest cell whose split distance (`CELLS_A_RAD / SPANS` of its
 /// sides) is within the distance, held to what a zoom can name. The power of
@@ -60,12 +64,16 @@ pub const LATTICE_MAX: u32 = 2;
 /// squares to `m²·2^2e` with `m²` in [1, 4), whose exponent is `2e` or `2e +
 /// 1`, so halving it, rounding down, is `e`; and rounding the square never
 /// reaches 4, since the widest `m` short of 2, `2 − 2⁻²³`, squares to `4 −
-/// 2⁻²¹` and a bit, which rounds down to it. Every asker passes a square
-/// (pxl-spec space/camera/grid.rs, the decor a content draws), so a distance on a
-/// power of two falls the same side everywhere.
+/// 2⁻²¹` and a bit, which rounds down to it.
+///
+/// The square is scaled by a product, not divided: a product rounds half to
+/// even on every device, where a GPU's division need not round at all (Metal's
+/// is a few ulps off). The split squared is 9 · 2⁸, and
+/// 9 · fl(1/9) rounds to 1, so a square on a split distance, `2304 · 4^k`,
+/// scales to `4^k` exactly and begins its zoom (pxl-spec
+/// space/camera/grid.test.rs `zoom_cell_dist`).
 pub fn cell_zoom_at(r2: f32) -> Zoom {
-    let split = CELLS_A_RAD / SPANS;
-    let x2 = r2 / (split * split);
+    let x2 = r2 * INV_SPLIT2;
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }

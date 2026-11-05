@@ -21,7 +21,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   return HIT_WAITS | r;
 }
 
-@compute @workgroup_size(64, 1, 1)
+@compute @workgroup_size(MISS_LANES, 1, 1)
 fn miss_hit_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
@@ -38,7 +38,7 @@ fn miss_hit_cs(
   }
   let aim = px_aim(id, size);
   let w = walk(aim, px_start(aim, id, size), NONE);
-  if (w.ends == 0u || w.ends == 4u) {
+  if (w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % (MISS_LANES * MISS_ACROSS) == 0u) {
       atomicMax(&left[1], place / (MISS_LANES * MISS_ACROSS) + 1u);

@@ -234,7 +234,7 @@ pub struct FrameStat {
     pub light_moved: f64,
     pub decor_boxes: f64,
     /// The eye's cast's and the light's counts of an earlier frame, landed
-    /// with this one, by that frame's number (gpu/ray/tally.rs `RayCounts`).
+    /// with this one, by that frame's number (gpu/ray/count.rs `RayCounts`).
     pub rays: Option<RayCounts>,
 }
 
@@ -311,7 +311,7 @@ static REDRAW: Global<bool> = Global::new();
 static DRAWN_FRAMES: Global<f64> = Global::new();
 
 /// The number the frame being made takes as it is encoded, which a pass
-/// that counts it names its counts by (gpu/ray/tally.rs `Frame`): a frame
+/// that counts it names its counts by (gpu/ray/count.rs `Frame`): a frame
 /// that stands takes none, and none counts.
 fn next_frame() -> f64 {
     *DRAWN_FRAMES.get(|| 0.0) + 1.0
@@ -444,7 +444,7 @@ impl Renderer {
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buf);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buf);
+        let atmosphere = Atmosphere::new(g, &mut pipelines);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buf, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
@@ -458,6 +458,7 @@ impl Renderer {
             view_entry(2, moon.view),
             sampler_entry(3, moon.sampler),
         ];
+        sky_entries.extend(atmosphere.sky_entries());
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buf = g.buf(
@@ -1058,7 +1059,7 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
-        self.screen.tally_back(g);
+        self.screen.counts_back(g);
         if clouds_moved {
             self.clouds.write(g);
         }
@@ -1764,3 +1765,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], b
     let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
     (lists.draws, lists.uniforms, moved)
 }
+
+#[cfg(test)]
+#[path = "renderer.test.rs"]
+mod test;

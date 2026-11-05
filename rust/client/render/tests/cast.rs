@@ -39,7 +39,7 @@ use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{eye, face, pyramid, raster, ray, screen, tally, Zoom, LEAF_CELL};
+use pxl_engine::{count, eye, face, pyramid, raster, ray, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE,
     SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
@@ -1047,7 +1047,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
 
         let mut table = cast.table.clone();
-        table[pyramid::TALLY_ON as usize] = u32::from(s.tally);
+        table[pyramid::COUNT_ON as usize] = u32::from(s.tally);
         let table_buf = gpu.buffer(&table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
         let beams = gpu.buffer(&cast.beams, store());
@@ -1184,11 +1184,11 @@ fn hand_pixels_answer_as_cast_entry() {
         }
         args[ray::MISS_ARGS_CNT as usize] = cnt;
         if s.tally {
-            for (lane, v) in [tally::TOOK, tally::WALKED, tally::SKY]
+            for (lane, v) in [count::REUSED, count::WALKED, count::SKY]
                 .into_iter()
                 .zip([counts[0], counts[1], counts[2]])
             {
-                args[(ray::MISS_ARGS_TALLY + lane - tally::TOOK) as usize] = v;
+                args[(ray::MISS_ARGS_COUNT + lane - count::REUSED) as usize] = v;
             }
         }
         tally.compare(

@@ -5,7 +5,8 @@
 // corners (`beam::Grid::cell_window`), and that corner, whose line its rays resume from.
 // The shadow map's are light_cell.wgsl's.
 //
-// The window is f32 as the Rust's, a ceiling over a square root and two divisions: where
+// The window is f32 as the Rust's, a ceiling over a square root and a division by what varies
+// from cell to cell, `s` taken by its reciprocal, the host's (`Grid::s_inverse`): where
 // what it takes the ceiling of falls within a few ulps of a whole number, a GPU's rounding
 // may take the next window (tests/cell.rs `on_edge`).
 
@@ -23,7 +24,7 @@ fn cell_window(c: vec2<u32>) -> u32 {
   let edge = sqrt(at.x * at.x + at.y * at.y);
   let beyond = (edge + radius_tan) / (1.0 - edge * radius_tan);
   let stretch = 1.0 + beyond * beyond;
-  return u32(ceil(FRAC_1_SQRT_2 + radius * stretch / s));
+  return u32(ceil(FRAC_1_SQRT_2 + radius * stretch * eye_f32(GRID + GRID_S_INVERSE)));
 }
 
 @compute @workgroup_size(CELL_SIDE, CELL_SIDE, 1)

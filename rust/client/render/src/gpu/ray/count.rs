@@ -1,28 +1,28 @@
-// pxl-render/gpu/ray/tally.rs
+// pxl-render/gpu/ray/count.rs
 
-//! What the eye's cast and the light's walked and took, counted where the
-//! `ray_counts` setting asks (pxl-engine `tally`): where each pass
+//! What the eye's cast and the light's walked and reused, counted where the
+//! `ray_counts` setting asks (pxl-engine `count`): where each pass
 //! counts cleared each counted frame, gathered into one array after the
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
 //! (`mapped`), and handed on as it lands with what the CPU knew of the
 //! frame that counted it (`Frame`), by the renderer's number of that frame
 //! (`RayCounts`), as a GPU read is.
 
-use pxl_engine::{pyramid, raster, ray, tally};
+use pxl_engine::{count, pyramid, raster, ray};
 use xpute_guest::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
-const WORDS: usize = tally::WORDS as usize;
+const WORDS: usize = count::WORDS as usize;
 
 /// A counted frame's counts, by index, an observer's each (`count_at`):
 /// whether it cast, 1 or 0 (`CAST`), its pixels or slots (`RAYS`), and its
-/// lanes (pxl-engine `tally`, from `LANES_AT`).
+/// lanes (pxl-engine `count`, from `LANES_AT`).
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
-const OBSERVER_COUNTS: usize = LANES_AT + tally::LANES as usize;
-pub const RAY_COUNTS: usize = tally::OBSERVERS as usize * OBSERVER_COUNTS;
+const OBSERVER_COUNTS: usize = LANES_AT + count::LANES as usize;
+pub const RAY_COUNTS: usize = count::OBSERVERS as usize * OBSERVER_COUNTS;
 
 /// Where `observer`'s count `k` is.
 pub const fn count_at(observer: u32, k: usize) -> usize {
@@ -44,8 +44,8 @@ pub struct RayCounts {
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
-    pub casts: [bool; tally::OBSERVERS as usize],
-    pub rays: [u32; tally::OBSERVERS as usize],
+    pub casts: [bool; count::OBSERVERS as usize],
+    pub rays: [u32; count::OBSERVERS as usize],
 }
 
 /// Where the passes counted, an observer's each: the walks' in the observed
@@ -53,14 +53,14 @@ pub(super) struct Frame {
 /// args (`args`), the boxes in the raster's draw (`boxes`).
 pub(super) struct Counts {
     pub pyramid: u32,
-    pub args: [u32; tally::OBSERVERS as usize],
-    pub boxes: [u32; tally::OBSERVERS as usize],
+    pub args: [u32; count::OBSERVERS as usize],
+    pub boxes: [u32; count::OBSERVERS as usize],
 }
 
 /// The array and its readback; whether this frame counts (`on`), what
 /// the CPU knew of the frame copied (`copied_frame`), and the counts that
 /// landed, until taken (`take`).
-pub(super) struct Tally {
+pub(super) struct Counter {
     counts: u32,
     read: u32,
     on: bool,
@@ -76,10 +76,10 @@ pub(super) struct Tally {
     ray_counts: Option<RayCounts>,
 }
 
-impl Tally {
+impl Counter {
     /// Its buffers, made with the cast's: a few words.
-    pub(super) fn new(g: &Gpu) -> Tally {
-        Tally {
+    pub(super) fn new(g: &Gpu) -> Counter {
+        Counter {
             counts: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
@@ -112,11 +112,11 @@ impl Tally {
         if !self.on && !was {
             return;
         }
-        let mut head = [0u32; 1 + (tally::OBSERVERS * tally::WALKS) as usize];
+        let mut head = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
         head[0] = u32::from(self.on);
         g.write_buf(
             pyramid,
-            word_bytes(pyramid::TALLY_ON as usize),
+            word_bytes(pyramid::COUNT_ON as usize),
             bytes(&head),
         );
         if !self.on {
@@ -132,7 +132,7 @@ impl Tally {
         if !self.on || self.copied || self.mapped {
             return;
         }
-        for o in 0..tally::OBSERVERS {
+        for o in 0..count::OBSERVERS {
             let k = o as usize;
             if !self.frame.casts[k] {
                 continue;
@@ -141,14 +141,19 @@ impl Tally {
             for (buf, word, lane, words) in [
                 (
                     from.pyramid,
-                    pyramid::tally_at(o, tally::BEAM),
-                    tally::BEAM,
-                    tally::WALKS,
+                    pyramid::lane_at(o, count::BEAM),
+                    count::BEAM,
+                    count::WALKS,
                 ),
-                (from.args[k], ray::MISS_ARGS_TALLY, tally::TOOK, tally::RAYS),
-                (from.boxes[k], raster::ARGS_INSTANCES, tally::BOXES, 1),
+                (
+                    from.args[k],
+                    ray::MISS_ARGS_COUNT,
+                    count::REUSED,
+                    count::RAYS,
+                ),
+                (from.boxes[k], raster::ARGS_INSTANCES, count::BOXES, 1),
             ] {
-                let to = word_bytes(tally::at(o, lane) as usize);
+                let to = word_bytes(count::at(o, lane) as usize);
                 let size = word_bytes(words as usize);
                 g.copy_buf(
                     encoder,
@@ -173,14 +178,14 @@ impl Tally {
         if self.mapped && landed {
             let (l, f) = (&self.read_counts, self.copied_frame);
             let mut counts = [0.0; RAY_COUNTS];
-            for o in 0..tally::OBSERVERS {
+            for o in 0..count::OBSERVERS {
                 if !f.casts[o as usize] {
                     continue;
                 }
                 counts[count_at(o, CAST)] = 1.0;
                 counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
-                for lane in 0..tally::LANES {
-                    let c = f64::from(l[tally::at(o, lane) as usize]);
+                for lane in 0..count::LANES {
+                    let c = f64::from(l[count::at(o, lane) as usize]);
                     counts[count_at(o, LANES_AT + lane as usize)] = c;
                 }
             }

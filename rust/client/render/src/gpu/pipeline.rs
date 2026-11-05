@@ -14,7 +14,7 @@ use crate::api_spec::stream;
 use crate::frame::shader::record::{
     compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{signaled, room, shader_bytes, Format, Gpu, Stencil, GATED_DEPTH};
+use crate::gpu::api::{room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH};
 use crate::gpu::surface::WORLD_COLOR;
 
 pub const GROUPS: usize = 4;
@@ -23,7 +23,7 @@ pub const LANES: usize = 8;
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
     pub id: u32,
-    pub layouts: [u32; GROUPS],
+    pub layouts: [Layout; GROUPS],
     pub strides: [u32; LANES],
     pub lanes: usize,
 }
@@ -41,7 +41,7 @@ pub struct Pipelines {
     /// and their sources' bytes.
     modules_made: u32,
     module_bytes: usize,
-    layouts: [(u64, u32); LAYOUTS],
+    layouts: [(u64, Layout); LAYOUTS],
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
@@ -79,7 +79,7 @@ impl Pipelines {
             modules: [0; SHADERS as usize],
             modules_made: 0,
             module_bytes: 0,
-            layouts: [(0, 0); LAYOUTS],
+            layouts: [(0, Layout::default()); LAYOUTS],
             layout_len: 0,
             pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
             pipeline_len: 0,
@@ -115,19 +115,19 @@ impl Pipelines {
         m
     }
 
-    fn layout(&mut self, g: &Gpu, entries: &[u32]) -> u32 {
-        let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
-        if let Some(&(_, id)) = self.layouts[..self.layout_len]
+    fn layout(&mut self, g: &Gpu, group: &'static [u32]) -> Layout {
+        let key = group.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
+        if let Some(&(_, layout)) = self.layouts[..self.layout_len]
             .iter()
             .find(|(k, _)| *k == key)
         {
-            return id;
+            return layout;
         }
         xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
-        let id = g.layout(entries);
-        self.layouts[self.layout_len] = (key, id);
+        let layout = g.layout(group);
+        self.layouts[self.layout_len] = (key, layout);
         self.layout_len += 1;
-        id
+        layout
     }
 
     /// The pipeline made under `key`, where one is.
@@ -226,7 +226,7 @@ impl Pipelines {
     /// A compute pipeline over shader `kind`'s one compute entry and `group`,
     /// group 0's (binding, stages, kind) words: kept by both, as a render
     /// pipeline by its record and targets, so owners asking the same share it.
-    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &[u32]) -> Pipeline {
+    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &'static [u32]) -> Pipeline {
         // Past every render pipeline's key's first word, a record's number.
         let key = group
             .iter()

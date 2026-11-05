@@ -37,7 +37,7 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
   let place = sample_box(id.xy, origin, true, vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)));
   if (place != NO_BOX) {
-    ask_face(sample_taken(id.xy), place);
+    ask_face(sample_item(id.xy), place);
     // The faces' pass's workgroups raised to hold it, by the box that opens one.
     if (place % RASTER_FACES_LANES == 0u) {
       args_most(RASTER_ARGS_FACES, place / RASTER_FACES_LANES + 1u);

@@ -83,13 +83,25 @@ pub struct Grid {
     pub corners_at: u32,
 }
 
+/// The samples' spacing, in the screen's tangents at its axis: a lattice's
+/// side over its samples a side, both a power of two times the cell's, so
+/// the very f32 at every lattice (`Grid::sample`); and its reciprocal, which
+/// a tangent is scaled by to count samples (`Grid::sample_before`), the
+/// same constant on the CPU and the GPU (pxl-render cast.wgsl
+/// `sample_before`, sample_eye.wgsl).
+pub const SAMPLE_SPACING: f32 = CELL / SAMPLE as f32;
+pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
+
 /// The grid's words among the eye's (`eye::GRID`), where each field lies
 /// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
 /// `past`, `span`, `corners` and `samples`, across then up, the words where
 /// the cells' starts, the samples' hits, the boxes' asks, the missed pixels'
 /// hits and their asks start, `lattice`, and where the lists the walk over
-/// the observed pyramid alone leaves start: whole vec4s.
+/// the observed pyramid alone leaves start; then the reciprocal of `s`
+/// (`s_inverse`) and the slope of the screen's sides across and up
+/// (`slope`), f32 bits, each rounded once by the host: whole vec4s.
 pub const GRID_S: usize = 0;
+
 pub const GRID_KEEP: usize = 1;
 pub const GRID_RADIUS: usize = 2;
 pub const GRID_RADIUS_TAN: usize = 3;
@@ -106,7 +118,9 @@ pub const GRID_LATTICE: usize = 16;
 pub const GRID_LEFTS_AT: usize = 17;
 pub const GRID_MISSES_AT: usize = 18;
 pub const GRID_CORNERS_AT: usize = 19;
-pub const GRID_WORDS: usize = 20;
+pub const GRID_S_INVERSE: usize = 20;
+pub const GRID_SLOPE: usize = 21;
+pub const GRID_WORDS: usize = 24;
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -190,6 +204,12 @@ impl Grid {
         w[GRID_LATTICE] = self.lattice;
         (w[GRID_LEFTS_AT], w[GRID_MISSES_AT], w[GRID_CORNERS_AT]) =
             (self.lefts_at, self.misses_at, self.corners_at);
+        let slope = self.slope();
+        (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
+            self.s_inverse().to_bits(),
+            slope[0].to_bits(),
+            slope[1].to_bits(),
+        );
         w
     }
 
@@ -218,6 +238,20 @@ impl Grid {
         }
     }
 
+    /// The reciprocal of `s`, which a tangent is scaled by to count the
+    /// lattice's sides (`cell`, `window`): rounded once here, on the host, and
+    /// handed the shaders in a word (`GRID_S_INVERSE`).
+    pub fn s_inverse(&self) -> f32 {
+        1.0 / self.s
+    }
+
+    /// The slope of the screen's sides across and up, `√(1 + tan²)`, which a
+    /// side's distance to a point is its offset over (`eye::sees`): rounded
+    /// once here, on the host, and handed the shaders in words (`GRID_SLOPE`).
+    pub fn slope(&self) -> [f32; 2] {
+        self.tan.map(|t| libm::sqrtf(1.0 + t * t))
+    }
+
     /// How far a beam ray that stopped at `t` hands on: no farther than any
     /// pixel's ray about it enters what stopped it.
     pub fn hand_dist(&self, t: f32) -> f32 {
@@ -232,7 +266,8 @@ impl Grid {
         let edge = libm::sqrtf(at[0] * at[0] + at[1] * at[1]);
         let beyond = (edge + self.radius_tan) / (1.0 - edge * self.radius_tan);
         let stretch = 1.0 + beyond * beyond;
-        libm::ceilf(core::f32::consts::FRAC_1_SQRT_2 + self.radius * stretch / self.s) as u32
+        libm::ceilf(core::f32::consts::FRAC_1_SQRT_2 + self.radius * stretch * self.s_inverse())
+            as u32
     }
 
     /// The window of the screen's cell `[x, y]`, from its left and top: at
@@ -263,7 +298,7 @@ impl Grid {
     /// The screen's cell holding the screen's point at the tangents `[tx,
     /// ty]`.
     pub fn cell(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
-        let at = |v: f32, n: u32| (libm::floorf(v / self.s).max(0.0) as u32).min(n - 1);
+        let at = |v: f32, n: u32| (libm::floorf(v * self.s_inverse()).max(0.0) as u32).min(n - 1);
         [
             at(tx + self.tan[0], self.span[0]),
             at(self.tan[1] - ty, self.span[1]),
@@ -275,17 +310,10 @@ impl Grid {
         SAMPLE * self.lattice
     }
 
-    /// The samples' spacing, in the screen's tangents at its axis: the
-    /// lattice's side over its samples a side, both a power of two times
-    /// the cell's, so the very f32 at every lattice, `grid::CELL / SAMPLE`.
-    fn sample_spacing(&self) -> f32 {
-        self.s / self.cell_samples() as f32
-    }
-
     /// The tangents across and up of sample `[i, j]`, from the screen's
     /// left and top `NEAR` samples past it: the same at every lattice.
     pub fn sample(&self, [i, j]: [u32; 2]) -> [f32; 2] {
-        let d = self.sample_spacing();
+        let d = SAMPLE_SPACING;
         [
             -self.tan[0] + (i as f32 - NEAR as f32) * d,
             self.tan[1] - (j as f32 - NEAR as f32) * d,
@@ -296,12 +324,8 @@ impl Grid {
     /// ty]`, across and up, from the screen's left and top `NEAR` samples
     /// past it: with the next across, down and both, the four about it.
     pub fn sample_before(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
-        let d = self.sample_spacing();
-        let at = |v: f32, n: u32| (libm::floorf(v / d).max(0.0) as u32 + NEAR).min(n - 2);
-        [
-            at(tx + self.tan[0], self.samples[0]),
-            at(self.tan[1] - ty, self.samples[1]),
-        ]
+        let at = |v: f32| libm::floorf(v * SAMPLE_SPACING_INVERSE).max(0.0) as u32 + NEAR;
+        [at(tx + self.tan[0]), at(self.tan[1] - ty)]
     }
 
     /// The screen's cell sample `[i, j]` starts from: the one holding it, or

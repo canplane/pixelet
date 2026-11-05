@@ -3,12 +3,11 @@
 /**
  * What a dev server and the page's preview (script/web.ts `serve`) answer
  * besides the bundle: the routes the page asks of its own origin, forwarded
- * where the tiles come from, and a device's console. Loaded by Expo's
- * transform for metro.config.ts as well as by Node, so it reads no
- * `import.meta`.
+ * where the tiles come from. A device's console is @pxl/build/console.ts's.
+ * Loaded by Expo's transform for metro.config.ts as well as by Node, so it
+ * reads no `import.meta`.
  */
 
-import * as fs from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
 import process from "node:process";
@@ -73,37 +72,6 @@ export function forward(
     res.end(String(err));
   });
   req.pipe(up);
-}
-
-/** What a device's console posts to `/__console` (src/remote-console.ts),
- * printed where this server's output goes and appended to `log`, so a phone
- * on a tunnel can be read without a debugger attached. */
-export function console_post(
-  log: string,
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-): void {
-  if (req.method !== "POST") {
-    res.statusCode = 405;
-    res.end();
-    return;
-  }
-  let body = "";
-  req.on("data", (c: Buffer) => {
-    if (body.length < 1 << 16) body += c.toString();
-  });
-  req.on("end", () => {
-    const lines = body.split("\n").filter(Boolean);
-    for (const line of lines) console.log(line);
-    if (lines.length > 0) {
-      fs.appendFileSync(
-        log,
-        lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(""),
-      );
-    }
-    res.statusCode = 204;
-    res.end();
-  });
 }
 
 export type Middleware = (

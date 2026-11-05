@@ -28,11 +28,11 @@ use xpute_guest::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+/// A fence or the device's STATUS as the host last stored it.
+pub use xpute_gpu::encode::load_acquire;
 /// Whether a completion's fence holds the ticket it was asked with
 /// (xpute spec RESULT).
 pub use xpute_gpu::encode::signaled;
-/// A fence or the device's STATUS as the host last stored it.
-pub use xpute_gpu::encode::load_acquire;
 pub use xpute_gpu::enums::TextureFormat as Format;
 /// What a read back or an image says beside its fence.
 pub use xpute_gpu::spec::RESULT;
@@ -386,6 +386,61 @@ pub fn pass_desc(
     }
 }
 
+/// A bind group layout, and the group it was made of: its (binding, stages, kind) words, as a
+/// pipeline record holds them (frame/shader/record.rs), or a compute group. Made by
+/// `Gpu::layout` alone, so a bind group over it is checked against the group itself.
+#[derive(Clone, Copy, Default)]
+pub struct Layout {
+    id: Id,
+    group: &'static [u32],
+}
+
+impl Layout {
+    /// Whether the group has `binding`.
+    pub fn binds(&self, binding: u32) -> bool {
+        self.group
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .any(|w| w[0] == binding)
+    }
+
+    /// `entries` the group's bindings each once, each a resource its kind takes (a buffer for
+    /// a buffer's kind, a sampler for a sampler's, a view for the rest); a bug otherwise.
+    #[track_caller]
+    fn holds(&self, entries: &[Entry]) {
+        let words = self.group.as_chunks::<3>().0;
+        xpute_kit::ensure!(
+            entries.len() == words.len(),
+            ENOTRECOVERABLE,
+            entries.len(),
+            words.len()
+        );
+        for (k, e) in entries.iter().enumerate() {
+            let [_, _, kind] = *words
+                .iter()
+                .find(|w| w[0] == e.binding)
+                .or_bug(Errno::ENOTRECOVERABLE);
+            let buf = matches!(
+                kind,
+                record::UNIFORM | record::UNIFORM_DYNAMIC | record::STORAGE | record::STORAGE_RW
+            );
+            let sampler = matches!(kind, record::SAMPLER | record::SAMPLER_COMPARISON);
+            let takes = match e.resource {
+                encode::Resource::Buffer { .. } => buf,
+                encode::Resource::Sampler(_) => sampler,
+                encode::Resource::View(_) => !buf && !sampler,
+            };
+            xpute_kit::ensure!(takes, ENOTRECOVERABLE, e.binding, kind);
+            xpute_kit::ensure!(
+                entries[..k].iter().all(|d| d.binding != e.binding),
+                ENOTRECOVERABLE,
+                e.binding
+            );
+        }
+    }
+}
+
 /// A bind group's entry, as xpute's encoder takes it.
 pub use xpute_gpu::encode::BindGroupEntry as Entry;
 
@@ -553,31 +608,67 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
             &mut *mem::at::<Encoder<OBJECTS>>(at as usize + bytes as usize - ENCODER_BYTES),
         )
     };
-    STATE.set(Some(State {
-        stream,
-        encoder,
-        at,
-        in_frame: false,
-        device_out: false,
-        device: None,
-        stamps: None,
-        stamps_written: [0; READS],
-        stamps_out: [0; READS],
-        stamps_asked_cnt: 0,
-        stamps_asked: None,
-        gpu_ms: [0.0; SPANS],
-        gpu_busy_ms: 0.0,
-        gpu_landed: None,
-        images: Vec::new(),
-        landed: Vec::new(),
-        generation: 0,
-        frees: Vec::new(),
-        device_pending: false,
-        lost: false,
-        ranges: Vec::new(),
-        ranges_out: Vec::new(),
-    }));
+    STATE.set(Some(State::over(stream, encoder, at)));
     at
+}
+
+/// The calls' state over a stream in a region of its own, apart from the kernel's memory, its
+/// encoder beside it, and `device` as though its block were in: what a test makes the renderer
+/// on, no host running the stream.
+#[cfg(test)]
+pub(crate) fn install_apart(device: Device) {
+    const WORDS: usize = 1 << 25;
+    let region: &'static mut [u64] = Vec::leak(vec![0; WORDS / 2]);
+    // SAFETY: leaked, so it lives as long as the process, and nothing else names it.
+    let stream = unsafe {
+        let mem = mem::Memory::new(region.as_mut_ptr().expose_provenance(), WORDS * WORD);
+        Stream::new(mem, 0, WORDS, HEAD)
+    };
+    // SAFETY: all-zero bytes are an encoder that has made nothing (xpute-gpu encode).
+    let encoder = unsafe { Box::<Encoder<OBJECTS>>::new_zeroed().assume_init() };
+    let mut s = State::over(stream, Box::leak(encoder), 0);
+    s.device = Some(device);
+    STATE.set(Some(s));
+}
+
+/// A device made up, as `install_apart` takes it.
+#[cfg(test)]
+pub(crate) fn test_device() -> Device {
+    Device {
+        align: UNIFORM_ALIGN_MAX,
+        timestamps: false,
+        canvas: Format::bgra8unorm,
+        period_ns: 1.0,
+    }
+}
+
+impl State {
+    fn over(stream: Stream, encoder: &'static mut Encoder<OBJECTS>, at: u32) -> State {
+        State {
+            stream,
+            encoder,
+            at,
+            in_frame: false,
+            device_out: false,
+            device: None,
+            stamps: None,
+            stamps_written: [0; READS],
+            stamps_out: [0; READS],
+            stamps_asked_cnt: 0,
+            stamps_asked: None,
+            gpu_ms: [0.0; SPANS],
+            gpu_busy_ms: 0.0,
+            gpu_landed: None,
+            images: Vec::new(),
+            landed: Vec::new(),
+            generation: 0,
+            frees: Vec::new(),
+            device_pending: false,
+            lost: false,
+            ranges: Vec::new(),
+            ranges_out: Vec::new(),
+        }
+    }
 }
 
 /// Where the stream lies in the kernel's memory, once installed: what a host
@@ -624,7 +715,10 @@ fn writable(s: &mut State) -> bool {
 /// the first call after a device answers (`on_device_answered`).
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
-    if s.device.is_none() && s.device_out && load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::READY {
+    if s.device.is_none()
+        && s.device_out
+        && load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::READY
+    {
         let word = |k: usize| *head(DEVICE_AT + k);
         let limit = |name: &str| {
             word(
@@ -825,10 +919,11 @@ pub fn take_landed(mut landed: impl FnMut(u32)) {
 /// Whether an image handed to the device has yet to land (`Gpu::image`):
 /// another turn is wanted to take it.
 pub fn images_landing() -> bool {
-    STATE
-        .get(|| None)
-        .as_ref()
-        .is_some_and(|s| s.images.iter().any(|a| !signaled(&a.fence[0], IMAGE_TICKET)))
+    STATE.get(|| None).as_ref().is_some_and(|s| {
+        s.images
+            .iter()
+            .any(|a| !signaled(&a.fence[0], IMAGE_TICKET))
+    })
 }
 
 /// A frame's records are one: past the range they are dropped whole, with
@@ -1172,9 +1267,9 @@ impl Gpu {
         handle_of(s.encoder.shader_module(&mut s.stream, code))
     }
 
-    /// A group's (binding, stages, kind) words, as a pipeline record holds them.
-    pub fn layout(&self, words: &[u32]) -> Id {
-        let words = words.as_chunks::<3>().0;
+    /// A group's layout from its (binding, stages, kind) words, as a pipeline record holds them.
+    pub fn layout(&self, group: &'static [u32]) -> Layout {
+        let words = group.as_chunks::<3>().0;
         xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
         let entries: [encode::BindGroupLayoutEntry; GROUP_ENTRIES] = core::array::from_fn(|i| {
             let [binding, stage, kind] = words.get(i).copied().unwrap_or_default();
@@ -1185,15 +1280,17 @@ impl Gpu {
             }
         });
         let s = self.s();
-        handle_of(
+        let id = handle_of(
             s.encoder
                 .bind_group_layout(&mut s.stream, &entries[..words.len()]),
-        )
+        );
+        Layout { id, group }
     }
 
-    fn pipeline_layout(&self, layouts: &[Id]) -> Id {
+    fn pipeline_layout(&self, layouts: &[Layout]) -> Id {
+        let ids: Vec<Id> = layouts.iter().map(|l| l.id).collect();
         let s = self.s();
-        handle_of(s.encoder.pipeline_layout(&mut s.stream, layouts))
+        handle_of(s.encoder.pipeline_layout(&mut s.stream, &ids))
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
@@ -1205,7 +1302,7 @@ impl Gpu {
     pub fn pipeline(
         &self,
         words: &[u32],
-        layouts: &[Id],
+        layouts: &[Layout],
         module: Id,
         format: Format,
         (depth, stencil): (Format, Stencil),
@@ -1325,7 +1422,7 @@ impl Gpu {
         &self,
         module: Id,
         entry: &str,
-        layouts: &[Id],
+        layouts: &[Layout],
         (fence, ticket): (&u32, u32),
     ) -> Id {
         let layout = self.pipeline_layout(layouts);
@@ -1344,10 +1441,13 @@ impl Gpu {
         p
     }
 
-    pub fn bind_group(&self, layout: Id, entries: &[Entry]) -> Id {
-        xpute_kit::ensure!(entries.len() <= GROUP_ENTRIES, ENOSPC, entries.len());
+    /// A bind group over `layout`, `entries` its group's bindings each once, each a resource
+    /// its kind takes: any other is a bug (`Layout::holds`).
+    #[track_caller]
+    pub fn bind_group(&self, layout: Layout, entries: &[Entry]) -> Id {
+        layout.holds(entries);
         let s = self.s();
-        handle_of(s.encoder.bind_group(&mut s.stream, layout, entries))
+        handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries))
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
@@ -1706,7 +1806,15 @@ impl Gpu {
     /// the kernel's memory at `address`; `fence`, the mapping's own fence
     /// and result, holds `ticket` once they are in or refused, a turn or
     /// more later, and only then may `id` be mapped again (xpute MAP_ASYNC).
-    pub fn map_read(&self, id: Id, off: u32, length: u32, addr: u32, fence: &[u32; 2], ticket: u32) {
+    pub fn map_read(
+        &self,
+        id: Id,
+        off: u32,
+        length: u32,
+        addr: u32,
+        fence: &[u32; 2],
+        ticket: u32,
+    ) {
         // SAFETY: the kernel's own range, which it asked to be written and
         // does not read while the mapping is out.
         let into = unsafe {

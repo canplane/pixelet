@@ -28,7 +28,7 @@ pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
 use crate::answer;
 pub use crate::answer::FILL_BITS;
-use crate::tally;
+use crate::count;
 pub use crate::ZOOM_BITS;
 
 pub const FACE_SHIFT: u32 = VAL_BITS;
@@ -54,16 +54,16 @@ const _: () = assert!(MISS >> (FILL_SHIFT + FILL_BITS) != 0);
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
 /// count listed or not (`MISS_ARGS_CNT`); then what its pixels, or the
-/// light's slots, counted where the `ray_counts` setting asks (`tally::RAYS`
-/// lanes from `tally::TOOK`, `MISS_ARGS_TALLY`). Each frame's start
+/// light's slots, counted where the `ray_counts` setting asks (`count::RAYS`
+/// lanes from `count::REUSED`, `MISS_ARGS_COUNT`). Each frame's start
 /// (`MISS_ARGS_EMPTY`) dispatches neither and counts none.
 pub const MISS_LANES: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;
 pub const MISS_ARGS_LIST: u32 = 0;
 pub const MISS_ARGS_WHOLE: u32 = 3;
 pub const MISS_ARGS_CNT: u32 = 6;
-pub const MISS_ARGS_TALLY: u32 = 7;
-pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
+pub const MISS_ARGS_COUNT: u32 = 7;
+pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_COUNT + count::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
 
 /// The eye's walk again's words past those: the args what lies about the

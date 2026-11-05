@@ -17,7 +17,7 @@ use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::pyramid::{self, BUCKET};
-use pxl_engine::{eye, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{count, eye, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
 };
@@ -33,8 +33,10 @@ const EYE_WEST: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 
 const SIZE: u32 = 256;
-/// A word a GPU's rounding may move, as tests/walk.rs takes it.
-const WITHIN: u32 = 1024;
+/// A word a GPU's rounding may move, as tests/walk.rs takes it: its depth's product fused into
+/// the push after it, and its product with `light::DEPTH_ONE` into the half after it, a word's
+/// step each. Nothing is divided: the light's reciprocals and starts are the host's.
+const WITHIN: u32 = 2;
 const FRAME: u32 = 9;
 /// Slots told of a case that differs, its table a copy each; those past some times as many
 /// are read as they are, a wrong shader differing nearly everywhere.
@@ -95,10 +97,10 @@ fn box_of(c: &Case) -> (Light, Starts) {
     let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
     let starts = Starts {
         base,
-        across: across.map(|v| v * q),
-        down: down.map(|v| v * q),
+        across: across.map(|v| light::fixed(v * q)),
+        down: down.map(|v| light::fixed(v * q)),
         at: [a0.0, a1.0, a2.0, a3.0],
-        frac: [a0.1, a1.1, a2.1, a3.1],
+        frac: [a0.1, a1.1, a2.1, a3.1].map(|f| f.map(light::fixed)),
     };
     (s, starts)
 }
@@ -684,7 +686,7 @@ fn run_case(
     drop(empty);
     let mut table0 = vec![0u32; pyramid::WORDS as usize];
     table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::TALLY_ON as usize] = 1;
+    table0[pyramid::COUNT_ON as usize] = 1;
     if case.eye_first {
         let mut q = Keeping {
             w,
@@ -804,8 +806,7 @@ fn run_case(
     }
 
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
-    let mut read_only = table0.clone();
-    let (mut same, mut stepped, mut axis_over, mut differ) = (0u32, 0u32, 0u32, 0u32);
+    let (mut same, mut axis_over, mut differ) = (0u32, 0u32, 0u32);
     let mut first_differ = None;
     for k in 0..n as usize {
         if !walked[k] {
@@ -821,18 +822,6 @@ fn run_case(
         }
         if an_axis_over(&s, got[k], want[k]) {
             axis_over += 1;
-        } else if stepped + differ <= TELLS * 8
-            && a_step_over(
-                w,
-                case,
-                &s,
-                &starts,
-                (&mut read_only, tag),
-                k as u32,
-                got[k],
-            )
-        {
-            stepped += 1;
         } else {
             differ += 1;
             first_differ.get_or_insert((k, got[k], want[k]));
@@ -1016,9 +1005,9 @@ fn run_case(
     }
 
     // Its count of what it asked.
-    let lane = pyramid::tally_at(tally::LIGHT, tally::MISS) as usize;
+    let lane = pyramid::lane_at(count::LIGHT, count::MISS) as usize;
     let tallied = u64::from(table_hand[lane]);
-    let asked_lane = pyramid::tally_at(tally::LIGHT, tally::ASKED) as usize;
+    let asked_lane = pyramid::lane_at(count::LIGHT, count::ASKED) as usize;
     let asked = u64::from(table_hand[asked_lane]);
 
     // The next frame: the walk over the table alone first, then this pass for what it left.
@@ -1095,26 +1084,12 @@ fn run_case(
         return;
     }
     let mut next_differ = 0u32;
-    let mut next_stepped = 0u32;
+    let mut next_axis_over = 0u32;
     let mut first_next = None;
     for k in 0..n as usize {
         if still[k] && got2[k].abs_diff(want2[k]) > WITHIN {
-            if an_axis_over(&s, got2[k], want2[k])
-                || next_stepped + next_differ <= TELLS * 8
-                    && a_step_over(
-                        w,
-                        case,
-                        &s,
-                        &starts,
-                        (
-                            &mut table_next,
-                            pyramid::tag(FRAME + 1, pyramid::LIGHT_MISSED_PASS),
-                        ),
-                        k as u32,
-                        got2[k],
-                    )
-            {
-                next_stepped += 1;
+            if an_axis_over(&s, got2[k], want2[k]) {
+                next_axis_over += 1;
             } else {
                 next_differ += 1;
                 first_next.get_or_insert((k, got2[k], want2[k]));
@@ -1136,7 +1111,10 @@ fn run_case(
         .filter(|&e| entry(&table_after, e) != entry(&next, e))
         .count() as u64;
 
-    eprintln!("{name}: {same} alike, {axis_over} an axis over, {stepped} a step over, {differ} differ of {} ; {kinds:?}", kinds["slots"]);
+    eprintln!(
+        "{name}: {same} alike, {axis_over} an axis over, {differ} differ of {} ; {kinds:?}",
+        kinds["slots"]
+    );
     let line = |name: &str, a: &Asks| {
         eprintln!(
             "  {name}: asks {} of {} visits: {} past the roots, {} absent, {} at other zooms, {} its own; {} off a slot",
@@ -1153,7 +1131,7 @@ fn run_case(
     );
     eprintln!("  buckets of one ask: {}, {alone_differ} differ, {twice} slots a node's twice; the Rust's alone visited by {only_ref_most} rays at most; traps (laid, Rust's, hand's): {trap_cnt:?}", alone.len());
     eprintln!(
-        "  next frame: {struck} ended by the table, {slots_left} left, {next_stepped} a step over, {next_differ} differ, {rewritten} slots written; tally {} asked",
+        "  next frame: {struck} ended by the table, {slots_left} left, {next_axis_over} an axis over, {next_differ} differ, {rewritten} slots written; tally {} asked",
         table_after[asked_lane]
     );
     line("next frame", &asks_next);
@@ -1173,10 +1151,8 @@ fn run_case(
     if differ != 0 {
         fail(format!("{differ} slots differ, first {first_differ:?}"));
     }
-    if stepped > 32 || axis_over > 256 {
-        fail(format!(
-            "too many a step over: {stepped}, an axis over: {axis_over}"
-        ));
+    if axis_over > 256 {
+        fail(format!("too many an axis over: {axis_over}"));
     }
     if bad_entry != 0 {
         fail(format!("{bad_entry} kept wrong, first {first_bad:?}"));
@@ -1237,78 +1213,6 @@ fn an_axis_over(s: &Light, got: u32, want: u32) -> bool {
         let by = (libm::fabsf(s.bias[a] - s.bias[b]) * one) as u32;
         apart.abs_diff(by) <= WITHIN
     })
-}
-
-/// Whether the word `got` of slot `k` is what its ray ends at from a start a step over, or,
-/// on a tile whose distance lies on a boundary of the zooms asked, at the band a GPU's
-/// rounding of its `length` takes it to.
-fn a_step_over(
-    w: World,
-    case: &Case,
-    s: &Light,
-    starts: &Starts,
-    (table, tag): (&mut [u32], u32),
-    k: u32,
-    got: u32,
-) -> bool {
-    let slot = [k % SIZE, k / SIZE];
-    let (o, r, d) = slot_ray(case, s, starts, slot);
-    let mut ends_at = |from: [i32; 3], r: &Ray, d: Detail| {
-        let mut q = Keeping {
-            w,
-            cuts: case.cuts,
-            table: &mut *table,
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: None,
-        };
-        let t = cast::first(&mut q, from, r, d, Until::Opaque);
-        let word = light::word(light::depth(s, &t));
-        word.abs_diff(got) <= WITHIN || an_axis_over(s, got, word)
-    };
-    let mut asks = vec![d];
-    for by in [1.000001f32, 0.999999] {
-        let moved = Light {
-            across: s.across.map(|v| v * by),
-            down: s.down.map(|v| v * by),
-            ..*s
-        };
-        asks.push(slot_ray(case, &moved, starts, slot).2);
-    }
-    asks.dedup_by(|a, b| a.range == b.range);
-    let stepped = asks.iter().any(|&d| {
-        (0..27).any(|m| {
-            let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
-            ends_at(from, &r, d)
-        })
-    });
-    if stepped {
-        return true;
-    }
-    // A cell whose edge it stops at, its span in it a few of the steps its start is rounded
-    // to: starts two steps apart on two axes pass by.
-    let mut q = Keeping {
-        w,
-        cuts: case.cuts,
-        table: &mut *table,
-        tag,
-        asks: Asks::default(),
-        writes: true,
-        met: None,
-    };
-    let t = cast::first(&mut q, o, &r, d, Until::Opaque);
-    let og = cast::grid_of(o);
-    let side = (1u64 << (32 - t.hit.node.zoom)) as f32 / (1u32 << FRAC_W) as f32;
-    let leaves = (0..3)
-        .filter(|&a| r.dir[a] != 0.0)
-        .map(|a| {
-            let from =
-                t.hit.node.corner[a].wrapping_sub(og[a]) as i32 as f32 / (1u32 << FRAC_W) as f32;
-            (if r.dir[a] > 0.0 { from + side } else { from }) / r.dir[a]
-        })
-        .fold(f32::MAX, f32::min);
-    t.ends == End::Hit && leaves - t.hit.t < 4.0 / (1u32 << FRAC_W) as f32
 }
 
 /// A slot that differs said where it can be read: its words, the node its reference walk

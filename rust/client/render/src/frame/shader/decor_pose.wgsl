@@ -142,7 +142,8 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (part && !is_changed(cell, vec4<i32>(leaf, leaf + 1i))) {
     return;
   }
-  // The finest clip level holding its leaf column (`DecorQuery::finest`): `cell`'s holds it.
+  // The finest clip level holding its leaf column (`DecorQuery::finest`): its own or finer, as
+  // a pair is listed only where its brick's row is held (decor_mark.wgsl).
   let zoom = lookup_from(step_to(LOOKUP_NONE, LEAF_CELL, leaf).place);
   let s = LEAF_CELL - zoom;
   // The surface asked, its clip level's and then the finest's; the last its pose's.

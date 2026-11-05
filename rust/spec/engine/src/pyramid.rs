@@ -40,10 +40,10 @@
 
 use crate::answer::Kind;
 use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
+use crate::count;
 use crate::overwrite;
 use crate::overwrite::NodeSlot;
 use crate::overwrite::{cut_box, BOXES};
-use crate::tally;
 use crate::world::INHERITANCE_WORDS;
 use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
@@ -57,8 +57,8 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 /// pxl-render gpu/generator.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN_CAP` at most, past which all is forgotten (`reads_written`); and
-/// whether its walks count what they ask, and what they counted (`TALLY_ON`,
-/// `TALLY_AT`).
+/// whether its walks count what they ask, and what they counted (`COUNT_ON`,
+/// `COUNT_AT`).
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
@@ -68,22 +68,22 @@ pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN_CAP: u32 = 32;
 /// Whether the walks count what they ask, where the `ray_counts` setting
 /// asks, and the words they count into, each observer's walks' lanes
-/// (`tally_at`).
-pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
-pub(crate) const TALLY_AT: u32 = TALLY_ON + 1;
-pub(crate) const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
+/// (`lane_at`).
+pub const COUNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
+pub(crate) const COUNT_AT: u32 = COUNT_ON + 1;
+pub(crate) const COUNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
 /// The missed pixels' hits kept for their faces (pxl-engine
 /// `beam::HIT_WORDS`): the dispatch over them, as the walks again raise
 /// it, and their count (`HITS_ARGS`, `HITS_CNT`), set each frame the cast
 /// runs with the head; read, not written, by the passes it dispatches.
-pub const HITS_ARGS: u32 = TALLY_AT + TALLY_WORDS;
+pub const HITS_ARGS: u32 = COUNT_AT + COUNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
 pub const HEAD_WORDS: u32 = HITS_CNT + 1;
 
-/// Where `observer`'s walks count lane `lane` (pxl-engine `tally::BEAM`
-/// to `tally::MISS`) in the head.
-pub const fn tally_at(observer: u32, lane: u32) -> u32 {
-    TALLY_AT + observer * tally::WALKS + lane
+/// Where `observer`'s walks count lane `lane` (pxl-engine `count::BEAM`
+/// to `count::MISS`) in the head.
+pub const fn lane_at(observer: u32, lane: u32) -> u32 {
+    COUNT_AT + observer * count::WALKS + lane
 }
 
 /// What a frame forgets: nothing; everything, where what every node is

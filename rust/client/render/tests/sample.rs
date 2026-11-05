@@ -21,7 +21,7 @@ use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
 use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, raster, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{count, eye, face, raster, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
     SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
@@ -39,7 +39,8 @@ const SIZE: u32 = 256;
 const FRAME: u32 = 9;
 const CAST: u32 = 7;
 const WORKGROUP: u32 = beam::SAMPLE_SIDE;
-/// Samples apart from the reference tried from a start a step over (`a_step_over`), at most.
+/// Missed pixels apart from the reference tried from a start a step over, at most: what the
+/// GPU's own way of an eye's ray (walk_node.wgsl `eye_aim`) takes across an edge.
 const STEPS_TRIED: u32 = 32;
 /// Rays that visit a node for it to be no grazing's.
 const SURE: u32 = 9;
@@ -436,8 +437,8 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
         apart: false,
         passes: [pyramid::SAMPLES_PASS, pyramid::BEAM_PASS],
         lanes: [
-            pyramid::tally_at(tally::EYE, tally::SAMPLE),
-            pyramid::tally_at(tally::EYE, tally::ASKED),
+            pyramid::lane_at(count::EYE, count::SAMPLE),
+            pyramid::lane_at(count::EYE, count::ASKED),
         ],
         groups: [
             grid.samples[0].div_ceil(WORKGROUP),
@@ -567,8 +568,8 @@ fn light_of(c: &LightCase, moved: [i32; 2]) -> Observed {
         apart: true,
         passes: [pyramid::LIGHT_SAMPLES_PASS, pyramid::LIGHT_BEAM_PASS],
         lanes: [
-            pyramid::tally_at(tally::LIGHT, tally::SAMPLE),
-            pyramid::tally_at(tally::LIGHT, tally::ASKED),
+            pyramid::lane_at(count::LIGHT, count::SAMPLE),
+            pyramid::lane_at(count::LIGHT, count::ASKED),
         ],
         groups: [n.div_ceil(WORKGROUP), n.div_ceil(WORKGROUP)],
         cuts: c.cuts,
@@ -843,7 +844,7 @@ fn run_frame(
 
     // Each sample's words: ended by the hit, or walked after it.
     let (mut same, mut differ, mut none_put) = (0u64, 0u64, 0u64);
-    let (mut axis_over, mut stepped, mut visits_off) = (0u64, 0u64, 0u64);
+    let (mut axis_over, mut visits_off) = (0u64, 0u64);
     let mut first = None;
     let listed_case = matches!(obs.rays, Rays::Light { taken: Some(_), .. });
     for (place, &s) in taken.iter().enumerate() {
@@ -911,21 +912,6 @@ fn run_frame(
         ok = ok && out[at + beam::SAMPLE_FACES as usize] == UNTOUCHED;
         // Left: ended by the second pass, none of it put by the first.
         ok = ok && (!was_left || ended[zoom_word] == UNTOUCHED);
-        if !ok
-            && stepped + differ <= u64::from(STEPS_TRIED)
-            && a_step_over(
-                w,
-                obs,
-                words,
-                table0,
-                tag,
-                s,
-                &out[at..at + beam::SAMPLE_WORDS as usize],
-            )
-        {
-            ok = true;
-            stepped += 1;
-        }
         if ok {
             same += 1;
         } else {
@@ -943,7 +929,6 @@ fn run_frame(
         let a = met.hit.asset[0];
         let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
         add("samples", true);
-        add("a step over", false);
         add("left", was_left);
         add("ended", !was_left);
         add("hit", hits);
@@ -1097,7 +1082,7 @@ fn run_frame(
     let tallied = u64::from(table_hand[lane]);
     let asked = u64::from(table_hand[obs.lanes[1] as usize]);
     eprintln!(
-        "{name}: {same} alike ({axis_over} an axis over, {stepped} a step over, {visits_off} visits off), {differ} differ of {} samples, {none_put} not needed, {stray} stray; {cnt} left, {left_unasked} asking nothing; tally {tallied} visits {asked} asked",
+        "{name}: {same} alike ({axis_over} an axis over, {visits_off} visits off), {differ} differ of {} samples, {none_put} not needed, {stray} stray; {cnt} left, {left_unasked} asking nothing; tally {tallied} visits {asked} asked",
         taken.len()
     );
     eprintln!(
@@ -1131,9 +1116,9 @@ fn run_frame(
     if stray != 0 {
         fail(format!("{stray} samples put that no thread takes"));
     }
-    if stepped > 32 || axis_over > 256 || visits_off > 16 {
+    if axis_over > 256 || visits_off > 16 {
         fail(format!(
-            "too many a step over: {stepped}, an axis over: {axis_over}, visits off: {visits_off}"
+            "too many an axis over: {axis_over}, visits off: {visits_off}"
         ));
     }
     if bad != 0 {
@@ -1171,38 +1156,6 @@ fn run_frame(
     table_hand
 }
 
-/// Whether the words `got` of sample `s` are what its ray ends at from a start a step over, as a
-/// GPU rounds it.
-fn a_step_over(
-    w: World,
-    obs: &Observed,
-    beams: &[u32],
-    table: &[u32],
-    tag: u32,
-    s: [u32; 2],
-    got: &[u32],
-) -> bool {
-    let (o, r, d) = obs.aim(s);
-    (0..27).any(|m| {
-        let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
-        let mut q = Keeping {
-            w,
-            cuts: obs.cuts,
-            table: &mut table.to_vec(),
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: None,
-        };
-        let (met, _) = obs.walk_from(&mut q, beams, s, from, &r, d);
-        let node = beam::SAMPLE_NODE as usize;
-        met.ends != End::Miss
-            && got[node + beam::NODE_ZOOM as usize] == met.hit.node.zoom
-            && (0..3).all(|a| got[node + beam::NODE_CORNER as usize + a] == met.hit.node.corner[a])
-            && got[beam::SAMPLE_ASSET as usize] == met.hit.asset[0]
-    })
-}
-
 /// An observer's two frames, the second a step moved.
 #[expect(
     clippy::too_many_arguments,
@@ -1232,7 +1185,7 @@ fn two_frames(
     let mut kinds = Kinds::new();
     let mut table0 = vec![0u32; pyramid::WORDS as usize];
     table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::TALLY_ON as usize] = 1;
+    table0[pyramid::COUNT_ON as usize] = 1;
     let table_buf = gpu.buffer(&table0, store_of());
     let words = lines(first, &table_buf);
     let mut after_beam = gpu.read(&table_buf);
@@ -2858,7 +2811,7 @@ fn coarser(obs: &Observed, words: &mut [u32]) -> u64 {
 fn frame_table() -> Vec<u32> {
     let mut t = vec![0u32; pyramid::WORDS as usize];
     t[pyramid::FRAME as usize] = FRAME;
-    t[pyramid::TALLY_ON as usize] = 1;
+    t[pyramid::COUNT_ON as usize] = 1;
     t
 }
 

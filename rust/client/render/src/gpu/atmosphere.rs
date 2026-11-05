@@ -21,9 +21,9 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW,
-    PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE, SHADER_ATMOS_FROXEL, STORAGE_RW,
-    STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, TEXTURE_ARRAY, UNIFORM,
+    binds, COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
+    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE,
+    SHADER_ATMOS_FROXEL, STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -41,8 +41,9 @@ use crate::frame::shader::word::{
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, signaled, pass_desc, room, sampler_entry, texture_usage,
-    view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, RESULT,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, signaled, texture_usage,
+    view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Layout, Load, RenderContext,
+    RESULT,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -55,13 +56,8 @@ use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// Bindings 8 through 18 but the sky view's own 14, and the air's volume at
-/// 22: eleven entries.
-pub const AIR_ENTRIES: usize = 11;
-
-/// The air's words, its transmittance and its sampler: what a pass lit
-/// through the air reads of it (atmos_medium.wgsl).
-pub const MEDIUM: [u32; 3] = [8, 9, 11];
+/// The air's entries every painter and the sky read (record.rs `AIR`).
+pub const AIR_ENTRIES: usize = 6;
 
 /// What the volume's maker binds: the volume it writes, the air's words and
 /// the tables it marches through, and which light, as its sky view's.
@@ -86,22 +82,17 @@ const FROXEL_GROUP: [u32; 18] = [
     UNIFORM,
 ];
 
-/// What the exposure's maker binds: the texel it writes, the frame's words,
-/// the air but the texel and the volume, its own words and what it measures.
-const EXPOSURE_GROUP: [u32; 39] = [
+/// What the exposure's maker binds: the texel it writes, the air's words, its
+/// transmittance, sampler, multiscattering and irradiance, its own words and
+/// what it measures.
+const EXPOSURE_GROUP: [u32; 24] = [
     1,
     COMPUTE,
     STORAGE_TEXTURE_2D,
-    0,
-    COMPUTE,
-    UNIFORM,
     8,
     COMPUTE,
     UNIFORM,
     9,
-    COMPUTE,
-    TEXTURE,
-    10,
     COMPUTE,
     TEXTURE,
     11,
@@ -110,25 +101,24 @@ const EXPOSURE_GROUP: [u32; 39] = [
     12,
     COMPUTE,
     TEXTURE,
-    15,
-    COMPUTE,
-    TEXTURE,
-    16,
-    COMPUTE,
-    TEXTURE_ARRAY,
-    17,
-    COMPUTE,
-    TEXTURE_ARRAY,
-    18,
-    COMPUTE,
-    TEXTURE,
     14,
     COMPUTE,
     UNIFORM,
+    18,
+    COMPUTE,
+    TEXTURE,
     20,
     COMPUTE,
     STORAGE_RW,
 ];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
+        && binds(&[SHADER_ATMOS_FROXEL], &FROXEL_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 
 /// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
 pub const EARTH_LAYERS: u32 = GROUND_DEMAND_TILES;
@@ -333,7 +323,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Atmosphere {
         let uniform = g.buf(
             word_bytes(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -479,93 +469,74 @@ impl Atmosphere {
             froxel: pipelines.build_compute(g, SHADER_ATMOS_FROXEL, &FROXEL_GROUP),
             froxel_groups: [0; 2],
         };
-        // Every table's group is the air's entries it reads and its own.
+        // Every table's group is the air's entries its layout binds, and its own.
         let air = atmosphere.entries();
-        let of = |bindings: &[u32], own: &[Entry]| -> Vec<Entry> {
-            let shared = air.iter().filter(|e| bindings.contains(&e.binding));
+        let of = |layout: Layout, own: &[Entry]| -> Vec<Entry> {
+            let shared = air.iter().filter(|e| layout.binds(e.binding));
             shared.chain(own).copied().collect()
         };
         let multiscatter = view_entry(12, views[MULTISCATTER]);
-        let frame = buf_entry(0, frame_buf);
         let lights = atmosphere.lights;
         let light = |k: usize| buf_entry(14, lights[k]);
         // The exposure reads the air but what it writes, and the volume made of it.
-        let unexposed: Vec<u32> = air
-            .iter()
-            .map(|e| e.binding)
-            .filter(|&b| b != 13 && b != 22)
-            .collect();
-        let reads: [(usize, Vec<Entry>); TABLES] = [
-            (TRANSMITTANCE, of(&[8], &[])),
-            (MULTISCATTER, of(&MEDIUM, &[])),
-            (IRRADIANCE, of(&MEDIUM, &[multiscatter])),
-            // The views are measured from the frame's up, and take their
-            // slopes off the land's light too.
+        let own: [(usize, Vec<Entry>); TABLES] = [
+            (TRANSMITTANCE, vec![]),
+            (MULTISCATTER, vec![]),
+            (IRRADIANCE, vec![multiscatter]),
+            // The views take their slopes off the land's light too.
             (
                 SKY_VIEW,
-                of(
-                    &[8, 9, 11, 18],
-                    &[
-                        multiscatter,
-                        light(0),
-                        frame,
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![multiscatter, light(0), buf_entry(20, atmosphere.slopes.0)],
             ),
             (
                 MOON_VIEW,
-                of(
-                    &[8, 9, 11, 18],
-                    &[
-                        multiscatter,
-                        light(1),
-                        frame,
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![multiscatter, light(1), buf_entry(20, atmosphere.slopes.0)],
             ),
             (
                 EXPOSURE_TEXEL,
-                of(
-                    &unexposed,
-                    &[
-                        view_entry(1, views[EXPOSURE_TEXEL]),
-                        frame,
-                        buf_entry(14, atmosphere.exposure_words),
-                        buf_entry(20, atmosphere.slopes.0),
-                    ],
-                ),
+                vec![
+                    multiscatter,
+                    view_entry(1, views[EXPOSURE_TEXEL]),
+                    buf_entry(14, atmosphere.exposure_words),
+                    buf_entry(20, atmosphere.slopes.0),
+                ],
             ),
         ];
-        for (k, entries) in reads {
+        for (k, own) in own {
             let layout = if k == EXPOSURE_TEXEL {
                 atmosphere.exposure.layouts[0]
             } else {
                 atmosphere.passes[pass_of(k)].layouts[0]
             };
-            atmosphere.groups[k] = g.bind_group(layout, &entries);
+            atmosphere.groups[k] = g.bind_group(layout, &of(layout, &own));
         }
+        let froxel = atmosphere.froxel.layouts[0];
         for k in 0..2 {
-            let froxel = of(&[8, 9, 11, 12], &[view_entry(1, volume), light(k)]);
-            atmosphere.froxel_groups[k] = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
+            let own = [multiscatter, view_entry(1, volume), light(k)];
+            atmosphere.froxel_groups[k] = g.bind_group(froxel, &of(froxel, &own));
         }
         atmosphere
     }
 
+    /// The air every painter and the sky read (record.rs `AIR`).
     pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
         [
             buf_entry(8, self.uniform),
             view_entry(9, self.views[TRANSMITTANCE]),
-            view_entry(10, self.views[SKY_VIEW]),
             sampler_entry(11, self.sampler),
             view_entry(13, self.views[EXPOSURE_TEXEL]),
+            view_entry(18, self.views[IRRADIANCE]),
+            view_entry(22, self.volume),
+        ]
+    }
+
+    /// The air the sky alone reads (record.rs `SKY_AIR`).
+    pub fn sky_entries(&self) -> [Entry; 4] {
+        [
+            view_entry(10, self.views[SKY_VIEW]),
             view_entry(15, self.views[MOON_VIEW]),
             view_entry(16, self.earth.view),
             view_entry(17, self.earth_tiles.1),
-            view_entry(18, self.views[IRRADIANCE]),
-            view_entry(12, self.views[MULTISCATTER]),
-            view_entry(22, self.volume),
         ]
     }
 

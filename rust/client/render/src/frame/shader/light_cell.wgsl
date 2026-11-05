@@ -9,11 +9,11 @@
 /// BEAM_WINDOW` beam rays a side from its own corner, and that beam ray, whose line its rays
 /// resume from; and whether they do, only where every beam ray of the window asked the band
 /// its rays ask (`cast::Detail::alike`): the beam's spacing is one, so only its band tells. A
-/// workgroup is a square of the light's list's lanes, as `light_take` reads them.
+/// workgroup is a square of the light's list's lanes, as `light_item` reads them.
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let cells = head_word(LIGHT_HEAD_CELLS_ACROSS);
-  let c = light_take(LEVEL_CELL, id.xy);
+  let c = light_item(LEVEL_CELL, id.xy);
   if (c.x >= cells || c.y >= cells || !light_needs(LEVEL_CELL, c)) {
     return;
   }

@@ -42,8 +42,8 @@ const _: () = assert!(
 );
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
-/// start in Q3 and what rounding to it left.
-type Anchor = ([i32; 2], [i32; 3], [f32; 3]);
+/// start in Q3 and what rounding to it left, in fixed point (`light::fixed`).
+type Anchor = ([i32; 2], [i32; 3], [i32; 3]);
 
 /// WebGPU clip z in [0, 1], column-major.
 fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
@@ -333,11 +333,12 @@ impl Shadow {
                 let rel = inverse[a] * x + inverse[4 + a] * y + inverse[12 + a];
                 (eye[a] + rel) * q3
             };
-            let (at, frac): (Vec<i32>, Vec<f32>) = (0..3)
+            let step = f64::from(1u32 << light::STEP_BITS);
+            let (at, frac): (Vec<i32>, Vec<i32>) = (0..3)
                 .map(|a| {
                     let v = p(a);
                     let r = v.round_ties_even();
-                    ((r as i64) as i32, (v - r) as f32)
+                    ((r as i64) as i32, ((v - r) * step).round_ties_even() as i32)
                 })
                 .unzip();
             let at = [at[0], at[1], at[2]];
@@ -354,8 +355,8 @@ impl Shadow {
         let light = Light::of_words(&self.light_words);
         Starts {
             base,
-            across: light.across.map(|v| v * q3 as f32),
-            down: light.down.map(|v| v * q3 as f32),
+            across: light.across.map(|v| light::fixed(v * q3 as f32)),
+            down: light.down.map(|v| light::fixed(v * q3 as f32)),
             at: [a0.0, a1.0, a2.0, a3.0],
             frac: [a0.1, a1.1, a2.1, a3.1],
         }

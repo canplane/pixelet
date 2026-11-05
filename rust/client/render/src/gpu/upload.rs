@@ -9,7 +9,7 @@ use xpute_guest::mem;
 use crate::frame::draw;
 use crate::frame::draw::DRAW_WORDS;
 use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
-use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
 /// only its own records.
@@ -89,7 +89,7 @@ pub struct Uploads {
     missing: u32,
     /// The layout every upload's group is in (record.rs `UPLOAD_LAYOUT`),
     /// made on the device as the first is grouped.
-    layout: u32,
+    layout: Option<Layout>,
 }
 
 pub(crate) fn buf_size(len: u32) -> u32 {
@@ -130,7 +130,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         cnt: 0,
         bytes: 0,
         missing: 0,
-        layout: 0,
+        layout: None,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
     unsafe { draw::set_lists(at + (UPLOAD_COLUMNS * slots * 4) as u32, live) };
@@ -145,7 +145,7 @@ impl Uploads {
         self.buf.fill(0);
         self.group.fill(0);
         self.missing = self.cnt;
-        self.layout = 0;
+        self.layout = None;
     }
 
     /// As far as the turn's stream has room.
@@ -299,10 +299,8 @@ impl Uploads {
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
-            if self.layout == 0 {
-                self.layout = g.layout(&UPLOAD_LAYOUT);
-            }
-            let id = g.bind_group(self.layout, &[buf_entry(0, self.buf[i])]);
+            let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
+            let id = g.bind_group(layout, &[buf_entry(0, self.buf[i])]);
             self.group[i] = id;
         }
         Some(self.group[i])

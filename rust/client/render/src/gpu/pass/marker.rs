@@ -13,7 +13,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
-    Format, Gpu, Load, RenderContext,
+    Format, Gpu, Layout, Load, RenderContext,
 };
 use crate::gpu::atlas::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::atlas::{AtlasPainter, DisplayList, ATLAS_SCALE};
@@ -357,7 +357,7 @@ impl MarkerPass {
                 || set.numbers != self.numbers_view
                 || set.group == 0
             {
-                let bound = |layout: u32, before: u32| {
+                let bound = |layout: Layout, before: u32| {
                     g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, before)])
                 };
                 release(set.group);

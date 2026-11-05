@@ -85,7 +85,7 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
-    ("tally", 0),
+    ("count", 0),
     ("area", 1),
     ("ground", 1),
     ("clipmap", 1),

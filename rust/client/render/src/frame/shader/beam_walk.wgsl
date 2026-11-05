@@ -26,12 +26,11 @@ struct Beamed {
   visits: u32,
 }
 
-/// The beam ray from `origin` aimed `aimed`, reaching `t_max` at the zooms `range` holds it to,
+/// The beam ray from `origin` aimed `aimed`, its reciprocal `inv` (walk_node.wgsl `Aim`), reaching `t_max` at the zooms `range` holds it to,
 /// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
 /// `base` (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
-fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
+fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
   let dir = ray_dir(aimed);
-  let inv = ray_inv(dir);
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
@@ -41,6 +40,9 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, 
   var roots = vec3<i32>(0);
   var at = world_root(0u, idx_of(corner, zoom, roots, r0));
   var visits = 0u;
+  // A walk that runs out of steps, a node looked at a step, has gone to its reach, as
+  // `cast::walk_at_most` and `walk_asking` end one: it hands on `t_max`, as a ray that reached
+  // it does, its line left where it is.
   var hit_t = t_max;
   for (var step = 0u; step < STEPS_MOST; step += 1u) {
     let u = under(zoom);
@@ -57,8 +59,8 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, 
       // `node_dist_sq`).
       let far_v = max(-lo, hi);
       let near_v = min(max(lo, vec3<f32>(0.0)), hi);
-      let far2 = dot(far_v, far_v);
-      let zooms = zoom_at(far2, range) | (zoom_at(dot(near_v, near_v), range) << ZOOM_BITS);
+      let far2 = squared(far_v);
+      let zooms = zoom_at(far2, range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
       let a = ask_handed(at, zoom, idx_of(corner, zoom, roots, r0), zooms, false);
       at = a.handed;
       visits += 1u;
@@ -71,10 +73,8 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, 
         // It passes whole a split whose box it clears by `2√2` of the spacing, stops at
         // one too narrow to share with the rays about it, and enters every other
         // (`narrow`, `meets_box`).
-        // The beam's spacing at its far corner (`Spacing::width`).
-        let width = spacing.x + spacing.y * sqrt(far2);
-        let side_w = hi.x - lo.x;
-        let narrow = side_w * side_w < 8.0 * (width * width);
+        let width = spacing_width(spacing, far2);
+        let too_narrow = narrow(hi.x - lo.x, width);
         let grown = NARROW * width;
         let past = box_past(a.asset);
         let box_lo = units(corner + box_step(box_first(a.asset), u, 0u), og, roots) - vec3<f32>(grown);
@@ -85,13 +85,13 @@ fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, 
         ) + vec3<f32>(grown);
         let b = span_of(dir, inv, box_lo, box_hi, t0, t_max);
         let meets = max(t0, largest(b.near)) < min(t1, smallest(b.far));
-        into = meets && !narrow;
-        ends = meets && narrow;
+        into = meets && !too_narrow;
+        ends = meets && too_narrow;
       }
       if (ends) {
         // Where the ray enters the node (`entry_plane`).
         let axis = crossing(dir, s.near, true);
-        hit_t = max(s.near[axis], 0.0);
+        hit_t = past_origin(s.near[axis]);
         break;
       }
     }

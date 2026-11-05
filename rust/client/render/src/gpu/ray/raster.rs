@@ -19,7 +19,7 @@ use pxl_engine::{beam, eye, light, raster, ray};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
+    binds, COMPUTE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_LIGHT_SAMPLE_BOX,
     SHADER_SAMPLE_BOX, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
@@ -123,6 +123,15 @@ const FACE_GROUP: [u32; 24] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
     STORAGE, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE_RW, 16, COMPUTE, STORAGE,
 ];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
+        && binds(&[SHADER_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
+        && binds(&[SHADER_FACE], &FACE_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 const _: () = assert!(
     floor::holds(&[&FACE_GROUP]),
     "the faces' group binds past WebGPU's floor"

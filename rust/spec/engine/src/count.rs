@@ -1,14 +1,14 @@
-// pxl-engine/tally.rs
+// pxl-engine/count.rs
 
-//! gpu-portable: what a cast walked and took, counted where the
+//! gpu-portable: what a cast walked and reused, counted where the
 //! `ray_counts` setting asks, one array an observer's lanes alike (`at`):
 //! the eye's and the light's, each cast by the same passes — its beam rays,
 //! its samples, its walk again, its pixels or slots taking the visible
 //! sample or walking, and the boxes its samples drew (pxl-render
-//! gpu/ray/tally.rs). A pass adds where it can write: a walk that writes
-//! the observed pyramid into its head (`pyramid::tally_at`), as no binding
+//! gpu/ray/count.rs). A pass adds where it can write: a walk that writes
+//! the observed pyramid into its head (`pyramid::lane_at`), as no binding
 //! more fits beside it; a pixel or a slot into its walk again's args
-//! (`ray::MISS_ARGS_TALLY`), which it adds to already, listing itself; the
+//! (`ray::MISS_ARGS_COUNT`), which it adds to already, listing itself; the
 //! boxes off the raster's draw (`raster::ARGS_INSTANCES`). The frame's last
 //! copies gather them into the array, which is read back and summed.
 
@@ -21,14 +21,14 @@ pub const OBSERVERS: u32 = 2;
 /// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walks
 /// that ask the world by hand, its samples' and the light's walk again,
 /// those asked of the world (`ASKED`), no slot answering; its pixels or
-/// slots that took the visible sample, those that walked and those that took
-/// the sky (`TOOK`, `WALKED`, `SKY`), together every one it cast again; the
+/// slots that reused the visible sample, those that walked and those that took
+/// the sky (`REUSED`, `WALKED`, `SKY`), together every one it cast again; the
 /// boxes drawn (`BOXES`).
 pub const BEAM: u32 = 0;
 pub const SAMPLE: u32 = 1;
 pub const MISS: u32 = 2;
 pub const ASKED: u32 = 3;
-pub const TOOK: u32 = 4;
+pub const REUSED: u32 = 4;
 pub const WALKED: u32 = 5;
 pub const SKY: u32 = 6;
 pub const BOXES: u32 = 7;
@@ -36,12 +36,16 @@ pub const LANES: u32 = 8;
 pub const WORDS: u32 = OBSERVERS * LANES;
 
 /// The lanes a walk writing the pyramid adds to, from the first
-/// (`BEAM` to `ASKED`), and those a pixel or a slot does (`TOOK` to
+/// (`BEAM` to `ASKED`), and those a pixel or a slot does (`REUSED` to
 /// `SKY`), each a run where it adds.
 pub const WALKS: u32 = 4;
 pub const RAYS: u32 = 3;
 const _: () = assert!(
-    BEAM == 0 && ASKED + 1 == WALKS && TOOK == WALKS && SKY + 1 == WALKS + RAYS && BOXES == SKY + 1
+    BEAM == 0
+        && ASKED + 1 == WALKS
+        && REUSED == WALKS
+        && SKY + 1 == WALKS + RAYS
+        && BOXES == SKY + 1
 );
 
 /// Lane `lane` of `observer` in the array.

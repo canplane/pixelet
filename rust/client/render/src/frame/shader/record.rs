@@ -205,9 +205,6 @@ struct Head {
     vertex: u32,
 }
 
-/// The shell holds the same list against the same numbers.
-pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
-
 const fn lit(shader: u32, cull: u32) -> Head {
     Head {
         shader,
@@ -279,51 +276,38 @@ const fn screen(shader: u32) -> Head {
     }
 }
 
-/// The air's bindings, numbered alike in every pass that reads it.
-const AIR: [[u32; 2]; 11] = [
+/// The air's bindings, numbered alike in every pass that reads them: those every painter and
+/// the sky read (gpu/atmosphere.rs `entries`).
+const AIR: [[u32; 2]; 6] = [
     [8, UNIFORM],
     [9, TEXTURE],
-    [10, TEXTURE],
     [11, SAMPLER],
     [13, TEXTURE],
-    [15, TEXTURE],
-    [16, TEXTURE_ARRAY],
-    [17, TEXTURE_ARRAY],
     [18, TEXTURE],
-    [12, TEXTURE],
     // The air before each point, made of the rest (gpu/atmosphere.rs `froxel`).
     [22, TEXTURE_3D],
 ];
+/// The air the sky alone reads: its views, the sun's and the moon's, and the Earth's picture
+/// and tiles (gpu/atmosphere.rs `sky_entries`).
+const SKY_AIR: [[u32; 2]; 4] = [
+    [10, TEXTURE],
+    [15, TEXTURE],
+    [16, TEXTURE_ARRAY],
+    [17, TEXTURE_ARRAY],
+];
+/// The multiple scattering's table, which the tables made after it read.
+const MULTISCATTER: [u32; 2] = [12, TEXTURE];
 
 /// The light's shadow map and its comparing sampler (shadow.wgsl), read where
 /// a lit fragment is shaded.
 const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
-const LIT_FRAME: [[u32; 2]; 14] = {
-    // The air in the vertex stage, where each point's lights and veil are
-    // worked out; a fragment reads its words and the eye's texel, whose white
-    // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
-    // are the sky pass's, laid out unread.
-    [
-        [0, UNIFORM],
-        SHADOW[0],
-        SHADOW[1],
-        AIR[0],
-        AIR[1],
-        AIR[2],
-        AIR[3],
-        AIR[4],
-        AIR[5],
-        AIR[6],
-        AIR[7],
-        AIR[8],
-        AIR[9],
-        AIR[10],
-    ]
-};
-/// The air's entries whole, the volume among them, which the sheets read as
-/// every painter does (atmos_air.wgsl `seen_from_eye`); the tables and the
-/// Earth's maps it does not read are laid out because the shader declares them.
-const CLOUD_GROUP: [[u32; 2]; 15] = and(
+/// The frame, the shadow and the air a painter reads: the air in the vertex stage, where each
+/// point's lights and veil are worked out; a fragment reads its words and the eye's texel,
+/// whose white it shows by (atmos_eye.wgsl).
+const LIT_FRAME: [[u32; 2]; 9] = and([[0, UNIFORM], SHADOW[0], SHADOW[1]], AIR);
+/// The sheets' own words and tiles, and the air as every painter reads it (atmos_air.wgsl
+/// `seen_from_eye`).
+const CLOUD_GROUP: [[u32; 2]; 10] = and(
     [[0, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]],
     AIR,
 );
@@ -332,7 +316,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, shadow, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 22] = and(
+const SCREEN_GROUP: [[u32; 2]; 17] = and(
     LIT_FRAME,
     [
         [3, TEXTURE_UINT_ARRAY],
@@ -432,7 +416,7 @@ const fn and<const N: usize, const M: usize, const R: usize>(
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 18] = and(
+const BOX_GROUP: [[u32; 2]; 13] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );
@@ -474,13 +458,16 @@ const MARK_GROUPS: [Group; 4] = [
 /// a draw's (`DRAW`).
 const MARKER_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
 const MARKER_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
-const SKY_GROUP: [[u32; 2]; 15] = and(
-    [
-        [0, UNIFORM],
-        [19, UNIFORM],
-        [2, TEXTURE_ARRAY],
-        [3, SAMPLER],
-    ],
+const SKY_GROUP: [[u32; 2]; 14] = and(
+    and::<4, 4, 8>(
+        [
+            [0, UNIFORM],
+            [19, UNIFORM],
+            [2, TEXTURE_ARRAY],
+            [3, SAMPLER],
+        ],
+        SKY_AIR,
+    ),
     AIR,
 );
 
@@ -811,7 +798,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_AO_DOWNSAMPLE => Descriptor::new(
             screen(SHADER_AO_DOWNSAMPLE),
             &[],
-            &[&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]]],
+            &[&[[0, UNIFORM], [1, DEPTH]]],
         ),
         PIPELINE_AO_SAMPLE => Descriptor::new(
             screen(SHADER_AO_SAMPLE),
@@ -842,18 +829,17 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_ATMOS_MULTISCATTER => Descriptor::new(
             screen(SHADER_ATMOS_MULTISCATTER),
             &[],
-            &[&[AIR[0], AIR[1], AIR[3]]],
+            &[&[AIR[0], AIR[1], AIR[2]]],
         ),
         PIPELINE_ATMOS_SKY_VIEW => Descriptor::new(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
             &[&[
-                [0, UNIFORM],
                 AIR[0],
                 AIR[1],
-                AIR[3],
-                AIR[8],
-                [12, TEXTURE],
+                AIR[2],
+                AIR[4],
+                MULTISCATTER,
                 [14, UNIFORM],
                 [20, STORAGE_RW],
             ]],
@@ -861,7 +847,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_ATMOS_IRRADIANCE => Descriptor::new(
             screen(SHADER_ATMOS_IRRADIANCE),
             &[],
-            &[&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]]],
+            &[&[AIR[0], AIR[1], AIR[2], MULTISCATTER]],
         ),
         PIPELINE_STAR => Descriptor::new(
             Head {
@@ -1017,10 +1003,6 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 }
 
 /// Every pipeline's record, worked out as the crate is built.
-#[expect(
-    clippy::large_const_arrays,
-    reason = "`is_floored` reads it as the crate is pipeline, which a static is not"
-)]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
     let mut id = 0;
@@ -1075,6 +1057,62 @@ const _: () = {
         assert!(
             is_floored(id),
             "a pipeline's layout binds past WebGPU's floor (frame/shader/floor.rs)"
+        );
+        id += 1;
+    }
+};
+
+/// Whether pipeline `id`'s groups lay out exactly what its shader reads: every binding the
+/// entry points it runs read (its vertex entry, `Head::vertex`, and `fs` where it has a
+/// fragment stage) an entry in its group of a kind the binding's declaration takes (build.rs
+/// `layout_kinds`); and every entry read by a pipeline that lays out the same group, as
+/// build.rs `BINDS` holds a compute group.
+const fn lays_out(id: u32) -> bool {
+    let desc = desc_of(id);
+    let entries = STAGES[desc.head.shader as usize];
+    let mut k = 0;
+    while k < entries.len() {
+        let [g, b, by, takes, vertex] = entries[k];
+        if vertex & 1 << desc.head.vertex != 0 || (desc.head.fragment && by & FRAGMENT != 0) {
+            if g as usize >= desc.groups.len() {
+                return false;
+            }
+            let group = desc.groups[g as usize];
+            let mut found = false;
+            let mut e = 0;
+            while e < group.len() {
+                found |= group[e][0] == b && takes & 1 << group[e][1] != 0;
+                e += 1;
+            }
+            if !found {
+                return false;
+            }
+        }
+        k += 1;
+    }
+    let mut g = 0;
+    while g < desc.groups.len() {
+        let group = desc.groups[g];
+        let mut e = 0;
+        while e < group.len() {
+            if stages_reading(group, group[e][0]) == NONE {
+                return false;
+            }
+            e += 1;
+        }
+        g += 1;
+    }
+    true
+}
+
+/// Every pipeline's groups against what its shader reads, checked as the crate is built,
+/// over every id.
+const _: () = {
+    let mut id = 0;
+    while id < PIPELINES {
+        assert!(
+            lays_out(id),
+            "a pipeline's groups lay out other than its shader reads (record.rs `lays_out`)"
         );
         id += 1;
     }

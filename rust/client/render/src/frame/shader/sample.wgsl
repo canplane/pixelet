@@ -17,6 +17,6 @@ fn sample_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let s = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let aim = sample_aim(s);
   let start = sample_start(aim, s);
-  let w = walk_asking(aim.origin, aim.dir, aim.t_max, aim.range, start);
+  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
   sample_put(sample_word(s), w, w.visits + start.visits);
 }

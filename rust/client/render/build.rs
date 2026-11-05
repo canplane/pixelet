@@ -77,7 +77,9 @@ fn main() {
     // Its word of what lies about its face, and that word's fields, a bit an
     // edge or a corner (pxl-engine face.rs).
     use pxl_engine::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
-    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
+    let faces = format!(
+        "const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n"
+    );
     // The side of the box a cell filled short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-engine answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
@@ -253,14 +255,14 @@ fn strip_comments(text: &str) -> String {
     out
 }
 
-// light_list.wgsl's `light_take` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes
+// light_list.wgsl's `light_item` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes
 // of one entry of the list, and every pass that calls it declares its workgroup by a side of its
 // own: light_beam.wgsl by `CORNER_SIDE`, light_cell.wgsl by `SAMPLE_SIDE`, light_sample_box.wgsl
-// (through `sample_taken`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
+// (through `sample_item`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
 // whole dispatch by that pass's own side (gpu/ray/cast.rs `light_args`), so each is that side.
 const _: () = assert!(
     LIGHT_TILE == SAMPLE_SIDE && CORNER_SIDE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
-    "light_take reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile, CORNER_SIDE \
+    "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile, CORNER_SIDE \
      and SQUARE_SIDE are each that side"
 );
 
@@ -271,7 +273,7 @@ fn walk_word() -> String {
     use pxl_engine::clipmap::{self, Lookup};
     use pxl_engine::overwrite::NodeSlot;
     use pxl_engine::{
-        answer, beam, cast, eye, face, light, param, pyramid, raster, ray, tally, value, SHARD_ZOOM,
+        answer, beam, cast, count, eye, face, light, param, pyramid, raster, ray, value, SHARD_ZOOM,
     };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
@@ -336,25 +338,32 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
         ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
         ("LIGHT_ANCHOR", light::ANCHOR as u32),
+        ("LIGHT_STEP_BITS", light::STEP_BITS),
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
         ("LIGHT_MISS_STRUCK", light::MISS_STRUCK),
         ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
         ("LIGHT_MISSED_PASS", pyramid::LIGHT_MISSED_PASS),
         ("MISSED_PASS", pyramid::MISSED_PASS),
-        ("EYE_MISS_TALLY", pyramid::tally_at(tally::EYE, tally::MISS)),
+        ("EYE_MISS_COUNT", pyramid::lane_at(count::EYE, count::MISS)),
         ("HITS_ARGS", pyramid::HITS_ARGS),
         ("HITS_CNT", pyramid::HITS_CNT),
         ("RAY_MISS", ray::MISS),
         (
-            "LIGHT_ASKED_TALLY",
-            pyramid::tally_at(tally::LIGHT, tally::ASKED),
+            "LIGHT_ASKED_COUNT",
+            pyramid::lane_at(count::LIGHT, count::ASKED),
         ),
         ("LIGHT_T_MAX", light::W_T_MAX as u32),
         ("LIGHT_ACROSS", light::W_ACROSS as u32),
         ("LIGHT_DOWN", light::W_DOWN as u32),
         ("LIGHT_DIR", light::W_DIR as u32),
         ("LIGHT_BIAS", light::W_BIAS as u32),
+        ("LIGHT_WIDTH", light::W_WIDTH as u32),
+        ("LIGHT_INVERSE", light::W_INVERSE as u32),
+        ("LIGHT_T_MAX_INVERSE", light::W_T_MAX_INVERSE as u32),
+        ("LIGHT_ACROSS2_INVERSE", light::W_ACROSS2_INVERSE as u32),
+        ("LIGHT_DOWN2_INVERSE", light::W_DOWN2_INVERSE as u32),
+        ("LIGHT_WIDTH_INVERSE", light::W_WIDTH_INVERSE as u32),
         ("LIGHT_CORNER_X", light::CORNER[0] as u32),
         ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
         ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
@@ -384,29 +393,29 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_COUNTED", light::HEAD_COUNTED as u32),
         ("LIGHT_BEAM_PASS", pyramid::LIGHT_BEAM_PASS),
         (
-            "LIGHT_BEAM_TALLY",
-            pyramid::tally_at(tally::LIGHT, tally::BEAM),
+            "LIGHT_BEAM_COUNT",
+            pyramid::lane_at(count::LIGHT, count::BEAM),
         ),
         ("VISIBLE_LACK", raster::LACK),
         ("MISS_ARGS_LIST", ray::MISS_ARGS_LIST),
         ("MISS_ARGS_CNT", ray::MISS_ARGS_CNT),
-        ("MISS_ARGS_TALLY", ray::MISS_ARGS_TALLY),
-        ("TALLY_TOOK", tally::TOOK),
-        ("TALLY_SKY", tally::SKY),
-        ("TALLY_WALKED", tally::WALKED),
+        ("MISS_ARGS_COUNT", ray::MISS_ARGS_COUNT),
+        ("COUNT_REUSED", count::REUSED),
+        ("COUNT_SKY", count::SKY),
+        ("COUNT_WALKED", count::WALKED),
         ("SAMPLES_PASS", pyramid::SAMPLES_PASS),
         ("LIGHT_SAMPLES_PASS", pyramid::LIGHT_SAMPLES_PASS),
         (
-            "EYE_SAMPLE_TALLY",
-            pyramid::tally_at(tally::EYE, tally::SAMPLE),
+            "EYE_SAMPLE_COUNT",
+            pyramid::lane_at(count::EYE, count::SAMPLE),
         ),
         (
-            "EYE_ASKED_TALLY",
-            pyramid::tally_at(tally::EYE, tally::ASKED),
+            "EYE_ASKED_COUNT",
+            pyramid::lane_at(count::EYE, count::ASKED),
         ),
         (
-            "LIGHT_SAMPLE_TALLY",
-            pyramid::tally_at(tally::LIGHT, tally::SAMPLE),
+            "LIGHT_SAMPLE_COUNT",
+            pyramid::lane_at(count::LIGHT, count::SAMPLE),
         ),
         ("GRID_S", beam::GRID_S as u32),
         ("GRID_KEEP", beam::GRID_KEEP as u32),
@@ -425,19 +434,21 @@ fn walk_word() -> String {
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
         ("GRID_CORNERS_AT", beam::GRID_CORNERS_AT as u32),
+        ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
+        ("GRID_SLOPE", beam::GRID_SLOPE as u32),
         ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
         ("STARTS_DOWN", light::STARTS_DOWN as u32),
         ("STARTS_ANCHORS", light::STARTS_ANCHORS as u32),
         ("STARTS_FRACS", light::STARTS_FRACS as u32),
         (
-            "LIGHT_MISS_TALLY",
-            pyramid::tally_at(tally::LIGHT, tally::MISS),
+            "LIGHT_MISS_COUNT",
+            pyramid::lane_at(count::LIGHT, count::MISS),
         ),
         ("CARVE", eye::CARVE as u32),
         ("HIDE", eye::HIDE as u32),
         ("FRAME", pyramid::FRAME),
         ("PASSES", pyramid::PASSES),
-        ("TALLY_ON", pyramid::TALLY_ON),
+        ("COUNT_ON", pyramid::COUNT_ON),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),
@@ -473,7 +484,7 @@ fn walk_word() -> String {
         ("SAMPLE_FACES", beam::SAMPLE_FACES),
         ("CORNER_SIDE", CORNER_SIDE),
         ("BEAM_PASS", pyramid::BEAM_PASS),
-        ("EYE_BEAM_TALLY", pyramid::tally_at(tally::EYE, tally::BEAM)),
+        ("EYE_BEAM_COUNT", pyramid::lane_at(count::EYE, count::BEAM)),
         ("RASTER_ARGS_INSTANCES", raster::ARGS_INSTANCES),
         ("RASTER_ARGS_ASKS", raster::ARGS_ASKS),
         ("RASTER_FACES_LANES", raster::FACES_LANES),
@@ -513,15 +524,18 @@ fn walk_word() -> String {
     // half the tile's diagonal (`light::TILE_READ_PAD`, light_propagate.wgsl).
     let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\n",
-        grid::CELLS_A_RAD / grid::SPANS,
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\n",
+        grid::INV_SPLIT2,
         cast::NARROW,
+        cast::NARROW_SQUARED,
         2.0 * cast::SQRT_6,
         light::margin(0.0),
         light::FOOTPRINT_TILES,
         light::READ_TILES[0],
         light::READ_TILES[1],
         core::f32::consts::FRAC_1_SQRT_2,
+        beam::SAMPLE_SPACING,
+        beam::SAMPLE_SPACING_INVERSE,
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
@@ -1274,30 +1288,66 @@ fn assemble(out: &Path) {
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         let file = format!("{kind}.wgsl");
         std::fs::write(out.join("assembled").join(&file), &text).expect("an assembled shader");
-        sources += &format!("        {kind} => include_str!(concat!(env!(\"OUT_DIR\"), \"/shader/assembled/{file}\")),\n");
-        // Each binding and the stages whose entry points read it.
-        let mut read_by: Vec<(u32, u32, Vec<&str>)> = Vec::new();
+        sources += &format!(
+            "        {kind} => include_str!(concat!(env!(\"OUT_DIR\"), \"/shader/assembled/{file}\")),\n"
+        );
+        // Each binding, the stages whose entry points read it, and the layout kinds that take
+        // it as it is declared.
+        let mut read_by: Vec<(u32, u32, Vec<&str>, String, u32)> = Vec::new();
         for (handle, var) in module.global_variables.iter() {
             let Some(b) = var.binding else { continue };
-            let mut by = Vec::new();
+            let takes = layout_kinds(&module, var).unwrap_or_else(|| {
+                panic!(
+                    "shader {kind} ({parts:?}): binding {}:{} has no layout kind",
+                    b.group, b.binding
+                )
+            });
+            let (mut by, mut vertex) = (Vec::new(), 0u32);
             for (i, entry) in module.entry_points.iter().enumerate() {
                 let stage = match entry.stage {
                     naga::ShaderStage::Vertex => "VERTEX",
                     naga::ShaderStage::Fragment => "FRAGMENT",
                     _ => "COMPUTE",
                 };
-                if !info.get_entry_point(i)[handle].is_empty() && !by.contains(&stage) {
+                if info.get_entry_point(i)[handle].is_empty() {
+                    continue;
+                }
+                if !by.contains(&stage) {
                     by.push(stage);
                 }
+                if entry.stage == naga::ShaderStage::Vertex {
+                    let k = part::VERTEX_ENTRY
+                        .iter()
+                        .position(|&n| n == entry.name)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "shader {kind}: vertex entry {} not in VERTEX_ENTRY",
+                                entry.name
+                            )
+                        });
+                    vertex |= 1 << k;
+                }
             }
-            read_by.push((b.group, b.binding, by));
+            // Two parts may declare one binding, one of them unread: the binding is the one read.
+            match read_by
+                .iter_mut()
+                .find(|r| (r.0, r.1) == (b.group, b.binding))
+            {
+                Some(_) if by.is_empty() => {}
+                Some(r) if r.2.is_empty() => *r = (b.group, b.binding, by, takes, vertex),
+                Some(_) => panic!(
+                    "shader {kind} ({parts:?}): binding {}:{} read twice",
+                    b.group, b.binding
+                ),
+                None => read_by.push((b.group, b.binding, by, takes, vertex)),
+            }
         }
         read_by.sort();
         let entries: Vec<String> = read_by
             .iter()
-            .map(|(g, b, by)| {
+            .map(|(g, b, by, takes, vertex)| {
                 format!(
-                    "[{g}, {b}, {}]",
+                    "[{g}, {b}, {}, {takes}, {vertex}]",
                     if by.is_empty() {
                         "NONE".to_string()
                     } else {
@@ -1342,7 +1392,151 @@ fn assemble(out: &Path) {
     .expect("the shaders' sources");
     std::fs::write(
         root.join("stages.rs"),
-        format!("/// Each shader's bindings, [group, binding, the stages that read it], read off it by build.rs.\npub const STAGES: [&[[u32; 3]]; SHADERS as usize] = [\n{stages}];\n"),
+        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADERS as usize] = [\n{stages}];\n{BINDS}"),
     )
     .expect("the shaders' stages");
+}
+
+/// Whether a compute group's (binding, stages, kind) words lay out what the shaders over it
+/// read, written beside `STAGES`: every binding one of `shaders` reads is in group 0, has an
+/// entry in `group` seen from the compute stage, and its kind is one its declaration takes
+/// (the number, a buffer's read-only or not, a texture's kind); and every entry of `group` is
+/// read by one of them. Each owner of a compute group asserts it.
+const BINDS: &str = "
+/// Whether `group`, a compute group's (binding, stages, kind) words, lays out exactly what
+/// `shaders` read, each binding as its declaration takes it (build.rs `BINDS`).
+pub const fn binds(shaders: &[u32], group: &[u32]) -> bool {
+    let mut s = 0;
+    while s < shaders.len() {
+        let entries = STAGES[shaders[s] as usize];
+        let mut k = 0;
+        while k < entries.len() {
+            let [g, b, by, takes, _] = entries[k];
+            if by != NONE {
+                let mut found = false;
+                let mut e = 0;
+                while e < group.len() {
+                    found |= group[e] == b
+                        && group[e + 1] & COMPUTE != 0
+                        && takes & 1 << group[e + 2] != 0;
+                    e += 3;
+                }
+                if g != 0 || !found {
+                    return false;
+                }
+            }
+            k += 1;
+        }
+        s += 1;
+    }
+    let mut e = 0;
+    while e < group.len() {
+        let mut read = false;
+        let mut s = 0;
+        while s < shaders.len() {
+            read |= stages_of(shaders[s], 0, group[e]) != NONE;
+            s += 1;
+        }
+        if !read {
+            return false;
+        }
+        e += 3;
+    }
+    true
+}
+";
+
+/// The layout kinds (api.json's record words) that take `var` as its declaration has it, as
+/// the bits of an expression over record.rs's names; none for a kind no record word lays out.
+fn layout_kinds(module: &naga::Module, var: &naga::GlobalVariable) -> Option<String> {
+    use naga::{
+        AddressSpace, ImageClass, ImageDimension as D, ScalarKind, StorageAccess, StorageFormat,
+        TypeInner,
+    };
+    let kinds: &[&str] = match (var.space, &module.types[var.ty].inner) {
+        (AddressSpace::Uniform, _) => &["UNIFORM", "UNIFORM_DYNAMIC"],
+        (AddressSpace::Storage { access }, _) if access.contains(StorageAccess::STORE) => {
+            &["STORAGE_RW"]
+        }
+        (AddressSpace::Storage { .. }, _) => &["STORAGE"],
+        (_, TypeInner::Sampler { comparison: true }) => &["SAMPLER_COMPARISON"],
+        (_, TypeInner::Sampler { comparison: false }) => &["SAMPLER"],
+        (
+            _,
+            &TypeInner::Image {
+                dim,
+                arrayed,
+                ref class,
+            },
+        ) => match (dim, arrayed, class) {
+            (
+                D::D2,
+                false,
+                ImageClass::Sampled {
+                    kind: ScalarKind::Float,
+                    multi: false,
+                },
+            ) => &["TEXTURE", "TEXTURE_UNFILTERED"],
+            (
+                D::D2,
+                true,
+                ImageClass::Sampled {
+                    kind: ScalarKind::Float,
+                    multi: false,
+                },
+            ) => &["TEXTURE_ARRAY"],
+            (
+                D::D2,
+                true,
+                ImageClass::Sampled {
+                    kind: ScalarKind::Uint,
+                    multi: false,
+                },
+            ) => &["TEXTURE_UINT_ARRAY"],
+            (
+                D::D3,
+                false,
+                ImageClass::Sampled {
+                    kind: ScalarKind::Float,
+                    multi: false,
+                },
+            ) => &["TEXTURE_3D"],
+            (D::D2, false, ImageClass::Depth { multi: false }) => &["DEPTH"],
+            (
+                D::D2,
+                true,
+                ImageClass::Storage {
+                    format: StorageFormat::R32Uint,
+                    access,
+                },
+            ) if access.contains(StorageAccess::LOAD | StorageAccess::STORE) => {
+                &["STORAGE_TEXTURE_RW"]
+            }
+            (
+                D::D3,
+                false,
+                ImageClass::Storage {
+                    format: StorageFormat::Rgba16Float,
+                    access,
+                },
+            ) if *access == StorageAccess::STORE => &["STORAGE_TEXTURE_3D"],
+            (
+                D::D2,
+                false,
+                ImageClass::Storage {
+                    format: StorageFormat::Rgba16Float,
+                    access,
+                },
+            ) if *access == StorageAccess::STORE => &["STORAGE_TEXTURE_2D"],
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(
+        kinds
+            .iter()
+            .map(|k| format!("1 << {k}"))
+            .collect::<Vec<_>>()
+            .join(" | "),
+    )
 }

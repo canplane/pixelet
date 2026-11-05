@@ -12,7 +12,7 @@
 mod gpu;
 
 use pxl_engine::beam::{
-    self, Grid, ASK_FACE, ASK_LINE, ASK_NODE, ASK_TO, ASK_WORDS, CELL_CORNER, HITS, HIT_FACE,
+    Grid, ASK_FACE, ASK_LINE, ASK_NODE, ASK_TO, ASK_WORDS, CELL_CORNER, HITS, HIT_FACE,
     HIT_FOLLOWS, HIT_LANES, HIT_NODE, HIT_OUT, HIT_PX, HIT_SQUARE, HIT_WAITS,
 };
 use pxl_engine::{eye, pyramid, raster, ray};
@@ -91,7 +91,8 @@ const SCREENS: [Screen; 5] = [
 ];
 
 /// The ulps of a cell's quotient from a whole number within which the pixel's ray may lie
-/// in the next cell.
+/// in the next cell: the GPU's own division of the pixel's tangent (grid.wgsl `px_tan`) and
+/// the sum it may fuse; the quotient itself is a product by the host's `Grid::s_inverse`.
 const EDGE_ULPS: f64 = 8.0;
 
 /// The patch pixel `p` of `seed`'s screen lies in: rectangles of a few to tens of pixels,
@@ -201,7 +202,7 @@ fn cells_of(g: &Grid, s: &Screen, p: [u32; 2]) -> [[u32; 2]; 2] {
             (f64::from(p[a]) + 0.5 + f64::from(s.jitter[a])) / f64::from(s.size[a]) * 2.0 - 1.0;
         let t = f64::from(s.tan[a]);
         // Across, `tx + tan`; up, `tan - ty`, `ty` the negated `ndc`'s: alike.
-        let v = (ndc * t + t) / f64::from(f32::from_bits(g.words()[beam::GRID_S]));
+        let v = (ndc * t + t) * f64::from(g.s_inverse());
         let ulp = {
             let x = v.abs() as f32;
             f64::from(f32::from_bits(x.to_bits() + 1) - x)

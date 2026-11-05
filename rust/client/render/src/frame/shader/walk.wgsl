@@ -71,7 +71,7 @@ fn revisits(seed: u32) -> bool {
 fn walk(aim: Aim, start: Start, line: u32) -> Walked {
   let beam = line != NONE;
   let dir = ray_dir(aim.dir);
-  let inv = ray_inv(dir);
+  let inv = aim.inv;
   let t_max = aim.t_max;
   let range = aim.range;
   let origin = aim.origin;
@@ -103,8 +103,9 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       // Its farthest corner and nearest point, squared (`node_dist_sq`).
       let far_v = max(-lo, hi);
       let near_v = min(max(lo, vec3<f32>(0.0)), hi);
-      let asked_far = zoom_at(dot(far_v, far_v), range);
-      let asked_near = zoom_at(dot(near_v, near_v), range);
+      let far2 = squared(far_v);
+      let asked_far = zoom_at(far2, range);
+      let asked_near = zoom_at(squared(near_v), range);
       let c = idx_of(corner, zoom, roots, r0);
       var w = slot_of(zoom, c, asked_far, asked_near);
       let other_zooms = w == NONE;
@@ -135,9 +136,8 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       } else if (other_zooms) {
         // No box of it read. A beam ray stops at a split too narrow to share, which
         // a box would decide: left.
-        let width = eye_f32(GRID + GRID_S) * length(far_v);
-        let side_w = hi.x - lo.x;
-        if (beam && side_w * side_w < NARROW * NARROW * width * width) {
+        let width = spacing_width(vec2<f32>(0.0, eye_f32(GRID + GRID_S)), far2);
+        if (beam && narrow(hi.x - lo.x, width)) {
           ends = 4u;
           break;
         }
@@ -150,9 +150,8 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         let past = vec3<u32>((asset.x >> BOX_BITS) & m, asset.y & m, (asset.y >> (2u * BOX_BITS)) & m) + vec3<u32>(1u);
         // A beam ray's width at its far corner: it stops at a split it may not
         // share with the rays about it, and clears one it clears by that.
-        let width = select(0.0, eye_f32(GRID + GRID_S) * length(far_v), beam);
-        let side_w = hi.x - lo.x;
-        let narrow = beam && side_w * side_w < NARROW * NARROW * width * width;
+        let width = select(0.0, spacing_width(vec2<f32>(0.0, eye_f32(GRID + GRID_S)), far2), beam);
+        let too_narrow = beam && narrow(hi.x - lo.x, width);
         let grown = NARROW * width;
         let box_lo = units(corner + box_step(first, u, 0u), og, roots) - vec3<f32>(grown);
         let box_hi = select(
@@ -162,8 +161,8 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         ) + vec3<f32>(grown);
         let b = span_of(dir, inv, box_lo, box_hi, t0, t_max);
         let meets = max(t0, largest(b.near)) < min(t1, smallest(b.far));
-        into = meets && !narrow;
-        if (meets && narrow) {
+        into = meets && !too_narrow;
+        if (meets && too_narrow) {
           ends = 1u;
         }
       } else if (kind == KIND_CELL) {
@@ -194,7 +193,7 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
       }
       if (ends != 0u) {
         axis = crossing(dir, near_at, true);
-        hit_t = max(near_at[axis], 0.0);
+        hit_t = past_origin(near_at[axis]);
         break;
       }
     }
@@ -234,6 +233,10 @@ fn walk(aim: Aim, start: Start, line: u32) -> Walked {
         zoom = FINEST_ZOOM - h;
       }
     }
+  }
+  // Out of steps, it is left to the walk that asks, as one that meets a node no slot keeps.
+  if (ends == 0u) {
+    ends = 4u;
   }
   return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
 }

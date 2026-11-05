@@ -72,7 +72,7 @@ export const eye_miss = 76 as number;
 
 export const eye_asked = 77 as number;
 
-export const eye_took = 78 as number;
+export const eye_reused = 78 as number;
 
 export const eye_walked = 79 as number;
 
@@ -92,7 +92,7 @@ export const light_miss = 86 as number;
 
 export const light_asked = 87 as number;
 
-export const light_took = 88 as number;
+export const light_reused = 88 as number;
 
 export const light_walked = 89 as number;
 

@@ -10,7 +10,7 @@ use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
-    Entry, Gpu, Image, TrackedRenderPass,
+    Entry, Gpu, Image, Layout, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -18,7 +18,7 @@ use crate::gpu::put::{put_f32, put_u32, Scratch};
 
 fn frame_group(
     g: &Gpu,
-    layout: u32,
+    layout: Layout,
     frame: u32,
     shadow: [Entry; 2],
     air: [Entry; AIR_ENTRIES],
@@ -45,7 +45,7 @@ struct Skins {
 /// A skin's bind group, made in `layout` where none is; none while its image
 /// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
 /// group made in a frame that is dropped would be gone and still named here.
-pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
+pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> {
     if let Some(group) = skin_made(image) {
         return Some(group);
     }
@@ -95,7 +95,7 @@ pub enum Stage {
 }
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
-pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
+pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> Layout {
     pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
 }
 
@@ -108,7 +108,7 @@ pub struct FrameGroups {
 impl FrameGroups {
     pub fn new(
         g: &Gpu,
-        layout: u32,
+        layout: Layout,
         frame_buf: u32,
         shadow: [Entry; 2],
         air: [Entry; AIR_ENTRIES],
@@ -173,7 +173,7 @@ impl DrawUniforms {
     pub fn write<T>(
         &mut self,
         g: &Gpu,
-        layout: u32,
+        layout: Layout,
         cnt: u32,
         draws: impl Iterator<Item = T>,
         moved: bool,

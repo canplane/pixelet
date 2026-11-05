@@ -35,7 +35,7 @@ fn catmull_rom(t: f32) -> vec4<f32> {
 /// The height the surface draws at the center of the tile's cell `g`, in leaf cells
 /// (`ground::height`, `bicubic`).
 fn ground_height(rec: u32, g: vec2<i32>) -> i32 {
-  let s = (vec2<f32>(g) + CELL_CENTER) / CELL_STEP + f32(ELE_PAD) - 0.5;
+  let s = (vec2<f32>(g) + CELL_CENTER) * (1.0 / CELL_STEP) + f32(ELE_PAD) - 0.5;
   let f = floor(s);
   let first = vec2<i32>(f) - 1i;
   let wx = catmull_rom(s.x - f.x);

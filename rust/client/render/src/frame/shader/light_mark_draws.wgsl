@@ -41,7 +41,7 @@ fn instance_anchor(axis: u32, o: i32) -> f32 {
   let a = i32(drawing_at(DRAWN_ANCHOR + axis));
   // The anchor and the eye in unit cells, which wrap round the world on X.
   let d = a - (o >> FRAC_W);
-  return f32(select(d, wrap_idx(LEAF_CELL, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) / f32(1u << FRAC_W);
+  return f32(select(d, wrap_idx(LEAF_CELL, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) * (1.0 / f32(1u << FRAC_W));
 }
 
 /// Where placed slot `k` stands, its base middle as drawn, units from the eye at Q3
@@ -55,20 +55,21 @@ fn instance_pos(k: u32, o: vec3<i32>) -> vec3<f32> {
   );
 }
 
-/// Whether a ball of `radius` at `v` units from the eye meets its view (`eye::sees`).
+/// Whether a ball of `radius` at `v` units from the eye meets its view (`eye::sees`), its
+/// sides' slopes the host's (`Grid::slope`).
 fn sees(v: vec3<f32>, radius: f32) -> bool {
   let f = dot(v, eye_v3(FORWARD));
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let o = vec2<f32>(dot(v, eye_v3(RIGHT)), dot(v, eye_v3(UP)));
-  let side = abs(o) - tan_xy * f <= radius * sqrt(vec2<f32>(1.0) + tan_xy * tan_xy);
+  let slope = vec2<f32>(eye_f32(GRID + GRID_SLOPE), eye_f32(GRID + GRID_SLOPE + 1u));
+  let side = abs(o) - tan_xy * f <= radius * slope;
   return f >= -radius && side.x && side.y;
 }
 
 /// How many tiles either side of its own a drawn receiver stands on (`Light::ring`).
 fn ring() -> i32 {
-  let across = light_v3(LIGHT_ACROSS);
-  let tile = f32(LIGHT_TILE) * sqrt(dot(across, across));
-  return max(i32(ceil(f32(WIDEST) / 2.0 / tile)), 1i);
+  let half = f32(WIDEST) * (0.5 / f32(LIGHT_TILE));
+  return max(i32(ceil(half * eye_f32(LIGHT + LIGHT_WIDTH_INVERSE))), 1i);
 }
 
 @compute @workgroup_size(ROW_LANES, 1, 1)
@@ -87,7 +88,7 @@ fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
     v = instance_pos(k, o);
   }
-  let middle = v + vec3<f32>(0.0, 0.0, f32(TALLEST) / 2.0);
+  let middle = v + vec3<f32>(0.0, 0.0, f32(TALLEST) * 0.5);
   if (!sees(middle, f32(TALLEST + WIDEST))) {
     return;
   }

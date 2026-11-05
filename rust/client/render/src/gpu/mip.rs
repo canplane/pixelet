@@ -7,7 +7,7 @@
 use crate::frame::shader::record::PIPELINE_MIP;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{pass_desc, release, sampler_entry, view_entry, Format, Gpu, Load};
+use crate::gpu::api::{pass_desc, release, sampler_entry, view_entry, Format, Gpu, Layout, Load};
 use crate::gpu::pipeline::Pipelines;
 
 pub fn mip_levels(width: u32, height: u32) -> u32 {
@@ -16,7 +16,7 @@ pub fn mip_levels(width: u32, height: u32) -> u32 {
 
 pub struct MipPass {
     pipeline: u32,
-    layout: u32,
+    layout: Layout,
     sampler: u32,
 }
 

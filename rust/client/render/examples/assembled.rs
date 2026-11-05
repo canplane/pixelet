@@ -1,7 +1,8 @@
 // pxl-render/examples/assembled.rs
 
 //! Every shader by hand as the page takes it, and the world's asked one, written into the
-//! directory named, a file each: for Tint (ts/tool/shader/shader.test.ts).
+//! directory named, a file each: for Tint (ts/tool/shader/shader.test.ts) and the device's
+//! own compiler (ts/tool/shader/probe.html).
 
 use pxl_render::frame::shader::record::{self, PARTS};
 

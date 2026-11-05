@@ -16,12 +16,12 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN,
-    SHADER_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
+    binds, dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
+    SHADER_WAY_RETURN, SHADER_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, signaled, release, room, word_bytes,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, room, signaled, word_bytes,
     write_buffer_bytes, Gpu, RenderContext, RESULT, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -526,6 +526,17 @@ const BOUND_GROUP: [u32; 12] = dynamic(
 const _: () = assert!(
     floor::holds(&[&HEIGHT_GROUP]) && floor::holds(&[&BOUND_GROUP]),
     "the fill's tops' or levels' group binds past WebGPU's floor"
+);
+// Each fill's and ways' compute group against what its shader reads, as its declarations take
+// it (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_HEIGHT], &HEIGHT_GROUP)
+        && binds(&[SHADER_BOUND], &BOUND_GROUP)
+        && binds(&[SHADER_WAY], &WAY_GROUP)
+        && binds(&[SHADER_WAY_FREE], &WAY_FREE_GROUP)
+        && binds(&[SHADER_WAY_TREE], &WAY_TREE_GROUP)
+        && binds(&[SHADER_WAY_RETURN], &WAY_RETURN_GROUP),
+    "a fill's or ways' compute group lays out other than its shader reads (record.rs `binds`)"
 );
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.

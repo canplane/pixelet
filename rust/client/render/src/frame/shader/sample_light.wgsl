@@ -4,17 +4,17 @@
 // `LIGHT_SAMPLE` slots, taken off what the cast casts, each ray at its tile's band.
 
 const WALK_PASS: u32 = LIGHT_SAMPLES_PASS;
-const VISITS_TALLY: u32 = LIGHT_SAMPLE_TALLY;
-const ASKED_TALLY: u32 = LIGHT_ASKED_TALLY;
+const VISITS_COUNT: u32 = LIGHT_SAMPLE_COUNT;
+const ASKED_COUNT: u32 = LIGHT_ASKED_COUNT;
 
 fn sample_lattice() -> vec2<u32> {
   return vec2<u32>(head_word(LIGHT_HEAD_SAMPLES_ACROSS));
 }
 
 /// The sample the thread at `id` walks: its own where the cast begins its epoch, else one of
-/// the tiles listed as fed, `NONE` past them (light_list.wgsl `light_take`).
-fn sample_taken(id: vec2<u32>) -> vec2<u32> {
-  return light_take(LEVEL_SAMPLE, id);
+/// the tiles listed as fed, `NONE` past them (light_list.wgsl `light_item`).
+fn sample_item(id: vec2<u32>) -> vec2<u32> {
+  return light_item(LEVEL_SAMPLE, id);
 }
 
 /// Whether a tile sample `s` may feed, its own and those about it, is one this cast casts
@@ -33,14 +33,7 @@ fn left_at() -> u32 {
 }
 
 fn sample_aim(s: vec2<u32>) -> Aim {
-  let texel = slot_texel(s * LIGHT_SAMPLE);
-  return Aim(
-    texel_start(light_corner() + vec2<i32>(texel)),
-    light_v3(LIGHT_DIR),
-    eye_f32(LIGHT + LIGHT_T_MAX),
-    vec2<u32>(texel_band(texel)),
-    mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)),
-  );
+  return light_aim(slot_texel(s * LIGHT_SAMPLE), mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)));
 }
 
 /// Off the cell of the box its texel lies in (`light::cell`).

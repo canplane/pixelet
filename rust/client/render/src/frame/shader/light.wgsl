@@ -2,7 +2,7 @@
 
 // The world's depth from the light into every slot the cast needs (light_list.wgsl
 // `light_needs`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
-// sample where its own ray enters it as that sample entered it (`took`), or the sky where no
+// sample where its own ray enters it as that sample entered it (`visible_entry`), or the sky where no
 // sample about it met anything (`sky`), each only where that sample asked the band the slot
 // asks; the rest listed for their walk (light_miss_hit.wgsl, light_miss.wgsl).
 
@@ -11,14 +11,14 @@
 /// The visible sample at each texel of the box, in the box's order (`Light::texel`): its
 /// sample's number (`raster::id_of`), 0 where it kept none.
 @group(0) @binding(15) var visibility: texture_2d_array<u32>;
-/// The listed slots' dispatch, their count and the tally's lanes (`ray::MISS_ARGS_WORDS`).
+/// The listed slots' dispatch, their count and the counts' lanes (`ray::MISS_ARGS_WORDS`).
 @group(0) @binding(17) var<storage, read_write> misses: array<atomic<u32>>;
 
-/// One more of the tally's lane `lane` (`tally::TOOK` on) where the cast counts, as cast.wgsl's
+/// One more of the counts' lane `lane` (`count::REUSED` on) where the cast counts, as cast.wgsl's
 /// `add_cnt`.
 fn add_cnt(lane: u32) {
   if (head_word(LIGHT_HEAD_COUNTED) != 0u) {
-    atomicAdd(&misses[MISS_ARGS_TALLY + lane - TALLY_TOOK], 1u);
+    atomicAdd(&misses[MISS_ARGS_COUNT + lane - COUNT_REUSED], 1u);
   }
 }
 
@@ -48,8 +48,8 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
     && went_on(s + vec2<u32>(1u, 1u), band);
 }
 
-/// Where a slot's ray takes its visible sample, and whether it does.
-struct Took {
+/// Where a slot's ray enters its visible sample's cell, across which axis, and whether it enters it as the sample did.
+struct Entry {
   t: f32,
   axis: u32,
   enters: bool,
@@ -59,7 +59,7 @@ struct Took {
 /// not: where it enters that sample's cell as drawn (`cast::entry`, `fill_bounds`), taken
 /// where it enters it across the axis the sample did, asked at its band; the eye's pixels
 /// take theirs as cast.wgsl does.
-fn took(origin: vec3<i32>, visible: u32, band: u32) -> Took {
+fn visible_entry(origin: vec3<i32>, visible: u32, band: u32) -> Entry {
   let n = head_word(LIGHT_HEAD_SIZE) / LIGHT_SAMPLE;
   let id = (visible & ~VISIBLE_LACK) - 1u;
   let s = vec2<u32>(id % n, id / n);
@@ -74,12 +74,12 @@ fn took(origin: vec3<i32>, visible: u32, band: u32) -> Took {
   let inset = (hi - lo) * (0.5 * (1.0 - side((asset >> FILL_SHIFT) & (EIGHTHS - 1u))));
   let dir = ray_dir(light_v3(LIGHT_DIR));
   let t_max = eye_f32(LIGHT + LIGHT_T_MAX);
-  let b = span_of(dir, ray_inv(dir), lo + inset, hi - inset, 0.0, t_max);
+  let b = span_of(dir, light_inverse(), lo + inset, hi - inset, 0.0, t_max);
   let t0 = max(0.0, largest(b.near));
   let t1 = min(t_max, smallest(b.far));
   let axis = crossing(dir, b.near, true);
   let enters = t1 > t0 && axis == beams[light_sample_at(s) + SAMPLE_AXIS] && asks_alike(s, band);
-  return Took(max(b.near[axis], 0.0), axis, enters);
+  return Entry(max(b.near[axis], 0.0), axis, enters);
 }
 
 /// Each slot of the tiles the cast casts (light_list.wgsl `light_needs`): its word off its
@@ -92,7 +92,7 @@ fn light_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let size = head_word(LIGHT_HEAD_SIZE);
-  let at = light_take(LEVEL_RAY, group.xy * LIGHT_TILE + lane.xy);
+  let at = light_item(LEVEL_RAY, group.xy * LIGHT_TILE + lane.xy);
   if (at.x >= size || at.y >= size || !light_needs(LEVEL_RAY, at)) {
     return;
   }
@@ -101,19 +101,19 @@ fn light_cs(
   let band = texel_band(p);
   let visible = textureLoad(visibility, p, 0u, 0u).x;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    let hit = took(origin, visible, band);
-    if (hit.enters) {
-      add_cnt(TALLY_TOOK);
-      textureStore(light, at, 0u, vec4<u32>(stop_word(hit.t, hit.axis), 0u, 0u, 0u));
+    let entry = visible_entry(origin, visible, band);
+    if (entry.enters) {
+      add_cnt(COUNT_REUSED);
+      textureStore(light, at, 0u, vec4<u32>(stop_word(entry.t, entry.axis), 0u, 0u, 0u));
       return;
     }
   }
   if (visible == 0u && sky(at, p, band)) {
-    add_cnt(TALLY_SKY);
+    add_cnt(COUNT_SKY);
     textureStore(light, at, 0u, vec4<u32>(depth_word(1.0), 0u, 0u, 0u));
     return;
   }
-  add_cnt(TALLY_WALKED);
+  add_cnt(COUNT_WALKED);
   let place = atomicAdd(&misses[MISS_ARGS_CNT], 1u);
   if (place < size * size) {
     // The rows the list fills raised to hold it by the place that opens each (`opens`).

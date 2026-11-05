@@ -21,7 +21,7 @@
 use pxl_engine::screen::{self, TILES_WORDS};
 
 use crate::frame::shader::part::{SHADER_BOX_ARGS, SHADER_SCREEN_MARK};
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
 };
@@ -69,6 +69,13 @@ const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
 /// What the box's args' pass binds (box_args.wgsl): the marks' box and the
 /// args.
 const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_BOX_ARGS], &BOX_ARGS_GROUP) && binds(&[SHADER_SCREEN_MARK], &MARK_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 
 /// The numbers a frame through the gate writes into its claimed tiles'
 /// stencil, 1 on, the stencil's eight bits but 0, which a frame drawn whole

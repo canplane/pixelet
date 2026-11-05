@@ -27,7 +27,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_PROPAGATE};
-use crate::frame::shader::record::{COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::record::{binds, COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, RenderContext,
@@ -49,6 +49,13 @@ const GROUP: [u32; 24] = [
 const BOUNDS_GROUP: [u32; 12] = [
     0, COMPUTE, DEPTH, 1, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
 ];
+
+// Each compute group here against what its shader reads, as its declarations take it
+// (build.rs `BINDS`).
+const _: () = assert!(
+    binds(&[SHADER_SCREEN_PROPAGATE], &GROUP) && binds(&[SHADER_SCREEN_BOUND], &BOUNDS_GROUP),
+    "a compute group lays out other than its shader reads (record.rs `binds`)"
+);
 
 const _: () = assert!(
     BOUND_SQUARES * BOUND_SQUARES <= MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP,

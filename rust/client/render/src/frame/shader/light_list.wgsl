@@ -3,7 +3,7 @@
 // The shadow map's lattice as the light's beam, cells and slots take it off its list
 // (pxl-engine light.rs): where a beam ray's line and start, a cell's start and a
 // sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
-// place of the lattice the thread at an id takes (`light_take`); and whether the cast needs it
+// place of the lattice the thread at an id takes (`light_item`); and whether the cast needs it
 // (`light_needs`); and the reads, the stands, their squares and each list's marks, as the
 // receivers' passes claim tiles (`light::reads_at`, `stands_at`, `coarse_at`,
 // `listed_marks_at`). The list is `beams`, as resume.wgsl names it; the receivers' passes bind
@@ -79,7 +79,7 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 /// begins its epoch, else off the list of what feeds the tiles it claimed, a workgroup of
 /// `SAMPLE_SIDE` × `SAMPLE_SIDE` `LISTED_LANES` and an entry `listed_per` of them; none past
 /// the list.
-fn light_take(level: u32, id: vec2<u32>) -> vec2<u32> {
+fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
   if (head_word(LIGHT_HEAD_EPOCH) == head_word(LIGHT_HEAD_CAST)) {
     return id;
   }

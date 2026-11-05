@@ -12,13 +12,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
 import { REPO, treeFile, WORKSPACE } from "@pxl/build/paths.ts";
+import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
 import { stamp } from "@pxl/build/stamp.ts";
-import {
-  console_post,
-  forward,
-  type Middleware,
-  route_target,
-} from "./script/proxy.ts";
+import { forward, type Middleware, route_target } from "./script/proxy.ts";
 
 // The app's directory, from the workspace the import maps are read under: Expo
 // loads this file through its own transform, which takes no `import.meta`.
@@ -108,8 +104,8 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   return context.resolveRequest(context, name, platform);
 };
 
-/** Where `/__console` appends what a device's console posts. */
-const CONSOLE_LOG = path.join(here, ".dev-console.log");
+/** A device's console, appended to the app's `.dev-console.log`. */
+const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
 
 export default {
   ...base,
@@ -123,8 +119,7 @@ export default {
       (metro: Middleware): Middleware =>
       (req, res, next) => {
         const url = req.url ?? "/";
-        if (url.startsWith("/__console"))
-          return console_post(CONSOLE_LOG, req, res);
+        if (url.startsWith(CONSOLE_PATH)) return devConsole(req, res);
         const target = route_target(url);
         if (target) return forward(target, req, res);
         metro(req, res, next);

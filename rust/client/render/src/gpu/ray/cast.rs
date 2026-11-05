@@ -10,12 +10,12 @@ use pxl_engine::{beam, eye, light, overwrite, pyramid, raster, ray};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use super::count::{self, Counter, Counts, RayCounts};
 use super::raster::Raster;
-use super::tally::{self, Counts, RayCounts, Tally};
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    within, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
+    binds, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
     SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM,
     SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
     SHADER_LIGHT_MISS_HIT, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT,
@@ -25,8 +25,8 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
-    RenderContext,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Entry,
+    Gpu, RenderContext,
 };
 use crate::gpu::generator::{cut_boxes, hold, DecorFrame, Generation, Generator, IndirectDraw};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -61,7 +61,7 @@ pub struct Cast<'a> {
     /// decor is (pxl-engine `light::ACTORS_AT`).
     pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
-    /// (gpu/ray/tally.rs).
+    /// (gpu/ray/count.rs).
     pub ray_counts: bool,
 }
 
@@ -305,8 +305,8 @@ pub(super) struct CastBuffers {
     px_group: u32,
     px_bound: [u32; 7],
     /// What the light's cast and the eye's recast, counted where the setting
-    /// asks (ray/tally.rs).
-    tally: Tally,
+    /// asks (ray/count.rs).
+    counter: Counter,
     /// The list, the light's visibility buffer and its boxes the light's groups
     /// were made over, made again where one is another.
     light_grouped: [u32; 3],
@@ -342,13 +342,8 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
 /// map's, or the eye's, which names none.
 pub(super) const HEAD_BINDING: u32 = 11;
 
-/// The cast's world's group, every kernel's over it bar the light's own and
-/// the pixels': the one the missed pixels' cast binds, and the head the
-/// passes both observers take read their observer by. The shadow map's
-/// passes of those bind it over the light's buffers (`light_groups`); the
-/// light's own bind its world and its clipmap (`LIGHT_GROUP`), past the floor's
-/// storage buffers were they one group; the pixels' (`cast_cs`) read the
-/// visibility buffer and no world (`px_group`).
+/// `sample_hit_cs`'s and `beam_hit_cs`'s (sample_hit.wgsl, beam_hit.wgsl): the eye, the
+/// beam's words, the pyramid and what they leave.
 const SAMPLE_HIT_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
 ];
@@ -552,9 +547,6 @@ const _: () = assert!(
     floor::holds(&[&LIGHT_MISS_GROUP]),
     "the light's missed slots' group binds past WebGPU's floor"
 );
-/// What `forget_cs` reads of the cast's world's group (forget.wgsl): the
-/// observed pyramid.
-const FORGET_GROUP: [u32; 3] = [9, COMPUTE, STORAGE_RW];
 /// The light's receivers' passes' groups: the eye, the head and the list,
 /// and the rays the eye's pixels met the world by (light_mark.wgsl), the decor
 /// placed (light_mark_draws.wgsl) or the passes' args (light_propagate.wgsl).
@@ -627,7 +619,12 @@ const _: () = assert!(
 );
 /// `light_miss_cs`'s dispatch, its rows none until `light_miss_hit_cs` leaves one.
 const LIGHT_LEFT_EMPTY: [u32; 4] = [ray::MISS_ACROSS, 0, 1, 0];
-const WORLD_GROUP: [u32; 33] = [
+/// The cast's world's group, over which `cell_cs`, `light_cell_cs`, `fold_cs` and
+/// `forget_cs` run: the eye, the clip levels' table and the bricks' levels the fold reads
+/// and writes, the beam rays' words the cells' starts go into, the observed pyramid, and the
+/// head the passes both observers take read their observer by. The shadow map's passes of
+/// those bind it over the light's buffers (`light_groups`).
+const WORLD_GROUP: [u32; 18] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -635,21 +632,6 @@ const WORLD_GROUP: [u32; 33] = [
     COMPUTE,
     STORAGE_RW,
     2,
-    COMPUTE,
-    STORAGE,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    4,
-    COMPUTE,
-    STORAGE,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
     COMPUTE,
     STORAGE,
     8,
@@ -701,12 +683,6 @@ const _: () = assert!(
     "the cast's world's group or the missed pixels' binds past WebGPU's floor"
 );
 
-/// What `fold_cs` reads of the cast's world's group (fold.wgsl): the clip
-/// levels' table it writes the folds into, and the bricks' levels.
-const FOLD_GROUP: [u32; 6] = [1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE];
-/// What `cell_cs` reads of it (cell.wgsl): the eye, and the beam rays' words
-/// it writes the cells' starts into.
-const CELL_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW];
 /// The missed pixels' hits' passes' groups (hit_lead.wgsl, hit_faces.wgsl,
 /// `hit_groups`): the eye, the rays, the beam's words, the pyramid's head, and
 /// the walk again's words the leaders are listed in.
@@ -742,32 +718,41 @@ const HIT_FACES_GROUP: [u32; 12] = [
     STORAGE,
 ];
 const _: () = assert!(
-    floor::holds(&[&FOLD_GROUP])
-        && floor::holds(&[&CELL_GROUP])
-        && floor::holds(&[&HIT_LEAD_GROUP])
-        && floor::holds(&[&HIT_FACES_GROUP]),
-    "the fold's, the cells' or the hits' group binds past WebGPU's floor"
+    floor::holds(&[&HIT_LEAD_GROUP]) && floor::holds(&[&HIT_FACES_GROUP]),
+    "the hits' group binds past WebGPU's floor"
 );
 
+// Each compute group against what the shaders built over it read, as their declarations take
+// it (build.rs `BINDS`).
 const _: () = assert!(
-    within(FOLD_GROUP, WORLD_GROUP)
-        && within(CELL_GROUP, WORLD_GROUP)
-        && within(FORGET_GROUP, WORLD_GROUP)
-        && within(
-            [
-                0,
-                COMPUTE,
-                UNIFORM,
-                8,
-                COMPUTE,
-                STORAGE_RW,
-                HEAD_BINDING,
-                COMPUTE,
-                UNIFORM
+    binds(&[SHADER_CAST], &CAST_GROUP)
+        && binds(
+            &[
+                SHADER_BEAM,
+                SHADER_SAMPLE,
+                SHADER_LIGHT_BEAM,
+                SHADER_LIGHT_SAMPLE
             ],
-            WORLD_GROUP
-        ),
-    "the fold, the cells, the forgetting and the light's cells bind the cast's world's group"
+            &ASK_GROUP
+        )
+        && binds(
+            &[SHADER_CELL, SHADER_LIGHT_CELL, SHADER_FOLD, SHADER_FORGET],
+            &WORLD_GROUP
+        )
+        && binds(&[SHADER_SAMPLE_HIT, SHADER_BEAM_HIT], &SAMPLE_HIT_GROUP)
+        && binds(&[SHADER_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
+        && binds(&[SHADER_MISS_HIT], &MISS_HIT_GROUP)
+        && binds(&[SHADER_MISS, SHADER_MISS_LIST], &MISS_GROUP)
+        && binds(&[SHADER_HIT_LEAD], &HIT_LEAD_GROUP)
+        && binds(&[SHADER_HIT_FACES], &HIT_FACES_GROUP)
+        && binds(&[SHADER_LIGHT], &LIGHT_GROUP)
+        && binds(&[SHADER_LIGHT_MISS], &LIGHT_MISS_GROUP)
+        && binds(&[SHADER_LIGHT_MISS_HIT], &LIGHT_MISS_HIT_GROUP)
+        && binds(&[SHADER_LIGHT_MARK], &LIGHT_MARK_GROUP)
+        && binds(&[SHADER_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
+        && binds(&[SHADER_LIGHT_PROPAGATE], &LIGHT_PROPAGATE_GROUP)
+        && binds(&[SHADER_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
+    "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
 );
 
 impl RaysPass {
@@ -811,7 +796,7 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
         let light_slide_built = pipelines.build_compute(g, SHADER_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
-        let tally = Tally::new(g);
+        let counter = Counter::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
@@ -949,7 +934,7 @@ impl RaysPass {
             raster,
             px_group: 0,
             px_bound: [0; 7],
-            tally,
+            counter,
             light_grouped: [0; 3],
         };
         self.cast = Some(c);
@@ -960,7 +945,7 @@ impl RaysPass {
     /// view: the GPU's cast where an eye casts, its eye handed over first;
     /// its samples' raster through its gate where the frame is `gated`;
     /// `frame` the renderer's number this frame takes, which its counts are
-    /// named by (tally.rs `Frame`).
+    /// named by (count.rs `Frame`).
     #[expect(
         clippy::too_many_arguments,
         reason = "the frame's values, each its own"
@@ -1421,14 +1406,14 @@ impl RaysPass {
         } else {
             c.sent_forget = None;
         }
-        let frame = tally::Frame {
+        let frame = count::Frame {
             number: frame,
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.light_cast],
             rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
-        c.tally.begin(g, ray_counts, c.pyramid, frame);
+        c.counter.begin(g, ray_counts, c.pyramid, frame);
         let bindings = [
             c.eye,
             c.clipmap,
@@ -1444,7 +1429,12 @@ impl RaysPass {
         ];
         if bindings != c.bindings {
             release(c.group);
-            c.group = cast_group(g, &c.cells_built, bindings);
+            let [eye, clipmap, ground, _, _, _, _, _, beams, pyramid, head] = bindings;
+            c.group = cast_group(
+                g,
+                &c.cells_built,
+                [eye, clipmap, ground, beams, pyramid, head],
+            );
             release(c.miss_group);
             c.miss_group = g.bind_group(
                 c.miss_built.layouts[0],
@@ -1963,7 +1953,7 @@ impl RaysPass {
             args: [c.marks, c.light_misses],
             boxes: [c.raster.args, c.raster.light.args],
         };
-        c.tally.copy(g, encoder, &counted);
+        c.counter.copy(g, encoder, &counted);
     }
 
     /// The light's cast made where `wanted`, shadows first cast, before the
@@ -1984,16 +1974,16 @@ impl RaysPass {
         c.light_ready = c.raster.light_made(g, shadow::SIZE);
     }
 
-    /// The counts copied last frame mapped back (`Tally::back`).
-    pub fn tally_back(&mut self, g: &Gpu) {
+    /// The counts copied last frame mapped back (`Counter::back`).
+    pub fn counts_back(&mut self, g: &Gpu) {
         if let Some(c) = self.cast.as_mut() {
-            c.tally.back(g);
+            c.counter.back(g);
         }
     }
 
-    /// The counts that landed since last taken (`Tally::take`).
+    /// The counts that landed since last taken (`Counter::take`).
     pub fn take_counts(&mut self) -> Option<RayCounts> {
-        self.cast.as_mut().and_then(|c| c.tally.take())
+        self.cast.as_mut().and_then(|c| c.counter.take())
     }
 
     pub fn light_casts(&self) -> bool {
@@ -2042,7 +2032,7 @@ impl RaysPass {
             c.read.forget();
             c.light_content.forget();
             c.generator.on_dropped();
-            c.tally.on_dropped();
+            c.counter.on_dropped();
         }
     }
 
@@ -2065,24 +2055,16 @@ impl RaysPass {
     }
 }
 
-/// The cast's group 0 over `bindings`: the eye, the clip level and its fold
-/// (`fold_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the bricks' palette indices, the service area's index, the
-/// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
-/// the observed pyramid, and the head (`WORLD_GROUP`): the eye's, or, over
-/// the light's list and head, the shadow map's (`light_groups`).
-fn cast_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 11]) -> u32 {
-    let [eye, clipmap, ground, rays, palette_indices, shards, overwrites, pool, beams, pyramid, head] =
-        bindings;
+/// The cast's world's group 0 over `bindings` (`WORLD_GROUP`): the eye, the
+/// clip levels' table, the tiles' frames, the beam rays' lines and the cells'
+/// starts, the observed pyramid, and the head: the eye's, or, over the light's
+/// list and head, the shadow map's (`light_groups`).
+fn cast_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 6]) -> u32 {
+    let [eye, clipmap, ground, beams, pyramid, head] = bindings;
     let entries = [
         buf_entry(0, eye),
         buf_entry(1, clipmap),
         buf_entry(2, ground),
-        view_entry(3, rays),
-        buf_entry(4, palette_indices),
-        buf_entry(5, shards),
-        buf_entry(6, overwrites),
-        buf_entry(7, pool),
         buf_entry(8, beams),
         buf_entry(9, pyramid),
         buf_entry(HEAD_BINDING, head),
@@ -2216,7 +2198,19 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// slide's; the boxes' none before its raster's buffers are made.
 fn light_groups(
     g: &Gpu,
-    [walk, world, boxes_built, miss, mark, mark_draws, propagate, slide, miss_hit, sample_hit, sample]: [&Pipeline; 11],
+    [
+        walk,
+        world,
+        boxes_built,
+        miss,
+        mark,
+        mark_draws,
+        propagate,
+        slide,
+        miss_hit,
+        sample_hit,
+        sample,
+    ]: [&Pipeline; 11],
     bindings: [u32; 12],
     [pyramid, head, list, boxes, visibility, args, misses, light_args, left, sample_left]: [u32;
         10],
@@ -2224,56 +2218,41 @@ fn light_groups(
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bindings;
     let entries = [
-        (0, buf_entry(0, eye)),
-        (1, buf_entry(1, clipmap)),
-        (2, buf_entry(2, ground)),
-        (3, view_entry(3, rays)),
-        (4, buf_entry(4, palette_indices)),
-        (5, buf_entry(5, shards)),
-        (6, buf_entry(6, overwrites)),
-        (7, buf_entry(7, pool)),
-        (8, buf_entry(8, list)),
-        (9, buf_entry(9, pyramid)),
-        (10, view_entry(10, light)),
-        (HEAD_BINDING, buf_entry(HEAD_BINDING, head)),
-        (12, buf_entry(12, list)),
-        (13, buf_entry(13, left)),
-        (14, buf_entry(14, boxes)),
-        (15, view_entry(15, visibility)),
-        (16, buf_entry(16, args)),
-        (17, buf_entry(17, misses)),
-        (18, buf_entry(18, drawing)),
-        (19, buf_entry(19, regions)),
-        (20, buf_entry(20, instances)),
-        (21, buf_entry(21, light_args)),
+        buf_entry(0, eye),
+        buf_entry(1, clipmap),
+        buf_entry(2, ground),
+        view_entry(3, rays),
+        buf_entry(4, palette_indices),
+        buf_entry(5, shards),
+        buf_entry(6, overwrites),
+        buf_entry(7, pool),
+        buf_entry(8, list),
+        buf_entry(9, pyramid),
+        view_entry(10, light),
+        buf_entry(HEAD_BINDING, head),
+        buf_entry(12, list),
+        buf_entry(13, left),
+        buf_entry(14, boxes),
+        view_entry(15, visibility),
+        buf_entry(16, args),
+        buf_entry(17, misses),
+        buf_entry(18, drawing),
+        buf_entry(19, regions),
+        buf_entry(20, instances),
+        buf_entry(21, light_args),
     ];
-    // Each the entries its layout declares (build.rs `compute`).
-    let of = |declared: &[u32]| {
-        entries
-            .iter()
-            .filter(|(b, _)| declared.chunks(3).any(|d| d[0] == *b))
-            .map(|&(_, e)| e)
-            .collect::<Vec<_>>()
+    // Each group takes the entries its layout binds.
+    let of = |p: &Pipeline| {
+        let layout = p.layouts[0];
+        let e: Vec<Entry> = entries
+            .into_iter()
+            .filter(|e| layout.binds(e.binding))
+            .collect();
+        g.bind_group(layout, &e)
     };
     [
-        g.bind_group(walk.layouts[0], &of(&LIGHT_GROUP)),
-        cast_group(
-            g,
-            world,
-            [
-                eye,
-                clipmap,
-                ground,
-                rays,
-                palette_indices,
-                shards,
-                overwrites,
-                pool,
-                list,
-                pyramid,
-                head,
-            ],
-        ),
+        of(walk),
+        cast_group(g, world, [eye, clipmap, ground, list, pyramid, head]),
         // The raster's once its buffers are made.
         if boxes == 0 {
             0
@@ -2289,12 +2268,12 @@ fn light_groups(
                 ],
             )
         },
-        g.bind_group(miss.layouts[0], &of(&LIGHT_MISS_GROUP)),
-        g.bind_group(mark.layouts[0], &of(&LIGHT_MARK_GROUP)),
-        g.bind_group(mark_draws.layouts[0], &of(&LIGHT_MARK_DRAWS_GROUP)),
-        g.bind_group(propagate.layouts[0], &of(&LIGHT_PROPAGATE_GROUP)),
-        g.bind_group(slide.layouts[0], &of(&LIGHT_SLIDE_GROUP)),
-        g.bind_group(miss_hit.layouts[0], &of(&LIGHT_MISS_HIT_GROUP)),
+        of(miss),
+        of(mark),
+        of(mark_draws),
+        of(propagate),
+        of(slide),
+        of(miss_hit),
         g.bind_group(
             sample_hit.layouts[0],
             &[
@@ -2305,6 +2284,6 @@ fn light_groups(
                 buf_entry(HEAD_BINDING, head),
             ],
         ),
-        g.bind_group(sample.layouts[0], &of(&ASK_GROUP)),
+        of(sample),
     ]
 }

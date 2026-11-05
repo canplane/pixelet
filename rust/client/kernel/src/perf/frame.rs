@@ -5,7 +5,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::sys::sched::phase_spec::PHASES;
-use pxl_engine::tally;
+use pxl_engine::count;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
 use crate::perf::word::{as_words, as_words_mut, words, Words};
@@ -109,10 +109,10 @@ pub struct FrameSample {
 }
 
 /// The `ray_counts` setting's counts of one frame, as the renderer hands
-/// them (pxl-render gpu/ray/tally.rs `RayCounts`), in perf.json FRAME's
+/// them (pxl-render gpu/ray/count.rs `RayCounts`), in perf.json FRAME's
 /// `rays` group's order: whether the eye cast in full, its pixels and its
 /// lanes; whether the light's map cast, its slots and its lanes
-/// (pxl-engine `tally`). What an observer took, walked and took the sky
+/// (pxl-engine `count`). What an observer reused, walked and took the sky
 /// for is what it cast again, of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -123,7 +123,7 @@ pub struct RaySample {
     pub eye_sample: f64,
     pub eye_miss: f64,
     pub eye_asked: f64,
-    pub eye_took: f64,
+    pub eye_reused: f64,
     pub eye_walked: f64,
     pub eye_sky: f64,
     pub eye_boxes: f64,
@@ -133,7 +133,7 @@ pub struct RaySample {
     pub light_sample: f64,
     pub light_miss: f64,
     pub light_asked: f64,
-    pub light_took: f64,
+    pub light_reused: f64,
     pub light_walked: f64,
     pub light_sky: f64,
     pub light_boxes: f64,
@@ -144,28 +144,28 @@ impl RaySample {
     pub fn of(c: [f64; ray::RAY_COUNTS]) -> RaySample {
         let at = |o: u32, k: usize| c[ray::count_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
-        let (eye, light) = (tally::EYE, tally::LIGHT);
+        let (eye, light) = (count::EYE, count::LIGHT);
         RaySample {
             eye_cast: at(eye, ray::CAST),
             eye_rays: at(eye, ray::RAYS),
-            eye_beam: lane(eye, tally::BEAM),
-            eye_sample: lane(eye, tally::SAMPLE),
-            eye_miss: lane(eye, tally::MISS),
-            eye_asked: lane(eye, tally::ASKED),
-            eye_took: lane(eye, tally::TOOK),
-            eye_walked: lane(eye, tally::WALKED),
-            eye_sky: lane(eye, tally::SKY),
-            eye_boxes: lane(eye, tally::BOXES),
+            eye_beam: lane(eye, count::BEAM),
+            eye_sample: lane(eye, count::SAMPLE),
+            eye_miss: lane(eye, count::MISS),
+            eye_asked: lane(eye, count::ASKED),
+            eye_reused: lane(eye, count::REUSED),
+            eye_walked: lane(eye, count::WALKED),
+            eye_sky: lane(eye, count::SKY),
+            eye_boxes: lane(eye, count::BOXES),
             light_cast: at(light, ray::CAST),
             light_rays: at(light, ray::RAYS),
-            light_beam: lane(light, tally::BEAM),
-            light_sample: lane(light, tally::SAMPLE),
-            light_miss: lane(light, tally::MISS),
-            light_asked: lane(light, tally::ASKED),
-            light_took: lane(light, tally::TOOK),
-            light_walked: lane(light, tally::WALKED),
-            light_sky: lane(light, tally::SKY),
-            light_boxes: lane(light, tally::BOXES),
+            light_beam: lane(light, count::BEAM),
+            light_sample: lane(light, count::SAMPLE),
+            light_miss: lane(light, count::MISS),
+            light_asked: lane(light, count::ASKED),
+            light_reused: lane(light, count::REUSED),
+            light_walked: lane(light, count::WALKED),
+            light_sky: lane(light, count::SKY),
+            light_boxes: lane(light, count::BOXES),
         }
     }
 
@@ -230,13 +230,13 @@ words!(FrameSample, FRAME::WORDS,
 words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
-    eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_asked => FRAME::eye_asked - FRAME::eye_cast, eye_took => FRAME::eye_took - FRAME::eye_cast,
+    eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_asked => FRAME::eye_asked - FRAME::eye_cast, eye_reused => FRAME::eye_reused - FRAME::eye_cast,
     eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
     eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
     light_cast => FRAME::light_cast - FRAME::eye_cast, light_rays => FRAME::light_rays - FRAME::eye_cast,
     light_beam => FRAME::light_beam - FRAME::eye_cast,
     light_sample => FRAME::light_sample - FRAME::eye_cast, light_miss => FRAME::light_miss - FRAME::eye_cast, light_asked => FRAME::light_asked - FRAME::eye_cast,
-    light_took => FRAME::light_took - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
+    light_reused => FRAME::light_reused - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
     light_sky => FRAME::light_sky - FRAME::eye_cast, light_boxes => FRAME::light_boxes - FRAME::eye_cast,
 );
 
