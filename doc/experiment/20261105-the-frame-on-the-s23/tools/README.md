@@ -50,3 +50,13 @@ python3 -I show.py light_receivers,light_beam,world base:rv1-8194,rv3-8194 chang
 - `pxl.perf.drive` sets `res` to fixed itself.
 - The `perf` setting does not stop the timestamps' read; it only shows the panel.
 - A CDP device-scale override changes `devicePixelRatio`, not the canvas.
+
+## Safari's page
+
+`measure.mjs` loads a page in the Mac's Safari through safaridriver (`safaridriver -p 4444`) and runs its phases: default zoom, farthest zoom with the sky time moving, back, shadows on. Every 5 s it logs the page's live GPU bytes and object count, the GPU process's footprint and the GPU's utilization to `<label>.jsonl`, and it stops if the GPU pins at 100% or the footprint passes 1.2 GB. Serve the page behind `mem-proxy.mjs <metro port> <port>`, which counts every buffer and texture from before the first frame, or `pass-proxy.mjs`, which also gives each pass its own submit and logs the passes still outstanding:
+
+```sh
+VPORT=<port> FAR_S=600 node measure.mjs <label>
+```
+
+A pin holds the GPU until Safari is force-quit.

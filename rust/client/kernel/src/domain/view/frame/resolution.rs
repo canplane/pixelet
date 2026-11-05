@@ -42,9 +42,11 @@
 //! none the sample is the frame's gap, which never falls below the paced
 //! interval, so room cannot be foreseen and only the scale moves: a window
 //! whose gaps average past `SCALE_MISSED` budgets steps down, and a step up
-//! is a probe taken after a hold of quiet windows; one that goes over within
-//! `SCALE_TRUST_WINDOWS` steps back and doubles the hold, up to
-//! `SCALE_PROBE_WINDOWS_MAX`. A change moves one knob a step: the scale's
+//! waits for `SCALE_PROBE_WINDOWS` quiet ones. Either way a step up is on
+//! trial: one that goes over within `RES_TRUST_WINDOWS` steps back and doubles
+//! the wait for the next, up to `RES_UP_WINDOWS_MAX`, which is what stops two
+//! steps swinging where a prediction falls a little short, and one that
+//! outlasts them stands and the wait is as it was. A change moves one knob a step: the scale's
 //! rebuilds the targets, so no frame is summed while it waits to be drawn,
 //! and the lattice's is laid by the next cast, the frames that stand on the
 //! last keeping its grid (pxl-render gpu/ray/cast.rs `prepare`); the
@@ -118,10 +120,10 @@ struct Judge {
     quiet: u32,
     /// Windows ended since the last change.
     since: u32,
-    /// Untimed: the quiet windows a probe up waits for, and whether the step
-    /// is one on trial.
-    hold: u32,
-    probing: bool,
+    /// How many times over the wait for a step up runs, for the steps up
+    /// that fell back, and whether the step is one on trial.
+    backoff: u32,
+    on_trial: bool,
     moving: bool,
 }
 
@@ -138,8 +140,8 @@ impl Judge {
         budget_ms: 0.0,
         quiet: 0,
         since: u32::MAX,
-        hold: param::SCALE_PROBE_WINDOWS,
-        probing: false,
+        backoff: 1,
+        on_trial: false,
         moving: false,
     };
 
@@ -174,6 +176,16 @@ impl Judge {
         }
     }
 
+    /// The windows with room a step up waits for.
+    fn hold(&self, timed: bool) -> u32 {
+        let wait = if timed {
+            param::RES_UP_WINDOWS
+        } else {
+            param::SCALE_PROBE_WINDOWS
+        };
+        (wait * self.backoff).min(param::RES_UP_WINDOWS_MAX)
+    }
+
     /// The load `cost` over `budget_ms` would be at the knobs `(step,
     /// lattice)`: the rest as it is, the per-pixel time by the pixels there
     /// over these, the lattice's by its corners and cells there over these.
@@ -205,34 +217,34 @@ impl Judge {
         if self.since <= param::RES_SETTLE_WINDOWS {
             return false;
         }
-        if self.probing && self.since > param::SCALE_TRUST_WINDOWS {
-            self.probing = false;
+        if self.on_trial && self.since > param::RES_TRUST_WINDOWS {
+            self.on_trial = false;
+            self.backoff = 1;
         }
         let (down, up) = (self.down(timed), self.up());
-        let (over, room, hold) = if timed {
+        let (over, room) = if timed {
             (
                 load > 1.0 + param::RES_BAND,
                 up.is_some_and(|u| self.predicted(cost, sampled, u) < 1.0 - param::RES_BAND),
-                param::RES_UP_WINDOWS,
             )
         } else {
             let over = load > param::SCALE_MISSED;
-            (over, !over, self.hold)
+            (over, !over)
         };
         let to = match (down, up) {
             (Some(to), _) if over => {
-                if self.probing {
-                    self.hold = (self.hold * 2).min(param::SCALE_PROBE_WINDOWS_MAX);
-                    self.probing = false;
+                if self.on_trial {
+                    self.backoff = self.backoff.saturating_mul(2);
+                    self.on_trial = false;
                 }
                 to
             }
             (_, Some(to)) if room => {
                 self.quiet += 1;
-                if self.quiet < hold {
+                if self.quiet < self.hold(timed) {
                     return false;
                 }
-                self.probing = !timed;
+                self.on_trial = true;
                 to
             }
             _ => {

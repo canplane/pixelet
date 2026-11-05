@@ -92,7 +92,7 @@ fn untimed_probe_backoff() {
         0
     );
     assert_eq!(windows(&mut k, 1.0, 1, false), 1);
-    assert_eq!((k.step, k.probing), (0, true));
+    assert_eq!((k.step, k.on_trial), (0, true));
     assert_eq!(windows(&mut k, 1.0, settle, false), 0);
     assert_eq!(
         windows(&mut k, param::SCALE_MISSED + 0.5, 1, false),
@@ -100,21 +100,55 @@ fn untimed_probe_backoff() {
         "the probe fails"
     );
     assert_eq!(
-        (k.step, k.probing, k.hold),
+        (k.step, k.on_trial, k.hold(false)),
         (1, false, 2 * param::SCALE_PROBE_WINDOWS)
     );
     assert_eq!(
         windows(&mut k, 1.0, settle + 2 * param::SCALE_PROBE_WINDOWS, false),
         1
     );
+    assert_eq!(windows(&mut k, 1.0, param::RES_TRUST_WINDOWS + 1, false), 0);
     assert_eq!(
-        windows(&mut k, 1.0, param::SCALE_TRUST_WINDOWS + 1, false),
-        0
-    );
-    assert_eq!(
-        (k.step, k.probing),
-        (0, false),
+        (k.step, k.on_trial, k.hold(false)),
+        (0, false, param::SCALE_PROBE_WINDOWS),
         "the probe outlasted its trust"
+    );
+}
+
+/// Timed, two steps do not swing where the step above is predicted to fit
+/// and does not: each fall within the trust doubles the windows before the
+/// next step up, up to the most, and one that outlasts the trust stands and
+/// the wait is as it was.
+#[test]
+fn timed_up_backoff() {
+    let settle = param::RES_SETTLE_WINDOWS;
+    let mut k = Judge::NEW;
+    k.step = 1;
+    // Up after its wait, over within the trust, back: twice the wait, then
+    // four times.
+    let mut wait = param::RES_UP_WINDOWS;
+    for _ in 0..2 {
+        assert_eq!(windows(&mut k, 0.3, wait - 1, true), 0);
+        assert_eq!(windows(&mut k, 0.3, 1, true), 1);
+        assert_eq!((k.step, k.on_trial), (0, true));
+        assert_eq!(windows(&mut k, 0.3, settle, true), 0);
+        assert_eq!(windows(&mut k, 1.5, 1, true), 1, "the step up falls back");
+        assert_eq!((k.step, k.on_trial), (1, false));
+        assert_eq!(windows(&mut k, 0.3, settle, true), 0);
+        wait *= 2;
+        assert_eq!(k.hold(true), wait);
+    }
+    // The most it waits.
+    k.backoff = 1 << 20;
+    assert_eq!(k.hold(true), param::RES_UP_WINDOWS_MAX);
+    // A step up that outlasts its trust stands, and the wait is as it was.
+    k.backoff = 2;
+    assert_eq!(windows(&mut k, 0.3, 2 * param::RES_UP_WINDOWS, true), 1);
+    assert_eq!(k.step, 0);
+    assert_eq!(windows(&mut k, 0.3, param::RES_TRUST_WINDOWS + 1, true), 0);
+    assert_eq!(
+        (k.step, k.on_trial, k.hold(true)),
+        (0, false, param::RES_UP_WINDOWS)
     );
 }
 
@@ -151,7 +185,7 @@ fn pause_keeps_windows() {
         1,
         "the probe's hold outlasts the pause"
     );
-    assert_eq!((k.step, k.probing), (0, true));
+    assert_eq!((k.step, k.on_trial), (0, true));
 }
 
 /// Timed, a window over its budget steps the scale down to `RES_MIN`

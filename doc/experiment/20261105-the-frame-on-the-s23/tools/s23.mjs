@@ -10,10 +10,16 @@
 //               walk      the actor walked north 12 s, the camera still (shadows as last set)
 //               trace     the profiler's window as a Perfetto trace, after the scene before it
 //               drive     pxl.perf.drive(DRIVE_S)
+//               hold-off, hold-on  a circle of HOLD_S seconds (default 60) with the shadows off / on,
+//                         every frame's columns dumped (`-<scene>-frames.json`: the scale, the
+//                         lattice, the kind, the GPU's), a shot at its end
+//               rest      15 s with nothing moved, every frame's columns dumped (`-rest<n>-frames.json`)
+//               set:K=V   a setting set to its value, 3 s to land
 //               cold      the drive with ray_counts on and every frame's columns dumped; give it
 //                         first, on a fresh load, to see the cache's refill after the zoom-out
 //   HOUR      the sky's hour for the scenes (noon by default; morning for low shadows)
 //   RES       fixed (default) or low
+//   OBSTACLE  orbit_obstacle: through, stop or climb (default the page's own)
 //   SETTLE_MS wait after the renderer is live, for the strata's textures (default 25000;
 //             shorter from the shelf), then a shot `-settled.png`
 //   DRIVE_S   the drive's seconds (default 20)
@@ -167,13 +173,15 @@ const keep = async (scene) => {
     fs.writeFileSync(path.join(OUT, `${L}-${scene}-probe.json`), JSON.stringify(await ev(c, `(()=>{const t0=window.__T0||0;const G=window.__G;const f=a=>a.filter(x=>x[0]>=t0);return {t0,raf:f(G.raf),sub:f(G.sub),done:f(G.done),map:f(G.map),tex:f(G.tex)}})()`, 60000)));
 };
 const begin = () => ev(c, `(__m.start(),window.__T0=performance.now(),1)`);
-const columns = ["t", "interval_ms", "kind_name", "gpu_read", "gpu_frame", "gpu_busy_ms", "eye_cast", "eye_rays", "eye_beam", "eye_sample", "eye_miss", "eye_asked", "eye_reused", "eye_walked", "eye_sky", "terrain_landed"];
+const columns = ["t", "interval_ms", "kind_name", "gpu_read", "gpu_frame", "gpu_busy_ms", "eye_cast", "eye_rays", "eye_beam", "eye_sample", "eye_miss", "eye_asked", "eye_reused", "eye_walked", "eye_sky", "terrain_landed", "pack_bytes", "scale", "lattice", "light_cast", "light_rays", "light_beam", "light_sample", "light_miss", "light_asked"];
 const dump = async (scene) => fs.writeFileSync(path.join(OUT, `${L}-${scene}-frames.json`), await ev(c, `(()=>{const k=${JSON.stringify(columns)};const names=(pxl.perf.read().frames.gpu_spans||[]).map(x=>x.name);return JSON.stringify({keys:k,names,rows:__m.frames().map(f=>[...k.map(x=>f[x]),...(f.gpu_spans||[])])})})()`, 60000));
 
 await set("ray_counts", 0);
 await set("res", `__m.SET.res.options.${env.RES || "fixed"}`);
 await set("sky_time", `__m.SET.sky_time.options.${env.HOUR || "noon"}`);
+if (env.OBSTACLE) await set("orbit_obstacle", `__m.SET.orbit_obstacle.options.${env.OBSTACLE}`);
 let last = "settled";
+let rests = 0;
 for (const scene of SCENES) {
   if (scene === "off" || scene === "on") {
     await set("shadows", scene === "on" ? 1 : 0);
@@ -182,12 +190,33 @@ for (const scene of SCENES) {
     await ev(c, motion + `(25,6)`, 240000);
     log(`circle ${scene}`, await ev(c, `pxl.perf.report()`));
     await keep(scene);
+    if (env.FRAMES === "1") await dump(scene);
+    await shot(scene);
     await set("ray_counts", 1);
     await wait(1000);
     await ev(c, `__m.start()`);
     await ev(c, motion + `(8,6)`, 240000);
     log(`counts ${scene}`, await ev(c, `pxl.perf.report()`));
     await set("ray_counts", 0);
+  } else if (scene === "hold-off" || scene === "hold-on") {
+    await set("shadows", scene === "hold-on" ? 1 : 0);
+    await wait(10000);
+    await begin();
+    await ev(c, motion + `(${Number(env.HOLD_S || 60)},6)`, 400000);
+    log(scene, await ev(c, `pxl.perf.report()`));
+    await dump(scene);
+    await shot(scene);
+  } else if (scene.startsWith("set:")) {
+    const [k, val] = scene.slice(4).split("=");
+    await set(k, val);
+    await wait(3000);
+  } else if (scene === "rest") {
+    rests += 1;
+    await wait(5000);
+    await begin();
+    await wait(15000);
+    log(`rest${rests}`, await ev(c, `pxl.perf.report()`));
+    await dump(`rest${rests}`);
   } else if (scene === "walk") {
     await wait(5000);
     await shot("before-walk");
@@ -198,12 +227,16 @@ for (const scene of SCENES) {
     await wait(1000);
     log("walk", await ev(c, `pxl.perf.report()`));
     await keep("walk");
+    if (env.FRAMES === "1") await dump("walk");
     await wait(4000);
     await shot("walked");
   } else if (scene === "drive") {
     await begin();
+    if (env.VIEW === "1") await ev(c, `(()=>{window.__V=[];window.__Vt=setInterval(()=>{const m=pxl.perf.report().match(/distance ([0-9.]+) u +polar ([-0-9.]+). +azimuth ([-0-9.]+)/);window.__V.push(m?[+m[1],+m[2],+m[3]]:null)},1000);return 1})()`);
     log("drive", await ev(c, `pxl.perf.drive(${Number(env.DRIVE_S || 20)})`, 300000));
+    if (env.VIEW === "1") log("drive view", await ev(c, `(clearInterval(window.__Vt),JSON.stringify(window.__V))`));
     await keep("drive");
+    if (env.FRAMES === "1") await dump("drive");
   } else if (scene === "cold") {
     await set("ray_counts", 1);
     await wait(2000);

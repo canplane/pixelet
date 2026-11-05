@@ -279,6 +279,36 @@ fn nearest_turns_through() {
     assert_eq!(climb_step(&past, &level, &access), level);
 }
 
+/// A zoom all the way in tilted past the level leaves the eye in the ground
+/// under the pivot: it still turns, tilts back, and zooms out, and only going
+/// deeper is refused.
+#[test]
+fn the_nearest_under_the_level_is_no_trap() {
+    let _g = serial();
+    let (tile_cache, store, pivot) = roofed(None);
+    let world = World::new(&tile_cache, &store);
+    let access = Ground::of(&world);
+    let at = ViewPose {
+        polar: core::f64::consts::FRAC_PI_2 + 0.4,
+        ..pose(pivot, MIN_DIST, 0.0)
+    };
+    assert!(in_solid(&at, &access));
+    let turned = ViewPose { azimuth: 1.0, ..at };
+    assert_eq!(climb_step(&turned, &at, &access), turned);
+    let back = ViewPose {
+        polar: at.polar - 0.01,
+        ..at
+    };
+    assert_eq!(climb_step(&back, &at, &access), back);
+    let out = ViewPose { dist: 10.0, ..at };
+    assert_eq!(climb_step(&out, &at, &access), out);
+    let deeper = ViewPose {
+        polar: at.polar + 0.1,
+        ..at
+    };
+    assert_eq!(climb_step(&deeper, &at, &access), at);
+}
+
 /// `stop` goes the straight line alone: into a low wall it stops short, from
 /// either side, a zoom in as a zoom out.
 #[test]

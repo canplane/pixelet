@@ -8,7 +8,9 @@
 //! - **The nearest**: within `NEAREST_DIST`, the eye goes anywhere over the
 //!   pivot's level, through what is there, unasked: its rays do not meet the
 //!   cell it stands in (pxl-engine `cast::walk`). Under the level it stops as
-//!   anywhere, and no pitch is raised.
+//!   anywhere, and no pitch is raised, so a zoom in tilted past the level can
+//!   leave it in the ground: from there what goes no deeper is let through,
+//!   or no turn, tilt or zoom would ever move it again (`way_hit`).
 //! - **Stop**: the eye's way that hits something solid goes as far as it got
 //!   (`way_hit`). What lies between the eye and the pivot is not asked.
 //! - **Climb**, in `climb`: the way is that of the eye as drawn, its pitch
@@ -212,7 +214,9 @@ fn climb_step(to: &ViewPose, from: &ViewPose, access: &Ground<'_>) -> ViewPose {
 /// way is the straight line in control space, as the damping follows it, a
 /// sample two cells the eye moves, each drawn by `draw`, and the eye goes up its
 /// own column and over from each to the next (`rise_clear`). An eye that starts
-/// in something solid has hit it where it stands.
+/// in something solid has hit it where it stands, but for one at the nearest
+/// under the pivot's level, which goes where it is no deeper (the module's
+/// rules).
 fn way_hit(
     from: &ViewPose,
     to: &ViewPose,
@@ -221,7 +225,9 @@ fn way_hit(
 ) -> Option<f64> {
     let mut last = draw(from);
     if in_solid(&last, access) {
-        return Some(0.0);
+        let under_nearest = from.dist <= NEAREST_DIST && from.polar > core::f64::consts::FRAC_PI_2;
+        let no_deeper = eye(&draw(to)).0[2] >= eye(&last).0[2];
+        return (!(under_nearest && no_deeper)).then_some(0.0);
     }
     if line_clear(eye(&last).0, eye(&draw(to)).0, access) {
         return None;

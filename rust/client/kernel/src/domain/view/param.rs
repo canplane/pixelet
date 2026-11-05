@@ -43,14 +43,17 @@ pub const RES_SETTLE_WINDOWS: u32 = 2;
 /// past this many budgets missed frames.
 pub const SCALE_MISSED: f64 = 1.5;
 
-/// Where the device reports no GPU time, the quiet windows before the first
-/// probe up, 5 s, and the most a failed probe doubles them to, 60 s.
+/// Where the device reports no GPU time, the quiet windows before a probe
+/// up, 5 s.
 pub const SCALE_PROBE_WINDOWS: u32 = 10;
-pub const SCALE_PROBE_WINDOWS_MAX: u32 = 120;
 
-/// The windows after a probe up, 2 s, within which going over takes it back
-/// and doubles the wait before the next.
-pub const SCALE_TRUST_WINDOWS: u32 = 4;
+/// The windows after a step up, 4 s, within which going over takes it back
+/// and doubles the wait before the next; the S23's fell within 3 s where the
+/// prediction missed by a few percent.
+pub const RES_TRUST_WINDOWS: u32 = 8;
+
+/// The most those doublings make the wait, 60 s.
+pub const RES_UP_WINDOWS_MAX: u32 = 120;
 
 /// The picker shows a case at thumbnail size: its buffer's long side, in pixels.
 pub const CASE_LONG_SIDE_MAX: f64 = 256.0;

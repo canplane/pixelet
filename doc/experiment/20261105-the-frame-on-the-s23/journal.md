@@ -131,7 +131,43 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   in 9d55c0c66d did not stop it, so way_free, named likeliest in that commit, was not
   the cause. Force-quitting Safari freed the GPU at once.
 
+- **Why frames cast, and the world query's share** (main 97f694bb41, per-frame reason
+  bits, a doubled-query variant): circling or walking 97–99% of frames cast, all eye
+  and jitter, every cast earned; at rest none cast, yet the GPU is busy 10.8 ms a
+  frame at 60 Hz (world 4.6); driving, gated frames carry 10.2 s of GPU against cast
+  frames' 2.0, with `mark` at 6.2 ms. One world query is ~0.1–0.2 ms p50 and 15–25% of
+  an asking pass's p95. So neither the kernel's cast rate nor the world's rules are
+  the next lever. The camera follows the actor, so "actor walking, camera still" were
+  full casts: map-gate's no gain on receivers-only casts is unproven either way.
+
+- **Safari's page memory measured, every phase** (af434aad6e, the shelf, each pass in
+  its own submit, far zoom 10 min): default 410 MiB, far 412, back 412, shadows on
+  577, flat, with no climb. No stuck pass, device loss or pin; utilization under 71%.
+  The 0.6–0.7 GB gap of the code's inventory doesn't exist on a fresh page: the 1.4–1.5
+  GB belonged to one GPU process serving several hung pages. The hang did not recur,
+  but the face cap and the split submits changed together.
+- **`auto` tries a step up on one rule** (6a9f3a2070): scale changes 18–20 a minute to
+  0–1, fps 54–55 to 56–58, interval p95 33–36 to 23–30 ms; settles at 0.5 warm.
+
+- **The drive measured a pin, and a user could hit it.** A held drag and the wheel past
+  the horizon left the camera at 2 u under the level, every step refused but a
+  vertical drag. Fixed in collision.rs with a test, and drive.ts tilts to just over
+  the horizon. So every drive figure above is ~6 s of casts plus ~14 s of one standing
+  close-up: its cast frames' and passes' tails compare only with each other, its fps
+  and gated share mean nothing, and `mark` 6.2 ms is the actor's fragments up close.
+  The honest drive's baseline (one run): 326 frames all cast, fps 16.4, busy 52/115,
+  `light_walk` p95 39, `miss` 27, `light_sample` 18.5, `sample` 17.
+- **The atomics, second round** (patch held for the Mac's GPU tests): a slot's key
+  atomic beside a plain entry, tallies atomic and gated, the light list, ways, decor
+  and stands plain. Shadows on: `light_beam` 3.2 to 1.6 ms, `light_walk` p95 2.4 to 1.6,
+  busy p95 50 to 43, fps 25 to 27.6. Shadows off, three cool pairs: 43.9 to 44.0 fps,
+  even. The first round's −3 fps was run order: the first of a pair runs faster.
+
 ## Did not work
+
+- **The atomics, first round** (entries apart from keys, plain tallies, a name column,
+  +2 MiB): cache walks +0.2–0.5 ms, and plain tallies read 2–15% of main's on Adreno,
+  useless. A person decides by those counts, so they stay atomic.
 
 - **The receivers' stands in workgroup memory** (light_propagate): `light_receivers`
   ~7 ms either way on the S23; 1 KB and barriers for nothing, dropped.
@@ -161,11 +197,13 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
 
 ## Unsettled
 
-- **The hung submit in Safari at the far zoom.** Read and probed, not found: the
-  atmosphere's counts are constant, a sky step casts no ray, every loop in that frame
-  ends on data the code can produce, barriers are cheap, and far poses on the
-  synthetic world saw no hang (it has no real far data). Finite-but-long work or a
-  WebKit or driver stall is open. Next: each pass in its own submit, logged.
+- **The hung submit in Safari at the far zoom.** On af434aad6e, unsplit, the GPU
+  pinned about 2 min into the far zoom, memory flat at 412 MiB; with each pass in its
+  own submit the same phases ran 10 min clean, passes in the tens of ms. So the face
+  cap isn't the fix; the suspect is one large command buffer stalling in WebKit or
+  Metal, not a shader that never ends (two runs against one; a split run could be
+  luck). Reading found every loop in that frame ending on data the code can produce.
+  Next: the frame in several submits, in the app, tested in Safari.
 
 - **`light_receivers`** 6.9–8.1 ms every frame with an actor walking, the largest
   light cost now; receivers.patch is being measured.

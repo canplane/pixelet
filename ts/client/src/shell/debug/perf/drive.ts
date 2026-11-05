@@ -4,10 +4,10 @@
  * The one measurement (`pxl.perf.drive`), the worst the renderer meets and
  * taken the same way each time: the display's pixels fixed, the shadows and
  * the profiler on, the sky at 07:00; the camera zoomed to its farthest and
- * tilted to the horizon through the canvas's own input; then, for the window,
- * turned a full circle every `TURN_S` while the wheel sweeps the zoom in and
- * out; and the window's report. Two runs alike are two windows alike, so a
- * change is read off their reports.
+ * tilted to just over the horizon through the canvas's own input; then, for
+ * the whole window, turned a full circle every `TURN_S` while the wheel sweeps
+ * the zoom in and out; and the window's report. Two runs alike are two windows
+ * alike, so a change is read off their reports.
  */
 
 import { SETTING } from "@/shell/setting/schema.ts";
@@ -21,8 +21,8 @@ const STEP_MS = 16;
 /** The wheel's step, and the steps that take the zoom from one end to the other. */
 const WHEEL = 100;
 const RUN = 60;
-/** The drag up that tilts the view to the horizon, in CSS pixels. */
-const TILT_PX = 2000;
+/** The drag up that tilts the default view to just over the horizon, a share of the canvas's height. */
+const TILT_SHARE = 0.06;
 /** The circle the pointer turns the view on, its radius in CSS pixels and a turn's seconds. */
 const RADIUS = 250;
 const TURN_S = 4;
@@ -41,6 +41,7 @@ export async function perfDrive(seconds = 60): Promise<string> {
   setting.set(SETTING.perf.key, 1);
   setting.set(SETTING.sky_time.key, SETTING.sky_time.options.dawn);
   const r = canvas.getBoundingClientRect();
+  const tilt = TILT_SHARE * r.height;
   const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
   const pointer = (type: string, at: [number, number], buttons: number) =>
     canvas.dispatchEvent(
@@ -72,10 +73,10 @@ export async function perfDrive(seconds = 60): Promise<string> {
   }
   pointer("pointerdown", [x, y], 2);
   for (let n = 1; n <= RUN; n++) {
-    pointer("pointermove", [x, y - (TILT_PX * n) / RUN], 2);
+    pointer("pointermove", [x, y - (tilt * n) / RUN], 2);
     await wait(STEP_MS);
   }
-  pointer("pointerup", [x, y - TILT_PX], 0);
+  pointer("pointerup", [x, y - tilt], 0);
   await wait(SETTLE_MS);
   perf.start();
   const on = (a: number): [number, number] => [
