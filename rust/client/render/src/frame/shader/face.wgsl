@@ -62,7 +62,8 @@ fn descent(c: vec3<i32>, zoom: u32, low: u32, low_handed: vec4<u32>) -> Descent 
   var grand = low_handed;
   var parent = low_handed;
   var at = low_handed;
-  for (var z = low + 1u; z < zoom; z += 1u) {
+  var z = low + 1u;
+  for (var i = 0u; i < 33u && z < zoom; i += 1u) {
     at = world_child(at, z, over(c, zoom, z));
     if (z + 2u == zoom) {
       up.x = z;
@@ -72,6 +73,7 @@ fn descent(c: vec3<i32>, zoom: u32, low: u32, low_handed: vec4<u32>) -> Descent 
       up.y = z;
       parent = at;
     }
+    z += 1u;
   }
   return Descent(up, grand, parent);
 }

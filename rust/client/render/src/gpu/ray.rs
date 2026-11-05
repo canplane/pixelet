@@ -93,10 +93,12 @@ impl RaysPass {
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
-    /// made again: the group is made again over them when next drawn.
+    /// made again or let go: the group over the last is let go with it, and
+    /// made again over them when the cast next prepares (`regroup`).
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        self.bindings = [0; 4];
+        release(self.group);
+        (self.group, self.bindings) = (0, [0; 4]);
     }
 
     /// The tiles this frame casts and draws, `cnt` of them, handed before

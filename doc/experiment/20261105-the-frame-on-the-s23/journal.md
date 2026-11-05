@@ -105,11 +105,31 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   every beam ray bought nothing (`beam_hit` even) and goes.
 - **The page's GPU memory, read from the code** (main 417494fe4a): 437 MiB on the Mac
   (428 on the S23) with shadows never on, 565 once on (none of it given back), ~780
-  at every cap with load transients — under the 1.4–1.5 GB Safari's GPU process died
-  at, the rest unaccounted. Five loops or GPU-written counts had no hard cap,
-  way_free.wgsl:31 the worst (a one-lane walk of the ways pool that leaves only at
-  depth 0). After our pages Safari's GPU process stayed stuck exiting and the Mac's GPU
-  at 100%, Finder, the Dock and the menu bar frozen.
+  at every cap with load transients. Five loops or GPU-written counts had no hard cap,
+  way_free.wgsl:31 the worst by reading (a one-lane walk of the ways pool that leaves
+  only at depth 0). After our pages the Mac's GPU stayed at 100% with Finder, the Dock
+  and the menu bar frozen, and the Mac was rebooted; the next day quitting Safari
+  alone freed it, so the reboot was not shown to be needed. Safari's GPU process died
+  at 1.4–1.5 GB after several runs left pages open; a fresh page is well under that.
+
+- **The shadow resources follow the setting; the loops and counts read as unbounded
+  capped** (the caps were not shown to fix anything: see the hung submit). Shadows
+  toggled six times a run in Safari, three runs, every allocation counted: off back
+  to 431.19 MB, on to 603.40 MB each time (164 MiB swing, no leak), the same shadows
+  on each turn-on, the GPU never pinned. A "t must advance" stop on the capped walks
+  was not taken: a push, a corner crossing or a node under t's ulp keeps t.
+
+- **`auto` on the S23** (main 97f694bb41, the shelf, 60 s holds, one load, thermal
+  0): shadows off 54–56 fps at lattice 1; shadows on 45–48 fps, settled at 0.5 and
+  lattice 2 within 10 s, softer but clean. Shadows off it swings 0.84↔0.71 every ~3 s
+  (18 changes in 60 s), against the judge's stated contract: the timed branch lacks the
+  untimed branch's guard.
+- **A fresh Safari page holds 412 MiB, flat** at default and far zoom, with no climb
+  (main 97f694bb41). So the device losses read as memory on 11-05 were not shown to be
+  memory. One GPU submit never finished 80 s into the far zoom, near a sky step: in
+  flight stuck at 1, GPU 100%, the GPU process uninterruptible, the canvas off. Caps
+  in 9d55c0c66d did not stop it, so way_free, named likeliest in that commit, was not
+  the cause. Force-quitting Safari freed the GPU at once.
 
 ## Did not work
 
@@ -140,6 +160,12 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   over `miss`, `sample` and `beam`.
 
 ## Unsettled
+
+- **The hung submit in Safari at the far zoom.** Read and probed, not found: the
+  atmosphere's counts are constant, a sky step casts no ray, every loop in that frame
+  ends on data the code can produce, barriers are cheap, and far poses on the
+  synthetic world saw no hang (it has no real far data). Finite-but-long work or a
+  WebKit or driver stall is open. Next: each pass in its own submit, logged.
 
 - **`light_receivers`** 6.9–8.1 ms every frame with an actor walking, the largest
   light cost now; receivers.patch is being measured.

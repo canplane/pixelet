@@ -44,8 +44,12 @@ fn spans(a: vec2<i32>, b: vec2<i32>) -> bool {
 fn stand_between(current: u32, a: vec2<i32>, b: vec2<i32>) {
   let lo = min(a, b);
   let hi = max(a, b);
-  for (var j = lo.y; j <= hi.y; j += 1i) {
-    for (var i = lo.x; i <= hi.x; i += 1i) {
+  // Only the box's tiles are marked (`stand`), so the walk keeps to them.
+  let n = i32(light_tiles());
+  let first = max(lo, vec2<i32>(0));
+  let last = min(hi, vec2<i32>(n - 1i));
+  for (var j = first.y; j <= last.y; j += 1i) {
+    for (var i = first.x; i <= last.x; i += 1i) {
       stand(current, vec2<i32>(i, j));
     }
   }

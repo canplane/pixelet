@@ -30,11 +30,14 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[base + LINE_VISITS] = w.visits;
   let hand = beam_hand_at(c);
   if (w.ends == 4u) {
+    // The list holds a place for each beam ray of the lattice, each listed once.
     let place = atomicAdd(&left[3], 1u);
-    if (place % (CORNER_SIDE * CORNER_SIDE) == 0u) {
-      atomicAdd(&left[0], 1u);
+    if (place < lattice.x * lattice.y) {
+      if (place % (CORNER_SIDE * CORNER_SIDE) == 0u) {
+        atomicAdd(&left[0], 1u);
+      }
+      beams[corners_left_at() + 1u + place] = c.x | (c.y << 16u);
     }
-    beams[corners_left_at() + 1u + place] = c.x | (c.y << 16u);
     // How far it came, where `beam_cs` goes on from its line's node (resume.wgsl
     // `line_resumed`), and writes this word as below.
     beams[hand] = bitcast<u32>(w.t);

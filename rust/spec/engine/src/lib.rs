@@ -83,6 +83,13 @@ pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W;
 /// level (pxl-spec space/coord/world.rs `EXTENT`).
 pub const HEIGHT_BITS: u32 = 16;
 
+/// The most workgroups a dispatch takes on an axis: WebGPU's
+/// `maxComputeWorkgroupsPerDimension` at its default, which the page's
+/// device keeps, as it asks for no limits; a native device's adapter allows
+/// at least as many. Each count a pass writes for an indirect dispatch is
+/// held under it by the room it lists into.
+pub const WORKGROUPS_MOST: u32 = 65_535;
+
 /// The coarsest cube: a tile here is as wide as the world is tall, so the
 /// pyramid is alike on every axis from here finer, and 3D begins. A tile of
 /// it with the world's whole height over it is a **shard**, the unit the

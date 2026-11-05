@@ -53,7 +53,8 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let was = vec2<i32>(i32(head_word(LIGHT_HEAD_CORNER_WAS)), i32(head_word(LIGHT_HEAD_CORNER_WAS + 1u)));
   var reached = !keeps_tile(id.xy, was);
-  let columns = u32(head[LIGHT_COLUMNS_AT].x);
+  // The head holds `LIGHT_COLUMNS` columns at most (pxl-engine `light::COLUMNS`).
+  let columns = min(u32(head[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
   for (var k = 0u; k < columns && !reached; k += 1u) {
     reached = reaches(id.xy, bitcast<vec4<f32>>(head[LIGHT_COLUMNS_AT + 1u + k]));
   }

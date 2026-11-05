@@ -361,8 +361,8 @@ pub struct Renderer {
     bind_group: u32,
     models: FrameGroups,
     shadow: Shadow,
-    /// Whether the shadow map is cast and drawn this frame: the setting on
-    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`prepare`).
+    /// Whether the shadow map is cast and drawn this frame: the map made
+    /// (`Shadow::on`) and the sun or the moon up (`prepare`).
     shadows: bool,
     /// Whether the debug pass drew into the screen's depth last frame, so
     /// the finish carries it whole again (gpu/finish.rs).
@@ -578,6 +578,27 @@ impl Renderer {
         e
     }
 
+    /// What only the shadows hold, made where their setting
+    /// (`STAGE_AT::SHADOWS`) is on and let go where it is off, before the
+    /// frame: the map and the world's depth from the light (`Shadow::made`)
+    /// and the light's cast (`RaysPass::light_made`); and the lit passes'
+    /// groups made again over the map or the blank one where it turned.
+    fn shadows_made(&mut self, g: &Gpu) {
+        let on = stage_lane()[STAGE_AT::SHADOWS] > 0.0;
+        self.screen.light_made(g, on);
+        if self.shadow.made(g, on) {
+            self.models.release();
+            self.models = FrameGroups::new(
+                g,
+                frame_layout(g, &mut self.pipelines),
+                self.frame_buf,
+                self.shadow.entries(1),
+                self.atmosphere.entries(),
+            );
+            self.box_groups(g);
+        }
+    }
+
     /// The ghost boxes' group 0: what a cell's face is painted by, and the draws.
     fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
@@ -675,7 +696,7 @@ impl Renderer {
         } else {
             None
         };
-        let light = light.filter(|_| s[STAGE_AT::SHADOWS] > 0.0 && reach > 0.0);
+        let light = light.filter(|_| self.shadow.on() && reach > 0.0);
         self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
@@ -838,10 +859,7 @@ impl Renderer {
         // What the frame cannot put off is recorded before what can wait:
         // the cast pass made first, then the bricks' uploads, which take
         // only the room left.
-        if cast.is_some() {
-            self.screen
-                .light_made(g, stage_lane()[STAGE_AT::SHADOWS] > 0.0);
-        }
+        self.shadows_made(g);
         self.screen.hand(g, &mut input.ground);
         let tiles = input.earth_tiles;
         read.mark(
@@ -1027,7 +1045,7 @@ impl Renderer {
             &meshes,
             (world.rays_view, [world.width, world.height]),
             (
-                self.shadow.world,
+                self.shadow.world(),
                 self.shadow.generation,
                 self.shadow.starts(),
             ),

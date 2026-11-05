@@ -131,7 +131,11 @@ fn light_propagate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let u = up();
   let t = vec2<i32>(id.xy);
   var is_read = false;
-  for (var k = 0u; k <= u.steps && !is_read; k += 1u) {
+  // Step `k` lies `k - 1` tiles or more from the tile stood on along the way's longer axis,
+  // and a step `n` tiles and its taps' span off reads only tiles past the box, which no
+  // receiver stands on (`stood`): the steps past that, one spare for rounding, read nothing.
+  let most = n + u32(LIGHT_READ_LAST - LIGHT_READ_FIRST) + 3u;
+  for (var k = 0u; k <= min(u.steps, most) && !is_read; k += 1u) {
     let o = up_at(u, k);
     for (var b = LIGHT_READ_FIRST; b <= LIGHT_READ_LAST && !is_read; b += 1i) {
       for (var a = LIGHT_READ_FIRST; a <= LIGHT_READ_LAST && !is_read; a += 1i) {

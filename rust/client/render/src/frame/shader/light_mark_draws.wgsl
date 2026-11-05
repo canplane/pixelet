@@ -95,9 +95,13 @@ fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let t = tile_of(v);
   let current = cast_number();
   let r = ring();
-  for (var b = -r; b <= r; b += 1i) {
-    for (var a = -r; a <= r; a += 1i) {
-      stand(current, t + vec2<i32>(a, b));
+  // Only the box's tiles are marked (`stand`), so the walk keeps to them.
+  let n = i32(light_tiles());
+  let first = max(t - vec2<i32>(r), vec2<i32>(0));
+  let last = min(t + vec2<i32>(r), vec2<i32>(n - 1i));
+  for (var j = first.y; j <= last.y; j += 1i) {
+    for (var i = first.x; i <= last.x; i += 1i) {
+      stand(current, vec2<i32>(i, j));
     }
   }
 }

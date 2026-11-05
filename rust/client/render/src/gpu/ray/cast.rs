@@ -222,13 +222,13 @@ pub(super) struct CastBuffers {
     /// and the box (pxl-engine `light::HEAD_EPOCH`): a tile cast in it or
     /// after stands where the box kept it.
     light_epoch: u32,
-    /// Whether all the light's cast is made (`light_made`): its list and its
-    /// raster's buffers and targets; before then no shadow map is cast.
+    /// Whether all the light's cast is made (`light_made`): its list, its
+    /// raster's buffers and targets and its groups; while not, no shadow map
+    /// is cast.
     light_ready: bool,
     /// The beam's lines, the samples and the misses (pxl-engine
-    /// `light::list_words`), made where shadows are first cast.
+    /// `light::list_words`), made while the shadows are on; 0 while off.
     light_list: u32,
-    light_list_whole: bool,
     /// The misses' walk's dispatch and count, as the eye's are
     /// (pxl-engine `ray::MISS_ARGS_WORDS`).
     light_misses: u32,
@@ -318,9 +318,6 @@ pub(super) struct CastBuffers {
     /// What the light's cast and the eye's recast, counted where the setting
     /// asks (ray/count.rs).
     counter: Counter,
-    /// The list, the light's visibility buffer and its boxes the light's groups
-    /// were made over, made again where one is another.
-    light_grouped: [u32; 3],
 }
 
 /// What a cast's head handed the node cache's forgetting (pxl-engine
@@ -880,8 +877,7 @@ impl RaysPass {
             light_number: 0,
             light_epoch: 0,
             light_ready: false,
-            light_list: light_list(g, false),
-            light_list_whole: false,
+            light_list: 0,
             light_misses: buf(
                 word_bytes(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
@@ -963,7 +959,6 @@ impl RaysPass {
             px_group: 0,
             px_bound: [0; 7],
             counter,
-            light_grouped: [0; 3],
         };
         self.cast = Some(c);
     }
@@ -1311,7 +1306,7 @@ impl RaysPass {
         // standing frame casts none. Where only the latter two moved, a tile
         // cast since anything else last did stands where the box kept it,
         // and only the tiles read anew are cast (`light::HEAD_EPOCH`). None
-        // where no shadow is cast, nor before all its cast is made
+        // where no shadow is cast, nor while its cast is not made
         // (`light_made`), its read let go until then.
         let shadows = cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .iter()
@@ -1648,16 +1643,12 @@ impl RaysPass {
             regions,
             instances,
         ];
-        let grouped = [
-            c.light_list,
-            c.raster.light_visibility(),
-            c.raster.light.boxes,
-        ];
-        if light_bound != c.light_bound || grouped != c.light_grouped {
+        // Made once all the light's cast is, over its list and its raster's
+        // buffers, which are let go with them (`light_made`).
+        if c.light_ready && light_bound != c.light_bound {
             for group in c.light_groups {
                 release(group);
             }
-            c.light_grouped = grouped;
             c.light_groups = light_groups(
                 g,
                 [
@@ -1680,7 +1671,7 @@ impl RaysPass {
                     c.light_head,
                     c.light_list,
                     c.raster.light.boxes,
-                    c.raster.light_visibility(),
+                    c.raster.light.visibility_array,
                     c.raster.light.args,
                     c.light_misses,
                     c.light_args,
@@ -2072,22 +2063,34 @@ impl RaysPass {
         c.counter.copy(g, encoder, &counted);
     }
 
-    /// The light's cast made where `wanted`, shadows first cast, before the
-    /// frame: its list grown (`light::list_words`) and its raster's buffers
-    /// and targets (`Raster::light_made`), what only a map cast needs. Its
-    /// passes are made with the eye's (`make`), the beam's, the cells' and
-    /// the samples' the eye's own; ready once its buffers are (`light_ready`).
-    pub fn light_made(&mut self, g: &Gpu, wanted: bool) {
+    /// The light's cast made where `on`, the shadows' setting
+    /// (`STAGE_AT::SHADOWS`), before the frame: its list (`light::list_words`)
+    /// and its raster's buffers and targets (`Raster::light_made`), what
+    /// only a map cast needs; ready once they are (`light_ready`), and its
+    /// groups made over them as the frame prepares. Let go where not on,
+    /// its groups with them, so the first map cast after they are made again
+    /// begins an epoch and casts whole, as the first one did. Its passes are
+    /// made with the eye's (`make`), the beam's, the cells' and the samples'
+    /// the eye's own.
+    pub fn light_made(&mut self, g: &Gpu, on: bool) {
         let Some(c) = self.cast.as_mut() else { return };
-        if !wanted || c.light_ready {
-            return;
-        }
-        if !c.light_list_whole {
+        if on {
+            if !c.light_ready {
+                if c.light_list == 0 {
+                    c.light_list = light_list(g);
+                }
+                c.light_ready = c.raster.light_made(g, shadow::SIZE);
+            }
+        } else if c.light_list != 0 || c.light_ready {
+            for group in c.light_groups {
+                release(group);
+            }
+            (c.light_groups, c.light_bound) = ([0; 12], [0; 12]);
             release(c.light_list);
-            c.light_list = light_list(g, true);
-            c.light_list_whole = true;
+            c.light_list = 0;
+            c.raster.light_release();
+            c.light_ready = false;
         }
-        c.light_ready = c.raster.light_made(g, shadow::SIZE);
     }
 
     /// The counts copied last frame mapped back (`Counter::back`).
@@ -2280,17 +2283,11 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     args
 }
 
-/// The light's list, a word before shadows are cast, or `whole`: the beam's
-/// lines and the cells' starts, the raster's samples and the misses past
-/// them (`light::list_words`).
-fn light_list(g: &Gpu, whole: bool) -> u32 {
-    let words = if whole {
-        light::list_words(shadow::SIZE) as usize
-    } else {
-        4
-    };
+/// The light's list: the beam's lines and the cells' starts, the raster's
+/// samples and the misses past them (`light::list_words`).
+fn light_list(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes(words),
+        word_bytes(light::list_words(shadow::SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2313,8 +2310,7 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// pass), the misses' walk's, the two marks', the propagation's, the
 /// slide's, the misses' and the samples' walks over the node cache alone, the
 /// samples' and the beam rays' walks that ask, one group, and the beam rays'
-/// walk over the node cache alone; the boxes' none before its raster's buffers
-/// are made.
+/// walk over the node cache alone.
 fn light_groups(
     g: &Gpu,
     [
@@ -2386,21 +2382,16 @@ fn light_groups(
     [
         of(walk),
         cast_group(g, world, [eye, clipmap, ground, list, node_cache, head]),
-        // The raster's once its buffers are made.
-        if boxes == 0 {
-            0
-        } else {
-            g.bind_group(
-                boxes_built.layouts[0],
-                &[
-                    buf_entry(0, eye),
-                    buf_entry(8, list),
-                    buf_entry(HEAD_BINDING, head),
-                    buf_entry(14, boxes),
-                    buf_entry(16, args),
-                ],
-            )
-        },
+        g.bind_group(
+            boxes_built.layouts[0],
+            &[
+                buf_entry(0, eye),
+                buf_entry(8, list),
+                buf_entry(HEAD_BINDING, head),
+                buf_entry(14, boxes),
+                buf_entry(16, args),
+            ],
+        ),
         of(miss),
         of(mark),
         of(mark_draws),

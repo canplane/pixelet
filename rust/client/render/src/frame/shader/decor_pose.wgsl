@@ -43,8 +43,12 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
   let s = LEAF_CELL - zoom;
   if (r.b.z < r.b.w) {
     let floor = -(1i << (HEIGHT_BITS - 1u - s));
-    let end = select(floor, r.b.z >> s, col.palette_idx == VALUE_VOID);
-    return Surface(SURFACE_WALK, max((r.b.w - 1i) >> s, col.top - 1i), 0u, end);
+    let z = max((r.b.w - 1i) >> s, col.top - 1i);
+    // A column at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall, from its floor up, so a walk
+    // from a cell in it reaches its floor within that many: one longer starts outside the
+    // world, and is cut there, as a walk past its end is.
+    let end = max(select(floor, r.b.z >> s, col.palette_idx == VALUE_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
+    return Surface(SURFACE_WALK, z, 0u, end);
   }
   if (col.palette_idx == VALUE_VOID) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
@@ -61,9 +65,13 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
   let t = vec3<u32>(UNIT_ZOOM - PLACED_FIRST);
   let first = lo >> t;
   let last = hi >> t;
-  for (var nz = first.z; nz <= last.z; nz += 1i) {
-    for (var ny = first.y; ny <= last.y; ny += 1i) {
-      for (var nx = first.x; nx <= last.x; nx += 1i) {
+  // The box spans `hi - lo + 1` cells, so `((hi - lo) >> t) + 2` nodes and `1 << t` cells of
+  // each at most, however near the integers' ends it lies.
+  let nodes = ((hi - lo) >> t) + 1i;
+  let side = 1i << t.x;
+  for (var nz = first.z; nz <= last.z && nz - first.z <= nodes.z; nz += 1i) {
+    for (var ny = first.y; ny <= last.y && ny - first.y <= nodes.y; ny += 1i) {
+      for (var nx = first.x; nx <= last.x && nx - first.x <= nodes.x; nx += 1i) {
         let node = vec3<i32>(nx, ny, nz);
         let slot = world_root(PLACED_FIRST, node).x;
         if (slot == SLOT_NOTHING) {
@@ -71,9 +79,9 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
         }
         let start = max(lo, node << t);
         let stop = min(hi, ((node + 1i) << t) - 1i);
-        for (var z = start.z; z <= stop.z; z += 1i) {
-          for (var y = start.y; y <= stop.y; y += 1i) {
-            for (var x = start.x; x <= stop.x; x += 1i) {
+        for (var z = start.z; z <= stop.z && z - start.z < side; z += 1i) {
+          for (var y = start.y; y <= stop.y && y - start.y < side; y += 1i) {
+            for (var x = start.x; x <= stop.x && x - start.x < side; x += 1i) {
               if (leaf_overlaps(slot, vec3<i32>(x, y, z), at, size)) {
                 return true;
               }

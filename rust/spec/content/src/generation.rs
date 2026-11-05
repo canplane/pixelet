@@ -13,6 +13,7 @@ use pxl_engine::overwrite;
 use pxl_engine::seed::node_seed;
 use pxl_engine::value;
 use pxl_engine::world::{placed_in, PlacedCursor};
+use pxl_engine::WORKGROUPS_MOST;
 use pxl_engine::{wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, UNIT_ZOOM, ZOOM_BITS};
 use xpute_kit::math::rng::SplitMix32;
 
@@ -67,6 +68,10 @@ pub const RECORD_WORDS: u32 = 5;
 /// The eye's clip levels' bricks, an entry each: what the GPU generates decor
 /// in, entry `s` the brick the clip levels' table holds at `s`.
 pub const EYE_ENTRIES: u32 = EYE_CLIP_LEVELS * ENTRIES;
+const _: () = assert!(
+    EYE_ENTRIES * DECORS.len() as u32 <= WORKGROUPS_MOST,
+    "every entry's pairs listed, a workgroup deep each, fit one dispatch (decor_mark.wgsl)"
+);
 
 /// A record no decor stands at: its candidate is deleted by the thinning or
 /// generates nothing where it is, so it is drawn as nothing (`drawn::NONE`

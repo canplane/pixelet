@@ -20,7 +20,9 @@ use crate::node_cache;
 use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
+use crate::raster::FACES_LANES;
 use crate::world;
+use crate::WORKGROUPS_MOST;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents (`of`), where the kernel writes the
@@ -500,6 +502,10 @@ pub const HIT_SQUARE: u32 = 16;
 pub const HIT_LANES: u32 = 64;
 pub const HIT_FOLLOWS: u32 = 1 << 31;
 pub const HIT_WAITS: u32 = 1 << 31;
+const _: () = assert!(
+    HITS.div_ceil(HIT_LANES) <= WORKGROUPS_MOST && HITS.div_ceil(FACES_LANES) <= WORKGROUPS_MOST,
+    "the kept hits, and their faces' asks, fit one dispatch"
+);
 
 #[cfg(test)]
 #[path = "beam.test.rs"]

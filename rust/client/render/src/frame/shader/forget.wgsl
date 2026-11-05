@@ -125,15 +125,19 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   // Or handed a slot of a child group of what is placed that was written.
+  // The head holds `NODE_CACHE_WRITTEN_CAP` written child groups and `NODE_CACHE_BOXES` boxes
+  // at most (pxl-engine node_cache.rs).
   let placed = node_cache[w + W_PLACED];
-  for (var f = 0u; f < node_cache[NODE_CACHE_WRITTEN_AT]; f += 1u) {
+  let written = min(node_cache[NODE_CACHE_WRITTEN_AT], NODE_CACHE_WRITTEN_CAP);
+  for (var f = 0u; f < written; f += 1u) {
     if (reads_written(placed, node_cache[NODE_CACHE_WRITTEN_AT + 1u + f])) {
       node_cache[w + W_KEY] = 0u;
       return;
     }
   }
   // Or over a box of what is placed or cut that changed.
-  for (var b = 0u; b < node_cache[NODE_CACHE_BOXES_AT]; b += 1u) {
+  let boxes = min(node_cache[NODE_CACHE_BOXES_AT], NODE_CACHE_BOXES);
+  for (var b = 0u; b < boxes; b += 1u) {
     let at = NODE_CACHE_BOXES_AT + 1u + 4u * b;
     let changed = vec4<i32>(
       i32(node_cache[at]),

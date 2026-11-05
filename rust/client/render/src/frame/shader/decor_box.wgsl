@@ -22,7 +22,8 @@ fn reaches(b: vec4<i32>, zoom: u32, cell: u32, at: vec4<i32>) -> bool {
 
 /// A box of the frame's reaches the leaf cells `at`.
 fn is_changed(cell: u32, at: vec4<i32>) -> bool {
-  let boxes = list_word(LIST_BOXES);
+  // The list holds `BOX_CAP` boxes at most (pxl-content `generation::LIST_AT`).
+  let boxes = min(list_word(LIST_BOXES), BOX_CAP);
   for (var k = 0u; k < boxes; k += 1u) {
     let b = BOXES_AT + BOX_WORDS * k;
     let edit = vec4<i32>(i32(list_word(b)), i32(list_word(b + 1u)), i32(list_word(b + 2u)), i32(list_word(b + 3u)));

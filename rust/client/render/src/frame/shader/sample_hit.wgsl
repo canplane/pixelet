@@ -26,11 +26,14 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (w.ends == 4u) {
     beams[base + SAMPLE_LEFT_T] = bitcast<u32>(w.t);
     beams[base + SAMPLE_VISITS] = w.visits;
+    // The list holds a place for each sample of the lattice, each listed once.
     let place = atomicAdd(&left[3], 1u);
-    if (place % (SAMPLE_SIDE * SAMPLE_SIDE) == 0u) {
-      atomicAdd(&left[0], 1u);
+    if (place < lattice.x * lattice.y) {
+      if (place % (SAMPLE_SIDE * SAMPLE_SIDE) == 0u) {
+        atomicAdd(&left[0], 1u);
+      }
+      beams[left_at() + 1u + place] = s.x | (s.y << 16u);
     }
-    beams[left_at() + 1u + place] = s.x | (s.y << 16u);
     return;
   }
   sample_put(base, w, w.visits);

@@ -10,7 +10,8 @@
 @compute @workgroup_size(WAY_LANES)
 fn way_return_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
   let freed = scratch_at(arrayLength(&scratch), group.z) + FREED_AT;
-  let n = scratch[freed];
+  // A build gives back no more than it took, `BRICK_CHILD_GROUPS` at most (`tree::fits`).
+  let n = min(scratch[freed], BRICK_CHILD_GROUPS);
   for (var r = lane.x; r < n; r += WAY_LANES) {
     push(scratch[freed + 1u + r]);
   }

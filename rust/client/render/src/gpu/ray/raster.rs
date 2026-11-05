@@ -92,10 +92,9 @@ pub(super) struct Raster {
     size: [u32; 2],
     groups: [u32; 4],
     bindings: [u32; 10],
-    /// The light's, made where its shadows are first cast (`light_made`); and a
-    /// visibility buffer naming no sample, bound where it is not.
+    /// The light's, made while its shadows are on (`light_made`,
+    /// `light_release`).
     pub(super) light: LightRaster,
-    blank_array: u32,
 }
 
 /// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
@@ -110,7 +109,7 @@ pub(super) struct LightRaster {
     uniform: u32,
     visibility: u32,
     visibility_view: u32,
-    visibility_array: u32,
+    pub(super) visibility_array: u32,
     depth: u32,
     depth_view: u32,
     group: u32,
@@ -141,7 +140,6 @@ impl Raster {
     /// Its pipelines and its args and uniform, made where the cast's are
     /// (`RaysPass::make`).
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
-        let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
             boxes_built: pipelines.build_compute(g, COMPUTE_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
             light_boxes_built: pipelines.build_compute(
@@ -174,7 +172,6 @@ impl Raster {
             groups: [0; 4],
             bindings: [0; 10],
             light: LightRaster::default(),
-            blank_array: g.view(blank, true, 0, 1, 0, 1),
         }
     }
 
@@ -392,8 +389,8 @@ impl Raster {
 }
 
 impl Raster {
-    /// The light's buffers and its targets at the map's `size`, made once;
-    /// whether they are.
+    /// The light's buffers and its targets at the map's `size`, made where
+    /// they are not; whether they are.
     pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.light;
         if s.group == 0 {
@@ -422,13 +419,22 @@ impl Raster {
         s.group != 0
     }
 
-    /// The light's visibility buffer as its cast reads it, an array of one layer;
-    /// one naming no sample where it is not made.
-    pub(super) fn light_visibility(&self) -> u32 {
-        if self.light.group != 0 {
-            self.light.visibility_array
-        } else {
-            self.blank_array
+    /// The light's buffers and its targets let go, as its shadows go off;
+    /// made again by `light_made`.
+    pub(super) fn light_release(&mut self) {
+        let s = core::mem::take(&mut self.light);
+        for id in [
+            s.group,
+            s.visibility_view,
+            s.visibility_array,
+            s.visibility,
+            s.depth_view,
+            s.depth,
+            s.uniform,
+            s.args,
+            s.boxes,
+        ] {
+            release(id);
         }
     }
 

@@ -25,9 +25,14 @@ fn way_free_cs(@builtin(workgroup_id) group: vec3<u32>) {
   // The root's child group, the brick's own nodes along z (`way::tree::root_slot`).
   let first = CHILDREN * (root & (POOL_CHILD_GROUPS - 1u));
   push(first / CHILDREN);
+  var pushed = 1u;
   var path = 0u;
   var d = 0u;
   var b = first;
+  // A tree way_tree_cs built holds branches down to the brick's cells alone, `BRICK_LEVELS`
+  // under its root child group, and no more than `BRICK_CHILD_GROUPS` child groups. A word
+  // past either is no such tree's: the walk stops there and leaves the child groups it has
+  // not reached taken.
   loop {
     let k = path_at(path, d);
     if (k == CHILDREN) {
@@ -44,8 +49,12 @@ fn way_free_cs(@builtin(workgroup_id) group: vec3<u32>) {
     path += 1u << (4u * d);
     let h = pool[b + k];
     if (h != 0u) {
+      if (d == BRICK_LEVELS || pushed == BRICK_CHILD_GROUPS) {
+        break;
+      }
       b = h & ~BRANCH;
       push(b / CHILDREN);
+      pushed += 1u;
       d += 1u;
       path &= ~(15u << (4u * d));
     }

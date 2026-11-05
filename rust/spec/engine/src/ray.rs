@@ -29,6 +29,8 @@ pub const FACE_BITS: u32 = 3;
 use crate::answer;
 pub use crate::answer::FILL_BITS;
 use crate::count;
+use crate::node_cache::MARKS;
+use crate::WORKGROUPS_MOST;
 pub use crate::ZOOM_BITS;
 
 pub const FACE_SHIFT: u32 = VAL_BITS;
@@ -65,6 +67,10 @@ pub const MISS_ARGS_CNT: u32 = 6;
 pub const MISS_ARGS_COUNT: u32 = 7;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_COUNT + count::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
+const _: () = assert!(
+    MARKS.div_ceil(MISS_LANES * MISS_ACROSS) <= WORKGROUPS_MOST,
+    "the rows over the marked pixels listed fit one dispatch"
+);
 
 /// The eye's walk again's words past those: the args what lies about the
 /// faces its hits met is asked by, once a square of them (pxl-render

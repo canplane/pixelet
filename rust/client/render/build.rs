@@ -277,7 +277,7 @@ const _: () = assert!(
 fn walk_word() -> String {
     use pxl_engine::area::Shard;
     use pxl_engine::clipmap::{self, Lookup};
-    use pxl_engine::overwrite::NodeSlot;
+    use pxl_engine::overwrite::{NodeSlot, BOXES};
     use pxl_engine::{
         answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, value,
         SHARD_ZOOM,
@@ -518,6 +518,7 @@ fn walk_word() -> String {
         ("LIGHT_ACTORS_AT", light::ACTORS_AT as u32),
         ("LIGHT_ACTORS", light::ACTORS as u32),
         ("LIGHT_COLUMNS_AT", light::COLUMNS_AT as u32),
+        ("LIGHT_COLUMNS", light::COLUMNS as u32),
         ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
         ("LIGHT_ARGS_BEAM", light::ARGS_BEAM),
         ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
@@ -540,6 +541,8 @@ fn walk_word() -> String {
         ("NODE_CACHE_MOVED_AT", node_cache::MOVED_AT),
         ("NODE_CACHE_BOXES_AT", node_cache::BOXES_AT),
         ("NODE_CACHE_WRITTEN_AT", node_cache::WRITTEN_AT),
+        ("NODE_CACHE_WRITTEN_CAP", node_cache::WRITTEN_CAP),
+        ("NODE_CACHE_BOXES", BOXES),
         ("W_KEY", node_cache::W_KEY),
         ("W_PLACED", node_cache::W_PLACED),
         ("EYE_CLIP_LEVELS", clipmap::EYE_CLIP_LEVELS),
@@ -816,6 +819,7 @@ fn decor_word() -> String {
         ("LIST_BOXES", g::LIST_BOXES),
         ("BOXES_AT", g::BOXES_AT),
         ("BOX_WORDS", g::BOX_WORDS),
+        ("BOX_CAP", g::BOX_CAP),
         ("EVERY", g::EVERY),
         ("LIST_EVERY", g::LIST_EVERY),
         ("LIST_PARTS", g::LIST_PARTS),

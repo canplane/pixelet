@@ -74,10 +74,11 @@ fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
 // The tiles of the map a receiver's taps read about the texels from `lo` to
 // `hi`, held to a tile past the map each way.
 fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
-  let n = vec2f(light_tiles.count.xy);
+  let n = vec2i(light_tiles.count.xy);
   let side = light_tiles.size.w;
-  let a = vec2i(clamp(floor((lo - propagate.spread.x) / side), vec2f(-1.0), n));
-  let b = vec2i(clamp(floor((hi + propagate.spread.x) / side), vec2f(-1.0), n));
+  // Clamped as integers, so a range lies within a tile past the map however its floats came.
+  let a = clamp(vec2i(floor((lo - propagate.spread.x) / side)), vec2i(-1), n);
+  let b = clamp(vec2i(floor((hi + propagate.spread.x) / side)), vec2i(-1), n);
   return vec4i(a, b);
 }
 
