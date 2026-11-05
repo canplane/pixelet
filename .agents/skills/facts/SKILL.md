@@ -13,13 +13,9 @@ Before adding a state, a rule, a value or a representation, ask:
 > owner?
 
 - A fact has one authoritative definition; every other form of it is derived
-  from that one (generated, computed, or read through it). Two definitions of
-  one fact, in two languages or two parts, are two owners: keep one.
+  from that one (generated, computed, or read through it).
 - A value another fact determines is not owned again: the surface's size is
   `SURFACE_RESIZE`'s, so no command carries it a second time.
-- A physical copy, a cache or a generated file is fine where its owner, how it
-  is derived and when it is invalidated are said: the GPU's copy of the
-  world's data, read from the CPU's; a `.spec.ts` written from its JSON.
 - Facts are not merged because they look alike: a turn and a drawn frame, a
   storage file and a GPU upload.
 
@@ -64,4 +60,3 @@ Do:
   texture are read by its number.
 - Drop a form kept in storage when what it holds fills back in. No migration
   unless the user asks for one.
-- Prove it runs: the tests, and the real path where behavior moved.

@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
-import { bracket, type InputDriver } from "@/bracket.tsx";
+import { type InputDriver } from "@/services/types.ts";
+import * as surface from "@/services/surface.tsx";
+import { useSafeArea } from "@/services/safe-area.ts";
+import { useVisualViewport } from "@/services/viewport.ts";
 import { POINTER_KIND, POINTER_PHASE } from "@/port/input.ts";
-import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/port/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { releasePointers, worldPointer } from "./pointer.ts";
@@ -24,12 +26,13 @@ import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import * as input from "@/port/input.ts";
+import * as scene from "@/port/scene.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
 const PANEL_GAP_PX = 12;
 
-const WORLD = surface_driver(surface_role.WORLD);
+const WORLD = surface_driver(scene.draw_world);
 
 /** The place's input as the world takes it: pointers and keys through the
  * shell's own stores first (`worldPointer`, `keyDown`), the box and the wheel
@@ -50,11 +53,7 @@ const INPUT: InputDriver = {
 function World() {
   const overMarker = useKernel((s) => s.over_marker);
   return (
-    <bracket.surface.World
-      surface={WORLD}
-      input={INPUT}
-      overMarker={overMarker}
-    />
+    <surface.World surface={WORLD} input={INPUT} overMarker={overMarker} />
   );
 }
 
@@ -62,14 +61,12 @@ function World() {
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
   const bottom =
-    bottomRest(bracket.view.useSafeArea(), chrome.inset) +
-    DOCK_HEIGHT +
-    PANEL_GAP_PX;
+    bottomRest(useSafeArea(), chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
 function Overlays() {
-  bracket.view.useVisualViewport();
+  useVisualViewport();
 
   return (
     <>

@@ -3,52 +3,41 @@
 //! CAMERA: the camera's: the tracking button, the compass, a search result.
 
 use super::State;
-use super::{ask_turn, given, on_earth, refuse_unless};
+use super::{ask_turn, on_earth, refuse_unless};
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::state::IntentPatch;
-use crate::domain::control::cmd::{self as abi, Command};
+use crate::domain::control::cmd as abi;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::sys::sched::edge::request_world_tick;
 use crate::turn::world_platform;
+use xpute_guest::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
-pub(super) fn apply(
-    s: &mut State,
-    cmd: Command,
-    pkt: &Option<&[u8]>,
-) -> Result<Option<i32>, MarshalError> {
-    match cmd {
-        Command::CAMERA_TRACKING => {
-            follow_mode::tracking_action(
-                abi::CameraTracking::read(given(pkt)?)?.tracking,
-                world_platform().orient,
-            );
-            request_world_tick();
-            Ok(Some(0))
-        }
-        Command::CAMERA_NORTH_UP => {
-            // Following the heading would turn it straight back.
-            if !follow_mode::following() {
-                controller::reset_azimuth();
-            }
-            ask_turn(s)
-        }
-        Command::CAMERA_GOTO => {
-            let p = abi::CameraGoto::read(given(pkt)?)?;
-            refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
-            destination::go_to_deg(
-                p.lon,
-                p.lat,
-                IntentPatch {
-                    dist: p.dist,
-                    azimuth: p.azimuth,
-                    polar: p.polar,
-                },
-            );
-            ask_turn(s)
-        }
-        _ => Ok(None),
+pub(super) fn tracking(c: abi::CameraTracking) -> Outcome {
+    follow_mode::tracking_action(c.tracking, world_platform().orient);
+    request_world_tick();
+    Ok(Some(0))
+}
+
+pub(super) fn north_up(s: &mut State) -> Outcome {
+    // Following the heading would turn it straight back.
+    if !follow_mode::following() {
+        controller::reset_azimuth();
     }
+    ask_turn(s)
+}
+
+pub(super) fn goto(s: &mut State, c: abi::CameraGoto) -> Outcome {
+    refuse_unless(on_earth(c.lon, c.lat), Errno::EINVAL)?;
+    destination::go_to_deg(
+        c.lon,
+        c.lat,
+        IntentPatch {
+            dist: c.dist,
+            azimuth: c.azimuth,
+            polar: c.polar,
+        },
+    );
+    ask_turn(s)
 }

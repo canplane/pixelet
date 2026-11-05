@@ -1,48 +1,39 @@
 // @pxl/client/port/surface.ts
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import type { SurfaceDriver } from "@/bracket.tsx";
-import {
-  Command,
-  encode_surface_close,
-  encode_surface_open,
-  encode_surface_resize,
-} from "@/abi/cmd.spec.ts";
-import { HOST } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
+/** SURFACE and TURN on the shell's port: the surfaces the shell lends the
+ * kernel, and the grant each turn the strobe grants submits before it rings. */
 
-/** 0 when the kernel has none left. */
-function surface_open(role: u32): u32 {
-  return HOST.doorbell.call(
-    port.SHELL,
-    Command.SURFACE_OPEN,
-    encode_surface_open(HOST.doorbell, role),
-    (result) => Math.max(0, result),
-  );
-}
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { FrameGrant } from "@xpute/host";
+import { type SurfaceDriver } from "@/services/types.ts";
+import * as origin from "@/services/origin.ts";
+import { kernel } from "@/host/kernel.ts";
 
-function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
-  HOST.send(
-    port.SHELL,
-    Command.SURFACE_RESIZE,
-    encode_surface_resize(HOST.doorbell, surface, width, height, dpr),
-  );
-}
-
-function surface_close(surface: u32): void {
-  HOST.doorbell.call(
-    port.SHELL,
-    Command.SURFACE_CLOSE,
-    encode_surface_close(HOST.doorbell, surface),
-    (result) => result,
-  );
-}
-
-/** A surface of `role` (gpu.spec.ts `surface_role`) as the place drives it. */
-export function surface_driver(role: u32): SurfaceDriver {
+/** A surface as the place drives it: 0 opened when the kernel has none left;
+ * `draw`, where given, says what it draws as it opens (scene.ts). */
+export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
   return {
-    open: () => surface_open(role),
-    size: surface_size,
-    close: surface_close,
+    open: () => {
+      const surface = Math.max(0, kernel.surface_open());
+      if (surface !== 0) draw?.(surface);
+      return surface;
+    },
+    size: (surface, width, height, dpr) =>
+      kernel.surface_resize(surface, width, height, dpr),
+    close: (surface) => void kernel.surface_close(surface),
   };
+}
+
+/** The turn's grant, told the kernel before each turn the strobe grants:
+ * its pacing, whether it is interactive, the reads allowed out and the
+ * clock. The strobe runs only while the world's view is open, so every turn
+ * it grants is one the view draws. */
+export function submit_grant(grant: FrameGrant): void {
+  kernel.turn_grant(
+    grant.refresh_ms,
+    grant.paced_ms,
+    grant.interactive,
+    origin.credits,
+    Date.now(),
+  );
 }

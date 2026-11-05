@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/pointer_type.spec.ts
+// ts/client/src/abi/cmd/pointer_type.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // What the pointer is, as the browser's `pointerType` says.
 

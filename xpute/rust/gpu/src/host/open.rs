@@ -2,27 +2,63 @@
 
 use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 
-/// What a program asks of the device it opens.
+/// What the device is opened as.
 #[derive(Clone)]
 pub struct Ask {
     pub backends: wgpu::Backends,
     pub power_preference: wgpu::PowerPreference,
-    /// What the device is asked to have, from the adapter it is asked of:
-    /// one the adapter lacks makes the device refuse (`OpenError::Device`).
-    /// What the device has, the guest reads from its block (DEVICE).
-    pub features: fn(&wgpu::Adapter) -> wgpu::Features,
+    /// WebGPU's feature names the device must have: one the adapter lacks
+    /// makes the device refuse (`OpenError::Device`), one wgpu does not know
+    /// refuses it before it is asked (`OpenError::Feature`). What the device
+    /// has, the guest reads from its block (DEVICE).
+    pub required: &'static [&'static str],
+    /// Those it takes where the adapter has them.
+    pub optional: &'static [&'static str],
     /// What the device is asked to hold, from the adapter it is asked of,
     /// since an adapter refuses a device that asks past its own.
     pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
     pub memory_hints: wgpu::MemoryHints,
 }
 
+impl Ask {
+    /// The device the machine's GPU grant asks for: its power and features,
+    /// with the adapter's own limits and the platform's primary backends.
+    pub fn of(gpu: &xpute_guest::machine::Gpu) -> Ask {
+        Ask {
+            backends: wgpu::Backends::PRIMARY,
+            power_preference: match gpu.power {
+                "low-power" => wgpu::PowerPreference::LowPower,
+                _ => wgpu::PowerPreference::HighPerformance,
+            },
+            required: gpu.required,
+            optional: gpu.optional,
+            limits: wgpu::Adapter::limits,
+            memory_hints: wgpu::MemoryHints::Performance,
+        }
+    }
+
+    /// The features asked of `adapter`: every required one, and each
+    /// optional one it has.
+    fn features(&self, adapter: &wgpu::Adapter) -> Result<wgpu::Features, OpenError> {
+        let mut out = wgpu::Features::empty();
+        for name in self.required {
+            out |= feature(name).ok_or(OpenError::Feature(name))?;
+        }
+        for name in self.optional {
+            out |= feature(name).unwrap_or(wgpu::Features::empty()) & adapter.features();
+        }
+        Ok(out)
+    }
+}
+
 #[derive(Debug)]
 pub enum OpenError {
     Adapter(wgpu::RequestAdapterError),
     Device(wgpu::RequestDeviceError),
+    /// A required feature whose WebGPU name wgpu does not know.
+    Feature(&'static str),
     /// The guest it is for has stopped.
-    Stopped,
+    Terminated,
 }
 
 /// A device opened as asked, and the instance a program makes its surfaces
@@ -48,7 +84,7 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     }))
     .map_err(OpenError::Adapter)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: (ask.features)(&adapter),
+        required_features: ask.features(&adapter)?,
         required_limits: (ask.limits)(&adapter),
         memory_hints: ask.memory_hints.clone(),
         ..Default::default()

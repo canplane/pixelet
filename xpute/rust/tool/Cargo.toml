@@ -13,9 +13,12 @@ path = "src/lib.rs"
 name = "spec"
 path = "src/bin/spec.rs"
 
+# A program's machine and protocols generated where each one's `gen` says:
+# `xpute-gen <machine.json> <protocol.json>...`, `--check` to fail where one
+# is stale.
 [[bin]]
-name = "cmd"
-path = "src/bin/cmd.rs"
+name = "xpute-gen"
+path = "src/bin/gen.rs"
 
 # No crate of the workspace's: it writes into them.
 [dependencies]

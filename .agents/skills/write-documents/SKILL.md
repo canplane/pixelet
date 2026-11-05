@@ -7,7 +7,7 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Rules
 
-- **Lead with the core.** Put first the claim the rest follows from. The
+- **Lead with the main claim.** Put first the claim the rest follows from. The
   masthead (tagline, date, play link, screenshot) stays on top.
 - **Earn a name before you use it.** Say the need first, then name what meets
   it, in a main clause:
@@ -26,18 +26,12 @@ description: How the documents people read are written and reviewed — README.m
   not approve it: a new name follows naming first.
 - **Order by dependency.** A catalog of module names goes at the end, a model's
   vocabulary before the machine that uses it.
-- **One word, one meaning.** Watch for words used in two senses (`frame` as a
-  drawn frame and a frame of reference; `page` as a pyramid square and a
-  browser tab). Where the code uses one word for both, qualify it where it is
-  defined (`a frame of reference`).
 - **Diagrams** are hand-aligned ASCII under about 78 columns, built with a short
   script; a diagram's branches name what comes out.
 - **Each document says what is its own.** A document over another layer
   (pixelet over xpute) says what it inherits, links it, and moves on. It defers
   only to a document its reader opens: a README sends a person to another README
-  or to ARCHITECTURE.md, never to AGENTS.md. ARCHITECTURE.md holds the
-  structure: the parts, the rule each follows, and what crosses between them.
-  How one module works goes in its doc comment or the README beside its code,
+  or to ARCHITECTURE.md, never to AGENTS.md. How one module works goes in its doc comment or the README beside its code,
   and ARCHITECTURE.md points there. A file assembled at build time reads
   correctly on its own.
 - **Name what outlives the document.** A README describes the system;
@@ -48,6 +42,8 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Checks
 
+- The parts are named the kernel, the shell and the host in pixelet's
+  documents, and the guest, the host and the program in xpute's.
 - What the old version named (paths, identifiers, constants) is still there
   or was cut on purpose, and nothing points at what was cut.
 - No minute under `doc/` is linked.

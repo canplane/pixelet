@@ -1,9 +1,8 @@
-// @pxl/client/abi/cmd/scene_minor.spec.ts
+// ts/client/src/abi/cmd/scene_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
-// The scene's: a character drawn alone into a surface, a line said.
+// The scene's: what a surface draws, a line said.
 
-export const PREVIEW_OPEN = 0x01;
-export const PREVIEW_CLOSE = 0x02;
 export const CHAT = 0x03;
+export const DRAW = 0x04;

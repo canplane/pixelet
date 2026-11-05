@@ -42,7 +42,7 @@ struct DataSpec {
     ts_names: Option<&'static [&'static str]>,
 }
 
-const DATA_SPECS: [DataSpec; 24] = [
+const DATA_SPECS: [DataSpec; 21] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -100,26 +100,6 @@ const DATA_SPECS: [DataSpec; 24] = [
         rs: Some("rust/spec/src/division.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
-        enums: Enums::None,
-        ts_names: None,
-    },
-    DataSpec {
-        json: "spec/client/kernel/door/port.json",
-        uses: &[],
-        ts: Some("ts/client/src/abi/port.spec.ts"),
-        rs: Some("rust/client/kernel/src/door/port.spec.rs"),
-        rs_also: &[],
-        module: Some("port"),
-        enums: Enums::None,
-        ts_names: None,
-    },
-    DataSpec {
-        json: "spec/client/kernel/door/toc.json",
-        uses: &[],
-        ts: Some("ts/client/src/abi/toc.spec.ts"),
-        rs: Some("rust/client/kernel/src/door/toc.spec.rs"),
-        rs_also: &[],
-        module: Some("toc"),
         enums: Enums::None,
         ts_names: None,
     },
@@ -267,27 +247,6 @@ const DATA_SPECS: [DataSpec; 24] = [
         module: Some("spec"),
         enums: Enums::Named(&["WAKES", "HIT_KINDS"]),
         ts_names: None,
-    },
-    DataSpec {
-        json: "spec/client/kernel/sys/mem/mem.json",
-        uses: &[],
-        ts: Some("ts/client/src/abi/mem.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
-        // pxl-wasm's build script, which links the module by these numbers.
-        rs_also: &[(
-            "rust/client-bracket/wasm/mem.spec.rs",
-            "pxl-wasm/mem.spec.rs",
-        )],
-        module: Some("spec"),
-        enums: Enums::None,
-        ts_names: Some(&[
-            "TOC_AT",
-            "DESKTOP_BYTES",
-            "PHONE_BYTES",
-            "REGION_BYTES",
-            "SQ_CAP",
-            "CQ_CAP",
-        ]),
     },
     // Read, not written: the profiler uses its names; xpute generates it.
     DataSpec {

@@ -4,27 +4,17 @@
  * `POINTER_KIND`), and the world's view opened and closed. */
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import {
-  Command,
-  encode_input_move,
-  encode_input_pointer,
-  encode_input_wheel,
-  PointerPhase,
-  PointerType,
-} from "@/abi/cmd.spec.ts";
-import {
-  bracket,
   type PointerKind,
   type PointerPhase as PlacePhase,
-} from "@/bracket.tsx";
-import { HOST, PACING, set_view_open } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
+} from "@/services/types.ts";
+import * as sensor from "@/services/sensor.ts";
+import { host, kernel, pacing } from "@/host/kernel.ts";
 
-/** Sent with the next turn, which it makes interactive. */
-export function send_input(cmd: Command, pkt: PacketWriter): void {
-  PACING.input(performance.now());
-  HOST.send(port.SHELL, cmd, pkt);
+/** The next turn made interactive, as an input asks. */
+export function interactive(): void {
+  pacing.input(performance.now());
 }
 
 export function pointer(
@@ -35,32 +25,33 @@ export function pointer(
   x: f64,
   y: f64,
 ): void {
-  send_input(
-    Command.INPUT_POINTER,
-    encode_input_pointer(HOST.doorbell, phase, pointer_type, id, button, x, y),
-  );
+  interactive();
+  kernel.input_pointer(phase, pointer_type, id, button, x, y);
 }
 
 export function wheel(delta_y: f64): void {
-  send_input(Command.INPUT_WHEEL, encode_input_wheel(HOST.doorbell, delta_y));
+  interactive();
+  kernel.input_wheel(delta_y);
 }
 
 export function keys(x: i32, y: i32): void {
-  send_input(Command.INPUT_MOVE, encode_input_move(HOST.doorbell, x, y));
+  interactive();
+  kernel.input_move(x, y);
 }
 
+/** The world's view opened: turns run while it is open. */
 export function open(): () => void {
-  set_view_open(true);
-  const unfollow = bracket.sensor.follow();
+  host.resume();
+  const unfollow = sensor.follow();
   return () => {
     unfollow();
-    set_view_open(false);
+    host.pause();
   };
 }
 
 /** A turn asked for now, as a moved box needs one. */
 export function frame(): void {
-  HOST.strobe.request();
+  host.wake();
 }
 
 /** A place's pointer phase, as the kernel numbers it. */

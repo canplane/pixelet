@@ -13,7 +13,8 @@ import jaDev from "./dev/ja.json" with { type: "json" };
 import koDev from "./dev/ko.json" with { type: "json" };
 import zhHansDev from "./dev/zh-Hans.json" with { type: "json" };
 import zhHantDev from "./dev/zh-Hant.json" with { type: "json" };
-import { bracket } from "@/bracket.tsx";
+import * as locale from "@/services/locale.ts";
+import * as storage from "@/services/storage.ts";
 
 interface Catalog {
   [key: string]: string | Catalog;
@@ -72,9 +73,8 @@ const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",
   // By language alone: i18next takes a later exact match over an earlier
   // region, so ["en-US", "ko"] read as Korean.
-  detect: () =>
-    bracket.storage.get(LANG_KEY) ?? bracket.locale.list().map(languageOf),
-  cacheUserLanguage: (lng) => bracket.storage.set(LANG_KEY, lng),
+  detect: () => storage.get(LANG_KEY) ?? locale.list().map(languageOf),
+  cacheUserLanguage: (lng) => storage.set(LANG_KEY, lng),
 };
 
 let booted = false;
@@ -107,6 +107,6 @@ export function boot(): void {
       },
     });
 
-  bracket.locale.show(i18next.language);
-  i18next.on("languageChanged", (lng) => bracket.locale.show(lng));
+  locale.show(i18next.language);
+  i18next.on("languageChanged", (lng) => locale.show(lng));
 }

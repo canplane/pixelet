@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/canplane/xpute/spec/machine.schema.json",
+  "title": "xpute machine",
+  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU socket its guest is given (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the host, and on the guest MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/cmd.json, spec/abi/fs.json) are protocol files too.",
+  "type": "object",
+  "required": ["$doc"],
+  "properties": {
+    "$doc": { "$ref": "#/$defs/doc" },
+    "gen": {
+      "description": "Where a file's code goes, each from this file's directory: its TypeScript (a protocol's enums in a folder named as it is, beside it) and its Rust (a machine's constants, which the guest's build script also includes as it links).",
+      "type": "object",
+      "required": ["ts", "rs"],
+      "additionalProperties": false,
+      "properties": {
+        "ts": { "type": "string" },
+        "rs": { "type": "string" }
+      }
+    },
+    "mem": {
+      "description": "The memory the host gives the guest, which never grows.",
+      "type": "object",
+      "required": ["bytes", "region_bytes", "min_heap_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "bytes": {
+          "description": "The sizes a host may give, any one of them, each a whole number of regions. The program picks one; the module is linked against the smallest.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 1
+        },
+        "region_bytes": { "description": "What a reservation is counted in.", "type": "integer", "minimum": 1 },
+        "min_heap_bytes": {
+          "description": "The heap the smallest size must leave past the front, the linker's data and the program's fixed ranges, checked as the guest compiles.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "stack": {
+      "type": "object",
+      "required": ["module_bytes", "thread_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "module_bytes": { "description": "A module's stack, first in the memory.", "type": "integer", "minimum": 1 },
+        "thread_bytes": { "description": "A native guest's thread's stack, outside the memory.", "type": "integer", "minimum": 1 }
+      }
+    },
+    "rings": {
+      "type": "object",
+      "required": ["slot_bytes", "sq_cap", "cq_cap", "turn_posts"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "slot_bytes": { "description": "A packet's room, a power of two and a multiple of 8.", "type": "integer" },
+        "sq_cap": { "description": "Frames the submission ring holds, a power of two.", "type": "integer" },
+        "cq_cap": {
+          "description": "Frames the completion ring holds, a power of two, more than sq_cap + turn_posts.",
+          "type": "integer"
+        },
+        "turn_posts": {
+          "description": "What one turn posts besides its replies: its events, its hostcalls, and a call's slot.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "gpu": {
+      "description": "The GPU socket: a stream past the rings the guest writes its GPU calls into and the host runs after each turn (xpute-gpu), which says its own head (xpute-guest ipc/stream.rs). Absent, none.",
+      "type": "object",
+      "required": ["bytes", "power", "features"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "power": { "description": "WebGPU's power preference.", "enum": ["low-power", "high-performance"] },
+        "features": {
+          "description": "WebGPU's feature names. The surface's format is the platform's, and the limits the adapter's.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required": { "description": "What the device must have.", "type": "array", "items": { "type": "string" } },
+            "optional": { "description": "What it takes where the adapter has it.", "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "name": { "description": "A protocol's word for itself, for the generated names only.", "type": "string" },
+    "export": { "description": "What the guest implements and the host calls: what the host sends the guest.", "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "import": { "description": "What the host implements and the guest calls: what the guest posts to the host.", "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "extern": {
+      "description": "Types the program's Rust names, read and written as a number.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "rs"],
+        "properties": {
+          "name": { "type": "string" },
+          "rs": { "description": "The Rust path.", "type": "string" },
+          "repr": { "enum": ["u8", "u32"] },
+          "$doc": { "$ref": "#/$defs/doc" }
+        }
+      }
+    },
+    "enums": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "format", "entries"],
+        "properties": {
+          "name": { "description": "Any but Command, which xpute makes from out and in.", "type": "string" },
+          "format": { "enum": ["dec", "hex2", "hex4"] },
+          "default": { "type": "string" },
+          "unknown": { "description": "The member a number nobody gave out reads as.", "type": "string" },
+          "$doc": { "$ref": "#/$defs/doc" },
+          "entries": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["section"],
+                  "additionalProperties": false,
+                  "properties": { "section": { "type": "string" } }
+                },
+                {
+                  "type": "object",
+                  "required": ["name", "val"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "val": { "type": "integer", "minimum": 0 },
+                    "$doc": { "$ref": "#/$defs/doc" }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "fields"],
+        "properties": {
+          "name": { "type": "string" },
+          "$doc": { "$ref": "#/$defs/doc" },
+          "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+        }
+      }
+    }
+  },
+  "dependentRequired": {
+    "gen": ["mem", "stack", "rings"],
+    "mem": ["stack", "rings"],
+    "stack": ["mem", "rings"],
+    "rings": ["mem", "stack"],
+    "gpu": ["mem", "stack", "rings"]
+  },
+  "$defs": {
+    "doc": { "type": "array", "items": { "type": "string" } },
+    "command": {
+      "type": "object",
+      "required": ["name", "val"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "description": "SCREAMING_SNAKE, unique across the protocol.", "type": "string" },
+        "val": {
+          "description": "Its number, the wire's and fixed: `major << 8 | minor` where the table names majors. One number space holds every protocol's commands: majors 0x00 to 0x0F are xpute's own, and a program's protocol gives none of them nor a number another of its protocols gives.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "$doc": { "$ref": "#/$defs/doc" },
+        "pkt": { "description": "Its packet's fields, in order; none, no packet.", "type": "array", "items": { "$ref": "#/$defs/field" } },
+        "call": {
+          "description": "The sender waits for the answer: an `export` the host calls, an `import` the host answers before the guest goes on.",
+          "type": "boolean"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "description": "u8, u32, i32, f64, bool, str, or an enum, extern or record named here.", "type": "string" },
+        "optional": { "type": "boolean" },
+        "list": { "type": "boolean" },
+        "$doc": { "$ref": "#/$defs/doc" }
+      }
+    }
+  }
+}

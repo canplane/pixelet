@@ -1,0 +1,170 @@
+{
+  "$doc": [
+    "The file device, on major FS: a guest's files, opened below a root the host bound, as",
+    "POSIX's `openat` and io_uring's submission and completion name them (ipc/fs.json).",
+    "The guest posts its calls (`import`); the host answers an open with FS_OPENED (`export`) on a",
+    "later turn, and does the rest in the gap. xpute ships both ends: the guest's calls",
+    "(xpute-guest ipc/door.rs, ipc/file.rs) and the host's server (@xpute/host). A program",
+    "binds only its roots to what backs them."
+  ],
+  "name": "fs",
+  "export": [
+    {
+      "name": "FS_OPENED",
+      "val": 769,
+      "$doc": [
+        "An FS_OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.",
+        "Never sent for a descriptor already closed."
+      ],
+      "pkt": [
+        {
+          "name": "fd",
+          "type": "u32"
+        },
+        {
+          "name": "res",
+          "type": "i32"
+        },
+        {
+          "name": "detail",
+          "type": "u32",
+          "$doc": [
+            "Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."
+          ]
+        }
+      ]
+    }
+  ],
+  "import": [
+    {
+      "name": "FS_OPENAT",
+      "val": 770,
+      "$doc": [
+        "The file at `path` below `root` opened as `fd`, answered by FS_OPENED."
+      ],
+      "pkt": [
+        {
+          "name": "fd",
+          "type": "u32"
+        },
+        {
+          "name": "root",
+          "type": "u32"
+        },
+        {
+          "name": "flags",
+          "type": "u32",
+          "$doc": [
+            "ipc/fs.json `flag`."
+          ]
+        },
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ]
+    },
+    {
+      "name": "FS_READ",
+      "val": 771,
+      "$doc": [
+        "The opened file's first `len` bytes copied to `at` in the guest's memory."
+      ],
+      "pkt": [
+        {
+          "name": "fd",
+          "type": "u32"
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "len",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "FS_WRITE",
+      "val": 772,
+      "$doc": [
+        "The `len` bytes at `at` added to what the file opened for writing holds."
+      ],
+      "pkt": [
+        {
+          "name": "fd",
+          "type": "u32"
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "len",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "FS_CLOSE",
+      "val": 773,
+      "$doc": [
+        "The descriptor ended. A file opened for writing is replaced by what was written; an",
+        "open not yet answered is canceled, and never answered."
+      ],
+      "pkt": [
+        {
+          "name": "fd",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "extern": [],
+  "enums": [
+    {
+      "name": "Major",
+      "$doc": [
+        "What a command is about."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "FS",
+          "val": 3
+        }
+      ]
+    },
+    {
+      "name": "FsMinor",
+      "$doc": [
+        "A file's calls and the open's answer."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "OPENED",
+          "val": 1
+        },
+        {
+          "name": "OPENAT",
+          "val": 2
+        },
+        {
+          "name": "READ",
+          "val": 3
+        },
+        {
+          "name": "WRITE",
+          "val": 4
+        },
+        {
+          "name": "CLOSE",
+          "val": 5
+        }
+      ]
+    }
+  ],
+  "records": []
+}

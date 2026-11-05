@@ -23,6 +23,8 @@ mod program {
             stack_bytes: 1 << 20,
             thread_name: "demo",
             clock: native::now,
+            stop_hook: None,
+            admit: None,
         },
         turn
     );

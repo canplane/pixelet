@@ -3,7 +3,9 @@ dist/
 .vite/
 .wrangler/
 .expo/
-app/native/ios/
-app/native/android/
-app/native/modules/platform/android/build/
-app/web/public/brand/
+client/ios/
+client/android/
+client/modules/platform/android/build/
+client/public/brand/
+client/public/index.html
+app/guest.paths.json

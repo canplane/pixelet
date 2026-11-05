@@ -1,25 +1,37 @@
 ---
 name: naming
-description: Recommendations for naming in pixelet — short, plain names read where they stand; the names chosen with the user; names someone else owns; renaming. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
+description: Naming in pixelet — short, plain names read where they stand; where a word comes from; the abbreviations and the words that stay whole; the names chosen with the user; names someone else owns; renaming. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
 
-- Let the module path qualify a name: inside a module a short, loose name
-  usually does; a name read across many modules does better saying its thing
-  exactly.
-- Prefer short, plain names, as in UNIX V6 and K&R's C, and the abbreviations
-  programmers already use (`idx`, `buf`, `pos`, `px`, `cfg`, `err`, `tmp`;
-  `pkt` for a wire packet) over coined ones; keep a domain word mostly whole.
+- Use short, plain names, as in UNIX V6 and K&R's C.
+- The system — xpute, the commands' modules, what the kernel asks of its host
+  — takes its word from Unix, Linux or Wayland; a device outside them keeps its
+  platform's word. The application — the world, its drawing, its map, its UI —
+  takes the word its own field uses (graphics, cartography, games). A metaphor
+  no field uses is no name.
+- A word on this list is abbreviated; any other stays whole: index `idx`,
+  value `val`, values `vals`, buffer `buf`, source `src`, destination `dst`,
+  offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
+  direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance
+  `dist`, address `addr`, capacity `cap`, dimension `dim`, memory `mem`,
+  component `comp`, channel `ch`, elevation `ele`, feature `feat`, latitude
+  `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation `orient`,
+  rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial `init`,
+  matrix `mat`, configuration `cfg`, descriptor `desc`, context `ctx`. `pkt` is
+  only a wire packet.
+- Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
+  included, and `sz` in xpute (`HDR_SZ`, `WORD_SZ`); `environment`; `source` as
+  a source of data; `encode`, `decode`.
 - Name what the thing is. A padding noun says little, and a placeholder word
   says nothing: one that could stand for anything, as "whatsit" could (`kept`,
   `held`, `goes`, `done`), which only the code around it explains (`Stop`, not
   `Held`). A plain word that reads at once (`reach`) is fine. A word in a
   comment is no precedent for a name.
-- Leave a name that reads fine, and don't lengthen it to repeat its module.
-- Mind a loose word mostly where several modules use it for different things.
-- Snake_case and SCREAMING tend to abbreviate; PascalCase types, camelCase and
-  the React shell's own names tend to stay whole (`let cfg: Config`).
+- Mind a loose word where several modules use it for different things.
+- Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
+  React shell's own names stay whole (`let cfg: Config`).
 - Use a plural for a collection, and a unit suffix on a length (`_u` the
   world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
   ground), on the value where a person sees it (`29.0 m`).

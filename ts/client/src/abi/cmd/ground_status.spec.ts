@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/ground_status.spec.ts
+// ts/client/src/abi/cmd/ground_status.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // Whether the screen shows the world: Success once a frame that drew ground went
 // to it, or one went over a view whose tiles all answered with nothing to draw;

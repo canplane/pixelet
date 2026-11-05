@@ -6,7 +6,7 @@
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
 
-fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
+pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
         let kind = spec.kind(&f.ty)?;
         if f.list
@@ -264,9 +264,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         if strs { "Strs, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
-    if t.program.is_some() {
-        out.push("use xpute_kit::status::errno::Errno;".into());
-    }
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         out.push(String::new());
@@ -360,16 +357,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "    }".to_string(),
                 "}".to_string(),
             ]);
-            if let Some(program) = t.program {
-                out.extend([
-                    String::new(),
-                    format!("impl<'a> {program}::FromPacket<'a> for {name}{lt} {{"),
-                    format!("    fn from_packet(pkt: {program}::Packet<'a>) -> Result<Self, Errno> {{"),
-                    format!("        {name}::read(pkt.bytes().ok_or(Errno::EBADMSG)?).map_err(|e| e.errnum)"),
-                    "    }".to_string(),
-                    "}".to_string(),
-                ]);
-            }
         }
         if let Some(event) = &c.event {
             let doc = [format!("Command::{}'s event.", c.name)];

@@ -1,14 +1,10 @@
 // pxl-kernel/door/layout.rs
 
-//! The memory's layout. Its front, below GLOBAL_BASE: the rings'
-//! descriptors, their slot payloads and the toc's page, at fixed
-//! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
-//! by its owner and handed to it at boot (`install`), and the heap after
-//! them.
+//! The memory's layout past the machine's front (machine.json, xpute-guest
+//! machine.rs): `.fixed`, which ranges it holds, each sized by its owner and
+//! handed to it at boot (`install`), and the heap after them.
 
-use xpute_guest::entry::BootInfo;
-use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
-
+use super::text_call;
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
@@ -17,90 +13,30 @@ use crate::domain::scene::character::companion;
 use crate::domain::scene::character::preview;
 use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
+use crate::machine::MACHINE;
 use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::host;
-use crate::sys::io::host_spec::stream::BYTES;
 use crate::sys::io::param;
-use crate::sys::mem::section::{self, fixed_at, map, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use crate::sys::mem::spec::{
-    CQ_CAP, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES, TOC_AT,
-};
-use pxl_render::api_spec::stream;
+use crate::sys::mem::section::{self, map};
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
-use xpute_guest::mem;
+use xpute_guest::entry::BootInfo;
+use xpute_guest::machine::{self, Gpu};
 use xpute_guest::mem::section::span_of;
-use xpute_guest::mem::section::{page_up, Section, PAGE_BYTES};
+use xpute_guest::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
-/// A packet is at most a page; anything larger crosses by address. A page
-/// is also the buddy's smallest block.
-pub(crate) const RING_SLOT_BYTES: u32 = PAGE_BYTES;
-
-const SQ_DESC_AT: u32 = RING_DESC_AT;
-const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
-const DESC_END: u32 = CQ_DESC_AT + page_up(ring_bytes(CQ_CAP));
-
-const SQ_SLOT_AT: u32 = RING_SLOT_AT;
-const CQ_SLOT_AT: u32 = SQ_SLOT_AT + slots_bytes(SQ_CAP, RING_SLOT_BYTES);
-const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
-
-/// The door's two rings, submission and completion, laid out at their
-/// addresses in the module's memory.
-///
-/// # Safety
-/// Once: the ranges are the rings' alone, in memory that never moves and
-/// outlives them.
-pub(crate) unsafe fn rings() -> (Ring, Ring) {
-    let mem = mem::core();
-    // SAFETY: the caller's.
-    unsafe {
-        (
-            Ring::init(
-                mem,
-                SQ_DESC_AT as usize,
-                SQ_CAP,
-                SQ_SLOT_AT,
-                RING_SLOT_BYTES,
-            ),
-            Ring::init(
-                mem,
-                CQ_DESC_AT as usize,
-                CQ_CAP,
-                CQ_SLOT_AT,
-                RING_SLOT_BYTES,
-            ),
-        )
-    }
-}
-
-// The boundaries are chosen constants, not roundings, so page alignment is asserted.
-const _: () = assert!(
-    RING_DESC_AT.is_multiple_of(PAGE_BYTES)
-        && RING_SLOT_AT.is_multiple_of(PAGE_BYTES)
-        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES),
-    "a range begins on a page, so every slot in it begins on one"
-);
-const _: () = assert!(
-    STACK_BYTES <= RING_DESC_AT,
-    "the stack runs into the descriptors"
-);
-const _: () = assert!(
-    DESC_END <= RING_SLOT_AT,
-    "the descriptors run into the payloads"
-);
-const _: () = assert!(SLOT_END <= TOC_AT, "the payloads run into the toc");
-const _: () = assert!(
-    TOC_AT.is_multiple_of(PAGE_BYTES) && TOC_AT + PAGE_BYTES <= GLOBAL_BASE,
-    "the toc is a page under the bracket's data"
-);
+// The renderer draws through the machine's GPU socket.
+const GPU: Gpu = match MACHINE.gpu {
+    Some(g) => g,
+    None => panic!("the kernel's machine takes the GPU socket"),
+};
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
-/// resident divisions' cells, the renderer's upload table, the GPU call
-/// stream, the kernel's other host calls. Each is mostly in use whenever
+/// resident divisions' cells and the renderer's upload table. Each is mostly in use whenever
 /// the kernel runs, or the host's reservation; what is held only at times,
 /// or far below its worst most of the time, is the heap's
 /// (`HEAP_FLOWS_BYTES`).
@@ -109,8 +45,6 @@ pub(crate) enum Fixed {
     Terrain,
     Division,
     Uploads,
-    Gpu,
-    Host,
 }
 
 /// None is let go.
@@ -133,28 +67,17 @@ const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
 pub(crate) const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
-const FIXED: [u32; 5] = [
+const FIXED: [u32; 3] = [
     fixed::TERRAIN_BYTES,
     division::DIVISION_BYTES,
     upload::uploads_bytes(MAX_LIVE_UPLOADS),
-    stream::BYTES,
-    BYTES,
 ];
 
-pub(crate) const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
+pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 
-const _: () = assert!(
-    REGION_BYTES.is_multiple_of(PAGE_BYTES)
-        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES)
-        && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
-    "a section begins on a page, so every block in it begins on one"
-);
-
-/// The lowest the heap could begin: the linker's data cannot end before `--global-base`.
-const _: () = assert!(
-    GLOBAL_BASE + FIXED_BYTES + MIN_HEAP_BYTES <= PHONE_BYTES,
-    "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
-);
+// The front, the fixed ranges and the heap a phone is guaranteed fit the
+// smaller size; the linker's data cannot begin before the front ends.
+const _: () = MACHINE.check(FIXED_BYTES);
 
 /// A body its kind's packet at its longest, in the block the buddy gives
 /// it, a power of two; none for a kind whose bodies take slots.
@@ -193,15 +116,9 @@ const HEAP_FLOWS_BYTES: u64 = {
 };
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= MIN_HEAP_BYTES as u64,
+    HEAP_FLOWS_BYTES <= MACHINE.min_heap_bytes as u64,
     "the heap's bounded flows at their worst do not fit the heap a phone is guaranteed"
 );
-
-/// A pure function of the linker's answer: the global allocator asks for
-/// its first block before anything has laid the memory out.
-pub fn heap_at(data_end: u32) -> u32 {
-    fixed_at(data_end) + FIXED_BYTES
-}
 
 /// Asking before boot lays out memory is a bug.
 pub(crate) fn range(f: Fixed) -> Section {
@@ -212,19 +129,21 @@ pub(crate) fn range(f: Fixed) -> Section {
         .nth(&FIXED, PAGE_BYTES, f as usize)
 }
 
-/// Lays the memory map and hands each range of `.fixed` to its owner.
-/// Returns where GPU calls are recorded for the host, 0 where the kernel
-/// makes them itself.
-pub(crate) fn install(b: &BootInfo) -> u32 {
+/// Lays the memory map and hands each range of `.fixed` to its owner, and
+/// the GPU socket's stream to the renderer.
+pub(crate) fn install(b: &BootInfo) {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
-    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
-    // renderer's or the host's alone.
+    // SAFETY: `.fixed.uploads` and the GPU socket's stream, zeroed, each the
+    // renderer's alone.
     unsafe {
-        host::set_stream(range(Fixed::Host).off);
+        host::set_host(host::Host {
+            door: machine::door(),
+            text: text_call,
+        });
         upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
-        api::install(range(Fixed::Gpu).off)
+        api::install(MACHINE.gpu_at(), GPU.bytes);
     }
 }
 

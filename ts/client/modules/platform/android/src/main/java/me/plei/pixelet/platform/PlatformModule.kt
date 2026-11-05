@@ -1,0 +1,108 @@
+// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/PlatformModule.kt
+
+package me.plei.pixelet.platform
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.jni.NativeArrayBuffer
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.typedarray.Uint8Array
+
+/**
+ * The device's half of the client's services (ts/client/src/services/, the
+ * .native files) on Android, the module an iPhone's PlatformModule.swift is: what the shell
+ * asks of the system, under the same names. The kernel and the view it draws
+ * into are xpute's module (@xpute/native). An image's decode runs off the
+ * JavaScript thread.
+ */
+class PlatformModule : Module() {
+  private val context: Context
+    get() = appContext.reactContext ?: throw CodedException("the app has no context")
+
+  override fun definition() = ModuleDefinition {
+    Name("PxlPlatform")
+
+    // ---- the transport (services/origin.native.ts) ----
+
+    /** A body fetched still zstd, decoded off the JavaScript thread on the
+     * module's queue, into a direct buffer JavaScript takes without a copy. */
+    AsyncFunction("unpack") { packed: ByteArray ->
+      NativeArrayBuffer(PxlNative.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
+    }
+
+    // ---- storage (services/storage.native.ts) ----
+    //
+    // SharedPreferences, the system's store for an app's small values, as a
+    // page's localStorage is the browser's.
+
+    Function("storageGet") { key: String -> preferences().getString(key, null) }
+
+    Function("storageSet") { key: String, value: String ->
+      preferences().edit().putString(key, value).apply()
+    }
+
+    // ---- the clipboard (services/share.native.ts) ----
+
+    Function("clipboardSet") { text: String ->
+      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+      clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
+    }
+
+    // ---- text (services/text.native.ts, Text.kt) ----
+
+    Function("textLanguage") { tag: String -> setTextLanguage(tag) }
+
+    Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
+
+    /** The line starting at `x` with the middle of its em box on the middle
+     * row, into `out`: `width` by `height` pixels, RGBA, top row first, alpha
+     * not premultiplied. */
+    Function("textRaster") { weight: Double, px: Double, rgba: Double, text: String, x: Double, width: Int, height: Int, out: Uint8Array ->
+      if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
+    }
+
+    // ---- the compass (services/sensor.native.ts) ----
+
+    /** Whether the device has a compass at all, which expo-horizon-location only says
+     * by failing a watch — and a failed watch reads as a compass lost, not
+     * one never there. */
+    Function("headingAvailable") {
+      val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+      sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
+    }
+
+    // ---- the safe area (services/safe-area.native.ts) ----
+
+    /** How much of the screen's bottom inset takes a touch, in
+     * density-independent pixels: the navigation buttons' bar, or none with
+     * gesture navigation, whose handle only takes a swipe. What the shell
+     * rests its bottom chrome clear of (ts/client/src/shell/ui/bottom-rest.ts). */
+    Function("tappableBottom") {
+      val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
+      val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
+      insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
+    }
+
+    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.kt) ----
+
+    View(KeyboardDock::class) {
+      Events("onLift")
+      // The shell's lengths are in density-independent pixels, the view's in
+      // the screen's.
+      Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
+      Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
+      Prop("applied") { view: KeyboardDock, applied: Double -> view.applied = view.px(applied) }
+    }
+  }
+
+  private fun preferences() = context.getSharedPreferences("pxl", Context.MODE_PRIVATE)
+
+  private fun android.view.View.px(dp: Double): Int = (dp * resources.displayMetrics.density).toInt()
+}

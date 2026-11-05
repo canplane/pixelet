@@ -1,13 +1,18 @@
 ---
 name: device-build
-description: Build the device app (ts/app/native) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone, a Meta Quest or an Apple Vision Pro — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
+description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone, a Meta Quest or an Apple Vision Pro — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
 ---
 
 # Building for a device
 
-Prebuild first: `ts/app/native/ios/` and `ts/app/native/android/` come from
-`expo prebuild` and are not committed. Each platform's build builds the kernel
-(`ts/app/native/script/build-native.py`).
+The device app is `ts/client` (`@pxl/client`), the same Expo app the page is built
+from. Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
+`expo prebuild` and are not committed. Each platform's build builds the kernel,
+`pxl-kernel` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
+`xpute/ts/native/script/build-core.py`.
+
+After the app moves or pnpm's links are remade (the move from `ts/client/native/`
+did both), prebuild again with `--clean` and run `pod install` again.
 
 A **Release** build embeds the JavaScript bundle. A **Debug** build loads it
 from Metro (`make dev-native`) on port 8081; check that the running Metro serves
@@ -25,25 +30,25 @@ make sync-build-number
 
 - Xcode with a signing team for a phone, CocoaPods, and the Rust targets, which
   `rust/rust-toolchain.toml` installs.
-- Node, as `ts/app/native/package.json`'s `engines` asks, on `PATH` for
+- Node, as `ts/client/package.json`'s `engines` asks, on `PATH` for
   `pod install`, and named for Xcode's script phases in
-  `ts/app/native/ios/.xcode.env.local` (`export NODE_BINARY=…`), which prebuild
+  `ts/client/ios/.xcode.env.local` (`export NODE_BINARY=…`), which prebuild
   does not write.
 
 ### Generate
 
 ```bash
-make install && (cd ts/app/native && pnpm exec expo prebuild --platform ios --no-install)
-(cd ts/app/native/ios && pod install)
+make install && (cd ts/client && pnpm exec expo prebuild --platform ios --no-install)
+(cd ts/client/ios && pod install)
 ```
 
-Run both again after a file is added under `modules/platform/` (only
-`pod install` adds a new Swift file to the pod), after `app.config.ts` or a
-plugin changes, or after a dependency is added.
+Run both again after a file is added under `modules/platform/` or
+`xpute/ts/native/ios/` (only `pod install` adds a new Swift file to the pod),
+after `app.config.ts` or a plugin changes, or after a dependency is added.
 
 ### Build, install, launch
 
-From `ts/app/native/ios`. A phone has different ids for xcodebuild and
+From `ts/client/ios`. A phone has different ids for xcodebuild and
 devicectl: `xcrun xctrace list devices` gives the first, `xcrun devicectl list
 devices` the second.
 
@@ -89,7 +94,7 @@ xcrun simctl launch <id> me.plei.pixelet
 - An AVD from that image (Device Manager), or a phone with USB debugging on.
 - **JDK 17.** A newer one (Android Studio ships 25) fails the native build of
   expo-modules-core with "A restricted method in java.lang.System has been
-  called". `ts/app/native/.java-version` pins 17 for jenv: run
+  called". `ts/client/.java-version` pins 17 for jenv: run
   `jenv add <JDK 17 home>` once, then run Gradle as `jenv exec ./gradlew …`.
   Opening the project in Android Studio rewrites
   `android/gradle/gradle-daemon-jvm.properties` for its Java 25, which overrides
@@ -100,7 +105,7 @@ xcrun simctl launch <id> me.plei.pixelet
 ### Generate
 
 ```bash
-make install && (cd ts/app/native && pnpm exec expo prebuild --platform android --no-install)
+make install && (cd ts/client && pnpm exec expo prebuild --platform android --no-install)
 ```
 
 The app has two flavors, `mobile` for a phone and `quest` for a Meta Quest, so
@@ -110,7 +115,7 @@ variants are debug builds.
 
 ### Build, install, launch
 
-From `ts/app/native/android`, with `ANDROID_HOME=~/Library/Android/sdk` and the
+From `ts/client/android`, with `ANDROID_HOME=~/Library/Android/sdk` and the
 platform tools' `adb`:
 
 ```bash

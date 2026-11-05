@@ -22,10 +22,10 @@ unsafe impl Send for Job {}
 /// What the guest's thread hands back while a caller waits.
 enum Back {
     Done,
-    /// A hostcall's record, at its offset, for the caller to answer.
+    /// A call's frame, at its offset, for the caller to answer.
     Hostcall(u32),
-    /// The guest has stopped: its thread runs nothing again (`stopped`).
-    Stopped,
+    /// The guest has stopped: its thread runs nothing again (`terminate`).
+    Terminated,
 }
 
 struct Handoff {
@@ -135,14 +135,14 @@ pub(super) fn hostcall(at: u32) -> i32 {
     })
 }
 
-/// The guest has stopped, on its own thread, inside a call: the caller is told, and
-/// this thread stays here, with the guest's stack and locks as they are, so the
+/// Terminates the guest, on its own thread, inside a call: the caller is told,
+/// and this thread stays here, with the guest's stack and locks as they are, so the
 /// process goes on without it.
-pub fn stopped() -> ! {
+pub fn terminate() -> ! {
     GUEST_END.with(|e| {
         let e = e.borrow();
         let (sent, _) = e.as_ref().expect("a stop is on the guest's thread");
-        sent.send(Back::Stopped).expect("the caller is gone");
+        sent.send(Back::Terminated).expect("the caller is gone");
     });
     loop {
         std::thread::park();
@@ -150,14 +150,14 @@ pub fn stopped() -> ! {
 }
 
 /// The guest has stopped.
-static STOPPED: AtomicBool = AtomicBool::new(false);
+static TERMINATED: AtomicBool = AtomicBool::new(false);
 
 /// `f` on the guest's thread, the caller waiting; each hostcall it makes
 /// meanwhile answered on the caller's. None where the guest has stopped, in this
 /// call or before it.
 pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
     let h = handoff();
-    if STOPPED.load(Ordering::Relaxed) {
+    if TERMINATED.load(Ordering::Relaxed) {
         return None;
     }
     let mut f = Some(f);
@@ -177,8 +177,8 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
             }
             Back::Done => break,
             // `run` is left as it is, on a stack that never runs again.
-            Back::Stopped => {
-                STOPPED.store(true, Ordering::Relaxed);
+            Back::Terminated => {
+                TERMINATED.store(true, Ordering::Relaxed);
                 return None;
             }
         }

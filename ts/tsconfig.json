@@ -1,6 +1,6 @@
-// tsc checks and emits nothing: Vite and Metro transform and bundle. Every
-// alias is here, and Vite, vitest and Metro read it from here
-// (build/paths.ts).
+// tsc checks and emits nothing: Metro transforms and bundles. Every alias is
+// here, and vitest and Metro read it from here (build/paths.ts). This is the
+// page's view of the client; the device's is client/tsconfig.native.json.
 {
   "compilerOptions": {
     "target": "esnext",
@@ -16,7 +16,7 @@
     "erasableSyntaxOnly": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
-    "types": ["node", "vite/client", "@webgpu/types"],
+    "types": ["node", "@webgpu/types"],
 
     "paths": {
       "@/*": ["./client/src/*"],
@@ -24,6 +24,6 @@
       "@pxl/build/*": ["./build/*"]
     }
   },
-  "include": ["client", "build", "app/web", "vitest.config.ts"],
-  "exclude": ["**/node_modules", "**/dist"]
+  "include": ["client", "build", "vitest.config.ts"],
+  "exclude": ["**/node_modules", "**/dist", "client/ios", "client/android"]
 }

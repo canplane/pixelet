@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/sensor.spec.ts
+// ts/client/src/abi/cmd/sensor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // Which of the device's sensors.
 

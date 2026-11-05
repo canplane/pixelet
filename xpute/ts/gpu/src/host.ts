@@ -246,10 +246,10 @@ export class GpuHost {
     }
   }
 
-  /** Runs the stream at `at`, `head` words of head, as the turn left it. */
-  run(at: u32, head: u32): void {
+  /** Runs the stream at `at` as the turn left it, from past the head it says. */
+  run(at: u32): void {
     let r: Words | undefined;
-    each_record(this.memory(), at, head, (code, w, a) => {
+    each_record(this.memory(), at, (code, w, a) => {
       r ??= new Words(w);
       r.at = a;
       this.record(code, r);

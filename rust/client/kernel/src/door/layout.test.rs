@@ -4,10 +4,10 @@ use super::*;
 use crate::domain::layer::terrain::fixed;
 
 #[test]
-fn mem_json_matches_layout() {
+fn machine_json_matches_layout() {
     let note = include_str!(concat!(
         env!("PXL_REPO"),
-        "/spec/client/kernel/sys/mem/mem.json"
+        "/rust/client/kernel/machine.json"
     ));
     let mib = |bytes: u64| format!("{:.2} MiB", bytes as f64 / f64::from(1u32 << 20));
     let figures = [
@@ -18,7 +18,7 @@ fn mem_json_matches_layout() {
     for (what, bytes) in figures {
         assert!(
             note.contains(&mib(bytes)),
-            "mem.json's MIN_HEAP_BYTES note states {what} at {}",
+            "machine.json's mem note states {what} at {}",
             mib(bytes)
         );
     }

@@ -9,5 +9,3 @@
 //! (door/layout.rs), which hands each owner its own at boot.
 
 pub(crate) mod section;
-#[path = "mem/mem.spec.rs"]
-pub mod spec;

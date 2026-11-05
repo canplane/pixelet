@@ -1,0 +1,27 @@
+// @xpute/host/ipc/head/word.spec.ts
+//
+// GENERATED from spec/ipc/head.json
+
+/** Where MAGIC is. */
+export const MAGIC = 0 as number;
+
+/** Where VERSION is. */
+export const VERSION = 1 as number;
+
+/** Frames the submission ring holds. */
+export const SQ_CAP = 2 as number;
+
+/** Frames the completion ring holds. */
+export const CQ_CAP = 3 as number;
+
+/** A ring slot's payload, the same for both rings. */
+export const SLOT_BYTES = 4 as number;
+
+/** Where the submission ring's words begin. */
+export const SQ_AT = 5 as number;
+
+/** Where the completion ring's words begin. */
+export const CQ_AT = 6 as number;
+
+/** Where the GPU stream is, which the host runs after each turn; 0 without the GPU socket. */
+export const GPU_AT = 7 as number;

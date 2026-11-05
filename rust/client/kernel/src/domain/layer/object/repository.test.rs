@@ -12,7 +12,7 @@ use crate::sys;
 use crate::sys::io::request;
 
 /// The top's rows for the writes of each case, as the store folds them and
-/// as the source folds them (ts/client/src/driver/namespace/object_tree.ts).
+/// as the source folds them (ts/client/src/sys/fs/object_tree.ts).
 const GOLDEN: &str = include_str!("../../../../../../spec/golden/object/top.tsv");
 
 /// A leaf at `zoom`, `x` shards east of the first.
@@ -221,7 +221,7 @@ fn top_folds_until_shard_read() {
 }
 
 /// A file that does not decode is refused: named, not wanted, and wanted
-/// again as new once the driver empties it.
+/// again as new once the client empties it.
 #[test]
 fn refused_file_named() {
     let _g = sys::serial();

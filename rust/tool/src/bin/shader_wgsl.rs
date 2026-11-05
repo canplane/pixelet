@@ -20,7 +20,7 @@
 //! always builds them and compares.
 //!
 //! Whether the browser's compiler takes what this writes is the web app's
-//! test (ts/app/web src/shader.test.ts, Tint through Dawn), which make
+//! test (ts/tool/shader shader.test.ts, Tint through Dawn), which make
 //! test-ts runs: naga takes modules Tint refuses.
 //!
 //! The check judges only that each checked-in file is what the source makes

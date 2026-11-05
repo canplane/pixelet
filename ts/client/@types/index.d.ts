@@ -3,10 +3,9 @@
 export {};
 
 declare global {
-  // Global constants injected at build time: Vite's `define` on a page
-  // (vite.config.ts), the device app's babel.config.ts on a device: each a
-  // compile-time constant whose branches vanish from the bundle. Deployment
-  // values are read through deploy.ts.
+  // Global constants injected at build time by babel.config.ts, on a page and
+  // on a device: each a compile-time constant whose branches vanish from the
+  // bundle. Deployment values are read through deploy.ts.
   const __APP_ENV__: string;
   const __IS_DEV__: boolean;
 

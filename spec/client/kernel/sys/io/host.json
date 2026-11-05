@@ -1,57 +1,9 @@
 {
   "$doc": [
-    "The kernel's own hostcalls, numbered beside xpute's (xpute/spec/ipc/sys.json,",
-    "pxl-kernel sys/io/host.rs, ts/client/src/driver/text.ts) and made as hostcalls, answered",
-    "before they return; and the range of the stream xpute's calls are recorded in, which",
-    "a hostcall's record lies past while it runs."
+    "What the platform's text writes into the kernel's memory as it answers the kernel's",
+    "calls TEXT_LAYOUT and TEXT_RASTER (domain/control/cmd.json, pxl-kernel sys/io/text.rs,",
+    "ts/client/src/port/text.ts), before they return."
   ],
-  "stream": {
-    "$type": "u32",
-    "$doc": ["The stream's range, laid out by the kernel's map."],
-    "BYTES": {
-      "$val": 65536,
-      "$doc": [
-        "The range's size. A record names what it moves rather than carrying it, so",
-        "a turn's records are words, and a hostcall's text bytes the most of what it holds."
-      ]
-    }
-  },
-  "op": {
-    "$type": "u32",
-    "$doc": ["The kernel's calls, each with xpute's PROGRAM bit and made as a hostcall; a record's call, then its arguments."],
-    "TEXT_LAYOUT": {
-      "$val": 2147483649,
-      "$doc": [
-        "weight, px (f32 bits), max width (f32 bits, 0 for one line), at, lines, then the",
-        "text's bytes: the text in the platform's own family at the weight and size, broken",
-        "into lines no wider than the width where it can be; at `at`, how many lines, then",
-        "a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most"
-      ]
-    },
-    "TEXT_RASTER": {
-      "$val": 2147483650,
-      "$doc": [
-        "weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then",
-        "the text's bytes: one line drawn in the platform's own family, starting at x with",
-        "the middle of its em box on the middle row, into `width` by `height` pixels at",
-        "`at`, RGBA a byte a channel, top row first, alpha not premultiplied"
-      ]
-    }
-  },
-  "LAYOUT": {
-    "$type": "u32",
-    "$packed": true,
-    "$doc": [
-      "TEXT_LAYOUT's arguments, a word each after its call, then the text's bytes at",
-      "`WORDS`: the weight, px and max width as f32 bits, where its answer goes and",
-      "how many lines it may hold."
-    ],
-    "weight": 1,
-    "px": 1,
-    "max_width": 1,
-    "at": 1,
-    "lines": 1
-  },
   "LAYOUT_ANSWER": {
     "$type": "u32",
     "$packed": true,
@@ -64,21 +16,5 @@
     "$doc": ["A line of TEXT_LAYOUT's answer: its end, a byte offset, and its width as f32 bits."],
     "end": 1,
     "width": 1
-  },
-  "RASTER": {
-    "$type": "u32",
-    "$packed": true,
-    "$doc": [
-      "TEXT_RASTER's arguments, a word each after its call, then the text's bytes at",
-      "`WORDS`: the weight and px as f32 bits, the color, where its pixels go, their",
-      "width and height, and x as f32 bits."
-    ],
-    "weight": 1,
-    "px": 1,
-    "color": 1,
-    "at": 1,
-    "width": 1,
-    "height": 1,
-    "x": 1
   }
 }

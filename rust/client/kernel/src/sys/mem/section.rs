@@ -2,20 +2,19 @@
 
 //! Which sections the memory has and where each begins:
 //!
-//!   module    stack first (an overflow traps), the rings, then the linker's data;
-//!             on a device the stack's and the data's ranges stand empty
+//!   front     the machine's (xpute-guest machine.rs): the stack, the header, the
+//!             rings and the GPU stream, then the linker's data; on a device
+//!             the stack's and the data's ranges stand empty
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
 //!   heap      everything left, one allocator
 //!
-//! Everything ahead of the heap is checked against MIN_HEAP_BYTES, at compile
-//! time and again at boot.
+//! Everything ahead of the heap is checked against the machine's
+//! `min_heap_bytes`, at compile time (`Machine::check`) and again at boot.
 
-use xpute_guest::mem::section::{page_up, Section};
+use xpute_guest::mem::section::Section;
 
+use crate::machine::MACHINE;
 use xpute_guest::global::Global;
-
-// Shared with the shell and the linker through mem.json.
-pub use crate::sys::mem::spec::{MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {
@@ -23,28 +22,20 @@ pub struct Map {
     pub heap: Section,
 }
 
-pub fn fixed_at(data_end: u32) -> u32 {
-    page_up(data_end)
-}
-
 /// `fixed_bytes` is the roof's (door/layout.rs `FIXED_BYTES`).
 pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
-    let regions = bytes / REGION_BYTES;
-    let heap = fixed_at(data_end) + fixed_bytes;
-    xpute_kit::ensure!(
-        heap + MIN_HEAP_BYTES <= regions * REGION_BYTES,
-        ENOMEM,
-        heap,
-        bytes
-    );
+    let region = MACHINE.region_bytes;
+    let end = bytes / region * region;
+    let heap = MACHINE.heap_at(data_end, fixed_bytes);
+    xpute_kit::ensure!(heap + MACHINE.min_heap_bytes <= end, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
-            off: fixed_at(data_end),
+            off: MACHINE.fixed_at(data_end),
             bytes: fixed_bytes,
         },
         heap: Section {
             off: heap,
-            bytes: regions * REGION_BYTES - heap,
+            bytes: end - heap,
         },
     }
 }

@@ -1,0 +1,25 @@
+// @pxl/app/modules/platform/android/build.gradle
+//
+// The device's half of the app's platform on Android (src/main/java/…). The
+// guest is built and packed by xpute's module (@xpute/native).
+
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'me.plei.pixelet'
+version = '0.0.0'
+
+android {
+  namespace "me.plei.pixelet.platform"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core-ktx:1.16.0'
+}
+

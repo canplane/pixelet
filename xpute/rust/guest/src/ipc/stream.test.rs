@@ -10,7 +10,7 @@ fn stream(words: usize) -> Stream {
             Memory::new(range.as_mut_ptr().expose_provenance(), words * WORD),
             0,
             words,
-            1,
+            Stream::OWN_WORDS,
         )
     }
 }

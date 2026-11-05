@@ -1,0 +1,9 @@
+// The packages as a native app's bundler reads them: x.native.ts in place of
+// x.ts where there is one.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleSuffixes": [".native", ""]
+  },
+  "include": ["kit", "host", "gpu", "native"]
+}

@@ -6,7 +6,7 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 import { type AboveKeyboardProps, bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { layer } from "@/shell/ui/theme.ts";
-import { bracket } from "@/bracket.tsx";
+import { useSafeArea } from "@/services/safe-area.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;
@@ -30,7 +30,7 @@ export function AboveKeyboard({
   lift = 0,
   children,
 }: AboveKeyboardProps) {
-  const rest = bottomRest(bracket.view.useSafeArea(), inset);
+  const rest = bottomRest(useSafeArea(), inset);
   const [applied, setApplied] = useState(0);
   return (
     <KeyboardDock

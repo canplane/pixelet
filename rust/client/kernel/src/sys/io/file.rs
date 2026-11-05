@@ -8,28 +8,28 @@
 //! shard's objects by the quadkey, an asset by its load's id, a storage file by
 //! its slot's, the sphere, the objects' top and their edits by their own. What
 //! it is called past that and where, a version, a URL or a storage key, is what
-//! the driver
-//! (ts/client/src/driver/namespace/) binds the root to, `@xpute/host`
+//! the client
+//! (ts/client/src/sys/fs/) binds the root to, `@xpute/host`
 //! carrying the open there. A file is bytes: how a platform keeps them, as
 //! text or otherwise, is its backend's.
 
 use core::fmt::{self, Write};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::abi::cmd::SysOpened;
+use xpute_guest::abi::fs::FsOpened;
 use xpute_guest::ipc::file::Files;
 pub use xpute_guest::ipc::file::Opened;
-use xpute_guest::ipc::sys::Fd;
+use xpute_guest::ipc::fs::Fd;
 use xpute_kit::status::bug::OrBug;
 
+use crate::machine::MACHINE;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::file_spec::{format, object, root, storage};
-use crate::sys::io::host::{sys, turn};
+use crate::sys::io::host::{door, turn};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refusal;
-use crate::sys::mem::spec::MIN_HEAP_BYTES;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
@@ -42,7 +42,7 @@ use xpute_kit::status::errno::Errno;
 /// owner keeps. One of another format, one its backend cannot read as bytes
 /// (EBADMSG), or one larger than any heap a device is given (no build reads
 /// it) is refused: read as nothing and never written over, and named to the
-/// driver (`is_refused`), whose it is to set the file aside and empty the slot
+/// client (`is_refused`), whose it is to set the file aside and empty the slot
 /// (`on_emptied`). Which storage a slot is, how it keeps the bytes, and what
 /// an older file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,7 +77,7 @@ impl StorageFile {
 }
 
 /// The longest name the kernel opens: a u64 in decimal, at its widest, past
-/// every quadkey, so the host stream's reserve can count on it.
+/// every quadkey, so a slot holds the open that names it.
 pub const PATH_BYTES: usize = 20;
 
 const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
@@ -108,13 +108,13 @@ fn files() -> &'static mut Files<Owner, OPEN> {
 
 /// Opens `root`'s object `path`; none where there is no host.
 pub fn open(_: Credit, root: u32, path: Path, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root, path.as_str(), owner))
+    Some(files().open(door()?, root, path.as_str(), owner))
 }
 
 /// Opens a storage file to be read whole; what it held is taken with `take_storage`.
 pub fn open_storage(file: StorageFile) -> Option<Fd> {
     Some(files().open(
-        sys()?,
+        door()?,
         root::STORAGE,
         file.path().as_str(),
         Owner::StorageFile(file),
@@ -140,12 +140,12 @@ fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
-/// it was read, and nothing is written over it until the driver empties the slot.
+/// it was read, and nothing is written over it until the client empties the slot.
 pub fn is_refused(file: StorageFile) -> bool {
     refusals()[file as usize]
 }
 
-/// The driver set a refused slot's file aside and emptied it: its owner may
+/// The client set a refused slot's file aside and emptied it: its owner may
 /// open it again and write it.
 pub fn on_emptied(file: StorageFile) {
     refusals()[file as usize] = false;
@@ -164,7 +164,7 @@ pub fn storage_of(file: StorageFile, mut bytes: Vec<u8>) -> StorageRead {
     StorageRead::Bytes(bytes)
 }
 
-/// Named to the driver in the next snapshot, for it to set aside.
+/// Named to the client in the next snapshot, for it to set aside.
 fn refuse(file: StorageFile) -> StorageRead {
     refusals()[file as usize] = true;
     request_world_tick();
@@ -238,7 +238,7 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The driver's answer to `open_storage`, for a test with none: `bytes`, read
+/// The client's answer to `open_storage`, for a test with none: `bytes`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
@@ -277,11 +277,11 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
 /// `dst` is filled from the next turn on.
 ///
 /// # Safety
-/// As `Sys::read`: `dst` outlives this turn, unmoved and unread.
+/// As `Door::read`: `dst` outlives this turn, unmoved and unread.
 pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
-    if let Some(sys) = sys() {
+    if let Some(door) = door() {
         // SAFETY: the caller's.
-        unsafe { sys.read(fd, dst) };
+        unsafe { door.read(fd, dst) };
     }
 }
 
@@ -295,14 +295,14 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
 /// The bytes are filled from the next turn on: as `read`, they are neither
 /// read nor dropped before then.
 pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
-    let sys = sys().or_bug(Errno::ENOTRECOVERABLE);
+    let door = door().or_bug(Errno::ENOTRECOVERABLE);
     // SAFETY: the caller's.
-    unsafe { files().read_whole(sys, fd, bytes) }.map_err(|_| Refusal::now())
+    unsafe { files().read_whole(door, fd, bytes) }.map_err(|_| Refusal::now())
 }
 
 pub fn close(fd: Fd) {
-    if let Some(sys) = sys() {
-        files().close(sys, fd);
+    if let Some(door) = door() {
+        files().close(door, fd);
     }
 }
 
@@ -400,7 +400,7 @@ static LAST_WRITE: Global<(u64, u32)> = Global::new();
 /// for its owner to write on a later turn. Nothing is written, and none
 /// counted, where there is no host.
 pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
-    let Some(sys) = sys() else { return true };
+    let Some(door) = door() else { return true };
     let written = LAST_WRITE.get(|| (0, 0));
     if written.0 != turn() {
         *written = (turn(), 0);
@@ -409,7 +409,7 @@ pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
         return false;
     }
     written.1 += 1;
-    files().write_whole(sys, root, path.as_str(), bytes, Owner::Write);
+    files().write_whole(door, root, path.as_str(), bytes, Owner::Write);
     true
 }
 
@@ -418,9 +418,9 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     if is_refused(file) {
         return;
     }
-    if let Some(sys) = sys() {
+    if let Some(door) = door() {
         files().write_whole(
-            sys,
+            door,
             root::STORAGE,
             file.path().as_str(),
             seal(file, bytes),
@@ -431,15 +431,15 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 
 /// An open the host completed, read once (`Opened::of`); xpute's table finds
 /// its owner and closes it where it failed. A file larger than the heap every
-/// device is given cannot be held anywhere: it is the driver's answer refused,
+/// device is given cannot be held anywhere: it is the client's answer refused,
 /// closed here, and the owner hears EFBIG.
-pub fn on_opened(completed: &SysOpened) {
-    let SysOpened { fd, detail, .. } = *completed;
-    let Some(owner) = sys().and_then(|sys| files().complete_open(sys, completed)) else {
+pub fn on_opened(completed: &FsOpened) {
+    let FsOpened { fd, detail, .. } = *completed;
+    let Some(owner) = door().and_then(|door| files().complete_open(door, completed)) else {
         return;
     };
     let opened = match Opened::of(completed) {
-        Opened::Bytes(n) if n > MIN_HEAP_BYTES => {
+        Opened::Bytes(n) if n > MACHINE.min_heap_bytes => {
             close(fd);
             Opened::Failed {
                 errnum: Errno::EFBIG,

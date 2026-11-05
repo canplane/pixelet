@@ -4,21 +4,45 @@
 // completion ring has room for all it may leave (`reserve`), so one started
 // never finds the ring full; what is not started waits in order. Overrunning
 // the ring is a sizing fault.
+//
+// The guest's hostcalls are frames too: its files (abi/fs.json) and its report
+// are posted as any event is; a call answered before it returns is laid
+// unpublished in the next slot and its place handed to the host's `hostcall`.
+// The host routes each by its command's major.
+//
+// Both rings keep a ring's rules (ring.hpp R1 to R3), so the door holds
+// whether its host takes turns with the guest or runs beside it; and two more,
+// io_uring's too:
+//
+// - R3, as the door keeps it: memory an event names by its address is the
+//   host's until the host's head has passed the event (`posted`, `consumed`),
+//   so the guest writes it again, or frees it, only then. Memory a call names
+//   is the host's only until the call returns.
+// - R4. A completion finds its request by its tag, never by where it lies in
+//   either ring or when it came.
+// - R5. A call never nests: the host answers it without calling into the
+//   guest, and the guest makes no call while another is unanswered.
 
 #pragma once
 
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <source_location>
 #include <span>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
 #include "xpute/guest/abi/cmd.spec.hpp"
+#include "xpute/guest/abi/fs.spec.hpp"
+#include "xpute/guest/hostcall.hpp"
 #include "frame.hpp"
 #include "ring.hpp"
+#include "fs.hpp"
 
 namespace xpute {
 
@@ -49,6 +73,16 @@ struct DoorStat {
     bool operator==(const DoorStat &) const = default;
 };
 
+// Where an event was posted in the completion ring: asked of `consumed`.
+struct Posted {
+    std::uint32_t pos;
+
+    bool operator==(const Posted &) const = default;
+};
+
+// How much of a report's path is kept where the whole would not fit a slot.
+inline constexpr std::size_t ABORT_PATH_BYTES = 32;
+
 class Door {
   public:
     // `most_events` is the most one command raises, or the turn once its drain
@@ -60,6 +94,18 @@ class Door {
 
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
+    // A turn begins: what the writes the host has taken named is let go.
+    void rise() const noexcept {
+        std::erase_if(writes_, [this](const FileWrite &w) { return consumed(w.posted); });
+    }
+
+    // The event posted last.
+    Posted posted() const noexcept { return {cq_.tail() - 1}; }
+
+    // Whether the host's head has passed the event posted at `posted`: what it
+    // named is the guest's again (R3).
+    bool consumed(Posted posted) const noexcept { return cq_.consumed(posted.pos); }
+
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
         posted(cmd, cq_.push(tag, cmd, flags, result));
     }
@@ -68,9 +114,9 @@ class Door {
         posted(cmd, cq_.push_in_place(tag, cmd, flags, result, write));
     }
 
-    // An event for `port`.
-    template <class Fill> void raise(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
-        post_in_place(frame::tag_of(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+    // An event tagged `tag`.
+    template <class Fill> void send_with(std::uint32_t tag, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
+        post_in_place(tag, cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
@@ -78,18 +124,80 @@ class Door {
         });
     }
 
-    // `event` for `port`.
-    template <Event E> void raise_to(std::uint32_t port, const E &event) const noexcept {
-        raise(port, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
+    // `event`, tagged 0.
+    template <Event E> void send(const E &event) const noexcept {
+        send_with(0, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
+    }
+
+    // `event`, answered before this returns: laid in the next slot unpublished
+    // and handed to the host's `hostcall`, its value or its errno; ENOSPC where
+    // no slot is free, EMSGSIZE where it does not fit one.
+    template <Event E> Result<std::uint32_t> call(const E &event) const noexcept {
+        Result<std::uint32_t> at = cq_.stage_in_place(0, E::NUMBER, frame::ACKREQ, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+            xtp::PacketWriter w(out);
+            w.branch(E::FIELDS, [&event](xtp::PacketWriter &b) { event.write(b); });
+            Result<std::uint32_t> n = w.finish();
+            return n ? std::optional(*n) : std::nullopt;
+        });
+        if (!at) return make_error(ErrorClass::fault, at.error().errnum == Errno::eagain ? Errno::enospc : at.error().errnum);
+        return answer_of(xpute::hostcall(*at));
+    }
+
+    // Answered by FS_OPENED on a later turn.
+    void openat(Fd fd, std::uint32_t root, std::uint32_t flags, std::string_view path) const noexcept {
+        send(abi::fs::FsOpenatEvent{.fd = fd, .root = root, .flags = flags, .path = path});
+    }
+
+    // `dst` is filled once the host's head has passed the event, and is kept,
+    // unread, until `consumed` says so: where it was posted.
+    Posted read(Fd fd, std::span<std::uint8_t> dst) const noexcept {
+        send(abi::fs::FsReadEvent{.fd = fd, .at = cq_.mem().off_of(dst), .len = static_cast<std::uint32_t>(dst.size())});
+        return posted();
+    }
+
+    void write(Fd fd, std::vector<std::uint8_t> bytes) const noexcept {
+        send(abi::fs::FsWriteEvent{.fd = fd, .at = cq_.mem().off_of(std::span<const std::uint8_t>(bytes)), .len = static_cast<std::uint32_t>(bytes.size())});
+        writes_.push_back({posted(), std::move(bytes)});
+    }
+
+    // A write is committed, an open not yet answered cancelled.
+    void close(Fd fd) const noexcept { send(abi::fs::FsCloseEvent{.fd = fd}); }
+
+    // Drops what the turn posted and posts the report alone, as the guest stops:
+    // its file's path cut to its end, or left out, where the whole of it would
+    // not fit a slot.
+    void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) const noexcept {
+        cq_.clear();
+        std::string_view path = at.file_name();
+        std::string_view tail = path.substr(path.size() > ABORT_PATH_BYTES ? path.size() - ABORT_PATH_BYTES : 0);
+        for (std::string_view file : {path, tail, std::string_view{}}) {
+            abi::SysAbortEvent report{
+                .errnum = static_cast<std::int32_t>(errnum),
+                .line = at.line(),
+                .column = at.column(),
+                .a_low = static_cast<std::uint32_t>(a),
+                .a_high = static_cast<std::uint32_t>(a >> 32),
+                .b_low = static_cast<std::uint32_t>(b),
+                .b_high = static_cast<std::uint32_t>(b >> 32),
+                .file = file,
+            };
+            Errno e = cq_.push_in_place(0, abi::SysAbortEvent::NUMBER, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+                xtp::PacketWriter w(out);
+                w.branch(abi::SysAbortEvent::FIELDS, [&report](xtp::PacketWriter &b) { report.write(b); });
+                Result<std::uint32_t> n = w.finish();
+                return n ? std::optional(*n) : std::nullopt;
+            });
+            if (e != Errno::emsgsize || file.empty()) return posted(abi::SysAbortEvent::NUMBER, e);
+        }
     }
 
     // Applies waiting commands in order while there is room for what one more may
     // leave; replies to ACKREQ and to failures. Answers how many completions it made.
-    // What the host sent, port 0, is xpute's own and applied here: NOP answers
-    // its value, and an open the host completed goes to `opened`; every other
-    // sender's goes to `apply`. A drain runs before
-    // any phase's budget, so the program records what it is handed and returns.
-    template <class Opened, class Apply> std::uint32_t drain(Opened &&opened, Apply &&apply) const noexcept {
+    // A command under xpute's majors is xpute's own and applied here: NOP
+    // answers its value, and an open the host completed goes to `opened`;
+    // every command past them goes to `apply`. A drain runs before any phase's
+    // budget, so the program records what it is handed and returns.
+    template <class Opened, class Apply> std::uint32_t receive(Opened &&opened, Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
@@ -114,18 +222,25 @@ class Door {
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
     template <class Opened, class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
-        if (frame::port_of(f.tag) != frame::HOST) return apply(f.cmd, pkt);
+        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return apply(f.cmd, pkt);
+        if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_OPENED)) {
+            Result<abi::fs::FsOpened> o = abi::fs::FsOpened::read(pkt);
+            if (!o) return {.err = o.error().errnum};
+            return opened(*o);
+        }
         if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
             if (pkt.empty()) return {};
             Result<abi::Nop> nop = abi::Nop::read(pkt);
             if (!nop) return {.err = nop.error().errnum};
             return {.val = static_cast<std::int32_t>(nop->val)};
         }
-        if (f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
-            Result<abi::SysOpened> o = abi::SysOpened::read(pkt);
-            if (!o) return {.err = o.error().errnum};
-            return opened(*o);
-        }
+        // The guest's life (SYS_ATTACH, SYS_SUSPEND, SYS_RESUME) and its GPU
+        // grant's answer (GPU_READY): a C++ guest keeps nothing across either.
+        if (f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_ATTACH) || f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_SUSPEND) ||
+            f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_RESUME) || f.cmd == static_cast<std::uint32_t>(abi::Command::GPU_READY))
+            return {.val = 0};
+        // The guest's own report and file calls, which the host never sends,
+        // and the numbers xpute gives nothing.
         return {.err = Errno::enosys};
     }
 
@@ -140,6 +255,12 @@ class Door {
     std::uint32_t reserve_;
     // Kept by the const calls that move the rings, as the rings' own words are.
     mutable DoorStat stat_;
+    // Kept until the host's head has passed the `write` that names it.
+    struct FileWrite {
+        Posted posted;
+        std::vector<std::uint8_t> bytes;
+    };
+    mutable std::vector<FileWrite> writes_;
 };
 
 } // namespace xpute

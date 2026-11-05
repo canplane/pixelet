@@ -9,7 +9,7 @@ import { SensorStatus } from "@/abi/cmd.spec.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { color } from "@/shell/ui/theme.ts";
-import { bracket } from "@/bracket.tsx";
+import * as device from "@/services/device.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /** A sensor's status as a color: `tone.pending` while its reading is asked
@@ -59,7 +59,7 @@ export function SensorIcons() {
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {bracket.device.handheld &&
+      {device.handheld &&
         orientation !== SensorStatus.Unavailable &&
         icon("location.north.circle", orientation)}
     </View>

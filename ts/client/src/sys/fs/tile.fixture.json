@@ -1,0 +1,442 @@
+{
+  "$doc": [
+    "Tile objects as the kernel named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the Earth's sphere. tile.ts must make the same (tile.test.ts)."
+  ],
+  "source": {
+    "top_zoom": 4,
+    "format": {
+      "terrain": 12,
+      "place": 10,
+      "division": 8,
+      "earth": 2
+    },
+    "version": {
+      "terrain": "v10.2026-10-09.1",
+      "place": "v10.2026-10-09.1",
+      "division": "v7.2026-10-09.1",
+      "earth": "v1.2026-10-05.1"
+    },
+    "shard": {
+      "0103300": {},
+      "01033210": {
+        "version": {
+          "place": "v10.2026-10-12.1"
+        }
+      },
+      "010332": {
+        "version": {
+          "terrain": "v11.2026-10-20.1",
+          "division": "v8.2026-10-20.1"
+        }
+      },
+      "0103321": {
+        "version": {
+          "terrain": "v11.2026-10-21.2"
+        }
+      }
+    }
+  },
+  "tiles": [
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/0103"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/01033"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/010330"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/0103300"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/01033001"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/0103300123"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/010330012301230"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-20.1/010332"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-21.2/0103321"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-21.2/01033210"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-21.2/010332103"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-21.2/0103321032"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-21.2/010332103210321"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-20.1/0103322"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-20.1/01033220"
+    },
+    {
+      "kind": "terrain",
+      "object": "v11.2026-10-20.1/010332201230123"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/0103301"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/01032"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/2310"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/231012"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/231012301230123"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/3333"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/33333"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/333333333333333"
+    },
+    {
+      "kind": "terrain",
+      "object": "v10.2026-10-09.1/000000000000000"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/01033"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/010330"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103300"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/01033001"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103300123"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/010330012301230"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/010332"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103321"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-12.1/01033210"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-12.1/010332103"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-12.1/0103321032"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-12.1/010332103210321"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103322"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/01033220"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/010332201230123"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/0103301"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/01032"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/2310"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/231012"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/231012301230123"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/3333"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/33333"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/333333333333333"
+    },
+    {
+      "kind": "place",
+      "object": "v10.2026-10-09.1/000000000000000"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/0103"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/01033"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/010330"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/0103300"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/01033001"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/0103300123"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/010330012301230"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/010332"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/0103321"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/01033210"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/010332103"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/0103321032"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/010332103210321"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/0103322"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/01033220"
+    },
+    {
+      "kind": "division",
+      "object": "v8.2026-10-20.1/010332201230123"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/0103301"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/01032"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/2310"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/231012"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/231012301230123"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/3333"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/33333"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/333333333333333"
+    },
+    {
+      "kind": "division",
+      "object": "v7.2026-10-09.1/000000000000000"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/01033"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010330"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103300"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/01033001"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103300123"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010330012301230"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010332"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103321"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/01033210"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010332103"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103321032"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010332103210321"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103322"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/01033220"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/010332201230123"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/0103301"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/01032"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/2310"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/231012"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/231012301230123"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/3333"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/33333"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/333333333333333"
+    },
+    {
+      "kind": "earth",
+      "object": "v1.2026-10-05.1/000000000000000"
+    }
+  ],
+  "sphere": "v1.2026-10-05.1/sphere"
+}

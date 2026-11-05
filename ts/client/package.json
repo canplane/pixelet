@@ -2,22 +2,68 @@
   "name": "@pxl/client",
   "private": true,
   "type": "module",
+  "main": "index.ts",
+  "engines": {
+    "node": ">=24"
+  },
   "exports": {
     "./*": "./src/*"
   },
+  "scripts": {
+    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 expo start",
+    "build:wasm": "./script/build-wasm.py",
+    "build:wasm:published": "./script/build-wasm.py --published",
+    "build:brand": "cd \"$(git rev-parse --show-toplevel)/rust\" && cargo run -q -p pxl-tool --bin render_brand",
+    "web": "pnpm build:wasm && pnpm build:brand && node script/web.ts html && EXPO_NO_TYPESCRIPT_SETUP=1 expo start --web",
+    "web:oven": "PXL_DEV_SOURCE=oven pnpm web",
+    "web:shelf": "PXL_DEV_SOURCE=shelf pnpm web",
+    "build:web": "pnpm build:wasm:published && pnpm build:brand && node script/web.ts html && EXPO_NO_TYPESCRIPT_SETUP=1 expo export -p web && node script/web.ts stamp",
+    "preview": "pnpm build:web && node script/web.ts serve",
+    "preview:oven": "PXL_DEV_SOURCE=oven pnpm preview",
+    "preview:shelf": "PXL_DEV_SOURCE=shelf pnpm preview"
+  },
   "dependencies": {
+    "@expo/metro-runtime": "57.0.16",
     "@expo/ui": "~57.0.20",
+    "@xpute/gpu": "workspace:*",
     "@xpute/host": "workspace:*",
     "@xpute/kit": "workspace:*",
+    "@xpute/native": "workspace:*",
     "expo": "57.0.25",
+    "expo-file-system": "~57.0.7",
     "expo-glass-effect": "~57.0.4",
+    "expo-horizon-core": "~57.0.2",
+    "expo-horizon-location": "~57.0.2",
+    "expo-sqlite": "~57.0.4",
     "expo-symbols": "~57.0.3",
     "i18next": "^26.4.2",
     "phosphor-react-native": "^3.0.6",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-i18next": "^17.0.14",
     "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
+    "react-native-web": "~0.21.4",
     "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@pxl/build": "workspace:*",
+    "@types/babel__core": "^7.20.5"
+  },
+  "xpute": {
+    "core": {
+      "workspace": "../../rust",
+      "package": "pxl-kernel",
+      "profile": {
+        "debug": "native-watch",
+        "release": "native"
+      },
+      "args": {
+        "release": [
+          "--no-default-features"
+        ]
+      }
+    }
   }
 }

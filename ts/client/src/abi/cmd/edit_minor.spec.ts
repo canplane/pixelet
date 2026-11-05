@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/edit_minor.spec.ts
+// ts/client/src/abi/cmd/edit_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The edit's: the tool and what it takes, and a marker's draft.
 

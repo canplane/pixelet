@@ -9,12 +9,12 @@ import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { asset_url } from "@/port/shell.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
-import { bracket } from "@/bracket.tsx";
+import * as origin from "@/services/origin.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cube);
-  return key ? `${bracket.origin.url}${asset_url(key)}` : null;
+  return key ? `${origin.url}${asset_url(key)}` : null;
 }
 
 interface CubeSwatchProps {

@@ -9,16 +9,17 @@
 import * as surface_role from "./gpu/surface_role.spec.ts";
 import * as stream from "./gpu/stream.spec.ts";
 
-/** What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone. */
+/** What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or
+ * nothing yet, as a canvas opens before the shell says what it draws. */
 export { surface_role };
 
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
- * (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
+ * (xpute-guest ipc/stream.rs) in the kernel's machine's GPU socket, which the
  * kernel writes its calls into during a turn and the host runs once the turn
- * has returned.
+ * has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).
  *
- * Its head is HEAD words, past the stream's END what the host writes for the
+ * Its head, past the stream's own words, is what the host writes for the
  * kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
  * of them (gpu/api.rs `READS`), each its word, then each span's begin and end
- * ticks (gpu/api.rs lays them out and holds this number to it). */
+ * ticks. gpu/api.rs lays them out, and the stream says the head's length itself. */
 export { stream };

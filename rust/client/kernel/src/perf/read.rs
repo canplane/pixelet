@@ -39,7 +39,7 @@ const REASONS: usize = LIMIT::REASONS as usize;
 const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
 
 struct Read {
-    /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
+    /// On the heap, not a static: a native build's statics are outside the core memory, where the client reads them.
     stats: Box<[f64; STATS_WORDS]>,
     now: Box<[f64; NOW_WORDS]>,
 }

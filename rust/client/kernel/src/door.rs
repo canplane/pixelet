@@ -1,26 +1,25 @@
 // pxl-kernel/door.rs
 
-//! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
-//! hands each turn to: the toc, commands applied, events raised. The
-//! rings are xpute's (`xpute_guest::ipc::door`), and so is the entry the
-//! kernel implements (`run`, xpute_guest::entry) and what its host's form
-//! hands it (`BootInfo`).
+//! The kernel's side of the doorbell, its entry (`run`, xpute_guest::entry),
+//! which its machine's guest form (`xpute_guest::guest!`, lib.rs) hands each
+//! turn to: commands applied, events raised. The rings, the front's header
+//! and the front they lie in are xpute's, laid by the host as the kernel's
+//! machine places them (machine.json, xpute_guest::machine), and so is what
+//! its host's form hands it (`BootInfo`).
 
 mod apply;
 mod executor;
 pub mod layout;
-/// The ports at the kernel's far side, generated from port.json.
-#[path = "door/port.spec.rs"]
-pub(crate) mod port;
-/// The toc's keys, generated from toc.json.
-#[path = "door/toc.spec.rs"]
-pub(crate) mod toc;
+mod life;
 
-use crate::domain::control::cmd::{Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent};
+use crate::domain::control::cmd::{
+    self, Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent, TextLayoutEvent,
+    TextRasterEvent,
+};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
-use crate::door::toc::key::GPU_STREAM;
+use crate::machine::MACHINE;
 use crate::perf::record::perf_record_turn;
 use crate::perf::spec::Wake;
 use crate::shell;
@@ -32,39 +31,78 @@ use crate::sys::io::host;
 use crate::sys::io::loader;
 use crate::sys::io::request;
 use crate::sys::io::text;
+use crate::sys::io::text::TextCall;
 use crate::sys::mem::section;
-use crate::sys::mem::spec;
 use crate::sys::sched::edge;
 use crate::turn;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
 use pxl_render::gpu::surface;
-use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::door::{Door, DoorStat, Submission};
-use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
+use xpute_guest::ipc::door::{DoorStat, Posted, Submission};
+use xpute_guest::machine::{self, door};
+use xpute_guest::mem::off_of_slice;
 use xpute_guest::mem::section::PAGE_BYTES;
-use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
-use xpute_guest::stop::{self, PanicHook};
+use xpute_guest::stop;
+use xpute_kit::status::errno::Errno;
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
     last_snapshot: SnapshotMemo,
+    /// Where the last snapshot's event was posted: `SNAPSHOT` is the host's
+    /// until its head has passed it (xpute_guest ipc/door.rs R3).
+    snapshot_posted: Option<Posted>,
+    /// A snapshot was put off while the host still held the last: the next
+    /// turn comes at once and posts it.
+    snapshot_owed: bool,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
     asked: bool,
 }
 
-static DOOR: Global<Door> = Global::new();
-
-fn door() -> &'static Door {
-    DOOR.get(|| {
-        // SAFETY: once, the door's first use; the ranges are the layout's alone.
-        let (sq, cq) = unsafe { layout::rings() };
-        Door::new(sq, cq, EVENTS)
-    })
+/// The kernel's text call, made of the shell's protocol as TEXT_LAYOUT or
+/// TEXT_RASTER and answered before it returns (sys/io/host.rs `Host`).
+pub(crate) fn text_call(call: &TextCall<'_>) -> Result<u32, Errno> {
+    match *call {
+        TextCall::Layout {
+            weight,
+            px,
+            max_width,
+            at,
+            lines,
+            text,
+        } => cmd::shell::text_layout(&TextLayoutEvent {
+            weight,
+            px,
+            max_width,
+            at,
+            lines,
+            text_at: off_of_slice(text.as_bytes()) as u32,
+            text_len: text.len() as u32,
+        }),
+        TextCall::Raster {
+            weight,
+            px,
+            color,
+            at,
+            width,
+            height,
+            x,
+            text,
+        } => cmd::shell::text_raster(&TextRasterEvent {
+            weight,
+            px,
+            color,
+            at,
+            width,
+            height,
+            x,
+            text_at: off_of_slice(text.as_bytes()) as u32,
+            text_len: text.len() as u32,
+        }),
+    }
 }
 
 /// The rings' peaks since the last take, the profiler's (perf/report.rs
@@ -73,18 +111,16 @@ pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
 
-/// What a turn raises, all after its drain and once (`post_shell` at the
-/// falling edge): a sensor's start or stop each, and the snapshot. A command
-/// raises nothing itself, so the door's reserve past this is its reply.
-const EVENTS: u32 = Sensor::ALL.len() as u32 + 1;
+/// What a turn posts besides its replies: a sensor's start or stop each and
+/// the snapshot, all after its drain and once (`post_shell` at the falling
+/// edge); the files' hostcalls at their most, whether the drain or the rest
+/// of the turn posts them (`host::FILE_FRAMES`); and the slot a call is laid
+/// in, never published. The machine declares it (machine.json `turn_posts`).
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 1 + host::FILE_FRAMES + 1;
 
-// The shell reads the completion ring dry before it rings, so a ring with
-// room for a reply to every submission and the door's reserve past the last
-// (`Door::new`, EVENTS + 1) never stops a drain partway (mem.json
-// CQ_CAP).
 const _: () = assert!(
-    spec::SQ_CAP + EVENTS < spec::CQ_CAP,
-    "a full submission ring's replies and the turn's events do not fit the completion ring"
+    MACHINE.turn_posts == EVENTS,
+    "machine.json's turn_posts is not what a turn posts"
 );
 
 static STATE: Global<State> = Global::new();
@@ -92,12 +128,11 @@ static STATE: Global<State> = Global::new();
 fn state() -> &'static mut State {
     STATE.get(|| State {
         last_snapshot: Default::default(),
+        snapshot_posted: None,
+        snapshot_owed: false,
         asked: false,
     })
 }
-
-/// xpute's two rings and the host's stream, and the GPU stream.
-const TOC_ENTRIES: usize = 4;
 
 /// A case lives on its surface, so it goes with it.
 fn close_surface(handle: u32) {
@@ -105,6 +140,14 @@ fn close_surface(handle: u32) {
         renderer::on_surface_closed(closed);
     }
     preview::preview_close(handle);
+}
+
+/// The GPU answered, the first time or again after a loss: the kernel asks
+/// its block and makes the renderer on it once the block is in (pxl-render
+/// gpu/api.rs). Its loss is the block's to say, read at the turn's edge.
+fn gpu_ready() {
+    api::on_device_answered();
+    edge::request_world_tick();
 }
 
 /// A shell has booted. On a device the kernel outlives a JS reload, and the
@@ -122,50 +165,31 @@ fn on_host_attached(s: &mut State) {
     s.last_snapshot = Default::default();
 }
 
-/// First turn: lays out memory and writes the toc at TOC_AT.
-fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
+/// First turn: the stop installed, then the front the host laid held to the
+/// machine and opened where the form has not (`xpute_guest::guest!` has, on a
+/// page), then the rest of memory.
+fn boot(b: BootInfo) {
+    stop::install(host::abort, b.stop_hook);
+    if !machine::booted() {
+        machine::boot(&MACHINE);
+    }
     boot::set(b);
-    boot::set_admit(admit);
     executor::install();
-    stop::install(host::abort, panic_hook);
-    let gpu_stream = layout::install(&b);
+    layout::install(&b);
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
     turn::boot();
-    let entries: [Entry; TOC_ENTRIES] = [
-        (key::SQ, door().sq().at() as u32),
-        (key::CQ, door().cq().at() as u32),
-        (key::SYS, layout::range(layout::Fixed::Host).off),
-        (GPU_STREAM, gpu_stream),
-    ];
-    // SAFETY: the page at TOC_AT, kept clear of the rings and the
-    // bracket's data; the toc's alone.
-    unsafe {
-        write_toc(
-            mem::core(),
-            spec::TOC_AT as usize,
-            toc_words(TOC_ENTRIES),
-            &entries,
-        );
-    };
 }
 
-/// The entry (xpute_guest::entry `Entry`, with the bracket's panic hook and
-/// its GPU host's admission): a turn applies waiting submissions, polls tasks
-/// on the quota, and returns when to wake next, in ms (0 for the next frame,
-/// NO_WAKE for none). The first turn boots, on what its host's form hands it
-/// (`boot_info`). `panic_hook` is where a bracket sharing its process with the
-/// kernel says why, a panic's text not being in the record's numbers, and ends
-/// the kernel's thread without the process. None where the host is apart (a page).
-pub fn run(
-    quota_ms: f64,
-    boot_info: fn() -> BootInfo,
-    panic_hook: Option<PanicHook>,
-    admit: Admit,
-) -> f64 {
+/// The entry (xpute_guest::entry `Entry`): a turn applies waiting
+/// submissions, polls tasks on the quota, and returns when to wake next, in
+/// ms (0 for the next frame, NO_WAKE for none). The first turn boots, on what
+/// its host's form hands it (`boot_info`), its stop hook and its GPU host's
+/// admission among it.
+pub fn run(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
-        boot(boot_info(), panic_hook, admit);
+        boot(boot_info());
     }
     let s = state();
     let rise = now();
@@ -177,30 +201,39 @@ pub fn run(
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    door().drain(|submission| match submission {
+    door().receive(|submission| match submission {
+        Submission::Life(l) => life::apply(s, l),
+        Submission::GpuReady => {
+            gpu_ready();
+            Ok(Some(0))
+        }
         Submission::Opened(opened) => {
             file::on_opened(&opened);
             Ok(Some(0))
         }
-        Submission::Program(number, pkt) => apply::apply(s, number, &pkt),
+        Submission::Program(number, pkt) => cmd::shell::apply(s, number, &pkt),
     });
     let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {
         task::poll();
     }
     let polled = now();
-    // Once a turn, where a frame was drawn or a UI command applied: a second
-    // snapshot would point into the buffer the first one's event still names.
+    // Once a turn, where a frame was drawn, a UI command applied or a
+    // snapshot put off.
     let asked = core::mem::take(&mut s.asked);
-    if take_world_drawn() || asked {
+    if take_world_drawn() || asked || core::mem::take(&mut s.snapshot_owed) {
         post_shell(s);
         dispatch::run();
     }
     api::gpu_publish();
-    host::fall();
     let fall = edge::world_fall();
-    // What the completion ring had no room for is still in the submission ring.
-    let wake = if door().pending() { 0.0 } else { fall };
+    // What the completion ring had no room for is still in the submission
+    // ring, and a snapshot put off waits for the next turn.
+    let wake = if door().pending() || s.snapshot_owed {
+        0.0
+    } else {
+        fall
+    };
     let asked = match wake {
         0.0 => Wake::next,
         w if w < 0.0 => Wake::none,
@@ -212,8 +245,8 @@ pub fn run(
 }
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
-/// One is posted a turn, and the shell reads it on the event, before the next
-/// turn can rewrite it.
+/// It is rewritten only once the host's head has passed the event that named
+/// it (`State::snapshot_posted`); until then a snapshot that moved is put off.
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
@@ -224,8 +257,8 @@ fn post_shell(s: &mut State) {
         take_geolocation_command, GeolocationCommand,
     };
 
-    let start = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStartEvent { sensor });
-    let stop = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStopEvent { sensor });
+    let start = |sensor: Sensor| cmd::shell::sensor_start(&SensorStartEvent { sensor });
+    let stop = |sensor: Sensor| cmd::shell::sensor_stop(&SensorStopEvent { sensor });
     if let Some(c) = take_geolocation_command() {
         match c {
             GeolocationCommand::Start => start(Sensor::Geolocation),
@@ -238,7 +271,10 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
-    if let Some(shown) = s.last_snapshot.take_moved() {
+    if s.snapshot_posted.is_some_and(|p| !door().consumed(p)) {
+        // The memo is left as it was, so what moved is posted once the host lets go.
+        s.snapshot_owed = true;
+    } else if let Some(shown) = s.last_snapshot.take_moved() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = shell::ui_snapshot(&shown, buf) {
@@ -247,12 +283,10 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        door().raise_to(
-            port::SHELL,
-            &ShellSnapshotEvent {
-                at: off_of_slice(&raw const buf[..]) as u32,
-                len,
-            },
-        );
+        cmd::shell::shell_snapshot(&ShellSnapshotEvent {
+            at: off_of_slice(&raw const buf[..]) as u32,
+            len,
+        });
+        s.snapshot_posted = Some(door().posted());
     }
 }

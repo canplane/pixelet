@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # Builds and publishes the client and its Worker under `PXL_BUILD_NUMBER`
 # from CI. Without a number it publishes unnumbered (`#<last>-<id>`,
-# ts/app/web/vite.config.ts `buildNumber`).
+# ts/build/stamp.ts `stamp`).
 #
 # The deployment runs across the trees, so it is the repository's: the
-# page's bundle, built by the page (its `build` task) and copied beside the
+# page's bundle, built by the app (its `build:web` task, Expo's export) and copied beside the
 # Worker, where wrangler.jsonc `assets` serves it; the panics' path table,
 # kept in the bucket (r2.py); the Worker, published by wrangler; and the site
 # read back. Everything that can fail before the Worker goes out runs before
@@ -30,10 +30,10 @@ WRANGLER = ["wrangler"]
 
 REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
-WEB = REPO / "ts/app/web"
+APP = REPO / "ts/client"
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
-PATHS = REPO / "ts/app/web/src/guest.paths.json"
+PATHS = APP / "guest.paths.json"
 BUILT = EDGE / "dist/index.html"
 # The custom domain the Worker answers on (spec/spec/route.json `origins`).
 SITE = json.loads((REPO / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]
@@ -41,7 +41,7 @@ SITE = json.loads((REPO / "spec/spec/route.json").read_text())["origins"]["SITE"
 
 def loads(html):
     """What a page loads: its hashed scripts and styles, which name the build."""
-    return " ".join(sorted(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html)))
+    return " ".join(sorted(re.findall(r'(?:src|href)="(/_expo/static/[^"]+)"', html)))
 
 
 def live():
@@ -78,12 +78,12 @@ status = subprocess.run(["git", "status", "--porcelain"], cwd=EDGE, capture_outp
 if status.returncode == 0 and status.stdout.strip():
     print(f"[deploy] the tree is not clean, so the build id will say -dirty:\n{status.stdout.strip()}", flush=True)
 
-step("install", ["pnpm", "--dir", str(WEB), "install", "--frozen-lockfile"])
-step("build", ["pnpm", "--dir", str(WEB), "build"])
+step("install", ["pnpm", "--dir", str(APP), "install", "--frozen-lockfile"])
+step("build", ["pnpm", "--dir", str(APP), "build:web"])
 # A fresh copy every time, so what is checked or deployed is never a bundle
 # left from before.
 shutil.rmtree(EDGE / "dist", ignore_errors=True)
-shutil.copytree(WEB / "dist", EDGE / "dist")
+shutil.copytree(APP / "dist", EDGE / "dist")
 
 # The `#n` → path table for this build's panics, kept beside the build log,
 # never served. Before the publish: a table for a build that then failed to

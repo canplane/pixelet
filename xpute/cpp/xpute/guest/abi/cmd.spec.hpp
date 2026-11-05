@@ -2,13 +2,16 @@
 //
 // GENERATED from spec/abi/cmd.json
 //
-// xpute's own commands, by number (kit abi/cmd: `major << 8 | minor`), and the packet
-// each carries — an XTP branch whose children are its fields, in order. A command with
-// no fields carries no packet. The host sends them, port 0 (ipc/frame.json HOST); a
-// program numbers its own as it likes, and the sender tells the two apart.
-//
-// The direction is the ring: `pkt` is what the host submits, `event` what the guest
-// raises on the completion ring.
+// xpute's own protocol, the host's, on majors NOP, SYS and GPU: the guest's life as its host tells it.
+// NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME are the guest's
+// life as its host sees it: a host (re)attached, the guest about to be frozen, and woken;
+// what each means to keep or reset is the guest's. GPU_READY is the GPU grant's state:
+// the device the machine asked for answered. SYS_ABORT is the guest's end, the broken
+// invariant it reports as it stops, which the host hears as a VMM hears a guest's exit.
+// Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose
+// children are its fields, in order; one with no fields carries no packet. Files are a
+// device of their own (fs.json). Majors 0x00 to 0x0F are xpute's (ipc/frame.json); a
+// program numbers its own protocols' commands past them.
 
 #pragma once
 
@@ -30,42 +33,73 @@ namespace xpute::abi {
 enum class Major : std::uint32_t {
     NOP = 0x00,
     SYS = 0x01,
+    GPU = 0x02,
 };
 
 } // namespace xpute::abi
 
 template <> struct xpute::Members<xpute::abi::Major> {
-    static constexpr std::array<xpute::abi::Major, 2> ALL{xpute::abi::Major::NOP, xpute::abi::Major::SYS};
+    static constexpr std::array<xpute::abi::Major, 3> ALL{xpute::abi::Major::NOP, xpute::abi::Major::SYS, xpute::abi::Major::GPU};
 };
 
 namespace xpute::abi {
 
-// The hostcalls' answers (ipc/sys.json).
+// The guest's life as its host tells it, and its end.
 enum class SysMinor : std::uint32_t {
-    OPENED = 0x01,
+    ABORT = 0x06,
+    ATTACH = 0x07,
+    SUSPEND = 0x08,
+    RESUME = 0x09,
 };
 
 } // namespace xpute::abi
 
 template <> struct xpute::Members<xpute::abi::SysMinor> {
-    static constexpr std::array<xpute::abi::SysMinor, 1> ALL{xpute::abi::SysMinor::OPENED};
+    static constexpr std::array<xpute::abi::SysMinor, 4> ALL{xpute::abi::SysMinor::ABORT, xpute::abi::SysMinor::ATTACH, xpute::abi::SysMinor::SUSPEND, xpute::abi::SysMinor::RESUME};
 };
 
 namespace xpute::abi {
 
-// xpute's own commands.
+// The GPU grant's state.
+enum class GpuMinor : std::uint32_t {
+    READY = 0x01,
+};
+
+} // namespace xpute::abi
+
+template <> struct xpute::Members<xpute::abi::GpuMinor> {
+    static constexpr std::array<xpute::abi::GpuMinor, 1> ALL{xpute::abi::GpuMinor::READY};
+};
+
+namespace xpute::abi {
+
+// Every command, by the side that sends it.
 enum class Command : std::uint32_t {
+
+    // ---- host, export ----
     // Replies with its packet's value, or 0 where it has none — the rings' own test.
     NOP = 0x0000,
-    // An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
-    // Never sent for a descriptor already closed.
-    SYS_OPENED = 0x0101,
+    // A host has attached, the first or again after one before it went: the mount sends it
+    // once the front is laid. What the old host's requests leave behind is the guest's to let go.
+    SYS_ATTACH = 0x0107,
+    // The guest is about to be frozen, its turns stopped for as long as its host is hidden:
+    // its last sure moment to save. A call, rung at once.
+    SYS_SUSPEND = 0x0108,
+    // The guest woken from SYS_SUSPEND. A call, rung at once.
+    SYS_RESUME = 0x0109,
+    // The GPU the machine asked for answered, the first time or again after a loss, whose
+    // sign is in the stream's device block.
+    GPU_READY = 0x0201,
+
+    // ---- host, import ----
+    // The broken invariant the guest reports as it stops (xpute-kit status/bug.rs).
+    SYS_ABORT = 0x0106,
 };
 
 } // namespace xpute::abi
 
 template <> struct xpute::Members<xpute::abi::Command> {
-    static constexpr std::array<xpute::abi::Command, 2> ALL{xpute::abi::Command::NOP, xpute::abi::Command::SYS_OPENED};
+    static constexpr std::array<xpute::abi::Command, 6> ALL{xpute::abi::Command::NOP, xpute::abi::Command::SYS_ATTACH, xpute::abi::Command::SYS_SUSPEND, xpute::abi::Command::SYS_RESUME, xpute::abi::Command::GPU_READY, xpute::abi::Command::SYS_ABORT};
 };
 
 namespace xpute::abi {
@@ -93,47 +127,30 @@ struct Nop {
     }
 };
 
-// Command::SYS_OPENED's packet.
-struct SysOpened {
-    std::uint32_t fd{};
-    std::int32_t res{};
-    // Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on.
-    std::uint32_t detail{};
+// Command::SYS_ABORT's event.
+struct SysAbortEvent {
+    std::int32_t errnum{};
+    std::uint32_t line{};
+    std::uint32_t column{};
+    std::uint32_t a_low{};
+    std::uint32_t a_high{};
+    std::uint32_t b_low{};
+    std::uint32_t b_high{};
+    std::string_view file{};
 
-    static Result<SysOpened> read(std::span<const std::uint8_t> pkt) noexcept {
-        Result<xtp::TreeReader> t = xtp::TreeReader::make(pkt);
-        if (!t) return t.error();
-        Result<xtp::BranchCursor> f = t->read_branch();
-        if (!f) return f.error();
-        SysOpened out;
-        {
-            Result<xtp::Cursor> c = f->at(0);
-            if (!c) return c.error();
-            auto v = c->get_number();
-            if (!v) return v.error();
-            auto n = integer<std::uint32_t>(*v);
-            if (!n) return n.error();
-            out.fd = *n;
-        }
-        {
-            Result<xtp::Cursor> c = f->at(1);
-            if (!c) return c.error();
-            auto v = c->get_number();
-            if (!v) return v.error();
-            auto n = integer<std::int32_t>(*v);
-            if (!n) return n.error();
-            out.res = *n;
-        }
-        {
-            Result<xtp::Cursor> c = f->at(2);
-            if (!c) return c.error();
-            auto v = c->get_number();
-            if (!v) return v.error();
-            auto n = integer<std::uint32_t>(*v);
-            if (!n) return n.error();
-            out.detail = *n;
-        }
-        return out;
+    // Its number, and the children it is written as.
+    static constexpr std::uint32_t NUMBER = 262;
+    static constexpr std::uint32_t FIELDS = 8;
+
+    void write(xtp::PacketWriter &w) const noexcept {
+        w.i32(errnum);
+        w.u32(line);
+        w.u32(column);
+        w.u32(a_low);
+        w.u32(a_high);
+        w.u32(b_low);
+        w.u32(b_high);
+        w.str(file);
     }
 };
 

@@ -23,8 +23,8 @@ pub const MAX_CREDITS: u32 = 16;
 
 /// Most files written in one turn by number (sys/io/file.rs `write`), an
 /// edit batch of the objects' each (domain/layer/object/repository.rs); one
-/// past them waits for a later turn. Counted in the host stream's reserve
-/// (sys/io/host.rs `RESERVE`).
+/// past them waits for a later turn. Counted in the files' frames a turn
+/// (sys/io/host.rs `FILE_FRAMES`).
 pub const WRITES_A_TURN: u32 = 8;
 
 // ---- bodies ----

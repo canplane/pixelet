@@ -2,8 +2,8 @@
 
 /**
  * Deployment values that ship as data. `__IS_DEV__` and friends stay bare
- * globals at call sites, so the branch visibly drops from the bundle. It is
- * `VITE_APP_ENV`, not `import.meta.env.DEV`.
+ * globals at call sites, written in as values by the app's build
+ * (ts/client/babel.config.ts), so the branch visibly drops from the bundle.
  */
 
 import {

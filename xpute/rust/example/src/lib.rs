@@ -1,41 +1,51 @@
 // xpute-example/lib.rs
 
 //! The smallest guest, read beside the host that drives it
-//! (ts/example/sum.test.ts). It answers `SUM` with the sum of its two numbers
-//! and one the host holds, which it asks for by a hostcall answered now, and
-//! raises `SUMMED` as it does; and `COUNT` with a task that reads a file whole
-//! and raises `COUNTED` with its size a few turns later. Its commands are its
-//! table's (spec/example/cmd.json), generated for both ends.
+//! (ts/example/sum.test.ts). Its machine (machine.json) declares its memory
+//! and its rings, which the host lays out as the machine places them; its one
+//! protocol (asker.json) has the host send SUM and the guest call ASK, and
+//! both ends' code is generated from it. It answers SUM with the sum of its two numbers and
+//! the host's answer to ASK, answered before the call returns.
 
 #![cfg(target_arch = "wasm32")]
 
-#[path = "cmd.spec.rs"]
-mod cmd;
+#[path = "asker.spec.rs"]
+mod abi;
+#[path = "../machine.spec.rs"]
+mod machine;
 
-use cmd::{Command, Count, CountedEvent, Hostcall, Root, Sum, SummedEvent};
-use xpute_guest::program::{raise, read, Turn};
-use xpute_kit::status::errno::Errno;
+use abi::asker;
+use xpute_guest::entry::BootInfo;
+use xpute_guest::ipc::door::{Outcome, Submission};
+use xpute_guest::sched::wake::NO_WAKE;
+use xpute_kit::status::error::MarshalError;
 
-xpute_guest::program! {
-    on Command::SUM => sum,
-    on Command::COUNT => count,
+// No fixed ranges: the heap starts on the page past the data.
+xpute_guest::guest!(machine::MACHINE, 0, entry);
+
+struct Example;
+
+impl asker::Exports for Example {
+    fn sum(&mut self, c: abi::Sum) -> Outcome {
+        let answer = asker::ask().map_err(MarshalError::new)?;
+        Ok(Some((c.a + c.b) as i32 + answer as i32))
+    }
 }
 
-fn sum(cx: &mut Turn<'_>, p: Sum) -> Result<i32, Errno> {
-    let total = p.a + p.b;
-    cx.raise(&SummedEvent { total });
-    let held = cx.call_now(Hostcall::ASK as u32, &[])?;
-    Ok((total + held) as i32)
-}
-
-fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
-    let path = String::from(p.path);
-    cx.spawn(async move {
-        let res = match read(Root::FILES as u32, &path).await {
-            Ok(bytes) => bytes.len() as i32,
-            Err(e) => e as i32,
-        };
-        raise(&CountedEvent { res });
-    })?;
-    Ok(0)
+/// A turn: what waits applied in order, then the next asked for while any is left.
+fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
+    let door = xpute_guest::machine::door();
+    door.rise();
+    door.receive(|submission| match submission {
+        // It keeps nothing across its life, and draws nothing.
+        Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
+        // It opens no file.
+        Submission::Opened(_) => Ok(None),
+        Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
+    });
+    if door.pending() {
+        0.0
+    } else {
+        NO_WAKE
+    }
 }

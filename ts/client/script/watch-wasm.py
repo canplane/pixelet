@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# Builds the guest's module again (build-wasm.py) on each change under rust/
+# outside a target/, one build at a time: a change during a build queues one
+# more. It says when public/guest.wasm was replaced; Metro does not watch
+# public/, so the page is reloaded by hand. `make dev` runs it beside the dev
+# server, which builds the module once at its start.
+#
+#   ./script/watch-wasm.py [--interval SECONDS]
+
+import argparse
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+APP = Path(__file__).resolve().parent.parent
+BUILD = APP / "script/build-wasm.py"
+OUT = APP / "public/guest.wasm"
+RUST = APP.parent.parent / "rust"
+
+
+def tree():
+    """Each file under rust/ but a target/, by its path, with its time and size."""
+    seen = {}
+    stack = [RUST]
+    while stack:
+        try:
+            entries = os.scandir(stack.pop())
+        except OSError:
+            continue
+        with entries:
+            for e in entries:
+                try:
+                    if e.is_dir(follow_symlinks=False):
+                        if e.name != "target":
+                            stack.append(e.path)
+                    else:
+                        st = e.stat(follow_symlinks=False)
+                        seen[e.path] = (st.st_mtime_ns, st.st_size)
+                except OSError:
+                    continue
+    return seen
+
+
+def mtime(path):
+    return path.stat().st_mtime_ns if path.is_file() else None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Rebuild the guest's module on each change under rust/.")
+    parser.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tree (0.5)")
+    args = parser.parse_args()
+
+    print(f"[watch-wasm] watching {RUST}", flush=True)
+    last = tree()
+    while True:
+        time.sleep(args.interval)
+        now = tree()
+        if now == last:
+            continue
+        # What a build starts from; a change while it runs differs from this
+        # and starts one more build after it.
+        last = now
+        before = mtime(OUT)
+        status = subprocess.run([sys.executable, str(BUILD)], cwd=APP).returncode
+        if status != 0:
+            print(f"[watch-wasm] build failed ({status}); the page keeps the module it has", file=sys.stderr, flush=True)
+        elif mtime(OUT) != before:
+            print("[watch-wasm] public/guest.wasm rebuilt: reload the page", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

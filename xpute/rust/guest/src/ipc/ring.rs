@@ -3,9 +3,32 @@
 //! A ring of frames, laid out by spec/ipc/ring.json. A push fails only
 //! when full (EAGAIN) or when the packet exceeds a slot (EMSGSIZE), never
 //! depending on what was sent before.
+//!
+//! A ring's two sides may take turns on one thread, as a page's host and its
+//! module do, or run at once on two, as a native host and a guest on its own
+//! thread do. The same rules, io_uring's, hold either way:
+//!
+//! - R1. Each position word has one writer: TAIL is the producer's and HEAD
+//!   the consumer's.
+//! - R2. A position word is stored with release and loaded with acquire. The
+//!   producer writes a frame and its slot, then stores TAIL past them; the
+//!   consumer loads TAIL before it reads them, and stores HEAD past a frame
+//!   once it is done with the frame and its slot; the producer loads HEAD
+//!   before it writes into that frame or slot again.
+//! - R3. Memory a frame names by its address is the receiver's from the
+//!   moment the frame is published until the receiver stores HEAD past it.
+//!   The sender writes it again only once it has loaded a HEAD past that
+//!   frame (`consumed`).
+//!
+//! The frames' and slots' own words are plain memory, ordered by the
+//! position words alone. Where a target has no threads, as WebAssembly
+//! without its atomics feature, the atomic accesses are its plain loads and
+//! stores.
 
 #[path = "ring.spec.rs"]
 mod spec;
+
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -28,13 +51,6 @@ fn padded(bytes: usize) -> usize {
     bytes.next_multiple_of(WORD_SZ as usize)
 }
 
-/// In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
-fn pkt_bytes(u8: &[u8], at: usize) -> u64 {
-    let word = at + WORD_SZ as usize;
-    let payload = u32::from_le_bytes([u8[word], u8[word + 1], u8[word + 2], u8[word + 3]]);
-    (u64::from(HDR_SZ) + u64::from(payload)).next_multiple_of(u64::from(WORD_SZ))
-}
-
 #[derive(Clone)]
 pub struct Ring {
     mem: Memory,
@@ -50,6 +66,9 @@ impl Ring {
     /// The ring's words at `at` and its slots in `mem` must stay valid, and
     /// never move, for as long as the ring is used.
     pub unsafe fn new(mem: Memory, at: usize) -> Ring {
+        if !mem.at::<u32>(at).is_aligned() {
+            xpute_kit::bug!(EINVAL, at);
+        }
         let header = |word: u32| mem.word(at + 4 * word as usize);
         let cap = header(CAP);
         if !cap.is_power_of_two() {
@@ -70,25 +89,35 @@ impl Ring {
         self.at
     }
 
-    #[allow(clippy::mut_from_ref)]
-    fn words(&self) -> &mut [u32] {
-        // SAFETY: the memory outlives the ring, and each side writes only its
-        // own words.
-        unsafe {
-            core::slice::from_raw_parts_mut(
-                self.mem.at::<u32>(self.at),
-                ring_bytes(self.cap) as usize / 4,
-            )
-        }
+    /// A position word (HEAD, TAIL), only ever touched as an atomic (R2).
+    fn pos(&self, word: u32) -> &AtomicU32 {
+        // SAFETY: a word of the ring `new` was given, aligned as `new` checked,
+        // which neither side reads or writes but atomically.
+        unsafe { AtomicU32::from_ptr(self.mem.at::<u32>(self.at + 4 * word as usize)) }
     }
 
+    /// The frame's word `word` from the ring's start: the writer's until the
+    /// producer publishes it, the reader's after.
+    fn frame_word(&self, word: usize) -> u32 {
+        // SAFETY: inside the ring `new` was given, aligned as its start is.
+        unsafe { self.mem.at::<u32>(self.at + 4 * word).read() }
+    }
+
+    fn set_frame_word(&self, word: usize, w: u32) {
+        // SAFETY: as `frame_word`.
+        unsafe { self.mem.at::<u32>(self.at + 4 * word).write(w) }
+    }
+
+    /// The slot at `start` from the slots' base, alone: the other side may
+    /// be reading or writing another slot meanwhile.
     #[allow(clippy::mut_from_ref)]
-    fn slots(&self) -> &mut [u8] {
-        // SAFETY: as `words`.
+    fn slot(&self, start: usize) -> &mut [u8] {
+        // SAFETY: a slot of the memory `new` was given, which R2 hands to one
+        // side at a time.
         unsafe {
             core::slice::from_raw_parts_mut(
-                self.mem.at::<u8>(self.slot_base as usize),
-                slots_bytes(self.cap, self.slot_bytes) as usize,
+                self.mem.at::<u8>(self.slot_base as usize + start),
+                self.slot_bytes as usize,
             )
         }
     }
@@ -113,12 +142,40 @@ impl Ring {
         }
     }
 
+    /// The first of the fixed words of the ring header at `at` that is not
+    /// what `cap`, `slot_base` and `slot_bytes` say: where it is in the memory
+    /// and what it holds. None where all are. Its positions are not held to
+    /// anything, since a host may have pushed before the guest looks.
+    pub fn header_differs(
+        mem: Memory,
+        at: usize,
+        cap: u32,
+        slot_base: u32,
+        slot_bytes: u32,
+    ) -> Option<(u32, u32)> {
+        [(CAP, cap), (SLOT_BYTES, slot_bytes), (SLOT_BASE, slot_base)]
+            .into_iter()
+            .find_map(|(word, w)| {
+                let off = at + 4 * word as usize;
+                let found = mem.word(off);
+                (found != w).then_some((off as u32, found))
+            })
+    }
+
     pub fn head(&self) -> u32 {
-        self.words()[HEAD as usize]
+        self.pos(HEAD).load(Ordering::Acquire)
     }
 
     pub fn tail(&self) -> u32 {
-        self.words()[TAIL as usize]
+        self.pos(TAIL).load(Ordering::Acquire)
+    }
+
+    /// Whether the consumer has stored its head past the frame published at
+    /// `pos`: what that frame named is the producer's again (R3). The
+    /// producer's to ask.
+    pub fn consumed(&self, pos: u32) -> bool {
+        let tail = self.tail();
+        tail.wrapping_sub(self.head()) < tail.wrapping_sub(pos)
     }
 
     pub fn len(&self) -> u32 {
@@ -149,7 +206,7 @@ impl Ring {
                     return Errno::EMSGSIZE;
                 }
                 let start = self.slot_at(self.tail());
-                self.slots()[start..start + pkt.len()].copy_from_slice(pkt);
+                self.slot(start)[..pkt.len()].copy_from_slice(pkt);
                 self.pad(start, pkt.len());
                 self.slot_base + start as u32
             }
@@ -168,32 +225,77 @@ impl Ring {
         result: i32,
         write: impl FnOnce(&mut [u8]) -> Option<u32>,
     ) -> Errno {
+        match self.lay(tag, cmd, flags, result, write) {
+            Ok(_) => {
+                self.advance_tail();
+                Errno::OK
+            }
+            Err(e) => e,
+        }
+    }
+
+    /// `push_in_place`'s frame laid at the tail and not published: where its
+    /// words begin in the memory. The next push takes its place.
+    pub fn stage_in_place(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) -> Result<usize, Errno> {
+        let at = self.lay(tag, cmd, flags, 0, write)?;
+        Ok(self.at + 4 * at)
+    }
+
+    /// Drops every frame not yet read: the writer's, before its reader reads.
+    pub fn clear(&self) {
+        self.pos(TAIL).store(self.head(), Ordering::Release);
+    }
+
+    /// The frame at the tail, its packet written by `write`: the word where
+    /// it begins, from the ring's start.
+    fn lay(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) -> Result<usize, Errno> {
         if self.len() >= self.cap {
-            return Errno::EAGAIN;
+            return Err(Errno::EAGAIN);
         }
         let start = self.slot_at(self.tail());
-        let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize])
-            .filter(|&n| n <= self.slot_bytes)
-        else {
-            return Errno::EMSGSIZE;
+        let Some(n) = write(self.slot(start)).filter(|&n| n <= self.slot_bytes) else {
+            return Err(Errno::EMSGSIZE);
         };
         self.pad(start, n as usize);
-        self.publish(tag, cmd, flags, result, self.slot_base + start as u32);
-        Errno::OK
+        Ok(self.entry(tag, cmd, flags, result, self.slot_base + start as u32))
     }
 
     fn pad(&self, start: usize, len: usize) {
-        self.slots()[start + len..start + padded(len)].fill(0);
+        self.slot(start)[len..padded(len)].fill(0);
     }
 
     fn publish(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) {
-        let w = self.words();
-        let at = self.entry_at(w[TAIL as usize]) as usize;
-        w[at + frame::TAG as usize] = tag;
-        w[at + frame::CMD as usize] = cmd_word(cmd, flags);
-        w[at + frame::RESULT as usize] = result as u32;
-        w[at + frame::PKT as usize] = pkt_at;
-        w[TAIL as usize] = w[TAIL as usize].wrapping_add(1);
+        self.entry(tag, cmd, flags, result, pkt_at);
+        self.advance_tail();
+    }
+
+    /// The frame's words at the tail's entry, unpublished: where they begin.
+    fn entry(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) -> usize {
+        let at = self.entry_at(self.tail()) as usize;
+        self.set_frame_word(at + frame::TAG as usize, tag);
+        self.set_frame_word(at + frame::CMD as usize, cmd_word(cmd, flags));
+        self.set_frame_word(at + frame::RESULT as usize, result as u32);
+        self.set_frame_word(at + frame::PKT as usize, pkt_at);
+        at
+    }
+
+    /// The frame at the tail published, its words and slot written before (R2).
+    fn advance_tail(&self) {
+        self.pos(TAIL)
+            .store(self.tail().wrapping_add(1), Ordering::Release);
     }
 
     /// The head's frame, none when empty. Read it, then `advance`.
@@ -201,15 +303,14 @@ impl Ring {
         if self.is_empty() {
             return None;
         }
-        let w = self.words();
         let at = self.entry_at(self.head()) as usize;
-        let word = w[at + frame::CMD as usize];
+        let word = self.frame_word(at + frame::CMD as usize);
         Some(Frame {
-            tag: w[at + frame::TAG as usize],
+            tag: self.frame_word(at + frame::TAG as usize),
             cmd: cmd_of(word),
             flags: flags_of(word),
-            result: w[at + frame::RESULT as usize] as i32,
-            pkt_at: w[at + frame::PKT as usize],
+            result: self.frame_word(at + frame::RESULT as usize) as i32,
+            pkt_at: self.frame_word(at + frame::PKT as usize),
         })
     }
 
@@ -223,11 +324,15 @@ impl Ring {
         let bad = || MarshalError::new(Errno::EBADMSG);
         let off = f.pkt_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
         if !off.is_multiple_of(self.slot_bytes as usize)
-            || off + HDR_SZ as usize > self.slots().len()
+            || off + HDR_SZ as usize > slots_bytes(self.cap, self.slot_bytes) as usize
         {
             return Err(bad());
         }
-        let bytes = pkt_bytes(self.slots(), off);
+        // In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
+        let payload = self
+            .mem
+            .word(self.slot_base as usize + off + WORD_SZ as usize);
+        let bytes = (u64::from(HDR_SZ) + u64::from(payload)).next_multiple_of(u64::from(WORD_SZ));
         if bytes > u64::from(self.slot_bytes) {
             return Err(bad());
         }
@@ -238,11 +343,13 @@ impl Ring {
         }))
     }
 
+    /// The head's frame, and its slot, let go (R2).
     pub fn advance(&self) {
         if self.is_empty() {
             xpute_kit::bug!(ENOTRECOVERABLE);
         }
-        self.words()[HEAD as usize] = self.head().wrapping_add(1);
+        self.pos(HEAD)
+            .store(self.head().wrapping_add(1), Ordering::Release);
     }
 }
 

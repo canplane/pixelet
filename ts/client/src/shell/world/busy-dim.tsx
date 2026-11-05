@@ -7,7 +7,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { Dim } from "@/shell/ui/motion/dim.ts";
 import { DIM } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
-import { bracket } from "@/bracket.tsx";
+import * as device from "@/services/device.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /**
@@ -22,7 +22,7 @@ export function BusyDim({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const busy = useKernel((s) => s.camera_busy) && !bracket.device.handheld;
+  const busy = useKernel((s) => s.camera_busy) && !device.handheld;
   return (
     <Dim.Provider value={busy ? 0.4 : 1}>
       <Motion

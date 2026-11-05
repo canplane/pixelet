@@ -18,7 +18,7 @@ fn check_packed(f: &Field) -> Result<(), String> {
     }
 }
 
-fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
+pub(super) fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let one = match spec.kind(&f.ty)? {
         Kind::Number => f.ty.clone(),
         Kind::Bool => "boolean".to_string(),
@@ -129,64 +129,6 @@ impl TsUses {
     }
 }
 
-/// A field's type where a record is read by place, as a tuple.
-fn ts_type_tuple(spec: &Spec, f: &Field) -> Result<String, String> {
-    if spec.kind(&f.ty)? != Kind::Record {
-        return ts_type(spec, f);
-    }
-    let one = format!("{}Tuple", f.ty);
-    Ok(if f.list {
-        format!("{one}[]")
-    } else if f.optional {
-        format!("{one} | null")
-    } else {
-        one
-    })
-}
-
-/// A field read by place: a record as its tuple, so no field's name is a key.
-fn ts_read_tuple(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
-    if spec.kind(&f.ty)? != Kind::Record {
-        return ts_read(spec, f, i);
-    }
-    let read = format!("read_{}_tuple", snake(&f.ty));
-    Ok(if f.list {
-        format!("list(b.at_branch({i}), {read})")
-    } else if f.optional {
-        format!("optional(b.at({i}), {read})")
-    } else {
-        format!("{read}(b.at_branch({i}))")
-    })
-}
-
-/// Fields as a tuple's labeled elements.
-fn ts_tuple(spec: &Spec, fields: &[Field]) -> Result<String, String> {
-    let items = fields
-        .iter()
-        .map(|f| Ok(format!("{}: {}", f.name, ts_type_tuple(spec, f)?)))
-        .collect::<Result<Vec<_>, String>>()?;
-    Ok(format!("[{}]", items.join(", ")))
-}
-
-/// A reader by place: the fields in order, as the tuple `ty`.
-fn ts_tuple_reader(
-    spec: &Spec,
-    name: &str,
-    ty: &str,
-    fields: &[Field],
-) -> Result<Vec<String>, String> {
-    let reads = fields
-        .iter()
-        .enumerate()
-        .map(|(i, f)| ts_read_tuple(spec, f, i))
-        .collect::<Result<Vec<_>, String>>()?;
-    Ok(vec![
-        format!("export function read_{name}_tuple(b: BranchCursor): {ty} {{"),
-        format!("  return [{}];", reads.join(", ")),
-        "}".to_string(),
-    ])
-}
-
 fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<String>, String> {
     let reads = fields
         .iter()
@@ -194,7 +136,10 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
         .map(|(i, f)| Ok(format!("{}: {}", f.name, ts_read(spec, f, i)?)))
         .collect::<Result<Vec<_>, String>>()?;
     Ok(vec![
-        format!("export function read_{name}(b: BranchCursor): {ty} {{"),
+        format!(
+            "export function read_{name}({}: BranchCursor): {ty} {{",
+            if fields.is_empty() { "_b" } else { "b" }
+        ),
         format!("  return {{ {} }};", reads.join(", ")),
         "}".to_string(),
     ])
@@ -231,20 +176,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         tail.extend(uses.field_lines(spec, &r.fields)?);
         tail.extend(["}".to_string(), String::new()]);
         tail.extend(ts_reader(spec, &snake(&r.name), &r.name, &r.fields)?);
-        if t.port.is_some() {
-            tail.extend([
-                String::new(),
-                format!("/** {} by place. */", r.name),
-                format!(
-                    "export type {}Tuple = {};",
-                    r.name,
-                    ts_tuple(spec, &r.fields)?
-                ),
-                String::new(),
-            ]);
-            let ty = format!("{}Tuple", r.name);
-            tail.extend(ts_tuple_reader(spec, &snake(&r.name), &ty, &r.fields)?);
-        }
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
@@ -299,40 +230,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 &format!("{name}Event"),
                 event,
             )?);
-            if t.port.is_some() {
-                tail.push(String::new());
-                let ty = ts_tuple(spec, event)?;
-                tail.extend(ts_tuple_reader(spec, &c.name.to_lowercase(), &ty, event)?);
-            }
-        }
-        // What a port sends or hears it as: its number and its fields by
-        // place, so a bundle keeps no field's name.
-        if t.port.is_some() {
-            let lower = c.name.to_lowercase();
-            let mut types: Vec<String> = Vec::new();
-            let mut props = vec![format!("number: Command.{}", c.name)];
-            match &c.pkt {
-                Some(pkt) => {
-                    types.push(format!("port.Command<{}>", ts_tuple(spec, pkt)?));
-                    props.push(format!("write: encode_{lower}"));
-                }
-                None if c.event.is_none() => types.push("port.Command<[]>".to_string()),
-                None => {}
-            }
-            if let Some(event) = &c.event {
-                types.push(format!("port.Event<{}>", ts_tuple(spec, event)?));
-                props.push(format!("read: read_{lower}_tuple"));
-            }
-            tail.extend([
-                String::new(),
-                format!("/** Command.{}, as a port sends it or hears it. */", c.name),
-                format!(
-                    "export const {}: {} = {{ {} }};",
-                    c.name,
-                    types.join(" & "),
-                    props.join(", ")
-                ),
-            ]);
         }
     }
     uses.arrays.sort();
@@ -379,12 +276,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 "import type {{ {} }} from \"@xpute/kit/{from}\";",
                 names.join(", ")
             ));
-        }
-    }
-    // The port's types read through its module, beside the table's own `Command`.
-    if let Some(port) = t.port {
-        if reads(&tail, "port.Command<") || reads(&tail, "port.Event<") {
-            out.push(format!("import type * as port from \"{port}\";"));
         }
     }
     // A packed list is written by its sequence type, a value rather than a type.

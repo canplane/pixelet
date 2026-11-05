@@ -20,7 +20,7 @@ import {
 } from "@/shell/catalog/asset/mod.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
 import { OBJECT_SCALES } from "@/shell/world/object.spec.ts";
-import { bracket } from "@/bracket.tsx";
+import * as storage from "@/services/storage.ts";
 import * as DockMode from "./mode.ts";
 import * as edit from "@/port/edit.ts";
 import * as scene from "@/port/scene.ts";
@@ -96,7 +96,7 @@ interface Stored {
 function load(): Stored {
   let stored: Partial<Stored> | null = null;
   try {
-    stored = JSON.parse(bracket.storage.get(STORAGE_KEY) ?? "null");
+    stored = JSON.parse(storage.get(STORAGE_KEY) ?? "null");
   } catch {
     /* nothing stored that reads */
   }
@@ -114,7 +114,7 @@ function load(): Stored {
 }
 
 function save(s: DockState): void {
-  bracket.storage.set(
+  storage.set(
     STORAGE_KEY,
     JSON.stringify({ hotbar: s.recentPicks } satisfies Stored),
   );

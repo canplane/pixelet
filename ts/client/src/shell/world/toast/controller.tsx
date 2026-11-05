@@ -110,7 +110,7 @@ function world(
     : null;
 }
 
-/** Each toast is derived from what the kernel and the drivers say now; an error is one toast a source. */
+/** Each toast is derived from what the kernel and the client say now; an error is one toast a source. */
 export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
   const locationError = useKernel((s) => s.location.err);

@@ -124,7 +124,7 @@ if fmt_rust:
 cargo("lint-")
 if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in touched:
     task("check-spec")
-if under("ts/client/") or under("ts/app/web/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-wasm" in touched:
+if under("ts/client/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-kernel" in touched:
     task("check-build")
 # Each formatted file under ts/, by its config; what lies outside the trees is not formatted.
 formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)$", path)]
@@ -138,7 +138,7 @@ if xpute:
 
 # The tests of what the same selection reached.
 # The web app's test compiles the generated shaders with Tint.
-if under("ts/client/") or under("ts/app/web/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
+if under("ts/client/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
     task("test-ts")
 if xpute:
     task("test-xpute")

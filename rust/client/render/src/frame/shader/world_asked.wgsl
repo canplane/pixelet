@@ -2,7 +2,7 @@
 
 // The world's one query asked word for word, its asks and what is told in words of their
 // own (tests/world.rs). In no shader the page runs: what build.rs `world_asked` assembles
-// for that test and for Tint (ts/app/web/src/shader.test.ts).
+// for that test and for Tint (ts/tool/shader/shader.test.ts).
 
 @group(0) @binding(12) var<storage, read> asked: array<u32>;
 @group(0) @binding(13) var<storage, read_write> told: array<u32>;

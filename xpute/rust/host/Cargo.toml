@@ -20,6 +20,13 @@ xpute-kit.workspace = true
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# What an Android app reaches a native guest through (src/jni.rs), and the
+# log a stop is told to (src/native/say.rs): the NDK's own headers, JNI and
+# the log, as bindings and nothing over them.
+[target.'cfg(target_os = "android")'.dependencies]
+jni-sys = "0.3"
+ndk-sys = "0.6"
+
 # Each its own process, since a process boots one guest and sets one base
 # (xpute_guest::mem): the boot and the guest's thread, and the
 # allocator installed as a test binary's own.

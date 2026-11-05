@@ -1,7 +1,8 @@
 // xpute-conformance/guest.rs
 
 //! The Rust conformance guest, exporting the C++ guest's two calls so one
-//! host drives both; `boot` takes a layout's seed and answers the toc's
+//! host drives both; `boot` takes a layout's seed, lays the front there and
+//! writes its header, as a host does for a machine, and answers the header's
 //! offset. Natively the host hands it a region, a clock and its hostcall; as
 //! wasm it imports all three, its range starts past the linker's data, and its
 //! turn is the module's `run`.
@@ -10,20 +11,18 @@
 use core::cell::Cell;
 
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::door::{Door, Outcome, Submission};
+use xpute_guest::ipc::door::{Door, Event, Outcome, Submission};
 use xpute_guest::ipc::file::Files;
-use xpute_guest::ipc::frame;
+use xpute_guest::ipc::head::{self, Head};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
-use xpute_guest::ipc::sys::Sys;
-use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc};
 use xpute_guest::mem::Memory;
 use xpute_guest::sched::wake::NO_WAKE;
 use xpute_kit::math::rng::SplitMix32;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::TreeReader;
+use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
 use crate::spec;
 
@@ -35,23 +34,21 @@ const fn page_up(bytes: u32) -> u32 {
 
 // What the guest shares with its host, each on pages of its own, in the order
 // a layout draws (`layout`).
-const TOC: usize = 0;
+const HEAD: usize = 0;
 const SQ_DESC: usize = 1;
 const CQ_DESC: usize = 2;
 const SQ_SLOT: usize = 3;
 const CQ_SLOT: usize = 4;
 const STREAM: usize = 5;
-const SYS: usize = 6;
-const PARTS: usize = 7;
+const PARTS: usize = 6;
 
 const PART_BYTES: [u32; PARTS] = [
-    toc_words(4) as u32 * 4,
+    head::spec::WORDS * 4,
     ring_bytes(spec::SQ_CAP),
     ring_bytes(spec::CQ_CAP),
     slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES),
     slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES),
     spec::STREAM_WORDS * 4,
-    spec::SYS_WORDS * 4,
 ];
 
 /// The most a layout spans: the page it starts past, every part, and the most
@@ -101,14 +98,28 @@ struct Guest {
 
 struct State {
     stream: Stream,
-    sys: Sys,
     files: Files<u32, { spec::HANDLES as usize }>,
     handles: Table<(), { spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
-    /// What HOSTCALL's host writes.
+    /// What the host writes as it answers CALL's INC.
     word: u32,
+}
+
+/// What CALL calls: a number and an offset.
+struct Inc {
+    n: u32,
+    at: u32,
+}
+
+impl Event for Inc {
+    const NUMBER: u32 = spec::cmd::INC;
+    const FIELDS: u32 = 2;
+    fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.n));
+        w.u32(Some(self.at));
+    }
 }
 
 /// Where each part lies under `seed`, from the range's start: the parts in the
@@ -138,7 +149,7 @@ fn layout(seed: u32) -> [u32; PARTS] {
 unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     let at = layout(seed).map(|off| range + off);
     // SAFETY: the caller's memory; the ranges are the layout's.
-    let (sq, cq, stream, sys) = unsafe {
+    let (sq, cq, stream) = unsafe {
         (
             Ring::init(
                 mem,
@@ -154,30 +165,30 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
                 at[CQ_SLOT],
                 spec::SLOT_BYTES,
             ),
-            Stream::new(mem, at[STREAM] as usize, spec::STREAM_WORDS as usize, 1),
-            Sys::new(mem, at[SYS] as usize, spec::SYS_WORDS as usize),
+            Stream::new(
+                mem,
+                at[STREAM] as usize,
+                spec::STREAM_WORDS as usize,
+                Stream::OWN_WORDS,
+            ),
         )
     };
     let door = Door::new(sq, cq, spec::MOST_RAISE);
-    // SAFETY: as above.
-    unsafe {
-        write_toc(
-            mem,
-            at[TOC] as usize,
-            toc_words(4),
-            &[
-                (key::SQ, at[SQ_DESC]),
-                (key::CQ, at[CQ_DESC]),
-                (spec::key::STREAM, at[STREAM]),
-                (key::SYS, at[SYS]),
-            ],
-        )
+    // The stream lies where a GPU stream would: the host runs it after every turn.
+    let front = Head {
+        sq_cap: spec::SQ_CAP,
+        cq_cap: spec::CQ_CAP,
+        slot_bytes: spec::SLOT_BYTES,
+        sq_at: at[SQ_DESC],
+        cq_at: at[CQ_DESC],
+        gpu_at: at[STREAM],
     };
+    // SAFETY: as above.
+    unsafe { head::write(mem, at[HEAD] as usize, &front) };
     let guest = Guest {
         door,
         state: State {
             stream,
-            sys,
             files: Files::new(),
             handles: Table::new(),
             now,
@@ -188,7 +199,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
     unsafe { mem.at::<Guest>((range + STATE_AT) as usize).write(guest) };
-    at[TOC]
+    at[HEAD]
 }
 
 /// # Safety
@@ -196,23 +207,19 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
 unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
-    state.sys.rise();
-    door.drain(|submission| match submission {
+    door.rise();
+    door.receive(|submission| match submission {
+        // It keeps nothing across its life, and draws nothing.
+        Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
         Submission::Opened(opened) => {
-            if let Some(owner) = state.files.complete_open(&mut state.sys, &opened) {
-                door.post(
-                    frame::tag_of(spec::SENDER, owner),
-                    spec::cmd::OPENED,
-                    0,
-                    opened.res,
-                );
+            if let Some(owner) = state.files.complete_open(door, &opened) {
+                door.post(owner, spec::cmd::OPENED, 0, opened.res);
             }
             Ok(Some(0))
         }
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
     });
     state.stream.publish();
-    state.sys.fall();
     if door.pending() {
         0.0
     } else {
@@ -305,7 +312,6 @@ mod wasm {
 fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
     let State {
         stream,
-        sys,
         files,
         handles,
         now,
@@ -322,7 +328,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(frame::tag_of(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
+                door.post(k, spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }
@@ -348,18 +354,17 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             Ok(Some(0))
         }
         spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
-        spec::cmd::OPEN => Ok(Some(files.open(sys, 1, "f", arg(pkt)?) as i32)),
+        spec::cmd::OPEN => Ok(Some(files.open(door, 1, "f", arg(pkt)?) as i32)),
         spec::cmd::CLOSE => files
-            .close(sys, arg(pkt)?)
+            .close(door, arg(pkt)?)
             .map(|_| Some(0))
             .ok_or_else(bad_handle),
-        spec::cmd::HOSTCALL => {
+        spec::cmd::CALL => {
             let n = arg(pkt)?;
             *word = 0;
             let at = mem.off_of(&raw const *word) as u32;
-            sys.call_now(spec::hostcall::ANSWER, &[n, at], &[])
-                .map_err(MarshalError::new)?;
-            // SAFETY: the word the host wrote before the hostcall returned.
+            door.call(&Inc { n, at }).map_err(MarshalError::new)?;
+            // SAFETY: the word the host wrote before the call returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
         }
         _ => Ok(None),

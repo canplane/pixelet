@@ -9,13 +9,16 @@
 namespace xpute {
 
 Stream::Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head) noexcept : mem_(mem), at_(at), words_(words), head_(head) {
-    ensure(head > END && head < words, Errno::einval, head, words);
-    mem_.set_word(at_ + WORD * END, 0);
+    ensure(head >= OWN_WORDS && head < words, Errno::einval, head, words);
+    ensure(reinterpret_cast<std::uintptr_t>(mem_.at(at_)) % std::atomic_ref<std::uint32_t>::required_alignment == 0, Errno::einval, at_);
+    end().store(0, std::memory_order_release);
+    mem_.set_word(at_ + WORD * HEAD, head);
 }
 
 std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n, std::source_location from) noexcept {
     std::uint32_t at = head_ + len_;
     ensure(std::uint64_t{at} + 2 + n <= words_, Errno::enospc, words_ * WORD, 0, from);
+    ensure(free(), Errno::ebusy, at_, 0, from);
     len_ += 2 + n;
     std::uint32_t off = at_ + WORD * at;
     mem_.set_word(off, op);
@@ -43,18 +46,6 @@ void Stream::record(std::uint32_t op, std::span<const std::uint32_t> args, std::
     fill(*w, args, tail, bytes);
 }
 
-std::optional<std::uint32_t> Stream::past(std::uint32_t op, std::span<const std::uint32_t> args,
-                                          std::optional<std::span<const std::uint8_t>> bytes) noexcept {
-    std::uint32_t n = static_cast<std::uint32_t>(args.size()) + byte_words_of(bytes);
-    std::uint32_t at = head_ + len_;
-    if (std::uint64_t{at} + 2 + n > words_) return std::nullopt;
-    std::uint32_t off = at_ + WORD * at;
-    mem_.set_word(off, op);
-    mem_.set_word(off + WORD, n);
-    fill(off + 2 * WORD, args, {}, bytes);
-    return off;
-}
-
 void Stream::fill(std::uint32_t w, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,
                   std::optional<std::span<const std::uint8_t>> bytes) noexcept {
     auto a = static_cast<std::uint32_t>(args.size()), t = static_cast<std::uint32_t>(tail.size());
@@ -70,8 +61,10 @@ void Stream::fill(std::uint32_t w, std::span<const std::uint32_t> args, std::spa
 }
 
 void Stream::publish() noexcept {
-    mem_.set_word(at_ + WORD * END, len_);
+    if (len_ == 0) return;
+    end().store(len_, std::memory_order_release);
     len_ = 0;
+    free_ = false;
 }
 
 } // namespace xpute

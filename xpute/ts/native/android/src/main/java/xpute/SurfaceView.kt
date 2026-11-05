@@ -1,0 +1,76 @@
+// @xpute/native/android/src/main/java/xpute/SurfaceView.kt
+
+package xpute
+
+import android.content.Context
+import android.view.SurfaceHolder
+import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.viewevent.EventDispatcher
+import expo.modules.kotlin.views.ExpoView
+
+/**
+ * A view a guest's surface draws into, ios/SurfaceView.swift's on Android:
+ * a system SurfaceView, a window of its own the system composes under the
+ * app's views. The view binds the surface the app names (`surface`) while
+ * the system's surface exists, and never past the moment the system takes it
+ * back: `surfaceDestroyed` does not return until the guest's GPU host has let
+ * it go. It says when it is bound (`onAttach`) and when it is not
+ * (`onDetach`). The guest sizes the surface and draws every frame inside a
+ * turn, so nothing here draws.
+ */
+class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, appContext), SurfaceHolder.Callback {
+  private val onAttach by EventDispatcher()
+  private val onDetach by EventDispatcher()
+
+  private val view = android.view.SurfaceView(context).also {
+    it.holder.addCallback(this)
+    addView(it)
+  }
+
+  /** The guest's surface the app wants shown here; 0 for none. */
+  var surface: Int = 0
+    set(value) {
+      field = value
+      rebind()
+    }
+
+  /** Whether the system's surface exists to be drawn into. */
+  private var ready = false
+
+  /** The surface bound to the view's; 0 for none. */
+  private var bound = 0
+
+  // React Native lays this view out and none of its own children, so the
+  // system's view is given the whole of it here.
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    view.layout(0, 0, r - l, b - t)
+  }
+
+  override fun surfaceCreated(holder: SurfaceHolder) {
+    ready = true
+    rebind()
+  }
+
+  override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+
+  override fun surfaceDestroyed(holder: SurfaceHolder) {
+    ready = false
+    rebind()
+  }
+
+  /** Binds the guest's surface to what is wanted, letting go of what is not. */
+  private fun rebind() {
+    val wanted = if (ready) surface else 0
+    if (bound == wanted) return
+    if (bound != 0) {
+      Gpu.surfaceUnbind(bound)
+      bound = 0
+      onDetach(mapOf<String, Any>())
+    }
+    if (wanted == 0) return
+    if (Gpu.surfaceBind(wanted, view.holder.surface) == 0) {
+      bound = wanted
+      onAttach(mapOf("surface" to wanted))
+    }
+  }
+}

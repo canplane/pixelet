@@ -1,11 +1,34 @@
 // cpp/xpute/guest/ipc/stream.hpp
 
-// A turn's calls from guest to host as records in one range. The host runs
-// them after the turn returns and before the next, so a record may name
-// memory the host writes and the guest reads next turn.
+// A turn's calls from guest to host as records in one range, published at
+// the turn's end and run whole by the host, so a record may name memory the
+// host writes and the guest reads once the host has run it. Word END counts
+// the record words past the head, word HEAD the words before the first
+// record, which a host reads from the stream itself; the user's words follow
+// them.
+//
+// END hands the records from guest to host and back, by the rules a ring's
+// position words keep (ring.hpp), whether the two take turns on one thread or
+// run at once on two:
+//
+// - R1. END has one writer at a time: the guest stores a count into it only
+//   while it reads 0, and the host stores 0 into it only while it reads a
+//   count.
+// - R2. END is stored with release and loaded with acquire. The guest writes
+//   its records, then stores their count; the host loads the count before it
+//   reads them, and stores 0 once it is done with them; the guest loads END
+//   before it writes records again.
+// - R3. The records, and the memory a record names for the host to read, are
+//   the host's from the count's store until the host stores 0. A host stores
+//   0 whether or not it ran them, so a host with nothing to run them on never
+//   holds the guest.
+//
+// A guest that finds END not yet 0 writes no records (`free`): the turn
+// leaves what it would have recorded for a later one.
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <source_location>
@@ -30,8 +53,11 @@ constexpr std::uint64_t record_bytes(std::uint64_t args, std::optional<std::uint
 class Stream {
   public:
     static constexpr std::uint32_t END = 0;
+    static constexpr std::uint32_t HEAD = 1;
+    // The stream's own words, before the user's.
+    static constexpr std::uint32_t OWN_WORDS = 2;
 
-    Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head = 1) noexcept;
+    Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head = OWN_WORDS) noexcept;
 
     std::uint32_t head_at() const noexcept { return at_; }
 
@@ -43,8 +69,8 @@ class Stream {
     // fit with `leave` bytes left after them.
     bool fits(std::uint64_t bytes, std::uint32_t leave) const noexcept { return std::uint64_t{left()} >= bytes + leave; }
 
-    // Answers where the `n` words begin. Past the range is a bug, reported at
-    // the caller.
+    // Answers where the `n` words begin. Past the range, or while the host
+    // holds the stream (EBUSY), is a bug, reported at the caller.
     std::uint32_t open(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
 
     // A record of `n` words for its writer to fill; none where an open
@@ -54,12 +80,15 @@ class Stream {
     void record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail = {},
                 std::optional<std::span<const std::uint8_t>> bytes = std::nullopt, std::source_location at = std::source_location::current()) noexcept;
 
-    // A record laid past the last the turn has recorded and never published,
-    // for a hostcall: its offset in the memory, or none where it does not
-    // fit. The next record written takes its words.
-    std::optional<std::uint32_t> past(std::uint32_t op, std::span<const std::uint32_t> args,
-                                      std::optional<std::span<const std::uint8_t>> bytes = std::nullopt) noexcept;
+    // Whether the host has stored END back to 0 since the last publish: the
+    // stream is the guest's to write (R1, R3).
+    bool free() noexcept {
+        if (!free_) free_ = end().load(std::memory_order_acquire) == 0;
+        return free_;
+    }
 
+    // The turn's records handed to the host (R2); a turn that recorded none
+    // leaves END as it is.
     void publish() noexcept;
 
     // The records from here to `commit` are one: one that does not fit drops
@@ -75,6 +104,11 @@ class Stream {
     }
 
   private:
+    // END, only ever touched as an atomic (R2).
+    std::atomic_ref<std::uint32_t> end() const noexcept {
+        return std::atomic_ref<std::uint32_t>(*reinterpret_cast<std::uint32_t *>(mem_.at(at_ + WORD * END)));
+    }
+
     // A record's words past its op and count, from `w`: `args`, `tail`, and
     // `bytes` as their count then words.
     void fill(std::uint32_t w, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,
@@ -85,6 +119,8 @@ class Stream {
     std::uint32_t words_;
     std::uint32_t head_;
     std::uint32_t len_ = 0;
+    // The host stored END back to 0 since the last publish, as last loaded.
+    bool free_ = true;
     // Whether a transaction is open, where it began, and whether a record
     // that did not fit has dropped it.
     struct Mark {

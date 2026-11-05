@@ -18,12 +18,24 @@ use crate::enums::{
 };
 use crate::spec::{op, NONE, STATUS, SURFACE_PREFERRED};
 
+/// The stream at `at` handed back to the guest, whether or not it was run:
+/// END stored back to 0 with release, once nothing more of its records is
+/// read, and only where the guest published a count (xpute-guest
+/// ipc/stream.rs R1, R2).
+pub fn release(memory: &mut Memory<'_>, at: u32) {
+    if memory.load_acquire(at) != 0 {
+        memory.store_release(at, 0);
+    }
+}
+
 impl GpuHost {
-    /// Runs the stream at `at`, `head` words of head, as the turn left it:
-    /// word 0 the count of record words past the head, each record its op,
-    /// its count of words, then they.
-    pub fn run(&mut self, memory: &mut Memory<'_>, at: u32, head: u32) {
-        let end = memory.word(at);
+    /// Runs the stream at `at` as the turn left it (xpute-guest
+    /// ipc/stream.rs): word 0 the count of record words past the head, END,
+    /// word 1 the head's own count of words, each record its op, its count of
+    /// words, then they. The stream is handed back once run (`release`).
+    pub fn run(&mut self, memory: &mut Memory<'_>, at: u32) {
+        let end = memory.load_acquire(at);
+        let head = memory.word(at + 4);
         let first = at + 4 * head;
         let mut k = 0;
         while k + 2 <= end {
@@ -48,6 +60,7 @@ impl GpuHost {
         if self.uploads.is_some() {
             self.submit(core::iter::empty());
         }
+        release(memory, at);
     }
 
     /// Nothing for no bytes, as WebGPU writes nothing.

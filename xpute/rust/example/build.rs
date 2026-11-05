@@ -1,7 +1,11 @@
 // xpute-example/build.rs
 
-// Linked as a module guest is, with the link numbers `program!` assumes.
+// The module linked as its machine says (machine.json, xpute-guest machine.rs
+// `link`): its memory imported, its stack first, its data past the front.
+
+#[path = "machine.spec.rs"]
+mod machine;
 
 fn main() {
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig::DEFAULT);
+    xpute_guest::wasm::link(&machine::MACHINE.link());
 }

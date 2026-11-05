@@ -39,20 +39,26 @@ export class Strobe<G extends Grant = Grant> {
     doorbell.wake = (wake_ms) => this.wake(wake_ms);
   }
 
-  start(): void {
+  /** Turns run from now on; nothing where they already run or the guest stopped. */
+  resume(): void {
+    if (this.running || this.doorbell.terminated) return;
     this.running = true;
     this.last = performance.now();
     this.request();
   }
 
-  stop(): void {
+  /** No turn runs until `resume`; nothing where none runs. */
+  pause(): void {
+    if (!this.running) return;
     this.running = false;
     clearTimeout(this.timer);
     this.timer_at = Infinity;
   }
 
+  /** A moment asked of the policy; none while paused or once the guest
+   * stopped. */
   request(): void {
-    if (this.asked || !this.running) return;
+    if (this.asked || !this.running || this.doorbell.terminated) return;
     this.asked = true;
     this.policy.next(this.consider);
   }
@@ -74,7 +80,7 @@ export class Strobe<G extends Grant = Grant> {
 
   private turn(now: f64): void {
     this.asked = false;
-    if (!this.running) return;
+    if (!this.running || this.doorbell.terminated) return;
     if (!this.policy.admit(now)) return this.request();
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every turn worth reporting would land.
@@ -83,7 +89,13 @@ export class Strobe<G extends Grant = Grant> {
     clearTimeout(this.timer);
     this.timer_at = Infinity;
     const grant = this.policy.grant(performance.now());
-    this.submit(grant, delta_s);
+    // What `submit` sends goes with this turn, so it asks for no other.
+    this.asked = true;
+    try {
+      this.submit(grant, delta_s);
+    } finally {
+      this.asked = false;
+    }
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);
     this.policy.observe(performance.now() - t0, grant, wake_ms);

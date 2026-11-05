@@ -1,0 +1,12 @@
+// The client as a device's bundler reads it, from its entry (index.ts) and
+// its build's configuration: x.native.ts in place of x.ts where there is one,
+// and the page's own files, which no device reaches, left out. The page's is
+// ../tsconfig.json.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@webgpu/types"],
+    "moduleSuffixes": [".native", ""]
+  },
+  "include": ["*.ts", "plugin", "script", "@types"]
+}

@@ -20,12 +20,11 @@
 #include "xpute/guest/abi/cmd.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
 #include "xpute/guest/hostcall.hpp"
-#include "xpute/guest/ipc/toc.hpp"
 #include "xpute/guest/ipc/door.hpp"
 #include "xpute/guest/ipc/file.hpp"
+#include "xpute/guest/ipc/head.hpp"
 #include "xpute/guest/ipc/ring.hpp"
 #include "xpute/guest/ipc/stream.hpp"
-#include "xpute/guest/ipc/sys.hpp"
 #include "xpute/guest/mem.hpp"
 #include "xpute/guest/mem/section.hpp"
 #include "xpute/guest/sched/wake.hpp"
@@ -41,16 +40,15 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 
 // What the guest shares with its host, each on pages of its own, in the order
 // a layout draws (`layout`).
-enum Part : std::size_t { TOC, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, SYS, PARTS };
+enum Part : std::size_t { HEAD, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
-    toc_words(4) * 4,
+    head::WORDS * 4,
     ring_bytes(SQ_CAP),
     ring_bytes(CQ_CAP),
     slots_bytes(SQ_CAP, SLOT_BYTES),
     slots_bytes(CQ_CAP, SLOT_BYTES),
     STREAM_WORDS * 4,
-    SYS_WORDS * 4,
 };
 
 // The most a layout spans: the page it starts past, every part, and the most
@@ -79,16 +77,29 @@ std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     return at;
 }
 
+// What CALL calls: a number and an offset.
+struct Inc {
+    std::uint32_t n = 0;
+    std::uint32_t at = 0;
+
+    static constexpr std::uint32_t NUMBER = cmd::INC;
+    static constexpr std::uint32_t FIELDS = 2;
+
+    void write(xtp::PacketWriter &w) const noexcept {
+        w.u32(n);
+        w.u32(at);
+    }
+};
+
 struct State {
     Door door;
     Stream stream;
-    Sys sys;
     // Each for the owner its packet named.
     Files<std::uint32_t, HANDLES> files;
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
-    // What HOSTCALL's host writes.
+    // What the host writes as it answers CALL's INC.
     std::uint32_t word = 0;
 };
 
@@ -117,7 +128,7 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> pkt) {
 Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
-    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::HOSTCALL) {
+    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::CALL) {
         std::optional<std::uint32_t> n = first_u32(pkt);
         if (!n) return {.err = Errno::ebadmsg};
         arg = *n;
@@ -129,7 +140,7 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(frame::tag_of(SENDER, k), cmd::EVENT, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::EVENT, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -147,19 +158,18 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         s.mark = s.now();
         return {};
     case cmd::OPEN:
-        return {.val = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
+        return {.val = static_cast<std::int32_t>(s.files.open(s.door, 1, "f", arg))};
     case cmd::CLOSE:
-        return s.files.close(s.sys, arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
+        return s.files.close(s.door, arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.val = static_cast<std::int32_t>(round(since))};
     }
-    case cmd::HOSTCALL: {
+    case cmd::CALL: {
         s.word = 0;
-        const std::array<std::uint32_t, 2> args{arg, s.stream.mem().off_of(&s.word)};
-        Result<std::uint32_t> res = s.sys.call_now(hostcall::ANSWER, args, {});
+        Result<std::uint32_t> res = s.door.call(Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
         if (!res) return {.err = res.error().errnum};
-        // The word the host wrote before the hostcall returned.
+        // The word the host wrote before the call returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
     }
     default:
@@ -173,28 +183,22 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
     for (std::uint32_t &off : at) off += range;
     Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
-        .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .sys = Sys(m, at[SYS], SYS_WORDS), .files = {}, .handles = {}, .now = now};
-    const std::array<Entry, 4> entries{{
-        {toc::key::SQ, at[SQ_DESC]},
-        {toc::key::CQ, at[CQ_DESC]},
-        {key::STREAM, at[STREAM]},
-        {toc::key::SYS, at[SYS]},
-    }};
-    write_toc(m, at[TOC], toc_words(entries.size()), entries);
-    return at[TOC];
+        .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
+    // The stream lies where a GPU stream would: the host runs it after every turn.
+    write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .gpu_at = at[STREAM]});
+    return at[HEAD];
 }
 
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
-    s.sys.rise();
-    s.door.drain(
-        [&s](const abi::SysOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.sys, opened)) s.door.post(frame::tag_of(SENDER, *owner), cmd::OPENED, 0, opened.res);
+    s.door.rise();
+    s.door.receive(
+        [&s](const abi::fs::FsOpened &opened) {
+            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.door, opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
             return Outcome{};
         },
         [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
     s.stream.publish();
-    s.sys.fall();
     return s.door.pending() ? 0.0 : NO_WAKE;
 }
 

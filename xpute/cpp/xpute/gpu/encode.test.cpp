@@ -389,6 +389,8 @@ XPUTE_TEST(gpu_programs_match_record) {
             std::vector<std::uint8_t> got(mem.at(0), mem.at(0) + n);
             std::string key = name + ".turn." + std::to_string(turn);
             XPUTE_CHECK_EQ(got == g.bytes(key), true, key.c_str());
+            // Read as a host runs it, and handed back.
+            mem.set_word(0, 0);
             turn++;
         });
         XPUTE_CHECK_EQ(turn, g.len(name + ".turn"), (name + "'s turns").c_str());

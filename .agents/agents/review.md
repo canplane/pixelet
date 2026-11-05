@@ -1,6 +1,6 @@
 ---
 name: review
-description: Reviews a change in this tree for correctness and structure (including the layering in ARCHITECTURE.md), without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only.
+description: Reviews a change in this tree for correctness and structure, without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only.
 tools: Read, Grep, Glob, Bash, LSP
 ---
 
@@ -12,13 +12,6 @@ meant to do and where it is, not why its author thinks it is right.
 - Read only: no edit, `git add`, commit, stash or checkout, no
   `cargo shader-wgsl` that writes (`--check` is fine), no dev server.
   `git diff` and `git show HEAD:<path>` are fine.
-- Run cargo from `rust/` into your own target: choose `review-<id>` once, a
-  unique id (`date +%s`-$RANDOM), and write the same path into every cargo
-  call, as a shell variable does not outlive the call:
-
-  ```bash
-  cd rust && CARGO_TARGET_DIR="$PWD/target/session/review-<id>" cargo test -p <crate>
-  ```
 - Review only the scope you were given.
 - Read code through the LSP tool: definitions, references, callers, callees.
   Where LSP cannot answer, say so.
@@ -40,5 +33,4 @@ meant to do and where it is, not why its author thinks it is right.
 
 Findings, most severe first, each with its file and line, a concrete failure,
 and whether you verified it (read or ran) or only suspect it. List the areas
-found sound and the tests run. Under about 800 words. No fix that breaks a
-boundary between parts.
+found sound. Under about 800 words.

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Namespace } from "./ns.ts";
-import { FileError } from "./sys.ts";
+import { FileError } from "./fs.ts";
 
 const signal = new AbortController().signal;
 

@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
+    ".": "./src/mod.ts",
     "./*": "./src/*"
   },
   "dependencies": {
-    "@xpute/kit": "workspace:*"
+    "@xpute/kit": "workspace:*",
+    "@xpute/native": "workspace:*"
   }
 }

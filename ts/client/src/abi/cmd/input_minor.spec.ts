@@ -1,6 +1,6 @@
-// @pxl/client/abi/cmd/input_minor.spec.ts
+// ts/client/src/abi/cmd/input_minor.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/control/cmd.json
+// GENERATED from rust/client/kernel/shell.json
 
 // The input's: the pointer, the wheel, the held movement, a tracker's pose.
 

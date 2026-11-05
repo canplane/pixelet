@@ -95,7 +95,7 @@ impl Serve for Policy {
         self.intake
     }
 
-    /// As the client's read classes them (`ts/client/src/driver/namespace/read.ts`). An object's
+    /// As the client's read classes them (`ts/client/src/sys/fs/read.ts`). An object's
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
     fn fault(&self, failure: Failure) -> Fault {

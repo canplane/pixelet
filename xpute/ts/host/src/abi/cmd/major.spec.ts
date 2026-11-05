@@ -6,3 +6,4 @@
 
 export const NOP = 0x00;
 export const SYS = 0x01;
+export const GPU = 0x02;

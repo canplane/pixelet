@@ -146,14 +146,8 @@ fn records_read_back() {
         ..Default::default()
     }))
     .expect("a device with timestamp queries");
-    let [region, head, input_at, done, readback] = [
-        "region",
-        "stream.head",
-        "input.at",
-        "done.at",
-        "readback.at",
-    ]
-    .map(|k| g.u32(k));
+    let [region, input_at, done, readback] =
+        ["region", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
     g.each("program", |name| {
         let p = g.s(name);
         let mut memory = vec![0u8; region as usize];
@@ -174,7 +168,7 @@ fn records_read_back() {
             memory[..words.len()].copy_from_slice(&words);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
             Memory::of(&mut memory).set_word(done, ticket);
-            host.run(&mut Memory::of(&mut memory), 0, head);
+            host.run(&mut Memory::of(&mut memory), 0);
             while Memory::of(&mut memory).word(done) & DONE == 0 {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
                 host.poll(&mut Memory::of(&mut memory));

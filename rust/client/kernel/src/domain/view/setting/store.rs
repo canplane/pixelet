@@ -20,7 +20,7 @@ use xpute_guest::global::Global;
 static DEVELOPMENT: Global<bool> = Global::new();
 
 /// Development builds offer the settings schema.json marks `dev`, as the
-/// shell's boot says (`SYS_BOOT`).
+/// shell's boot says (`SETTING_DEVELOPMENT`).
 pub fn set_development(development: bool) {
     DEVELOPMENT.set(development);
 }
@@ -97,7 +97,7 @@ fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
 /// The store differs from what storage holds. Written once a turn, so a turn
-/// of changes costs the host stream one file, whatever their number.
+/// of changes costs the host one file, whatever their number.
 static UNSAVED: Global<bool> = Global::new();
 
 /// The store against its storage file, opened on the storage root
@@ -109,7 +109,7 @@ enum Load {
     /// What it held, or nothing: written from now on.
     Loaded,
     /// Refused (sys/io/file.rs `is_refused`): the defaults, and not written
-    /// over until the driver sets it aside and empties the slot.
+    /// over until the client sets it aside and empties the slot.
     Refused,
     /// There and not readable here otherwise: the defaults, and never
     /// written over this session.
@@ -157,7 +157,7 @@ pub fn settings_load_step() -> bool {
     true
 }
 
-/// The driver set a refused slot's file aside and emptied it: the store, with
+/// The client set a refused slot's file aside and emptied it: the store, with
 /// what changed meanwhile, is written from the next keep on.
 pub fn on_settings_emptied() {
     if *load() == Load::Refused {

@@ -1,213 +1,197 @@
 # xpute
 
-xpute runs one program inside another across three edges and no others: one
-memory they share, one call in, and one number out. The outer program, the
-**host**, owns the platform: the clock, the memory, whatever reaches outside.
-The inner one, the **guest**, owns none of it on its own account. Everything it
-has, the host granted it: the memory once at boot, and a quota of time on each
-call in, which is a **turn**. What the guest builds over those grants — its
-allocator, its scheduler, its tables — is its own, as a library operating
-system's is over an exokernel, and xpute does not enforce the grants.
+xpute makes a program's guest its first-class citizen. The guest is compiled
+code, the same code as a WebAssembly module in a page and as a library linked
+into a native app; it leads, and JavaScript does the I/O and the UI around it.
+No foreign function call is made for each piece of the boundary: the two share
+one memory, and a pair of rings in it carries everything else, in io_uring's
+shape. xpute is that arrangement, both ends of it, and `kit`, the generic code
+underneath. It is not a general runtime and not an actor bus.
 
-**xpute is both ends of that arrangement, and `kit`, the generic code underneath
-them.** `kit` is written in every language xpute has, and each end in the
-languages it is built in.
+**Host** and **guest** mean what they mean in WebAssembly and in a virtual
+machine. The guest is a **unikernel**: the program and xpute's guest library,
+its library OS, built as one image, as MirageOS and Unikraft build theirs, and
+run inside. The host is its **VMM**: it implements the guest's devices and
+gives it its time. Nothing in xpute knows what the guest computes.
 
-It was written for a program driven by TypeScript: compiled to one WebAssembly
-module in a browser tab, or linked into a native app. Nothing in xpute knows
-what that program computes.
+## The guest and its world
 
-## The arrangement
-
-```text
-┌─ host ── TypeScript ───┐                        ┌─ guest ──────────────────┐
-│ owns the clock, the    │                        │ computes, and owns       │
-│ memory, the I/O        │ ═══ run(quota) ═════▶  │ nothing                  │
-│                        │                        │                          │
-│                        │  ◀═══ wake_ms ═══════  │                          │
-│                        │  ◀──── now() ────────  │                          │
-│                        │  ◀── hostcall(at) ───  │                          │
-└───────────┬────────────┘                        └────────────┬─────────────┘
-            │                                                  │
-            └──────────────────────────┬───────────────────────┘
-                                       ▼
-           ┌─ the core memory ───────────────────────────────────┐
-           │ everything else crosses here, and nothing else does │
-           └─────────────────────────────────────────────────────┘
-```
-
-Three edges, and two calls the other way, each answered before it returns: the
-guest reads the host's clock (`now`), because it spends its quota against that
-clock in the middle of a turn, when the host cannot run; and it runs a
-**hostcall**, a guest's call into its host, now rather than from the stream the
-host runs after the turn: one of its program's that the host answers from what
-it already holds, where an answer a turn later would cost it that turn. There is
-no second entry point, no other callback, and nothing either side holds a
-pointer to on the other.
-
-`run` is the whole of the guest's life. xpute names it, as a C runtime names
-`main`, and the guest implements it. It runs when the host rings, for as long as
-the quota it was handed, and when the call returns the guest is not running at
-all. Its answer, `wake_ms`, is when it would like the next turn. A guest that
-asks for nothing is rung for nothing.
-
-What the guest cannot do itself — a file, a call to a GPU — it asks for in what
-its turn leaves, and the host takes every such request before it rings again.
-
-A file is asked for as POSIX's `openat` and io_uring's submission and completion
-name it: opened below a root the host bound, read and written by descriptor,
-each answered with a result or Linux's errno, its open's answer (`SYS_OPENED`) a
-turn later. WASI's calls look alike — an open, a read, an errno, a directory the
-host grants — but each returns before the guest goes on. Here nothing the guest
-asks returns within its turn but a hostcall run now: a guest waits a turn for
-what it asked, and never blocks.
-
-[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped
-that way, and the contract either end must keep.
-
-## `kit`, `guest` and `host`
-
-`kit` is that and nothing more — collections, codecs, scalar math, an errno
-table, the wire formats. Link it and use it: it knows nothing of turns, hosts or
-memories. Golden records under `spec/golden/` hold the languages to each other
-wherever bytes cross.
-
-`guest` and `host` are the arrangement above, named by the end each is: the two
-ends of one thing, which owe each other matching formats, and whose module lists
-differ. The guest ends in each language are one end, and match as `kit` does.
+A guest's author sees two things: the guest and its **world**. The guest sends
+to its world and receives from it, and never names a destination. A world is
+its commands, as a WIT world is: its **imports**, which the guest calls, and
+its **exports**, which the guest handles.
 
 ```text
-rust/kit  ·  ts/kit  ·  cpp/xpute/kit       the same kit, in each language
-rust/guest  ·  cpp/xpute/guest              the guest end, in each language
-ts/host                                     the host end in TypeScript, mounted on any guest its platform opened
-rust/host                                   the host end in Rust: a guest's memory by offset, and a guest linked in
-rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
-rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
-rust/example  ·  cpp/example  ·  ts/example the smallest guest in each, and the host that drives both
-rust/tool                                   the repository's own Rust programs, run by cargo
-script                                      the repository's own scripts (Python)
-spec                                        the numbers every language's are generated from
+┌─ the guest ────────────┐                 ┌─ its world ────────────┐
+│ decides; owns no       │ ─── imports ──▶ │ answers what the guest │
+│ device                 │                 │ calls                  │
+│                        │ ◀── exports ─── │ sends what the guest   │
+│                        │                 │ handles                │
+└────────────────────────┘                 └────────────────────────┘
 ```
 
-A program takes these as packages, by name. In TypeScript they are
-`@xpute/kit`, `@xpute/host` and `@xpute/gpu` (`ts/kit`, `ts/host`, `ts/gpu`),
-each its own source: its `package.json` maps a path under its name to the file
-under `src/` (`@xpute/host/port.ts` is `ts/host/src/port.ts`), and the files
-strip to JavaScript as they are, so a bundler or Node's type stripping takes
-them with no build. In Rust they are the crates `xpute-kit`, `xpute-guest`,
-`xpute-host` and `xpute-gpu`. None is published yet: a program beside this tree
-lists the packages in its pnpm workspace and depends on them as `workspace:*`,
-and names the crates by `path`.
+## The shell, the guest and the host
+
+A platform's author sees the world as two parts: the client outside the VM,
+and the VMM under it.
+
+- **The shell and the guest.** The program's **shell**, its screens and
+  components, is the client outside the VM, as an application on a host
+  reaches a guest's service over virtio-vsock: a unikernel has no userspace.
+  The ring pair is the device between them, by io_uring's roles: the shell
+  submits its commands to the guest, and the guest completes them; what the
+  guest sends the shell unasked, more rarely, is an **upcall**. The app's ABI
+  is this relation.
+- **The guest and the host.** The host implements the devices the guest's
+  machine asks for (the GPU, the file device), by virtio's convention, and
+  gives the guest its memory, its clock and its turns, as a VMM gives a
+  vCPU's time. The guest calls its devices, and the host raises interrupts.
+  xpute's predefined ABI is this relation.
+
+```text
+  shell  the client         screens, components
+   │ ▲
+   ▼ │   the app's ABI: commands submitted and completed; upcalls
+  guest  the unikernel      the program and its library OS; owns no device
+   │ ▲
+   ▼ │   xpute's ABI: calls to its devices; interrupts up
+  host   its VMM            memory, clock and turns, GPU, files
+```
+
+Physically the shell and the host share one JavaScript runtime, and natively
+the host has Rust pieces beside it: the guest's thread, its memory and the
+GPU's run. Both relations ride the same pair of rings, told apart by a
+command's major: the host carries the shell's submissions on the SQ and hands
+the guest's completions and upcalls back. The shell meets the host directly
+only for the surfaces (a view lent to the GPU) and the lifecycle (boot,
+visibility), through the host's TypeScript API.
+
+## Two ABIs, one number space
+
+A command is `major << 8 | minor` (`kit` `abi/cmd`), and who defines it decides
+its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F (`spec/abi/`).
+Its imports are the guest's calls to its devices: the file device's calls
+(`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`, `spec/abi/fs.json`) and
+`SYS_ABORT`, the report the guest posts as it stops. Its exports are the
+host's interrupts:
+
+- `SYS_ATTACH`, a host attached, the first time or again;
+- `SYS_SUSPEND` and `SYS_RESUME`, calls around a hidden host;
+- `GPU_READY`, the GPU the machine asked for answered.
+
+`NOP` is the rings' own test. xpute ships both ends of the file device.
+
+The **app's ABI** takes majors from `PROGRAM_MAJOR`, 0x10
+(`spec/ipc/frame.json`), in protocol files of the app's own, each command an
+export or an import. The generator refuses an app's command under
+`PROGRAM_MAJOR`, and a number two protocols both give. There are no ports: the
+host hands a frame to what answers its command's major.
+
+## The rings
+
+The rings are io_uring's, by its roles. The **SQ** is written by the host, the
+side where the outside's interrupts arrive: the shell's submissions and the
+host's own interrupts. The **CQ** is written by the guest: its completions and
+upcalls, and its own calls to its devices, in ublk's manner, whose results
+come back on the SQ. Five rules make the contract:
+
+1. Each ring has one writer.
+2. A position is published with release and read with acquire.
+3. A buffer a frame names is the receiver's until it moves its head past that
+   frame.
+4. A completion finds its request by id.
+5. A call never nests, and its answer makes no call.
+
+When each side runs is the platform's. On the web the guest runs on the page's
+event loop, in turns the **strobe** gives, the web host's policy, paced to the
+display's frames; natively it runs on its own thread.
+
+## The machine
+
+A guest crate declares its **machine** (`machine.json`, its schema
+`spec/machine.schema.json`): the memory sizes a host may give, the stack, the
+rings, and the devices it asks for, `gpu` and `fs`. Which devices the guest
+needs is the guest's to decide, as a VM's configuration names its virtio
+devices: the host attaches what the machine asks for, a boot that backs a
+device the machine does not ask for, or none it does, is refused, and an
+unattached device's command is answered `ENODEV`. From the machine the host
+lays the **front** before the first turn: a header of words
+(`spec/ipc/head.json`) naming the rings and the GPU stream, and each ring's own
+header. The guest computes the same front from the same machine and checks the
+header against it, stopping with `ENOEXEC` where a word differs. The GPU
+stream says its own head.
 
 ## Embedding a guest
 
-The smallest program shows the whole of it: a guest that answers one command, in
-Rust (`rust/example`) and in C++ (`cpp/example`), and the host that drives
-either (`ts/example/sum.test.ts`), which `make test` runs. Each end is one
-declaration. The guest names a function for each command it answers in
-`xpute_guest::program!`, or in C++ `XPUTE_PROGRAM`
-(`cpp/xpute/guest/program.hpp`), which lays its range out (a page for the toc,
-then the two rings and their slots and the hostcalls' stream, then the heap),
-runs its turns and hands each command to its function: the function's result is
-the reply, and its errno the failure. The host opens it in one call
-(`@xpute/host/port.ts` `open`) and talks to it through a **port**, the number
-the guest sees as a command's sender. `send` puts a command on the rings for the
-next turn, `on` hears what the guest raises after the turn that raised it, and
-`call` rings the guest at once and returns its answer. A hostcall of the
-program's own is answered by the function `open` was given for its number. What
-waits on the host runs as a task (`Turn::spawn`): a file is read whole by
-awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
-open is answered and ready on the next, from the host's `Fs` that `open` was
-given; `raise` sends an event from the task to the program's port, and
-`Door::raise_to` to any port. A bug or a panic ends the guest:
-`program!` and `XPUTE_PROGRAM` install xpute's stop (`xpute-guest/stop.rs`,
-`cpp/xpute/guest/stop.hpp`), which the host hears as `ABORT`.
+The smallest program shows the whole of it: a guest that answers one command
+(`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
+`make test` runs. Its machine is `rust/example/machine.json`, and its one
+protocol `rust/example/asker.json`: the host sends `SUM`, and the guest calls
+`ASK` as it adds, answered before the call returns.
 
-The commands are the program's own table (`spec/example/cmd.json`), generated
-for both ends by xpute-tool's `cmd`: the guest's function takes its packet as
-the struct the table makes for it, and the host sends a command and hears an
-event by the constant the table makes for it, its fields by place. Nothing it
-generates reads a name at run time, so a bundle keeps the numbers alone.
+The **generator** writes both ends' code from the machine and the protocol
+files in the guest crate: `MACHINE` for each end, and for each protocol a
+stub per export and a handler per import on the host, and a function per
+import and a trait for the exports on the guest. A program runs it as
+`xpute-gen <machine.json> <protocol.json>...` (`--check` to fail where a file
+is stale); xpute's own files are written by `cargo spec`. The generated code
+is committed.
 
-```sh
-cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs --write
-# and a C++ guest's header: --cpp guest/cmd.spec.hpp --namespace my_program
+The **guest crate is the artifact**, the unikernel's one image. It builds as
+`rlib`, `cdylib` and `staticlib`, links by its machine in `build.rs`, and
+writes one `xpute_guest::guest!`, which picks the WebAssembly module or the
+native library by its target:
+
+```toml
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+xpute-guest = "…"
+xpute-gpu = "…"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+xpute-host = "…"
+xpute-gpu = { version = "…", features = ["host"] }
 ```
 
 ```rust
-// build.rs, with xpute-guest as a build dependency
+// build.rs
 fn main() {
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig::DEFAULT);
+    xpute_guest::wasm::link(&machine::MACHINE.link());
 }
 
-// lib.rs
-xpute_guest::program! {
-    on Command::SUM => sum, // fn(&mut Turn, Sum) -> Result<i32, Errno>
-    on Command::COUNT => count,
-}
-
-fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
-    let path = String::from(p.path);
-    cx.spawn(async move {
-        let res = match read(Root::FILES as u32, &path).await {
-            Ok(bytes) => bytes.len() as i32,
-            Err(e) => e as i32,
-        };
-        raise(&CountedEvent { res });
-    })?;
-    Ok(0)
-}
+// lib.rs; `gpu:` only where the machine asks for a GPU
+const GPU: xpute_gpu::Numbers = xpute_gpu::Numbers { frame_latency: 2, upload_chunk_bytes: 1 << 20 };
+xpute_guest::guest!(MACHINE, FIXED_BYTES, my_guest::run, gpu: GPU);
 ```
 
-In C++ a task is a coroutine (`Task<>`), and the read holds its own copy of the
-path, so the handler makes it and hands it over:
+The entry, `run`, is a turn: called with a quota of time, it applies what
+waits on the SQ, posts what it has on the CQ, and returns when it wants the
+next turn. On wasm32 the form is a module that exports `run`; anywhere else it
+is the native library, with its memory laid out from the machine, its own
+thread, which runs the guest while it has work and sleeps until a kick or the
+time it asked for, its allocator and xpute's stop hook, exported as
+`xpute_run`, `xpute_kick`, `xpute_mem`, `xpute_hostcall_on`,
+`xpute_notify_on`, `xpute_answer` and `xpute_ack`
+(`rust/host/include/xpute.h`), its GPU host's calls as
+`xpute_gpu_*` (`rust/gpu/include/xpute_gpu.h`), and on Android the same calls
+under the Kotlin classes `xpute.Guest` and `xpute.Gpu`.
 
-```cpp
-Task<> count_bytes(Read file) {
-    Result<Bytes> bytes = co_await file;
-    raise(CountedEvent{.res = bytes ? int32_t(bytes->size()) : int32_t(bytes.error().errnum)});
-}
+On the JavaScript side an app calls `@xpute/host`'s `boot(machine, { guest?,
+... })` once. The platform is picked by file: `x.ts` is the page's,
+`x.native.ts` the device's, as a native bundler and `tsconfig.native.json`
+(`moduleSuffixes`) resolve them. A page passes its module as `guest`; a device
+passes none, since the guest is linked in. A native app installs
+**`@xpute/native`**, the React Native module (Kotlin, Swift, JNI, the headers
+and the guest's build for iOS and Android), which Expo autolinks; the app's
+`package.json` names its guest crate (`xpute.core`). The rest of the config is
+what the program decides: what backs the files (`fs`) and the GPU it grants
+(`gpu`, `@xpute/gpu`'s `WebGpu` or `NativeGpu`), each where the machine asks
+for it, what hears its own commands (`program`), its scheduling policy and
+what it submits before each turn.
 
-Result<int32_t> count(Turn &cx, Count p) {
-    if (Result<void> s = cx.spawn(count_bytes(read(static_cast<std::uint32_t>(Root::FILES), p.path))); !s) return s.error();
-    return 0;
-}
-
-XPUTE_PROGRAM(on<Command::SUM, sum>, on<Command::COUNT, count>) // sum: Result<int32_t>(Turn &, Sum)
-```
-
-```ts
-const guest = open(module, { answer: { [Hostcall.ASK]: () => ANSWER }, fs });
-guest.on(SUMMED, (total) => console.log(total)); // 5
-guest.call(SUM, 2, 3); // 2 + 3 + ANSWER
-guest.on(COUNTED, (res) => console.log(res)); // the file's bytes, or -errno
-guest.send(COUNT, "file.txt");
-```
-
-Under the two declarations lie the parts they compose, which a program that lays
-its memory out itself uses as they are. A guest built as a **WebAssembly
-module** takes its form from `xpute_guest::wasm`: a call in its `build.rs`, and
-one `wasm_abi!`, which installs its allocator and exports `run`, the entry it
-calls. Its host opens the module over a memory of its own
-(`@xpute/host/module.ts` `open_module`) and mounts on it (`@xpute/host/host.ts`
-`mount`), given where the toc lies, its answers to the guest's calls (`SysHost`,
-each part optional) and the scheduling policy that says when a turn runs and how
-much it gets (`sched/policy.ts`: a fixed quota where there is no display, frame
-pacing on a page, and the fixed quota where `open` is given none).
-
-```rust
-xpute_guest::wasm_abi!(
-    xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
-    my_guest::entry // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
-);
-```
-
-A guest **linked into a native program**, on a unix platform, is booted by one
-`xpute_host::native_abi!`, beside `native::Alloc` as the program's allocator,
-and exports `xpute_run`, `xpute_mem` and `xpute_hostcall_on`
-(`rust/host/examples/native.rs` is one, and `make test` runs it).
-
-A **C++ program** takes the library in two files, as SQLite ships its own: it
+A **C++ guest** takes the library in two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
 `-ffp-contract=off`, the flags `cpp/Makefile` builds with. They are at
 `cpp/amalgamation/` in xpute's own repository; in this tree
@@ -215,30 +199,63 @@ includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
 
 ## What it leaves to whoever uses it
 
-The line is drawn in the same place every time: xpute carries the mechanism, and
-the policy belongs to the program.
+xpute carries the mechanism, and the policy belongs to the program.
 
 - **It does not know what the guest computes.** No domain type reaches `kit` or
   either end.
-- **It does not choose the memory map.** It is told a base, a unit and a list of
-  sizes, and answers where each range landed. What the ranges hold is the
-  guest's.
+- **It does not choose the memory past the front.** The machine says the sizes;
+  what the guest's ranges hold, and where, is the guest's.
 - **It does not choose an allocator.** The heap is reached through one call, and
   what answers it is the guest's choice.
 - **It is not a transport.** Nothing here leaves the machine; what carries bytes
   to another one is the host's business.
 - **It is not real time.** A quota is how long a turn should take. Nothing
   preempts: a turn that runs long is charged for it in the next one.
-- **It is not an RPC framework.** A message is four words and a packet, and the
-  numbers in them are the program's own.
+- **It does not give the app's commands a meaning.** A message is four words
+  and a packet, and the app's numbers are the app's own.
+
+## `kit`, `guest` and `host`
+
+`kit` is collections, codecs, scalar math, an errno table and the wire formats.
+Link it and use it: it knows nothing of turns, hosts or memories. Golden
+records under `spec/golden/` hold the languages to each other wherever bytes
+cross. `guest` and `host` are the two ends of the arrangement, which owe each
+other matching formats, and whose module lists differ.
+
+```text
+rust/kit  ·  ts/kit  ·  cpp/xpute/kit       the same kit, in each language
+rust/guest  ·  cpp/xpute/guest              the guest end, in each language
+ts/host                                     the host end in TypeScript
+rust/host                                   the host's Rust: a guest linked in
+ts/native                                   the React Native module
+rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, written and run
+rust/conformance  ·  cpp/conformance        a guest each, for the traces
+rust/example  ·  ts/example                 the smallest guest and its host
+rust/tool                                   the generator, and the tools
+script                                      the repository's scripts
+spec                                        the numbers, generated from
+```
+
+In TypeScript they are `@xpute/kit`, `@xpute/host`, `@xpute/gpu` and
+`@xpute/native` (`ts/kit`, `ts/host`, `ts/gpu`, `ts/native`), each its own
+source: its `package.json` maps a path under its name to the file under
+`src/` (`@xpute/host/host.ts` is `ts/host/src/host.ts`), and `@xpute/host`'s
+entry is `ts/host/src/mod.ts`; the files strip to JavaScript as they are, so a
+bundler or Node's type stripping takes them with no build. In Rust they are
+the crates `xpute-kit`, `xpute-guest`, `xpute-host` and `xpute-gpu`. None is
+published yet: a program beside this tree lists the packages in its pnpm
+workspace and depends on them as `workspace:*`, and names the crates by
+`path`.
+
+[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped
+that way, and the contract either end must keep.
 
 ## Running it
 
-Node at the version `ts/.tool-versions` pins with pnpm (`make install`
-first), rustup (it installs what
-`rust/rust-toolchain.toml` names), a C++20
-compiler as `c++` or `$CXX`, GNU Make, and the [WASI
-SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
+Node at the version `ts/.tool-versions` pins with pnpm (`make install` first),
+rustup (it installs what `rust/rust-toolchain.toml` names), a C++20 compiler
+as `c++` or `$CXX`, GNU Make, and the
+[WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 `$WASI_SDK_PATH`, for the C++ guest built as a module.
 
 ```sh

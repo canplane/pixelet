@@ -2,6 +2,9 @@
 //
 // GENERATED from spec/abi/cmd.json
 
-// The hostcalls' answers (ipc/sys.json).
+// The guest's life as its host tells it, and its end.
 
-export const OPENED = 0x01;
+export const ABORT = 0x06;
+export const ATTACH = 0x07;
+export const SUSPEND = 0x08;
+export const RESUME = 0x09;

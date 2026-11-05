@@ -44,9 +44,8 @@ async function replay(): Promise<void> {
   const device = await adapter.requestDevice({
     requiredFeatures: ["timestamp-query"],
   });
-  const [region, head, inputAt, done, readback] = [
+  const [region, inputAt, done, readback] = [
     "region",
-    "stream.head",
     "input.at",
     "done.at",
     "readback.at",
@@ -68,7 +67,7 @@ async function replay(): Promise<void> {
     for (const [k, turn] of turns.entries()) {
       bytes.set(g.bytes(turn), 0);
       words[done / 4] = k + 1;
-      host.run(0, head);
+      host.run(0);
       while ((words[done / 4] & DONE) === 0) {
         await new Promise((r) => setTimeout(r, 1));
       }

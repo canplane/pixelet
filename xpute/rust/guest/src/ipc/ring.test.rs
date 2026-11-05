@@ -112,7 +112,7 @@ fn payload_per_slot() {
     r.advance();
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, 0, None);
-    r.words()[(at + frame::PKT) as usize] = 4;
+    r.set_frame_word((at + frame::PKT) as usize, 4);
     let f = r.peek().expect("a frame waits");
     assert_eq!((f.tag, f.pkt_at), (11, 4));
     assert!(r.pkt(&f).is_err(), "outside a slot");

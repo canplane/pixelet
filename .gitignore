@@ -183,12 +183,14 @@ vite.config.ts.timestamp-*
 # Scratch: notes, diffs and logs a session keeps while it works.
 /tmp/
 
-# The guest's module, built from rust/ by ts/app/web/script/build-wasm.py
-ts/app/web/src/guest.wasm
-ts/app/web/src/guest.paths.json
+# The guest's module, built from rust/ by ts/client/script/build-wasm.py, and
+# the page's template made from ts/client/index.html (ts/client/script/web.ts).
+ts/client/public/guest.wasm
+ts/client/public/index.html
+ts/client/guest.paths.json
 # The page's icons and link preview, made from ts/client/brand by each web
 # build (pxl-tool/bin/render_brand.rs).
-ts/app/web/public/brand/
+ts/client/public/brand/
 
 
 # Backup files sometimes created by rustfmt/editor tooling
@@ -210,22 +212,22 @@ ts/client/.build_number
 ts/server/edge/dist/
 
 # What a device posts to the dev server's /__console, for reading with tail.
-ts/app/web/.dev-console.log
+ts/client/.dev-console.log
 
-# Expo's per-machine state for the device app: the dev server's settings and
-# the types it generates.
-ts/app/native/.expo/
+# Expo's per-machine state for the app: the dev server's settings, the types
+# it generates and the build stamp (metro.config.ts).
+ts/client/.expo/
 
 # A standalone WebGPU repro page is dev-only and not part of the app.
-ts/app/web/public/repro-*.html
+ts/client/public/repro-*.html
 
 # What `expo prebuild` generates, which is made again from app.config.ts and the
 # modules rather than kept, and what the platform module's own Gradle build
 # leaves beside it.
-ts/app/native/modules/platform/android/build/
-ts/app/native/modules/platform/android/.gradle/
-ts/app/native/ios/
-ts/app/native/android/
+ts/client/modules/platform/android/build/
+ts/client/modules/platform/android/.gradle/
+ts/client/ios/
+ts/client/android/
 
 # What Python compiles of a script it imports.
 __pycache__/

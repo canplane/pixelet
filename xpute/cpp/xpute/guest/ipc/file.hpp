@@ -14,11 +14,13 @@
 #include <utility>
 #include <vector>
 
-#include "xpute/guest/abi/cmd.spec.hpp"
+#include "xpute/guest/abi/fs.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/error.hpp"
-#include "sys.hpp"
+#include "door.hpp"
+#include "fs.hpp"
+#include "xpute/guest/hostcall.hpp"
 
 namespace xpute {
 
@@ -41,7 +43,7 @@ struct Opened {
 
     bool operator==(const Opened &) const = default;
 
-    static Opened of(const abi::SysOpened &opened) noexcept {
+    static Opened of(const abi::fs::FsOpened &opened) noexcept {
         Result<std::uint32_t> n = answer_of(opened.res);
         if (n) return {.kind = Kind::bytes, .bytes = *n};
         if (n.error().errnum == Errno::enoent) return {.kind = Kind::absent};
@@ -96,50 +98,44 @@ class Bytes {
 // At most `N - 1` open at once; one more is a bug.
 template <class O, std::size_t N> class Files {
   public:
-    Fd open(Sys &sys, std::uint32_t root, std::string_view path, O owner) {
+    Fd open(const Door &door, std::uint32_t root, std::string_view path, O owner) {
         Fd fd = take(std::move(owner));
-        sys.openat(fd, root, sys::flag::O_RDONLY, path);
-        return fd;
-    }
-
-    // `open`, or none where `N - 1` are open already.
-    std::optional<Fd> try_open(Sys &sys, std::uint32_t root, std::string_view path, O owner) {
-        std::optional<Fd> fd = held_.insert(std::move(owner));
-        if (fd) sys.openat(*fd, root, sys::flag::O_RDONLY, path);
+        door.openat(fd, root, fs::flag::O_RDONLY, path);
         return fd;
     }
 
     // Answered or not.
-    std::optional<O> close(Sys &sys, Fd fd) {
-        sys.close(fd);
+    std::optional<O> close(const Door &door, Fd fd) {
+        door.close(fd);
         return held_.remove(fd);
     }
 
     // Opened, written and closed in one turn, so no answer comes.
-    void write_whole(Sys &sys, std::uint32_t root, std::string_view path, std::vector<std::uint8_t> bytes, O owner) {
+    void write_whole(const Door &door, std::uint32_t root, std::string_view path, std::vector<std::uint8_t> bytes, O owner) {
         Fd fd = take(std::move(owner));
-        sys.openat(fd, root, sys::flag::O_WRONLY, path);
-        sys.write(fd, std::move(bytes));
-        close(sys, fd);
+        door.openat(fd, root, fs::flag::O_WRONLY, path);
+        door.write(fd, std::move(bytes));
+        close(door, fd);
     }
 
     // The owner of the open `opened` completes, or none where its descriptor was
     // closed since; a descriptor whose open failed is closed here.
-    std::optional<O> complete_open(Sys &sys, const abi::SysOpened &opened) {
+    std::optional<O> complete_open(const Door &door, const abi::fs::FsOpened &opened) {
         const O *held = held_.get(opened.fd);
         if (held == nullptr) return std::nullopt;
         O owner = *held;
-        if (opened.res < 0) close(sys, opened.fd);
+        if (opened.res < 0) close(door, opened.fd);
         return owner;
     }
 
     // The file an open answered with `bytes`, read whole into the heap and
-    // closed: its bytes, filled from the next turn on and kept until then, or
-    // ENOMEM where the heap has no room for them, nothing read.
-    Result<Bytes> read_whole(Sys &sys, Fd fd, std::uint32_t bytes) {
+    // closed: its bytes, filled once the host's head has passed the read and
+    // kept until then, or ENOMEM where the heap has no room for them, nothing
+    // read.
+    Result<Bytes> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
         std::optional<Bytes> held = Bytes::make(bytes);
-        if (held) sys.read(fd, held->span());
-        close(sys, fd);
+        if (held) door.read(fd, held->span());
+        close(door, fd);
         if (!held) return make_error(ErrorClass::fault, Errno::enomem);
         return std::move(*held);
     }
