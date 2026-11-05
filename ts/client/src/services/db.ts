@@ -30,7 +30,7 @@ function open(): Promise<IDBDatabase | null> {
 
 let db = open();
 
-function asked<R>(req: IDBRequest<R>): Promise<R> {
+function settle<R>(req: IDBRequest<R>): Promise<R> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -51,13 +51,13 @@ export async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   try {
     const out = await fn({
       get: (key) =>
-        asked<Uint8Array<ArrayBuffer> | undefined>(store.get(key)).then(
+        settle<Uint8Array<ArrayBuffer> | undefined>(store.get(key)).then(
           (bytes) => bytes ?? null,
         ),
       put: async (key, bytes) => {
         await (bytes === null
-          ? asked(store.delete(key))
-          : asked(store.put(bytes, key)));
+          ? settle(store.delete(key))
+          : settle(store.put(bytes, key)));
       },
     });
     await committed;

@@ -77,6 +77,10 @@ if [ -n "$val" ]; then
   val=${val//'${CLAUDE_CODE_SESSION_ID}'/$sid}
   val=${val//'$CLAUDE_CODE_SESSION_ID'/$sid}
   val=${val//'$PWD'/$base}
+  # A relative target whose cwd a later `cd` sets is not guessed at.
+  if [ "${val#/}" = "$val" ] && [ -z "$d" ] && grep -qE '(^|[;&|(] *)cd ' <<<"$cmd"; then
+    exit 0
+  fi
   [ "${val#/}" = "$val" ] && val=$base/$val
   case $val in *'$'*|*'<'*) ;; *) dst=$val ;; esac
 fi

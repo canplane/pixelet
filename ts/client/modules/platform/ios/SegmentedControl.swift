@@ -32,7 +32,7 @@ class SegmentedControl: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     addSubview(control)
-    control.addTarget(self, action: #selector(picked), for: .valueChanged)
+    control.addTarget(self, action: #selector(pick), for: .valueChanged)
   }
 
   override func layoutSubviews() {
@@ -40,7 +40,7 @@ class SegmentedControl: ExpoView {
     control.frame = bounds
   }
 
-  @objc private func picked() {
+  @objc private func pick() {
     onPick(["index": control.selectedSegmentIndex])
   }
 }

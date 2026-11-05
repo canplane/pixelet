@@ -17,7 +17,7 @@ import UIKit
 /// lifted where no measure looks is taken for one that had left it. So the
 /// transform is only ever the part of the lift the layout has not taken yet.
 /// Once the keys have arrived, the lift is said (`onLift`), the shell lays
-/// the view out that much higher and says so (`applied`), and the transform
+/// the view out that much higher and says so (`layoutLift`), and the transform
 /// is none: at rest, the view is where the layout says it is. The view takes
 /// no touch of its own, only what stands on it.
 class KeyboardDock: ExpoView {
@@ -28,14 +28,14 @@ class KeyboardDock: ExpoView {
   /// measured from there, so the rule of where it rests is the shell's alone.
   var rest: CGFloat = 0
   /// How much of the lift the shell's layout carries.
-  var applied: CGFloat = 0 {
-    didSet { transform = CGAffineTransform(translationX: 0, y: -(lift - applied)) }
+  var layoutLift: CGFloat = 0 {
+    didSet { transform = CGAffineTransform(translationX: 0, y: -(lift - layoutLift)) }
   }
   let onLift = EventDispatcher()
 
   /// How much of the window the keyboard covers, as it was last told.
-  private var covered: CGFloat = 0
-  private var lift: CGFloat { max(0, covered + clearance - rest) }
+  private var keyboard: CGFloat = 0
+  private var lift: CGFloat { max(0, keyboard + clearance - rest) }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -46,12 +46,12 @@ class KeyboardDock: ExpoView {
     guard let window, let info = note.userInfo,
           let end = (info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
     else { return }
-    covered = window.bounds.maxY - window.convert(end, from: window.screen.coordinateSpace).minY
+    keyboard = window.bounds.maxY - window.convert(end, from: window.screen.coordinateSpace).minY
     let target = lift
     let duration = (info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0
     let curve = (info[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
     UIView.animate(withDuration: duration, delay: 0, options: [UIView.AnimationOptions(rawValue: curve << 16), .beginFromCurrentState]) {
-      self.transform = CGAffineTransform(translationX: 0, y: -(target - self.applied))
+      self.transform = CGAffineTransform(translationX: 0, y: -(target - self.layoutLift))
     } completion: { finished in
       // A later change that took over says its own lift when it ends.
       if finished { self.onLift(["lift": target]) }

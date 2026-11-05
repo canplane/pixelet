@@ -1,7 +1,7 @@
 // @pxl/client/port/sensor.ts
 
 /** SENSOR on the shell's port: what the place's sensors heard, in its words
- * (services/types.ts `SensorHeard`), sent as the kernel numbers it; the kernel's
+ * (services/types.ts `SensorListener`), sent as the kernel numbers it; the kernel's
  * asks that one start or stop, passed to the place's; and the location the
  * search panel's card asks for. */
 
@@ -13,7 +13,7 @@ import {
   type SensorStartEvent,
   type SensorStopEvent,
 } from "@/abi/cmd.spec.ts";
-import { type SensorHeard } from "@/services/types.ts";
+import { type SensorListener } from "@/services/types.ts";
 import * as sensor from "@/services/sensor.ts";
 import { kernel } from "@/host/kernel.ts";
 
@@ -70,7 +70,7 @@ const ANSWER = {
 } as const;
 
 /** What the place's sensors heard, handed to it once at boot. */
-export const SENSOR_HEARD: SensorHeard = {
+export const SENSOR_LISTENER: SensorListener = {
   position: kernel_pos,
   positionError: (error) => kernel.sensor_err(Sensor.Geolocation, ERR[error]),
   orientation: kernel_orient,

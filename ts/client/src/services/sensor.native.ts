@@ -10,14 +10,14 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import type { SensorHeard } from "./types.ts";
+import type { SensorListener } from "./types.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** Set once at boot, before any sensor starts. */
-let heard: SensorHeard;
+let listener: SensorListener;
 
-export function hear(given: SensorHeard): void {
-  heard = given;
+export function listen(given: SensorListener): void {
+  listener = given;
 }
 
 function geo_has(): boolean {
@@ -44,7 +44,7 @@ let granted: boolean | null = null;
 
 /** Only reads an answered permission: asking opens an Android activity,
  * and the resume restarted the sensors, which asked again in a loop. */
-async function permitted(): Promise<boolean> {
+async function geo_permit(): Promise<boolean> {
   const now = await Location.getForegroundPermissionsAsync();
   const { status } =
     now.status === Location.PermissionStatus.UNDETERMINED
@@ -74,8 +74,8 @@ function recheck(): void {
       return;
     }
     granted = true;
-    heard.permission("geolocation", "granted");
-    heard.permission("orientation", "granted");
+    listener.permission("geolocation", "granted");
+    listener.permission("orientation", "granted");
   });
 }
 
@@ -104,7 +104,7 @@ let geolocation: Watch | null = null;
 function geo_fail(watch: Watch, error: "denied" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
-  heard.positionError(error);
+  listener.positionError(error);
 }
 
 function geo_start(): void {
@@ -112,7 +112,7 @@ function geo_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await permitted())) return geo_fail(watch, "denied");
+    if (!(await geo_permit())) return geo_fail(watch, "denied");
     const subscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
@@ -129,7 +129,7 @@ function geo_start(): void {
           heading,
         } = pos.coords;
         // An altitude with no accuracy is none measured.
-        heard.position(
+        listener.position(
           longitude,
           latitude,
           null_if_negative(altitudeAccuracy) === null ? null : altitude,
@@ -159,8 +159,8 @@ let orientation: Watch | null = null;
 function orient_fail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orient_stop();
-  if (refused) heard.permission("orientation", "denied");
-  else heard.orientationLost();
+  if (refused) listener.permission("orientation", "denied");
+  else listener.orientationLost();
 }
 
 function orient_start(): void {
@@ -168,11 +168,11 @@ function orient_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   orientation = watch;
   void (async () => {
-    if (!(await permitted())) return orient_fail(watch, true);
+    if (!(await geo_permit())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        heard.orientation(heading, null, null, null);
+        listener.orientation(heading, null, null, null);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
