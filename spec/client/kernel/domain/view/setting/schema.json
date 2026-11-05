@@ -302,26 +302,8 @@
       "default": false,
       "section": "debug"
     },
-    "camera_gizmo": {
-      "number": 16,
-      "$doc": [
-        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them."
-      ],
-      "kind": "toggle",
-      "default": false,
-      "section": "debug"
-    },
     "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
     "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
-    "ray_steps": {
-      "number": 19,
-      "$doc": [
-        "Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl)."
-      ],
-      "kind": "toggle",
-      "default": false,
-      "section": "debug"
-    },
     "ray_counts": {
       "number": 20,
       "$doc": [

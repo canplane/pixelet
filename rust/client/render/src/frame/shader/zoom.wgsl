@@ -1,8 +1,7 @@
 // pxl-render/zoom.wgsl
 
 // The zoom asked at a distance on a face met at a slant, the camera grid's rule (pxl-engine
-// grid.rs): every walk's (walk_node.wgsl), and the gizmo's that shows it (screen_shade.wgsl
-// `cell_share`).
+// grid.rs), every walk's (walk_node.wgsl).
 
 /// The zoom asked at `r2`, a distance squared, on a face `slant` octaves foreshortened
 /// (`node_slant`; `Detail::on`).

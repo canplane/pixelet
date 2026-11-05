@@ -268,12 +268,8 @@ pub enum SettingKey {
     perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them.
-    camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl).
-    ray_steps = 19,
     /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,
     /// The hour the sky is drawn at; SKY_TIMES says each.
@@ -281,7 +277,7 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 22] = [
+    pub const ALL: [SettingKey; 20] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -298,10 +294,8 @@ impl SettingKey {
         SettingKey::view,
         SettingKey::perf,
         SettingKey::world_gizmo,
-        SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
-        SettingKey::ray_steps,
         SettingKey::ray_counts,
         SettingKey::sky_time,
     ];
@@ -335,10 +329,8 @@ impl SettingKey {
             SettingKey::view => SettingKind::Toggle,
             SettingKey::perf => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
-            SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
-            SettingKey::ray_steps => SettingKind::Toggle,
             SettingKey::ray_counts => SettingKind::Toggle,
             SettingKey::sky_time => SettingKind::Choice,
         }
@@ -392,10 +384,8 @@ pub struct Settings {
     pub view: bool,
     pub perf: bool,
     pub world_gizmo: bool,
-    pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
-    pub ray_steps: bool,
     pub ray_counts: bool,
     pub sky_time: SkyTime,
 }
@@ -419,10 +409,8 @@ impl Settings {
         view: false,
         perf: false,
         world_gizmo: false,
-        camera_gizmo: false,
         person: 1,
         pet: 5,
-        ray_steps: false,
         ray_counts: false,
         sky_time: SkyTime::real,
     };
@@ -447,10 +435,8 @@ impl Settings {
             SettingKey::view => self.view as u32,
             SettingKey::perf => self.perf as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
-            SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
-            SettingKey::ray_steps => self.ray_steps as u32,
             SettingKey::ray_counts => self.ray_counts as u32,
             SettingKey::sky_time => self.sky_time as u32,
         }
@@ -488,7 +474,6 @@ impl Settings {
             SettingKey::view if val <= 1 => self.view = val == 1,
             SettingKey::perf if val <= 1 => self.perf = val == 1,
             SettingKey::world_gizmo if val <= 1 => self.world_gizmo = val == 1,
-            SettingKey::camera_gizmo if val <= 1 => self.camera_gizmo = val == 1,
             SettingKey::person => match u8::try_from(val) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,
@@ -497,7 +482,6 @@ impl Settings {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
-            SettingKey::ray_steps if val <= 1 => self.ray_steps = val == 1,
             SettingKey::ray_counts if val <= 1 => self.ray_counts = val == 1,
             SettingKey::sky_time => match SkyTime::of(val) {
                 Some(o) => self.sky_time = o,

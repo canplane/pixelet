@@ -2,9 +2,9 @@
 
 // A sample's hit as the raster reads it (pxl-engine `beam::SAMPLE_WORDS`).
 
-/// The ended walk `w` put at word `base`, the nodes it and its beam ray visited `visits`
-/// (pxl-engine `beam::SAMPLE_WORDS`): `SAMPLE_NONE` where it went on to its reach.
-fn sample_put(base: u32, w: Walked, visits: u32) {
+/// The ended walk `w` put at word `base` (pxl-engine `beam::SAMPLE_WORDS`): `SAMPLE_NONE` where
+/// it went on to its reach.
+fn sample_put(base: u32, w: Walked) {
   let at = base + SAMPLE_NODE;
   beams[at + NODE_ZOOM] = select(w.zoom, SAMPLE_NONE, w.ends == 3u);
   beams[at + NODE_CORNER] = w.corner.x;
@@ -17,5 +17,4 @@ fn sample_put(base: u32, w: Walked, visits: u32) {
   beams[base + SAMPLE_ASSET] = select(w.asset.x, 0u, w.ends == 3u);
   beams[base + SAMPLE_ASSET + 1u] = select(w.asset.y, 0u, w.ends == 3u);
   beams[base + SAMPLE_AXIS] = select(w.axis, 0u, w.ends == 3u);
-  beams[base + SAMPLE_VISITS] = visits;
 }

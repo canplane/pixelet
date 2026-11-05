@@ -13,8 +13,6 @@ use pxl_engine::param::light;
 use pxl_engine::screen;
 use std::path::Path;
 
-#[path = "src/frame/shader/debug_look.spec.rs"]
-mod debug_look;
 #[path = "src/param.rs"]
 #[expect(
     dead_code,
@@ -153,9 +151,8 @@ fn main() {
     }
     // The eye's words the screen pass reads (pxl-engine eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_engine::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, STEPS, TAN, UP};
+    use pxl_engine::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, TAN, UP};
     let last = (ORIGIN + 2)
-        .max(STEPS)
         .max(FAR)
         .max(FORWARD + 2)
         .max(RIGHT + 2)
@@ -163,7 +160,7 @@ fn main() {
         .max(TAN + 1)
         .max(JITTER + 1);
     let eye = format!(
-        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_FAR: u32 = {FAR}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_FAR: u32 = {FAR}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
@@ -193,55 +190,9 @@ fn main() {
         1u32 << HASH_SHARE_BITS
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
-    std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
-}
-
-/// The debug views' looks (debug_look.json) as WGSL: the grid's and the
-/// tints decoded to light, which their passes mix in, and the steps' as they
-/// are, which the pass writes to the screen; the ramp read straight between
-/// its stops.
-fn debug_looks() -> String {
-    use debug_look::{share, steps};
-    // A world's cell spans (1, `SPANS`] of the view's cells where the rays
-    // stop on it (pxl-engine grid.rs `cell_zoom_at`), so its share of a cell
-    // squared is within (1, `SPANS`²]: the tints' bounds are those.
-    let spans = grid::SPANS;
-    assert!(
-        share::finer::most == 1.0 && share::within::most == spans * spans,
-        "debug_look.json's share bounds are the split's"
-    );
-    let srgb = |c: u32| [c >> 16, c >> 8, c].map(|v| (v & 255) as f32 / 255.0);
-    let light = |c: u32| {
-        srgb(c).map(|v| {
-            if v <= 0.04045 {
-                v / 12.92
-            } else {
-                libm::powf((v + 0.055) / 1.055, 2.4)
-            }
-        })
-    };
-    let parts = |v: [f32; 3]| format!("{:?}, {:?}, {:?}", v[0], v[1], v[2]);
-    let vec3 = |v: [f32; 3]| format!("vec3f({})", parts(v));
-    let ramp: Vec<String> = steps::ramp.iter().map(|&c| vec3(srgb(c))).collect();
-    let last = steps::ramp.len() - 1;
-    format!(
-        "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        parts(light(debug_look::grid::rgb)),
-        debug_look::grid::alpha,
-        vec3(light(share::finer::rgb)),
-        share::finer::most,
-        vec3(light(share::within::rgb)),
-        share::within::most,
-        vec3(light(share::coarser::rgb)),
-        steps::most,
-        vec3(srgb(steps::none)),
-        ramp.len(),
-        ramp.join(", "),
-        last - 1
-    )
 }
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never
@@ -304,7 +255,6 @@ fn walk_word() -> String {
         ("CELL_CORNER", beam::CELL_CORNER),
         ("CELL_RESUMES", beam::CELL_RESUMES),
         ("CELL_WORDS", beam::CELL_WORDS),
-        ("LINE_VISITS", beam::LINE_VISITS),
         ("LINE_NODE", beam::LINE_NODE),
         ("LINE_WORDS", beam::LINE_WORDS),
         ("NODE_ZOOM", beam::NODE_ZOOM),
@@ -315,7 +265,6 @@ fn walk_word() -> String {
         ("SAMPLE_LEFT_T", beam::SAMPLE_LEFT_T),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
-        ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
         ("SAMPLE_SIDE", SAMPLE_SIDE),

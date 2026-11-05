@@ -1364,7 +1364,7 @@ impl RaysPass {
         // the jitter: a pixel's marks hold its footprint (`light_mark_cs`).
         let l = &mut c.light_receivers;
         l.begin();
-        l.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
+        l.read(&cast.eye[eye::ORIGIN..eye::ORIGIN + 3]);
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
         l.read(cast.actors);
         l.mark(c.generator.counts());

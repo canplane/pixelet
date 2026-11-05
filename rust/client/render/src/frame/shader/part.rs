@@ -113,113 +113,111 @@ pub const SHADER_LIGHT_MISS: u32 = 46;
 /// The occlusion's half-resolution map brought to the pixel and multiplied
 /// into the world's color, as the tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 47;
-/// The camera grid's cells over the screen (camera_grid.wgsl).
-pub const SHADER_CAMERA_GRID: u32 = 48;
 /// The samples' hits handed to the rasterizer (pxl-engine `raster`):
 /// their boxes written, by hand (boxes.wgsl, sample_box.wgsl), a compute
 /// entry; and the boxes drawn, the nearest
 /// face a pixel's ray enters kept with its sample (raster.wgsl), which the
 /// cast's pixels read (`SHADER_CAST`).
-pub const SHADER_SAMPLE_BOX: u32 = 49;
-pub const SHADER_RASTER: u32 = 50;
+pub const SHADER_SAMPLE_BOX: u32 = 48;
+pub const SHADER_RASTER: u32 = 49;
 /// What lies about each box's face, asked once a box (pxl-engine
 /// `raster::ARGS_FACES`), and each missed pixel's hit's, by hand (face.wgsl): its one
 /// compute entry.
-pub const SHADER_FACE: u32 = 51;
+pub const SHADER_FACE: u32 = 50;
 /// The tiles of the light's box its receivers stand on in a cast
 /// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
 /// (`light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.
-pub const SHADER_LIGHT_MARK: u32 = 52;
-pub const SHADER_LIGHT_MARK_DRAWS: u32 = 53;
-pub const SHADER_LIGHT_PROPAGATE: u32 = 54;
+pub const SHADER_LIGHT_MARK: u32 = 51;
+pub const SHADER_LIGHT_MARK_DRAWS: u32 = 52;
+pub const SHADER_LIGHT_PROPAGATE: u32 = 53;
 /// Which candidates of a slot `SHADER_GENERATION_MARK` listed the thinning
 /// retains, a clip level cell a thread, for `SHADER_GENERATION` to generate: its
 /// one compute entry.
-pub const SHADER_GENERATION_THIN: u32 = 55;
+pub const SHADER_GENERATION_THIN: u32 = 54;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
-pub const SHADER_SCREEN_FINISH: u32 = 56;
+pub const SHADER_SCREEN_FINISH: u32 = 55;
 /// The world's color gathered over frames (screen_resolve.wgsl).
-pub const SHADER_SCREEN_RESOLVE: u32 = 57;
+pub const SHADER_SCREEN_RESOLVE: u32 = 56;
 /// The claimed tiles set back to nothing at the far plane, their stencil
 /// raised (screen_gate.wgsl).
-pub const SHADER_SCREEN_GATE: u32 = 58;
+pub const SHADER_SCREEN_GATE: u32 = 57;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (screen_show.wgsl).
-pub const SHADER_SCREEN_SHOW: u32 = 59;
+pub const SHADER_SCREEN_SHOW: u32 = 58;
 /// The light's map's tiles that changed propagated to the screen's
 /// (screen_propagate.wgsl): its one compute entry.
-pub const SHADER_SCREEN_PROPAGATE: u32 = 60;
+pub const SHADER_SCREEN_PROPAGATE: u32 = 59;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (screen_write_back.wgsl).
-pub const SHADER_SCREEN_WRITE_BACK: u32 = 61;
+pub const SHADER_SCREEN_WRITE_BACK: u32 = 60;
 /// The claimed tiles of the samples' raster set back to no sample at the far
 /// plane (raster_gate.wgsl).
-pub const SHADER_RASTER_GATE: u32 = 62;
+pub const SHADER_RASTER_GATE: u32 = 61;
 /// The tiles the frame's one mark covers, or every one, taking its number
 /// (screen_mark.wgsl): its one compute entry.
-pub const SHADER_SCREEN_MARK: u32 = 63;
+pub const SHADER_SCREEN_MARK: u32 = 62;
 /// The world's depth laid in the claimed tiles of the light's map, their
 /// stencil raised (light_gate.wgsl).
-pub const SHADER_LIGHT_GATE: u32 = 64;
+pub const SHADER_LIGHT_GATE: u32 = 63;
 /// Each square of the screen's least and most depth, set in the tiles drawn
 /// (screen_bound.wgsl): its one compute entry.
-pub const SHADER_SCREEN_BOUND: u32 = 65;
+pub const SHADER_SCREEN_BOUND: u32 = 64;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
-pub const SHADER_SKINNED_MARK: u32 = 66;
+pub const SHADER_SKINNED_MARK: u32 = 65;
 /// The tiles of the light's box the box slid onto, or slid into another
 /// band (pxl-engine `Light::keeps`), by hand (light_slide.wgsl): a compute
 /// entry.
-pub const SHADER_LIGHT_SLIDE: u32 = 67;
+pub const SHADER_LIGHT_SLIDE: u32 = 66;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
-pub const SHADER_DECOR_MARK: u32 = 68;
-pub const SHADER_IMPOSTOR_MARK: u32 = 69;
-pub const SHADER_LOCATION_ZONE_MARK: u32 = 70;
-pub const SHADER_LOCATION_BEACON_MARK: u32 = 71;
+pub const SHADER_DECOR_MARK: u32 = 67;
+pub const SHADER_IMPOSTOR_MARK: u32 = 68;
+pub const SHADER_LOCATION_ZONE_MARK: u32 = 69;
+pub const SHADER_LOCATION_BEACON_MARK: u32 = 70;
 /// The missed pixels' hits whose faces are asked once a square of them,
 /// the one of each square that asks listed (pxl-engine `beam::HIT_WORDS`), and
 /// the faces asked put at their pixels, by hand (hit_lead.wgsl,
 /// hit_faces.wgsl): compute entries.
-pub const SHADER_HIT_LEAD: u32 = 72;
-pub const SHADER_HIT_FACES: u32 = 73;
+pub const SHADER_HIT_LEAD: u32 = 71;
+pub const SHADER_HIT_FACES: u32 = 72;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 74;
+pub const SHADER_BOX_ARGS: u32 = 73;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl,
 /// light_cell.wgsl, sample.light.wgsl, light_sample_box.wgsl).
-pub const SHADER_LIGHT_BEAM: u32 = 75;
-pub const SHADER_LIGHT_CELL: u32 = 76;
-pub const SHADER_LIGHT_SAMPLE: u32 = 77;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 78;
+pub const SHADER_LIGHT_BEAM: u32 = 74;
+pub const SHADER_LIGHT_CELL: u32 = 75;
+pub const SHADER_LIGHT_SAMPLE: u32 = 76;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 77;
 /// The samples' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
-pub const SHADER_SAMPLE_HIT: u32 = 79;
+pub const SHADER_SAMPLE_HIT: u32 = 78;
 /// The missed pixels' walk over the node cache alone, by hand: what it does
 /// not end `COMPUTE_MISS_LIST` walks again.
-pub const SHADER_MISS_HIT: u32 = 80;
+pub const SHADER_MISS_HIT: u32 = 79;
 /// The beam rays' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
-pub const SHADER_BEAM_HIT: u32 = 81;
+pub const SHADER_BEAM_HIT: u32 = 80;
 /// The light's missed slots' walk over the node cache alone, by hand: what it does
 /// not end `SHADER_LIGHT_MISS` walks again.
-pub const SHADER_LIGHT_MISS_HIT: u32 = 82;
+pub const SHADER_LIGHT_MISS_HIT: u32 = 81;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
 /// again.
-pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 83;
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 82;
 /// `SHADER_BEAM_HIT` for the light's map: what it does not end `SHADER_LIGHT_BEAM` walks again.
-pub const SHADER_LIGHT_BEAM_HIT: u32 = 84;
+pub const SHADER_LIGHT_BEAM_HIT: u32 = 83;
 /// The tiles claimed, listed for `SHADER_CAST`.
-pub const SHADER_CAST_TILES: u32 = 85;
+pub const SHADER_CAST_TILES: u32 = 84;
 /// The box of the screen's claimed tiles, a frame through the gate's (`SHADER_DECOR_GATE`).
-pub const SHADER_CLAIMED_BOX: u32 = 86;
+pub const SHADER_CLAIMED_BOX: u32 = 85;
 /// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
-pub const SHADER_DECOR_GATE: u32 = 87;
-pub const SHADERS: u32 = 88;
+pub const SHADER_DECOR_GATE: u32 = 86;
+pub const SHADERS: u32 = 87;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -360,7 +358,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ray",
         "eye",
         "paint",
-        "debug_look",
         "px",
         "tile_word",
         "screen_tiles",
@@ -639,8 +636,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_AO_APPLY
     &["tile_word", "screen_tiles", "effect", "ao_view", "ao_apply"],
-    // SHADER_CAMERA_GRID
-    &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX
     &[
         "walk_word",

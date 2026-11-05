@@ -21,7 +21,6 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let w = walk(aim, sample_start(aim, s), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     beams[base + SAMPLE_LEFT_T] = bitcast<u32>(w.t);
-    beams[base + SAMPLE_VISITS] = w.visits;
     // The list holds a place for each sample of the lattice, each listed once.
     let place = enlist(lattice.x * lattice.y);
     if (place < lattice.x * lattice.y) {
@@ -29,5 +28,5 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     return;
   }
-  sample_put(base, w, w.visits);
+  sample_put(base, w);
 }

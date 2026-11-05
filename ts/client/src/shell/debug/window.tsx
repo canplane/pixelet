@@ -10,11 +10,7 @@ import {
   type SettingName,
   settingsIn,
 } from "@/shell/setting/schema.ts";
-import {
-  CameraGizmoLegend,
-  RayStepsLegend,
-  WorldGizmoLegend,
-} from "./legend.tsx";
+import { WorldGizmoLegend } from "./legend.tsx";
 import { PerfPanel } from "./perf.tsx";
 import { ViewPanel } from "./view.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -23,8 +19,6 @@ const PANEL = {
   view: ViewPanel,
   perf: PerfPanel,
   world_gizmo: WorldGizmoLegend,
-  camera_gizmo: CameraGizmoLegend,
-  ray_steps: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
 /**

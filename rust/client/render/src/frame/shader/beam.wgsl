@@ -27,5 +27,4 @@ fn beam_cs(
     atomicAdd(&node_cache[VISITS_COUNT], met.visits);
   }
   beams[hand] = bitcast<u32>(beam_hand(met.t));
-  beams[base + LINE_VISITS] = met.visits;
 }

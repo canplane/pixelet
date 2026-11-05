@@ -20,7 +20,6 @@ use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
 use crate::domain::view::frame::resolution;
 use crate::domain::view::lens;
-use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::source;
 use pxl_render::gpu::api;
 use pxl_spec::space::layer::octant::Octant;
@@ -58,12 +57,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// zoom (pxl-engine `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
-    lens::gpu_cast(
-        o,
-        settings_store().ray_steps,
-        resolution::lattice(),
-        &mut words,
-    )?;
+    lens::gpu_cast(o, resolution::lattice(), &mut words)?;
     let edits = preview::cur();
     let cut = |e: Option<Octant>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {

@@ -39,7 +39,6 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>, left: bool) {
     t = bitcast<f32>(textureLoad(rays, id, 1u).x);
   }
   let start = px_start_at(aim, id, size, t);
-  let visits = select(start.visits, textureLoad(rays, id, 2u).x, left);
   let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
   let face = face_of(aim, w);
   var faces = 0u;
@@ -50,7 +49,7 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>, left: bool) {
   } else if (w.ends == 1u) {
     faces = keep_hit(w, face, id);
   }
-  write_ray(id, ray_word(w, w.visits + visits, face, faces));
+  write_ray(id, ray_word(w, face, faces));
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, a thread a drawn pixel, each but the

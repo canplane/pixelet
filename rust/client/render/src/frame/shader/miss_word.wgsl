@@ -50,28 +50,24 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
 }
 
-/// The ray's words where walk `w` ended, the nodes it and its beam ray visited `visits`,
-/// entered through `face`, `faces` what lies about that face (`word`): where it met nothing,
-/// the first two zero.
-fn ray_word(w: Walked, visits: u32, face: u32, faces: u32) -> vec4<u32> {
+/// The ray's words where walk `w` ended, entered through `face`, `faces` what lies about that
+/// face (`word`): where it met nothing, every word zero.
+fn ray_word(w: Walked, face: u32, faces: u32) -> vec4<u32> {
   if (w.ends != 1u) {
-    return vec4<u32>(0u, 0u, visits, 0u);
+    return vec4<u32>(0u);
   }
-  let steps = eye_word(ORIGIN + 3u) != 0u;
   return vec4<u32>(
     (w.asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (w.zoom << RAY_ZOOM_SHIFT) | (hit_fill(w) << RAY_FILL_SHIFT),
     bitcast<u32>(w.t),
-    select(w.asset.y, visits, steps),
+    w.asset.y,
     faces,
   );
 }
 
-/// A marked pixel's words while it waits for the walk that asks (miss_hit.wgsl, miss.wgsl): how
-/// far its walk over the node cache came and the nodes that walk visited, in its
-/// distance's and its visits' words (`ray_word`).
-fn write_left(id: vec2<u32>, t: f32, visits: u32) {
+/// A marked pixel's word while it waits for the walk that asks (miss_hit.wgsl, miss.wgsl): how
+/// far its walk over the node cache came, in its distance's word (`ray_word`).
+fn write_left(id: vec2<u32>, t: f32) {
   textureStore(rays, id, 1u, vec4<u32>(bitcast<u32>(t), 0u, 0u, 0u));
-  textureStore(rays, id, 2u, vec4<u32>(visits, 0u, 0u, 0u));
 }
 
 /// A ray's words written at pixel `id` (`write_ray`).

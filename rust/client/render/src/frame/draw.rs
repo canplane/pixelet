@@ -44,13 +44,10 @@ pub const PIPELINE_MARKER: u32 = 6;
 pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as impostors where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 8;
-/// The camera grid over the screen (camera_grid.wgsl): (0, 0, 0, uniform,
-/// pipeline). Listed, it also tints the rays' cells (`frame_gizmo`).
-pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's draw stats count
 /// them (gpu/renderer.rs `FrameStat::draws`): what the list draws is these.
-pub const DRAW_PIPELINES: [u32; 10] = [
+pub const DRAW_PIPELINES: [u32; 9] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_DECOR,
@@ -60,7 +57,6 @@ pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_MARKER,
     PIPELINE_DEBUG,
     PIPELINE_IMPOSTOR,
-    PIPELINE_CAMERA_GRID,
 ];
 
 /// A draw record's (draws, triangles), by its pipeline's place in `DRAW_PIPELINES`.

@@ -204,13 +204,6 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -222,13 +215,6 @@ export const SETTING = {
     kind: "index",
     default: 5 as number,
     section: "character",
-  },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
-  ray_steps: {
-    key: 19 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
   },
   /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
@@ -416,13 +402,6 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -434,12 +413,5 @@ export const SETTING_PRODUCTION = {
     kind: "index",
     default: 5 as number,
     section: "character",
-  },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
-  ray_steps: {
-    key: 19 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
   },
 } as const;

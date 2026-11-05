@@ -132,69 +132,69 @@ pub const WORLD_ASKED: &str = include_str!(concat!(
 ));
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
-pub const PIPELINE_SKY: u32 = 10;
-pub const PIPELINE_MIP: u32 = 11;
+pub const PIPELINE_SKY: u32 = 9;
+pub const PIPELINE_MIP: u32 = 10;
 /// The occlusion's half-resolution map laid over the world's color in the
 /// claimed tiles (gpu/ao.rs `apply`).
-pub const PIPELINE_AO_APPLY: u32 = 12;
-pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
-pub const PIPELINE_AO_SAMPLE: u32 = 14;
-pub const PIPELINE_AO_BLUR: u32 = 15;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 16;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 17;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 18;
-pub const PIPELINE_STAR: u32 = 19;
-pub const PIPELINE_CLOUD: u32 = 20;
-pub const PIPELINE_CLOUD_FIELD: u32 = 21;
-pub const PIPELINE_ATLAS: u32 = 22;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 23;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
+pub const PIPELINE_AO_APPLY: u32 = 11;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 12;
+pub const PIPELINE_AO_SAMPLE: u32 = 13;
+pub const PIPELINE_AO_BLUR: u32 = 14;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 15;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 16;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 17;
+pub const PIPELINE_STAR: u32 = 18;
+pub const PIPELINE_CLOUD: u32 = 19;
+pub const PIPELINE_CLOUD_FIELD: u32 = 20;
+pub const PIPELINE_ATLAS: u32 = 21;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 22;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 23;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
-pub const PIPELINE_MARKER_REGION: u32 = 25;
+pub const PIPELINE_MARKER_REGION: u32 = 24;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 26;
+pub const PIPELINE_DEBUG_FACE: u32 = 25;
 /// The eye's rays, opaque at their depth (pxl-engine ray.rs).
-pub const PIPELINE_SCREEN_RAY: u32 = 27;
+pub const PIPELINE_SCREEN_RAY: u32 = 26;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
-pub const PIPELINE_DECOR_DEPTH: u32 = 28;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 29;
-pub const PIPELINE_LIGHT_MAP: u32 = 30;
+pub const PIPELINE_DECOR_DEPTH: u32 = 27;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 28;
+pub const PIPELINE_LIGHT_MAP: u32 = 29;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER: u32 = 31;
+pub const PIPELINE_RASTER: u32 = 30;
 /// The world's color onto the canvas, encoded once, and its depth carried to
 /// the canvas's size (gpu/finish.rs).
-pub const PIPELINE_SCREEN_FINISH: u32 = 32;
+pub const PIPELINE_SCREEN_FINISH: u32 = 31;
 /// The world's color gathered over frames (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_RESOLVE: u32 = 33;
+pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
 /// The gate a frame not drawn whole is drawn through: the claimed tiles
 /// cleared, their stencil raised (gpu/renderer.rs `frame`).
-pub const PIPELINE_SCREEN_GATE: u32 = 34;
+pub const PIPELINE_SCREEN_GATE: u32 = 33;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
-pub const PIPELINE_SCREEN_SHOW: u32 = 35;
+pub const PIPELINE_SCREEN_SHOW: u32 = 34;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 36;
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
 /// The gate the samples' raster is drawn through in a frame not drawn whole:
 /// the claimed tiles cleared to the far plane, the rest left at the nearest
 /// (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER_GATE: u32 = 37;
+pub const PIPELINE_RASTER_GATE: u32 = 36;
 /// The gate the light's map is drawn through where only the listed
 /// casters that changed moved: the world's depth laid in the claimed tiles,
 /// their stencil raised (gpu/shadow.rs).
-pub const PIPELINE_LIGHT_GATE: u32 = 38;
+pub const PIPELINE_LIGHT_GATE: u32 = 37;
 /// An actor drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MARK: u32 = 39;
+pub const PIPELINE_SKINNED_MARK: u32 = 38;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
-pub const PIPELINE_DECOR_MARK: u32 = 40;
-pub const PIPELINE_IMPOSTOR_MARK: u32 = 41;
-pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 42;
-pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 43;
-pub const PIPELINES: u32 = 44;
+pub const PIPELINE_DECOR_MARK: u32 = 39;
+pub const PIPELINE_IMPOSTOR_MARK: u32 = 40;
+pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 41;
+pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 42;
+pub const PIPELINES: u32 = 43;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -239,9 +239,8 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
 }
 
 use crate::frame::draw::{
-    PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
-    PIPELINE_SKINNED,
+    PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
 use pxl_engine::param::light;
@@ -637,15 +636,6 @@ const fn desc_of(id: u32) -> Descriptor {
             },
             &DEBUG_FACE_BUFFERS,
             &[FRAME, &DRAW],
-        ),
-        // Over everything, against no depth.
-        PIPELINE_CAMERA_GRID => Descriptor::new(
-            Head {
-                depth_compare: ALWAYS,
-                ..blended(SHADER_CAMERA_GRID, CULL_NONE)
-            },
-            &[],
-            &[&[[0, UNIFORM], [19, UNIFORM]]],
         ),
         PIPELINE_SCREEN_RAY => Descriptor::new(
             Head {

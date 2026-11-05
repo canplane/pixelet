@@ -394,9 +394,7 @@ pub const NODE_CORNER: u32 = 1;
 pub const NODE_ROOTS: u32 = 4;
 pub const NODE_WORDS: u32 = 7;
 
-/// What a beam ray leaves for the pixels about it, in words: the nodes its
-/// walk visited, which the steps view counts into every walk resumed from
-/// it, then the node it stopped at
+/// What a beam ray leaves for the pixels about it, in words: the node it stopped at
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::Inheritance::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the node cache is its key's
@@ -406,8 +404,7 @@ pub const NODE_WORDS: u32 = 7;
 /// beam rays leave the same, their origin after it (pxl-engine
 /// `light::LINE_ORIGIN`), and how far they hand on apart as well
 /// (`light::hand_at`).
-pub const LINE_VISITS: u32 = 0;
-pub const LINE_NODE: u32 = 1;
+pub const LINE_NODE: u32 = 0;
 pub const LINE_INHERITANCE: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
@@ -437,22 +434,17 @@ pub const CELL_WORDS: u32 = 3;
 /// before any cell walks itself, and the axis the sample entered it
 /// across: a face its ray reached through air, so one a pixel may show only
 /// where it enters across the same; what lies about that face
-/// (`face::word`), asked once here for every pixel that shows it; and the
-/// nodes visited from the eye to it, its beam ray's and its own, which a
-/// pixel that takes its cell reports in the steps view as the walk it
-/// took.
+/// (`face::word`), asked once here for every pixel that shows it.
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
-pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
-pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
+pub const SAMPLE_WORDS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 /// While a sample is listed for the walk that asks the world (pxl-render sample_hit.wgsl,
 /// sample.wgsl), where its walk over the node cache left it, in its asset's first word: how far
-/// it came, which that walk goes on from off its cell's line (resume.wgsl `resumed_at`); the
-/// nodes it visited in `SAMPLE_VISITS`.
+/// it came, which that walk goes on from off its cell's line (resume.wgsl `resumed_at`).
 pub const SAMPLE_LEFT_T: u32 = SAMPLE_ASSET;
 
 /// The side of a workgroup of the passes over the beam rays' corners, a thread a corner, and

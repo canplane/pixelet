@@ -42,7 +42,7 @@ struct DataSpec {
     ts_names: Option<&'static [&'static str]>,
 }
 
-const DATA_SPECS: [DataSpec; 21] = [
+const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -140,16 +140,6 @@ const DATA_SPECS: [DataSpec; 21] = [
         rs: Some("rust/client/kernel/src/domain/scene/gizmo/gizmo.spec.rs"),
         rs_also: &[],
         module: Some("gizmo_spec"),
-        enums: Enums::None,
-        ts_names: None,
-    },
-    DataSpec {
-        json: "spec/client/render/frame/shader/debug_look.json",
-        uses: &[],
-        ts: Some("ts/client/src/abi/debug_look.spec.ts"),
-        rs: Some("rust/client/render/src/frame/shader/debug_look.spec.rs"),
-        rs_also: &[],
-        module: Some("debug_look_spec"),
         enums: Enums::None,
         ts_names: None,
     },

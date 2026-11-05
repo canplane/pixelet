@@ -97,7 +97,6 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
   var corner = start.corner;
   var zoom = start.zoom;
   var roots = start.roots;
-  var visits = start.visits;
 
   // 0 goes on; 1 a hit; 2 lacks; 3 gone to its reach; 4 left to `sample_cs`.
   var ends = 0u;
@@ -134,7 +133,6 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
         hit_t = t;
         break;
       }
-      visits += 1u;
       visited = true;
       let kind = slot.kind;
       asset = slot.asset;
@@ -253,5 +251,5 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
     ends = 4u;
     hit_t = t;
   }
-  return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
+  return Walked(ends, zoom, corner, roots, asset, axis, hit_t);
 }

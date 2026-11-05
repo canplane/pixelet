@@ -351,5 +351,5 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
   if (node_cache_word(COUNT_ON) != 0u) {
     atomicAdd(&node_cache[VISITS_COUNT], visits);
   }
-  return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits);
+  return Walked(ends, zoom, corner, roots, asset, axis, hit_t);
 }

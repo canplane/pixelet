@@ -53,7 +53,7 @@ fn beam_walk(aim: Aim, spacing: vec2<f32>, base: u32, start: Start) -> Beamed {
   // Whether what was handed the node it ends at is in the line: where it asked it.
   var handed_ended = false;
   let tag = walk_tag();
-  var visits = start.visits;
+  var visits = 0u;
   // A walk that runs out of steps, a node looked at a step, has gone to its reach, as
   // `cast::walk_at_most` and `walk_asking` end one: it hands on `t_max`, as a ray that reached
   // it does, its line left where it is.

@@ -45,7 +45,7 @@ fn miss_hit_cs(
   let aim = px_aim(id, size);
   let w = walk(aim, px_start(aim, id, size), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
-    write_left(id, w.t, w.visits);
+    write_left(id, w.t);
     let place = enlist(MARKS);
     if (place < MARKS) {
       beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
@@ -61,5 +61,5 @@ fn miss_hit_cs(
   } else if (w.ends == 1u) {
     faces = keep_hit(w, face, id);
   }
-  write_ray(id, ray_word(w, w.visits, face, faces));
+  write_ray(id, ray_word(w, face, faces));
 }

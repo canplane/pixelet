@@ -20,16 +20,15 @@ use xpute_kit::status::errno::Errno;
 use crate::api_spec::surface_role;
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{
-    stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG,
-    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
-    REWRITE_WORDS, UPLOAD_WORDS,
+    stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
+    PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, GIZMO, JITTER,
-    LIGHT_STEPS, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON,
-    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, JITTER, LIGHT_STEPS,
+    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
+    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -175,12 +174,11 @@ fn least_height(alt_km: f64) -> f64 {
 
 /// The world's draws that mark no tiles: any of theirs the kernel does not
 /// bound (`FrameInput::bounded`) that moved draws the frame whole.
-const BESIDE: [u32; 5] = [
+const BESIDE: [u32; 4] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR,
-    PIPELINE_CAMERA_GRID,
 ];
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
@@ -497,7 +495,7 @@ impl Renderer {
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
             propagate: Propagate::new(g, &mut pipelines),
-            debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
+            debug: DebugPass::new(g, &mut pipelines, frame_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
@@ -1006,12 +1004,6 @@ impl Renderer {
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        // The camera gizmo listed tints the rays' cells (screen_shade.wgsl `cell_share`).
-        self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 {
-            1.0
-        } else {
-            0.0
-        };
         // The jitter apart: where only it moved, the frame draws its pixels
         // again and stands once it holds (gpu/resolve.rs).
         let jitter = [self.frame[JITTER], self.frame[JITTER + 1]];
@@ -1633,7 +1625,6 @@ impl Renderer {
                 PIPELINE_MARKER => 2 * d[1],
                 // Two a segment, and the faces'.
                 PIPELINE_DEBUG => d[1] + d[2] / 3,
-                PIPELINE_CAMERA_GRID => 1,
                 _ => 0,
             };
             let c = &mut stats[stats_slot(d[4])];

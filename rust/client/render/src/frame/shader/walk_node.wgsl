@@ -48,19 +48,17 @@ fn ray_inv(dir: vec3<f32>) -> vec3<f32> {
   return select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
 }
 
-/// Where a walk starts: the node holding where the ray is at `t`, and the nodes its beam ray
-/// visited (`visits`, resume.wgsl).
+/// Where a walk starts: the node holding where the ray is at `t` (resume.wgsl).
 struct Start {
   t: f32,
   corner: vec3<u32>,
   zoom: u32,
   roots: vec3<i32>,
-  visits: u32,
 }
 
 /// From the root of the origin, at 0.
 fn root_start() -> Start {
-  return Start(0.0, vec3<u32>(0u), 0u, vec3<i32>(0), 0u);
+  return Start(0.0, vec3<u32>(0u), 0u, vec3<i32>(0));
 }
 
 /// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
@@ -73,7 +71,6 @@ struct Walked {
   asset: vec2<u32>,
   axis: u32,
   t: f32,
-  visits: u32,
 }
 
 /// Units from the origin at `og` to `p`, in the root `roots` from it (pxl-engine

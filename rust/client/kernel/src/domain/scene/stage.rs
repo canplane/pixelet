@@ -55,7 +55,6 @@ use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::cloud;
-use crate::domain::scene::gizmo::camera_gizmo;
 use crate::domain::scene::marker;
 use crate::domain::scene::model;
 use crate::domain::scene::param;
@@ -315,7 +314,6 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         let models = model::models();
         let animating = scene.tick(list, models, &frame);
         scene.begin(list, models, frame.eye);
-        camera_gizmo::draw(list, settings_store().camera_gizmo);
         animating
     });
     {

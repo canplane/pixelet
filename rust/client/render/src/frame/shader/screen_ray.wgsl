@@ -12,8 +12,8 @@
 // same bits.
 
 // The rays, a layer a word: what a ray met (val, face, zoom), how far it
-// went (f32 bits), the four palette indices the ground's cell is drawn by or, in the
-// steps view, the nodes its descent asked, and its face's edges and corners
+// went (f32 bits), the four palette indices the ground's cell is drawn by, and its face's
+// edges and corners
 // (`RAY_FACES`). A cell is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each val's swatch and layer, then the color it reads as from afar, in
@@ -22,7 +22,7 @@
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays left (pxl-engine `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
-// their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
+// their low bits; its reach;
 // the axes and tangents each ray's direction is formed of; and where each
 // px's ray goes through it (`EYE_JITTER`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;

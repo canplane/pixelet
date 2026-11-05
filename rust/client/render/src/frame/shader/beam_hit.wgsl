@@ -28,7 +28,6 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[at + NODE_ROOTS] = u32(w.roots.x);
   beams[at + NODE_ROOTS + 1u] = u32(w.roots.y);
   beams[at + NODE_ROOTS + 2u] = u32(w.roots.z);
-  beams[base + LINE_VISITS] = w.visits;
   let hand = beam_hand_at(c);
   if (w.ends == 4u) {
     // The list holds a place for each beam ray of the lattice, each listed once.

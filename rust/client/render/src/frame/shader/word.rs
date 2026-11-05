@@ -105,9 +105,6 @@ uniform! {
         /// How far from the eye the effects on a drawn surface reach, in
         /// units (effect.wgsl `effect_share`).
         EFFECT_REACH: F32 = 50,
-        /// Whether the camera gizmo is drawn, its tint on the rays' cells
-        /// with it (screen_shade.wgsl `cell_share`).
-        GIZMO: F32 = 51,
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
         SCREEN: Vec2 = 52,

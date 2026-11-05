@@ -41,7 +41,6 @@ fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
   let dir = ray_dir(aim.dir);
   let inv = aim.inv;
   let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
-  let visits = beams[line + LINE_VISITS];
   let k = line + LINE_NODE;
   let node_c = vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]);
   var node_r = vec3<i32>(i32(beams[k + NODE_ROOTS]), i32(beams[k + NODE_ROOTS + 1u]), i32(beams[k + NODE_ROOTS + 2u]));
@@ -54,7 +53,7 @@ fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
   let on = select(vec3<i32>(0), vec3<i32>(1), (d >= vec3<i32>(0)) & (p < og))
     + select(vec3<i32>(0), vec3<i32>(-1), (d < vec3<i32>(0)) & (p > og));
   if (any(node_r != on)) {
-    return Start(t, vec3<u32>(0u), 0u, vec3<i32>(0), visits);
+    return Start(t, vec3<u32>(0u), 0u, vec3<i32>(0));
   }
   let apart_from = (node_c.x ^ p.x) | (node_c.y ^ p.y) | (node_c.z ^ p.z);
   var zoom = min(beams[k + NODE_ZOOM], countLeadingZeros(apart_from));
@@ -71,5 +70,5 @@ fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
     zoom -= 1u;
     corner = corner & vec3<u32>(~under(zoom));
   }
-  return Start(t, corner, zoom, node_r, visits);
+  return Start(t, corner, zoom, node_r);
 }

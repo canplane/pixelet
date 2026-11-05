@@ -49,7 +49,6 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
   let px = px_tan(p, size.xy);
   let aim = eye_aim(px);
   let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
-  let steps = eye_word(ORIGIN + 3u) != 0u;
   let on = node_cache[COUNT_ON] != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
     let n = eye_word(GRID + GRID_SAMPLES);
@@ -67,7 +66,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
       write_ray(p, vec4<u32>(
         (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
         bitcast<u32>(entry.t),
-        select(asset.y, beams[k + SAMPLE_VISITS], steps),
+        asset.y,
         beams[k + SAMPLE_FACES],
       ));
       return;
@@ -80,7 +79,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
     let k = sample_word(s);
     if (went_on(k) && went_on(sample_word(s + vec2<u32>(1u, 0u))) && went_on(sample_word(s + vec2<u32>(0u, 1u))) && went_on(sample_word(s + vec2<u32>(1u)))) {
       add_cnt(on, COUNT_SKY);
-      write_ray(p, vec4<u32>(0u, 0u, select(0u, beams[k + SAMPLE_VISITS], steps), 0u));
+      write_ray(p, vec4<u32>(0u));
       return;
     }
   }

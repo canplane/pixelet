@@ -6,13 +6,12 @@
 //! gpu/generator.rs, the screen pass). Each is a word's place among them, one
 //! layout written here alone.
 
-/// The eye's position in Q3 steps, X, Y and Z.
 use crate::beam;
 use crate::overwrite::Cut;
 
+/// The eye's position in Q3 steps, X, Y and Z, then a word no reader reads, so the next
+/// starts a vec4.
 pub const ORIGIN: usize = 0;
-/// Whether each ray reports the nodes its descent asked, not what it met.
-pub const STEPS: usize = 3;
 /// The unit forward, X, Y and Z, then how far every ray goes (`FAR`), f32 bits.
 pub const FORWARD: usize = 4;
 pub const FAR: usize = 7;
@@ -67,7 +66,7 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// Every word, the grid last.
 pub const WORDS: usize = GRID + GRID_WORDS;
 const _: () = assert!(
-    STEPS == ORIGIN + 3
+    FORWARD == ORIGIN + 4
         && FAR == FORWARD + 3
         && UP == RIGHT + 4
         && TAN == UP + 4

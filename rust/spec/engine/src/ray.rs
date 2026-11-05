@@ -5,12 +5,11 @@
 //! frame/shader/screen_ray.wgsl), a layer of the world surface's rays a
 //! word: what it stopped on, through which face, at which zoom and the
 //! share of its cube it keeps (`first_word`); how far, f32 bits; the four palette indices the ground's asset is
-//! drawn by (`ground::word`, none for any other), or in the steps view the
-//! nodes its descent asked; and what lies about the face it entered
-//! (`face::word`), the world's own answer about the cell, the same for
-//! every pixel of it. A cell is painted from these, its own, alone, by its
-//! value whichever source holds it. Where it met nothing, the first two
-//! are zero: a hit's value is never void.
+//! drawn by (`ground::word`, none for any other); and what lies about the
+//! face it entered (`face::word`), the world's own answer about the cell, the
+//! same for every pixel of it. A cell is painted from these, its own, alone,
+//! by its value whichever source holds it. Where it met nothing, every word is
+//! zero: a hit's value is never void.
 
 use crate::Zoom;
 

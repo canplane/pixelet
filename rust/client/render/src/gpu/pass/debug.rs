@@ -1,9 +1,8 @@
 // pxl-render/gpu/pass/debug.rs
 
-//! The dev gizmos, over the finished world in passes of their own, and the
-//! camera grid over all of it, off the frame's cell and the sky's ray.
+//! The dev gizmos, over the finished world in passes of their own.
 
-use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
+use crate::frame::draw::{uniform_of, PIPELINE_DEBUG};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
@@ -22,33 +21,18 @@ pub struct DebugPass {
     faces: Pipeline,
     frame_group: u32,
     uniforms: DrawUniforms,
-    grid: Pipeline,
-    grid_group: u32,
 }
 
 impl DebugPass {
-    pub fn new(
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        frame_buf: u32,
-        sky_buf: u32,
-        align: u32,
-    ) -> DebugPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> DebugPass {
         let pipeline = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
-        let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
-        let grid_group = g.bind_group(
-            grid.layouts[0],
-            &[buf_entry(0, frame_buf), buf_entry(19, sky_buf)],
-        );
         DebugPass {
             pipeline,
             faces,
             frame_group,
             uniforms: DrawUniforms::new(16, align),
-            grid,
-            grid_group,
         }
     }
 
@@ -80,12 +64,11 @@ impl DebugPass {
     ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::debug);
-        let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
         let held = self
             .uniforms
             .slots()
             .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
-        if held.is_none() && !grid {
+        if held.is_none() {
             return false;
         }
         let slots = held.as_ref();
@@ -145,11 +128,6 @@ impl DebugPass {
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }
-        }
-        if grid {
-            g.set_pipeline(pass, self.grid.id);
-            g.set_bind_group(pass, 0, self.grid_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
         }
         g.end(pass);
         true
