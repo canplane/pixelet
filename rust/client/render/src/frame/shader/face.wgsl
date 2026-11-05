@@ -179,10 +179,15 @@ fn face_word(
 
 @compute @workgroup_size(RASTER_FACES_LANES)
 fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= args[RASTER_ARGS_INSTANCES]) {
+  // The hits' asks hold a place for each hit, the boxes' for each sample
+  // (`beam::Grid::hit_asks_at`, `asks_at`).
+  let asks = args[RASTER_ARGS_ASKS];
+  let samples = eye_word(GRID + GRID_SAMPLES) * eye_word(GRID + GRID_SAMPLES + 1u);
+  let room = select(samples, HITS, asks == eye_word(GRID + GRID_HIT_ASKS_AT));
+  if (id.x >= in_room(args[RASTER_ARGS_INSTANCES], room)) {
     return;
   }
-  let a = args[RASTER_ARGS_ASKS] + id.x * ASK_WORDS;
+  let a = asks + id.x * ASK_WORDS;
   let to = beams[a + ASK_TO];
   if (to == ASK_NONE) {
     return;

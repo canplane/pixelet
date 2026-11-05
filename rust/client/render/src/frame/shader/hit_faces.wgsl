@@ -13,7 +13,7 @@
 
 @compute @workgroup_size(HIT_LANES)
 fn hit_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= min(node_cache[HITS_CNT], HITS)) {
+  if (id.x >= in_room(node_cache[HITS_CNT], HITS)) {
     return;
   }
   let k = hit_at(id.x);

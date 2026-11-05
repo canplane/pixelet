@@ -12,7 +12,8 @@ use xpute_host::native::{self, Config};
 
 static TURNS: AtomicU32 = AtomicU32::new(0);
 
-/// A turn that asks for the next at once, as one still at work does.
+/// A turn that asks for the next at once, as one still at work does: it runs
+/// at the next kick, as a page's runs at its strobe's next moment.
 fn turn(_: f64) -> f64 {
     TURNS.fetch_add(1, Ordering::SeqCst);
     0.0
@@ -54,15 +55,35 @@ fn paused_runs_only_the_rung_turn() {
 
     assert_eq!(native::ring(0.0), Some(0.0));
     settle();
-    assert_eq!(turns(), 1, "one ring, one turn, though it asked for the next");
+    assert_eq!(
+        turns(),
+        1,
+        "one ring, one turn, though it asked for the next"
+    );
 
     native::resume();
     settle();
-    assert!(turns() > 1, "resumed, the kick and the turn's ask run");
+    assert_eq!(
+        turns(),
+        1,
+        "resumed, a turn that asked for the next at once waits for a paced kick"
+    );
+    assert_eq!(
+        native::ack().0,
+        0.0,
+        "and the program is told the guest wants it at once"
+    );
+
+    native::kick_quota(-1.0);
+    settle();
+    assert_eq!(turns(), 2, "the kick runs it, and nothing after it");
 
     native::pause();
     settle();
     let paused_at = turns();
     settle();
-    assert!(turns() <= paused_at + 1, "paused again, at most the turn under way ends");
+    assert!(
+        turns() <= paused_at + 1,
+        "paused again, at most the turn under way ends"
+    );
 }

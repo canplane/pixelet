@@ -48,7 +48,7 @@ fn alike_hit(k: u32, p: vec2<u32>) -> u32 {
 
 @compute @workgroup_size(HIT_LANES)
 fn hit_lead_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= min(node_cache[HITS_CNT], HITS)) {
+  if (id.x >= in_room(node_cache[HITS_CNT], HITS)) {
     return;
   }
   let k = hit_at(id.x);
@@ -67,9 +67,14 @@ fn hit_lead_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   // Its place among the asks, and the faces' pass's workgroups raised by the place that
   // opens one.
-  let place = atomicAdd(&marks.faces[RASTER_ARGS_INSTANCES], 1u);
+  // The asks hold a place for each hit (`beam::Grid::hit_asks_at`).
+  let place = atomicAdd(&marks.faces[RASTER_ARGS_CNT], 1u);
+  if (place >= HITS) {
+    return;
+  }
+  atomicMax(&marks.faces[RASTER_ARGS_INSTANCES], in_room(place + 1u, HITS));
   if (place % RASTER_FACES_LANES == 0u) {
-    atomicMax(&marks.faces[RASTER_ARGS_FACES], place / RASTER_FACES_LANES + 1u);
+    atomicMax(&marks.faces[RASTER_ARGS_FACES], workgroups(place + 1u, HITS, RASTER_FACES_LANES));
   }
   let cell = grid_cell(px_tan(p, textureDimensions(rays)));
   let a = eye_word(GRID + GRID_HIT_ASKS_AT) + place * ASK_WORDS;

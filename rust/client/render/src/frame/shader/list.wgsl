@@ -30,12 +30,12 @@ fn list_place(group: vec2<u32>, lane: u32) -> u32 {
 }
 
 /// One more listed in the list of `args`: its place, the rows of the walk over it raised by
-/// the place that opens each, none past `room`.
+/// the place that opens each, none past `room` (`workgroups`).
 fn enlist(room: u32) -> u32 {
   let place = atomicAdd(&args.cnt, 1u);
   let per = MISS_LANES * MISS_ACROSS;
   if (place < room && place % per == 0u) {
-    atomicMax(&args.list[1], place / per + 1u);
+    atomicMax(&args.list[1], workgroups(place + 1u, room, per));
   }
   return place;
 }

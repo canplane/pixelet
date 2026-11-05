@@ -325,7 +325,7 @@
     "DEVICE": {
       "$val": 48,
       "$doc": [
-        "address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then STATUS."
+        "address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then the frames unfinished, then STATUS. The frames unfinished are the frames the guest has drawn whose work the queue has not yet done, written by the host alone: before STATUS as the block is, and stored with release each time the count changes after. The guest loads it with acquire once STATUS reads READY, and draws a frame only while it is below its frame latency, the rule both hosts hold a frame to (xpute-gpu admit)."
       ]
     },
     "RENDER_PIPELINE_ASYNC": {

@@ -63,23 +63,60 @@ impl GpuHost {
         release(memory, at);
     }
 
-    /// Nothing for no bytes, as WebGPU writes nothing.
-    fn write(&mut self, id: u32, offset: u64, bytes: &[u8]) {
-        let Some(size) = core::num::NonZeroU64::new(bytes.len() as u64) else {
-            return;
-        };
+    /// The bytes staged through the belt, a chunk's room at a time, and
+    /// copied into the buffer ahead of what follows; nothing for no bytes, as
+    /// WebGPU writes nothing.
+    pub(super) fn write(&mut self, id: u32, offset: u64, bytes: &[u8]) {
         let buffer = self.buffer(id).clone();
-        let encoder = self.uploads.get_or_insert_with(|| {
-            self.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
-        });
-        self.belt
-            .write_buffer(encoder, &buffer, offset, size)
-            .copy_from_slice(bytes);
+        let mut at = 0;
+        while at < bytes.len() {
+            let Some((chunk, chunk_at, n)) = self.stage((bytes.len() - at) as u64) else {
+                return;
+            };
+            let piece = &bytes[at..at + n as usize];
+            chunk
+                .get_mapped_range_mut(chunk_at..chunk_at + n)
+                .expect("an upload chunk taken free is mapped")
+                .copy_from_slice(piece);
+            let encoder = self.uploads.get_or_insert_with(|| {
+                self.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            });
+            encoder.copy_buffer_to_buffer(&chunk, chunk_at, &buffer, offset + at as u64, n);
+            at += n as usize;
+        }
+    }
+
+    /// The belt's room for the next `want` bytes of a write. Where every
+    /// chunk is taken, the writes so far are submitted and the queue waited
+    /// for until one is back: a write record has no refusal, and its bytes
+    /// are the host's only while it runs (xpute-guest ipc/stream.rs R3), so
+    /// it is staged before the record returns, as a driver's staging ring
+    /// waits for the GPU. None only where the device went, its chunks' mapping
+    /// refused, and the write goes with everything else the loss ends.
+    fn stage(&mut self, want: u64) -> Option<(wgpu::Buffer, u64, u64)> {
+        loop {
+            if let Some(room) = self.belt.take(want) {
+                return Some(room);
+            }
+            if self.uploads.is_some() {
+                self.submit(core::iter::empty());
+            }
+            if !self.belt.is_returning() {
+                return None;
+            }
+            if self
+                .device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .is_err()
+            {
+                return None;
+            }
+        }
     }
 
     /// `then` submitted after the writes made since the last submit.
-    fn submit(&mut self, then: impl IntoIterator<Item = wgpu::CommandBuffer>) {
+    pub(super) fn submit(&mut self, then: impl IntoIterator<Item = wgpu::CommandBuffer>) {
         let uploads = self.uploads.take().map(|e| {
             self.belt.finish();
             e.finish()
@@ -755,6 +792,7 @@ impl GpuHost {
                         )
                     }) as u32,
                 );
+                self.tell_unfinished(memory);
                 memory.store_release(address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),

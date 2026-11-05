@@ -442,7 +442,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_cnt",
     ],
     // SHADER_GENERATION_ARGS
-    &["decor_word", "decor_args"],
+    &["decor_word", "decor_instances", "decor_args"],
     // SHADER_GENERATION_COMPACT
     &[
         "walk_word",
@@ -453,6 +453,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_record",
         "decor_row",
         "decor_run",
+        "decor_instances",
         "decor_compact",
     ],
     // SHADER_WAY
@@ -797,7 +798,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_HIT_FACES
     &["walk_word", "ray", "eye_bind", "hit", "hit_faces"],
     // SHADER_BOX_ARGS
-    &["box_args"],
+    &["tile_word", "box_args"],
     // SHADER_LIGHT_BEAM
     &[
         "walk_word",

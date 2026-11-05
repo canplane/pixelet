@@ -1716,14 +1716,23 @@ fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown:
         }
         for j in 0..DECORS.len() as u32 {
             if shown[j as usize] >> (cell - FIRST_CELL) & 1 != 0 {
+                let room = generation::LIST_WORDS - generation::LIST_AT;
+                let all = list[generation::GENERATE_CNT as usize];
+                list[generation::GENERATE_CNT as usize] += 1;
+                if all >= room {
+                    continue;
+                }
+                list[generation::GENERATE_ARGS as usize + 2] = all + 1;
                 let counted = if whole {
-                    generation::THIN_ARGS + 2
+                    generation::THIN_CNT
                 } else {
                     generation::LIST_PARTS
                 } as usize;
                 let n = list[counted];
                 list[counted] += 1;
-                list[generation::GENERATE_ARGS as usize + 2] += 1;
+                if whole {
+                    list[generation::THIN_ARGS as usize + 2] = n + 1;
+                }
                 let w = if whole {
                     generation::LIST_AT + n
                 } else {
@@ -2311,11 +2320,15 @@ fn hand_args_draws_its_regions() {
         }
         let args0 = vec![0xdead_beefu32; drawn::ARGS_WORDS as usize * regions_n];
         let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));
-        let entries =
-            [(0, &mb), (1, &rb), (2, &ab), (3, &ub)].map(|(binding, b)| wgpu::BindGroupEntry {
+        // Instances that hold every region's count, so none is cut short.
+        let slots = regions[..regions_n].iter().sum::<u32>().max(1);
+        let ib = make(&vec![0u32; ((drawn::COLUMNS + 1) * slots) as usize]);
+        let entries = [(0, &mb), (1, &rb), (2, &ab), (3, &ub), (15, &ib)].map(|(binding, b)| {
+            wgpu::BindGroupEntry {
                 binding,
                 resource: b.as_entire_binding(),
-            });
+            }
+        });
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &hand.get_bind_group_layout(0),
@@ -2778,6 +2791,7 @@ impl Chain<'_> {
                     (1, &self.regions),
                     (2, &self.args),
                     (3, &self.uniforms),
+                    (15, &self.instances),
                 ],
             );
             pass.set_pipeline(args);

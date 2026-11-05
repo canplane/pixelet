@@ -878,7 +878,7 @@ fn hand_pixels_answer_as_cast_entry() {
         uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::CLAIMED_FOR, now]);
         let changed_buf = gpu.buffer(&changed, store());
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
-        let mut list_words = vec![0u32; 3 + (tiles[0] * tiles[1]) as usize];
+        let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
         let per_tile = screen::TILE / ray::CAST_SIDE;
         list_words[1..3].copy_from_slice(&[per_tile, per_tile]);
         let list = gpu.buffer(&list_words, store());

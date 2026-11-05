@@ -16,6 +16,7 @@
 //!     xpute_guest::wasm::Config {
 //!         heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES),
 //!         stack_bytes: 1 << 20,
+//!         admit: None,
 //!     },
 //!     my_guest::run
 //! );
@@ -38,6 +39,10 @@ pub struct Config {
     /// The stack it was linked with (`LinkConfig::stack_bytes`), checked
     /// against `__stack_high` as it boots.
     pub stack_bytes: u32,
+    /// What it is handed as `BootInfo::admit`: the page's admission where it
+    /// draws (xpute-gpu `admit::page`, `guest!` given the GPU), none where
+    /// it draws nothing.
+    pub admit: Option<fn() -> bool>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -54,7 +59,7 @@ pub fn boot_info(
         hostcall,
         heap_stat,
         stop_hook: None,
-        admit: None,
+        admit: cfg.admit,
         publish: None,
     }
 }

@@ -11,7 +11,8 @@ fn beam_cs(
 ) {
   let place = list_place(group.xy, lane.x);
   let at = corners_left_at();
-  if (place >= beams[at]) {
+  let lattice = beam_lattice();
+  if (place >= in_room(beams[at], lattice.x * lattice.y)) {
     return;
   }
   let listed = beams[at + 1u + place];

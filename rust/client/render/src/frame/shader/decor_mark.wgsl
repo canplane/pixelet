@@ -50,12 +50,24 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       return;
     }
   }
+  // The pairs listed whole and in part together take no more places than the list holds,
+  // so the two never meet.
+  let room = LIST_WORDS - LIST_AT;
   for (var j = 0u; j < DECORS; j += 1u) {
     if (((shown[j] >> (cell - FIRST_CELL)) & 1u) != 0u) {
-      let count_at = select(LIST_PARTS, THIN_ARGS + 2u, whole);
-      let n = atomicAdd(&list.head[count_at], 1u);
-      atomicAdd(&list.head[GENERATE_ARGS + 2u], 1u);
-      let w = select(part_at(n), LIST_AT + n, whole);
+      let all = atomicAdd(&list.head[GENERATE_CNT], 1u);
+      if (all >= room) {
+        continue;
+      }
+      atomicMax(&list.head[GENERATE_ARGS + 2u], workgroups(all + 1u, room, 1u));
+      var w = 0u;
+      if (whole) {
+        let n = atomicAdd(&list.head[THIN_CNT], 1u);
+        atomicMax(&list.head[THIN_ARGS + 2u], workgroups(n + 1u, room, 1u));
+        w = LIST_AT + n;
+      } else {
+        w = part_at(atomicAdd(&list.head[LIST_PARTS], 1u));
+      }
       list.words[w - BOXES_AT] = pair_word(s, j);
     }
   }

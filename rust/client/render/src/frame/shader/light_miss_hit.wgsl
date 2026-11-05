@@ -15,7 +15,9 @@ fn light_miss_hit_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  let cnt = beams[head_word(LIGHT_HEAD_MISSES_CNT)];
+  // Both lists hold a place for each slot (pxl-engine `light::misses_at`, `misses_left_at`).
+  let size = head_word(LIGHT_HEAD_SIZE);
+  let cnt = in_room(beams[head_word(LIGHT_HEAD_MISSES_CNT)], size * size);
   let k = list_place(group.xy, lane.x);
   if (k >= cnt) {
     return;
@@ -27,7 +29,6 @@ fn light_miss_hit_cs(
   let w = walk(aim, light_resumed(aim, texel), NONE, vec2<f32>(0.0));
   if (w.ends == 4u) {
     textureStore(light, slot, 0, vec4<u32>(bitcast<u32>(w.t), 0u, 0u, 0u));
-    let size = head_word(LIGHT_HEAD_SIZE);
     let place = enlist(size * size);
     if (place < size * size) {
       beams[head_word(LIGHT_HEAD_MISSES_LEFT) + 1u + place] = listed;

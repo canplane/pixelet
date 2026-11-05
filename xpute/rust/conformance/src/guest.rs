@@ -272,6 +272,7 @@ mod wasm {
         Config {
             heap_at: |data_end| range_at(data_end) + HEAP_AT,
             stack_bytes: spec::STACK_BYTES,
+            admit: None,
         },
         entry
     );

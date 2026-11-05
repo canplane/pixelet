@@ -23,6 +23,7 @@ pub mod resolve;
 pub mod shadow;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
+pub mod split;
 pub mod star;
 pub mod surface;
 pub mod text;

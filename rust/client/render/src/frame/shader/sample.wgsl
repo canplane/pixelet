@@ -11,7 +11,8 @@ fn sample_cs(
 ) {
   let place = list_place(group.xy, lane.x);
   let at = left_at();
-  if (place >= beams[at]) {
+  let lattice = sample_lattice();
+  if (place >= in_room(beams[at], lattice.x * lattice.y)) {
     return;
   }
   let listed = beams[at + 1u + place];

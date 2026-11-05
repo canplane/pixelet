@@ -364,8 +364,9 @@ call's reply and to send a `cmd`.
 Natively the guest runs on its own thread, a vCPU that runs while it has work,
 as Linux's idle loop and io_uring's submitter have it: submitting is not
 stopping (`xpute-host/native/thread.rs`). The thread runs a turn whenever it is
-kicked or the time the last turn asked for has come, at once again where the
-turn answered 0, and sleeps otherwise. It is the one scheduler of the guest's
+kicked or the time the last turn asked for has come, and sleeps otherwise; a
+turn that answered 0 waits for the kick of the strobe's next admitted moment,
+as a page's turn does. It is the one scheduler of the guest's
 turns, and it keeps the wake time alone: the strobe sets no timer for it and
 asks no turn for what the host sent, which the doorbell kicked. The host's
 JavaScript writes the SQ, stores its tail with release and kicks
@@ -654,13 +655,18 @@ the generation. On a device the view is xpute's (`@xpute/native`
 
 The native GPU host reaches the guest's memory by offset (`xpute-host/mem.rs`
 `Memory`), each read or write only the range the guest names, since the host's
-own blocks may lie in the same memory. It also paces drawn frames, which a
-browser does for a page: a turn draws while fewer of the drawn frames it
-admitted are unfinished than its frame latency (`GpuHost::admit`), so taking a
-surface's texture never blocks. The answer reaches the guest with its boot
-(`BootInfo::admit`), which the program hands its renderer
-(`xpute-gpu/admit.rs` `Admit`); a page's GPU host admits every drawn frame
-(`every`). The GPU host runs by its config (`Config`): the program's numbers
+own blocks may lie in the same memory. Both GPU hosts pace drawn frames by
+one rule (`xpute-gpu/admit.rs` `admits`): a turn draws while fewer of its
+drawn frames are unfinished on the GPU than its frame latency, so taking a
+surface's texture never blocks and the GPU is never more than that many frames
+behind. The native host counts the frames it admitted until the queue's
+`on_submitted_work_done` (`GpuHost::admit`); the page's counts each turn whose
+stream took a surface's texture until the queue's `onSubmittedWorkDone`, and
+both tell the count in the device's block (spec/gpu DEVICE). The answer reaches
+the guest with its boot (`BootInfo::admit`), which the program hands its
+renderer (`Admit`): beside a native guest the host's own (`GpuHost::admit`),
+and in a module the block's count at the program's frame latency
+(`admit::page`). The GPU host runs by its config (`Config`): the program's numbers
 (`Numbers`, the frame latency and the upload chunk) and the platform's
 choices, which beside a native guest are xpute's defaults
 (`host/native.rs` `config`): the surface's preferred format, BGRA on an

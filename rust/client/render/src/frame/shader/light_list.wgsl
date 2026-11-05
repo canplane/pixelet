@@ -41,6 +41,14 @@ fn listed_at(which: u32) -> u32 {
   return head_word(LIGHT_HEAD_LISTED + which);
 }
 
+/// The places of list `which`: every beam ray's corner, or every tile (`light::listed_room`).
+fn listed_room(which: u32) -> u32 {
+  if (which == LIGHT_LISTED_CORNERS) {
+    return beam_across() * beam_across();
+  }
+  return light_tiles() * light_tiles();
+}
+
 /// The list what feeds a claimed tile at `level` is listed in (`light::LISTED_CORNERS`,
 /// `LISTED_FED`, `LISTED_CLAIMED`).
 fn listed(level: u32) -> u32 {
@@ -74,8 +82,9 @@ fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
   let per = across * across;
   let e = place / per;
   let k = place % per;
-  let at = listed_at(listed(level));
-  if (e >= beams[at]) {
+  let which = listed(level);
+  let at = listed_at(which);
+  if (e >= in_room(beams[at], listed_room(which))) {
     return vec2<u32>(NONE);
   }
   let w = beams[at + 1u + e];

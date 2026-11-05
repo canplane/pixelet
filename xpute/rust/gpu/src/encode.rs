@@ -1334,13 +1334,19 @@ pub mod call {
         words(stream, op::RESIZE, &[surface, size[0], size[1]])
     }
 
-    /// Where the host writes the device's limits, features and status.
+    /// Where the host writes the device's limits, features, frames
+    /// unfinished and status, which the page's admission reads
+    /// (`admit::page`).
     pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
-        words(
+        let asked = words(
             stream,
             op::DEVICE,
             &[off_of_slice(into) as u32, into.len() as u32],
-        )
+        );
+        if asked {
+            crate::admit::ask(into);
+        }
+        asked
     }
 }
 

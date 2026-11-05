@@ -21,7 +21,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&args.hits[0], r / HIT_LANES + 1u);
+    atomicMax(&args.hits[0], workgroups(r + 1u, HITS, HIT_LANES));
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
@@ -33,7 +33,7 @@ fn miss_hit_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let k = list_place(group.xy, lane.x);
-  if (k >= node_cache[MARKS_CNT] || k >= MARKS) {
+  if (k >= in_room(node_cache[MARKS_CNT], MARKS)) {
     return;
   }
   let listed = node_cache[MARKS_AT + k];

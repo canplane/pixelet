@@ -5,6 +5,7 @@ export default defineConfig({
     include: [
       "kit/src/**/*.test.ts",
       "host/src/**/*.test.ts",
+      "gpu/src/host.frames.test.ts",
       "example/**/*.test.ts",
     ],
     testTimeout: 0,

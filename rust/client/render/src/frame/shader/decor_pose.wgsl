@@ -155,12 +155,13 @@ const STAGE_POSE = 3u;
 /// reaches is asked.
 @compute @workgroup_size(LANES)
 fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let whole = list[THIN_ARGS + 2u];
+  // The pairs generated whole, of the pairs the list holds (`generation::LIST_WORDS`).
+  let whole = in_room(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
   let part = id.z >= whole;
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= min(records[cnt_at(brick, j)], decor_cap(j))) {
+  if (id.x >= in_room(records[cnt_at(brick, j)], decor_cap(j))) {
     return;
   }
   let r = entry_word(brick, j, id.x);

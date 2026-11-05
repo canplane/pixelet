@@ -42,6 +42,7 @@ use crate::frame::shader::floor::BIND_GROUPS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::pipeline::LANES;
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
+use crate::gpu::split::Splits;
 
 pub mod buffer_usage {
     pub use xpute_gpu::spec::BUFFER_USAGE::{
@@ -73,10 +74,11 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 pub type Image = (u32, &'static [u8]);
 
 /// The device's block (xpute DEVICE): a word a limit, the features a bit
-/// each, the timestamp period, the preferred surface format, the status.
+/// each, the timestamp period, the preferred surface format, the frames
+/// unfinished, the status.
 const FEAT_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
 const PERIOD_AT: usize = LIMIT_NAME.len() + FEAT_WORDS;
-const DEVICE_WORDS: usize = PERIOD_AT + 3;
+const DEVICE_WORDS: usize = PERIOD_AT + 4;
 
 /// The head's words past the stream's own: the device's block, then the
 /// spans' reads, `READS` of them, each its fence and result, then the
@@ -405,6 +407,21 @@ impl Layout {
             .any(|w| w[0] == binding)
     }
 
+    /// The buffers of `entries` bound as writable storage.
+    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = Id> + 'e {
+        let words = self.group.as_chunks::<3>().0;
+        entries.iter().filter_map(move |e| match e.resource {
+            encode::Resource::Buffer { buffer, .. }
+                if words
+                    .iter()
+                    .any(|w| w[0] == e.binding && w[2] == record::STORAGE_RW) =>
+            {
+                Some(buffer)
+            }
+            _ => None,
+        })
+    }
+
     /// `entries` the group's bindings each once, each a resource its kind takes (a buffer for
     /// a buffer's kind, a sampler for a sampler's, a view for the rest); a bug otherwise.
     #[track_caller]
@@ -548,6 +565,8 @@ struct State {
     /// holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
+    /// Where each encoder is cut into command buffers (gpu/split.rs).
+    splits: Splits,
 }
 
 /// An image file copied into its texture: the file's bytes kept until the
@@ -669,6 +688,7 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
+            splits: Splits::default(),
         }
     }
 }
@@ -990,6 +1010,7 @@ fn handle_of(id: Option<Id>) -> Id {
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
+            s.splits.let_go(id);
             if writable(s) {
                 s.encoder.destroy(&mut s.stream, id);
             } else {
@@ -1129,14 +1150,16 @@ impl Gpu {
             size
         );
         let s = self.s();
-        handle_of(s.encoder.buffer(
+        let buf = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size,
                 usage,
                 mapped_at_creation: false,
             },
-        ))
+        ));
+        s.splits.made(buf, usage & buffer_usage::INDIRECT != 0);
+        buf
     }
 
     pub fn texture(
@@ -1453,7 +1476,9 @@ impl Gpu {
     pub fn bind_group(&self, layout: Layout, entries: &[Entry]) -> Id {
         layout.holds(entries);
         let s = self.s();
-        handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries))
+        let group = handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries));
+        s.splits.grouped(group, layout.writable(entries));
+        group
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
@@ -1532,9 +1557,61 @@ impl Gpu {
         None
     }
 
+    /// An encoder, cut into command buffers as its passes read args
+    /// (gpu/split.rs) and submitted as them.
     pub fn encoder(&self) -> Id {
         let s = self.s();
-        handle_of(s.encoder.encoder(&mut s.stream))
+        let encoder = handle_of(s.encoder.encoder(&mut s.stream));
+        s.splits.begun(encoder);
+        encoder
+    }
+
+    /// `encoder` recorded into a new command buffer from here (gpu/split.rs).
+    fn split(&self, encoder: Id) {
+        let s = self.s();
+        let next = handle_of(s.encoder.encoder(&mut s.stream));
+        s.splits.split(encoder, next);
+    }
+
+    /// The pass an indirect call on `pass` reading `buf` is recorded in: a
+    /// compute pass is ended and begun again in a new command buffer where
+    /// `buf` was written in its own (`Splits::cuts`), its pipeline and
+    /// groups set again and its span's end moved to it; a render pass began
+    /// apart (`Splits::draws_apart`), so its own draws alone could have
+    /// written it, a bug.
+    #[track_caller]
+    fn indirect(&self, pass: Id, buf: Id) -> Id {
+        let s = self.s();
+        if !s.splits.cuts(pass, buf) {
+            return s.splits.pass_at(pass);
+        }
+        let (encoder, compute) = s.splits.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
+        xpute_kit::ensure!(compute, ENOTRECOVERABLE, pass, buf);
+        let o = s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE);
+        let (was, end, pipeline) = (o.at, o.end, o.pipeline);
+        let groups = o.groups.clone();
+        s.encoder.end(&mut s.stream, was);
+        self.split(encoder);
+        let s = self.s();
+        let stamp = end.map(|(query_set, end)| encode::TimestampWrites {
+            query_set,
+            begin: None,
+            end: Some(end),
+        });
+        let at = handle_of(
+            s.encoder
+                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+        );
+        if pipeline != 0 {
+            call::set_pipeline(&mut s.stream, at, pipeline);
+        }
+        for (idx, (group, offsets)) in groups.iter().enumerate() {
+            if *group != 0 {
+                call::set_bind_group(&mut s.stream, at, idx as u32, *group, offsets);
+            }
+        }
+        s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE).at = at;
+        at
     }
 
     /// `size` texels of `src` into `dst`, as WebGPU's `copyTextureToTexture`.
@@ -1545,10 +1622,17 @@ impl Gpu {
         dst: &encode::TexelCopyTexture,
         size: [u32; 3],
     ) {
-        call::copy_texture_to_texture(&mut self.s().stream, encoder, src, dst, size);
+        let s = self.s();
+        let encoder = s.splits.at(encoder);
+        call::copy_texture_to_texture(&mut s.stream, encoder, src, dst, size);
     }
 
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
+        let named = encoder;
+        if self.s().splits.draws_apart(named) {
+            self.split(named);
+        }
+        let encoder = self.s().splits.at(named);
         let colors = [encode::ColorAttachment {
             view: d.color,
             resolve: None,
@@ -1568,7 +1652,7 @@ impl Gpu {
             stencil_read_only: false,
         });
         let s = self.s();
-        handle_of(s.encoder.render_pass(
+        let pass = handle_of(s.encoder.render_pass(
             &mut s.stream,
             encoder,
             &encode::RenderPassDescriptor {
@@ -1581,27 +1665,44 @@ impl Gpu {
                 }),
                 occlusion: None,
             },
-        ))
+        ));
+        s.splits.opened(pass, named, false, None);
+        pass
     }
 
     /// Timed in `stamp`'s span where the frame is timed.
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        handle_of(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
+        let end = stamp.as_ref().and_then(|t| Some((t.query_set, t.end?)));
+        let pass = handle_of(
+            s.encoder
+                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+        );
+        s.splits.opened(pass, encoder, true, end);
+        pass
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
-        call::dispatch(&mut self.s().stream, pass, [x, y, z]);
+        let s = self.s();
+        call::dispatch(&mut s.stream, s.splits.pass_at(pass), [x, y, z]);
+        s.splits.ran(pass);
     }
 
     /// Workgroups as `buffer` holds them from `offset`, across, up and deep:
-    /// a count only the GPU knows.
+    /// a count only the GPU knows, written in a command buffer before this
+    /// one (gpu/split.rs).
+    #[track_caller]
     pub fn dispatch_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::dispatch_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::dispatch_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
-        call::set_pipeline(&mut self.s().stream, pass, pipeline);
+        let s = self.s();
+        call::set_pipeline(&mut s.stream, s.splits.pass_at(pass), pipeline);
+        s.splits.piped(pass, pipeline);
     }
 
     /// What the pass draws held to `[x, y, width, height]` of its targets.
@@ -1610,7 +1711,9 @@ impl Gpu {
     }
 
     pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
-        call::set_bind_group(&mut self.s().stream, pass, idx, group, offsets);
+        let s = self.s();
+        call::set_bind_group(&mut s.stream, s.splits.pass_at(pass), idx, group, offsets);
+        s.splits.bound(pass, idx, group, offsets);
     }
 
     /// A size of 0 is the rest of the buffer.
@@ -1645,14 +1748,16 @@ impl Gpu {
         first_vertex: u32,
         first_instance: u32,
     ) {
+        let s = self.s();
         call::draw(
-            &mut self.s().stream,
+            &mut s.stream,
             pass,
             vertices,
             instances,
             first_vertex,
             first_instance,
         );
+        s.splits.ran(pass);
     }
 
     pub fn draw_indexed(
@@ -1663,8 +1768,9 @@ impl Gpu {
         first_idx: u32,
         first_instance: u32,
     ) {
+        let s = self.s();
         call::draw_indexed(
-            &mut self.s().stream,
+            &mut s.stream,
             pass,
             indices,
             instances,
@@ -1672,29 +1778,43 @@ impl Gpu {
             0,
             first_instance,
         );
+        s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn draw_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::draw_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::draw_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn draw_indexed_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::draw_indexed_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::draw_indexed_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
     /// Ends the pass and lets its handle go.
     pub fn end(&self, pass: Id) {
         let s = self.s();
-        s.encoder.end(&mut s.stream, pass);
+        s.encoder.end(&mut s.stream, s.splits.pass_at(pass));
+        s.splits.closed(pass);
     }
 
-    /// Submits the encoder and lets its handle go.
+    /// Submits the encoder's command buffers, each alone and in order, and
+    /// lets their handles go.
     pub fn submit(&self, encoder: Id) {
         let s = self.s();
-        s.encoder.submit(&mut s.stream, &[encoder]);
+        for e in s.splits.submitted(encoder) {
+            s.encoder.submit(&mut s.stream, &[e]);
+        }
     }
 
-    /// The frame's encoder, its spans resolved, copied out and mapped back
+    /// The frame's encoder, its command buffers submitted each alone and in
+    /// order, the last with its spans resolved, copied out and mapped back
     /// through a read none is out on, where it wrote any, submitted. The
     /// read asked first of those out is taken in first, where it landed, and
     /// may be asked again: its ticket is the order it was asked in, which
@@ -1704,14 +1824,20 @@ impl Gpu {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
+        let buffers = s.splits.submitted(encoder);
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
-            s.encoder.submit(&mut s.stream, &[encoder]);
+            for e in buffers {
+                s.encoder.submit(&mut s.stream, &[e]);
+            }
             return None;
         };
         let bytes = 2 * SPANS as u32 * 8;
-        call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
-        call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped[r], 0), bytes);
-        s.encoder.submit(&mut s.stream, &[encoder]);
+        let last = *buffers.last().or_bug(Errno::ENOTRECOVERABLE);
+        call::resolve_query_set(&mut s.stream, last, set, 0, 2 * SPANS as u32, resolve, 0);
+        call::copy_buffer_to_buffer(&mut s.stream, last, (resolve, 0), (mapped[r], 0), bytes);
+        for e in buffers {
+            s.encoder.submit(&mut s.stream, &[e]);
+        }
         s.stamps_written[r] = written;
         s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
         s.stamps_out[r] = s.stamps_asked_cnt;
@@ -1805,7 +1931,15 @@ impl Gpu {
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
-        call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
+        let s = self.s();
+        call::copy_buffer_to_buffer(
+            &mut s.stream,
+            s.splits.at(encoder),
+            (from, at),
+            (to, to_at),
+            size,
+        );
+        s.splits.copied(encoder, to);
     }
 
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied

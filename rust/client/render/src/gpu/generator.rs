@@ -102,8 +102,9 @@ pub const COMPACT_GROUP: [u32; 18] = [
     COMPUTE, STORAGE_RW, 15, COMPUTE, STORAGE_RW,
 ];
 /// `decor_args_cs`'s (decor_args.wgsl).
-pub const ARGS_GROUP: [u32; 12] = [
+pub const ARGS_GROUP: [u32; 15] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
+    15, COMPUTE, STORAGE_RW,
 ];
 /// `decor_gate_cs`'s and `decor_gate_args_cs`'s (decor_gate.wgsl): the frame's words, the
 /// regions' uniforms and args, the instances, the gated list and args, the claimed tiles' box,
@@ -549,6 +550,7 @@ impl Generator {
                     (1, self.regions),
                     (2, self.args),
                     (3, self.uniforms),
+                    (15, self.instances),
                 ],
             ),
             group(

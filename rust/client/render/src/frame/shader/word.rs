@@ -276,6 +276,12 @@ pub const STAR_RECORD_FLOATS: usize = 8;
 /// which build.rs holds the struct to.
 pub const RASTER_FLOATS: usize = 24;
 
+/// The workgroups a dispatch takes a dimension at most on every WebGPU device, the limit's
+/// default (WebGPU, "Limits", `maxComputeWorkgroupsPerDimension`): the floor's
+/// (floor.rs), stated here, where build.rs reads it, so every count the GPU writes into a
+/// dispatch is bounded by it (constant.wgsl `workgroups`).
+pub const MAX_COMPUTE_WORKGROUPS_PER_DIMENSION: u32 = 65535;
+
 /// The occlusion's passes' resolution, the screen's over this (gpu/ao.rs):
 /// the downsample keeps one depth of each 2×2 and the apply blends the 2×2
 /// about each pixel (ao_downsample.wgsl, ao_apply.wgsl), so it is two.

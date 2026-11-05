@@ -50,11 +50,12 @@ fn up_at(u: Up, k: u32) -> vec2<i32> {
   return vec2<i32>(floor(u.way * f));
 }
 
-/// Pass `w`'s rows raised to hold entry `e` of the list it takes, its threads one of
+/// Pass `w`'s rows raised to hold entry `e` of a list of `room` places, its threads one of
 /// `across` a side of the entry's tile each (pxl-engine `light::LIST_ACROSS`).
-fn opened(w: u32, e: u32, across: u32) {
+fn opened(w: u32, e: u32, room: u32, across: u32) {
   let per = LIGHT_LIST_ACROSS * LIGHT_LISTED_LANES;
-  atomicMax(&args.passes[w + 1u], ((e + 1u) * across * across + per - 1u) / per);
+  let square = across * across;
+  atomicMax(&args.passes[w + 1u], workgroups((e + 1u) * square, room * square, per));
 }
 
 /// The places of list `which`, `across` a row, whose reach `lo`..`hi` about the tile
@@ -64,6 +65,7 @@ fn opened(w: u32, e: u32, across: u32) {
 fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi: vec2<i32>, off: vec2<i32>) {
   let marks = listed_marks_at(which);
   let at = listed_at(which);
+  let room = listed_room(which);
   let first = t - hi - off;
   let last = t - lo - off;
   for (var j = first.y; j <= last.y; j += 1i) {
@@ -71,16 +73,19 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
       if (i >= 0i && j >= 0i && i < across && j < across
         && atomicExchange(&args.marks[marks + u32(j * across + i)], current) != current) {
         let e = atomicAdd(&args.counts[which], 1u);
+        if (e >= room) {
+          continue;
+        }
         list_put(at + 1u + e, (u32(j) << 16u) | u32(i));
         if (which == LIGHT_LISTED_CLAIMED) {
-          opened(LIGHT_ARGS_SLOT, e, LIGHT_TILE);
+          opened(LIGHT_ARGS_SLOT, e, room, LIGHT_TILE);
         } else if (which == LIGHT_LISTED_FED) {
           let s = LIGHT_TILE / LIGHT_SAMPLE;
-          opened(LIGHT_ARGS_CELLS, e, 1u);
-          opened(LIGHT_ARGS_SAMPLE, e, s);
-          opened(LIGHT_ARGS_SAMPLE_BOX, e, s);
+          opened(LIGHT_ARGS_CELLS, e, room, 1u);
+          opened(LIGHT_ARGS_SAMPLE, e, room, s);
+          opened(LIGHT_ARGS_SAMPLE_BOX, e, room, s);
         } else {
-          opened(LIGHT_ARGS_BEAM, e, 1u);
+          opened(LIGHT_ARGS_BEAM, e, room, 1u);
         }
       }
     }

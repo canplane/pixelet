@@ -24,6 +24,7 @@ pub const DYNAMIC_UNIFORM_BUFFERS_PER_LAYOUT: u32 = 8;
 pub const MAX_STORAGE_BUFFER_BINDING_SIZE: u64 = 134_217_728;
 pub const MAX_BUFFER_SIZE: u64 = 268_435_456;
 pub const MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP: u32 = 256;
+pub use crate::frame::shader::word::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION;
 
 /// Whether a buffer of `bytes` is one every device makes, and, where
 /// `storage`, binds whole as storage: each is bound whole, as no binding

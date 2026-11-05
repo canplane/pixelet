@@ -186,8 +186,15 @@ export class GpuHost {
   >();
   /** Each slot's newest handle, kept after it is let go: an older one's bind is refused. */
   private readonly _seen = new Map<u32, u32>();
-  /** Where the guest asked the device's block written, for its status. */
+  /** Where the guest asked the device's block written, for its frames
+   * unfinished and its status. */
   private _block: { address: u32; words: u32 } | undefined;
+  /** The frames drawn whose work the queue has not yet done (spec DEVICE):
+   * a turn's whose stream took a surface's texture, until the queue's
+   * `onSubmittedWorkDone` asked after it resolves. */
+  private _unfinished_cnt = 0;
+  /** This turn's stream has taken a surface's texture. */
+  private _drew = false;
 
   private readonly _device: GPUDevice;
   private readonly _memory: () => ArrayBufferLike;
@@ -249,14 +256,35 @@ export class GpuHost {
     }
   }
 
-  /** Runs the stream at `at` as the turn left it, from past the head it says. */
+  /** Runs the stream at `at` as the turn left it, from past the head it
+   * says; a frame it drew counted unfinished until the queue has done the
+   * work submitted with it. */
   run(at: u32): void {
     let r: Words | undefined;
+    this._drew = false;
     each_record(this._memory(), at, (code, w, a) => {
       r ??= new Words(w);
       r.at = a;
       this._record(code, r);
     });
+    if (!this._drew) return;
+    this._tell_unfinished(this._unfinished_cnt + 1);
+    this._device.queue
+      .onSubmittedWorkDone()
+      .then(() => this._tell_unfinished(this._unfinished_cnt - 1));
+  }
+
+  /** The frames unfinished, kept and told the guest in its block with
+   * release (spec DEVICE). */
+  private _tell_unfinished(cnt: number): void {
+    this._unfinished_cnt = cnt;
+    if (!this._block) return;
+    const block = new Uint32Array(
+      this._memory(),
+      this._block.address,
+      this._block.words,
+    );
+    Atomics.store(block, this._block.words - 2, cnt);
   }
 
   private _put(id: u32, o: GpuObject): void {
@@ -312,7 +340,11 @@ export class GpuHost {
    * (RESULT): `result` into the word after it first, where the request has
    * one, then the ticket, with release; and a turn asked to read it. */
   private _signal(word: u32, ticket: u32, result?: u32): void {
-    const w = new Uint32Array(this._memory(), word, result === undefined ? 1 : 2);
+    const w = new Uint32Array(
+      this._memory(),
+      word,
+      result === undefined ? 1 : 2,
+    );
     if (result !== undefined) w[1] = result;
     Atomics.store(w, 0, ticket);
     this._wake();
@@ -662,7 +694,9 @@ export class GpuHost {
               ? vertex.entryPoint
               : `${vertex.entryPoint}+${entryPoint}`,
           layout:
-            layout === undefined ? "auto" : this._get<GPUPipelineLayout>(layout),
+            layout === undefined
+              ? "auto"
+              : this._get<GPUPipelineLayout>(layout),
           vertex,
           primitive,
           depthStencil: depthFormat === undefined ? undefined : depth,
@@ -699,7 +733,9 @@ export class GpuHost {
         const desc: GPUComputePipelineDescriptor = {
           label: entryPoint,
           layout:
-            layout === undefined ? "auto" : this._get<GPUPipelineLayout>(layout),
+            layout === undefined
+              ? "auto"
+              : this._get<GPUPipelineLayout>(layout),
           compute: { module, entryPoint },
         };
         if (code === op.COMPUTE_PIPELINE) {
@@ -971,7 +1007,12 @@ export class GpuHost {
       }
       case op.SET_VERTEX_BUFFER: {
         const pass = this._get<GPURenderPassEncoder>(r.u());
-        pass.setVertexBuffer(r.u(), this._get<GPUBuffer>(r.u()), r.u(), r.opt());
+        pass.setVertexBuffer(
+          r.u(),
+          this._get<GPUBuffer>(r.u()),
+          r.u(),
+          r.opt(),
+        );
         return;
       }
       case op.SET_INDEX_BUFFER: {
@@ -1127,6 +1168,7 @@ export class GpuHost {
         const texture = this._surfaces.get(r.u())?.context.getCurrentTexture();
         if (!texture) return;
         this._put(id, { view: texture.createView(), format: texture.format });
+        this._drew = true;
         return;
       }
       case op.DEVICE: {
@@ -1147,6 +1189,7 @@ export class GpuHost {
         out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
           navigator.gpu.getPreferredCanvasFormat(),
         );
+        out[words - 2] = this._unfinished_cnt;
         Atomics.store(out, words - 1, STATUS.READY);
         return;
       }

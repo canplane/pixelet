@@ -1,14 +1,57 @@
 // xpute-gpu/admit.rs
 
 //! Whether the GPU's host takes a frame now without blocking: a guest draws a
-//! frame only while it is admitted. A host in the guest's own process hands
-//! the guest its answer with its boot (xpute-guest `BootInfo::admit`,
-//! `host::native::admit` over `GpuHost::admit`); a page's admits every frame
-//! (`every`), since the browser paces a page's frames and taking a canvas's
-//! texture never blocks.
+//! frame only while fewer of its frames than its frame latency are unfinished
+//! on the GPU (`admits`), the one rule every host holds a frame to. A host in
+//! the guest's own process applies it to its own count
+//! (`host::native::admit` over `GpuHost::admit`); a page's host tells the
+//! guest its count in the device's block (spec DEVICE), and `page` applies it
+//! there. Either reaches the guest with its boot (xpute-guest
+//! `BootInfo::admit`).
+
+use core::sync::atomic::{AtomicU32, Ordering};
+
+use xpute_guest::global::Global;
+
+use crate::spec::STATUS;
 
 pub type Admit = fn() -> bool;
 
+/// Every frame: where a guest's form hands no admission.
 pub fn every() -> bool {
     true
 }
+
+/// A frame while fewer than `latency` drawn are unfinished.
+pub fn admits(unfinished: u32, latency: u32) -> bool {
+    unfinished < latency
+}
+
+/// The device's block the guest last asked for (`call::device`): its first
+/// word and its length.
+static BLOCK: Global<Option<(*mut u32, usize)>> = Global::new();
+
+/// The block `call::device` names to the host, kept for `page`. A block's
+/// words are the host's to write for good (xpute-guest ipc/stream.rs R4), so
+/// it stays where it is while it is read.
+pub(crate) fn ask(block: &mut [u32]) {
+    BLOCK.set(Some((block.as_mut_ptr(), block.len())));
+}
+
+/// The page's admission (`BootInfo::admit` of a WebAssembly guest given the
+/// GPU, xpute-guest `guest!`), `LATENCY` its program's frame latency
+/// (`Numbers`): a frame while the block's device is ready and its frames
+/// unfinished admit one; none before the block is asked for or once the
+/// device is lost.
+pub fn page<const LATENCY: u32>() -> bool {
+    BLOCK.get(|| None).is_some_and(|(at, len)| {
+        // SAFETY: the block `ask` kept, which stays live and in place; its
+        // words the host writes are only ever loaded atomically.
+        let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k)) }.load(Ordering::Acquire);
+        word(len - 1) == STATUS::READY && admits(word(len - 2), LATENCY)
+    })
+}
+
+#[cfg(test)]
+#[path = "admit.test.rs"]
+mod test;

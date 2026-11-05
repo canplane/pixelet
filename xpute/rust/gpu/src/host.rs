@@ -14,6 +14,7 @@
 //! exports it under xpute's names (`native_abi!`).
 
 mod admit;
+mod belt;
 mod configure;
 mod image;
 mod name;
@@ -33,6 +34,7 @@ use std::sync::Arc;
 use xpute_host::mem::Memory;
 
 use crate::spec::STATUS;
+use belt::Belt;
 use image::{Decoder, Decoding};
 use name::Names;
 use object::Object;
@@ -56,8 +58,9 @@ pub struct Config {
     /// each surface's `desired_maximum_frame_latency`; at least one. A
     /// surface keeps one texture more, so taking one never blocks.
     pub frame_latency: u32,
-    /// The staging belt's chunk: as large as a frame's writes, since a
-    /// larger write takes a chunk of its own.
+    /// The staging belt's chunk: as large as a frame's writes, a larger
+    /// write staged across several. The belt holds one more chunk than the
+    /// frame latency.
     pub upload_chunk_bytes: u64,
     pub present_mode: wgpu::PresentMode,
 }
@@ -91,7 +94,7 @@ pub struct GpuHost {
     present_mode: wgpu::PresentMode,
     /// Every buffer write goes through the belt into `uploads`, submitted
     /// ahead of what follows: `Queue::write_buffer` makes a Metal buffer a write.
-    belt: wgpu::util::StagingBelt,
+    belt: Belt,
     uploads: Option<wgpu::CommandEncoder>,
 }
 
@@ -123,7 +126,7 @@ impl GpuHost {
         });
         GpuHost {
             adapter,
-            belt: wgpu::util::StagingBelt::new(device.clone(), cfg.upload_chunk_bytes),
+            belt: Belt::new(&device, cfg.upload_chunk_bytes, cfg.frame_latency + 1),
             device,
             queue,
             names: Names::new(),
@@ -164,6 +167,7 @@ impl GpuHost {
             return;
         }
         let _ = self.device.poll(wgpu::PollType::Poll);
+        self.tell_unfinished(memory);
         self.pending.retain(|p| p.poll(memory));
         self.land_images(memory);
     }
@@ -172,3 +176,7 @@ impl GpuHost {
 #[cfg(test)]
 #[path = "host.test.rs"]
 mod test;
+
+#[cfg(test)]
+#[path = "host.noop.test.rs"]
+mod noop;

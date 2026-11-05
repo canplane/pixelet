@@ -19,6 +19,7 @@
 /// The tiles claimed, this pass's dispatch ahead of them (cast_tiles.wgsl).
 struct CastTiles {
   args: array<u32, 3>,
+  cnt: u32,
   at: array<u32>,
 }
 @group(0) @binding(30) var<storage, read> claimed: CastTiles;

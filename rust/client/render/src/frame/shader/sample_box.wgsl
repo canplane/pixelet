@@ -40,7 +40,8 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     ask_face(sample_item(id.xy), place);
     // The faces' pass's workgroups raised to hold it, by the box that opens one.
     if (place % RASTER_FACES_LANES == 0u) {
-      args_most(RASTER_ARGS_FACES, place / RASTER_FACES_LANES + 1u);
+      let n = sample_lattice();
+      args_most(RASTER_ARGS_FACES, workgroups(place + 1u, n.x * n.y, RASTER_FACES_LANES));
     }
   }
 }

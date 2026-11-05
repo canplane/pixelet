@@ -232,9 +232,10 @@ pub fn booted() -> bool {
 /// xpute-gpu's `native_guest!` instead: the GPU's host a device beside the
 /// guest, polled before each turn and rung as the guest publishes its stream
 /// (`BootInfo::publish`), and its admission handed the entry
-/// (`BootInfo::admit`). The program's crate
-/// then depends on xpute-gpu with its `host` feature for every target but
-/// wasm32, where a page's host draws and admits every frame.
+/// (`BootInfo::admit`); as a WebAssembly module, its admission is the
+/// page's (xpute-gpu `admit::page`) at the numbers' frame latency. The
+/// program's crate then depends on xpute-gpu, with its `host` feature for
+/// every target but wasm32.
 ///
 /// ```ignore
 /// xpute_guest::guest!(MACHINE, FIXED_BYTES, door::run);
@@ -242,7 +243,7 @@ pub fn booted() -> bool {
 /// ```
 #[macro_export]
 macro_rules! guest {
-    (@wasm $machine:expr, $fixed_bytes:expr, $entry:expr) => {
+    (@wasm $machine:expr, $fixed_bytes:expr, $entry:expr, $admit:expr) => {
         #[cfg(target_arch = "wasm32")]
         mod xpute_guest_machine {
             #[allow(unused_imports)]
@@ -261,6 +262,7 @@ macro_rules! guest {
             $crate::wasm::Config {
                 heap_at: |data_end| $machine.heap_at(data_end, $fixed_bytes),
                 stack_bytes: $machine.stack_bytes,
+                admit: $admit,
             },
             xpute_guest_machine::xpute_turn
         );
@@ -276,7 +278,12 @@ macro_rules! guest {
             let _ = $gpu;
         };
 
-        $crate::guest!(@wasm $machine, $fixed_bytes, $entry);
+        $crate::guest!(
+            @wasm $machine,
+            $fixed_bytes,
+            $entry,
+            Some(::xpute_gpu::admit::page::<{ $gpu.frame_latency }>)
+        );
 
         #[cfg(not(target_arch = "wasm32"))]
         ::xpute_gpu::native_guest!($machine, $fixed_bytes, $entry, $gpu);
@@ -285,7 +292,7 @@ macro_rules! guest {
         const _: () = $machine.check($fixed_bytes);
         const _: $crate::entry::Entry = $entry;
 
-        $crate::guest!(@wasm $machine, $fixed_bytes, $entry);
+        $crate::guest!(@wasm $machine, $fixed_bytes, $entry, None);
 
         #[cfg(not(target_arch = "wasm32"))]
         ::xpute_host::native_guest!($machine, $fixed_bytes, $entry);

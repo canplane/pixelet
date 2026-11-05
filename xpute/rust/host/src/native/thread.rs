@@ -2,15 +2,16 @@
 
 //! The guest's own thread, a vCPU that runs while the guest has work: it runs
 //! a turn (`Vcpu::turn`) whenever it is kicked or the time the last turn asked
-//! to be woken at has come, at once again where the turn answered 0, and
-//! sleeps otherwise. A kick carries the least quota the next turn is given;
-//! a turn no kick gave one is given the last quota a kick gave (the slice).
-//! A caller's work (`run`), such as a device's, runs on it between turns
-//! while the caller waits. The thread keeps the guest's wake time alone: a
-//! turn that answered 0 is told the program as one the guest wants at once
-//! (`ack`), so what the program paces, a display's frames, follows it
-//! without a timer of its own. Paused (`pause`), it runs only the turns a
-//! caller rings, and its kicks and wake time wait for `resume`.
+//! to be woken at has come, and sleeps otherwise. A kick carries the least
+//! quota the next turn is given; a turn no kick gave one is given the last
+//! quota a kick gave (the slice). A caller's work (`run`), such as a device's,
+//! runs on it between turns while the caller waits. The thread keeps the
+//! guest's wake time alone, but for 0: a turn that answered 0 is told the
+//! program as one the guest wants at once (`ack`), and the next runs at the
+//! kick of the program's next paced moment, as a page's runs at the next
+//! moment its strobe's policy admits (@xpute/host sched/strobe.ts), so no
+//! turn runs between a display's frames. Paused (`pause`), it runs only the
+//! turns a caller rings, and its kicks and wake time wait for `resume`.
 //!
 //! The guest's hostcalls are answered on a thread outside it. A hostcall made
 //! by a caller's work is handed to that caller. One made by a turn is handed
@@ -85,7 +86,8 @@ struct Loop {
     quota: Option<f64>,
     /// What a turn no kick gave a quota is given: the last quota a kick gave.
     slice: f64,
-    /// When the last turn asked to be woken.
+    /// When the last turn asked to be woken, past now: one that answered 0
+    /// waits for a kick (`Ack::resched`).
     wake_at: Option<Instant>,
     job: Option<Job>,
     job_ends: u64,
@@ -270,7 +272,7 @@ fn run_loop(vcpu: Vcpu) {
                 let mut g = state();
                 g.busy = false;
                 g.ends += 1;
-                g.wake_at = (wake >= 0.0).then(|| Instant::now() + duration_of(wake));
+                g.wake_at = (wake > 0.0).then(|| Instant::now() + duration_of(wake));
                 g.ack.resched |= wake == 0.0;
                 g.ack.turn_ms = g.ack.turn_ms.max(turn_ms);
                 HOST_CV.notify_all();

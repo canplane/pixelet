@@ -78,12 +78,12 @@ fn is_eyed(b: Box, tan_xy: vec2<f32>) -> bool {
 }
 
 /// The sample at word `k`, numbered `number`, written as a box from `origin`, appended
-/// to the boxes and counted in the args, its number and its axis, `RASTER_EYED` where it
+/// to the boxes and counted in the args, none past the `room` of the boxes, its number and its axis, `RASTER_EYED` where it
 /// lies about the eye at the screen's tangents `tan` where `eyed` asks; none where it went
 /// on to its reach, or where a sample at `before`, the one across or up, `NO_BOX` where
 /// there is none, stopped alike. Its place among the boxes, `NO_BOX` where it wrote none
 /// (pxl-engine `raster`, `cast::asset_box`).
-fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, eyed: bool, tan_xy: vec2<f32>) -> u32 {
+fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, room: u32, eyed: bool, tan_xy: vec2<f32>) -> u32 {
   if (beams[k + SAMPLE_NODE + NODE_ZOOM] == SAMPLE_NONE) {
     return NO_BOX;
   }
@@ -96,7 +96,11 @@ fn write_box(k: u32, before: vec2<u32>, origin: vec3<i32>, number: u32, eyed: bo
   let b = asset_box(origin, k + SAMPLE_NODE, beams[k + SAMPLE_ASSET]);
   let lacks = beams[k + SAMPLE_LACKS] != 0u;
   let near = eyed && is_eyed(b, tan_xy);
-  let box_at = args_add(RASTER_ARGS_INSTANCES, 1u);
+  let box_at = args_add(RASTER_ARGS_CNT, 1u);
+  if (box_at >= room) {
+    return NO_BOX;
+  }
+  args_most(RASTER_ARGS_INSTANCES, in_room(box_at + 1u, room));
   let at = box_at * RASTER_BOX_WORDS;
   box_put(at + RASTER_BOX_LO, bitcast<u32>(b.lo.x));
   box_put(at + RASTER_BOX_LO + 1u, bitcast<u32>(b.lo.y));
@@ -125,5 +129,5 @@ fn sample_box(id: vec2<u32>, origin: vec3<i32>, eyed: bool, tan_xy: vec2<f32>) -
   if (s.y > 0u && sample_needed(s - vec2<u32>(0u, 1u))) {
     before.y = sample_word(s - vec2<u32>(0u, 1u));
   }
-  return write_box(sample_word(s), before, origin, s.y * n.x + s.x, eyed, tan_xy);
+  return write_box(sample_word(s), before, origin, s.y * n.x + s.x, n.x * n.y, eyed, tan_xy);
 }

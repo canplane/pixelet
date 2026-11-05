@@ -506,8 +506,8 @@ const _: () = assert!(
     "a tile is a whole number of the cast's workgroups"
 );
 /// The claimed tiles' list as a frame's cast starts: `cast_cs`'s dispatch, no tile yet, each
-/// one's workgroups across and down (cast_tiles.wgsl).
-const CAST_TILES_START: [u32; 3] = [0, TILE_CASTS, TILE_CASTS];
+/// one's workgroups across and down, and none counted (cast_tiles.wgsl).
+const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// The pixels `miss_hit_cs` left: `miss_list_cs`'s dispatch and their count
 /// (`ray::LEFT_EMPTY`), then the hits it kept, as `node_cache::HITS_ARGS` lays them.
 const MISS_LEFT_EMPTY: [u32; 8] = {

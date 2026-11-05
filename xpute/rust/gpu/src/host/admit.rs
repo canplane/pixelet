@@ -3,6 +3,8 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
+use xpute_host::mem::Memory;
+
 use super::surface::Frame;
 use super::GpuHost;
 
@@ -32,8 +34,23 @@ impl GpuHost {
     /// latency are unfinished, so each surface's next texture is free and
     /// taking it does not block. Asked once a turn, before it draws.
     pub fn admit(&mut self) -> bool {
-        self.admitted = self.unfinished_cnt.load(Ordering::Relaxed) < self.frame_latency;
+        self.admitted = crate::admit::admits(
+            self.unfinished_cnt.load(Ordering::Relaxed),
+            self.frame_latency,
+        );
         self.admitted
+    }
+
+    /// The frames unfinished, told the guest in the device's block (spec
+    /// DEVICE) as a page's host tells them: before each turn, once the
+    /// queue's callbacks that end frames have run.
+    pub(super) fn tell_unfinished(&self, memory: &mut Memory<'_>) {
+        if let Some((address, words)) = self.block {
+            memory.store_release(
+                address + 4 * (words - 2),
+                self.unfinished_cnt.load(Ordering::Relaxed),
+            );
+        }
     }
 
     /// Each surface's texture this turn drew, shown; an admitted frame

@@ -17,7 +17,8 @@ fn light_miss_cs(
 ) {
   let at = head_word(LIGHT_HEAD_MISSES_LEFT);
   let k = list_place(group.xy, lane.x);
-  if (k >= beams[at]) {
+  let size = head_word(LIGHT_HEAD_SIZE);
+  if (k >= in_room(beams[at], size * size)) {
     return;
   }
   let listed = beams[at + 1u + k];

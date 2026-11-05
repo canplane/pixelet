@@ -86,8 +86,8 @@ const _: () = assert!(
 /// The eye's walk again's words past those: the args what lies about the
 /// faces its hits met is asked by, once a square of them (pxl-render
 /// hit_lead.wgsl `hit_lead_cs`, face.wgsl `face_cs`), laid as the boxes' are
-/// (`raster::ARGS_WORDS`: their count, their dispatch, where their asks
-/// lie), at a storage binding's alignment, 256 bytes on every device, so
+/// (`raster::ARGS_WORDS`: their count within their room, their dispatch,
+/// where their asks lie, and their count as they are listed), at a storage binding's alignment, 256 bytes on every device, so
 /// the faces' pass binds them alone as it binds the boxes'. Set each frame
 /// the cast runs, as the words before them are.
 pub const MISS_ARGS_ROOM: u32 = 64;

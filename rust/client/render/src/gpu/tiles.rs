@@ -66,9 +66,11 @@ pub fn mark_of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32, margin: f32)
 /// the tiles' words.
 const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
 
-/// What the box's args' pass binds (box_args.wgsl): the marks' box and the
-/// args.
-const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+/// What the box's args' pass binds (box_args.wgsl): the marks' box, the
+/// args and the tiles' words.
+const BOX_ARGS_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
+];
 
 /// What the claimed tiles' box's pass binds (claimed_box.wgsl): the box, the tiles' words
 /// and uniform.
@@ -149,6 +151,10 @@ impl Tiles {
             word_bytes(4),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
+        let uniform = g.buf(
+            word_bytes(TILES_WORDS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
         let box_args = (claimed_for == 1).then(|| {
             let args = g.buf(
                 word_bytes(4),
@@ -157,7 +163,11 @@ impl Tiles {
             let pass = pipelines.build_compute(g, COMPUTE_BOX_ARGS, &BOX_ARGS_GROUP);
             let group = g.bind_group(
                 pass.layouts[0],
-                &[buf_entry(0, marks_box), buf_entry(1, args)],
+                &[
+                    buf_entry(0, marks_box),
+                    buf_entry(1, args),
+                    buf_entry(2, uniform),
+                ],
             );
             (args, pass, group)
         });
@@ -165,10 +175,7 @@ impl Tiles {
             side,
             claimed_for,
             span,
-            uniform: g.buf(
-                word_bytes(TILES_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
+            uniform,
             changed_at: 0,
             size: [0; 2],
             now: 0,

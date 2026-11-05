@@ -20,7 +20,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&node_cache[HITS_ARGS], r / HIT_LANES + 1u);
+    atomicMax(&node_cache[HITS_ARGS], workgroups(r + 1u, HITS, HIT_LANES));
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
@@ -78,7 +78,7 @@ fn miss_list_cs(
 ) {
   let k = list_place(group.xy, lane.x);
   let at = eye_word(GRID + GRID_MISSES_AT);
-  if (k >= beams[at]) {
+  if (k >= in_room(beams[at], MARKS)) {
     return;
   }
   let listed = beams[at + 1u + k];

@@ -157,7 +157,9 @@ const _: () = assert!(FIRST_CELL > EVERY);
 
 /// What `decor_mark_cs` reads and lists and `decor_thin_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
-/// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
+/// entry-decor pairs listed, within the list's room (`THIN_ARGS`,
+/// `GENERATE_ARGS`), then the pairs it counted as it listed them
+/// (`THIN_CNT`, `GENERATE_CNT`); whether
 /// every entry generates whole, decor having been off (`LIST_EVERY`), how
 /// many boxes (`LIST_BOXES`), how many pairs generate again in part
 /// (`LIST_PARTS`), a pad; the boxes, `BOX_WORDS` each; then the list, an
@@ -167,7 +169,9 @@ const _: () = assert!(FIRST_CELL > EVERY);
 /// `decor_cs` alone generates, its records where a box reaches them
 /// (`reaches`).
 pub const THIN_ARGS: u32 = 0;
+pub const THIN_CNT: u32 = 3;
 pub const GENERATE_ARGS: u32 = 4;
+pub const GENERATE_CNT: u32 = 7;
 pub const LIST_EVERY: u32 = 8;
 pub const LIST_BOXES: u32 = 9;
 pub const LIST_PARTS: u32 = 10;

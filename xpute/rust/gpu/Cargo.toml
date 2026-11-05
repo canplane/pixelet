@@ -37,3 +37,6 @@ host = ["dep:xpute-host", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", 
 # The golden records' reader, and a device asked for without a runtime.
 xpute-kit = { workspace = true, features = ["golden"] }
 pollster = "1"
+# A device with no GPU under it, which makes and maps buffers and runs
+# nothing: what the host's CPU tests stage writes on (src/host/belt.test.rs).
+wgpu = { version = "30", default-features = false, features = ["noop"] }

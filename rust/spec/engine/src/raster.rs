@@ -24,7 +24,9 @@ use crate::beam;
 /// face (pxl-render face.wgsl `face_cs`), `FACES_LANES` boxes a workgroup
 /// (`ARGS_FACES`), its workgroups raised by the box that opens each, the
 /// other two 1; then the first word of the boxes' asks among the beam rays'
-/// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`).
+/// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`);
+/// then the boxes counted as they are written (`ARGS_CNT`), of which
+/// `ARGS_INSTANCES` is the part the boxes' room holds.
 /// One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample at most;
 /// the samples are `param::beam::SAMPLE` a camera grid cell a side, about
 /// 270 thousand on a 16:9 view whatever its pixels. The missed pixels'
@@ -38,7 +40,8 @@ pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
 pub const ARGS_ASKS: u32 = 7;
-pub const ARGS_WORDS: u32 = 8;
+pub const ARGS_CNT: u32 = 8;
+pub const ARGS_WORDS: u32 = 9;
 pub const FACES_LANES: u32 = 64;
 pub const BOX_LO: u32 = 0;
 pub const BOX_HI: u32 = 3;
