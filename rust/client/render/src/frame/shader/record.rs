@@ -143,15 +143,6 @@ pub use crate::api_spec::record::*;
 pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 
-/// Each generated compute entry's group 0 and its workgroup as its WGSL
-/// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
-/// so on, by the stem of the entry's file.
-pub mod compute {
-    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM};
-    use crate::frame::shader::floor;
-    include!(concat!(env!("OUT_DIR"), "/compute.rs"));
-}
-
 /// `group` with its uniform at `binding` taken at a dynamic offset: how the
 /// CPU binds it, which the shader does not say.
 pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32; N] {

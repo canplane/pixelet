@@ -4,7 +4,8 @@
 // thread: each leaf cell under it is read off the decor's hashes, and one that stands at the
 // entry's clip level and stands clear (`scatter::retained`) is laid as the decor's next
 // record, its cell for `decor_cs`; none past the decor's room. Its brick is its head's, which
-// mark wrote. What it reads is the decor's hash alone.
+// mark wrote off the clipmap's row this frame; the row is not read again, so a head that names
+// another brick lays that brick's candidates. What it reads is the decor's hash alone.
 
 @group(0) @binding(9) var<storage, read_write> records: array<atomic<u32>>;
 @group(0) @binding(11) var<storage, read> list: array<u32>;

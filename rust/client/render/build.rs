@@ -4,9 +4,11 @@
 
 use naga::front::wgsl;
 use pxl_engine::answer;
+use pxl_engine::beam::{CORNER_SIDE, SAMPLE_SIDE};
 use pxl_engine::grid;
 use pxl_engine::ground;
 use pxl_engine::lattice;
+use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
 use pxl_engine::screen;
 use std::path::Path;
@@ -62,6 +64,7 @@ fn main() {
     std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
     std::fs::write(out.join("way_word.wgsl"), way_word()).expect("the ways' words");
     std::fs::write(out.join("decor_word.wgsl"), decor_word()).expect("decor's words");
+    std::fs::write(out.join("fill_word.wgsl"), fill_word()).expect("the fill's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -181,11 +184,6 @@ fn main() {
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
     std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
-    std::fs::write(
-        Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"),
-        compute(dir),
-    )
-    .expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
@@ -255,90 +253,17 @@ fn strip_comments(text: &str) -> String {
     out
 }
 
-/// Each generated compute entry's group 0 as its WGSL declares it, a binding
-/// its index, its stages and its kind (frame/shader/record.rs's codes), and
-/// its workgroup: what a pipeline's layout is made of and a dispatch counts
-/// by, read off the one module rust-gpu wrote.
-fn compute(dir: &Path) -> String {
-    let mut out = String::new();
-    let mut files: Vec<_> = std::fs::read_dir(dir)
-        .expect("the shaders")
-        .map(|e| e.expect("a shader").path())
-        .collect();
-    files.sort();
-    for path in files {
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        let Some(stem) = name.strip_suffix(".gen.wgsl") else {
-            continue;
-        };
-        let text = std::fs::read_to_string(&path).expect("a generated shader");
-        let lines: Vec<&str> = text.lines().collect();
-        let mut group = Vec::new();
-        let mut workgroup = None;
-        for (k, line) in lines.iter().enumerate() {
-            let line = line.trim();
-            if let Some(rest) = line.strip_prefix("@group(0) @binding(") {
-                let binding: u32 = rest
-                    .split(')')
-                    .next()
-                    .and_then(|n| n.parse().ok())
-                    .expect("a binding's index");
-                let var = lines.get(k + 1).map(|l| l.trim()).unwrap_or_default();
-                let kind = if var.starts_with("var<uniform>") {
-                    "UNIFORM"
-                } else if var.starts_with("var<storage, read_write>") {
-                    "STORAGE_RW"
-                } else if var.starts_with("var<storage>") {
-                    "STORAGE"
-                } else if var.contains("texture_storage_2d_array<r32uint,read_write>") {
-                    "STORAGE_TEXTURE_RW"
-                } else if var.contains("texture_2d_array<u32>") {
-                    "TEXTURE_UINT_ARRAY"
-                } else {
-                    panic!("{name}: binding {binding} is of no kind a layout names: {var}");
-                };
-                group.push((binding, kind));
-            }
-            if let Some(rest) = line.strip_prefix("@compute @workgroup_size(") {
-                workgroup = Some(
-                    rest.split(')')
-                        .next()
-                        .expect("a workgroup")
-                        .replace(' ', ""),
-                );
-            }
-        }
-        group.sort();
-        let upper = stem.to_uppercase();
-        let entries: Vec<String> = group
-            .iter()
-            .map(|(b, k)| format!("{b}, COMPUTE, {k}"))
-            .collect();
-        out += &format!(
-            "pub const {upper}_GROUP: [u32; {}] = [{}];\n",
-            3 * group.len(),
-            entries.join(", ")
-        );
-        out += &format!(
-            "pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n",
-            workgroup.expect("an entry's workgroup")
-        );
-        // Its layout within what every device binds (frame/shader/floor.rs).
-        out += &format!("const _: () = assert!(floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
-    }
-    out
-}
+// light_list.wgsl's `light_take` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes
+// of one entry of the list, and every pass that calls it declares its workgroup by a side of its
+// own: light_beam.wgsl by `CORNER_SIDE`, light_cell.wgsl by `SAMPLE_SIDE`, light_sample_box.wgsl
+// (through `sample_taken`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
+// whole dispatch by that pass's own side (gpu/ray/cast.rs `light_args`), so each is that side.
+const _: () = assert!(
+    LIGHT_TILE == SAMPLE_SIDE && CORNER_SIDE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
+    "light_take reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile, CORNER_SIDE \
+     and SQUARE_SIDE are each that side"
+);
 
-/// The tiles' uniform as every pass reads it (pxl-engine
-/// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
-/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
-/// the frames since it changed, wrapping, and claimed while fewer than the
-/// uniform's `claimed_for`. The one rule the screen's and the light's passes
-/// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
-/// the Rust itself.
 /// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
@@ -381,7 +306,7 @@ fn walk_word() -> String {
         ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
-        ("SAMPLE_SIDE", beam::SAMPLE_SIDE),
+        ("SAMPLE_SIDE", SAMPLE_SIDE),
         ("ENTRIES", pyramid::ENTRIES),
         ("ENTRIES_AT", pyramid::ENTRIES_AT),
         ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
@@ -483,7 +408,10 @@ fn walk_word() -> String {
             "LIGHT_SAMPLE_TALLY",
             pyramid::tally_at(tally::LIGHT, tally::SAMPLE),
         ),
+        ("GRID_S", beam::GRID_S as u32),
         ("GRID_KEEP", beam::GRID_KEEP as u32),
+        ("GRID_RADIUS", beam::GRID_RADIUS as u32),
+        ("GRID_RADIUS_TAN", beam::GRID_RADIUS_TAN as u32),
         ("GRID_PAST", beam::GRID_PAST as u32),
         ("GRID_SPAN", beam::GRID_SPAN as u32),
         ("GRID_CORNERS", beam::GRID_CORNERS as u32),
@@ -492,6 +420,7 @@ fn walk_word() -> String {
         ("GRID_SAMPLES_AT", beam::GRID_SAMPLES_AT as u32),
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
+        ("GRID_HIT_ASKS_AT", beam::GRID_HIT_ASKS_AT as u32),
         ("GRID_LATTICE", beam::GRID_LATTICE as u32),
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
@@ -530,6 +459,10 @@ fn walk_word() -> String {
         ("HIT_FACE", beam::HIT_FACE),
         ("HIT_PX", beam::HIT_PX),
         ("HIT_WAITS", beam::HIT_WAITS),
+        ("HIT_OUT", beam::HIT_OUT),
+        ("HIT_SQUARE", beam::HIT_SQUARE),
+        ("HIT_FOLLOWS", beam::HIT_FOLLOWS),
+        ("MISS_ARGS_ROOM", ray::MISS_ARGS_ROOM),
         ("FACE_BOX", face::BOX),
         ("RAY_FACE_SHIFT", ray::FACE_SHIFT),
         ("RAY_ZOOM_SHIFT", ray::ZOOM_SHIFT),
@@ -538,7 +471,7 @@ fn walk_word() -> String {
         ("MISS_ARGS_WHOLE", ray::MISS_ARGS_WHOLE),
         ("SCREEN_TILE", screen::TILE),
         ("SAMPLE_FACES", beam::SAMPLE_FACES),
-        ("CORNER_SIDE", beam::CORNER_SIDE),
+        ("CORNER_SIDE", CORNER_SIDE),
         ("BEAM_PASS", pyramid::BEAM_PASS),
         ("EYE_BEAM_TALLY", pyramid::tally_at(tally::EYE, tally::BEAM)),
         ("RASTER_ARGS_INSTANCES", raster::ARGS_INSTANCES),
@@ -576,11 +509,11 @@ fn walk_word() -> String {
     ];
     // How far short of where a beam ray of the light stopped its cells' rays start: a share of
     // its spacing, and Q3 steps (`light::margin`). A slot a receiver reads lies within the disk
-    // grown by its taps' reach (`light::READ_PAD`); a tile holds one where its middle lies
-    // within it grown by half the tile's diagonal (light_propagate.wgsl).
-    let tile_pad = light::READ_PAD + light::TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
+    // grown by its taps' reach, and a tile holds one where its middle lies within it grown by
+    // half the tile's diagonal (`light::TILE_READ_PAD`, light_propagate.wgsl).
+    let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\n",
+        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\n",
         grid::CELLS_A_RAD / grid::SPANS,
         cast::NARROW,
         2.0 * cast::SQRT_6,
@@ -588,6 +521,7 @@ fn walk_word() -> String {
         light::FOOTPRINT_TILES,
         light::READ_TILES[0],
         light::READ_TILES[1],
+        core::f32::consts::FRAC_1_SQRT_2,
     );
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
@@ -725,9 +659,17 @@ fn world_word() -> String {
         .enumerate()
         .map(|(k, b)| format!("case {k}u: {{ return {b}u; }} "))
         .collect();
-    out + &format!(
+    out += &format!(
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
+    );
+    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
+    let cases: String = (0..=clip::LEVELS)
+        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
+        .collect();
+    out + &format!(
+        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
+        clip::level_at(clip::LEVELS + 1)
     )
 }
 
@@ -804,14 +746,7 @@ fn way_word() -> String {
     for (name, v) in floats {
         out += &format!("const {name}: f32 = {v:?};\n");
     }
-    // Where a brick's level `j` begins among its levels, in entries (`clipmap::level_at`).
-    let cases: String = (0..=clip::LEVELS)
-        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::level_at(j)))
-        .collect();
-    out + &format!(
-        "fn level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
-        clip::level_at(clip::LEVELS + 1)
-    )
+    out
 }
 
 /// What decor's passes by hand read past the world's words, from pxl-content, whose layouts
@@ -968,6 +903,29 @@ fn decor_word() -> String {
     )
 }
 
+/// What a handed brick's tops read by hand past the ways' words (height.wgsl), from
+/// pxl-engine, whose layouts they are: where its cells' palette words lie in its record,
+/// and a word's four palette indices.
+fn fill_word() -> String {
+    use pxl_engine::clipmap as clip;
+    let mut out = format!("const PALETTE_AT: u32 = {}u;\n", clip::PALETTE_AT);
+    // A cell's word's four palette indices, `dx + 2·dy` (ground.rs `palette_indices`).
+    let b = ground::PALETTE_BITS;
+    let m = (1u32 << b) - 1;
+    out += &format!(
+        "fn palette_four(w: u32) -> vec4<u32> {{ return vec4<u32>(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+        2 * b,
+        3 * b
+    );
+    out
+}
+
+/// The tiles' uniform as every pass reads it (pxl-engine
+/// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
+/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
+/// the frames since it changed, wrapping, and claimed while fewer than the
+/// uniform's `claimed_for`. The one rule every pass that reads the tiles
+/// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast.wgsl).
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.
@@ -1052,6 +1010,7 @@ fn words() -> String {
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
+        format!("const HEIGHT_SIDE: u32 = {HEIGHT_SIDE}u;\nconst LEVEL_SIDE: u32 = {LEVEL_SIDE}u;\nconst FOLD_LANES: u32 = {FOLD_LANES}u;\nconst CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).
@@ -1204,6 +1163,40 @@ fn read_fns(text: &str) -> String {
     kept.join("\n") + "\n"
 }
 
+/// `text` with only the structs something in it reads, each line one statement as
+/// `strip_comments` leaves it: a struct's lines from its `struct` to its brace's close.
+fn read_structs(text: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut lines: Vec<&str> = text.lines().collect();
+    loop {
+        // Each struct's name, its first line and its last.
+        let mut structs = Vec::new();
+        let mut k = 0;
+        while k < lines.len() {
+            let Some(rest) = lines[k].strip_prefix("struct ") else {
+                k += 1;
+                continue;
+            };
+            let name = &rest[..rest.find(|c: char| !is_word(c)).unwrap_or(rest.len())];
+            // Its brace closes on its own line, or on a line of its own after.
+            let end = (k..lines.len())
+                .find(|&j| j == k && lines[j].contains('}') || lines[j].starts_with('}'))
+                .expect("a struct's close");
+            structs.push((name, k, end));
+            k = end + 1;
+        }
+        let unread = structs.iter().find(|(name, first, last)| {
+            !lines.iter().enumerate().any(|(j, l)| {
+                (j < *first || j > *last) && l.split(|c: char| !is_word(c)).any(|w| w == *name)
+            })
+        });
+        let Some(&(_, first, last)) = unread else {
+            return lines.join("\n") + "\n";
+        };
+        lines.drain(first..=last);
+    }
+}
+
 /// `text` with only the module's constants something in it reads.
 fn read_consts(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
@@ -1252,19 +1245,12 @@ fn assemble(out: &Path) {
     let (mut sources, mut stages) = (String::new(), String::new());
     let mut rastered = false;
     for (kind, parts) in part::PARTS.iter().enumerate() {
-        let generated = parts.len() == 1 && parts[0].ends_with(".gen");
-        let mut text = if generated {
-            String::new()
-        } else {
-            constant.clone() + "\n"
-        };
+        let mut text = constant.clone() + "\n";
         for part in parts.iter() {
             text += &read(part);
             text += "\n";
         }
-        if !generated {
-            text = read_consts(&read_fns(&text));
-        }
+        text = read_consts(&read_structs(&read_fns(&text)));
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         // The raster's view as the host writes it (frame/shader/word.rs `RASTER_FLOATS`).
@@ -1332,13 +1318,15 @@ fn assemble(out: &Path) {
         "seed",
         "clip",
         "palette",
+        "brick",
+        "level",
         "world",
         "world_split",
         "world_asked",
     ]
     .map(read)
     .join("\n");
-    let asked = read_consts(&read_fns(&asked));
+    let asked = read_consts(&read_structs(&read_fns(&asked)));
     let module = wgsl::parse_str(&asked)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
     Validator::new(ValidationFlags::all(), Capabilities::empty())

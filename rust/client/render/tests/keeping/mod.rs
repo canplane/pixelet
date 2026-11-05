@@ -268,12 +268,18 @@ impl Gpu {
             .collect()
     }
 
+    /// The pipeline of `entry` in `source`, or in the module the file `MUT_WGSL` names where
+    /// that holds the entry: a mutant sweep's.
     pub fn pipeline(&self, source: &str, entry: &str) -> wgpu::ComputePipeline {
+        let mutant = std::env::var_os("MUT_WGSL")
+            .map(|p| std::fs::read_to_string(p).expect("the mutant's module"))
+            .filter(|t| t.contains(&format!("fn {entry}(")));
+        let text = mutant.unwrap_or_else(|| source.to_string());
         let module = self
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(entry),
-                source: wgpu::ShaderSource::Wgsl(source.into()),
+                source: wgpu::ShaderSource::Wgsl(text.into()),
             });
         self.device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

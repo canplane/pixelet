@@ -1,8 +1,8 @@
 // pxl-engine/raster.rs
 
 //! gpu-portable: the samples' hits drawn as boxes, so the rasterizer keeps
-//! each drawn pixel's cell (pxl-render boxes.wgsl; pxl-shader cast.rs
-//! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
+//! each drawn pixel's cell (pxl-render boxes.wgsl, cast.wgsl `cast_cs`,
+//! gpu/ray/raster.rs, raster.wgsl). Each sample that
 //! stopped is a box, the cell as the cast stops on it (`cast::asset_box`),
 //! unless the sample before it across or up stopped alike, which some
 //! sample before it in turn draws. A box draws its face turned to the eye
@@ -16,10 +16,12 @@
 //! every sample's, leaving its sample's number (`id_of`): the pixel's cell
 //! where a hit, and where a lack, a node it walks itself.
 
+use crate::beam;
+
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
-/// face (pxl-shader `face_cs`), `FACES_LANES` boxes a workgroup
+/// face (pxl-render face.wgsl `face_cs`), `FACES_LANES` boxes a workgroup
 /// (`ARGS_FACES`), its workgroups raised by the box that opens each, the
 /// other two 1; then the first word of the boxes' asks among the beam rays'
 /// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`).
@@ -67,6 +69,14 @@ pub const fn id_of(sample: u32, lacks: bool) -> u32 {
 /// The sample an id names (`id_of`), none for 0.
 pub const fn sample_of(id: u32) -> u32 {
     (id & !LACK) - 1
+}
+
+/// Whether the samples whose words begin at `a` and `b` of `words` stopped alike, so the later
+/// draws no box of its own: alike in every word a pixel reads of them, those before
+/// `beam::SAMPLE_FACES` (pxl-render boxes.wgsl `alike`).
+pub fn alike(words: &[u32], a: usize, b: usize) -> bool {
+    let read = beam::SAMPLE_FACES as usize;
+    words[a..a + read] == words[b..b + read]
 }
 
 /// The raster's reversed depth: a face at view depth `w` drawn at `NEAR /

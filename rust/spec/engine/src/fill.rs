@@ -8,8 +8,8 @@
 //! each column's once, into its scratch, the frame's (`spans`,
 //! `clipmap::SPANS_AT`), and off them its levels, level 0 each column's own
 //! (`level`), and its ways' tree (`way::tree`). A GPU runs each pass a
-//! thread a column or entry (pxl-shader `height_cs`, `bound_cs`; pxl-render
-//! way.wgsl `way_cs`); a bake runs its columns' passes in order over one brick
+//! thread a column or entry (pxl-render height.wgsl `height_cs`, bound.wgsl
+//! `bound_cs`, way.wgsl `way_cs`); a bake runs its columns' passes in order over one brick
 //! (`brick`), so the spans it sizes a tile's room by are the ones a GPU
 //! keeps.
 

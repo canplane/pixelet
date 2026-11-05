@@ -199,17 +199,13 @@ pub const fn eighths(fill: u32) -> u32 {
 /// empties none. The palette index is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the
 /// ground, the ground's where air is what is written.
-#[expect(
-    clippy::implicit_saturating_sub,
-    reason = "rust-gpu has no `saturating_sub`"
-)]
 pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     if fills(kind) {
         let sum = ground + over;
         (if sum > FULL { FULL } else { sum }, over >= ground)
     } else {
         let over = over / (FULL / EIGHTHS) * (FULL / EIGHTHS);
-        (if over > ground { 0 } else { ground - over }, false)
+        (ground.saturating_sub(over), false)
     }
 }
 

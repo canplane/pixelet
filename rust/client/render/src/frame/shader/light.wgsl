@@ -1,7 +1,7 @@
 // pxl-render/light.wgsl
 
-// The world's depth from the light into every slot the cast needs (pxl-shader observer.rs
-// `resolve`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
+// The world's depth from the light into every slot the cast needs (light_list.wgsl
+// `light_needs`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
 // sample where its own ray enters it as that sample entered it (`took`), or the sky where no
 // sample about it met anything (`sky`), each only where that sample asked the band the slot
 // asks; the rest listed for their walk (light_miss_hit.wgsl, light_miss.wgsl).
@@ -14,27 +14,27 @@
 /// The listed slots' dispatch, their count and the tally's lanes (`ray::MISS_ARGS_WORDS`).
 @group(0) @binding(17) var<storage, read_write> misses: array<atomic<u32>>;
 
-/// One more of the tally's lane `lane` (`tally::TOOK` on) where the cast counts (cast.rs
-/// `add_cnt`).
+/// One more of the tally's lane `lane` (`tally::TOOK` on) where the cast counts, as cast.wgsl's
+/// `add_cnt`.
 fn add_cnt(lane: u32) {
   if (head_word(LIGHT_HEAD_COUNTED) != 0u) {
     atomicAdd(&misses[MISS_ARGS_TALLY + lane - TALLY_TOOK], 1u);
   }
 }
 
-/// Whether sample `s` was walked at `band` (observer.rs `asks_alike`).
+/// Whether sample `s` was walked at `band`: the band of the tile it lies on (light_aim.wgsl
+/// `tile_band`, pxl-engine `Light::band`).
 fn asks_alike(s: vec2<u32>, band: u32) -> bool {
   return tile_band(light_on(LEVEL_RAY, s * LIGHT_SAMPLE)) == band;
 }
 
-/// Whether sample `s` went on to its reach, asked at `band` (observer.rs `went_on`).
+/// Whether sample `s` went on to its reach, asked at `band` (`beam::SAMPLE_NONE`).
 fn went_on(s: vec2<u32>, band: u32) -> bool {
   return beams[light_sample_at(s) + SAMPLE_NODE + NODE_ZOOM] == SAMPLE_NONE && asks_alike(s, band);
 }
 
 /// Whether the four samples about slot `at` each went on to their reach, asked at `band`;
-/// none where the four lie not about it, within a sample of the box's edge (observer.rs
-/// `sky`, `Map::sample_before`).
+/// none where the four lie not about it, within a sample of the box's edge.
 fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
   let d = LIGHT_SAMPLE;
   let n = head_word(LIGHT_HEAD_SIZE);
@@ -57,8 +57,8 @@ struct Took {
 
 /// The cell the ray from `origin` takes off the visible sample `visible`, one that lacks
 /// not: where it enters that sample's cell as drawn (`cast::entry`, `fill_bounds`), taken
-/// where it enters it across the axis the sample did, asked at its band (observer.rs `took`,
-/// raster.rs `visible_cell`).
+/// where it enters it across the axis the sample did, asked at its band; the eye's pixels
+/// take theirs as cast.wgsl does.
 fn took(origin: vec3<i32>, visible: u32, band: u32) -> Took {
   let n = head_word(LIGHT_HEAD_SIZE) / LIGHT_SAMPLE;
   let id = (visible & ~VISIBLE_LACK) - 1u;
@@ -82,10 +82,11 @@ fn took(origin: vec3<i32>, visible: u32, band: u32) -> Took {
   return Took(max(b.near[axis], 0.0), axis, enters);
 }
 
-/// Each slot of the tiles the cast casts (`Map::needs`): its word off its visible sample or
-/// the sky, else listed for its walk as the eye's missed pixels are (cast.rs `enlist`). The
+/// Each slot of the tiles the cast casts (light_list.wgsl `light_needs`): its word off its
+/// visible sample or the sky, else listed for its walk as the eye's missed pixels are
+/// (cast.wgsl `enlist`). The
 /// list holds every slot, so none finds it full.
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
 fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,

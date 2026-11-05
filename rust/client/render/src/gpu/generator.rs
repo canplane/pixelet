@@ -586,7 +586,7 @@ impl Generator {
             return;
         }
         // A workgroup a slot, reading the records its decor laid, then
-        // placed decor's, `generation::RUNS` a workgroup (pxl-shader
+        // placed decor's, `generation::RUNS` a workgroup (decor_run.wgsl
         // `run_of`): the records held, not the capacity.
         let records = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
         let passes = [

@@ -1,22 +1,8 @@
 // pxl-render/walk_node.wgsl
 
-// What a walk works out of a node, every walk's alike: the eye's words, a ray to walk, where
-// it starts and ends, a node's planes and its index, its bucket, the zoom asked at a distance,
-// a ray's span in a box (pxl-engine cast.rs).
-
-@group(0) @binding(0) var<uniform> eye: array<vec4<u32>, EYE_VEC4S>;
-
-fn eye_word(k: u32) -> u32 {
-  return eye[k / 4u][k % 4u];
-}
-
-fn eye_f32(k: u32) -> f32 {
-  return bitcast<f32>(eye_word(k));
-}
-
-fn eye_v3(k: u32) -> vec3<f32> {
-  return vec3<f32>(eye_f32(k), eye_f32(k + 1u), eye_f32(k + 2u));
-}
+// What a walk works out of a node, every walk's alike, over the eye's words (eye_bind.wgsl):
+// a ray to walk, where it starts and ends, a node's planes and its index, its bucket, the zoom
+// asked at a distance, a ray's span in a box (pxl-engine cast.rs).
 
 /// A cut as the eye holds it: its index, then its zoom.
 fn eye_cut(k: u32) -> vec4<i32> {

@@ -11,8 +11,7 @@
 //!
 //! The lines are a function of the sources that make them and the set they
 //! read, so they are kept once a pair, under the digest of both, where every
-//! checkout, export or worktree finds them, as the shaders are (pxl-tool
-//! bin/shader_wgsl.rs).
+//! checkout, export or worktree finds them.
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin fill_digest -- [set]
 //!       the lines of `set` (default out/terrain), made or found: their path

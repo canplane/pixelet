@@ -38,7 +38,7 @@ const _: () = assert!(FILL_SHIFT + FILL_BITS < 32);
 
 /// The first word the cast's reading walk leaves a pixel it could not
 /// finish from the observed pyramid alone, for the walk that writes it to
-/// find (pxl-shader `cast_cs`, `miss_cs`): no hit's, as
+/// find (pxl-render cast.wgsl `cast_cs`, miss.wgsl `miss_cs`): no hit's, as
 /// `first_word` sets no bit past the fill share's, and not the zero of one that
 /// met nothing. It lives within the cast's one pass: the walk again runs
 /// after the reading walk in that pass and overwrites every pixel so
@@ -48,7 +48,7 @@ pub const MISS: u32 = u32::MAX;
 const _: () = assert!(MISS >> (FILL_SHIFT + FILL_BITS) != 0);
 
 /// The walk again's dispatches, as the reading walk counts what it marks
-/// (pxl-shader `cast_cs`): over the marked pixels listed
+/// (pxl-render cast.wgsl `cast_cs`): over the marked pixels listed
 /// (`pyramid::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
 /// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
@@ -67,8 +67,8 @@ pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
 
 /// The eye's walk again's words past those: the args what lies about the
-/// faces its hits met is asked by, once a square of them (pxl-shader cast.rs
-/// `hit_lead_cs`, pxl-render face.wgsl `face_cs`), laid as the boxes' are
+/// faces its hits met is asked by, once a square of them (pxl-render
+/// hit_lead.wgsl `hit_lead_cs`, face.wgsl `face_cs`), laid as the boxes' are
 /// (`raster::ARGS_WORDS`: their count, their dispatch, where their asks
 /// lie), at a storage binding's alignment, 256 bytes on every device, so
 /// the faces' pass binds them alone as it binds the boxes'. Set each frame
@@ -80,6 +80,13 @@ const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ROOM);
 /// `cast_cs`): the walk over every pixel is dispatched by it where the list is full
 /// (`MISS_ARGS_WHOLE`).
 pub const CAST_SIDE: u32 = 8;
+
+/// The face a ray going `dir` enters across `axis`: 2·axis, and one more where it goes up
+/// that axis, the face's outward normal pointing down it; a ray that does not move along the
+/// axis enters it as one going down.
+pub fn face(dir: [f32; 3], axis: u32) -> u32 {
+    2 * axis + u32::from(crate::axis(dir, axis) > 0.0)
+}
 
 /// The first word of a hit at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.

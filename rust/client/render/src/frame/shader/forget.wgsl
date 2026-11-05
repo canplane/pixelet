@@ -13,28 +13,27 @@
 const LEVEL_WORDS: u32 = CLIP_ENTRIES / 32u;
 const ROWS_A_WORD: u32 = 32u / ACROSS;
 
-/// The entries of a clip level that hold the bricks from `q0` to `q1`, X then Y, a bit
-/// each as its moved words lay them: every one where they span the level's side either
+/// Word `k` of the entries of a clip level that hold the bricks from `q0` to `q1`, X then Y,
+/// a bit each as its moved words lay them: every one where they span the level's side either
 /// way, as the clip level wraps (`pyramid::entries_of`).
-fn entries_of(q0: vec2<i32>, q1: vec2<i32>) -> array<u32, LEVEL_WORDS> {
-  var mask: array<u32, LEVEL_WORDS>;
+fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   let n = q1 - q0 + vec2<i32>(1);
   if (n.x >= i32(ACROSS) || n.y >= i32(ACROSS)) {
-    for (var k = 0u; k < LEVEL_WORDS; k += 1u) {
-      mask[k] = 0xffffffffu;
-    }
-    return mask;
+    return 0xffffffffu;
   }
   let m = i32(ACROSS) - 1i;
   // The row's columns, from the first round the clip level.
   let run = (1u << u32(n.x)) - 1u;
   let s = u32(q0.x & m);
   let row = ((run << s) | (run >> (ACROSS - s))) & (0xffffffffu >> (32u - ACROSS));
+  var word = 0u;
   for (var j = 0i; j < n.y; j += 1i) {
     let r = u32((q0.y + j) & m);
-    mask[r / ROWS_A_WORD] |= row << (ACROSS * (r % ROWS_A_WORD));
+    if (r / ROWS_A_WORD == k) {
+      word |= row << (ACROSS * (r % ROWS_A_WORD));
+    }
   }
-  return mask;
+  return word;
 }
 
 /// Whether the node of `zoom` at column `c` reads a brick that moved, the moved
@@ -54,10 +53,11 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
       lo = c >> vec2<u32>(s);
       hi = lo;
     }
-    let mask = entries_of(lo >> vec2<u32>(BRICK_SHIFT), hi >> vec2<u32>(BRICK_SHIFT));
+    let q0 = lo >> vec2<u32>(BRICK_SHIFT);
+    let q1 = hi >> vec2<u32>(BRICK_SHIFT);
     let at = PYRAMID_MOVED_AT + w * LEVEL_WORDS;
     for (var k = 0u; k < LEVEL_WORDS; k += 1u) {
-      if ((pyramid[at + k] & mask[k]) != 0u) {
+      if ((pyramid[at + k] & entries_word(q0, q1, k)) != 0u) {
         return true;
       }
     }

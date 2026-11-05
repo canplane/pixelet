@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/screen_propagate.wgsl
 
 // The light's changed tiles propagated to the screen (gpu/propagate.rs), the
-// light's propagation turned round: where pxl-shader light.rs
+// light's propagation turned round: where light_propagate.wgsl
 // `light_propagate_cs`
 // takes the screen's receivers to the light's tiles, this takes the light's
 // tiles that changed back to the pixels that read them. A workgroup a screen

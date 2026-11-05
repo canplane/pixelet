@@ -2,7 +2,7 @@
 
 //! gpu-portable: the eye a cast is from, as the words the kernel writes
 //! (pxl-kernel domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
-//! reader takes (pxl-shader `Eye`, pxl-render gpu/ray/cast.rs and
+//! reader takes (pxl-render eye_bind.wgsl, gpu/ray/cast.rs and
 //! gpu/generator.rs, the screen pass). Each is a word's place among them, one
 //! layout written here alone.
 

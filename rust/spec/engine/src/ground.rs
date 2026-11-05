@@ -118,12 +118,12 @@ pub fn window(t: f32) -> (i32, f32) {
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
-pub(crate) fn clamp_idx(i: i32) -> u32 {
+pub fn clamp_idx(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
 
 /// Catmull-Rom's four weights at `t` past the second sample.
-fn catmull_rom(t: f32) -> [f32; 4] {
+pub fn catmull_rom(t: f32) -> [f32; 4] {
     let (t2, t3) = (t * t, t * t * t);
     [
         -0.5 * t3 + t2 - 0.5 * t,

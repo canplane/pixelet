@@ -12,14 +12,10 @@
 /// passes the draw in `w`'s low 16, so a lone count goes either way as the
 /// weight says; held within each half's room (`rooms`, together at least
 /// `n`).
-#[expect(
-    clippy::implicit_saturating_sub,
-    reason = "rust-gpu has no `saturating_sub`"
-)]
 pub fn halve(n: u32, rooms: [u32; 2], w: u32) -> u32 {
     let scaled = n * (w >> 16);
     let share = (scaled >> 16) + ((scaled & 0xffff) > (w & 0xffff)) as u32;
-    let least = if n > rooms[1] { n - rooms[1] } else { 0 };
+    let least = n.saturating_sub(rooms[1]);
     let most = if n < rooms[0] { n } else { rooms[0] };
     if share < least {
         least

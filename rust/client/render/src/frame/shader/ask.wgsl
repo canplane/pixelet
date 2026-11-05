@@ -1,7 +1,7 @@
 // pxl-render/ask.wgsl
 
 // A ray's walk, each node off the observed pyramid or asked of the world there and then and
-// kept (pxl-engine `cast::walk`, pxl-shader pyramid.rs `Writing`). No stack: a node asked of the
+// kept (pxl-engine `cast::walk`, `pyramid`). No stack: a node asked of the
 // world finds what is handed it from the top (`world_root`). The pyramid's words all atomic, as
 // a slot's key is exchanged to claim it: no compare-and-swap, which Safari's WGSL compiler
 // writes Metal for that does not compile (doc/experiment/20261103-shaders-on-two-phones). A
@@ -70,7 +70,7 @@ fn ask(zoom: u32, c: vec3<i32>, zooms: u32) -> In {
 
 /// The node `c` at `zoom`, handed `handed`, asked at `zooms`: off the slot that keeps it, unless
 /// this pass is still writing it; else of the world, and kept where this walk claims a slot
-/// (`Writing::node`). What it hands its children: the slot's where one kept it. One asked of
+/// (pxl-engine pyramid.rs, its claim `claim` here). What it hands its children: the slot's where one kept it. One asked of
 /// the world counts in `ASKED_TALLY` where `counts`.
 fn ask_handed(handed: vec4<u32>, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
   let tag = walk_tag();

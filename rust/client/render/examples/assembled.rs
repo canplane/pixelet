@@ -14,12 +14,10 @@ fn main() {
         std::fs::write(format!("{dir}/{name}.wgsl"), text).expect("a shader");
     };
     for (kind, parts) in PARTS.iter().enumerate() {
-        if !parts.iter().any(|p| p.ends_with(".gen")) {
-            write(
-                format!("{kind}-{}", parts.last().expect("a shader's parts")),
-                record::src(kind as u32),
-            );
-        }
+        write(
+            format!("{kind}-{}", parts.last().expect("a shader's parts")),
+            record::src(kind as u32),
+        );
     }
     write("world_asked".to_string(), record::WORLD_ASKED);
 }

@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [features]
 default = ["std"]
 # Everything but `math::rng`. Without it the kit is `no_std` and holds the
-# seeds alone, which a GPU shader compiled through rust-gpu takes as they are.
+# seeds alone.
 std = []
 # The golden records' reader (src/golden.rs), for another crate's tests.
 golden = ["std"]

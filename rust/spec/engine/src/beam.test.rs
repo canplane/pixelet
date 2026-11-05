@@ -192,8 +192,8 @@ impl Query for Stand {
     }
 }
 
-/// A beam ray's line as the shader leaves it (pxl-shader beam.rs
-/// `Leaving`, `BeamLine`): the node it stopped at and what was handed each
+/// A beam ray's line as the shader leaves it (pxl-render beam_walk.wgsl,
+/// resume.wgsl): the node it stopped at and what was handed each
 /// node from the root to it.
 #[derive(Clone, Copy)]
 struct Line {
@@ -246,8 +246,8 @@ impl View {
         }
     }
 
-    /// The eye's zooms, its beam rays `g`'s lattice apart (pxl-shader eye.rs
-    /// `eye_origin`).
+    /// The eye's zooms, its beam rays `g`'s lattice apart (pxl-render
+    /// walk_node.wgsl `eye_aim`).
     fn detail(&self, g: &Grid) -> Detail {
         Detail {
             range: self.range,
@@ -258,7 +258,7 @@ impl View {
         }
     }
 
-    /// The eye's ray at the tangents `at` (pxl-shader eye.rs `eye_ray`).
+    /// The eye's ray at the tangents `at` (pxl-render walk_node.wgsl `eye_aim`).
     fn ray(&self, [tx, ty]: [f32; 2]) -> Ray {
         let [f, r, u] = self.axes;
         Ray::new(cast::through(f, r, u, tx, ty), FAR)
@@ -282,10 +282,10 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
     })
 }
 
-/// A sample's stop as it leaves it for the raster (pxl-shader beam.rs
+/// A sample's stop as it leaves it for the raster (pxl-render sample_put.wgsl
 /// `sample_put`): how it ended, the node, its asset and the axis it
 /// entered across. Of one gone on to its reach, only that: its zoom
-/// `SAMPLE_NONE` is all the raster reads of it (pxl-shader raster.rs
+/// `SAMPLE_NONE` is all the raster reads of it (pxl-render boxes.wgsl
 /// `write_box`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Stop {
@@ -325,13 +325,13 @@ struct Cast {
     resumed: bool,
 }
 
-/// The view cast as the shader casts it at `lattice` (pxl-shader
-/// observer.rs `beam`, `cell`, `sample`, the eye's observer): every
+/// The view cast as the shader casts it at `lattice` (pxl-render beam.wgsl,
+/// cell.wgsl, sample.wgsl over sample_eye.wgsl): every
 /// corner's beam ray to where it stops and how far it hands on; each
 /// cell's start, the least of its window's, that corner's line, and
 /// whether it resumes, every beam ray of the window asking as its rays
 /// ask; and every sample walked to its stop from its cell's start off that
-/// line (pxl-shader beam.rs `resume_walk`), or from the world's root
+/// line (pxl-render resume.wgsl), or from the world's root
 /// where it resumes not. The samples row by row, `samples[0]` a row.
 fn cast_at(view: &View, lattice: u32) -> Vec<Cast> {
     let g = Grid::of(view.tan, lattice);
@@ -364,8 +364,8 @@ fn cast_at(view: &View, lattice: u32) -> Vec<Cast> {
                 if t < least {
                     (least, from) = (t, k);
                 }
-                // The eye's corners and cells ask its one detail
-                // (pxl-shader eye.rs `corner_detail`, `cell_detail`).
+                // The eye's corners and cells ask its one detail (pxl-render
+                // cell.wgsl).
                 alike = alike && detail.alike(detail);
             }
         }

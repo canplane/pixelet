@@ -16,9 +16,10 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
-    SHADER_WAY_RETURN, SHADER_WAY_TREE, STORAGE, STORAGE_RW,
+    dynamic, COMPUTE, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN,
+    SHADER_WAY_TREE, STORAGE, STORAGE_RW, UNIFORM,
 };
+use crate::frame::shader::word::{HEIGHT_SIDE, LEVEL_SIDE};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, signaled, release, room, word_bytes,
     write_buffer_bytes, Gpu, RenderContext, RESULT, UNIFORM_ALIGN_MAX,
@@ -157,7 +158,7 @@ pub(super) struct GroundPipelines {
 impl GroundPipelines {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> GroundPipelines {
         GroundPipelines {
-            heights: pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP),
+            heights: pipelines.build_compute(g, SHADER_HEIGHT, &HEIGHT_GROUP),
             bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
             ways: pipelines.build_compute(g, SHADER_WAY, &WAY_GROUP),
             free: pipelines.build_compute(g, SHADER_WAY_FREE, &WAY_FREE_GROUP),
@@ -499,7 +500,7 @@ const _: () = assert!(
 
 /// The clip levels' bricks' cells' four palette indices, a word a cell in the
 /// slots' order: written by the fill off each handed brick (`height_cs`), read
-/// by the cast at a hit (pxl-shader `World`'s `PaletteWords`). Their own
+/// by the cast at a hit (palette.wgsl). Their own
 /// buffer, as the bricks' binding has no room for them.
 const PALETTE_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
 const _: () = assert!(
@@ -507,11 +508,25 @@ const _: () = assert!(
     "PALETTE_BYTES: the bricks' palette indices bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// `bound_cs`'s group: its level at a dynamic offset (`SLOT_STRIDE`), the
-/// fresh frames, the frames it writes the levels of, and the handed
-/// bricks' scratch it reads the spans in. The cast's and `fold_cs`'s one
-/// group is the cast's, which binds all of theirs.
-const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
+/// `height_cs`'s group (height.wgsl): the fresh frames, the frames it writes
+/// the tops and laid cells of, and the bricks' palette indices.
+const HEIGHT_GROUP: [u32; 9] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW,
+];
+/// `bound_cs`'s group (bound.wgsl): its level at a dynamic offset
+/// (`SLOT_STRIDE`), the fresh frames, the frames it writes the levels of, and
+/// the handed bricks' scratch it reads the spans in. The cast's and
+/// `fold_cs`'s one group is the cast's, which binds all of theirs.
+const BOUND_GROUP: [u32; 12] = dynamic(
+    [
+        0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE,
+    ],
+    0,
+);
+const _: () = assert!(
+    floor::holds(&[&HEIGHT_GROUP]) && floor::holds(&[&BOUND_GROUP]),
+    "the fill's tops' or levels' group binds past WebGPU's floor"
+);
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
@@ -657,11 +672,10 @@ impl RaysPass {
         g.dispatch(pass, 1, 1, c.fresh_len);
         g.set_pipeline(pass, c.heights_built.id);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        let w = compute::HEIGHT_WORKGROUP;
         g.dispatch(
             pass,
-            BRICK.div_ceil(w[0]),
-            BRICK.div_ceil(w[1]),
+            BRICK.div_ceil(HEIGHT_SIDE),
+            BRICK.div_ceil(HEIGHT_SIDE),
             c.fresh_len,
         );
         // A column a thread, over the tops just drawn: each column's spans
@@ -678,7 +692,7 @@ impl RaysPass {
         g.set_pipeline(pass, c.bound_built.id);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
-            let side = (BRICK >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
+            let side = (BRICK >> j).div_ceil(LEVEL_SIDE);
             g.dispatch(pass, side, side, c.fresh_len);
         }
         // Each brick's ways as cells, a workgroup a brick, over its spans

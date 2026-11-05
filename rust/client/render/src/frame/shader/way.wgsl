@@ -15,31 +15,10 @@
 
 // ---- way.rs, fill.rs: a run's cells, and a column's spans as kept ----
 
-/// The cells of zoom `cell` the leaf cells `run` fill, first and last, first past last
-/// where none (`way::fill_range`).
-fn fill_range(cell: u32, run: vec2<i32>) -> vec2<i32> {
-  if (run.x >= run.y) {
-    return vec2<i32>(1i, 0i);
-  }
-  if (cell >= LEAF_CELL) {
-    let d = cell - LEAF_CELL;
-    return vec2<i32>(run.x << d, (run.y << d) - 1i);
-  }
-  let d = LEAF_CELL - cell;
-  let first = run.x >> d;
-  let last = (run.y - 1i) >> d;
-  return vec2<i32>(select(first + 1i, first, fills(cell, run, first)), select(last - 1i, last, fills(cell, run, last)));
-}
-
 /// Whether the leaf cells `run` fill any cell of zoom `cell` (`way::fills_any`).
 fn fills_any(cell: u32, run: vec2<i32>) -> bool {
   let r = fill_range(cell, run);
   return r.x <= r.y;
-}
-
-/// A run's bound word, its lowest and past its highest (`answer::bound_word`).
-fn bound_word(run: vec2<i32>) -> u32 {
-  return u32((run.x & 0xffffi) | (run.y << 16u));
 }
 
 /// A column's spans' head word (fill.rs `head_word`): its count, `SPANS_PAST` where they
@@ -161,55 +140,6 @@ fn face(rec: u32, c: vec2<i32>) -> i32 {
   }
   let cell = brick_cell(rec);
   return face_height(cell, top_of(cell, h).cells);
-}
-
-// ---- ground.rs: a column's height off its tile's samples ----
-
-/// Sample `i` of the brick's tile's padded samples, two a word, low first.
-fn sample(rec: u32, i: u32) -> i32 {
-  return (i32(fresh[rec + ELE_AT + i / 2u] >> (16u * (i % 2u))) << 16u) >> 16u;
-}
-
-/// A sample index on the padded grid, its edge's past it (`clamp_idx`).
-fn clamp_idx(i: i32) -> u32 {
-  return u32(clamp(i, 0i, i32(ELE_PADDED_SPAN) - 1i));
-}
-
-/// Catmull-Rom's four weights at `t` past the second sample.
-fn catmull_rom(t: f32) -> vec4<f32> {
-  let t2 = t * t;
-  let t3 = t * t * t;
-  return vec4<f32>(
-    -0.5 * t3 + t2 - 0.5 * t,
-    1.5 * t3 - 2.5 * t2 + 1.0,
-    -1.5 * t3 + 2.0 * t2 + 0.5 * t,
-    0.5 * t3 - 0.5 * t2,
-  );
-}
-
-/// The height the surface draws at the center of the tile's cell `g`, in leaf cells
-/// (`ground::height`, `bicubic`).
-fn ground_height(rec: u32, g: vec2<i32>) -> i32 {
-  let s = (vec2<f32>(g) + CELL_CENTER) / CELL_STEP + f32(ELE_PAD) - 0.5;
-  let f = floor(s);
-  let first = vec2<i32>(f) - 1i;
-  let wx = catmull_rom(s.x - f.x);
-  let wy = catmull_rom(s.y - f.y);
-  var out = 0.0;
-  var lo = 2147483647i;
-  var hi = -2147483647i - 1i;
-  for (var j = 0u; j < 4u; j++) {
-    let row_at = clamp_idx(first.y + i32(j)) * ELE_PADDED_SPAN;
-    var row = 0.0;
-    for (var i = 0u; i < 4u; i++) {
-      let v = sample(rec, row_at + clamp_idx(first.x + i32(i)));
-      lo = min(lo, v);
-      hi = max(hi, v);
-      row += f32(v) * wx[i];
-    }
-    out += row * wy[j];
-  }
-  return i32(round(clamp(out, f32(lo), f32(hi))));
 }
 
 // ---- way.rs: a segment, its crossing of a column, what a visit writes ----

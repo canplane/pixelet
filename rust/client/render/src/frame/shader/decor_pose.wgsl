@@ -7,12 +7,11 @@
 // is walked cell by cell. One ask of the world, in the loop (`world_cell`), so a thread
 // holds what the loop reads after and no more. No stack, no array, no struct of `var`.
 //
-// Footing and pose are one pass, as neither holds a walk: pxl-shader's `decor_footing_cs`
-// stood apart so that no pass held the world's walk twice.
+// Footing and pose are one pass, as neither holds a walk.
 //
-// Of a record a thread writes its first word, and its box's height and sink.
+// Of a record a thread writes its first word, and its box's height and sink. The eye's
+// words are eye_bind.wgsl's.
 
-@group(0) @binding(0) var<uniform> eye: array<vec4<u32>, EYE_VEC4S>;
 @group(0) @binding(9) var<storage, read_write> records: array<u32>;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
@@ -111,10 +110,6 @@ fn leaf_overlaps(slot: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> boo
 
 fn list_word(k: u32) -> u32 {
   return list[k];
-}
-
-fn eye_word(k: u32) -> u32 {
-  return eye[k / 4u][k % 4u];
 }
 
 /// A cut as the eye holds it: its index, then its zoom.

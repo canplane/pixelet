@@ -89,10 +89,7 @@ pub const fn high(word: u32) -> u32 {
 /// domain/layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (low, high);
-    // Child `k`, each read at a constant index: a runtime one is a bounds
-    // check, whose panic's path a GPU's loop about it carries out as a flag
-    // its own column's (pxl-shader `add`), so no barrier after it is in
-    // uniform control flow.
+    // Child `k`, each read at a constant index.
     let child = |k: u32| match k {
         0 => children[0],
         1 => children[1],

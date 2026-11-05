@@ -152,7 +152,7 @@ pub fn leaf_of(cell: Zoom, g: i32) -> i32 {
     (g << s) + ((1 << s) >> 1)
 }
 
-/// The world as the GPU holds it, read as pxl-shader's `World` reads it.
+/// The world as the GPU holds it, read as clip.wgsl and world.wgsl read it.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
     pub clipmap: &'a [[i32; 4]],

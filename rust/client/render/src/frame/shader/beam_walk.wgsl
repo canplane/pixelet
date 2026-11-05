@@ -3,7 +3,7 @@
 // A beam ray walked from the world's root to the first cell that fills or lacks, or the first
 // split too narrow to share (`cast::walk`, `Until::Beam`), through the observed pyramid writing
 // what it asks (ask.wgsl), either observer's (beam.wgsl, light_beam.wgsl). Its line is left as
-// it goes (pxl-shader beam.rs `Leaving`): what was handed each node it goes into is written at
+// it goes (pxl-engine `beam::LINE_WORDS`): what was handed each node it goes into is written at
 // that node's zoom, read back where the walk pops to its child, in place of a stack.
 
 /// What was handed the line's node at `zoom`, at `base` (`beam::LINE_INHERITANCE`).
@@ -28,7 +28,7 @@ struct Beamed {
 
 /// The beam ray from `origin` aimed `aimed`, reaching `t_max` at the zooms `range` holds it to,
 /// its beam's rays `spacing` apart, `across` then `angle` (`cast::Spacing`), its line left at
-/// `base` (`cast::walk_from_root`, `Until::Beam`, `Leaving`).
+/// `base` (`cast::walk_from_root`, `Until::Beam`; the line's words `beam::LINE_WORDS`).
 fn beam_walk(origin: vec3<i32>, aimed: vec3<f32>, t_max: f32, range: vec2<u32>, spacing: vec2<f32>, base: u32) -> Beamed {
   let dir = ray_dir(aimed);
   let inv = ray_inv(dir);

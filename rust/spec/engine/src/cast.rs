@@ -88,9 +88,7 @@ impl Detail {
 
     /// Whether a walk asking it may take what one asking `other` met: the
     /// cell it stopped at, the sky past it, the line it left. Only where
-    /// both asked the same zooms at the same spacing. [rust-gpu] Word by
-    /// word: an array's `==` is an intrinsic (`raw_eq`) its backend lowers
-    /// none of.
+    /// both asked the same zooms at the same spacing.
     pub fn alike(self, other: Detail) -> bool {
         self.range[0] == other.range[0]
             && self.range[1] == other.range[1]
@@ -175,13 +173,17 @@ impl Ray {
             inverse: [inv(dir[0]), inv(dir[1]), inv(dir[2])],
         }
     }
+
+    /// Its direction's reciprocal on each axis, 0 where it does not move along one.
+    pub fn inverse(&self) -> [f32; 3] {
+        self.inverse
+    }
 }
 
 /// The greater and the lesser of two floats, one comparison each. IEEE's
 /// `f32::max` and `f32::min` hand back the other operand where one is NaN,
-/// and rust-gpu lowers each into two NaN-check branches — seventeen a pass
-/// of the walk's loop. No number the walk compares is NaN (`Ray::new`), so
-/// the comparison is the whole rule.
+/// and no number the walk compares is NaN (`Ray::new`), so the comparison is
+/// the whole rule.
 fn greater(a: f32, b: f32) -> f32 {
     if a > b {
         a
@@ -487,13 +489,43 @@ pub fn asset_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
 /// where that span begins (`entry_plane`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, asset_box(o, n, asset), 0.0);
+    let e = entry_with(o, ray, ray.inverse, n, asset);
+    (e.t, e.axis, e.enters)
+}
+
+/// Where a ray enters a cell, as `entry` takes it, and the planes that decided it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Entry {
+    /// The t of the plane it enters across, no nearer than the origin.
+    pub t: f32,
+    pub axis: u32,
+    /// Whether it enters within its interval, `span[1] > span[0]`.
+    pub enters: bool,
+    /// The t at each axis's near plane and far plane (`planes`).
+    pub near: [f32; 3],
+    pub far: [f32; 3],
+    /// Where its interval in the cell begins and ends.
+    pub span: [f32; 2],
+}
+
+/// `entry` along `ray` with `inverse` for its direction's reciprocal: what a device that
+/// divides as it will takes, its own reciprocal handed in.
+pub fn entry_with(o: [i32; 3], ray: &Ray, inverse: [f32; 3], n: &Node, asset: u32) -> Entry {
+    let ray = Ray { inverse, ..*ray };
+    let (x, y, z) = spans(&ray, asset_box(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
     );
-    let (t, e) = entry_plane(ray, [x.0, y.0, z.0]);
-    (t, e, t1 > t0)
+    let (t, e) = entry_plane(&ray, [x.0, y.0, z.0]);
+    Entry {
+        t,
+        axis: e,
+        enters: t1 > t0,
+        near: [x.0, y.0, z.0],
+        far: [x.1, y.1, z.1],
+        span: [t0, t1],
+    }
 }
 
 /// Whether the ray, at `t`, has crossed the mid plane `mid` units from the

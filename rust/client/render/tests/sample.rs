@@ -1,15 +1,17 @@
 //! `sample_hit_cs` and `sample_cs` by hand (frame/shader/sample_hit.wgsl, sample.wgsl), the eye's
 //! and the light's (sample_eye.wgsl, sample_light.wgsl), answer as `cast::walk` resumed off the
-//! beam (pxl-shader observer.rs `resume`) through `Writing` (tests/keeping): over the real world
+//! beam (resume.wgsl) through `Writing` (tests/keeping): over the real world
 //! of tests/real_world, off the lines and cells' starts the beam's passes leave there, each
 //! sample's words as the Rust's `sample_put`, what it left in the observed pyramid as `Writing`
 //! leaves it, and the next frame off that. Skipped where no adapter answers.
 
+mod gpu;
 mod keeping;
 mod real_world;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use gpu::{cross, read_texture, texture, unit, Kinds, LightBox};
 use keeping::*;
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
@@ -19,7 +21,7 @@ use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
 use pxl_engine::pyramid::{self, BUCKET};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, tally, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{eye, face, raster, ray, tally, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CELL, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL,
     SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SAMPLE_HIT, SHADER_SAMPLE, SHADER_SAMPLE_HIT,
@@ -221,7 +223,21 @@ impl Observed {
         ray: &Ray,
         detail: Detail,
     ) -> (Trace<Inheritance>, u32) {
-        let at = self.cell_at(s) as usize;
+        self.walk_at(q, beams, self.cell_at(s), o, ray, detail)
+    }
+
+    /// A ray's walk through `q` from `o`, resumed off the cell whose start is at word `cell`
+    /// of `beams` (`resumed`), or from the world's root where that cell resumes not.
+    fn walk_at(
+        &self,
+        q: &mut Keeping,
+        beams: &[u32],
+        cell: u32,
+        o: [i32; 3],
+        ray: &Ray,
+        detail: Detail,
+    ) -> (Trace<Inheritance>, u32) {
+        let at = cell as usize;
         let line = beams[at + beam::CELL_CORNER as usize] * self.line_words;
         let over = LineOver { beams, line };
         let resumes = beams[at + beam::CELL_RESUMES as usize] != 0;
@@ -379,19 +395,6 @@ struct LightCase {
     least: &'static [(&'static str, u32)],
 }
 
-fn unit(v: [f32; 3]) -> [f32; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    v.map(|x| x / l)
-}
-
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
 /// The eye's words at `c`, one step moved along each axis by `moved`.
 fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
     let forward = unit(c.look);
@@ -514,52 +517,21 @@ fn world_binds<'a>(
     ]
 }
 
-/// A light box and where its rays start, as a host lays them (light.rs `Starts`).
+/// A light box and where its rays start, its corner moved by `moved`.
 fn box_of(c: &LightCase, moved: [i32; 2]) -> (Light, Starts, [i32; 2]) {
-    let dir = unit(c.dir);
-    let a = cross(dir, [0.0, 0.0, 1.0]);
-    let a = if a == [0.0; 3] {
-        [1.0, 0.0, 0.0]
-    } else {
-        unit(a)
-    };
-    let across = a.map(|v| v * c.side);
-    let down = unit(cross(dir, a)).map(|v| v * c.side);
-    let half = c.size as f32 / 2.0;
     let corner = [c.corner[0] + moved[0], c.corner[1] + moved[1]];
-    let s = Light {
-        first: [0, 1, 2].map(|k| -half * (across[k] + down[k]) - c.back * dir[k]),
+    let b = LightBox {
+        size: c.size,
+        origin: c.origin,
+        dir: c.dir,
+        side: c.side,
+        back: c.back,
         t_max: c.t_max,
-        across,
-        down,
-        dir,
-        bias: [0.00025, 0.0005, 0.00075],
         corner,
         reach_ndc: 1.0,
     };
-    let base = corner.map(|v| v.div_euclid(light::ANCHOR) * light::ANCHOR);
-    let q = (1u32 << FRAC_W) as f32;
-    let anchor = |k: usize| {
-        let w = [
-            base[0] + (k % 2) as i32 * light::ANCHOR,
-            base[1] + (k / 2) as i32 * light::ANCHOR,
-        ];
-        let (i, j) = ((w[0] - corner[0]) as f32, (w[1] - corner[1]) as f32);
-        let v = |a: usize| (s.first[a] + i * across[a] + j * down[a]) * q;
-        (
-            [0, 1, 2].map(|a| c.origin[a].wrapping_add(v(a).round_ties_even() as i32)),
-            [0, 1, 2].map(|a| v(a) - v(a).round_ties_even()),
-        )
-    };
-    let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-    let starts = Starts {
-        base,
-        across: across.map(|v| v * q),
-        down: down.map(|v| v * q),
-        at: [a0.0, a1.0, a2.0, a3.0],
-        frac: [a0.1, a1.1, a2.1, a3.1],
-    };
-    (s, starts, corner)
+    let (l, starts) = b.lay();
+    (l, starts, corner)
 }
 
 /// The light's words at `c`, its lines and cells yet to be laid: each cast tile a third of them.
@@ -713,9 +685,6 @@ fn light_beams(
     }
     words
 }
-
-/// What each kind of end of a walk it took, for what the test may say.
-type Kinds = BTreeMap<&'static str, u64>;
 
 /// One frame over `table`: the hit pass, the left walked, each sample's words against the
 /// reference, what it kept against `Writing`'s. The table the hand left.
@@ -880,11 +849,12 @@ fn run_frame(
     for (place, &s) in taken.iter().enumerate() {
         // Taken by a thread of a later row of the list's workgroups.
         let row = light::LIST_ACROSS * light::LISTED_LANES;
-        *kinds.entry("listed, past a row").or_default() +=
-            u64::from(listed_case && place as u32 >= row);
+        kinds.add("listed, past a row", listed_case && place as u32 >= row);
         // Taken by a thread of a row's last workgroup's last row of lanes.
-        *kinds.entry("listed, a row's last lanes").or_default() +=
-            u64::from(listed_case && place as u32 % row >= row - beam::SAMPLE_SIDE);
+        kinds.add(
+            "listed, a row's last lanes",
+            listed_case && place as u32 % row >= row - beam::SAMPLE_SIDE,
+        );
         let at = obs.sample_at(s) as usize;
         let node = at + beam::SAMPLE_NODE as usize;
         let zoom_word = node + beam::NODE_ZOOM as usize;
@@ -971,7 +941,7 @@ fn run_frame(
         // What the test may say.
         let hits = met.ends == End::Hit;
         let a = met.hit.asset[0];
-        let mut add = |k: &'static str, yes: bool| *kinds.entry(k).or_default() += u64::from(yes);
+        let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
         add("samples", true);
         add("a step over", false);
         add("left", was_left);
@@ -1092,14 +1062,14 @@ fn run_frame(
         .keys()
         .filter(|k| !hand_kept.contains_key(*k))
         .count();
-    *kinds.entry("not needed").or_default() += none_put;
-    *kinds.entry("kept").or_default() += hand_kept.len() as u64;
-    *kinds.entry("kept, filled").or_default() += filled;
+    kinds.count("not needed", none_put);
+    kinds.count("kept", hand_kept.len() as u64);
+    kinds.count("kept, filled", filled);
     let zooms_apart = hand_kept.keys().filter(|k| {
         let z = key_zooms(k.2);
         z[0] != z[1]
     });
-    *kinds.entry("kept, far and near apart").or_default() += zooms_apart.count() as u64;
+    kinds.count("kept, far and near apart", zooms_apart.count() as u64);
 
     // The slots laid, as the rule leaves each: where its node alone is asked in its bucket, by
     // rays enough that none is a grazing a GPU's rounding may enter or not.
@@ -1341,7 +1311,7 @@ fn two_frames(
     );
     eprintln!("  KINDS {} {kinds:?}", first.name);
     for (what, n) in least {
-        let got = kinds.get(what).copied().unwrap_or(0);
+        let got = kinds.get(what);
         if got < u64::from(*n) {
             failed.push(format!(
                 "{}: too few of {what} to say: {got}, wanted {n}",
@@ -2136,5 +2106,1163 @@ fn hand_light_samples_answer_as_cast_walk() {
         c.least,
         &mut failed,
     );
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A screen's pixels the cast marked missed, their rays as the walks again take them: how many
+/// across and down, the eye's jitter, one in so many marked, and how many of those the cast
+/// listed before its list was full.
+struct Screen {
+    name: &'static str,
+    size: [u32; 2],
+    jitter: [f32; 2],
+    marked_in: u32,
+    listed: u32,
+}
+
+/// The tangents across and up of pixel `p`'s ray through its jittered middle, row 0 at the
+/// top: the rule every pass that walks a drawn pixel takes it by (grid.wgsl `px_tan`).
+fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
+    let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
+    [ndc_x * tan[0], ndc_y * tan[1]]
+}
+
+/// Pixel `p`'s ray, the zooms it asks, and the first word of its cell's start (`Grid::cell`).
+fn px_aim(obs: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail, u32) {
+    let Rays::Eye {
+        axes,
+        far,
+        range,
+        grid,
+        ..
+    } = &obs.rays
+    else {
+        unreachable!()
+    };
+    let at = px_tan(s, grid.tan, p);
+    let d = cast::through(axes[0], axes[1], axes[2], at[0], at[1]);
+    let detail = Detail {
+        range: *range,
+        spacing: Spacing {
+            angle: grid.s,
+            across: 0.0,
+        },
+    };
+    (Ray::new(d, *far), detail, grid.cell_at(grid.cell(at)))
+}
+
+#[test]
+fn hand_missed_pixels_answer_as_cast_walk() {
+    use pxl_render::frame::shader::record::{SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST};
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let at = spots(&built);
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let eyes = [
+        EyeCase {
+            name: "the eye, over the ground",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+            look: [0.5, 0.4, -0.77],
+            tan: [0.3, 0.2],
+            lattice: 1,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+            least: &[],
+        },
+        EyeCase {
+            name: "the eye, lattice 2, over the seam",
+            origin: over([EYE[0] + 280, EYE[1] + 90], 40),
+            look: [0.8, 0.2, -0.55],
+            tan: [0.4, 0.3],
+            lattice: 2,
+            far: 2000.0,
+            range: [8, FINEST],
+            cuts: none,
+            least: &[],
+        },
+        EyeCase {
+            name: "the eye, on a bridge",
+            origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
+            look: [0.5, -0.3, -0.8],
+            tan: [0.3, 0.3],
+            lattice: 1,
+            far: 600.0,
+            range: [LEAF_CELL, FINEST],
+            cuts: none,
+            least: &[],
+        },
+    ];
+    let screens = [
+        Screen {
+            name: "every pixel marked and listed",
+            size: [96, 61],
+            jitter: [0.0, 0.0],
+            marked_in: 1,
+            listed: u32::MAX,
+        },
+        Screen {
+            name: "one in three marked, jittered, the list full past a third",
+            size: [131, 77],
+            jitter: [0.25, -0.375],
+            marked_in: 3,
+            listed: 1000,
+        },
+    ];
+    let hit_p = gpu.pipeline(src(SHADER_MISS_HIT), "miss_hit_cs");
+    let list_p = gpu.pipeline(src(SHADER_MISS_LIST), "miss_list_cs");
+    let whole_p = gpu.pipeline(src(SHADER_MISS), "miss_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    for c in &eyes {
+        for s in &screens {
+            let name = format!("{}, {}", c.name, s.name);
+            let mut obs = eye_of(c, [0; 3]);
+            for k in 0..2 {
+                obs.eye[eye::JITTER + k] = s.jitter[k].to_bits();
+            }
+            let mut table0 = vec![0u32; pyramid::WORDS as usize];
+            table0[pyramid::FRAME as usize] = FRAME;
+            let table_buf = gpu.buffer(&table0, store_of());
+            let words = eye_beams(&gpu, &b, &obs, &table_buf);
+            let mut table = gpu.read(&table_buf);
+            let Rays::Eye { origin, grid, .. } = &obs.rays else {
+                unreachable!()
+            };
+            let (origin, grid) = (*origin, *grid);
+
+            // The pixels the cast marked, and those it listed, in an order of their own as its
+            // atomics take them.
+            let [wd, ht] = s.size;
+            let texels = (wd * ht) as usize;
+            let mark = |p: u32| (p.wrapping_mul(0x9e37_79b9) >> 7).is_multiple_of(s.marked_in);
+            let mut marked: Vec<u32> = (0..wd * ht).filter(|&p| mark(p)).collect();
+            marked.sort_by_key(|&p| p.wrapping_mul(0x85eb_ca77).rotate_left(13));
+            let listed = marked.len().min(s.listed as usize);
+            table[pyramid::MARKS_CNT as usize] = listed as u32;
+            for (k, &p) in marked[..listed].iter().enumerate() {
+                table[(pyramid::MARKS_AT + k as u32) as usize] = ((p / wd) << 16) | (p % wd);
+            }
+            let mut ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
+                .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
+                .collect();
+            for &p in &marked {
+                ray_words[p as usize] = ray::MISS;
+            }
+
+            // The walk over the pyramid alone, what it left listed, then the walks that ask.
+            let rays = texture(
+                &gpu.device,
+                &gpu.queue,
+                s.size,
+                ray::WORDS,
+                wgpu::TextureUsages::STORAGE_BINDING,
+                &ray_words,
+            );
+            let view = rays.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+            let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+            let beams = gpu.buffer(&words, store_of());
+            let table_buf = gpu.buffer(&table, store_of());
+            let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0], store_of());
+            gpu.dispatch(
+                &hit_p,
+                &[
+                    (0, eye_buf.as_entire_binding()),
+                    (3, wgpu::BindingResource::TextureView(&view)),
+                    (8, beams.as_entire_binding()),
+                    (9, table_buf.as_entire_binding()),
+                    (10, left.as_entire_binding()),
+                ],
+                [
+                    ray::MISS_ACROSS,
+                    (listed as u32)
+                        .div_ceil(ray::MISS_ACROSS * ray::MISS_LANES)
+                        .max(1),
+                ],
+            );
+            let args = gpu.read(&left);
+            let mut after = gpu.read(&beams);
+            after[grid.misses_at as usize] = args[3];
+            let mut table = gpu.read(&table_buf);
+            table[pyramid::HITS_ARGS as usize..(pyramid::HITS_CNT + 1) as usize]
+                .copy_from_slice(&args[4..8]);
+            let beams = gpu.buffer(&after, store_of());
+            let table_buf = gpu.buffer(&table, store_of());
+            let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
+            binds.push((3, wgpu::BindingResource::TextureView(&view)));
+            if args[1] != 0 {
+                gpu.dispatch(&list_p, &binds, [args[0], args[1]]);
+            }
+            gpu.dispatch(&whole_p, &binds, [wd.div_ceil(8), ht.div_ceil(8)]);
+            let out = read_texture(&gpu.device, &gpu.queue, &rays);
+            let out_beams = gpu.read(&beams);
+            let out_table = gpu.read(&table_buf);
+            let claimed = left_claimed(&out_table);
+            if claimed.len() > left_claimed(&table0).len() {
+                failed.push(format!("{name}: the passes did not run to their end"));
+                continue;
+            }
+
+            // Each marked pixel's words as `cast::walk` writing the pyramid leaves them, its hit
+            // kept where its faces are to be asked.
+            let tag = pyramid::tag(FRAME, pyramid::MISSED_PASS);
+            let mut table_ref = table0.clone();
+            let mut q = Keeping {
+                w,
+                cuts: obs.cuts,
+                table: &mut table_ref,
+                tag,
+                asks: Asks::default(),
+                writes: true,
+                met: None,
+            };
+            let left_at: BTreeSet<u32> = (0..args[3])
+                .map(|k| after[(grid.misses_at + 1 + k) as usize])
+                .collect();
+            let (mut same, mut differ, mut stepped) = (0u32, 0u32, 0u32);
+            let mut hits = BTreeSet::new();
+            for &p in &marked {
+                let px = [p % wd, p / wd];
+                let (r, d, cell) = px_aim(&obs, s, px);
+                let (met, before) = obs.walk_at(&mut q, &words, cell, origin, &r, d);
+                let got = |l: u32| out[l as usize * texels + p as usize];
+                let face = 2 * met.hit.axis + u32::from(r.dir[met.hit.axis as usize] > 0.0);
+                let was_left = left_at.contains(&((px[1] << 16) | px[0]));
+                let walked_again = was_left || !marked[..listed].contains(&p);
+                let mut ok = got(0) != ray::MISS;
+                if met.ends == End::Hit {
+                    let whole = answer::fill_eighths(met.hit.asset[0]) == answer::EIGHTHS;
+                    ok = ok
+                        && got(0) == ray::first_word(met.hit.asset[0], face, met.hit.node.zoom)
+                        && got(2) == met.hit.asset[1];
+                    let t = f32::from_bits(got(1));
+                    ok = ok && (t - met.hit.t).abs() <= 1e-4 * met.hit.t.max(1.0);
+                    if whole {
+                        // Its hit kept, its number marked waiting, its words the walk's.
+                        let n = got(3) & !beam::HIT_WAITS;
+                        let k = grid.hit_at(n) as usize;
+                        let node = k + beam::HIT_NODE as usize;
+                        ok = ok
+                            && got(3) & beam::HIT_WAITS != 0
+                            && hits.insert(n)
+                            && out_beams[node + beam::NODE_ZOOM as usize] == met.hit.node.zoom
+                            && (0..3).all(|a| {
+                                out_beams[node + beam::NODE_CORNER as usize + a]
+                                    == met.hit.node.corner[a]
+                                    && out_beams[node + beam::NODE_ROOTS as usize + a]
+                                        == met.hit.node.roots[a] as u32
+                            })
+                            && out_beams[k + beam::HIT_FACE as usize] == face
+                            && out_beams[k + beam::HIT_PX as usize] == (px[1] << 16 | px[0]);
+                    } else {
+                        ok = ok && got(3) == face::BOX;
+                    }
+                } else {
+                    ok = ok && got(0) == 0 && got(1) == 0 && got(3) == 0;
+                }
+                // Its visits with its beam ray's, where it met nothing.
+                if met.ends != End::Hit {
+                    ok = ok && got(2).abs_diff(met.visits + before) <= VISITS_OFF;
+                }
+                if !ok && stepped <= STEPS_TRIED {
+                    // A start a step over, as a GPU rounds it.
+                    let o = origin;
+                    let again = (0..27).any(|m| {
+                        let from = [o[0] + m % 3 - 1, o[1] + (m / 3) % 3 - 1, o[2] + m / 9 - 1];
+                        let mut q = Keeping {
+                            w,
+                            cuts: obs.cuts,
+                            table: &mut table0.clone(),
+                            tag,
+                            asks: Asks::default(),
+                            writes: true,
+                            met: None,
+                        };
+                        let (m, _) = obs.walk_at(&mut q, &words, cell, from, &r, d);
+                        m.ends == met.ends
+                            && (m.ends != End::Hit
+                                || got(0) == ray::first_word(m.hit.asset[0], face, m.hit.node.zoom))
+                    });
+                    if again {
+                        stepped += 1;
+                        ok = true;
+                    }
+                }
+                if ok {
+                    same += 1;
+                } else {
+                    differ += 1;
+                    if differ <= 3 {
+                        eprintln!(
+                            "DIFFERS {name} {px:?} left {was_left} again {walked_again}: want {:?} z{} {:?} t{} axis {} asset {:x?} visits {}+{before}; got {:x?}",
+                            met.ends, met.hit.node.zoom, met.hit.node.corner, met.hit.t, met.hit.axis, met.hit.asset, met.visits,
+                            [got(0), got(1), got(2), got(3)]
+                        );
+                    }
+                    assert!(
+                        std::env::var_os("MUT_WGSL").is_none(),
+                        "{name}: {px:?} differs"
+                    );
+                }
+                let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
+                add("pixels", true);
+                add("left by the walk over the pyramid", was_left);
+                add(
+                    "past the list, walked over every pixel",
+                    !marked[..listed].contains(&p),
+                );
+                add("hit", met.ends == End::Hit);
+                add(
+                    "hit, its faces kept to ask",
+                    met.ends == End::Hit
+                        && answer::fill_eighths(met.hit.asset[0]) == answer::EIGHTHS,
+                );
+                add("past its reach", met.ends == End::Miss);
+                add(
+                    "resumed",
+                    words[cell as usize + beam::CELL_RESUMES as usize] != 0,
+                );
+            }
+            // The hits kept are numbered from 0, one each, as many as the count.
+            let cnt = out_table[pyramid::HITS_CNT as usize];
+            if hits.len() as u32 != cnt || hits.iter().copied().max().is_some_and(|m| m + 1 != cnt)
+            {
+                failed.push(format!(
+                    "{name}: {} hits kept against a count of {cnt}",
+                    hits.len()
+                ));
+            }
+            // A pixel the cast did not mark stands.
+            let untouched = (0..wd * ht).filter(|&p| !mark(p)).all(|p| {
+                (0..ray::WORDS as usize)
+                    .all(|l| out[l * texels + p as usize] == ray_words[l * texels + p as usize])
+            });
+            if !untouched {
+                failed.push(format!("{name}: a pixel not marked was written"));
+            }
+            eprintln!("{name}: {same} alike, {differ} differ, {stepped} a step over");
+            if differ > 0 {
+                failed.push(format!("{name}: {differ} pixels differ"));
+            }
+        }
+    }
+    eprintln!("  KINDS missed {kinds:?}");
+    for (what, n) in [
+        ("left by the walk over the pyramid", 1),
+        ("past the list, walked over every pixel", 1),
+        ("hit, its faces kept to ask", 1),
+        ("past its reach", 1),
+    ] {
+        if kinds.get(what) < n {
+            failed.push(format!("too few of {what} to say"));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A word the boxes' writing leaves standing where it writes none.
+const UNWRITTEN: u32 = 0x5eed_0b0c;
+
+/// The samples' words as the hand's hit pass and the walk after it leave them over `table`,
+/// each sample's words laid first as a cast before left them in `prior`, else `UNTOUCHED`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the device, the world, the observer, its words, what stood before, the table and the passes"
+)]
+fn stopped(
+    gpu: &Gpu,
+    b: &WorldBufs,
+    obs: &Observed,
+    words: &[u32],
+    prior: Option<&[u32]>,
+    table: &[u32],
+    hit: &wgpu::ComputePipeline,
+    world: &wgpu::ComputePipeline,
+) -> Vec<u32> {
+    let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+    let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
+    let mut laid = words.to_vec();
+    for j in 0..obs.lattice[1] {
+        for i in 0..obs.lattice[0] {
+            let at = obs.sample_at([i, j]) as usize;
+            let to = at + beam::SAMPLE_WORDS as usize;
+            match prior {
+                Some(p) => laid[at..to].copy_from_slice(&p[at..to]),
+                None => laid[at..to].fill(UNTOUCHED),
+            }
+        }
+    }
+    let beams = gpu.buffer(&laid, store_of());
+    let table = gpu.buffer(table, store_of());
+    let left = gpu.buffer(&[0, 1, 1, 0], store_of());
+    let mut binds = vec![
+        (0, eye_buf.as_entire_binding()),
+        (8, beams.as_entire_binding()),
+        (9, table.as_entire_binding()),
+        (10, left.as_entire_binding()),
+    ];
+    if obs.apart {
+        binds.push((11, head_buf.as_entire_binding()));
+    }
+    gpu.dispatch(hit, &binds, obs.groups);
+    let args = gpu.read(&left);
+    let mut after = gpu.read(&beams);
+    after[obs.lefts_at as usize] = args[3];
+    let beams = gpu.buffer(&after, store_of());
+    let mut binds = world_binds(b, &eye_buf, &beams, &table);
+    if obs.apart {
+        binds.push((11, head_buf.as_entire_binding()));
+    }
+    if args[3] != 0 {
+        gpu.dispatch(world, &binds, [args[0], 1]);
+    }
+    gpu.read(&beams)
+}
+
+/// A box as pxl-engine `raster` has it written: its words (`raster::BOX_WORDS`) and the first
+/// word of its sample.
+type BoxWords = ([u32; raster::BOX_WORDS as usize], usize);
+
+/// Each box the samples' words `words` draw from `origin`, by its sample's id
+/// (`raster::id_of`): a sample that stopped, unless the one across or up before it that the
+/// cast needs stopped alike (`raster::alike`), which one before is asked and in what order
+/// this test's own reading of boxes.wgsl `sample_box`; the cell as the cast stops on it
+/// (`cast::asset_box`), and `raster::EYED` where `tan` is the screen's and it lies about the
+/// eye (`raster::is_eyed`).
+fn boxes_want(
+    obs: &Observed,
+    words: &[u32],
+    origin: [i32; 3],
+    tan: Option<[f32; 2]>,
+    kinds: &mut Kinds,
+) -> BTreeMap<u32, BoxWords> {
+    let mut want = BTreeMap::new();
+    let n = obs.lattice;
+    let alike = |a: usize, b: usize| raster::alike(words, a, b);
+    let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
+    for s in obs.taken() {
+        let k = obs.sample_at(s) as usize;
+        let node = k + beam::SAMPLE_NODE as usize;
+        let zoom = words[node + beam::NODE_ZOOM as usize];
+        add("samples", true);
+        if zoom == beam::SAMPLE_NONE {
+            add("past its reach, no box", true);
+            continue;
+        }
+        // A sample before that the cast does not need is not compared, whatever it holds.
+        for b in [[s[0].wrapping_sub(1), s[1]], [s[0], s[1].wrapping_sub(1)]] {
+            if b[0] < n[0] && b[1] < n[1] && !obs.needed(b) {
+                add(
+                    "a sample before not needed, alike as it stood",
+                    alike(k, obs.sample_at(b) as usize),
+                );
+            }
+        }
+        let across = s[0] > 0 && obs.needed([s[0] - 1, s[1]]);
+        if across && alike(k, obs.sample_at([s[0] - 1, s[1]]) as usize) {
+            add("alike the one across", true);
+            continue;
+        }
+        let up = s[1] > 0 && obs.needed([s[0], s[1] - 1]);
+        if up && alike(k, obs.sample_at([s[0], s[1] - 1]) as usize) {
+            add("alike the one up", true);
+            continue;
+        }
+        let cell = Node {
+            zoom,
+            corner: [0, 1, 2].map(|a| words[node + beam::NODE_CORNER as usize + a]),
+            roots: [0, 1, 2].map(|a| words[node + beam::NODE_ROOTS as usize + a] as i32),
+        };
+        let asset = words[k + beam::SAMPLE_ASSET as usize];
+        let (lo, hi) = cast::asset_box(origin, &cell, asset);
+        // boxes.wgsl insets a cell as `lo + (hi - lo) · by`, which a device may fuse; a fused
+        // sum rounds as the Rust's product and sum apart wherever the product is exact, as a
+        // node's side, a power of two, times `by` is. Each inset's product held exact, so the
+        // planes are compared word for word.
+        let eighths = answer::fill_eighths(asset);
+        if eighths != answer::EIGHTHS {
+            let whole = asset & !(((1 << answer::FILL_BITS) - 1) << answer::FILL_SHIFT);
+            let (node_lo, node_hi) = cast::asset_box(origin, &cell, whole);
+            let by = 0.5 * (1.0 - answer::side(eighths));
+            for a in 0..3 {
+                let side = node_hi[a] - node_lo[a];
+                add(
+                    "boxes, an inset's product rounded",
+                    f64::from(side * by) != f64::from(side) * f64::from(by),
+                );
+            }
+        }
+        let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
+        let eyed = tan.is_some_and(|t| raster::is_eyed(lo, hi, t));
+        let id = raster::id_of(s[1] * n[0] + s[0], lacks);
+        let mut w = [0u32; raster::BOX_WORDS as usize];
+        for a in 0..3 {
+            w[(raster::BOX_LO as usize) + a] = lo[a].to_bits();
+            w[(raster::BOX_HI as usize) + a] = hi[a].to_bits();
+        }
+        w[raster::BOX_ID as usize] = id;
+        let axis = words[k + beam::SAMPLE_AXIS as usize];
+        w[raster::BOX_AXIS as usize] = axis | if eyed { raster::EYED } else { 0 };
+        add("boxes", true);
+        add("boxes, eyed", eyed);
+        add("boxes, eyed, a cell", eyed && !lacks);
+        add(
+            "boxes, eyed, past the eye",
+            eyed && lo.iter().any(|&v| v > 0.0),
+        );
+        // Eyed, its nearest point past what the screen's corner adds to the reach alone, and past
+        // half the reach.
+        let d2 = |a: usize| {
+            let v = if lo[a] > 0.0 {
+                lo[a]
+            } else if hi[a] < 0.0 {
+                hi[a]
+            } else {
+                0.0
+            };
+            v * v
+        };
+        let near = d2(0) + d2(1) + d2(2);
+        let corner = tan.map_or(0.0, |t| t[0] * t[0] + t[1] * t[1]);
+        let reach = 4.0 * raster::NEAR * raster::NEAR;
+        add(
+            "boxes, eyed, past the corner's share and half the reach",
+            eyed && near >= reach * corner && near >= reach / 4.0 * (1.0 + corner),
+        );
+        add("boxes, lacks", lacks);
+        add(
+            "boxes, short of its cube",
+            answer::fill_eighths(asset) < answer::EIGHTHS,
+        );
+        add("boxes, in another root", cell.roots != [0; 3]);
+        want.insert(id, (w, k));
+    }
+    want
+}
+
+/// The boxes' writing by hand over `words` from `origin` against `boxes_want`: the args, each box
+/// word for word, the rest of the boxes standing; and, for the eye (`grid`), each box's ask and
+/// its sample's faces' word as the faces' pass is to take them (pxl-engine `beam::ASK_WORDS`,
+/// `beam::SAMPLE_FACES`), every other word of the samples' standing. Fails into `failed`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the device, the pass, its observer, words, origin and screen, what to tell and what failed"
+)]
+fn boxes_case(
+    gpu: &Gpu,
+    pass: &wgpu::ComputePipeline,
+    obs: &Observed,
+    words: &[u32],
+    origin: [i32; 3],
+    grid: Option<&Grid>,
+    groups: [u32; 2],
+    kinds: &mut Kinds,
+    failed: &mut Vec<String>,
+) {
+    let name = &obs.name;
+    let tan = grid.map(|g| g.tan);
+    let want = boxes_want(obs, words, origin, tan, kinds);
+    let samples = obs.lattice[0] * obs.lattice[1];
+    let mut laid_args = vec![0u32; raster::ARGS_WORDS as usize];
+    laid_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    if let Some(g) = grid {
+        laid_args[raster::ARGS_FACES as usize + 1] = 1;
+        laid_args[raster::ARGS_FACES as usize + 2] = 1;
+        laid_args[raster::ARGS_ASKS as usize] = g.asks_at;
+    }
+    // The boxes' asks laid apart from every word a sample leaves, so a word written is told.
+    let mut laid = words.to_vec();
+    if let Some(g) = grid {
+        let at = g.asks_at as usize;
+        laid[at..at + (samples * beam::ASK_WORDS) as usize].fill(UNWRITTEN);
+    }
+    let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+    let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
+    let beams = gpu.buffer(&laid, store_of());
+    let boxes = gpu.buffer(
+        &vec![UNWRITTEN; raster::words(samples) as usize],
+        store_of(),
+    );
+    let args = gpu.buffer(&laid_args, store_of());
+    let mut binds = vec![
+        (0, eye_buf.as_entire_binding()),
+        (8, beams.as_entire_binding()),
+        (14, boxes.as_entire_binding()),
+        (16, args.as_entire_binding()),
+    ];
+    if obs.apart {
+        binds.push((11, head_buf.as_entire_binding()));
+    }
+    gpu.dispatch(pass, &binds, groups);
+    let got_args = gpu.read(&args);
+    let got_boxes = gpu.read(&boxes);
+    let got = gpu.read(&beams);
+
+    let mut fail = |what: String| failed.push(format!("{name}: {what}"));
+    let cnt = got_args[raster::ARGS_INSTANCES as usize];
+    let mut want_args = laid_args.clone();
+    want_args[raster::ARGS_INSTANCES as usize] = want.len() as u32;
+    if grid.is_some() {
+        want_args[raster::ARGS_FACES as usize] = (want.len() as u32).div_ceil(raster::FACES_LANES);
+    }
+    if got_args != want_args {
+        fail(format!("args {got_args:?}, want {want_args:?}"));
+    }
+    // Each box once, word for word, its place's ask with it.
+    let (mut same, mut differ, mut asked) = (0u64, 0u64, 0u64);
+    let mut seen = BTreeSet::new();
+    let mut want_beams = laid.clone();
+    let room = (samples as usize).min(cnt as usize);
+    for place in 0..room {
+        let at = place * raster::BOX_WORDS as usize;
+        let b = &got_boxes[at..at + raster::BOX_WORDS as usize];
+        let id = b[raster::BOX_ID as usize];
+        let Some((w, k)) = want.get(&id).filter(|_| seen.insert(id)) else {
+            differ += 1;
+            if differ <= 3 {
+                eprintln!("DIFFERS {name}: box {place} {b:x?}, no such sample's or twice");
+            }
+            continue;
+        };
+        if b != w {
+            differ += 1;
+            if differ <= 3 {
+                eprintln!("DIFFERS {name}: box {place} {b:x?}, want {w:x?}");
+            }
+        } else {
+            same += 1;
+        }
+        let Some(g) = grid else { continue };
+        // What lies about its face, as the faces' pass is to take it.
+        let k = *k;
+        let a = g.ask_at(place as u32) as usize;
+        let asset = words[k + beam::SAMPLE_ASSET as usize];
+        let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
+        if lacks || answer::fill_eighths(asset) < answer::EIGHTHS {
+            want_beams[k + beam::SAMPLE_FACES as usize] = if lacks { 0 } else { face::BOX };
+            want_beams[a + beam::ASK_TO as usize] = beam::ASK_NONE;
+            kinds.count("asks none", 1);
+        } else {
+            let s = raster::sample_of(id);
+            let s = [s % obs.lattice[0], s / obs.lattice[0]];
+            let (_, ray, _) = obs.aim(s);
+            let axis = words[k + beam::SAMPLE_AXIS as usize];
+            let cell = obs.cell_at(s) as usize;
+            want_beams[a + beam::ASK_NODE as usize] = (k + beam::SAMPLE_NODE as usize) as u32;
+            want_beams[a + beam::ASK_FACE as usize] = ray::face(ray.dir, axis);
+            want_beams[a + beam::ASK_LINE as usize] =
+                words[cell + beam::CELL_CORNER as usize] * beam::LINE_WORDS;
+            want_beams[a + beam::ASK_TO as usize] = (k + beam::SAMPLE_FACES as usize) as u32;
+            asked += 1;
+        }
+    }
+    let unwritten = got_boxes[room * raster::BOX_WORDS as usize..]
+        .iter()
+        .filter(|&&v| v != UNWRITTEN)
+        .count();
+    let words_apart: Vec<usize> = (0..got.len())
+        .filter(|&i| got[i] != want_beams[i])
+        .collect();
+    kinds.count("boxes compared", same + differ);
+    kinds.count("asks compared", asked);
+    kinds.count("words compared", got.len() as u64);
+    eprintln!(
+        "{name}: {same} boxes alike, {differ} differ of {} wanted, {cnt} written; {asked} asked; {} words apart, {unwritten} written past the boxes",
+        want.len(),
+        words_apart.len()
+    );
+    if differ != 0 || same != want.len() as u64 {
+        fail(format!(
+            "{differ} boxes differ, {same} alike of {}",
+            want.len()
+        ));
+    }
+    if unwritten != 0 {
+        fail(format!("{unwritten} words written past the boxes"));
+    }
+    if let Some(&i) = words_apart.first() {
+        fail(format!(
+            "{} of the samples' words apart, first {i}: {:x} want {:x}",
+            words_apart.len(),
+            got[i],
+            want_beams[i]
+        ));
+    }
+    if want.is_empty() {
+        fail("no box to compare".to_string());
+    }
+}
+
+/// The samples' words cut down, the last sample that stopped going on to its reach one by one,
+/// until its boxes are one past a multiple of the faces' lanes (`raster::FACES_LANES`).
+fn one_past_lanes(obs: &Observed, words: &mut [u32], origin: [i32; 3], tan: [f32; 2]) {
+    let mut order = obs.taken();
+    order.reverse();
+    for s in order {
+        let n = boxes_want(obs, words, origin, Some(tan), &mut Kinds::new()).len() as u32;
+        if n % raster::FACES_LANES == 1 {
+            return;
+        }
+        let k = (obs.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize;
+        words[k] = beam::SAMPLE_NONE;
+    }
+    panic!("no count one past a multiple of the lanes");
+}
+
+/// How an eye case's samples' words are cut before their boxes are written.
+#[derive(Clone, Copy)]
+enum Laid {
+    None,
+    /// To boxes one past a multiple of the faces' lanes (`one_past_lanes`).
+    Lanes,
+    /// A sample alike the one before it but its node a zoom coarser (`coarser`).
+    Zoom,
+}
+
+/// Each sample alike the one across before it, where its node's corner lies on the grid a zoom
+/// coarser, its node taken a zoom coarser at the same corner, one row in eight: the words a pixel
+/// reads alike but the zoom. How many.
+fn coarser(obs: &Observed, words: &mut [u32]) -> u64 {
+    let read = beam::SAMPLE_FACES as usize;
+    let mut cut = 0;
+    for j in (0..obs.lattice[1]).step_by(8) {
+        for i in 1..obs.lattice[0] {
+            let (k, b) = (
+                obs.sample_at([i, j]) as usize,
+                obs.sample_at([i - 1, j]) as usize,
+            );
+            let z = k + (beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize;
+            let zoom = words[z];
+            if zoom == beam::SAMPLE_NONE || zoom == 0 || words[k..k + read] != words[b..b + read] {
+                continue;
+            }
+            let keep = !(u32::MAX >> (zoom - 1));
+            let c = k + (beam::SAMPLE_NODE + beam::NODE_CORNER) as usize;
+            if (0..3).all(|a| words[c + a] & !keep == 0) {
+                words[z] = zoom - 1;
+                cut += 1;
+            }
+        }
+    }
+    cut
+}
+
+/// The table a frame's beam passes start over.
+fn frame_table() -> Vec<u32> {
+    let mut t = vec![0u32; pyramid::WORDS as usize];
+    t[pyramid::FRAME as usize] = FRAME;
+    t[pyramid::TALLY_ON as usize] = 1;
+    t
+}
+
+#[test]
+fn hand_eye_boxes_answer_as_raster() {
+    use pxl_render::frame::shader::record::SHADER_SAMPLE_BOX;
+    use pxl_render::frame::shader::word::SQUARE_SIDE;
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let at = spots(&built);
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let case = |name, origin, look, tan, lattice, far, range| EyeCase {
+        name,
+        origin,
+        look,
+        tan,
+        lattice,
+        far,
+        range,
+        cuts: none,
+        least: &[],
+    };
+    let mut cases = vec![
+        case(
+            "the eye, over the ground",
+            over([EYE[0] + 90, EYE[1] + 90], 60),
+            [0.5, 0.4, -0.77],
+            [0.3, 0.2],
+            1,
+            2000.0,
+            [8, FINEST],
+        ),
+        case(
+            "the eye, lattice 2, over the seam",
+            over([EYE[0] + 280, EYE[1] + 90], 40),
+            [0.8, 0.2, -0.55],
+            [0.4, 0.3],
+            2,
+            2000.0,
+            [8, FINEST],
+        ),
+        case(
+            "the eye, on a bridge",
+            q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
+            [0.5, -0.3, -0.8],
+            [0.3, 0.3],
+            1,
+            600.0,
+            [LEAF_CELL, FINEST],
+        ),
+        case(
+            "the eye, down a bore, under the ground",
+            q8([at.bore[0], at.bore[1], at.bore[2]]),
+            [0.6, 0.2, -0.3],
+            [0.3, 0.3],
+            1,
+            300.0,
+            [LEAF_CELL, FINEST],
+        ),
+        case(
+            "the eye, where no clip level holds the ground",
+            q8([1 << 15, 1 << 15, 40]),
+            [0.3, 0.2, -0.93],
+            [0.4, 0.3],
+            1,
+            800.0,
+            [8, FINEST],
+        ),
+        case(
+            "the eye, high over the clip levels",
+            over([EYE[0] + 2000, EYE[1] + 2000], 2500),
+            [0.3, -0.2, -0.9],
+            [0.3, 0.25],
+            1,
+            20000.0,
+            [4, FINEST],
+        ),
+    ];
+    cases.push(EyeCase {
+        name: "the eye, on what is placed, cut and hid",
+        cuts: [
+            Cut {
+                zoom: 22,
+                at: [at.leaf_c[0] >> 3, at.leaf_c[1] >> 3, at.leaf_c[2] >> 3],
+            },
+            Cut {
+                zoom: at.leaf_zoom,
+                at: at.leaf_c,
+            },
+        ],
+        ..case(
+            "",
+            over(at.on_placed, 20),
+            [0.02, 0.03, -1.0],
+            [0.3, 0.4],
+            1,
+            400.0,
+            [LEAF_CELL, FINEST],
+        )
+    });
+    let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
+    let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    let mut run = |b: &WorldBufs, c: &EyeCase, cut: Laid, kinds: &mut Kinds| {
+        let mut obs = eye_of(c, [0; 3]);
+        let table = gpu.buffer(&frame_table(), store_of());
+        let lines = eye_beams(&gpu, b, &obs, &table);
+        let table = gpu.read(&table);
+        let mut words = stopped(&gpu, b, &obs, &lines, None, &table, &hit, &world);
+        let Rays::Eye { origin, grid, .. } = &obs.rays else {
+            unreachable!()
+        };
+        let (origin, grid) = (*origin, *grid);
+        match cut {
+            Laid::None => {}
+            Laid::Lanes => {
+                one_past_lanes(&obs, &mut words, origin, grid.tan);
+                obs.name += ", its boxes one past a multiple of the lanes";
+            }
+            Laid::Zoom => {
+                kinds.count("alike but the zoom", coarser(&obs, &mut words));
+                obs.name += ", a sample's node coarser at its corner";
+            }
+        }
+        let groups = grid.samples.map(|n| n.div_ceil(SQUARE_SIDE));
+        boxes_case(
+            &gpu,
+            &pass,
+            &obs,
+            &words,
+            origin,
+            Some(&grid),
+            groups,
+            kinds,
+            &mut failed,
+        );
+        // Two Q3 steps over the middle of the top of the nearest cell it drew, and under the
+        // middle of its bottom: within `raster::is_eyed`'s reach at the screen's corner, and
+        // past it straight ahead.
+        let boxes = boxes_want(&obs, &words, origin, None, &mut Kinds::new());
+        let q = (1 << FRAC_W) as f32;
+        boxes
+            .values()
+            .filter(|(w, _)| w[raster::BOX_ID as usize] & raster::LACK == 0)
+            .map(|(w, _)| {
+                let f = |k: u32| f32::from_bits(w[k as usize]);
+                let mid = |a: u32| (f(raster::BOX_LO + a) + f(raster::BOX_HI + a)) / 2.0;
+                let top = f(raster::BOX_HI + 2);
+                let near = mid(0) * mid(0) + mid(1) * mid(1) + top * top;
+                let step = |v: f32| (v * q).round_ties_even() as i32;
+                let at = |z: f32, by: i32| {
+                    [
+                        origin[0].wrapping_add(step(mid(0))),
+                        origin[1] + step(mid(1)),
+                        origin[2] + step(z) + by,
+                    ]
+                };
+                (
+                    near,
+                    [at(f(raster::BOX_HI + 2), 2), at(f(raster::BOX_LO + 2), -2)],
+                )
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|m| m.1)
+    };
+    for c in &cases {
+        run(&b, c, Laid::None, &mut kinds);
+    }
+    run(&b, &cases[0], Laid::Lanes, &mut kinds);
+    run(&b, &cases[0], Laid::Zoom, &mut kinds);
+    // The eye by a cell of the bridge it saw, looking at it: its box about the eye.
+    let [over_top, under] =
+        run(&b, &cases[2], Laid::None, &mut Kinds::new()).expect("a cell drawn");
+    for (name, origin, look) in [
+        (
+            "the eye, two steps over a cell's top",
+            over_top,
+            [0.1, 0.05, -1.0],
+        ),
+        (
+            "the eye, two steps under a cell's bottom",
+            under,
+            [0.1, 0.05, 1.0],
+        ),
+    ] {
+        let c = case(
+            name,
+            origin,
+            look,
+            [0.5, 0.4],
+            1,
+            300.0,
+            [LEAF_CELL, FINEST],
+        );
+        run(&b, &c, Laid::None, &mut kinds);
+    }
+    // Over X = 0, where its roots part: boxes in the next root.
+    let zero = real_world::build(EYE_ZERO);
+    let bz = world_bufs(&gpu, &zero);
+    let c = case(
+        "the eye, looking over X = 0",
+        q8([
+            150,
+            EYE_ZERO[1] + 90,
+            zero.top_at([150, EYE_ZERO[1] + 90]) + 100,
+        ]),
+        [-0.9, 0.1, -0.4],
+        [0.3, 0.2],
+        1,
+        2000.0,
+        [8, FINEST],
+    );
+    run(&bz, &c, Laid::None, &mut kinds);
+    eprintln!("  KINDS eye boxes {kinds:?}");
+    for what in [
+        "boxes",
+        "boxes, eyed",
+        "boxes, eyed, a cell",
+        "boxes, eyed, past the eye",
+        "boxes, eyed, past the corner's share and half the reach",
+        "alike but the zoom",
+        "boxes, lacks",
+        "boxes, short of its cube",
+        "boxes, in another root",
+        "alike the one across",
+        "alike the one up",
+        "past its reach, no box",
+        "asks none",
+        "asks compared",
+    ] {
+        if kinds.get(what) == 0 {
+            failed.push(format!("none of {what} to say"));
+        }
+    }
+    if kinds.get("boxes, an inset's product rounded") != 0 {
+        failed
+            .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn hand_light_boxes_answer_as_raster() {
+    use pxl_render::frame::shader::record::SHADER_LIGHT_SAMPLE_BOX;
+    use pxl_render::frame::shader::word::SQUARE_SIDE;
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let none = [Cut::NONE; 2];
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let about = LightCase {
+        name: "the light, about the eye",
+        origin: over([EYE[0] + 90, EYE[1] + 90], 40),
+        dir: [0.3, 0.2, -0.93],
+        side: 1.0,
+        back: 60.0,
+        t_max: 400.0,
+        range: [8, FINEST],
+        corner: [1300, -900],
+        cuts: none,
+        size: SIZE,
+        listed: None,
+        least: &[],
+    };
+    let cases = [
+        LightCase { ..about },
+        LightCase {
+            name: "the light, its tiles listed",
+            corner: [1304, -896],
+            listed: Some(3),
+            ..about
+        },
+        LightCase {
+            name: "the light, every tile listed, the list's row full",
+            corner: [1304, -896],
+            listed: Some(1),
+            ..about
+        },
+        LightCase {
+            name: "the light, its tiles listed, the shipped map's size",
+            side: 0.5,
+            corner: [1304, -896],
+            size: shadow::SIZE,
+            listed: Some(23),
+            ..about
+        },
+        LightCase {
+            name: "the light, where no clip level holds the ground",
+            origin: q8([1 << 15, 1 << 15, 40]),
+            side: 8.0,
+            back: 100.0,
+            t_max: 800.0,
+            corner: [0, 0],
+            ..about
+        },
+        LightCase {
+            name: "the light, wide, over the clip levels",
+            origin: over([EYE[0] + 3000, EYE[1] + 3000], 900),
+            dir: [0.2, -0.3, -0.93],
+            side: 32.0,
+            back: 200.0,
+            t_max: 4000.0,
+            corner: [77, 5],
+            ..about
+        },
+    ];
+    let hit = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_HIT), "sample_hit_cs");
+    let world = gpu.pipeline(src(SHADER_LIGHT_SAMPLE), "sample_cs");
+    let pass = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "light_sample_box_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    let mut run = |b: &WorldBufs, c: &LightCase, kinds: &mut Kinds| {
+        let mut obs = light_of(c, [0, 0]);
+        let table = gpu.buffer(&frame_table(), store_of());
+        let lines = light_beams(&gpu, b, &mut obs, &table, c.listed);
+        let table = gpu.read(&table);
+        // Listed, its samples as the whole cast of the same box left them: a sample not taken
+        // keeps what it held.
+        let prior = c.listed.map(|_| {
+            let whole = LightCase { listed: None, ..*c };
+            let mut o = light_of(&whole, [0, 0]);
+            let t = gpu.buffer(&frame_table(), store_of());
+            let lines = light_beams(&gpu, b, &mut o, &t, None);
+            let t = gpu.read(&t);
+            stopped(&gpu, b, &o, &lines, None, &t, &hit, &world)
+        });
+        let words = stopped(
+            &gpu,
+            b,
+            &obs,
+            &lines,
+            prior.as_deref(),
+            &table,
+            &hit,
+            &world,
+        );
+        let Rays::Light {
+            light: l, starts, ..
+        } = &obs.rays
+        else {
+            unreachable!()
+        };
+        // Every box from box texel (0, 0)'s start.
+        let origin = light::ray(l, starts, [0, 0]).0;
+        // Whole, a thread a sample; listed, the rows the list's entries open, as the sample pass's.
+        let groups = if c.listed.is_some() {
+            obs.groups
+        } else {
+            obs.lattice.map(|n| n.div_ceil(SQUARE_SIDE))
+        };
+        kinds.add("listed", c.listed.is_some());
+        boxes_case(
+            &gpu,
+            &pass,
+            &obs,
+            &words,
+            origin,
+            None,
+            groups,
+            kinds,
+            &mut failed,
+        );
+    };
+    for c in &cases {
+        run(&b, c, &mut kinds);
+    }
+    let zero = real_world::build(EYE_ZERO);
+    let bz = world_bufs(&gpu, &zero);
+    let c = LightCase {
+        name: "the light, over X = 0",
+        origin: q8([
+            10,
+            EYE_ZERO[1] + 90,
+            zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+        ]),
+        range: [LEAF_CELL, LEAF_CELL],
+        ..about
+    };
+    run(&bz, &c, &mut kinds);
+    eprintln!("  KINDS light boxes {kinds:?}");
+    for what in [
+        "boxes",
+        "boxes, lacks",
+        "boxes, short of its cube",
+        "boxes, in another root",
+        "alike the one across",
+        "alike the one up",
+        "listed",
+        "a sample before not needed, alike as it stood",
+    ] {
+        if kinds.get(what) == 0 {
+            failed.push(format!("none of {what} to say"));
+        }
+    }
+    if kinds.get("boxes, eyed") != 0 {
+        failed.push("a light's box said eyed".to_string());
+    }
+    if kinds.get("boxes, an inset's product rounded") != 0 {
+        failed
+            .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
+    }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

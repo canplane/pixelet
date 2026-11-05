@@ -2,34 +2,24 @@
 
 // A missed pixel's ray and the words its walk leaves there, as the walk over the observed
 // pyramid alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
-// (pxl-shader cast.rs `px_tan`, `word`, `write_ray`, `keep_hit`).
+// (grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
 /// Pixel `id`'s ray of rays `size` wide and high, through its middle off by the eye's jitter
-/// (`px_tan`), and where it starts off its cell (`Grid::cell`, `resumed`).
-struct Px {
-  aim: Aim,
-  start: Start,
+/// (grid.wgsl `px_tan`).
+fn px_aim(id: vec2<u32>, size: vec2<u32>) -> Aim {
+  return eye_aim(px_tan(id, size));
 }
 
-fn px(id: vec2<u32>, size: vec2<u32>) -> Px {
-  let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let ndc = (vec2<f32>(id) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0 - vec2<f32>(1.0);
-  let tan_at = vec2<f32>(ndc.x, -ndc.y) * tan_xy;
-  let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
-  let s = eye_f32(GRID);
-  let cell = min(
-    vec2<u32>(max(floor(vec2<f32>(tan_at.x + tan_xy.x, tan_xy.y - tan_at.y) / s), vec2<f32>(0.0))),
-    span_n - vec2<u32>(1u),
-  );
-  let aim = eye_aim(tan_at);
-  let at_cell = eye_word(GRID + GRID_CELLS_AT) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
-  return Px(aim, resumed(aim, at_cell, LINE_WORDS, NONE));
+/// Where pixel `id`'s ray aimed `aim` starts off the cell it goes through (grid.wgsl
+/// `grid_cell`, resume.wgsl `resumed`).
+fn px_start(aim: Aim, id: vec2<u32>, size: vec2<u32>) -> Start {
+  return resumed(aim, cell_start(grid_cell(px_tan(id, size))), LINE_WORDS, NONE);
 }
 
-/// The face the ray aimed `aim` entered where walk `w` stopped (`world::face_of`).
+/// The face the ray aimed `aim` entered where walk `w` stopped: twice its axis, one more
+/// where the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`'s face).
 fn face_of(aim: Aim, w: Walked) -> u32 {
   return 2u * w.axis + select(0u, 1u, aim.dir[w.axis] > 0.0);
 }
@@ -43,7 +33,7 @@ fn hit_fill(w: Walked) -> u32 {
 /// Walk `w`'s hit at pixel `id`, entered through `face`, put as hit `r` for what lies about
 /// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`).
 fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
-  let k = eye_word(GRID + GRID_HITS_AT) + r * HIT_WORDS;
+  let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
   beams[k + HIT_NODE + NODE_CORNER] = w.corner.x;
   beams[k + HIT_NODE + NODE_CORNER + 1u] = w.corner.y;

@@ -1,8 +1,8 @@
 //! Decor's passes by hand (frame/shader/decor_pose.wgsl, decor_args.wgsl) answer as the
 //! Rust does: over the real world of tests/real_world, each record a thread leaves as
 //! `generation::placement` stands it through the real walk (`support::column_surface`),
-//! as the generated modules did while they were held (doc/experiment/20261104-taking-rust-gpu-out/decor),
-//! for word. Skipped where no adapter answers.
+//! word for word (doc/experiment/20261104-taking-rust-gpu-out/decor). Skipped where no
+//! adapter answers.
 
 mod real_world;
 
@@ -1537,7 +1537,7 @@ fn hand_thin_lays_as_scatter() {
     let words = generation::record_at(generation::SLOT_RECORDS) as usize;
     let size = |pairs: u32| [BRICK_CELLS.div_ceil(generation::LANES), 1, pairs];
     let (mut laid_total, mut pairs_total) = (0u64, 0u64);
-    let (mut none_past, mut full_rooms) = (0u64, 0u64);
+    let (mut none_past, mut full_rooms, mut stale_heads) = (0u64, 0u64, 0u64);
     for (name, eye) in [
         ("east of the seam", real_world::EYE),
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30]),
@@ -1665,12 +1665,47 @@ fn hand_thin_lays_as_scatter() {
             assert!(got == before, "{name}, {s} {j}: a word past its room");
             full_rooms += 1;
         }
+        // A head naming the brick east of the one its entry's row holds, as no mark of the
+        // frame writes it: thin does not read the row, and lays the head's brick's candidates.
+        let stale: Vec<(u32, u32)> = pairs
+            .iter()
+            .copied()
+            .filter(|&(s, j)| {
+                let row = built.clipmap[s as usize];
+                let cell = FIRST_CELL + s / ENTRIES;
+                let east = thin_leaves(j as usize, cell, [row[0] + 1, row[1]]);
+                !east.is_empty() && east != want[&(s, j)]
+            })
+            .step_by(53)
+            .take(4)
+            .collect();
+        for &(s, j) in &stale {
+            let row = built.clipmap[s as usize];
+            let cell = FIRST_CELL + s / ENTRIES;
+            let mut before = init.clone();
+            before[generation::head_at(s) as usize] = (row[0] + 1) as u32;
+            let mut list = vec![0u32; generation::LIST_WORDS as usize];
+            list[generation::THIN_ARGS as usize + 2] = 1;
+            list[generation::LIST_AT as usize] = generation::pair_word(s, j);
+            let (list, records) = (buffer(&device, &list), buffer(&device, &before));
+            let at = [(9, &records), (10, &rows), (11, &list)];
+            dispatch(&device, &queue, &hand, &at, size(1));
+            let got = read(&device, &queue, &records, name);
+            let mut east = thin_leaves(j as usize, cell, [row[0] + 1, row[1]]);
+            east.sort();
+            assert_eq!(
+                read_laid(&got, s, j),
+                (east.len() as u32, east),
+                "{name}, {s} {j}: a head naming another brick"
+            );
+            stale_heads += 1;
+        }
         eprintln!("{name}: {} pairs", pairs.len());
     }
     eprintln!(
-        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {full_rooms} rooms filled"
+        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {full_rooms} rooms filled, {stale_heads} heads naming another brick"
     );
-    assert!(laid_total > 0 && none_past > 0 && full_rooms > 0);
+    assert!(laid_total > 0 && none_past > 0 && full_rooms > 0 && stale_heads > 0);
 }
 
 /// The test's reference for `decor_mark_cs`, over words, one entry after another, by
@@ -3326,10 +3361,13 @@ impl Chain<'_> {
             pass.dispatch_workgroups(self.workgroups, 1, 1);
         }
         q.submit([e.finish()]);
-        // The tiles the decor compacted stands on, as the light's mark reads its lanes.
+        // The tiles the decor compacted stands on, as the light's mark reads its lanes: the
+        // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs).
         let mut head = vec![0u32; light::HEAD_WORDS];
         head[light::HEAD_CAST] = CAST_NUMBER;
-        head[light::HEAD_SIZE] = MAP_SIDE;
+        for (k, v) in light::head_layout(MAP_SIDE) {
+            head[k] = v;
+        }
         let head = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytes(&head),

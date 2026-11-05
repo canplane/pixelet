@@ -13,7 +13,7 @@
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
 /// Where pixel `p`'s ray met the world: whether it did, and the tile it met it on. A
-/// ray that met nothing leaves its first word zero (pxl-shader cast.rs `word`).
+/// ray that met nothing leaves its first word zero (pxl-engine `ray::first_word`).
 struct Met {
   got: bool,
   tile: vec2<i32>,
@@ -28,11 +28,7 @@ fn met_tile(p: vec2<u32>, drawn: vec2<u32>) -> Met {
     return Met(false, vec2<i32>(0));
   }
   let t = bitcast<f32>(textureLoad(rays, p, 1u).x);
-  // Its ray through the pixel's jittered middle (pxl-shader cast.rs `px_tan`).
-  let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let ndc = (vec2<f32>(p) + vec2<f32>(0.5) + jitter) / vec2<f32>(drawn) * 2.0 - vec2<f32>(1.0);
-  let tan_at = vec2<f32>(ndc.x, -ndc.y) * tan_xy;
+  let tan_at = px_tan(p, drawn);
   let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
   return Met(true, tile_of(aimed / length(aimed) * t));
 }

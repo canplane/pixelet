@@ -688,8 +688,8 @@ pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
 /// buffer, an `IVec4` as their entry table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
 /// A row of the clip levels' table, as the kernel writes it (pxl-kernel
-/// domain/layer/terrain/clipmap.rs `table`) and the GPU reads it (pxl-shader
-/// `World`), an `IVec4` of its buffer: the brick an entry's clip level wants
+/// domain/layer/terrain/clipmap.rs `table`) and the GPU reads it (pxl-render
+/// clip.wgsl), an `IVec4` of its buffer: the brick an entry's clip level wants
 /// there; where its cells are present, the slot holding them plus one
 /// (`slot`), which another clip level at its zoom may have filled, 0 while
 /// they are not; and the fill they are on their way from, 0 where none is.
@@ -987,11 +987,7 @@ fn bounded(
 /// column's own for a node no wider than a cell, and its entry there for
 /// the node's first cell, at `[x, y]` in its brick.
 fn entry_at(zoom: Zoom, from: Zoom, [x, y]: [u32; 2]) -> (u32, [u32; 2]) {
-    #[expect(
-        clippy::implicit_saturating_sub,
-        reason = "rust-gpu has no `saturating_sub`"
-    )]
-    let j = if zoom >= from { 0 } else { from - zoom };
+    let j = from.saturating_sub(zoom);
     (j, [x >> j, y >> j])
 }
 

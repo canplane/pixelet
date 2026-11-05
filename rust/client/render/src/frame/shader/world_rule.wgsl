@@ -1,8 +1,9 @@
 // pxl-render/world_rule.wgsl
 
 // The world's rules that read no buffer, by hand: a value's kind, the service area's wall,
-// a brick's cell order, a bound word and a column's top in cells. What the world's query
-// (world.wgsl) and the ways' fill (way.wgsl, way_tree.wgsl) both read.
+// a brick's cell order, a bound word, the bounds an entry holds and a column's top in
+// cells. What the world's query (world.wgsl), the ways' fill (way.wgsl, way_tree.wgsl) and
+// the ground's levels (bound.wgsl, fold.wgsl) read.
 
 // ---- value.rs, answer.rs ----
 
@@ -45,10 +46,28 @@ fn bound_of(w: i32) -> vec2<i32> {
   return vec2<i32>((w << 16u) >> 16u, w >> 16u);
 }
 
+/// A run's bound word, its lowest and past its highest (`answer::bound_word`).
+fn bound_word(run: vec2<i32>) -> u32 {
+  return u32((run.x & 0xffffi) | (run.y << 16u));
+}
+
 /// `ground::Bounds`: the ground's lowest and highest, then the ways'.
 fn bounds_of(a: i32, b: i32) -> vec4<i32> {
   return vec4<i32>(bound_of(a), bound_of(b));
 }
+
+/// `ground::bounds_word`.
+fn bounds_word(b: vec4<i32>) -> vec2<i32> {
+  return vec2<i32>(i32(bound_word(b.xy)), i32(bound_word(b.zw)));
+}
+
+/// `ground::joined`: each source's lowest and highest of the two.
+fn joined(a: vec4<i32>, b: vec4<i32>) -> vec4<i32> {
+  return vec4<i32>(min(a.x, b.x), max(a.y, b.y), min(a.z, b.z), max(a.w, b.w));
+}
+
+const BOUNDS_EMPTY = vec4<i32>(EMPTY_LO, EMPTY_HI, EMPTY_LO, EMPTY_HI);
+const BOUNDS_OPEN = vec4<i32>(UNBOUNDED_LO, UNBOUNDED_HI, UNBOUNDED_LO, UNBOUNDED_HI);
 
 // ---- ground.rs ----
 
