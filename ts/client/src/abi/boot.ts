@@ -27,7 +27,12 @@ import { namespace } from "@/sys/fs/namespace.ts";
 import { follow_refused_files } from "@/sys/fs/refusal.ts";
 
 import { host, kernel, set_host } from "@/host/kernel.ts";
-import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
+import {
+  BATCH_FRAMES,
+  MARGIN_SHARE,
+  PACE_HZ,
+  SETTLE_MS,
+} from "@/abi/pacing.spec.ts";
 import { SENSOR_LISTENER, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import { submit_grant } from "@/port/surface.ts";
 import { onabort } from "@/sys/abort.ts";
@@ -121,6 +126,7 @@ async function open(): Promise<void> {
   // Turns paced to the display, its numbers the kernel's own (pacing.json).
   const pacing = new FramePacing(
     {
+      pace_hz: PACE_HZ,
       margin_share: MARGIN_SHARE,
       batch_frames: BATCH_FRAMES,
       settle_ms: SETTLE_MS,

@@ -7,6 +7,15 @@
     "(pxl-kernel sys/sched/edge.rs)."
   ],
 
+  "PACE_HZ": {
+    "$val": 60,
+    "$doc": [
+      "The slowest rate turns are paced at: the most whole refreshes of the display that fit",
+      "one interval at this rate, one at least, so a 120 Hz display runs a turn every second",
+      "refresh."
+    ]
+  },
+
   "MARGIN_SHARE": {
     "$val": 0.15,
     "$doc": [

@@ -13,15 +13,18 @@
  * `batch_frames` frames.
  *
  * The display's refresh is a low percentile of the gaps between the
- * animation frames the host is handed (`gap`), every one, run or skipped: not
- * 1000 / 60 and not the mean, which feeds an overrun back into a larger slice
- * and reads the near-immediate frame after a late one as a fast display. Gaps
- * past MAX_FRAME_GAP_MS are idle, not frames.
+ * animation frames the host is handed (`gap`), every one seen, run or
+ * skipped: not the mean, which feeds an overrun back into a larger slice and
+ * reads the near-immediate frame after a late one as a fast display. Gaps past
+ * MAX_FRAME_GAP_MS are idle, not frames. Before the first gap the refresh is
+ * taken as one interval at `pace_hz`, so the first turn's quota is the
+ * program's own interval.
  *
  * A turn runs on every `divisor`-th refresh (Android Swappy's swap interval),
- * the most refreshes that fit `PACED_MAX_MS` and at least one, so the frame
- * interval is a whole multiple of the refresh: 60 Hz on a 120 Hz display, 72
- * on a 144. The divisor is the display's, not the load's.
+ * the most refreshes that fit one interval at `pace_hz` and at least one, so
+ * the frame interval is a whole multiple of the refresh: at 60, every second
+ * refresh of a 120 Hz display and of a 144. The divisor is the display's, not
+ * the load's.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -29,15 +32,11 @@ import type { Grant, SchedulingPolicy } from "./policy.ts";
 
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
-/** The slowest rate turns are paced at. */
-const PACED_MIN_HZ = 60;
-/** The longest interval turns are paced at. */
-const PACED_MAX_MS = 1000 / PACED_MIN_HZ;
-/** The display's refresh until gaps are seen: taken as 60 Hz, whatever the pacing. */
-const FIRST_REFRESH_MS = 1000 / 60;
 
 /** The program's numbers for its pacing. */
 export interface FramePacingConfig {
+  /** The slowest rate turns are paced at. */
+  pace_hz: f64;
   /** The frame share left unspent, for the host's own work and estimate error. */
   margin_share: f64;
   batch_frames: f64;
@@ -52,9 +51,11 @@ export interface FrameGrant extends Grant {
 }
 
 export class FramePacing implements SchedulingPolicy<FrameGrant> {
-  private readonly gaps = new Float64Array(FRAME_WINDOW).fill(FIRST_REFRESH_MS);
+  private readonly gaps = new Float64Array(FRAME_WINDOW);
   private readonly sorted = new Float64Array(FRAME_WINDOW);
   private gap_at = 0;
+  /** How many of `gaps` are frames seen, up to the window. */
+  private seen = 0;
   private overrun_ms = 0;
   private input_at = -Infinity;
   private asked_next = false;
@@ -64,6 +65,8 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private last = -Infinity;
 
   private readonly cfg: FramePacingConfig;
+  /** The longest interval turns are paced at. */
+  private readonly max_ms: f64;
   private readonly next_frame: (run: (now: f64) => void) => void;
 
   /** `next_frame` hands over the display's next animation frame. */
@@ -72,6 +75,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     next_frame: (run: (now: f64) => void) => void,
   ) {
     this.cfg = cfg;
+    this.max_ms = 1000 / cfg.pace_hz;
     this.next_frame = next_frame;
   }
 
@@ -89,26 +93,30 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     if (gap_ms > 0 && gap_ms <= MAX_FRAME_GAP_MS) {
       this.gaps[this.gap_at] = gap_ms;
       this.gap_at = (this.gap_at + 1) % FRAME_WINDOW;
+      this.seen = Math.min(this.seen + 1, FRAME_WINDOW);
     }
   }
 
-  /** The display's refresh, from the gaps. */
+  /** The display's refresh, from the gaps seen. */
   refresh(): f64 {
-    this.sorted.set(this.gaps);
-    this.sorted.sort();
-    return this.sorted[FRAME_WINDOW / 4];
+    const n = this.seen;
+    if (n === 0) return this.max_ms;
+    const seen = this.sorted.subarray(0, n);
+    seen.set(this.gaps.subarray(0, n));
+    seen.sort();
+    return seen[n >> 2];
   }
 
   /**
-   * The interval turns are paced at: the most whole refreshes within
-   * `PACED_MAX_MS`, an eighth of a refresh allowed for the spread of its
+   * The interval turns are paced at: the most whole refreshes within one
+   * interval at `pace_hz`, an eighth of a refresh allowed for the spread of its
    * measure, so a 120 Hz display read at 8.34 ms still paces at two; one at
    * least.
    */
   pace_ms(refresh_ms: f64): f64 {
     const divisor = Math.max(
       1,
-      Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms),
+      Math.floor((this.max_ms + refresh_ms / 8) / refresh_ms),
     );
     return divisor * refresh_ms;
   }

@@ -10,6 +10,11 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
+/** The slowest rate turns are paced at: the most whole refreshes of the display that fit
+ * one interval at this rate, one at least, so a 120 Hz display runs a turn every second
+ * refresh. */
+export const PACE_HZ: f64 = 60 as number;
+
 /** Share of the frame left unspent for the host's own work; a share, so a fast display
  * does not lose most of its frame to it. */
 export const MARGIN_SHARE: f64 = 0.15 as number;

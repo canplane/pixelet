@@ -12,6 +12,7 @@ import {
 import { NO_WAKE } from "./wake.ts";
 
 const POLICY: FramePacingConfig = {
+  pace_hz: 60,
   margin_share: 0.15,
   batch_frames: 2,
   settle_ms: 150,
@@ -35,7 +36,16 @@ test("frame pacing - the refresh is the display's, read off its animation frames
   near(grant_after_gaps(q, 1000 / 60).refresh_ms, 1000 / 60, 1e-9);
 });
 
-test("frame pacing - turns are paced at the most whole refreshes within 60 Hz, one at least", () => {
+test("frame pacing - before a frame is seen, the refresh is one interval at the program's rate, and the first gaps decide it", () => {
+  const q = new FramePacing({ ...POLICY, pace_hz: 30 }, () => {});
+  near(q.grant(0).refresh_ms, 1000 / 30, 1e-9);
+  near(q.grant(0).paced_ms, 1000 / 30, 1e-9);
+  q.gap(1000 / 120);
+  near(q.grant(0).refresh_ms, 1000 / 120, 1e-9);
+  near(q.grant(0).paced_ms, 4000 / 120, 1e-9);
+});
+
+test("frame pacing - turns are paced at the most whole refreshes within the program's rate, one at least", () => {
   const paced = (hz: number) =>
     grant_after_gaps(new FramePacing(POLICY, () => {}), 1000 / hz).paced_ms;
   near(paced(120), 2000 / 120, 1e-9);
