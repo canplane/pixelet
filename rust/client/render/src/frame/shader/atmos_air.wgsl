@@ -10,41 +10,14 @@
 
 /* the air before a point */
 
-// The cubic B-spline about texel coordinate `x` along one axis as two
-// linear reads (Sigg and Hadwiger 2005): their places, texels with centers
-// at whole numbers, then their weights.
-fn bspline_taps(x: f32) -> vec4f {
-  let i = floor(x);
-  let f = x - i;
-  let f2 = f * f;
-  let f3 = f2 * f;
-  let w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
-  let w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
-  let w3 = f3 / 6.0;
-  let g0 = w0 + w1;
-  let g1 = 1.0 - g0;
-  return vec4f(i - 1.0 + w1 / g0, i + 1.0 + w3 / max(g1, 1e-6), g0, g1);
-}
-
-// The volume about light `k`, the sun's half or the moon's, at
-// column `c` across and down and `slice` deep, texel coordinates with
-// centers at whole numbers, by the cubic B-spline in all three: smooth to
-// its second derivative across every column and slice, eight trilinear
-// reads. A tap past the half's first or last column reads that column, as
-// the edge's own would.
+// The volume about light `k`, the sun's half or the moon's, at column `c`
+// across and down and `slice` deep, texel coordinates with centers at whole
+// numbers: one trilinear read. A read past the half's first or last column
+// reads that column, as the edge's own would.
 fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
-  let x = bspline_taps(c.x);
-  let y = bspline_taps(c.y);
-  let z = bspline_taps(slice);
-  let across = clamp(x.xy, vec2f(0.0), vec2f(n - 1.0)) + f32(k) * n;
-  var sum = vec3f(0.0);
-  for (var i = 0u; i < 8u; i++) {
-    let at = vec3f(select(across.x, across.y, (i & 1u) != 0u), select(y.x, y.y, (i & 2u) != 0u), select(z.x, z.y, (i & 4u) != 0u));
-    let weight = select(x.z, x.w, (i & 1u) != 0u) * select(y.z, y.w, (i & 2u) != 0u) * select(z.z, z.w, (i & 4u) != 0u);
-    sum += weight * textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / vec3f(2.0 * n, n, n), 0.0).rgb;
-  }
-  return sum;
+  let at = vec3f(clamp(c.x, 0.0, n - 1.0) + f32(k) * n, c.y, slice);
+  return textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / vec3f(2.0 * n, n, n), 0.0).rgb;
 }
 
 // What the air `d` km along `dir` scatters per share it takes, per unit of
@@ -63,7 +36,7 @@ fn air_held_of(k: u32, dir: vec3f, d: f32) -> vec3f {
 // march takes it (atmos_march.wgsl `gather_between`): from where the ray
 // enters the air to the ground at the latest. What it scatters is that ray's
 // 1 - e^-τ(d) times each light per share taken, read off its light's half of
-// the volume smooth (`air_held_of`) where that light reaches the air
+// the volume (`air_held_of`) where that light reaches the air
 // (atmos_medium.wgsl `reaches`), and shown as that light's sky is
 // (`beyond`). Only that slow factor is read off the grid; the fast one is
 // the pixel's own.
