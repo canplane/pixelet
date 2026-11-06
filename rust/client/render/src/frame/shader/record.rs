@@ -547,9 +547,10 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
-/// The list's uniforms by slot, read only, which an actor's draw reads at the
-/// slot its first instance names (skinned_draw.slot.wgsl): one group a pass,
-/// the renderer's (gpu/pass/skinned_mesh.rs `SkinnedPass::set_draws`).
+/// The list's uniforms by slot, read only, which an actor's draw and the
+/// beacon's read at the slot their first instance names (skinned_draw.slot.wgsl,
+/// location.slot.wgsl): one group a pass (gpu/pass/skinned_mesh.rs
+/// `SkinnedPass::set_draws`, gpu/pass/location.rs `LocationPass::set_draws`).
 const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
 /// An actor's, lit and its depth from the light, as a model's but its draw
 /// read off the list's uniforms (`DRAWS`).
@@ -644,7 +645,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_LOCATION_BEACON => Descriptor::new(
             lit(SHADER_LOCATION_BEACON, CULL_BACK),
             &LOCATION_BEACON_BUFFERS,
-            &[&LIT_FRAME, &DRAW],
+            &[&LIT_FRAME, &DRAWS],
         ),
         PIPELINE_MARKER => Descriptor::new(
             Head {

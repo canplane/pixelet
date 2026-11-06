@@ -272,7 +272,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LOCATION_BEACON
     lit![
         "place",
-        "location",
+        "location.slot",
         "location_beacon_place",
         "location_beacon"
     ],

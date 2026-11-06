@@ -4,8 +4,7 @@
 //! ground under it, and a beacon above that eases, spins and bobs.
 
 use pxl_render::frame::draw::{
-    DrawId, DrawList, MirroredBlock, Position, Stand, PIPELINE_LOCATION_BEACON,
-    PIPELINE_LOCATION_ZONE,
+    DrawId, DrawList, MirroredBlock, Position, Stand, PIPELINE_LOCATION_ZONE,
 };
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::camera::grid;
@@ -403,17 +402,8 @@ impl LocationIndicator {
         let r = f64::from(beacon::RADIUS);
         let bob = BEACON_BOB + r;
         let stand = Stand::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);
-        draw.draw_as(
-            &self.beacon_id,
-            PIPELINE_LOCATION_BEACON,
-            0,
-            p.night as u32,
-            0,
-            beacon,
-            (p.time * BEACON_SPIN_RATE) as f32,
-            1.0,
-            Some(stand),
-        );
+        let spin = (p.time * BEACON_SPIN_RATE) as f32;
+        draw.draw_beacon(&self.beacon_id, beacon, spin, p.night, stand);
     }
 }
 

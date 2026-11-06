@@ -158,7 +158,7 @@ pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// float 4 is the turn about Z.
 pub const PIPELINE_SKINNED: u32 = 3;
 /// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
-/// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
+/// (0, 0, 0, uniform, pipeline), its uniform as `DrawList::draw_beacon` lays it.
 pub const PIPELINE_LOCATION_ZONE: u32 = 4;
 pub const PIPELINE_LOCATION_BEACON: u32 = 5;
 /// (upload handle, count, 0, uniform, pipeline).
@@ -725,6 +725,16 @@ impl DrawList {
     ) {
         let words = [fourth, opacity, 0.0, 0.0, 0.0];
         self.put(id, pipeline, [handle, a, b], at, words, stand);
+    }
+
+    /// The location indicator's beacon at `at`, spun `spin` about Z, its
+    /// look the night's where `night`: what its vertices read off its slot
+    /// (location.slot.wgsl), its position, its spin, its opacity and the
+    /// night in its uniform's first six words.
+    pub fn draw_beacon(&mut self, id: &DrawId, at: Position, spin: f32, night: bool, stand: Stand) {
+        let night = if night { 1.0 } else { 0.0 };
+        let words = [spin, 1.0, night, 0.0, 0.0];
+        self.put(id, PIPELINE_LOCATION_BEACON, [0; 3], at, words, Some(stand));
     }
 
     /// The eighth float pads the record's first two vec4s, and the twelfth

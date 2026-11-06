@@ -773,6 +773,7 @@ impl Renderer {
         e.push(buf_entry(3, self.draws_buf));
         self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
         self.skinned_mesh.set_draws(g, self.draws_buf);
+        self.location.set_draws(g, self.draws_buf);
         let lit = self.lit_entries(self.frame_buf);
         self.screen.set_lit(lit);
     }

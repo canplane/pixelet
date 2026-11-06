@@ -10,7 +10,7 @@ use crate::frame::draw::{
 use crate::frame::draw::{Draw, Draws};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
 use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -83,7 +83,10 @@ pub struct LocationPass {
     beacon: Pipeline,
     /// A slot a draw, each read at its own offset (`prepare`).
     zone_uniforms: DrawUniforms,
-    beacon_uniforms: DrawUniforms,
+    /// The list's uniforms as the beacon binds them, and their buffer
+    /// (`set_draws`).
+    draws: u32,
+    draws_buf: u32,
     frame_group: u32,
     box_pos: u32,
     box_uv: u32,
@@ -125,7 +128,8 @@ impl LocationPass {
         LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
             zone_uniforms: DrawUniforms::new(DRAW_BYTES, align),
-            beacon_uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            draws: 0,
+            draws_buf: 0,
             zone,
             beacon,
             box_pos: put(g, bytes(&box_p), buffer_usage::VERTEX),
@@ -210,27 +214,18 @@ impl LocationPass {
         uploads: &mut Uploads,
     ) {
         let c = self.color;
-        let put = |buf: &mut [u8], (d, night): (&[u32; DRAW_WORDS], f32)| {
+        let put = |buf: &mut [u8], d: &[u32; DRAW_WORDS]| {
             let u = uniform_of(uniforms, d);
             buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
-                u[0], u[1], u[2], u[3], c[0], c[1], c[2], night, u[8], u[9], u[10], 0.0,
+                u[0], u[1], u[2], u[3], c[0], c[1], c[2], 0.0, u[8], u[9], u[10], 0.0,
             ]));
         };
-        let beacons = draws.of(PIPELINE_LOCATION_BEACON);
-        self.beacon_uniforms.write(
-            g,
-            self.beacon.layouts[1],
-            beacons.len() as u32,
-            beacons.map(|d| (d, d[1] as f32)),
-            moved,
-            put,
-        );
         let zones = zones(draws);
         self.zone_uniforms.write(
             g,
             self.zone.layouts[1],
             zones.clone().count() as u32,
-            zones.clone().map(|d| (d, 0.0)),
+            zones.clone(),
             moved,
             put,
         );
@@ -239,25 +234,33 @@ impl LocationPass {
         }
     }
 
-    /// The pipeline, the models' group 0 `frame` (gpu/pass/model.rs
-    /// `FrameGroups`) and the octahedron bound once; a draw binds its
-    /// uniform's slot alone.
-    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws, frame: u32) {
-        let Some(slots) = self.beacon_uniforms.slots() else {
+    /// The list's uniforms, the buffer `buf`, as the beacon binds them in
+    /// group 1, made again only where the buffer is another; before the
+    /// frame's commands, as a group made in a frame dropped would be gone.
+    pub fn set_draws(&mut self, g: &Gpu, buf: u32) {
+        if buf == self.draws_buf {
             return;
-        };
-        let cnt = draws.of(PIPELINE_LOCATION_BEACON).len() as u32;
-        if cnt == 0 {
+        }
+        release(self.draws);
+        self.draws = g.bind_group(self.beacon.layouts[1], &[buf_entry(0, buf)]);
+        self.draws_buf = buf;
+    }
+
+    /// The pipeline, the models' group 0 `frame` (gpu/pass/model.rs
+    /// `FrameGroups`), the list's uniforms (`set_draws`) and the octahedron
+    /// bound once; each beacon drawn as the instance its slot names, which
+    /// its vertices read their draw at (location.slot.wgsl).
+    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws, frame: u32) {
+        if self.draws == 0 || draws.of(PIPELINE_LOCATION_BEACON).len() == 0 {
             return;
         }
         pass.set_pipeline(self.beacon.id);
         pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(1, self.draws, &[]);
         pass.set_vertex_buf(0, self.oct_pos, 0, 0);
         pass.set_vertex_buf(1, self.oct_normal, 0, 0);
-        for k in 0..cnt {
-            let (group, off) = slots.at(k);
-            pass.set_bind_group(1, group, &[off]);
-            pass.draw(BEACON_VERTICES, 1, 0, 0);
+        for d in draws.of(PIPELINE_LOCATION_BEACON) {
+            pass.draw(BEACON_VERTICES, 1, 0, d[3]);
         }
     }
 
