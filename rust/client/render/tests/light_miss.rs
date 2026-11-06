@@ -541,7 +541,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
     table[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table, store_of());
     let buf = gpu.buffer(list, store_of());
-    let side = beam::CORNER_SIDE;
+    let side = beam::SAMPLE_SIDE;
     gpu.light_beam(
         &[
             (0, eye.as_entire_binding()),
@@ -556,6 +556,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
             (11, head.as_entire_binding()),
         ],
         &buf,
+        &table,
         SIZE,
     );
     let cells = light::cells_across(SIZE);

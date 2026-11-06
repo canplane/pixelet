@@ -1307,7 +1307,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 
 /// Every pass that reads a tile's band (light_aim.wgsl `tile_band`) gives each tile the band
 /// pxl-engine's `Light::band` gives it, so no two passes split over one: a slot's against its
-/// samples' and the holes' queue's, a cell's against its beam rays', a slide's against the cast it
+/// samples' run's and the holes' queue's, a cell's against its beam rays', a slide's against the cast it
 /// keeps. A probe appended to each pass's module reads every tile of a box, and of the beam
 /// rays' window past it, over boxes of every side, their texels' width at random and where a
 /// tile's distance squared lands on a split distance's.
@@ -1316,8 +1316,9 @@ fn every_pass_bands_a_tile_alike() {
     use pxl_engine::grid::INV_SPLIT2;
     use pxl_engine::FINEST_ZOOM;
     use pxl_render::frame::shader::record::{
-        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT, COMPUTE_LIGHT_CELL,
-        COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE, COMPUTE_QUEUE_LAST,
+        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE,
+        COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
+        COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_SAMPLES,
     };
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
@@ -1339,11 +1340,12 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     };
     let passes = [
         COMPUTE_LIGHT,
-        COMPUTE_LIGHT_SAMPLE,
+        COMPUTE_QUEUE_LIGHT_SAMPLES,
+        COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
         COMPUTE_QUEUE_LAST,
         COMPUTE_QUEUE,
-        COMPUTE_LIGHT_BEAM_HIT,
-        COMPUTE_LIGHT_BEAM,
+        COMPUTE_QUEUE_LIGHT_CORNERS,
+        COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
         COMPUTE_LIGHT_CELL,
         COMPUTE_LIGHT_SLIDE,
     ]

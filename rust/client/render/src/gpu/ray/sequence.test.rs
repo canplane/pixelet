@@ -183,7 +183,8 @@ fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &LIGHT_CLAIM, 21), ARGS_WRITTEN);
     assert_eq!(role(&FRAME, &STOPS, 9), STATE);
-    assert_eq!(role(&FRAME, &BEAM, 9), STATE);
+    let corners = FRAME.steps.iter().find(|s| s.name == "corners");
+    assert_eq!(corners.map(|s| role(&FRAME, s, 9)), Some(STATE));
 }
 
 /// The call that shipped refused: the claim off the light's args, which the propagation's

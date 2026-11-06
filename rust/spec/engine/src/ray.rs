@@ -100,12 +100,10 @@ pub const fn owed_into(from: u32) -> u32 {
     }
 }
 
-/// What a walk over the node cache left, listed for the walk that asks the world (pxl-render
-/// list.wgsl `enlist`; beam_hit.wgsl, sample_hit.wgsl):
-/// its dispatch, laid as `MISS_ARGS_LIST`'s, no row until one is listed, then its count
-/// (`LEFT_CNT`). Every list, these and the walk again's, raises the same row word.
+/// A list's dispatch and count as a frame starts (pxl-render list.wgsl `enlist`): laid as
+/// `MISS_ARGS_LIST`'s, no row until one is listed, then none counted. Every list raises the
+/// same row word.
 pub const LEFT_EMPTY: [u32; 4] = [MISS_ACROSS, 0, 1, 0];
-pub const LEFT_CNT: u32 = 3;
 const _: () = assert!(
     MISS_ARGS_LIST == 0,
     "a list's rows are its dispatch's second word"
@@ -123,52 +121,47 @@ const _: () = assert!(
 /// eye's pixel while the rays stand, `node_cache::RESUMES`); the asks, a lane a node a walk was
 /// parked at, once a node; the second walk, over the node cache alone, over the rays the first
 /// parked, from the state each was parked in; the asks again; and the last walk, which asks
-/// the world where no slot keeps a node, over the rays the second parked. Both observers' walks
-/// count their work against the frame's budget (`VISITS_A_FRAME`, `ASKS_A_FRAME`) up to their
-/// caps (`caps`): a hole the budget does not reach stays parked and is owed
+/// the world where no slot keeps a node, over the rays the second parked. Every run counts its
+/// work against the frame's budget (`VISITS_A_FRAME`, `ASKS_A_FRAME`) up to its kind's caps
+/// (`caps`): a hole the budget does not reach stays parked and is owed
 /// (`node_cache::OWED_AT`), a light's slot's tile to the light's next claim, an eye's pixel to
 /// the next frame's queue while the rays stand.
 pub const QUEUE_LANES: u32 = 64;
 pub const QUEUE_GROUPS: u32 = 256;
 pub const QUEUE_STEPS: u32 = 16;
 
-/// The work the holes' queues may do in a frame, the eye's and the light's together
-/// (pxl-render queue_walk.wgsl, queue_ask.wgsl, queue_last.wgsl): the nodes their walks visit,
-/// and the nodes they ask of the world. A hole the budget does not reach is parked and owed
-/// (`node_cache::OWED_AT`). To be set from the S23's hot drive.
+/// The work a frame's queues may do, every run's together (pxl-render queue_walk.wgsl,
+/// queue_ask.wgsl, queue_last.wgsl): the nodes their walks visit, and the nodes they ask of the
+/// world, the beam rays' among them. A ray the budget does not reach is parked and owed
+/// (`node_cache::OWED_AT`). To be set from the S23's hot drive; the asks the most a whole frame
+/// of the kernel's harness (pxl-kernel tests/frame) needs to rest within its bound.
 pub const VISITS_A_FRAME: u32 = 1 << 23;
-pub const ASKS_A_FRAME: u32 = 1 << 16;
-
-/// The share of a budget reserved for each observer whose queue runs in a frame, so neither
-/// starves the other: the queue that runs first stops short of the budget by this and by
-/// `OVERRUN` where the other runs after it (`caps`).
-pub const fn reserved(budget: u32) -> u32 {
-    budget / 4
-}
+pub const ASKS_A_FRAME: u32 = 1 << 17;
 
 /// The most a walk's lanes visit past a cap: every lane of the dispatch saw the visits under
 /// it and walked one run of steps more. Asks are counted one at a time and pass no cap.
 pub const OVERRUN: u32 = QUEUE_GROUPS * QUEUE_LANES * QUEUE_STEPS;
-const _: () = assert!(
-    VISITS_A_FRAME - reserved(VISITS_A_FRAME) - OVERRUN >= reserved(VISITS_A_FRAME),
-    "the first queue's cap keeps a reserved share of its own"
-);
 
-/// The caps a queue's work counts to, the frame's work so far included, the visits' and the
-/// asks' (`node_cache::caps_at`): the whole budget where it runs last or alone; short of it by the
-/// share reserved for the queue after it, and by what its lanes may overrun, where it runs
-/// `first` and another runs after it (`shared`). So the queue after it does at least the
-/// reserved share of each.
-pub const fn caps(first: bool, shared: bool) -> [u32; 2] {
-    if first && shared {
-        [
-            VISITS_A_FRAME - reserved(VISITS_A_FRAME) - OVERRUN,
-            ASKS_A_FRAME - reserved(ASKS_A_FRAME),
-        ]
-    } else {
-        [VISITS_A_FRAME, ASKS_A_FRAME]
-    }
+/// The least share of the budget every run of a frame does, the same for each kind
+/// (`count::RUNS`), so no run starves another: the visits' and the asks'. To be set from the
+/// S23.
+pub const VISITS_SHARE: u32 = (VISITS_A_FRAME - (count::RUNS - 1) * OVERRUN) / count::RUNS;
+pub const ASKS_SHARE: u32 = ASKS_A_FRAME / count::RUNS;
+
+/// The caps a run's work counts to, the frame's work so far included, the visits' and the
+/// asks' (`node_cache::caps_at`), where `after` runs of the frame follow it: the budget short
+/// of each later run's share and of what its lanes may overrun into it. So every run does at
+/// least its share, the first too.
+pub const fn caps(after: u32) -> [u32; 2] {
+    [
+        VISITS_A_FRAME - after * (VISITS_SHARE + OVERRUN),
+        ASKS_A_FRAME - after * ASKS_SHARE,
+    ]
 }
+const _: () = assert!(
+    caps(count::RUNS - 1)[0] >= VISITS_SHARE && caps(count::RUNS - 1)[1] >= ASKS_SHARE,
+    "the first run's cap holds its share"
+);
 
 /// The queue's words, an observer's buffer of them (pxl-render queue_walk.wgsl
 /// `queue`, queue_ask.wgsl): the next hole the first walk takes (`QUEUE_TAKEN`) and the next the
@@ -177,8 +170,8 @@ pub const fn caps(first: bool, shared: bool) -> [u32; 2] {
 /// which it counts against its budget beside the frame's (`node_cache::VISITED`) and the asks
 /// after it fold into the frame's (`QUEUE_VISITED`); the stops the two walks listed, as
 /// `node_cache::HITS_ARGS` lays them (`QUEUE_HITS`); then the asks' records
-/// (`QUEUE_RECORDS_AT`, `QUEUE_RECORD_WORDS` each, `QUEUE_RECORDS_ROOM` a walk: as many as the
-/// frame may ask). Each frame's start is `QUEUE_EMPTY`.
+/// (`QUEUE_RECORDS_AT`, `QUEUE_RECORD_WORDS` each, `QUEUE_RECORDS_ROOM` a walk). Each run's
+/// start is `QUEUE_EMPTY`.
 pub const QUEUE_TAKEN: u32 = 0;
 pub const QUEUE_TAKEN_AGAIN: u32 = 1;
 pub const QUEUE_ASKS: u32 = 2;
@@ -189,7 +182,9 @@ pub const QUEUE_RECORDS_AT: u32 = 9;
 /// An ask's record: the node's zoom, its index's three words, the zooms it is asked at, far then
 /// near over `ZOOM_BITS`, whether it is asked from the top, and what was handed its parent.
 pub const QUEUE_RECORD_WORDS: u32 = 10;
-pub const QUEUE_RECORDS_ROOM: u32 = ASKS_A_FRAME;
+/// The nodes one walk lists for the asks after it at most: a ray parked at a node listed past
+/// it is asked by the last walk instead.
+pub const QUEUE_RECORDS_ROOM: u32 = 1 << 16;
 pub const QUEUE_WORDS: u32 = QUEUE_RECORDS_AT + 2 * QUEUE_RECORDS_ROOM * QUEUE_RECORD_WORDS;
 pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 1, 1, 0];
 
@@ -240,19 +235,19 @@ pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
 mod tests {
     use super::*;
 
-    /// Two queues in a frame, the first at its cap and past it by the most its lanes overrun:
-    /// the second still has the reserved share of the visits and of the asks to do, and the
-    /// first had at least as much; one alone has the whole budget.
+    /// Every run of a frame, each at its cap and past it by the most its lanes overrun: each
+    /// still has its share of the visits and of the asks to do; one alone has the whole budget.
     #[test]
-    fn each_queue_keeps_its_reserved_share() {
-        let [first_visits, first_asks] = caps(true, true);
-        let [last_visits, last_asks] = caps(false, true);
-        assert_eq!([last_visits, last_asks], [VISITS_A_FRAME, ASKS_A_FRAME]);
-        let spent = first_visits + OVERRUN;
-        assert!(last_visits - spent >= reserved(VISITS_A_FRAME));
-        assert!(first_visits >= reserved(VISITS_A_FRAME));
-        assert!(last_asks - first_asks >= reserved(ASKS_A_FRAME));
-        assert!(first_asks >= reserved(ASKS_A_FRAME));
-        assert_eq!(caps(true, false), [VISITS_A_FRAME, ASKS_A_FRAME]);
+    fn each_run_keeps_its_share() {
+        for runs in 1..=count::RUNS {
+            let mut spent = [0, 0];
+            for k in 0..runs {
+                let [visits, asks] = caps(runs - 1 - k);
+                assert!(visits - spent[0] >= VISITS_SHARE, "{runs} {k}");
+                assert!(asks - spent[1] >= ASKS_SHARE, "{runs} {k}");
+                spent = [visits + OVERRUN, asks];
+            }
+        }
+        assert_eq!(caps(0), [VISITS_A_FRAME, ASKS_A_FRAME]);
     }
 }

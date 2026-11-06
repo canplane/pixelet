@@ -309,3 +309,64 @@ fn the_lanes_alone_ask_no_frame() {
     assert!(r.land(true, [0; 2]));
     assert_eq!(r.owed, [false; 2]);
 }
+
+/// The eye's lattice owed (`count::LATTICE_OWED`) rides its owed word: a run that leaves an
+/// offset uncounted lands as the lattice owed and the eye owed, a frame asked; one that leaves
+/// every offset counted lands as neither; a later run keeps it until its own lands; a dropped
+/// run owes it again, its work not done; a refused mapping owes it; the eye let go owes none;
+/// and the light's word never sets it.
+#[test]
+fn the_lattice_owed_lands_with_the_eyes_work() {
+    for (word, lattice) in [
+        (count::LATTICE_OWED, true),
+        (count::LATTICE_OWED | 3, true),
+        (3, false),
+        (0, false),
+    ] {
+        let mut r = Readback::default();
+        assert!(r.copy(false, [true, false]));
+        assert!(!r.lattice);
+        assert!(r.ask(true));
+        r.land(true, [word, 0]);
+        assert_eq!((r.lattice, r.owed[EYE]), (lattice, word != 0));
+        assert_eq!(r.wants_frame([true; 2]), word != 0);
+        assert!(r.copy(false, [true, false]));
+        assert_eq!(r.lattice, lattice, "kept until a later run lands: {r:?}");
+        r.dropped();
+        assert!(r.lattice && r.owed[EYE]);
+        r.off(EYE);
+        assert!(!r.lattice);
+    }
+    let mut r = Readback::default();
+    assert!(r.copy(false, [true, false]));
+    assert!(r.ask(true));
+    r.land(false, [0; 2]);
+    assert!(r.lattice);
+    let mut r = Readback::default();
+    assert!(r.copy(false, [false, true]));
+    assert!(r.ask(true));
+    r.land(true, [0, count::LATTICE_OWED]);
+    assert!(!r.lattice && r.owed[LIGHT]);
+}
+
+/// The lattice is read off the eye's owed work of any run since the grid was laid, an older
+/// one's among them, and off none before.
+#[test]
+fn the_lattice_owed_lands_off_any_run_since_the_lay() {
+    // A run every frame, each landing a generation behind: the older run's count clears it.
+    let mut r = Readback::default();
+    r.lays();
+    assert!(r.copy(false, [true, false]));
+    assert!(r.ask(true));
+    assert!(!r.copy(false, [true, false]));
+    r.land(true, [0, 0]);
+    assert!(!r.lattice && !r.owed[EYE] && r.pending[EYE]);
+    // A run before the lay landing after it says nothing of the grid laid.
+    let mut r = Readback::default();
+    assert!(r.copy(false, [true, false]));
+    r.lays();
+    assert!(r.ask(true));
+    assert!(!r.copy(false, [true, false]));
+    r.land(true, [0, 0]);
+    assert!(r.lattice);
+}

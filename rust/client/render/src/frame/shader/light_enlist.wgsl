@@ -47,10 +47,7 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
         } else if (which == LIGHT_LISTED_FED) {
           let s = LIGHT_TILE / LIGHT_SAMPLE;
           opened(LIGHT_ARGS_CELLS, e, room, 1u);
-          opened(LIGHT_ARGS_SAMPLE, e, room, s);
           opened(LIGHT_ARGS_SAMPLE_BOX, e, room, s);
-        } else {
-          opened(LIGHT_ARGS_BEAM, e, room, 1u);
         }
       }
     }

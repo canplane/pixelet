@@ -19,6 +19,7 @@
 //! - its head: the frame's number, what is forgotten, and the eye's
 //!   clip levels' entries that moved (`HEAD_WORDS`);
 //! - the frame the eye's draw last ran (`DRAWN`);
+//! - the eye's rolled lattice (`ROLL_K`);
 //! - the entries, a slot each (`ENTRIES_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
@@ -121,35 +122,54 @@ pub const LAST_TAKEN: u32 = HITS_CNT + 1;
 /// The holes' work so far in the frame, both observers' queues', the nodes visited and those
 /// asked: added to through atomics by each queue's asks, the visits its walk over the node
 /// cache before them left in its words folded in (pxl-render queue_ask.wgsl, `ray::QUEUE_VISITED`),
-/// and by its last walk; read by every walk's budget against its observer's caps (`caps_at`).
+/// and by its last walk; read by every walk's budget against its run's caps (`caps_at`).
 /// Set to none by the host each frame a queue runs.
 pub const VISITED: u32 = LAST_TAKEN + 1;
 pub const ASKED: u32 = VISITED + 1;
+/// The eye's samples its lattice's run left parked this frame, the budget not reaching them
+/// (pxl-render samples.wgsl `unreached`), which the cast's close reads (roll.wgsl,
+/// `ROLL_DONE`). Set to none with the frame's work.
+pub const LATTICE_LEFT: u32 = ASKED + 1;
 /// Each observer's work its last cast or queue leaves owed, `count::OBSERVERS` words (`owed_at`):
 /// the eye's, the pixels its last walk left parked (pxl-render queue_last.wgsl `unreached`);
 /// the light's, the tiles it wanted and left unclaimed, copied in from its args after the claim
 /// (`light::ARGS_LEFT`), and the slots its last walk left parked, which add to it. None where
 /// nothing is owed. Kept apart each frame the observer's queue runs, as a later frame's head
 /// written clears it, and read back from there (`count::OWED`).
-pub const OWED_AT: u32 = ASKED + 1;
-/// Each observer's caps its queue counts the frame's work to, the visits' and the asks'
-/// (`ray::caps`), two words an observer (`caps_at`): the host's each frame its queue runs.
+pub const OWED_AT: u32 = LATTICE_LEFT + 1;
+/// Each kind of run's caps it counts the frame's work to, the visits' and the asks'
+/// (`ray::caps`), two words a kind (`caps_at`): the host's each frame a run of it runs.
 pub const CAPS_AT: u32 = OWED_AT + count::OBSERVERS;
 /// Whether the eye's cast keeps the states its holes were parked in, 1 or 0, the host's each
 /// frame the eye casts: where its rays are those its last cast walked, the view, the jitter,
 /// the world and the drawn size as they were, so a parked hole names the same ray and goes on
 /// from where it was parked (pxl-render cast.wgsl, queue_walk.wgsl); else every pixel the cast
 /// takes is set to no parked ray.
-pub const RESUMES: u32 = CAPS_AT + 2 * count::OBSERVERS;
+pub const RESUMES: u32 = CAPS_AT + 2 * count::RUNS;
 pub const HEAD_WORDS: u32 = RESUMES + 1;
 /// The frame the eye's draw last ran, written by it (pxl-render record_draw.wgsl
 /// `record_draw_cs`): the boxes the raster draws until it runs again name the entries it
 /// marked seen then (`record::drawn`). Past the head the host writes each frame.
 pub const DRAWN: u32 = HEAD_WORDS;
+/// The eye's rolled lattice (`beam::ROLLS`), kept from cast to cast while its grid stands and
+/// set to none by the host where the grid is laid anew: the offset this cast casts its samples
+/// at, an index of `beam::roll` (`ROLL_K`); the offsets counted, a bit each, all of
+/// `beam::ROLLS_DONE` once every one is (`ROLL_DONE`); whether the next cast's samples go
+/// on from where the budget parked them rather than afresh (`ROLL_RESUMES`); and that offset,
+/// across and down, f32 bits (`ROLL_AT`), which a sample's ray reads as a word as it read the
+/// host's before, so its tangents round as the CPU's `beam::Grid::sample` rounds them. Written by the
+/// close of the frames the eye casts its samples in alone (pxl-render roll.wgsl `roll_cs`),
+/// which counts the offset where the samples' run left none parked (`LATTICE_LEFT`) and takes
+/// the next.
+pub const ROLL_K: u32 = DRAWN + 1;
+pub const ROLL_DONE: u32 = ROLL_K + 1;
+pub const ROLL_RESUMES: u32 = ROLL_K + 2;
+pub const ROLL_AT: u32 = ROLL_K + 3;
+pub const ROLL_WORDS: u32 = 5;
 
-/// The first of `observer`'s caps (`CAPS_AT`).
-pub const fn caps_at(observer: u32) -> u32 {
-    CAPS_AT + 2 * observer
+/// The first of run kind `run`'s caps (`CAPS_AT`, `count::RUNS`).
+pub const fn caps_at(run: u32) -> u32 {
+    CAPS_AT + 2 * run
 }
 
 /// The word of `observer`'s owed work (`OWED_AT`).
@@ -221,7 +241,7 @@ pub const ENTRY_WORDS: u32 = W_FACES + 6;
 /// The slots: room for many frames of the about 80 thousand nodes a frame at E120 asks and
 /// the cells the eye and the light draw; a power of two, so a key's hash masks to one.
 pub const ENTRIES: u32 = 1 << 20;
-pub const ENTRIES_AT: u32 = DRAWN + 1;
+pub const ENTRIES_AT: u32 = ROLL_K + ROLL_WORDS;
 /// The buffer's words, whatever is drawn: none of them a pixel's.
 pub const WORDS: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
 const _: () = assert!(

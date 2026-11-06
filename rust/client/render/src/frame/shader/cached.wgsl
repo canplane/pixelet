@@ -8,6 +8,10 @@
 
 @group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 
+fn node_cache_word(k: u32) -> u32 {
+  return node_cache[k];
+}
+
 /// The node `c` at `zoom`, asked at `zooms`, far then near over `ZOOM_BITS`, off the slot that
 /// keeps it for those zooms (walk_node.wgsl `holds_for`): at those zooms, or a cell by its node
 /// alone; what was handed it read where `hands`; else `KIND_LEFT`. A slot keeping a split at

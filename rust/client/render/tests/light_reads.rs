@@ -48,7 +48,9 @@ fn eye_words(l: &Light) -> Vec<u32> {
     w
 }
 
-fn head_words(current: u32, epoch: u32, was: [i32; 2]) -> Vec<u32> {
+/// The head of cast `current` in `epoch`, the box's corner the cast before's `was` and its
+/// eye's zooms `range_was`.
+fn head_words(current: u32, epoch: u32, was: [i32; 2], range_was: [Zoom; 2]) -> Vec<u32> {
     let mut head = vec![0u32; light::HEAD_WORDS];
     head[light::HEAD_CAST] = current;
     head[light::HEAD_EPOCH] = epoch;
@@ -57,11 +59,20 @@ fn head_words(current: u32, epoch: u32, was: [i32; 2]) -> Vec<u32> {
     }
     head[light::HEAD_CORNER_WAS] = was[0] as u32;
     head[light::HEAD_CORNER_WAS + 1] = was[1] as u32;
+    head[light::HEAD_RANGE_WAS] = range_was[0];
+    head[light::HEAD_RANGE_WAS + 1] = range_was[1];
     head
 }
 
-fn run(gpu: &Gpu, p: &wgpu::ComputePipeline, l: &Light, list: &[u32], was: [i32; 2]) -> Vec<u32> {
-    run_with(gpu, p, l, list, head_words(40, 37, was))
+fn run(
+    gpu: &Gpu,
+    p: &wgpu::ComputePipeline,
+    l: &Light,
+    list: &[u32],
+    was: [i32; 2],
+    range_was: [Zoom; 2],
+) -> Vec<u32> {
+    run_with(gpu, p, l, list, head_words(40, 37, was, range_was))
 }
 
 fn run_with(
@@ -86,6 +97,10 @@ fn run_with(
     gpu.read(&list)
 }
 
+/// A slide: its name, where the box's corner was and where it is, and the eye's zooms the cast
+/// before was cast under.
+type Slide = (&'static str, [i32; 2], [i32; 2], [Zoom; 2]);
+
 #[test]
 fn hand_slide_forgets_what_moved() {
     let Some(gpu) = Gpu::new() else {
@@ -96,30 +111,45 @@ fn hand_slide_forgets_what_moved() {
     let t = light::TILE as i32;
     let mut tally = Tally::default();
     let (mut kept, mut off, mut banded) = (0u32, 0u32, 0u32);
-    // Where the corner was, and where it is.
-    let slides: [(&str, [i32; 2], [i32; 2]); 7] = [
-        ("a tile across", [1304, -896], [1304 + t, -896]),
-        ("a tile up", [1304, -896], [1304, -896 - t]),
+    // Where the corner was, and where it is; the eye's zooms the cast before was cast under.
+    let step = [RANGE[0] - 1, RANGE[1] - 1];
+    let slides: [Slide; 9] = [
+        ("a tile across", [1304, -896], [1304 + t, -896], RANGE),
+        ("a tile up", [1304, -896], [1304, -896 - t], RANGE),
         (
             "three across and two down",
             [1304, -896],
             [1304 - 3 * t, -896 + 2 * t],
+            RANGE,
         ),
-        ("over X = 0", [-2 * t, 40 * t], [3 * t, 39 * t]),
+        ("over X = 0", [-2 * t, 40 * t], [3 * t, 39 * t], RANGE),
         (
             "over the i32 seam",
             [i32::MAX - t + 1, 0],
             [(i32::MAX - t + 1).wrapping_add(2 * t), t],
+            RANGE,
         ),
-        ("far, nine tiles each way", [0, 0], [9 * t, -9 * t]),
-        ("past the box", [0, 0], [(N as i32 + 1) * t, 0]),
+        ("far, nine tiles each way", [0, 0], [9 * t, -9 * t], RANGE),
+        ("past the box", [0, 0], [(N as i32 + 1) * t, 0], RANGE),
+        (
+            "a zoom step, the box standing",
+            [1304, -896],
+            [1304, -896],
+            step,
+        ),
+        (
+            "a zoom step and a tile across",
+            [1304, -896],
+            [1304 + t, -896],
+            step,
+        ),
     ];
-    for (n, (name, was, corner)) in slides.into_iter().enumerate() {
+    for (n, (name, was, corner, range_was)) in slides.into_iter().enumerate() {
         let l = box_of([0.3, 0.2, -0.93], 0.0625, 0.75, corner);
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
-        let have = run(&gpu, &p, &l, &list, was);
+        let have = run(&gpu, &p, &l, &list, was, range_was);
         // The slide's first thread names the cast the slide last ran in (`light::SLIDE_RAN`).
         let ran = (light::slide_at(SIZE) + light::SLIDE_RAN) as usize;
         tally.compare(
@@ -133,7 +163,7 @@ fn hand_slide_forgets_what_moved() {
         let (mut case_kept, mut case_off) = (0, 0);
         for j in 0..N {
             for i in 0..N {
-                if l.keeps(SIZE, RANGE, [i, j], was) {
+                if l.keeps(SIZE, [RANGE, range_was], [i, j], was) {
                     case_kept += 1;
                     continue;
                 }
@@ -204,7 +234,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
-        let mut head = head_words(40, 37, corner);
+        let mut head = head_words(40, 37, corner, RANGE);
         let at = 4 * light::COLUMNS_AT;
         head[at] = columns.len() as u32;
         for (k, c) in columns.iter().enumerate() {
@@ -373,7 +403,7 @@ fn hand_propagation_reads_what_stands() {
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
         list[kept + light::STOOD_CNT as usize] = 0;
-        let mut head = head_words(current, epoch, [1304, -896]);
+        let mut head = head_words(current, epoch, [1304, -896], RANGE);
         head[light::HEAD_SLIDE_OWED] = 0;
         head[light::HEAD_WORLD] = current - 3;
         let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
@@ -609,7 +639,7 @@ fn hand_claim_takes_the_nearest_within_its_budget() {
         }
     }
     let was_list = list.clone();
-    let mut head = head_words(current, epoch, l.corner);
+    let mut head = head_words(current, epoch, l.corner, RANGE);
     head[light::HEAD_CARRIES] = 1;
     let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
     let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);

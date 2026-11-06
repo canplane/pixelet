@@ -72,6 +72,12 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
   let place = ((id.y / SAMPLE_SIDE) * LIGHT_LIST_ACROSS + id.x / SAMPLE_SIDE) * LIGHT_LISTED_LANES
     + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
+  return light_item_at(level, place);
+}
+
+/// What of `level` lies at place `place` of the list of what feeds the tiles the cast claimed,
+/// an entry its side's square of places in order; none past the list.
+fn light_item_at(level: u32, place: u32) -> vec2<u32> {
   var across = 1u;
   if (level == LEVEL_SAMPLE) {
     across = LIGHT_TILE / LIGHT_SAMPLE;

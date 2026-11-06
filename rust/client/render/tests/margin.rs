@@ -170,6 +170,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
             (11, head.as_entire_binding()),
         ],
         &beams,
+        &table,
         SIZE,
     );
     gpu.dispatch(

@@ -5,28 +5,24 @@
 // cast casts, each along the light from where its texel lies on the near plane, at its tile's
 // band (pxl-engine `light::corner_at`, `Light::band`), its line in the light's list.
 
-const WALK_PASS: u32 = LIGHT_BEAM_PASS;
-const VISITS_COUNT: u32 = LIGHT_BEAM_COUNT;
-
-/// A beam ray's asks are not counted (pxl-engine `count::ASKED`).
-/// Its walks ask whatever they meet: no budget is theirs.
-fn may_ask() -> bool {
-  return true;
-}
-
-fn asked_at() -> u32 {
-  return NONE;
-}
-
 /// The beam rays across the map, and down (`light::beam_across`).
 fn beam_lattice() -> vec2<u32> {
   return vec2<u32>(beam_across());
 }
 
-/// The beam ray the thread at `id` walks: its own where the cast begins its epoch, else one of
-/// the corners listed, `NONE` past them (light_list.wgsl `light_item`).
-fn beam_item(id: vec2<u32>) -> vec2<u32> {
-  return light_item(LEVEL_CORNER, id);
+/// The beam rays a run takes: those listed for the tiles the cast claimed, a beam ray a place
+/// (light_list.wgsl `light_item_at`).
+fn corners_listed() -> u32 {
+  return in_room(beams[listed_at(LIGHT_LISTED_CORNERS)], beam_across() * beam_across());
+}
+
+fn corner_queued(k: u32) -> vec2<u32> {
+  return light_item_at(LEVEL_CORNER, k);
+}
+
+/// The first word of beam ray `c`'s parked state (`light::corner_states_at`).
+fn corner_state_at(c: vec2<u32>) -> u32 {
+  return head_word(LIGHT_HEAD_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
 }
 
 /// The first word of beam ray `c`'s line (`light::line`).
@@ -37,11 +33,6 @@ fn beam_line(c: vec2<u32>) -> u32 {
 /// The word of how far the rays about beam ray `c` start (`light::hand_at`).
 fn beam_hand_at(c: vec2<u32>) -> u32 {
   return light_hand_at(c.y * beam_across() + c.x);
-}
-
-/// The list of the beam rays the walk over the node cache left (`light::corners_left_at`).
-fn corners_left_at() -> u32 {
-  return head_word(LIGHT_HEAD_CORNERS_LEFT);
 }
 
 /// Beam ray `c`'s ray, at the band of the tile its texel, which may lie past the box, lies on,

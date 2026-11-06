@@ -1,42 +1,38 @@
 // pxl-render/queue_walk.wgsl
 
-// The holes' walks over the node cache alone (walk.wgsl, cached.wgsl, queue.wgsl): the first
-// over the queue's holes, a hole parked before on from its parked state, the second over the
-// rays the first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next ray off
-// the queue's words when its own ends or is parked, walks it `QUEUE_STEPS` steps at a time,
-// and holds its state between them, so a lane whose ray ends early walks another while the
-// long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
+// A run's walks over the node cache alone (walk.wgsl, cached.wgsl), over the items its kind's
+// module names, their rays, starts and ends (queue.wgsl for the holes): the first over the
+// run's items, an item parked before on from its parked state, the second over the rays the
+// first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next item
+// off the queue's words when its own ray ends or is parked, walks it `QUEUE_STEPS` steps at a
+// time, and holds its state between them, so a lane whose ray ends early walks another while
+// the long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
 // left, and the node listed for the asks (queue_ask.wgsl), with what was handed its parent
-// where a slot keeps that; a ray the frame's budget of visits does not reach, up to the cap
-// the observer's queue counts to (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of the pass writes.
+// where a slot keeps that; a ray the frame's budget of visits does not reach, up to its run's
+// caps (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of
+// the pass writes.
 
 /// The queue's words (pxl-engine `ray::QUEUE_WORDS`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
-/// A stop listed for the record, what lies about its face put at its pixel off it (miss_word.wgsl
-/// `hit_put`, record_stops.wgsl):
-/// numbered as the walks take them, the dispatch over them raised by the number that opens a
-/// workgroup (`ray::QUEUE_HITS`, which the last walk goes on from as `node_cache::HITS_ARGS`),
-/// and its number marked waiting (`beam::HIT_WAITS`); none past its observer's room (`hits_room`).
-fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
-  let r = atomicAdd(&queue[QUEUE_HITS + 3u], 1u);
-  if (r >= hits_room()) {
-    return 0u;
-  }
-  if (r % HIT_LANES == 0u) {
-    atomicMax(&queue[QUEUE_HITS], workgroups(r + 1u, hits_room(), HIT_LANES));
-  }
-  hit_put(r, w, face, id);
-  return HIT_WAITS | r;
+/// The next stop's number, as these walks number the stops their items keep for the record
+/// (queue.wgsl `keep_hit`), and the dispatch over them raised to `rows`: in the queue's words
+/// (`ray::QUEUE_HITS`), which the last walk goes on from as `node_cache::HITS_ARGS`.
+fn stop_number() -> u32 {
+  return atomicAdd(&queue[QUEUE_HITS + 3u], 1u);
 }
 
-/// Whether the frame's node visits so far reach the cap this queue counts to (pxl-engine
-/// `ray::VISITS_A_FRAME`, `ray::caps`), either observer's.
+fn stop_rows(rows: u32) {
+  atomicMax(&queue[QUEUE_HITS], rows);
+}
+
+/// Whether the frame's node visits so far reach the cap this run counts to (pxl-engine
+/// `ray::VISITS_A_FRAME`, `ray::caps`).
 fn spent() -> bool {
   return node_cache[VISITED] + atomicLoad(&queue[QUEUE_VISITED]) >= node_cache[queue_caps()];
 }
 
-/// The node hole `hole`'s walk `w` was left at, no slot keeping it, listed for the asks of the
+/// The node an item's walk `w` was left at, no slot keeping it, listed for the asks of the
 /// walk `again` or the first, where it is kept at all (`keeps`): its zoom, its index, the zooms
 /// asked, and what was handed its parent, off the slot that keeps the parent at the zooms the
 /// ray asked it at, a node the walk went through; else it is asked from the top.
@@ -72,43 +68,39 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
 }
 
 /// The lanes of a walk over the node cache alone, the first, or the one `again` over what the
-/// first parked: each holds one ray at a time, `hole` `NONE` where it holds none. The first
-/// takes every hole the queue holds, so every hole's state is written in this cast before the
+/// first parked: each holds one ray at a time, `item` `NONE` where it holds none. The first
+/// takes every item the run holds, so every item's state is written in this run before the
 /// second reads it: parked, or not.
 fn queue_walk(again: bool) {
-  let n = listed();
-  let taken = select(QUEUE_TAKEN, QUEUE_TAKEN_AGAIN, again);
-  var hole = NONE;
+  let n = item_count();
+  let next = select(QUEUE_TAKEN, QUEUE_TAKEN_AGAIN, again);
+  var item = NONE;
   var t = 0.0;
   var corner = vec3<u32>(0u);
   var zoom = 0u;
   var roots = vec3<i32>(0);
   var step = 0u;
   loop {
-    if (hole == NONE) {
-      let k = atomicAdd(&queue[taken], 1u);
+    if (item == NONE) {
+      let k = atomicAdd(&queue[next], 1u);
       if (k >= n) {
         break;
       }
-      let h = queued(k);
-      // A hole parked before goes on from where it was parked: a light's slot of an owed tile,
-      // whose claim took its state (light_propagate.wgsl `light_claim_cs`); an eye's pixel
-      // whose rays stand, which its cast or the frame's queue alone left parked (cast.wgsl,
-      // pxl-engine `node_cache::RESUMES`). Any other hole's state holds no parked ray.
-      let resumes = again || parked(h);
-      if (resumes && !parked(h)) {
+      let h = item_at(k);
+      let how = taken(h, again);
+      if (how == TAKEN_NONE) {
         continue;
       }
-      hole = h;
-      if (resumes) {
-        let s = parked_start(h);
+      item = h;
+      if (how == TAKEN_FRESH) {
+        let s = item_start(h, item_aim(h));
         t = s.t;
         corner = s.corner;
         zoom = s.zoom;
         roots = s.roots;
         step = s.step;
       } else {
-        let s = hole_start(h, hole_aim(h));
+        let s = parked_start(h);
         t = s.t;
         corner = s.corner;
         zoom = s.zoom;
@@ -117,11 +109,11 @@ fn queue_walk(again: bool) {
       }
     }
     if (spent()) {
-      park(hole, t, corner, zoom, roots, step);
-      hole = NONE;
+      park(item, t, corner, zoom, roots, step);
+      item = NONE;
       continue;
     }
-    let aim = hole_aim(hole);
+    let aim = item_aim(item);
     let w = walk(aim, Start(t, corner, zoom, roots, vec4<u32>(0u), true, step), QUEUE_STEPS);
     atomicAdd(&queue[QUEUE_VISITED], w.visits);
     if (w.ends == 5u) {
@@ -133,12 +125,12 @@ fn queue_walk(again: bool) {
       continue;
     }
     if (w.ends == 4u) {
-      park(hole, w.t, w.corner, w.zoom, w.roots, w.step);
+      park(item, w.t, w.corner, w.zoom, w.roots, w.step);
       list_ask(aim, w, again);
     } else {
-      finish(hole, aim, w);
+      finish(item, aim, w);
     }
-    hole = NONE;
+    item = NONE;
   }
 }
 

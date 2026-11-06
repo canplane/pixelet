@@ -7,7 +7,7 @@ mod gpu;
 
 use pxl_engine::cast::{self, Spacing};
 use pxl_engine::{grid, node_cache};
-use pxl_render::frame::shader::record::{src, SHADER_BEAM_HIT};
+use pxl_render::frame::shader::record::{src, SHADER_QUEUE_CORNERS};
 
 /// The probe's words a case: its vector's three, then what the module leaves of it.
 const PROBE_WORDS: usize = 7;
@@ -37,7 +37,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 
 /// The probe run over `cases` on the beam rays' walk's module, what it left of each.
 fn probe(gpu: &gpu::Gpu, cases: &[[f32; 3]]) -> Vec<[u32; PROBE_WORDS]> {
-    let source = format!("{}\n{PROBE}", src(SHADER_BEAM_HIT));
+    let source = format!("{}\n{PROBE}", src(SHADER_QUEUE_CORNERS));
     let p = gpu.pipeline(&source, "probe_cs");
     let mut words = vec![cases.len() as u32];
     for v in cases {
@@ -328,7 +328,7 @@ fn hand_keeps_as_the_engine() {
             cases.push((zoom, [v(rand()), v(rand()), v(rand())]));
         }
     }
-    let source = format!("{}\n{KEEPS}", src(SHADER_BEAM_HIT));
+    let source = format!("{}\n{KEEPS}", src(SHADER_QUEUE_CORNERS));
     let p = gpu.pipeline(&source, "keeps_cs");
     let mut words = vec![cases.len() as u32];
     for (zoom, c) in &cases {

@@ -24,7 +24,8 @@ pub const COMPUTE_ATMOS_FROXEL: u32 = 11;
 pub const COMPUTE_WAY_FREE: u32 = 12;
 pub const COMPUTE_WAY_TREE: u32 = 13;
 pub const COMPUTE_WAY_RETURN: u32 = 14;
-pub const COMPUTE_BEAM: u32 = 15;
+/// The eye's beam rays' run's first walk over the node cache alone (`SHADER_QUEUE_CORNERS`).
+pub const COMPUTE_QUEUE_CORNERS: u32 = 15;
 pub const COMPUTE_CELL: u32 = 16;
 /// The drawn receivers' workgroups, a thread (`SHADER_LIGHT_MARK_DRAWS`).
 pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 17;
@@ -33,7 +34,8 @@ pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 17;
 /// those two walks.
 pub const COMPUTE_QUEUE_ASK: u32 = 18;
 pub const COMPUTE_FORGET: u32 = 19;
-pub const COMPUTE_SAMPLE: u32 = 20;
+/// The eye's samples' run's last walk (`SHADER_QUEUE_LAST_SAMPLES`).
+pub const COMPUTE_QUEUE_LAST_SAMPLES: u32 = 20;
 pub const COMPUTE_LIGHT: u32 = 21;
 pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 22;
 pub const COMPUTE_SAMPLE_BOX: u32 = 23;
@@ -53,16 +55,17 @@ pub const COMPUTE_QUEUE_LAST: u32 = 33;
 /// (`SHADER_RECORD_STOPS`).
 pub const COMPUTE_RECORD_FACES: u32 = 34;
 pub const COMPUTE_BOX_ARGS: u32 = 35;
-pub const COMPUTE_LIGHT_BEAM: u32 = 36;
+pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 36;
 pub const COMPUTE_LIGHT_CELL: u32 = 37;
-pub const COMPUTE_LIGHT_SAMPLE: u32 = 38;
+pub const COMPUTE_QUEUE_LAST_LIGHT_SAMPLES: u32 = 38;
 pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 39;
-pub const COMPUTE_SAMPLE_HIT: u32 = 40;
+/// The eye's samples' run's first walk over the node cache alone (`SHADER_QUEUE_SAMPLES`).
+pub const COMPUTE_QUEUE_SAMPLES: u32 = 40;
 pub const COMPUTE_QUEUE: u32 = 41;
-pub const COMPUTE_BEAM_HIT: u32 = 42;
+pub const COMPUTE_QUEUE_LAST_CORNERS: u32 = 42;
 pub const COMPUTE_QUEUE_PARKED: u32 = 43;
-pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
-pub const COMPUTE_LIGHT_BEAM_HIT: u32 = 45;
+pub const COMPUTE_QUEUE_LIGHT_SAMPLES: u32 = 44;
+pub const COMPUTE_QUEUE_LAST_LIGHT_CORNERS: u32 = 45;
 pub const COMPUTE_CAST_TILES: u32 = 46;
 pub const COMPUTE_CLAIMED_BOX: u32 = 47;
 pub const COMPUTE_DECOR_GATE_ARGS: u32 = 48;
@@ -84,7 +87,27 @@ pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 55;
 /// Each tile the light's cast lists read, wanted where its epoch has not cast it or it is owed
 /// (light_propagate.wgsl `light_want_cs`).
 pub const COMPUTE_LIGHT_WANT: u32 = 56;
-pub const COMPUTES: u32 = 57;
+/// The samples' runs' second walks over the node cache alone and their asks, the eye's and the
+/// light's (`SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE_ASK_SAMPLES`).
+pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 57;
+pub const COMPUTE_QUEUE_ASK_SAMPLES: u32 = 58;
+pub const COMPUTE_QUEUE_ASK_SAMPLES_PARKED: u32 = 59;
+pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 60;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES: u32 = 61;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED: u32 = 62;
+/// The close of a frame the eye's queue runs in, where it casts its samples and where it does
+/// not (`SHADER_ROLL`).
+pub const COMPUTE_ROLL: u32 = 63;
+pub const COMPUTE_ROLL_OWED: u32 = 64;
+/// The beam rays' runs' second walks over the node cache alone and their asks, the eye's and
+/// the light's (`SHADER_QUEUE_CORNERS`, `SHADER_QUEUE_ASK_CORNERS`).
+pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 65;
+pub const COMPUTE_QUEUE_ASK_CORNERS: u32 = 66;
+pub const COMPUTE_QUEUE_ASK_CORNERS_PARKED: u32 = 67;
+pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 68;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS: u32 = 69;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED: u32 = 70;
+pub const COMPUTES: u32 = 71;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -109,11 +132,14 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_WAY_FREE => (SHADER_WAY_FREE, "way_free_cs"),
         COMPUTE_WAY_TREE => (SHADER_WAY_TREE, "way_tree_cs"),
         COMPUTE_WAY_RETURN => (SHADER_WAY_RETURN, "way_return_cs"),
-        COMPUTE_BEAM => (SHADER_BEAM, "beam_cs"),
+        COMPUTE_QUEUE_CORNERS => (SHADER_QUEUE_CORNERS, "queue_cs"),
+        COMPUTE_QUEUE_CORNERS_PARKED => (SHADER_QUEUE_CORNERS, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_CORNERS => (SHADER_QUEUE_ASK_CORNERS, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_CORNERS_PARKED => (SHADER_QUEUE_ASK_CORNERS, "queue_ask_parked_cs"),
         COMPUTE_CELL => (SHADER_CELL, "cell_cs"),
         COMPUTE_QUEUE_ASK => (SHADER_QUEUE_ASK, "queue_ask_cs"),
         COMPUTE_FORGET => (SHADER_FORGET, "forget_cs"),
-        COMPUTE_SAMPLE => (SHADER_SAMPLE, "sample_cs"),
+        COMPUTE_QUEUE_LAST_SAMPLES => (SHADER_QUEUE_LAST_SAMPLES, "queue_last_cs"),
         COMPUTE_LIGHT => (SHADER_LIGHT, "light_cs"),
         COMPUTE_QUEUE_ASK_PARKED => (SHADER_QUEUE_ASK, "queue_ask_parked_cs"),
         COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
@@ -132,16 +158,31 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_LAST => (SHADER_QUEUE_LAST, "queue_last_cs"),
         COMPUTE_RECORD_FACES => (SHADER_RECORD_STOPS, "record_faces_cs"),
         COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
-        COMPUTE_LIGHT_BEAM => (SHADER_LIGHT_BEAM, "beam_cs"),
+        COMPUTE_QUEUE_LIGHT_CORNERS => (SHADER_QUEUE_LIGHT_CORNERS, "queue_cs"),
+        COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (SHADER_QUEUE_LIGHT_CORNERS, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_CORNERS => (SHADER_QUEUE_ASK_LIGHT_CORNERS, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED => {
+            (SHADER_QUEUE_ASK_LIGHT_CORNERS, "queue_ask_parked_cs")
+        }
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
-        COMPUTE_LIGHT_SAMPLE => (SHADER_LIGHT_SAMPLE, "sample_cs"),
+        COMPUTE_QUEUE_LAST_LIGHT_SAMPLES => (SHADER_QUEUE_LAST_LIGHT_SAMPLES, "queue_last_cs"),
         COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "sample_box_cs"),
-        COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
+        COMPUTE_QUEUE_SAMPLES => (SHADER_QUEUE_SAMPLES, "queue_cs"),
+        COMPUTE_QUEUE_SAMPLES_PARKED => (SHADER_QUEUE_SAMPLES, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_SAMPLES => (SHADER_QUEUE_ASK_SAMPLES, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_SAMPLES_PARKED => (SHADER_QUEUE_ASK_SAMPLES, "queue_ask_parked_cs"),
         COMPUTE_QUEUE => (SHADER_QUEUE, "queue_cs"),
-        COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
+        COMPUTE_QUEUE_LAST_CORNERS => (SHADER_QUEUE_LAST_CORNERS, "queue_last_cs"),
         COMPUTE_QUEUE_PARKED => (SHADER_QUEUE, "queue_parked_cs"),
-        COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
-        COMPUTE_LIGHT_BEAM_HIT => (SHADER_LIGHT_BEAM_HIT, "beam_hit_cs"),
+        COMPUTE_QUEUE_LIGHT_SAMPLES => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_cs"),
+        COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_SAMPLES => (SHADER_QUEUE_ASK_LIGHT_SAMPLES, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED => {
+            (SHADER_QUEUE_ASK_LIGHT_SAMPLES, "queue_ask_parked_cs")
+        }
+        COMPUTE_ROLL => (SHADER_ROLL, "roll_cs"),
+        COMPUTE_ROLL_OWED => (SHADER_ROLL, "roll_owed_cs"),
+        COMPUTE_QUEUE_LAST_LIGHT_CORNERS => (SHADER_QUEUE_LAST_LIGHT_CORNERS, "queue_last_cs"),
         COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
         COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
         COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),

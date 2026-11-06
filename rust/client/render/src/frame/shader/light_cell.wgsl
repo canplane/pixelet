@@ -7,8 +7,9 @@
 
 /// Cell `c`'s start: the least of the beam rays' starts within its window, `2 + 2 ·
 /// BEAM_WINDOW` beam rays a side from its own corner, and that beam ray, whose line its rays
-/// resume from; and whether they do, only where every beam ray of the window asked the band
-/// its rays ask (`cast::Detail::alike`): the beam's spacing is one, so only its band tells.
+/// resume from; and whether they do, only where every beam ray of the window ended
+/// (`beam::HAND_PARKED`) and asked the band its rays ask (`cast::Detail::alike`): the beam's
+/// spacing is one, so only its band tells.
 /// A beam ray lies a tile from the next (`light::BEAM`), so the window's beam rays lie on
 /// every tile from its first's to its last's (`tiles_ask`). A workgroup is a square of the
 /// light's list's lanes, as `light_item` reads them.
@@ -26,5 +27,5 @@ fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let at = light_cell_at(c);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;
-  beams[at + CELL_RESUMES] = u32(tiles_ask(lo, hi, tile_band(light_on(LEVEL_CELL, c))));
+  beams[at + CELL_RESUMES] = u32(least.z == 0u && tiles_ask(lo, hi, tile_band(light_on(LEVEL_CELL, c))));
 }

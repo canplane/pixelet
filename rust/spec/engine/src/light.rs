@@ -258,10 +258,19 @@ impl Light {
 
     /// Whether box tile `tile`, the map `size` texels a side, keeps what a
     /// cast left in it where the box slid to its corner from `was`, the
-    /// eye's zooms `range`: the tile lay in the box under `was` too, and its
-    /// band there is its band here (`band`). The one rule of what a slide
-    /// keeps (pxl-render light_slide.wgsl).
-    pub fn keeps(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], was: [i32; 2]) -> bool {
+    /// eye's zooms `range` and the cast's before `range_was`: the tile lay in
+    /// the box under `was` too, and its band there under `range_was` is its
+    /// band here under `range` (`band`). A tile's slots answer its band's
+    /// cells alone, so a tile whose band neither the slide nor the zooms moved
+    /// answers as before. The one rule of what a slide and a step of the
+    /// eye's zooms keep (pxl-render light_slide.wgsl).
+    pub fn keeps(
+        &self,
+        size: u32,
+        [range, range_was]: [[Zoom; 2]; 2],
+        tile: [u32; 2],
+        was: [i32; 2],
+    ) -> bool {
         let (n, t) = (tiles(size) as i32, TILE as i32);
         let from = [
             tile[0] as i32 + self.corner[0].wrapping_sub(was[0]) / t,
@@ -272,7 +281,7 @@ impl Light {
             && from[1] >= 0
             && from[0] < n
             && from[1] < n
-            && self.band(size, range, from) == self.band(size, range, here)
+            && self.band(size, range_was, from) == self.band(size, range, here)
     }
 
     /// Whether the rays of box tile `tile`, the map `size` texels a side, asking at its band
@@ -471,22 +480,21 @@ pub const HEAD_CELLS: usize = 4 * (STANDS_AT + 1 + 2 * STANDS);
 pub const HEAD_CELLS_ACROSS: usize = HEAD_CELLS + 1;
 pub const HEAD_SAMPLES: usize = HEAD_CELLS + 2;
 pub const HEAD_SAMPLES_ACROSS: usize = HEAD_CELLS + 3;
-pub const HEAD_LEFTS: usize = HEAD_CELLS + 4;
-pub const HEAD_READS: usize = HEAD_CELLS + 5;
-pub const HEAD_TILES: usize = HEAD_CELLS + 6;
-pub const HEAD_HANDS: usize = HEAD_CELLS + 7;
+pub const HEAD_READS: usize = HEAD_CELLS + 4;
+pub const HEAD_TILES: usize = HEAD_CELLS + 5;
+pub const HEAD_HANDS: usize = HEAD_CELLS + 6;
 /// What a cast keeps for the next (`kept_at`).
-pub const HEAD_KEPT: usize = HEAD_CELLS + 8;
-pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 9;
-pub const HEAD_MISSES: usize = HEAD_CELLS + 10;
+pub const HEAD_KEPT: usize = HEAD_CELLS + 7;
+pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 8;
+pub const HEAD_MISSES: usize = HEAD_CELLS + 9;
 /// Each list's marks (`listed_marks_at`), then each list (`listed_at`), a word each in the
 /// lists' order (`LISTED_CORNERS`).
-pub const HEAD_MARKS: usize = HEAD_CELLS + 11;
+pub const HEAD_MARKS: usize = HEAD_CELLS + 10;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
-/// The beam rays the walk over the node cache left (`corners_left_at`).
-pub const HEAD_CORNERS_LEFT: usize = HEAD_LISTED + LISTS as usize;
+/// Where the beam rays' run parks them (`corner_states_at`).
+pub const HEAD_CORNER_STATES: usize = HEAD_LISTED + LISTS as usize;
 /// The slide's two words (`slide_at`).
-pub const HEAD_SLIDE: usize = HEAD_CORNERS_LEFT + 1;
+pub const HEAD_SLIDE: usize = HEAD_CORNER_STATES + 1;
 /// Past the words the map's side lays, two the host sets each cast: the number of the cast
 /// the world's receivers were last stood in, this one's where it stands them again
 /// (`LISTED_STOOD`; pxl-render light_mark.wgsl); and the number of the last cast before this
@@ -509,18 +517,22 @@ pub const HEAD_RINGS: usize = HEAD_REGION + 1;
 pub const HEAD_CARRIES: usize = HEAD_RINGS + 1;
 /// The holes' stops (`hits_at`), laid by the map's side.
 pub const HEAD_HITS: usize = HEAD_CARRIES + 1;
+/// The eye's zooms the cast before was cast under (`eye::RANGE`), the host's each cast: the
+/// bands a tile held, which the slide keeps a tile by beside the band it takes now
+/// (`Light::keeps`, pxl-render light_slide.wgsl).
+pub const HEAD_RANGE_WAS: usize = HEAD_HITS + 1;
 const HEAD_LAID_VEC4S: usize = 10;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_HITS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_RANGE_WAS + 1 < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 29] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -528,14 +540,13 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
         (HEAD_CELLS_ACROSS, cells_across(size)),
         (HEAD_SAMPLES, sample(size, 0)),
         (HEAD_SAMPLES_ACROSS, size / SAMPLE),
-        (HEAD_LEFTS, lefts_at(size)),
         (HEAD_READS, reads_at(size)),
         (HEAD_TILES, tiles(size)),
         (HEAD_HANDS, hand_at(size, 0)),
         (HEAD_KEPT, kept_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
-        (HEAD_CORNERS_LEFT, corners_left_at(size)),
+        (HEAD_CORNER_STATES, corner_states_at(size)),
         (HEAD_SLIDE, slide_at(size)),
         (HEAD_PLACES, places_at(size)),
         (HEAD_REGION, list_words(size)),
@@ -738,7 +749,7 @@ pub const TILE: u32 = 8;
 /// last cast left it where owed (light_lay.wgsl).
 pub const CLAIM_BUDGET: u32 = 4096;
 
-/// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl, light_cell.wgsl
+/// The light's beam (pxl-render corners.wgsl over beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
@@ -851,7 +862,7 @@ pub fn margin(width: f32) -> f32 {
 
 /// The shadow map as the eye's rays are cast, every slot every frame
 /// (pxl-engine `raster`): a sample every `SAMPLE` slots across and down
-/// walked (pxl-render sample.wgsl `sample_cs`), the cells they stopped at written
+/// walked (pxl-render samples.wgsl over sample.light.wgsl), the cells they stopped at written
 /// as boxes by the eye's writer (pxl-render boxes.wgsl `write_box`) and drawn
 /// from the light by the eye's raster, orthographic (pxl-render raster.wgsl),
 /// in the box's order (`Light::texel`), each texel keeping the nearest its own
@@ -1069,22 +1080,14 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
     at
 }
 
-/// The samples their walk over the node cache left, for the walk that asks the world
-/// (pxl-render sample_hit.wgsl, sample.wgsl), past the lists, as the eye's are past its words
-/// (`beam::Grid::lefts_at`): how many, copied in once it is done, then each, its X and its Y
-/// over 16 bits.
-pub const fn lefts_at(size: u32) -> u32 {
+/// Where the beam rays' run parks them, past the lists, as the eye's are past its words
+/// (`beam::Grid::corner_states_at`): a state a beam ray of the map (`ray::STATE_WORDS`,
+/// pxl-render corners.wgsl), row by row.
+pub const fn corner_states_at(size: u32) -> u32 {
     listed_at(size, LISTS)
 }
 
-/// The beam rays the same walk left (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl), past
-/// the samples left, as the eye's are (`beam::Grid::corners_at`): how many, copied in once it is
-/// done, then each, its X and its Y over 16 bits.
-pub const fn corners_left_at(size: u32) -> u32 {
-    lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
-}
-
-/// Past the beam rays left, two words kept from cast to cast: the number of the last cast its
+/// Past the beam rays' states, two words kept from cast to cast: the number of the last cast its
 /// slide ran in (`SLIDE_RAN`), set by the slide's first thread (pxl-render light_slide.wgsl);
 /// and the number of the first cast whose reads hold where a cast that owed a slide stood no
 /// receiver, so ran none (`READS_FROM`), set by the one thread that lists a cast's first stood
@@ -1092,7 +1095,7 @@ pub const fn corners_left_at(size: u32) -> u32 {
 /// light_stood.wgsl `stood_first`): the reads' epoch is the later of it and `HEAD_EPOCH`
 /// (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
-    corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
+    corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
 }
 pub const SLIDE_RAN: u32 = 0;
 pub const READS_FROM: u32 = 1;
@@ -1214,19 +1217,17 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// `light_want_cs`). The passes that write these read no count of
 /// theirs here: the drawn receivers' and the claim's dispatches are buffers of their own
 /// (`DRAWS_DISPATCH_WORDS`, `CLAIM_DISPATCH`).
-pub const ARGS_BEAM: u32 = 0;
-pub const ARGS_CELLS: u32 = 3;
-pub const ARGS_SAMPLE: u32 = 6;
-pub const ARGS_SAMPLE_BOX: u32 = 9;
-pub const ARGS_SLOT: u32 = 12;
-pub const ARGS_LAY: u32 = 15;
+pub const ARGS_CELLS: u32 = 0;
+pub const ARGS_SAMPLE_BOX: u32 = 3;
+pub const ARGS_SLOT: u32 = 6;
+pub const ARGS_LAY: u32 = 9;
 /// The claims' count, each claim's place (`places_at`); the count of the straddling ring's
 /// claims (`claims`); and the tiles wanted and left unclaimed, the first of the cast's owed
 /// work (`node_cache::OWED_AT`); none at a cast's start.
-pub const ARGS_PLACED: u32 = 19;
-pub const ARGS_STRADDLE: u32 = 20;
-pub const ARGS_LEFT: u32 = 21;
-pub const ARGS_PASSES: u32 = 22;
+pub const ARGS_PLACED: u32 = 13;
+pub const ARGS_STRADDLE: u32 = 14;
+pub const ARGS_LEFT: u32 = 15;
+pub const ARGS_PASSES: u32 = 16;
 /// The drawn receivers' dispatch, a buffer of its own, as many workgroups as they are, written
 /// whole each cast by the pass that opens it (pxl-render light_mark_draws_open.wgsl) and read
 /// by theirs, which writes the lists' marks here (light_mark_draws.wgsl).
@@ -1625,7 +1626,7 @@ mod tests {
                 let from = [here[0] + dx, here[1] + dy];
                 let fresh = cast_tile(&now, &st, range, here);
                 let tile = [here[0] as u32, here[1] as u32];
-                if now.keeps(size, range, tile, was.corner) {
+                if now.keeps(size, [range, range], tile, was.corner) {
                     assert_eq!(
                         cast_tile(&was, &st, range, from),
                         fresh,
@@ -1638,6 +1639,38 @@ mod tests {
             }
         }
         assert!(whole > 0 && banded > 0, "{whole} {banded}");
+    }
+
+    /// A step of the eye's zooms keeps a tile where its band stands, the box where it was, and
+    /// what the tile kept is what a cast now casts there; where the band moved, it is cast again.
+    #[test]
+    fn a_zoom_step_keeps_a_tile_its_band_holds() {
+        let size = 64;
+        let n = tiles(size) as i32;
+        let l = over_bumps([512, 512]);
+        let st = starts_of([0; 3], &l);
+        let (mut kept, mut cast) = (0, 0);
+        for (was, now) in [
+            ([UNIT_ZOOM - 3, UNIT_ZOOM], [UNIT_ZOOM - 2, UNIT_ZOOM]),
+            ([UNIT_ZOOM - 3, UNIT_ZOOM], [UNIT_ZOOM - 3, UNIT_ZOOM + 1]),
+            ([UNIT_ZOOM - 2, UNIT_ZOOM + 1], [UNIT_ZOOM - 3, UNIT_ZOOM]),
+        ] {
+            for k in 0..n * n {
+                let here = [k % n, k / n];
+                let tile = [here[0] as u32, here[1] as u32];
+                if l.keeps(size, [now, was], tile, l.corner) {
+                    assert_eq!(
+                        cast_tile(&l, &st, was, here),
+                        cast_tile(&l, &st, now, here),
+                        "{was:?} {now:?} {here:?}"
+                    );
+                    kept += 1;
+                } else {
+                    cast += 1;
+                }
+            }
+        }
+        assert!(kept > 0 && cast > 0, "{kept} {cast}");
     }
 
     /// A box 64 texels a side, a unit each, over the eye, the light straight down, a receiver

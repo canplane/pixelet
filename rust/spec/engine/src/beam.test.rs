@@ -317,8 +317,8 @@ struct Cast {
     resumed: bool,
 }
 
-/// The view cast as the shader casts it at `lattice` (pxl-render beam.wgsl,
-/// cell.wgsl, sample.wgsl over sample.eye.wgsl): every
+/// The view cast as the shader casts it at `lattice` (pxl-render corners.wgsl,
+/// cell.wgsl, samples.wgsl over sample.eye.wgsl): every
 /// corner's beam ray to where it stops and how far it hands on; each
 /// cell's start, the least of its window's, that corner's line, and
 /// whether it resumes, every beam ray of the window asking as its rays

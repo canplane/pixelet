@@ -32,13 +32,15 @@ pub(super) struct Reads {
     pub shadows: bool,
     pub light_made: bool,
     /// Whether what a tile of the shadow map holds reads as the light's last cast read it
-    /// (cast.rs `light_content`): the light's frame, the shadows, the eye's zooms, and the
-    /// world under it moved whole or not.
+    /// (cast.rs `light_content`): the light's frame, the shadows, and the world under it moved
+    /// whole or not.
     pub content_same: bool,
     /// Whether the world under the map moved in columns alone, the epoch going on.
     pub world_columns: bool,
-    /// The light's box's corner (pxl-engine `light::CORNER`).
+    /// The light's box's corner (pxl-engine `light::CORNER`), and the eye's zooms, which its
+    /// tiles' bands are held to (pxl-engine `eye::RANGE`, `Light::band`).
     pub corner: [i32; 2],
+    pub range: [u32; 2],
     /// Whether which tiles the receivers read reads as last time (cast.rs `light_receivers`),
     /// their boxes taken as the eye stands (`Schedule::stands`).
     pub receivers_same: bool,
@@ -47,6 +49,9 @@ pub(super) struct Reads {
     pub forgets: bool,
     /// Whether each observer is owed a run of its queue (count.rs `Readback::owed`).
     pub owed: [bool; 2],
+    /// Whether the eye's rolled lattice is owed an offset its samples have not all ended at
+    /// (count.rs `Readback::lattice`, pxl-engine `count::LATTICE_OWED`).
+    pub lattice_owed: bool,
 }
 
 /// What the light's cast does, where it casts.
@@ -56,8 +61,9 @@ pub(super) struct Light {
     pub moved: u32,
     /// Whether an epoch begins (pxl-engine `light::HEAD_EPOCH`): what a tile holds moved.
     pub epoch: bool,
-    /// Whether the box slid within the epoch, the reads moved with it (`light_slide_cs`), and
-    /// whether the world's changed columns set tiles again within it.
+    /// Whether the box slid or the eye's zooms moved within the epoch, the reads moved with the
+    /// box and a tile whose band moved set again (`light_slide_cs`), and whether the world's
+    /// changed columns set tiles again within it.
     pub slid: bool,
     pub reached: bool,
     /// Whether an owed tile's parked rays are resumed where it is claimed
@@ -68,6 +74,8 @@ pub(super) struct Light {
     /// (`light::HEAD_CORNER_WAS`).
     pub corner: [i32; 2],
     pub corner_was: [i32; 2],
+    /// The eye's zooms the cast before was cast under (`light::HEAD_RANGE_WAS`).
+    pub range_was: [u32; 2],
     /// Whether the world's receivers stand in this cast (`light::HEAD_STANDS_WORLD`); whether
     /// they are added to those that stand, the walked list holding the claimed tiles' alone,
     /// else stood afresh.
@@ -84,10 +92,10 @@ pub(super) struct Plan {
     /// Nothing cast (`plain`), the rays standing (`standing`), the pixels cast again over the
     /// samples that stand (`px`), or a cast run (`cast`).
     pub kind: FrameKind,
-    /// Whether the grid is laid anew from the eye's words, the roll begun again; and the
-    /// rolled lattice's offset a cast takes (`beam::roll`).
+    /// Whether the grid is laid anew from the eye's words, the rolled lattice begun again at its
+    /// first offset (pxl-engine `node_cache::ROLL_K`). Which offset a cast casts its samples
+    /// at is the GPU's (roll.wgsl).
     pub lays: bool,
-    pub roll: Option<u32>,
     /// Whether every pixel is cast whole though only the claimed tiles' moved, the world's
     /// receivers standing afresh off its walked list.
     pub ungated: bool,
@@ -105,7 +113,6 @@ impl Plan {
     const PLAIN: Plan = Plan {
         kind: FrameKind::plain,
         lays: false,
-        roll: None,
         ungated: false,
         resumes: false,
         queue: false,
@@ -130,8 +137,10 @@ pub(super) struct Schedule {
     /// Whether the cast's input as last read is what the rays hold: read by the last frame,
     /// which was not dropped, and cast in.
     read: bool,
-    /// The casts of the rolled lattice since the view or the world last moved (`beam::ROLLS`).
+    /// The casts of the rolled lattice since the view or the world last moved (`beam::ROLLS`),
+    /// and whether the eye's lattice was owed an offset as the last frame read it.
     rolls: u32,
+    lattice_owed: bool,
     /// The jitter the last frame read.
     jitter: [u32; 2],
     /// Whether the samples' raster is drawn through its gate, in the claimed tiles alone.
@@ -149,8 +158,9 @@ pub(super) struct Schedule {
     /// Whether the light's content as last read is what its tiles hold: read by the last
     /// frame, which was not dropped, with the light's cast made.
     content: bool,
-    /// The box's corner the light last cast under.
+    /// The box's corner and the eye's zooms the light last cast under.
     corner: [i32; 2],
+    range: [u32; 2],
     /// Whether the next light cast stands the world's receivers on the eye's answers; and
     /// whether the stands of the frame the eye stands in, its pixels' footprints, are owed.
     world: bool,
@@ -169,6 +179,7 @@ impl Schedule {
         Schedule {
             read: false,
             rolls: beam::ROLLS,
+            lattice_owed: false,
             jitter: [0; 2],
             gated: false,
             walked_whole: false,
@@ -176,6 +187,7 @@ impl Schedule {
             owed_list: 0,
             content: false,
             corner: [0; 2],
+            range: [0; 2],
             world: false,
             footprint_owed: false,
             forgot: false,
@@ -195,7 +207,9 @@ impl Schedule {
     ///
     /// The eye: a cast where the view or the world moved lays the grid and starts the rolled
     /// lattice again; while they stand, the casts that follow keep the grid and cast the
-    /// samples at the next offset until `beam::ROLLS` have run. Then the eye's rays rest: the
+    /// samples at the offset the GPU takes (roll.wgsl), at least `beam::ROLLS` casts and while
+    /// the eye's lattice is owed an offset (`Reads::lattice_owed`), whose samples the budget
+    /// left parked go on in the next. Then the eye's rays rest: the
     /// frame stands, or, where the jitter moved, casts the pixels again off the record. The
     /// jitter moves where each pixel's ray goes through it, which no sample reads, so it wakes
     /// the pixels and not the roll.
@@ -208,7 +222,8 @@ impl Schedule {
         self.read = true;
         let jittered = r.jitter != self.jitter;
         self.jitter = r.jitter;
-        let rolling = self.rolls < beam::ROLLS;
+        self.lattice_owed = r.lattice_owed;
+        let rolling = self.rolling();
         let (mut kind, lays) = match (stands, rolling, jittered) {
             (true, false, false) => (FrameKind::standing, false),
             (true, false, true) => (FrameKind::px, false),
@@ -218,16 +233,17 @@ impl Schedule {
                 (FrameKind::cast, true)
             }
         };
-        let roll = (kind == FrameKind::cast).then(|| {
-            self.rolls += 1;
-            self.rolls - 1
-        });
+        if kind == FrameKind::cast {
+            self.rolls = (self.rolls + 1).min(beam::ROLLS);
+        }
         // A cast whose view stood, the roll's alone.
         let rolled = stands && kind == FrameKind::cast;
         let light_on = r.shadows && r.light_made;
         let held = r.content_same && self.content;
         self.content = r.light_made;
-        let slid = r.corner != self.corner;
+        // A step of the eye's zooms moves what a tile holds only where it moves the tile's band,
+        // as a slide does, so it is taken as one (`Light::keeps`).
+        let slid = r.corner != self.corner || r.range != self.range;
         // The first frame the eye stands in after it moved marks again, with the footprints
         // the jitter's frames after it stand on; and every cast of the roll, whose samples
         // found what the casts before did not.
@@ -280,6 +296,7 @@ impl Schedule {
         self.forgot |= casts && r.forgets;
         let light = (light_on && moved != 0).then(|| {
             let corner_was = core::mem::replace(&mut self.corner, r.corner);
+            let range_was = core::mem::replace(&mut self.range, r.range);
             // Added to those that stand where the walked list holds the claimed tiles' alone,
             // which only a cast within the epoch and under the same box takes.
             let adds = !walked_whole;
@@ -299,6 +316,7 @@ impl Schedule {
                 carries,
                 corner: r.corner,
                 corner_was,
+                range_was,
                 world,
                 adds: world && adds,
                 footprint: stands,
@@ -325,7 +343,6 @@ impl Schedule {
         self.plan = Plan {
             kind,
             lays,
-            roll,
             ungated,
             resumes,
             queue,
@@ -357,7 +374,7 @@ impl Schedule {
     /// rests, as no view stands.
     pub fn off(&mut self) {
         (self.read, self.content) = (false, false);
-        self.rolls = beam::ROLLS;
+        (self.rolls, self.lattice_owed) = (beam::ROLLS, false);
         (self.eye_on, self.light_on) = (false, false);
         self.plan = Plan::PLAIN;
     }
@@ -377,9 +394,10 @@ impl Schedule {
         self.gated
     }
 
-    /// Whether the rolled lattice has casts left before the eye's rays rest.
+    /// Whether the rolled lattice has casts left before the eye's rays rest: fewer than
+    /// `beam::ROLLS` cast, or an offset owed.
     pub fn rolling(&self) -> bool {
-        self.rolls < beam::ROLLS
+        self.rolls < beam::ROLLS || self.lattice_owed
     }
 
     /// The owed list the eye's queue fills, the last run's.

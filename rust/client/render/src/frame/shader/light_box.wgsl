@@ -41,12 +41,15 @@ fn tile_of(v: vec3<f32>) -> vec2<i32> {
 }
 
 /// Whether box tile `tile` keeps what a cast left in it where the box slid to its
-/// corner from `was` (`Light::keeps`).
+/// corner from `was` and the eye's zooms moved from the cast before's (`Light::keeps`,
+/// `light::HEAD_RANGE_WAS`).
 fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
   let n = i32(light_tiles());
   let here = vec2<i32>(tile);
   let held = here + (light_corner() - was) / i32(LIGHT_TILE);
-  return all(held >= vec2<i32>(0)) && all(held < vec2<i32>(n)) && tile_band(held) == tile_band(here);
+  let range_was = vec2<u32>(head_word(LIGHT_HEAD_RANGE_WAS), head_word(LIGHT_HEAD_RANGE_WAS + 1u));
+  return all(held >= vec2<i32>(0)) && all(held < vec2<i32>(n))
+    && tile_band_in(held, range_was) == tile_band(here);
 }
 
 /// How far from the eye a surface receives the map, in units (`Light::reach`): the effects'

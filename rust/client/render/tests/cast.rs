@@ -24,8 +24,8 @@ mod gpu;
 mod real_world;
 
 use gpu::{
-    array_view, at_edge, cross, entry_held, entry_node, mix, read_texture, slack, texture, ulps,
-    unit, Gpu, Kinds, Tally,
+    array_view, at_edge, cross, edges_within, entry_held, entry_node, mix, read_texture, slack,
+    texture, ulps, unit, Gpu, Kinds, Tally,
 };
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::beam::{self, Grid};
@@ -36,8 +36,7 @@ use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{eye, face, node_cache, raster, ray, record, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
-    src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE,
-    SHADER_SAMPLE, SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
+    src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
@@ -206,30 +205,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     table0[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table0, store());
     let beams = gpu.buffer(&vec![0u32; grid.size() as usize], store());
-    let left = gpu.buffer(&ray::LEFT_EMPTY, store());
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_BEAM_HIT), "beam_hit_cs"),
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (8, beams.as_entire_binding()),
-            (9, table.as_entire_binding()),
-            (10, left.as_entire_binding()),
-        ],
-        [
-            grid.corners[0].div_ceil(WORKGROUP),
-            grid.corners[1].div_ceil(WORKGROUP),
-            1,
-        ],
-    );
-    let args = gpu.read(&left);
-    let mut words = gpu.read(&beams);
-    words[grid.corners_at as usize] = args[3];
-    let beams = gpu.buffer(&words, store());
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_BEAM), "beam_cs"),
-        &world_binds(b, &eye_buf, &beams, &table),
-        [args[0], args[1], 1],
-    );
+    gpu.corners(false, &world_binds(b, &eye_buf, &beams, &table), &table);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
         &[
@@ -242,32 +218,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
             1,
         ],
     );
-    let left = gpu.buffer(&ray::LEFT_EMPTY, store());
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs"),
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (8, beams.as_entire_binding()),
-            (9, table.as_entire_binding()),
-            (10, left.as_entire_binding()),
-        ],
-        [
-            grid.samples[0].div_ceil(WORKGROUP),
-            grid.samples[1].div_ceil(WORKGROUP),
-            1,
-        ],
-    );
-    let args = gpu.read(&left);
-    let mut words = gpu.read(&beams);
-    words[grid.lefts_at as usize] = args[3];
-    let beams = gpu.buffer(&words, store());
-    if args[3] != 0 {
-        gpu.dispatch(
-            &gpu.pipeline(src(SHADER_SAMPLE), "sample_cs"),
-            &world_binds(b, &eye_buf, &beams, &table),
-            [args[0], args[1], 1],
-        );
-    }
+    gpu.samples(false, &world_binds(b, &eye_buf, &beams, &table), &table);
     let samples = grid.samples[0] * grid.samples[1];
     // The draw's args, then the faces' asks' (`raster::ASKED_AT`).
     let asked_at = raster::ASKED_AT as usize;
@@ -303,11 +254,10 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         }
     }
     eprintln!(
-        "{}: {} samples, {stopped} stopped, {lacks} lack, {} asks, {} left",
+        "{}: {} samples, {stopped} stopped, {lacks} lack, {} asks",
         c.name,
         samples,
         laid[asked_at + raster::ARGS_INSTANCES as usize],
-        args[3]
     );
 
     let mut binds = face_binds(b, &eye_buf, &beams, &box_args, raster::ASKED_AT);
@@ -1027,7 +977,7 @@ fn hand_pixels_answer_as_cast_entry() {
             format!("drawn pixel {} word {}", k / 4, k % 4)
         });
         eprintln!("{name}: {drawn_cnt} drawn, {edges} decided at an edge");
-        if edges * 1000 > u64::from(drawn_cnt) {
+        if !edges_within(edges, u64::from(drawn_cnt)) {
             tally.differ.push((format!("{name}: edges"), edges));
         }
     }

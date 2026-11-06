@@ -1,72 +1,35 @@
 // pxl-render/queue_last.wgsl
 
-// The holes' last walk (walk.wgsl, ask.wgsl, queue.wgsl): over the rays the walks over the
-// node cache left parked, from the state each was parked in, asking the world where no slot
-// keeps a node. The lanes as the walks before (queue_walk.wgsl): each takes the next hole when
-// its own ray ends, off a word of the node cache's head the asks before it set back
-// (`node_cache::LAST_TAKEN`), a hole not parked passed. Either observer's counts against the
-// frame's budget where the asks before left it, up to its observer's caps (`node_cache::VISITED`,
-// `node_cache::caps_at`): a ray the budget does not reach stays parked and is owed
-// (`unreached`).
+// A run's last walk (walk.wgsl, ask.wgsl), over the items its kind's module names (queue.wgsl
+// for the holes): over the rays the walks over the node cache left parked, from the state each
+// was parked in, asking the world where no slot keeps a node. The lanes as the walks before
+// (queue_walk.wgsl): each takes the next item when its own ray ends, off a word of the node
+// cache's head the asks before it set back (`node_cache::LAST_TAKEN`), an item not parked
+// passed. A run counts against the frame's budget where the runs before it left it, up to its
+// kind's caps (`node_cache::VISITED`, `node_cache::caps_at`): a ray the budget does not reach
+// stays parked, as its kind's module leaves it (`unreached`).
 
-const WALK_PASS: u32 = MISSED_PASS;
-
-/// A stop listed for the record, what lies about its face put at its pixel off it (miss_word.wgsl
-/// `hit_put`, record_stops.wgsl),
-/// numbered on from the walks over the node cache's (`node_cache::HITS_CNT`), the dispatch over
-/// them raised by the number that opens a workgroup (`node_cache::HITS_ARGS`), and its number
-/// marked waiting (`beam::HIT_WAITS`); none past its observer's room (`hits_room`).
-fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
-  let r = atomicAdd(&node_cache[HITS_CNT], 1u);
-  if (r >= hits_room()) {
-    return 0u;
-  }
-  if (r % HIT_LANES == 0u) {
-    atomicMax(&node_cache[HITS_ARGS], workgroups(r + 1u, hits_room(), HIT_LANES));
-  }
-  hit_put(r, w, face, id);
-  return HIT_WAITS | r;
+/// The next stop's number, as this walk numbers the stops its items keep for the record
+/// (queue.wgsl `keep_hit`), on from the walks over the node cache's (`node_cache::HITS_CNT`),
+/// and the dispatch over them raised to `rows` (`node_cache::HITS_ARGS`).
+fn stop_number() -> u32 {
+  return atomicAdd(&node_cache[HITS_CNT], 1u);
 }
 
-/// Whether a node may be asked of the world: one more within the cap this queue counts the
+fn stop_rows(rows: u32) {
+  atomicMax(&node_cache[HITS_ARGS], rows);
+}
+
+/// Whether a node may be asked of the world: one more within the cap this run counts the
 /// frame's asks to (`node_cache::caps_at`), counted as it is taken.
 fn may_ask() -> bool {
   return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[queue_caps() + 1u]);
 }
 
-/// A hole's ray the frame's budget does not reach, at the node `corner`, `zoom`, `roots`, `t`
-/// along it, `step` steps taken: parked where its state lies, its word left as the cast wrote
-/// it, and counted as its observer's owed work (`node_cache::OWED_AT`), which the renderer
-/// reads back and wakes the next frame by. An eye's pixel keeps what the record drew there
-/// (cast.wgsl), and the frame's queue alone takes it on while the rays stand. A light's slot's
-/// tile is owed (pxl-engine `light::READ_OWED`), so the next claim takes it nearest first and
-/// the ray goes on from there; its word written when it ends, which that cast's lay of the
-/// tiles read takes (gpu/shadow.rs `begin`). The tile's read word is the claim's and the
-/// slide's to write but for this bit, which every slot of the tile it sets sets alike.
-fn unreached(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) {
-  park(hole, t, corner, zoom, roots, step);
-  if (!light_run()) {
-    // Listed for the queue that goes on next, at its number among the owed, which the host
-    // copies in as that list's count (pxl-engine `ray::owed_list_at`). A hole is taken once a
-    // walk, so the list holds each parked pixel once.
-    let r = atomicAdd(&node_cache[EYE_OWED], 1u);
-    if (r < room()) {
-      beams[eye_owed_at() + WALKED_LIST + r] = hole;
-    }
-    return;
-  }
-  let tile = slot_texel(hole_at(hole)) / LIGHT_TILE;
-  let w = head_word(LIGHT_HEAD_READS) + tile.y * head_word(LIGHT_HEAD_TILES) + tile.x;
-  if (w < arrayLength(&beams)) {
-    beams[w] = beams[w] | LIGHT_READ_OWED;
-  }
-  atomicAdd(&node_cache[LIGHT_OWED], 1u);
-}
-
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_last_cs() {
-  let n = listed();
-  var hole = NONE;
+  let n = item_count();
+  var item = NONE;
   var t = 0.0;
   var corner = vec3<u32>(0u);
   var zoom = 0u;
@@ -77,16 +40,16 @@ fn queue_last_cs() {
   var top = true;
   var visits = 0u;
   loop {
-    if (hole == NONE) {
+    if (item == NONE) {
       let k = atomicAdd(&node_cache[LAST_TAKEN], 1u);
       if (k >= n) {
         break;
       }
-      let h = queued(k);
+      let h = item_at(k);
       if (!parked(h)) {
         continue;
       }
-      hole = h;
+      item = h;
       let s = parked_start(h);
       t = s.t;
       corner = s.corner;
@@ -96,11 +59,11 @@ fn queue_last_cs() {
       top = true;
     }
     if (atomicLoad(&node_cache[VISITED]) >= atomicLoad(&node_cache[queue_caps()])) {
-      unreached(hole, t, corner, zoom, roots, step);
-      hole = NONE;
+      unreached(item, t, corner, zoom, roots, step);
+      item = NONE;
       continue;
     }
-    let aim = hole_aim(hole);
+    let aim = item_aim(item);
     let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);
     atomicAdd(&node_cache[VISITED], w.visits);
     visits += w.visits;
@@ -115,11 +78,11 @@ fn queue_last_cs() {
       continue;
     }
     if (w.ends == 4u) {
-      unreached(hole, w.t, w.corner, w.zoom, w.roots, w.step);
+      unreached(item, w.t, w.corner, w.zoom, w.roots, w.step);
     } else {
-      finish(hole, aim, w);
+      finish(item, aim, w);
     }
-    hole = NONE;
+    item = NONE;
   }
   count_visits(visits_at(), visits);
 }

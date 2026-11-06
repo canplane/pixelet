@@ -3,6 +3,7 @@
 use super::super::count::Readback;
 use super::*;
 use fnv::FnvHashSet;
+use pxl_engine::count;
 use pxl_engine::screen::JITTERS;
 
 const E: usize = EYE as usize;
@@ -27,7 +28,8 @@ const REGIONS: usize = 2;
 /// `frame`): the mapping out landed, refused or not (`landed`: none, ok, refused); a world to
 /// cast in or none (`present`); what the schedule reads (`Reads`), the observers' owed
 /// work the readback's or, where `owed` names it, that and no readback stepped; whether the walks leave work parked, the eye's and the light's
-/// (`parks`, `light_owed`); whether the frame is drawn whole after all (`whole`, renderer.rs
+/// (`parks`, `light_owed`), the eye's its holes' and its samples', a cast's offset then not
+/// counted (roll.wgsl); whether the frame is drawn whole after all (`whole`, renderer.rs
 /// `Decided::gated` not); and whether it is dropped.
 #[derive(Clone, Copy, Debug)]
 struct Turn {
@@ -55,7 +57,8 @@ struct Turn {
 /// whether each observer's last run left work owed (`truth`), as count.test.rs's `World`;
 /// each region's parked state; the regions each of the eye's two owed lists names; the owed
 /// list the last eye run that was not dropped filled; the jitter the rays were last cast
-/// at, the view's own; and whether the node cache forgot anything since the light last cast.
+/// at, the view's own; whether the node cache forgot anything since the light last cast; and
+/// the offsets of the rolled lattice the device counted (pxl-engine `node_cache::ROLL_DONE`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct World {
     s: Schedule,
@@ -68,6 +71,7 @@ struct World {
     filled: Option<u32>,
     jitter: u32,
     forgot: bool,
+    done: u32,
 }
 
 impl World {
@@ -83,6 +87,7 @@ impl World {
             filled: None,
             jitter: 0,
             forgot: false,
+            done: 0,
         }
     }
 
@@ -138,17 +143,31 @@ impl World {
             content_same: t.content_same,
             world_columns: t.world_columns,
             corner: [t.corner, 0],
+            range: [0; 2],
             receivers_same: t.receivers_same,
             forgets: t.forgets,
             owed,
+            lattice_owed: joined && self.slot.lattice,
         };
         let content = self.s.content;
         let p = self.s.plan(r);
+        if joined && p.lays {
+            self.slot.lays();
+        }
         self.forgot |= p.casts() && t.forgets;
         // A view, world or surface moved, or rays the device no longer holds: the eye casts
-        // from roll 0, the grid laid anew, its holes walked afresh.
-        if !(t.same && read) && (p.kind != FrameKind::cast || !p.lays || p.roll != Some(0)) {
-            return Err("a change cast other than from roll 0");
+        // from its first offset, the grid laid anew, its holes walked afresh.
+        if !(t.same && read) && (p.kind != FrameKind::cast || !p.lays) {
+            return Err("a change cast other than from the first offset");
+        }
+        // An offset owed is cast while the view stands.
+        if r.lattice_owed
+            && t.same
+            && read
+            && p.kind != FrameKind::cast
+            && p.kind != FrameKind::plain
+        {
+            return Err("the eye's lattice owed and not cast");
         }
         // The jitter moved alone: the pixels are cast again, no parked ray resumed.
         if t.same && read && t.jitter != jitter && (!p.casts() || p.resumes) {
@@ -232,11 +251,25 @@ impl World {
                     }
                 }
             }
+            // The samples' run: the grid laid anew starts the count, and an offset is counted
+            // where it left no sample parked; every frame the eye runs owes its lattice where an
+            // offset is not counted (roll.wgsl).
+            if p.kind == FrameKind::cast {
+                if p.lays {
+                    self.done = 0;
+                }
+                if !t.parks {
+                    self.done = (self.done + 1).min(beam::ROLLS);
+                }
+            }
             if ran[E] {
                 let f = self.s.owed_list();
                 self.lists[f as usize] = listed;
                 self.filled = Some(f);
                 owe[E] = u32::from(listed.contains(&true));
+                if self.done < beam::ROLLS {
+                    owe[E] |= count::LATTICE_OWED;
+                }
             }
             owe[L] = u32::from(t.light_owed);
             for o in 0..2 {
@@ -291,13 +324,24 @@ impl World {
     /// the roll's casts between its first two and its last two as one, which step alike.
     fn key(&self) -> World {
         let mut w = *self;
+        let since = w.slot.carried[E].is_some_and(|g| w.slot.since_laid(g));
         for o in 0..2 {
             w.slot.carried[o] =
                 w.slot.carried[o].map(|c| if c == w.slot.cast[o] { 0 } else { u32::MAX });
             w.slot.cast[o] = 0;
         }
+        // The generation laid, read alone through whether the copy out holds one since; the
+        // copy out of the last generation always does, a turn's eye run following its lay.
+        w.slot.laid = if since && w.slot.carried[E] == Some(u32::MAX) {
+            u32::MAX
+        } else {
+            0
+        };
         if (2..beam::ROLLS - 1).contains(&w.s.rolls) {
             w.s.rolls = 2;
+        }
+        if (2..beam::ROLLS - 1).contains(&w.done) {
+            w.done = 2;
         }
         w
     }
@@ -435,9 +479,14 @@ fn reached(alphabet: Alphabet) -> Result<Vec<World>, String> {
         let w = all[k];
         k += 1;
         let mut from = vec![w];
-        if w.s.rolls == 2 {
+        if w.s.rolls == 2 || w.done == 2 {
             let mut last = w;
-            last.s.rolls = beam::ROLLS - 2;
+            if w.s.rolls == 2 {
+                last.s.rolls = beam::ROLLS - 2;
+            }
+            if w.done == 2 {
+                last.done = beam::ROLLS - 2;
+            }
             from.push(last);
         }
         for w in from {
@@ -506,8 +555,10 @@ fn the_light_holds_in_every_state() {
 /// (gpu/resolve.rs), the sequence's `JITTERS - 1` frames, each casting the pixels at its place;
 /// and the last run's owed work read back: its copy waiting a turn where a mapping was out,
 /// copied alone by the turn after (`Readback::copies_pending`), mapped by the next and landing
-/// by the one after that, each mapping landing by the turn after it is asked.
-const REST: usize = beam::ROLLS as usize + (JITTERS as usize - 1) + 3;
+/// by the one after that, each mapping landing by the turn after it is asked. The casts go on
+/// past the last offset while the run that counted it is read back (`count::LATTICE_OWED`),
+/// two turns, its copy and its mapping, before the one that lands it plans no cast.
+const REST: usize = beam::ROLLS as usize + 2 + (JITTERS as usize - 1) + 3;
 
 /// A scene that stands from `start`: the view, the world, the light and the settings stand
 /// (`shadows`), the jitter moving only while the resolve's sequence asks, every mapping landing
@@ -562,6 +613,44 @@ fn rests(start: World, shadows: bool, animating: bool) -> Result<usize, String> 
     Err(format!("no rest within {REST} turns from {start:?}: {w:?}"))
 }
 
+/// A step of the eye's zooms alone, the box standing, casts the light as a slide does: its
+/// tiles set again where their band moved, none carried.
+#[test]
+fn a_zoom_step_slides_the_light() {
+    let mut s = Schedule::new();
+    let r = Reads {
+        same: true,
+        jitter: [0; 2],
+        gated: false,
+        shadows: true,
+        light_made: true,
+        content_same: true,
+        world_columns: false,
+        corner: [0; 2],
+        range: [8, 20],
+        receivers_same: true,
+        forgets: false,
+        owed: [false; 2],
+        lattice_owed: false,
+    };
+    s.plan(r);
+    s.plan(r);
+    let l = s
+        .plan(Reads {
+            range: [9, 21],
+            ..r
+        })
+        .light;
+    assert!(l.is_some_and(|l| l.slid && !l.carries && l.moved & 1 << LightMoved::slide as u32 != 0));
+    let l = s
+        .plan(Reads {
+            range: [9, 21],
+            ..r
+        })
+        .light;
+    assert!(l.is_none_or(|l| !l.slid));
+}
+
 #[test]
 fn a_standing_scene_rests_within_its_bound() {
     let mut most = 0;
@@ -573,6 +662,7 @@ fn a_standing_scene_rests_within_its_bound() {
             most = most.max(rests(w, shadows, animating).unwrap_or_else(|e| panic!("{e}")));
         }
     }
+    std::println!("{most} turns to rest at most");
     assert!(
         most <= REST,
         "{most} turns to rest past the bound of {REST}"

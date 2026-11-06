@@ -4,7 +4,7 @@
 
 use naga::front::wgsl;
 use pxl_engine::answer;
-use pxl_engine::beam::{CORNER_SIDE, SAMPLE_SIDE};
+use pxl_engine::beam::SAMPLE_SIDE;
 use pxl_engine::grid;
 use pxl_engine::ground;
 use pxl_engine::lattice;
@@ -219,16 +219,16 @@ fn strip_comments(text: &str) -> String {
 
 // light_list.wgsl's `light_item` reads a workgroup's ids as `SAMPLE_SIDE` × `SAMPLE_SIDE` lanes
 // of one entry of the list, and every pass that calls it declares its workgroup by a side of its
-// own: beam_hit.wgsl (through `beam_item`) by `CORNER_SIDE`, light_cell.wgsl by `SAMPLE_SIDE`,
+// own: light_cell.wgsl by `SAMPLE_SIDE`,
 // light_sample_box.wgsl (through `sample_item`) by `SQUARE_SIDE`, light.wgsl by its tile. The cast sizes each pass's
 // whole dispatch by that pass's own side (gpu/ray/cast.rs `light_args`), so each is that side.
 const _: () = assert!(
-    LIGHT_TILE == SAMPLE_SIDE && CORNER_SIDE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
-    "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile, CORNER_SIDE \
-     and SQUARE_SIDE are each that side"
+    LIGHT_TILE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
+    "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile and \
+     SQUARE_SIDE are each that side"
 );
 
-/// What the walk over the node cache reads by hand (sample_hit.wgsl), from
+/// What the walks read by hand (walk.wgsl), from
 /// pxl-engine, whose layouts they are.
 fn walk_word() -> String {
     use pxl_engine::area::Shard;
@@ -265,7 +265,17 @@ fn walk_word() -> String {
         ("NODE_ROOTS", beam::NODE_ROOTS),
         ("SAMPLE_NODE", beam::SAMPLE_NODE),
         ("SAMPLE_ASSET", beam::SAMPLE_ASSET),
-        ("SAMPLE_LEFT_T", beam::SAMPLE_LEFT_T),
+        ("SAMPLE_PARKED", beam::SAMPLE_PARKED),
+        ("SAMPLE_PARKED_T", beam::SAMPLE_PARKED_T),
+        ("SAMPLE_PARKED_STATE", beam::SAMPLE_PARKED_STATE),
+        ("ROLLS", beam::ROLLS),
+        ("ROLLS_DONE", beam::ROLLS_DONE),
+        ("ROLL_K", node_cache::ROLL_K),
+        ("ROLL_DONE", node_cache::ROLL_DONE),
+        ("ROLL_RESUMES", node_cache::ROLL_RESUMES),
+        ("ROLL_AT", node_cache::ROLL_AT),
+        ("LATTICE_LEFT", node_cache::LATTICE_LEFT),
+        ("LATTICE_OWED", count::LATTICE_OWED),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
         ("NODE_WORDS", beam::NODE_WORDS),
@@ -342,7 +352,6 @@ fn walk_word() -> String {
             "LIGHT_HEAD_SAMPLES_ACROSS",
             light::HEAD_SAMPLES_ACROSS as u32,
         ),
-        ("LIGHT_HEAD_LEFTS", light::HEAD_LEFTS as u32),
         ("LIGHT_HEAD_READS", light::HEAD_READS as u32),
         ("LIGHT_HEAD_TILES", light::HEAD_TILES as u32),
         ("LIGHT_HEAD_HANDS", light::HEAD_HANDS as u32),
@@ -362,7 +371,8 @@ fn walk_word() -> String {
         ("LIGHT_READS_FROM", light::READS_FROM),
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
-        ("LIGHT_HEAD_CORNERS_LEFT", light::HEAD_CORNERS_LEFT as u32),
+        ("LIGHT_HEAD_CORNER_STATES", light::HEAD_CORNER_STATES as u32),
+        ("LIGHT_HEAD_RANGE_WAS", light::HEAD_RANGE_WAS as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
         ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
@@ -419,11 +429,10 @@ fn walk_word() -> String {
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
         ("GRID_STOP_ASKS_AT", beam::GRID_STOP_ASKS_AT as u32),
-        ("GRID_ROLL", beam::GRID_ROLL as u32),
         ("GRID_LATTICE", beam::GRID_LATTICE as u32),
-        ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_WALKED_AT", beam::GRID_WALKED_AT as u32),
-        ("GRID_CORNERS_AT", beam::GRID_CORNERS_AT as u32),
+        ("GRID_CORNER_STATES_AT", beam::GRID_CORNER_STATES_AT as u32),
+        ("HAND_PARKED", beam::HAND_PARKED),
         ("GRID_HANDS_AT", beam::GRID_HANDS_AT as u32),
         ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
         ("GRID_SLOPE", beam::GRID_SLOPE as u32),
@@ -482,8 +491,13 @@ fn walk_word() -> String {
         ("LAST_TAKEN", node_cache::LAST_TAKEN),
         ("VISITED", node_cache::VISITED),
         ("ASKED", node_cache::ASKED),
-        ("EYE_CAPS", node_cache::caps_at(count::EYE)),
-        ("LIGHT_CAPS", node_cache::caps_at(count::LIGHT)),
+        ("EYE_LATTICE_CAPS", node_cache::caps_at(count::EYE_LATTICE)),
+        ("EYE_HOLES_CAPS", node_cache::caps_at(count::EYE_HOLES)),
+        (
+            "LIGHT_LATTICE_CAPS",
+            node_cache::caps_at(count::LIGHT_LATTICE),
+        ),
+        ("LIGHT_HOLES_CAPS", node_cache::caps_at(count::LIGHT_HOLES)),
         ("EYE_OWED", node_cache::owed_at(count::EYE)),
         ("LIGHT_OWED", node_cache::owed_at(count::LIGHT)),
         ("RESUMES", node_cache::RESUMES),
@@ -497,7 +511,6 @@ fn walk_word() -> String {
         ("SCREEN_TILE", screen::TILE),
         ("RASTER_ASKED_AT", raster::ASKED_AT),
         ("RASTER_STOP_ASKED_AT", raster::STOP_ASKED_AT),
-        ("CORNER_SIDE", CORNER_SIDE),
         ("BEAM_PASS", node_cache::BEAM_PASS),
         (
             "EYE_BEAM_COUNT",
@@ -514,9 +527,7 @@ fn walk_word() -> String {
         ("LIGHT_COLUMNS_AT", light::COLUMNS_AT as u32),
         ("LIGHT_COLUMNS", light::COLUMNS as u32),
         ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
-        ("LIGHT_ARGS_BEAM", light::ARGS_BEAM),
         ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
-        ("LIGHT_ARGS_SAMPLE", light::ARGS_SAMPLE),
         ("LIGHT_ARGS_SAMPLE_BOX", light::ARGS_SAMPLE_BOX),
         ("LIGHT_ARGS_SLOT", light::ARGS_SLOT),
         ("LIGHT_STOOD_SLIDE", light::STOOD_SLIDE),
@@ -583,6 +594,20 @@ fn walk_word() -> String {
     for (name, v) in words {
         out += &format!("const {name}: u32 = {v}u;\n");
     }
+    // The rolled lattice's offsets, in its order, each exact as pxl-engine rounds it
+    // (`beam::roll`): the one a cast casts is its index (`beam::ROLL_K`).
+    let offsets: Vec<String> = (0..beam::ROLLS)
+        .map(|k| {
+            let [x, y] = beam::roll(k);
+            format!("vec2<f32>({x:?}, {y:?})")
+        })
+        .collect();
+    out += &format!(
+        "const ROLL_OFFSETS = array<vec2<f32>, {}>({});\nfn roll_offset(k: u32) -> vec2<f32> {{ return ROLL_OFFSETS[min(k, {}u)]; }}\n",
+        beam::ROLLS,
+        offsets.join(", "),
+        beam::ROLLS - 1
+    );
     out
 }
 
@@ -1448,11 +1473,11 @@ fn assemble(out: &Path) {
                 "raster.wgsl's `Raster` against `RASTER_FLOATS`"
             );
         }
-        // The lists' words as pxl-engine lays them (list.wgsl `MissArgs`, `Left`;
+        // The lists' words as pxl-engine lays them (list.wgsl `MissArgs`;
         // light_stood.wgsl `Stood`): each member's first word.
         {
             use pxl_engine::{light, ray};
-            let words: [(&str, &[u32]); 3] = [
+            let words: [(&str, &[u32]); 2] = [
                 (
                     "MissArgs",
                     &[
@@ -1461,7 +1486,6 @@ fn assemble(out: &Path) {
                         ray::MISS_ARGS_COUNT,
                     ],
                 ),
-                ("Left", &[0, ray::LEFT_CNT]),
                 (
                     "Stood",
                     &[light::STOOD_LIST, light::STOOD_CNT, light::STOOD_SLIDE],

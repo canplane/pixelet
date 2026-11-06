@@ -35,9 +35,9 @@ struct CastTiles {
 @group(0) @binding(30) var<storage, read> claimed: CastTiles;
 
 /// The first of the four samples about the screen's point at the tangents `at`
-/// at the offset the samples were cast at (`Grid::sample_before`).
+/// at the offset the samples were cast at (`Grid::sample_before`, `node_cache::ROLL_AT`).
 fn sample_before(at: vec2<f32>) -> vec2<u32> {
-  let roll = vec2<f32>(eye_f32(GRID + GRID_ROLL), eye_f32(GRID + GRID_ROLL + 1u));
+  let roll = vec2<f32>(bitcast<f32>(node_cache_word(ROLL_AT)), bitcast<f32>(node_cache_word(ROLL_AT + 1u)));
   let v = vec2<f32>(at.x + eye_f32(TAN) - roll.x, eye_f32(TAN + 1u) - at.y - roll.y);
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }

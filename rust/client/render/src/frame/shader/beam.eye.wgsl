@@ -4,25 +4,20 @@
 // grid (pxl-engine `beam::Grid::corners`), every one needed, each its thread's, its line in the
 // eye's beam rays' buffer.
 
-const WALK_PASS: u32 = BEAM_PASS;
-const VISITS_COUNT: u32 = EYE_BEAM_COUNT;
-
-/// A beam ray's asks are not counted (pxl-engine `count::ASKED`).
-/// Its walks ask whatever they meet: no budget is theirs.
-fn may_ask() -> bool {
-  return true;
-}
-
-fn asked_at() -> u32 {
-  return NONE;
-}
-
 fn beam_lattice() -> vec2<u32> {
   return vec2<u32>(eye_word(GRID + GRID_CORNERS), eye_word(GRID + GRID_CORNERS + 1u));
 }
 
-fn beam_item(id: vec2<u32>) -> vec2<u32> {
-  return id;
+/// The beam rays a run takes: every corner of the grid, a corner's place its index row by
+/// row.
+fn corners_listed() -> u32 {
+  let n = beam_lattice();
+  return n.x * n.y;
+}
+
+fn corner_queued(k: u32) -> vec2<u32> {
+  let n = beam_lattice();
+  return vec2<u32>(k % n.x, k / n.x);
 }
 
 fn beam_idx(c: vec2<u32>) -> u32 {
@@ -39,9 +34,9 @@ fn beam_hand_at(c: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_HANDS_AT) + beam_idx(c);
 }
 
-/// The list of the corners the walk over the node cache left (`Grid::corners_at`).
-fn corners_left_at() -> u32 {
-  return eye_word(GRID + GRID_CORNERS_AT);
+/// The first word of corner `c`'s parked state (`Grid::corner_states_at`).
+fn corner_state_at(c: vec2<u32>) -> u32 {
+  return eye_word(GRID + GRID_CORNER_STATES_AT) + beam_idx(c) * STATE_WORDS;
 }
 
 /// Corner `c`'s ray, at its tangents (`Grid::corner`), its line `beam_line`.

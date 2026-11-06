@@ -63,8 +63,9 @@ pub(super) struct Counts {
     pub boxes: [u32; count::OBSERVERS as usize],
 }
 
-/// The observers, as the readback keeps them (pxl-engine `count::OBSERVERS`).
+/// The observers, as the readback keeps them (pxl-engine `count::OBSERVERS`), the eye's place.
 const OBSERVERS: usize = count::OBSERVERS as usize;
+const EYE: usize = count::EYE as usize;
 
 /// The one readback's slot and each observer's owed work as the CPU knows them, a pure state
 /// its frames step (`copy`, `ask`, `land`, `dropped`, `off`) and read (`wants_frame`, `wakes`),
@@ -97,6 +98,13 @@ pub(super) struct Readback {
     pub ran: [bool; OBSERVERS],
     /// Whether each observer is owed a run of its queue.
     pub owed: [bool; OBSERVERS],
+    /// Whether the eye's rolled lattice is owed an offset (`count::LATTICE_OWED`), as the eye's
+    /// owed work of a run since the grid was last laid that landed says: unlike `owed`, read
+    /// off a run older than the eye's last, whose count of offsets a later run of the same
+    /// grid only adds to, so the casts go on until one says every offset is counted.
+    pub lattice: bool,
+    /// The eye's generation the grid was last laid in (`lays`).
+    pub laid: u32,
 }
 
 impl Readback {
@@ -138,10 +146,17 @@ impl Readback {
         self.carried[o] == Some(self.cast[o])
     }
 
+    /// The frame's eye run lays the grid anew, its rolled lattice owed from its first offset:
+    /// the eye's owed work of an earlier generation no longer says what it owes.
+    pub fn lays(&mut self) {
+        self.laid = self.cast[EYE].wrapping_add(1);
+        self.lattice = true;
+    }
+
     /// The mapping out landed, refused where not `ok`, each observer's owed work read as
     /// `owed`: an observer whose last generation it holds is owed where that owes work or the
-    /// mapping was refused; an older one's reading changes nothing. Whether its lanes are
-    /// taken.
+    /// mapping was refused; an older one's reading changes nothing, but the eye's lattice,
+    /// read off any generation since the grid was laid. Whether its lanes are taken.
     pub fn land(&mut self, ok: bool, owed: [u32; OBSERVERS]) -> bool {
         self.mapped = false;
         for (o, &owed) in owed.iter().enumerate() {
@@ -149,7 +164,15 @@ impl Readback {
                 self.owed[o] = !ok || owed != 0;
             }
         }
+        if self.carried[EYE].is_some_and(|g| self.since_laid(g)) {
+            self.lattice = !ok || owed[EYE] & count::LATTICE_OWED != 0;
+        }
         ok && self.counted
+    }
+
+    /// Whether the eye's generation `g` ran on the grid last laid.
+    pub fn since_laid(&self, g: u32) -> bool {
+        g.wrapping_sub(self.laid) <= self.cast[EYE].wrapping_sub(self.laid)
     }
 
     /// The last frame dropped, its run and its copy with it: an observer that ran in it is owed
@@ -165,6 +188,7 @@ impl Readback {
         for o in 0..OBSERVERS {
             if self.ran[o] {
                 (self.owed[o], self.pending[o]) = (true, false);
+                self.lattice |= o == EYE;
             }
         }
         self.ran = [false; OBSERVERS];
@@ -175,6 +199,7 @@ impl Readback {
     pub fn off(&mut self, o: usize) {
         self.cast[o] = self.cast[o].wrapping_add(1);
         (self.owed[o], self.pending[o]) = (false, false);
+        self.lattice &= o != EYE;
     }
 
     /// Whether the frame after this one must run: a copy holding an observer's last owed work
@@ -417,6 +442,11 @@ impl Counter {
         self.slot.owed[o as usize]
     }
 
+    /// Whether the eye's rolled lattice is owed an offset (`Readback::lattice`).
+    pub(super) fn lattice_owed(&self) -> bool {
+        self.slot.lattice
+    }
+
     /// Whether the frame after this one must run for an observer's owed work, each observer
     /// that may run `on` (`Readback::wants_frame`).
     pub(super) fn wants_frame(&self, on: [bool; OBSERVERS]) -> bool {
@@ -441,6 +471,11 @@ impl Counter {
     /// The frame its copy was encoded in was dropped.
     pub(super) fn on_dropped(&mut self) {
         self.slot.dropped();
+    }
+
+    /// The frame's eye run lays the grid anew (`Readback::lays`).
+    pub(super) fn lays(&mut self) {
+        self.slot.lays();
     }
 }
 

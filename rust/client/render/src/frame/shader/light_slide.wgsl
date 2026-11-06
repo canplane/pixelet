@@ -1,15 +1,17 @@
 // pxl-render/light_slide.wgsl
 
 // The tiles of the box an earlier cast of the epoch cast, where the box slid since, a
-// `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), or the world under it changed: a
+// `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), the eye's zooms moved
+// (`light::HEAD_RANGE_WAS`), or the world under it changed: a
 // thread a tile, after the host moved the reads with the box, each tile's word the word of
 // the tile that held its world texels under the corner before (`light::HEAD_CORNER_WAS`;
-// gpu/ray/cast.rs `prepare`). A tile the box slid onto, one the slide moved into another band
-// (`Light::keeps`), and one whose rays may meet a cell of its band over a column of the world
+// gpu/ray/cast.rs `prepare`). A tile the box slid onto, one the slide or the zooms moved into
+// another band (`Light::keeps`), and one whose rays may meet a cell of its band over a column of the world
 // that changed (`Light::reaches`, `light::COLUMNS_AT`), is set to none, so the propagation
 // takes it, read, as read anew (light_propagate.wgsl); the rest hold what their cast left.
 // Each writes its own word alone, and the first the cast's number as the last the slide ran in
-// (`light::SLIDE_RAN`). Run where the box slid or the world changed and a receiver stands
+// (`light::SLIDE_RAN`). Run where the box slid, the zooms moved or the world changed and a
+// receiver stands
 // (`light::STOOD_SLIDE`), after the receivers stood, before the propagation.
 
 /// Whether box tile `tile`'s rays, at its band, may meet a cell over the world's column `c`,

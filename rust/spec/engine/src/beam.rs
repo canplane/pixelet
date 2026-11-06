@@ -20,6 +20,7 @@ use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
 use crate::raster::FACES_LANES;
+use crate::ray;
 use crate::world;
 use crate::WORKGROUPS_MOST;
 
@@ -75,16 +76,14 @@ pub struct Grid {
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub stop_asks_at: u32,
-    /// The samples the walk over the node cache alone left (pxl-render
-    /// sample_hit.wgsl) for the walk that asks the world: their count, then
-    /// each, `left_word`.
-    pub lefts_at: u32,
-    /// The corners the same walk left for theirs (pxl-render beam_hit.wgsl): their
-    /// count, then each, `left_word`.
-    pub corners_at: u32,
+    /// Where the beam rays' runs park them, a state each (`ray::STATE_WORDS`, pxl-render
+    /// corners.wgsl), in the corners' order.
+    pub corner_states_at: u32,
     /// Where the samples lie off the lattice's own places, across and down, in the
     /// screen's tangents at its axis: one of the rolled lattice's offsets (`roll`), none
-    /// as a grid is laid (`of`), set by the cast that rolls it (`rolled`).
+    /// as a grid is laid (`of`), set for the CPU's grid alone (`rolled`). A GPU reads the
+    /// offset its cast casts off the rolled lattice's words (`node_cache::ROLL_K`), not off
+    /// the grid's.
     pub roll: [f32; 2],
 }
 
@@ -101,18 +100,24 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// a power of two.
 const ROLL_SIDE: u32 = 4;
 
-/// The rolled lattice: the casts of the samples a standing view takes, each at its own
-/// offset (`roll`), one a frame, before the eye's rays rest. The offsets together lay a
-/// regular lattice the spacing over `ROLL_SIDE` apart, `CELL`/16: a region whose projection
-/// holds a square of that side aligned to it, or any disc √2 · `CELL`/16 across, holds a
-/// sample of some offset, and is met within this many standing casts.
+/// The rolled lattice: the offsets (`roll`) a standing view's samples are cast at, the screen
+/// the eye's one region. The offsets together lay a regular lattice the spacing over
+/// `ROLL_SIDE` apart, `CELL`/16: a region whose projection holds a square of that side
+/// aligned to it, or any disc √2 · `CELL`/16 across, holds a sample of some offset.
 ///
-/// The spatial guarantee holds for each offset whose samples completed their cast. Every
-/// offset's samples complete in the frame that casts them, because the samples take no part
-/// of the holes' budget (`ray::VISITS_A_FRAME`): only the holes' queue is budgeted, and what
-/// it leaves parked never holds back a sample. So the bound of `ROLLS` standing casts holds as
-/// written.
+/// An offset counts only once every sample of it has ended. The samples are walked under the
+/// frame's budget, the eye's lattice's share of it (`ray::caps`, `count::EYE_LATTICE`), so a
+/// frame waits for no sample: one the budget does not reach is parked in its own words
+/// (`SAMPLE_PARKED`) and goes on from there in the next cast, at the same offset, before any
+/// other offset is cast (`node_cache::ROLL_K`; pxl-render roll.wgsl). So a view standing after its last change has
+/// every offset counted within `ROLLS` + ⌈W/B⌉ casts, W the samples' work its budget has
+/// not reached and B its share; until then the eye owes its lattice (`count::LATTICE_OWED`),
+/// and the renderer casts while it does.
 pub const ROLLS: u32 = ROLL_SIDE * ROLL_SIDE;
+
+/// The rolled lattice's counted offsets once every one is, a bit an offset
+/// (`node_cache::ROLL_DONE`).
+pub const ROLLS_DONE: u32 = (1 << ROLLS) - 1;
 
 /// The samples' offset in the `k`th cast of the rolled lattice (`ROLLS`), across and down,
 /// in the screen's tangents at its axis: an angle, a stratum of the spacing split
@@ -152,13 +157,13 @@ const _: () = assert!(ROLL_SIDE.is_power_of_two(), "the offsets halve the spacin
 /// The grid's words among the eye's (`eye::GRID`), where each field lies
 /// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
 /// `past`, `span`, `corners` and `samples`, across then up, the words where
-/// the cells' starts, the samples' hits, the boxes' asks and the holes' stops start, `lattice`, and where the lists the walk over
-/// the node cache alone leaves start, the samples' and the corners', and where the walked
+/// the cells' starts, the samples' hits, the boxes' asks and the holes' stops start, `lattice`, and where the list the walk over
+/// the node cache alone leaves starts, the corners', and where the walked
 /// pixels' lists lie past the grid's words (`walked_at`, `ray::walked_words`); then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
 /// (`slope`), f32 bits, each rounded once by the host; then where how far each
 /// beam ray hands on starts (`hand_at`), where the asks the hits' stops opened start
-/// (`stop_asks_at`), and the samples' offset across and down (`roll`), f32 bits.
+/// (`stop_asks_at`).
 pub const GRID_S: usize = 0;
 
 pub const GRID_KEEP: usize = 1;
@@ -173,16 +178,14 @@ pub const GRID_SAMPLES_AT: usize = 12;
 pub const GRID_ASKS_AT: usize = 13;
 pub const GRID_HITS_AT: usize = 14;
 pub const GRID_LATTICE: usize = 15;
-pub const GRID_LEFTS_AT: usize = 16;
 pub const GRID_WALKED_AT: usize = 17;
-pub const GRID_CORNERS_AT: usize = 18;
+pub const GRID_CORNER_STATES_AT: usize = 18;
 pub const GRID_S_INVERSE: usize = 19;
 pub const GRID_SLOPE: usize = 20;
 pub const GRID_HANDS_AT: usize = 22;
 pub const GRID_STOP_ASKS_AT: usize = 23;
-pub const GRID_ROLL: usize = 24;
 /// Whole vec4s, as the eye's words bind as a uniform's (`eye::WORDS`).
-pub const GRID_WORDS: usize = (GRID_ROLL + 2).next_multiple_of(4);
+pub const GRID_WORDS: usize = (GRID_STOP_ASKS_AT + 1).next_multiple_of(4);
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -221,8 +224,7 @@ impl Grid {
             asks_at: 0,
             hits_at: 0,
             stop_asks_at: 0,
-            lefts_at: 0,
-            corners_at: 0,
+            corner_states_at: 0,
             roll: [0.0; 2],
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
@@ -233,8 +235,7 @@ impl Grid {
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
         g.stop_asks_at = g.hits_at + HITS * HIT_WORDS;
-        g.lefts_at = g.stop_asks_at + HITS * ASK_WORDS;
-        g.corners_at = g.lefts_at + 1 + samples[0] * samples[1];
+        g.corner_states_at = g.stop_asks_at + HITS * ASK_WORDS;
         g
     }
 
@@ -258,11 +259,9 @@ impl Grid {
             w[GRID_HITS_AT],
         ) = (self.cells_at, self.samples_at, self.asks_at, self.hits_at);
         w[GRID_LATTICE] = self.lattice;
-        (w[GRID_LEFTS_AT], w[GRID_WALKED_AT], w[GRID_CORNERS_AT]) =
-            (self.lefts_at, self.size(), self.corners_at);
+        (w[GRID_WALKED_AT], w[GRID_CORNER_STATES_AT]) = (self.size(), self.corner_states_at);
         w[GRID_HANDS_AT] = self.hands_at;
         w[GRID_STOP_ASKS_AT] = self.stop_asks_at;
-        (w[GRID_ROLL], w[GRID_ROLL + 1]) = (self.roll[0].to_bits(), self.roll[1].to_bits());
         let slope = self.slope();
         (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
             self.s_inverse().to_bits(),
@@ -292,13 +291,13 @@ impl Grid {
             asks_at: w[GRID_ASKS_AT],
             hits_at: w[GRID_HITS_AT],
             stop_asks_at: w[GRID_STOP_ASKS_AT],
-            lefts_at: w[GRID_LEFTS_AT],
-            corners_at: w[GRID_CORNERS_AT],
-            roll: [f(w[GRID_ROLL]), f(w[GRID_ROLL + 1])],
+            corner_states_at: w[GRID_CORNER_STATES_AT],
+            roll: [0.0; 2],
         }
     }
 
-    /// The grid with its samples at the `k`th offset of the rolled lattice (`roll`).
+    /// The CPU's grid with its samples at the `k`th offset of the rolled lattice (`roll`), as a
+    /// GPU casts them where the rolled lattice's words say `k` (`node_cache::ROLL_K`).
     pub fn rolled(self, k: u32) -> Grid {
         Grid {
             roll: roll(k),
@@ -448,10 +447,10 @@ impl Grid {
     }
 
     /// The beam rays' words: the lines, the cells' starts, the samples'
-    /// hits, the boxes' asks and the missed pixels' hits and theirs, as
-    /// many as the grid lays, whatever the pixels drawn.
+    /// hits, the boxes' asks, the missed pixels' hits and theirs and the corners' list, as many
+    /// as the grid lays, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
-        self.corners_at + 1 + self.corners[0] * self.corners[1]
+        self.corner_states_at + self.corners[0] * self.corners[1] * ray::STATE_WORDS
     }
 }
 
@@ -477,6 +476,11 @@ pub const LINE_INHERITANCE: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
+/// A beam ray's hand while it has not ended, the frame's budget having parked it
+/// (pxl-render corners.wgsl): no distance, which a cell whose window holds one reads as its
+/// cone not walked, its rays starting from the root (cell.wgsl, light_cell.wgsl `CELL_RESUMES`).
+pub const HAND_PARKED: u32 = f32::INFINITY.to_bits();
+
 /// What a cell hands its rays, in words, every observer's (`light::cell`):
 /// where they start, f32 bits; the corner of the least
 /// start, as an index into the corners row by row, whose line the faces they
@@ -500,7 +504,10 @@ pub const CELL_WORDS: u32 = 3;
 /// (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to its reach,
 /// the asset there, 1 where that node lacks, which a pixel entering it
 /// before any cell walks itself, and the axis the sample entered it
-/// across: a face its ray reached through air (`raster::faces`).
+/// across: a face its ray reached through air (`raster::faces`). While its ray has not
+/// ended, its zoom is `SAMPLE_PARKED`, and the state the queue parked it in lies in its words
+/// (pxl-render samples.wgsl): its distance in its asset's first (`SAMPLE_PARKED_T`), its
+/// node's corner in its node's, the rest in whether it lacks (`SAMPLE_PARKED_STATE`).
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
@@ -508,19 +515,12 @@ pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_AXIS + 1;
 
 pub const SAMPLE_NONE: u32 = u32::MAX;
-/// While a sample is listed for the walk that asks the world (pxl-render sample_hit.wgsl,
-/// sample.wgsl), where its walk over the node cache left it, in its asset's first word: how far
-/// it came, which that walk goes on from off its cell's line (resume.wgsl `resumed_at`).
-pub const SAMPLE_LEFT_T: u32 = SAMPLE_ASSET;
+pub const SAMPLE_PARKED: u32 = u32::MAX - 1;
+pub const SAMPLE_PARKED_T: u32 = SAMPLE_ASSET;
+pub const SAMPLE_PARKED_STATE: u32 = SAMPLE_LACKS;
 
-/// The side of a workgroup of the passes over the beam rays' corners, a thread a corner, and
-/// of the one over what the first left, a thread a place in the list (pxl-render
-/// beam_hit.wgsl, beam.wgsl).
-pub const CORNER_SIDE: u32 = 8;
-
-/// The side of a workgroup of the passes over a lattice's samples, a thread a sample, and of
-/// those over what they left, a thread a place in the list (pxl-render sample_hit.wgsl,
-/// sample.wgsl).
+/// The side of a workgroup of the passes over the light's list's cells, a thread a cell
+/// (pxl-render light_cell.wgsl, light_list.wgsl `light_item`).
 pub const SAMPLE_SIDE: u32 = 8;
 
 /// What a hit's faces are asked off, once a hit (pxl-render face.wgsl

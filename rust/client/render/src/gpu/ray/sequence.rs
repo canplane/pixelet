@@ -9,10 +9,11 @@
 //! built (frame/shader/access.rs `check`), each the frame holds today named in `KNOWN`.
 
 use super::cast::{
-    ASK_GROUP, CAST_GROUP, CAST_TILES_GROUP, CLAIM_BINDING, DRAWS_BINDING, LIGHT_CLAIM_GROUP,
-    LIGHT_GROUP, LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP,
-    LIGHT_PROPAGATE_GROUP, LIGHT_SAMPLE_HIT_GROUP, LIGHT_SLIDE_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP,
-    QUEUE_LAST_GROUP, SAMPLE_HIT_GROUP, WORLD_GROUP,
+    CAST_GROUP, CAST_TILES_GROUP, CLAIM_BINDING, DRAWS_BINDING, LATTICE_ASK_GROUP,
+    LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_CLAIM_GROUP, LIGHT_GROUP,
+    LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP, LIGHT_MARK_DRAWS_GROUP,
+    LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP, LIGHT_SLIDE_GROUP,
+    QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, ROLL_GROUP, WORLD_GROUP,
 };
 use super::raster::{
     FACE_GROUP, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP,
@@ -37,8 +38,8 @@ use pxl_engine::{count, light, node_cache, raster, ray};
 const MARKS: u32 = 0;
 const NODE_CACHE: u32 = 1;
 const QUEUE: u32 = 2;
-const BEAM_LEFT: u32 = 3;
-const SAMPLE_LEFT: u32 = 4;
+const CORNERS_QUEUE: u32 = 3;
+const SAMPLES_QUEUE: u32 = 4;
 const CAST_TILES: u32 = 5;
 const RASTER_ARGS: u32 = 6;
 const RASTER_STOPS: u32 = 7;
@@ -47,8 +48,8 @@ const LIGHT_LIST: u32 = 9;
 const LIGHT_STOOD: u32 = 10;
 const LIGHT_DRAWS: u32 = 11;
 const LIGHT_CLAIMS: u32 = 12;
-const LIGHT_BEAM_LEFT: u32 = 13;
-const LIGHT_SAMPLE_LEFT: u32 = 14;
+const LIGHT_CORNERS_QUEUE: u32 = 13;
+const LIGHT_SAMPLES_QUEUE: u32 = 14;
 const LIGHT_MISSES: u32 = 15;
 const LIGHT_QUEUE: u32 = 16;
 const LIGHT_RASTER_ARGS: u32 = 17;
@@ -64,8 +65,8 @@ const BUFFERS: &[Buffer] = &[
     buffer("marks", ARGS),
     buffer("node_cache", STATE),
     buffer("queue", STATE),
-    buffer("beam_left", ARGS),
-    buffer("sample_left", ARGS),
+    buffer("corners_queue", STATE),
+    buffer("samples_queue", STATE),
     buffer("cast_tiles", ARGS),
     buffer("raster.args", ARGS),
     buffer("raster.stops", ARGS),
@@ -74,8 +75,8 @@ const BUFFERS: &[Buffer] = &[
     buffer("light_stood", ARGS),
     buffer("light_draws_dispatch", ARGS),
     buffer("light_claim_dispatch", ARGS),
-    buffer("light_beam_left", ARGS),
-    buffer("light_sample_left", ARGS),
+    buffer("light_corners_queue", STATE),
+    buffer("light_samples_queue", STATE),
     buffer("light_misses", ARGS),
     buffer("light_queue", STATE),
     buffer("raster.light.args", ARGS),
@@ -108,18 +109,20 @@ const fn bind(binding: u32, buf: u32) -> Bind {
 const IN_LIGHT_MARKS: u32 = 1;
 const IN_EYE: u32 = 2;
 const IN_EYE_HOLES: u32 = 3;
-const IN_GENERATE: u32 = 4;
-const IN_LIGHT: u32 = 5;
-const IN_LIGHT_HOLES: u32 = 6;
-const IN_MAP: u32 = 7;
-const IN_SCREEN_GATE: u32 = 8;
-const IN_LIGHT_GATE: u32 = 9;
-const IN_LIT: u32 = 10;
+const IN_EYE_CLOSE: u32 = 4;
+const IN_GENERATE: u32 = 5;
+const IN_LIGHT: u32 = 6;
+const IN_LIGHT_HOLES: u32 = 7;
+const IN_MAP: u32 = 8;
+const IN_SCREEN_GATE: u32 = 9;
+const IN_LIGHT_GATE: u32 = 10;
+const IN_LIT: u32 = 11;
 const STAGES: &[&str] = &[
     "the host's writes",
     "the light's tiles' marks",
     "the eye's cast",
     "the eye's holes",
+    "the eye's close",
     "the decor generated",
     "the light's cast",
     "the light's holes",
@@ -132,16 +135,28 @@ const STAGES: &[&str] = &[
 // The groups as the host makes them (ray/cast.rs `RaysPass::prepare`, `light_groups`,
 // `queue_groups`; ray/raster.rs `Raster::prepare`, `record_group`, `light_record_group`;
 // gpu/generator.rs `regroup`; gpu/tiles.rs `Tiles::new`): each binding to a buffer here.
-const BEAM_HIT_BINDS: Group = Group {
-    layout: &SAMPLE_HIT_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, BEAM_LEFT)],
+const CORNERS_WALK_BINDS: Group = Group {
+    layout: &LATTICE_WALK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, CORNERS_QUEUE)],
 };
-const SAMPLE_HIT_BINDS: Group = Group {
-    layout: &SAMPLE_HIT_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, SAMPLE_LEFT)],
+const CORNERS_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, CORNERS_QUEUE)],
 };
-const ASK_BINDS: Group = Group {
-    layout: &ASK_GROUP,
+const SAMPLES_WALK_BINDS: Group = Group {
+    layout: &LATTICE_WALK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, SAMPLES_QUEUE)],
+};
+const SAMPLES_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, SAMPLES_QUEUE)],
+};
+const LATTICE_LAST_BINDS: Group = Group {
+    layout: &LATTICE_LAST_GROUP,
+    binds: &[bind(9, NODE_CACHE)],
+};
+const ROLL_BINDS: Group = Group {
+    layout: &ROLL_GROUP,
     binds: &[bind(9, NODE_CACHE)],
 };
 const WORLD_BINDS: Group = Group {
@@ -272,13 +287,25 @@ const LIGHT_CLAIM_BINDS: Group = Group {
     layout: &LIGHT_CLAIM_GROUP,
     binds: &[bind(21, LIGHT_ARGS)],
 };
-const LIGHT_BEAM_HIT_BINDS: Group = Group {
-    layout: &LIGHT_SAMPLE_HIT_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_BEAM_LEFT)],
+const LIGHT_CORNERS_WALK_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_WALK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_CORNERS_QUEUE)],
 };
-const LIGHT_SAMPLE_HIT_BINDS: Group = Group {
-    layout: &LIGHT_SAMPLE_HIT_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_SAMPLE_LEFT)],
+const LIGHT_CORNERS_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_CORNERS_QUEUE)],
+};
+const LIGHT_SAMPLES_WALK_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_WALK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_SAMPLES_QUEUE)],
+};
+const LIGHT_SAMPLES_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_SAMPLES_QUEUE)],
+};
+const LIGHT_LATTICE_LAST_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_LAST_GROUP,
+    binds: &[bind(9, NODE_CACHE)],
 };
 const LIGHT_SAMPLE_BOX_BINDS: Group = Group {
     layout: &LIGHT_SAMPLE_BOX_GROUP,
@@ -332,17 +359,7 @@ pub const LIT_PASS: &[u32] = &[
     PIPELINE_GHOST_DECOR,
 ];
 
-/// The eye's beam rays left, the samples left and the pixels' claimed tiles (ray/cast.rs
-/// `RaysPass::dispatch`).
-pub const BEAM: Step =
-    Step::dispatch_off("beam", IN_EYE, COMPUTE_BEAM, &[&ASK_BINDS], (BEAM_LEFT, 0));
-pub const SAMPLE: Step = Step::dispatch_off(
-    "sample",
-    IN_EYE,
-    COMPUTE_SAMPLE,
-    &[&ASK_BINDS],
-    (SAMPLE_LEFT, 0),
-);
+/// The pixels' claimed tiles (ray/cast.rs `RaysPass::dispatch`).
 /// The record's draw and its faces' pass (ray/raster.rs `Raster::draw`).
 pub const RASTER: Step =
     Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
@@ -441,40 +458,12 @@ pub const LIGHT_CLAIM: Step = Step::dispatch_off(
     &[&LIGHT_CLAIM_BINDS],
     (LIGHT_CLAIMS, 0),
 );
-pub const LIGHT_BEAM_HIT: Step = Step::dispatch_off(
-    "light_beam_hit",
-    IN_LIGHT,
-    COMPUTE_LIGHT_BEAM_HIT,
-    &[&LIGHT_BEAM_HIT_BINDS],
-    (LIGHT_ARGS, light::ARGS_BEAM),
-);
-pub const LIGHT_BEAM: Step = Step::dispatch_off(
-    "light_beam",
-    IN_LIGHT,
-    COMPUTE_LIGHT_BEAM,
-    &[&ASK_BINDS],
-    (LIGHT_BEAM_LEFT, 0),
-);
 pub const LIGHT_CELLS: Step = Step::dispatch_off(
     "light_cells",
     IN_LIGHT,
     COMPUTE_LIGHT_CELL,
     &[&WORLD_BINDS],
     (LIGHT_ARGS, light::ARGS_CELLS),
-);
-pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
-    "light_sample_hit",
-    IN_LIGHT,
-    COMPUTE_LIGHT_SAMPLE_HIT,
-    &[&LIGHT_SAMPLE_HIT_BINDS],
-    (LIGHT_ARGS, light::ARGS_SAMPLE),
-);
-pub const LIGHT_SAMPLE: Step = Step::dispatch_off(
-    "light_sample",
-    IN_LIGHT,
-    COMPUTE_LIGHT_SAMPLE,
-    &[&ASK_BINDS],
-    (LIGHT_SAMPLE_LEFT, 0),
 );
 pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
     "light_sample_box",
@@ -608,13 +597,13 @@ pub const OPEN_NODE_CACHE: Step =
     Step::write("open_node_cache", at(NODE_CACHE, 0, node_cache::HEAD_WORDS));
 pub const OPEN_MARKS: Step = Step::write("open_marks", at(MARKS, 0, ray::MISS_ARGS_WORDS as u32));
 pub const OPEN_QUEUE: Step = Step::write("open_queue", at(QUEUE, 0, ray::QUEUE_EMPTY.len() as u32));
-pub const OPEN_BEAM_LEFT: Step = Step::write(
-    "open_beam_left",
-    at(BEAM_LEFT, 0, ray::LEFT_EMPTY.len() as u32),
+pub const OPEN_CORNERS_QUEUE: Step = Step::write(
+    "open_corners_queue",
+    at(CORNERS_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
 );
-pub const OPEN_SAMPLE_LEFT: Step = Step::write(
-    "open_sample_left",
-    at(SAMPLE_LEFT, 0, ray::LEFT_EMPTY.len() as u32),
+pub const OPEN_SAMPLES_QUEUE: Step = Step::write(
+    "open_samples_queue",
+    at(SAMPLES_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_CAST_TILES: Step = Step::write("open_cast_tiles", at(CAST_TILES, 0, 4));
 pub const OPEN_RASTER_ARGS: Step = Step::write(
@@ -664,13 +653,13 @@ pub const OPEN_LIGHT_QUEUE: Step = Step::write(
     "open_light_queue",
     at(LIGHT_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
 );
-pub const OPEN_LIGHT_BEAM_LEFT: Step = Step::write(
-    "open_light_beam_left",
-    at(LIGHT_BEAM_LEFT, 0, ray::LEFT_EMPTY.len() as u32),
+pub const OPEN_LIGHT_CORNERS_QUEUE: Step = Step::write(
+    "open_light_corners_queue",
+    at(LIGHT_CORNERS_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
 );
-pub const OPEN_LIGHT_SAMPLE_LEFT: Step = Step::write(
-    "open_light_sample_left",
-    at(LIGHT_SAMPLE_LEFT, 0, ray::LEFT_EMPTY.len() as u32),
+pub const OPEN_LIGHT_SAMPLES_QUEUE: Step = Step::write(
+    "open_light_samples_queue",
+    at(LIGHT_SAMPLES_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_RASTER_ARGS: Step = Step::write(
     "open_light_raster_args",
@@ -693,18 +682,6 @@ pub const READ_COUNT_BACK: Step = Step::copy(
     IN_LIGHT,
     at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
-);
-pub const BEAM_LEFT_COUNT: Step = Step::copy(
-    "beam_left_count",
-    IN_EYE,
-    at(BEAM_LEFT, ray::LEFT_CNT, 1),
-    NO_RANGE,
-);
-pub const SAMPLE_LEFT_COUNT: Step = Step::copy(
-    "sample_left_count",
-    IN_EYE,
-    at(SAMPLE_LEFT, ray::LEFT_CNT, 1),
-    NO_RANGE,
 );
 pub const MARKS_COUNT: Step = Step::copy(
     "marks_count",
@@ -774,18 +751,6 @@ pub const LIGHT_LEFT: Step = Step::copy(
     at(LIGHT_ARGS, light::ARGS_LEFT, 1),
     at(NODE_CACHE, node_cache::owed_at(count::LIGHT), 1),
 );
-pub const LIGHT_BEAM_LEFT_COUNT: Step = Step::copy(
-    "light_beam_left_count",
-    IN_LIGHT,
-    at(LIGHT_BEAM_LEFT, ray::LEFT_CNT, 1),
-    at(LIGHT_LIST, light::corners_left_at(SIZE), 1),
-);
-pub const LIGHT_SAMPLE_LEFT_COUNT: Step = Step::copy(
-    "light_sample_left_count",
-    IN_LIGHT,
-    at(LIGHT_SAMPLE_LEFT, ray::LEFT_CNT, 1),
-    at(LIGHT_LIST, light::lefts_at(SIZE), 1),
-);
 pub const LIGHT_MISSES_COUNT: Step = Step::copy(
     "light_misses_count",
     IN_LIGHT,
@@ -794,20 +759,34 @@ pub const LIGHT_MISSES_COUNT: Step = Step::copy(
 );
 
 /// The host's writes past the opens above: the raster's draw args set to none where the
-/// record's draw runs (ray/raster.rs `record_draw`); each observer's caps (ray/cast.rs
+/// record's draw runs (ray/raster.rs `record_draw`); each run's caps (ray/cast.rs
 /// `RaysPass::prepare`); the node cache's counts and frame where nothing casts; the decor's
 /// boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
     at(RASTER_ARGS, 0, raster::ARGS_WORDS),
 );
-pub const OPEN_EYE_CAPS: Step = Step::write(
-    "open_eye_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::EYE), 2),
+pub const OPEN_EYE_LATTICE_CAPS: Step = Step::write(
+    "open_eye_lattice_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::EYE_LATTICE), 2),
 );
-pub const OPEN_LIGHT_CAPS: Step = Step::write(
-    "open_light_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::LIGHT), 2),
+pub const OPEN_LIGHT_LATTICE_CAPS: Step = Step::write(
+    "open_light_lattice_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::LIGHT_LATTICE), 2),
+);
+/// The eye's rolled lattice set to none where its grid is laid anew (ray/cast.rs
+/// `RaysPass::prepare`, `node_cache::ROLL_K`).
+pub const OPEN_ROLL: Step = Step::write(
+    "open_roll",
+    at(NODE_CACHE, node_cache::ROLL_K, node_cache::ROLL_WORDS),
+);
+pub const OPEN_EYE_HOLES_CAPS: Step = Step::write(
+    "open_eye_holes_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::EYE_HOLES), 2),
+);
+pub const OPEN_LIGHT_HOLES_CAPS: Step = Step::write(
+    "open_light_holes_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::LIGHT_HOLES), 2),
 );
 pub const OPEN_NODE_CACHE_COUNTS: Step = Step::write(
     "open_node_cache_counts",
@@ -866,8 +845,8 @@ pub const FRAME: Frame = Frame {
         OPEN_NODE_CACHE,
         OPEN_MARKS,
         OPEN_QUEUE,
-        OPEN_BEAM_LEFT,
-        OPEN_SAMPLE_LEFT,
+        OPEN_CORNERS_QUEUE,
+        OPEN_SAMPLES_QUEUE,
         OPEN_CAST_TILES,
         OPEN_RASTER_ARGS,
         OPEN_RASTER_STOP_ASKS,
@@ -879,13 +858,16 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_CLAIMS,
         OPEN_LIGHT_MISSES,
         OPEN_LIGHT_QUEUE,
-        OPEN_LIGHT_BEAM_LEFT,
-        OPEN_LIGHT_SAMPLE_LEFT,
+        OPEN_LIGHT_CORNERS_QUEUE,
+        OPEN_LIGHT_SAMPLES_QUEUE,
         OPEN_LIGHT_RASTER_ARGS,
         OPEN_GENERATION_LIST,
         OPEN_RASTER_DRAW_ARGS,
-        OPEN_EYE_CAPS,
-        OPEN_LIGHT_CAPS,
+        OPEN_EYE_LATTICE_CAPS,
+        OPEN_EYE_HOLES_CAPS,
+        OPEN_LIGHT_LATTICE_CAPS,
+        OPEN_LIGHT_HOLES_CAPS,
+        OPEN_ROLL,
         OPEN_NODE_CACHE_COUNTS,
         OPEN_NODE_CACHE_FRAME,
         OPEN_GENERATION_BOXES,
@@ -932,18 +914,69 @@ pub const FRAME: Frame = Frame {
         ),
         // The eye's cast: its beam rays, their cells, its samples, its record drawn, and its
         // pixels.
-        Step::dispatch("beam_hit", IN_EYE, COMPUTE_BEAM_HIT, &[&BEAM_HIT_BINDS]),
-        BEAM_LEFT_COUNT,
-        BEAM,
-        Step::dispatch("cell", IN_EYE, COMPUTE_CELL, &[&WORLD_BINDS]),
+        // The eye's beam rays' run (ray/cast.rs `walk_run`).
         Step::dispatch(
-            "sample_hit",
+            "corners",
             IN_EYE,
-            COMPUTE_SAMPLE_HIT,
-            &[&SAMPLE_HIT_BINDS],
+            COMPUTE_QUEUE_CORNERS,
+            &[&CORNERS_WALK_BINDS],
         ),
-        SAMPLE_LEFT_COUNT,
-        SAMPLE,
+        Step::dispatch(
+            "corners_ask",
+            IN_EYE,
+            COMPUTE_QUEUE_ASK_CORNERS,
+            &[&CORNERS_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "corners_parked",
+            IN_EYE,
+            COMPUTE_QUEUE_CORNERS_PARKED,
+            &[&CORNERS_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "corners_ask_parked",
+            IN_EYE,
+            COMPUTE_QUEUE_ASK_CORNERS_PARKED,
+            &[&CORNERS_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "corners_last",
+            IN_EYE,
+            COMPUTE_QUEUE_LAST_CORNERS,
+            &[&LATTICE_LAST_BINDS],
+        ),
+        Step::dispatch("cell", IN_EYE, COMPUTE_CELL, &[&WORLD_BINDS]),
+        // The eye's samples' run (ray/cast.rs `walk_run`).
+        Step::dispatch(
+            "samples",
+            IN_EYE,
+            COMPUTE_QUEUE_SAMPLES,
+            &[&SAMPLES_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "samples_ask",
+            IN_EYE,
+            COMPUTE_QUEUE_ASK_SAMPLES,
+            &[&SAMPLES_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "samples_parked",
+            IN_EYE,
+            COMPUTE_QUEUE_SAMPLES_PARKED,
+            &[&SAMPLES_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "samples_ask_parked",
+            IN_EYE,
+            COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
+            &[&SAMPLES_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "samples_last",
+            IN_EYE,
+            COMPUTE_QUEUE_LAST_SAMPLES,
+            &[&LATTICE_LAST_BINDS],
+        ),
         Step::dispatch(
             "sample_box",
             IN_EYE,
@@ -993,6 +1026,10 @@ pub const FRAME: Frame = Frame {
         STOP_FACES,
         STOP_FACES_PUT,
         EYE_OWED,
+        // The eye's close: its rolled lattice's offset counted or held where its samples were
+        // cast, else its lattice owed alone (roll.wgsl).
+        Step::dispatch("roll", IN_EYE_CLOSE, COMPUTE_ROLL, &[&ROLL_BINDS]).one_of(5),
+        Step::dispatch("roll_owed", IN_EYE_CLOSE, COMPUTE_ROLL_OWED, &[&ROLL_BINDS]).one_of(5),
         // The decor generated over the rays.
         Step::dispatch(
             "generation_mark",
@@ -1042,13 +1079,69 @@ pub const FRAME: Frame = Frame {
         FED_COUNT,
         CLAIMED_COUNT,
         LIGHT_LEFT,
-        LIGHT_BEAM_HIT,
-        LIGHT_BEAM_LEFT_COUNT,
-        LIGHT_BEAM,
+        // The light's beam rays' run (ray/cast.rs `walk_run`).
+        Step::dispatch(
+            "light_corners",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LIGHT_CORNERS,
+            &[&LIGHT_CORNERS_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "light_corners_ask",
+            IN_LIGHT,
+            COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
+            &[&LIGHT_CORNERS_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "light_corners_parked",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
+            &[&LIGHT_CORNERS_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "light_corners_ask_parked",
+            IN_LIGHT,
+            COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
+            &[&LIGHT_CORNERS_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "light_corners_last",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
+            &[&LIGHT_LATTICE_LAST_BINDS],
+        ),
         LIGHT_CELLS,
-        LIGHT_SAMPLE_HIT,
-        LIGHT_SAMPLE_LEFT_COUNT,
-        LIGHT_SAMPLE,
+        // The light's samples' run (ray/cast.rs `walk_run`).
+        Step::dispatch(
+            "light_samples",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LIGHT_SAMPLES,
+            &[&LIGHT_SAMPLES_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "light_samples_ask",
+            IN_LIGHT,
+            COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
+            &[&LIGHT_SAMPLES_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "light_samples_parked",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
+            &[&LIGHT_SAMPLES_WALK_BINDS],
+        ),
+        Step::dispatch(
+            "light_samples_ask_parked",
+            IN_LIGHT,
+            COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
+            &[&LIGHT_SAMPLES_ASK_BINDS],
+        ),
+        Step::dispatch(
+            "light_samples_last",
+            IN_LIGHT,
+            COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
+            &[&LIGHT_LATTICE_LAST_BINDS],
+        ),
         LIGHT_SAMPLE_BOX,
         Step::dispatch(
             "light_record_draw",
@@ -1130,6 +1223,10 @@ const APPENDS: &[Range] = &[
     at(NODE_CACHE, node_cache::VISITED, 2),
     at(QUEUE, ray::QUEUE_VISITED, 1),
     at(LIGHT_QUEUE, ray::QUEUE_VISITED, 1),
+    at(SAMPLES_QUEUE, ray::QUEUE_VISITED, 1),
+    at(LIGHT_SAMPLES_QUEUE, ray::QUEUE_VISITED, 1),
+    at(CORNERS_QUEUE, ray::QUEUE_VISITED, 1),
+    at(LIGHT_CORNERS_QUEUE, ray::QUEUE_VISITED, 1),
 ];
 
 /// The copies that open a count before the passes that add to it: the stops the holes' walks
@@ -1188,6 +1285,14 @@ const fn world_marks_kept(which: u32, owner: &'static str) -> Kept {
 
 /// What the frame keeps over frames, each with its owner and what makes it stale.
 const KEPT: &[Kept] = &[
+    Kept {
+        range: at(NODE_CACHE, node_cache::ROLL_K, node_cache::ROLL_WORDS),
+        owner: "roll",
+        by: &[],
+        invalidation: "the eye's rolled lattice: the offset its samples are cast at, the offsets \
+            counted and whether its parked samples go on, stale where the grid is laid anew, \
+            where the host sets it to none (ray/cast.rs `RaysPass::prepare`, `OPEN_ROLL`)",
+    },
     Kept {
         range: at(
             LIGHT_LIST,

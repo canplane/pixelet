@@ -16,12 +16,6 @@ fn light_run() -> bool {
   return head_word(LIGHT_HEAD_SIZE) != 0u;
 }
 
-/// The first of the caps the running queue counts the frame's work to, the visits' and the
-/// asks', in the node cache's head (pxl-engine `node_cache::caps_at`).
-fn queue_caps() -> u32 {
-  return select(EYE_CAPS, LIGHT_CAPS, light_run());
-}
-
 fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }
@@ -86,11 +80,16 @@ fn light_corner() -> vec2<i32> {
 /// whole number under 2^24, times the host's scale, one product, so every pass gives a tile
 /// the same band.
 fn tile_band(tile: vec2<i32>) -> u32 {
+  return tile_band_in(tile, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+}
+
+/// `tile_band` under the eye's zooms `range` (`Light::band`).
+fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
   let half = i32(head_word(LIGHT_HEAD_SIZE) / 2u);
   let x = gap(tile.x, half);
   let y = gap(tile.y, half);
   let s2 = f32(x * x + y * y) * eye_f32(LIGHT + LIGHT_BAND_SCALE);
-  return zoom_in_splits(s2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+  return zoom_in_splits(s2, range);
 }
 
 /// Whether every tile from `lo` to `hi`, each axis's both included, asks band `band`

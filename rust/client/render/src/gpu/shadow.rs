@@ -19,11 +19,9 @@
 //! (light_gate.wgsl), as the world's pass is.
 
 use crate::gpu::ray::sequence;
-use pxl_engine::beam::{CORNER_SIDE, SAMPLE_SIDE};
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
-use pxl_engine::param::light::SAMPLE;
 use pxl_engine::ray::{MISS_ACROSS, MISS_LANES};
 use pxl_engine::WORKGROUPS_MOST;
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -85,10 +83,8 @@ const _: () = {
     assert!(
         (SIZE * SIZE).div_ceil(per) <= most
             && corners.div_ceil(per) <= most
-            && (SIZE * SIZE).div_ceil(MISS_LANES * MISS_ACROSS) <= most
-            && corners.div_ceil(CORNER_SIDE * CORNER_SIDE) <= most
-            && ((SIZE / SAMPLE) * (SIZE / SAMPLE)).div_ceil(SAMPLE_SIDE * SAMPLE_SIDE) <= most,
-        "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists, the misses and what the walks over the node cache left"
+            && (SIZE * SIZE).div_ceil(MISS_LANES * MISS_ACROSS) <= most,
+        "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists and the misses"
     );
 };
 

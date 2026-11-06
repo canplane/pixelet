@@ -35,8 +35,7 @@ fn resumed_at(aim: Aim, at_cell: u32, t: f32, line_words: u32, line_origin: u32)
 }
 
 /// The ray `aim` at `t`, off the deepest node of the line at word `line` that holds where it is
-/// there, or the root at it where that lies in another root: a cell's rays at its start, or a
-/// beam ray where its walk over the node cache left it (beam_hit.wgsl).
+/// there, or the root at it where that lies in another root: a cell's rays at its start.
 fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
   let dir = ray_dir(aim.dir);
   let inv = aim.inv;

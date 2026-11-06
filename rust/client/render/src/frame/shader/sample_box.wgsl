@@ -7,9 +7,11 @@
 // stopped it kept, and sets the face it entered across, asking that face's word the first time
 // where its observer reads one (`sample_asks`).
 
-/// Whether sample `s` stopped on a node.
+/// Whether sample `s` stopped on a node: not gone on to its reach, and not parked
+/// (`beam::SAMPLE_PARKED`).
 fn stopped(s: vec2<u32>) -> bool {
-  return beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM] != SAMPLE_NONE;
+  let zoom = beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM];
+  return zoom != SAMPLE_NONE && zoom != SAMPLE_PARKED;
 }
 
 /// Sample `s`'s node, its roots world-absolute from where its ray starts.
