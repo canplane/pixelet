@@ -33,7 +33,7 @@ pub struct Pipeline {
 const LAYOUTS: usize = PIPELINES as usize * GROUPS + COMPUTES as usize;
 /// Every pipeline the renderer makes, render and compute, each held to it
 /// as it is made.
-const PIPELINE_CAP: usize = 106;
+const PIPELINE_CAP: usize = 107;
 
 pub struct Pipelines {
     modules: [u32; SHADERS as usize],
@@ -147,7 +147,14 @@ impl Pipelines {
 
     /// Pipeline `id` drawing into `format`, depth32 its depth.
     pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Pipeline {
-        self.build_onto(g, id, format, (Format::depth32float, Stencil::Unused))
+        self.build_targets(g, id, format, 1)
+    }
+
+    /// Pipeline `id` drawing into `targets` colors of `format`, each the
+    /// fragment's output at its own location, depth32 its depth.
+    pub fn build_targets(&mut self, g: &Gpu, id: u32, format: Format, targets: usize) -> Pipeline {
+        let depth = (Format::depth32float, Stencil::Unused);
+        self.build_onto(g, id, (format, targets), depth)
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
@@ -166,19 +173,22 @@ impl Pipelines {
     /// (`GATED_DEPTH`), as `stencil` asks: into the depth alone where
     /// `format` is depth32's (`build`).
     pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
-        self.build_onto(g, id, format, (GATED_DEPTH, stencil))
+        self.build_onto(g, id, (format, 1), (GATED_DEPTH, stencil))
     }
 
     fn build_onto(
         &mut self,
         g: &Gpu,
         id: u32,
-        format: Format,
+        (format, targets): (Format, usize),
         (depth, stencil): (Format, Stencil),
     ) -> Pipeline {
         let key = fold(
             fold(
-                fold(fold(0xcbf29ce484222325, id), format as u32),
+                fold(
+                    fold(fold(0xcbf29ce484222325, id), format as u32),
+                    targets as u32,
+                ),
                 depth as u32,
             ),
             stencil as u32,
@@ -208,7 +218,7 @@ impl Pipelines {
             words,
             &b.layouts[..groups],
             module,
-            format,
+            (format, targets),
             (depth, stencil),
             (word, ticket),
         );

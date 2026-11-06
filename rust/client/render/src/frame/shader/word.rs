@@ -7,9 +7,10 @@
 
 use pxl_engine::screen;
 
-/// A draw's uniform (frame/draw.rs): its translation and what its pipeline
-/// reads past it.
-pub const DRAW_FLOATS: usize = 8;
+/// A draw's uniform (frame/draw.rs `Position`): its position's Q3 in its
+/// first three words, what its pipeline reads past them in the next five,
+/// and its position's remainder in the third vec4.
+pub const DRAW_FLOATS: usize = 12;
 
 /// What a uniform's field is to the shader that reads it off the vec4s.
 #[derive(Clone, Copy)]
@@ -19,6 +20,7 @@ pub enum Kind {
     Vec2,
     Vec2u,
     Vec3,
+    Vec3i,
     Vec4i,
     Vec4u,
     /// Three columns, a vec4 each, their `w` unread.
@@ -32,7 +34,7 @@ impl Kind {
         match self {
             Kind::F32 | Kind::U32 => 1,
             Kind::Vec2 | Kind::Vec2u => 2,
-            Kind::Vec3 => 3,
+            Kind::Vec3 | Kind::Vec3i => 3,
             Kind::Vec4i | Kind::Vec4u => 4,
             Kind::Mat3 => 11,
             Kind::Mat4 => 16,
@@ -115,6 +117,10 @@ uniform! {
         /// over its length squared, the box orthographic (shadow.wgsl
         /// `light_slope`).
         LIGHT_STEPS: Mat3 = 56,
+        /// The eye's Q3 (frame/draw.rs `Position`), which every draw's
+        /// position is taken against (frame.wgsl `from_eye`); `VIEW_PROJ`
+        /// holds the eye at its origin.
+        EYE: Vec3i = 68,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-engine `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
@@ -122,7 +128,7 @@ uniform! {
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
         /// Last: the words before it are what a frame reads as moved
         /// (gpu/renderer.rs `frame`).
-        JITTER: Vec2 = 68,
+        JITTER: Vec2 = 72,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
@@ -247,22 +253,22 @@ pub const AO_FLOATS: usize = floats(ao::FIELDS);
 
 uniform! {
     /// A marker set's (marker.wgsl, gpu/pass/marker.rs): the view, the
-    /// projection, the set's translation and its pixels a unit, and the
-    /// markers before the set's first.
+    /// projection, its pixels a unit, and the markers before the set's
+    /// first. Each marker holds where it stands (`MARKER_INSTANCE_WORDS`).
     marker {
         VIEW: Mat4 = 0,
         PROJ: Mat4 = 16,
-        TRANSLATION: Vec3 = 32,
-        PX_PER_UNIT: F32 = 35,
-        BEFORE: F32 = 36,
+        PX_PER_UNIT: F32 = 32,
+        BEFORE: F32 = 33,
     }
 }
 pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 
-/// A marker's instance and a location indicator zone's box's, in floats, as the kernel
-/// lays them (pxl-kernel domain/scene/marker/set.rs, location.rs) and
-/// marker.wgsl and location_zone.wgsl read them.
-pub const MARKER_INSTANCE_FLOATS: u32 = 11;
+/// A marker's instance, in words, its first three its stand's Q3 and the
+/// rest floats, and a location indicator zone's box's, in floats, as the
+/// kernel lays them (pxl-kernel domain/scene/marker/set.rs, location.rs)
+/// and marker.wgsl and location_zone.wgsl read them.
+pub const MARKER_INSTANCE_WORDS: u32 = 11;
 pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its

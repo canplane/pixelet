@@ -429,14 +429,14 @@ pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) ->
 }
 
 /// Each figure's actor into the frame's list, where it stands.
-pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
+pub fn companion_draw(draw: &mut DrawList, models: &Models) {
     let c = companion();
     for (actor, transform) in [&mut c.person, &mut c.pet]
         .into_iter()
         .flatten()
         .filter_map(Figure::drawn)
     {
-        actor.draw(draw, models, &transform, eye);
+        actor.draw(draw, models, &transform);
     }
 }
 

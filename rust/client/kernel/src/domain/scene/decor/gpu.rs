@@ -12,11 +12,13 @@ use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
 use pxl_engine::overwrite;
 use pxl_engine::LEAF_CELL;
+use pxl_render::frame::draw::Position;
 use pxl_render::gpu::api;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use xpute_guest::global::Global;
@@ -90,13 +92,17 @@ fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
 struct Frame {
     /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
+    /// The zoom placed decor is walked at (`walk_zoom`), made with `shown`.
+    walk_zoom: Zoom,
     drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`note_edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
-    translation: [f32; 3],
+    /// The unit the eye stands in, the lanes' anchor, as a draw's Q3
+    /// (pxl-render frame/draw.rs `Position`).
+    anchor: Q3,
     /// What the drawing words were last made of, by value.
     seen: Option<Key>,
     /// The cell the placed decor was last walked about, and what it left out.
@@ -106,8 +112,8 @@ struct Frame {
 /// What the drawing words are made of: the unit the eye stands in (its
 /// anchor), the ground's decor the eraser leaves out, and whether the
 /// catalog that measures the variants is read. A new input goes here or the
-/// drawing words never see it change. The eye within its unit moves only
-/// the translation.
+/// drawing words never see it change. The eye within its unit moves nothing
+/// here, only the frame's eye (pxl-render word.rs `frame::EYE`).
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
     anchor: V3,
@@ -132,11 +138,12 @@ static HAND_OVER: Global<Frame> = Global::new();
 fn hand_over() -> &'static mut Frame {
     HAND_OVER.get(|| Frame {
         shown: [0; DECORS.len()],
+        walk_zoom: UNIT_ZOOM,
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
         edits: [[0; 4]; overwrite::EDITS as usize],
         edited: 0,
-        translation: [0.0; 3],
+        anchor: [0; 3],
         seen: None,
         walked: None,
     })
@@ -155,7 +162,7 @@ fn wrap(x: i32) -> u32 {
 pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
     let h = hand_over();
     let anchor = eye.map(libm::floor);
-    h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
+    h.anchor = Position::of(anchor).q;
     let seen = Key {
         anchor,
         scattered_cell: scattered,
@@ -165,23 +172,9 @@ pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
         h.seen = Some(seen);
         drawing(&mut h.drawing, seen);
         h.shown = shown();
+        h.walk_zoom = walk_zoom();
     }
-    // Out to `dist` from anywhere in the anchor's unit: every unit of the
-    // eye's cell at its zoom reaches no farther than the cell and one
-    // beside it, whose side `dist` is short of. What is past an eye's own
-    // distance `decor_cnt_cs` leaves out by its size, as it does what is
-    // past the box.
-    // No farther than the rays ask the leaves' cells, past which none is drawn.
-    let dist = (DECORS
-        .iter()
-        .map(|d| d.extent(catalog()))
-        .fold(0.0, f64::max)
-        / decor_impostor_angle())
-    .min(lattice::draw_dist(lattice::GROUND, quadrant::LEAF_ZOOM));
-    let mut zoom = UNIT_ZOOM;
-    while zoom > 0 && units(zoom) < dist {
-        zoom -= 1;
-    }
+    let zoom = h.walk_zoom;
     let side = units(zoom);
     let cell = anchor.map(|v| libm::floor(v / side) as i32);
     let around = Aabb {
@@ -223,6 +216,27 @@ pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
             0,
         ]);
     });
+}
+
+/// The zoom of the coarsest cell no wider than the reach placed decor is
+/// walked out to is short of: out to where the largest is an impostor's
+/// worth, and no farther than the rays ask the leaves' cells, past which
+/// none is drawn. Every unit of the eye's cell at that zoom reaches no
+/// farther than the cell and one beside it. What is past an eye's own
+/// distance `decor_cnt_cs` leaves out by its size, as it does what is past
+/// the box.
+fn walk_zoom() -> Zoom {
+    let dist = (DECORS
+        .iter()
+        .map(|d| d.extent(catalog()))
+        .fold(0.0, f64::max)
+        / decor_impostor_angle())
+    .min(lattice::draw_dist(lattice::GROUND, quadrant::LEAF_ZOOM));
+    let mut zoom = UNIT_ZOOM;
+    while zoom > 0 && units(zoom) < dist {
+        zoom -= 1;
+    }
+    zoom
 }
 
 /// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, X on its own
@@ -314,7 +328,7 @@ pub fn frame() -> DecorFrame<'static> {
         },
         drawing: &h.drawing,
         placed_records: &h.placed,
-        translation: h.translation,
+        anchor: h.anchor,
         edits: &h.edits[..edited],
     }
 }

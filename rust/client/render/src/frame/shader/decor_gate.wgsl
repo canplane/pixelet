@@ -70,12 +70,13 @@ fn decor_gate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let slot = instances[at];
   let off = region_word(region, 3u);
   let stride = region_word(region, 4u);
-  let translation = vec3<f32>(
-    bitcast<f32>(region_word(region, 0u)),
-    bitcast<f32>(region_word(region, 1u)),
-    bitcast<f32>(region_word(region, 2u)),
+  // The anchor's Q3 against the eye's, as the draw places it (instance.wgsl
+  // `draw_translation`): decor's anchor is on Q3, so this is the f64
+  // difference narrowed once, and the gate decides on what is drawn.
+  var v = from_eye(
+    vec3<i32>(bitcast<i32>(region_word(region, 0u)), bitcast<i32>(region_word(region, 1u)), bitcast<i32>(region_word(region, 2u))),
+    vec3<f32>(bitcast<f32>(region_word(region, 8u)), bitcast<f32>(region_word(region, 9u)), bitcast<f32>(region_word(region, 10u))),
   );
-  var v = translation;
   for (var k = 0u; k < 3u; k += 1u) {
     v[k] += bitcast<f32>(instances[off + k * stride + slot]);
   }

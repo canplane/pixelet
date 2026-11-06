@@ -15,7 +15,7 @@ use crate::gpu::upload::{Draws, Uploads};
 /// Their faces go into the canvas's depth, cleared once what is drawn over
 /// the world is done with it, and their lines are drawn against those faces alone, so a gizmo
 /// hides gizmos and nothing of the world hides one. Each set takes its own
-/// translation, a draw's uniform a set.
+/// position, a draw's uniform a set.
 pub struct DebugPass {
     pipeline: Pipeline,
     faces: Pipeline,
@@ -32,7 +32,7 @@ impl DebugPass {
             pipeline,
             faces,
             frame_group,
-            uniforms: DrawUniforms::new(16, align),
+            uniforms: DrawUniforms::new(32, align),
         }
     }
 
@@ -46,7 +46,8 @@ impl DebugPass {
             moved,
             |buf, d| {
                 let u = uniform_of(uniforms, d);
-                buf[..16].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0]));
+                // Its position's Q3 and its remainder (debug.wgsl `Draw`).
+                buf[..32].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0, u[8], u[9], u[10], 0.0]));
             },
         );
     }

@@ -31,11 +31,12 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
-use crate::frame::shader::word::frame::VIEW_PROJ;
+use crate::frame::shader::word::frame::{EYE, VIEW_PROJ};
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass, GATED_DEPTH,
+    word_bytes, Entry, Format, Gpu, Group, Load, RenderContext, Stencil, TrackedRenderPass,
+    GATED_DEPTH,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
@@ -83,16 +84,13 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 /// and its depth alone, as the lit passes read it; the world's depth from
 /// the light as its cast leaves it, a word a slot of the clipmap (pxl-engine
 /// `light::word`), which `light_cs` writes and `PIPELINE_LIGHT_MAP` lays
-/// into the map off the box's corner; and the group the world is laid in over, the world, the
-/// corner and the light's list whose reads hold the epoch's uncast tiles lit, made again
-/// exactly when the list is another.
+/// into the map off the box's corner.
 struct Targets {
     map: u32,
     map_view: u32,
     map_depth_view: u32,
     world: u32,
     world_view: u32,
-    lay_group: (u32, u32),
 }
 
 pub struct Shadow {
@@ -101,12 +99,16 @@ pub struct Shadow {
     sampler: u32,
     blank_view: u32,
     blank_sampler: u32,
-    /// The world laid in, over `Targets::lay_group`; and the map's gate,
-    /// which lays it in the claimed tiles alone, over the world, the corner,
-    /// the map's tiles' words and uniform and the marks' box
-    /// (`Tiles::marks_box`).
+    /// The world laid in, over `lay_group`: the world, the corner and the
+    /// light's list whose reads hold the epoch's uncast tiles lit; and the
+    /// map's gate, which lays it in the claimed tiles alone, over
+    /// `gate_group`: those and the map's tiles' words and uniform and the
+    /// marks' box (`Tiles::marks_box`). Both set before the frame
+    /// (`set_groups`).
     lay: Pipeline,
     gate: Pipeline,
+    lay_group: Group,
+    gate_group: Group,
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
@@ -183,6 +185,8 @@ impl Shadow {
             blank_sampler,
             lay,
             gate,
+            lay_group: Group::default(),
+            gate_group: Group::default(),
             corner,
             light_group,
             light_frame,
@@ -201,9 +205,9 @@ impl Shadow {
     }
 
     /// The map and the world made where `on`, the shadows' setting
-    /// (`STAGE_AT::SHADOWS`), and let go where not, with the group that
-    /// binds the world: the first map cast after they are made casts whole,
-    /// as the light's cast does (ray/cast.rs `light_made`). Whether they
+    /// (`STAGE_AT::SHADOWS`), and let go where not: the first map cast after
+    /// they are made casts whole, as the light's cast does (ray/cast.rs
+    /// `light_made`). Whether they
     /// were made or let go, so the lit passes' groups are made again over
     /// the map or the blank one (`entries`).
     pub fn made(&mut self, g: &Gpu, on: bool) -> bool {
@@ -212,14 +216,7 @@ impl Shadow {
         }
         match self.targets.take() {
             Some(t) => {
-                for id in [
-                    t.lay_group.0,
-                    t.world_view,
-                    t.world,
-                    t.map_depth_view,
-                    t.map_view,
-                    t.map,
-                ] {
+                for id in [t.world_view, t.world, t.map_depth_view, t.map_view, t.map] {
                     release(id);
                 }
             }
@@ -247,11 +244,41 @@ impl Shadow {
                     map_depth_view: g.depth_only_view(map),
                     world,
                     world_view,
-                    lay_group: (0, 0),
                 });
             }
         }
         true
+    }
+
+    /// The lay's group and the gate's, over the map's `tiles` and the
+    /// light's list `reads` (ray/cast.rs `light_reads`), before the frame's
+    /// commands, where the map and the list are made; let go where either
+    /// is not.
+    pub fn set_groups(&mut self, g: &Gpu, tiles: &Tiles, reads: Option<u32>) {
+        let (Some(t), Some(reads)) = (&self.targets, reads) else {
+            self.lay_group.release();
+            self.gate_group.release();
+            return;
+        };
+        let lay = [
+            view_entry(0, t.world_view),
+            buf_entry(1, self.corner),
+            buf_entry(2, reads),
+        ];
+        self.lay_group.set(g, self.lay.layouts[0], &lay);
+        let (words, uniform) = tiles.this_frame();
+        self.gate_group.set(
+            g,
+            self.gate.layouts[0],
+            &[
+                lay[0],
+                lay[1],
+                lay[2],
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+                buf_entry(33, tiles.marks_box()),
+            ],
+        );
     }
 
     /// Whether the map and the world are made (`made`).
@@ -443,6 +470,12 @@ impl Shadow {
 
     /// The light's frame, where the casters' depth pipelines read their
     /// view.
+    /// The eye's Q3 in the light's frame, as in the eye's: a draw from the
+    /// light takes its position against the same eye (frame.wgsl `from_eye`).
+    pub fn put_eye(&mut self, eye: [f32; 3]) {
+        self.light[EYE..EYE + 3].copy_from_slice(&eye);
+    }
+
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.light_frame, 0, bytes(&self.light));
     }
@@ -456,35 +489,18 @@ impl Shadow {
     /// that casts, the rest kept as the last frame left it: the gate lays
     /// the world there and raises their stencil, a quad a tile of the box
     /// the frame's marks cover, the unclaimed collapsed, as many as the GPU
-    /// counted (`Tiles::box_args`). The casters are drawn into it next,
-    /// through the stencil, then it ends.
+    /// counted (`Tiles::box_args`), each over its group set before the frame
+    /// (`set_groups`). The casters are drawn into it next, through the
+    /// stencil, then it ends.
     pub fn begin<'a>(
-        &mut self,
+        &self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
         tiles: &mut Tiles,
         gated: bool,
-        LightReads {
-            list: reads,
-            epoch,
-            args,
-        }: LightReads,
+        LightReads { epoch, args, .. }: LightReads,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let (lay, corner_buf) = (self.lay.layouts[0], self.corner);
-        let t = self.targets.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        if t.lay_group.1 != reads {
-            release(t.lay_group.0);
-            let group = g.bind_group(
-                lay,
-                &[
-                    view_entry(0, t.world_view),
-                    buf_entry(1, corner_buf),
-                    buf_entry(2, reads),
-                ],
-            );
-            t.lay_group = (group, reads);
-        }
         let t = self.targets();
         // The box's corner the world's depth is laid in off, and the reads that tell the
         // tiles the light's epoch cast from those it has not yet, past where a slide went
@@ -508,28 +524,15 @@ impl Shadow {
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
-            let (words, uniform) = tiles.this_frame();
-            let group = g.bind_group(
-                self.gate.layouts[0],
-                &[
-                    view_entry(0, t.world_view),
-                    buf_entry(1, self.corner),
-                    buf_entry(2, reads),
-                    buf_entry(30, words),
-                    buf_entry(31, uniform),
-                    buf_entry(33, tiles.marks_box()),
-                ],
-            );
             pass.set_stencil_reference(n);
             pass.set_pipeline(self.gate.id);
-            pass.set_bind_group(0, group, &[]);
+            pass.set_bind_group(0, self.gate_group.id(), &[]);
             if let Some(args) = tiles.box_args() {
                 pass.draw_indirect(args, 0);
             }
-            release(group);
         } else if cast {
             pass.set_pipeline(self.lay.id);
-            pass.set_bind_group(0, t.lay_group.0, &[]);
+            pass.set_bind_group(0, self.lay_group.id(), &[]);
             pass.draw_indirect(args, word_bytes(light::ARGS_LAY as usize));
         }
         pass

@@ -133,7 +133,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         layout: None,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { draw::set_lists(at + (UPLOAD_COLUMNS * slots * 4) as u32, live) };
+    unsafe { draw::set_lists(at as usize + UPLOAD_COLUMNS * slots * 4, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {

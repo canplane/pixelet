@@ -18,7 +18,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
-use crate::frame::draw::uniform_of;
+use crate::frame::draw::{q3_of, uniform_of};
 use crate::frame::draw::{
     stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
     PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
@@ -26,7 +26,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, JITTER, LIGHT_STEPS,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, EYE, JITTER, LIGHT_STEPS,
     LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
@@ -39,13 +39,13 @@ use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, stream_free, texture_usage, view_entry, word_bytes, Device,
-    Entry, Format, Gpu, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
+    Entry, Format, Gpu, Group, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
 };
 use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
-use crate::gpu::generator::IndirectDraw;
+use crate::gpu::generator::{Gate, IndirectDraw};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
@@ -402,8 +402,14 @@ pub struct Renderer {
     /// The sheets' words as last written (`CloudPass::words`).
     clouds_read: Read,
     /// The gate a frame not drawn whole is drawn through, over the tiles'
-    /// words and uniform (`Resolve::tiles`).
+    /// words and uniform (`Resolve::tiles`), its group over them.
     gate: Pipeline,
+    gate_group: Group,
+    /// The marks' groups 0 (tile_mark.wgsl): the screen's over this frame's
+    /// words and the last's, the map's over the light's frame
+    /// (`mark_entries`).
+    marks: [Group; 2],
+    light_marks: Group,
     /// The light's map's tiles, the light's cast's tiles' side (pxl-engine
     /// `light::TILE`), claimed the frame they changed alone, as the
     /// map gathers nothing (gpu/tiles.rs).
@@ -503,6 +509,9 @@ impl Renderer {
             beside: Read::default(),
             clouds_read: Read::default(),
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
+            gate_group: Group::default(),
+            marks: [Group::default(), Group::default()],
+            light_marks: Group::default(),
             light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::light_mark),
             last_frame_uploads: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
@@ -556,19 +565,38 @@ impl Renderer {
         true
     }
 
-    /// A mark's group 0 over the frame's words `frame` and `tiles`' words,
-    /// uniform and marks' box (tile_mark.wgsl), for the frame it is made in.
-    fn mark_group(&self, g: &Gpu, frame: u32, tiles: &Tiles) -> u32 {
-        let (words, uniform) = tiles.this_frame();
-        g.bind_group(
-            self.skinned_mesh.mark_layout(),
-            &[
-                buf_entry(0, frame),
-                buf_entry(30, words),
-                buf_entry(31, uniform),
-                buf_entry(32, tiles.marks_box()),
-            ],
-        )
+    /// The groups of the frame's passes kept across frames (`Group`), set
+    /// before its commands over the world's surface `s` made at its size
+    /// (`targets`), the screen's tiles and the map's at theirs
+    /// (`Tiles::size`), and what else each binds.
+    fn set_groups(&mut self, g: &Gpu, s: &Surface) {
+        let tiles = &self.resolve.tiles;
+        let layout = self.skinned_mesh.mark_layout();
+        let frames = [self.frame_buf, self.frame_was_buf];
+        for (group, frame) in self.marks.iter_mut().zip(frames) {
+            group.set(g, layout, &mark_entries(frame, tiles));
+        }
+        if self.shadow.on() {
+            let (light_frame, _) = self.shadow.frame_and_map();
+            let entries = mark_entries(light_frame, &self.light_tiles);
+            self.light_marks.set(g, layout, &entries);
+        }
+        let drawn = tiles.this_frame();
+        let entries = [buf_entry(30, drawn.0), buf_entry(31, drawn.1)];
+        self.gate_group.set(g, self.gate.layouts[0], &entries);
+        if self.screen_ao {
+            self.ao.set_apply_group(g, drawn);
+        }
+        let reads = self.screen.light_reads().map(|r| r.list);
+        self.shadow.set_groups(g, &self.light_tiles, reads);
+        if self.shadows {
+            let depth = s.depth_only_view;
+            self.propagate
+                .set_groups(g, depth, &self.light_tiles, &self.resolve.tiles);
+        }
+        self.resolve.set_groups(g, self.frame_buf, s);
+        let tiles = Some(&self.resolve.tiles);
+        self.finish.set_groups(g, self.frame_buf, s, tiles);
     }
 
     /// What a cell's face is painted by, wherever it is drawn from
@@ -648,9 +676,15 @@ impl Renderer {
         m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
         put_mat(u, VIEW_PROJ, &m);
         self.view_proj = m;
-        // Everything is drawn in the eye's frame; positions are taken against the eye
-        // in f64 before they are narrowed.
+        // Everything is drawn in the eye's frame: a draw's position is
+        // taken against the eye's Q3 on the GPU (frame/draw.rs `Position`),
+        // the eye held on Q3 steps (pxl-kernel view/frame/pose.rs
+        // `view_compose`), so its Q3 is exact.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
+        for (k, v) in q3_of(eye_world).into_iter().enumerate() {
+            u[EYE + k] = f32::from_bits(v as u32);
+        }
+        self.shadow.put_eye([u[EYE], u[EYE + 1], u[EYE + 2]]);
         self.resolve.prepare(&m, eye_world);
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m);
@@ -1034,14 +1068,8 @@ impl Renderer {
         self.skinned_mesh
             .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.location.prepare(g, &draws, uniforms, lists_moved, b);
-        self.marker.prepare(
-            g,
-            world.screen_depth_view,
-            world.screen,
-            &draws,
-            uniforms,
-            b,
-        );
+        self.marker
+            .prepare(g, world.screen_depth_view, world.screen, &draws, b);
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
@@ -1206,6 +1234,7 @@ impl Renderer {
             self.resolve.tiles.marked_in(now);
         }
 
+        self.set_groups(g, world);
         // The frame proper changes nothing that outlives it and lets go in it
         // each object it makes: one too large for the stream is dropped whole,
         // and the screen keeps the last.
@@ -1223,11 +1252,7 @@ impl Renderer {
             // A draw as it is marked by this frame's words, as it was by the
             // last's: each at the jitter it is or was drawn at.
             g.write_buf(self.frame_was_buf, 0, bytes(&self.frame_was));
-            // The marks' groups 0 over the frame's words, this frame's and
-            // the last's, and the screen tiles' (tile_mark.wgsl).
-            let tiles = &self.resolve.tiles;
-            let frames =
-                [self.frame_buf, self.frame_was_buf].map(|frame| self.mark_group(g, frame, tiles));
+            let frames = [self.marks[0].id(), self.marks[1].id()];
             // The world's depth attached read only, its stencil kept: the
             // marks test nothing and write no color.
             let desc = pass_desc(
@@ -1246,16 +1271,16 @@ impl Renderer {
             self.impostor.draw_marks(&mut pass, frames);
             self.location.draw_marks(&mut pass, frames);
             pass.end();
-            frames.into_iter().for_each(release);
         }
         // Decor generated, in a frame through the gate, drawn where it meets the tiles the
         // frame claims, now that its marks are made (`Generator::gate`).
         let generated = if gated {
-            let claimed_box = self.resolve.tiles.dispatch_claimed_box(&mut ctx);
-            let tiles = self.resolve.tiles.this_frame().1;
+            let tiles = &self.resolve.tiles;
             self.screen
-                .gate_generated(&mut ctx, self.frame_buf, tiles, claimed_box);
-            self.screen.generated().map(IndirectDraw::through_gate)
+                .gate_generated(&mut ctx, Gate::Screen, self.frame_buf, tiles);
+            self.screen
+                .generated()
+                .map(|d| d.through_gate(Gate::Screen))
         } else {
             self.screen.generated()
         };
@@ -1266,8 +1291,7 @@ impl Renderer {
         // the map's tiles the casters' shadows change, their words set by
         // their drawn selves, which the propagation reads.
         if propagating {
-            let (light_frame, map) = self.shadow.frame_and_map();
-            let group = self.mark_group(g, light_frame, &self.light_tiles);
+            let (_, map) = self.shadow.frame_and_map();
             let desc = pass_desc(
                 0,
                 Load::Clear,
@@ -1281,18 +1305,27 @@ impl Renderer {
             let mut pass = TrackedRenderPass::new(g, pass);
             // The light's frame has no jitter, and stands in a frame whose
             // map is drawn through its gate: as a draw is and as it was, one.
-            let frames = [group; 2];
+            let frames = [self.light_marks.id(); 2];
             self.skinned_mesh.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, true);
             pass.end();
-            release(group);
             // The box they cover counted into the gate's draw.
             self.light_tiles.dispatch_box_args(&mut ctx);
+            // Decor generated drawn into the map where it meets the tiles the map claims, as
+            // the screen's gate draws it (`Generator::gate`).
+            let (light_frame, _) = self.shadow.frame_and_map();
+            self.screen
+                .gate_generated(&mut ctx, Gate::Light, light_frame, &self.light_tiles);
         }
+        // Decor generated as the map draws it: through its gate where the map is.
+        let map_generated = if propagating {
+            self.screen.generated().map(|d| d.through_gate(Gate::Light))
+        } else {
+            self.screen.generated()
+        };
         if propagating {
-            let depth = world.depth_only_view;
             self.propagate
-                .dispatch(&mut ctx, depth, &self.light_tiles, &self.resolve.tiles);
+                .dispatch(&mut ctx, self.resolve.tiles.squares());
         }
         self.screen.dispatch(&mut ctx);
         // The shadow map: the world's depth from the sun in the tiles a receiver reads, where
@@ -1304,7 +1337,7 @@ impl Renderer {
             let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_gated, reads);
             let light = self.shadow.light_group;
             self.decor
-                .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);
+                .draw_generated(&mut pass, map_generated, b, Stage::Depth, light);
             self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
             self.skinned_mesh.draw(
                 &mut pass,
@@ -1359,16 +1392,10 @@ impl Renderer {
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(number) = number {
             pass.set_stencil_reference(number);
-            let tiles = self.resolve.tiles.this_frame();
-            let group = g.bind_group(
-                self.gate.layouts[0],
-                &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
-            );
             let [across, down] = self.resolve.tiles.squares();
             pass.set_pipeline(self.gate.id);
-            pass.set_bind_group(0, group, &[]);
+            pass.set_bind_group(0, self.gate_group.id(), &[]);
             pass.draw(6, across * down, 0, 0);
-            release(group);
         }
         // The world that stands while the eye does: what the occlusion reads.
         self.draw_opaque(&mut pass, generated, b, Stage::Lit);
@@ -1397,7 +1424,7 @@ impl Renderer {
         // quads, before what the kernel animates is drawn.
         if self.screen_ao {
             let [across, down] = self.resolve.tiles.squares();
-            self.ao.apply(g, &mut pass, drawn, across * down);
+            self.ao.apply(&mut pass, across * down);
         }
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
         pass.set_pipeline(self.sky_built.id);
@@ -1442,21 +1469,19 @@ impl Renderer {
         // frame's words (`SHADOW_STRENGTH`), so it is drawn whole and sets
         // every square before a frame reaches.
         if self.shadows {
-            self.propagate
-                .set_bounds(&mut ctx, world.depth_only_view, drawn, squares);
+            self.propagate.set_bounds(&mut ctx, squares);
         }
-        let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
+        let gathered = self.resolve.draw(&mut ctx, world, gated);
         // At the canvas's size, its own span. A frame not drawn whole
         // finishes again only its claimed tiles (screen_tiles.wgsl); not
         // after the debug pass drew into the screen's depth.
         self.finish.draw(
             &mut ctx,
             GpuSpanName::finish,
-            self.frame_buf,
             world,
             gathered,
             canvas_view,
-            (gated && !self.debug_drew).then_some(&self.resolve.tiles),
+            Some((&self.resolve.tiles, gated && !self.debug_drew)),
         );
         self.marker
             .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
@@ -1597,6 +1622,7 @@ impl Renderer {
             preview
                 .skinned_mesh
                 .prepare(g, core::iter::once(own), uniforms, moved, uploads());
+            preview.set_groups(g, s);
         }
     }
 
@@ -1663,6 +1689,18 @@ impl Renderer {
             rays: None,
         }
     }
+}
+
+/// A mark's group 0 over the frame's words `frame` and `tiles`' words,
+/// uniform and marks' box (tile_mark.wgsl).
+fn mark_entries(frame: u32, tiles: &Tiles) -> [Entry; 4] {
+    let (words, uniform) = tiles.this_frame();
+    [
+        buf_entry(0, frame),
+        buf_entry(30, words),
+        buf_entry(31, uniform),
+        buf_entry(32, tiles.marks_box()),
+    ]
 }
 
 /// A new size is applied once it has held SETTLE_TURNS turns; until then the

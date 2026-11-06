@@ -10,7 +10,7 @@ import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";
 import { HaloPath, HaloText } from "./halo.tsx";
 import { color, halo, textStyle, weight } from "@/shell/ui/theme.ts";
-import { useKernel } from "@/shell/store/watch.ts";
+import { useView } from "@/shell/store/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
@@ -29,7 +29,7 @@ function niceLength(m: f64): f64 {
 
 /** Line and ticks are one path under one halo. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const mPerPx = useKernel((s) => s.m_per_px);
+  const mPerPx = useView((v) => v.m_per_px);
   const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
   const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
 

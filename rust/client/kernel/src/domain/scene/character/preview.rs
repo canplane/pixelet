@@ -21,7 +21,6 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::surface;
 use pxl_spec::asset::actor::IDLE_CLIP;
-use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
@@ -98,8 +97,9 @@ pub fn preview_step(ctx: &mut TickContext) {
     if c.previews.is_empty() {
         return;
     }
-    // Under the sea below the eye, out of sight and near it, where the f32 of
-    // its draw resolves a unit-tall model.
+    // Under the sea below the eye, out of sight of the world, and drawn
+    // about its own Q3 (pxl-render gpu/pass/preview.rs `draw`), so a
+    // unit-tall model resolves wherever it stands.
     let mut at = pose::sea_under_eye();
     at[2] -= CASE_DEPTH_U;
     let mut turned = false;
@@ -151,10 +151,10 @@ pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> b
 }
 
 /// Each preview's actor into the frame's list, where it stands.
-pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
+pub fn preview_draw(draw: &mut DrawList, models: &Models) {
     for preview in &previews().previews {
         if let (Some(actor), Some(transform)) = (&preview.actor, preview.transform) {
-            actor.draw(draw, models, &transform, eye);
+            actor.draw(draw, models, &transform);
         }
     }
 }

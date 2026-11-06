@@ -305,10 +305,11 @@ impl EditMinor {
 #[repr(u32)]
 pub enum ShellMinor {
     SNAPSHOT = 0x01,
+    VIEW = 0x02,
 }
 
 impl ShellMinor {
-    pub const ALL: [ShellMinor; 1] = [ShellMinor::SNAPSHOT];
+    pub const ALL: [ShellMinor; 2] = [ShellMinor::SNAPSHOT, ShellMinor::VIEW];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ShellMinor> {
@@ -727,10 +728,13 @@ pub enum Command {
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
     SHELL_SNAPSHOT = 0x1b01,
+    /// The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
+    /// zoom, which moves them every frame, leaves the snapshot as it was.
+    SHELL_VIEW = 0x1b02,
 }
 
 impl Command {
-    pub const ALL: [Command; 37] = [
+    pub const ALL: [Command; 38] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -768,6 +772,7 @@ impl Command {
         Command::TEXT_LAYOUT,
         Command::TEXT_RASTER,
         Command::SHELL_SNAPSHOT,
+        Command::SHELL_VIEW,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -784,8 +789,6 @@ pub struct Snapshot<'a> {
     /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
     pub draft: Option<&'a str>,
     pub orient: OrientationState,
-    /// The view's azimuth.
-    pub azimuth: f64,
     pub is_follow_mode: bool,
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
@@ -795,8 +798,6 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
     /// has read its storage file, a few turns from boot.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
-    pub m_per_px: f64,
     /// The division the pivot is in and every one above it, broad to narrow; empty
     /// where the pivot is in none or the tile it is read out of has not arrived.
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
@@ -817,7 +818,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 18;
+    pub const FIELDS: u32 = 16;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
@@ -825,13 +826,11 @@ impl Snapshot<'_> {
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.str(self.draft);
         w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
-        w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
         w.bool(Some(self.zooming));
         w.bool(Some(self.over_marker));
         w.u32_array(Some(self.settings));
-        w.f64(Some(self.m_per_px));
         let mut n = 0;
         (self.division)(&mut |_| n += 1);
         w.branch(n, |w| {
@@ -1647,6 +1646,32 @@ impl xpute_guest::ipc::door::Event for ShellSnapshotEvent {
     }
 }
 
+/// Command::SHELL_VIEW's event.
+pub struct ShellViewEvent {
+    /// The view's azimuth.
+    pub azimuth: f64,
+    /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
+    pub m_per_px: f64,
+}
+
+impl ShellViewEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.azimuth));
+        w.f64(Some(self.m_per_px));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for ShellViewEvent {
+    const NUMBER: u32 = 6914;
+    const FIELDS: u32 = 2;
+    fn write(&self, w: &mut PacketWriter) {
+        ShellViewEvent::write(self, w);
+    }
+}
+
 /// The shell protocol's guest end: what it posts to the host and what it hears from it.
 pub mod shell {
     use super::*;
@@ -1676,6 +1701,11 @@ pub mod shell {
 
     /// Command::SHELL_SNAPSHOT, posted for the host.
     pub fn shell_snapshot(e: &ShellSnapshotEvent) {
+        machine::door().send(e);
+    }
+
+    /// Command::SHELL_VIEW, posted for the host.
+    pub fn shell_view(e: &ShellViewEvent) {
         machine::door().send(e);
     }
 

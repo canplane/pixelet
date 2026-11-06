@@ -16,7 +16,9 @@ use fnv::FnvHashMap;
 use pxl_content::cloud::{cloud_draw, drift, holds_cloud};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
-use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
+use pxl_render::frame::draw::{
+    DrawList, Position, Stand, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::catalog::Slot;
@@ -253,7 +255,6 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         },
         None,
     );
-    let frame_eye = frame.eye;
     for (&key, b) in &c.patches {
         let corner = [
             key[0] as f64 * PATCH - off[0],
@@ -303,25 +304,16 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             side: PATCH,
             heights: b.heights,
         };
-        let translation = DrawList::translation(
-            [nearest(corner[0], frame_eye[0]), corner[1], 0.0],
-            frame_eye,
-        );
+        // The patch's corner as the drift leaves it, finer than Q3, on its
+        // own lap of X: its draw holds no eye.
+        let pos = Position::of([corner[0], corner[1], 0.0]);
         let groups = VARIANTS.iter().enumerate().map(|(k, &a)| {
             (
                 (FIRST_GROUP + k) as u32,
                 (widest(a), CLOUD_WIDTH.map(|w| w / widest(a))),
             )
         });
-        present_patch(
-            draw,
-            &patch,
-            translation,
-            eye,
-            groups,
-            opacity,
-            &mut c.impostors,
-        );
+        present_patch(draw, &patch, pos, eye, groups, opacity, &mut c.impostors);
     }
 }
 
@@ -377,14 +369,15 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 
 /// The patch's clouds as `build` laid them, read off its columns: each one's
 /// middle about the patch's corner, its height over the datum, and its half
-/// extent. The field's hash is asked once a patch, where it is built.
+/// extent. The field's hash is asked once a patch, where it is built, and
+/// the catalog once a variant.
 fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] =
         unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
     column::groups(words)
-        .zip(VARIANTS)
-        .flat_map(move |((first, n), file)| {
+        .zip(VARIANTS.map(|file| (widest(file), extent(file)[2])))
+        .flat_map(move |((first, n), (wide, tall))| {
             let column = GroupColumns {
                 first: first as usize,
                 cnt: n as usize,
@@ -392,11 +385,8 @@ fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
             (0..n as usize).map(move |i| {
                 let at = |k: usize| f64::from(f32::from_bits(words[column.f32_at(k, i)]));
                 let scale = at(4);
-                let side = widest(file) * scale / 2.0;
-                (
-                    [at(0), at(1), at(2)],
-                    [side, side, extent(file)[2] * scale / 2.0],
-                )
+                let side = wide * scale / 2.0;
+                ([at(0), at(1), at(2)], [side, side, tall * scale / 2.0])
             })
         })
 }
@@ -484,7 +474,7 @@ struct PatchDraw {
 fn present_patch(
     draw: &mut DrawList,
     b: &PatchDraw,
-    translation: [f32; 3],
+    pos: Position,
     eye: V3,
     groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,
     opacity: f32,
@@ -561,17 +551,12 @@ fn present_patch(
         at += impostors.len();
         let idx = b.idx / 4 + first as u32;
         // Its group's draws read the sun's map, so they stand within the patch's box grown by
-        // as far as the group's models reach at their most scale, units from the eye.
+        // as far as the group's models reach at their most scale, in the world.
         let e = extent * most;
-        let stand = [
-            [x0 - e - eye[0], y0 - e - eye[1], zlo - e - eye[2]],
-            [
-                x0 + b.side + e - eye[0],
-                y0 + b.side + e - eye[1],
-                zhi + e - eye[2],
-            ],
-        ]
-        .map(|v| v.map(|w| w as f32));
+        let stand = Stand::of(
+            [x0 - e, y0 - e, zlo - e],
+            [x0 + b.side + e, y0 + b.side + e, zhi + e],
+        );
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -584,7 +569,7 @@ fn present_patch(
                 group,
                 models,
                 [off, cnt, idx],
-                translation,
+                pos,
                 opacity,
                 Some(stand),
             );
@@ -596,7 +581,7 @@ fn present_patch(
                 group,
                 impostors.len() as u32,
                 [off, cnt, idx + models],
-                translation,
+                pos,
                 1.0,
                 Some(stand),
             );

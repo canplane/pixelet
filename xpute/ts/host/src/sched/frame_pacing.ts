@@ -56,6 +56,9 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private gap_at = 0;
   /** How many of `gaps` are frames seen, up to the window. */
   private seen = 0;
+  /** The display's refresh as of the last gap seen: a percentile of the
+   * window, sorted once a gap and read by every admit and grant after it. */
+  private _refresh_ms: f64;
   private overrun_ms = 0;
   private input_at = -Infinity;
   private asked_next = false;
@@ -76,6 +79,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   ) {
     this.cfg = cfg;
     this.max_ms = 1000 / cfg.pace_hz;
+    this._refresh_ms = this.max_ms;
     this.next_frame = next_frame;
   }
 
@@ -94,17 +98,17 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
       this.gaps[this.gap_at] = gap_ms;
       this.gap_at = (this.gap_at + 1) % FRAME_WINDOW;
       this.seen = Math.min(this.seen + 1, FRAME_WINDOW);
+      const n = this.seen;
+      const seen = this.sorted.subarray(0, n);
+      seen.set(this.gaps.subarray(0, n));
+      seen.sort();
+      this._refresh_ms = seen[n >> 2];
     }
   }
 
   /** The display's refresh, from the gaps seen. */
   refresh(): f64 {
-    const n = this.seen;
-    if (n === 0) return this.max_ms;
-    const seen = this.sorted.subarray(0, n);
-    seen.set(this.gaps.subarray(0, n));
-    seen.sort();
-    return seen[n >> 2];
+    return this._refresh_ms;
   }
 
   /**

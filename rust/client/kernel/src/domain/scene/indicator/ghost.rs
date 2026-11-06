@@ -7,7 +7,9 @@
 //! is decided here: a box's color and texture, and the box that stands in for
 //! a decor until it can be drawn as itself.
 
-use pxl_render::frame::draw::{DrawList, MirroredBlock, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
+use pxl_render::frame::draw::{
+    DrawList, MirroredBlock, Position, Stand, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
+};
 use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
@@ -177,40 +179,41 @@ impl GhostDraw {
         self.shape = self.block.write(draw, instance).then_some(shape);
     }
 
-    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
+    /// On Q3, a box's on whole units, a decor's where its stored Q3 is: on any lap of X,
+    /// drawn the short way round from the eye (pxl-render frame/draw.rs `Position`).
+    pub fn draw(&self, draw: &mut DrawList) {
         let Some(shape) = self.shape else { return };
         match shape {
             Shape::Box { size_bits, .. } => {
-                let t = DrawList::translation(on_whole_units(self.at).0, eye);
+                let whole = on_whole_units(self.at).0;
                 // Written in a cell of its own size (write_lone_box).
-                let unit = f64::from_bits(size_bits) as f32;
+                let size = f64::from_bits(size_bits);
                 // It reads the sun's map, so it stands within its cell, its corner off the whole
-                // unit `t` by under one.
-                let stand = [t, t.map(|v| v + 1.0 + unit)];
+                // unit by under one.
+                let stand = Stand::of(whole, whole.map(|v| v + 1.0 + size));
                 draw.draw_in(
                     PIPELINE_GHOST_BOX,
                     self.block.handle,
                     1,
                     0,
-                    t,
+                    Position::of(whole),
                     GHOST_OPACITY,
-                    unit,
+                    size as f32,
                     self.z_step as f32,
                     Some(stand),
                 );
             }
             Shape::Decor { group, .. } => {
                 let idx = GroupColumns::words(1) as u32;
-                let t = DrawList::translation(self.at, eye);
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
                     self.block.handle,
                     group,
                     1,
                     [0, 1, idx],
-                    t,
+                    Position::of(self.at),
                     GHOST_OPACITY,
-                    Some(DrawList::ball(t)),
+                    Some(Stand::ball(self.at)),
                 );
             }
         }

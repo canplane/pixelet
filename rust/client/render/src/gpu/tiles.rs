@@ -23,7 +23,7 @@ use pxl_engine::screen::{self, TILES_WORDS};
 use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
+    buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -119,6 +119,9 @@ pub struct Tiles {
     mark: Pipeline,
     mark_uniform: u32,
     mark_cnt: u32,
+    /// The marks' pass's group over its uniform and the words, set with the
+    /// words (`size`).
+    mark_group: Group,
     /// The tiles the frame's marks cover, from the first to past the last,
     /// four words the GPU's: the one handed, widened by the draws that mark
     /// (tile_mark.wgsl), which bind it whatever reads it.
@@ -186,6 +189,7 @@ impl Tiles {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             mark_cnt: 0,
+            mark_group: Group::default(),
             marks_box,
             box_args,
             gate_number: 0,
@@ -197,7 +201,8 @@ impl Tiles {
         }
     }
 
-    pub fn release(self) {
+    pub fn release(mut self) {
+        self.mark_group.release();
         let (args, group) = self.box_args.map_or((0, 0), |(a, _, g)| (a, g));
         for id in [
             self.uniform,
@@ -223,6 +228,11 @@ impl Tiles {
         let [across, down] = self.squares();
         release(self.changed_at);
         self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
+        let entries = [
+            buf_entry(0, self.mark_uniform),
+            buf_entry(1, self.changed_at),
+        ];
+        self.mark_group.set(g, self.mark.layouts[0], &entries);
     }
 
     /// The mark this frame hands, the frame numbered anew: where it is
@@ -280,19 +290,11 @@ impl Tiles {
             return;
         }
         let g = ctx.g;
-        let group = g.bind_group(
-            self.mark.layouts[0],
-            &[
-                buf_entry(0, self.mark_uniform),
-                buf_entry(1, self.changed_at),
-            ],
-        );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.mark_group.id(), &[]);
         g.set_pipeline(pass, self.mark.id);
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
-        release(group);
     }
 
     /// The box of the tiles this frame claims, once its marks are made, set by a thread a tile
@@ -316,6 +318,11 @@ impl Tiles {
         g.end(pass);
         release(group);
         self.claimed_box
+    }
+
+    /// The span the marks' passes are timed in, and what reads the marks beside them.
+    pub fn span(&self) -> GpuSpanName {
+        self.span
     }
 
     /// The words and the uniform as this frame draws them, the claimed alone

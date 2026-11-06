@@ -843,8 +843,9 @@ platform's services give, the surfaces, the sensors, the text, the data and each
 turn's grant. Both sides' readers, writers and bindings are generated from it
 (`domain/control/cmd.spec.rs`, `ts/client/src/abi/cmd.spec.ts`), each packet an
 XTP tree, xpute's relocatable binary tree. Its exports are what the shell and
-the services submit; its imports are what the kernel posts unasked, the snapshot
-and the sensors it starts and stops, and the text it calls for, a text's lines
+the services submit; its imports are what the kernel posts unasked, the snapshot,
+the view's azimuth and scale apart from it (`SHELL_VIEW`), the sensors it starts
+and stops, and the text it calls for, a text's lines
 and its pixels (`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
 (`sys/io/text.rs`, `ts/client/src/port/text.ts`): a page's host through the
 module's import, a device's on the JavaScript thread that waits on the turn. A

@@ -139,10 +139,15 @@ pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
-    /// Each want's order before its place in the view is read: what a turn
-    /// of the frustum alone orders again from (`reorder`).
+    /// Each want's order before its place in the view is read, which
+    /// `reorder` places it from.
     orders: Vec<Order>,
     last: Option<Key>,
+    /// The estimator's tiles as the last observation named them, in the
+    /// order named, before any is asked for: an observation that names the
+    /// same tiles and the same floor asks for what that one asked
+    /// (`names_same`).
+    required: Vec<Quadrant>,
     /// The floor's tiles as last observed.
     floor: Vec<Quadrant>,
     /// The asks found absent in an observation, written once all are found
@@ -174,6 +179,7 @@ impl<L: Observed> Default for Demand<L> {
             wants: Vec::new(),
             orders: Vec::new(),
             last: None,
+            required: Vec::new(),
             floor: Vec::new(),
             gone: Vec::new(),
             moved: false,
@@ -251,10 +257,12 @@ impl<L: Observed> Demand<L> {
             placed.push((p, of));
         };
         let mut lines = Lines::default();
+        self.required.clear();
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
+            self.required.extend_from_slice(&demand);
             demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
@@ -349,27 +357,17 @@ impl<L: Observed> Demand<L> {
             self.gone = gone;
         }
         // By id, as a stream's wants are said (sys/io/request.rs `declare`):
-        // key order, an id being its key, after every absence
-        // is written. Each want's place the least of the tiles it is asked by
-        // (`placed`), found in one walk down the pyramid in key order, so each
-        // tile's line, its own and the ground's it is ordered by, steps from
-        // its neighbor's.
+        // key order, an id being its key, after every absence is written,
+        // each line read stepping from its neighbor's; then placed in the
+        // view (`reorder`).
         placed.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
-        let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
+        let mut lines = Lines::default();
         self.wants.clear();
         self.orders.clear();
         for &p in &demand {
             if unanswered(p, &mut lines) {
-                let mut a = asks[&p];
+                let a = asks[&p];
                 self.orders.push(a.order);
-                if let Some(o) = o {
-                    let from = placed.partition_point(|&(q, _)| q.id() < p.id());
-                    for &(_, of) in placed[from..].iter().take_while(|&&(q, _)| q == p) {
-                        a.order =
-                            a.order
-                                .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
-                    }
-                }
                 self.wants.push((p.id(), a));
             }
         }
@@ -378,33 +376,47 @@ impl<L: Observed> Demand<L> {
         self.placed = placed;
         demand.clear();
         self.demand = demand;
+        self.reorder(o);
+    }
 
+    /// Whether `o` names the tiles the last observation named, the
+    /// estimator's and the floor's, in the same order. Both are functions
+    /// of the eye's place and reach alone, so between such observations
+    /// what is asked stands and only the order of the wants moves.
+    fn names_same(&self, o: &Observation, estimator: &ByEye, top: Zoom) -> bool {
+        (!matches!(L::ASK_SCOPE, AskScope::View)
+            || names(&self.required, |each| estimator.requirements(o, each)))
+            && (matches!(L::ASK_SCOPE, AskScope::Line)
+                || names(&self.floor, |each| floor::floor(o, top, each)))
+    }
+
+    /// The wants placed in the view of `o`: each its own order, a
+    /// destination's first, or else the least of the tiles it is asked by
+    /// (`placed`), each read in one walk down the pyramid in key order, so
+    /// each tile's ground steps from its neighbor's. A function of what is
+    /// asked and of `o`, so a turn that asks what the last one did places
+    /// its wants again alone.
+    fn reorder(&mut self, o: Option<&Observation>) {
+        let mut ground = ColumnWalk::default();
+        let mut placed = self.placed.iter().peekable();
+        for ((id, a), &base) in self.wants.iter_mut().zip(&self.orders) {
+            a.order = base;
+            while placed.next_if(|(q, _)| q.id() < *id).is_some() {}
+            while let Some(&(_, of)) = placed.next_if(|(q, _)| q.id() == *id) {
+                if let Some(o) = o {
+                    a.order =
+                        a.order
+                            .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
+                }
+            }
+        }
         self.observation = o.copied();
     }
 
-    /// The wants ordered again for `o`, which differs from the observation
-    /// they were found for in its frustum alone: what is asked is of the
-    /// eye's place, which stood, and only the order is of where it looks.
-    fn reorder(&mut self, o: &Observation) {
-        let mut ground = ColumnWalk::default();
-        for ((id, a), &base) in self.wants.iter_mut().zip(&self.orders) {
-            a.order = base;
-            let from = self.placed.partition_point(|&(q, _)| q.id() < *id);
-            for &(_, of) in self.placed[from..]
-                .iter()
-                .take_while(|&&(q, _)| q.id() == *id)
-            {
-                a.order = a
-                    .order
-                    .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
-            }
-        }
-        self.observation = Some(*o);
-    }
-
     /// The layer's turn, from the live eye: the eye that is coming, which
-    /// every cast reads as it arrives. Observes again whenever anything in
-    /// `Key` changed.
+    /// every cast reads as it arrives. Where anything in `Key` changed it
+    /// observes again, or, where nothing it reads moved and the eye names
+    /// the tiles it named (`names_same`), places the wants again alone.
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
@@ -423,11 +435,31 @@ impl<L: Observed> Demand<L> {
         if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
+        self.turn(o, dst, pinned, top);
+        declare(L::STREAM, &self.wants);
+    }
+
+    /// `step` for the observation `o` and the layer's `top`, its wants left
+    /// in `wants`.
+    fn turn(
+        &mut self,
+        o: Option<Observation>,
+        dst: Option<Quadrant>,
+        pinned: &[Quadrant],
+        top: Zoom,
+    ) {
         self.idle_revision = None;
         let now = Key { o, dst };
         let moved = core::mem::take(&mut self.moved);
-        // Turned in place: the same asks, ordered again.
-        let turned = !moved
+        if !moved && self.last == Some(now) {
+            return;
+        }
+        let estimator = ByEye {
+            lattice: L::LATTICE,
+            top,
+        };
+        // A turn of the frustum alone names what the last did.
+        let named = !moved
             && self.last.is_some_and(|k| {
                 k.dst == dst
                     && k.o.zip(o).is_some_and(|(was, is)| {
@@ -435,32 +467,21 @@ impl<L: Observed> Demand<L> {
                             frustum: is.frustum,
                             ..was
                         } == is
+                            || self.names_same(&is, &estimator, top)
                     })
             });
-        if turned && self.last != Some(now) {
-            if let Some(o) = o.as_ref() {
-                self.reorder(o);
-            }
-            self.last = Some(now);
-        } else if moved || self.last != Some(now) {
+        if named {
+            self.reorder(o.as_ref());
+        } else {
             let line = dst
                 .into_iter()
                 .flat_map(|p| {
                     std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))
                 })
                 .chain(pinned.iter().copied());
-            self.observe(
-                o.as_ref(),
-                line,
-                &ByEye {
-                    lattice: L::LATTICE,
-                    top,
-                },
-                top,
-            );
-            self.last = Some(now);
+            self.observe(o.as_ref(), line, &estimator, top);
         }
-        declare(L::STREAM, &self.wants);
+        self.last = Some(now);
     }
 
     /// What it reads moved: its own tiles', the ground's, or the objects'.
@@ -486,27 +507,50 @@ impl<L: Observed> Demand<L> {
     }
 }
 
+/// Whether `name` names the tiles of `was`, in its order.
+fn names(was: &[Quadrant], name: impl FnOnce(&mut dyn FnMut(Quadrant))) -> bool {
+    let (mut k, mut same) = (0, true);
+    name(&mut |p| {
+        same &= was.get(k) == Some(&p);
+        k += 1;
+    });
+    same && k == was.len()
+}
+
+/// What the objects' shards are asked from (`object_step`): the
+/// observation, the source's top and the repository's revision. Two turns
+/// agreeing on all three ask for the same shards in the same order.
+type ObjectKey = (Option<Observation>, Option<Zoom>, u32);
+
+/// The key the objects' shards were last asked from.
+static OBJECT: Global<Option<ObjectKey>> = Global::new();
+
 /// The object layer's tiles, its shards, from the live eye: every shard
 /// within the demand the view makes of the ground at the shard's zoom
 /// (`observation::demand_radius`), as many as `repository::WANTS` at most,
 /// seen and nearer first. The repository reads their top first, which a
-/// view from afar draws from, then those of them it lists and has not read.
+/// view from afar draws from, then those of them it lists and has not read,
+/// each placed in the view only once it is one of them.
 pub fn object_step() {
-    let o = observation();
-    let r = o.zip(source::top()).and_then(|(o, top)| {
+    let (o, top) = (observation(), source::top());
+    let now = Some((o, top, repository::revision()));
+    let last = OBJECT.get(|| None);
+    if *last == now {
+        repository::want_again();
+        return;
+    }
+    *last = now;
+    let r = o.zip(top).and_then(|(o, top)| {
         observation::demand_radius(&o, GROUND, top, SHARD_ZOOM).map(|r| (o, r))
     });
-    repository::want(r.into_iter().flat_map(|(o, r)| {
-        tiles_within(SHARD_ZOOM, [o.eye[0], o.eye[1]], r).map(move |shard| {
-            (
-                shard,
-                Ask {
-                    priority: Priority::Demand,
-                    order: Order::of(&o, &shard.region()),
-                },
-            )
-        })
-    }));
+    repository::want(
+        r.into_iter()
+            .flat_map(|(o, r)| tiles_within(SHARD_ZOOM, [o.eye[0], o.eye[1]], r)),
+        |shard| Ask {
+            priority: Priority::Demand,
+            order: o.map_or(Order::LAST, |o| Order::of(&o, &shard.region())),
+        },
+    );
 }
 
 /// The tiles arrived, the pyramid's and the objects' shards (`LAYERS`),
@@ -579,3 +623,7 @@ fn on_arrived<L: Observed>(
     L::keep(framed, b);
     result
 }
+
+#[cfg(test)]
+#[path = "demand.test.rs"]
+mod test;

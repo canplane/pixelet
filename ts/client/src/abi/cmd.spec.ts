@@ -184,8 +184,6 @@ export interface Snapshot {
   /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
   draft: string | null;
   orient: OrientationState;
-  /** The view's azimuth. */
-  azimuth: f64;
   is_follow_mode: boolean;
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
@@ -195,8 +193,6 @@ export interface Snapshot {
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
    * has read its storage file, a few turns from boot. */
   settings: u32[];
-  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
-  m_per_px: f64;
   /** The division the pivot is in and every one above it, broad to narrow; empty
    * where the pivot is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
@@ -222,19 +218,17 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     companion: read_companion_state(b.at_branch(2)),
     draft: b.at(3).get<string | null>(),
     orient: read_orientation_state(b.at_branch(4)),
-    azimuth: b.at(5).get<f64>(),
-    is_follow_mode: b.at(6).get<boolean>(),
-    camera_busy: b.at(7).get<boolean>(),
-    zooming: b.at(8).get<boolean>(),
-    over_marker: b.at(9).get<boolean>(),
-    settings: Array.from(b.at(10).get<U32Array>()),
-    m_per_px: b.at(11).get<f64>(),
-    division: list(b.at_branch(12), read_division_part),
-    previews: Array.from(b.at(13).get<U32Array>()),
-    refused_files: list(b.at_branch(14), read_refused_file),
-    stall: b.at(15).get<Message | null>(),
-    renderer_progress: b.at(16).get<f64>(),
-    area_progress: b.at(17).get<f64>(),
+    is_follow_mode: b.at(5).get<boolean>(),
+    camera_busy: b.at(6).get<boolean>(),
+    zooming: b.at(7).get<boolean>(),
+    over_marker: b.at(8).get<boolean>(),
+    settings: Array.from(b.at(9).get<U32Array>()),
+    division: list(b.at_branch(10), read_division_part),
+    previews: Array.from(b.at(11).get<U32Array>()),
+    refused_files: list(b.at_branch(12), read_refused_file),
+    stall: b.at(13).get<Message | null>(),
+    renderer_progress: b.at(14).get<f64>(),
+    area_progress: b.at(15).get<f64>(),
   };
 }
 
@@ -703,6 +697,18 @@ export function read_shell_snapshot(b: BranchCursor): ShellSnapshotEvent {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }
 
+/** Command.SHELL_VIEW's event. */
+export interface ShellViewEvent {
+  /** The view's azimuth. */
+  azimuth: f64;
+  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
+  m_per_px: f64;
+}
+
+export function read_shell_view(b: BranchCursor): ShellViewEvent {
+  return { azimuth: b.at(0).get<f64>(), m_per_px: b.at(1).get<f64>() };
+}
+
 /** What the host sends on the shell protocol, bound to `host`: each
  * command rung, or called and answered before it returns. */
 export function shell_exports(host: Host) {
@@ -887,6 +893,9 @@ export interface ShellImports {
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
   shell_snapshot(e: ShellSnapshotEvent): void;
+  /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
+   * zoom, which moves them every frame, leaves the snapshot as it was. */
+  shell_view(e: ShellViewEvent): void;
 }
 
 /** `h` as the handler a host routes the shell protocol's commands to, each one read and
@@ -904,6 +913,8 @@ export function shell_imports(h: ShellImports): OnEvent {
         return h.text_raster(read_text_raster(need(f)));
       case Command.SHELL_SNAPSHOT:
         return h.shell_snapshot(read_shell_snapshot(need(f)));
+      case Command.SHELL_VIEW:
+        return h.shell_view(read_shell_view(need(f)));
       default:
         return Errno.ENOSYS;
     }

@@ -10,7 +10,7 @@
 //! impostor's, and nothing below that, as decor smaller than that is none
 //! (`decor::gpu`).
 
-use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
+use pxl_render::frame::draw::{DrawList, Position, Stand, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
@@ -262,27 +262,26 @@ impl Actor {
     }
 
     /// Into the frame's list, standing at `transform`, within the ball about it
-    /// (`DrawList::ball`): every actor drawn is a receiver of the sun's map, which reads the
-    /// ones the eye sees. None where it spans less than
-    /// the impostor's edge (`tick`).
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, transform: &Transform, eye: V3) {
+    /// (`Stand::ball`), its draw and its stand free of the eye: every actor drawn is a
+    /// receiver of the sun's map, which reads the ones the eye sees. None where it spans less
+    /// than the impostor's edge (`tick`).
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, transform: &Transform) {
         let Some(m) = models.get(self.model).filter(|_| self.drawn) else {
             return;
         };
         if m.handle() == 0 {
             return;
         }
-        let t = DrawList::translation(transform.at, eye);
         draw.draw_scaled(
             PIPELINE_SKINNED,
             m.handle(),
             self.palette_handle,
             self.model,
-            t,
+            Position::of(transform.at),
             transform.rot_z,
             1.0,
             transform.scale,
-            Some(DrawList::ball(t)),
+            Some(Stand::ball(transform.at)),
         );
     }
 }

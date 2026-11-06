@@ -23,7 +23,7 @@ use crate::domain::view::setting::store::settings_store;
 use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::gpu::atlas::shelf::NO_SLOT;
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::octant::Octant;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -33,7 +33,6 @@ use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::view::frame::coord;
-use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -107,8 +106,8 @@ struct Arrangement {
     keep: FnvHashSet<Design>,
     /// What the marker set holds, and the buffer the next run lays out
     /// into, swapped as `sized` and `spare` are.
-    instances: Vec<f32>,
-    spare_instances: Vec<f32>,
+    instances: Vec<u32>,
+    spare_instances: Vec<u32>,
     /// What the last run read, compared by value: equal, with nothing moved
     /// and nothing left waiting, the designs it laid out stand.
     last: Option<Inputs>,
@@ -438,19 +437,15 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     );
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
-    // f32 instances, so about the sea under the eye rather than the world's origin.
-    let about = pose::sea_under_eye();
+    // Each where it stands, its Q3, which holds no eye: the instances are
+    // written again only where the selection, the order or a design
+    // changed.
     for &i in &p.draw_order {
         let i = i as usize;
-        let at = [
-            p.candidates.local_x[i] - about[0],
-            p.candidates.local_y[i] - about[1],
-            p.candidates.local_z[i] - about[2],
-        ];
         let design = &sized[i].design;
         let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
         instances.extend_from_slice(&set::instance(
-            at,
+            sized[i].stands,
             [w, h],
             design::slot(design) as u32,
             anchor / h,
@@ -460,7 +455,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
         if section::map().is_some() {
-            p.set.write(model::draw_list(), about, &instances);
+            p.set.write(model::draw_list(), &instances);
         }
         ctx.invalidate();
     }
@@ -469,8 +464,8 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
 }
 
 /// The markers the last step laid out, into the frame's list.
-pub fn draw(draw: &mut DrawList, eye: V3) {
-    ARRANGEMENT.get(Arrangement::default).set.draw(draw, eye);
+pub fn draw(draw: &mut DrawList) {
+    ARRANGEMENT.get(Arrangement::default).set.draw(draw);
 }
 
 /// What a tap on a scene marker hit: a place to go to; a pin, its entry's, which the tool held decides what to do with.

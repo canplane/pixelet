@@ -5,3 +5,4 @@
 // What the kernel shows the shell.
 
 export const SNAPSHOT = 0x01;
+export const VIEW = 0x02;

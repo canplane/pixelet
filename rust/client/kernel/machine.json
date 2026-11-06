@@ -4,7 +4,7 @@
     "its stack, its rings and the GPU it asks for.",
     "",
     "`turn_posts` is what the kernel's turn may post besides its replies: a sensor's start",
-    "or stop each, the snapshot, the files' hostcalls at their most and a call's slot",
+    "or stop each, the snapshot, the view, the files' hostcalls at their most and a call's slot",
     "(door.rs `EVENTS`, which it checks against this)."
   ],
   "gen": {
@@ -82,7 +82,7 @@
     "slot_bytes": 4096,
     "sq_cap": 512,
     "cq_cap": 1024,
-    "turn_posts": 172
+    "turn_posts": 173
   },
   "fs": {
     "$doc": [

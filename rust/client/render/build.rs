@@ -1052,6 +1052,12 @@ fn words() -> String {
     };
     [
         vec4s("DRAW", DRAW_FLOATS),
+        // A Q3 step in units, a power of two, which a record's position is
+        // scaled by exactly (frame.wgsl `from_eye`).
+        format!(
+            "const Q3_STEP: f32 = {:?};\n",
+            1.0f32 / (1u32 << pxl_engine::FRAC_W) as f32
+        ),
         vec4s("FRAME", FRAME_FLOATS),
         vec4s("SKY", SKY_FLOATS),
         vec4s("ATMOS", ATMOS_FLOATS),
@@ -1060,7 +1066,7 @@ fn words() -> String {
         vec4s("AO", AO_FLOATS),
         vec4s("MARKER", MARKER_FLOATS),
         vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
-        format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst LOCATION_ZONE_INSTANCE_FLOATS: u32 = {LOCATION_ZONE_INSTANCE_FLOATS}u;\n"),
+        format!("const MARKER_INSTANCE_WORDS: u32 = {MARKER_INSTANCE_WORDS}u;\nconst LOCATION_ZONE_INSTANCE_FLOATS: u32 = {LOCATION_ZONE_INSTANCE_FLOATS}u;\n"),
         format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
         // The depth's bound's square and a screen tile's squares a side, the
         // workgroup its passes take a tile by (screen_bound.wgsl,
@@ -1131,6 +1137,7 @@ fn accessors(text: &str) -> String {
                 Kind::Vec2 => ("vec2f", format!("{words}[{row}].{lanes}")),
                 Kind::Vec2u => ("vec2u", format!("bitcast<vec2u>({words}[{row}].{lanes})")),
                 Kind::Vec3 => ("vec3f", format!("{words}[{row}].{lanes}")),
+                Kind::Vec3i => ("vec3i", format!("bitcast<vec3i>({words}[{row}].{lanes})")),
                 Kind::Vec4i => ("vec4i", format!("bitcast<vec4i>({})", vec4(0))),
                 Kind::Vec4u => ("vec4u", format!("bitcast<vec4u>({})", vec4(0))),
                 Kind::Mat3 => (

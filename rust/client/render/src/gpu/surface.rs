@@ -72,9 +72,10 @@ pub struct Surface {
     pub history: [u32; 2],
     pub history_view: [u32; 2],
     /// The finished picture at the canvas's size, the canvas's format, made
-    /// with the screen's depth: a gated frame finishes again only its
-    /// claimed tiles in it, and every frame shows it whole on the canvas, whose
-    /// texture is a new one each frame (gpu/finish.rs): the world's alone.
+    /// with the screen's depth: every frame finishes into it in the pass that
+    /// finishes the canvas, a gated frame only its claimed tiles, once it
+    /// has shown it whole on the canvas, whose texture is a new one each
+    /// frame (gpu/finish.rs): the world's alone.
     pub picture: u32,
     pub picture_view: u32,
 }

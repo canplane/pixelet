@@ -5,19 +5,22 @@
 // the depth from the light and the mark (tile_mark.wgsl) all lay alike.
 
 struct Draw {
-  translation: vec3f,
+  // The position's Q3 and its remainder (frame/draw.rs `Position`).
+  q: vec3i,
   rot: f32,
   opacity: f32,
   scale: f32,
   _p0: f32,
   _p1: f32,
+  r: vec3f,
+  _p2: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
-fn draw_translation() -> vec3f { return draw_words[0].xyz; }
+fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_words[0].xyz), draw_words[2].xyz); }
 fn draw_rot() -> f32 { return draw_words[0].w; }
 fn draw_opacity() -> f32 { return draw_words[1].x; }
 fn draw_scale() -> f32 { return draw_words[1].y; }

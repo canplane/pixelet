@@ -81,6 +81,9 @@ struct State {
     save_due_ms: Option<f64>,
     /// The files `want` asks for, by id; reused across turns.
     wants: Vec<(u64, Ask)>,
+    /// How many times what `want` reads of it moved: the top or a shard
+    /// read, a file refused or emptied.
+    revision: u32,
     /// The changes the store takes, in order, held while the host holds its
     /// lanes (`change`).
     changes: Vec<Change>,
@@ -167,11 +170,11 @@ pub fn holds(space: &Aabb) -> bool {
     span(1).all(|y| span(0).all(|x| st.is_read(Quadrant::new(SHARD_ZOOM, [x, y]).id())))
 }
 
-/// The shards the view asks for (domain/view/demand.rs `object_step`), each
-/// with its ask, no more than `WANTS`: before the top is read, the top
-/// alone; then those it lists not yet read, in place of what was wanted
-/// before. A file refused is not wanted until the client empties it.
-pub fn want(asked: impl Iterator<Item = (Quadrant, Ask)>) {
+/// The shards the view asks for (domain/view/demand.rs `object_step`), no
+/// more than `WANTS`, each wanted with its `ask`: before the top is read,
+/// the top alone; then those it lists not yet read, in place of what was
+/// wanted before. A file refused is not wanted until the client empties it.
+pub fn want(asked: impl Iterator<Item = Quadrant>, ask: impl Fn(Quadrant) -> Ask) {
     let st = state();
     st.wants.clear();
     if st.top_shards.is_none() {
@@ -183,15 +186,31 @@ pub fn want(asked: impl Iterator<Item = (Quadrant, Ask)>) {
             st.wants.push((TOP, ask));
         }
     } else {
-        for (shard, ask) in asked {
+        for shard in asked {
             let id = shard.id();
             if !st.is_read(id) && !st.refused_files.contains(&id) {
-                st.wants.push((id, ask));
+                st.wants.push((id, ask(shard)));
             }
         }
         st.wants.sort_unstable_by_key(|&(id, _)| id);
     }
     declare(Stream::object, &st.wants);
+}
+
+/// The files `want` last found, wanted again as they were.
+pub fn want_again() {
+    declare(Stream::object, &state().wants);
+}
+
+/// What `want` reads of the repository as of now: equal where no top or
+/// shard was read and no file refused or emptied between.
+pub fn revision() -> u32 {
+    state().revision
+}
+
+fn moved() {
+    let st = state();
+    st.revision = st.revision.wrapping_add(1);
 }
 
 /// A file below OBJECT arrived, the top's or a shard's, or its absence
@@ -224,6 +243,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     };
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
+        moved();
         request_world_tick();
     }
     result
@@ -240,12 +260,14 @@ fn on_top(rows: Vec<(u64, u32)>) {
         }
     }
     state().top_shards = Some(listed);
+    moved();
 }
 
 /// The shard `id` read: its folds let go and its leaves written.
 fn on_shard(id: u64, writes: Vec<Write>) {
     change(Change::Shard(Quadrant::of_id(id).at, writes));
     state().read.insert(id);
+    moved();
 }
 
 /// The files refused and not yet emptied, by id below OBJECT.
@@ -261,6 +283,7 @@ pub fn on_emptied(id: u64) -> bool {
         return false;
     };
     st.refused_files.remove(i);
+    st.revision = st.revision.wrapping_add(1);
     // Its failed want goes, so the next is a new one.
     st.wants.retain(|&(n, _)| n != id);
     declare(Stream::object, &st.wants);

@@ -6,7 +6,7 @@
 //! read-only (marker.wgsl). The atlas is premultiplied so its mips
 //! filter without a dark fringe.
 
-use crate::frame::draw::{uniform_of, PIPELINE_MARKER};
+use crate::frame::draw::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -312,7 +312,6 @@ impl MarkerPass {
         depth: u32,
         size: (u32, u32),
         draws: &Draws,
-        uniforms: &[f32],
         uploads: &Uploads,
     ) {
         if self.atlas_group == 0 {
@@ -388,8 +387,6 @@ impl MarkerPass {
                 let mut s = [0.0f32; MARKER_FLOATS];
                 s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
-                s[marker::TRANSLATION..marker::TRANSLATION + 3]
-                    .copy_from_slice(&uniform_of(uniforms, d)[..3]);
                 s[marker::PX_PER_UNIT] = px_per_unit;
                 s[marker::BEFORE] = before as f32;
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));

@@ -50,7 +50,7 @@ use xpute_guest::stop;
 use xpute_kit::status::errno::Errno;
 
 struct State {
-    /// The UI snapshot last posted; one is posted only where it moved.
+    /// The UI snapshot and view last posted; each is posted only where it moved.
     last_snapshot: SnapshotMemo,
     /// Where the last snapshot's event was posted: `SNAPSHOT` is the host's
     /// until its head has passed it (xpute_guest ipc/door.rs R3).
@@ -111,12 +111,12 @@ pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
 
-/// What a turn posts besides its replies: a sensor's start or stop each and
-/// the snapshot, all after its drain and once (`post_shell` at the falling
-/// edge); the files' hostcalls at their most, whether the drain or the rest
-/// of the turn posts them (`host::FILE_FRAMES`); and the slot a call is laid
-/// in, never published. The machine declares it (machine.json `turn_posts`).
-const EVENTS: u32 = Sensor::ALL.len() as u32 + 1 + host::FILE_FRAMES + 1;
+/// What a turn posts besides its replies: a sensor's start or stop each, the
+/// snapshot and the view, all after its drain and once (`post_shell` at the
+/// falling edge); the files' hostcalls at their most, whether the drain or the
+/// rest of the turn posts them (`host::FILE_FRAMES`); and the slot a call is
+/// laid in, never published. The machine declares it (machine.json `turn_posts`).
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + host::FILE_FRAMES + 1;
 
 const _: () = assert!(
     MACHINE.turn_posts == EVENTS,
@@ -276,6 +276,9 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Listen => start(Sensor::Orientation),
             OrientationCommand::Remove => stop(Sensor::Orientation),
         }
+    }
+    if let Some(view) = s.last_snapshot.take_view_moved() {
+        cmd::shell::shell_view(&view);
     }
     if s.snapshot_pos.is_some_and(|p| !door().is_consumed(p)) {
         // The memo is left as it was, so what moved is posted once the host lets go.

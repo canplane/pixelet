@@ -119,3 +119,6 @@ export const TEXT_RASTER = 0x1c02;
 /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
  * block the kernel holds, valid until the next snapshot. */
 export const SHELL_SNAPSHOT = 0x1b01;
+/** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
+ * zoom, which moves them every frame, leaves the snapshot as it was. */
+export const SHELL_VIEW = 0x1b02;

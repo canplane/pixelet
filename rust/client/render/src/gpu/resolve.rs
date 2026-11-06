@@ -28,7 +28,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
+    buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
     RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -51,6 +51,11 @@ pub struct Resolve {
     uniform: u32,
     /// The write-back.
     back: Pipeline,
+    /// Their groups (`set_groups`), each of the surface's histories': the
+    /// resolve's reading it as the last frame's, the write-back's reading it
+    /// as this frame's.
+    groups: [Group; 2],
+    back_groups: [Group; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -88,6 +93,8 @@ impl Resolve {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
+            groups: [Group::default(), Group::default()],
+            back_groups: [Group::default(), Group::default()],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
@@ -117,13 +124,46 @@ impl Resolve {
         self.jitter
     }
 
+    /// Its groups over `s`, the frame words in `frame` and the tiles' words
+    /// and uniform, before the frame's commands, the tiles of `s`'s size
+    /// (`Tiles::size`).
+    pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface) {
+        let (words, uniform) = self.tiles.this_frame();
+        for k in 0..2 {
+            self.groups[k].set(
+                g,
+                self.pipeline.layouts[0],
+                &[
+                    buf_entry(0, frame),
+                    view_entry(1, s.color_view),
+                    view_entry(2, s.depth_only_view),
+                    view_entry(3, s.history_view[k]),
+                    sampler_entry(4, self.sampler),
+                    buf_entry(5, self.uniform),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                ],
+            );
+            self.back_groups[k].set(
+                g,
+                self.back.layouts[0],
+                &[
+                    view_entry(1, s.history_view[k]),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                ],
+            );
+        }
+    }
+
     /// The frame's world color, `s`'s, blended into what the frames before
     /// left, into the history its turn writes, each tile by its age
     /// (`age`). Where the frame is drawn through the gate (`gated`), only the
     /// claimed tiles, written back into the last history, which stays the
-    /// one read. Passes of their own, by the frame words in `frame`, their
-    /// time counted in the span `resolve`; the history the finish encodes.
-    pub fn draw(&mut self, ctx: &mut RenderContext, frame: u32, s: &Surface, gated: bool) -> u32 {
+    /// one read. Passes of their own over the groups set for `s`
+    /// (`set_groups`), their time counted in the span `resolve`; the history
+    /// the finish encodes.
+    pub fn draw(&mut self, ctx: &mut RenderContext, s: &Surface, gated: bool) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
@@ -144,20 +184,6 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let (words, uniform) = self.tiles.this_frame();
-        let group = g.bind_group(
-            self.pipeline.layouts[0],
-            &[
-                buf_entry(0, frame),
-                view_entry(1, s.color_view),
-                view_entry(2, s.depth_only_view),
-                view_entry(3, s.history_view[was]),
-                sampler_entry(4, self.sampler),
-                buf_entry(5, self.uniform),
-                buf_entry(30, words),
-                buf_entry(31, uniform),
-            ],
-        );
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
         let load = if gated { Load::Load } else { Load::Clear };
@@ -166,21 +192,12 @@ impl Resolve {
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
         g.set_pipeline(pass, self.pipeline.id);
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.groups[was].id(), &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        release(group);
         if !gated {
             return s.history_view[k];
         }
-        let group = g.bind_group(
-            self.back.layouts[0],
-            &[
-                view_entry(1, s.history_view[k]),
-                buf_entry(30, words),
-                buf_entry(31, uniform),
-            ],
-        );
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -193,10 +210,9 @@ impl Resolve {
             ),
         );
         g.set_pipeline(pass, self.back.id);
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.back_groups[k].id(), &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        release(group);
         s.history_view[was]
     }
 

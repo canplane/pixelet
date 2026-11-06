@@ -55,7 +55,7 @@ import {
   SOURCE_DECLARED,
 } from "@/abi/state.ts";
 import { set_online } from "@/origin/online.ts";
-import { snapshot_posted } from "@/port/snapshot.ts";
+import { snapshot_posted, view_posted } from "@/port/snapshot.ts";
 import * as snapshot from "@/port/snapshot.ts";
 
 let called = false;
@@ -75,14 +75,15 @@ export function boot_state(): Boot {
 export const watch_boot = listeners.watch;
 
 /** What the kernel sends the shell: the snapshot, and the files it
- * names refused; the sensors it starts and stops; and the text it calls for,
- * answered before the call returns. */
+ * names refused; the view; the sensors it starts and stops; and the text it
+ * calls for, answered before the call returns. */
 const SHELL: ShellImports = {
   shell_snapshot: (e) => {
     snapshot_posted(e);
     follow_refused_files(snapshot.current().refused_files);
     if (state === BOOT_LOADING && loaded(snapshot.current())) set(BOOT_STARTED);
   },
+  shell_view: view_posted,
   sensor_start,
   sensor_stop,
   text_layout,

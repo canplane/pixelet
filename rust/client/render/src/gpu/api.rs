@@ -311,6 +311,10 @@ impl<'a> TrackedRenderPass<'a> {
 /// tiles a frame draws again, so a pass skips the rest (`Stencil`).
 pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
 
+/// The most color targets a pipeline draws into: the finish's two, the
+/// canvas and the picture the world's surface keeps (gpu/finish.rs).
+pub const TARGETS: usize = 2;
+
 /// What a pipeline does with the stencil beside its depth (`GATED_DEPTH`),
 /// which holds in each tile the number of the gated frame that last claimed
 /// it, as a light tile's word names the cast that read it: nothing; passes
@@ -335,11 +339,13 @@ pub enum Load {
 }
 
 /// A pass's targets: color cleared to transparent, or to what `color_clear`
-/// gives, or loaded, depth cleared to `depth_clear`, loaded or read only, and
+/// gives, or loaded, and a second color started as the first
+/// (`second_color`), depth cleared to `depth_clear`, loaded or read only, and
 /// its stencil, where it has one, cleared to 0 or loaded (`load_stencil`); 0
 /// for one absent.
 pub struct PassDesc {
     color: Id,
+    second: Id,
     color_load: Load,
     color_clear: [f32; 4],
     depth: Id,
@@ -366,6 +372,15 @@ impl PassDesc {
             ..self
         }
     }
+
+    /// `view` its second color target, at location 1, started as its first:
+    /// a pipeline of two targets draws into it (`Pipelines::build_targets`).
+    pub fn second_color(self, view: Id) -> PassDesc {
+        PassDesc {
+            second: view,
+            ..self
+        }
+    }
 }
 
 pub fn pass_desc(
@@ -378,6 +393,7 @@ pub fn pass_desc(
 ) -> PassDesc {
     PassDesc {
         color,
+        second: 0,
         color_load,
         color_clear: [0.0; 4],
         depth,
@@ -496,6 +512,77 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
     Entry {
         binding,
         resource: encode::Resource::Sampler(sampler),
+    }
+}
+
+/// Whether two entries bind one resource at one binding: a resource's handle
+/// is generational (xpute_guest abi/handle.rs), so one let go and made again
+/// is another handle, never the one it had.
+fn same_entry(a: &Entry, b: &Entry) -> bool {
+    use encode::Resource::{Buffer, Sampler, View};
+    a.binding == b.binding
+        && match (a.resource, b.resource) {
+            (
+                Buffer {
+                    buffer: x,
+                    offset: o,
+                    size: n,
+                },
+                Buffer {
+                    buffer: y,
+                    offset: p,
+                    size: m,
+                },
+            ) => x == y && o == p && n == m,
+            (Sampler(x), Sampler(y)) | (View(x), View(y)) => x == y,
+            _ => false,
+        }
+}
+
+/// A bind group kept across frames over the resources its entries name, and
+/// made again over another where one of them is made again (`same_entry`):
+/// its owner sets it before the frame's commands (`frame_begin`), each frame
+/// it draws, as a frame lets go in it each object it makes; and lets it go
+/// with itself. The group it replaces names a resource already let go,
+/// destroyed by the host, and is let go then.
+#[derive(Default)]
+pub struct Group {
+    layout: Id,
+    entries: Vec<Entry>,
+    id: Id,
+}
+
+impl Group {
+    /// The group over `layout` and `entries`, the one kept where it was made
+    /// over both, else one made now in its place.
+    #[track_caller]
+    pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> Id {
+        let kept = self.id != 0
+            && self.layout == layout.id
+            && self.entries.len() == entries.len()
+            && self
+                .entries
+                .iter()
+                .zip(entries)
+                .all(|(a, b)| same_entry(a, b));
+        if !kept {
+            release(self.id);
+            self.id = g.bind_group(layout, entries);
+            self.layout = layout.id;
+            self.entries.clear();
+            self.entries.extend_from_slice(entries);
+        }
+        self.id
+    }
+
+    /// The group as last set; 0 before.
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
+    pub fn release(&mut self) {
+        release(self.id);
+        *self = Group::default();
     }
 }
 
@@ -1325,17 +1412,18 @@ impl Gpu {
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `format` and `depth`, `stencil` the
-    /// stencil beside it: into the depth alone where `format` is depth32's,
-    /// its fragment writing no color (the shadow map, gpu/shadow.rs). Made by
-    /// WebGPU's async call: the host stores `ticket` at the fence once it
-    /// is made, and nothing names it before (gpu/pipeline.rs `Pipelines::made`).
+    /// group layouts, drawing into `targets` colors of `format`, at locations
+    /// from 0, and `depth`, `stencil` the stencil beside it: into the depth
+    /// alone where `format` is depth32's, its fragment writing no color (the
+    /// shadow map, gpu/shadow.rs). Made by WebGPU's async call: the host
+    /// stores `ticket` at the fence once it is made, and nothing names it
+    /// before (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
         layouts: &[Layout],
         module: Id,
-        format: Format,
+        (format, targets): (Format, usize),
         (depth, stencil): (Format, Stencil),
         (fence, ticket): (&u32, u32),
     ) -> Id {
@@ -1375,16 +1463,18 @@ impl Gpu {
             })
             .collect();
         let layout = self.pipeline_layout(layouts);
-        let blend = match words[8] {
+        let blend = || match words[8] {
             record::ALPHA => Some(ALPHA_BLEND),
             record::ADD => Some(ADD_BLEND),
             _ => None,
         };
-        let targets = [encode::ColorTargetState {
-            format,
-            blend,
-            write_mask: COLOR_WRITE::ALL,
-        }];
+        let colors: [encode::ColorTargetState; TARGETS] =
+            core::array::from_fn(|_| encode::ColorTargetState {
+                format,
+                blend: blend(),
+                write_mask: COLOR_WRITE::ALL,
+            });
+        xpute_kit::ensure!(targets <= TARGETS, EINVAL, targets);
         let compare = match words[5] {
             record::GREATER => CompareFunction::greater,
             record::GREATER_EQUAL => CompareFunction::greater_equal,
@@ -1436,7 +1526,7 @@ impl Gpu {
                     targets: if format == Format::depth32float {
                         &[]
                     } else {
-                        &targets
+                        &colors[..targets]
                     },
                 }),
             },
@@ -1652,13 +1742,18 @@ impl Gpu {
             self.split(named);
         }
         let encoder = self.s().splits.at(named);
-        let colors = [encode::ColorAttachment {
-            view: d.color,
+        let colors = [d.color, d.second].map(|view| encode::ColorAttachment {
+            view,
             resolve: None,
             load: load_op(d.color_load),
             store: StoreOp::store,
             clear: d.color_clear,
-        }];
+        });
+        let targets = match (d.color, d.second) {
+            (0, _) => 0,
+            (_, 0) => 1,
+            _ => 2,
+        };
         let depth_stencil = (d.depth != 0).then(|| encode::DepthStencilAttachment {
             view: d.depth,
             depth_load: load_op(d.depth_load),
@@ -1675,7 +1770,7 @@ impl Gpu {
             &mut s.stream,
             encoder,
             &encode::RenderPassDescriptor {
-                colors: if d.color != 0 { &colors } else { &[] },
+                colors: &colors[..targets],
                 depth_stencil,
                 timestamps: d.stamp.as_ref().map(|t| encode::TimestampWrites {
                     query_set: t.query_set,

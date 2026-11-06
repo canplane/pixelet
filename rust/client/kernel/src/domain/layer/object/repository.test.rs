@@ -184,13 +184,13 @@ fn absent_top_reads_every_shard() {
     let _g = sys::serial();
     fresh();
     let shard = shard_of(leaf(0, [5, 7, 2]));
-    want([(shard, Ask::PLAIN)].into_iter());
+    want([shard].into_iter(), |_| Ask::PLAIN);
     assert_eq!(state().wants.len(), 1);
     assert_eq!(state().wants[0].0, TOP);
     assert!(!holds(&shard.region()));
     admit(TOP, None).unwrap();
     assert!(holds(&shard.region()));
-    want([(shard, Ask::PLAIN)].into_iter());
+    want([shard].into_iter(), |_| Ask::PLAIN);
     assert!(state().wants.is_empty());
 }
 
@@ -211,7 +211,7 @@ fn top_folds_until_shard_read() {
     assert_eq!(object().word_at(shard.at), Some(rows[0].1));
     assert!(held().is_empty());
     assert!(!holds(&shard.region()) && holds(&other.region()));
-    want([(shard, Ask::PLAIN), (other, Ask::PLAIN)].into_iter());
+    want([shard, other].into_iter(), |_| Ask::PLAIN);
     assert_eq!(state().wants.len(), 1);
     assert_eq!(state().wants[0].0, shard.id());
     admit(shard.id(), Some(&shard_file(shard))).unwrap();
@@ -232,11 +232,11 @@ fn refused_file_named() {
     assert!(admit(shard.id(), Some(&foreign)).is_err());
     assert_eq!(refused_files(), &[shard.id()]);
     assert!(!holds(&shard.region()));
-    want([(shard, Ask::PLAIN)].into_iter());
+    want([shard].into_iter(), |_| Ask::PLAIN);
     assert!(state().wants.is_empty());
     assert!(on_emptied(shard.id()));
     assert!(refused_files().is_empty() && !on_emptied(shard.id()));
-    want([(shard, Ask::PLAIN)].into_iter());
+    want([shard].into_iter(), |_| Ask::PLAIN);
     assert_eq!(state().wants.len(), 1);
 }
 

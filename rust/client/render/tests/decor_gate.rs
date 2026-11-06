@@ -1,8 +1,9 @@
 //! `decor_gate_cs` by hand (frame/shader/decor_gate.wgsl) answers as the rule it states: of each
 //! region's instances, a frame through the gate lists exactly those whose ball (decor_ball.wgsl)
 //! meets the claimed tiles' box as the frame sees it, at the region's own place, and the
-//! region's args with their count. The instances lie about the view, some well inside the box,
-//! some well past it; one within a hair of a plane is not asked either way, as a GPU's f32
+//! region's args with their count, through the screen's gate, its view a perspective, and the
+//! light map's, its view orthographic. The instances lie about the view, some well inside the
+//! box, some well past it; one within a hair of a plane is not asked either way, as a GPU's f32
 //! rounds there.
 
 mod gpu;
@@ -11,17 +12,35 @@ use std::collections::BTreeSet;
 
 use gpu::Gpu;
 use pxl_content::generation::{self, drawn};
-use pxl_engine::screen;
+use pxl_engine::{light, screen};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS,
 };
+use pxl_render::frame::shader::word::frame::EYE;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
+use pxl_render::gpu::shadow;
 
-const SIZE: [u32; 2] = [1080, 1920];
-const SIDE: u32 = 32;
 const CAP: u32 = 4096;
-/// The claimed tiles' box, first and last across and down.
-const BOX: [u32; 4] = [10, 20, 15, 31];
+
+/// A gate's target: its size in pixels, its tiles' side, and the claimed tiles' box, first and
+/// last across and down.
+struct Target {
+    size: [u32; 2],
+    side: u32,
+    claimed: [u32; 4],
+}
+
+const SCREEN: Target = Target {
+    size: [1080, 1920],
+    side: 32,
+    claimed: [10, 20, 15, 31],
+};
+
+const LIGHT: Target = Target {
+    size: [shadow::SIZE; 2],
+    side: light::TILE,
+    claimed: [100, 90, 140, 131],
+};
 
 fn device() -> Option<Gpu> {
     let gpu = Gpu::new();
@@ -43,9 +62,8 @@ fn mul(a: &M4, b: &M4) -> M4 {
     m
 }
 
-/// A view from `eye` to the origin, Z up, and a perspective of `fov_y` radians over the
-/// screen's aspect, rows as a matrix's.
-fn view_proj(eye: [f64; 3], fov_y: f64) -> M4 {
+/// A view from `eye` to the origin, Z up, rows as a matrix's.
+fn view(eye: [f64; 3]) -> M4 {
     let norm = |v: [f64; 3]| {
         let l = libm::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
         v.map(|x| x / l)
@@ -61,14 +79,18 @@ fn view_proj(eye: [f64; 3], fov_y: f64) -> M4 {
     let f = norm(eye.map(|v| -v));
     let s = norm(cross(f, [0.0, 0.0, 1.0]));
     let u = cross(s, f);
-    let view = [
+    [
         [s[0], s[1], s[2], -dot(s, eye)],
         [u[0], u[1], u[2], -dot(u, eye)],
         [-f[0], -f[1], -f[2], dot(f, eye)],
         [0.0, 0.0, 0.0, 1.0],
-    ];
+    ]
+}
+
+/// The screen's view from `eye`, a perspective of `fov_y` radians over its aspect.
+fn perspective(eye: [f64; 3], fov_y: f64) -> M4 {
     let t = 1.0 / libm::tan(fov_y / 2.0);
-    let aspect = f64::from(SIZE[0]) / f64::from(SIZE[1]);
+    let aspect = f64::from(SCREEN.size[0]) / f64::from(SCREEN.size[1]);
     let (near, far) = (0.5, 5000.0);
     let proj = [
         [t / aspect, 0.0, 0.0, 0.0],
@@ -76,21 +98,31 @@ fn view_proj(eye: [f64; 3], fov_y: f64) -> M4 {
         [0.0, 0.0, far / (near - far), near * far / (near - far)],
         [0.0, 0.0, -1.0, 0.0],
     ];
-    mul(&proj, &view)
+    mul(&proj, &view(eye))
 }
 
-/// How far the ball at `c` of radius `r` lies inside the claimed box's four planes, the least
-/// of them, in the planes' own units: past 0 inside, under it past.
-fn inside(m: &M4, c: [f64; 3], r: f64) -> f64 {
-    let side = f64::from(SIDE);
-    let size = SIZE.map(f64::from);
-    let lo = [
-        f64::from(BOX[0]) * side - 1.0,
-        f64::from(BOX[1]) * side - 1.0,
+/// The light map's view from `eye`, orthographic, `half` units each side of its middle.
+fn orthographic(eye: [f64; 3], half: f64) -> M4 {
+    let (near, far) = (0.0, 1000.0);
+    let proj = [
+        [1.0 / half, 0.0, 0.0, 0.0],
+        [0.0, 1.0 / half, 0.0, 0.0],
+        [0.0, 0.0, 1.0 / (near - far), near / (near - far)],
+        [0.0, 0.0, 0.0, 1.0],
     ];
+    mul(&proj, &view(eye))
+}
+
+/// How far the ball at `c` of radius `r` lies inside the four planes of the claimed box of
+/// target `t`, the least of them, in the planes' own units: past 0 inside, under it past.
+fn inside(t: &Target, m: &M4, c: [f64; 3], r: f64) -> f64 {
+    let side = f64::from(t.side);
+    let size = t.size.map(f64::from);
+    let b = t.claimed;
+    let lo = [f64::from(b[0]) * side - 1.0, f64::from(b[1]) * side - 1.0];
     let hi = [
-        (f64::from(BOX[2] + 1) * side).min(size[0]) + 1.0,
-        (f64::from(BOX[3] + 1) * side).min(size[1]) + 1.0,
+        (f64::from(b[2] + 1) * side).min(size[0]) + 1.0,
+        (f64::from(b[3] + 1) * side).min(size[1]) + 1.0,
     ];
     let x = [lo[0] / size[0] * 2.0 - 1.0, hi[0] / size[0] * 2.0 - 1.0];
     let y = [1.0 - lo[1] / size[1] * 2.0, 1.0 - hi[1] / size[1] * 2.0];
@@ -115,8 +147,23 @@ fn inside(m: &M4, c: [f64; 3], r: f64) -> f64 {
 #[test]
 fn a_gated_frame_lists_the_instances_that_meet_its_box() {
     let Some(gpu) = device() else { return };
-    let m = view_proj([0.0, -120.0, 60.0], 1.0);
+    lists_what_meets(&gpu, &SCREEN, &perspective([0.0, -120.0, 60.0], 1.0));
+}
+
+#[test]
+fn a_gated_light_map_lists_the_instances_that_meet_its_box() {
+    let Some(gpu) = device() else { return };
+    lists_what_meets(&gpu, &LIGHT, &orthographic([60.0, -90.0, 200.0], 128.0));
+}
+
+/// Gate `t` seen by `m` lists the instances whose ball meets its claimed box.
+fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let translation = [3.0f32, -2.0, 0.5];
+    // The eye's Q3 against the anchor's, X across the i32's seam, where the
+    // wrapping difference is the short way round.
+    let eye_q = [i32::MAX - 100, 5000 * 256, 7 * 256];
+    let anchor_q: [i32; 3] =
+        std::array::from_fn(|a| eye_q[a].wrapping_add((translation[a] * 256.0) as i32));
     // The regions' counts, some empty, laid end to end; each slot its own instance, listed in
     // reverse within the list.
     let regions = drawn::REGIONS as usize;
@@ -165,7 +212,7 @@ fn a_gated_frame_lists_the_instances_that_meet_its_box() {
         region_words[r] = n;
         region_words[regions + r] = first + n;
         let u = r * drawn::UNIFORM_WORDS as usize;
-        uniforms[u..u + 3].copy_from_slice(&translation.map(f32::to_bits));
+        uniforms[u..u + 3].copy_from_slice(&anchor_q.map(|v| v as u32));
         uniforms[u + 4] = CAP;
         uniforms[u + drawn::UNIFORM_IDX as usize] = columns * CAP + first;
         let a = r * drawn::ARGS_WORDS as usize;
@@ -173,16 +220,17 @@ fn a_gated_frame_lists_the_instances_that_meet_its_box() {
         first += n;
     }
     let mut frame = vec![0u32; FRAME_FLOATS];
+    frame[EYE..EYE + 3].copy_from_slice(&eye_q.map(|v| v as u32));
     for c in 0..4 {
         for r in 0..4 {
             frame[c * 4 + r] = (m[r][c] as f32).to_bits();
         }
     }
-    let across = SIZE.map(|v| v.div_ceil(SIDE));
+    let across = t.size.map(|v| v.div_ceil(t.side));
     let mut tiles = [0u32; screen::TILES_WORDS];
     tiles[..4].copy_from_slice(&[across[0], across[1], 1, 0]);
-    tiles[4..]
-        .copy_from_slice(&[SIZE[0] as f32, SIZE[1] as f32, 0.0, SIDE as f32].map(f32::to_bits));
+    let size = [t.size[0] as f32, t.size[1] as f32, 0.0, t.side as f32];
+    tiles[4..].copy_from_slice(&size.map(f32::to_bits));
 
     let storage = wgpu::BufferUsages::STORAGE;
     let frame_buf = gpu.buffer(&frame, wgpu::BufferUsages::UNIFORM);
@@ -191,7 +239,7 @@ fn a_gated_frame_lists_the_instances_that_meet_its_box() {
     let instances_buf = gpu.buffer(&instances, storage);
     let gated = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
     let gated_args = gpu.buffer(&vec![u32::MAX; args.len()], storage);
-    let box_buf = gpu.buffer(&BOX, storage);
+    let box_buf = gpu.buffer(&t.claimed, storage);
     let regions_buf = gpu.buffer(&region_words, storage);
     let tiles_buf = gpu.buffer(&tiles, wgpu::BufferUsages::UNIFORM);
     let binds = [
@@ -254,7 +302,7 @@ fn a_gated_frame_lists_the_instances_that_meet_its_box() {
                     + f64::from(translation[a])
             });
             let middle = [v[0], v[1], v[2] + f64::from(generation::TALLEST) * 0.5];
-            let d = inside(&m, middle, radius);
+            let d = inside(t, m, middle, radius);
             if d.abs() < 1e-3 {
                 near += 1;
                 continue;

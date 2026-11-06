@@ -100,6 +100,9 @@ impl Uploads {
         send: &mut dyn FnMut(u32, &[u8]) -> Uptake,
         wanted: &dyn Fn(u32) -> bool,
     ) {
+        if self.waiting == 0 {
+            return;
+        }
         let mut full = false;
         for slot in 0..self.slots.len() {
             let Upload::Waiting(block) = self.slots[slot] else {

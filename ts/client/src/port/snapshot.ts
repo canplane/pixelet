@@ -8,6 +8,7 @@ import {
   read_snapshot,
   SensorStatus,
   type ShellSnapshotEvent,
+  type ShellViewEvent,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
 import { host } from "@/host/kernel.ts";
@@ -23,13 +24,11 @@ const INIT: Snapshot = {
   companion: { person_ready: false, pet_ready: false },
   draft: null,
   orient: { status: SensorStatus.Idle, err: null },
-  azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,
   over_marker: false,
   settings: [],
-  m_per_px: 0,
   division: [],
   previews: [],
   refused_files: [],
@@ -58,4 +57,20 @@ export const watch_snapshot = listeners.watch;
 
 export function current(): Snapshot {
   return snapshot;
+}
+
+let view: ShellViewEvent = { azimuth: 0, m_per_px: 0 };
+const view_listeners = new Listeners();
+
+/** The kernel's SHELL_VIEW, which a rotation or a zoom posts every frame:
+ * told only to what watches the view, the snapshot's readers left asleep. */
+export function view_posted(e: ShellViewEvent): void {
+  view = e;
+  view_listeners.notify();
+}
+
+export const watch_view = view_listeners.watch;
+
+export function current_view(): ShellViewEvent {
+  return view;
 }

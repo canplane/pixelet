@@ -1,12 +1,15 @@
 // The ghost's boxes: each unfolded into a cube's six faces, every edge of
 // it its own silhouette.
 
-// Two vec4s, not a vec3f followed by scalars: that layout inside a storage
+// Whole vec4s, not a vec3f followed by scalars: that layout inside a storage
 // array is read differently by two backends, everything past the first member sliding.
 struct Draw {
+  // The position's Q3, bit for bit, and padding (frame/draw.rs `Position`).
   place: vec4f,
   // Opacity, the box's cell in units, the height step, padding.
   measure: vec4f,
+  // The position's remainder, and padding.
+  rem: vec4f,
 };
 
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
@@ -85,7 +88,7 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
 fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   let d = draws[v / BOX_VERTICES];
   let b = box_of(words, d);
-  let c = box_corner(v % BOX_VERTICES, b, d.place.xyz);
+  let c = box_corner(v % BOX_VERTICES, b, from_eye(bitcast<vec3i>(d.place.xyz), d.rem.xyz));
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;

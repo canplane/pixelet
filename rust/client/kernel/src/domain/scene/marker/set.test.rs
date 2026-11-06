@@ -1,0 +1,53 @@
+// pxl-kernel/domain/scene/marker/set.test.rs
+
+use super::*;
+use crate::sys;
+use pxl_render::frame::draw::{lists_bytes, set_lists, DRAW_WORDS};
+use pxl_render::gpu::atlas::shelf::Paint;
+use xpute_guest::mem::heap::alloc;
+
+/// A marker's instance holds its stand's Q3 bit for bit, X across the i32's
+/// seam and words whose bits read as a NaN among them, and nothing of the
+/// eye: the same markers lay the same words, and the set draws the same
+/// record, wherever the eye is, so an eye that moves rewrites no instance
+/// and writes no draw (pxl-render gpu/read.rs `Written`).
+#[test]
+fn a_marker_is_where_it_stands() {
+    let _g = sys::serial();
+    let stands = [
+        [i32::MAX - 3, -0x0040_0001, 0x7fc0_0001],
+        [i32::MIN + 3, 512, -1],
+    ];
+    let paint = Paint::Pill {
+        text: "a".into(),
+        fill: 0,
+        ink: 0,
+        logical_w: 24.0,
+    };
+    let slot = atlas().add(24.0, 30.0, paint) as u32;
+    let lay = || {
+        stands
+            .iter()
+            .flat_map(|&s| instance(s, [24.0, 30.0], slot, 1.0, 40.0))
+            .collect::<Vec<u32>>()
+    };
+    let (was, now) = (lay(), lay());
+    assert_eq!(was, now);
+    for (k, s) in stands.iter().enumerate() {
+        let at = k * INSTANCE_WORDS;
+        assert_eq!(was[at..at + 3], s.map(|v| v as u32));
+    }
+    const LIVE: usize = 4;
+    let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
+    // SAFETY: a block of the heap's, the lists' alone for the test's run.
+    unsafe { set_lists(at, LIVE) };
+    let (mut a, mut b) = (DrawList::default(), DrawList::default());
+    let mut set = Set::default();
+    set.write(&mut a, &was);
+    for list in [&mut a, &mut b] {
+        list.begin_frame();
+        set.draw(list);
+    }
+    assert!(a.same_draws(&b));
+    assert_eq!(a.take().draws.len(), DRAW_WORDS, "the set is drawn");
+}

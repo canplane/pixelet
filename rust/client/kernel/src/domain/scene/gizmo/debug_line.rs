@@ -4,7 +4,7 @@
 //! the gizmo lines behind it and draws nothing, so the gizmos occlude one
 //! another and nothing else. A module built without the gizmos holds none.
 
-use pxl_render::frame::draw::{DrawList, MirroredBlock, PIPELINE_DEBUG};
+use pxl_render::frame::draw::{DrawList, MirroredBlock, Position, PIPELINE_DEBUG};
 use pxl_render::frame::shader::record;
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
@@ -40,11 +40,11 @@ impl DebugLines {
         self.origin = origin;
     }
 
-    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
+    pub fn draw(&self, draw: &mut DrawList) {
         if self.line_cnt == 0 || self.block.handle == 0 {
             return;
         }
-        let t = DrawList::translation(self.origin, eye);
+        let t = Position::of(self.origin);
         draw.draw_as(
             PIPELINE_DEBUG,
             self.block.handle,

@@ -26,11 +26,10 @@ pub struct SkinnedPass {
     marks: Marks,
 }
 
-/// A mark's uniform: its place, the uniform's first words (skinned_mesh.wgsl
+/// A mark's uniform: the draw's, as the lit pass reads it (skinned_place.wgsl
 /// `Draw`).
 fn put_mark(buf: &mut [u8], (_, u): &Draw) {
-    buf[..24].copy_from_slice(bytes(&u[..6]));
-    buf[24..DRAW_BYTES as usize].fill(0);
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
 }
 
 impl SkinnedPass {
@@ -142,10 +141,9 @@ impl SkinnedPass {
             draws.clone(),
             moved,
             |buf, d| {
-                let u = uniform_of(uniforms, d);
-                // Translation, turn about Z, opacity, scale, padding (skinned_mesh.wgsl `Draw`).
-                buf[..24].copy_from_slice(bytes(&u[..6]));
-                buf[24..DRAW_BYTES as usize].fill(0);
+                // Its position's Q3, turn about Z, opacity, scale, padding,
+                // its position's remainder (skinned_place.wgsl `Draw`).
+                buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
             },
         );
         for d in draws {

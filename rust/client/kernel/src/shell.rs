@@ -1,12 +1,13 @@
 // pxl-kernel/shell.rs
 
-//! What the page's UI reads of the kernel (a Snapshot packet, handed over
-//! only when changed) and the commands it applies to the stores.
+//! What the page's UI reads of the kernel (a Snapshot packet, and the view's
+//! azimuth and scale beside it, each handed over only when changed) and the
+//! commands it applies to the stores.
 
 use crate::domain::layer::Base as _;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
 use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::domain::control::camera::controller;
@@ -15,7 +16,7 @@ use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, Snapshot,
+    PivotState, RefusedFile, ShellViewEvent, Snapshot,
 };
 use crate::domain::control::edit::write;
 use crate::domain::control::navigation::follow_mode::following;
@@ -41,12 +42,19 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
 
-/// The pivot's division and each above it, broad to narrow. A name
-/// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
-/// the zoom it shows from (`Division::shown_from`).
+/// The finest zoom whose side a logical pixel, `u_per_px` wide, is no wider
+/// than; none where it is wider than the world. A division's name shows where
+/// the zoom it shows from (`Division::shown_from`) is no finer than this one,
+/// so the names shown move only where the view's scale crosses a zoom.
+fn named_to(u_per_px: f64) -> Option<Zoom> {
+    (0..=FINEST_ZOOM).rev().find(|&z| u_per_px <= units(z))
+}
+
+/// The pivot's division and each above it, broad to narrow, each shown where
+/// the view names to its zoom (`named_to`).
 fn division_parts(
     at: Option<(Quadrant, u32)>,
-    u_per_px: f64,
+    named_to: Option<Zoom>,
     each: &mut dyn FnMut(&DivisionPart<'_>),
 ) {
     let Some(at) = at else { return };
@@ -54,15 +62,15 @@ fn division_parts(
         each(&DivisionPart {
             subtype: part.subtype as u8,
             name: &part.name,
-            shown: u_per_px <= units(part.shown_from()),
+            shown: named_to.is_some_and(|z| part.shown_from() <= z),
             area: part.area,
         });
     });
 }
 
 /// What the snapshot is made of, read off its owners: where the names are
-/// read (`division::naming`) rather than the names, and the waiting
-/// marker's text aside (`SnapshotMemo`).
+/// read (`division::naming`) rather than the names, which of them show rather
+/// than the view's scale, and the waiting marker's text aside (`SnapshotMemo`).
 #[derive(Clone, Copy, PartialEq)]
 pub struct SnapshotInputs {
     status: GroundStatus,
@@ -72,7 +80,6 @@ pub struct SnapshotInputs {
     companion: [bool; 2],
     drafting: bool,
     orient: SensorState,
-    azimuth: f64,
     is_follow_mode: bool,
     camera_busy: bool,
     zooming: bool,
@@ -80,9 +87,9 @@ pub struct SnapshotInputs {
     /// By each setting's number, one not given out 0; none until they are
     /// read, as the shell holds none before its first snapshot.
     settings: Option<[u32; SettingKey::SLOTS]>,
-    /// The view's scale at the pivot, as the units a logical pixel spans.
-    u_per_px: f64,
     division: Option<(Quadrant, u32)>,
+    /// The zoom the view names its divisions to (`named_to`).
+    named_to: Option<Zoom>,
     previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
@@ -100,6 +107,7 @@ const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize
 fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
+    let division = pivot.and_then(|at| naming(&at));
     let mut previews = ([0u32; PREVIEWS_MAX], 0);
     for (slot, (surface, ..)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
@@ -121,7 +129,6 @@ fn snapshot_inputs() -> SnapshotInputs {
         companion: companion_ready(),
         drafting: write::marker_draft().is_some(),
         orient: device_orient_store().state,
-        azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
         camera_busy: dragging(),
         zooming: controller::zooming(),
@@ -133,8 +140,8 @@ fn snapshot_inputs() -> SnapshotInputs {
             }
             by_number
         }),
-        u_per_px: units_per_px_at(dist()),
-        division: pivot.and_then(|at| naming(&at)),
+        division,
+        named_to: named_to(units_per_px_at(dist())),
         previews,
         stall: stall(),
         declared: source::top().is_some(),
@@ -163,11 +170,13 @@ fn snapshot_inputs() -> SnapshotInputs {
 }
 
 /// The snapshot last sent, which a new one is sent only where it moved
-/// from: its makings and the marker draft's text.
+/// from: its makings and the marker draft's text; and the view last sent,
+/// its azimuth and its meters a pixel.
 #[derive(Default)]
 pub struct SnapshotMemo {
     last_inputs: Option<SnapshotInputs>,
     text: String,
+    last_view: Option<(f64, f64)>,
 }
 
 impl SnapshotMemo {
@@ -182,6 +191,23 @@ impl SnapshotMemo {
         self.text.clear();
         self.text.push_str(text);
         Some(now)
+    }
+
+    /// The view now, where its azimuth or its scale moved since it was last
+    /// sent; taken as sent.
+    pub fn take_view_moved(&mut self) -> Option<ShellViewEvent> {
+        let now = (
+            camera_state().intent.azimuth,
+            m_per_px(units_per_px_at(dist()), controller::pivot()),
+        );
+        if self.last_view == Some(now) {
+            return None;
+        }
+        self.last_view = Some(now);
+        Some(ShellViewEvent {
+            azimuth: now.0,
+            m_per_px: now.1,
+        })
     }
 }
 
@@ -216,14 +242,12 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
             status: shown.orient.status,
             err: shown.orient.err,
         },
-        azimuth: shown.azimuth,
         is_follow_mode: shown.is_follow_mode,
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,
         over_marker: shown.over_marker,
         settings: shown.settings.as_ref().map_or(&[], |s| s),
-        m_per_px: m_per_px(shown.u_per_px, shown.pivot),
-        division: &|each| division_parts(shown.division, shown.u_per_px, each),
+        division: &|each| division_parts(shown.division, shown.named_to, each),
         previews: &shown.previews.0[..shown.previews.1],
         refused_files: &|each| {
             for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {

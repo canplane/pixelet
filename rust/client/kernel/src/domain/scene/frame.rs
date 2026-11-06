@@ -11,7 +11,9 @@ use pxl_spec::space::coord::world;
 pub struct Frame {
     /// The sea under the eye, in the world's doubles; what is drawn is measured about it.
     pub anchor: V3,
-    /// Draw translations are taken relative to the eye.
+    /// The eye, in the world's doubles: what is listed is decided from it;
+    /// a draw's position and the box it stands within hold none of it
+    /// (pxl-render frame/draw.rs `Position`, `Stand`).
     pub eye: V3,
     /// About the anchor.
     pub frustum: Frustum,

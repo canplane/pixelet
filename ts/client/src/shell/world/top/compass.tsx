@@ -6,7 +6,7 @@ import { Path, Svg } from "react-native-svg";
 import { LABEL, NORTH } from "@/shell/ui/palette.ts";
 import { chrome, SECONDARY } from "@/shell/ui/theme.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { useKernel } from "@/shell/store/watch.ts";
+import { useView } from "@/shell/store/watch.ts";
 
 const NEEDLE_HALF = 16;
 const NEEDLE_WIDTH = 9;
@@ -43,7 +43,7 @@ function face(end: f64, side: f64, seam: f64): string {
 
 /** The dial and a needle pointing north, turned against the world. */
 export function CompassFace() {
-  const turn = -useKernel((s) => s.azimuth);
+  const turn = -useView((v) => v.azimuth);
   const w = NEEDLE_WIDTH / 2;
   return (
     <View style={{ width: chrome.control, height: chrome.control }}>

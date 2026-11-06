@@ -7,9 +7,9 @@
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::frame::draw::{uniform_of, DRAW_WORDS};
+use crate::frame::draw::{uniform_of, Position, DRAW_WORDS};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
@@ -75,6 +75,12 @@ impl Preview {
         }
     }
 
+    /// Its finish's groups over `s`, before the frame's commands, `s` made
+    /// at its size.
+    pub fn set_groups(&mut self, g: &Gpu, s: &Surface) {
+        self.finish.set_groups(g, self.frame_buf, s, None);
+    }
+
     pub fn release(self) {
         self.frames.release();
         release(self.frame_buf);
@@ -103,9 +109,14 @@ impl Preview {
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::preview);
-        let u = uniform_of(uniforms, own);
-        let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
+        // The case's eye stands at the actor's Q3, so the actor is its
+        // remainder from it.
+        let at = Position::in_uniform(uniform_of(uniforms, own));
+        let actor = at.r.map(f64::from);
         let u = &mut frame;
+        for k in 0..3 {
+            u[EYE + k] = f32::from_bits(at.q[k] as u32);
+        }
         let (mut proj, mut view, mut t, mut m, mut n) = (
             mat4::new(),
             mat4::new(),
@@ -170,15 +181,8 @@ impl Preview {
         pass.end();
         // Encoded onto its canvas at its own frame's words, no vignette.
         let view_id = g.cur(s.handle);
-        self.finish.draw(
-            ctx,
-            GpuSpanName::preview,
-            self.frame_buf,
-            s,
-            s.color_view,
-            view_id,
-            None,
-        );
+        self.finish
+            .draw(ctx, GpuSpanName::preview, s, s.color_view, view_id, None);
         release(view_id);
     }
 }

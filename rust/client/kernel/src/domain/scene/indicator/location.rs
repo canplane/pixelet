@@ -4,7 +4,7 @@
 //! ground under it, and a beacon above that eases, spins and bobs.
 
 use pxl_render::frame::draw::{
-    DrawList, MirroredBlock, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
+    DrawList, MirroredBlock, Position, Stand, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
 };
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::camera::grid;
@@ -362,17 +362,17 @@ impl LocationIndicator {
         slides
     }
 
-    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
+    pub fn draw(&self, draw: &mut DrawList) {
         let Some(p) = &self.zone else { return };
         if !p.visible || self.block.handle == 0 {
             return;
         }
         let shown = p.beacon_at.unwrap_or(p.target);
-        // The zone about its center, and the beacon over where it is shown:
-        // the beacon's bob and slide move it alone, as the zone reads no
-        // time; each, its draw changed, marks where it was and where it is
-        // (pxl-render gpu/pass/mark.rs).
-        let center = DrawList::translation(p.center, eye);
+        // The zone about its center, on Q3, and the beacon at its own
+        // position over where it is shown, finer than Q3: the beacon's bob
+        // and slide move it alone, as the zone reads no time; each, its draw
+        // changed, marks where it was and where it is (pxl-render
+        // gpu/pass/mark.rs).
         if p.zone_drawn {
             let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
@@ -380,26 +380,24 @@ impl LocationIndicator {
                 self.block.handle,
                 cnt,
                 0,
-                center,
+                Position::of(p.center),
                 0.0,
                 1.0,
                 None,
             );
         }
-        let beacon = [
-            center[0] + shown[0] as f32,
-            center[1] + shown[1] as f32,
-            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB) as f32,
-        ];
+        let (x, y) = (p.center[0] + shown[0], p.center[1] + shown[1]);
+        let rest = p.center[2] + BEACON_Z_BIAS;
+        let beacon = Position::of([
+            x,
+            y,
+            rest + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB,
+        ]);
         // It reads the sun's map, so it stands within the box its whole bob sweeps, which
-        // holds still while it bobs (frame/draw.rs `Stand`).
-        let r = beacon::RADIUS;
-        let mid = [beacon[0], beacon[1], center[2] + BEACON_Z_BIAS as f32];
-        let bob = BEACON_BOB as f32 + r;
-        let stand = [
-            [mid[0] - r, mid[1] - r, mid[2] - bob],
-            [mid[0] + r, mid[1] + r, mid[2] + bob],
-        ];
+        // holds still while it bobs (pxl-render frame/draw.rs `Stand`).
+        let r = f64::from(beacon::RADIUS);
+        let bob = BEACON_BOB + r;
+        let stand = Stand::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);
         draw.draw_as(
             PIPELINE_LOCATION_BEACON,
             0,

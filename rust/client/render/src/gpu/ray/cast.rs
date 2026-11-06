@@ -32,11 +32,14 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Entry,
     Gpu, RenderContext,
 };
-use crate::gpu::generator::{cut_boxes, hold, DecorFrame, Generation, Generator, IndirectDraw};
+use crate::gpu::generator::{
+    cut_boxes, hold, DecorFrame, Gate, Generation, Generator, IndirectDraw,
+};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
+use crate::gpu::tiles::Tiles;
 use pxl_engine::count::{EYE, LIGHT};
 
 /// The GPU's cast this frame (frame/shader/cast.wgsl `cast_cs`), a ray
@@ -60,9 +63,9 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU generates and draws over the same world (gpu/generator.rs).
     pub decor: DecorFrame<'a>,
-    /// The box each drawn thing that reads the shadow map stands within, as its draw is
-    /// recorded (frame/draw.rs `Lists::stands`): receivers of the map as decor is (pxl-engine
-    /// `light::STANDS_AT`).
+    /// The box each drawn thing that reads the shadow map stands within, in the world's Q3, as
+    /// its draw is recorded (frame/draw.rs `Lists::stands`): receivers of the map as decor is
+    /// (pxl-engine `light::STANDS_AT`), taken against the eye's `ORIGIN` as the head is written.
     pub stands: &'a [Stand],
     /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/count.rs).
@@ -1576,12 +1579,15 @@ impl RaysPass {
             let at = 4 * light::STARTS_AT;
             head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&light_map.2.words());
             // What the host draws that reads the map, receivers as decor is, a box each
-            // (`light_mark_draws_cs`).
+            // (`light_mark_draws_cs`), in units from the eye's origin, the Q3 the
+            // generated decor is placed against, rounded outward (`Stand::from_eye`).
             let at = 4 * light::STANDS_AT;
             let n = cast.stands.len().min(light::STANDS);
             c.light_draws = n != 0 || c.generator.instances().is_some();
             head[at] = n as u32;
-            for (k, [lo, hi]) in cast.stands[..n].iter().enumerate() {
+            let origin: [i32; 3] = core::array::from_fn(|k| cast.eye[eye::ORIGIN + k] as i32);
+            for (k, s) in cast.stands[..n].iter().enumerate() {
+                let [lo, hi] = s.from_eye(origin);
                 let w = at + 4 * (1 + 2 * k);
                 head[w..w + 3].copy_from_slice(&lo.map(f32::to_bits));
                 head[w + 4..w + 7].copy_from_slice(&hi.map(f32::to_bits));
@@ -2609,16 +2615,10 @@ impl RaysPass {
         self.cast.as_ref().and_then(|c| c.generator.indirect_draw())
     }
 
-    /// What a frame through the gate draws of decor generated (`Generator::gate`).
-    pub fn gate_generated(
-        &self,
-        ctx: &mut RenderContext,
-        frame: u32,
-        tiles: u32,
-        claimed_box: u32,
-    ) {
+    /// What a frame draws through `gate` of decor generated (`Generator::gate`).
+    pub fn gate_generated(&self, ctx: &mut RenderContext, gate: Gate, frame: u32, tiles: &Tiles) {
         if let Some(c) = self.cast.as_ref() {
-            c.generator.gate(ctx, frame, tiles, claimed_box);
+            c.generator.gate(ctx, gate, frame, tiles);
         }
     }
 

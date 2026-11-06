@@ -69,8 +69,9 @@ impl View {
         })
     }
 
-    /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
-    /// no eye position in either, so nothing large cancels in floats.
+    /// Eye-relative matrices, as the GPU's points are (pxl-render
+    /// frame/draw.rs `Position`): no eye position in either, so nothing large
+    /// cancels in floats.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
         let mut view_proj = mat4::new();
         let rot = self.at().rot;

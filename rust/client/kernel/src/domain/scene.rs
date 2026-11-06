@@ -19,7 +19,6 @@ pub mod region;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;
-use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
@@ -58,13 +57,17 @@ impl Scene {
     }
 
     /// Begins the frame's list with the scene's own layers.
-    pub fn begin(&mut self, draw: &mut DrawList, models: &Models, eye: V3) {
+    pub fn begin(&mut self, draw: &mut DrawList, models: &Models) {
         draw.begin_frame();
-        self.ghost.draw(draw, eye);
-        companion_draw(draw, models, eye);
-        preview_draw(draw, models, eye);
-        self.location.draw(draw, eye);
-        self.debug.draw(draw, eye);
-        self.coverage.draw(draw, eye);
+        self.ghost.draw(draw);
+        companion_draw(draw, models);
+        preview_draw(draw, models);
+        self.location.draw(draw);
+        self.debug.draw(draw);
+        self.coverage.draw(draw);
     }
 }
+
+#[cfg(test)]
+#[path = "scene.test.rs"]
+mod test;

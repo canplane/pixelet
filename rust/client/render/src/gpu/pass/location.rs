@@ -95,11 +95,12 @@ pub struct LocationPass {
     beacon_marks: Marks,
 }
 
-/// A mark's uniform: the draw's place and turn, as the lit pass's first
-/// words (location.wgsl `Draw`).
+/// A mark's uniform: the draw's position and turn, where the lit pass reads
+/// them (location.wgsl `Draw`).
 fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
-    buf[..DRAW_BYTES as usize]
-        .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0]));
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
+        u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0, u[8], u[9], u[10], 0.0,
+    ]));
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
@@ -221,8 +222,9 @@ impl LocationPass {
         let c = self.color;
         let put = |buf: &mut [u8], (d, night): (&[u32; DRAW_WORDS], f32)| {
             let u = uniform_of(uniforms, d);
-            buf[..DRAW_BYTES as usize]
-                .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], c[0], c[1], c[2], night]));
+            buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
+                u[0], u[1], u[2], u[3], c[0], c[1], c[2], night, u[8], u[9], u[10], 0.0,
+            ]));
         };
         let beacons = draws.of(PIPELINE_LOCATION_BEACON);
         self.beacon_uniforms.write(

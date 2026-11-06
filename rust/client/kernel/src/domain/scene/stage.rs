@@ -313,7 +313,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         let (scene, list) = (scene(), draw_list());
         let models = model::models();
         let animating = scene.tick(list, models, &frame);
-        scene.begin(list, models, frame.eye);
+        scene.begin(list, models);
         animating
     });
     {
@@ -329,7 +329,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         cloud::step(draw_list(), &frame, &ctx.pass);
     }
     marker::step(ctx, &frame);
-    marker::draw(draw_list(), frame.eye);
+    marker::draw(draw_list());
     if draw {
         ctx.invalidate();
     }

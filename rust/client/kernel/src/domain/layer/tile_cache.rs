@@ -79,6 +79,13 @@ pub struct TileCache<L: Base> {
     /// again or no longer, answered from above. Not what is read over a
     /// tile (`moved_at`), which holds nothing.
     revision: u32,
+    /// How many times what is asked of it was set (`ask`), which
+    /// `revision` counts only where a held tile's answer moved.
+    ask_revision: u32,
+    /// Of the tiles asked for, how many and how many show (`count_shown`),
+    /// as of the two revisions they were counted at: read through `shown`
+    /// alone, counted again where either moved.
+    shown: core::cell::Cell<Option<([u32; 2], [u32; 2])>>,
     refused: u32,
     /// Tiles taken in since `take_landed`, the profiler's.
     landed: u32,
@@ -150,6 +157,8 @@ impl<L: Base> Default for TileCache<L> {
             going: Vec::with_capacity(Self::ENTRIES as usize),
             moved: Vec::new(),
             revision: 0,
+            ask_revision: 0,
+            shown: core::cell::Cell::new(None),
             refused: 0,
             landed: 0,
         }
@@ -325,6 +334,7 @@ impl<L: Base> TileCache<L> {
             ENOTRECOVERABLE,
             asks.len()
         );
+        self.ask_revision = self.ask_revision.wrapping_add(1);
         for (&p, e) in &mut self.tiles {
             let was = e.ask.is_some();
             e.ask = asks.get(&p).copied();
@@ -445,26 +455,44 @@ impl<L: Base> TileCache<L> {
     /// over it drawing it coarser (`finest_resident`), as a finer tile asked for
     /// while the eye moves is.
     pub fn is_shown(&self) -> bool {
-        let mut lines = Lines::default();
-        self.asked()
-            .all(|p| self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some())
+        let [asked, shown] = self.shown();
+        shown == asked
     }
 
     /// How much of what is asked for shows, as `is_shown` asks, 0 to 1; none
     /// where nothing is asked yet. It goes back as more is asked for.
     pub fn shown_share(&self) -> f64 {
-        let (mut lines, mut asked, mut shown) = (Lines::default(), 0u32, 0u32);
-        for p in self.asked() {
-            asked += 1;
-            if self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some() {
-                shown += 1;
+        match self.shown() {
+            [0, _] => 0.0,
+            [asked, shown] => f64::from(shown) / f64::from(asked),
+        }
+    }
+
+    /// The tiles asked for and those of them that show, counted once
+    /// for the asks and what is held as they stand.
+    fn shown(&self) -> [u32; 2] {
+        let now = [self.revision, self.ask_revision];
+        match self.shown.get() {
+            Some((at, cnt)) if at == now => cnt,
+            _ => {
+                let cnt = self.count_shown();
+                self.shown.set(Some((now, cnt)));
+                cnt
             }
         }
-        if asked == 0 {
-            0.0
-        } else {
-            f64::from(shown) / f64::from(asked)
+    }
+
+    /// The tiles asked for and those of them that show: its answer, or a
+    /// resident tile over it drawing it coarser.
+    fn count_shown(&self) -> [u32; 2] {
+        let (mut lines, mut cnt) = (Lines::default(), [0u32; 2]);
+        for p in self.asked() {
+            cnt[0] += 1;
+            if self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some() {
+                cnt[1] += 1;
+            }
         }
+        cnt
     }
 
     fn asked(&self) -> impl Iterator<Item = Quadrant> + '_ {
@@ -573,3 +601,7 @@ impl<L: Base> TileCache<L> {
         held.slot
     }
 }
+
+#[cfg(test)]
+#[path = "tile_cache.test.rs"]
+mod test;

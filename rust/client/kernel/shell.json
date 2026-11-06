@@ -841,6 +841,30 @@
           "type": "u32"
         }
       ]
+    },
+    {
+      "name": "SHELL_VIEW",
+      "val": 6914,
+      "$doc": [
+        "The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a",
+        "zoom, which moves them every frame, leaves the snapshot as it was."
+      ],
+      "pkt": [
+        {
+          "name": "azimuth",
+          "type": "f64",
+          "$doc": [
+            "The view's azimuth."
+          ]
+        },
+        {
+          "name": "m_per_px",
+          "type": "f64",
+          "$doc": [
+            "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
+          ]
+        }
+      ]
     }
   ],
   "extern": [
@@ -1161,6 +1185,10 @@
         {
           "name": "SNAPSHOT",
           "val": 1
+        },
+        {
+          "name": "VIEW",
+          "val": 2
         }
       ]
     },
@@ -1539,13 +1567,6 @@
           "type": "OrientationState"
         },
         {
-          "name": "azimuth",
-          "type": "f64",
-          "$doc": [
-            "The view's azimuth."
-          ]
-        },
-        {
           "name": "is_follow_mode",
           "type": "bool"
         },
@@ -1574,13 +1595,6 @@
           "$doc": [
             "Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel",
             "has read its storage file, a few turns from boot."
-          ]
-        },
-        {
-          "name": "m_per_px",
-          "type": "f64",
-          "$doc": [
-            "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
           ]
         },
         {

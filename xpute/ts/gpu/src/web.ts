@@ -38,14 +38,9 @@ export class WebGpu implements Gpu {
   private tries = 0;
   /** A device answered once: giving up after it is losing the GPU, not lacking one. */
   private had = false;
-  /** A canvas transfers once: an effect mounted again is handed the same one. */
-  private readonly offscreens = new WeakMap<
-    HTMLCanvasElement,
-    OffscreenCanvas
-  >();
   /** In the order they were bound, so a device acquired again binds each
    * slot's newest last. */
-  private readonly canvases = new Map<u32, OffscreenCanvas>();
+  private readonly canvases = new Map<u32, HTMLCanvasElement>();
 
   /** `report` is told whether there is a GPU, the last word at once. */
   watch(report: (state: GpuState) => void): void {
@@ -73,14 +68,9 @@ export class WebGpu implements Gpu {
   }
 
   bind(handle: u32, canvas: HTMLCanvasElement): void {
-    let offscreen = this.offscreens.get(canvas);
-    if (!offscreen) {
-      offscreen = canvas.transferControlToOffscreen();
-      this.offscreens.set(canvas, offscreen);
-    }
     this.canvases.delete(handle);
-    this.canvases.set(handle, offscreen);
-    this.host?.bind(handle, offscreen.getContext("webgpu")!);
+    this.canvases.set(handle, canvas);
+    this.host?.bind(handle, canvas.getContext("webgpu")!);
   }
 
   unbind(handle: u32): void {
