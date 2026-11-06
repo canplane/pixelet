@@ -4,8 +4,9 @@
 // query reads changed (pxl-engine node_cache.rs `FORGETS`): every slot's key, or the key of
 // each slot over a brick that moved (`forgets`), over a box of what is placed or cut that
 // changed (`over_box`), or handed a slot of a child group of what is placed that was
-// written (`reads_written`). The eye's record of voxels is forgotten by the same predicates in
-// the same pass (record_draw.wgsl `record_forget_cs`).
+// written (`reads_written`); and, of a slot that draws (pxl-engine `record`) and is kept, what
+// draws it, its faces and their words, where a node beside it across a face is forgotten so
+// (`changed_beside`), as what lies about a face reads the cells beside it.
 
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 
@@ -159,4 +160,38 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       return;
     }
   }
+  let state = node_cache[w + W_STATE];
+  if ((state & (RECORD_FACES | RECORD_ASKED)) != 0u && changed_beside(zoom, c)) {
+    node_cache[w + W_STATE] = state & ~(RECORD_FACES | RECORD_ASKED);
+    for (var face = 0u; face < 6u; face += 1u) {
+      node_cache[w + W_FACES + face] = 0u;
+    }
+  }
+}
+
+/// Whether the rule forgets a node of `zoom` beside the one at column `c` across a face or an
+/// edge, over a brick that moved or a box that changed (`forgets`, `over_box`).
+fn changed_beside(zoom: u32, c: vec2<i32>) -> bool {
+  let boxes = min(node_cache[NODE_CACHE_BOXES_AT], NODE_CACHE_BOXES);
+  for (var dy = -1i; dy <= 1i; dy += 1i) {
+    for (var dx = -1i; dx <= 1i; dx += 1i) {
+      let at = vec2<i32>(wrap_idx(zoom, c.x + dx), c.y + dy);
+      if (forgets(zoom, at)) {
+        return true;
+      }
+      for (var b = 0u; b < boxes; b += 1u) {
+        let w = NODE_CACHE_BOXES_AT + 1u + 4u * b;
+        let changed = vec4<i32>(
+          i32(node_cache[w]),
+          i32(node_cache[w + 1u]),
+          i32(node_cache[w + 2u]),
+          i32(node_cache[w + 3u]),
+        );
+        if (over_box(zoom, at, changed)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }

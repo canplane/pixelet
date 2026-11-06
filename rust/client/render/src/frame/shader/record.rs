@@ -67,33 +67,24 @@ pub const COMPUTE_CAST_TILES: u32 = 46;
 pub const COMPUTE_CLAIMED_BOX: u32 = 47;
 pub const COMPUTE_DECOR_GATE_ARGS: u32 = 48;
 pub const COMPUTE_DECOR_GATE: u32 = 49;
-/// The second of the samples' passes into their observer's record, the eye's and the
-/// light's (sample_box.wgsl `sample_observe_cs`).
-pub const COMPUTE_SAMPLE_OBSERVE: u32 = 50;
-pub const COMPUTE_LIGHT_SAMPLE_OBSERVE: u32 = 51;
-/// The eye's record over every slot: forgotten, and drawn as the raster's boxes
-/// (record_draw.wgsl).
-pub const COMPUTE_RECORD_FORGET: u32 = 52;
-pub const COMPUTE_RECORD_DRAW: u32 = 53;
-/// The missed pixels' hits into the eye's record, and those whose stop met its key's claim
-/// (record_stops.wgsl).
-pub const COMPUTE_RECORD_STOPS: u32 = 54;
-pub const COMPUTE_RECORD_DEFERRED: u32 = 55;
+/// The node cache's drawable entries drawn as the raster's boxes (record_draw.wgsl).
+pub const COMPUTE_RECORD_DRAW: u32 = 50;
+/// The missed pixels' hits into the node cache's drawable entries (record_stops.wgsl).
+pub const COMPUTE_RECORD_STOPS: u32 = 51;
 /// The tiles the light's cast wants claimed nearest first (light_propagate.wgsl
 /// `light_claim_cs`), from the module that lists them.
-pub const COMPUTE_LIGHT_CLAIM: u32 = 56;
-/// The light's record drawn as its raster's boxes (record_draw.wgsl).
-pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 57;
+pub const COMPUTE_LIGHT_CLAIM: u32 = 52;
+/// The node cache's drawable entries drawn as the light's raster's boxes (record_draw.wgsl).
+pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 53;
 /// The screen's tiles that hold a parked pixel set changed (parked_tiles.wgsl).
-pub const COMPUTE_PARKED_TILES: u32 = 58;
-/// The light's holes' stops into its record, and those put off (record_stops.wgsl over
+pub const COMPUTE_PARKED_TILES: u32 = 54;
+/// The light's holes' stops into the node cache's drawable entries (record_stops.wgsl over
 /// record_stops.light.wgsl).
-pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 59;
-pub const COMPUTE_LIGHT_RECORD_DEFERRED: u32 = 60;
+pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 55;
 /// Each tile the light's cast lists read, wanted where its epoch has not cast it or it is owed
 /// (light_propagate.wgsl `light_want_cs`).
-pub const COMPUTE_LIGHT_WANT: u32 = 61;
-pub const COMPUTES: u32 = 62;
+pub const COMPUTE_LIGHT_WANT: u32 = 56;
+pub const COMPUTES: u32 = 57;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -145,22 +136,17 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
         COMPUTE_LIGHT_SAMPLE => (SHADER_LIGHT_SAMPLE, "sample_cs"),
         COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "sample_box_cs"),
-        COMPUTE_SAMPLE_OBSERVE => (SHADER_SAMPLE_BOX, "sample_observe_cs"),
-        COMPUTE_LIGHT_SAMPLE_OBSERVE => (SHADER_LIGHT_SAMPLE_BOX, "sample_observe_cs"),
         COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_QUEUE => (SHADER_QUEUE, "queue_cs"),
         COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
         COMPUTE_QUEUE_PARKED => (SHADER_QUEUE, "queue_parked_cs"),
         COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_LIGHT_BEAM_HIT => (SHADER_LIGHT_BEAM_HIT, "beam_hit_cs"),
-        COMPUTE_RECORD_FORGET => (SHADER_RECORD_DRAW, "record_forget_cs"),
         COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
         COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
-        COMPUTE_RECORD_DEFERRED => (SHADER_RECORD_DEFERRED, "record_deferred_cs"),
         COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),
         COMPUTE_PARKED_TILES => (SHADER_PARKED_TILES, "parked_tiles_cs"),
         COMPUTE_LIGHT_RECORD_STOPS => (SHADER_LIGHT_RECORD_STOPS, "record_stops_cs"),
-        COMPUTE_LIGHT_RECORD_DEFERRED => (SHADER_LIGHT_RECORD_DEFERRED, "record_deferred_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }

@@ -1,72 +1,79 @@
 // pxl-render/record_draw.wgsl
 
-// The eye's record over every slot, a thread a slot (pxl-engine record.rs): forgotten where
-// the node cache's rule forgets (`record_forget_cs`, forget.wgsl), and drawn, a key one entry
-// (`joins_first`), every held voxel in view written as a box for the raster's draw
-// (`record_draw_cs`, raster.wgsl), a stale one behind every fresh one (pxl-engine
-// `raster::STALE`), a stale one about the eye not at all; and each box it writes stood on by the light's receivers, where they are
-// stood this frame (`light::HEAD_STANDS_WORLD`), by the one rule every receiver stands by
-// (light_box.wgsl `box_tiles`, light_stood.wgsl), as a pixel that takes the box's voxel hits
-// within it (visible.wgsl `visible_cell`). The light's record by the same passes, over its
-// own (`light_record_draw_cs`): every held voxel whose box the light's box holds written as a
+// The node cache over every slot, a thread a slot (pxl-engine record.rs): each drawable entry,
+// a face set, drawn by the eye and by the light, and marked drawn in the frame's number
+// (`node_cache::W_SEEN`; `record::drawn`). The eye's draw writes every drawable entry in view
+// as a box for the raster's draw (`record_draw_cs`, raster.wgsl), its faces those an eye's ray
+// asked about (pxl-engine `record::ASKED`), none where it has none, a stale one behind every
+// fresh one (pxl-engine `raster::STALE`), a stale one about the eye not at all, and names the
+// frame it ran (`node_cache::DRAWN`); and each box it writes stood on by the light's
+// receivers, where they are stood this frame (`light::HEAD_STANDS_WORLD`), by the one rule
+// every receiver stands by (light_box.wgsl `box_tiles`, light_stood.wgsl), as a pixel that
+// takes the box's voxel hits within it (visible.wgsl `visible_cell`). The light's
+// (`light_record_draw_cs`) writes every drawable entry whose box the light's box holds as a
 // box for the light's raster, in units from where box texel (0, 0)'s ray starts, as the raster
-// lays the light's boxes, a stale one, asked at a band other than its tile's, behind every
-// fresh one (pxl-engine `record::light_fresh`), and forgotten by `record_forget_cs`.
+// lays the light's boxes, its faces every one some ray entered (`record::FACES`), a stale one,
+// not the node a ray asking its tile's band stops on, behind every fresh one (pxl-engine
+// `record::light_fresh`).
+
+/// The node cache, read and marked drawn: a thread a slot, so one writer a word.
+@group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
+
+fn node_cache_word(k: u32) -> u32 {
+  return node_cache[k];
+}
 
 /// The raster's boxes (pxl-engine `raster::BOX_WORDS`).
 @group(0) @binding(14) var<storage, read_write> boxes: array<u32>;
 /// The raster's args (pxl-engine `raster::ARGS_INSTANCES`, `raster::ARGS_CNT`).
 @group(0) @binding(16) var<storage, read_write> box_args: array<atomic<u32>>;
 
-/// Whether the node cache's rule forgets the node of `zoom` at column `c`, or a node beside it
-/// across a face, whose answer what lies about its faces reads (forget.wgsl `forgets`,
-/// `over_box`).
-fn forgets_about(zoom: u32, c: vec2<i32>) -> bool {
-  let boxes_cnt = min(node_cache[NODE_CACHE_BOXES_AT], NODE_CACHE_BOXES);
-  for (var dy = -1i; dy <= 1i; dy += 1i) {
-    for (var dx = -1i; dx <= 1i; dx += 1i) {
-      let at = vec2<i32>(wrap_idx(zoom, c.x + dx), c.y + dy);
-      if (forgets(zoom, at)) {
-        return true;
-      }
-      for (var b = 0u; b < boxes_cnt; b += 1u) {
-        let w = NODE_CACHE_BOXES_AT + 1u + 4u * b;
-        let changed = vec4<i32>(
-          i32(node_cache[w]),
-          i32(node_cache[w + 1u]),
-          i32(node_cache[w + 2u]),
-          i32(node_cache[w + 3u]),
-        );
-        if (over_box(zoom, at, changed)) {
-          return true;
-        }
-      }
-    }
+/// The entry at word `e`'s box from the origin `o`, the cell its asset keeps inset as it
+/// fills (pxl-engine cast.rs `asset_box`).
+fn entry_box(e: u32, k: Kept, o: vec3<i32>) -> Planes {
+  let p = kept_planes(k, o);
+  let eighths = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+  var lo = p.lo;
+  var hi = p.hi;
+  if (eighths != 0u) {
+    let inset = (hi - lo) * (0.5 * (1.0 - side(eighths)));
+    lo += inset;
+    hi -= inset;
   }
-  return false;
+  return Planes(lo, hi);
 }
 
-@compute @workgroup_size(RECORD_DRAW_LANES, 1, 1)
-fn record_forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= RECORD_ENTRIES) {
-    return;
-  }
-  let e = record_at(id.x);
-  if (node_cache[NODE_CACHE_FORGETS] == FORGETS_ALL) {
-    atomicStore(&record[e + R_HELD], 0u);
-    return;
-  }
-  let held = record_word(e + R_HELD);
-  if ((held & RECORD_HELD) == 0u) {
-    return;
-  }
-  let k = entry_kept(e, held);
-  let c = idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i));
-  if (forgets_about(k.zoom, c.xy)) {
-    atomicStore(&record[e + R_HELD], 0u);
-  }
+/// Box `place` of the draw's, the box `b` of slot `slot`, a lack where `kind` is, its faces
+/// word `faces`.
+fn put_box(place: u32, b: Planes, slot: u32, kind: u32, faces: u32) {
+  let at = place * RASTER_BOX_WORDS;
+  boxes[at + RASTER_BOX_LO] = bitcast<u32>(b.lo.x);
+  boxes[at + RASTER_BOX_LO + 1u] = bitcast<u32>(b.lo.y);
+  boxes[at + RASTER_BOX_LO + 2u] = bitcast<u32>(b.lo.z);
+  boxes[at + RASTER_BOX_HI] = bitcast<u32>(b.hi.x);
+  boxes[at + RASTER_BOX_HI + 1u] = bitcast<u32>(b.hi.y);
+  boxes[at + RASTER_BOX_HI + 2u] = bitcast<u32>(b.hi.z);
+  boxes[at + RASTER_BOX_ID] = (slot + 1u) | select(0u, RASTER_LACK, kind == KIND_LACKS);
+  boxes[at + RASTER_BOX_FACES] = faces;
 }
 
+/// A place for a box among the draw's, `NO_ENTRY` past its room, its count raised.
+fn box_place() -> u32 {
+  let place = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
+  if (place >= RECORD_BOXES) {
+    return NO_ENTRY;
+  }
+  atomicMax(&box_args[RASTER_ARGS_INSTANCES], place + 1u);
+  return place;
+}
+
+/// The entry at word `e` marked drawn this frame (`record::drawn`).
+fn mark_drawn(e: u32) {
+  let frame = record_frame();
+  if (node_cache[e + W_SEEN] != frame) {
+    node_cache[e + W_SEEN] = frame;
+  }
+}
 /// Whether the box `lo`..`hi`, units from the eye, meets what the eye sees: before it, within
 /// its reach, and within the screen's sides grown by `RECORD_VIEW_GROWTH`
 /// (pxl-engine `record::in_view`).
@@ -101,58 +108,43 @@ fn is_eyed(lo: vec3<f32>, hi: vec3<f32>, tan_xy: vec2<f32>) -> bool {
 
 @compute @workgroup_size(RECORD_DRAW_LANES, 1, 1)
 fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= RECORD_ENTRIES) {
+  if (id.x == 0u) {
+    node_cache[NODE_CACHE_DRAWN] = record_frame();
+  }
+  if (id.x >= ENTRIES) {
     return;
   }
-  let e = record_at(id.x);
-  let held = record_word(e + R_HELD);
-  if ((held & RECORD_HELD) == 0u) {
-    return;
-  }
-  let k = entry_kept(e, held);
-  if (joins_first(id.x, k)) {
+  let e = entry_at(id.x);
+  let kind = entry_kind(e);
+  let state = node_cache_word(e + W_STATE);
+  // The faces an eye's ray entered and asked what lies about (pxl-engine `record::ASKED`).
+  let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
+  if (kind == KIND_SPLIT || faces == 0u) {
     return;
   }
   let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-  let p = kept_planes(k, o);
-  // The cell its asset keeps inset as it fills (pxl-engine cast.rs `asset_box`).
-  let eighths = (record_word(e + R_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
-  var lo = p.lo;
-  var hi = p.hi;
-  if (eighths != 0u) {
-    let inset = (hi - lo) * (0.5 * (1.0 - side(eighths)));
-    lo += inset;
-    hi -= inset;
-  }
+  let k = entry_kept(e, o);
+  let b = entry_box(e, k, o);
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let near = is_eyed(lo, hi, tan_xy);
-  if (!near && !in_view(lo, hi)) {
+  let near = is_eyed(b.lo, b.hi, tan_xy);
+  if (!near && !in_view(b.lo, b.hi)) {
     return;
   }
-  let state = record_word(e + R_STATE);
   let fresh = kept_fresh(k, (state & RECORD_WHOLE) != 0u, o);
   // A stale box about the eye is not drawn (pxl-engine `record`, Fresh or stale).
   if (near && !fresh) {
     return;
   }
-  let box_at = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
-  if (box_at >= RECORD_ENTRIES) {
+  let place = box_place();
+  if (place == NO_ENTRY) {
     return;
   }
-  atomicMax(&box_args[RASTER_ARGS_INSTANCES], box_at + 1u);
-  let at = box_at * RASTER_BOX_WORDS;
-  boxes[at + RASTER_BOX_LO] = bitcast<u32>(lo.x);
-  boxes[at + RASTER_BOX_LO + 1u] = bitcast<u32>(lo.y);
-  boxes[at + RASTER_BOX_LO + 2u] = bitcast<u32>(lo.z);
-  boxes[at + RASTER_BOX_HI] = bitcast<u32>(hi.x);
-  boxes[at + RASTER_BOX_HI + 1u] = bitcast<u32>(hi.y);
-  boxes[at + RASTER_BOX_HI + 2u] = bitcast<u32>(hi.z);
-  boxes[at + RASTER_BOX_ID] = (id.x + 1u) | select(0u, RASTER_LACK, (state & RECORD_LACKS) != 0u);
-  boxes[at + RASTER_BOX_FACES] = (state & RECORD_FACES) | select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh);
+  mark_drawn(e);
+  put_box(place, b, id.x, kind, faces | select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh));
   if (head_word(LIGHT_HEAD_STANDS_WORLD) != 0u) {
-    let b = box_tiles(lo, hi);
-    if (b.got) {
-      stand_box(b.first, b.last);
+    let t = box_tiles(b.lo, b.hi);
+    if (t.got) {
+      stand_box(t.first, t.last);
     }
   }
 }
@@ -186,45 +178,27 @@ fn on_box(lo: vec3<f32>, hi: vec3<f32>) -> bool {
 
 @compute @workgroup_size(RECORD_DRAW_LANES, 1, 1)
 fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= RECORD_ENTRIES) {
+  if (id.x >= ENTRIES) {
     return;
   }
-  let e = record_at(id.x);
-  let held = record_word(e + R_HELD);
-  if ((held & RECORD_HELD) == 0u) {
+  let e = entry_at(id.x);
+  let kind = entry_kind(e);
+  let state = node_cache_word(e + W_STATE);
+  let faces = state & RECORD_FACES;
+  if (kind == KIND_SPLIT || faces == 0u) {
     return;
   }
-  let k = entry_kept(e, held);
-  if (joins_first(id.x, k)) {
+  let o = texel_start(light_corner());
+  let k = entry_kept(e, o);
+  let b = entry_box(e, k, o);
+  if (!on_box(b.lo, b.hi)) {
     return;
   }
-  let p = kept_planes(k, texel_start(light_corner()));
-  // The cell its asset keeps inset as it fills (pxl-engine cast.rs `asset_box`).
-  let eighths = (record_word(e + R_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
-  var lo = p.lo;
-  var hi = p.hi;
-  if (eighths != 0u) {
-    let inset = (hi - lo) * (0.5 * (1.0 - side(eighths)));
-    lo += inset;
-    hi -= inset;
-  }
-  if (!on_box(lo, hi)) {
+  let fresh = band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, tile_band(box_tile((b.lo + b.hi) * 0.5)));
+  let place = box_place();
+  if (place == NO_ENTRY) {
     return;
   }
-  let state = record_word(e + R_STATE);
-  let fresh = tile_band(box_tile((lo + hi) * 0.5)) == k.band;
-  let box_at = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
-  if (box_at >= RECORD_ENTRIES) {
-    return;
-  }
-  atomicMax(&box_args[RASTER_ARGS_INSTANCES], box_at + 1u);
-  let at = box_at * RASTER_BOX_WORDS;
-  boxes[at + RASTER_BOX_LO] = bitcast<u32>(lo.x);
-  boxes[at + RASTER_BOX_LO + 1u] = bitcast<u32>(lo.y);
-  boxes[at + RASTER_BOX_LO + 2u] = bitcast<u32>(lo.z);
-  boxes[at + RASTER_BOX_HI] = bitcast<u32>(hi.x);
-  boxes[at + RASTER_BOX_HI + 1u] = bitcast<u32>(hi.y);
-  boxes[at + RASTER_BOX_HI + 2u] = bitcast<u32>(hi.z);
-  boxes[at + RASTER_BOX_ID] = (id.x + 1u) | select(0u, RASTER_LACK, (state & RECORD_LACKS) != 0u);
-  boxes[at + RASTER_BOX_FACES] = (state & RECORD_FACES) | select(RASTER_STALE, 0u, fresh);
+  mark_drawn(e);
+  put_box(place, b, id.x, kind, faces | select(RASTER_STALE, 0u, fresh));
 }

@@ -164,10 +164,20 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
   }
 }
 
+/// Whether the entry at word `w` draws and was drawn for frame `frame` (pxl-engine
+/// `record::drawn`): a face set, and drawn this frame or the last, or by the eye's last draw.
+fn drawn(w: u32, frame: u32) -> bool {
+  if ((node_cache_now(w + W_STATE) & (RECORD_FACES | RECORD_ASKED)) == 0u) {
+    return false;
+  }
+  let seen = node_cache_now(w + W_SEEN);
+  return seen + 2u > frame || seen == node_cache_word(NODE_CACHE_DRAWN);
+}
+
 /// Claims a slot of the bucket from `first` to keep the node `c` at `zoom` asked at `zooms`
 /// under this pass's `tag` (pxl-engine node_cache.rs): a free one, the first from the node's at
-/// these zooms (`pair_hash`); else an earlier frame's, the first from the node's own
-/// (`node_hash`). The slot's first word, its claim named, so no other walk keeps the node at
+/// these zooms (`pair_hash`); else an earlier frame's that no draw drew for this frame
+/// (`drawn`), the first from the node's own (`node_hash`). The slot's first word, its claim named, so no other walk keeps the node at
 /// these zooms beside it; `NONE` where a walk of this pass keeps the node at these zooms or
 /// claims it, or no slot is free or an earlier frame's. A lost claim tries again over the
 /// bucket as it then stands.
@@ -202,7 +212,7 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
       var turn = 2u * BUCKET;
       if (held == 0u) {
         turn = (k - probe) & (BUCKET - 1u);
-      } else if (!is_claim(held) && (held & ~KEY_ZOOMS) / PASSES < frame) {
+      } else if (!is_claim(held) && (held & ~KEY_ZOOMS) / PASSES < frame && !drawn(w, frame)) {
         turn = BUCKET + ((k - victim) & (BUCKET - 1u));
       }
       if (turn < best) {
@@ -234,8 +244,14 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
 }
 
 /// Writes the node `c` at `zoom` asked at `zooms`, answered `a`, in the slot at word `w` its
-/// walk claimed (`claim`): every word, then its key under `tag`, last.
+/// walk claimed (`claim`): every word, what draws it none (pxl-engine `record`), then its key
+/// under `tag`, last.
 fn fill(w: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
+  atomicStore(&node_cache[w + W_STATE], 0u);
+  atomicStore(&node_cache[w + W_SEEN], 0u);
+  for (var face = 0u; face < 6u; face += 1u) {
+    atomicStore(&node_cache[w + W_FACES + face], 0u);
+  }
   atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.handed, zoom, c));
   atomicStore(&node_cache[w + W_ASSET], a.asset.x);
   atomicStore(&node_cache[w + W_ASSET + 1u], a.asset.y);

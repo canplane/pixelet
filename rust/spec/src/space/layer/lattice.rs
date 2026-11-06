@@ -30,6 +30,11 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
 pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
     split_dist(lattice.grid_zoom(zoom - 1))
 }
+/// Every effect's one reach from the eye: out to where the grid's cells one zoom coarser
+/// than the ground's leaf begin, where the casters are drawn whole and a face's bits read the
+/// leaf's (pxl-kernel domain/scene/stage.rs; pxl-render gpu/shadow.rs `half_width`).
+pub const EFFECT_REACH: f64 = split_dist(GROUND.cell() - 1);
+
 const _: () = assert!(
     draw_dist(GROUND, TOP_ZOOM) < REACH as f64,
     "the eye draws within the reach every node it stops on is named and kept by"

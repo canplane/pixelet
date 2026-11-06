@@ -54,12 +54,6 @@ fn sample_line(s: vec2<u32>) -> u32 {
   return beams[sample_cell_word(s) + CELL_CORNER] * LINE_WORDS;
 }
 
-/// The band its ray asked: the eye's every ray asks a node by its distance from the eye
-/// alone, so none (`record::Key`'s band 0).
-fn sample_band(s: vec2<u32>) -> u32 {
-  return 0u;
-}
-
 /// Off its cell.
 fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
   return resumed(aim, sample_cell_word(s), LINE_WORDS, NONE);

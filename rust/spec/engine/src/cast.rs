@@ -291,29 +291,40 @@ impl Node {
     }
 
     /// The node the world names `idx` at `zoom`, as a walk from the origin `o` holds it
-    /// (`idx`'s inverse): on X, which the world names round, the one whose middle lies
-    /// nearest the origin, which is the walk's wherever the node lies within `REACH` of
-    /// the origin. `zoom` is 1 or finer and coarser than `FINEST_ZOOM`, whose index names
-    /// no root.
+    /// (`idx`'s inverse): its corner off the index's low bits, and on each axis the root,
+    /// the origin's or one either side, whose copy of the node has its middle nearer the
+    /// origin than half a root, which is the walk's wherever the node lies within `REACH` of
+    /// the origin at zoom 1 or finer (pxl-render record.wgsl `node_of_idx`).
     pub fn of_idx(o: [i32; 3], zoom: Zoom, idx: [i32; 3]) -> Node {
-        let r0 = roots_of(o);
-        let side = 1i64 << zoom;
-        let shift = FINEST_ZOOM - zoom;
-        // On the finest grid, from the X root 0's corner: the origin, and the middle of
-        // the node `idx` names in the root 0 or −1.
-        let round = 1i64 << FINEST_ZOOM;
-        let at = i64::from(r0[0]) * round + i64::from(grid_of(o)[0]);
-        let x = i64::from(idx[0]);
-        let mid = (x << shift) + (1i64 << shift >> 1);
-        let n = [
-            x + (at - mid + round / 2).div_euclid(round) * side,
-            i64::from(idx[1]) + i64::from(y_start(zoom)),
-            i64::from(idx[2]) + i64::from(z_start(zoom)),
-        ];
+        let og = grid_of(o);
+        let start = [0, y_start(zoom), z_start(zoom)];
+        let low = if zoom >= FINEST_ZOOM {
+            u32::MAX
+        } else {
+            (1u32 << zoom) - 1
+        };
+        let u = under(zoom);
+        let axis = |a: usize| {
+            let n = (idx[a] as u32).wrapping_add(start[a] as u32) & low;
+            let corner = if zoom == 0 {
+                0
+            } else {
+                n << (FINEST_ZOOM - zoom.min(FINEST_ZOOM))
+            };
+            // Its middle on the finest grid of its root, and the origin's of the origin's.
+            let mid = corner + (u >> 1);
+            let root = if mid >= og[a] {
+                -i32::from(mid - og[a] >= 1 << 31)
+            } else {
+                i32::from(og[a] - mid > 1 << 31)
+            };
+            (corner, root)
+        };
+        let (x, y, z) = (axis(0), axis(1), axis(2));
         Node {
-            corner: n.map(|v| ((v & (side - 1)) as u32) << shift),
+            corner: [x.0, y.0, z.0],
             zoom,
-            roots: [0, 1, 2].map(|a| (n[a] >> zoom) as i32 - r0[a]),
+            roots: [x.1, y.1, z.1],
         }
     }
 }
@@ -1182,8 +1193,8 @@ mod tests {
     }
 
     /// The world's name of a node within `REACH` of an origin in the world names it again
-    /// as the walk from that origin holds it, at every zoom from 1 to the finest's
-    /// coarser, about X's seam and the world's edges alike.
+    /// as the walk from that origin holds it, at every zoom from 1 to the finest, about X's
+    /// seam and the world's edges alike.
     #[test]
     fn idx_names_its_node_within_reach() {
         let hash = |v: u64| {
@@ -1212,7 +1223,7 @@ mod tests {
             let ray = Ray::new([d[0] / len, d[1] / len, d[2] / len], REACH as f32);
             let t = (g >> 50) as f32 / (1u64 << 14) as f32 * (REACH - 1) as f32;
             let p = point_at(o, &ray, t);
-            for zoom in 1..FINEST_ZOOM {
+            for zoom in 1..=FINEST_ZOOM {
                 let n = Node {
                     corner: p.0.map(|c| c & !under(zoom)),
                     zoom,

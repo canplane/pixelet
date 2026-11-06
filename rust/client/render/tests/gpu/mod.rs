@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use pxl_engine::answer::Kind;
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::{cast, count, node_cache, ray, FRAC_W};
 use pxl_render::frame::shader::record::{
@@ -306,6 +307,74 @@ fn wait(device: &wgpu::Device) {
 }
 
 /// The words of `from`, a buffer that may be copied from.
+/// Lays in the node cache's words `cache` a drawable entry in slot `slot` (pxl-engine
+/// `node_cache`, `record`): the node `n` as a walk from the origin `o` holds it, kept by a walk
+/// of frame 1 at the node's own zoom, answered `kind` and `asset`, what draws it `state`.
+pub fn lay_entry(
+    cache: &mut [u32],
+    slot: u32,
+    o: [i32; 3],
+    n: &cast::Node,
+    (kind, asset): (Kind, [u32; 2]),
+    state: u32,
+) {
+    let e = node_cache::entry_at(slot) as usize;
+    let zooms = n.zoom | n.zoom << pxl_engine::ZOOM_BITS;
+    cache[e + node_cache::W_KEY as usize] = node_cache::PASSES | zooms << node_cache::TAG_BITS;
+    cache[e + node_cache::W_KIND as usize] = kind as u32;
+    cache[e + node_cache::W_ASSET as usize] = asset[0];
+    cache[e + node_cache::W_ASSET as usize + 1] = asset[1];
+    let w = node_cache::W_NODE as usize;
+    cache[e + w] = n.zoom;
+    let idx = n.idx(o);
+    for a in 0..3 {
+        cache[e + w + 1 + a] = idx[a] as u32;
+    }
+    cache[e + node_cache::W_STATE as usize] = state;
+}
+
+/// Lays the node `n`, as a walk from the origin `o` holds it, answered `kind` and `asset`, in
+/// the first free slot of its bucket of the node cache's words `cache`, as a walk that asked it
+/// keeps it (pxl-render ask.wgsl `keep`), what draws it none: its slot, none where it is kept
+/// already or its bucket is full.
+pub fn lay_kept(
+    cache: &mut [u32],
+    o: [i32; 3],
+    n: &cast::Node,
+    answer: (Kind, [u32; 2]),
+) -> Option<u32> {
+    let idx = n.idx(o);
+    let first = node_cache::bucket_of(n.zoom, idx);
+    let mut free = None;
+    for slot in first..first + node_cache::BUCKET {
+        let e = node_cache::entry_at(slot) as usize;
+        if entry_held(cache, e) {
+            let w = e + node_cache::W_NODE as usize;
+            if cache[w] == n.zoom && [1, 2, 3].map(|a| cache[w + a] as i32) == idx {
+                return None;
+            }
+        } else if free.is_none() {
+            free = Some(slot);
+        }
+    }
+    let slot = free?;
+    lay_entry(cache, slot, o, n, answer, 0);
+    Some(slot)
+}
+
+/// The node of the entry at word `e` of the node cache's words `cache`, as a walk from the
+/// origin `o` holds it (`cast::Node::of_idx`).
+pub fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
+    let w = e + node_cache::W_NODE as usize;
+    cast::Node::of_idx(o, cache[w], [1, 2, 3].map(|a| cache[w + a] as i32))
+}
+
+/// Whether the entry at word `e` of `cache` holds a node: a key that is no claim.
+pub fn entry_held(cache: &[u32], e: usize) -> bool {
+    let key = cache[e + node_cache::W_KEY as usize];
+    key != 0 && key != node_cache::CLAIMED && key & node_cache::CLAIM_MASK != node_cache::CLAIM_FAR
+}
+
 pub fn read_buffer(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<u32> {
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,

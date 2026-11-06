@@ -15,8 +15,8 @@ use super::cast::{
     QUEUE_LAST_GROUP, SAMPLE_HIT_GROUP, WORLD_GROUP,
 };
 use super::raster::{
-    DEFERRED_BINDING, DEFERRED_GROUP, FACE_GROUP, LIGHT_DEFERRED_GROUP, LIGHT_SAMPLE_BOX_GROUP,
-    LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP, STOPS_GROUP,
+    FACE_GROUP, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP,
+    STOPS_GROUP,
 };
 use crate::frame::draw::{
     PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
@@ -41,7 +41,7 @@ const BEAM_LEFT: u32 = 3;
 const SAMPLE_LEFT: u32 = 4;
 const CAST_TILES: u32 = 5;
 const RASTER_ARGS: u32 = 6;
-const RASTER_DEFERRED: u32 = 7;
+const RASTER_STOPS: u32 = 7;
 const LIGHT_ARGS: u32 = 8;
 const LIGHT_LIST: u32 = 9;
 const LIGHT_STOOD: u32 = 10;
@@ -52,7 +52,7 @@ const LIGHT_SAMPLE_LEFT: u32 = 14;
 const LIGHT_MISSES: u32 = 15;
 const LIGHT_QUEUE: u32 = 16;
 const LIGHT_RASTER_ARGS: u32 = 17;
-const LIGHT_RASTER_DEFERRED: u32 = 18;
+const LIGHT_RASTER_STOPS: u32 = 18;
 const LIGHT_BOX_ARGS: u32 = 19;
 const GENERATION_LIST: u32 = 20;
 const GENERATION_ARGS: u32 = 21;
@@ -68,7 +68,7 @@ const BUFFERS: &[Buffer] = &[
     buffer("sample_left", ARGS),
     buffer("cast_tiles", ARGS),
     buffer("raster.args", ARGS),
-    buffer("raster.deferred", ARGS),
+    buffer("raster.stops", ARGS),
     buffer("light_args", ARGS),
     buffer("light_list", LIST),
     buffer("light_stood", ARGS),
@@ -79,7 +79,7 @@ const BUFFERS: &[Buffer] = &[
     buffer("light_misses", ARGS),
     buffer("light_queue", STATE),
     buffer("raster.light.args", ARGS),
-    buffer("raster.light.deferred", ARGS),
+    buffer("raster.light.stops", ARGS),
     buffer("light_tiles.box_args", ARGS),
     buffer("generator.list", ARGS),
     buffer("generator.args", ARGS),
@@ -150,7 +150,7 @@ const WORLD_BINDS: Group = Group {
 };
 const SAMPLE_BOX_BINDS: Group = Group {
     layout: &SAMPLE_BOX_GROUP,
-    binds: &[bind(16, RASTER_ARGS)],
+    binds: &[bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
 const RECORD_BINDS: Group = Group {
     layout: &RECORD_GROUP,
@@ -163,19 +163,25 @@ const RECORD_BINDS: Group = Group {
 };
 const FACES_BINDS: Group = Group {
     layout: &FACE_GROUP,
-    binds: &[Bind {
-        binding: 16,
-        buf: RASTER_ARGS,
-        at: raster::ASKED_AT,
-    }],
+    binds: &[
+        bind(9, NODE_CACHE),
+        Bind {
+            binding: 16,
+            buf: RASTER_ARGS,
+            at: raster::ASKED_AT,
+        },
+    ],
 };
 const STOP_FACES_OF_BINDS: Group = Group {
     layout: &FACE_GROUP,
-    binds: &[Bind {
-        binding: 16,
-        buf: RASTER_ARGS,
-        at: raster::STOP_ASKED_AT,
-    }],
+    binds: &[
+        bind(9, NODE_CACHE),
+        Bind {
+            binding: 16,
+            buf: RASTER_ARGS,
+            at: raster::STOP_ASKED_AT,
+        },
+    ],
 };
 const CAST_TILES_OF_BINDS: Group = Group {
     layout: &CAST_TILES_GROUP,
@@ -199,15 +205,7 @@ const LAST_BINDS: Group = Group {
 };
 const STOPS_OF_BINDS: Group = Group {
     layout: &STOPS_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        bind(16, RASTER_ARGS),
-        bind(DEFERRED_BINDING, RASTER_DEFERRED),
-    ],
-};
-const DEFERRED_BINDS: Group = Group {
-    layout: &DEFERRED_GROUP,
-    binds: &[bind(16, RASTER_ARGS)],
+    binds: &[bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
 const GENERATION_MARK_BINDS: Group = Group {
     layout: &MARK_GROUP,
@@ -284,11 +282,11 @@ const LIGHT_SAMPLE_HIT_BINDS: Group = Group {
 };
 const LIGHT_SAMPLE_BOX_BINDS: Group = Group {
     layout: &LIGHT_SAMPLE_BOX_GROUP,
-    binds: &[bind(16, LIGHT_RASTER_ARGS)],
+    binds: &[bind(9, NODE_CACHE), bind(16, LIGHT_RASTER_ARGS)],
 };
 const LIGHT_SLOTS_BINDS: Group = Group {
     layout: &LIGHT_GROUP,
-    binds: &[bind(17, LIGHT_MISSES)],
+    binds: &[bind(9, NODE_CACHE), bind(17, LIGHT_MISSES)],
 };
 const LIGHT_WALK_BINDS: Group = Group {
     layout: &QUEUE_GROUP,
@@ -300,15 +298,7 @@ const LIGHT_WALK_ASK_BINDS: Group = Group {
 };
 const LIGHT_STOPS_BINDS: Group = Group {
     layout: &LIGHT_STOPS_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        bind(16, LIGHT_RASTER_ARGS),
-        bind(DEFERRED_BINDING, LIGHT_RASTER_DEFERRED),
-    ],
-};
-const LIGHT_DEFERRED_BINDS: Group = Group {
-    layout: &LIGHT_DEFERRED_GROUP,
-    binds: &[bind(16, LIGHT_RASTER_ARGS)],
+    binds: &[bind(9, NODE_CACHE), bind(16, LIGHT_RASTER_ARGS)],
 };
 
 // Each step a host's call names, in the order the frame encodes them.
@@ -370,20 +360,21 @@ pub const PX: Step = Step::dispatch_off(
     &[&PIXELS_BINDS],
     (CAST_TILES, 0),
 );
-/// The holes' stops into the eye's record (ray/raster.rs `Raster::stops`).
+/// The holes' stops into the node cache's drawable entries (ray/raster.rs `Raster::stops`):
+/// their dispatch copied out of the node cache's head, which they bind writable, then the
+/// stops off it.
+pub const STOPS_DISPATCH: Step = Step::copy(
+    "stops_dispatch",
+    IN_EYE_HOLES,
+    at(NODE_CACHE, node_cache::HITS_ARGS, 3),
+    at(RASTER_STOPS, 0, 3),
+);
 pub const STOPS: Step = Step::dispatch_off(
     "stops",
     IN_EYE_HOLES,
     COMPUTE_RECORD_STOPS,
     &[&STOPS_OF_BINDS],
-    (NODE_CACHE, node_cache::HITS_ARGS),
-);
-pub const STOPS_DEFERRED: Step = Step::dispatch_off(
-    "stops_deferred",
-    IN_EYE_HOLES,
-    COMPUTE_RECORD_DEFERRED,
-    &[&DEFERRED_BINDS],
-    (RASTER_DEFERRED, 0),
+    (RASTER_STOPS, 0),
 );
 pub const STOP_FACES: Step = Step::dispatch_off(
     "stop_faces",
@@ -397,7 +388,7 @@ pub const STOP_FACES_PUT: Step = Step::dispatch_off(
     IN_EYE_HOLES,
     COMPUTE_RECORD_FACES,
     &[&STOPS_OF_BINDS],
-    (NODE_CACHE, node_cache::HITS_ARGS),
+    (RASTER_STOPS, 0),
 );
 /// The decor's slots thinned and generated off the list's args (gpu/generator.rs `dispatch`).
 pub const THIN: Step = Step::dispatch_off(
@@ -492,14 +483,7 @@ pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
     &[&LIGHT_SAMPLE_BOX_BINDS],
     (LIGHT_ARGS, light::ARGS_SAMPLE_BOX),
 );
-pub const LIGHT_SAMPLE_OBSERVE: Step = Step::dispatch_off(
-    "light_sample_observe",
-    IN_LIGHT,
-    COMPUTE_LIGHT_SAMPLE_OBSERVE,
-    &[&LIGHT_SAMPLE_BOX_BINDS],
-    (LIGHT_ARGS, light::ARGS_SAMPLE_BOX),
-);
-/// The light's record's draw (ray/raster.rs `Raster::light_draw`).
+/// The light's draw of the record (ray/raster.rs `Raster::light_draw`).
 pub const LIGHT_RASTER: Step = Step::draw_off(
     "light_raster",
     IN_LIGHT,
@@ -515,20 +499,20 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     &[&LIGHT_SLOTS_BINDS],
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
-/// The holes' stops into the light's record (ray/raster.rs `Raster::light_stops`).
+/// The holes' stops into the node cache's drawable entries (ray/raster.rs
+/// `Raster::light_stops`), their dispatch copied out of the node cache's head first.
+pub const LIGHT_STOPS_DISPATCH: Step = Step::copy(
+    "light_stops_dispatch",
+    IN_LIGHT_HOLES,
+    at(NODE_CACHE, node_cache::HITS_ARGS, 3),
+    at(LIGHT_RASTER_STOPS, 0, 3),
+);
 pub const LIGHT_STOPS: Step = Step::dispatch_off(
     "light_stops",
     IN_LIGHT_HOLES,
     COMPUTE_LIGHT_RECORD_STOPS,
     &[&LIGHT_STOPS_BINDS],
-    (NODE_CACHE, node_cache::HITS_ARGS),
-);
-pub const LIGHT_STOPS_DEFERRED: Step = Step::dispatch_off(
-    "light_stops_deferred",
-    IN_LIGHT_HOLES,
-    COMPUTE_LIGHT_RECORD_DEFERRED,
-    &[&LIGHT_DEFERRED_BINDS],
-    (LIGHT_RASTER_DEFERRED, 0),
+    (LIGHT_RASTER_STOPS, 0),
 );
 /// The shadow map's pass: through its gate, off the marks' box, or the world's depth laid in
 /// the tiles read (gpu/shadow.rs `Shadow::begin`).
@@ -641,12 +625,6 @@ pub const OPEN_RASTER_STOP_ASKS: Step = Step::write(
     "open_raster_stop_asks",
     at(RASTER_ARGS, raster::STOP_ASKED_AT, raster::ARGS_WORDS),
 );
-pub const OPEN_RASTER_DEFERRED_CNT: Step = Step::write(
-    "open_raster_deferred_cnt",
-    at(RASTER_ARGS, raster::DEFERRED_CNT, raster::DEFERRED_WORDS),
-);
-pub const OPEN_RASTER_DEFERRED: Step =
-    Step::write("open_raster_deferred", at(RASTER_DEFERRED, 0, 3));
 pub const OPEN_LIGHT_ARGS: Step =
     Step::write("open_light_args", at(LIGHT_ARGS, 0, light::ARGS_WORDS));
 pub const OPEN_LIGHT_RINGS: Step = Step::write(
@@ -697,18 +675,6 @@ pub const OPEN_LIGHT_SAMPLE_LEFT: Step = Step::write(
 pub const OPEN_LIGHT_RASTER_ARGS: Step = Step::write(
     "open_light_raster_args",
     at(LIGHT_RASTER_ARGS, 0, raster::ARGS_WORDS),
-);
-pub const OPEN_LIGHT_RASTER_DEFERRED_CNT: Step = Step::write(
-    "open_light_raster_deferred_cnt",
-    at(
-        LIGHT_RASTER_ARGS,
-        raster::DEFERRED_CNT,
-        raster::DEFERRED_WORDS,
-    ),
-);
-pub const OPEN_LIGHT_RASTER_DEFERRED: Step = Step::write(
-    "open_light_raster_deferred",
-    at(LIGHT_RASTER_DEFERRED, 0, 3),
 );
 pub const OPEN_GENERATION_LIST: Step = Step::write(
     "open_generation_list",
@@ -905,8 +871,6 @@ pub const FRAME: Frame = Frame {
         OPEN_CAST_TILES,
         OPEN_RASTER_ARGS,
         OPEN_RASTER_STOP_ASKS,
-        OPEN_RASTER_DEFERRED_CNT,
-        OPEN_RASTER_DEFERRED,
         OPEN_LIGHT_ARGS,
         OPEN_LIGHT_RINGS,
         OPEN_LIGHT_STOOD,
@@ -918,8 +882,6 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_BEAM_LEFT,
         OPEN_LIGHT_SAMPLE_LEFT,
         OPEN_LIGHT_RASTER_ARGS,
-        OPEN_LIGHT_RASTER_DEFERRED_CNT,
-        OPEN_LIGHT_RASTER_DEFERRED,
         OPEN_GENERATION_LIST,
         OPEN_RASTER_DRAW_ARGS,
         OPEN_EYE_CAPS,
@@ -952,7 +914,7 @@ pub const FRAME: Frame = Frame {
         ),
         // What the casts since the world's receivers were stood afresh left in the stood list's
         // args and the read list's count copied back in, before every pass that stands a tile,
-        // the eye's record's draw among them.
+        // the eye's draw among them.
         STOOD_BACK,
         READ_COUNT_BACK,
         // The same through the light's gate.
@@ -988,12 +950,6 @@ pub const FRAME: Frame = Frame {
             COMPUTE_SAMPLE_BOX,
             &[&SAMPLE_BOX_BINDS],
         ),
-        Step::dispatch(
-            "sample_observe",
-            IN_EYE,
-            COMPUTE_SAMPLE_OBSERVE,
-            &[&SAMPLE_BOX_BINDS],
-        ),
         Step::dispatch("record_draw", IN_EYE, COMPUTE_RECORD_DRAW, &[&RECORD_BINDS]),
         RASTER,
         FACE,
@@ -1005,7 +961,7 @@ pub const FRAME: Frame = Frame {
         ),
         PX,
         MARKS_COUNT,
-        // The eye's holes walked, their stops into its record, and its owed counted.
+        // The eye's holes walked, their stops into the record, and its owed counted.
         Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &[&WALK_BINDS]),
         Step::dispatch(
             "queue_ask",
@@ -1032,8 +988,8 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST,
             &[&LAST_BINDS],
         ),
+        STOPS_DISPATCH,
         STOPS,
-        STOPS_DEFERRED,
         STOP_FACES,
         STOP_FACES_PUT,
         EYE_OWED,
@@ -1094,7 +1050,6 @@ pub const FRAME: Frame = Frame {
         LIGHT_SAMPLE_LEFT_COUNT,
         LIGHT_SAMPLE,
         LIGHT_SAMPLE_BOX,
-        LIGHT_SAMPLE_OBSERVE,
         Step::dispatch(
             "light_record_draw",
             IN_LIGHT,
@@ -1104,7 +1059,7 @@ pub const FRAME: Frame = Frame {
         LIGHT_RASTER,
         LIGHT_SLOTS,
         LIGHT_MISSES_COUNT,
-        // The light's holes walked and their stops into its record.
+        // The light's holes walked and their stops into the record.
         Step::dispatch(
             "light_queue",
             IN_LIGHT_HOLES,
@@ -1136,8 +1091,8 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST,
             &[&LAST_BINDS],
         ),
+        LIGHT_STOPS_DISPATCH,
         LIGHT_STOPS,
-        LIGHT_STOPS_DEFERRED,
         // Each observer's owed work kept apart where its queue ran, which the readback's copy
         // carries (ray/count.rs `Counter::copy`).
         EYE_OWED_KEEP,

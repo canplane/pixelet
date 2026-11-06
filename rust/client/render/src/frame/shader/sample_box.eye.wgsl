@@ -1,8 +1,7 @@
 // pxl-render/sample_box.eye.wgsl
 
-// The eye as its samples' stops into its record take it (sample_box.wgsl): whether a sample
-// stopped on its node whole, where their faces' asks lie, and which samples a dispatch takes
-// together.
+// The eye as its samples' stops take it (sample_box.wgsl): whether a sample stopped on its node
+// whole, and where their faces' asks lie.
 
 /// Whether sample `s` stopped on `k` whole, coarser than the eye asks it from where the ray
 /// starts (`record::stopped_whole`).
@@ -14,9 +13,4 @@ fn sample_whole(s: vec2<u32>, k: Kept) -> bool {
 fn sample_asks() -> Asks {
   let n = sample_lattice();
   return Asks(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);
-}
-
-/// Whether the dispatch that takes sample `s` takes sample `b`: the eye's takes every sample.
-fn sample_with(s: vec2<u32>, b: vec2<u32>) -> bool {
-  return true;
 }

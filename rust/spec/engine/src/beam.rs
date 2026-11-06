@@ -67,18 +67,14 @@ pub struct Grid {
     hands_at: u32,
     /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines and how far each hands on (`hand_at`);
-    /// then the asks of the record's faces, a sample's room each (`asks_at`;
-    /// the voxels themselves are the record's, `record`), the holes' stops
-    /// (`hits_at`) and the asks of the record's faces they opened (`stop_asks_at`), `HITS`
-    /// each; then the hits
-    /// whose stop met its key's claim, each one's number (`defers_at`), `HITS` at most, their
-    /// count among the raster's args (`raster::DEFERRED_AT`).
+    /// then the asks of the drawable entries' faces, a sample's room each (`asks_at`;
+    /// the voxels themselves are the node cache's, `record`), the holes' stops
+    /// (`hits_at`) and the asks of the faces they opened (`stop_asks_at`), `HITS` each.
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub stop_asks_at: u32,
-    pub defers_at: u32,
     /// The samples the walk over the node cache alone left (pxl-render
     /// sample_hit.wgsl) for the walk that asks the world: their count, then
     /// each, `left_word`.
@@ -161,9 +157,8 @@ const _: () = assert!(ROLL_SIDE.is_power_of_two(), "the offsets halve the spacin
 /// pixels' lists lie past the grid's words (`walked_at`, `ray::walked_words`); then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
 /// (`slope`), f32 bits, each rounded once by the host; then where how far each
-/// beam ray hands on starts (`hand_at`), where the record's asks the hits' stops opened
-/// start (`stop_asks_at`), where the hits' stops put off lie (`defers_at`), and the samples'
-/// offset across and down (`roll`), f32 bits.
+/// beam ray hands on starts (`hand_at`), where the asks the hits' stops opened start
+/// (`stop_asks_at`), and the samples' offset across and down (`roll`), f32 bits.
 pub const GRID_S: usize = 0;
 
 pub const GRID_KEEP: usize = 1;
@@ -185,9 +180,9 @@ pub const GRID_S_INVERSE: usize = 19;
 pub const GRID_SLOPE: usize = 20;
 pub const GRID_HANDS_AT: usize = 22;
 pub const GRID_STOP_ASKS_AT: usize = 23;
-pub const GRID_DEFERS_AT: usize = 24;
-pub const GRID_ROLL: usize = 25;
-pub const GRID_WORDS: usize = 28;
+pub const GRID_ROLL: usize = 24;
+/// Whole vec4s, as the eye's words bind as a uniform's (`eye::WORDS`).
+pub const GRID_WORDS: usize = (GRID_ROLL + 2).next_multiple_of(4);
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -226,7 +221,6 @@ impl Grid {
             asks_at: 0,
             hits_at: 0,
             stop_asks_at: 0,
-            defers_at: 0,
             lefts_at: 0,
             corners_at: 0,
             roll: [0.0; 2],
@@ -239,8 +233,7 @@ impl Grid {
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
         g.stop_asks_at = g.hits_at + HITS * HIT_WORDS;
-        g.defers_at = g.stop_asks_at + HITS * ASK_WORDS;
-        g.lefts_at = g.defers_at + HITS;
+        g.lefts_at = g.stop_asks_at + HITS * ASK_WORDS;
         g.corners_at = g.lefts_at + 1 + samples[0] * samples[1];
         g
     }
@@ -269,7 +262,6 @@ impl Grid {
             (self.lefts_at, self.size(), self.corners_at);
         w[GRID_HANDS_AT] = self.hands_at;
         w[GRID_STOP_ASKS_AT] = self.stop_asks_at;
-        w[GRID_DEFERS_AT] = self.defers_at;
         (w[GRID_ROLL], w[GRID_ROLL + 1]) = (self.roll[0].to_bits(), self.roll[1].to_bits());
         let slope = self.slope();
         (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
@@ -300,7 +292,6 @@ impl Grid {
             asks_at: w[GRID_ASKS_AT],
             hits_at: w[GRID_HITS_AT],
             stop_asks_at: w[GRID_STOP_ASKS_AT],
-            defers_at: w[GRID_DEFERS_AT],
             lefts_at: w[GRID_LEFTS_AT],
             corners_at: w[GRID_CORNERS_AT],
             roll: [f(w[GRID_ROLL]), f(w[GRID_ROLL + 1])],

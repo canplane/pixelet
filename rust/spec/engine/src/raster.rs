@@ -23,7 +23,7 @@
 /// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`);
 /// then the boxes counted as they are written (`ARGS_CNT`), of which
 /// `ARGS_INSTANCES` is the part the boxes' room holds.
-/// The eye's boxes are the record's held voxels in view, `record::ENTRIES` at most; the
+/// The eye's boxes are the drawable entries in view, `record::BOXES` at most; the
 /// light's a sample's at most, its samples `param::light::SAMPLE` texels apart. The faces'
 /// asks are a sample's at most, the samples `param::beam::SAMPLE` a camera grid cell a
 /// side, about 270 thousand on a 16:9 view whatever its pixels; one dispatch's 65535
@@ -44,17 +44,10 @@ pub const ARGS_ASKS: u32 = 7;
 pub const ARGS_CNT: u32 = 8;
 pub const ARGS_WORDS: u32 = 9;
 pub const ASKED_AT: u32 = 64;
-/// The faces' asks the record's stops open past the samples' (`record`), laid as theirs.
+/// The faces' asks the holes' stops open past the samples' (`record`), laid as theirs.
 pub const STOP_ASKED_AT: u32 = 128;
-/// The hits whose stop met its key's claim (`record`, `beam::Grid::defers_at`): their count
-/// (`DEFERRED_CNT`). The dispatch over them, `beam::HIT_LANES` a workgroup, raised by the one
-/// that opens each, the other two 1, is a buffer of its own (`DEFERRED_DISPATCH`, as each frame
-/// begins it): the pass that takes them reads its count from it and writes the faces' asks'
-/// here, so it binds these args and not that (pxl-render record_deferred.wgsl).
-pub const DEFERRED_AT: u32 = 192;
-pub const DEFERRED_CNT: u32 = DEFERRED_AT;
-pub const DEFERRED_WORDS: u32 = 1;
-pub const DEFERRED_DISPATCH: [u32; 3] = [0, 1, 1];
+/// The args' words, the draw's and both faces' asks'.
+pub const WORDS: u32 = STOP_ASKED_AT + ARGS_WORDS;
 pub const FACES_LANES: u32 = 64;
 pub const BOX_LO: u32 = 0;
 pub const BOX_HI: u32 = 3;
@@ -68,7 +61,6 @@ const _: () = assert!(
         && ASKED_AT + ARGS_WORDS <= STOP_ASKED_AT
         && (ASKED_AT * 4).is_multiple_of(256)
         && (STOP_ASKED_AT * 4).is_multiple_of(256)
-        && STOP_ASKED_AT + ARGS_WORDS <= DEFERRED_AT
 );
 
 /// A voxel's faces drawn, a bit a side, six: each face some ray entered it through

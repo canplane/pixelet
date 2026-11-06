@@ -1,17 +1,16 @@
 // pxl-render/record_hits.wgsl
 
-// An observer's holes' stops as its record takes them (record_stops.wgsl, record_deferred.wgsl):
-// the stops the holes' queue listed, a hit each (queue_walk.wgsl, queue_last.wgsl `keep_hit`,
-// `beam::HIT_WORDS`), their count in the node cache's head (`node_cache::HITS_CNT`), and each
-// one's node and stop as `upsert` takes them (record_put.wgsl).
+// An observer's holes' stops as what draws the node cache's entries takes them
+// (record_stops.wgsl): the stops the holes' queue listed, a hit each (queue_walk.wgsl,
+// queue_last.wgsl `keep_hit`, `beam::HIT_WORDS`), their count in the node cache's head
+// (`node_cache::HITS_CNT`), and each one's node and stop as `observe_stop` takes them
+// (record_put.wgsl).
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
-@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 
-/// Hit `r`'s node as the record keys it, at its ray's band, its roots from where its ray
-/// starts.
+/// Hit `r`'s node, its roots world-absolute from where its ray starts.
 fn hit_kept(r: u32) -> Kept {
-  return kept_at(hit_at(r) + HIT_NODE, hit_band(r), hit_origin(r));
+  return kept_at(hit_at(r) + HIT_NODE, hit_origin(r));
 }
 
 /// Hit `r`'s stop: its asset, whether it lacks, the face its ray entered and its pixel's cell's

@@ -357,7 +357,6 @@ pub const TOUCHES: &[Touch] = {
     const fn asks(at: u32) -> [u32; 2] {
         [at, raster::ARGS_WORDS]
     }
-    const DEFERRED_CNT: [u32; 2] = [raster::DEFERRED_CNT, raster::DEFERRED_WORDS];
     const QUEUE_HITS: [u32; 2] = [ray::QUEUE_HITS, 4];
     const QUEUE_VISITED: [u32; 2] = [ray::QUEUE_VISITED, 1];
     /// The frame's holes' work so far in the node cache's head, and every observer's caps.
@@ -365,16 +364,10 @@ pub const TOUCHES: &[Touch] = {
     const VISITS_DONE: [u32; 2] = [node_cache::VISITED, 1];
     const CAPS: [u32; 2] = [node_cache::CAPS_AT, 2 * count::OBSERVERS];
     &[
-        // The eye's samples into its record, their faces' asks (sample_box.eye.wgsl); the
-        // light's lay none (sample_box.light.wgsl).
+        // The eye's samples' stops, their faces' asks (sample_box.eye.wgsl); the light's lay
+        // none (sample_box.light.wgsl).
         Touch {
             compute: COMPUTE_SAMPLE_BOX,
-            binding: 16,
-            writes: &[asks(raster::ASKED_AT)],
-            reads: &[asks(raster::ASKED_AT)],
-        },
-        Touch {
-            compute: COMPUTE_SAMPLE_OBSERVE,
             binding: 16,
             writes: &[asks(raster::ASKED_AT)],
             reads: &[asks(raster::ASKED_AT)],
@@ -385,13 +378,7 @@ pub const TOUCHES: &[Touch] = {
             writes: &[],
             reads: &[],
         },
-        Touch {
-            compute: COMPUTE_LIGHT_SAMPLE_OBSERVE,
-            binding: 16,
-            writes: &[],
-            reads: &[],
-        },
-        // The record's boxes counted into its draw's args, each box's tiles stood on by the
+        // The drawable entries' boxes counted into its draw's args, each box's tiles stood on by the
         // world's receivers (record_draw.wgsl, light_stood.wgsl `stand_box`).
         Touch {
             compute: COMPUTE_RECORD_DRAW,
@@ -411,32 +398,19 @@ pub const TOUCHES: &[Touch] = {
             writes: &[marks(light::LISTED_STOOD)],
             reads: &[marks(light::LISTED_STOOD)],
         },
-        // The holes' stops: those put off counted, their dispatch raised, and the eye's faces'
-        // asks laid at their own place (record_stops.wgsl, record_stops.eye.wgsl); the light's
-        // lay none (record_stops.light.wgsl).
+        // The holes' stops: the eye's faces' asks laid at their own place (record_stops.wgsl,
+        // record_stops.eye.wgsl); the light's lay none (record_stops.light.wgsl).
         Touch {
             compute: COMPUTE_RECORD_STOPS,
             binding: 16,
-            writes: &[DEFERRED_CNT, asks(raster::STOP_ASKED_AT)],
-            reads: &[DEFERRED_CNT, asks(raster::STOP_ASKED_AT)],
+            writes: &[asks(raster::STOP_ASKED_AT)],
+            reads: &[asks(raster::STOP_ASKED_AT)],
         },
         Touch {
             compute: COMPUTE_LIGHT_RECORD_STOPS,
             binding: 16,
-            writes: &[DEFERRED_CNT],
-            reads: &[DEFERRED_CNT],
-        },
-        Touch {
-            compute: COMPUTE_RECORD_DEFERRED,
-            binding: 16,
-            writes: &[asks(raster::STOP_ASKED_AT)],
-            reads: &[DEFERRED_CNT, asks(raster::STOP_ASKED_AT)],
-        },
-        Touch {
-            compute: COMPUTE_LIGHT_RECORD_DEFERRED,
-            binding: 16,
             writes: &[],
-            reads: &[DEFERRED_CNT],
+            reads: &[],
         },
         // The faces' pass reads the asks its group views (face.wgsl).
         Touch {

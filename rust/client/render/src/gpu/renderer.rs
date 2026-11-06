@@ -885,9 +885,8 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
-            // Up to a power of two, so the snap grid and the texel move only in
-            // steps; what a receiver reads within, the effects' reach.
-            let half_width = libm::exp2(libm::ceil(libm::log2(reach)));
+            // What a receiver reads within, the effects' reach.
+            let half_width = shadow::half_width(reach);
             let reach_ndc = (reach / half_width) as f32;
             self.shadow
                 .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));

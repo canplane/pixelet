@@ -13,7 +13,7 @@ use pxl_render::gpu::ray::{Cast, Filled, GroundBricks};
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_guest::global::Global;
 
 use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
@@ -122,10 +122,7 @@ pub fn stage_write() {
         0.0
     };
     s[STAGE_AT::CLOUDS] = cloud::clouds_shown();
-    // Out to where the grid's cells one zoom coarser than the ground's leaf
-    // begin, where the casters are drawn whole and a face's bits read the
-    // leaf's: every effect's one boundary.
-    s[STAGE_AT::EFFECT_REACH] = grid::split_dist(GROUND.cell() - 1);
+    s[STAGE_AT::EFFECT_REACH] = EFFECT_REACH;
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 

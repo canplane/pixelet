@@ -494,7 +494,7 @@ pub const HEAD_SLIDE: usize = HEAD_CORNERS_LEFT + 1;
 pub const HEAD_WORLD: usize = HEAD_SLIDE + 1;
 pub const HEAD_SLIDE_OWED: usize = HEAD_WORLD + 1;
 /// Whether the world's receivers are stood this frame, 1 or 0, which the host writes every
-/// frame, a light cast's head or not, so the eye's record's draw stands the boxes it draws
+/// frame, a light cast's head or not, so the eye's draw stands the boxes it draws
 /// only where the light's cast stands them (pxl-render record_draw.wgsl `record_draw_cs`).
 pub const HEAD_STANDS_WORLD: usize = HEAD_SLIDE_OWED + 1;
 /// The places (`places_at`), the holes' region (`list_words`) and the rings (`rings_at`), laid
@@ -507,21 +507,20 @@ pub const HEAD_RINGS: usize = HEAD_REGION + 1;
 /// node cache forgot nothing since the cast before (`READ_OWED`; pxl-render
 /// light_propagate.wgsl `light_claim_cs`).
 pub const HEAD_CARRIES: usize = HEAD_RINGS + 1;
-/// The holes' stops (`hits_at`) and the stops put off (`defers_at`), laid by the map's side.
+/// The holes' stops (`hits_at`), laid by the map's side.
 pub const HEAD_HITS: usize = HEAD_CARRIES + 1;
-pub const HEAD_DEFERS: usize = HEAD_HITS + 1;
 const HEAD_LAID_VEC4S: usize = 10;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_DEFERS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_HITS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 31] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -542,7 +541,6 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 31] {
         (HEAD_REGION, list_words(size)),
         (HEAD_RINGS, rings_at(size)),
         (HEAD_HITS, hits_at(size)),
-        (HEAD_DEFERS, defers_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -965,7 +963,7 @@ impl Light {
     /// lie on (`tile_of`), which hold every point of it, the light's rays parallel, and
     /// `FOOTPRINT_TILES` more each way where `footprint`; none where it lies past the reach
     /// (`reach`, `within`) or past the box. The one rule every receiver stands by: the box the
-    /// eye's record's draw writes for a voxel in view (`cast::asset_box`; pxl-render
+    /// eye's draw writes for a voxel in view (`cast::asset_box`; pxl-render
     /// record_draw.wgsl `record_draw_cs`, which stands it as it writes it), which every pixel
     /// that took that voxel hit on (visible.wgsl `visible_cell`); a walked pixel's hit, a box of one point (light_mark.wgsl); and the box
     /// a drawn receiver stands within (frame/draw.rs `Stand`, light_mark_draws.wgsl).
@@ -1144,21 +1142,15 @@ pub const fn region_words() -> u32 {
 
 /// The light's holes' stops, past its holes' region: a stop each of the most holes a cast
 /// lists, every slot of the tiles it claims (`parked_room`), each `beam::HIT_WORDS`, kept by
-/// pxl-render queue.wgsl `finish` and taken into the light's record after its queue
-/// (record_stops.wgsl).
+/// pxl-render queue.wgsl `finish` and taken into the node cache's drawable entries after its
+/// queue (record_stops.wgsl).
 pub const fn hits_at(size: u32) -> u32 {
     list_words(size) + region_words()
 }
 
-/// The stops put off, a stop's number each, past the stops (record_stops.wgsl
-/// `record_stops_cs`, `record_deferred_cs`).
-pub const fn defers_at(size: u32) -> u32 {
-    hits_at(size) + parked_room() * beam::HIT_WORDS
-}
-
 /// The light's list, its holes' region and its stops with it: the buffer's words.
 pub const fn buffer_words(size: u32) -> u32 {
-    defers_at(size) + parked_room()
+    hits_at(size) + parked_room() * beam::HIT_WORDS
 }
 
 /// The rings of the box's tiles about its middle, a whole tile wide each: the order a cast

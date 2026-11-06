@@ -2,7 +2,7 @@
 //! and the light's (sample.eye.wgsl, sample.light.wgsl), answer as `cast::walk` from the root
 //! answers the same ray: over the real world of tests/real_world, off what the beam's passes
 //! leave there, each sample's stop as the Rust's, and the next frame off the node cache the first
-//! left. The missed pixels' walks, the eye's record the samples write and draw, and the boxes
+//! left. The missed pixels' walks, the drawable entries the samples' stops set and the draw draws, and the boxes
 //! the light's samples draw answer alike. Skipped where no adapter answers.
 
 mod gpu;
@@ -11,9 +11,10 @@ mod real_world;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
-    bytes, cross, edge_axes, list_every, margins, read_texture, texture, unit, Gpu, Kinds, LightBox,
+    bytes, cross, edge_axes, entry_held, entry_node, lay_kept, list_every, margins, read_texture,
+    texture, unit, Gpu, Kinds, LightBox,
 };
-use pxl_engine::answer;
+use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
@@ -1932,17 +1933,41 @@ fn stopped(
 type BoxWords = [u32; raster::BOX_WORDS as usize];
 
 /// A voxel's key as a sample's words hold it: its node, its zoom, corner and roots from where
-/// its ray starts, and the band its ray asked.
-type Key = ([u32; beam::NODE_WORDS as usize], u32);
+/// its ray starts.
+type Key = [u32; beam::NODE_WORDS as usize];
 
-/// The key of the sample at word `at` of `words`, its ray asked at `band`.
-fn sample_key(words: &[u32], at: usize, band: u32) -> Key {
-    let k = at + beam::SAMPLE_NODE as usize;
-    (core::array::from_fn(|i| words[k + i]), band)
+/// The key of the sample at word `at` of `words`.
+fn sample_key(words: &[u32], at: usize) -> Key {
+    key_words(words, at + beam::SAMPLE_NODE as usize)
+}
+
+/// The node words at word `k` of `words` (`beam::NODE_WORDS`).
+fn key_words(words: &[u32], k: usize) -> Key {
+    core::array::from_fn(|i| words[k + i])
+}
+
+/// The node a key's words name, as a walk from where its ray starts holds it.
+fn node_of(key: &Key) -> Node {
+    Node {
+        zoom: key[beam::NODE_ZOOM as usize],
+        corner: [0, 1, 2].map(|a| key[beam::NODE_CORNER as usize + a]),
+        roots: [0, 1, 2].map(|a| key[beam::NODE_ROOTS as usize + a] as i32),
+    }
+}
+
+/// The node's words as a sample's hold it (`node_of`'s inverse).
+fn node_words(n: &Node) -> Key {
+    let mut w = [0u32; beam::NODE_WORDS as usize];
+    w[beam::NODE_ZOOM as usize] = n.zoom;
+    for a in 0..3 {
+        w[beam::NODE_CORNER as usize + a] = n.corner[a];
+        w[beam::NODE_ROOTS as usize + a] = n.roots[a] as u32;
+    }
+    w
 }
 
 /// Each voxel the samples' words `words` draw from `origin`, by its key (`sample_key`): a
-/// node a sample that stopped stopped on at its band, its box the cell as the cast stops on it
+/// node a sample that stopped stopped on, its box the cell as the cast stops on it
 /// (`cast::asset_box`), `raster::EYED` where `tan` is the screen's and it lies about the eye
 /// (`raster::is_eyed`), its faces drawn each axis a sample of it entered across
 /// (`raster::faces`), and its id but the voxel's number, which the boxes' order gives
@@ -1968,7 +1993,7 @@ fn boxes_want(
         let axis = words[k + beam::SAMPLE_AXIS as usize];
         // The side its ray entered through (`ray::face`).
         let face = ray::face(obs.aim(s).1.dir, axis);
-        let key = sample_key(words, k, obs.band(s));
+        let key = sample_key(words, k);
         if let Some(w) = want.get_mut(&key) {
             add("a voxel another sample drew", true);
             add(
@@ -2048,19 +2073,18 @@ fn boxes_want(
     want
 }
 
-/// The light's samples' two passes by hand over `words` into an empty record, in frame
-/// `frame`, against pxl-engine `record`: each node a sample stopped on held once by its key,
-/// world-absolute from where its ray starts at its band (`record::Key::of`), its state the
-/// faces its samples entered across, whether it lacks and whether its ray stopped on it
-/// coarser than its band (`record::light_whole`), seen this frame; and no other held. Fails
-/// into `failed`.
+/// The light's samples' stops by hand over `words`, in frame `frame`, into a node cache that
+/// keeps each node a sample stopped on as its walk would (`lay_kept`), against pxl-engine
+/// `record`: each such entry's state the faces its samples entered across and whether some
+/// ray of them stopped on it coarser than its band (`record::light_whole`), marked in the
+/// frame's number, as it draws from then; and no other entry drawn. Fails into `failed`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the device, the passes, its observer, words, groups, frame, what to tell and what failed"
+    reason = "the device, the pass, its observer, words, groups, frame, what to tell and what failed"
 )]
 fn light_record_case(
     gpu: &Gpu,
-    passes: [&wgpu::ComputePipeline; 2],
+    pass: &wgpu::ComputePipeline,
     obs: &Observed,
     words: &[u32],
     groups: [u32; 2],
@@ -2069,12 +2093,11 @@ fn light_record_case(
     failed: &mut Vec<String>,
 ) {
     let name = &obs.name;
-    let mut want: BTreeMap<record::Key, u32> = BTreeMap::new();
-    let taken: BTreeSet<[u32; 2]> = obs.taken().into_iter().collect();
-    let node_words = |s: [u32; 2]| {
-        let node = obs.sample_at(s) as usize + beam::SAMPLE_NODE as usize;
-        &words[node..node + beam::NODE_WORDS as usize]
-    };
+    let mut laid = frame_table();
+    laid[node_cache::FRAME as usize] = frame;
+    // Each stopped sample's node's slot, as the walk that stopped it keeps it, and the state
+    // its samples set.
+    let mut want: BTreeMap<u32, u32> = BTreeMap::new();
     for s in obs.taken() {
         let k = obs.sample_at(s) as usize;
         let node = k + beam::SAMPLE_NODE as usize;
@@ -2082,101 +2105,89 @@ fn light_record_case(
         if zoom == beam::SAMPLE_NONE {
             continue;
         }
-        // A sample before it, across or up, that the cast does not take, on its node as an
-        // earlier cast left it: no thread takes it, so it heads none of this cast's runs.
-        for b in [[s[0].wrapping_sub(1), s[1]], [s[0], s[1].wrapping_sub(1)]] {
-            if b[0] < obs.lattice[0]
-                && b[1] < obs.lattice[1]
-                && !taken.contains(&b)
-                && node_words(b) == node_words(s)
-            {
-                kinds.add("a sample before not taken, on its node", true);
-            }
-        }
         let n = Node {
             zoom,
             corner: [0, 1, 2].map(|a| words[node + beam::NODE_CORNER as usize + a]),
             roots: [0, 1, 2].map(|a| words[node + beam::NODE_ROOTS as usize + a] as i32),
         };
-        let key = record::Key::of(obs.aim(s).0, &n, obs.band(s));
+        let o = obs.aim(s).0;
         let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
+        let asset = [
+            words[k + beam::SAMPLE_ASSET as usize],
+            words[k + beam::SAMPLE_ASSET as usize + 1],
+        ];
+        let kind = if lacks { Kind::Lacks } else { Kind::Cell };
+        let idx = n.idx(o);
+        let first = node_cache::bucket_of(zoom, idx);
+        let slot = lay_kept(&mut laid, o, &n, (kind, asset)).or_else(|| {
+            (first..first + node_cache::BUCKET).find(|&slot| {
+                let e = node_cache::entry_at(slot) as usize;
+                let w = e + node_cache::W_NODE as usize;
+                entry_held(&laid, e)
+                    && laid[w] == zoom
+                    && [1, 2, 3].map(|a| laid[w + a] as i32) == idx
+            })
+        });
+        let Some(slot) = slot else {
+            kinds.add("voxels, their bucket full", true);
+            continue;
+        };
         let state = raster::faces([ray::face(
             obs.aim(s).1.dir,
             words[k + beam::SAMPLE_AXIS as usize],
-        )]) | if lacks { record::LACKS } else { 0 }
-            | if record::light_whole(&key) {
-                record::WHOLE
-            } else {
-                0
-            };
-        *want.entry(key).or_default() |= state;
+        )]) | if record::light_whole(zoom, obs.band(s)) {
+            record::WHOLE
+        } else {
+            0
+        };
+        *want.entry(slot).or_default() |= state;
         kinds.add("voxels", true);
         kinds.add("voxels, lacks", lacks);
-        kinds.add("voxels, in another root", key.roots != [0; 3]);
+        kinds.add("voxels, in another root", n.roots != [0; 3]);
         kinds.add(
             "voxels, short of its cube",
-            answer::fill_eighths(words[k + beam::SAMPLE_ASSET as usize]) < answer::EIGHTHS,
+            answer::fill_eighths(asset[0]) < answer::EIGHTHS,
         );
     }
-    let mut laid = vec![0u32; record::WORDS as usize];
-    laid[record::FRAME as usize] = frame;
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];
     args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buffer(words, store_of());
-    let rec = gpu.buffer(&laid, store_of());
+    let table = gpu.buffer(&laid, store_of());
     let args = gpu.buffer(&args, store_of());
-    let binds = [
-        (0, eye_buf.as_entire_binding()),
-        (8, beams.as_entire_binding()),
-        (11, head_buf.as_entire_binding()),
-        (16, args.as_entire_binding()),
-        (23, rec.as_entire_binding()),
-    ];
-    for pass in passes {
-        gpu.dispatch(pass, &binds, [groups[0], groups[1], 1]);
-    }
-    let got = gpu.read(&rec);
-    let mut held: BTreeMap<record::Key, Vec<u32>> = BTreeMap::new();
-    for slot in 0..record::ENTRIES {
-        let e = record::entry_at(slot) as usize;
-        let h = got[e + record::R_HELD as usize];
-        if h & record::HELD == 0 {
-            continue;
-        }
-        let w = |a: u32| got[e + a as usize];
-        let key = record::Key {
-            zoom: record::zoom_of(h),
-            corner: [0, 1, 2].map(|a| w(record::R_CORNER + a)),
-            roots: [0, 1, 2].map(|a| w(record::R_ROOTS + a) as i32),
-            band: record::band_of(h),
-        };
-        held.entry(key).or_default().push(slot);
-    }
-    let (mut none, mut twice, mut differ) = (0u64, 0u64, 0u64);
-    for (key, state) in &want {
-        let Some(slots) = held.get(key) else {
-            none += 1;
-            continue;
-        };
-        twice += slots.len() as u64 - 1;
-        let e = record::entry_at(slots[0]) as usize;
-        let alike = got[e + record::R_STATE as usize] == *state
-            && got[e + record::R_SEEN as usize] == frame
-            && record::bucket_of(key) == slots[0] & !(record::BUCKET - 1);
+    gpu.dispatch(
+        pass,
+        &[
+            (0, eye_buf.as_entire_binding()),
+            (8, beams.as_entire_binding()),
+            (9, table.as_entire_binding()),
+            (11, head_buf.as_entire_binding()),
+            (16, args.as_entire_binding()),
+        ],
+        [groups[0], groups[1], 1],
+    );
+    let got = gpu.read(&table);
+    let mut differ = 0u64;
+    for (&slot, &state) in &want {
+        let e = node_cache::entry_at(slot) as usize;
+        let alike = got[e + node_cache::W_STATE as usize] == state
+            && got[e + node_cache::W_SEEN as usize] == frame;
         differ += u64::from(!alike);
     }
-    let stray = held.keys().filter(|k| !want.contains_key(*k)).count();
+    let stray = (0..node_cache::ENTRIES)
+        .filter(|slot| {
+            let e = node_cache::entry_at(*slot) as usize;
+            got[e + node_cache::W_STATE as usize] != 0 && !want.contains_key(slot)
+        })
+        .count();
     eprintln!(
-        "{name}: {} voxels, {none} not held, {twice} held twice, {differ} differ, {stray} held \
-         that no sample stopped on",
+        "{name}: {} voxels, {differ} differ, {stray} drawn that no sample stopped on",
         want.len()
     );
-    if none != 0 || differ != 0 || stray != 0 {
+    if differ != 0 || stray != 0 {
         failed.push(format!(
-            "{name}: {none} voxels not held, {differ} differ, {stray} held that no sample \
-             stopped on"
+            "{name}: {differ} voxels differ, {stray} drawn that no sample stopped on"
         ));
     }
     if want.is_empty() {
@@ -2184,20 +2195,21 @@ fn light_record_case(
     }
 }
 
-/// The eye's samples' two passes by hand over `words` from `origin`, into the record `was`
-/// left, in frame `frame`, then its draw, against `boxes_want` and pxl-engine `record`: each
-/// key held once; its entry its node's answer, seen this frame,
-/// whole where its ray stopped coarser than it asked, its faces those `was` held and those
-/// its samples entered across; each box written a held voxel's, word for word, `STALE` where
-/// it is not fresh (`record::fresh`); and every voxel in view (`record::in_view`) drawn. The
-/// record after. Fails into `failed`.
+/// The eye's samples' stops by hand over `words` from `origin`, into the node cache `was` left
+/// with each node a sample stopped on kept as its walk would keep it (`lay_kept`), in frame
+/// `frame`, then its draw, against `boxes_want` and pxl-engine `record`: each such entry's
+/// state whole where its ray stopped coarser than it asked, its faces, entered and asked,
+/// those `was` held and those its samples entered across, marked drawn in the frame where
+/// drawn; each box written a drawable entry's, word for word, `STALE` where it is not fresh
+/// (`record::fresh`); every voxel in view (`record::in_view`) drawn; and the frame the draw ran
+/// named (`node_cache::DRAWN`). The node cache after. Fails into `failed`.
 #[expect(
     clippy::too_many_arguments,
     reason = "the device, the passes, its observer, words, origin and grid, what stood, what to tell and what failed"
 )]
 fn record_case(
     gpu: &Gpu,
-    [pass, observe, draw]: [&wgpu::ComputePipeline; 3],
+    [pass, draw]: [&wgpu::ComputePipeline; 2],
     obs: &Observed,
     words: &[u32],
     (origin, grid): ([i32; 3], &Grid),
@@ -2214,26 +2226,43 @@ fn record_case(
     laid_args[asked + raster::ARGS_FACES as usize + 1] = 1;
     laid_args[asked + raster::ARGS_FACES as usize + 2] = 1;
     laid_args[asked + raster::ARGS_ASKS as usize] = grid.asks_at;
-    let mut rec = was.map_or_else(|| vec![0u32; record::WORDS as usize], <[u32]>::to_vec);
-    rec[record::FRAME as usize] = frame;
+    let mut rec = was.map_or_else(frame_table, <[u32]>::to_vec);
+    rec[node_cache::FRAME as usize] = frame;
+    // Each node a taken sample stopped on kept, as the walk that stopped it keeps it.
+    for s in obs.taken() {
+        let k = obs.sample_at(s) as usize;
+        let node = k + beam::SAMPLE_NODE as usize;
+        if words[node + beam::NODE_ZOOM as usize] == beam::SAMPLE_NONE {
+            continue;
+        }
+        let n = node_of(&key_words(words, node));
+        let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
+        let asset = [
+            words[k + beam::SAMPLE_ASSET as usize],
+            words[k + beam::SAMPLE_ASSET as usize + 1],
+        ];
+        let kind = if lacks { Kind::Lacks } else { Kind::Cell };
+        lay_kept(&mut rec, origin, &n, (kind, asset));
+    }
     let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buffer(words, store_of());
     let args = gpu.buffer(&laid_args, store_of());
     let rec_buf = gpu.buffer(&rec, store_of());
     let boxes = gpu.buffer(
-        &vec![UNWRITTEN; (record::ENTRIES * raster::BOX_WORDS) as usize],
+        &vec![UNWRITTEN; (record::BOXES * raster::BOX_WORDS) as usize],
         store_of(),
     );
     let groups = grid.samples.map(|n| n.div_ceil(SQUARE_SIDE));
-    let binds = [
-        (0, eye_buf.as_entire_binding()),
-        (8, beams.as_entire_binding()),
-        (16, args.as_entire_binding()),
-        (23, rec_buf.as_entire_binding()),
-    ];
-    for p in [pass, observe] {
-        gpu.dispatch(p, &binds, [groups[0], groups[1], 1]);
-    }
+    gpu.dispatch(
+        pass,
+        &[
+            (0, eye_buf.as_entire_binding()),
+            (8, beams.as_entire_binding()),
+            (9, rec_buf.as_entire_binding()),
+            (16, args.as_entire_binding()),
+        ],
+        [groups[0], groups[1], 1],
+    );
     // The light's head saying no receiver stands this frame, over its list, args and stood
     // list: the draw stands none, so none of them is written (tests/light.rs holds what it
     // stands where they do).
@@ -2254,15 +2283,15 @@ fn record_case(
         draw,
         &[
             (0, eye_buf.as_entire_binding()),
+            (9, rec_buf.as_entire_binding()),
             (11, light_head_buf.as_entire_binding()),
             (12, light_list_buf.as_entire_binding()),
             (14, boxes.as_entire_binding()),
             (16, args.as_entire_binding()),
             (21, light_args_buf.as_entire_binding()),
             (22, stood_buf.as_entire_binding()),
-            (23, rec_buf.as_entire_binding()),
         ],
-        [record::ENTRIES / record::DRAW_LANES, 1, 1],
+        [node_cache::ENTRIES / record::DRAW_LANES, 1, 1],
     );
     let got = gpu.read(&rec_buf);
     let got_boxes = gpu.read(&boxes);
@@ -2274,6 +2303,9 @@ fn record_case(
     {
         fail("the light's words written where no receiver stands".into());
     }
+    if got[node_cache::DRAWN as usize] != frame {
+        fail("the draw's frame not named".into());
+    }
 
     let f = |k: usize| f32::from_bits(obs.eye[k]);
     let v3 = |k: usize| [f(k), f(k + 1), f(k + 2)];
@@ -2281,24 +2313,12 @@ fn record_case(
     let tan = [f(eye::TAN), f(eye::TAN + 1)];
     let range = [obs.eye[eye::RANGE], obs.eye[eye::RANGE + 1]];
     let far = f(eye::FAR);
-    let r0 = cast::roots_of(origin);
-    // Each held slot by its key, as `raster::key` has it from this origin.
-    let key_of = |e: usize| -> Key {
-        let w = |a: u32| got[e + a as usize];
-        let held = w(record::R_HELD);
-        let mut node = [0u32; beam::NODE_WORDS as usize];
-        node[beam::NODE_ZOOM as usize] = record::zoom_of(held);
-        for a in 0..3u32 {
-            node[(beam::NODE_CORNER + a) as usize] = w(record::R_CORNER + a);
-            node[(beam::NODE_ROOTS + a) as usize] =
-                (w(record::R_ROOTS + a) as i32 - r0[a as usize]) as u32;
-        }
-        (node, record::band_of(held))
-    };
+    // Each drawable slot by its key, as `raster::key` has it from this origin.
+    let key_of = |e: usize| -> Key { node_words(&entry_node(&got, e, origin)) };
     let mut held: BTreeMap<Key, Vec<u32>> = BTreeMap::new();
-    for slot in 0..record::ENTRIES {
-        let e = record::entry_at(slot) as usize;
-        if got[e + record::R_HELD as usize] & record::HELD != 0 {
+    for slot in 0..node_cache::ENTRIES {
+        let e = node_cache::entry_at(slot) as usize;
+        if entry_held(&got, e) && got[e + node_cache::W_STATE as usize] != 0 {
             held.entry(key_of(e)).or_default().push(slot);
         }
     }
@@ -2310,39 +2330,31 @@ fn record_case(
         };
         twice += slots.len() as u64 - 1;
         // One slot a key.
-        let e = record::entry_at(slots[0]) as usize;
+        let e = node_cache::entry_at(slots[0]) as usize;
         let w_at = |a: u32| got[e + a as usize];
-        let k = record::Key::of(
-            origin,
-            &Node {
-                zoom: key.0[beam::NODE_ZOOM as usize],
-                corner: [0, 1, 2].map(|a| key.0[beam::NODE_CORNER as usize + a]),
-                roots: [0, 1, 2].map(|a| key.0[beam::NODE_ROOTS as usize + a] as i32),
-            },
-            key.1,
-        );
-        let whole = record::stopped_whole(origin, &k.node(origin), range);
-        let lacks = w[raster::BOX_ID as usize] & raster::LACK != 0;
-        // What the slot held before, where it held this key.
-        let faces_was = was
-            .filter(|r| (0..record::R_ASSET as usize).all(|a| r[e + a] == got[e + a]))
-            .map_or(0, |r| r[e + record::R_STATE as usize] & record::FACES);
-        let state = w[raster::BOX_FACES as usize] & record::FACES
-            | faces_was
-            | if lacks { record::LACKS } else { 0 }
+        let node = node_of(key);
+        let whole = record::stopped_whole(origin, &node, range);
+        // What the slot held before, where it held this node.
+        let state_was = was
+            .filter(|r| (0..node_cache::W_STATE as usize).all(|a| r[e + a] == got[e + a]))
+            .map_or(0, |r| r[e + node_cache::W_STATE as usize]);
+        // The eye's samples ask about every face they enter (`record::ASKED`).
+        let faces = w[raster::BOX_FACES as usize] & record::FACES;
+        let state = state_was
+            | faces
+            | faces << record::ASKED_SHIFT
             | if whole { record::WHOLE } else { 0 };
         kinds.add("voxels, stopped whole", whole);
-        let alike = w_at(record::R_STATE) == state
-            && w_at(record::R_SEEN) == frame
-            && record::bucket_of(&k) == slots[0] & !(record::BUCKET - 1);
+        let alike = w_at(node_cache::W_STATE) == state
+            && node_cache::bucket_of(node.zoom, node.idx(origin))
+                == slots[0] & !(node_cache::BUCKET - 1);
         if !alike {
             entries_differ += 1;
             if entries_differ <= 3 {
                 eprintln!(
-                    "DIFFERS {name}: entry {} state {:x} seen {}, want state {state:x}",
+                    "DIFFERS {name}: entry {} state {:x}, want state {state:x}",
                     slots[0],
-                    w_at(record::R_STATE),
-                    w_at(record::R_SEEN)
+                    w_at(node_cache::W_STATE),
                 );
             }
         }
@@ -2355,29 +2367,23 @@ fn record_case(
         let at = place * raster::BOX_WORDS as usize;
         let b = &got_boxes[at..at + raster::BOX_WORDS as usize];
         let slot = raster::voxel_of(b[raster::BOX_ID as usize]);
-        let e = record::entry_at(slot) as usize;
+        let e = node_cache::entry_at(slot) as usize;
         let key = key_of(e);
         let Some(w) = want.get(&key) else {
             differ += 1;
             continue;
         };
         drawn.insert(key);
-        let node = Node {
-            zoom: key.0[beam::NODE_ZOOM as usize],
-            corner: [0, 1, 2].map(|a| key.0[beam::NODE_CORNER as usize + a]),
-            roots: [0, 1, 2].map(|a| key.0[beam::NODE_ROOTS as usize + a] as i32),
-        };
-        let state = got[e + record::R_STATE as usize];
-        let fresh = record::fresh(
-            origin,
-            &record::Key::of(origin, &node, key.1),
-            state & record::WHOLE != 0,
-            range,
-        );
+        if got[e + node_cache::W_SEEN as usize] != frame {
+            differ += 1;
+            eprintln!("DIFFERS {name}: box {place}'s entry not marked drawn");
+        }
+        let state = got[e + node_cache::W_STATE as usize];
+        let fresh = record::fresh(origin, &node_of(&key), state & record::WHOLE != 0, range);
         stale += u64::from(!fresh);
         let mut w = *w;
         w[raster::BOX_ID as usize] |= slot + 1;
-        w[raster::BOX_FACES as usize] = state & record::FACES
+        w[raster::BOX_FACES as usize] = record::asked_faces(state)
             | w[raster::BOX_FACES as usize] & raster::EYED
             | if fresh { 0 } else { raster::STALE };
         if b == w {
@@ -2392,20 +2398,10 @@ fn record_case(
     // Every voxel in view drawn, but a stale one about the eye; one at the edge of the view as
     // the device rounds it told.
     let fresh_of = |key: &Key| {
-        let node = Node {
-            zoom: key.0[beam::NODE_ZOOM as usize],
-            corner: [0, 1, 2].map(|a| key.0[beam::NODE_CORNER as usize + a]),
-            roots: [0, 1, 2].map(|a| key.0[beam::NODE_ROOTS as usize + a] as i32),
-        };
         let state = held.get(key).map_or(0, |slots| {
-            got[(record::entry_at(slots[0]) + record::R_STATE) as usize]
+            got[(node_cache::entry_at(slots[0]) + node_cache::W_STATE) as usize]
         });
-        record::fresh(
-            origin,
-            &record::Key::of(origin, &node, key.1),
-            state & record::WHOLE != 0,
-            range,
-        )
+        record::fresh(origin, &node_of(key), state & record::WHOLE != 0, range)
     };
     let mut missed = 0u64;
     for (key, w) in &want {
@@ -2584,7 +2580,6 @@ fn hand_eye_record_answers_as_raster() {
     let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
     let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
     let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
-    let observe = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_observe_cs");
     let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
@@ -2605,7 +2600,7 @@ fn hand_eye_record_answers_as_raster() {
         }
         // A frame into an empty record, and the next over what it kept: the same voxels
         // found, none written again.
-        let passes = [&pass, &observe, &draw];
+        let passes = [&pass, &draw];
         let kept = record_case(
             &gpu,
             passes,
@@ -2728,7 +2723,7 @@ fn hand_eye_record_answers_as_raster() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// A voxel the eye's record holds, its fill cube about an eye that has since come into it: the
+/// A voxel the record holds, its fill cube about an eye that has since come into it: the
 /// record a cast from over the ground wrote, then the draw alone from the middle of each
 /// coarse voxel's box, asking finer there than the voxel, so it is stale (`record::fresh`) and
 /// about the eye (`raster::is_eyed`). The draw writes no box for it: a stale box about the
@@ -2754,7 +2749,6 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
     let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
     let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
     let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
-    let observe = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_observe_cs");
     let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
@@ -2772,7 +2766,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
     };
     let kept = record_case(
         &gpu,
-        [&pass, &observe, &draw],
+        [&pass, &draw],
         &obs,
         &words,
         (*origin, grid),
@@ -2784,59 +2778,51 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
 
     // The coarsest voxels that keep a share of their cube, each an eye come into its box.
     let q = (1 << FRAC_W) as f32;
-    let mut inside: Vec<(u32, [i32; 3])> = (0..record::ENTRIES)
+    let mut inside: Vec<(u32, [i32; 3])> = (0..node_cache::ENTRIES)
         .filter_map(|slot| {
-            let e = record::entry_at(slot) as usize;
-            let held = kept[e + record::R_HELD as usize];
-            let state = kept[e + record::R_STATE as usize];
-            if held & record::HELD == 0 || state & (record::LACKS | record::WHOLE) != 0 {
+            let e = node_cache::entry_at(slot) as usize;
+            let state = kept[e + node_cache::W_STATE as usize];
+            let kind = kept[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK;
+            if !entry_held(&kept, e)
+                || state == 0
+                || kind != Kind::Cell as u32
+                || state & record::WHOLE != 0
+            {
                 return None;
             }
-            let zoom = record::zoom_of(held);
-            if zoom + 2 > FINEST {
+            let node = entry_node(&kept, e, *origin);
+            if node.zoom + 2 > FINEST {
                 return None;
             }
-            let key = record::Key {
-                zoom,
-                corner: [0, 1, 2].map(|a| kept[e + (record::R_CORNER + a) as usize]),
-                roots: [0, 1, 2].map(|a| kept[e + (record::R_ROOTS + a) as usize] as i32),
-                band: 0,
-            };
-            let asset = kept[e + record::R_ASSET as usize];
-            let (lo, hi) = cast::asset_box(*origin, &key.node(*origin), asset);
+            let asset = kept[e + node_cache::W_ASSET as usize];
+            let (lo, hi) = cast::asset_box(*origin, &node, asset);
             let mid = |a: usize| ((lo[a] + hi[a]) / 2.0 * q).round_ties_even() as i32;
             Some((
-                zoom,
+                node.zoom,
                 [
                     origin[0].wrapping_add(mid(0)),
                     origin[1] + mid(1),
                     origin[2] + mid(2),
                 ],
             ))
-            .map(|(z, at)| (z * record::ENTRIES + slot, at))
+            .map(|(z, at)| (z * node_cache::ENTRIES + slot, at))
         })
         .collect();
     inside.sort_unstable();
     let mut tried = 0u32;
     for &(k, at) in inside.iter().take(8) {
-        let slot = k % record::ENTRIES;
+        let slot = k % node_cache::ENTRIES;
         let near = eye_of(&case("the eye, come into a voxel's box", at), [0; 3]);
-        let e = record::entry_at(slot) as usize;
-        let held = kept[e + record::R_HELD as usize];
-        let key = record::Key {
-            zoom: record::zoom_of(held),
-            corner: [0, 1, 2].map(|a| kept[e + (record::R_CORNER + a) as usize]),
-            roots: [0, 1, 2].map(|a| kept[e + (record::R_ROOTS + a) as usize] as i32),
-            band: 0,
-        };
-        let asset = kept[e + record::R_ASSET as usize];
-        let (lo, hi) = cast::asset_box(at, &key.node(at), asset);
-        if record::fresh(at, &key, false, far_eye.range) || !raster::is_eyed(lo, hi, far_eye.tan) {
+        let e = node_cache::entry_at(slot) as usize;
+        let node = entry_node(&kept, e, at);
+        let asset = kept[e + node_cache::W_ASSET as usize];
+        let (lo, hi) = cast::asset_box(at, &node, asset);
+        if record::fresh(at, &node, false, far_eye.range) || !raster::is_eyed(lo, hi, far_eye.tan) {
             continue;
         }
         tried += 1;
         let mut rec = kept.clone();
-        rec[record::FRAME as usize] = FRAME + 1;
+        rec[node_cache::FRAME as usize] = FRAME + 1;
         let asked = raster::ASKED_AT as usize;
         let mut laid_args = vec![0u32; asked + raster::ARGS_WORDS as usize];
         laid_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
@@ -2844,7 +2830,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         let args = gpu.buffer(&laid_args, store_of());
         let rec_buf = gpu.buffer(&rec, store_of());
         let boxes = gpu.buffer(
-            &vec![UNWRITTEN; (record::ENTRIES * raster::BOX_WORDS) as usize],
+            &vec![UNWRITTEN; (record::BOXES * raster::BOX_WORDS) as usize],
             store_of(),
         );
         let size = shadow::SIZE;
@@ -2867,13 +2853,13 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
                 (16, args.as_entire_binding()),
                 (21, light_args_buf.as_entire_binding()),
                 (22, stood_buf.as_entire_binding()),
-                (23, rec_buf.as_entire_binding()),
+                (9, rec_buf.as_entire_binding()),
             ],
-            [record::ENTRIES / record::DRAW_LANES, 1, 1],
+            [node_cache::ENTRIES / record::DRAW_LANES, 1, 1],
         );
         let got_args = gpu.read(&args);
         let got = gpu.read(&boxes);
-        let cnt = got_args[raster::ARGS_CNT as usize].min(record::ENTRIES) as usize;
+        let cnt = got_args[raster::ARGS_CNT as usize].min(record::BOXES) as usize;
         let id = raster::id_of(slot, false);
         if let Some(b) = (0..cnt).find(|&b| {
             got[b * raster::BOX_WORDS as usize + raster::BOX_ID as usize] & !raster::LACK == id
@@ -2881,7 +2867,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
             let faces = got[b * raster::BOX_WORDS as usize + raster::BOX_FACES as usize];
             failed.push(format!(
                 "slot {slot}, zoom {}: a stale box about the eye drawn, faces {faces:#x}",
-                key.zoom
+                node.zoom
             ));
         }
     }
@@ -2956,7 +2942,6 @@ fn hand_light_record_answers_as_raster() {
     let hit = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_HIT), "sample_hit_cs");
     let world = gpu.pipeline(src(SHADER_LIGHT_SAMPLE), "sample_cs");
     let pass = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "sample_box_cs");
-    let observe = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "sample_observe_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     let mut run = |b: &WorldBufs, c: &LightCase, kinds: &mut Kinds| {
@@ -2988,16 +2973,7 @@ fn hand_light_record_answers_as_raster() {
         let groups = obs.groups;
         kinds.add("listed", c.listed.is_some());
         // The light's asks none: its slots read no faces' words.
-        light_record_case(
-            &gpu,
-            [&pass, &observe],
-            &obs,
-            &words,
-            groups,
-            FRAME,
-            kinds,
-            &mut failed,
-        );
+        light_record_case(&gpu, &pass, &obs, &words, groups, FRAME, kinds, &mut failed);
     };
     for c in &cases {
         run(&b, c, &mut kinds);
@@ -3022,7 +2998,6 @@ fn hand_light_record_answers_as_raster() {
         "voxels, short of its cube",
         "voxels, in another root",
         "listed",
-        "a sample before not taken, on its node",
     ] {
         if kinds.get(what) == 0 {
             failed.push(format!("none of {what} to say"));

@@ -1,38 +1,20 @@
 // pxl-render/sample_box.wgsl
 
-// An observer's samples as stops into its record of voxels (record_put.wgsl `upsert`;
-// pxl-engine record.rs), the eye's and the light's alike, each as its sample.eye.wgsl or
-// sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl take it, a thread a
-// sample, in two passes: the first (`sample_box_cs`) has each sample that heads its node's
-// run, no sample before it across or up that the same dispatch takes (`sample_with`) stopped
-// on the node, find its entry or claim and write it; the second (`sample_observe_cs`), once
-// every write of the first is done, has every stopped sample find its entry; a head that met
-// its key's claim in the first is taken there, with every other sample, past the dispatch's
-// end. Each marks its entry seen and sets the face it entered across, asking that face's word
-// the first time where its observer reads one (`sample_asks`). A run of one node that meets a
-// sample the dispatch does not take, which holds what an earlier cast left, has a head of its
-// own past it, so every node a taken sample stopped on has its entry.
+// An observer's samples as stops into what draws the node cache's entries (record_put.wgsl
+// `observe_stop`; pxl-engine record.rs), the eye's and the light's alike, each as its
+// sample.eye.wgsl or sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl
+// take it, a thread a sample: every stopped sample finds its node's entry, which the walk that
+// stopped it kept, and sets the face it entered across, asking that face's word the first time
+// where its observer reads one (`sample_asks`).
 
 /// Whether sample `s` stopped on a node.
 fn stopped(s: vec2<u32>) -> bool {
   return beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM] != SAMPLE_NONE;
 }
 
-/// Whether samples `a` and `b` stopped on one node.
-fn same_node(a: vec2<u32>, b: vec2<u32>) -> bool {
-  let ka = sample_word(a) + SAMPLE_NODE;
-  let kb = sample_word(b) + SAMPLE_NODE;
-  for (var i = 0u; i < NODE_WORDS; i += 1u) {
-    if (beams[ka + i] != beams[kb + i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/// Sample `s`'s node as the record keys it, its roots from where its ray starts.
+/// Sample `s`'s node, its roots world-absolute from where its ray starts.
 fn sample_kept(s: vec2<u32>) -> Kept {
-  return kept_at(sample_word(s) + SAMPLE_NODE, sample_band(s), sample_aim(s).origin);
+  return kept_at(sample_word(s) + SAMPLE_NODE, sample_aim(s).origin);
 }
 
 /// Sample `s`'s stop: its answer, the face it entered across, and the line its cell's rays
@@ -67,20 +49,5 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (s.x == NO_ENTRY) {
     return;
   }
-  let across = s - vec2<u32>(1u, 0u);
-  let up = s - vec2<u32>(0u, 1u);
-  if ((s.x > 0u && sample_with(s, across) && same_node(s, across))
-    || (s.y > 0u && sample_with(s, up) && same_node(s, up))) {
-    return;
-  }
-  _ = upsert(sample_kept(s), sample_stop(s), true, sample_asks());
-}
-
-@compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
-fn sample_observe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let s = stopped_item(id.xy);
-  if (s.x == NO_ENTRY) {
-    return;
-  }
-  _ = upsert(sample_kept(s), sample_stop(s), false, sample_asks());
+  observe_stop(sample_kept(s), sample_stop(s), sample_asks());
 }

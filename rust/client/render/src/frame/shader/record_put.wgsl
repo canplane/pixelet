@@ -1,25 +1,25 @@
 // pxl-render/record_put.wgsl
 
-// A stop into the eye's record of voxels, the one way every ray's stop goes in (pxl-engine
-// record.rs): its key's entry found, or claimed and written, one key one entry; marked seen;
-// the face it entered set, and that face's word asked the first time it is (face.wgsl), the
-// ask laid among the asks it is handed (`Asks`). The samples (sample_box.wgsl) and the missed
-// pixels' hits (record_stops.wgsl) each make their stops and call `upsert`.
+// A stop into what draws the node cache's entries, the one way every ray's stop goes in
+// (pxl-engine record.rs): its node's entry found (record.wgsl `find`), whole where the stop
+// found it so, the face it entered set, and that face's word asked the first time it is
+// (face.wgsl), the ask laid among the asks it is handed (`Asks`). The samples
+// (sample_box.wgsl) and the missed pixels' hits (record_stops.wgsl) each make their stops and
+// call `observe_stop`.
 
-/// The raster's args, then the faces' asks' at `RASTER_ASKED_AT` and `RASTER_STOP_ASKED_AT`,
-/// and the hits put off (pxl-engine `raster::ARGS_INSTANCES`, `raster::ASKED_AT`,
-/// `raster::STOP_ASKED_AT`, `raster::DEFERRED_AT`).
+/// The node cache, whose entries' states a stop sets (`node_cache::W_STATE`) through atomics,
+/// as many stops of one node set them at once.
+@group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
+
+fn node_cache_word(k: u32) -> u32 {
+  return atomicLoad(&node_cache[k]);
+}
+
+/// The raster's args, then the faces' asks' at `RASTER_ASKED_AT` and `RASTER_STOP_ASKED_AT`
+/// (pxl-engine `raster::ARGS_INSTANCES`, `raster::ASKED_AT`, `raster::STOP_ASKED_AT`).
 @group(0) @binding(16) var<storage, read_write> args: array<atomic<u32>>;
 
-/// None.
-const NO_ENTRY: u32 = 0xffffffffu;
-/// What a stop that met its key's claim takes: none yet, put off past the dispatch's end
-/// (pxl-engine `record`).
-const MET_CLAIM: u32 = 0xfffffffeu;
-/// The times a stop reads its bucket again after another took the slot it would.
-const CLAIM_TRIES: u32 = 4u;
-
-/// What a ray found where it stopped on a node, the node's key apart (`Kept`; pxl-engine
+/// What a ray found where it stopped on a node, the node apart (`Kept`; pxl-engine
 /// `record`): its answer, whether it lacks, whether the ray stopped on it whole, coarser than
 /// it asked there (`record::stopped_whole`, `record::light_whole`), the face its ray entered
 /// (2·axis, plus one where the ray runs up the axis), and the first word of the beam ray's
@@ -59,173 +59,44 @@ fn eye_origin() -> vec3<i32> {
 }
 
 /// The node at word `k` of the beam rays' words (`beam::NODE_WORDS`), as a walk from `origin`
-/// holds it, at band `band`, as the record keys it (`record::Key::of`).
-fn kept_at(k: u32, band: u32, origin: vec3<i32>) -> Kept {
+/// holds it, its roots world-absolute.
+fn kept_at(k: u32, origin: vec3<i32>) -> Kept {
   let roots = vec3<i32>(i32(beams[k + NODE_ROOTS]), i32(beams[k + NODE_ROOTS + 1u]), i32(beams[k + NODE_ROOTS + 2u]));
   return Kept(
     beams[k + NODE_ZOOM],
     vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]),
     roots + origin_roots(origin),
-    band,
   );
 }
 
-/// The slot of the record that holds `k`, `NO_ENTRY` where none does: the first of its bucket
-/// that holds it.
-fn find(k: Kept) -> u32 {
-  let b = kept_bucket(k);
-  for (var i = 0u; i < RECORD_BUCKET; i += 1u) {
-    let e = record_at(b + i);
-    let held = record_word(e + R_HELD);
-    if ((held & RECORD_HELD) != 0u && entry_holds(e, held, k)) {
-      return b + i;
-    }
-  }
-  return NO_ENTRY;
-}
-
-/// Whether a stop of `k` that claimed slot `pick` of the bucket from `b` lets its claim go:
-/// another slot holds `k`, or `k`'s claim stands before it in the bucket. Of the claims of
-/// one key that meet, the first stands: a claim yields only to a held entry, which stands,
-/// or to a claim before it, and the first only to a held one.
-fn yields(k: Kept, b: u32, pick: u32) -> bool {
-  let mine = kept_claim(k);
-  for (var i = 0u; i < RECORD_BUCKET; i += 1u) {
-    if (b + i == pick) {
-      continue;
-    }
-    let e = record_at(b + i);
-    let held = record_word(e + R_HELD);
-    if ((held & RECORD_HELD) != 0u && entry_holds(e, held, k)) {
-      return true;
-    }
-    if (held == mine && b + i < pick) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Stop `p` of `k` written into slot `slot` it claimed: its key, its answer, its state, seen
-/// this frame, no face drawn yet; its held word last.
-fn write_entry(k: Kept, p: Stop, slot: u32) {
-  let e = record_at(slot);
-  atomicStore(&record[e + R_CORNER], k.corner.x);
-  atomicStore(&record[e + R_CORNER + 1u], k.corner.y);
-  atomicStore(&record[e + R_CORNER + 2u], k.corner.z);
-  atomicStore(&record[e + R_ROOTS], u32(k.roots.x));
-  atomicStore(&record[e + R_ROOTS + 1u], u32(k.roots.y));
-  atomicStore(&record[e + R_ROOTS + 2u], u32(k.roots.z));
-  atomicStore(&record[e + R_ASSET], p.asset.x);
-  atomicStore(&record[e + R_ASSET + 1u], p.asset.y);
-  let lacks = select(0u, RECORD_LACKS, p.lacks);
-  let whole = select(0u, RECORD_WHOLE, p.whole);
-  atomicStore(&record[e + R_STATE], lacks | whole);
-  atomicStore(&record[e + R_SEEN], record_frame());
-  for (var face = 0u; face < 6u; face += 1u) {
-    atomicStore(&record[e + R_FACES + face], 0u);
-  }
-  atomicStore(&record[e + R_HELD], kept_held(k));
-}
-
-/// Stop `p` of `k`'s slot: the one that holds its key; `MET_CLAIM` where its key's claim holds
-/// one, which it waits on no lane for; else one it claims and writes, the first free slot of
-/// its bucket, else the one least lately seen of those no pixel took this frame or the last
-/// (`record::victim`). `NO_ENTRY` where every slot was, or where it yielded to a claim not
-/// yet held.
-fn claim(k: Kept, p: Stop) -> u32 {
-  let b = kept_bucket(k);
-  let mine = kept_claim(k);
-  let frame = record_frame();
-  for (var tries = 0u; tries < CLAIM_TRIES; tries += 1u) {
-    var pick = NO_ENTRY;
-    var was = 0u;
-    var oldest = 0xffffffffu;
-    var free = false;
-    var met = false;
-    for (var i = 0u; i < RECORD_BUCKET; i += 1u) {
-      let e = record_at(b + i);
-      let held = record_word(e + R_HELD);
-      if (held == 0u) {
-        if (!free) {
-          free = true;
-          pick = b + i;
-          was = 0u;
-        }
-        continue;
-      }
-      if (held == mine) {
-        met = true;
-        break;
-      }
-      if ((held & RECORD_HELD) == 0u) {
-        continue;
-      }
-      if (entry_holds(e, held, k)) {
-        return b + i;
-      }
-      let seen = record_word(e + R_SEEN);
-      if (!free && seen + 2u <= frame && seen < oldest) {
-        oldest = seen;
-        pick = b + i;
-        was = held;
-      }
-    }
-    if (met) {
-      return MET_CLAIM;
-    }
-    if (pick == NO_ENTRY) {
-      return NO_ENTRY;
-    }
-    // The slot taken by its claim bit, as a compare-exchange of `was` for `mine` would take it,
-    // which Safari compiles none of (doc/tip/shaders-phones-take.md). The bit set on a word no
-    // claim holds is set by one lane alone, as no other store reaches a held word while a pass
-    // claims (record.rs, its writers); that lane writes its claim where the word was the one
-    // it read, else takes the bit off again. On a word a claim holds the bit is set already,
-    // so its owner's word is never touched. Under the bit a free slot reads `RECORD_CLAIM`
-    // alone, which no key's claim is (`kept_claim`), and a held one no key it holds.
-    let w = record_at(pick) + R_HELD;
-    let got = atomicOr(&record[w], RECORD_CLAIM);
-    let taken = (got & RECORD_CLAIM) == 0u;
-    let exchanged = taken && got == was;
-    if (exchanged) {
-      atomicStore(&record[w], mine);
-    } else if (taken) {
-      atomicAnd(&record[w], ~RECORD_CLAIM);
-    }
-    if (exchanged) {
-      // Read the bucket again: a stop of the same key that claimed another slot meanwhile
-      // keeps the first; this one lets its slot go free.
-      if (yields(k, b, pick)) {
-        atomicStore(&record[record_at(pick) + R_HELD], 0u);
-        return find(k);
-      }
-      write_entry(k, p, pick);
-      return pick;
-    }
-  }
-  return NO_ENTRY;
-}
-
 /// The side stop `p` entered its entry at word `e` through set (`raster::faces`, a bit a side),
-/// and, the first time it is, what lies about it told at once where it needs no asking, a lack's none and a
-/// cell short of its cube its box's (`face::BOX`), else asked of the faces' pass off the stop's
-/// line, laid among `asks`, its node the entry (`record::TO_RECORD`).
+/// and, where its observer reads faces' words (`asks`' room, the eye's), set asked
+/// (`record::ASKED`): the first time it is, what lies about it told at once where it needs no
+/// asking, a lack's none and a cell short of its cube its box's (`face::BOX`), else asked of
+/// the faces' pass off the stop's line, laid among `asks`, its node the entry
+/// (`record::TO_RECORD`). An observer that reads none (the light's) sets the side alone, a
+/// box's word told the first time it is.
 fn observe(p: Stop, e: u32, asks: Asks) {
   let bit = 1u << p.face;
-  let state = e + R_STATE;
-  if ((record_word(state) & bit) != 0u || (atomicOr(&record[state], bit) & bit) != 0u) {
+  let asked = bit << RECORD_ASKED_SHIFT;
+  let reads = asks.room != 0u;
+  let mark = select(bit, bit | asked, reads);
+  let state = e + W_STATE;
+  if ((node_cache_word(state) & mark) == mark) {
     return;
   }
+  let was = atomicOr(&node_cache[state], mark);
+  let first_asked = reads && (was & asked) == 0u;
   if (p.lacks) {
     return;
   }
   if (((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u) {
-    atomicStore(&record[e + R_FACES + p.face], FACE_BOX);
+    if ((was & bit) == 0u || first_asked) {
+      atomicStore(&node_cache[e + W_FACES + p.face], FACE_BOX);
+    }
     return;
   }
-  // An observer that reads no face's word lays its asks in no room (the light's).
-  if (asks.room == 0u) {
+  if (!first_asked) {
     return;
   }
   let place = args_add(asks.args + RASTER_ARGS_CNT, 1u);
@@ -241,26 +112,26 @@ fn observe(p: Stop, e: u32, asks: Asks) {
   beams[a + ASK_NODE] = e;
   beams[a + ASK_FACE] = p.face;
   beams[a + ASK_LINE] = p.line;
-  beams[a + ASK_TO] = RECORD_TO | (e + R_FACES + p.face);
+  beams[a + ASK_TO] = RECORD_TO | (e + W_FACES + p.face);
 }
 
-/// Stop `p` of `k` into the record: its key's entry found, or, where `claims`, claimed and
-/// written; marked seen and its face set (`observe`). Its slot; `NO_ENTRY` where it took
-/// none; `MET_CLAIM` where it met its key's claim, for its caller to put it off past the
-/// dispatch's end.
-fn upsert(k: Kept, p: Stop, claims: bool, asks: Asks) -> u32 {
-  var slot = find(k);
-  if (slot == NO_ENTRY && claims) {
-    slot = claim(k, p);
+/// Stop `p` on the node `k` into what draws it: its entry found (`find`), marked in the frame's
+/// number where it draws from now on (`node_cache::W_SEEN`), set whole where the stop found it
+/// so (`RECORD_WHOLE`, the world's, which whichever ray stops on it whole first sets), and its
+/// face set (`observe`). None where no slot keeps its node: its pixel walks again.
+fn observe_stop(k: Kept, p: Stop, asks: Asks) {
+  let slot = find(k.zoom, idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i)), p.asset, p.lacks);
+  if (slot == NO_ENTRY) {
+    return;
   }
-  if (slot == NO_ENTRY || slot == MET_CLAIM) {
-    return slot;
+  let e = entry_at(slot);
+  let state = node_cache_word(e + W_STATE);
+  // Drawable from now: no claim takes it before a draw draws it (`record::drawn`).
+  if ((state & (RECORD_FACES | RECORD_ASKED)) == 0u) {
+    atomicStore(&node_cache[e + W_SEEN], record_frame());
   }
-  let e = record_at(slot);
-  let frame = record_frame();
-  if (record_word(e + R_SEEN) != frame) {
-    atomicStore(&record[e + R_SEEN], frame);
+  if (p.whole && (state & RECORD_WHOLE) == 0u) {
+    atomicOr(&node_cache[e + W_STATE], RECORD_WHOLE);
   }
   observe(p, e, asks);
-  return slot;
 }

@@ -1,11 +1,12 @@
 //! What decides where the walks by hand (frame/shader/walk_node.wgsl) stop, against
-//! pxl-engine: the zoom asked at a distance, and whether a split is narrow at a beam's width,
-//! on their edges. Skipped where no adapter answers.
+//! pxl-engine: the zoom asked at a distance, whether a split is narrow at a beam's width, on
+//! their edges, and which nodes a slot of the node cache keeps. Skipped where no adapter
+//! answers.
 
 mod gpu;
 
 use pxl_engine::cast::{self, Spacing};
-use pxl_engine::grid;
+use pxl_engine::{grid, node_cache};
 use pxl_render::frame::shader::record::{src, SHADER_BEAM_HIT};
 
 /// The probe's words a case: its vector's three, then what the module leaves of it.
@@ -268,4 +269,96 @@ fn hand_width_off_a_square_root() {
 /// Two to the `k`, exact: the float whose exponent is `k`, for `k` a normal float's.
 fn pow2(k: i32) -> f32 {
     f32::from_bits(((127 + k) as u32) << 23)
+}
+
+/// Whether a slot keeps a node as the walks ask it and the bucket it is kept in
+/// (walk_node.wgsl `keeps`, `bucket_of`), a thread a case: its zoom and its index, then what
+/// the module leaves.
+const KEEPS: &str = r"
+@group(0) @binding(40) var<storage, read_write> probe: array<u32>;
+
+@compute @workgroup_size(64, 1, 1)
+fn keeps_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  if (id.x >= probe[0]) {
+    return;
+  }
+  let k = 1u + id.x * 6u;
+  let c = vec3<i32>(i32(probe[k + 1u]), i32(probe[k + 2u]), i32(probe[k + 3u]));
+  probe[k + 4u] = select(0u, 1u, keeps(probe[k], c));
+  probe[k + 5u] = bucket_of(probe[k], c);
+}
+";
+
+/// The walks keep a node exactly where pxl-engine's `node_cache::keeps` does, in the bucket its
+/// `node_cache::bucket_of` names: at every zoom to past the finest, on every axis's index about
+/// and across the edges of twice the world's span at that zoom, and on noise.
+#[test]
+fn hand_keeps_as_the_engine() {
+    let Some(gpu) = gpu::Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let mut seed = 0x9e37_79b9u32;
+    let mut rand = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed
+    };
+    let mut cases: Vec<(u32, [i32; 3])> = Vec::new();
+    for zoom in 0..=pxl_engine::FINEST_ZOOM + 2 {
+        // The first and last index kept on an axis, and the one past each.
+        let side = if zoom >= 31 { i32::MAX } else { 1i32 << zoom };
+        let edges = [
+            -side,
+            side - 1,
+            side.wrapping_neg().wrapping_sub(1),
+            side,
+            0,
+            -1,
+        ];
+        for &x in &edges {
+            for &y in &edges {
+                cases.push((zoom, [x, y, rand() as i32 >> (rand() % 32)]));
+                cases.push((zoom, [rand() as i32 >> (rand() % 32), x, y]));
+            }
+        }
+        for _ in 0..256 {
+            let v = |r: u32| r as i32 >> (r % 32);
+            cases.push((zoom, [v(rand()), v(rand()), v(rand())]));
+        }
+    }
+    let source = format!("{}\n{KEEPS}", src(SHADER_BEAM_HIT));
+    let p = gpu.pipeline(&source, "keeps_cs");
+    let mut words = vec![cases.len() as u32];
+    for (zoom, c) in &cases {
+        words.extend([*zoom, c[0] as u32, c[1] as u32, c[2] as u32, 2, 0]);
+    }
+    let buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
+    gpu.dispatch(
+        &p,
+        &[(40, buf.as_entire_binding())],
+        [(cases.len() as u32).div_ceil(64), 1, 1],
+    );
+    let out = gpu.read(&buf);
+    let (mut kept, mut differ) = (0u32, Vec::new());
+    for (i, (zoom, c)) in cases.iter().enumerate() {
+        let got = out[1 + i * 6 + 4] == 1;
+        let want = node_cache::keeps(*zoom, *c);
+        kept += u32::from(want);
+        if got != want || out[1 + i * 6 + 5] != node_cache::bucket_of(*zoom, *c) {
+            differ.push((*zoom, *c, got));
+        }
+    }
+    eprintln!("{} cases, {kept} kept", cases.len());
+    assert!(
+        kept > 0 && (kept as usize) < cases.len(),
+        "both kinds of case"
+    );
+    assert!(
+        differ.is_empty(),
+        "{} differ, first: {:?}",
+        differ.len(),
+        differ.first()
+    );
 }

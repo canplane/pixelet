@@ -111,7 +111,7 @@ pub const SHADER_QUEUE_ASK: u32 = 46;
 /// The occlusion's half-resolution map brought to the pixel and multiplied
 /// into the world's color, as the tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 47;
-/// The eye's samples written into its record of voxels, by hand (pxl-engine `record`;
+/// The eye's samples' stops into the record of voxels, by hand (pxl-engine `record`;
 /// sample_box.wgsl), two compute entries; and the boxes drawn, the eye's and the light's, the
 /// nearest face a pixel's ray enters kept with its voxel (raster.wgsl), which the cast's
 /// pixels read (`SHADER_CAST`).
@@ -178,7 +178,7 @@ pub const SHADER_LOCATION_BEACON_MARK: u32 = 70;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
 pub const SHADER_BOX_ARGS: u32 = 71;
-/// The shadow map's beam rays, cells, samples and samples' stops into its record: the
+/// The shadow map's beam rays, cells, samples and samples' stops into the record: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl,
 /// light_cell.wgsl, sample.light.wgsl, sample_box.light.wgsl).
@@ -206,29 +206,24 @@ pub const SHADER_CAST_TILES: u32 = 81;
 pub const SHADER_CLAIMED_BOX: u32 = 82;
 /// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
 pub const SHADER_DECOR_GATE: u32 = 83;
-/// The eye's record of voxels over every slot, by hand (record_draw.wgsl): forgotten where the
-/// node cache's rule forgets, and its voxels in view written as the raster's boxes, each stood
-/// on by the light's receivers where the world's are stood this frame.
+/// The node cache's drawable entries over every slot, by hand (record_draw.wgsl): those in view
+/// written as the raster's boxes, each stood on by the light's receivers where the world's are
+/// stood this frame, and those on the light's box as its raster's.
 pub const SHADER_RECORD_DRAW: u32 = 84;
-/// The holes' stops into the eye's record, those put off, and what lies about each one's face
+/// The holes' stops into the node cache's drawable entries, and what lies about each one's face
 /// put at its pixel, by hand (record_stops.wgsl).
 pub const SHADER_RECORD_STOPS: u32 = 85;
 /// The screen's tiles that hold a pixel the eye's holes' queue left parked, set changed, by
 /// hand (parked_tiles.wgsl).
 pub const SHADER_PARKED_TILES: u32 = 86;
-/// `SHADER_RECORD_STOPS` for the light's record (record_stops.light.wgsl).
+/// `SHADER_RECORD_STOPS` for the light's stops (record_stops.light.wgsl).
 pub const SHADER_LIGHT_RECORD_STOPS: u32 = 87;
-/// The holes' stops put off by `SHADER_RECORD_STOPS`, the eye's and the light's, taken past
-/// its dispatch's end (record_deferred.wgsl), modules of their own, as they do not bind the
-/// dispatch they read their count from.
-pub const SHADER_RECORD_DEFERRED: u32 = 88;
-pub const SHADER_LIGHT_RECORD_DEFERRED: u32 = 89;
 /// The light's claim (light_claim.wgsl), a module apart from the propagation, which writes the
 /// dispatch it reads its count from; and the drawn receivers' dispatch opened
 /// (light_mark_draws_open.wgsl), a module apart from the receivers' pass that reads it.
-pub const SHADER_LIGHT_CLAIM: u32 = 90;
-pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 91;
-pub const SHADERS: u32 = 92;
+pub const SHADER_LIGHT_CLAIM: u32 = 88;
+pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 89;
+pub const SHADERS: u32 = 90;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -688,7 +683,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "answer",
         "world",
         "world_split",
-        "record",
         "face",
     ],
     // SHADER_LIGHT_MARK
@@ -1004,7 +998,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "eye_bind",
         "walk_node",
         "side",
-        "forget",
         "record",
         "light_aim",
         "light_box",
@@ -1049,34 +1042,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "record_stops.light",
         "record_hits",
         "record_stops",
-    ],
-    // SHADER_RECORD_DEFERRED
-    &[
-        "walk_word",
-        "raster_box",
-        "eye_bind",
-        "walk_node",
-        "hit",
-        "record",
-        "record_put",
-        "record_stops.eye",
-        "record_hits",
-        "record_deferred",
-    ],
-    // SHADER_LIGHT_RECORD_DEFERRED
-    &[
-        "walk_word",
-        "raster_box",
-        "eye_bind",
-        "walk_node",
-        "side",
-        "light_aim",
-        "hit",
-        "record",
-        "record_put",
-        "record_stops.light",
-        "record_hits",
-        "record_deferred",
     ],
     // SHADER_LIGHT_CLAIM
     &[

@@ -182,7 +182,7 @@ fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &PX, 30), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &LIGHT_CLAIM, 21), ARGS_WRITTEN);
-    assert_eq!(role(&FRAME, &STOPS, 9), ARGS_INDIRECT);
+    assert_eq!(role(&FRAME, &STOPS, 9), STATE);
     assert_eq!(role(&FRAME, &BEAM, 9), STATE);
 }
 

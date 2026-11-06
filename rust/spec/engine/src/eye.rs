@@ -75,6 +75,7 @@ const _: () = assert!(
         && LIGHT.is_multiple_of(4)
         && JITTER.is_multiple_of(4)
         && GRID.is_multiple_of(4)
+        && WORDS.is_multiple_of(4)
 );
 
 /// Whether a ball `radius` units wide about `v`, units from the eye, lies

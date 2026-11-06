@@ -20,6 +20,7 @@
 
 use crate::gpu::ray::sequence;
 use pxl_engine::beam::{CORNER_SIDE, SAMPLE_SIDE};
+use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
 use pxl_engine::param::light::SAMPLE;
@@ -27,6 +28,7 @@ use pxl_engine::ray::{MISS_ACROSS, MISS_LANES};
 use pxl_engine::WORKGROUPS_MOST;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -48,6 +50,30 @@ use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
 pub const SIZE: u32 = 2048;
+
+/// The box's half width about its target for the effects' `reach`: up to a power of two, so
+/// the snap grid and the texel move only in steps (gpu/renderer.rs).
+pub const fn half_width(reach: f64) -> f64 {
+    let mut h = 1.0;
+    while h < reach {
+        h *= 2.0;
+    }
+    while h / 2.0 >= reach && h > f64::MIN_POSITIVE {
+        h /= 2.0;
+    }
+    h
+}
+
+/// How far from where any of its rays starts any node the light's cast meets lies, the box
+/// `half_width` about its target (`aim`): along the light, the box's depth, its rays' reach
+/// (`Light::t_max`), and across, its two sides.
+pub const fn light_reach(half_width: f64) -> f64 {
+    2.0 * half_width / (1.0 - DEPTH_STEP) + 4.0 * half_width
+}
+const _: () = assert!(
+    light_reach(half_width(EFFECT_REACH)) < REACH as f64,
+    "every node the light's cast meets is one the node cache keeps and the record names again from its box (pxl-engine cast::REACH)"
+);
 const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"

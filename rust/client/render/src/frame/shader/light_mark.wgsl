@@ -4,7 +4,7 @@
 // their hits lie on, by the one rule every receiver stands by (pxl-engine `Light::box_tiles`):
 // a box within the effects' reach (`Light::reach`) stands on the tiles its corners lie on, and
 // the footprint about them where the head asks it (`light::HEAD_FOOTPRINT`). A drawn pixel
-// took a voxel of the eye's record whose box the raster drew, so hit within that box, which
+// took a drawable entry's voxel whose box the raster drew, so hit within that box, which
 // the record's draw stands as it writes it (record_draw.wgsl `record_draw_cs`); met the sky,
 // which receives nothing; or was walked apart and listed (cast.wgsl `cast_cs`,
 // `ray::WALKED_LIST`), in a list with room for every pixel drawn. So every walked pixel's hit

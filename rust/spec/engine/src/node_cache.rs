@@ -7,16 +7,18 @@
 //! a bucket of `BUCKET` slots a key's hash (pxl-render walk_node.wgsl
 //! `bucket_of`), as voxel hashing keeps its blocks (Nießner, Zollhöfer, Izadi, Stamminger 2013): a node is
 //! found by its key alone, wherever the walk that asks it starts. Only nodes
-//! under the world's roots are kept (pxl-render walk_node.wgsl `keeps`). What is drawn is the query's
-//! answer whichever walk read it, so what is kept decides only how much is
-//! asked again, never what is drawn. What is drawn is the eye's record's
-//! (`record`), keyed by the same node and forgotten by this cache's rule, in
-//! its pass, but kept and evicted apart from it.
+//! under the world's roots are kept (`keeps`). What is drawn is its drawable entries
+//! (`record`): the cells a ray stopped on, each the query's answer for its node, which takes
+//! no zooms asked (world.test.rs `cell_answer_takes_no_zooms`), and the faces rays entered
+//! it by. What is kept decides how much is asked again and, through its drawable entries,
+//! what is drawn; no entry drawn in the last two frames is evicted (pxl-render ask.wgsl
+//! `claim_slot`, `drawn`).
 //!
 //! One buffer of words:
 //!
 //! - its head: the frame's number, what is forgotten, and the eye's
 //!   clip levels' entries that moved (`HEAD_WORDS`);
+//! - the frame the eye's draw last ran (`DRAWN`);
 //! - the entries, a slot each (`ENTRIES_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
@@ -28,14 +30,16 @@
 //! its frame and its pass, and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
 //! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
-//! it from another node of the same slot (pxl-render forget.wgsl reads its column).
+//! it from another node of the same slot (pxl-render forget.wgsl reads its column); then
+//! what draws it, none until a ray stops on it (`W_STATE`, `W_SEEN`, `W_FACES`), written by
+//! the stops, the draws and the faces' pass, and set to none where the slot is written.
 //!
 //! A walk that asked the world keeps the node at the zooms asked in a slot of
 //! its bucket (pxl-render ask.wgsl `keep`): a free one, the first from the
-//! node's at those zooms; where none is, one an earlier frame wrote, a
-//! forgotten split among them, the first from the node's own; none where every
-//! slot is this frame's, or where a walk of its pass keeps the node at those
-//! zooms or claims it. Which of the nodes a full bucket's walks ask are kept is
+//! node's at those zooms; where none is, one an earlier frame wrote and no draw
+//! drew in the last two frames (`record::drawn`), a forgotten split among them,
+//! the first from the node's own; none where every slot is this frame's or drawn,
+//! or where a walk of its pass keeps the node at those zooms or claims it. Which of the nodes a full bucket's walks ask are kept is
 //! the order the walks run in.
 //!
 //! A walk writes a slot only once it has claimed it: its key exchanged for
@@ -122,6 +126,10 @@ pub const CAPS_AT: u32 = OWED_AT + count::OBSERVERS;
 /// takes is set to no parked ray.
 pub const RESUMES: u32 = CAPS_AT + 2 * count::OBSERVERS;
 pub const HEAD_WORDS: u32 = RESUMES + 1;
+/// The frame the eye's draw last ran, written by it (pxl-render record_draw.wgsl
+/// `record_draw_cs`): the boxes the raster draws until it runs again name the entries it
+/// marked seen then (`record::drawn`). Past the head the host writes each frame.
+pub const DRAWN: u32 = HEAD_WORDS;
 
 /// The first of `observer`'s caps (`CAPS_AT`).
 pub const fn caps_at(observer: u32) -> u32 {
@@ -185,14 +193,30 @@ pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 /// What was handed it of what is placed, its `Inheritance`'s first word
 /// (`world::Inheritance::words`).
 pub const W_PLACED: u32 = W_INHERITANCE;
-pub const ENTRY_WORDS: u32 = W_NODE + 4;
+/// What draws it (`record`): its state, the faces rays entered and asked about and whether
+/// some ray stopped on it whole (`record::FACES`, `record::ASKED`, `record::WHOLE`); the last
+/// frame a draw drew it (`record::drawn`); and what lies about each face, a word a side, as
+/// `ray::face` numbers them (`face::word`).
+pub const W_STATE: u32 = W_NODE + 4;
+pub const W_SEEN: u32 = W_STATE + 1;
+pub const W_FACES: u32 = W_SEEN + 1;
+pub const ENTRY_WORDS: u32 = W_FACES + 6;
 
-/// The slots: room for many frames of the about 80 thousand nodes a frame
-/// at E120 asks; a power of two, so a key's hash masks to one.
-pub const ENTRIES: u32 = 1 << 19;
-pub const ENTRIES_AT: u32 = HEAD_WORDS;
+/// The slots: room for many frames of the about 80 thousand nodes a frame at E120 asks and
+/// the cells the eye and the light draw; a power of two, so a key's hash masks to one.
+pub const ENTRIES: u32 = 1 << 20;
+pub const ENTRIES_AT: u32 = DRAWN + 1;
 /// The buffer's words, whatever is drawn: none of them a pixel's.
 pub const WORDS: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+const _: () = assert!(
+    (WORDS as u64) * 4 <= 134_217_728,
+    "the node cache binds whole as storage on every device"
+);
+
+/// The first word of slot `slot`'s entry.
+pub const fn entry_at(slot: u32) -> u32 {
+    ENTRIES_AT + slot * ENTRY_WORDS
+}
 
 /// No entry: a node no slot keeps.
 pub const NONE: u32 = u32::MAX;
@@ -266,6 +290,27 @@ pub const fn keeps(zoom: Zoom, c: [i32; 3]) -> bool {
         v == 0 || v == -1
     }
     held(c[0], zoom) && held(c[1], zoom) && held(c[2], zoom)
+}
+
+/// pxl-render walk_node.wgsl `mix_hash`.
+const fn mix_hash(h: u32, v: u32) -> u32 {
+    (h ^ v).wrapping_mul(0x9E37_79B1).rotate_left(15)
+}
+
+/// The node `c` of `zoom`, the world's name of it, hashed (pxl-render walk_node.wgsl
+/// `node_hash`).
+pub const fn node_hash(zoom: Zoom, c: [i32; 3]) -> u32 {
+    let mut h = zoom.wrapping_mul(0x85EB_CA77);
+    h = mix_hash(h, c[0] as u32);
+    h = mix_hash(h, c[1] as u32);
+    h = mix_hash(h, c[2] as u32);
+    h ^ h >> 16
+}
+
+/// The first slot of the bucket that keeps the node `c` of `zoom` (pxl-render walk_node.wgsl
+/// `bucket_of`).
+pub const fn bucket_of(zoom: Zoom, c: [i32; 3]) -> u32 {
+    node_hash(zoom, c) & (ENTRIES - 1) & !(BUCKET - 1)
 }
 
 #[cfg(test)]

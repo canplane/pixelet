@@ -1,61 +1,29 @@
 // pxl-render/record.wgsl
 
-// The eye's record of voxels, kept across frames (pxl-engine record.rs): its slots, a node's
-// key and bucket, a slot's node as a walk from the eye holds it, and whether that node is the
-// one the eye's walk stops on. Its writers and their order are record.rs's.
+// What draws the node cache's entries (pxl-engine record.rs): an entry's node as a walk from an
+// origin holds it, whether that node is the one the eye's walk or a light's ray stops on, and
+// the entry of a node a stop draws. Over the node cache as the module binds it, whose words it
+// reads through `node_cache_word`. Its writers and their order are record.rs's.
 
-@group(0) @binding(23) var<storage, read_write> record: array<atomic<u32>>;
+/// None.
+const NO_ENTRY: u32 = 0xffffffffu;
 
-/// Word `i` of the record.
-fn record_word(i: u32) -> u32 {
-  return atomicLoad(&record[i]);
+/// The first word of slot `slot`'s entry (`node_cache::entry_at`).
+fn entry_at(slot: u32) -> u32 {
+  return ENTRIES_AT + slot * ENTRY_WORDS;
 }
 
-/// The frame's number (`record::FRAME`).
+/// The frame's number (`node_cache::FRAME`).
 fn record_frame() -> u32 {
-  return record_word(RECORD_FRAME);
+  return node_cache_word(FRAME);
 }
 
-/// The first word of slot `slot`'s entry (`record::entry_at`).
-fn record_at(slot: u32) -> u32 {
-  return RECORD_HEAD_WORDS + slot * RECORD_ENTRY_WORDS;
-}
-
-/// A node as the record keys it, its roots world-absolute (`record::Key`).
+/// A node as a walk holds it, its roots world-absolute (pxl-engine `cast::Node`, its roots
+/// added to the origin's).
 struct Kept {
   zoom: u32,
   corner: vec3<u32>,
   roots: vec3<i32>,
-  band: u32,
-}
-
-/// Its held word (`Key::held`).
-fn kept_held(k: Kept) -> u32 {
-  return RECORD_HELD | (k.band << 8u) | k.zoom;
-}
-
-/// The first slot of its bucket (`record::bucket_of`).
-fn kept_bucket(k: Kept) -> u32 {
-  var h = kept_held(k) * 0x85EBCA77u;
-  h = mix_hash(h, k.corner.x);
-  h = mix_hash(h, k.corner.y);
-  h = mix_hash(h, k.corner.z);
-  h = mix_hash(h, u32(k.roots.x));
-  h = mix_hash(h, u32(k.roots.y));
-  h = mix_hash(h, u32(k.roots.z));
-  return (h ^ (h >> 16u)) & (RECORD_ENTRIES - 1u) & ~(RECORD_BUCKET - 1u);
-}
-
-/// The claim word of a slot being written for it (`record::claim_of`).
-fn kept_claim(k: Kept) -> u32 {
-  var h = kept_held(k) * 0x27D4EB2Fu;
-  h = mix_hash(h, k.corner.x);
-  h = mix_hash(h, k.corner.y);
-  h = mix_hash(h, k.corner.z);
-  h = mix_hash(h, u32(k.roots.x));
-  h = mix_hash(h, u32(k.roots.y));
-  h = mix_hash(h, u32(k.roots.z));
-  return RECORD_CLAIM | max((h ^ (h >> 16u)) & (RECORD_CLAIM - 1u), 1u);
 }
 
 /// The root holding the origin `o` on each axis (`cast::roots_of`).
@@ -63,25 +31,75 @@ fn origin_roots(o: vec3<i32>) -> vec3<i32> {
   return vec3<i32>(o.x >> 31u, 0i, i32(u32(o.z) + Z_START) >> 31u);
 }
 
-/// The key of the entry at word `e`, its held word `held`.
-fn entry_kept(e: u32, held: u32) -> Kept {
-  return Kept(
-    held & 0xffu,
-    vec3<u32>(record_word(e + R_CORNER), record_word(e + R_CORNER + 1u), record_word(e + R_CORNER + 2u)),
-    vec3<i32>(
-      i32(record_word(e + R_ROOTS)),
-      i32(record_word(e + R_ROOTS + 1u)),
-      i32(record_word(e + R_ROOTS + 2u)),
-    ),
-    (held & ~RECORD_HELD) >> 8u,
+/// The node of `zoom` the world names `c` as a walk from the origin `o` holds it
+/// (pxl-engine `cast::Node::of_idx`): its corner off the index's low bits, and on each axis the
+/// root, the origin's or one either side, whose copy of it has its middle nearer the origin
+/// than half a root.
+fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Kept {
+  let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
+  let y_start = select(1u << ((zoom - 1u) & 31u), 0u, zoom == 0u);
+  let z_start = select(1u << ((zoom - SHARD_ZOOM - 1u) & 31u), 0u, zoom <= SHARD_ZOOM);
+  let low = select((1u << (zoom & 31u)) - 1u, 0xffffffffu, zoom >= FINEST_ZOOM);
+  let n = (vec3<u32>(c) + vec3<u32>(0u, y_start, z_start)) & vec3<u32>(low);
+  let corner = select(n << vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
+  let mid = corner + vec3<u32>(under(zoom) >> 1u);
+  let up = mid >= og;
+  let d = select(og - mid, mid - og, up);
+  let half = vec3<u32>(1u << 31u);
+  let root = select(
+    select(vec3<i32>(0i), vec3<i32>(1i), d > half),
+    select(vec3<i32>(0i), vec3<i32>(-1i), d >= half),
+    up,
   );
+  return Kept(zoom, corner, root + origin_roots(o));
 }
 
-/// Whether the entry at word `e`, its held word `held`, holds `k`.
-fn entry_holds(e: u32, held: u32, k: Kept) -> bool {
-  let c = vec3<u32>(record_word(e + R_CORNER), record_word(e + R_CORNER + 1u), record_word(e + R_CORNER + 2u));
-  let r = vec3<u32>(record_word(e + R_ROOTS), record_word(e + R_ROOTS + 1u), record_word(e + R_ROOTS + 2u));
-  return held == kept_held(k) && all(c == k.corner) && all(r == vec3<u32>(k.roots));
+/// The node of the entry at word `e` as a walk from the origin `o` holds it.
+fn entry_kept(e: u32, o: vec3<i32>) -> Kept {
+  let n = e + W_NODE;
+  let c = vec3<i32>(i32(node_cache_word(n + 1u)), i32(node_cache_word(n + 2u)), i32(node_cache_word(n + 3u)));
+  return node_of_idx(o, node_cache_word(n), c);
+}
+
+/// The kind of the entry at word `e` where it holds a node, a claim's or a free slot's
+/// `KIND_SPLIT`, which no draw takes (pxl-engine `node_cache`).
+fn entry_kind(e: u32) -> u32 {
+  let key = node_cache_word(e + W_KEY);
+  if (key == 0u || key == CLAIMED || (key & CLAIM_MASK) == CLAIM_FAR) {
+    return KIND_SPLIT;
+  }
+  return node_cache_word(e + W_KIND) & KIND_MASK;
+}
+
+/// The slot of the entry that draws the node `c` of `zoom` a ray stopped on, its answer the
+/// asset `asset` or the lack: of the entries of its bucket that hold it and answer so, the one
+/// that draws already (a face set), else the first; `NO_ENTRY` where none does (pxl-engine
+/// `record`). No pass that looks writes a key, so every look of a pass takes one entry.
+fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
+  if (!keeps(zoom, c)) {
+    return NO_ENTRY;
+  }
+  let first = bucket_of(zoom, c);
+  let kind = select(KIND_CELL, KIND_LACKS, lacks);
+  var found = NO_ENTRY;
+  for (var k = 0u; k < BUCKET; k += 1u) {
+    let e = entry_at(first + k);
+    let n = e + W_NODE;
+    if (entry_kind(e) != kind || node_cache_word(n) != zoom
+      || any(vec3<u32>(node_cache_word(n + 1u), node_cache_word(n + 2u), node_cache_word(n + 3u)) != vec3<u32>(c))) {
+      continue;
+    }
+    if (!lacks && (node_cache_word(e + W_ASSET) != asset.x || node_cache_word(e + W_ASSET + 1u) != asset.y)) {
+      continue;
+    }
+    if ((node_cache_word(e + W_STATE) & RECORD_FACES) != 0u) {
+      return first + k;
+    }
+    if (found == NO_ENTRY) {
+      found = first + k;
+    }
+  }
+  return found;
 }
 
 /// The node's planes in units from the origin `o` (pxl-engine cast.rs `bounds`).
@@ -122,30 +140,13 @@ fn kept_fresh(k: Kept, whole: bool, o: vec3<i32>) -> bool {
     return true;
   }
   let zoom = k.zoom - 1u;
-  let parent = Kept(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots, k.band);
+  let parent = Kept(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots);
   return zoom < asked_near(kept_planes(parent, o));
 }
 
-/// Whether slot `slot`, holding `k`, is a second entry of its key: a slot before it in its
-/// bucket holds `k` (two claims that each missed the other, pxl-engine `record`). It then
-/// gives that one the faces it holds that one does not, with their words, and goes free.
-fn joins_first(slot: u32, k: Kept) -> bool {
-  let b = slot & ~(RECORD_BUCKET - 1u);
-  for (var i = b; i < slot; i += 1u) {
-    let f = record_at(i);
-    let held = record_word(f + R_HELD);
-    if ((held & RECORD_HELD) != 0u && entry_holds(f, held, k)) {
-      let e = record_at(slot);
-      let mine = record_word(e + R_STATE) & RECORD_FACES;
-      let gained = mine & ~atomicOr(&record[f + R_STATE], mine);
-      for (var face = 0u; face < 6u; face += 1u) {
-        if (((gained >> face) & 1u) != 0u) {
-          atomicStore(&record[f + R_FACES + face], record_word(e + R_FACES + face));
-        }
-      }
-      atomicStore(&record[e + R_HELD], 0u);
-      return true;
-    }
-  }
-  return false;
+/// Whether the node of `zoom`, `whole` where some ray stopped on it whole, is the node a
+/// light's ray asking `band` stops on: at the band, or coarser where the query answers it a
+/// cell whole (pxl-engine `record::band_fresh`).
+fn band_fresh(zoom: u32, whole: bool, band: u32) -> bool {
+  return zoom == band || (whole && zoom < band);
 }
