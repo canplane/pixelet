@@ -45,8 +45,10 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
     && went_on_alike(s + vec2<u32>(1u, 1u), band, p);
 }
 
-/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): its word off its
-/// visible voxel or the sky, else listed for its walk as the eye's missed pixels are. The list holds every slot, so none finds it full.
+/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): its word as it stands
+/// where the cast before answered it and its tile was carried over (`ray::KEPT`); else off its
+/// visible voxel or the sky, else listed for its walk as the eye's missed pixels are. The list
+/// holds every slot, so none finds it full.
 @compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
 fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
@@ -58,6 +60,12 @@ fn light_cs(
     return;
   }
   let on = head_word(LIGHT_HEAD_COUNTED) != 0u;
+  let k = (at.y % LIGHT_TILE) * LIGHT_TILE + at.x % LIGHT_TILE;
+  let state = light_state_at(beams[light_place_at(at)], k, head_word(LIGHT_HEAD_CAST));
+  if ((beams[state + STATE_WORDS - 1u] & KEPT) != 0u) {
+    add_cnt(on, COUNT_REUSED);
+    return;
+  }
   let p = slot_texel(at);
   let aim = light_aim(p);
   let band = aim.range.x;

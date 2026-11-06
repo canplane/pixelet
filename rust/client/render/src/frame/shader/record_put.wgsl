@@ -177,8 +177,23 @@ fn claim(k: Kept, p: Stop) -> u32 {
     if (pick == NO_ENTRY) {
       return NO_ENTRY;
     }
-    let r = atomicCompareExchangeWeak(&record[record_at(pick) + R_HELD], was, mine);
-    if (r.exchanged) {
+    // The slot taken by its claim bit, as a compare-exchange of `was` for `mine` would take it,
+    // which Safari compiles none of (doc/tip/shaders-phones-take.md). The bit set on a word no
+    // claim holds is set by one lane alone, as no other store reaches a held word while a pass
+    // claims (record.rs, its writers); that lane writes its claim where the word was the one
+    // it read, else takes the bit off again. On a word a claim holds the bit is set already,
+    // so its owner's word is never touched. Under the bit a free slot reads `RECORD_CLAIM`
+    // alone, which no key's claim is (`kept_claim`), and a held one no key it holds.
+    let w = record_at(pick) + R_HELD;
+    let got = atomicOr(&record[w], RECORD_CLAIM);
+    let taken = (got & RECORD_CLAIM) == 0u;
+    let exchanged = taken && got == was;
+    if (exchanged) {
+      atomicStore(&record[w], mine);
+    } else if (taken) {
+      atomicAnd(&record[w], ~RECORD_CLAIM);
+    }
+    if (exchanged) {
       // Read the bucket again: a stop of the same key that claimed another slot meanwhile
       // keeps the first; this one lets its slot go free.
       if (yields(k, b, pick)) {

@@ -193,6 +193,7 @@ fn hand_light_cs_answers_as_the_rust() {
         "past the list",
         "samples gone on",
         "samples stopped",
+        "kept",
     ]);
     tally.end("light_cs");
 }
@@ -220,6 +221,31 @@ fn run_slots(
 
     // The list's words noise, the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
+    // Each tile of the slots' grid at a place of its own, its slots' states in the cast's
+    // region (`light::places_at`, `light::region_words`): none parked, and in one tile in seven
+    // every slot kept, its ray finished in the cast before and carried with its tile
+    // (`ray::KEPT`, light_propagate.wgsl `claim`).
+    list.resize(light::buffer_words(SIZE) as usize, 0);
+    let places = light::places_at(SIZE) as usize;
+    for t in 0..tiles * tiles {
+        list[places + t as usize] = t;
+    }
+    let kept = |slot: [u32; 2]| {
+        let t = (slot[1] / light::TILE) * tiles + slot[0] / light::TILE;
+        noise(t ^ 0x6b65).is_multiple_of(7)
+    };
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            if kept([x, y]) {
+                let place = (y / light::TILE) * tiles + x / light::TILE;
+                let k = (y % light::TILE) * light::TILE + x % light::TILE;
+                let at = light::list_words(SIZE)
+                    + ((CAST % 2) * light::parked_room() + place * light::TILE * light::TILE + k)
+                        * ray::STATE_WORDS;
+                list[(at + ray::STATE_WORDS - 1) as usize] = ray::KEPT;
+            }
+        }
+    }
     // The light's record, a voxel a sample at the sample's number, as the slots read it by the
     // visible id (pxl-engine `record`): its key, world-absolute from where the sample's ray
     // starts, its asset, and its state the face the sample entered and whether it lacks.
@@ -470,6 +496,10 @@ fn run_slots(
     let wants: Vec<Answer> = needed
         .iter()
         .map(|&slot| {
+            if kept(slot) {
+                kinds.add("kept", true);
+                return Answer::Kept;
+            }
             let (o, _) = light::ray(&l, &starts, l.texel(SIZE, slot));
             answer(slot, o, inv, kinds)
         })
@@ -544,6 +574,10 @@ fn run_slots(
     let (mut took, mut sky) = (0u32, 0u32);
     let (mut exact, mut fused) = (0u32, 0u32);
     for (&slot, &want) in needed.iter().zip(&wants) {
+        // A kept slot's word stands, and it is not listed.
+        if want == Answer::Kept {
+            continue;
+        }
         let at = (slot[1] * SIZE + slot[0]) as usize;
         let g = got(at, slot);
         // The answer the slot is held to: its own, or where a GPU's fused sum in its depth may
@@ -608,12 +642,14 @@ fn run_slots(
 }
 
 /// A slot's answer: the depth `t` along its ray and the axis it enters its visible voxel's
-/// cell across, the sky, or its walk; and the word a pass left it.
+/// cell across, the sky, its walk, or its word as the cast before left it, kept; and the word a
+/// pass left it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Answer {
     Entry(f32, u32),
     Sky,
     Walk,
+    Kept,
     Word(u32),
 }
 
@@ -839,6 +875,17 @@ fn hand_light_marks_answer_as_the_rust() {
             jitter: [0.125, 0.375],
             footprint: true,
             lit: lit([-0.4, 0.1, -0.9], 0.5),
+        },
+        Look {
+            name: "looking up from the ground, the sky over the hills",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+            look: [0.1, 0.8, 0.6],
+            tan: [0.9, 0.6],
+            far: 900.0,
+            size: [40, 27],
+            jitter: [0.25, 0.125],
+            footprint: true,
+            lit: lit([0.3, 0.2, -0.93], 1.0),
         },
         Look {
             name: "high over the ground, nothing within the reach",

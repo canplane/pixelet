@@ -1,9 +1,11 @@
 //! The holes' queue over the light's slots (frame/shader/queue.wgsl, queue_walk.wgsl,
 //! queue_ask.wgsl, queue_last.wgsl) answers as `cast::walk`: over the real world of
 //! tests/real_world, each listed slot's word as `light::word(light::depth(..))` of its walk, and
-//! no other slot written, over an empty node cache; the next frame, over the node cache the
-//! first left, each slot's word as the world's again; and where bricks changed between the
-//! frames, the next frame's after the app's forgetting (`forget_cs`) as the changed world's.
+//! no other slot written, over an empty node cache, once the frames the budget parks its rays
+//! over owe nothing (pxl-engine `ray::VISITS_A_FRAME`, `node_cache::OWED_AT`); the next frame,
+//! over the node cache the first left, each slot's word as the world's again; and where bricks
+//! changed between the frames, the next frame's after the app's forgetting (`forget_cs`) as the
+//! changed world's.
 //! Every walk starts off its cell's line, the cells laid as the cast lays them each frame
 //! (beam.light.wgsl, light_cell.wgsl). Skipped where no adapter answers.
 
@@ -12,7 +14,7 @@ mod real_world;
 
 use std::collections::BTreeMap;
 
-use gpu::{array_view, read_texture, texture, Gpu};
+use gpu::{array_view, bytes, read_texture, texture, Gpu};
 
 use pxl_engine::answer;
 use pxl_engine::cast::{self, Detail, End, Ray, Until};
@@ -20,7 +22,7 @@ use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL};
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::node_cache::{self, MOVED_WORDS};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::{beam, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::{beam, count, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::ROW_LANES;
 
@@ -526,6 +528,8 @@ const NOT_LISTED: u32 = 30;
 const SKIPPED_EVERY: u32 = 11;
 /// The cast the head names, its epoch begun with it: every tile read.
 const CAST: u32 = 7;
+/// The frames the light's queue may take to owe nothing over every slot of a map.
+const FRAMES_TO_REST: usize = 64;
 
 /// The beam's lines and each cell's start laid in `list` as the cast lays them (beam.light.wgsl,
 /// light_cell.wgsl), every tile read, its beam over a table of its own.
@@ -666,25 +670,16 @@ fn run_case(
     let view = array_view(&map);
     let table_buf = gpu.buffer(&table0, store_of());
     let list_buf = gpu.buffer(&list, store_of());
-    let first = holes(gpu, b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view);
+    let first = holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        &view,
+        &walked,
+        s.corner,
+    );
     let got = read_texture(&gpu.device, &gpu.queue, &map);
     let table_hand = gpu.read(&table_buf);
-
-    // Every stop the queue kept names a slot it walked, one a slot at most, in the light's
-    // stops past its holes' region (queue.wgsl `finish`, `light::hits_at`).
-    let stops = table_hand[node_cache::HITS_CNT as usize].min(light::parked_room());
-    let words = gpu.read(&list_buf);
-    let at = light::hits_at(SIZE) as usize;
-    let mut kept = std::collections::BTreeSet::new();
-    let mut strays = 0u32;
-    for r in 0..stops as usize {
-        let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
-        let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
-        if k >= walked.len() || !walked[k] || !kept.insert(k) {
-            strays += 1;
-        }
-    }
-    assert_eq!(strays, 0, "stops of slots not walked, or twice, of {stops}");
 
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
     let (mut same, mut axis_over, mut differ) = (0u32, 0u32, 0u32);
@@ -756,7 +751,14 @@ fn run_case(
     let list2 = gpu.buffer(&list, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
-    let next = holes(gpu, b, [&eye_buf, &head_buf, &next_buf, &list2], &view2);
+    let next = holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &next_buf, &list2],
+        &view2,
+        &walked,
+        s.corner,
+    );
     let got2 = read_texture(&gpu.device, &gpu.queue, &map2);
     // Each slot's word the next frame, ended by the table or walked again: the world's again.
     let mut next_differ = 0u32;
@@ -780,9 +782,15 @@ fn run_case(
         "{name}: {same} alike, {axis_over} an axis over, {differ} differ of {} ; {kinds:?}",
         kinds["slots"]
     );
-    let work = |q: &[u32]| [ray::QUEUE_VISITED, ray::QUEUE_ASKED].map(|w| q[w as usize]);
+    let work = |frames: &[Vec<u32>]| {
+        frames
+            .iter()
+            .map(|q| [ray::QUEUE_VISITED, ray::QUEUE_ASKED].map(|w| q[w as usize]))
+            .collect::<Vec<_>>()
+    };
     eprintln!(
-        "  nodes visited and asked over the node cache: first frame {:?}, next {:?}",
+        "  nodes visited and asked over the node cache, a frame each till the light owes none: \
+         first {:?}, next {:?}",
         work(&first),
         work(&next)
     );
@@ -869,14 +877,25 @@ fn listed(slots: &[u32]) -> Vec<u32> {
 }
 
 /// The holes' queue over the slots the list holds (`Gpu::holes`), over the eye, the head, the
-/// table and the list, writing the map `view`, its stops kept in the list and counted in the
-/// table's head as the light's cast keeps them: the queue's words as its walks left them.
+/// table and the list, writing the map `view`, run frame after frame while the light owes work
+/// (pxl-engine `node_cache::OWED_AT`), as a ray the frame's budget does not reach is parked and
+/// its tile owed (`ray::VISITS_A_FRAME`, `ray::ASKS_A_FRAME`, `light::READ_OWED`): each frame
+/// after the first, as the next cast's claim takes the owed tiles (light_propagate.wgsl
+/// `light_claim_cs`) and its slots' pass lists them (light.wgsl), the slots `walked` of the
+/// tiles owed whose rays are parked listed, the others kept, those tiles owed no more, their
+/// parked rays where they were parked, the box's corner `corner`; each frame its work, its
+/// owed word and its stops' count set to none as the host sets them, and its stops kept in the
+/// list each naming a slot `walked`, one a slot at most (queue.wgsl `finish`,
+/// `light::hits_at`). The queue's words as each frame's walks left them; the light owes none
+/// after the last.
 fn holes(
     gpu: &Gpu,
     b: &WorldBufs,
     [eye, head, table, list]: [&wgpu::Buffer; 4],
     view: &wgpu::TextureView,
-) -> Vec<u32> {
+    walked: &[bool],
+    corner: [i32; 2],
+) -> Vec<Vec<u32>> {
     let binds = [
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
@@ -890,7 +909,81 @@ fn holes(
         (9, table.as_entire_binding()),
         (11, head.as_entire_binding()),
     ];
-    gpu.holes(&binds, table, true)
+    let owed = node_cache::owed_at(count::LIGHT);
+    let mut frames = Vec::new();
+    loop {
+        // The frame's work none, the light's owed none (its claim left nothing wanted), and
+        // its stops none.
+        let none = vec![0u32; (owed + 1 - node_cache::VISITED) as usize];
+        gpu.queue
+            .write_buffer(table, u64::from(node_cache::VISITED) * 4, bytes(&none));
+        let hits = [0u32, 1, 1, 0];
+        gpu.queue
+            .write_buffer(table, u64::from(node_cache::HITS_ARGS) * 4, bytes(&hits));
+        // A frame after the first over the owed tiles' slots.
+        if !frames.is_empty() {
+            let mut words = gpu.read(list);
+            let tiles = light::tiles(SIZE);
+            let reads = light::reads_at(SIZE) as usize;
+            let mut slots = Vec::new();
+            for t in 0..tiles * tiles {
+                let w = &mut words[reads + t as usize];
+                if *w & light::READ_OWED == 0 {
+                    continue;
+                }
+                *w &= !light::READ_OWED;
+                let at = [t % tiles, t / tiles].map(|a| a * light::TILE);
+                for y in 0..light::TILE {
+                    for x in 0..light::TILE {
+                        let slot = [0, 1].map(|k| {
+                            ((at[k] + [x, y][k]) as i32).wrapping_add(corner[k]) as u32 & (SIZE - 1)
+                        });
+                        // Its ray parked where the claim carries it; a slot the frame
+                        // before answered is kept, and not listed (`ray::KEPT`).
+                        let place = (slot[1] / light::TILE) * tiles + slot[0] / light::TILE;
+                        let within = (slot[1] % light::TILE) * light::TILE + slot[0] % light::TILE;
+                        let state = light::list_words(SIZE)
+                            + ((CAST % 2) * light::parked_room()
+                                + place * light::TILE * light::TILE
+                                + within)
+                                * ray::STATE_WORDS;
+                        let parked = words[(state + ray::STATE_WORDS - 1) as usize] & ray::PARKED;
+                        let k = slot[1] * SIZE + slot[0];
+                        if walked[k as usize] && parked != 0 {
+                            slots.push(slot[0] | (slot[1] << 16));
+                        }
+                    }
+                }
+            }
+            let at = light::misses_cnt(SIZE) as usize;
+            words[at] = slots.len() as u32;
+            words[at + 1..at + 1 + slots.len()].copy_from_slice(&slots);
+            gpu.queue.write_buffer(list, 0, bytes(&words));
+        }
+        frames.push(gpu.holes(&binds, table, true));
+        let t = gpu.read(table);
+        let stops = t[node_cache::HITS_CNT as usize].min(light::parked_room());
+        let words = gpu.read(list);
+        let at = light::hits_at(SIZE) as usize;
+        let mut kept = std::collections::BTreeSet::new();
+        let mut strays = 0u32;
+        for r in 0..stops as usize {
+            let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
+            let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
+            if k >= walked.len() || !walked[k] || !kept.insert(k) {
+                strays += 1;
+            }
+        }
+        assert_eq!(strays, 0, "stops of slots not walked, or twice, of {stops}");
+        if t[owed as usize] == 0 {
+            return frames;
+        }
+        assert!(
+            frames.len() < FRAMES_TO_REST,
+            "the light owes {} after {FRAMES_TO_REST} frames",
+            t[owed as usize]
+        );
+    }
 }
 
 /// The node cache never answers the world as it was: a frame's walks keep what a world whose
@@ -1077,7 +1170,14 @@ fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool
     let view = array_view(&map);
     let table_buf = gpu.buffer(&table, store_of());
     let list_buf = gpu.buffer(&list, store_of());
-    holes(gpu, b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view);
+    holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        &view,
+        &walked,
+        s.corner,
+    );
     (walked, read_texture(&gpu.device, &gpu.queue, &map))
 }
 

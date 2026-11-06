@@ -60,11 +60,44 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 0,
 /// once the reading walk is done (`WALKED_CNT`). A pixel is listed once a cast, so the list
 /// holds at most the pixels drawn. `drawn` is the rays' pixels, across times down; each place
 /// is a word from `Grid::walked_at`.
+///
+/// Then which list the eye's holes' queue takes this frame (`holes_from_at`), the host's each
+/// frame it runs: the walked list (`FROM_WALKED`), or one of the two lists of what the queue
+/// before left owed (`FROM_OWED` + the list's number); and those two lists (`owed_list_at`),
+/// each a count then the pixels, room for every pixel drawn. The queue's last walk lists every
+/// pixel it leaves parked in the owed list it does not take (pxl-render queue_last.wgsl
+/// `unreached`), its count the eye's owed word (`node_cache::OWED_AT`), copied in after it; a
+/// frame that runs the eye's queue alone takes that list, so it walks only what is owed, and a
+/// pixel its walk finished is never listed again.
 pub const WALKED_CNT: u32 = 0;
 pub const WALKED_LIST: u32 = 1;
+pub const FROM_WALKED: u32 = 0;
+pub const FROM_OWED: u32 = 1;
 
 pub const fn walked_words(drawn: u32) -> u32 {
+    owed_list_at(drawn, 2)
+}
+
+/// The word saying which list the eye's queue takes, of a target `drawn` pixels, from the
+/// walked list's first word.
+pub const fn holes_from_at(drawn: u32) -> u32 {
     WALKED_LIST + drawn
+}
+
+/// The first word, its count, of owed list `k` (0 or 1), of a target `drawn` pixels, from the
+/// walked list's first word.
+pub const fn owed_list_at(drawn: u32, k: u32) -> u32 {
+    holes_from_at(drawn) + 1 + k * (WALKED_LIST + drawn)
+}
+
+/// The owed list the eye's queue lists what it leaves parked in, where it takes list `from`
+/// (`holes_from_at`): the one it does not take.
+pub const fn owed_into(from: u32) -> u32 {
+    if from == FROM_OWED {
+        1
+    } else {
+        0
+    }
 }
 
 /// What a walk over the node cache left, listed for the walk that asks the world (pxl-render
@@ -172,14 +205,20 @@ pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 0, 
 /// its distance's bits, its node's corner, and its zoom, roots and steps taken packed under
 /// `PARKED`, which says the ray is parked there (pxl-render queue.wgsl `park`). Every hole can be
 /// parked; none is left out.
+///
+/// A light's slot whose ray is not parked in a tile its claim carries over from the cast before
+/// (pxl-render light_propagate.wgsl `claim`, `light::HEAD_CARRIES`) holds `KEPT` alone: that
+/// cast answered it, by its visible voxel, the sky or a walk that ended, over the light's
+/// content as it still stands, so its word stands and no walk takes it again (light.wgsl).
 pub const STATE_WORDS: u32 = 5;
 pub const PARKED: u32 = 1 << 31;
+pub const KEPT: u32 = 1 << 30;
 pub const fn region_words(room: u32) -> u32 {
     room * STATE_WORDS
 }
 const _: () = assert!(
     STEPS_MOST < 1 << 13 && FINEST_ZOOM < 1 << 6,
-    "a state's zoom, roots and steps fit under `PARKED`: 6, 9 and 13 bits"
+    "a state's zoom, roots and steps fit under `KEPT`: 6, 9 and 13 bits"
 );
 
 /// The side of the pixels' pass's workgroup, a square of pixels (pxl-render cast.wgsl

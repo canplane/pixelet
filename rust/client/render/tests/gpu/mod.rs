@@ -215,10 +215,21 @@ impl Gpu {
         table: &wgpu::Buffer,
         hits: bool,
     ) -> Vec<u32> {
+        self.holes_within(all, table, hits, ray::caps(true, false))
+    }
+
+    /// `holes`, the queue counting the frame's visits and asks to `caps` (`ray::QUEUE_CAPS`).
+    pub fn holes_within(
+        &self,
+        all: &[(u32, wgpu::BindingResource)],
+        table: &wgpu::Buffer,
+        hits: bool,
+        caps: [u32; 2],
+    ) -> Vec<u32> {
         let mut words = vec![0u32; ray::QUEUE_WORDS as usize];
         words[..ray::QUEUE_EMPTY.len()].copy_from_slice(&ray::QUEUE_EMPTY);
-        let caps = ray::QUEUE_CAPS as usize;
-        words[caps..caps + 2].copy_from_slice(&ray::caps(true, false));
+        let at = ray::QUEUE_CAPS as usize;
+        words[at..at + 2].copy_from_slice(&caps);
         let queue = self.buffer(&words, wgpu::BufferUsages::STORAGE);
         let take = |keep: &[u32]| {
             let mut binds: Vec<_> = all
@@ -532,6 +543,54 @@ pub fn ulps(a: f32, b: f32) -> u32 {
         }
     };
     key(a).abs_diff(key(b))
+}
+
+/// The ulps a plane's t may move by as the device works out the ray's way `d` along an axis
+/// itself: a sum of terms about 1, a few ulps of 1 off, is a large share of a small way. As
+/// many as a u32 holds where the way is so small its share has no bound.
+pub fn slack(d: f32) -> u32 {
+    if d == 0.0 {
+        0
+    } else {
+        (4.0 / d.abs()).ceil() as u32
+    }
+}
+
+/// The ulps within which a device's rounding of a ray may take it across an edge of a cell,
+/// past what its way's own rounding takes (`slack`).
+pub const EDGE_ULPS: u32 = 16;
+
+/// The room the device's rounding has between the planes of axes `a` and `b` along the way
+/// `dir`: `EDGE_ULPS` and each axis's slack; a bound the origin or the ray's reach sets moves by
+/// none.
+fn edge_room(dir: [f32; 3], a: Option<usize>, b: Option<usize>) -> u32 {
+    let s = |a: Option<usize>| a.map_or(0, |a| slack(dir[a]));
+    EDGE_ULPS.saturating_add(s(a)).saturating_add(s(b))
+}
+
+/// The axes entry `e` along the way `dir` may enter across as the device rounds the ray: its
+/// own, and each other axis the ray moves along whose near plane lies within the room of the
+/// plane it enters across (`edge_room`), at an edge between the two.
+pub fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
+    let axis = e.axis as usize;
+    (0..3)
+        .filter(|&a| {
+            a == axis
+                || (dir[a] != 0.0
+                    && ulps(e.near[a], e.near[axis]) <= edge_room(dir, Some(a), Some(axis)))
+        })
+        .map(|a| a as u32)
+        .collect()
+}
+
+/// Whether the device's rounding may decide entry `e` otherwise along the way `dir`: where it
+/// enters lies within the room of where it leaves, or the plane it enters across within the
+/// room of another axis's near plane (`edge_axes`).
+pub fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
+    let moves = |a: usize| dir[a] != 0.0;
+    let enter = (0..3).find(|&a| moves(a) && e.near[a] == e.span[0]);
+    let leave = (0..3).find(|&a| moves(a) && e.far[a] == e.span[1]);
+    ulps(e.span[0], e.span[1]) <= edge_room(dir, enter, leave) || edge_axes(e, dir).len() > 1
 }
 
 /// A hash of two words, for a case's choices.

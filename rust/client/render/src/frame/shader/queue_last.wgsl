@@ -46,7 +46,13 @@ fn may_ask() -> bool {
 fn unreached(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) {
   park(hole, t, corner, zoom, roots, step);
   if (!light_run()) {
-    atomicAdd(&node_cache[EYE_OWED], 1u);
+    // Listed for the queue that goes on next, at its number among the owed, which the host
+    // copies in as that list's count (pxl-engine `ray::owed_list_at`). A hole is taken once a
+    // walk, so the list holds each parked pixel once.
+    let r = atomicAdd(&node_cache[EYE_OWED], 1u);
+    if (r < room()) {
+      beams[eye_owed_at() + WALKED_LIST + r] = hole;
+    }
     return;
   }
   let tile = slot_texel(hole_at(hole)) / LIGHT_TILE;

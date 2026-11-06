@@ -195,9 +195,9 @@ fn light_propagate_cs(
 /// Wanted tile `t` claimed by the cast numbered `current` at place `place`: its word the cast's,
 /// owed no more; its place laid for its slots' parked rays, each slot's state taken from the
 /// cast before's region where that cast claimed it and left it owed and the light carries
-/// (`light::READ_OWED`, `light::HEAD_CARRIES`), so a ray its budget did not finish goes on,
-/// else set to no parked ray, so a slot's ray starts afresh; and what feeds it listed
-/// (`enlist`).
+/// (`light::READ_OWED`, `light::HEAD_CARRIES`), so a ray its budget did not finish goes on and
+/// a slot that cast answered keeps its word (`ray::KEPT`), else set to no parked ray, so a
+/// slot's ray starts afresh; and what feeds it listed (`enlist`).
 fn claim(t: vec2<i32>, place: u32, current: u32) {
   let n = light_tiles();
   let w = reads_at() + u32(t.y) * n + u32(t.x);
@@ -213,6 +213,10 @@ fn claim(t: vec2<i32>, place: u32, current: u32) {
       let src = light_state_at(was, k, current - 1u);
       for (var i = 0u; i < STATE_WORDS; i += 1u) {
         list_put(dst + i, list_at(src + i));
+      }
+      let last = dst + STATE_WORDS - 1u;
+      if ((list_at(last) & PARKED) == 0u) {
+        list_put(last, KEPT);
       }
     } else {
       list_put(dst + STATE_WORDS - 1u, 0u);

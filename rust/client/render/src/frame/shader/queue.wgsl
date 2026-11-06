@@ -43,13 +43,14 @@ fn hits_room() -> u32 {
   return select(HITS, LIGHT_PARKED_ROOM, light_run());
 }
 
-/// The holes the observer's cast listed: the light's slots (`light::misses_at`), the eye's
-/// walked pixels (walked.wgsl).
+/// The holes the queue takes: the light's slots its cast listed (`light::misses_at`); the
+/// eye's walked pixels its cast listed, or, where the eye's queue runs alone, the pixels the
+/// queue before left parked (walked.wgsl `holes_list_at`, pxl-engine `ray::holes_from_at`).
 fn listed() -> u32 {
   if (light_run()) {
     return in_room(beams[head_word(LIGHT_HEAD_MISSES_CNT)], room());
   }
-  return in_room(beams[walked_cnt_at()], room());
+  return in_room(beams[eye_holes_at()], room());
 }
 
 /// The `k`th hole the queue takes.
@@ -57,7 +58,20 @@ fn queued(k: u32) -> u32 {
   if (light_run()) {
     return beams[head_word(LIGHT_HEAD_MISSES) + k];
   }
-  return beams[walked_list_at(k)];
+  return beams[eye_holes_at() + WALKED_LIST + k];
+}
+
+/// The first word, its count, of the list of the eye's holes the queue takes this frame.
+fn eye_holes_at() -> u32 {
+  let drawn = room();
+  return holes_list_at(drawn, beams[holes_from_at(drawn)]);
+}
+
+/// The first word, its count, of the eye's owed list the queue lists the pixels it leaves
+/// parked in: the one it does not take.
+fn eye_owed_at() -> u32 {
+  let drawn = room();
+  return owed_into_at(drawn, beams[holes_from_at(drawn)]);
 }
 
 /// The first word of a hole's state: the eye's at its pixel's index in the region past its

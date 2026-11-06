@@ -453,6 +453,7 @@ fn walk_word() -> String {
         ("MISS_LANES", ray::MISS_LANES),
         ("WALKED_CNT", ray::WALKED_CNT),
         ("WALKED_LIST", ray::WALKED_LIST),
+        ("FROM_OWED", ray::FROM_OWED),
         ("HITS", beam::HITS),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
@@ -477,6 +478,7 @@ fn walk_word() -> String {
         ("QUEUE_RECORDS_ROOM", ray::QUEUE_RECORDS_ROOM),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
+        ("KEPT", ray::KEPT),
         ("LAST_TAKEN", node_cache::LAST_TAKEN),
         ("VISITED", node_cache::VISITED),
         ("ASKED", node_cache::ASKED),
@@ -1312,7 +1314,9 @@ fn read_consts(text: &str) -> String {
 /// doc/tip/shaders-phones-take.md): no struct holds a struct, directly or in an array; no
 /// function's local is a struct, but a vertex or fragment entry point's local of the
 /// type it returns; no function's local is an array, or holds one; no `i32::MIN`, written
-/// or folded, which Safari writes as a C++ long that no `select` with an int takes.
+/// or folded, which Safari writes as a C++ long that no `select` with an int takes; and no
+/// `atomicCompareExchangeWeak`, whose result Safari 27 writes as a struct of a
+/// `thread`-qualified field, which Metal refuses.
 fn held_to_faults(module: &naga::Module, name: &str) {
     use naga::TypeInner::{Array, BindingArray, Struct};
     let is_struct = |mut ty: naga::Handle<naga::Type>| loop {
@@ -1387,6 +1391,25 @@ fn held_to_faults(module: &naga::Module, name: &str) {
             .sum::<usize>();
     if held_min > 0 {
         faults.push(format!("i32::MIN held {held_min} times"));
+    }
+    let compared = module
+        .functions
+        .iter()
+        .map(|(_, f)| f)
+        .chain(module.entry_points.iter().map(|e| &e.function))
+        .flat_map(|f| f.expressions.iter())
+        .filter(|(_, e)| {
+            matches!(
+                e,
+                naga::Expression::AtomicResult {
+                    comparison: true,
+                    ..
+                }
+            )
+        })
+        .count();
+    if compared > 0 {
+        faults.push(format!("atomicCompareExchangeWeak held {compared} times"));
     }
     assert!(faults.is_empty(), "{name}: {}", faults.join("; "));
 }

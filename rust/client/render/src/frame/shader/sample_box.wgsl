@@ -4,12 +4,14 @@
 // pxl-engine record.rs), the eye's and the light's alike, each as its sample.eye.wgsl or
 // sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl take it, a thread a
 // sample, in two passes: the first (`sample_box_cs`) has each sample that heads its node's
-// run, no sample before it across or up stopped on the node, find its entry or claim and
-// write it; the second (`sample_observe_cs`), once every write of the first is done, has
-// every stopped sample find its entry; a head that met its key's claim in the first is taken
-// there, with every other sample, past the dispatch's end. Each marks its entry seen and sets
-// the face it entered across, asking that face's word the first time where its observer reads
-// one (`sample_asks`).
+// run, no sample before it across or up that the same dispatch takes (`sample_with`) stopped
+// on the node, find its entry or claim and write it; the second (`sample_observe_cs`), once
+// every write of the first is done, has every stopped sample find its entry; a head that met
+// its key's claim in the first is taken there, with every other sample, past the dispatch's
+// end. Each marks its entry seen and sets the face it entered across, asking that face's word
+// the first time where its observer reads one (`sample_asks`). A run of one node that meets a
+// sample the dispatch does not take, which holds what an earlier cast left, has a head of its
+// own past it, so every node a taken sample stopped on has its entry.
 
 /// Whether sample `s` stopped on a node.
 fn stopped(s: vec2<u32>) -> bool {
@@ -65,7 +67,10 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (s.x == NO_ENTRY) {
     return;
   }
-  if ((s.x > 0u && same_node(s, s - vec2<u32>(1u, 0u))) || (s.y > 0u && same_node(s, s - vec2<u32>(0u, 1u)))) {
+  let across = s - vec2<u32>(1u, 0u);
+  let up = s - vec2<u32>(0u, 1u);
+  if ((s.x > 0u && sample_with(s, across) && same_node(s, across))
+    || (s.y > 0u && sample_with(s, up) && same_node(s, up))) {
     return;
   }
   _ = upsert(sample_kept(s), sample_stop(s), true, sample_asks());

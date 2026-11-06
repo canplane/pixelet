@@ -155,29 +155,6 @@ fn kept_at(first: u32, zoom: u32, c: vec3<i32>, zooms: u32) -> bool {
   return false;
 }
 
-/// The node `c` at `zoom`, asked at `zooms`, asked of the world once for all the rays the queue
-/// parked at it (queue_ask.wgsl), what is handed it found as `world_answer` finds it: the slot
-/// claimed first (`claim`), so every other asker of the node at those zooms finds it claimed and
-/// asks nothing; then the world asked and the answer written there (`fill`). Nothing where a
-/// slot keeps it at those zooms, where it is not kept (`keeps`), where the pass may ask no more
-/// (`may_ask`), or where no slot can be claimed: the rays parked at it are walked on by the walk
-/// that asks (queue_last.wgsl). Counted at word `asked`, none where `NONE`.
-fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) {
-  if (!keeps(zoom, c)) {
-    return;
-  }
-  let first = bucket_of(zoom, c);
-  if (kept_at(first, zoom, c, zooms) || !may_ask()) {
-    return;
-  }
-  let tag = walk_tag();
-  let w = claim(first, zoom, c, zooms, tag);
-  if (w == NONE) {
-    return;
-  }
-  fill(w, zoom, c, zooms, tag, world_answer(parent, top, zoom, c, zooms, asked));
-}
-
 /// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in the
 /// slot it claims (`claim`, `fill`).
 fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
@@ -195,6 +172,12 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
 /// claims it, or no slot is free or an earlier frame's. A lost claim tries again over the
 /// bucket as it then stands.
 fn claim(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> u32 {
+  return claim_slot(first, zoom, c, zooms, tag).x;
+}
+
+/// `claim`, with the key the slot held before it: the slot's word, then that key, which a claim
+/// let go puts back (queue_ask.wgsl `ask_once`).
+fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2<u32> {
   let key = tag | (zooms << TAG_BITS);
   let h = pair_hash(zoom, c, zooms);
   let mine = (h & ~CLAIM_MASK) | CLAIM_FAR;
@@ -214,7 +197,7 @@ fn claim(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> u32 {
         held = node_cache_now(w);
       }
       if (held == CLAIMED || held == mine || (held == key && is_node_now(w, zoom, c))) {
-        return NONE;
+        return vec2<u32>(NONE, 0u);
       }
       var turn = 2u * BUCKET;
       if (held == 0u) {
@@ -229,7 +212,7 @@ fn claim(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> u32 {
       }
     }
     if (to == NONE) {
-      return NONE;
+      return vec2<u32>(NONE, 0u);
     }
     let w = ENTRIES_AT + (first + to) * ENTRY_WORDS;
     if (node_cache_now(w) != was) {
@@ -238,16 +221,16 @@ fn claim(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> u32 {
     let got = atomicExchange(&node_cache[w], CLAIMED);
     if (got == was) {
       atomicStore(&node_cache[w], mine);
-      return w;
+      return vec2<u32>(w, was);
     }
     if (got != CLAIMED) {
       put_back(w, got);
       if (got == mine) {
-        return NONE;
+        return vec2<u32>(NONE, 0u);
       }
     }
   }
-  return NONE;
+  return vec2<u32>(NONE, 0u);
 }
 
 /// Writes the node `c` at `zoom` asked at `zooms`, answered `a`, in the slot at word `w` its

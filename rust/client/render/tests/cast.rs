@@ -23,10 +23,12 @@
 mod gpu;
 mod real_world;
 
-use gpu::{array_view, cross, mix, read_texture, texture, ulps, unit, Gpu, Kinds, Tally};
+use gpu::{
+    array_view, at_edge, cross, mix, read_texture, slack, texture, ulps, unit, Gpu, Kinds, Tally,
+};
 use pxl_engine::answer::{self, In};
 use pxl_engine::beam::{self, Grid};
-use pxl_engine::cast::{self, Entry, Node, Query, Ray};
+use pxl_engine::cast::{self, Node, Query, Ray};
 use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
@@ -47,11 +49,9 @@ const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 const EYE_SEAM: [i32; 2] = [(1 << 23) - 8, (40 << 16) + 30];
 const FRAME: u32 = 9;
 const WORKGROUP: u32 = beam::SAMPLE_SIDE;
-/// The ulps a device's division may put a plane's t off the Rust's, and the ulps within which
-/// its rounding may take a pixel across an edge of its cell, each past what its way's own
+/// The ulps a device's division may put a plane's t off the Rust's, past what its way's own
 /// rounding takes (`slack`).
 const T_ULPS: u32 = 4;
-const EDGE_ULPS: u32 = 16;
 /// The ulps the device's reciprocal of a pixel's way may lie off the Rust's correctly rounded
 /// one: WGSL's bound on a division, 2.5 ulps, taken up to a whole ulp. Metal measured 1 here.
 const INV_ULPS: u32 = 3;
@@ -721,36 +721,6 @@ fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
     let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
     [ndc_x * tan[0], ndc_y * tan[1]]
-}
-
-/// The ulps a plane's t may move by as the device works out the ray's way `d` along an axis
-/// itself: a sum of terms about 1, a few ulps of 1 off, is a large share of a small way. As
-/// many as a u32 holds where the way is so small its share has no bound.
-fn slack(d: f32) -> u32 {
-    if d == 0.0 {
-        0
-    } else {
-        (4.0 / d.abs()).ceil() as u32
-    }
-}
-
-/// Whether the device's rounding may decide entry `e` otherwise along the way `dir`: where it
-/// enters lies within `EDGE_ULPS` of where it leaves, or the plane it enters across within
-/// `EDGE_ULPS` of another axis's near plane, each past what the two planes' own axes' slack
-/// takes (`slack`); a bound the origin or the ray's reach sets moves by none.
-fn at_edge(e: &Entry, dir: [f32; 3]) -> bool {
-    let moves = |a: usize| dir[a] != 0.0;
-    let room = |a: Option<usize>, b: Option<usize>| {
-        let s = |a: Option<usize>| a.map_or(0, |a| slack(dir[a]));
-        EDGE_ULPS.saturating_add(s(a)).saturating_add(s(b))
-    };
-    let enter = (0..3).find(|&a| moves(a) && e.near[a] == e.span[0]);
-    let leave = (0..3).find(|&a| moves(a) && e.far[a] == e.span[1]);
-    let axis = e.axis as usize;
-    ulps(e.span[0], e.span[1]) <= room(enter, leave)
-        || (0..3)
-            .filter(|&a| a != axis && moves(a))
-            .any(|a| ulps(e.near[a], e.near[axis]) <= room(Some(a), Some(axis)))
 }
 
 /// What the probe left of each pixel: its tangents and its ray.

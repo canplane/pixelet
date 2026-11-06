@@ -254,9 +254,11 @@ fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
 /// tile listed once (`light::LISTED_READ`), the lay opened to as many (`light::ARGS_LAY`); and
 /// one read wanted where its word names a cast before the reads' epoch, the later of the host's
 /// and the one a slide unrun began (`light::reads_epoch`), or says it owed
-/// (`light::READ_OWED`), then claimed by the claim pass (`light_claim_cs`), fewer than
-/// `light::CLAIM_BUDGET` wanted here so every one: its word the cast's. A step by a tile's edge
-/// may read either tile. Skipped where no adapter answers.
+/// (`light::READ_OWED`), counted as many as it wants (`light::LISTED_WANTED`), then claimed by
+/// the claim pass (`light_claim_cs`) by pxl-engine's rule (`light::claims`): every one where
+/// no more than `light::CLAIM_BUDGET` are wanted, else nearest first, the ring that straddles
+/// the budget filling it; a claimed tile's word the cast's. A step by a tile's edge may read
+/// either tile. Skipped where no adapter answers.
 #[test]
 fn hand_propagation_reads_what_stands() {
     let Some(gpu) = Gpu::new() else {
@@ -267,6 +269,7 @@ fn hand_propagation_reads_what_stands() {
     let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_claim_cs");
     let mut tally = Tally::default();
     let (current, epoch) = (40u32, 30u32);
+    let mut over_budget = false;
     for (case, dir, reads_from) in [
         ("the sun high, the host's epoch", [0.3, 0.2, -0.93], 0u32),
         ("the sun low, a slide unrun", [0.8, 0.3, -0.25], 38),
@@ -377,7 +380,7 @@ fn hand_propagation_reads_what_stands() {
         );
         // Then the claim over what it wants, as many rows as it opened.
         let wanted = gpu.read(&args_buf)[(light::ARGS_COUNTS + light::LISTED_WANTED) as usize];
-        assert!(wanted <= light::CLAIM_BUDGET, "{case}: {wanted} wanted");
+        over_budget |= wanted > light::CLAIM_BUDGET;
         gpu.dispatch(
             &claim,
             &[
@@ -419,18 +422,54 @@ fn hand_propagation_reads_what_stands() {
             &[missing.len() as u32, extra.len() as u32],
             |k| [format!("missing {missing:?}"), format!("past {extra:?}")][k].clone(),
         );
-        // Each tile's read word: the cast's where it was read and named a cast before the
-        // reads' epoch or was owed, else as it was.
+        // The tiles wanted: those read that named a cast before the reads' epoch or were
+        // owed; and by ring, where the claim's budget falls among them.
+        let wants = |k: usize| light::read_cast(was[k]) < ep || was[k] & light::READ_OWED != 0;
+        let at_of = |t: [i32; 2]| (t[1] as u32 * N + t[0] as u32) as usize;
+        let mut by_ring = vec![0u32; light::rings(SIZE) as usize];
+        for t in got.iter().filter(|&&t| wants(at_of(t))) {
+            by_ring[light::ring(SIZE, *t) as usize] += 1;
+        }
+        let wanted_want = by_ring.iter().sum::<u32>();
+        tally.compare(
+            &format!("{case}: the tiles wanted"),
+            &[wanted_want],
+            &[wanted],
+            |_| "the wanted list's count".into(),
+        );
+        let before = |r: u32| by_ring[..r as usize].iter().sum::<u32>();
+        // Each tile's read word: the cast's where it was wanted and its ring is claimed whole,
+        // as it was where it was not wanted or its ring lies past the budget; of the ring
+        // that straddles the budget, either, as many the cast's as fill the budget.
         let (mut want, mut have) = (Vec::new(), Vec::new());
+        let (mut straddling, mut straddled) = (0u32, 0u32);
         for j in 0..N as i32 {
             for i in 0..N as i32 {
-                let k = (j as u32 * N + i as u32) as usize;
-                let read = got.contains(&[i, j]);
-                let wants = light::read_cast(was[k]) < ep || was[k] & light::READ_OWED != 0;
-                want.push(if read && wants { current } else { was[k] });
+                let k = at_of([i, j]);
+                let mut w = was[k];
+                if got.contains(&[i, j]) && wants(k) {
+                    let r = light::ring(SIZE, [i, j]);
+                    let (b, own) = (before(r), by_ring[r as usize]);
+                    if light::claims(b, own, u32::MAX) {
+                        w = current;
+                    } else if b < light::CLAIM_BUDGET {
+                        straddling = light::CLAIM_BUDGET - b;
+                        if out[reads + k] == current {
+                            straddled += 1;
+                            w = current;
+                        }
+                    }
+                }
+                want.push(w);
                 have.push(out[reads + k]);
             }
         }
+        tally.compare(
+            &format!("{case}: the straddling ring's claims"),
+            &[straddling],
+            &[straddled],
+            |_| "claimed of the ring that straddles the budget".into(),
+        );
         let claimed = want.iter().zip(&was).filter(|(w, v)| w != v).count() as u32;
         tally.compare(&format!("{case}: the reads"), &want, &have, |k| {
             format!("tile {} {}", k as u32 % N, k as u32 / N)
@@ -446,6 +485,7 @@ fn hand_propagation_reads_what_stands() {
             "{case}: {claimed} {read_cnt}"
         );
     }
+    assert!(over_budget, "no case wants more than the claim's budget");
     tally.end("light_propagate_cs");
 }
 
@@ -455,8 +495,9 @@ fn hand_propagation_reads_what_stands() {
 /// of the ring that straddles the budget as many as fill it, none past, so the claims are the
 /// budget's, nearest first; each claimed tile takes a place of its own under the budget
 /// (`light::places_at`), its word the cast's, owed no more; an owed tile its cast before
-/// claimed has its slots' parked rays taken from that cast's region at its place there
-/// (`light::READ_OWED`, `light::HEAD_CARRIES`), any other its slots set to no parked ray; and a
+/// claimed has its slots' parked rays taken from that cast's region at its place there, a slot
+/// that cast answered kept (`light::READ_OWED`, `light::HEAD_CARRIES`, `ray::KEPT`), any other
+/// its slots set to no parked ray; and a
 /// tile not claimed keeps its word and is counted left (`light::ARGS_LEFT`). Skipped where no
 /// adapter answers.
 #[test]
@@ -513,8 +554,12 @@ fn hand_claim_takes_the_nearest_within_its_budget() {
             list[places + slot_tile(*t)] = was;
             for s in 0..side {
                 let w = state(was, s, current - 1);
+                // Parked, or, one slot in three, answered by that cast: not parked.
                 for i in 0..words {
                     list[w + i] = mix((e * side + s) as u32, i as u32) | ray::PARKED;
+                }
+                if s % 3 == 1 {
+                    list[w + words - 1] &= !ray::PARKED;
                 }
             }
             held.insert(*t);
@@ -576,7 +621,11 @@ fn hand_claim_takes_the_nearest_within_its_budget() {
                 let w = state(place, s, current);
                 if held.contains(t) {
                     let src = state(was_list[places + slot_tile(*t)], s, current - 1);
-                    if out[w..w + words] != was_list[src..src + words] {
+                    let mut want = was_list[src..src + words].to_vec();
+                    if want[words - 1] & ray::PARKED == 0 {
+                        want[words - 1] = ray::KEPT;
+                    }
+                    if out[w..w + words] != want[..] {
                         wrong.push(*t);
                     }
                 } else if out[w + words - 1] & ray::PARKED != 0 {

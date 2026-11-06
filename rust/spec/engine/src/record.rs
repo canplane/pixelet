@@ -53,7 +53,10 @@
 //!    (record_stops.wgsl, `beam::HIT_ASSET`, `HIT_LINE`), after their walk. A stop finds the
 //!    first slot of its bucket that holds its key; where none does, and it may claim, it
 //!    claims one, a free one or the one least lately seen (`victim`), its claim word its
-//!    key's (`claim_of`), reads its bucket again, and writes it unless another slot holds
+//!    key's (`claim_of`), taken by setting `CLAIM` on the word it read, which one lane alone
+//!    sets where no claim holds the word, and where the word was not the one it read put
+//!    off again, no other store reaching a held word while a pass claims (Safari compiles
+//!    no compare-exchange); it reads its bucket again, and writes it unless another slot holds
 //!    the key or the same claim stands before it in the bucket, else lets it go free. A
 //!    stop that meets its key's claim waits on no other lane: it is put off to a pass past a
 //!    dispatch's end, when every claim of the pass before is written or let go and the key
@@ -250,7 +253,8 @@ pub const fn bucket_of(k: &Key) -> u32 {
 
 /// The claim word of a slot being written for `k` (`R_HELD`): `CLAIM` and its key's hash,
 /// so a stop tells a claim of its own key from another's; two keys of one hash in one bucket
-/// take one slot between them this time.
+/// take one slot between them this time. The hash is never 0: `CLAIM` alone is a free slot
+/// a claim is taking (pxl-render record_put.wgsl `claim`), no key's claim.
 pub const fn claim_of(k: &Key) -> u32 {
     let mut h = k.held().wrapping_mul(0x27D4_EB2F);
     h = mix(h, k.corner[0]);
@@ -259,7 +263,8 @@ pub const fn claim_of(k: &Key) -> u32 {
     h = mix(h, k.roots[0] as u32);
     h = mix(h, k.roots[1] as u32);
     h = mix(h, k.roots[2] as u32);
-    CLAIM | (h ^ h >> 16) & (CLAIM - 1)
+    let hash = (h ^ h >> 16) & (CLAIM - 1);
+    CLAIM | if hash == 0 { 1 } else { hash }
 }
 
 /// The zoom the walk asks the node `n` at its nearest point from the origin `o`, the eye's
@@ -424,6 +429,7 @@ mod tests {
             assert_eq!(k.held() & CLAIM, 0);
             assert_eq!(bucket_of(&k) % BUCKET, 0);
             assert_eq!(claim_of(&k) & (HELD | CLAIM), CLAIM);
+            assert_ne!(claim_of(&k), CLAIM);
             assert!(bucket_of(&k) < ENTRIES);
         }
     }

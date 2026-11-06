@@ -295,10 +295,12 @@ pub(super) struct CastBuffers {
     /// Whether the eye may run its queue, a world to cast in; whether this frame's cast keeps
     /// the states its holes were parked in, the rays standing (`node_cache::RESUMES`); and
     /// whether this frame, casting nothing, runs the eye's queue alone over the holes its last
-    /// cast listed, owed work parked among them (`Readback::owed`).
+    /// cast listed, owed work parked among them (`Readback::owed`); and the eye's owed list
+    /// its last queue filled, which a queue run alone takes (`ray::owed_into`).
     eye_on: bool,
     eye_resumes: bool,
     eye_queue: bool,
+    eye_owed: u32,
     /// Whether the next cast stands the world's receivers on the eye's answers
     /// (record_draw.wgsl `record_draw_cs`, `light_mark_walked_cs`): held until one does; and whether the stands
     /// of the frame the eye stands in, its pixels' footprints, are owed, as the stands while
@@ -998,6 +1000,7 @@ impl RaysPass {
             eye_on: false,
             eye_resumes: false,
             eye_queue: false,
+            eye_owed: 0,
             light_forgot: false,
             light_world: false,
             light_footprint_owed: false,
@@ -1711,6 +1714,21 @@ impl RaysPass {
             }
             let caps = ray::caps(true, c.light_cast);
             g.write_buf(c.queue, word_bytes(ray::QUEUE_CAPS as usize), bytes(&caps));
+            // The list the eye's queue takes: its cast's walked pixels, or, run alone, the
+            // pixels the queue before left parked, so it walks only what is owed; and the owed
+            // list it fills in turn (`ray::holes_from_at`).
+            let from = if casts {
+                ray::FROM_WALKED
+            } else {
+                ray::FROM_OWED + c.eye_owed
+            };
+            let drawn = c.size[0] * c.size[1];
+            g.write_buf(
+                c.beams,
+                word_bytes((c.grid.walked_at() + ray::holes_from_at(drawn)) as usize),
+                bytes(&[from]),
+            );
+            c.eye_owed = ray::owed_into(from);
         }
         if c.light_cast {
             let caps = ray::caps(false, eye_runs);
@@ -1727,6 +1745,19 @@ impl RaysPass {
                 word_bytes(node_cache::VISITED as usize),
                 bytes(&none),
             );
+            // A frame of the node cache's own, as a cast's is: what the frames before kept is
+            // then a slot a claim may take (ask.wgsl `claim`), so a queue that runs frame after
+            // frame while nothing casts keeps the nodes it asks for and goes on. Its tags held
+            // within what a key tells apart (`node_cache::FRAMES`), past which the next cast
+            // forgets all.
+            if c.frame < node_cache::FRAMES {
+                c.frame += 1;
+                g.write_buf(
+                    c.node_cache,
+                    word_bytes(node_cache::FRAME as usize),
+                    bytes(&[c.frame]),
+                );
+            }
         }
         let frame = count::Frame {
             number: frame,
@@ -2192,6 +2223,21 @@ impl RaysPass {
             // stop's face's word put at its pixel (ray/raster.rs `stops`): next frame draws them.
             c.raster.stops(g, pass, c.node_cache);
             g.end(pass);
+            // The pixels left parked, listed in the owed list it filled, counted as the eye's
+            // owed work (queue_last.wgsl `unreached`): that list's count, which the queue run
+            // alone next takes and parked_tiles reads.
+            let drawn = c.size[0] * c.size[1];
+            g.copy_buf(
+                encoder,
+                (c.node_cache, word_bytes(node_cache::owed_at(EYE) as usize)),
+                (
+                    c.beams,
+                    word_bytes(
+                        (c.grid.walked_at() + ray::owed_list_at(drawn, c.eye_owed)) as usize,
+                    ),
+                ),
+                4,
+            );
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::miss).pass());
             g.set_bind_group(pass, 0, c.parked_tiles_group, &[]);
             g.set_pipeline(pass, c.parked_tiles_built.id);

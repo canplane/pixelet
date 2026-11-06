@@ -55,7 +55,7 @@ fn kept_claim(k: Kept) -> u32 {
   h = mix_hash(h, u32(k.roots.x));
   h = mix_hash(h, u32(k.roots.y));
   h = mix_hash(h, u32(k.roots.z));
-  return RECORD_CLAIM | ((h ^ (h >> 16u)) & (RECORD_CLAIM - 1u));
+  return RECORD_CLAIM | max((h ^ (h >> 16u)) & (RECORD_CLAIM - 1u), 1u);
 }
 
 /// The root holding the origin `o` on each axis (`cast::roots_of`).
