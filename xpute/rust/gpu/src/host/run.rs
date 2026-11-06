@@ -442,6 +442,11 @@ impl GpuHost {
                 });
                 self.put(id, Object::QuerySet(q));
             }
+            // wgpu names an object only as it makes it.
+            op::LABEL => {
+                r.u();
+                r.text();
+            }
             op::DESTROY => {
                 let id = r.u();
                 match self.take(id) {

@@ -1143,6 +1143,7 @@ impl Gpu {
     /// A buffer of `size` bytes, one every device makes and, as storage,
     /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
     /// structure let through, not a device to fall short on.
+    #[track_caller]
     pub fn buf(&self, size: u32, usage: u32) -> Id {
         xpute_kit::ensure!(
             floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
@@ -1159,6 +1160,7 @@ impl Gpu {
             },
         ));
         s.splits.made(buf, usage & buffer_usage::INDIRECT != 0);
+        self.label(buf, "buffer", core::panic::Location::caller());
         buf
     }
 
@@ -1557,20 +1559,34 @@ impl Gpu {
         None
     }
 
+    /// `id` named in the device's messages by the source line that made it,
+    /// `kind` before it: the buffer, encoder or pass a validation error names.
+    fn label(&self, id: Id, kind: &str, at: &core::panic::Location) {
+        let mut name = Label::default();
+        let file = at.file().rsplit('/').next().unwrap_or(at.file());
+        let _ = core::fmt::write(&mut name, format_args!("{kind} {file}:{}", at.line()));
+        let s = self.s();
+        call::label(&mut s.stream, id, name.text());
+    }
+
     /// An encoder, cut into command buffers as its passes read args
     /// (gpu/split.rs) and submitted as them.
+    #[track_caller]
     pub fn encoder(&self) -> Id {
         let s = self.s();
         let encoder = handle_of(s.encoder.encoder(&mut s.stream));
         s.splits.begun(encoder);
+        self.label(encoder, "encoder", core::panic::Location::caller());
         encoder
     }
 
     /// `encoder` recorded into a new command buffer from here (gpu/split.rs).
+    #[track_caller]
     fn split(&self, encoder: Id) {
         let s = self.s();
         let next = handle_of(s.encoder.encoder(&mut s.stream));
         s.splits.split(encoder, next);
+        self.label(next, "encoder split", core::panic::Location::caller());
     }
 
     /// The pass an indirect call on `pass` reading `buf` is recorded in: a
@@ -1602,6 +1618,8 @@ impl Gpu {
             s.encoder
                 .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
         );
+        self.label(at, "compute indirect", core::panic::Location::caller());
+        let s = self.s();
         if pipeline != 0 {
             call::set_pipeline(&mut s.stream, at, pipeline);
         }
@@ -1627,6 +1645,7 @@ impl Gpu {
         call::copy_texture_to_texture(&mut s.stream, encoder, src, dst, size);
     }
 
+    #[track_caller]
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
         let named = encoder;
         if self.s().splits.draws_apart(named) {
@@ -1667,10 +1686,12 @@ impl Gpu {
             },
         ));
         s.splits.opened(pass, named, false, None);
+        self.label(pass, "render", core::panic::Location::caller());
         pass
     }
 
     /// Timed in `stamp`'s span where the frame is timed.
+    #[track_caller]
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
         let end = stamp.as_ref().and_then(|t| Some((t.query_set, t.end?)));
@@ -1679,6 +1700,7 @@ impl Gpu {
                 .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
         );
         s.splits.opened(pass, encoder, true, end);
+        self.label(pass, "compute", core::panic::Location::caller());
         pass
     }
 
@@ -1975,3 +1997,36 @@ impl Gpu {
 #[cfg(test)]
 #[path = "api.test.rs"]
 mod test;
+
+/// A label's text, cut at its room.
+struct Label {
+    bytes: [u8; 64],
+    len: usize,
+}
+
+impl Default for Label {
+    fn default() -> Self {
+        Label {
+            bytes: [0; 64],
+            len: 0,
+        }
+    }
+}
+
+impl Label {
+    fn text(&self) -> &str {
+        core::str::from_utf8(&self.bytes[..self.len]).unwrap_or("")
+    }
+}
+
+impl core::fmt::Write for Label {
+    fn write_str(&mut self, text: &str) -> core::fmt::Result {
+        let mut take = text.len().min(self.bytes.len() - self.len);
+        while !text.is_char_boundary(take) {
+            take -= 1;
+        }
+        self.bytes[self.len..self.len + take].copy_from_slice(&text.as_bytes()[..take]);
+        self.len += take;
+        Ok(())
+    }
+}

@@ -134,6 +134,8 @@ pub mod op {
     pub const RENDER_PIPELINE_ASYNC: u32 = 49;
     /// COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's.
     pub const COMPUTE_PIPELINE_ASYNC: u32 = 50;
+    /// id, the label as bytes: the name the host's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a host that cannot name an object after it is made ignores it.
+    pub const LABEL: u32 = 51;
     pub const KEYS: &[&str] = &[
         "BUFFER",
         "TEXTURE",
@@ -185,6 +187,7 @@ pub mod op {
         "DEVICE",
         "RENDER_PIPELINE_ASYNC",
         "COMPUTE_PIPELINE_ASYNC",
+        "LABEL",
     ];
 }
 

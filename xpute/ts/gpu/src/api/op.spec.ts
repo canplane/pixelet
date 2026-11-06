@@ -151,3 +151,6 @@ export const RENDER_PIPELINE_ASYNC = 49 as number;
 
 /** COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's. */
 export const COMPUTE_PIPELINE_ASYNC = 50 as number;
+
+/** id, the label as bytes: the name the host's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a host that cannot name an object after it is made ignores it. */
+export const LABEL = 51 as number;

@@ -181,6 +181,9 @@ inline constexpr std::uint32_t RENDER_PIPELINE_ASYNC = 49u;
 
 // COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's.
 inline constexpr std::uint32_t COMPUTE_PIPELINE_ASYNC = 50u;
+
+// id, the label as bytes: the name the host's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a host that cannot name an object after it is made ignores it.
+inline constexpr std::uint32_t LABEL = 51u;
 } // namespace op
 
 enum class BindingKind : std::uint8_t {

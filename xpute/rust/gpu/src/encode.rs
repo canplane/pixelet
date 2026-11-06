@@ -1274,6 +1274,15 @@ pub mod call {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
+    /// `id`, any object, encoder or pass made before, named `label` in the
+    /// device's messages.
+    pub fn label(stream: &mut Stream, id: Id, label: &str) -> bool {
+        emit(stream, op::LABEL, &|s| {
+            s.word(id);
+            s.bytes(label.as_bytes());
+        })
+    }
+
     /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
     /// before) read into the guest's memory at `into`; `fence` its fence
     /// and result (spec RESULT), `ticket` landing there once the bytes are

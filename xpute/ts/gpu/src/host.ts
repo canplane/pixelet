@@ -1091,6 +1091,13 @@ export class GpuHost {
           r.u(),
         );
         return;
+      case op.LABEL: {
+        const o = this._get<GpuObject>(r.u());
+        const label = r.text();
+        if ("view" in o) o.view.label = label;
+        else o.label = label;
+        return;
+      }
       case op.END: {
         const id = r.u();
         this._get<GPURenderPassEncoder | GPUComputePassEncoder>(id).end();
