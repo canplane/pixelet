@@ -47,7 +47,8 @@ python3 -I show.py light_receivers,light_beam,world base:rv1-8194,rv3-8194 chang
   `therm` lines in a run's log give the thermal status and the AP's temperature.
 - The strata's textures land at their own time and change `world` by several ms.
   Settle before timing and look at the `-settled.png` shot.
-- `pxl.perf.drive` sets `res` to fixed itself.
+- `pxl.perf.drive` sets `res` to fixed itself. A baseline takes two cool runs and one
+  sustained run (`DRIVE_S=300 FRAMES=1`, its last 120 s), the phone warm as a user's.
 - The `perf` setting does not stop the timestamps' read; it only shows the panel.
 - A CDP device-scale override changes `devicePixelRatio`, not the canvas.
 

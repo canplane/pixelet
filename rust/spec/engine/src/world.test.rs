@@ -450,3 +450,151 @@ fn wall_off_any_brick() {
         }
     }
 }
+
+/// A cell's answer takes no zooms asked: a node the query answers a cell or the lack, its
+/// zoom at or past the finest asked (`near`) or whole past the ground's cells, has one answer
+/// whatever zooms it and every node over it were asked at, the ground's cells' place
+/// (`Lookup`) its ancestors hand it among them, and the answer with nothing handed down; so
+/// does what it hands on. So a stopped cell's answer is its node's alone (pxl-engine
+/// `record`, `node_cache`). Over the clip levels held, and over them holding no brick, where
+/// every cell lacks.
+#[test]
+fn cell_answer_takes_no_zooms() {
+    let (rows, ground) = clipmap();
+    let joined = folded(&rows, &ground, false);
+    let mut unheld = rows.clone();
+    for e in unheld
+        .iter_mut()
+        .take(((CELL - FIRST_CELL + 1) * ENTRIES) as usize)
+    {
+        *e = Entry::absent(e.brick().0);
+    }
+    let unheld_joined = folded(&unheld, &ground, true);
+    let mut kinds = [0u32; 3];
+    for (rows, joined) in [(&rows, &joined), (&unheld, &unheld_joined)] {
+        let w = Clipmap {
+            rows,
+            joined,
+            ground: &ground,
+        };
+        let got = answers_take_no_zooms(w);
+        assert!(got.iter().sum::<u32>() > 1000, "{got:?} cells reached");
+        for (k, n) in got.iter().enumerate() {
+            kinds[k] += n;
+        }
+    }
+    assert!(
+        kinds[Kind::Cell as usize] > 0 && kinds[Kind::Lacks as usize] > 0,
+        "{kinds:?}"
+    );
+}
+
+/// `cell_answer_takes_no_zooms` over the clip levels `w`: how many of each kind it asked.
+fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
+    let mut held = w;
+    let hash = |v: u64| {
+        let mut z = v.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        z = (z ^ z >> 30).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ z >> 27).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ z >> 31
+    };
+    let mut asking = Asking { w };
+    let (first, _) = w.origin(CELL);
+    let mut kinds = [0u32; 3];
+    let spread = (0..CLIP_SIZE as i32)
+        .step_by(53)
+        .flat_map(|x| (0..CLIP_SIZE as i32).step_by(61).map(move |y| [x, y]));
+    for (k, [gx, gy]) in spread.enumerate() {
+        let g = [
+            (first[0] << BRICK_SHIFT) + gx,
+            (first[1] << BRICK_SHIFT) + gy,
+        ];
+        // About the ground's top where the column meets it, else about its height.
+        let surface = column_surface(&mut asking, CELL, g);
+        let top = if surface.ends == End::Hit {
+            surface.top.0
+        } else {
+            height(g)
+        };
+        for dz in -2..=1 {
+            let leaf = [g[0], g[1], top + dz];
+            for zoom in FIRST_CELL..=CELL {
+                let c = overwrite::ancestor_at(CELL, leaf, CELL - zoom);
+                let mut alone = Inheritance::of(&Nothing, (zoom, c));
+                let base = node(
+                    &mut held,
+                    &w,
+                    &Nothing,
+                    &Nothing,
+                    &mut alone,
+                    (zoom, c),
+                    [zoom, zoom],
+                    [Cut::NONE; 2],
+                );
+                for trial in 0..12u64 {
+                    let mut r = hash(
+                        (k as u64) << 20 ^ (zoom as u64) << 12 ^ ((dz + 2) as u64) << 8 ^ trial,
+                    );
+                    let mut take = |n: u32| {
+                        let v = (r % u64::from(n)) as u32;
+                        r = hash(r);
+                        v
+                    };
+                    // Every node over it asked at zooms that split it, each its own, as a
+                    // walk's are.
+                    let mut at =
+                        Inheritance::of(&Nothing, (0, overwrite::ancestor_at(zoom, c, zoom)));
+                    let mut reached = true;
+                    for z in 0..zoom {
+                        let a = overwrite::ancestor_at(zoom, c, zoom - z);
+                        let near = z + 1 + take(CELL + 2 - z);
+                        let far = take(near + 1);
+                        let got = node(
+                            &mut held,
+                            &w,
+                            &Nothing,
+                            &Nothing,
+                            &mut at,
+                            (z, a),
+                            [far, near],
+                            [Cut::NONE; 2],
+                        );
+                        if got.kind != Kind::Split {
+                            reached = false;
+                            break;
+                        }
+                        let child = overwrite::ancestor_at(zoom, c, zoom - z - 1);
+                        at = at.child(&Nothing, &Nothing, (z + 1, child));
+                    }
+                    if !reached {
+                        continue;
+                    }
+                    // Asked at zooms it is a cell at: its own or coarser, or, past the ground's
+                    // cells, any, where nothing placed or carved makes it whole.
+                    let most = if zoom >= LEAF_CELL { CELL + 3 } else { zoom };
+                    let near = take(most + 1);
+                    let far = take(near + 1);
+                    let mut mine = at;
+                    let got = node(
+                        &mut held,
+                        &w,
+                        &Nothing,
+                        &Nothing,
+                        &mut mine,
+                        (zoom, c),
+                        [far, near],
+                        [Cut::NONE; 2],
+                    );
+                    assert_eq!(got, base, "{c:?} at {zoom}, asked [{far}, {near}]");
+                    assert_eq!(
+                        mine.words(),
+                        alone.words(),
+                        "{c:?} at {zoom} hands on, asked [{far}, {near}]"
+                    );
+                    kinds[got.kind as usize] += 1;
+                }
+            }
+        }
+    }
+    kinds
+}

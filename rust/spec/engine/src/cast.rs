@@ -283,11 +283,51 @@ impl Node {
                 self.zoom,
                 idx_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
             ),
-            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom) - y_start(self.zoom),
-            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom) - z_start(self.zoom),
+            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom)
+                .wrapping_sub(y_start(self.zoom)),
+            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom)
+                .wrapping_sub(z_start(self.zoom)),
         ]
     }
+
+    /// The node the world names `idx` at `zoom`, as a walk from the origin `o` holds it
+    /// (`idx`'s inverse): on X, which the world names round, the one whose middle lies
+    /// nearest the origin, which is the walk's wherever the node lies within `REACH` of
+    /// the origin. `zoom` is 1 or finer and coarser than `FINEST_ZOOM`, whose index names
+    /// no root.
+    pub fn of_idx(o: [i32; 3], zoom: Zoom, idx: [i32; 3]) -> Node {
+        let r0 = roots_of(o);
+        let side = 1i64 << zoom;
+        let shift = FINEST_ZOOM - zoom;
+        // On the finest grid, from the X root 0's corner: the origin, and the middle of
+        // the node `idx` names in the root 0 or −1.
+        let round = 1i64 << FINEST_ZOOM;
+        let at = i64::from(r0[0]) * round + i64::from(grid_of(o)[0]);
+        let x = i64::from(idx[0]);
+        let mid = (x << shift) + (1i64 << shift >> 1);
+        let n = [
+            x + (at - mid + round / 2).div_euclid(round) * side,
+            i64::from(idx[1]) + i64::from(y_start(zoom)),
+            i64::from(idx[2]) + i64::from(z_start(zoom)),
+        ];
+        Node {
+            corner: n.map(|v| ((v & (side - 1)) as u32) << shift),
+            zoom,
+            roots: [0, 1, 2].map(|a| (n[a] >> zoom) as i32 - r0[a]),
+        }
+    }
 }
+
+/// How far from its origin, in units, the eye's rays reach at most: a quarter of a root,
+/// which every draw distance stays within (pxl-spec layer/lattice.rs). Within it a node
+/// of zoom 1 or finer lies nearer than half the world's X to its origin on one side
+/// alone (`Node::of_idx`), and every node coarser than `FINEST_ZOOM` is one the node
+/// cache keeps (`node_cache::keeps`).
+pub const REACH: u32 = 1 << (UNIT_ZOOM - 2);
+const _: () = assert!(
+    2 * REACH <= 1 << (UNIT_ZOOM - 1),
+    "a node of zoom 1 within reach has one copy within half the world's X of its origin"
+);
 
 /// Y's Q3 steps from the world's south edge to 0, and Z's from its floor.
 pub const Y_START: u32 = 1 << 31;
@@ -1139,6 +1179,50 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The world's name of a node within `REACH` of an origin in the world names it again
+    /// as the walk from that origin holds it, at every zoom from 1 to the finest's
+    /// coarser, about X's seam and the world's edges alike.
+    #[test]
+    fn idx_names_its_node_within_reach() {
+        let hash = |v: u64| {
+            let mut z = v.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            z = (z ^ z >> 30).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ z >> 27).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ z >> 31
+        };
+        // The world's height in Q3 steps, from its floor.
+        let height = 1i64 << (HEIGHT_BITS + FRAC_W);
+        let mut checked = 0;
+        for i in 0..20_000u64 {
+            let h = hash(i);
+            let edge = [0, i32::MAX, i32::MIN, (h >> 7) as i32][(h & 3) as usize];
+            let x = edge.wrapping_add((h >> 9) as i32 >> 12);
+            let y = [i32::MAX, i32::MIN, (h >> 21) as i32][(h >> 3) as usize % 3]
+                .wrapping_sub((h >> 40) as i32 >> 14);
+            let z = ((h >> 24) as i64 % height - i64::from(Z_START)) as i32;
+            let o = [x, y, z];
+            let g = hash(i ^ 0xA5A5);
+            let d = [g, g >> 21, g >> 42].map(|v| (v & 0x1f_ffff) as f32 / 1_048_576.0 - 1.0);
+            let len = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            if len < 1e-3 {
+                continue;
+            }
+            let ray = Ray::new([d[0] / len, d[1] / len, d[2] / len], REACH as f32);
+            let t = (g >> 50) as f32 / (1u64 << 14) as f32 * (REACH - 1) as f32;
+            let p = point_at(o, &ray, t);
+            for zoom in 1..FINEST_ZOOM {
+                let n = Node {
+                    corner: p.0.map(|c| c & !under(zoom)),
+                    zoom,
+                    roots: p.1,
+                };
+                assert_eq!(Node::of_idx(o, zoom, n.idx(o)), n, "{o:?} {p:?} {zoom}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 500_000);
     }
     use crate::answer;
     use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};

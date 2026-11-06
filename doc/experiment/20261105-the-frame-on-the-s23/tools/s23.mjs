@@ -15,14 +15,21 @@
 //                         lattice, the kind, the GPU's), a shot at its end
 //               rest      15 s with nothing moved, every frame's columns dumped (`-rest<n>-frames.json`)
 //               set:K=V   a setting set to its value, 3 s to land
+//               at:N      the wheel N steps out (in where negative), as the drive's, 3 s to land, then a
+//                         10 s circle with ray_counts on, every frame's columns dumped
+//                         (`-at<n>-frames.json`, n the window's number; the report's distance and
+//                         polar in the log)
+//               wheel:N   the wheel N steps out (in where negative), 10 s to land, a shot `-wheel<n>.png`
+//               tilt      the view tilted up as the drive tilts it
 //               cold      the drive with ray_counts on and every frame's columns dumped; give it
 //                         first, on a fresh load, to see the cache's refill after the zoom-out
 //   HOUR      the sky's hour for the scenes (noon by default; morning for low shadows)
-//   RES       fixed (default) or low
+//   RES       fixed (default), auto (the user's default) or low
 //   OBSTACLE  orbit_obstacle: through, stop or climb (default the page's own)
 //   SETTLE_MS wait after the renderer is live, for the strata's textures (default 25000;
 //             shorter from the shelf), then a shot `-settled.png`
-//   DRIVE_S   the drive's seconds (default 20)
+//   DRIVE_S   the drive's seconds (default 20); a sustained run is DRIVE_S=300 with
+//             FRAMES=1, its last 120 s read off the frames, the phone warm
 //   COLD=1    this tab's HTTP cache off: a first load
 //   PROBE=1   rAF, submit, onSubmittedWorkDone, mapAsync and getCurrentTexture timed in the page,
 //             kept a scene each in `-<scene>-probe.json`
@@ -173,7 +180,7 @@ const keep = async (scene) => {
     fs.writeFileSync(path.join(OUT, `${L}-${scene}-probe.json`), JSON.stringify(await ev(c, `(()=>{const t0=window.__T0||0;const G=window.__G;const f=a=>a.filter(x=>x[0]>=t0);return {t0,raf:f(G.raf),sub:f(G.sub),done:f(G.done),map:f(G.map),tex:f(G.tex)}})()`, 60000)));
 };
 const begin = () => ev(c, `(__m.start(),window.__T0=performance.now(),1)`);
-const columns = ["t", "interval_ms", "kind_name", "gpu_read", "gpu_frame", "gpu_busy_ms", "eye_cast", "eye_rays", "eye_beam", "eye_sample", "eye_miss", "eye_asked", "eye_reused", "eye_walked", "eye_sky", "terrain_landed", "pack_bytes", "scale", "lattice", "light_cast", "light_rays", "light_beam", "light_sample", "light_miss", "light_asked"];
+const columns = ["t", "interval_ms", "kind_name", "gpu_read", "gpu_frame", "gpu_busy_ms", "eye_cast", "eye_rays", "eye_beam", "eye_sample", "eye_miss", "eye_asked", "eye_reused", "eye_walked", "eye_sky", "terrain_landed", "pack_bytes", "scale", "lattice", "light_cast", "light_rays", "light_beam", "light_sample", "light_miss", "light_asked", "light_moved"];
 const dump = async (scene) => fs.writeFileSync(path.join(OUT, `${L}-${scene}-frames.json`), await ev(c, `(()=>{const k=${JSON.stringify(columns)};const names=(pxl.perf.read().frames.gpu_spans||[]).map(x=>x.name);return JSON.stringify({keys:k,names,rows:__m.frames().map(f=>[...k.map(x=>f[x]),...(f.gpu_spans||[])])})})()`, 60000));
 
 await set("ray_counts", 0);
@@ -182,6 +189,8 @@ await set("sky_time", `__m.SET.sky_time.options.${env.HOUR || "noon"}`);
 if (env.OBSTACLE) await set("orbit_obstacle", `__m.SET.orbit_obstacle.options.${env.OBSTACLE}`);
 let last = "settled";
 let rests = 0;
+let ats = 0;
+let wheels = 0;
 for (const scene of SCENES) {
   if (scene === "off" || scene === "on") {
     await set("shadows", scene === "on" ? 1 : 0);
@@ -232,11 +241,33 @@ for (const scene of SCENES) {
     await shot("walked");
   } else if (scene === "drive") {
     await begin();
-    if (env.VIEW === "1") await ev(c, `(()=>{window.__V=[];window.__Vt=setInterval(()=>{const m=pxl.perf.report().match(/distance ([0-9.]+) u +polar ([-0-9.]+). +azimuth ([-0-9.]+)/);window.__V.push(m?[+m[1],+m[2],+m[3]]:null)},1000);return 1})()`);
-    log("drive", await ev(c, `pxl.perf.drive(${Number(env.DRIVE_S || 20)})`, 300000));
+    if (env.VIEW === "1") await ev(c, `(()=>{window.__V=[];window.__Vt=setInterval(()=>{const m=pxl.perf.report().match(/distance ([0-9.]+) u +polar ([-0-9.]+). +azimuth ([-0-9.]+)/);window.__V.push(m?[Math.round(performance.now()),+m[1],+m[2],+m[3]]:null)},200);return 1})()`);
+    log("drive", await ev(c, `pxl.perf.drive(${Number(env.DRIVE_S || 20)})`, 1000 * Number(env.DRIVE_S || 20) + 120000));
     if (env.VIEW === "1") log("drive view", await ev(c, `(clearInterval(window.__Vt),JSON.stringify(window.__V))`));
     await keep("drive");
     if (env.FRAMES === "1") await dump("drive");
+  } else if (scene.startsWith("at:")) {
+    ats += 1;
+    const n = Number(scene.slice(3));
+    await ev(c, `(async(n)=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();for(let i=0;i<Math.abs(n);i++){cv.dispatchEvent(new WheelEvent('wheel',{deltaY:Math.sign(n)*100,clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true,cancelable:true}));await new Promise(d=>setTimeout(d,16))}})(${n})`, 60000);
+    await set("ray_counts", 1);
+    await wait(3000);
+    await begin();
+    await ev(c, motion + `(10,6)`, 240000);
+    const report = await ev(c, `pxl.perf.report()`);
+    log(`at${ats} wheel ${n}`, (report.match(/distance [0-9.]+ u +polar [-0-9.]+./) || ["?"])[0]);
+    await dump(`at${ats}`);
+    await shot(`at${ats}`);
+    await set("ray_counts", 0);
+  } else if (scene.startsWith("wheel:")) {
+    wheels += 1;
+    const n = Number(scene.slice(6));
+    await ev(c, `(async(n)=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();for(let i=0;i<Math.abs(n);i++){cv.dispatchEvent(new WheelEvent('wheel',{deltaY:Math.sign(n)*100,clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true,cancelable:true}));await new Promise(d=>setTimeout(d,16))}})(${n})`, 60000);
+    await wait(10000);
+    await shot(`wheel${wheels}`);
+  } else if (scene === "tilt") {
+    await ev(c, `(async()=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();const [x,y]=[r.left+r.width/2,r.top+r.height/2];const p=(t,yy,b)=>cv.dispatchEvent(new PointerEvent(t,{pointerId:1,pointerType:'mouse',isPrimary:true,clientX:x,clientY:yy,buttons:b,button:2,bubbles:true,cancelable:true}));p('pointerdown',y,2);for(let n=1;n<=60;n++){p('pointermove',y-0.06*r.height*n/60,2);await new Promise(d=>setTimeout(d,16))}p('pointerup',y-0.06*r.height,0)})()`, 60000);
+    await wait(1000);
   } else if (scene === "cold") {
     await set("ray_counts", 1);
     await wait(2000);

@@ -261,3 +261,140 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
 - **Safari over http://localhost** asks no zstd and gets the 1 MB tile form; https
   takes zstd since Safari 26.3. Left to time.
 - **plei.me** answers Korea from LAX (60–110 KB/s); left as is.
+
+## 11-06, main ef8d1621b7 hot
+
+The batch (kept voxel records drawn every frame, one budgeted holes' queue, owed work
+woken by readback, the rolled lattice) on the user's drive, shadows on, `res fixed`,
+the shelf. Two fresh loads with `s23.mjs` (`SCENES=drive,rest`, `DRIVE_S=300
+FRAMES=1`; then `SCENES=drive,rest,rest`, `DRIVE_S=180`, after 3 min off). Beside
+each, every 5 s the GPU's clock cap (kgsl `max_freq`, `thermal_pwrlevel`) and the AP's
+and skin's temperatures, and an adb screencap every 20 s and 10 s. Beside the second, a
+second DevTools client that kept every console error. The profiler keeps the last 60 s,
+so each figure is the drive's last minute. Data, shots and clock logs:
+out/s23/hot1*, out/s23/hot2*.
+
+| | hot1, still throttling | hot2, settled hot |
+|---|---|---|
+| GPU clock cap in the window | 615 then 550 MHz (level 2–3), of 719 | 348 MHz (level 6) from 50 s on, 295 for 15 s |
+| thermal status, skin | 0 to 1, 39.5–40.5 °C | 1 at the end, 39–40 °C |
+| fps | 22.3 | 12.4 |
+| a frame's fps p50 / p5 | 38.5 / 7.6 | 22.7 / 4.3 |
+| interval p50 / p95 / max | 26 / 133 / 388 ms | 44 / 231 / 521 ms |
+| cast frames' busy p50 / p95 | 77 / 130 ms | 135 / 248 ms |
+| px | 29.6 / 67.4 | 50.5 / 126.6 |
+| miss | 4.0 / 18.0 | 8.1 / 36.4 |
+| sample | 8.3 / 16.9 | 16.5 / 33.4 |
+| beam | 7.9 / 15.1 | 14.2 / 27.6 |
+| world | 6.9 / 8.3 | 11.6 / 15.1 |
+| cast | 6.2 / 8.1 | 9.5 / 14.0 |
+| sample_box | 3.4 / 4.9 | 5.4 / 8.1 |
+| light_raster | 2.3 / 2.8 | 3.8 / 4.7 |
+| every other light pass, p95 | ≤ 0.5 (light_receivers 4.1) | ≤ 0.9 |
+
+Spans are ms p50 / p95. hot2 is the hot level: the clock held at its floor for two
+minutes, and its two 30 s halves read 12.6 and 12.2 fps. hot1's halves read 23.1 and 21.8
+while the cap was still stepping down.
+
+- **Against the journal:** the honest drive's baseline was 16.4 fps, busy 52/115; the
+  deduced hot frame was ~80 ms. Hot now, a cast frame takes 135 ms p50 and the drive runs
+  12.4 fps. Half the frames are held, with no GPU read (C h C h …), and they count in
+  the fps. Long intervals mostly fall on the held frame after a cast.
+- **px is the largest pass:** 37–39% of a cast frame's p50 (it was ~1–2 ms). It and
+  miss follow a frame's busy (correlation 0.70 and 0.68); sample and beam do not (0.14,
+  −0.01). The light's queue passes are under 1 ms. Ray counts were off in the drive,
+  so a spike was not tied to the queue's asks.
+- **No rest:** every frame of both rests asks the next (`wakes next` = n), with no decay
+  over 15 s windows. hot1's rest ran 47 fps with GPU busy 36 ms a timed frame (px p95
+  20). hot2's rest, the camera stopped 0.5 m from a grass wall, ran 22–24 fps with GPU
+  130–170 ms a frame, px p95 125–147 ms. The frames at rest are kinds held, px and
+  gated, and light_moved stays ~10 a frame.
+- **A command buffer invalid every frame, from load:** `[Buffer (unlabeled)] usage
+  (Indirect|Storage(read-write)) includes writable usage and another usage in the same
+  synchronization scope. While validating compute pass usage`, then `[Invalid
+  CommandBuffer] … Submit`. In hot2 there were 7,490 pairs in 263 s (25–50 a second),
+  through the load, the drive and the rest. The pass is not identified. A submit's work is
+  dropped each frame, so the figures above time only the submits that ran.
+- **The picture:**
+  - From about 100 m out (hot2-shots/s-t0086, t0096, t0136, t0166), the ground breaks
+    into thin vertical slivers and fragments over a flat untextured green.
+  - At 10–20 km (hot1-shots/s-t0176, s-t0291; hot2-shots/s-t0151), a bright horizontal
+    line crosses the horizon, and the far ground ends at a hard horizontal edge in haze.
+  - Inside the ground (hot2-shots/s-t0221, 2 m: three rock faces in a corner;
+    hot1-shots/s-t0336, 100 m: a full screen of one brown texture), the camera met faces
+    against solid.
+  - At rest after the drive (hot1-shots/s-t0356), the mid-distance hillside is flat
+    green with faint box edges, and a thin vertical sliver runs at the left edge.
+  - No stale shadow was seen after a turn. The sun is low at the drive's dawn, so few
+    shadows are on screen.
+
+## 11-06, main 034ddad063 hot (the indirect scope fixed)
+
+The fix for the invalid command buffer: an indirect call whose args are bound writable
+is refused as it is encoded, and the four dispatches' counts sit in buffers of their own.
+
+**Mac Chrome.** The same page loaded for 45 s in a fresh profile showed no GPU
+validation error and no ENOTRECOVERABLE. Four React Native "touch end without a touch
+start" warnings came from the pointer over the window.
+
+**Two loads on the S23,** run as the ef8d1621b7 entry ran them:
+- hot3w was a warm-up: `SCENES=drive`, `DRIVE_S=300`, ray counts off.
+- hot3 was measured right after it: `SCENES=set:ray_counts=1,drive,rest,rest`,
+  `DRIVE_S=180`.
+
+Both logged the clock cap and took shots every 10 s, and hot3 also had the console
+listener. Neither page logged a console error (`errs []`, and the listener wrote
+nothing). The clock cap fell to 550 MHz (level 3) 81 s into hot3 and stayed there to the
+end, status 1, skin 40.1–40.5 °C. It did not reach the 348 MHz of hot2, so hot3 is set
+against hot1, which had the same cap (615 to 550 MHz). Data: out/s23/hot3*.
+
+| | hot1, ef8d1621b7, 615→550 MHz | hot3w, counts off, 615 MHz | hot3, counts on, 550 MHz |
+|---|---|---|---|
+| fps | 22.3 | 13.4 | 10.7 |
+| a frame's fps p50 / p5 | 38.5 / 7.6 | 32.3 / 3.9 | 24.4 / 3.2 |
+| interval p50 / p95 / max | 26 / 133 / 388 | 31 / 256 / 405 | 41 / 315 / 452 |
+| cast frames' busy p50 / p95 | 77 / 130 | 166 / 251 | 194 / 303 |
+| light_beam | 0.1 / 0.5 | 73.0 / 82.7 | 81.5 / 92.3 |
+| light_sample | 0.1 / 0.5 | 11.1 / 26.0 | 12.2 / 28.4 |
+| light_walk | 0.1 / 0.5 | 2.0 / 34.5 | 4.1 / 40.0 |
+| light_hit | 0.1 / 0.2 | 1.8 / 19.9 | 4.8 / 20.2 |
+| light_raster | 2.3 / 2.8 | 2.6 / 3.6 | 2.6 / 3.5 |
+| px | 29.6 / 67.4 | 17.2 / 57.0 | 26.0 / 74.4 |
+| miss | 4.0 / 18.0 | 4.8 / 19.7 | 5.6 / 24.1 |
+| sample | 8.3 / 16.9 | 8.7 / 16.7 | 11.1 / 19.6 |
+| beam | 7.9 / 15.1 | 6.9 / 12.8 | 8.3 / 16.6 |
+
+Pass times are ms p50 / p95, over the drive's last minute.
+
+- **The light's work now runs.** On ef8d1621b7 the light's beam, sample, walk and hit
+  passes read near zero. With every submit valid they take ~100 ms of a cast frame,
+  light_beam ~80 ms of it. They follow a frame's busy most closely (light_beam 0.86,
+  light_sample 0.79, light_hit 0.73, px 0.69). The ef8d1621b7 figures therefore timed a
+  frame without its light. That the dropped command buffer held those passes is read off
+  these timings, not traced.
+- **Ray counts:** hot3 counted, per cast:
+
+  | | beam | sample | miss | asked of the world |
+  |---|---|---|---|---|
+  | eye | 220k | 278k | 21k | 25k |
+  | light | 177k | 191k | 193k | 31k |
+
+  The eye reused 74% and walked 5%. The light cast again only 5% of its rays.
+  Counting cost is under the clock's share: hot3w and hot3 differ by 17% in busy, and
+  the cap by 12%.
+- **Frame time against the queue.** The frames at or past the interval's p95 (315 ms)
+  walked 125k eye nodes on average against 15k for the rest, and asked fewer (1.3k
+  against 5.6k). The light's asks follow busy at 0.43. The profiler's frames give no
+  owed count, so the owed queue itself is not visible here.
+- **No rest:** in both rests every frame asked the next. rest2 had no motion or cast
+  for 20 s before it and still ran 18 fps at 151 ms of GPU a timed frame (px p95 80.5,
+  light_beam p95 71). Of its frames, 51 were light casts that asked zero nodes, with
+  33k boxes a cast. It had not come to rest 35 s after the drive.
+- **The picture (hot3-shots):** much as on ef8d1621b7.
+  - At 2 km (s-t0111) and 200 m (s-t0211), the ground is still slivers, scattered boxes
+    and dark squares over flat green.
+  - At 20 km (s-t0101), the bright horizontal line still crosses the horizon.
+  - Inside the ground, at 2 m (s-t0141, grey rock) and 20 m (s-t0156, the whole screen
+    one grey-violet rock), the camera still meets faces against solid.
+  - At rest (s-t0246, s-t0261, s-t0276), a grass wall fills the screen.
+  - No stale shadow was seen after a turn.

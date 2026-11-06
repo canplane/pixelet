@@ -3,13 +3,14 @@
 //! A layer's lattice: how many cells its tile holds a side, the same at
 //! every zoom, and its scale on the camera grid's cells.
 
-use super::quadrant::{Cell, Quadrant};
+use super::quadrant::{Cell, Quadrant, TOP_ZOOM};
 use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
 use crate::space::hierarchy::tree::{
     ancestor_of, child_idx, child_of, first_descendant_of, parent_of,
 };
+use pxl_engine::cast::REACH;
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
 /// is pxl-engine's, which a GPU reads tiles by too; placing it in the
@@ -20,7 +21,7 @@ pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no
 /// reader asks for, so the bake folds no coarser.
 pub const fn coarsest(lattice: Lattice) -> Zoom {
-    lattice.read_zoom(GROUND.cell_zoom(super::quadrant::TOP_ZOOM))
+    lattice.read_zoom(GROUND.cell_zoom(TOP_ZOOM))
 }
 
 /// How far from the eye the view draws with `zoom` its coarsest:
@@ -29,6 +30,10 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
 pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
     split_dist(lattice.grid_zoom(zoom - 1))
 }
+const _: () = assert!(
+    draw_dist(GROUND, TOP_ZOOM) < REACH as f64,
+    "the eye draws within the reach every node it stops on is named and kept by"
+);
 
 /// How far from an observer's foot a demand at `zoom` can lie: where a
 /// clip level holds the grid's cell a zoom coarser from (`CLIP_MARGIN`), as
