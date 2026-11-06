@@ -21,7 +21,10 @@ pub(super) struct Reads {
     /// the overwrites' room and revision and the surface, byte for byte; no brick handed fresh;
     /// and the cast's group made.
     pub same: bool,
-    /// Where each pixel's ray goes through it (pxl-engine `eye::JITTER`).
+    /// Where each pixel's ray goes through it (pxl-engine `eye::JITTER`): the world's
+    /// sequence, which moves only while a change that is not the scene's animation's settles
+    /// (gpu/resolve.rs `asks`). An animation's step holds it, so a turn that only animates
+    /// casts no pixel, runs no queue and owes nothing (schedule.test.rs `rests`).
     pub jitter: [u32; 2],
     /// Whether nothing moved but the listed draws that mark (renderer.rs `partial`).
     pub gated: bool,
@@ -225,18 +228,23 @@ impl Schedule {
         let held = r.content_same && self.content;
         self.content = r.light_made;
         let slid = r.corner != self.corner;
+        // The first frame the eye stands in after it moved marks again, with the footprints
+        // the jitter's frames after it stand on; and every cast of the roll, whose samples
+        // found what the casts before did not.
+        let footprint_owed = rolled || (self.footprint_owed && stands);
         // The world's receivers stand afresh where the light's content or the box moved, and a
-        // stand afresh takes every pixel's walk. Where the walked pixels' list would hold the
-        // claimed tiles' alone, as the last pixels' cast or this frame's is gated, every pixel
-        // is cast again now, whole (`ungated`), so the list holds every walk. The one condition
-        // the stand follows is then the list's (`walked_whole`): afresh where it holds every
-        // walk; else added to those that stand, the light and the box as they were.
+        // stand afresh takes every pixel's walk; so do the footprints owed, which the pixels
+        // the walked list leaves out owe. Where the walked pixels' list would hold the claimed
+        // tiles' alone, as the last pixels' cast or this frame's is gated, every pixel is cast
+        // again now, whole (`ungated`), so the list holds every walk. The one condition the
+        // stand follows is then the list's (`walked_whole`): afresh where it holds every walk;
+        // else added to those that stand, the light and the box as they were.
         let partial = if casts_px(kind) {
             r.gated && kind == FrameKind::px
         } else {
             !self.walked_whole
         };
-        let ungated = light_on && (!held || slid) && partial;
+        let ungated = light_on && (!held || slid || footprint_owed) && partial;
         if ungated && kind == FrameKind::standing {
             kind = FrameKind::px;
         }
@@ -250,10 +258,6 @@ impl Schedule {
         let rays_stand = stands && !jittered;
         let resumes = casts && rays_stand && !self.parked_stale;
         let queue = kind == FrameKind::standing && rays_stand && r.owed[EYE as usize];
-        // The first frame the eye stands in after it moved marks again, with the footprints
-        // the jitter's frames after it stand on; and every cast of the roll, whose samples
-        // found what the casts before did not.
-        let footprint_owed = rolled || (self.footprint_owed && stands);
         let moved = LightMoved::ALL
             .into_iter()
             .filter(|m| match m {

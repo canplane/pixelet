@@ -108,15 +108,13 @@ pub struct Tiles {
     /// (`mark`).
     uniform: u32,
     /// Each tile's word, a row after another, the GPU's; the target's
-    /// pixels across and down; this frame's number, and that of the last
-    /// frame a mark was handed in, every tile where it was drawn whole.
+    /// pixels across and down; this frame's number.
     changed_at: u32,
     size: [u32; 2],
     now: u32,
-    marked_at: u32,
     /// The last frame a mark was handed or drawn in that asks the frames of its claim: one
-    /// not made by what the scene animates alone, whose own steps take the claim's frames
-    /// (`claiming`, `asking`).
+    /// not made by what the scene animates alone, every tile where it was drawn whole
+    /// (`asking`).
     asked_at: u32,
     /// The marks' pass; its uniform, the mark's tiles and its head; and the
     /// tiles this frame's mark sets, 0 where it sets none.
@@ -186,7 +184,6 @@ impl Tiles {
             changed_at: 0,
             size: [0; 2],
             now: 0,
-            marked_at: 0,
             asked_at: 0,
             mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &MARK_GROUP),
             mark_uniform: g.buf(
@@ -273,11 +270,8 @@ impl Tiles {
                 })
                 .filter(|t| t[2] > t[0] && t[3] > t[1])
         };
-        if tiles.is_some() {
-            self.marked_at = self.now;
-            if !(gated && animated) {
-                self.asked_at = self.now;
-            }
+        if tiles.is_some() && !(gated && animated) {
+            self.asked_at = self.now;
         }
         let stamped = tiles.filter(|_| gated || self.claimed_for > 1);
         self.mark_cnt = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
@@ -432,22 +426,13 @@ impl Tiles {
         self.claimed_for
     }
 
-    /// Whether a tile changed so lately it has frames left of its claim but
-    /// this one: a mark was handed, or drawn (`marked_in`), so lately its
-    /// tile is claimed under a claim a frame shorter (`screen::claimed`).
-    pub fn claiming(&self) -> bool {
-        self.claims(self.marked_at)
-    }
-
-    /// `claiming`, of the marks that ask the frames of their claim alone: a tile changed by
-    /// what the scene animates alone is gathered at the animation's own steps.
+    /// Whether a tile changed, by a mark that asks the frames of its claim, so lately it has
+    /// frames left of its claim but this one: handed or drawn (`marked_in`), so lately its
+    /// tile is claimed under a claim a frame shorter (`screen::claimed`). A tile changed by
+    /// what the scene animates alone asks none.
     pub fn asking(&self) -> bool {
-        self.claims(self.asked_at)
-    }
-
-    fn claims(&self, at: u32) -> bool {
         screen::claimed(
-            screen::age(self.now, at),
+            screen::age(self.now, self.asked_at),
             self.claimed_for.saturating_sub(1),
         )
     }
@@ -463,11 +448,7 @@ impl Tiles {
     /// is later than the last, and ask its frames unless the scene's animation
     /// made it (`animated`).
     pub fn marked_in(&mut self, at: u32, animated: bool) {
-        let later = |last: u32| screen::age(self.now, at) < screen::age(self.now, last);
-        if later(self.marked_at) {
-            self.marked_at = at;
-        }
-        if !animated && later(self.asked_at) {
+        if !animated && screen::age(self.now, at) < screen::age(self.now, self.asked_at) {
             self.asked_at = at;
         }
     }

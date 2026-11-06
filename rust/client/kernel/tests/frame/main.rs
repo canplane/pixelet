@@ -1,8 +1,10 @@
 //! Whole frames of the kernel, run as a device runs them: the kernel linked as its native
 //! guest (lib.rs `guest!`, xpute-gpu's `native_guest!`), driven through its rings as the
-//! app's shell drives it (ts/client/src/port/), its world surface drawn offscreen on a wgpu
-//! device. A pass by hand binds its own groups and reads one usage scope; only the renderer's
-//! frames bind what the frame binds, so only they meet what WebGPU refuses of a whole frame.
+//! app's shell drives it (ts/client/src/port/), a frame's turn a refresh after the last on
+//! the guest's clock however long the machine takes (pace.rs), its world surface drawn
+//! offscreen on a wgpu device. A pass by hand binds its own groups and reads one usage
+//! scope; only the renderer's frames bind what the frame binds, so only they meet what WebGPU
+//! refuses of a whole frame.
 //!
 //! The frames fail on any error WebGPU's validation raises, which a scope on the guest's
 //! thread holds turn by turn (gpu.rs); on the kernel's stop, a broken invariant's report
@@ -13,6 +15,7 @@
 mod fs;
 mod gpu;
 mod host;
+mod pace;
 mod spec;
 mod watch;
 
@@ -89,6 +92,7 @@ impl Run {
     /// `submit_grant`), then held to what the frames must keep: whether the kernel wants
     /// the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
+        pace::frame();
         self.clock_ms += REFRESH_MS;
         self.frames += 1;
         self.host.send(
@@ -144,18 +148,24 @@ impl Run {
     }
 
     /// Idle turns, nothing sent, the clock at the display's pace: how many until the kernel
-    /// no longer asks for the next frame at once. What moves on its own wakes it at its own
+    /// asks for the next frame at once no more, its owed work done, a readback's landing
+    /// among it; it asks none at once over a jitter's sequence of turns past the bound after.
+    /// What moves on its own (the companion standing in view) steps on and wakes it at its own
     /// steps, later than that.
     fn rest(&mut self) -> u32 {
-        for n in 1..=REST_FRAMES {
-            if !self.frame(false) {
-                return n;
+        let mut asked = 0;
+        for n in 1..=REST_FRAMES + JITTERS {
+            if self.frame(false) {
+                asked = n;
             }
         }
-        panic!(
-            "frame {}: the owed work did not rest within {REST_FRAMES} idle turns",
+        assert!(
+            asked < REST_FRAMES,
+            "frame {}: the owed work did not rest within {REST_FRAMES} idle turns, the last \
+             asked {asked} turns in",
             self.frames
         );
+        asked + 1
     }
 
     fn pointer(&mut self, phase: &str, x: f64, y: f64) {
@@ -184,8 +194,10 @@ fn main() {
 
 fn frames() {
     let guest = pxl_kernel::guest();
-    // Every turn is one this test rings, none the guest's own thread runs.
+    // Every turn is one this test rings, none the guest's own thread runs, on the display's
+    // clock.
     pause();
+    pace::install(guest);
     let host = Host::lay(guest);
     watch::waiting("the device's opening".to_string());
     if gpu::open(guest).is_none() {

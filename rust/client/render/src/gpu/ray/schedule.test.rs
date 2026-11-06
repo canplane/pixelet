@@ -511,9 +511,12 @@ const REST: usize = beam::ROLLS as usize + (JITTERS as usize - 1) + 3;
 
 /// A scene that stands from `start`: the view, the world, the light and the settings stand
 /// (`shadows`), the jitter moving only while the resolve's sequence asks, every mapping landing
-/// the turn after it is asked, no walk leaving work parked, and no frame dropped. The turns it
-/// takes until nothing asks a frame and no wake is coming; then it asks no frame after.
-fn rests(start: World, shadows: bool) -> Result<usize, String> {
+/// the turn after it is asked, no walk leaving work parked, and no frame dropped; where
+/// `animating`, what the scene animates alone (an idle actor) steps every turn, its tiles
+/// marked and the frame drawn through the gate, the jitter held by it (gpu/resolve.rs `asks`).
+/// The turns it takes until nothing asks a frame and no wake is coming; then, the animation
+/// stepping on, a turn casts no pixel, runs no queue, casts no light and owes nothing.
+fn rests(start: World, shadows: bool, animating: bool) -> Result<usize, String> {
     let mut w = start;
     // The jitter's frames left of its sequence, the most a start may hold.
     let mut gather = JITTERS - 1;
@@ -523,7 +526,7 @@ fn rests(start: World, shadows: bool) -> Result<usize, String> {
         present: true,
         same: true,
         jitter,
-        gated: false,
+        gated: animating,
         shadows,
         made: shadows,
         content_same: true,
@@ -534,7 +537,7 @@ fn rests(start: World, shadows: bool) -> Result<usize, String> {
         owed: None,
         parks: false,
         light_owed: false,
-        whole: true,
+        whole: !animating,
         dropped: false,
     };
     for n in 0..=REST {
@@ -542,7 +545,9 @@ fn rests(start: World, shadows: bool) -> Result<usize, String> {
             for _ in 0..JITTERS {
                 let p = w.turn(standing(&w, w.jitter)).map_err(String::from)?;
                 if p.casts() || p.light.is_some() || p.queue || w.s.rolling() || w.waking() {
-                    return Err(format!("asks a frame after it rested: {w:?}"));
+                    return Err(format!(
+                        "asks a frame after it rested (animating {animating}): {w:?}"
+                    ));
                 }
             }
             return Ok(n);
@@ -564,8 +569,8 @@ fn a_standing_scene_rests_within_its_bound() {
         .iter()
         .chain(worlds(Alphabet::Light))
     {
-        for shadows in [false, true] {
-            most = most.max(rests(w, shadows).unwrap_or_else(|e| panic!("{e}")));
+        for (shadows, animating) in [(false, false), (true, false), (false, true), (true, true)] {
+            most = most.max(rests(w, shadows, animating).unwrap_or_else(|e| panic!("{e}")));
         }
     }
     assert!(

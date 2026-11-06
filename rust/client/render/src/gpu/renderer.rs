@@ -1122,7 +1122,7 @@ impl Renderer {
         // Where each pixel's ray goes through it this frame, the cast's and
         // what is drawn over the world alike (gpu/resolve.rs), in clip units
         // in the frame's words.
-        let j = self.resolve.jitter(animated);
+        let j = self.resolve.jitter();
         if let Some(c) = cast.as_mut() {
             c.eye[eye::JITTER] = j[0].to_bits();
             c.eye[eye::JITTER + 1] = j[1].to_bits();
@@ -1659,12 +1659,12 @@ impl Renderer {
             self.light_tiles.on_dropped();
             self.last_frame_uploads.forget();
         } else {
-            self.resolve.on_drawn(gated, animated);
+            self.resolve.on_drawn(gated);
             // The jitter's sequence run through once anything moved, as
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
-            // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it, and asks no frame between. The eye's
+            // turn at its own steps, drawn with the jitter held (`Resolve::asks`), and asks
+            // no frame between. The eye's
             // rolled lattice run through the same way, a cast a frame, until its rays rest.
             if self.screen.rolling() || (self.resolve.asks() && (quiet || !animated)) {
                 REDRAW.set(true);

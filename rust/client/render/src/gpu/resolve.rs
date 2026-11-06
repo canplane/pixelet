@@ -113,13 +113,13 @@ impl Resolve {
     }
 
     /// This frame's jitter, in drawn pixels, X right and Y down: the
-    /// sequence's next where the frame takes a place of it (`steps`, the
-    /// turn's animation stepped or not), or where it holds: once it ran
-    /// through with nothing else moving, the last frame anything else moved in
-    /// and the `JITTERS - 1` after it, each at its own place of the sequence;
-    /// and in a frame asked for anything else.
-    pub fn jitter(&mut self, animated: bool) -> [f32; 2] {
-        if self.steps(animated) {
+    /// sequence's next while a change that is not the scene's animation's
+    /// settles (`asks`), or where it holds: once it ran through, the last
+    /// frame such a change came in and the `JITTERS - 1` after it, each at its
+    /// own place of the sequence; and in a frame drawn for anything else, an
+    /// animation's step or an owed readback.
+    pub fn jitter(&mut self) -> [f32; 2] {
+        if self.asks() {
             let k = self.phase + 1;
             self.jitter = [halton(k, 2) - 0.5, halton(k, 3) - 0.5];
         }
@@ -239,35 +239,25 @@ impl Resolve {
     /// The frame was drawn: its history is the next's to read, unless it was
     /// drawn through the gate (`gated`), written back into the last; its
     /// view the last, and the jitter moves on where the frame took a place of
-    /// the sequence (`steps`, `animated` as `jitter` was handed it).
-    pub fn on_drawn(&mut self, gated: bool, animated: bool) {
+    /// the sequence (`asks`, as `jitter` read it).
+    pub fn on_drawn(&mut self, gated: bool) {
         if !gated {
             self.turn = 1 - self.turn;
         }
         self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;
-        if self.steps(animated) {
+        if self.asks() {
             self.phase = (self.phase + 1) % JITTERS;
         }
     }
 
-    /// Whether the jitter has places of its sequence left to cover in a
-    /// tile since it last changed, as far as the CPU knows (`Tiles::claiming`).
-    pub fn gathering(&self) -> bool {
-        self.tiles.claiming()
-    }
-
-    /// Whether this frame takes the sequence's next place: while a change that is not the
-    /// scene's animation alone gathers (`asks`), or in a turn the animation stepped
-    /// (`animated`) while its change gathers. A frame asked for anything else, an owed
-    /// readback's, holds the jitter, so it casts no pixel again for it.
-    fn steps(&self, animated: bool) -> bool {
-        self.asks() || (animated && self.gathering())
-    }
-
-    /// Whether the frames left of the jitter's sequence are asked for: gathering since a
-    /// change that is not the scene's animation alone (`Tiles::asking`), whose own steps
-    /// take its places of the sequence.
+    /// Whether the frames left of the jitter's sequence are asked for, and the jitter takes
+    /// the sequence's next place in each: gathering since a change that is not the scene's
+    /// animation alone (`Tiles::asking`). The jitter is the world's sequence, and moving it
+    /// casts every pixel again (gpu/ray/schedule.rs `FrameKind::px`), so an animation's step
+    /// holds it: the tiles it marks are drawn through the gate with the jitter as it stands,
+    /// its own antialiasing converging no further while only it moves, and no pixel is cast,
+    /// no eye's queue run and no readback owed for it.
     pub fn asks(&self) -> bool {
         self.tiles.asking()
     }

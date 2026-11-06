@@ -50,12 +50,15 @@ pub struct BootInfo {
 /// (0 for the next turn, `sched::wake::NO_WAKE` for none).
 pub type Entry = fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64;
 
-/// What a form's export runs: `entry`'s turn, the clock and the hostcall
-/// installed from `boot` on the first.
+/// What a form's export runs: `entry`'s turn, the hostcall and the publish
+/// installed from `boot` on the first, and its clock where none was set
+/// before it, as a host that keeps the guest's time sets one (`clock::set`).
 pub fn run(quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
-    if !crate::clock::is_set() {
+    if !crate::hostcall::is_set() {
         let b = boot();
-        crate::clock::set(b.clock);
+        if !crate::clock::is_set() {
+            crate::clock::set(b.clock);
+        }
         crate::hostcall::set(b.hostcall);
         crate::ipc::stream::on_publish(b.publish);
     }
