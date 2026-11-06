@@ -36,7 +36,9 @@ fn hit_fill(w: Walked) -> u32 {
 }
 
 /// Walk `w`'s hit at pixel `id`, entered through `face`, put as hit `r` for what lies about
-/// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`).
+/// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`), and as a stop the
+/// record takes (record_stops.wgsl): the asset it stopped at, and the line its pixel's cell's
+/// rays resumed from, which that face's word is asked off.
 fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
@@ -48,6 +50,10 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   beams[k + HIT_NODE + NODE_ROOTS + 2u] = u32(w.roots.z);
   beams[k + HIT_FACE] = face;
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
+  beams[k + HIT_ASSET] = w.asset.x;
+  beams[k + HIT_ASSET + 1u] = w.asset.y;
+  let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
+  beams[k + HIT_LINE] = beams[cell_start(cell) + CELL_CORNER] * LINE_WORDS;
 }
 
 /// The ray's words where walk `w` ended, entered through `face`, `faces` what lies about that

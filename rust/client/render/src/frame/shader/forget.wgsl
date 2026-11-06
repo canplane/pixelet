@@ -4,7 +4,8 @@
 // query reads changed (pxl-engine node_cache.rs `FORGETS`): every slot's key, or the key of
 // each slot over a brick that moved (`forgets`), over a box of what is placed or cut that
 // changed (`over_box`), or handed a slot of a child group of what is placed that was
-// written (`reads_written`).
+// written (`reads_written`). The eye's record of voxels is forgotten by the same predicates in
+// the same pass (record_draw.wgsl `record_forget_cs`).
 
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 

@@ -1,21 +1,19 @@
-//! `light_cs` and `light_mark_cs` by hand (frame/shader/light.wgsl, light_mark.wgsl) answer as
-//! pxl-engine's light over the real world of tests/real_world. A slot of a tile the cast casts
-//! takes its visible voxel where its own ray enters it as the sample did (`cast::entry_with`)
-//! at the band it asks (`Light::band`), its word `light::word(light::depth(..))`; else the sky
-//! where the four samples about it (`light::samples_about`) went on to their reach at its band;
-//! else it is listed for its walk. That composition is this test's own reading of light.wgsl
-//! `light_cs`, which pxl-engine has no one function for. The samples are each walked by
-//! `cast::first` over the world, and each texel's visible voxel is the nearest of those about
-//! it its ray enters, as the raster keeps it, some put out of place. A drawn pixel whose ray met
-//! the world marks the tile it met it on (`Light::tile_of`), and where the head asks the
-//! footprint, the tiles between it and each later neighbor's (`light::footprint`). Every word of
-//! the map is compared, and the slots listed for their walk as a set; every tile the reading
-//! marks must be marked. The light's reciprocals are the host's
-//! words (`Light::inverse`, `Light::t_max_inverse`), and a ray's start is summed in fixed point
-//! (`Starts::start`), read off a probe and held to the Rust's exactly; a slot may take what
-//! a fused sum gives it, each counted: its depth's product fused into the push after it; a
-//! slot's band is exact (`Light::band`); a tile a pixel meets the world within `EDGE` of may be
-//! marked or not. Skipped where no adapter answers.
+//! `light_cs` and the receivers' passes by hand (frame/shader/light.wgsl, light_mark.wgsl)
+//! answer as pxl-engine's light over the real world of tests/real_world. A slot of a tile the
+//! cast casts takes its visible voxel where its own ray enters it as the sample did
+//! (`cast::entry_with`) at the band it asks (`Light::band`), its word
+//! `light::word(light::depth(..))`; else the sky where the four samples about it
+//! (`light::samples_about`) went on to their reach at its band; else it is listed for its walk.
+//! That composition is this test's own reading of light.wgsl `light_cs`, which pxl-engine has no
+//! one function for. The samples are each walked by `cast::first` over the world, and each
+//! texel's visible voxel is the nearest of those about it its ray enters, as the raster keeps
+//! it, some put out of place. Every word of the map is compared, and the slots listed for their
+//! walk as a set. The light's reciprocals are the host's words (`Light::inverse`,
+//! `Light::t_max_inverse`), and a ray's start is summed in fixed point (`Starts::start`), read
+//! off a probe and held to the Rust's exactly; a slot may take what a fused sum gives it, each
+//! counted: its depth's product fused into the push after it; a slot's band is exact
+//! (`Light::band`). The receivers stand on the tiles `Light::box_tiles` gives, each listed once
+//! (`hand_light_marks_answer_as_the_rust`). Skipped where no adapter answers.
 
 mod gpu;
 mod real_world;
@@ -27,9 +25,9 @@ use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::{eye, param, raster, ray, Zoom};
+use pxl_engine::{eye, param, raster, ray, record, Zoom};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK};
-use pxl_render::frame::shader::word::SQUARE_SIDE;
+use pxl_render::frame::shader::word::{ROW_LANES, SQUARE_SIDE};
 
 use real_world::{q8, Asking, Built, World, FINEST};
 
@@ -670,35 +668,60 @@ fn tiles_about(l: &Light, v: [f32; 3]) -> Vec<[i32; 2]> {
         .collect()
 }
 
-/// A pair of neighbors that marked a tile: its step, across, down and the two diagonals;
-/// whether the later pixel lies on row 0; and whether it spans the footprint whole.
-#[derive(Clone, Copy)]
-struct Pair {
-    step: usize,
-    row_0: bool,
-    whole: bool,
+/// The tiles a set of receivers must stand on, and those they may, by a tile's edge or the
+/// reach's.
+#[derive(Default)]
+struct Stood {
+    must: BTreeSet<[i32; 2]>,
+    may: BTreeSet<[i32; 2]>,
 }
 
-/// The tiles between `a` and `b` (`light::footprint`) put in `out`, and whether there are any.
-fn between(a: [i32; 2], b: [i32; 2], out: &mut BTreeSet<[i32; 2]>) -> bool {
-    let Some([lo, hi]) = light::footprint(a, b) else {
-        return false;
-    };
-    for j in lo[1]..=hi[1] {
-        for i in lo[0]..=hi[0] {
-            out.insert([i, j]);
+impl Stood {
+    fn put(&mut self, t: [i32; 2], sure: bool) {
+        if sure {
+            self.must.insert(t);
+        }
+        self.may.insert(t);
+    }
+
+    /// The tiles from `first` to `last`, each `sure` or not.
+    fn put_range(&mut self, [first, last]: [[i32; 2]; 2], sure: bool) {
+        for y in first[1]..=last[1] {
+            for x in first[0]..=last[0] {
+                self.put([x, y], sure);
+            }
         }
     }
-    true
 }
 
+/// Whether a point `d` units from the eye lies within `reach` of it: yes, no, or by the reach's
+/// edge, where a GPU's rounding may put it either side.
+fn within_by(d: f32, reach: f32) -> (bool, bool) {
+    let edge = 1e-4 * reach;
+    (d <= reach - edge, d <= reach + edge)
+}
+
+/// The receivers' passes by hand (light_mark.wgsl, light_stood.wgsl) stand on the tiles
+/// pxl-engine's one rule gives (`Light::box_tiles`, the footprint where the head asks it), each
+/// listed once (`light::LISTED_STOOD`), the count in the stood list's args
+/// (`light::STOOD_CNT`), over the real world of tests/real_world: the pixels the eye walked
+/// apart, off their list past the grid's words (`light_mark_walked_cs`, `ray::walked_words`),
+/// each hit a box of one point; and every box the eye's raster drew, a voxel of its record
+/// each, its planes as `cast::asset_box` lays them (`light_mark_cs`). The cast's first stood tile opens the slide
+/// and begins the reads' epoch anew where a slide went unrun (`light::READS_FROM`); none
+/// stood, none listed and the slide shut, as past the reach. A tile a point lies within `EDGE`
+/// of, or a point by the reach, may be stood on or not. Skipped where no adapter answers.
 #[test]
-fn hand_light_mark_cs_answers_as_the_rust() {
+fn hand_light_marks_answer_as_the_rust() {
     let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let pipe = gpu.pipeline(src(SHADER_LIGHT_MARK), "light_mark_cs");
+    let marks = src(SHADER_LIGHT_MARK);
+    let pipes = [
+        gpu.pipeline(marks, "light_mark_walked_cs"),
+        gpu.pipeline(marks, "light_mark_cs"),
+    ];
     let built = real_world::build(EYE);
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let lit = |dir: [f32; 3], side: f32| lit([0; 3], dir, side, 60.0, 400.0, [1300, -900]);
@@ -802,34 +825,52 @@ fn hand_light_mark_cs_answers_as_the_rust() {
             footprint: true,
             lit: lit([-0.4, 0.1, -0.9], 0.5),
         },
+        Look {
+            name: "high over the ground, nothing within the reach",
+            origin: over([EYE[0] + 90, EYE[1] + 90], 2000),
+            look: [0.3, 0.2, -0.93],
+            tan: [0.3, 0.2],
+            far: 4000.0,
+            size: [40, 27],
+            jitter: [0.125, 0.0],
+            footprint: true,
+            lit: lit([0.3, 0.2, -0.93], 1.0),
+        },
     ];
     let mut tally = Tally::default();
     let mut kinds = Kinds::default();
     for c in &looks {
-        run_marks(&gpu, &pipe, built.world(), c, &mut tally, &mut kinds);
+        for by in [Marks::Walked, Marks::Voxels] {
+            run_marks(&gpu, &pipes, built.world(), c, by, &mut tally, &mut kinds);
+        }
     }
     kinds.hold(&[
         "pixels met",
         "pixels met nothing",
-        "pixels marked, not yet walked",
-        "neighbors past the footprint",
-        "tiles stood on by pairs alone",
-        "tiles stood on by pairs across alone",
-        "tiles stood on by pairs down alone",
-        "tiles stood on by pairs down a diagonal alone",
-        "tiles stood on by pairs up a diagonal alone",
-        "tiles stood on by pairs up to row 0 alone",
-        "tiles stood on by pairs a footprint apart alone",
-        "points past the box",
+        "pixels walked apart",
+        "pixels past the reach",
+        "voxels",
+        "samples gone on",
+        "voxels' boxes past the reach",
+        "tiles stood on",
+        "casts that stood nothing",
     ]);
     tally.end("light_mark_cs");
 }
 
+/// Which of the receivers' passes stands the tiles (`hand_light_marks_answer_as_the_rust`).
+#[derive(Clone, Copy, PartialEq)]
+enum Marks {
+    Walked,
+    Voxels,
+}
+
 fn run_marks(
     gpu: &Gpu,
-    pipe: &wgpu::ComputePipeline,
+    pipes: &[wgpu::ComputePipeline; 2],
     w: World,
     c: &Look,
+    by: Marks,
     tally: &mut Tally,
     kinds: &mut Kinds,
 ) {
@@ -840,10 +881,13 @@ fn run_marks(
     let range = [8, FINEST];
     let [wd, ht] = c.size;
     let texels = (wd * ht) as usize;
-
-    // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
-    // some marked and not yet walked, some meeting nothing.
-    let mut words: Vec<u32> = (0..ray::WORDS * wd * ht).map(noise).collect();
+    let reach = l.reach(SIZE);
+    let n = light::tiles(SIZE);
+    let grow = if c.footprint {
+        light::FOOTPRINT_TILES
+    } else {
+        0
+    };
     let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
@@ -855,106 +899,12 @@ fn run_marks(
             across: 0.0,
         },
     };
-    let tan_of = |p: [u32; 2]| {
-        let at = [0, 1].map(|k| (p[k] as f32 + 0.5 + c.jitter[k]) / c.size[k] as f32 * 2.0);
-        [(at[0] - 1.0) * c.tan[0], (1.0 - at[1]) * c.tan[1]]
-    };
-    let mut met: Vec<Option<Vec<[i32; 2]>>> = vec![None; texels];
-    for y in 0..ht {
-        for x in 0..wd {
-            let k = (y * wd + x) as usize;
-            let t = tan_of([x, y]);
-            let dir = cast::through(forward, right, up, t[0], t[1]);
-            let r = Ray::new(dir, c.far);
-            let m = cast::first(&mut q, c.origin, &r, detail, Until::Opaque);
-            let h = noise(k as u32 ^ 0x4242);
-            let (first, at) = if h.is_multiple_of(13) {
-                kinds.add("pixels marked, not yet walked", true);
-                (ray::MISS, 0)
-            } else if m.ends == End::Hit && !h.is_multiple_of(17) {
-                let face = ray::face(r.dir, m.hit.axis);
-                (
-                    ray::first_word(m.hit.asset[0], face, m.hit.node.zoom),
-                    m.hit.t.to_bits(),
-                )
-            } else {
-                kinds.add("pixels met nothing", true);
-                (0, 0)
-            };
-            words[k] = first;
-            words[texels + k] = at;
-            if first != 0 && first != ray::MISS {
-                let v = dir.map(|a| a * m.hit.t);
-                let about = tiles_about(&l, v);
-                let n = light::tiles(SIZE) as i32;
-                kinds.add(
-                    "points past the box",
-                    !about
-                        .iter()
-                        .all(|t| t[0] >= 0 && t[1] >= 0 && t[0] < n && t[1] < n),
-                );
-                kinds.add("pixels met", true);
-                kinds.add("pixels by a tile's edge", about.len() > 1);
-                met[k] = Some(about);
-            }
-        }
-    }
-
-    // The tiles every reading marks; and what marked each: a pixel's own, or a pair of
-    // neighbors, by its step, whether it is a pair over row 0 and whether it spans the whole
-    // footprint.
-    let mut must = BTreeSet::new();
-    let mut by: std::collections::BTreeMap<[i32; 2], Vec<Option<Pair>>> = Default::default();
-    for y in 0..ht {
-        for x in 0..wd {
-            let Some(own) = &met[(y * wd + x) as usize] else {
-                continue;
-            };
-            if own.len() == 1 {
-                must.insert(own[0]);
-                by.entry(own[0]).or_default().push(None);
-            }
-            if !c.footprint {
-                continue;
-            }
-            for (step, (dx, dy)) in [(1, 0), (0, 1), (1, 1), (1, -1)].into_iter().enumerate() {
-                let (qx, qy) = (x as i32 + dx, y as i32 + dy);
-                if qy < 0 || qx >= wd as i32 || qy >= ht as i32 {
-                    continue;
-                }
-                let Some(other) = &met[(qy as u32 * wd + qx as u32) as usize] else {
-                    continue;
-                };
-                if own.len() == 1 && other.len() == 1 {
-                    let (a, b) = (own[0], other[0]);
-                    let span = (a[0] - b[0]).abs().max((a[1] - b[1]).abs());
-                    let mut sure = BTreeSet::new();
-                    let stood = between(a, b, &mut sure);
-                    kinds.add("neighbors past the footprint", !stood && a != b);
-                    let label = Pair {
-                        step,
-                        row_0: qy == 0 && dy < 0,
-                        whole: span == light::FOOTPRINT_TILES,
-                    };
-                    for t in &sure {
-                        by.entry(*t).or_default().push(Some(label));
-                    }
-                    must.extend(sure);
-                }
-            }
-        }
-    }
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_FOOTPRINT] = u32::from(c.footprint);
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
-    }
     let mut eye_words = vec![0u32; eye::WORDS];
     for k in 0..3 {
         eye_words[eye::FORWARD + k] = forward[k].to_bits();
         eye_words[eye::RIGHT + k] = right[k].to_bits();
         eye_words[eye::UP + k] = up[k].to_bits();
+        eye_words[eye::ORIGIN + k] = c.origin[k] as u32;
     }
     eye_words[eye::TAN] = c.tan[0].to_bits();
     eye_words[eye::TAN + 1] = c.tan[1].to_bits();
@@ -963,62 +913,166 @@ fn run_marks(
     eye_words[eye::RANGE] = range[0];
     eye_words[eye::RANGE + 1] = range[1];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
+    let grid = beam::Grid::of(c.tan, 1);
+    eye_words[eye::GRID..eye::GRID + beam::GRID_WORDS].copy_from_slice(&grid.words());
+    let walked_at = grid.walked_at() as usize;
+    let drawn = wd * ht;
+    let mut beams = vec![0u32; walked_at + ray::walked_words(drawn) as usize];
 
-    // The stands as an earlier cast left them, some this cast's number already; the rest of the
-    // list noise.
-    let n = light::tiles(SIZE);
-    let stands = light::stands_at(SIZE) as usize;
+    // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
+    // some meeting nothing, some walked apart and listed.
+    let mut words: Vec<u32> = (0..ray::WORDS * wd * ht).map(noise).collect();
+    let tan_of = |p: [u32; 2]| {
+        let at = [0, 1].map(|k| (p[k] as f32 + 0.5 + c.jitter[k]) / c.size[k] as f32 * 2.0);
+        [(at[0] - 1.0) * c.tan[0], (1.0 - at[1]) * c.tan[1]]
+    };
+    let mut want = Stood::default();
+    // The tiles about `t`, the footprint where the head asks it, kept to the box.
+    let about = |t: [i32; 2]| {
+        let m = n as i32 - 1;
+        [
+            [(t[0] - grow).max(0), (t[1] - grow).max(0)],
+            [(t[0] + grow).min(m), (t[1] + grow).min(m)],
+        ]
+    };
+    let mut raster_args = vec![0u32; raster::ARGS_WORDS as usize];
+    let mut boxes = vec![0u32; raster::BOX_WORDS as usize];
+    match by {
+        Marks::Walked => {
+            let mut walked = Vec::new();
+            for y in 0..ht {
+                for x in 0..wd {
+                    let k = (y * wd + x) as usize;
+                    let t = tan_of([x, y]);
+                    let dir = cast::through(forward, right, up, t[0], t[1]);
+                    let r = Ray::new(dir, c.far);
+                    let m = cast::first(&mut q, c.origin, &r, detail, Until::Opaque);
+                    let h = noise(k as u32 ^ 0x4242);
+                    let (first, at) = if m.ends == End::Hit && !h.is_multiple_of(17) {
+                        let face = ray::face(r.dir, m.hit.axis);
+                        (
+                            ray::first_word(m.hit.asset[0], face, m.hit.node.zoom),
+                            m.hit.t.to_bits(),
+                        )
+                    } else {
+                        kinds.add("pixels met nothing", true);
+                        (0, 0)
+                    };
+                    words[k] = first;
+                    words[texels + k] = at;
+                    if !h.is_multiple_of(3) {
+                        continue;
+                    }
+                    walked.push((y << 16) | x);
+                    if first == 0 {
+                        continue;
+                    }
+                    let v = dir.map(|a| a * m.hit.t);
+                    let d = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                    kinds.add("pixels met", true);
+                    kinds.add("pixels past the reach", d > reach);
+                    let (sure, maybe) = within_by(d, reach);
+                    if !maybe {
+                        continue;
+                    }
+                    let own = tiles_about(&l, v);
+                    for &t in &own {
+                        want.put_range(about(t), sure && own.len() == 1);
+                    }
+                }
+            }
+            kinds.count("pixels walked apart", walked.len() as u64);
+            beams[walked_at + ray::WALKED_CNT as usize] = walked.len() as u32;
+            for (e, &p) in walked.iter().enumerate() {
+                beams[walked_at + (ray::WALKED_LIST + e as u32) as usize] = p;
+            }
+        }
+        Marks::Voxels => {
+            // A box a stopped sample's voxel, its planes as record_draw.wgsl writes them
+            // (`cast::asset_box`), the count as the raster's args hold it.
+            let mut voxels = 0u32;
+            for j in 0..grid.samples[1] {
+                for i in 0..grid.samples[0] {
+                    let t = grid.sample([i, j]);
+                    let dir = cast::through(forward, right, up, t[0], t[1]);
+                    let r = Ray::new(dir, c.far);
+                    let m = cast::first(&mut q, c.origin, &r, detail, Until::Opaque);
+                    if m.ends == End::Miss {
+                        kinds.add("samples gone on", true);
+                        continue;
+                    }
+                    let (lo, hi) = cast::asset_box(c.origin, &m.hit.node, m.hit.asset[0]);
+                    let at = (voxels * raster::BOX_WORDS) as usize;
+                    voxels += 1;
+                    if boxes.len() < at + raster::BOX_WORDS as usize {
+                        boxes.resize(at + raster::BOX_WORDS as usize, 0);
+                    }
+                    for k in 0..3 {
+                        boxes[at + raster::BOX_LO as usize + k] = lo[k].to_bits();
+                        boxes[at + raster::BOX_HI as usize + k] = hi[k].to_bits();
+                    }
+                    kinds.add("voxels", true);
+                    // The box a hair smaller holds the tiles it must stand on, a hair larger
+                    // those it may, as a GPU's rounding may move a tile's edge.
+                    let hair = 1e-3;
+                    let inner = l
+                        .box_tiles(
+                            SIZE,
+                            lo.map(|v| v + hair),
+                            hi.map(|v| v - hair),
+                            c.footprint,
+                        )
+                        .filter(|_| Light::within(lo, hi, reach * (1.0 - 1e-4)));
+                    let outer = l.box_tiles(
+                        SIZE,
+                        lo.map(|v| v - hair),
+                        hi.map(|v| v + hair),
+                        c.footprint,
+                    );
+                    kinds.add("voxels' boxes past the reach", outer.is_none());
+                    for (range, sure) in [(outer, false), (inner, true)] {
+                        if let Some(r) = range {
+                            want.put_range(r, sure);
+                        }
+                    }
+                }
+            }
+            raster_args[raster::ARGS_INSTANCES as usize] = voxels;
+        }
+    }
+    let inside = |t: &[i32; 2]| t[0] >= 0 && t[1] >= 0 && t[0] < n as i32 && t[1] < n as i32;
+    want.must.retain(inside);
+    want.may.retain(inside);
+    kinds.count("tiles stood on", want.must.len() as u64);
+    kinds.add("casts that stood nothing", want.may.is_empty());
+
+    let mut head = vec![0u32; light::HEAD_WORDS];
+    head[light::HEAD_CAST] = CAST;
+    head[light::HEAD_WORLD] = CAST;
+    head[light::HEAD_FOOTPRINT] = u32::from(c.footprint);
+    head[light::HEAD_SLIDE_OWED] = CAST - 2;
+    for (k, v) in light::head_layout(SIZE) {
+        head[k] = v;
+    }
+    // The list noise but the slide's words: the slide last ran before the last cast that owed
+    // one. The marks some other cast's, none the world's this one's.
     let mut list: Vec<u32> = (0..light::list_words(SIZE))
         .map(|k| noise(k ^ 0x99))
         .collect();
+    let slide = light::slide_at(SIZE) as usize;
+    list[slide + light::SLIDE_RAN as usize] = CAST - 3;
+    list[slide + light::READS_FROM as usize] = 0;
+    let marks_at = (light::ARGS_WORDS + light::listed_marks_at(SIZE, light::LISTED_STOOD)) as usize;
+    let mut args: Vec<u32> = (0..light::args_words(SIZE)).map(noise).collect();
     for t in 0..(n * n) as usize {
-        list[stands + t] = match noise(t as u32) % 7 {
-            0 => CAST,
-            1 => 0,
-            2 => CAST + 1,
+        args[marks_at + t] = match noise(t as u32) % 3 {
+            0 => 0,
+            1 => CAST + 1,
             _ => CAST - 1,
         };
     }
-    let inside = |t: &[i32; 2]| t[0] >= 0 && t[1] >= 0 && t[0] < n as i32 && t[1] < n as i32;
-    let word_of = |t: &[i32; 2]| stands + (t[1] as u32 * n + t[0] as u32) as usize;
-    let stood = must.iter().filter(|t| inside(t)).count();
-    assert!(stood > 0, "{}: no tile stood on in the box", c.name);
-    // The tiles in the box marked by what `of` takes alone.
-    let alone = |of: &dyn Fn(&Pair) -> bool| {
-        by.iter()
-            .filter(|(t, ways)| inside(t) && ways.iter().all(|w| w.as_ref().is_some_and(of)))
-            .count()
-    };
-    let stood_alone = [
-        ("tiles stood on by pairs alone", alone(&|_| true)),
-        (
-            "tiles stood on by pairs across alone",
-            alone(&|w| w.step == 0),
-        ),
-        (
-            "tiles stood on by pairs down alone",
-            alone(&|w| w.step == 1),
-        ),
-        (
-            "tiles stood on by pairs down a diagonal alone",
-            alone(&|w| w.step == 2),
-        ),
-        (
-            "tiles stood on by pairs up a diagonal alone",
-            alone(&|w| w.step == 3),
-        ),
-        (
-            "tiles stood on by pairs up to row 0 alone",
-            alone(&|w| w.row_0),
-        ),
-        (
-            "tiles stood on by pairs a footprint apart alone",
-            alone(&|w| w.whole),
-        ),
-    ];
-    for (k, n) in stood_alone {
-        kinds.count(k, n as u64);
-    }
+    let mut stood = vec![0u32; light::STOOD_WORDS as usize];
+    stood[..ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
 
     let rays = texture(
         &gpu.device,
@@ -1032,31 +1086,84 @@ fn run_marks(
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
     let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
-    let side = SQUARE_SIDE;
-    gpu.dispatch(
-        pipe,
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (3, wgpu::BindingResource::TextureView(&view)),
-            (11, head_buf.as_entire_binding()),
-            (12, list_buf.as_entire_binding()),
-        ],
-        [wd.div_ceil(side), ht.div_ceil(side), 1],
-    );
+    let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
+    let stood_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
+    let beams_buf = gpu.buffer(&beams, wgpu::BufferUsages::STORAGE);
+    let raster_buf = gpu.buffer(&raster_args, wgpu::BufferUsages::STORAGE);
+    let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
+    let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
+        (0, eye_buf.as_entire_binding()),
+        (11, head_buf.as_entire_binding()),
+        (12, list_buf.as_entire_binding()),
+        (21, args_buf.as_entire_binding()),
+        (22, stood_buf.as_entire_binding()),
+    ];
+    let (pipe, groups) = match by {
+        Marks::Walked => {
+            binds.push((3, wgpu::BindingResource::TextureView(&view)));
+            binds.push((23, beams_buf.as_entire_binding()));
+            let cnt = beams[walked_at + ray::WALKED_CNT as usize];
+            let per = ray::MISS_LANES * ray::MISS_ACROSS;
+            (&pipes[0], [ray::MISS_ACROSS, cnt.div_ceil(per).max(1), 1])
+        }
+        Marks::Voxels => {
+            binds.push((24, raster_buf.as_entire_binding()));
+            binds.push((25, boxes_buf.as_entire_binding()));
+            (&pipes[1], [record::ENTRIES.div_ceil(ROW_LANES), 1, 1])
+        }
+    };
+    gpu.dispatch(pipe, &binds, groups);
     let out = gpu.read(&list_buf);
-    let name = c.name;
-    let want: Vec<u32> = must.iter().filter(|t| inside(t)).map(|_| CAST).collect();
-    let got: Vec<u32> = must
+    let out_stood = gpu.read(&stood_buf);
+    let cnt = out_stood[light::STOOD_CNT as usize] as usize;
+    let at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
+    let listed: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
         .iter()
-        .filter(|t| inside(t))
-        .map(|t| out[word_of(t)])
+        .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
         .collect();
-    let tiles: Vec<[i32; 2]> = must.iter().filter(|t| inside(t)).copied().collect();
+    let got: BTreeSet<[i32; 2]> = listed.iter().copied().collect();
+    let name = c.name;
+    let case = |what: &str| {
+        format!(
+            "{name}, {}: {what}",
+            ["the walked", "the voxels"][by as usize]
+        )
+    };
+    // Each tile listed once, every one it must stand on listed, none it may not.
     tally.compare(
-        &format!("{name}: the tiles stood on, {stood} of them"),
-        &want,
-        &got,
-        |k| format!("tile {:?}", tiles[k]),
+        &case("each listed once"),
+        &[listed.len() as u32],
+        &[got.len() as u32],
+        |_| "listed".into(),
+    );
+    let must: Vec<[i32; 2]> = want.must.iter().copied().collect();
+    tally.compare(
+        &case("the tiles it must stand on"),
+        &vec![1; must.len()],
+        &must
+            .iter()
+            .map(|t| u32::from(got.contains(t)))
+            .collect::<Vec<_>>(),
+        |k| format!("tile {:?}", must[k]),
+    );
+    let extra: Vec<[i32; 2]> = got.difference(&want.may).copied().collect();
+    tally.compare(
+        &case("tiles past what it may stand on"),
+        &[0],
+        &[extra.len() as u32],
+        |_| format!("{extra:?}"),
+    );
+    // The slide opened and the reads' epoch begun anew by the first stood tile, else neither.
+    let n_slide = n.div_ceil(SQUARE_SIDE);
+    let any = cnt != 0;
+    tally.compare(
+        &case("the slide opened, the reads' epoch begun anew"),
+        &[if any { n_slide } else { 0 }, if any { CAST } else { 0 }],
+        &[
+            out_stood[light::STOOD_SLIDE as usize],
+            out[slide + light::READS_FROM as usize],
+        ],
+        |k| ["the slide's workgroups across", "the reads' epoch"][k].into(),
     );
 }
 

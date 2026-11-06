@@ -21,12 +21,13 @@ use pxl_engine::seed::node_seed;
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
-use pxl_engine::{area, eye, value, wrap_idx, Zoom, LEAF_CELL};
+use pxl_engine::{area, eye, ray, value, wrap_idx, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
     SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
     SHADER_LIGHT_MARK_DRAWS,
 };
+use pxl_render::frame::shader::word::ROW_LANES;
 use wgpu::util::DeviceExt;
 
 use real_world::{mix, Built, World};
@@ -2643,8 +2644,10 @@ struct Chain<'d> {
     device: &'d wgpu::Device,
     queue: &'d wgpu::Queue,
     pipelines: &'d [wgpu::ComputePipeline; 6],
-    /// `light_mark_draws_cs`, generated, a reader beside the draws of what compact lays.
+    /// `light_mark_draws_cs`, generated, a reader beside the draws of what compact lays, and
+    /// the one thread that opens its workgroups (`light_mark_draws_open_cs`).
     mark_draws: &'d wgpu::ComputePipeline,
+    mark_draws_open: &'d wgpu::ComputePipeline,
     records: wgpu::Buffer,
     list: wgpu::Buffer,
     regions: wgpu::Buffer,
@@ -2816,9 +2819,12 @@ impl Chain<'_> {
         }
         q.submit([e.finish()]);
         // The tiles the decor compacted stands on, as the light's mark reads its lanes: the
-        // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs).
+        // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs), the
+        // world's receivers stood in an earlier cast, none of their tiles marked; its
+        // workgroups as its one thread opens them, the placed decor's past the actors'.
         let mut head = vec![0u32; light::HEAD_WORDS];
         head[light::HEAD_CAST] = CAST_NUMBER;
+        head[light::HEAD_WORLD] = CAST_NUMBER - 1;
         for (k, v) in light::head_layout(MAP_SIDE) {
             head[k] = v;
         }
@@ -2827,36 +2833,47 @@ impl Chain<'_> {
             contents: bytes(&head),
             usage: wgpu::BufferUsages::UNIFORM,
         });
-        let tiles = light::tiles(MAP_SIDE);
-        let stood = buffer(
-            d,
-            &vec![0u32; (light::stands_at(MAP_SIDE) + tiles * tiles) as usize],
+        let list = buffer(d, &vec![0u32; light::list_words(MAP_SIDE) as usize]);
+        let light_args = buffer(d, &vec![0u32; light::args_words(MAP_SIDE) as usize]);
+        let mut stood_words = vec![0u32; light::STOOD_WORDS as usize];
+        stood_words[..ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
+        let stood = buffer(d, &stood_words);
+        let binds = [
+            (0, &eye_buf),
+            (11, &head),
+            (12, &list),
+            (18, &drawing),
+            (19, &self.regions),
+            (20, &self.instances),
+            (21, &light_args),
+            (22, &stood),
+        ];
+        let open = [binds[1], binds[4], binds[5], binds[6]];
+        dispatch(d, q, self.mark_draws_open, &open, [1, 1, 1]);
+        let opened = read(d, q, &light_args, frame.name);
+        let at = light::ARGS_DRAWS as usize;
+        let placed =
+            read(d, q, &self.regions, frame.name)[2 * drawn::REGIONS as usize - 1].min(self.cap);
+        let threads = if placed == 0 {
+            0
+        } else {
+            light::STANDS as u32 + placed
+        };
+        assert_eq!(
+            opened[at..at + 3],
+            [threads.div_ceil(ROW_LANES), 1, 1],
+            "{}: the drawn receivers' workgroups",
+            frame.name
         );
-        dispatch(
-            d,
-            q,
-            self.mark_draws,
-            &[
-                (0, &eye_buf),
-                (11, &head),
-                (12, &stood),
-                (18, &drawing),
-                (19, &self.regions),
-                (20, &self.instances),
-            ],
-            [
-                (light::ACTORS as u32 + self.cap).div_ceil(generation::LANES),
-                1,
-                1,
-            ],
-        );
+        dispatch(d, q, self.mark_draws, &binds, [opened[at], 1, 1]);
+        let stood = read(d, q, &stood, frame.name)[light::STOOD_CNT as usize];
         FrameLeft {
             records: read(d, q, &self.records, frame.name),
             regions: read(d, q, &self.regions, frame.name),
             args: read(d, q, &self.args, frame.name),
             uniforms: read(d, q, &self.uniforms, frame.name),
             instances: read(d, q, &self.instances, frame.name),
-            stood: read(d, q, &stood, frame.name),
+            stood,
         }
     }
 }
@@ -2868,8 +2885,8 @@ struct FrameLeft {
     args: Vec<u32>,
     uniforms: Vec<u32>,
     instances: Vec<u32>,
-    /// The tiles `light_mark_draws_cs` stood on off the instances.
-    stood: Vec<u32>,
+    /// The tiles `light_mark_draws_cs` listed stood on off the instances.
+    stood: u32,
 }
 
 /// Frames through all the passes by hand, their records against the Rust's frame and their
@@ -2899,6 +2916,12 @@ fn hand_frames_answer_as_the_rust() {
         "light_mark_draws by hand",
         src(SHADER_LIGHT_MARK_DRAWS),
         "light_mark_draws_cs",
+    );
+    let mark_draws_open = pipeline(
+        &device,
+        "light_mark_draws_open by hand",
+        src(SHADER_LIGHT_MARK_DRAWS),
+        "light_mark_draws_open_cs",
     );
     let mut totals = Tally::default();
     for (name, at) in [
@@ -3128,6 +3151,7 @@ fn hand_frames_answer_as_the_rust() {
                 queue: &queue,
                 pipelines: &hand_pipes,
                 mark_draws: &mark_draws,
+                mark_draws_open: &mark_draws_open,
                 records: buf(&init, wgpu::BufferUsages::empty()),
                 list: buf(
                     &vec![0; generation::LIST_WORDS as usize],
@@ -3179,7 +3203,7 @@ fn hand_frames_answer_as_the_rust() {
                     cap,
                     &meshes,
                 );
-                let on = got.stood.iter().filter(|&&w| w == CAST_NUMBER).count() as u64;
+                let on = u64::from(got.stood);
                 *totals.0.entry("frame: tiles decor stands on").or_default() += on;
                 for line in d.iter().take(8) {
                     eprintln!("{name}, {}, run {run}: {line}", frame.name);

@@ -113,21 +113,20 @@ pub const SHADER_LIGHT_MISS: u32 = 46;
 /// The occlusion's half-resolution map brought to the pixel and multiplied
 /// into the world's color, as the tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 47;
-/// The samples' hits handed to the rasterizer (pxl-engine `raster`):
-/// their boxes written, by hand (boxes.wgsl, sample_box.wgsl), a compute
-/// entry; and the boxes drawn, the nearest
-/// face a pixel's ray enters kept with its sample (raster.wgsl), which the
-/// cast's pixels read (`SHADER_CAST`).
+/// The eye's samples written into its record of voxels, by hand (pxl-engine `record`;
+/// sample_box.wgsl), two compute entries; and the boxes drawn, the eye's and the light's, the
+/// nearest face a pixel's ray enters kept with its voxel (raster.wgsl), which the cast's
+/// pixels read (`SHADER_CAST`).
 pub const SHADER_SAMPLE_BOX: u32 = 48;
 pub const SHADER_RASTER: u32 = 49;
-/// What lies about each box's face, asked once a box (pxl-engine
-/// `raster::ARGS_FACES`), and each missed pixel's hit's, by hand (face.wgsl): its one
-/// compute entry.
+/// What lies about each face of the record's voxels, asked once a face (pxl-engine
+/// `raster::ARGS_FACES`, `record::R_FACES`), and each missed pixel's hit's, by hand
+/// (face.wgsl): its one compute entry.
 pub const SHADER_FACE: u32 = 50;
-/// The tiles of the light's box its receivers stand on in a cast
-/// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
-/// where the decor and the actors drawn stand; then those they read
-/// (`light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
+/// The tiles of the light's box its receivers stand on (pxl-engine
+/// `light::LISTED_STOOD`): the eye's voxels' boxes and the pixels it walked apart, and where
+/// the decor and what the kernel draws that reads the map stand; then those they read (`light::LISTED_READ`,
+/// `light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.
 pub const SHADER_LIGHT_MARK: u32 = 51;
 pub const SHADER_LIGHT_MARK_DRAWS: u32 = 52;
@@ -217,7 +216,13 @@ pub const SHADER_CAST_TILES: u32 = 84;
 pub const SHADER_CLAIMED_BOX: u32 = 85;
 /// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
 pub const SHADER_DECOR_GATE: u32 = 86;
-pub const SHADERS: u32 = 87;
+/// The eye's record of voxels over every slot, by hand (record_draw.wgsl): forgotten where the
+/// node cache's rule forgets, and its voxels in view written as the raster's boxes.
+pub const SHADER_RECORD_DRAW: u32 = 87;
+/// The missed pixels' hits as stops into the eye's record, and those put off, by hand
+/// (record_stops.wgsl).
+pub const SHADER_RECORD_STOPS: u32 = 88;
+pub const SHADERS: u32 = 89;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -372,8 +377,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "grid",
         "walk_node",
         "side",
+        "record",
         "visible",
         "list",
+        "walked",
         "cast",
     ],
     // SHADER_BOUND
@@ -566,6 +573,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "miss_word",
         "list",
+        "walked",
         "miss",
     ],
     // SHADER_FORGET
@@ -648,7 +656,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "resume",
         "sample.eye",
-        "boxes",
+        "record",
+        "record_put",
         "sample_box",
     ],
     // SHADER_RASTER
@@ -669,11 +678,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "answer",
         "world",
         "world_split",
+        "record",
         "face",
     ],
     // SHADER_LIGHT_MARK
     &[
         "walk_word",
+        "raster_box",
         "eye_bind",
         "grid",
         "walk_node",
@@ -682,6 +693,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_box",
         "light_list",
         "light_stand",
+        "list",
+        "light_stood",
+        "walked",
         "light_mark",
     ],
     // SHADER_LIGHT_MARK_DRAWS
@@ -697,6 +711,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_box",
         "light_list",
         "light_stand",
+        "list",
+        "light_stood",
         "decor_ball",
         "light_mark_draws",
     ],
@@ -900,6 +916,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "miss_word",
         "list",
+        "walked",
         "miss_hit",
     ],
     // SHADER_BEAM_HIT
@@ -977,5 +994,29 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_word",
         "decor_ball",
         "decor_gate",
+    ],
+    // SHADER_RECORD_DRAW
+    &[
+        "walk_word",
+        "world_word",
+        "raster_box",
+        "seed",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "forget",
+        "record",
+        "record_draw",
+    ],
+    // SHADER_RECORD_STOPS
+    &[
+        "walk_word",
+        "raster_box",
+        "eye_bind",
+        "walk_node",
+        "hit",
+        "record",
+        "record_put",
+        "record_stops",
     ],
 ];

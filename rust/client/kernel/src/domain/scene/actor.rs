@@ -261,9 +261,9 @@ impl Actor {
         asks
     }
 
-    /// Into the frame's list, standing at `transform`, and where it stands with
-    /// it (`DrawList::stand`): every actor drawn is a receiver of the sun's
-    /// map, which reads the ones the eye sees. None where it spans less than
+    /// Into the frame's list, standing at `transform`, within the ball about it
+    /// (`DrawList::ball`): every actor drawn is a receiver of the sun's map, which reads the
+    /// ones the eye sees. None where it spans less than
     /// the impostor's edge (`tick`).
     pub fn draw(&self, draw: &mut DrawList, models: &Models, transform: &Transform, eye: V3) {
         let Some(m) = models.get(self.model).filter(|_| self.drawn) else {
@@ -282,7 +282,7 @@ impl Actor {
             transform.rot_z,
             1.0,
             transform.scale,
+            Some(DrawList::ball(t)),
         );
-        draw.stand(t);
     }
 }

@@ -1116,8 +1116,9 @@ impl Renderer {
         // Nothing moved but the jitter.
         let quiet = stands && listed_same && !clouds_drawn;
         // Only the listed draws that mark moved: the claimed tiles alone are
-        // drawn again. Else the frame is drawn whole, its pixels cast whole.
-        let gated = partial && stands;
+        // drawn again. Else the frame is drawn whole, its pixels cast whole, as it is where the
+        // light's receivers stand afresh off every pixel's walk (`RaysPass::ungated`).
+        let gated = partial && stands && !self.screen.ungated();
         if !gated {
             self.screen.whole();
         }
@@ -1285,8 +1286,8 @@ impl Renderer {
                 .dispatch(&mut ctx, depth, &self.light_tiles, &self.resolve.tiles);
         }
         self.screen.dispatch(&mut ctx);
-        // The shadow map: the world's depth from the sun, where the rays hold
-        // the world it was cast with, then decor's and the actors' drawn over
+        // The shadow map: the world's depth from the sun in the tiles a receiver reads, where
+        // the rays hold the world it was cast with, then decor's and the actors' drawn over
         // it; through its gate where `map_gated`, its stencil numbered as the
         // world's pass's.
         if let Some(reads) = self.screen.light_reads().filter(|_| map_drawn) {

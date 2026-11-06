@@ -2,9 +2,9 @@
 
 // The shadow map's lattice as the light's beam, cells and slots take it off its list
 // (pxl-engine light.rs): where a beam ray's line and start and a sample lie (pxl-engine light.rs), off the words the head lays (`light::head_layout`); which
-// place of the lattice the thread at an id takes (`light_item`); and the reads, the stands and
-// each list's marks, as the receivers' passes claim tiles (`light::reads_at`, `stands_at`,
-// `listed_marks_at`). The list is `beams`, as resume.wgsl names it; the receivers' passes bind
+// place of the lattice the thread at an id takes (`light_item`); and the reads and each list's
+// marks, as the receivers' passes claim tiles (`light::reads_at`, `listed_marks_at`). The list
+// is `beams`, as resume.wgsl names it; the receivers' passes bind
 // it apart (light_stand.wgsl).
 
 /// The levels of the map's lattice: a beam ray's corner, a cell, a sample, a slot's ray.
@@ -131,11 +131,6 @@ fn light_tiles() -> u32 {
 /// The reads, a word a tile (`light::reads_at`).
 fn reads_at() -> u32 {
   return head_word(LIGHT_HEAD_READS);
-}
-
-/// The stands, a word a tile (`light::stands_at`).
-fn stands_at() -> u32 {
-  return head_word(LIGHT_HEAD_STANDS);
 }
 
 /// The first of list `which`'s marks among the args' (light_propagate.wgsl), a word a place

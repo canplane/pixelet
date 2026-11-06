@@ -4,8 +4,11 @@
 //! A free cancels its block's pending upload and rewrites: the block may be
 //! reused before the list runs.
 
+use crate::frame::shader::record::reads_shadow_map;
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::in_flight;
+use pxl_content::generation::{TALLEST, WIDEST};
+use pxl_engine::light;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
@@ -123,9 +126,14 @@ pub struct DrawList {
     other_uniforms: Vec<f32>,
     next_handle: u32,
     taken: Vec<u32>,
-    /// Where each actor drawn stands, units from the eye (`stand`).
-    stands: Vec<[f32; 3]>,
+    /// The box each drawn thing that reads the shadow map stands within (`Stand`).
+    stands: Vec<Stand>,
 }
+
+/// The box a drawn thing that reads the shadow map stands within, units from the eye, its
+/// lowest corner then its highest: a receiver of the map, which stands by the rule every
+/// receiver does (pxl-engine `light::STANDS_AT`, `Light::box_tiles`).
+pub type Stand = [[f32; 3]; 2];
 
 pub struct Lists<'a> {
     pub uploads: &'a [u32],
@@ -134,9 +142,9 @@ pub struct Lists<'a> {
     pub draws: &'a [u32],
     /// Handed where they lie (`DrawList::begin_frame`).
     pub uniforms: &'a [f32],
-    /// Where each actor drawn stands, units from the eye, as its draw is
-    /// placed (`stand`).
-    pub stands: &'a [[f32; 3]],
+    /// The box each drawn thing that reads the shadow map stands within, as its draw is
+    /// recorded (`Stand`).
+    pub stands: &'a [Stand],
 }
 
 impl DrawList {
@@ -218,11 +226,35 @@ impl DrawList {
         self.stands.clear();
     }
 
-    /// An actor drawn stands at `translation`, its draw's (pxl-kernel
-    /// domain/scene/actor.rs `Actor::draw`): a receiver of the shadow map
-    /// (pxl-engine `light::ACTORS_AT`).
-    pub fn stand(&mut self, translation: [f32; 3]) {
-        self.stands.push(translation);
+    /// Where the draw of `pipeline` stands: the box `stand`, which every draw whose shader reads
+    /// the shadow map gives and no other does (record.rs `reads_shadow_map`), so whatever reads
+    /// the map stands. Past `light::STANDS` the box is taken into the last.
+    fn stand(&mut self, pipeline: u32, stand: Option<Stand>) {
+        xpute_kit::ensure!(
+            reads_shadow_map(pipeline) == stand.is_some(),
+            EINVAL,
+            pipeline
+        );
+        let Some(b) = stand else { return };
+        let full = self.stands.len() == light::STANDS;
+        match self.stands.last_mut() {
+            Some(last) if full => {
+                for k in 0..3 {
+                    last[0][k] = last[0][k].min(b[0][k]);
+                    last[1][k] = last[1][k].max(b[1][k]);
+                }
+            }
+            _ => self.stands.push(b),
+        }
+    }
+
+    /// The box about the ball a thing standing at `at`, units from the eye, stands within: about
+    /// its middle, as wide as decor is tall and wide (pxl-render decor_ball.wgsl, which reads a
+    /// placed decor's alike).
+    pub fn ball(at: [f32; 3]) -> Stand {
+        let r = (TALLEST + WIDEST) as f32;
+        let middle = [at[0], at[1], at[2] + TALLEST as f32 * 0.5];
+        [middle.map(|v| v - r), middle.map(|v| v + r)]
     }
 
     /// Eye-relative, narrowed to f32 after the subtraction, so precision is finest near the eye.
@@ -249,7 +281,9 @@ impl DrawList {
         fourth: f32,
         opacity: f32,
         scale: f32,
+        stand: Option<Stand>,
     ) {
+        self.stand(pipeline, stand);
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
@@ -278,7 +312,9 @@ impl DrawList {
         translation: [f32; 3],
         fourth: f32,
         opacity: f32,
+        stand: Option<Stand>,
     ) {
+        self.stand(pipeline, stand);
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
@@ -310,7 +346,9 @@ impl DrawList {
         opacity: f32,
         unit: f32,
         z_step: f32,
+        stand: Option<Stand>,
     ) {
+        self.stand(pipeline, stand);
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
@@ -340,8 +378,10 @@ impl DrawList {
         columns: [u32; 3],
         translation: [f32; 3],
         opacity: f32,
+        stand: Option<Stand>,
     ) {
         let [off, stride, idx] = columns;
+        self.stand(pipeline, stand);
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
@@ -421,3 +461,7 @@ impl MirroredBlock {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "draw.test.rs"]
+mod tests;

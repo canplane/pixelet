@@ -590,9 +590,13 @@ three zooms finer than the eye draws there.
 It casts only what a receiver reads:
 
 ```text
-  the world, where the eye's rays met it ┐
-  decor, where it is placed              ├─▶ marks the tile it stands on
-  an actor, where it is drawn            ┘   (light_mark_cs, light_mark_draws_cs)
+  the world, each voxel's box of the eye  ┐
+    and each pixel it walked apart        │
+  decor, where it is placed               ├─▶ lists the tiles it stands on,
+  an actor, the beacon, where drawn       ┘   within the effects' reach,
+                                              and its footprint
+                                              (light_mark_cs, light_mark_walked_cs,
+                                               light_mark_draws_cs)
                                                    │
                                                    ▼
             a tile is read if it lies sunward of one stood on,
@@ -600,8 +604,12 @@ It casts only what a receiver reads:
                                                    │
                                                    ▼
             the tiles read anew, since what a tile holds last moved,
-            are cast; the rest stand
+            are cast; the rest stand; the map is laid in the tiles read
 ```
+
+Every pass past the receivers' own is sized by what they list, so where nothing
+within the effects' reach is seen, as with the eye high over the ground, the
+light runs no workgroup past them and lays no tile.
 
 Every walk of the light asks one zoom, the band of the tile it lies on: the
 zoom the eye's rays ask as near as the tile's column comes to the eye, from the
@@ -702,7 +710,7 @@ for word to pxl-engine's Rust by a test over a real world's buffers
 ends at `cast::STEPS_MOST` steps (`pxl-engine cast.rs` `walk_at_most`). What
 a rule both sides decide divides by, or takes the square root of, the frame
 holds: the renderer rounds it once on the CPU and hands it in a word, and
-both multiply by it (`pxl-engine light.rs` `W_WIDTH` to `W_WIDTH_INVERSE`,
+both multiply by it (`pxl-engine light.rs` `W_WIDTH` to `W_BAND_SCALE`,
 `beam.rs` `GRID_S_INVERSE`, `GRID_SLOPE`). The light ray's start is fixed
 point, summed in integers (`light.rs` `Starts`, `light_aim.wgsl`
 `texel_start`); the eye's ray at each pixel and a beam's width, which only a

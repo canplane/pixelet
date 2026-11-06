@@ -1,12 +1,12 @@
 //! `face_cs` and `cast_cs` by hand (frame/shader/face.wgsl, cast.wgsl) answer as the Rust over
 //! the real world of tests/real_world, off the samples the eye's passes leave there (beam,
-//! cell, sample, the samples' boxes).
+//! cell, sample, the eye's record).
 //!
-//! `face_cs`: each box's ask answered with the bits `face::word` gives, every cell beside the
+//! `face_cs`: each of the record's asks answered with the bits `face::word` gives, every cell beside the
 //! hit asked off the line down to it as `support::sub_line` and `support::asset` ask it.
 //!
 //! `cast_cs`: each pixel it draws holds the words `cast::entry` takes off the visible voxel
-//! the test lays at it, or the sky where the four samples about it (`Grid::sample_before`)
+//! of the record the test lays at it, or the sky where the four samples about it (`Grid::sample_before`)
 //! went on; a cell past the eye's reach is not entered. A pixel it leaves, or marks missed,
 //! is the walk's to answer (tests/sample.rs). The device's own tangents, way and reciprocal of
 //! each pixel are read off a probe appended to the module (`probe_cs`), which calls what
@@ -31,7 +31,7 @@ use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{eye, face, node_cache, raster, ray, screen, Zoom, LEAF_CELL};
+use pxl_engine::{eye, face, node_cache, raster, ray, record, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE,
     SHADER_SAMPLE, SHADER_SAMPLE_BOX, SHADER_SAMPLE_HIT,
@@ -112,10 +112,10 @@ struct Cast {
     asked: Vec<u32>,
     beams: Vec<u32>,
     table: Vec<u32>,
-    /// The faces' asks laid, the voxels, and the boxes, their words (`raster::BOX_WORDS`).
+    /// The faces' asks laid, and the eye's record the samples wrote and the faces' pass
+    /// left its faces' words in (pxl-engine `record`).
     asks: u32,
-    voxels: u32,
-    boxes: Vec<u32>,
+    record: Vec<u32>,
 }
 
 fn device() -> Option<Gpu> {
@@ -197,7 +197,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
 }
 
 /// The eye's passes before the pixels, as a frame that casts runs them: the beam rays, the
-/// cells' starts, the samples, their boxes and their asks, then the boxes' faces asked by
+/// cells' starts, the samples, their record and their asks, then the record's faces asked by
 /// `face_cs`.
 fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
@@ -269,7 +269,9 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         );
     }
     let samples = grid.samples[0] * grid.samples[1];
-    let boxes = gpu.buffer(&vec![0u32; raster::words(samples) as usize], store());
+    let mut laid_record = vec![0u32; record::WORDS as usize];
+    laid_record[record::FRAME as usize] = FRAME;
+    let rec = gpu.buffer(&laid_record, store());
     // The draw's args, then the faces' asks' (`raster::ASKED_AT`).
     let asked_at = raster::ASKED_AT as usize;
     let mut laid = vec![0u32; asked_at + raster::ARGS_WORDS as usize];
@@ -278,15 +280,15 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
     let box_args = gpu.buffer(&laid, store());
-    // The boxes' two passes, the second reading what the first claimed.
+    // The record's two passes, the second reading what the first wrote.
     for entry in ["sample_box_cs", "sample_observe_cs"] {
         gpu.dispatch(
             &gpu.pipeline(src(SHADER_SAMPLE_BOX), entry),
             &[
                 (0, eye_buf.as_entire_binding()),
                 (8, beams.as_entire_binding()),
-                (14, boxes.as_entire_binding()),
                 (16, box_args.as_entire_binding()),
+                (23, rec.as_entire_binding()),
             ],
             [
                 grid.samples[0].div_ceil(SQUARE_SIDE),
@@ -306,16 +308,18 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         }
     }
     eprintln!(
-        "{}: {} samples, {stopped} stopped, {lacks} lack, {} boxes, {} left",
+        "{}: {} samples, {stopped} stopped, {lacks} lack, {} asks, {} left",
         c.name,
         samples,
-        laid[raster::ARGS_INSTANCES as usize],
+        laid[asked_at + raster::ARGS_INSTANCES as usize],
         args[3]
     );
 
+    let mut binds = face_binds(b, &eye_buf, &beams, &box_args, raster::ASKED_AT);
+    binds.push((23, rec.as_entire_binding()));
     gpu.dispatch(
         face_p,
-        &face_binds(b, &eye_buf, &beams, &box_args, raster::ASKED_AT),
+        &binds,
         [laid[asked_at + raster::ARGS_FACES as usize], 1, 1],
     );
     Cast {
@@ -329,8 +333,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         beams: gpu.read(&beams),
         table: gpu.read(&table),
         asks: laid[asked_at + raster::ARGS_INSTANCES as usize],
-        voxels: laid[raster::ARGS_INSTANCES as usize],
-        boxes: gpu.read(&boxes),
+        record: gpu.read(&rec),
     }
 }
 
@@ -400,6 +403,17 @@ impl Query for Asking<'_> {
     }
 }
 
+/// The key of the record's entry at word `e`, its held word `held` (pxl-engine `record::Key`).
+fn entry_key(rec: &[u32], e: usize, held: u32) -> record::Key {
+    let w = |a: u32| rec[e + a as usize];
+    record::Key {
+        zoom: record::zoom_of(held),
+        corner: [0, 1, 2].map(|a| w(record::R_CORNER + a)),
+        roots: [0, 1, 2].map(|a| w(record::R_ROOTS + a) as i32),
+        band: record::band_of(held),
+    }
+}
+
 /// The node at word `k` of the beam rays' words.
 fn node_at(beams: &[u32], k: u32) -> Node {
     let k = k as usize;
@@ -452,10 +466,17 @@ impl Ancestors<Inheritance> for BeamLine<'_> {
     }
 }
 
-/// The ask at word `a` as the Rust asks it (`Want`).
-fn face_want(q: &mut Asking, beams: &[u32], origin: [i32; 3], a: u32) -> Want {
+/// The ask at word `a` as the Rust asks it (`Want`), its node the record's entry in `rec`
+/// where it is the record's.
+fn face_want(q: &mut Asking, beams: &[u32], rec: &[u32], origin: [i32; 3], a: u32) -> Want {
     let w = |k: u32| beams[(a + k) as usize];
-    let hit = node_at(beams, w(beam::ASK_NODE));
+    // A record's ask names the record's entry (`record::TO_RECORD`), a hit's its node.
+    let hit = if w(beam::ASK_TO) & record::TO_RECORD != 0 {
+        let e = w(beam::ASK_NODE) as usize;
+        entry_key(rec, e, rec[e + record::R_HELD as usize]).node(origin)
+    } else {
+        node_at(beams, w(beam::ASK_NODE))
+    };
     let (zoom, c) = (hit.zoom, hit.idx(origin));
     let face_of = w(beam::ASK_FACE);
     let base = BeamLine::of(beams, w(beam::ASK_LINE), origin);
@@ -652,19 +673,26 @@ fn hand_faces_answer_as_face_word() {
             if to == beam::ASK_NONE {
                 continue;
             }
-            let Want { bits, cut } = face_want(&mut q, &cast.asked, cast.origin, a);
+            let Want { bits, cut } = face_want(&mut q, &cast.asked, &cast.record, cast.origin, a);
             kinds.add("asked, the cuts swapped answer otherwise", cut);
             want.push(bits);
-            have.push(cast.beams[to as usize]);
+            have.push(if to & record::TO_RECORD != 0 {
+                cast.record[(to & !record::TO_RECORD) as usize]
+            } else {
+                cast.beams[to as usize]
+            });
             kinds.add("asked", true);
             kinds.add("asked, a rise", bits & 0xf != 0);
             kinds.add("asked, a line", bits >> face::LINE_SHIFT & 0xf != 0);
             kinds.add("asked, a corner", bits >> face::CORNER_SHIFT != 0);
             kinds.add("asked, none set", bits == 0);
         }
-        tally.compare(&format!("{}, the boxes' asks", c.name), &want, &have, |k| {
-            format!("ask {k}")
-        });
+        tally.compare(
+            &format!("{}, the record's asks", c.name),
+            &want,
+            &have,
+            |k| format!("ask {k}"),
+        );
     }
     eprintln!("  KINDS faces {kinds:?}");
     let short = kinds.short(&[
@@ -846,15 +874,21 @@ fn hand_pixels_answer_as_cast_entry() {
         // The visible voxel the raster would leave: mostly that of one of the four samples
         // about the pixel, some none, some a lack, some a sample's far off.
         let n = g.samples[0];
-        // Each voxel by its node, the first written where one is twice (`raster::key`).
+        // Each held voxel's slot by its key, the first of its bucket where one is twice.
         let mut voxel_at = std::collections::BTreeMap::new();
-        for v in (0..cast.voxels).rev() {
-            let r = (g.voxels_at + v * beam::VOXEL_WORDS) as usize;
-            voxel_at.insert(raster::key(&cast.beams, r, 0), v);
+        for slot in (0..record::ENTRIES).rev() {
+            let e = record::entry_at(slot) as usize;
+            let held = cast.record[e + record::R_HELD as usize];
+            if held & record::HELD != 0 {
+                voxel_at.insert(entry_key(&cast.record, e, held), slot);
+            }
         }
         let voxel_of = |i: u32| -> Option<u32> {
-            let k = g.sample_at([i % n, i / n]) as usize;
-            voxel_at.get(&raster::key(&cast.beams, k, 0)).copied()
+            let k = g.sample_at([i % n, i / n]);
+            let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
+            voxel_at
+                .get(&record::Key::of(cast.origin, &node, 0))
+                .copied()
         };
         let stopped: Vec<u32> = (0..n * g.samples[1])
             .filter(|&i| {
@@ -931,7 +965,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
         let beams = gpu.buffer(&cast.beams, store());
-        let boxes = gpu.buffer(&cast.boxes, store());
+        let rec = gpu.buffer(&cast.record, store());
         gpu.dispatch(
             &cast_p,
             &[
@@ -941,7 +975,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (9, table_buf.as_entire_binding()),
                 (13, wgpu::BindingResource::TextureView(&vis_view)),
                 (14, marks.as_entire_binding()),
-                (15, boxes.as_entire_binding()),
+                (23, rec.as_entire_binding()),
                 (30, list.as_entire_binding()),
             ],
             [listed, per_tile, per_tile],
@@ -961,12 +995,11 @@ fn hand_pixels_answer_as_cast_entry() {
             let r = Ray::new(at.dir, far);
             let mut said = [ray::MISS, 0, 0, 0];
             if v != 0 && v & raster::LACK == 0 {
-                let i = raster::voxel_of(v);
-                let k = g.voxels_at + i * beam::VOXEL_WORDS;
-                let w = |a: u32| cast.beams[(k + a) as usize];
-                let node = node_at(&cast.beams, k + beam::VOXEL_NODE);
-                let asset = [w(beam::VOXEL_ASSET), w(beam::VOXEL_ASSET + 1)];
-                let faces = cast.boxes[(i * raster::BOX_WORDS + raster::BOX_FACES) as usize];
+                let e = record::entry_at(raster::voxel_of(v)) as usize;
+                let w = |a: u32| cast.record[e + a as usize];
+                let node = entry_key(&cast.record, e, w(record::R_HELD)).node(cast.origin);
+                let asset = [w(record::R_ASSET), w(record::R_ASSET + 1)];
+                let faces = w(record::R_STATE) & record::FACES;
                 // The entry along the device's reciprocal, its plane's t a few ulps off as the
                 // device divides; a pixel at an edge as the device rounds it.
                 let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
@@ -1000,7 +1033,7 @@ fn hand_pixels_answer_as_cast_entry() {
                         ray::first_word(asset[0], face, node.zoom),
                         t.to_bits(),
                         asset[1],
-                        w(beam::VOXEL_FACES + axis_was),
+                        w(record::R_FACES + axis_was),
                     ];
                     kinds.add(
                         "enters its sample, short of its cube",

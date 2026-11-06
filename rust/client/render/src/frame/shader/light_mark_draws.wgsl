@@ -1,14 +1,15 @@
 // pxl-render/light_mark_draws.wgsl
 
-// The drawn receivers of the shadow map, each the eye sees standing as the world's do
-// (light_mark.wgsl): the actors the host draws, a thread each (`light::ACTORS_AT`); then
+// The drawn receivers of the shadow map, each the eye sees standing by the world's one rule
+// (light_mark.wgsl, `Light::box_tiles`): what the host draws that reads the map, the box each
+// stands within as its draw is recorded, a thread each (`light::STANDS_AT`); then
 // the decor generated, a thread a slot of its instances (gpu/generator.rs), as many as
-// are placed, where each stands, as decor_compact.wgsl lays it. Seen
-// where a ball about its middle as wide as decor is tall and wide meets the view
-// (`eye::sees`); the tiles about its own stood on too, as many as half the widest decor
-// spans (`Light::ring`). The actors are those the scene draws in the world
-// (gpu/ray/cast.rs `Cast::actors`), no more than `light::ACTORS`. Run after decor is
-// placed, before the propagation.
+// are placed, where each stands, as decor_compact.wgsl lays it, the threads as many as the
+// cast's one thread opens (`light_mark_draws_open_cs`, `light::ARGS_DRAWS`). Seen where a
+// ball about its box, a placed decor's about its middle as wide as decor is tall and wide,
+// meets the view (`eye::sees`); the box stands, as every receiver's does (`box_tiles`). The
+// host's are those frame/draw.rs `DrawList` records, no more than `light::STANDS`. Run after
+// decor is placed and the world's receivers stood, before the propagation.
 
 /// The decor compacted this frame as its draws read it (decor_compact.wgsl
 /// `decor_compact_cs`): its drawing words, its regions and its instances.
@@ -66,41 +67,50 @@ fn sees(v: vec3<f32>, radius: f32) -> bool {
   return f >= -radius && side.x && side.y;
 }
 
-/// How many tiles either side of its own a drawn receiver stands on (`Light::ring`).
-fn ring() -> i32 {
-  let half = f32(WIDEST) * (0.5 / f32(LIGHT_TILE));
-  return max(i32(ceil(half * eye_f32(LIGHT + LIGHT_WIDTH_INVERSE))), 1i);
-}
-
 @compute @workgroup_size(ROW_LANES, 1, 1)
 fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  var v: vec3<f32>;
-  if (id.x < LIGHT_ACTORS) {
-    if (id.x >= u32(head[LIGHT_ACTORS_AT].x)) {
+  var lo: vec3<f32>;
+  var hi: vec3<f32>;
+  if (id.x < LIGHT_STANDS) {
+    if (id.x >= u32(head[LIGHT_STANDS_AT].x)) {
       return;
     }
-    v = bitcast<vec3<f32>>(head[LIGHT_ACTORS_AT + 1u + id.x].xyz);
+    lo = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 1u + 2u * id.x].xyz);
+    hi = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 2u + 2u * id.x].xyz);
   } else {
-    let k = id.x - LIGHT_ACTORS;
+    let k = id.x - LIGHT_STANDS;
     if (k >= instance_cnt()) {
       return;
     }
     let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-    v = instance_pos(k, o);
+    let middle = decor_middle(instance_pos(k, o));
+    lo = middle - vec3<f32>(decor_radius());
+    hi = middle + vec3<f32>(decor_radius());
   }
-  if (!sees(decor_middle(v), decor_radius())) {
+  // Seen where the ball about the box meets the view.
+  if (!sees(0.5 * (lo + hi), 0.5 * length(hi - lo))) {
     return;
   }
-  let t = tile_of(v);
-  let current = cast_number();
-  let r = ring();
-  // Only the box's tiles are marked (`stand`), so the walk keeps to them.
-  let n = i32(light_tiles());
-  let first = max(t - vec2<i32>(r), vec2<i32>(0));
-  let last = min(t + vec2<i32>(r), vec2<i32>(n - 1i));
-  for (var j = first.y; j <= last.y; j += 1i) {
-    for (var i = first.x; i <= last.x; i += 1i) {
-      stand(current, vec2<i32>(i, j));
+  let b = box_tiles(lo, hi);
+  if (!b.got) {
+    return;
+  }
+  for (var j = b.first.y; j <= b.last.y; j += 1i) {
+    for (var i = b.first.x; i <= b.last.x; i += 1i) {
+      stand_drawn(vec2<i32>(i, j));
     }
   }
+}
+
+/// The drawn receivers' workgroups (`light::ARGS_DRAWS`), the cast's one thread: the host's
+/// boxes' threads, and past them the placed decor's where any is placed.
+@compute @workgroup_size(1)
+fn light_mark_draws_open_cs() {
+  let stands = min(u32(head[LIGHT_STANDS_AT].x), LIGHT_STANDS);
+  let placed = instance_cnt();
+  let room = LIGHT_STANDS + instance_cap();
+  let threads = select(stands, LIGHT_STANDS + placed, placed != 0u);
+  atomicStore(&light_args[LIGHT_ARGS_DRAWS], workgroups(threads, room, ROW_LANES));
+  atomicStore(&light_args[LIGHT_ARGS_DRAWS + 1u], 1u);
+  atomicStore(&light_args[LIGHT_ARGS_DRAWS + 2u], 1u);
 }

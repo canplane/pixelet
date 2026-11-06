@@ -184,6 +184,9 @@ impl GhostDraw {
                 let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
+                // It reads the sun's map, so it stands within its cell, its corner off the whole
+                // unit `t` by under one.
+                let stand = [t, t.map(|v| v + 1.0 + unit)];
                 draw.draw_in(
                     PIPELINE_GHOST_BOX,
                     self.block.handle,
@@ -193,18 +196,21 @@ impl GhostDraw {
                     GHOST_OPACITY,
                     unit,
                     self.z_step as f32,
+                    Some(stand),
                 );
             }
             Shape::Decor { group, .. } => {
                 let idx = GroupColumns::words(1) as u32;
+                let t = DrawList::translation(self.at, eye);
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
                     self.block.handle,
                     group,
                     1,
                     [0, 1, idx],
-                    DrawList::translation(self.at, eye),
+                    t,
                     GHOST_OPACITY,
+                    Some(DrawList::ball(t)),
                 );
             }
         }

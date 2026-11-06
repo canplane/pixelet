@@ -560,6 +560,18 @@ fn present_patch(
         list[at..at + impostors.len()].copy_from_slice(impostors);
         at += impostors.len();
         let idx = b.idx / 4 + first as u32;
+        // Its group's draws read the sun's map, so they stand within the patch's box grown by
+        // as far as the group's models reach at their most scale, units from the eye.
+        let e = extent * most;
+        let stand = [
+            [x0 - e - eye[0], y0 - e - eye[1], zlo - e - eye[2]],
+            [
+                x0 + b.side + e - eye[0],
+                y0 + b.side + e - eye[1],
+                zhi + e - eye[2],
+            ],
+        ]
+        .map(|v| v.map(|w| w as f32));
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -574,6 +586,7 @@ fn present_patch(
                 [off, cnt, idx],
                 translation,
                 opacity,
+                Some(stand),
             );
         }
         if !impostors.is_empty() {
@@ -585,6 +598,7 @@ fn present_patch(
                 [off, cnt, idx + models],
                 translation,
                 1.0,
+                Some(stand),
             );
         }
     }

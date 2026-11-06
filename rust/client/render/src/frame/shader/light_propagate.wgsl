@@ -1,15 +1,16 @@
 // pxl-render/light_propagate.wgsl
 
-// Which tiles of the box a receiver reads in this cast, a thread a tile, after every
-// receiver stood (light_mark.wgsl, light_mark_draws.wgsl), before the beam: one in the
-// disk it reads (`Light::read`), within a tile and its taps of a step up the way up from a
-// tile one stands on (`up`, `up_at`: a point that far up lies that many
-// tiles over or one more, its taps a tile either side), as decor and the actors stand on
-// what the eye meets and are no taller. One read that no cast of the epoch read is the
-// cast's to cast: its word names the cast (`light::reads_at`), where it lies within the
-// epoch's budget (`within_budget`); what
-// feeds it is listed for the passes that cast it (`enlist`). A tile's words are its own
-// thread's alone.
+// Which tiles of the box a receiver reads in this cast, a thread a tile a receiver stands on
+// (`light::LISTED_STOOD`; light_mark.wgsl, light_mark_draws.wgsl), after every receiver stood
+// and the slide (light_slide.wgsl), before the beam: those in the disk it reads
+// (`Light::read`) within a tile and its taps of a step up the way up from it (`up`, `up_at`:
+// a point that far up lies that many tiles over or one more, its taps a tile either side), as
+// decor and the actors stand on what the eye meets and are no taller. Each is listed read once
+// a cast, by the first thread to swap its mark (`light::LISTED_READ`), and the map's lay opened
+// to it (`light::ARGS_LAY`; gpu/shadow.rs `Shadow::begin`). One no cast of the reads' epoch
+// read (`reads_epoch`) is the cast's to cast: its word names the cast (`light::reads_at`),
+// where it lies within the epoch's budget (`within_budget`); what feeds it is listed for the passes that cast it (`enlist`). A tile's
+// read words are the thread's alone that listed it read.
 
 /// The workgroups of the passes that cast tiles; the lists' counts and marks
 /// (`light::ARGS_WORDS`). A claim reads and writes the passes', the counts and the marks at once.
@@ -117,40 +118,65 @@ fn within_budget(t: vec2<i32>, current: u32, epoch: u32) -> bool {
   return 3.14159265 * dot(d, d) <= casts * f32(LIGHT_CLAIM_BUDGET);
 }
 
-@compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
-fn light_propagate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let size = light_size();
+/// Tile `t` read in the cast numbered `current`, its reads' epoch `epoch`: listed read where it
+/// holds a slot a receiver reads and is not listed yet, and claimed where no cast of the epoch
+/// read it and it lies within the budget.
+fn read_tile(current: u32, epoch: u32, t: vec2<i32>) {
   let n = light_tiles();
-  if (id.x >= n || id.y >= n) {
+  if (any(t < vec2<i32>(0)) || any(t >= vec2<i32>(i32(n)))) {
     return;
   }
   // A tile past every slot a receiver reads holds none of its slots.
-  let middle = vec2<i32>(id.xy * LIGHT_TILE + vec2<u32>(LIGHT_TILE / 2u));
-  if (!reads_texel(size, middle, LIGHT_TILE_READ_PAD)) {
+  let middle = t * i32(LIGHT_TILE) + vec2<i32>(i32(LIGHT_TILE / 2u));
+  if (!reads_texel(light_size(), middle, LIGHT_TILE_READ_PAD)) {
     return;
   }
-  let current = cast_number();
-  let epoch = light_epoch();
-  let u = up();
-  let t = vec2<i32>(id.xy);
-  var is_read = false;
-  // Step `k` lies `k - 1` tiles or more from the tile stood on along the way's longer axis,
-  // and a step `n` tiles and its taps' span off reads only tiles past the box, which no
-  // receiver stands on (`stood`): the steps past that, one spare for rounding, read nothing.
-  let most = n + u32(LIGHT_READ_LAST - LIGHT_READ_FIRST) + 3u;
-  for (var k = 0u; k <= min(u.steps, most) && !is_read; k += 1u) {
-    let o = up_at(u, k);
-    for (var b = LIGHT_READ_FIRST; b <= LIGHT_READ_LAST && !is_read; b += 1i) {
-      for (var a = LIGHT_READ_FIRST; a <= LIGHT_READ_LAST && !is_read; a += 1i) {
-        is_read = stood(current, t - o + vec2<i32>(a, b));
-      }
-    }
+  let place = u32(t.y) * n + u32(t.x);
+  if (atomicExchange(&args.marks[listed_marks_at(LIGHT_LISTED_READ) + place], current) == current) {
+    return;
+  }
+  let room = n * n;
+  let e = atomicAdd(&args.counts[LIGHT_LISTED_READ], 1u);
+  if (e < room) {
+    list_put(listed_at(LIGHT_LISTED_READ) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
+    atomicMax(&args.passes[LIGHT_ARGS_LAY + 1u], in_room(e + 1u, room));
   }
   // Read, read first in the epoch and within its budget: the cast's to cast. One past the
   // budget is left to a later cast, its word as it was.
-  let w = reads_at() + id.y * n + id.x;
-  if (is_read && list_at(w) < epoch && within_budget(t, current, epoch)) {
+  let w = reads_at() + place;
+  if (list_at(w) < epoch && within_budget(t, current, epoch)) {
     list_put(w, current);
     enlist(current, t);
+  }
+}
+
+@compute @workgroup_size(MISS_LANES, 1, 1)
+fn light_propagate_cs(
+  @builtin(workgroup_id) group: vec3<u32>,
+  @builtin(local_invocation_id) lane: vec3<u32>,
+) {
+  // Its place in the stood list, as list.wgsl's `list_place` numbers a list walked apart.
+  let k = (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
+  let n = light_tiles();
+  let at = listed_at(LIGHT_LISTED_STOOD);
+  if (k >= in_room(list_at(at), n * n)) {
+    return;
+  }
+  let w = list_at(at + 1u + k);
+  let s = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
+  let current = cast_number();
+  let epoch = reads_epoch();
+  let u = up();
+  // Step `k` lies `k - 1` tiles or more from the tile stood on along the way's longer axis,
+  // and a step `n` tiles and its taps' span off reads only tiles past the box: the steps past
+  // that, one spare for rounding, read nothing.
+  let most = n + u32(LIGHT_READ_LAST - LIGHT_READ_FIRST) + 3u;
+  for (var j = 0u; j <= min(u.steps, most); j += 1u) {
+    let o = up_at(u, j);
+    for (var b = LIGHT_READ_FIRST; b <= LIGHT_READ_LAST; b += 1i) {
+      for (var a = LIGHT_READ_FIRST; a <= LIGHT_READ_LAST; a += 1i) {
+        read_tile(current, epoch, s + o - vec2<i32>(a, b));
+      }
+    }
   }
 }

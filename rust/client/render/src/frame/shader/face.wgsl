@@ -1,7 +1,7 @@
 // pxl-render/face.wgsl
 
 // What lies about the face each hit's ray entered, asked of the world (world.wgsl) once a hit,
-// the boxes' and the missed pixels' alike, over the args the pass is bound to (pxl-engine
+// the record's voxels' and the missed pixels' alike, over the args the pass is bound to (pxl-engine
 // `face::word`, `support::sub_line`, `support::asset`). Each cell beside the hit is asked from
 // the deepest node it shares with the line down to the hit, that line read where the hit's
 // cell's beam ray left it over the node they share and handed down from there under it.
@@ -179,11 +179,13 @@ fn face_word(
 
 @compute @workgroup_size(RASTER_FACES_LANES)
 fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // The hits' asks hold a place for each hit, the boxes' for each sample
-  // (`beam::Grid::hit_asks_at`, `asks_at`).
+  // The hits' asks and the record's asks of the hits hold a place for each hit, the record's
+  // asks of the samples one for each sample (`beam::Grid::hit_asks_at`, `stop_asks_at`,
+  // `asks_at`).
   let asks = args[RASTER_ARGS_ASKS];
   let samples = eye_word(GRID + GRID_SAMPLES) * eye_word(GRID + GRID_SAMPLES + 1u);
-  let room = select(samples, HITS, asks == eye_word(GRID + GRID_HIT_ASKS_AT));
+  let hits = asks == eye_word(GRID + GRID_HIT_ASKS_AT) || asks == eye_word(GRID + GRID_STOP_ASKS_AT);
+  let room = select(samples, HITS, hits);
   if (id.x >= in_room(args[RASTER_ARGS_INSTANCES], room)) {
     return;
   }
@@ -192,7 +194,16 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (to == ASK_NONE) {
     return;
   }
-  let hit = node_idx(beams[a + ASK_NODE]);
+  // A record's ask names the record's entry (pxl-engine `record::TO_RECORD`), a hit's its
+  // node among the beam rays' words.
+  var hit: vec4<i32>;
+  if ((to & RECORD_TO) != 0u) {
+    let e = beams[a + ASK_NODE];
+    let k = entry_kept(e, record_word(e + R_HELD));
+    hit = vec4<i32>(idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i)), i32(k.zoom));
+  } else {
+    hit = node_idx(beams[a + ASK_NODE]);
+  }
   let c = hit.xyz;
   let zoom = u32(hit.w);
   let line = beams[a + ASK_LINE];
@@ -207,5 +218,11 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     low_handed = line_handed(line, low);
   }
   let d = descent(c, zoom, low, low_handed);
-  beams[to] = face_word(beams[a + ASK_FACE], line, low, low_handed, d.up, d.grand_handed, d.parent_handed, c, zoom);
+  let word = face_word(beams[a + ASK_FACE], line, low, low_handed, d.up, d.grand_handed, d.parent_handed, c, zoom);
+  // A voxel's face's word into the record (pxl-engine `record::TO_RECORD`), a hit's beside it.
+  if ((to & RECORD_TO) != 0u) {
+    atomicStore(&record[to & ~RECORD_TO], word);
+  } else {
+    beams[to] = word;
+  }
 }

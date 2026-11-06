@@ -8,7 +8,9 @@
 // (`Light::keeps`), and one whose rays may meet a cell of its band over a column of the world
 // that changed (`Light::reaches`, `light::COLUMNS_AT`), is set to none, so the propagation
 // takes it, read, as read anew (light_propagate.wgsl); the rest hold what their cast left.
-// Each writes its own word alone. Run only where the box slid or the world changed.
+// Each writes its own word alone, and the first the cast's number as the last the slide ran in
+// (`light::SLIDE_RAN`). Run where the box slid or the world changed and a receiver stands
+// (`light::STOOD_SLIDE`), after the receivers stood, before the propagation.
 
 /// Whether box tile `tile`'s rays, at its band, may meet a cell over the world's column `c`,
 /// `[x0, y0, x1, y1]` units from the eye (`Light::reaches`): the column grown by a cell of the
@@ -50,6 +52,9 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let tiles = light_tiles();
   if (id.x >= tiles || id.y >= tiles) {
     return;
+  }
+  if (all(id.xy == vec2<u32>(0u))) {
+    list_put(head_word(LIGHT_HEAD_SLIDE) + LIGHT_SLIDE_RAN, cast_number());
   }
   let was = vec2<i32>(i32(head_word(LIGHT_HEAD_CORNER_WAS)), i32(head_word(LIGHT_HEAD_CORNER_WAS + 1u)));
   var reached = !keeps_tile(id.xy, was);

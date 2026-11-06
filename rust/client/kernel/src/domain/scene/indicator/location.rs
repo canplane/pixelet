@@ -383,12 +383,22 @@ impl LocationIndicator {
                 center,
                 0.0,
                 1.0,
+                None,
             );
         }
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
             center[2] + (BEACON_Z_BIAS + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB) as f32,
+        ];
+        // It reads the sun's map, so it stands within the box its whole bob sweeps, which
+        // holds still while it bobs (frame/draw.rs `Stand`).
+        let r = beacon::RADIUS;
+        let mid = [beacon[0], beacon[1], center[2] + BEACON_Z_BIAS as f32];
+        let bob = BEACON_BOB as f32 + r;
+        let stand = [
+            [mid[0] - r, mid[1] - r, mid[2] - bob],
+            [mid[0] + r, mid[1] + r, mid[2] + bob],
         ];
         draw.draw_as(
             PIPELINE_LOCATION_BEACON,
@@ -398,6 +408,7 @@ impl LocationIndicator {
             beacon,
             (p.time * BEACON_SPIN_RATE) as f32,
             1.0,
+            Some(stand),
         );
     }
 }

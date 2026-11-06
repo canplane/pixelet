@@ -6,13 +6,10 @@
 // `MISS_LANES` a workgroup, `MISS_ACROSS` workgroups a row (pxl-engine `ray::LEFT_EMPTY`).
 
 /// The walk again's words (pxl-engine `ray::MISS_ARGS_WORDS`): its dispatch over the list,
-/// its rows raised as the list fills (`MISS_ARGS_LIST`); its dispatch over every pixel, written
-/// by the one thread that finds the list full (`MISS_ARGS_WHOLE`); the count listed or not
-/// (`MISS_ARGS_CNT`); and the counts' lanes (`MISS_ARGS_COUNT`). build.rs holds its words to
-/// pxl-engine's.
+/// its rows raised as the list fills (`MISS_ARGS_LIST`); the count listed (`MISS_ARGS_CNT`);
+/// and the counts' lanes (`MISS_ARGS_COUNT`). build.rs holds its words to pxl-engine's.
 struct MissArgs {
   list: array<atomic<u32>, 3>,
-  whole: array<u32, 3>,
   cnt: atomic<u32>,
   counts: array<atomic<u32>, COUNT_RAYS>,
 }

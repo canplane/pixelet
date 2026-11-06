@@ -53,6 +53,7 @@ impl DebugLines {
             t,
             0.0,
             1.0,
+            None,
         );
     }
 }

@@ -9,21 +9,20 @@
 //! found by its key alone, wherever the walk that asks it starts. Only nodes
 //! under the world's roots are kept (pxl-render walk_node.wgsl `keeps`). What is drawn is the query's
 //! answer whichever walk read it, so what is kept decides only how much is
-//! asked again, never what is drawn.
+//! asked again, never what is drawn. What is drawn is the eye's record's
+//! (`record`), keyed by the same node and forgotten by this cache's rule, in
+//! its pass, but kept and evicted apart from it.
 //!
 //! One buffer of words:
 //!
 //! - its head: the frame's number, what is forgotten, and the eye's
 //!   clip levels' entries that moved (`HEAD_WORDS`);
-//! - the entries, a slot each (`ENTRIES_AT`);
-//! - the pixels the frame's reading walk marked missed, listed for the walk
-//!   that writes the node cache (`MARKS_AT`).
+//! - the entries, a slot each (`ENTRIES_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
-//! marked in their own rays (`ray::MISS`) and listed here by plain writes,
-//! their count kept apart (`ray::MISS_ARGS_CNT`) and copied in after
-//! (`MARKS_CNT`), so a walk that only reads the node cache types no word of
-//! it atomic.
+//! marked in their own rays (`ray::MISS`) and listed past the camera grid's words
+//! (`ray::walked_words`) by plain writes, their count kept apart (`ray::MISS_ARGS_CNT`) and
+//! copied in after (`ray::WALKED_CNT`).
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass, and the zooms it was asked at — then the
@@ -156,18 +155,8 @@ pub const ENTRY_WORDS: u32 = W_NODE + 4;
 /// at E120 asks; a power of two, so a key's hash masks to one.
 pub const ENTRIES: u32 = 1 << 19;
 pub const ENTRIES_AT: u32 = HEAD_WORDS;
-/// The marked pixels listed (`MARKS_AT`), a word each, its row over its
-/// column, as many as `MARKS`; and their count, copied in from the walk's
-/// dispatch (`ray::MISS_ARGS_CNT`) once the reading walk is done
-/// (`MARKS_CNT`). A pixel past `MARKS` is walked by the walk over every
-/// pixel (`ray::MISS_ARGS_WHOLE`). Room for the bursts a load or a long
-/// zoom marks, about a hundred thousand at 9 Mpx.
-pub const MARKS: u32 = 1 << 20;
-pub const MARKS_CNT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
-pub const MARKS_AT: u32 = MARKS_CNT + 1;
-/// The buffer's words, whatever is drawn: the list's room fixed, so none
-/// of them a pixel's.
-pub const WORDS: u32 = MARKS_AT + MARKS;
+/// The buffer's words, whatever is drawn: none of them a pixel's.
+pub const WORDS: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
 
 /// No entry: a node no slot keeps.
 pub const NONE: u32 = u32::MAX;

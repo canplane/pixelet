@@ -84,6 +84,7 @@ impl Set {
                 DrawList::translation(self.origin, eye),
                 0.0,
                 1.0,
+                None,
             );
         }
     }

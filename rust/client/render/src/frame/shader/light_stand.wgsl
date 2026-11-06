@@ -1,11 +1,11 @@
 // pxl-render/light_stand.wgsl
 
-// The light's list (pxl-engine light.rs `list_words`) as the passes that mark, read and claim
+// The light's list (pxl-engine light.rs `list_words`) as the passes that stand, read and claim
 // its tiles write it, bound apart from `beams` (light_list.wgsl): a word read or written whole,
-// none past the buffer; and the tiles a receiver stands on (`light::stands_at`). No word of it
-// atomic: a stand is one number, the cast's, whichever receivers set it; a read is its tile's
-// thread's alone, a square's the cast's number whichever of its tiles sets it, and a listed
-// tile's place its own, off the count in the args (light_propagate.wgsl).
+// none past the buffer. No word of it atomic: a listed tile's place is its own, off a count
+// kept atomic apart (light_stood.wgsl, light_propagate.wgsl); a read is the word of the one
+// thread that listed its tile read, a square's the cast's number whichever of its tiles sets
+// it; and the slide's words are each one thread's (`light::slide_at`).
 
 @group(0) @binding(12) var<storage, read_write> list: array<u32>;
 /// The list as light_list.wgsl's readers name it, which these passes take none of: bound
@@ -25,29 +25,20 @@ fn list_put(i: u32, v: u32) {
   }
 }
 
-/// No tile's word (`tile_word`).
+/// No tile's place (`tile_place`).
 const NO_TILE: u32 = 0xffffffffu;
 
-/// Tile `t`'s word among the box's tiles' words at `first`, `NO_TILE` past the box.
-fn tile_word(first: u32, t: vec2<i32>) -> u32 {
+/// Tile `t`'s place among the box's tiles, row by row, `NO_TILE` past the box.
+fn tile_place(t: vec2<i32>) -> u32 {
   let n = i32(light_tiles());
   if (all(t >= vec2<i32>(0)) && all(t < vec2<i32>(n))) {
-    return first + u32(t.y * n + t.x);
+    return u32(t.y * n + t.x);
   }
   return NO_TILE;
 }
 
-/// Tile `t` marked stood on in the cast numbered `current`, none past the box: written
-/// only where it does not hold that number yet (pxl-engine `light::stands_at`).
-fn stand(current: u32, t: vec2<i32>) {
-  let w = tile_word(stands_at(), t);
-  if (w != NO_TILE && list_at(w) != current) {
-    list_put(w, current);
-  }
-}
-
-/// Whether a receiver stood on tile `t` in the cast numbered `current`, none past the box.
-fn stood(current: u32, t: vec2<i32>) -> bool {
-  let w = tile_word(stands_at(), t);
-  return w != NO_TILE && list_at(w) == current;
+/// The first cast whose reads hold: the later of the host's epoch and the one a slide unrun
+/// began (`light::reads_epoch`, `light::READS_FROM`).
+fn reads_epoch() -> u32 {
+  return max(light_epoch(), list_at(head_word(LIGHT_HEAD_SLIDE) + LIGHT_READS_FROM));
 }

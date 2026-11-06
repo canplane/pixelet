@@ -133,7 +133,7 @@ pub fn stage_write() {
 /// resolution is judged by (domain/view/frame/resolution.rs `load`).
 pub fn stage_render(pace: Pace) {
     let lists = draw_list().take();
-    let actors = lists.stands;
+    let stands = lists.stands;
     let models = model::models();
     // Each decor variant at its draw group (pxl-content scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
@@ -204,7 +204,7 @@ pub fn stage_render(pace: Pace) {
             shards: cast::shards(),
             overwrites: cast::overwrites(),
             decor: gpu::frame(),
-            actors,
+            stands,
             ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,

@@ -26,10 +26,10 @@ pub const COMPUTE_WAY_TREE: u32 = 13;
 pub const COMPUTE_WAY_RETURN: u32 = 14;
 pub const COMPUTE_BEAM: u32 = 15;
 pub const COMPUTE_CELL: u32 = 16;
-pub const COMPUTE_MISS: u32 = 17;
-/// The pixels the cast's reading walk missed, walked again from their list
-/// (pxl-engine `node_cache::MARKS_AT`), a thread each, from the module that
-/// walks every one (`SHADER_MISS`).
+/// The drawn receivers' workgroups, a thread (`SHADER_LIGHT_MARK_DRAWS`).
+pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 17;
+/// The pixels the walk over the node cache left, walked again from their list (pxl-engine
+/// `ray::walked_left_at`), a thread each (`SHADER_MISS`).
 pub const COMPUTE_MISS_LIST: u32 = 18;
 pub const COMPUTE_FORGET: u32 = 19;
 pub const COMPUTE_SAMPLE: u32 = 20;
@@ -62,10 +62,23 @@ pub const COMPUTE_CAST_TILES: u32 = 46;
 pub const COMPUTE_CLAIMED_BOX: u32 = 47;
 pub const COMPUTE_DECOR_GATE_ARGS: u32 = 48;
 pub const COMPUTE_DECOR_GATE: u32 = 49;
-/// The second of the boxes' passes, the eye's and the light's (boxes.wgsl `observe_box`).
+/// The second of the samples' passes, the eye's into its record (sample_box.wgsl
+/// `sample_observe_cs`) and the light's into its boxes (boxes.wgsl `observe_box`).
 pub const COMPUTE_SAMPLE_OBSERVE: u32 = 50;
 pub const COMPUTE_LIGHT_SAMPLE_OBSERVE: u32 = 51;
-pub const COMPUTES: u32 = 52;
+/// The eye's record over every slot: forgotten, and drawn as the raster's boxes
+/// (record_draw.wgsl).
+pub const COMPUTE_RECORD_FORGET: u32 = 52;
+pub const COMPUTE_RECORD_DRAW: u32 = 53;
+/// The pixels the eye's cast walked apart, stood on off their list (pxl-engine
+/// `ray::WALKED_LIST`), from the module whose first entry stands the voxels' boxes
+/// (`SHADER_LIGHT_MARK`).
+pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 54;
+/// The missed pixels' hits into the eye's record, and those whose stop met its key's claim
+/// (record_stops.wgsl).
+pub const COMPUTE_RECORD_STOPS: u32 = 55;
+pub const COMPUTE_RECORD_DEFERRED: u32 = 56;
+pub const COMPUTES: u32 = 57;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -92,7 +105,6 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_WAY_RETURN => (SHADER_WAY_RETURN, "way_return_cs"),
         COMPUTE_BEAM => (SHADER_BEAM, "beam_cs"),
         COMPUTE_CELL => (SHADER_CELL, "cell_cs"),
-        COMPUTE_MISS => (SHADER_MISS, "miss_cs"),
         COMPUTE_MISS_LIST => (SHADER_MISS, "miss_list_cs"),
         COMPUTE_FORGET => (SHADER_FORGET, "forget_cs"),
         COMPUTE_SAMPLE => (SHADER_SAMPLE, "sample_cs"),
@@ -101,7 +113,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
         COMPUTE_FACE => (SHADER_FACE, "face_cs"),
         COMPUTE_LIGHT_MARK => (SHADER_LIGHT_MARK, "light_mark_cs"),
+        COMPUTE_LIGHT_MARK_WALKED => (SHADER_LIGHT_MARK, "light_mark_walked_cs"),
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
+        COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_open_cs"),
         COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
         COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
         COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
@@ -123,6 +137,10 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_MISS_HIT => (SHADER_LIGHT_MISS_HIT, "light_miss_hit_cs"),
         COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_LIGHT_BEAM_HIT => (SHADER_LIGHT_BEAM_HIT, "beam_hit_cs"),
+        COMPUTE_RECORD_FORGET => (SHADER_RECORD_DRAW, "record_forget_cs"),
+        COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
+        COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
+        COMPUTE_RECORD_DEFERRED => (SHADER_RECORD_STOPS, "record_deferred_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }
@@ -707,10 +725,10 @@ const fn desc_of(id: u32) -> Descriptor {
             &LOCATION_BEACON_BUFFERS,
             &[MARK_FRAME, &DRAW],
         ),
-        // Every texel of the box the world's cast holds, whatever lies
-        // there, over the whole map: its clipmap's words, the box's
-        // corner and the tiles' reads, before the casters drawn over it, into the depth alone
-        // (gpu/api.rs `pipeline`), its fragment the depth.
+        // The texels of the box the world's cast holds in the tiles a receiver reads, a quad a
+        // tile listed read: its clipmap's words, the box's corner, the tiles' reads and the
+        // list of those read, before the casters drawn over it, into the depth alone (gpu/api.rs
+        // `pipeline`), its fragment the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
             Head {
                 fragment: true,
@@ -1082,6 +1100,13 @@ static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
 pub fn pipeline(id: u32) -> &'static [u32] {
     let (words, n) = &TABLE[id as usize];
     &words[..*n]
+}
+
+/// Whether render pipeline `id`'s shader reads the light's shadow map: whether its parts hold
+/// shadow.wgsl's (`PARTS`), its record's first word its shader. Whatever is drawn by one is a
+/// receiver of the map, and stands (frame/draw.rs `DrawList`).
+pub fn reads_shadow_map(id: u32) -> bool {
+    PARTS[pipeline(id)[0] as usize].contains(&"shadow")
 }
 
 /// Whether pipeline `id`'s layout binds within what every WebGPU device

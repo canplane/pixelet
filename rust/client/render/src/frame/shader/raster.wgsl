@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The voxels the samples stopped on drawn at the eye's rays' pixels (pxl-engine
-// raster.rs): each box an instance, its three faces turned to the eye, one an
-// axis, as `corner` winds them, the faces turned away never drawn, each grown in
+// The voxels drawn at the eye's rays' pixels (pxl-engine raster.rs), the eye's
+// record's (record_draw.wgsl) and the light's samples' (boxes.wgsl): each box an
+// instance, its three faces turned to the eye, one an axis, as `corner` winds them, the faces turned away never drawn, each grown in
 // its own plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn
 // pixel. A hit's box draws the faces across the axes its samples entered it by
 // (`raster::faces`), a lack's every face turned to the eye. A face keeps a pixel
@@ -10,8 +10,9 @@
 // (`raster_enters`). A ray enters a box through one face, and the face lies in
 // its plane, so a kept fragment's depth is where the ray enters the box: the
 // depth test, early, keeps the nearest box the pixel's ray enters of every
-// voxel's. A pixel keeps its voxel's number, which the cast's pixels read
-// (cast.wgsl `cast_cs`). A box
+// voxel's, a fresh one's before every stale one's (`RASTER_STALE`, its depth drawn
+// `RASTER_STALE_DEPTH` times). A pixel keeps its voxel's number, which the cast's pixels
+// read (cast.wgsl `cast_cs`). A box
 // about the eye (`RASTER_EYED`), which the near plane may cut, is drawn over
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.
@@ -76,12 +77,14 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   let hi = vec3f(raster_plane(w + RASTER_BOX_HI), raster_plane(w + RASTER_BOX_HI + 1u), raster_plane(w + RASTER_BOX_HI + 2u));
   o.lo = lo;
   o.hi = hi;
+  // A stale voxel's depth, the eye's alone, drawn behind every fresh one's.
+  let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);
   if ((word & RASTER_EYED) != 0u) {
     o.axis = RASTER_ANY;
     if (vi < 3u) {
       // Counter-clockwise over the whole screen.
       let xy = vec2f(f32((vi & 1u) * 4u) - 1.0, f32((vi >> 1u) * 4u) - 1.0);
-      o.clip = vec4f(xy, select(RASTER_EYED_DEPTH, 1.0, lacks), 1.0);
+      o.clip = vec4f(xy, select(RASTER_EYED_DEPTH, 1.0, lacks) * behind, 1.0);
     }
     return o;
   }
@@ -139,7 +142,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   o.clip = vec4f(
     dot(p, raster.right.xyz) / raster.right.w - off.x * depth,
     dot(p, raster.up.xyz) / raster.up.w - off.y * depth,
-    raster.forward.w,
+    raster.forward.w * behind,
     depth,
   );
   return o;

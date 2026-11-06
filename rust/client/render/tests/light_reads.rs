@@ -2,14 +2,15 @@
 //! `light_slide_cs` sets a tile's read to none wherever the box slid it off or into another
 //! band (`Light::keeps` false), so no cast reads a depth cast for another place. A tile it may
 //! keep it may also set to none. And it sets to none every tile whose rays may meet a column of
-//! the world that changed (`Light::reaches`), the box not slid. Skipped where no adapter
-//! answers.
+//! the world that changed (`Light::reaches`), the box not slid; and names the cast as the last
+//! its slide ran in (`light::SLIDE_RAN`). Skipped where no adapter answers.
 
 mod gpu;
 
+use pxl_content::generation::TALLEST;
 use pxl_engine::light::{self, Light};
-use pxl_engine::{eye, Zoom, LEAF_CELL};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT_SLIDE};
+use pxl_engine::{eye, ray, Zoom, LEAF_CELL};
+use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_render::gpu::shadow;
 
@@ -117,6 +118,14 @@ fn hand_slide_forgets_what_moved() {
             .map(|k| mix(k, n as u32) | 1)
             .collect();
         let have = run(&gpu, &p, &l, &list, was);
+        // The slide's first thread names the cast the slide last ran in (`light::SLIDE_RAN`).
+        let ran = (light::slide_at(SIZE) + light::SLIDE_RAN) as usize;
+        tally.compare(
+            &format!("{name}: the slide ran"),
+            &[40],
+            &[have[ran]],
+            |_| "the last cast the slide ran in".into(),
+        );
         let reads = light::reads_at(SIZE);
         let (mut want, mut got) = (Vec::new(), Vec::new());
         let (mut case_kept, mut case_off) = (0, 0);
@@ -225,4 +234,191 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     assert!(kept > 0 && off > 0, "too few to say");
     assert!(extra <= 16, "{extra} tiles no column reaches set to none");
     tally.end("world changes");
+}
+
+/// Where a point `v` units from the eye lies on the box, in texels from texel (0, 0)'s middle,
+/// as light_box.wgsl `texel_at` reads it.
+fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
+    let d = [0, 1, 2].map(|k| v[k] - l.first[k]);
+    let dot = |a: [f32; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+    [
+        dot(l.across) * l.across2_inverse(),
+        dot(l.down) * l.down2_inverse(),
+    ]
+}
+
+/// The propagation by hand (frame/shader/light_propagate.wgsl), a thread a stood tile
+/// (`light::LISTED_STOOD`), against this test's reading of its rule: a tile is read where it
+/// lies within the disk a receiver reads grown by `light::TILE_READ_PAD` and within the taps
+/// (`light::READ_TILES`) of a step up the way up decor's tallest from a stood tile; each read
+/// tile listed once (`light::LISTED_READ`), the lay opened to as many (`light::ARGS_LAY`); and
+/// one read claimed, its word the cast's, where its word names a cast before the reads' epoch,
+/// the later of the host's and the one a slide unrun began (`light::reads_epoch`). A step by a
+/// tile's edge may read either tile. Skipped where no adapter answers.
+#[test]
+fn hand_propagation_reads_what_stands() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
+    let mut tally = Tally::default();
+    let (current, epoch) = (40u32, 30u32);
+    for (case, dir, reads_from) in [
+        ("the sun high, the host's epoch", [0.3, 0.2, -0.93], 0u32),
+        ("the sun low, a slide unrun", [0.8, 0.3, -0.25], 38),
+    ] {
+        let l = box_of(dir, 0.0625, 0.75, [1304, -896]);
+        let half = N as i32 / 2;
+        // Some tiles stood on about the box's middle, each once.
+        let stood: std::collections::BTreeSet<[i32; 2]> = (0..300u32)
+            .map(|k| {
+                let r = mix(k, 7);
+                [
+                    half - 40 + (r % 80) as i32,
+                    half - 40 + (r >> 8 & 0x7f) as i32 % 80,
+                ]
+            })
+            .collect();
+        let stood: Vec<[i32; 2]> = stood.into_iter().collect();
+        // The way up, its steps and each step's tiles, either side where a step lies by an
+        // edge.
+        let low = texel_at(&l, [0.0; 3]);
+        let top = texel_at(&l, [0.0, 0.0, TALLEST as f32]);
+        let way = [0, 1].map(|k| (top[k] - low[k]) / light::TILE as f32);
+        let steps = way[0].abs().max(way[1].abs()).ceil() as u32;
+        let ups: Vec<(Vec<[i32; 2]>, bool)> = (0..=steps)
+            .map(|k| {
+                let f = if steps == 0 {
+                    0.0
+                } else {
+                    k as f32 / steps as f32
+                };
+                let at = |k: usize, e: f32| (way[k] * f + e).floor() as i32;
+                let xs = [at(0, -1e-4), at(0, 1e-4)];
+                let ys = [at(1, -1e-4), at(1, 1e-4)];
+                let mut o = vec![
+                    [xs[0], ys[0]],
+                    [xs[1], ys[0]],
+                    [xs[0], ys[1]],
+                    [xs[1], ys[1]],
+                ];
+                o.dedup();
+                o.sort();
+                o.dedup();
+                (o.clone(), o.len() == 1)
+            })
+            .collect();
+        let reads_disk = |t: [i32; 2]| {
+            let middle = [0, 1].map(|k| t[k] * light::TILE as i32 + light::TILE as i32 / 2);
+            l.read(SIZE, middle, light::TILE_READ_PAD)
+        };
+        let inside = |t: [i32; 2]| t[0] >= 0 && t[1] >= 0 && t[0] < N as i32 && t[1] < N as i32;
+        let (mut must, mut may) = (
+            std::collections::BTreeSet::new(),
+            std::collections::BTreeSet::new(),
+        );
+        let [first, last] = light::READ_TILES;
+        for s in &stood {
+            for (offsets, sure) in &ups {
+                for o in offsets {
+                    for b in first..=last {
+                        for a in first..=last {
+                            let t = [s[0] + o[0] - a, s[1] + o[1] - b];
+                            if inside(t) && reads_disk(t) {
+                                may.insert(t);
+                                if *sure {
+                                    must.insert(t);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // The list: the stood tiles listed, the reads some cast's each, the slide's words.
+        let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(|k| mix(k, 3)).collect();
+        let stood_at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
+        list[stood_at] = stood.len() as u32;
+        for (e, t) in stood.iter().enumerate() {
+            list[stood_at + 1 + e] = (t[1] as u32) << 16 | t[0] as u32;
+        }
+        let reads = light::reads_at(SIZE) as usize;
+        let was: Vec<u32> = (0..N * N)
+            .map(|t| [0, 29, 30, 37, 38, 41][(mix(t, 5) % 6) as usize])
+            .collect();
+        list[reads..reads + (N * N) as usize].copy_from_slice(&was);
+        let slide = light::slide_at(SIZE) as usize;
+        list[slide + light::READS_FROM as usize] = reads_from;
+        let mut args = vec![0u32; light::args_words(SIZE) as usize];
+        args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
+        let mut head = head_words(current, epoch, [1304, -896]);
+        head[light::HEAD_SLIDE_OWED] = 0;
+        let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
+        let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
+        let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
+        let per = ray::MISS_LANES * ray::MISS_ACROSS;
+        gpu.dispatch(
+            &p,
+            &[
+                (0, eye.as_entire_binding()),
+                (11, head.as_entire_binding()),
+                (12, list_buf.as_entire_binding()),
+                (21, args_buf.as_entire_binding()),
+            ],
+            [ray::MISS_ACROSS, (stood.len() as u32).div_ceil(per), 1],
+        );
+        let out = gpu.read(&list_buf);
+        let out_args = gpu.read(&args_buf);
+        let read_cnt = out_args[(light::ARGS_COUNTS + light::LISTED_READ) as usize] as usize;
+        let at = light::listed_at(SIZE, light::LISTED_READ) as usize;
+        let listed: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
+            .iter()
+            .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
+            .collect();
+        let got: std::collections::BTreeSet<[i32; 2]> = listed.iter().copied().collect();
+        let ep = light::reads_epoch(epoch, reads_from);
+        let missing: Vec<_> = must.difference(&got).copied().collect();
+        let extra: Vec<_> = got.difference(&may).copied().collect();
+        let lay = out_args[light::ARGS_LAY as usize + 1];
+        tally.compare(
+            &format!("{case}: the tiles read, each once, the lay's instances as many"),
+            &[read_cnt as u32, read_cnt as u32],
+            &[got.len() as u32, lay],
+            |k| ["listed once", "the lay's instances"][k].into(),
+        );
+        tally.compare(
+            &format!("{case}: the tiles read, none missing, none past"),
+            &[0, 0],
+            &[missing.len() as u32, extra.len() as u32],
+            |k| [format!("missing {missing:?}"), format!("past {extra:?}")][k].clone(),
+        );
+        // Each tile's read word: the cast's where it was read and named a cast before the
+        // reads' epoch, else as it was.
+        let (mut want, mut have) = (Vec::new(), Vec::new());
+        for j in 0..N as i32 {
+            for i in 0..N as i32 {
+                let k = (j as u32 * N + i as u32) as usize;
+                let read = got.contains(&[i, j]);
+                want.push(if read && was[k] < ep { current } else { was[k] });
+                have.push(out[reads + k]);
+            }
+        }
+        let claimed = want.iter().zip(&was).filter(|(w, v)| w != v).count() as u32;
+        tally.compare(&format!("{case}: the reads"), &want, &have, |k| {
+            format!("tile {} {}", k as u32 % N, k as u32 / N)
+        });
+        tally.compare(
+            &format!("{case}: the claimed listed"),
+            &[claimed],
+            &[out_args[(light::ARGS_COUNTS + light::LISTED_CLAIMED) as usize]],
+            |_| "the claimed list's count".into(),
+        );
+        assert!(
+            claimed > 0 && read_cnt > stood.len(),
+            "{case}: {claimed} {read_cnt}"
+        );
+    }
+    tally.end("light_propagate_cs");
 }

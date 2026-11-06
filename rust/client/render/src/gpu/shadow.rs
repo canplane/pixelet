@@ -7,9 +7,10 @@
 //! rays are, off samples and the visible voxel (light.wgsl `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-engine `light`); laid into the map
-//! each frame in the box's own order, one triangle over it
-//! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
-//! drawn over it depth only, from the light's frame. The lit passes read
+//! each frame in the box's own order in the tiles a receiver reads, a quad each
+//! (`PIPELINE_LIGHT_MAP`, `light::LISTED_READ`), the rest cleared to the far plane, and
+//! decor and the actors, which move every frame, drawn over it depth only, from the light's
+//! frame. The lit passes read
 //! the map as a plain light box. At 2048 the world is 16 MiB and the map,
 //! with its stencil, 20; both are made while the shadows are on alone
 //! (`Shadow::made`). Where only the listed casters that changed moved over
@@ -38,6 +39,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::gpu::ray::LightReads;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
 use crate::param::shadow::DEPTH_STEP;
@@ -163,7 +165,7 @@ impl Shadow {
         let lay = pipelines.build_gated(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
         let gate = pipelines.build_gated(g, PIPELINE_LIGHT_GATE, depth, Stencil::Gate);
         let corner = g.buf(
-            word_bytes(4),
+            word_bytes(8),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let light_frame = g.buf(
@@ -445,10 +447,11 @@ impl Shadow {
         g.write_buf(self.light_frame, 0, bytes(&self.light));
     }
 
-    /// The map's pass, timed in the span `shadow`, the world's depth laid in first
-    /// where `cast` (its cast holds this frame's world), one triangle over
-    /// the whole map; else cleared to the far plane, as nothing is cast
-    /// there. In the claimed tiles of `tiles` alone where it is drawn through
+    /// The map's pass, timed in the span `shadow`, cleared to the far plane, the world's
+    /// depth laid in first where `cast` (its cast holds this frame's world) in the tiles the
+    /// light's cast last listed read, a quad each, as many as it opened (`light::ARGS_LAY`):
+    /// every texel a receiver reads lies in one, and the rest hold the far plane, which none
+    /// reads. In the claimed tiles of `tiles` alone where it is drawn through
     /// its gate (`gated`, its stencil numbered by `Tiles::gate`), a frame
     /// that casts, the rest kept as the last frame left it: the gate lays
     /// the world there and raises their stencil, a quad a tile of the box
@@ -461,7 +464,11 @@ impl Shadow {
         cast: bool,
         tiles: &mut Tiles,
         gated: bool,
-        (reads, epoch): (u32, u32),
+        LightReads {
+            list: reads,
+            epoch,
+            args,
+        }: LightReads,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let (lay, corner_buf) = (self.lay.layouts[0], self.corner);
@@ -480,12 +487,17 @@ impl Shadow {
         }
         let t = self.targets();
         // The box's corner the world's depth is laid in off, and the reads that tell the
-        // tiles the light's epoch cast from those it has not yet (light_lay.wgsl).
+        // tiles the light's epoch cast from those it has not yet, past where a slide went
+        // unrun; and the tiles read (light_lay.wgsl `Lay`).
         let corner = [
             self.light_words[light::CORNER[0]],
             self.light_words[light::CORNER[1]],
             epoch,
             light::reads_at(SIZE),
+            light::listed_at(SIZE, light::LISTED_READ),
+            light::slide_at(SIZE) + light::READS_FROM,
+            0,
+            0,
         ];
         g.write_buf(self.corner, 0, bytes(&corner));
         let stamp = ctx.stamp(GpuSpanName::shadow);
@@ -518,7 +530,7 @@ impl Shadow {
         } else if cast {
             pass.set_pipeline(self.lay.id);
             pass.set_bind_group(0, t.lay_group.0, &[]);
-            pass.draw(3, 1, 0, 0);
+            pass.draw_indirect(args, word_bytes(light::ARGS_LAY as usize));
         }
         pass
     }

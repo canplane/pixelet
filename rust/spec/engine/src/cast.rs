@@ -308,7 +308,7 @@ pub fn grid_of(o: [i32; 3]) -> [u32; 3] {
 /// The root holding the origin `o` on each axis: its place on the grid over
 /// the root's side, 2^32, floored, so 0 or −1: X either side of the seam, Y always
 /// 0, Z 0 from the world's floor up.
-fn roots_of(o: [i32; 3]) -> [i32; 3] {
+pub fn roots_of(o: [i32; 3]) -> [i32; 3] {
     [o[0] >> 31, 0, o[2].wrapping_add(Z_START as i32) >> 31]
 }
 
@@ -661,6 +661,13 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// and stops on the same cell.
 fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
+}
+
+/// The zooms every ray from the origin `o` asks the node `n` at (`ask_zooms`), as the walk
+/// asks them: far, then near.
+pub fn node_zooms(o: [i32; 3], n: &Node, detail: Detail) -> [Zoom; 2] {
+    let (lo, hi) = bounds(n, grid_of(o));
+    ask_zooms(detail, node_dist_sq(lo, hi))
 }
 
 /// A vector's length squared.

@@ -14,6 +14,11 @@ struct MissLeft {
 }
 @group(0) @binding(10) var<storage, read_write> args: MissLeft;
 
+/// Word `i` of the beam rays' words, where the walked pixels lie (walked.wgsl).
+fn beam_at(i: u32) -> u32 {
+  return select(0u, beams[i], i < arrayLength(&beams));
+}
+
 /// A hit kept for what lies about its face to be asked once a hit (`keep_hit`).
 fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   let r = atomicAdd(&args.hits_cnt, 1u);
@@ -33,12 +38,13 @@ fn miss_hit_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let k = list_place(group.xy, lane.x);
-  if (k >= in_room(node_cache[MARKS_CNT], MARKS)) {
+  let size = textureDimensions(rays);
+  let drawn = size.x * size.y;
+  if (k >= in_room(beam_at(walked_cnt_at()), drawn)) {
     return;
   }
-  let listed = node_cache[MARKS_AT + k];
+  let listed = beam_at(walked_list_at(k));
   let id = vec2<u32>(listed & 0xffffu, listed >> 16u);
-  let size = textureDimensions(rays);
   if (id.x >= size.x || id.y >= size.y) {
     return;
   }
@@ -46,9 +52,10 @@ fn miss_hit_cs(
   let w = walk(aim, px_start(aim, id, size), STEPS_MOST);
   if (w.ends == 4u) {
     write_left(id, w.t);
-    let place = enlist(MARKS);
-    if (place < MARKS) {
-      beams[eye_word(GRID + GRID_MISSES_AT) + 1u + place] = listed;
+    let place = enlist(drawn);
+    let at = walked_left_at(drawn) + 1u + place;
+    if (place < drawn && at < arrayLength(&beams)) {
+      beams[at] = listed;
     }
     return;
   }

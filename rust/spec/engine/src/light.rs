@@ -40,9 +40,8 @@ use core::f32::consts::SQRT_2;
 /// a rule both the CPU and a GPU decide multiplies by in place of a division,
 /// each rounded once by the host (`words`): the rays' direction's (`inverse`)
 /// and the reach's (`t_max_inverse`), a vec4; then the squares of the steps
-/// across and down (`across2_inverse`, `down2_inverse`), the width's
-/// (`width_inverse`) and the width squared over the split distance squared
-/// (`band_scale`).
+/// across and down (`across2_inverse`, `down2_inverse`) and the width squared over the split
+/// distance squared (`band_scale`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
@@ -193,15 +192,10 @@ impl Light {
     }
 
     /// The reciprocals the rules multiply by, each rounded once here, on
-    /// the host, and handed the shaders in a word (`words`): the width's
-    /// (`W_WIDTH_INVERSE`, `ring`); the reach's, which scales a depth along a
-    /// ray to its share of the box's (`W_T_MAX_INVERSE`, `depth`); and the
+    /// the host, and handed the shaders in a word (`words`): the reach's, which scales a depth
+    /// along a ray to its share of the box's (`W_T_MAX_INVERSE`, `depth`); and the
     /// squares of the steps across and down, which scale a step's dot with
     /// each to texels (`W_ACROSS2_INVERSE`, `W_DOWN2_INVERSE`, `texel_at`).
-    pub fn width_inverse(&self) -> f32 {
-        1.0 / self.width()
-    }
-
     pub fn t_max_inverse(&self) -> f32 {
         1.0 / self.t_max
     }
@@ -371,8 +365,9 @@ impl Light {
             [
                 self.across2_inverse().to_bits(),
                 self.down2_inverse().to_bits(),
-                self.width_inverse().to_bits(),
                 self.band_scale().to_bits(),
+                // Past the light's words (`eye::LIGHT_WORDS`), so laid nowhere.
+                0,
             ],
         ];
         let mut out = [0; eye::LIGHT_WORDS];
@@ -396,8 +391,7 @@ pub const W_INVERSE: usize = 20;
 pub const W_T_MAX_INVERSE: usize = 23;
 pub const W_ACROSS2_INVERSE: usize = 24;
 pub const W_DOWN2_INVERSE: usize = 25;
-pub const W_WIDTH_INVERSE: usize = 26;
-pub const W_BAND_SCALE: usize = 27;
+pub const W_BAND_SCALE: usize = 26;
 
 /// The texels squared from the middle of a box `size` a side to the nearest
 /// point of box tile `tile`'s column (`Light::band`), each axis's gap a whole
@@ -439,12 +433,12 @@ pub const COLUMNS: usize = 64;
 /// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
 /// cast before (`HEAD_CORNER_WAS`), whether its marks take each pixel's
 /// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
-/// `STARTS_AT`), then the actors (`ACTORS_AT`), then the list's places for the passes by hand
+/// `STARTS_AT`), then what the host draws that reads the map (`STANDS_AT`), then the list's places for the passes by hand
 /// (`HEAD_CELLS`), then the world's columns that changed (`COLUMNS_AT`).
 pub const HEAD_VEC4S: usize = COLUMNS_AT + 1 + COLUMNS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
-/// The cast's number, counted up from one each cast, which a tile stood on
-/// and read in it is marked with (`stands_at`, `reads_at`).
+/// The cast's number, counted up from one each cast, which a tile listed and read in it is
+/// marked with (`listed_marks_at`, `reads_at`).
 pub const HEAD_CAST: usize = 0;
 pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
@@ -468,9 +462,9 @@ pub const HEAD_CORNER_WAS: usize = 4;
 pub const HEAD_FOOTPRINT: usize = 6;
 /// Where the slots' misses' count lies in the list (`misses_cnt`), the second vec4's last word.
 pub const HEAD_MISSES_CNT: usize = 7;
-/// Where a pass finds the list's words, and how many a row, as `head_layout` lays them for the
-/// map's side: words of their own past the actors.
-pub const HEAD_CELLS: usize = 4 * (ACTORS_AT + 1 + ACTORS);
+/// Where a pass finds the list's words and the args' marks, and how many a row, as
+/// `head_layout` lays them for the map's side: words of their own past the actors.
+pub const HEAD_CELLS: usize = 4 * (STANDS_AT + 1 + 2 * STANDS);
 pub const HEAD_CELLS_ACROSS: usize = HEAD_CELLS + 1;
 pub const HEAD_SAMPLES: usize = HEAD_CELLS + 2;
 pub const HEAD_SAMPLES_ACROSS: usize = HEAD_CELLS + 3;
@@ -478,7 +472,7 @@ pub const HEAD_LEFTS: usize = HEAD_CELLS + 4;
 pub const HEAD_READS: usize = HEAD_CELLS + 5;
 pub const HEAD_TILES: usize = HEAD_CELLS + 6;
 pub const HEAD_HANDS: usize = HEAD_CELLS + 7;
-pub const HEAD_STANDS: usize = HEAD_CELLS + 8;
+pub const HEAD_DRAWN_MARKS: usize = HEAD_CELLS + 8;
 pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 9;
 pub const HEAD_MISSES: usize = HEAD_CELLS + 10;
 /// Each list's marks (`listed_marks_at`), then each list (`listed_at`), a word each in the
@@ -491,18 +485,26 @@ pub const HEAD_MISSES_LEFT: usize = HEAD_LISTED + LISTS as usize;
 pub const HEAD_CORNERS_LEFT: usize = HEAD_MISSES_LEFT + 1;
 /// The voxels the boxes draw (`voxels_at`).
 pub const HEAD_VOXELS: usize = HEAD_CORNERS_LEFT + 1;
-const HEAD_LAID_VEC4S: usize = 6;
+/// The slide's two words (`slide_at`).
+pub const HEAD_SLIDE: usize = HEAD_VOXELS + 1;
+/// Past the words the map's side lays, two the host sets each cast: the number of the cast
+/// the world's receivers were last stood in, this one's where it stands them again
+/// (`LISTED_STOOD`; pxl-render light_mark.wgsl); and the number of the last cast before this
+/// one that owed a slide, the box slid or a column changed (`slide_at`; light_slide.wgsl).
+pub const HEAD_WORLD: usize = HEAD_SLIDE + 1;
+pub const HEAD_SLIDE_OWED: usize = HEAD_WORLD + 1;
+const HEAD_LAID_VEC4S: usize = 7;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
-pub const COLUMNS_AT: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
+pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_VOXELS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_SLIDE_OWED < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 22] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 27] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -514,12 +516,13 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 22] {
         (HEAD_READS, reads_at(size)),
         (HEAD_TILES, tiles(size)),
         (HEAD_HANDS, hand_at(size, 0)),
-        (HEAD_STANDS, stands_at(size)),
+        (HEAD_DRAWN_MARKS, drawn_marks_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
         (HEAD_MISSES_LEFT, misses_left_at(size)),
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
         (HEAD_VOXELS, voxels_at(size)),
+        (HEAD_SLIDE, slide_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -543,6 +546,22 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 22] {
         (
             HEAD_LISTED + LISTED_CLAIMED as usize,
             listed_at(size, LISTED_CLAIMED),
+        ),
+        (
+            HEAD_MARKS + LISTED_STOOD as usize,
+            listed_marks_at(size, LISTED_STOOD),
+        ),
+        (
+            HEAD_MARKS + LISTED_READ as usize,
+            listed_marks_at(size, LISTED_READ),
+        ),
+        (
+            HEAD_LISTED + LISTED_STOOD as usize,
+            listed_at(size, LISTED_STOOD),
+        ),
+        (
+            HEAD_LISTED + LISTED_READ as usize,
+            listed_at(size, LISTED_READ),
         ),
     ]
 }
@@ -598,12 +617,13 @@ pub const STARTS_ANCHORS: usize = 3;
 pub const STARTS_FRACS: usize = 7;
 pub const STARTS_VEC4S: usize = 11;
 
-/// The actors the host draws, receivers of the shadow map as decor is
-/// (pxl-render light_mark_draws.wgsl), past the starts: how many, the
-/// first word of a vec4, then each where it stands, units from the eye, a
-/// vec4 each, as many as `ACTORS`; any past them marks nothing.
-pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
-pub const ACTORS: usize = 32;
+/// What the host draws that reads the shadow map, receivers as decor is (pxl-render
+/// frame/draw.rs `DrawList`, light_mark_draws.wgsl), past the starts: how many, the first word
+/// of a vec4, then each the box it stands within, units from the eye, its lowest corner then
+/// its highest, a vec4 each, as many as `STANDS`; the host takes the boxes past them into the
+/// last, so none stands on nothing.
+pub const STANDS_AT: usize = STARTS_AT + STARTS_VEC4S;
+pub const STANDS: usize = 64;
 
 impl Starts {
     /// The start of the ray of world texel `w`, X across and Y down the
@@ -853,7 +873,7 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`node_cache::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+/// (`ray::WALKED_CNT`), then a slot each, its X and its Y over 16 bits.
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
@@ -864,72 +884,116 @@ pub const fn misses_at(size: u32) -> u32 {
 
 /// The slots their walk over the node cache left (pxl-render light_miss_hit.wgsl), for the
 /// walk that asks the world (light_miss.wgsl), as the eye's are listed apart
-/// (`beam::Grid::misses_at`): how many, copied in once that walk is done, then each, its X and
+/// (`ray::walked_left_at`): how many, copied in once that walk is done, then each, its X and
 /// its Y over 16 bits; the misses' own room, `size²`, as it lists only slots of theirs.
 pub const fn misses_left_at(size: u32) -> u32 {
     misses_at(size) + size * size
 }
 
-/// The tiles of the box a receiver stands on in a cast, past the misses: a
-/// word a tile (`TILE` texels a side), `tiles` a row, the number of the
-/// last cast a receiver stood on it in (`HEAD_CAST`; pxl-render
-/// light_mark.wgsl, light_mark_draws.wgsl): where the eye's pixels meet the
-/// world, and where the decor and the actors drawn stand.
-pub const fn stands_at(size: u32) -> u32 {
-    misses_left_at(size) + 1 + size * size
-}
-
-/// The tiles a receiver reads, past the stands, as many: the number of the
-/// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
-/// within its taps of the way up from a tile one stands on (pxl-render
-/// light_propagate.wgsl `up`). A tile this cast's number names is
-/// the cast's to cast; one an earlier cast of its epoch names holds what
-/// that cast left; no receiver reads any other.
+/// The tiles a receiver reads, past the misses: a word a tile (`TILE` texels a side), `tiles`
+/// a row, the number of the cast that first read one in its epoch (`HEAD_EPOCH`), read where
+/// it lies within its taps of the way up from a tile a receiver stands on (`LISTED_STOOD`;
+/// pxl-render light_propagate.wgsl `up`). A tile this cast's number names is the cast's to
+/// cast; one an earlier cast of the reads' epoch names holds what that cast left
+/// (`reads_epoch`); no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
-    stands_at(size) + tiles(size) * tiles(size)
+    misses_left_at(size) + 1 + size * size
 }
 
 pub const fn tiles(size: u32) -> u32 {
     size / TILE
 }
 
-/// The tiles across and down a pixel's footprint may span and be marked
-/// whole (pxl-render light_mark.wgsl): between where its ray met
-/// the world and where its neighbor's did, which a jitter of under half a
-/// pixel either way keeps its ray within, so the marks hold whatever the
-/// jitter. Past it the two met apart, an edge, and each marks its own. Taken
-/// where the eye stands (`HEAD_FOOTPRINT`).
+/// The tiles each way past its own a receiver stands on where the eye stands
+/// (`HEAD_FOOTPRINT`; `Light::box_tiles`): a jittered ray of the frames after lies within half
+/// a pixel of an answered neighbor's, so where the surface runs on between them its hit lies
+/// on the span of their tiles, within this many of either's; past it the two met apart, an
+/// edge, and each stands on its own.
 pub const FOOTPRINT_TILES: i32 = 3;
 
-/// The tiles a pair of neighbors that met the world on tiles `a` and `b` marks between them
-/// (pxl-render light_mark.wgsl `stand_between`), its lowest and its highest corner: none where
-/// they met on one tile or further apart than `FOOTPRINT_TILES` on either axis.
-pub fn footprint(a: [i32; 2], b: [i32; 2]) -> Option<[[i32; 2]; 2]> {
-    let lo = [a[0].min(b[0]), a[1].min(b[1])];
-    let hi = [a[0].max(b[0]), a[1].max(b[1])];
-    let apart = hi[0] - lo[0] > FOOTPRINT_TILES || hi[1] - lo[1] > FOOTPRINT_TILES;
-    (!apart && lo != hi).then_some([lo, hi])
+impl Light {
+    /// How far from the eye a surface receives the shadow map, in units, on the map `size`
+    /// texels a side: the share `reach_ndc` of the box's half-width, the effects' reach
+    /// (pxl-kernel domain/scene/stage.rs `STAGE_AT::EFFECT_REACH`, effect.wgsl `effect_share`,
+    /// 0 past it), and a texel past it, the normal offset a receiver reads the map at.
+    pub fn reach(&self, size: u32) -> f32 {
+        let width = self.width();
+        self.reach_ndc * width * (size as f32 * 0.5) + width
+    }
+
+    /// Whether the box from `lo` to `hi`, units from the eye, comes within `reach` of it.
+    pub fn within(lo: [f32; 3], hi: [f32; 3], reach: f32) -> bool {
+        let gap = |k: usize| lo[k].max(-hi[k]).max(0.0);
+        let (x, y, z) = (gap(0), gap(1), gap(2));
+        x * x + y * y + z * z <= reach * reach
+    }
+
+    /// The tiles a receiver on the box from `lo` to `hi`, units from the eye, stands on, on
+    /// the map `size` texels a side: the lowest and the highest of the tiles its eight corners
+    /// lie on (`tile_of`), which hold every point of it, the light's rays parallel, and
+    /// `FOOTPRINT_TILES` more each way where `footprint`; none where it lies past the reach
+    /// (`reach`, `within`) or past the box. The one rule every receiver stands by: the box the
+    /// eye's raster drew for a voxel of its record (`cast::asset_box`; pxl-render
+    /// record_draw.wgsl), which every pixel that took that voxel hit on (visible.wgsl
+    /// `visible_cell`); a walked pixel's hit, a box of one point (light_mark.wgsl); and the box
+    /// a drawn receiver stands within (frame/draw.rs `Stand`, light_mark_draws.wgsl).
+    pub fn box_tiles(
+        &self,
+        size: u32,
+        lo: [f32; 3],
+        hi: [f32; 3],
+        footprint: bool,
+    ) -> Option<[[i32; 2]; 2]> {
+        if !Light::within(lo, hi, self.reach(size)) {
+            return None;
+        }
+        let mut first = [i32::MAX; 2];
+        let mut last = [i32::MIN; 2];
+        // [naga] each corner by its bits, not an array a dynamic index reads.
+        let mut k = 0;
+        while k < 8 {
+            let v = [
+                if k & 1 == 0 { lo[0] } else { hi[0] },
+                if k & 2 == 0 { lo[1] } else { hi[1] },
+                if k & 4 == 0 { lo[2] } else { hi[2] },
+            ];
+            let t = self.tile_of(v);
+            first = [first[0].min(t[0]), first[1].min(t[1])];
+            last = [last[0].max(t[0]), last[1].max(t[1])];
+            k += 1;
+        }
+        let grow = if footprint { FOOTPRINT_TILES } else { 0 };
+        let n = tiles(size) as i32 - 1;
+        let first = [(first[0] - grow).max(0), (first[1] - grow).max(0)];
+        let last = [(last[0] + grow).min(n), (last[1] + grow).min(n)];
+        (first[0] <= last[0] && first[1] <= last[1]).then_some([first, last])
+    }
 }
 
-/// What a cast within its epoch casts, listed as its tiles are claimed
-/// (pxl-render light_propagate.wgsl): what feeds a claimed tile
-/// at each level of the lattice, by the reach it feeds within (pxl-render
-/// light_propagate.wgsl `enlist`), each the box tile it lies on: the beam rays'
-/// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
-/// (`LISTED_FED`), and the tiles claimed, whose slots it casts
-/// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
-/// j << 16` each, in the list's buffer, the count copied in once propagation
-/// is done (`ARGS_COUNTS`), as the eye's is (`node_cache::MARKS_CNT`); and a word
-/// for every place of each, the last cast that listed it, so each is listed once
-/// a cast, in the args' buffer (`listed_marks_at`). The passes
-/// that cast tiles take their threads off these (pxl-render light_list.wgsl
-/// `light_item`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
-/// entry its side's square of them, a cast that begins an epoch as any other
-/// (`CLAIM_BUDGET`).
+/// What a cast lists, a tile's `i | j << 16` each, in the list's buffer: what feeds a tile
+/// it claimed at each level of the lattice, by the reach it feeds within (pxl-render
+/// light_list.wgsl `light_needs`), each the box tile it lies on: the beam rays' corners
+/// (`LISTED_CORNERS`), the tiles whose cells and samples feed one (`LISTED_FED`), and the
+/// tiles claimed, whose slots it casts (`LISTED_CLAIMED`); the tiles a receiver stands on
+/// (`LISTED_STOOD`), the world's first, then the drawn receivers' (pxl-render
+/// light_mark.wgsl, light_mark_draws.wgsl); and the tiles a receiver reads, which the map is
+/// laid in (`LISTED_READ`; light_propagate.wgsl, gpu/shadow.rs `Shadow::begin`). Each list's
+/// count, then its entries, the count copied in once propagation is done (`ARGS_COUNTS`), as
+/// the eye's is (`ray::WALKED_CNT`); and a word for every place of each, in the args'
+/// buffer (`listed_marks_at`): the last cast that listed it, so each is listed once a cast,
+/// but the stood list's, which names the cast the world's receivers were last stood in
+/// (`HEAD_WORLD`), as they stand on in every cast after it until they are stood again. The
+/// drawn receivers' tiles each take a word of their own past the marks (`drawn_marks_at`),
+/// the last cast that listed it. The passes that cast tiles take their threads off the first
+/// three (pxl-render light_list.wgsl `light_item`): `LIST_ACROSS` workgroups of
+/// `LISTED_LANES` a row, an entry its side's square of them, a cast that begins an epoch as
+/// any other (`CLAIM_BUDGET`); the propagation a thread a stood tile.
 pub const LISTED_CORNERS: u32 = 0;
 pub const LISTED_FED: u32 = 1;
 pub const LISTED_CLAIMED: u32 = 2;
-pub const LISTS: u32 = 3;
+pub const LISTED_STOOD: u32 = 3;
+pub const LISTED_READ: u32 = 4;
+pub const LISTS: u32 = 5;
 pub const LIST_ACROSS: u32 = 64;
 pub const LISTED_LANES: u32 = 64;
 const _: () = assert!(
@@ -959,6 +1023,11 @@ pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
     at
 }
 
+/// The drawn receivers' marks past the lists', a word a tile (`LISTED_STOOD`).
+pub const fn drawn_marks_at(size: u32) -> u32 {
+    listed_marks_at(size, LISTS)
+}
+
 /// List `which`'s count, its entries after it (`LISTED_CORNERS`).
 pub const fn listed_at(size: u32, which: u32) -> u32 {
     let mut at = reads_at(size) + tiles(size) * tiles(size);
@@ -970,16 +1039,8 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
     at
 }
 
-/// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares, the lists, the samples left, the beam
-/// rays left, the voxels.
-pub const fn list_words(size: u32) -> u32 {
-    voxels_at(size) + (size / SAMPLE) * (size / SAMPLE) * beam::VOXEL_WORDS
-}
-
-/// The voxels the samples' boxes draw (pxl-render boxes.wgsl), past the beam rays left, as the
-/// eye's are past its samples (`beam::Grid::voxels_at`): `beam::VOXEL_WORDS` a box, a box a
-/// sample at most.
+/// The voxels the samples' boxes draw (pxl-render boxes.wgsl), past the beam rays left:
+/// `beam::VOXEL_WORDS` a box, a box a sample at most.
 pub const fn voxels_at(size: u32) -> u32 {
     corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
 }
@@ -999,26 +1060,84 @@ pub const fn corners_left_at(size: u32) -> u32 {
     lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
 }
 
-/// The workgroups of the passes that cast tiles, a buffer of their own: each
-/// pass's three words (x, y, z) from its `ARGS_*` word, `ARGS_PASSES` in all;
-/// each list's count (`ARGS_COUNTS`). A cast starts with none,
-/// `LIST_ACROSS` workgroups a row and no row, no list holding any; a tile
-/// claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the
-/// rows what it lists takes (`listed_at`); a cast that claims none, as where the receivers moved
-/// only within the tiles cast, casts none. Past `ARGS_WORDS`, which a cast
-/// writes, the lists' marks, which last from cast to cast (`args_words`).
+/// Past the voxels, two words kept from cast to cast: the number of the last cast its
+/// slide ran in (`SLIDE_RAN`), set by the slide's first thread (pxl-render light_slide.wgsl);
+/// and the number of the first cast whose reads hold where a cast that owed a slide stood no
+/// receiver, so ran none (`READS_FROM`), set by the one thread that lists a cast's first stood
+/// tile where the slide last ran before the last cast that owed one (`HEAD_SLIDE_OWED`;
+/// light_stood.wgsl `stood_first`): the reads' epoch is the later of it and `HEAD_EPOCH`
+/// (`reads_epoch`).
+pub const fn slide_at(size: u32) -> u32 {
+    voxels_at(size) + (size / SAMPLE) * (size / SAMPLE) * beam::VOXEL_WORDS
+}
+pub const SLIDE_RAN: u32 = 0;
+pub const READS_FROM: u32 = 1;
+
+/// Past them, what the world's receivers left in the stood list's args where they were last
+/// stood (`HEAD_WORLD`), copied out once they are and back in each cast that stands on them
+/// again (gpu/ray/cast.rs): its first `STOOD_KEPT` words.
+pub const fn kept_at(size: u32) -> u32 {
+    slide_at(size) + 2
+}
+
+/// The list's buffer's words: the beam's, the samples, the misses, the
+/// reads, their squares, the lists, the samples left, the beam
+/// rays left, the slide's two words and what the world's receivers left.
+pub const fn list_words(size: u32) -> u32 {
+    kept_at(size) + STOOD_KEPT
+}
+
+/// The stood list's args, a buffer of their own (pxl-render light_mark.wgsl `Stood`), as a
+/// list walked apart lays its own (`ray::LEFT_EMPTY`; list.wgsl `enlist`): the propagation's
+/// dispatch over the stood tiles, a row as each `MISS_LANES · MISS_ACROSS` is listed
+/// (`STOOD_LIST`), and their count (`STOOD_CNT`); then the slide's dispatch (`STOOD_SLIDE`):
+/// its tiles' workgroups across once a tile is stood, the stood list's first setting it, and
+/// down where the cast owes a slide, the host's, so a cast that owes one and stands nothing
+/// slides nothing (`READS_FROM`). The world's receivers' part, the first `STOOD_KEPT`, is
+/// theirs to keep (`kept_at`); the host sets the rest each cast.
+pub const STOOD_LIST: u32 = 0;
+pub const STOOD_CNT: u32 = 3;
+pub const STOOD_SLIDE: u32 = 4;
+pub const STOOD_WORDS: u32 = 7;
+pub const STOOD_KEPT: u32 = STOOD_SLIDE + 1;
+
+/// The reads' epoch: the first cast whose reads hold, the later of the epoch the host began
+/// (`HEAD_EPOCH`) and the one a slide unrun began (`READS_FROM`).
+pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
+    if reads_from > epoch {
+        reads_from
+    } else {
+        epoch
+    }
+}
+
+/// The workgroups of the passes the light's cast takes off what it lists, a buffer of their
+/// own: each pass's three words (x, y, z) from its `ARGS_*` word; the map's lay's four
+/// (`ARGS_LAY`), a draw's; `ARGS_PASSES` in all; each list's count (`ARGS_COUNTS`). A cast
+/// starts with none, `LIST_ACROSS` workgroups a row and no row, no list holding any; a tile
+/// claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the rows what it
+/// lists takes (`listed_at`); a cast that claims none, as where the receivers moved only within
+/// the tiles cast, casts none. The drawn receivers' (`ARGS_DRAWS`) holds as many as they are
+/// (light_mark_draws.wgsl `light_mark_draws_open_cs`); the lay six vertices and an instance a
+/// tile read (light_propagate.wgsl). So a cast whose receivers stand on nothing claims, lays
+/// and draws no tile. Past `ARGS_WORDS`, which a cast writes, the lists' marks and the drawn
+/// receivers', which last from cast to cast (`args_words`).
 pub const ARGS_BEAM: u32 = 0;
 pub const ARGS_CELLS: u32 = 3;
 pub const ARGS_SAMPLE: u32 = 6;
 pub const ARGS_SAMPLE_BOX: u32 = 9;
 pub const ARGS_SLOT: u32 = 12;
-pub const ARGS_PASSES: u32 = 15;
+pub const ARGS_DRAWS: u32 = 15;
+pub const ARGS_LAY: u32 = 18;
+pub const ARGS_PASSES: u32 = 22;
 pub const ARGS_COUNTS: u32 = ARGS_PASSES;
 pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
+/// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).
+pub const LAY_VERTICES: u32 = 6;
 
 /// The args' buffer's words on the map `size` texels a side.
 pub const fn args_words(size: u32) -> u32 {
-    ARGS_WORDS + listed_marks_at(size, LISTS)
+    ARGS_WORDS + drawn_marks_at(size) + tiles(size) * tiles(size)
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on
@@ -1407,5 +1526,144 @@ mod tests {
             }
         }
         assert!(whole > 0 && banded > 0, "{whole} {banded}");
+    }
+
+    /// A box 64 texels a side, a unit each, over the eye, the light straight down, a receiver
+    /// reading half of it: 8 tiles a side, and a reach of 17 units.
+    fn over_eye() -> Light {
+        Light::of(
+            [
+                [32.0, 0.0, 0.0],
+                [0.0, 32.0, 0.0],
+                [0.0, 0.0, -64.0],
+                [0.0, 0.0, 32.0],
+            ],
+            64,
+            [0, 0],
+            0.5,
+        )
+    }
+
+    /// The receivers' reach is the effects' share of the box's half-width and a texel past it.
+    #[test]
+    fn reach_is_effects_and_a_texel() {
+        let s = over_eye();
+        assert_eq!(s.width(), 1.0);
+        assert_eq!(s.reach(64), 17.0);
+    }
+
+    /// A box stands on nothing past the reach, and on its tiles once any of it comes within.
+    #[test]
+    fn box_past_reach_stands_on_nothing() {
+        let s = over_eye();
+        assert_eq!(
+            s.box_tiles(64, [17.5, -1.0, -1.0], [19.0, 1.0, 1.0], true),
+            None
+        );
+        assert_eq!(
+            s.box_tiles(64, [12.0, 12.0, 12.0], [13.0, 13.0, 13.0], true),
+            None
+        );
+        assert!(s
+            .box_tiles(64, [16.5, -1.0, -1.0], [19.0, 1.0, 1.0], false)
+            .is_some());
+        assert!(s
+            .box_tiles(64, [-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], false)
+            .is_some());
+    }
+
+    /// Every point of a box within the reach stands on a tile its range holds, as every pixel
+    /// that took a voxel hit on that voxel's box (pxl-render visible.wgsl `visible_entry`).
+    #[test]
+    fn box_tiles_hold_every_point() {
+        let s = over_eye();
+        let mut seed = 0x9e37_79b9u32;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed as f32 / u32::MAX as f32
+        };
+        let mut boxes = 0;
+        for _ in 0..2000 {
+            let lo = [0, 1, 2].map(|_| next() * 60.0 - 30.0);
+            let side = next() * 12.0;
+            let hi = lo.map(|v| v + side);
+            let within = Light::within(lo, hi, s.reach(64));
+            let range = s.box_tiles(64, lo, hi, false);
+            boxes += u32::from(range.is_some());
+            for _ in 0..16 {
+                let p = [0, 1, 2].map(|k| lo[k] + next() * (hi[k] - lo[k]));
+                let t = s.tile_of(p);
+                let on = (0..8).contains(&t[0]) && (0..8).contains(&t[1]);
+                let held = range.is_some_and(|[first, last]| {
+                    first[0] <= t[0] && t[0] <= last[0] && first[1] <= t[1] && t[1] <= last[1]
+                });
+                assert!(
+                    !within || !on || held,
+                    "{lo:?} {hi:?} {p:?} {t:?} {range:?}"
+                );
+            }
+        }
+        assert!(boxes > 100, "{boxes}");
+    }
+
+    /// A jittered ray between two answered neighbors' hits, on the line between them, where
+    /// their tiles lie within `FOOTPRINT_TILES` of each other, stands on a tile either one's
+    /// footprint holds (`box_tiles`), the tile of a point along the box's axes moving
+    /// monotonically: a jittered walk between two voxels' pixels as between two walked ones.
+    #[test]
+    fn footprint_holds_the_jitter_between() {
+        let s = over_eye();
+        let mut spans = 0;
+        for (a, b) in [
+            ([0.5, 0.5, 0.0], [9.5, 3.0, -2.0]),
+            ([-7.0, 2.0, 1.0], [-1.0, -9.0, 0.0]),
+            ([3.0, 3.0, 0.0], [3.5, 3.2, 4.0]),
+            ([-9.0, -9.0, 0.0], [12.0, 1.0, 0.0]),
+        ] {
+            let (ta, tb) = (s.tile_of(a), s.tile_of(b));
+            if (ta[0] - tb[0]).abs() > FOOTPRINT_TILES || (ta[1] - tb[1]).abs() > FOOTPRINT_TILES {
+                continue;
+            }
+            spans += 1;
+            let range = s.box_tiles(64, a, a, true).unwrap();
+            let held = |t: [i32; 2], [lo, hi]: [[i32; 2]; 2]| {
+                lo[0] <= t[0] && t[0] <= hi[0] && lo[1] <= t[1] && t[1] <= hi[1]
+            };
+            assert!(held(tb, range), "{a:?} {b:?}");
+            for k in 0..=64 {
+                let f = k as f32 / 64.0;
+                let p = [0, 1, 2].map(|i| a[i] + f * (b[i] - a[i]));
+                let t = s.tile_of(p);
+                assert!(held(t, range), "{a:?} {b:?} {p:?} {t:?}");
+            }
+        }
+        assert!(spans >= 2, "{spans}");
+    }
+
+    /// The footprint grows a box's tiles `FOOTPRINT_TILES` each way, kept to the box.
+    #[test]
+    fn footprint_grows_by_its_tiles() {
+        let s = over_eye();
+        let v = [0.0, 0.0, 0.0];
+        let [lo, hi] = s.box_tiles(64, v, v, false).unwrap();
+        let [glo, ghi] = s.box_tiles(64, v, v, true).unwrap();
+        assert_eq!(lo, hi);
+        assert_eq!(
+            glo,
+            [lo[0] - FOOTPRINT_TILES, lo[1] - FOOTPRINT_TILES].map(|x| x.max(0))
+        );
+        assert_eq!(
+            ghi,
+            [hi[0] + FOOTPRINT_TILES, hi[1] + FOOTPRINT_TILES].map(|x| x.min(7))
+        );
+    }
+
+    /// The reads' epoch is the later of the host's and the one a slide unrun began.
+    #[test]
+    fn reads_epoch_is_the_later() {
+        assert_eq!(reads_epoch(5, 0), 5);
+        assert_eq!(reads_epoch(5, 9), 9);
     }
 }

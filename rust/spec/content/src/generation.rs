@@ -747,7 +747,7 @@ pub const CLAIM_EXTENT: [i32; 3] = {
 
 /// The tallest decor and the widest, in unit cells: as high over what it
 /// stands on as anything generated reaches, and as far across (pxl-engine
-/// light.rs `Light::ring`; pxl-render light_propagate.wgsl `up`).
+/// light.rs `Light::box_tiles`; pxl-render decor_ball.wgsl, light_propagate.wgsl `up`).
 pub const TALLEST: i32 = CLAIM_EXTENT[2] + 1;
 pub const WIDEST: i32 = CLAIM_EXTENT[0] + 1;
 

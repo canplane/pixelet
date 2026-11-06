@@ -1,10 +1,10 @@
 // pxl-render/boxes.wgsl
 
-// The voxels the samples stopped on written as boxes for the raster's draw (raster.wgsl),
-// the eye's samples' and the light's alike, over the samples' words (resume.wgsl `beams`)
-// and their observer (sample.eye.wgsl, sample.light.wgsl) (pxl-engine raster.rs): the boxes,
-// the cast's table of voxels past them, the voxels' words, the raster's args, and the asks
-// of what lies about each voxel's faces (face.wgsl). Two passes over the samples: the first
+// The voxels the light's samples stopped on written as boxes for the raster's draw
+// (raster.wgsl), over the samples' words (resume.wgsl `beams`) and their observer
+// (sample.light.wgsl) (pxl-engine raster.rs); the eye's are its record's (sample_box.wgsl,
+// record_draw.wgsl). The boxes, the cast's table of voxels past them, the voxels' words, the
+// raster's args, and the asks of what lies about each voxel's faces (face.wgsl). Two passes over the samples: the first
 // (`claim_box`) has each sample that heads its node's run, no sample before it across or up
 // stopped on the node, claim the node's slot and the one that claims it write the voxel; the
 // second (`observe_box`) has every sample find its node's voxel, or write one of its own

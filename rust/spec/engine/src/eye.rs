@@ -40,20 +40,19 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// (`light::REACH_NDC`) and a texel's width (`light::W_WIDTH`); then the
 /// reciprocals the light's rules multiply by, each rounded once by the
 /// renderer: the rays' direction's and the reach's, a vec4, and the squares
-/// of the steps across and down and the width's (`light::W_INVERSE` to
-/// `light::W_WIDTH_INVERSE`); then the width squared over the split distance
-/// squared (`light::W_BAND_SCALE`). All zero where no shadow is cast. The renderer
+/// of the steps across and down (`light::W_INVERSE` to `light::W_DOWN2_INVERSE`); then the
+/// width squared over the split distance squared (`light::W_BAND_SCALE`). All zero where no shadow is cast. The renderer
 /// writes them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the
 /// kernel leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;
-pub const LIGHT_WORDS: usize = 28;
+pub const LIGHT_WORDS: usize = 27;
 /// Where each pixel's ray goes through it this frame, its offset from the
-/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
-/// words unused, as the eye is laid out in fours. The renderer's to write;
-/// the kernel leaves it zero.
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits, at the first four past the
+/// light's words, as the eye is laid out in fours; then two words unused, as it is. The
+/// renderer's to write; the kernel leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
-pub const JITTER: usize = LIGHT + LIGHT_WORDS;
+pub const JITTER: usize = (LIGHT + LIGHT_WORDS).next_multiple_of(4);
 pub(crate) const JITTER_WORDS: usize = 4;
 /// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
 /// `words`), worked out once off the tangents above where the kernel

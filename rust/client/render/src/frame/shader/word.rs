@@ -375,8 +375,7 @@ pub const MOON_MAP_MEAN: f32 = 0.2459;
 pub const AIR_FROXELS: u32 = 32;
 
 /// The side of a workgroup over a square, a thread a drawn pixel, a sample or
-/// a tile of the light's box (light_mark.wgsl, sample_box.wgsl,
-/// light_sample_box.wgsl, light_propagate.wgsl, light_slide.wgsl).
+/// a tile of the light's box (sample_box.wgsl, light_sample_box.wgsl, light_slide.wgsl).
 pub const SQUARE_SIDE: u32 = 8;
 /// The lanes of a workgroup over a row, a thread an entry (light_mark_draws.wgsl,
 /// forget.wgsl).

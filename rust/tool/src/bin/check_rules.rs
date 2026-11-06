@@ -81,7 +81,7 @@ const KERNEL_BESIDE: [&str; 1] = ["perf"];
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const ENGINE: &str = "rust/spec/engine/src/";
-const ENGINE_ORDER: [(&str, u8); 25] = [
+const ENGINE_ORDER: [(&str, u8); 26] = [
     ("param", 0),
     ("seed", 0),
     ("content", 0),
@@ -103,6 +103,7 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("beam", 3),
     ("eye", 3),
     ("raster", 3),
+    ("record", 3),
     ("ray", 3),
     ("light", 3),
     ("screen", 3),
