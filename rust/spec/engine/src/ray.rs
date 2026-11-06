@@ -97,14 +97,14 @@ const _: () = assert!(
 /// walks wrote it: no indirect call, so no command buffer is cut for it. A lane walks its ray
 /// `QUEUE_STEPS` steps at a time and keeps it, in its registers, between them.
 ///
-/// In turn: the first walk, over the node cache alone, over the observer's holes, the light's
-/// carried from its cast before first; the asks, a lane a node a walk was parked at, once a
+/// In turn: the first walk, over the node cache alone, over the observer's holes, a light's
+/// slot of an owed tile on from where its cast before parked it (`light::READ_OWED`); the asks, a lane a node a walk was parked at, once a
 /// node; the second walk, over the node cache alone, over the rays the first parked, from the
 /// state each was parked in; the asks again; and the last walk, which asks the world where no
 /// slot keeps a node, over the rays the second parked, so every eye hole ends in its frame. The
 /// light's walks count their work against its budget (`light::VISITS_A_FRAME`,
-/// `light::ASKS_A_FRAME`): a slot's ray the budget does not reach is carried to the light's
-/// next cast.
+/// `light::ASKS_A_FRAME`): a slot's ray the budget does not reach stays parked, its tile owed
+/// to the light's next claim (`light::READ_OWED`).
 pub const QUEUE_LANES: u32 = 64;
 pub const QUEUE_GROUPS: u32 = 256;
 pub const QUEUE_STEPS: u32 = 16;
@@ -134,21 +134,18 @@ pub const QUEUE_WORDS: u32 = QUEUE_RECORDS_AT + 2 * QUEUE_RECORDS_ROOM * QUEUE_R
 pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0];
 
 /// The holes' region, the last words of an observer's list, which every walk of the queue binds
-/// (pxl-render queue.wgsl `region_at`), sized to the most holes a cast lists, `room`: the
-/// eye's drawn pixels, a pixel listed once a cast (cast.wgsl, a thread a pixel), and the
-/// light's slots, `light::size²`, a slot listed once a cast (light.wgsl, a thread a slot).
-/// First its lists, a count then `room` holes each, the hole's X under its Y over 16 bits: the
-/// light's two, the slots carried from one cast to the next, the one a cast reads and the one
-/// it writes by its number's parity (`CARRIED_LISTS`); the eye's none, its holes in its walked
-/// list (`WALKED_LIST`). Then a state a hole, by its place (its pixel's or slot's index),
-/// `STATE_WORDS` each: its distance's bits, its node's corner, and its zoom, roots and steps
-/// taken packed under `PARKED`, which says the ray is parked there (pxl-render queue.wgsl
-/// `park`). Every hole can be parked; none is left out.
-pub const CARRIED_LISTS: u32 = 2;
+/// (pxl-render queue.wgsl `state_at`), a state for each of the most holes a cast lists,
+/// `room`: the eye's drawn pixels, a pixel listed once a cast (cast.wgsl, a thread a pixel), by
+/// its pixel's index, its holes in its walked list (`WALKED_LIST`); and the light's slots of the
+/// tiles a cast claims (light.wgsl, a thread a slot), by its tile's place and its slot within
+/// the tile, a cast's and the one before's (`light::region_words`). A state is `STATE_WORDS`:
+/// its distance's bits, its node's corner, and its zoom, roots and steps taken packed under
+/// `PARKED`, which says the ray is parked there (pxl-render queue.wgsl `park`). Every hole can be
+/// parked; none is left out.
 pub const STATE_WORDS: u32 = 5;
 pub const PARKED: u32 = 1 << 31;
-pub const fn region_words(room: u32, lists: u32) -> u32 {
-    lists * (1 + room) + room * STATE_WORDS
+pub const fn region_words(room: u32) -> u32 {
+    room * STATE_WORDS
 }
 const _: () = assert!(
     STEPS_MOST < 1 << 13 && FINEST_ZOOM < 1 << 6,

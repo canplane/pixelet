@@ -96,16 +96,19 @@ pub(crate) const COUNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
 pub const HITS_ARGS: u32 = COUNT_AT + COUNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
 /// The next ray the holes' queue's last walk takes (pxl-render queue_last.wgsl), each
-/// observer's in turn, and the slots it carries to the light's next cast, both set back to 0
-/// by the asks that run before it (queue_ask.wgsl).
+/// observer's in turn, set back to 0 by the asks that run before it (queue_ask.wgsl).
 pub const LAST_TAKEN: u32 = HITS_CNT + 1;
-pub const CARRIED: u32 = LAST_TAKEN + 1;
 /// The light's holes' work so far in its cast, the nodes visited and those asked
 /// (`ray::QUEUE_VISITED`, `ray::QUEUE_ASKED`), which its last walk adds to, copied in from its
 /// queue's words before that walk.
-pub const VISITED: u32 = CARRIED + 1;
+pub const VISITED: u32 = LAST_TAKEN + 1;
 pub const ASKED: u32 = VISITED + 1;
-pub const HEAD_WORDS: u32 = ASKED + 1;
+/// The light's work its cast leaves owed: the tiles it wanted and left unclaimed, copied in
+/// from its args after the claim (`light::ARGS_LEFT`), and the slots its last walk left parked
+/// (pxl-render queue_last.wgsl `unreached`), which add to it. None where the cast leaves
+/// nothing owed. Copied into the counts read back every light cast (`count::OWED`).
+pub const OWED: u32 = ASKED + 1;
+pub const HEAD_WORDS: u32 = OWED + 1;
 
 /// Where `observer`'s walks count lane `lane` (pxl-engine `count::BEAM`
 /// to `count::MISS`) in the head.

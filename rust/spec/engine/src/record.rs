@@ -81,7 +81,12 @@
 //! **A recorded voxel hides no nearer one from the rays:** the samples walk from their cells'
 //! starts, which the beam rays find from the eye, not from the record, so a sample stops on
 //! the first cell along its ray whatever the record holds there; an occluder a sample's ray
-//! meets is written the frame it is cast.
+//! meets is written the frame it is cast. While the view and the world stand, the samples
+//! are cast again at each offset of the rolled lattice (`beam::roll`), one a frame. The
+//! offsets together lay a regular lattice `grid::CELL`/16 apart, so a nearest occluder whose
+//! projection holds a square of that side aligned to it, or any disc √2 · `CELL`/16 across,
+//! holds a sample of some offset and is written within `beam::ROLLS` standing frames of the
+//! last change.
 //!
 //! **Eviction:** a sample that finds its bucket full takes the slot seen least lately, never
 //! one seen this frame or the last (`victim`), so no voxel a pixel took last frame goes.

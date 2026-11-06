@@ -1,8 +1,8 @@
 // pxl-render/queue_walk.wgsl
 
 // The holes' walks over the node cache alone (walk.wgsl, cached.wgsl, queue.wgsl): the first
-// over the queue's holes, the light's carried ones first, the second over the rays the first
-// parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next ray off
+// over the queue's holes, a light's slot of an owed tile on from its parked state, the second
+// over the rays the first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next ray off
 // the queue's words when its own ends or is parked, walks it `QUEUE_STEPS` steps at a time,
 // and holds its state between them, so a lane whose ray ends early walks another while the
 // long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
@@ -76,8 +76,7 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
 /// takes every hole the queue holds, so every hole's state is written in this cast before the
 /// second reads it: parked, or not.
 fn queue_walk(again: bool) {
-  let carried_n = carried();
-  let n = carried_n + listed();
+  let n = listed();
   let taken = select(QUEUE_TAKEN, QUEUE_TAKEN_AGAIN, again);
   var hole = NONE;
   var t = 0.0;
@@ -92,7 +91,9 @@ fn queue_walk(again: bool) {
         break;
       }
       let h = queued(k);
-      let resumes = again || k < carried_n;
+      // A light's slot of an owed tile goes on from where its cast before parked it, as its
+      // claim took its state (light_propagate.wgsl `light_claim_cs`).
+      let resumes = again || (light_run() && parked(h));
       if (resumes && !parked(h)) {
         continue;
       }

@@ -33,7 +33,11 @@ pub const WALKED: u32 = 5;
 pub const SKY: u32 = 6;
 pub const BOXES: u32 = 7;
 pub const LANES: u32 = 8;
-pub const WORDS: u32 = OBSERVERS * LANES;
+/// Past the lanes, the light's owed work as its cast left it (`node_cache::OWED`): copied every
+/// light cast, counted or not, and read back with the lanes, so the renderer asks for the next
+/// frame while it is not none (pxl-render gpu/ray/count.rs `Counter::owed`).
+pub const OWED: u32 = OBSERVERS * LANES;
+pub const WORDS: u32 = OWED + 1;
 
 /// The lanes a walk writing the node cache adds to, from the first
 /// (`BEAM` to `ASKED`), and those a pixel or a slot does (`REUSED` to

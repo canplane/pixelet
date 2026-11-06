@@ -1494,7 +1494,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             let drawn = s.size[0] * s.size[1];
             let walked = grid.walked_at() as usize;
             words.resize(
-                walked + (ray::walked_words(drawn) + ray::region_words(drawn, 0)) as usize,
+                walked + (ray::walked_words(drawn) + ray::region_words(drawn)) as usize,
                 0,
             );
 

@@ -56,6 +56,22 @@ fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
   return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(head_word(LIGHT_HEAD_SIZE) - 1u);
 }
 
+/// The word of the place the tile of slot `slot` holds its parked rays at, its number among its
+/// cast's claims (pxl-engine `light::places_at`): a word a tile of the slots' own grid.
+fn light_place_at(slot: vec2<u32>) -> u32 {
+  let n = head_word(LIGHT_HEAD_SIZE) / LIGHT_TILE;
+  let t = slot / LIGHT_TILE;
+  return head_word(LIGHT_HEAD_PLACES) + t.y * n + t.x;
+}
+
+/// The first word of the parked state of slot `k`, row by row, of the tile at place `place`,
+/// in the region of the cast numbered `number`, by its parity (pxl-engine
+/// `light::region_words`, `ray::STATE_WORDS`).
+fn light_state_at(place: u32, k: u32, number: u32) -> u32 {
+  let at = (number % 2u) * LIGHT_PARKED_ROOM + place * LIGHT_TILE * LIGHT_TILE + k;
+  return head_word(LIGHT_HEAD_REGION) + at * STATE_WORDS;
+}
+
 fn light_corner() -> vec2<i32> {
   return vec2<i32>(i32(eye_word(LIGHT + LIGHT_CORNER_X)), i32(eye_word(LIGHT + LIGHT_CORNER_Y)));
 }

@@ -167,11 +167,11 @@ fn main() {
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     // A light slot's word read as its depth, a share of the light box's, as
     // pxl-engine light.rs `word` lays it: the one place a word's depth is
-    // read; a box tile's slots a side, which the lay reads a tile's read word by; and the
-    // vertices it lays a tile with.
-    use pxl_engine::light::{DEPTH_ONE, LAY_VERTICES};
+    // read; a box tile's slots a side, which the lay reads a tile's read word by; the
+    // vertices it lays a tile with; and the bit that says a tile owed in its read word.
+    use pxl_engine::light::{DEPTH_ONE, LAY_VERTICES, READ_OWED};
     let light = format!(
-        "fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\nconst LAY_TILE: u32 = {LIGHT_TILE}u;\nconst LAY_VERTICES: u32 = {}u;\n",
+        "fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\nconst LAY_TILE: u32 = {LIGHT_TILE}u;\nconst LAY_VERTICES: u32 = {}u;\nconst READ_OWED: u32 = {READ_OWED}u;\n",
         LAY_VERTICES
     );
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
@@ -356,6 +356,12 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_WORLD", light::HEAD_WORLD as u32),
         ("LIGHT_HEAD_SLIDE_OWED", light::HEAD_SLIDE_OWED as u32),
         ("LIGHT_HEAD_STANDS_WORLD", light::HEAD_STANDS_WORLD as u32),
+        ("LIGHT_HEAD_PLACES", light::HEAD_PLACES as u32),
+        ("LIGHT_HEAD_REGION", light::HEAD_REGION as u32),
+        ("LIGHT_HEAD_RINGS", light::HEAD_RINGS as u32),
+        ("LIGHT_HEAD_CARRIES", light::HEAD_CARRIES as u32),
+        ("LIGHT_READ_OWED", light::READ_OWED),
+        ("LIGHT_PARKED_ROOM", light::parked_room()),
         ("LIGHT_SLIDE_RAN", light::SLIDE_RAN),
         ("LIGHT_READS_FROM", light::READS_FROM),
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
@@ -376,6 +382,7 @@ fn walk_word() -> String {
         ("LIGHT_LISTED_CLAIMED", light::LISTED_CLAIMED),
         ("LIGHT_LISTED_STOOD", light::LISTED_STOOD),
         ("LIGHT_LISTED_READ", light::LISTED_READ),
+        ("LIGHT_LISTED_WANTED", light::LISTED_WANTED),
         ("LIGHT_HEAD_COUNTED", light::HEAD_COUNTED as u32),
         ("LIGHT_BEAM_PASS", node_cache::LIGHT_BEAM_PASS),
         (
@@ -418,6 +425,7 @@ fn walk_word() -> String {
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
         ("GRID_STOP_ASKS_AT", beam::GRID_STOP_ASKS_AT as u32),
         ("GRID_DEFERS_AT", beam::GRID_DEFERS_AT as u32),
+        ("GRID_ROLL", beam::GRID_ROLL as u32),
         ("GRID_LATTICE", beam::GRID_LATTICE as u32),
         ("GRID_LEFTS_AT", beam::GRID_LEFTS_AT as u32),
         ("GRID_WALKED_AT", beam::GRID_WALKED_AT as u32),
@@ -474,13 +482,12 @@ fn walk_word() -> String {
         ("QUEUE_RECORDS_ROOM", ray::QUEUE_RECORDS_ROOM),
         ("VISITS_A_FRAME", light::VISITS_A_FRAME),
         ("ASKS_A_FRAME", light::ASKS_A_FRAME),
-        ("CARRIED_LISTS", ray::CARRIED_LISTS),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
         ("LAST_TAKEN", node_cache::LAST_TAKEN),
-        ("CARRIED", node_cache::CARRIED),
         ("VISITED", node_cache::VISITED),
         ("ASKED", node_cache::ASKED),
+        ("OWED", node_cache::OWED),
         ("HIT_ASSET", beam::HIT_ASSET),
         ("HIT_LINE", beam::HIT_LINE),
         ("FACE_BOX", face::BOX),
@@ -518,6 +525,10 @@ fn walk_word() -> String {
         ("LIGHT_STOOD_SLIDE", light::STOOD_SLIDE),
         ("LIGHT_ARGS_DRAWS", light::ARGS_DRAWS),
         ("LIGHT_ARGS_LAY", light::ARGS_LAY),
+        ("LIGHT_ARGS_CLAIM", light::ARGS_CLAIM),
+        ("LIGHT_ARGS_PLACED", light::ARGS_PLACED),
+        ("LIGHT_ARGS_STRADDLE", light::ARGS_STRADDLE),
+        ("LIGHT_ARGS_LEFT", light::ARGS_LEFT),
         ("LIGHT_ARGS_PASSES", light::ARGS_PASSES),
         ("LIGHT_LISTS", light::LISTS),
         ("ASK_NODE", beam::ASK_NODE),

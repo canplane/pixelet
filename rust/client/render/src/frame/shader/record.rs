@@ -79,7 +79,10 @@ pub const COMPUTE_RECORD_DRAW: u32 = 53;
 /// (record_stops.wgsl).
 pub const COMPUTE_RECORD_STOPS: u32 = 54;
 pub const COMPUTE_RECORD_DEFERRED: u32 = 55;
-pub const COMPUTES: u32 = 56;
+/// The tiles the light's cast wants claimed nearest first (light_propagate.wgsl
+/// `light_claim_cs`), from the module that lists them.
+pub const COMPUTE_LIGHT_CLAIM: u32 = 56;
+pub const COMPUTES: u32 = 57;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -117,6 +120,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
         COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_open_cs"),
         COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
+        COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_PROPAGATE, "light_claim_cs"),
         COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
         COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
         COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),

@@ -49,6 +49,7 @@ export const LIGHT_MOVED = [
   "receivers",
   "footprint",
   "world",
+  "owed",
 ] as const;
 
 export const FRAME_KINDS = [

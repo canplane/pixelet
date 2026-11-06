@@ -835,14 +835,20 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
     )
 }
 
-/// The light's list with `slots` listed in its misses' list (`light::misses_at`), and its
-/// holes' region last, a hole a slot (`ray::region_words`).
+/// The light's list with `slots` listed in its misses' list (`light::misses_at`), each tile
+/// of the map at a place of its own, its slots' parked rays there (`light::places_at`), and its
+/// holes' region last, none parked (`light::region_words`).
 fn listed(slots: &[u32]) -> Vec<u32> {
-    let region = ray::region_words(SIZE * SIZE, ray::CARRIED_LISTS);
-    let mut list = vec![0u32; (light::list_words(SIZE) + region) as usize];
+    let mut list = vec![0u32; (light::list_words(SIZE) + light::region_words()) as usize];
     let at = light::misses_cnt(SIZE) as usize;
     list[at] = slots.len() as u32;
     list[at + 1..at + 1 + slots.len()].copy_from_slice(slots);
+    let tiles = light::tiles(SIZE);
+    assert!(tiles * tiles <= light::CLAIM_BUDGET, "a place a tile");
+    let places = light::places_at(SIZE) as usize;
+    for t in 0..(tiles * tiles) as usize {
+        list[places + t] = t as u32;
+    }
     list
 }
 

@@ -46,9 +46,10 @@
     "slide",
     "receivers",
     "footprint",
-    "world"
+    "world",
+    "owed"
   ],
-  "$LIGHT_MOVED": "Why the light's map cast, a bit each, bit k the k-th (pxl-render gpu/ray/cast.rs `light_moved`): what it reads moved, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the actors' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).",
+  "$LIGHT_MOVED": "Why the light's map cast, a bit each, bit k the k-th (pxl-render gpu/ray/cast.rs `light_moved`): what it reads moved, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the actors' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`); or its last cast left work owed, tiles wanted past its budget or slots its walks' budget left parked, as read back (`owed`, pxl-render gpu/ray/count.rs `Counter::owed`).",
   "FRAME_KINDS": [
     "none",
     "unready",
@@ -61,5 +62,5 @@
     "px",
     "gated"
   ],
-  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface, or while the renderer is made before its first frame (`Pipelines::share`); `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast; `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show; `px` drawn with the pixels cast again over samples that stood, where only the eye's jitter moved (pxl-engine `eye::JITTER`); `gated` drawn through the gate where only what the kernel bounds moved: the claimed screen tiles alone drawn again, the rest standing (pxl-render gpu/renderer.rs `GATE_NUMBERS`, screen_tiles.wgsl)."
+  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface, or while the renderer is made before its first frame (`Pipelines::share`); `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast, where the view or the world moved or, while they stand, the eye's rolled lattice runs its next offset (pxl-engine `beam::ROLLS`); `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show; `px` drawn with the pixels cast again over samples that stood, where only the eye's jitter moved once its rays rest (pxl-engine `eye::JITTER`); `gated` drawn through the gate where only what the kernel bounds moved: the claimed screen tiles alone drawn again, the rest standing (pxl-render gpu/renderer.rs `GATE_NUMBERS`, screen_tiles.wgsl)."
 }

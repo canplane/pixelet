@@ -28,18 +28,22 @@ fn left_at() -> u32 {
   return eye_word(GRID + GRID_LEFTS_AT);
 }
 
+/// Off its place by this cast's offset of the rolled lattice (`Grid::sample`).
 fn sample_aim(s: vec2<u32>) -> Aim {
   return eye_aim(vec2<f32>(
-    -eye_f32(TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
-    eye_f32(TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
+    -eye_f32(TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING + eye_f32(GRID + GRID_ROLL),
+    eye_f32(TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING - eye_f32(GRID + GRID_ROLL + 1u),
   ));
 }
 
-/// The first word of its cell's start (`Grid::sample_cell`, `Grid::cell_at`).
+/// The first word of its cell's start, the cell it lies in where its offset moves it back
+/// past its place (`Grid::sample_cell`, `Grid::cell_at`).
 fn sample_cell_word(s: vec2<u32>) -> u32 {
   let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
+  let roll = vec2<f32>(eye_f32(GRID + GRID_ROLL), eye_f32(GRID + GRID_ROLL + 1u));
+  let first = vec2<u32>(NEAR_SAMPLES) + select(vec2<u32>(0u), vec2<u32>(1u), roll < vec2<f32>(0.0));
   let cell = min(
-    (max(s, vec2<u32>(NEAR_SAMPLES)) - vec2<u32>(NEAR_SAMPLES)) / (SAMPLE * eye_word(GRID + GRID_LATTICE)),
+    (max(s, first) - first) / (SAMPLE * eye_word(GRID + GRID_LATTICE)),
     span_n - vec2<u32>(1u),
   );
   return cell_start(cell);

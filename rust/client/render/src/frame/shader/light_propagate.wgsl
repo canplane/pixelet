@@ -8,9 +8,12 @@
 // decor and the actors stand on what the eye meets and are no taller. Each is listed read once
 // a cast, by the first thread to swap its mark (`light::LISTED_READ`), and the map's lay opened
 // to it (`light::ARGS_LAY`; gpu/shadow.rs `Shadow::begin`). One no cast of the reads' epoch
-// read (`reads_epoch`) is the cast's to cast: its word names the cast (`light::reads_at`),
-// where it lies within the epoch's budget (`within_budget`); what feeds it is listed for the passes that cast it (`enlist`). A tile's
-// read words are the thread's alone that listed it read.
+// claimed (`reads_epoch`), or owed (`light::READ_OWED`), is wanted (`light::LISTED_WANTED`),
+// counted by its ring (`light::rings_at`); the claim takes the wanted nearest first, at most
+// `light::CLAIM_BUDGET` (`light_claim_cs`, `light::claims`), the one way a tile is claimed: its
+// word names the cast (`light::reads_at`), it takes a place for its slots' parked rays
+// (`light::places_at`), and what feeds it is listed for the passes that cast it (`enlist`). A
+// tile's read words are the thread's alone that listed it read, then the one that claims it.
 
 /// The workgroups of the passes that cast tiles; the lists' counts and marks
 /// (`light::ARGS_WORDS`). A claim reads and writes the passes', the counts and the marks at once.
@@ -108,19 +111,30 @@ fn enlist(current: u32, t: vec2<i32>) {
   );
 }
 
-/// Whether tile `t` lies within what the epoch's casts so far may claim (`light::CLAIM_BUDGET`):
-/// the disk about the box's middle holding that many tiles for each cast of the epoch, this
-/// one's included.
-fn within_budget(t: vec2<i32>, current: u32, epoch: u32) -> bool {
+/// The ring box tile `t` lies in about the box's middle, whole tiles out (`light::ring`).
+fn ring(t: vec2<i32>) -> u32 {
   let half = f32(light_tiles()) * 0.5;
   let d = vec2<f32>(t) + vec2<f32>(0.5) - vec2<f32>(half);
-  let casts = f32(current - epoch + 1u);
-  return 3.14159265 * dot(d, d) <= casts * f32(LIGHT_CLAIM_BUDGET);
+  return u32(sqrt(d.x * d.x + d.y * d.y));
+}
+
+/// Tile `t` wanted: listed for the claim, the claim's rows opened to it, and counted by its
+/// ring.
+fn want(t: vec2<i32>) {
+  let n = light_tiles();
+  let room = n * n;
+  let e = atomicAdd(&args.counts[LIGHT_LISTED_WANTED], 1u);
+  if (e >= room) {
+    return;
+  }
+  list_put(listed_at(LIGHT_LISTED_WANTED) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
+  opened(LIGHT_ARGS_CLAIM, e, room, 1u);
+  atomicAdd(&args.marks[head_word(LIGHT_HEAD_RINGS) + ring(t)], 1u);
 }
 
 /// Tile `t` read in the cast numbered `current`, its reads' epoch `epoch`: listed read where it
-/// holds a slot a receiver reads and is not listed yet, and claimed where no cast of the epoch
-/// read it and it lies within the budget.
+/// holds a slot a receiver reads and is not listed yet, and wanted where no cast of the epoch
+/// claimed it or it is owed (`want`).
 fn read_tile(current: u32, epoch: u32, t: vec2<i32>) {
   let n = light_tiles();
   if (any(t < vec2<i32>(0)) || any(t >= vec2<i32>(i32(n)))) {
@@ -141,12 +155,9 @@ fn read_tile(current: u32, epoch: u32, t: vec2<i32>) {
     list_put(listed_at(LIGHT_LISTED_READ) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
     atomicMax(&args.passes[LIGHT_ARGS_LAY + 1u], in_room(e + 1u, room));
   }
-  // Read, read first in the epoch and within its budget: the cast's to cast. One past the
-  // budget is left to a later cast, its word as it was.
-  let w = reads_at() + place;
-  if (list_at(w) < epoch && within_budget(t, current, epoch)) {
-    list_put(w, current);
-    enlist(current, t);
+  let word = list_at(reads_at() + place);
+  if ((word & ~LIGHT_READ_OWED) < epoch || (word & LIGHT_READ_OWED) != 0u) {
+    want(t);
   }
 }
 
@@ -178,5 +189,74 @@ fn light_propagate_cs(
         read_tile(current, epoch, s + o - vec2<i32>(a, b));
       }
     }
+  }
+}
+
+/// Wanted tile `t` claimed by the cast numbered `current` at place `place`: its word the cast's,
+/// owed no more; its place laid for its slots' parked rays, each slot's state taken from the
+/// cast before's region where that cast claimed it and left it owed and the light carries
+/// (`light::READ_OWED`, `light::HEAD_CARRIES`), so a ray its budget did not finish goes on,
+/// else set to no parked ray, so a slot's ray starts afresh; and what feeds it listed
+/// (`enlist`).
+fn claim(t: vec2<i32>, place: u32, current: u32) {
+  let n = light_tiles();
+  let w = reads_at() + u32(t.y) * n + u32(t.x);
+  let word = list_at(w);
+  let held = head_word(LIGHT_HEAD_CARRIES) != 0u && (word & LIGHT_READ_OWED) != 0u
+    && (word & ~LIGHT_READ_OWED) + 1u == current;
+  let at = light_place_at(texel_slot(vec2<u32>(t) * LIGHT_TILE));
+  let was = list_at(at);
+  list_put(at, place);
+  for (var k = 0u; k < LIGHT_TILE * LIGHT_TILE; k += 1u) {
+    let dst = light_state_at(place, k, current);
+    if (held) {
+      let src = light_state_at(was, k, current - 1u);
+      for (var i = 0u; i < STATE_WORDS; i += 1u) {
+        list_put(dst + i, list_at(src + i));
+      }
+    } else {
+      list_put(dst + STATE_WORDS - 1u, 0u);
+    }
+  }
+  list_put(w, current);
+  enlist(current, t);
+}
+
+/// The wanted tiles claimed nearest first, a thread a tile wanted (`light::claims`): every one
+/// of a ring that fits within `light::CLAIM_BUDGET` with the rings within it, and of the one
+/// ring that straddles it the first to take a place, none past; each a place of its own among
+/// the cast's claims (`light::ARGS_PLACED`). A tile not claimed stays wanted, its word as it
+/// was, is counted as the cast's owed work (`light::ARGS_LEFT`, `node_cache::OWED`), and is
+/// wanted again by the next cast that reads it. Run after the propagation.
+@compute @workgroup_size(LIGHT_LISTED_LANES, 1, 1)
+fn light_claim_cs(
+  @builtin(workgroup_id) group: vec3<u32>,
+  @builtin(local_invocation_id) lane: vec3<u32>,
+) {
+  let e = (group.y * LIGHT_LIST_ACROSS + group.x) * LIGHT_LISTED_LANES + lane.x;
+  let n = light_tiles();
+  if (e >= in_room(atomicLoad(&args.counts[LIGHT_LISTED_WANTED]), n * n)) {
+    return;
+  }
+  let w = list_at(listed_at(LIGHT_LISTED_WANTED) + 1u + e);
+  let t = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
+  let rings = head_word(LIGHT_HEAD_RINGS);
+  let r = ring(t);
+  var before = 0u;
+  for (var q = 0u; q < r; q += 1u) {
+    before += atomicLoad(&args.marks[rings + q]);
+  }
+  let own = atomicLoad(&args.marks[rings + r]);
+  var claimed = before + own <= LIGHT_CLAIM_BUDGET;
+  if (!claimed && before < LIGHT_CLAIM_BUDGET) {
+    claimed = atomicAdd(&args.passes[LIGHT_ARGS_STRADDLE], 1u) < LIGHT_CLAIM_BUDGET - before;
+  }
+  if (!claimed) {
+    atomicAdd(&args.passes[LIGHT_ARGS_LEFT], 1u);
+    return;
+  }
+  let place = atomicAdd(&args.passes[LIGHT_ARGS_PLACED], 1u);
+  if (place < LIGHT_CLAIM_BUDGET) {
+    claim(t, place, cast_number());
   }
 }

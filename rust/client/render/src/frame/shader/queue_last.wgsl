@@ -7,7 +7,7 @@
 // (`node_cache::LAST_TAKEN`), a hole not parked passed. The eye's asks wherever no slot keeps a
 // node, so every eye hole ends in its frame. The light's counts against the frame's budget
 // where its walks before left it (`node_cache::VISITED`, `node_cache::ASKED`): a slot's ray
-// the budget does not reach is carried (`unreached`).
+// the budget does not reach stays parked, its tile owed (`unreached`).
 
 const WALK_PASS: u32 = MISSED_PASS;
 
@@ -36,19 +36,25 @@ fn may_ask() -> bool {
 
 /// A light's slot's ray the frame's budget does not reach, at the node `corner`, `zoom`,
 /// `roots`, `t` along it, `step` steps taken: its word left as the map held it, its ray parked
-/// and carried to the light's next cast, first in its queue (`carried_out`), its word written
-/// when it ends, which that cast's lay of the tiles read takes (gpu/shadow.rs `begin`).
+/// where its tile's place holds it, and its tile owed (pxl-engine `light::READ_OWED`), so the
+/// next claim takes it nearest first and the ray goes on from there; its word written when it
+/// ends, which that cast's lay of the tiles read takes (gpu/shadow.rs `begin`); and counted as
+/// the cast's owed work (`node_cache::OWED`), which the renderer reads back and wakes the next
+/// frame by. The tile's read word is the claim's and the slide's to write but for this bit,
+/// which every slot of the tile it sets sets alike.
 fn unreached(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) {
   park(hole, t, corner, zoom, roots, step);
-  let j = atomicAdd(&node_cache[CARRIED], 1u);
-  if (j < room()) {
-    beams[carried_out() + 1u + j] = hole;
+  let tile = slot_texel(hole_at(hole)) / LIGHT_TILE;
+  let w = head_word(LIGHT_HEAD_READS) + tile.y * head_word(LIGHT_HEAD_TILES) + tile.x;
+  if (w < arrayLength(&beams)) {
+    beams[w] = beams[w] | LIGHT_READ_OWED;
   }
+  atomicAdd(&node_cache[OWED], 1u);
 }
 
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_last_cs() {
-  let n = carried() + listed();
+  let n = listed();
   var hole = NONE;
   var t = 0.0;
   var corner = vec3<u32>(0u);

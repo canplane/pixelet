@@ -24,6 +24,7 @@ use crate::eye;
 use crate::grid;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
+use crate::ray;
 use crate::{axis, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 use core::f32::consts::SQRT_2;
 
@@ -457,8 +458,10 @@ pub const HEAD_SIZE: usize = 3;
 pub const HEAD_CORNER_WAS: usize = 4;
 /// Whether the cast's marks take each pixel's footprint (`FOOTPRINT_TILES`),
 /// 1 or 0, the second vec4's third word: not while the eye moves, as the next
-/// frame's rays mark again, and in the first frame it stands, which the
-/// jitter's frames after it stand on (pxl-render light_mark.wgsl).
+/// frame's rays mark again; in the first frame it stands, which the jitter's
+/// frames after it stand on, and in each cast of its rolled lattice
+/// (`beam::ROLLS`), whose samples find what the casts before did not
+/// (pxl-render light_mark.wgsl).
 pub const HEAD_FOOTPRINT: usize = 6;
 /// Where the slots' misses' count lies in the list (`misses_cnt`), the second vec4's last word.
 pub const HEAD_MISSES_CNT: usize = 7;
@@ -495,18 +498,28 @@ pub const HEAD_SLIDE_OWED: usize = HEAD_WORLD + 1;
 /// frame, a light cast's head or not, so the eye's record's draw stands the boxes it draws
 /// only where the light's cast stands them (pxl-render record_draw.wgsl `record_draw_cs`).
 pub const HEAD_STANDS_WORLD: usize = HEAD_SLIDE_OWED + 1;
-const HEAD_LAID_VEC4S: usize = 7;
+/// The places (`places_at`), the holes' region (`list_words`) and the rings (`rings_at`), laid
+/// by the map's side.
+pub const HEAD_PLACES: usize = HEAD_STANDS_WORLD + 1;
+pub const HEAD_REGION: usize = HEAD_PLACES + 1;
+pub const HEAD_RINGS: usize = HEAD_REGION + 1;
+/// Whether an owed tile's parked rays are resumed, 1 or 0, the host's each cast: where its
+/// cast held the light's content, the box did not slide, no changed column reached it and the
+/// node cache forgot nothing since the cast before (`READ_OWED`; pxl-render
+/// light_propagate.wgsl `light_claim_cs`).
+pub const HEAD_CARRIES: usize = HEAD_RINGS + 1;
+const HEAD_LAID_VEC4S: usize = 9;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_STANDS_WORLD < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_CARRIES < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 26] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -524,6 +537,9 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 26] {
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
         (HEAD_VOXELS, voxels_at(size)),
         (HEAD_SLIDE, slide_at(size)),
+        (HEAD_PLACES, places_at(size)),
+        (HEAD_REGION, list_words(size)),
+        (HEAD_RINGS, rings_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -563,6 +579,10 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 26] {
         (
             HEAD_LISTED + LISTED_READ as usize,
             listed_at(size, LISTED_READ),
+        ),
+        (
+            HEAD_LISTED + LISTED_WANTED as usize,
+            listed_at(size, LISTED_WANTED),
         ),
     ]
 }
@@ -708,11 +728,13 @@ impl Starts {
 /// slots' pass (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The tiles a cast claims at most for each cast of its epoch so far, nearest the eye first
-/// (pxl-render light_propagate.wgsl `within_budget`): an epoch's first cast claims the read
-/// tiles within the disk of that many tiles about the box's middle, each cast after one more
-/// such share, so a new light frame is cast over several frames, never more a frame. A read
-/// tile past it is claimed by a later cast; until then the map holds it lit (light_lay.wgsl).
+/// The tiles a cast claims at most, nearest the eye first (`claims`, pxl-render
+/// light_propagate.wgsl `light_claim_cs`): of the tiles it wants, those no cast of the epoch
+/// claimed and those owed (`READ_OWED`), by ring about the box's middle, so a new light frame,
+/// a slide or a changed column is cast over several frames, never more a frame. A tile wanted
+/// past it is wanted again by the next cast, which the work it leaves owed makes due where
+/// nothing else moves (`node_cache::OWED`); until it is claimed the map holds it lit, or as its
+/// last cast left it where owed (light_lay.wgsl).
 pub const CLAIM_BUDGET: u32 = 4096;
 
 /// The work the light's holes' queue may do in a cast (pxl-render queue.wgsl): the nodes its
@@ -888,13 +910,29 @@ pub const fn misses_at(size: u32) -> u32 {
 }
 
 /// The tiles a receiver reads, past the misses: a word a tile (`TILE` texels a side), `tiles`
-/// a row, the number of the cast that first read one in its epoch (`HEAD_EPOCH`), read where
+/// a row, the number of the cast that last claimed it in its epoch (`HEAD_EPOCH`), read where
 /// it lies within its taps of the way up from a tile a receiver stands on (`LISTED_STOOD`;
-/// pxl-render light_propagate.wgsl `up`). A tile this cast's number names is the cast's to
-/// cast; one an earlier cast of the reads' epoch names holds what that cast left
-/// (`reads_epoch`); no receiver reads any other.
+/// pxl-render light_propagate.wgsl `up`), and whether it is owed (`READ_OWED`). A tile this
+/// cast's number names is the cast's to cast; one an earlier cast of the reads' epoch names
+/// holds what that cast left (`reads_epoch`); no receiver reads any other. Its number is
+/// written by the claim (light_propagate.wgsl `light_claim_cs`) and set to none by the slide
+/// (light_slide.wgsl), and read under `READ_OWED` (`read_cast`).
 pub const fn reads_at(size: u32) -> u32 {
     misses_at(size) + size * size
+}
+
+/// A tile owed: one cast that still holds a slot its queue's budget did not finish, carried
+/// (pxl-render queue_last.wgsl `unreached`, which sets the bit; the claim clears it). An owed
+/// tile keeps what its cast left, as the map lays it, and is wanted again (`LISTED_WANTED`),
+/// claimed nearest first like a tile no cast of the epoch read (`claims`). Its parked rays
+/// are held where the cast before claimed it exactly, and resumed where the claim follows it,
+/// the light's content, the box and the node cache as they were (`HEAD_CARRIES`); else its
+/// slots are cast again.
+pub const READ_OWED: u32 = 1 << 31;
+
+/// The cast a tile's read word names, owed or not (`READ_OWED`).
+pub const fn read_cast(word: u32) -> u32 {
+    word & !READ_OWED
 }
 
 pub const fn tiles(size: u32) -> u32 {
@@ -974,7 +1012,9 @@ impl Light {
 /// tiles claimed, whose slots it casts (`LISTED_CLAIMED`); the tiles a receiver stands on
 /// (`LISTED_STOOD`), the world's first, then the drawn receivers' (pxl-render
 /// light_mark.wgsl, light_mark_draws.wgsl); and the tiles a receiver reads, which the map is
-/// laid in (`LISTED_READ`; light_propagate.wgsl, gpu/shadow.rs `Shadow::begin`). Each list's
+/// laid in (`LISTED_READ`; light_propagate.wgsl, gpu/shadow.rs `Shadow::begin`); and the tiles
+/// a receiver reads that no cast of the epoch claimed, or owed (`READ_OWED`), which the claim
+/// takes nearest first (`LISTED_WANTED`, `claims`). Each list's
 /// count, then its entries, the count copied in once propagation is done (`ARGS_COUNTS`), as
 /// the eye's is (`ray::WALKED_CNT`); and a word for every place of each, in the args'
 /// buffer (`listed_marks_at`): the last cast that listed it, so each is listed once a cast,
@@ -984,13 +1024,15 @@ impl Light {
 /// the last cast that listed it. The passes that cast tiles take their threads off the first
 /// three (pxl-render light_list.wgsl `light_item`): `LIST_ACROSS` workgroups of
 /// `LISTED_LANES` a row, an entry its side's square of them, a cast that begins an epoch as
-/// any other (`CLAIM_BUDGET`); the propagation a thread a stood tile.
+/// any other (`CLAIM_BUDGET`); the propagation a thread a stood tile; the claim a thread a tile
+/// wanted, as many rows (`ARGS_CLAIM`).
 pub const LISTED_CORNERS: u32 = 0;
 pub const LISTED_FED: u32 = 1;
 pub const LISTED_CLAIMED: u32 = 2;
 pub const LISTED_STOOD: u32 = 3;
 pub const LISTED_READ: u32 = 4;
-pub const LISTS: u32 = 5;
+pub const LISTED_WANTED: u32 = 5;
+pub const LISTS: u32 = 6;
 pub const LIST_ACROSS: u32 = 64;
 pub const LISTED_LANES: u32 = 64;
 const _: () = assert!(
@@ -1077,11 +1119,58 @@ pub const fn kept_at(size: u32) -> u32 {
     slide_at(size) + 2
 }
 
+/// Past them, the place each tile holds the light's holes' parked rays at, a word a tile by its
+/// slots' tile (`tiles` a row, the slots' own grid, which the box slides over), its number among
+/// the cast's claims (`ARGS_PLACED`), as the cast that last claimed it laid it
+/// (light_propagate.wgsl `light_claim_cs`, which writes it; pxl-render light_aim.wgsl
+/// `light_place_at`, which the queue reads it by).
+pub const fn places_at(size: u32) -> u32 {
+    kept_at(size) + STOOD_KEPT
+}
+
 /// The list's buffer's words: the beam's, the samples, the misses, the
 /// reads, their squares, the lists, the samples left, the beam
-/// rays left, the slide's two words and what the world's receivers left.
+/// rays left, the slide's two words, what the world's receivers left and the places; the
+/// holes' region past them (`region_words`).
 pub const fn list_words(size: u32) -> u32 {
-    kept_at(size) + STOOD_KEPT
+    places_at(size) + tiles(size) * tiles(size)
+}
+
+/// The slots a cast parks the light's holes' rays for: every slot of every tile it claims, at
+/// most `CLAIM_BUDGET` tiles of `TILE`² slots (`claims`), a state each at its tile's place and
+/// its slot within the tile (pxl-render light_aim.wgsl `light_state_at`).
+pub const fn parked_room() -> u32 {
+    CLAIM_BUDGET * TILE * TILE
+}
+
+/// The light's holes' region, past the list's words: a cast's parked states and the cast
+/// before's, by the cast number's parity, so a claim takes an owed tile's rays from the one
+/// while the queue writes the other (`ray::region_words`).
+pub const fn region_words() -> u32 {
+    ray::region_words(2 * parked_room())
+}
+
+/// The rings of the box's tiles about its middle, a whole tile wide each: the order a cast
+/// claims in (`claims`); fewer than the tiles across.
+pub const fn rings(size: u32) -> u32 {
+    tiles(size)
+}
+
+/// The ring box tile `t` of the map `size` texels a side lies in (`rings`): its middle's
+/// distance from the box's, in whole tiles.
+pub fn ring(size: u32, t: [i32; 2]) -> u32 {
+    let half = tiles(size) as f32 * 0.5;
+    let d = [t[0] as f32 + 0.5 - half, t[1] as f32 + 0.5 - half];
+    libm::sqrtf(d[0] * d[0] + d[1] * d[1]) as u32
+}
+
+/// Whether a cast claims a tile it wants of a ring that `before` tiles it wants in the rings
+/// within it and `own` in its own: every one of a ring all of whose tiles fit within
+/// `CLAIM_BUDGET` with the nearer, and of the one ring that straddles it the first of its own
+/// to take a place, `rank` the place it took among them; none past. So a cast claims nearest
+/// first and `CLAIM_BUDGET` tiles at most (pxl-render light_propagate.wgsl `light_claim_cs`).
+pub const fn claims(before: u32, own: u32, rank: u32) -> bool {
+    before + own <= CLAIM_BUDGET || (before < CLAIM_BUDGET && rank < CLAIM_BUDGET - before)
 }
 
 /// The stood list's args, a buffer of their own (pxl-render light_mark.wgsl `Stood`), as a
@@ -1126,15 +1215,29 @@ pub const ARGS_SAMPLE_BOX: u32 = 9;
 pub const ARGS_SLOT: u32 = 12;
 pub const ARGS_DRAWS: u32 = 15;
 pub const ARGS_LAY: u32 = 18;
-pub const ARGS_PASSES: u32 = 22;
+/// The claim's dispatch over the tiles wanted (`LISTED_WANTED`), raised as they are listed; the
+/// claims' count, each claim's place (`places_at`); the count of the straddling ring's claims
+/// (`claims`); and the tiles wanted and left unclaimed, the first of the cast's owed work
+/// (`node_cache::OWED`); none at a cast's start.
+pub const ARGS_CLAIM: u32 = 22;
+pub const ARGS_PLACED: u32 = 25;
+pub const ARGS_STRADDLE: u32 = 26;
+pub const ARGS_LEFT: u32 = 27;
+pub const ARGS_PASSES: u32 = 28;
 pub const ARGS_COUNTS: u32 = ARGS_PASSES;
 pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
 /// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).
 pub const LAY_VERTICES: u32 = 6;
 
+/// The tiles a cast wants by ring (`rings`), past the drawn receivers' marks, counted as the
+/// propagation lists them (light_propagate.wgsl) and read by the claim, none at a cast's start.
+pub const fn rings_at(size: u32) -> u32 {
+    drawn_marks_at(size) + tiles(size) * tiles(size)
+}
+
 /// The args' buffer's words on the map `size` texels a side.
 pub const fn args_words(size: u32) -> u32 {
-    ARGS_WORDS + drawn_marks_at(size) + tiles(size) * tiles(size)
+    ARGS_WORDS + rings_at(size) + rings(size)
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on
@@ -1685,5 +1788,63 @@ mod tests {
             assert!(!laid.contains(a), "{a}");
             assert!(host[i + 1..].iter().all(|b| b != a), "{a}");
         }
+    }
+
+    /// Every box tile lies in a ring of its own count (`rings`), and a tile nearer the middle
+    /// in no farther ring than one past it.
+    #[test]
+    fn rings_hold_every_tile_nearest_first() {
+        let n = tiles(2048) as i32;
+        let dist = |t: [i32; 2]| {
+            let d = [t[0] - n / 2, t[1] - n / 2];
+            d[0] * d[0] + d[1] * d[1]
+        };
+        for y in 0..n {
+            for x in 0..n {
+                assert!(ring(2048, [x, y]) < rings(2048), "{x} {y}");
+            }
+        }
+        for (a, b) in [
+            ([n / 2, n / 2], [n - 1, n - 1]),
+            ([n / 2 + 3, n / 2], [0, n / 2]),
+        ] {
+            assert!(dist(a) < dist(b));
+            assert!(ring(2048, a) <= ring(2048, b), "{a:?} {b:?}");
+        }
+    }
+
+    /// Over any rings' counts, a cast claims every tile of each ring that fits with the nearer
+    /// ones, as many of the ring that straddles the budget as fill it, none past, so
+    /// `CLAIM_BUDGET` at most and every tile while the wanted fit (`claims`).
+    #[test]
+    fn claims_fill_the_budget_nearest_first() {
+        for counts in [
+            &[3u32, 9, 40][..],
+            &[CLAIM_BUDGET][..],
+            &[CLAIM_BUDGET - 1, 2, 7][..],
+            &[100, CLAIM_BUDGET, 100][..],
+            &[CLAIM_BUDGET / 2, CLAIM_BUDGET / 2, 1, 1][..],
+        ] {
+            let mut before = 0;
+            let mut claimed = 0;
+            for (r, &own) in counts.iter().enumerate() {
+                let took = (0..own).filter(|&rank| claims(before, own, rank)).count() as u32;
+                let fits = before + own <= CLAIM_BUDGET;
+                let left = CLAIM_BUDGET.saturating_sub(before);
+                assert_eq!(took, if fits { own } else { left }, "{counts:?} ring {r}");
+                claimed += took;
+                before += own;
+            }
+            let wanted: u32 = counts.iter().sum();
+            assert_eq!(claimed, wanted.min(CLAIM_BUDGET), "{counts:?}");
+        }
+    }
+
+    /// The light's holes' region holds a parked state for every slot of every tile a cast
+    /// claims, for this cast and the one before (`parked_room`, `region_words`).
+    #[test]
+    fn region_parks_every_claimed_slot_of_two_casts() {
+        assert_eq!(parked_room(), CLAIM_BUDGET * TILE * TILE);
+        assert_eq!(region_words(), 2 * parked_room() * ray::STATE_WORDS);
     }
 }

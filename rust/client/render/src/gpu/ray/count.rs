@@ -6,7 +6,9 @@
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
 //! (`mapped`), and handed on as it lands with what the CPU knew of the
 //! frame that counted it (`Frame`), by the renderer's number of that frame
-//! (`RayCounts`), as a GPU read is.
+//! (`RayCounts`), as a GPU read is. Every light cast, counted or not, the
+//! light's owed work rides the same copy (`count::OWED`), and what lands
+//! tells whether the light is owed a cast (`owed`).
 
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_guest::mem::off_of;
@@ -58,14 +60,26 @@ pub(super) struct Counts {
 }
 
 /// The array and its readback; whether this frame counts (`on`), what
-/// the CPU knew of the frame copied (`copied_frame`), and the counts that
-/// landed, until taken (`take`).
+/// the CPU knew of the frame copied (`copied_frame`), whether that copy
+/// counted (`copied_on`) and carried the light's owed work (`copied_owed`),
+/// and the counts that landed, until taken (`take`).
 pub(super) struct Counter {
     counts: u32,
     read: u32,
     on: bool,
     frame: Frame,
     copied_frame: Frame,
+    copied_on: bool,
+    copied_owed: bool,
+    /// Whether the light is owed a cast: what the last light cast's copy
+    /// read back where it was not none, and set where a light cast's work is
+    /// not read back (`copy`, `on_dropped`), so a cast whose owed work no
+    /// copy carried is followed by another. Cleared by each light cast whose
+    /// copy carries it, until that copy lands.
+    owed: bool,
+    /// Whether a light cast ran since the copy out, so what it reads back
+    /// is not the light's last.
+    cast_since: bool,
     read_counts: Box<[u32; WORDS]>,
     /// The mapping's fence and result, the host's, and the ticket it
     /// was last asked with, the kernel's: one mapping out at a time.
@@ -91,6 +105,10 @@ impl Counter {
             on: false,
             frame: Frame::default(),
             copied_frame: Frame::default(),
+            copied_on: false,
+            copied_owed: false,
+            owed: false,
+            cast_since: false,
             read_counts: Box::new([0; WORDS]),
             mapping: Box::new([0; 2]),
             ticket: 0,
@@ -109,6 +127,7 @@ impl Counter {
     pub(super) fn begin(&mut self, g: &Gpu, on: bool, node_cache: u32, frame: Frame) {
         let was = self.on;
         self.on = on && frame.casts.contains(&true);
+        self.frame = frame;
         if !self.on && !was {
             return;
         }
@@ -122,19 +141,33 @@ impl Counter {
         if !self.on {
             return;
         }
-        self.frame = frame;
         g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
     /// The counts gathered into the array and copied where none are out,
-    /// after the frame's dispatches: each observer's that cast.
+    /// after the frame's dispatches: each observer's that cast where the
+    /// frame counts, and the light's owed work where it cast. A light cast
+    /// whose owed work is not copied leaves the light owed a cast.
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
-        if !self.on || self.copied || self.mapped {
+        let light = self.frame.casts[count::LIGHT as usize];
+        if light && (self.copied || self.mapped) {
+            (self.owed, self.cast_since) = (true, true);
+        }
+        if !(self.on || light) || self.copied || self.mapped {
             return;
+        }
+        if light {
+            g.copy_buf(
+                encoder,
+                (from.node_cache, word_bytes(node_cache::OWED as usize)),
+                (self.counts, word_bytes(count::OWED as usize)),
+                word_bytes(1),
+            );
+            (self.owed, self.cast_since) = (false, false);
         }
         for o in 0..count::OBSERVERS {
             let k = o as usize;
-            if !self.frame.casts[k] {
+            if !self.on || !self.frame.casts[k] {
                 continue;
             }
             // Each run where it was counted, into its lanes.
@@ -165,6 +198,7 @@ impl Counter {
         }
         g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
         (self.copied, self.copied_frame) = (true, self.frame);
+        (self.copied_on, self.copied_owed) = (self.on, light);
     }
 
     /// The counts copied last frame mapped back, and those that landed
@@ -173,6 +207,13 @@ impl Counter {
     pub(super) fn back(&mut self, g: &Gpu) {
         let landed = signaled(&self.mapping[0], self.ticket);
         if self.mapped && landed && self.mapping[1] != RESULT::OK {
+            self.mapped = false;
+            self.owed |= self.copied_owed;
+        }
+        if self.mapped && landed && self.copied_owed && !self.cast_since {
+            self.owed = self.read_counts[count::OWED as usize] != 0;
+        }
+        if self.mapped && landed && !self.copied_on {
             self.mapped = false;
         }
         if self.mapped && landed {
@@ -210,6 +251,22 @@ impl Counter {
         }
     }
 
+    /// Whether the light is owed a cast (`owed`).
+    pub(super) fn owed(&self) -> bool {
+        self.owed
+    }
+
+    /// Whether the light's owed work waits on the next frame to be mapped
+    /// back (`back`); once mapped, its fence wakes the turn (`owed_landed`).
+    pub(super) fn owed_out(&self) -> bool {
+        self.copied_owed && self.copied
+    }
+
+    /// Whether the light's owed work landed for a frame to read (`back`).
+    pub(super) fn owed_landed(&self) -> bool {
+        self.copied_owed && self.mapped && signaled(&self.mapping[0], self.ticket)
+    }
+
     /// The counts that landed since last taken.
     pub(super) fn take(&mut self) -> Option<RayCounts> {
         self.ray_counts.take()
@@ -217,6 +274,9 @@ impl Counter {
 
     /// The frame its copy was encoded in was dropped.
     pub(super) fn on_dropped(&mut self) {
+        if self.copied {
+            self.owed |= self.copied_owed;
+        }
         self.copied = false;
     }
 }

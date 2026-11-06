@@ -86,6 +86,10 @@ pub struct Grid {
     /// The corners the same walk left for theirs (pxl-render beam_hit.wgsl): their
     /// count, then each, `left_word`.
     pub corners_at: u32,
+    /// Where the samples lie off the lattice's own places, across and down, in the
+    /// screen's tangents at its axis: one of the rolled lattice's offsets (`roll`), none
+    /// as a grid is laid (`of`), set by the cast that rolls it (`rolled`).
+    pub roll: [f32; 2],
 }
 
 /// The samples' spacing, in the screen's tangents at its axis: a lattice's
@@ -97,6 +101,52 @@ pub struct Grid {
 pub const SAMPLE_SPACING: f32 = CELL / SAMPLE as f32;
 pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 
+/// The rolled lattice's strata a side: the spacing split this many ways across and down,
+/// a power of two.
+const ROLL_SIDE: u32 = 4;
+
+/// The rolled lattice: the casts of the samples a standing view takes, each at its own
+/// offset (`roll`), one a frame, before the eye's rays rest. The offsets together lay a
+/// regular lattice the spacing over `ROLL_SIDE` apart, `CELL`/16: a region whose projection
+/// holds a square of that side aligned to it, or any disc √2 · `CELL`/16 across, holds a
+/// sample of some offset, and is met within this many standing casts.
+pub const ROLLS: u32 = ROLL_SIDE * ROLL_SIDE;
+
+/// The samples' offset in the `k`th cast of the rolled lattice (`ROLLS`), across and down,
+/// in the screen's tangents at its axis: an angle, a stratum of the spacing split
+/// `ROLL_SIDE` ways a side, each stratum once in `ROLLS` casts. The order is the ordered
+/// dither's: the first is none, so the cast after a change lays the lattice's own places,
+/// the first four halve the spacing, and each four after refine it evenly. Every offset
+/// lies in [−spacing/2, spacing/2), so no sample lies more than half a spacing off its
+/// place; one moved back past its cell's first edge starts from the cell it lies in
+/// (`Grid::sample_cell`).
+pub fn roll(k: u32) -> [f32; 2] {
+    let (mut x, mut y) = (0, 0);
+    let mut side = ROLL_SIDE;
+    let mut k = k % ROLLS;
+    // Each pair of `k`'s bits, low first, picks the quadrant one halving finer: 0 the
+    // first, 1 the one diagonal to it, 2 the one across, 3 the one down.
+    while side > 1 {
+        side >>= 1;
+        let q = k & 3;
+        x += side * ((q >> 1) ^ (q & 1));
+        y += side * (q & 1);
+        k >>= 2;
+    }
+    // The strata past the spacing's middle taken a spacing back, about the place.
+    let centered = |v: u32| {
+        v as i32
+            - if v < ROLL_SIDE / 2 {
+                0
+            } else {
+                ROLL_SIDE as i32
+            }
+    };
+    let share = SAMPLE_SPACING / ROLL_SIDE as f32;
+    [centered(x) as f32 * share, centered(y) as f32 * share]
+}
+const _: () = assert!(ROLL_SIDE.is_power_of_two(), "the offsets halve the spacing");
+
 /// The grid's words among the eye's (`eye::GRID`), where each field lies
 /// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
 /// `past`, `span`, `corners` and `samples`, across then up, the words where
@@ -106,7 +156,8 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// (`s_inverse`) and the slope of the screen's sides across and up
 /// (`slope`), f32 bits, each rounded once by the host; then where how far each
 /// beam ray hands on starts (`hand_at`), where the record's asks the hits' stops opened
-/// start (`stop_asks_at`), and where the hits' stops put off lie (`defers_at`).
+/// start (`stop_asks_at`), where the hits' stops put off lie (`defers_at`), and the samples'
+/// offset across and down (`roll`), f32 bits.
 pub const GRID_S: usize = 0;
 
 pub const GRID_KEEP: usize = 1;
@@ -129,6 +180,7 @@ pub const GRID_SLOPE: usize = 20;
 pub const GRID_HANDS_AT: usize = 22;
 pub const GRID_STOP_ASKS_AT: usize = 23;
 pub const GRID_DEFERS_AT: usize = 24;
+pub const GRID_ROLL: usize = 25;
 pub const GRID_WORDS: usize = 28;
 
 impl Grid {
@@ -171,6 +223,7 @@ impl Grid {
             defers_at: 0,
             lefts_at: 0,
             corners_at: 0,
+            roll: [0.0; 2],
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
@@ -211,6 +264,7 @@ impl Grid {
         w[GRID_HANDS_AT] = self.hands_at;
         w[GRID_STOP_ASKS_AT] = self.stop_asks_at;
         w[GRID_DEFERS_AT] = self.defers_at;
+        (w[GRID_ROLL], w[GRID_ROLL + 1]) = (self.roll[0].to_bits(), self.roll[1].to_bits());
         let slope = self.slope();
         (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
             self.s_inverse().to_bits(),
@@ -243,6 +297,15 @@ impl Grid {
             defers_at: w[GRID_DEFERS_AT],
             lefts_at: w[GRID_LEFTS_AT],
             corners_at: w[GRID_CORNERS_AT],
+            roll: [f(w[GRID_ROLL]), f(w[GRID_ROLL + 1])],
+        }
+    }
+
+    /// The grid with its samples at the `k`th offset of the rolled lattice (`roll`).
+    pub fn rolled(self, k: u32) -> Grid {
+        Grid {
+            roll: roll(k),
+            ..self
         }
     }
 
@@ -319,12 +382,13 @@ impl Grid {
     }
 
     /// The tangents across and up of sample `[i, j]`, from the screen's
-    /// left and top `NEAR` samples past it: the same at every lattice.
+    /// left and top `NEAR` samples past it, off its place by the grid's
+    /// `roll`: the same at every lattice.
     pub fn sample(&self, [i, j]: [u32; 2]) -> [f32; 2] {
         let d = SAMPLE_SPACING;
         [
-            -self.tan[0] + (i as f32 - NEAR as f32) * d,
-            self.tan[1] - (j as f32 - NEAR as f32) * d,
+            -self.tan[0] + (i as f32 - NEAR as f32) * d + self.roll[0],
+            self.tan[1] - (j as f32 - NEAR as f32) * d - self.roll[1],
         ]
     }
 
@@ -333,18 +397,22 @@ impl Grid {
     /// past it: with the next across, down and both, the four about it.
     pub fn sample_before(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
         let at = |v: f32| libm::floorf(v * SAMPLE_SPACING_INVERSE).max(0.0) as u32 + NEAR;
-        [at(tx + self.tan[0]), at(self.tan[1] - ty)]
+        [
+            at(tx + self.tan[0] - self.roll[0]),
+            at(self.tan[1] - ty - self.roll[1]),
+        ]
     }
 
     /// The screen's cell sample `[i, j]` starts from: the one holding it, or
     /// the nearest where it lies past the screen, as only the screen's cells
-    /// have a start.
+    /// have a start. Its offset (`roll`) is under half a spacing, so where it
+    /// moves the sample back, the sample lies between its place and the one
+    /// before, in that one's cell.
     pub fn sample_cell(&self, [i, j]: [u32; 2]) -> [u32; 2] {
         let (n, k) = (self.span, self.cell_samples());
-        [
-            ((i.max(NEAR) - NEAR) / k).min(n[0] - 1),
-            ((j.max(NEAR) - NEAR) / k).min(n[1] - 1),
-        ]
+        let back = self.roll.map(|r| u32::from(r < 0.0));
+        let at = |v: u32, b: u32, n: u32| ((v.max(NEAR + b) - NEAR - b) / k).min(n - 1);
+        [at(i, back[0], n[0]), at(j, back[1], n[1])]
     }
 
     /// The first word of corner `c`'s line, by its index.

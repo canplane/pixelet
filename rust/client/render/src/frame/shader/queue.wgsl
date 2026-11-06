@@ -6,15 +6,10 @@
 // pxl-engine `ray::QUEUE_LANES`). The observer is the head the pass binds (light_aim.wgsl
 // `light_run`): one code for both, its pixel or slot, its ray, its start and its words chosen
 // by it. A ray is parked as its walk's state (`Walked`, walk.wgsl) at its hole's place in the
-// holes' region, the last words of the observer's list (`region_at`), from which a later walk
-// goes on as one unbroken walk; the region holds a state for every hole a cast can list, so
-// every ray can be parked.
-
-/// The region's first word, sized to `room` holes and `lists` lists (pxl-engine
-/// `ray::region_words`), the last words of the observer's list.
-fn region_at(room: u32, lists: u32) -> u32 {
-  return arrayLength(&beams) - (lists * (1u + room) + room * STATE_WORDS);
-}
+// holes' region (`state_at`), from which a later walk goes on as one unbroken walk; the region
+// holds a state for every hole a cast can list, so every ray can be parked. A light's slot
+// still parked at its cast's end stays parked, its tile owed to the next claim, which takes
+// its state where it resumes (pxl-engine `light::READ_OWED`; light_propagate.wgsl).
 
 /// A hole's pixel or slot, its column under its row.
 fn hole_at(hole: u32) -> vec2<u32> {
@@ -32,34 +27,6 @@ fn room() -> u32 {
   return size.x * size.y;
 }
 
-/// The region's lists: the light's carried slots, the one a cast reads, then the one it writes
-/// by its number's parity (`carried_in`, `carried_out`); the eye's none, its holes listed apart
-/// (walked.wgsl).
-fn lists() -> u32 {
-  return select(0u, CARRIED_LISTS, light_run());
-}
-
-/// The first word of list `i`, its count.
-fn list_at(i: u32) -> u32 {
-  return region_at(room(), lists()) + i * (1u + room());
-}
-
-fn carried_in() -> u32 {
-  return list_at(1u - head_word(LIGHT_HEAD_CAST) % 2u);
-}
-
-fn carried_out() -> u32 {
-  return list_at(head_word(LIGHT_HEAD_CAST) % 2u);
-}
-
-/// The slots the light's cast before carried, the first the queue takes; the eye none.
-fn carried() -> u32 {
-  if (light_run()) {
-    return in_room(beams[carried_in()], room());
-  }
-  return 0u;
-}
-
 /// The holes the observer's cast listed: the light's slots (`light::misses_at`), the eye's
 /// walked pixels (walked.wgsl).
 fn listed() -> u32 {
@@ -69,26 +36,26 @@ fn listed() -> u32 {
   return in_room(beams[walked_cnt_at()], room());
 }
 
-/// The `k`th hole the queue takes: the carried, then the listed.
+/// The `k`th hole the queue takes.
 fn queued(k: u32) -> u32 {
-  let c = carried();
-  if (k < c) {
-    return beams[carried_in() + 1u + k];
-  }
   if (light_run()) {
-    return beams[head_word(LIGHT_HEAD_MISSES) + k - c];
+    return beams[head_word(LIGHT_HEAD_MISSES) + k];
   }
-  return beams[walked_list_at(k - c)];
+  return beams[walked_list_at(k)];
 }
 
-/// The first word of a hole's state, at its pixel's or slot's index.
+/// The first word of a hole's state: the eye's at its pixel's index in the region past its
+/// list's words (pxl-engine `ray::region_words`); a light's slot's at its tile's place and its
+/// slot within the tile, in its cast's region (light_aim.wgsl `light_state_at`).
 fn state_at(hole: u32) -> u32 {
   let at = hole_at(hole);
-  var across = textureDimensions(rays).x;
   if (light_run()) {
-    across = head_word(LIGHT_HEAD_SIZE);
+    let place = beams[light_place_at(at)];
+    let k = (at.y % LIGHT_TILE) * LIGHT_TILE + at.x % LIGHT_TILE;
+    return light_state_at(place, k, head_word(LIGHT_HEAD_CAST));
   }
-  return region_at(room(), lists()) + lists() * (1u + room()) + (at.y * across + at.x) * STATE_WORDS;
+  let across = textureDimensions(rays).x;
+  return arrayLength(&beams) - room() * STATE_WORDS + (at.y * across + at.x) * STATE_WORDS;
 }
 
 /// A hole's ray.

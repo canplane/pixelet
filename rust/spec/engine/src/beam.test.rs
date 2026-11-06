@@ -454,3 +454,54 @@ fn sample_hit_same_every_lattice() {
         );
     }
 }
+
+/// The rolled lattice's offsets: the first none, each within half the spacing of its place,
+/// each stratum of the spacing split `ROLL_SIDE` ways a side once in `ROLLS`, the first four
+/// halving it.
+#[test]
+fn rolls_take_every_stratum_once() {
+    let share = SAMPLE_SPACING / ROLL_SIDE as f32;
+    assert_eq!(roll(0), [0.0; 2]);
+    let mut seen = [false; ROLLS as usize];
+    for k in 0..ROLLS {
+        let o = roll(k);
+        let half = SAMPLE_SPACING / 2.0;
+        assert!(o.iter().all(|&v| (-half..half).contains(&v)), "{k}: {o:?}");
+        let at = o.map(|v| (v / share).rem_euclid(ROLL_SIDE as f32) as u32);
+        assert_eq!(
+            o.map(|v| (v / share).fract()),
+            [0.0; 2],
+            "{k}: on a stratum's corner"
+        );
+        let place = (at[1] * ROLL_SIDE + at[0]) as usize;
+        assert!(!seen[place], "{k}: {at:?} twice");
+        seen[place] = true;
+        if k < 4 {
+            assert!(at.iter().all(|&v| v % (ROLL_SIDE / 2) == 0), "{k}: {at:?}");
+        }
+    }
+    assert_eq!(roll(ROLLS), roll(0));
+}
+
+/// A rolled sample starts from the cell it lies in, at every lattice: where its offset is
+/// none it lies on its cell's edge, which the lattice's own test takes.
+#[test]
+fn rolled_samples_start_in_their_cells() {
+    for tan in VIEWS {
+        for lattice in [1, LATTICE_MAX] {
+            for k in 0..ROLLS {
+                let g = Grid::of(tan, lattice).rolled(k);
+                for j in 0..g.samples[1] {
+                    for i in 0..g.samples[0] {
+                        let (held, from) = (g.cell(g.sample([i, j])), g.sample_cell([i, j]));
+                        for a in 0..2 {
+                            if g.roll[a] != 0.0 {
+                                assert_eq!(held[a], from[a], "{tan:?} {lattice} {k} {i} {j}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

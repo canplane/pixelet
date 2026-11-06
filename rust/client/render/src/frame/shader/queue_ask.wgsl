@@ -42,13 +42,12 @@ fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   queue_ask(false, id.x);
 }
 
-/// The second walk's nodes; and the last walk's first ray to take and the slots it carries
-/// set back, as that walk runs next (queue_last.wgsl).
+/// The second walk's nodes; and the last walk's first ray to take set back, as that walk runs
+/// next (queue_last.wgsl).
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
     atomicStore(&node_cache[LAST_TAKEN], 0u);
-    atomicStore(&node_cache[CARRIED], 0u);
   }
   queue_ask(true, id.x);
 }

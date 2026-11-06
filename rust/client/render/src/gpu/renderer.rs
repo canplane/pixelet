@@ -1063,6 +1063,9 @@ impl Renderer {
         let drawn = self.resolve.tiles.this_frame();
         let [across, down] = self.resolve.tiles.squares();
         self.screen.set_tiles(drawn, across * down);
+        // The counts the frames before copied, read back before the light's cast is decided,
+        // so the work a cast left owed makes this frame's light due (`RaysPass::wants_frame`).
+        self.screen.counts_back(g);
         self.screen.prepare(
             g,
             cast,
@@ -1102,7 +1105,6 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
-        self.screen.counts_back(g);
         if clouds_moved {
             self.clouds.write(g);
         }
@@ -1510,13 +1512,18 @@ impl Renderer {
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it.
-            if self.resolve.gathering() && (quiet || !animated) {
+            // step, held to the pixels about it. The eye's rolled lattice run
+            // through the same way, a cast a frame, until its rays rest.
+            if self.screen.rolling() || (self.resolve.gathering() && (quiet || !animated)) {
                 REDRAW.set(true);
             }
             if self.screen.generates() {
                 self.screen.on_drawn();
             }
+        }
+        // The light's owed work: its count mapped back the next frame, or a cast it owes.
+        if self.screen.wants_frame() {
+            REDRAW.set(true);
         }
         read.end();
         self.frame_read = read;
@@ -1802,8 +1809,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 
 /// Whether what the device made since this last ran wants a frame: an
 /// image landed, to be taken (`api::images_landed`), a pipeline made, which
-/// the progress shows and the first frame waits on, or the air's measures
-/// (`Atmosphere::landed`). Each wakes the turn as its fence is stored
+/// the progress shows and the first frame waits on, the air's measures
+/// (`Atmosphere::landed`), or the light's owed work (`RaysPass::owed_landed`). Each wakes the turn as its fence is stored
 /// (xpute `RESULT`), so none is polled.
 pub fn landed() -> bool {
     let images = api::images_landed();
@@ -1811,7 +1818,7 @@ pub fn landed() -> bool {
         let was = r.pipelines.share();
         let pipelines =
             !r.pipelines.is_made() && (r.pipelines.made() || r.pipelines.share() != was);
-        pipelines || r.atmosphere.landed()
+        pipelines || r.atmosphere.landed() || r.screen.owed_landed()
     });
     images || made
 }
