@@ -10,6 +10,12 @@ fn head_word(k: u32) -> u32 {
   return u32(head[k / 4u][k % 4u]);
 }
 
+/// Whether the pass is the light's: a head naming a map (`light::HEAD_SIZE`); the eye's head,
+/// all zero, names none.
+fn light_run() -> bool {
+  return head_word(LIGHT_HEAD_SIZE) != 0u;
+}
+
 fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }

@@ -31,9 +31,7 @@ use crate::beam;
 /// light's a sample's at most, its samples `param::light::SAMPLE` texels apart. The faces'
 /// asks are a sample's at most, the samples `param::beam::SAMPLE` a camera grid cell a
 /// side, about 270 thousand on a 16:9 view whatever its pixels; one dispatch's 65535
-/// workgroups hold 4.2M. The missed pixels'
-/// hits' faces are asked by args laid alike, their count where the boxes'
-/// is (`ray::MISS_ARGS_ROOM`).
+/// workgroups hold 4.2M.
 /// The draw's args are its own words alone; the faces' asks', a voxel's face each, laid the
 /// same way at `ASKED_AT`, a storage binding's alignment past them, which the faces' pass binds
 /// alone.

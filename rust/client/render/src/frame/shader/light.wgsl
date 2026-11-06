@@ -4,8 +4,8 @@
 // `light_item`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
 // voxel where its own ray enters it across a face its samples entered it by, or the sky where
 // no sample about it met anything, as cast.wgsl takes a pixel's (visible.wgsl), each only where
-// that voxel was asked at the band the slot asks; the rest listed for their walk
-// (light_miss_hit.wgsl, light_miss.wgsl).
+// that voxel was asked at the band the slot asks; the rest listed for the holes' queue
+// (queue.wgsl).
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(10) var light: texture_storage_2d_array<r32uint, read_write>;

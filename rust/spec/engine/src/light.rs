@@ -479,10 +479,8 @@ pub const HEAD_MISSES: usize = HEAD_CELLS + 10;
 /// lists' order (`LISTED_CORNERS`).
 pub const HEAD_MARKS: usize = HEAD_CELLS + 11;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
-/// The slots the walk over the node cache left (`misses_left_at`).
-pub const HEAD_MISSES_LEFT: usize = HEAD_LISTED + LISTS as usize;
-/// The beam rays the same walk left (`corners_left_at`).
-pub const HEAD_CORNERS_LEFT: usize = HEAD_MISSES_LEFT + 1;
+/// The beam rays the walk over the node cache left (`corners_left_at`).
+pub const HEAD_CORNERS_LEFT: usize = HEAD_LISTED + LISTS as usize;
 /// The voxels the boxes draw (`voxels_at`).
 pub const HEAD_VOXELS: usize = HEAD_CORNERS_LEFT + 1;
 /// The slide's two words (`slide_at`).
@@ -493,18 +491,22 @@ pub const HEAD_SLIDE: usize = HEAD_VOXELS + 1;
 /// one that owed a slide, the box slid or a column changed (`slide_at`; light_slide.wgsl).
 pub const HEAD_WORLD: usize = HEAD_SLIDE + 1;
 pub const HEAD_SLIDE_OWED: usize = HEAD_WORLD + 1;
+/// Whether the world's receivers are stood this frame, 1 or 0, which the host writes every
+/// frame, a light cast's head or not, so the eye's record's draw stands the boxes it draws
+/// only where the light's cast stands them (pxl-render record_draw.wgsl `record_draw_cs`).
+pub const HEAD_STANDS_WORLD: usize = HEAD_SLIDE_OWED + 1;
 const HEAD_LAID_VEC4S: usize = 7;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_SLIDE_OWED < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_STANDS_WORLD < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 27] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 26] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -519,7 +521,6 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 27] {
         (HEAD_DRAWN_MARKS, drawn_marks_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
-        (HEAD_MISSES_LEFT, misses_left_at(size)),
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
         (HEAD_VOXELS, voxels_at(size)),
         (HEAD_SLIDE, slide_at(size)),
@@ -714,6 +715,12 @@ pub const TILE: u32 = 8;
 /// tile past it is claimed by a later cast; until then the map holds it lit (light_lay.wgsl).
 pub const CLAIM_BUDGET: u32 = 4096;
 
+/// The work the light's holes' queue may do in a cast (pxl-render queue.wgsl): the nodes its
+/// walks visit, and the nodes it asks of the world. The eye's holes take none of it: every one
+/// ends in its frame. To be set from the S23's hot drive.
+pub const VISITS_A_FRAME: u32 = 1 << 23;
+pub const ASKS_A_FRAME: u32 = 1 << 16;
+
 /// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
 /// a beam ray at every `BEAM`-th texel of the box across and down,
@@ -866,28 +873,18 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
-/// The slots whose ray took no visible sample, listed for their walk
-/// (pxl-render light_miss.wgsl) apart from the slots that took theirs
-/// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
-/// that took their visible sample, by the same listing and dispatch
-/// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
-/// workgroup as long as its slowest lane. Past the samples: how many, copied
-/// in once the slots are done, as the eye's count is
-/// (`ray::WALKED_CNT`), then a slot each, its X and its Y over 16 bits.
+/// The slots whose ray took no visible sample, listed for the holes' queue
+/// (pxl-render queue.wgsl) apart from the slots that took theirs
+/// (`light_cs`), as the eye's missed pixels are, by the same listing
+/// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`). Past the samples: how many,
+/// copied in once the slots are done, as the eye's count is (`ray::WALKED_CNT`), then a slot
+/// each, its X and its Y over 16 bits; `size²` of them, a slot listed once a cast.
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
 
 pub const fn misses_at(size: u32) -> u32 {
     misses_cnt(size) + 1
-}
-
-/// The slots their walk over the node cache left (pxl-render light_miss_hit.wgsl), for the
-/// walk that asks the world (light_miss.wgsl), as the eye's are listed apart
-/// (`ray::walked_left_at`): how many, copied in once that walk is done, then each, its X and
-/// its Y over 16 bits; the misses' own room, `size²`, as it lists only slots of theirs.
-pub const fn misses_left_at(size: u32) -> u32 {
-    misses_at(size) + size * size
 }
 
 /// The tiles a receiver reads, past the misses: a word a tile (`TILE` texels a side), `tiles`
@@ -897,7 +894,7 @@ pub const fn misses_left_at(size: u32) -> u32 {
 /// cast; one an earlier cast of the reads' epoch names holds what that cast left
 /// (`reads_epoch`); no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
-    misses_left_at(size) + 1 + size * size
+    misses_at(size) + size * size
 }
 
 pub const fn tiles(size: u32) -> u32 {
@@ -933,9 +930,9 @@ impl Light {
     /// lie on (`tile_of`), which hold every point of it, the light's rays parallel, and
     /// `FOOTPRINT_TILES` more each way where `footprint`; none where it lies past the reach
     /// (`reach`, `within`) or past the box. The one rule every receiver stands by: the box the
-    /// eye's raster drew for a voxel of its record (`cast::asset_box`; pxl-render
-    /// record_draw.wgsl), which every pixel that took that voxel hit on (visible.wgsl
-    /// `visible_cell`); a walked pixel's hit, a box of one point (light_mark.wgsl); and the box
+    /// eye's record's draw writes for a voxel in view (`cast::asset_box`; pxl-render
+    /// record_draw.wgsl `record_draw_cs`, which stands it as it writes it), which every pixel
+    /// that took that voxel hit on (visible.wgsl `visible_cell`); a walked pixel's hit, a box of one point (light_mark.wgsl); and the box
     /// a drawn receiver stands within (frame/draw.rs `Stand`, light_mark_draws.wgsl).
     pub fn box_tiles(
         &self,
@@ -1665,5 +1662,28 @@ mod tests {
     fn reads_epoch_is_the_later() {
         assert_eq!(reads_epoch(5, 0), 5);
         assert_eq!(reads_epoch(5, 9), 9);
+    }
+
+    /// The words the host sets each cast, and the flag it sets every frame, lie in the head
+    /// apart from each other and from every word the map's side lays (`head_layout`).
+    #[test]
+    fn host_words_lie_apart_in_the_head() {
+        let host = [
+            HEAD_CAST,
+            HEAD_COUNTED,
+            HEAD_EPOCH,
+            HEAD_CORNER_WAS,
+            HEAD_CORNER_WAS + 1,
+            HEAD_FOOTPRINT,
+            HEAD_WORLD,
+            HEAD_SLIDE_OWED,
+            HEAD_STANDS_WORLD,
+        ];
+        let laid: std::vec::Vec<usize> = head_layout(2048).iter().map(|&(k, _)| k).collect();
+        for (i, a) in host.iter().enumerate() {
+            assert!(*a < HEAD_WORDS);
+            assert!(!laid.contains(a), "{a}");
+            assert!(host[i + 1..].iter().all(|b| b != a), "{a}");
+        }
     }
 }

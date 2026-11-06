@@ -21,6 +21,6 @@ fn beam_cs(
   let aim = beam_aim(c);
   // Where `beam_hit_cs` left it: its line's node at how far it came (resume.wgsl).
   let met = walk(aim, line_resumed(aim, aim.line, bitcast<f32>(beams[hand]), NONE), STEPS_MOST);
-  count_visits(met);
+  count_visits(VISITS_COUNT, met.visits);
   beams[hand] = bitcast<u32>(beam_hand(met.t));
 }

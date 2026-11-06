@@ -27,7 +27,10 @@ pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
 use crate::answer;
 pub use crate::answer::FILL_BITS;
+use crate::cast::STEPS_MOST;
 use crate::count;
+use crate::light::ASKS_A_FRAME;
+use crate::FINEST_ZOOM;
 pub use crate::ZOOM_BITS;
 
 pub const FACE_SHIFT: u32 = VAL_BITS;
@@ -37,9 +40,9 @@ const _: () = assert!(FILL_SHIFT + FILL_BITS < 32);
 
 /// The first word the cast's reading walk leaves a pixel it could not
 /// finish from the node cache alone, for the walk that writes it to
-/// find (pxl-render cast.wgsl `cast_cs`, miss_hit.wgsl): no hit's, as
+/// find (pxl-render cast.wgsl `cast_cs`, queue.wgsl): no hit's, as
 /// `first_word` sets no bit past the fill share's, and not the zero of one that
-/// met nothing. It lives within the cast's one pass: the walk again runs
+/// met nothing. It lives within the cast's one pass: the holes' queue runs
 /// after the reading walk in that pass and overwrites every pixel so
 /// marked, so no reader past it, the screen pass's or any frame's, ever
 /// sees it.
@@ -66,24 +69,18 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 0,
 /// (`beam::Grid::walked_at`), room for every pixel drawn, so no list of them is ever full: the
 /// pixels the reading walk marked (`MISS`), its row over its column, a word each
 /// (`WALKED_LIST`), after their count, copied in from the walk's dispatch (`MISS_ARGS_CNT`)
-/// once the reading walk is done (`WALKED_CNT`); then those its walk over the node cache left
-/// for the walk that asks the world (pxl-render miss_hit.wgsl, miss.wgsl `miss_list_cs`), as
-/// many at most, after their count, copied in once that walk is done (`walked_left_at`). A
-/// pixel is listed once a cast, so each list holds at most the pixels drawn. `drawn` is the
-/// rays' pixels, across times down; each place is a word from `Grid::walked_at`.
+/// once the reading walk is done (`WALKED_CNT`). A pixel is listed once a cast, so the list
+/// holds at most the pixels drawn. `drawn` is the rays' pixels, across times down; each place
+/// is a word from `Grid::walked_at`.
 pub const WALKED_CNT: u32 = 0;
 pub const WALKED_LIST: u32 = 1;
 
-pub const fn walked_left_at(drawn: u32) -> u32 {
+pub const fn walked_words(drawn: u32) -> u32 {
     WALKED_LIST + drawn
 }
 
-pub const fn walked_words(drawn: u32) -> u32 {
-    walked_left_at(drawn) + 1 + drawn
-}
-
 /// What a walk over the node cache left, listed for the walk that asks the world (pxl-render
-/// list.wgsl `enlist`; beam_hit.wgsl, sample_hit.wgsl, miss_hit.wgsl, light_miss_hit.wgsl):
+/// list.wgsl `enlist`; beam_hit.wgsl, sample_hit.wgsl):
 /// its dispatch, laid as `MISS_ARGS_LIST`'s, no row until one is listed, then its count
 /// (`LEFT_CNT`). Every list, these and the walk again's, raises the same row word.
 pub const LEFT_EMPTY: [u32; 4] = [MISS_ACROSS, 0, 1, 0];
@@ -93,15 +90,70 @@ const _: () = assert!(
     "a list's rows are its dispatch's second word"
 );
 
-/// The eye's walk again's words past those: the args what lies about the
-/// faces its hits met is asked by, once a square of them (pxl-render
-/// hit_lead.wgsl `hit_lead_cs`, face.wgsl `face_cs`), laid as the boxes' are
-/// (`raster::ARGS_WORDS`: their count within their room, their dispatch,
-/// where their asks lie, and their count as they are listed), at a storage binding's alignment, 256 bytes on every device, so
-/// the faces' pass binds them alone as it binds the boxes'. Set each frame
-/// the cast runs, as the words before them are.
-pub const MISS_ARGS_ROOM: u32 = 64;
-const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ROOM);
+/// The holes' queue (pxl-render queue.wgsl): the pixels the eye's cast and the slots the
+/// light's leave unanswered by any voxel, each observer's walked off one queue by lanes that
+/// each take the next ray when theirs ends or is parked, a fixed dispatch of
+/// `QUEUE_GROUPS` workgroups of `QUEUE_LANES` whatever the count, which it reads where the
+/// walks wrote it: no indirect call, so no command buffer is cut for it. A lane walks its ray
+/// `QUEUE_STEPS` steps at a time and keeps it, in its registers, between them.
+///
+/// In turn: the first walk, over the node cache alone, over the observer's holes, the light's
+/// carried from its cast before first; the asks, a lane a node a walk was parked at, once a
+/// node; the second walk, over the node cache alone, over the rays the first parked, from the
+/// state each was parked in; the asks again; and the last walk, which asks the world where no
+/// slot keeps a node, over the rays the second parked, so every eye hole ends in its frame. The
+/// light's walks count their work against its budget (`light::VISITS_A_FRAME`,
+/// `light::ASKS_A_FRAME`): a slot's ray the budget does not reach is carried to the light's
+/// next cast.
+pub const QUEUE_LANES: u32 = 64;
+pub const QUEUE_GROUPS: u32 = 256;
+pub const QUEUE_STEPS: u32 = 16;
+
+/// The queue's words, an observer's buffer of them (pxl-render queue_walk.wgsl
+/// `queue`, queue_ask.wgsl): the next hole the first walk takes (`QUEUE_TAKEN`) and the next the
+/// second takes (`QUEUE_TAKEN_AGAIN`); the nodes each walk was parked at, listed for the asks
+/// (`QUEUE_ASKS`, `QUEUE_ASKS_AGAIN`); the work its walks over the node cache did, the nodes
+/// visited and those asked, which the light's budget counts and its last walk goes on from
+/// (`QUEUE_VISITED`, `QUEUE_ASKED`; `node_cache::VISITED`); the eye's stops the two walks
+/// listed, as `node_cache::HITS_ARGS` lays them (`QUEUE_HITS`); then the asks' records
+/// (`QUEUE_RECORDS_AT`, `QUEUE_RECORD_WORDS` each, `QUEUE_RECORDS_ROOM` a walk: as many as the
+/// frame may ask). Each frame's start is `QUEUE_EMPTY`.
+pub const QUEUE_TAKEN: u32 = 0;
+pub const QUEUE_TAKEN_AGAIN: u32 = 1;
+pub const QUEUE_ASKS: u32 = 2;
+pub const QUEUE_ASKS_AGAIN: u32 = 3;
+pub const QUEUE_VISITED: u32 = 4;
+pub const QUEUE_ASKED: u32 = 5;
+pub const QUEUE_HITS: u32 = 8;
+pub const QUEUE_RECORDS_AT: u32 = 12;
+/// An ask's record: the node's zoom, its index's three words, the zooms it is asked at, far then
+/// near over `ZOOM_BITS`, whether it is asked from the top, and what was handed its parent.
+pub const QUEUE_RECORD_WORDS: u32 = 10;
+pub const QUEUE_RECORDS_ROOM: u32 = ASKS_A_FRAME;
+pub const QUEUE_WORDS: u32 = QUEUE_RECORDS_AT + 2 * QUEUE_RECORDS_ROOM * QUEUE_RECORD_WORDS;
+pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0];
+
+/// The holes' region, the last words of an observer's list, which every walk of the queue binds
+/// (pxl-render queue.wgsl `region_at`), sized to the most holes a cast lists, `room`: the
+/// eye's drawn pixels, a pixel listed once a cast (cast.wgsl, a thread a pixel), and the
+/// light's slots, `light::size²`, a slot listed once a cast (light.wgsl, a thread a slot).
+/// First its lists, a count then `room` holes each, the hole's X under its Y over 16 bits: the
+/// light's two, the slots carried from one cast to the next, the one a cast reads and the one
+/// it writes by its number's parity (`CARRIED_LISTS`); the eye's none, its holes in its walked
+/// list (`WALKED_LIST`). Then a state a hole, by its place (its pixel's or slot's index),
+/// `STATE_WORDS` each: its distance's bits, its node's corner, and its zoom, roots and steps
+/// taken packed under `PARKED`, which says the ray is parked there (pxl-render queue.wgsl
+/// `park`). Every hole can be parked; none is left out.
+pub const CARRIED_LISTS: u32 = 2;
+pub const STATE_WORDS: u32 = 5;
+pub const PARKED: u32 = 1 << 31;
+pub const fn region_words(room: u32, lists: u32) -> u32 {
+    lists * (1 + room) + room * STATE_WORDS
+}
+const _: () = assert!(
+    STEPS_MOST < 1 << 13 && FINEST_ZOOM < 1 << 6,
+    "a state's zoom, roots and steps fit under `PARKED`: 6, 9 and 13 bits"
+);
 
 /// The side of the pixels' pass's workgroup, a square of pixels (pxl-render cast.wgsl
 /// `cast_cs`).

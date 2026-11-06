@@ -175,6 +175,22 @@ fn squared(v: vec3<f32>) -> f32 {
   return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
+/// The zooms a node whose planes lie `lo` and `hi` from the origin is asked at, far then near
+/// over `ZOOM_BITS`: at its farthest corner and its nearest point, squared (`ask_zooms`,
+/// `node_dist_sq`); one range's alone, as the light's is.
+fn asked_zooms(lo: vec3<f32>, hi: vec3<f32>, range: vec2<u32>) -> u32 {
+  if (range.x == range.y) {
+    return range.x | (range.x << ZOOM_BITS);
+  }
+  return zoom_at(squared(max(-lo, hi)), range) | (zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range) << ZOOM_BITS);
+}
+
+/// The root that holds `origin` on each axis, X's wrapped away as the world names it
+/// (`roots_of`): what `idx_of` takes a node's roots from.
+fn root_of(origin: vec3<i32>) -> vec3<i32> {
+  return vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
+}
+
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
   return zoom_in_splits(r2 * INV_SPLIT2, range);

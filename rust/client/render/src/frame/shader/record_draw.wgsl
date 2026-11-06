@@ -4,12 +4,15 @@
 // the node cache's rule forgets (`record_forget_cs`, forget.wgsl), and drawn, a key one entry
 // (`joins_first`), every held voxel in view written as a box for the raster's draw
 // (`record_draw_cs`, raster.wgsl), a stale one behind every fresh one (pxl-engine
-// `raster::STALE`).
+// `raster::STALE`); and each box it writes stood on by the light's receivers, where they are
+// stood this frame (`light::HEAD_STANDS_WORLD`), by the one rule every receiver stands by
+// (light_box.wgsl `box_tiles`, light_stood.wgsl), as a pixel that takes the box's voxel hits
+// within it (visible.wgsl `visible_cell`).
 
 /// The raster's boxes (pxl-engine `raster::BOX_WORDS`).
 @group(0) @binding(14) var<storage, read_write> boxes: array<u32>;
 /// The raster's args (pxl-engine `raster::ARGS_INSTANCES`, `raster::ARGS_CNT`).
-@group(0) @binding(16) var<storage, read_write> args: array<atomic<u32>>;
+@group(0) @binding(16) var<storage, read_write> box_args: array<atomic<u32>>;
 
 /// Whether the node cache's rule forgets the node of `zoom` at column `c`, or a node beside it
 /// across a face, whose answer what lies about its faces reads (forget.wgsl `forgets`,
@@ -148,11 +151,11 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let state = record_word(e + R_STATE);
   let fresh = kept_fresh(k, (state & RECORD_WHOLE) != 0u, o);
-  let box_at = atomicAdd(&args[RASTER_ARGS_CNT], 1u);
+  let box_at = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
   if (box_at >= RECORD_ENTRIES) {
     return;
   }
-  atomicMax(&args[RASTER_ARGS_INSTANCES], box_at + 1u);
+  atomicMax(&box_args[RASTER_ARGS_INSTANCES], box_at + 1u);
   let at = box_at * RASTER_BOX_WORDS;
   boxes[at + RASTER_BOX_LO] = bitcast<u32>(lo.x);
   boxes[at + RASTER_BOX_LO + 1u] = bitcast<u32>(lo.y);
@@ -162,4 +165,10 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   boxes[at + RASTER_BOX_HI + 2u] = bitcast<u32>(hi.z);
   boxes[at + RASTER_BOX_ID] = (id.x + 1u) | select(0u, RASTER_LACK, (state & RECORD_LACKS) != 0u);
   boxes[at + RASTER_BOX_FACES] = (state & RECORD_FACES) | select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh);
+  if (head_word(LIGHT_HEAD_STANDS_WORLD) != 0u) {
+    let b = box_tiles(lo, hi);
+    if (b.got) {
+      stand_world_box(b.first, b.last);
+    }
+  }
 }

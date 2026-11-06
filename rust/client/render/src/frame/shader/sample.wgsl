@@ -21,6 +21,6 @@ fn sample_cs(
   let base = sample_word(s);
   let start = sample_start_at(aim, s, bitcast<f32>(beams[base + SAMPLE_LEFT_T]));
   let w = walk(aim, start, STEPS_MOST);
-  count_visits(w);
+  count_visits(VISITS_COUNT, w.visits);
   sample_put(base, w);
 }

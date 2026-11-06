@@ -92,11 +92,9 @@ pub const SHADER_BEAM: u32 = 39;
 /// Where each of the camera grid's cells' rays start off its beam rays, by hand
 /// (cell.wgsl): its one compute entry.
 pub const SHADER_CELL: u32 = 40;
-/// The pixels the cast's reading walk missed, walked again writing the
-/// node cache, every one or those listed (miss.wgsl), and the node cache
-/// forgotten (pxl-engine `node_cache`), by hand (forget.wgsl): compute
-/// entries.
-pub const SHADER_MISS: u32 = 41;
+/// The holes' queue's last walk, which asks the world (queue_last.wgsl), and the node cache
+/// forgotten (pxl-engine `node_cache`), by hand (forget.wgsl): compute entries.
+pub const SHADER_QUEUE_LAST: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
 /// The samples, a thread each, resumed from their cells' starts and walked
 /// to the cells the pixels about them take (pxl-engine `beam::Grid::samples`):
@@ -104,12 +102,12 @@ pub const SHADER_FORGET: u32 = 42;
 pub const SHADER_SAMPLE: u32 = 43;
 /// The world's depth from the light into its clipmap (pxl-engine `light`):
 /// every slot taking the visible voxel, a workgroup a tile (light.wgsl), a
-/// compute entry; that depth laid into the map (light_map.wgsl,
-/// gpu/shadow.rs); and the slots that took none walked apart (pxl-engine
-/// `light::misses_at`, light_miss.wgsl), a compute entry of its own.
+/// compute entry; and that depth laid into the map (light_map.wgsl,
+/// gpu/shadow.rs). The nodes the holes' queue's walks were parked at, asked once
+/// a node (queue_ask.wgsl): compute entries.
 pub const SHADER_LIGHT: u32 = 44;
 pub const SHADER_LIGHT_MAP: u32 = 45;
-pub const SHADER_LIGHT_MISS: u32 = 46;
+pub const SHADER_QUEUE_ASK: u32 = 46;
 /// The occlusion's half-resolution map brought to the pixel and multiplied
 /// into the world's color, as the tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 47;
@@ -124,8 +122,9 @@ pub const SHADER_RASTER: u32 = 49;
 /// (face.wgsl): its one compute entry.
 pub const SHADER_FACE: u32 = 50;
 /// The tiles of the light's box its receivers stand on (pxl-engine
-/// `light::LISTED_STOOD`): the eye's voxels' boxes and the pixels it walked apart, and where
-/// the decor and what the kernel draws that reads the map stand; then those they read (`light::LISTED_READ`,
+/// `light::LISTED_STOOD`): the pixels the eye walked apart (its voxels' boxes stood by the
+/// record's draw, `SHADER_RECORD_DRAW`), and where the decor and what the kernel draws that
+/// reads the map stand; then those they read (`light::LISTED_READ`,
 /// `light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.
 pub const SHADER_LIGHT_MARK: u32 = 51;
@@ -176,53 +175,45 @@ pub const SHADER_DECOR_MARK: u32 = 67;
 pub const SHADER_IMPOSTOR_MARK: u32 = 68;
 pub const SHADER_LOCATION_ZONE_MARK: u32 = 69;
 pub const SHADER_LOCATION_BEACON_MARK: u32 = 70;
-/// The missed pixels' hits whose faces are asked once a square of them,
-/// the one of each square that asks listed (pxl-engine `beam::HIT_WORDS`), and
-/// the faces asked put at their pixels, by hand (hit_lead.wgsl,
-/// hit_faces.wgsl): compute entries.
-pub const SHADER_HIT_LEAD: u32 = 71;
-pub const SHADER_HIT_FACES: u32 = 72;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 73;
+pub const SHADER_BOX_ARGS: u32 = 71;
 /// The shadow map's beam rays, cells, samples and samples' boxes: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl,
 /// light_cell.wgsl, sample.light.wgsl, light_sample_box.wgsl).
-pub const SHADER_LIGHT_BEAM: u32 = 74;
-pub const SHADER_LIGHT_CELL: u32 = 75;
-pub const SHADER_LIGHT_SAMPLE: u32 = 76;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 77;
+pub const SHADER_LIGHT_BEAM: u32 = 72;
+pub const SHADER_LIGHT_CELL: u32 = 73;
+pub const SHADER_LIGHT_SAMPLE: u32 = 74;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 75;
 /// The samples' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_SAMPLE` walks again.
-pub const SHADER_SAMPLE_HIT: u32 = 78;
-/// The missed pixels' walk over the node cache alone, by hand: what it does
-/// not end `COMPUTE_MISS_LIST` walks again.
-pub const SHADER_MISS_HIT: u32 = 79;
+pub const SHADER_SAMPLE_HIT: u32 = 76;
+/// The holes' queue's walks over the node cache alone (queue_walk.wgsl), the eye's pixels' and
+/// the light's slots': what they park `SHADER_QUEUE_ASK` asks and `SHADER_QUEUE_LAST` ends.
+pub const SHADER_QUEUE: u32 = 77;
 /// The beam rays' walk over the node cache alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
-pub const SHADER_BEAM_HIT: u32 = 80;
-/// The light's missed slots' walk over the node cache alone, by hand: what it does
-/// not end `SHADER_LIGHT_MISS` walks again.
-pub const SHADER_LIGHT_MISS_HIT: u32 = 81;
+pub const SHADER_BEAM_HIT: u32 = 78;
 /// `SHADER_SAMPLE_HIT` for the light's map: what it does not end `SHADER_LIGHT_SAMPLE` walks
 /// again.
-pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 82;
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 79;
 /// `SHADER_BEAM_HIT` for the light's map: what it does not end `SHADER_LIGHT_BEAM` walks again.
-pub const SHADER_LIGHT_BEAM_HIT: u32 = 83;
+pub const SHADER_LIGHT_BEAM_HIT: u32 = 80;
 /// The tiles claimed, listed for `SHADER_CAST`.
-pub const SHADER_CAST_TILES: u32 = 84;
+pub const SHADER_CAST_TILES: u32 = 81;
 /// The box of the screen's claimed tiles, a frame through the gate's (`SHADER_DECOR_GATE`).
-pub const SHADER_CLAIMED_BOX: u32 = 85;
+pub const SHADER_CLAIMED_BOX: u32 = 82;
 /// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
-pub const SHADER_DECOR_GATE: u32 = 86;
+pub const SHADER_DECOR_GATE: u32 = 83;
 /// The eye's record of voxels over every slot, by hand (record_draw.wgsl): forgotten where the
-/// node cache's rule forgets, and its voxels in view written as the raster's boxes.
-pub const SHADER_RECORD_DRAW: u32 = 87;
-/// The missed pixels' hits as stops into the eye's record, and those put off, by hand
-/// (record_stops.wgsl).
-pub const SHADER_RECORD_STOPS: u32 = 88;
-pub const SHADERS: u32 = 89;
+/// node cache's rule forgets, and its voxels in view written as the raster's boxes, each stood
+/// on by the light's receivers where the world's are stood this frame.
+pub const SHADER_RECORD_DRAW: u32 = 84;
+/// The holes' stops into the eye's record, those put off, and what lies about each one's face
+/// put at its pixel, by hand (record_stops.wgsl).
+pub const SHADER_RECORD_STOPS: u32 = 85;
+pub const SHADERS: u32 = 86;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -549,7 +540,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CELL
     &["walk_word", "eye_bind", "grid", "window", "cell"],
-    // SHADER_MISS
+    // SHADER_QUEUE_LAST
     &[
         "walk_word",
         "world_word",
@@ -572,9 +563,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "hit",
         "miss_word",
-        "list",
         "walked",
-        "miss",
+        "light_aim",
+        "light_resume",
+        "queue",
+        "queue_last",
     ],
     // SHADER_FORGET
     &["walk_word", "world_word", "seed", "forget"],
@@ -619,7 +612,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_LIGHT_MAP
     &["light_word", "light_lay", "light_map"],
-    // SHADER_LIGHT_MISS
+    // SHADER_QUEUE_ASK
     &[
         "walk_word",
         "world_word",
@@ -632,17 +625,12 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "level",
         "eye_bind",
         "walk_node",
-        "side",
-        "resume",
         "answer",
         "world",
         "world_split",
         "ask",
-        "walk",
         "light_aim",
-        "light_resume",
-        "list",
-        "light_miss",
+        "queue_ask",
     ],
     // SHADER_AO_APPLY
     &["tile_word", "screen_tiles", "effect", "ao_view", "ao_apply"],
@@ -684,7 +672,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MARK
     &[
         "walk_word",
-        "raster_box",
         "eye_bind",
         "grid",
         "walk_node",
@@ -801,10 +788,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "location_beacon_place",
         "tile_mark",
     ],
-    // SHADER_HIT_LEAD
-    &["walk_word", "ray", "eye_bind", "grid", "hit", "hit_lead"],
-    // SHADER_HIT_FACES
-    &["walk_word", "ray", "eye_bind", "hit", "hit_faces"],
     // SHADER_BOX_ARGS
     &["tile_word", "box_args"],
     // SHADER_LIGHT_BEAM
@@ -902,7 +885,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "list",
         "sample_hit",
     ],
-    // SHADER_MISS_HIT
+    // SHADER_QUEUE
     &[
         "walk_word",
         "eye_bind",
@@ -915,9 +898,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "hit",
         "miss_word",
-        "list",
         "walked",
-        "miss_hit",
+        "light_aim",
+        "light_resume",
+        "queue",
+        "queue_walk",
     ],
     // SHADER_BEAM_HIT
     &[
@@ -932,22 +917,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "beam.eye",
         "list",
         "beam_hit",
-    ],
-    // SHADER_LIGHT_MISS_HIT
-    &[
-        "walk_word",
-        "eye_bind",
-        "grid",
-        "walk_node",
-        "side",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "light_aim",
-        "light_resume",
-        "list",
-        "light_miss_hit",
     ],
     // SHADER_LIGHT_SAMPLE_HIT
     &[
@@ -1006,6 +975,12 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "forget",
         "record",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "list",
+        "light_stood",
         "record_draw",
     ],
     // SHADER_RECORD_STOPS

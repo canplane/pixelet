@@ -53,7 +53,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
   let range = aim.range;
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
-  let r0 = vec3<i32>(aim.origin.x >> 31u, 0i, i32(u32(aim.origin.z) + Z_START) >> 31u);
+  let r0 = root_of(aim.origin);
   var t = start.t;
   var corner = start.corner;
   var zoom = start.zoom;
@@ -90,12 +90,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
     var handed = vec4<u32>(0u);
     // Only touched, at a face or an edge: not entered, nothing in it met.
     if (t1 > t0) {
-      // The zooms asked at its farthest corner and nearest point, far then near over
-      // `ZOOM_BITS` (`ask_zooms`, `node_dist_sq`); one range's alone, as the light's is.
-      var zooms = range.x | (range.x << ZOOM_BITS);
-      if (range.x != range.y) {
-        zooms = zoom_at(squared(max(-lo, hi)), range) | (zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range) << ZOOM_BITS);
-      }
+      let zooms = asked_zooms(lo, hi, range);
       let a = node_answer(parent, top, zoom, idx_of(corner, zoom, roots, r0), zooms, line != NONE);
       if (a.kind == KIND_LEFT) {
         ends = 4u;
@@ -236,4 +231,11 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
     }
   }
   return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
+}
+
+/// The zooms the ray `aim` asks the node at `corner`, `zoom` and `roots` at, as its walk asks
+/// them (`asked_zooms`).
+fn node_zooms(aim: Aim, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> u32 {
+  let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
+  return asked_zooms(units(corner, og, roots), far_of(corner, under(zoom), og, roots), aim.range);
 }

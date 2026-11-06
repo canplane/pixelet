@@ -1,13 +1,11 @@
-//! `light_miss_cs` by hand (frame/shader/light_miss.wgsl) answers as `cast::walk`: over the
-//! real world of tests/real_world, each listed slot's word as `light::word(light::depth(..))` of
-//! its walk, and no other slot written; and the next frame, `light_miss_hit_cs` over the node
-//! cache it left, listing what it leaves (`light::misses_left_at`), and `light_miss_cs` again over
-//! that list, each slot's word as the world's again; and where
-//! bricks changed between the frames, the next frame's after the app's forgetting (`forget_cs`)
-//! as the changed world's. Every walk resumes off its cell's line, the cells laid as the cast
-//! lays them each frame (beam.light.wgsl, light_cell.wgsl): the next frame's where the walk over
-//! the node cache left it, which its slot's word holds; the first frame's at 0, the map's words
-//! laid none. Skipped where no adapter answers.
+//! The holes' queue over the light's slots (frame/shader/queue.wgsl, queue_walk.wgsl,
+//! queue_ask.wgsl, queue_last.wgsl) answers as `cast::walk`: over the real world of
+//! tests/real_world, each listed slot's word as `light::word(light::depth(..))` of its walk, and
+//! no other slot written, over an empty node cache; the next frame, over the node cache the
+//! first left, each slot's word as the world's again; and where bricks changed between the
+//! frames, the next frame's after the app's forgetting (`forget_cs`) as the changed world's.
+//! Every walk starts off its cell's line, the cells laid as the cast lays them each frame
+//! (beam.light.wgsl, light_cell.wgsl). Skipped where no adapter answers.
 
 mod gpu;
 mod real_world;
@@ -23,9 +21,7 @@ use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::node_cache::{self, MOVED_WORDS};
 use pxl_engine::overwrite::Cut;
 use pxl_engine::{beam, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
-use pxl_render::frame::shader::record::{
-    src, SHADER_FORGET, SHADER_LIGHT_CELL, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
-};
+use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::ROW_LANES;
 
 use real_world::{q8, store_of, truth, Asking, Built, World, WorldBufs, FINEST, NOTCH};
@@ -431,7 +427,7 @@ fn cases(b: &Built) -> Vec<Case> {
 }
 
 #[test]
-fn hand_light_miss_answers_as_light_miss_cs() {
+fn hand_light_holes_answer_as_cast_walk() {
     let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
@@ -450,12 +446,10 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         placed: gpu.buffer(&built.overwrites, store),
         pool: gpu.buffer(&built.pool, store),
     };
-    let miss = gpu.pipeline(src(SHADER_LIGHT_MISS), "light_miss_cs");
-    let hit = gpu.pipeline(src(SHADER_LIGHT_MISS_HIT), "light_miss_hit_cs");
 
     let mut failed = Vec::new();
     for case in cases(&built) {
-        run_case(&gpu, &bound, &miss, &hit, w, &case, None, &mut failed);
+        run_case(&gpu, &bound, w, &case, None, &mut failed);
     }
     // West of X = 0, every node's X negative as the world names it: kept, found and read.
     let west = real_world::build(EYE_WEST);
@@ -488,16 +482,7 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         cuts: [Cut::NONE; 2],
         least: &[("hit", 19850), ("slots", 19850)],
     };
-    run_case(
-        &gpu,
-        &bound_west,
-        &miss,
-        &hit,
-        west.world(),
-        &case,
-        None,
-        &mut failed,
-    );
+    run_case(&gpu, &bound_west, west.world(), &case, None, &mut failed);
     // Over X = 0, where X's roots part: rays end in the next root.
     let zero = real_world::build(EYE_ZERO);
     let bound_zero = WorldBufs {
@@ -532,16 +517,7 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         cuts: [Cut::NONE; 2],
         least: &[("ended in another root", 1467), ("slots", 19850)],
     };
-    run_case(
-        &gpu,
-        &bound_zero,
-        &miss,
-        &hit,
-        zero.world(),
-        &case,
-        None,
-        &mut failed,
-    );
+    run_case(&gpu, &bound_zero, zero.world(), &case, None, &mut failed);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
@@ -604,15 +580,9 @@ struct Edited<'a> {
     forget: &'a wgpu::ComputePipeline,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a case's passes and worlds, each its own"
-)]
 fn run_case(
     gpu: &Gpu,
     b: &WorldBufs,
-    miss: &wgpu::ComputePipeline,
-    hit: &wgpu::ComputePipeline,
     w: World,
     case: &Case,
     edited: Option<&Edited>,
@@ -642,8 +612,7 @@ fn run_case(
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
 
-    // The slots listed, the box's rows wrapped: in the misses' list, which the next frame's walk
-    // over the node cache reads, and in the list of what it left, which `light_miss_cs` reads.
+    // The slots listed, the box's rows wrapped, in the misses' list the queue takes.
     let n = SIZE * SIZE;
     let walked: Vec<bool> = (0..n)
         .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
@@ -652,13 +621,7 @@ fn run_case(
         .filter(|&k| walked[k as usize])
         .map(|k| (k % SIZE) | ((k / SIZE) << 16))
         .collect();
-    let mut list = vec![0u32; light::list_words(SIZE) as usize];
-    for at in [light::misses_cnt(SIZE), light::misses_left_at(SIZE)] {
-        let at = at as usize;
-        list[at] = slots.len() as u32;
-        list[at + 1..at + 1 + slots.len()].copy_from_slice(&slots);
-    }
-    let left_at = light::misses_left_at(SIZE) as usize;
+    let mut list = listed(&slots);
 
     let mut table0 = vec![0u32; node_cache::WORDS as usize];
     table0[node_cache::FRAME as usize] = FRAME;
@@ -698,17 +661,12 @@ fn run_case(
     // Each cell's start, off the beam the cast walks first, which every slot's walk resumes from.
     lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
 
-    // The hand pass, over the same table.
+    // The queue, over the same table.
     let map = map_of(gpu);
     let view = array_view(&map);
     let table_buf = gpu.buffer(&table0, store_of());
     let list_buf = gpu.buffer(&list, store_of());
-    let rows = (slots.len() as u32).div_ceil(ray::MISS_LANES * ray::MISS_ACROSS);
-    gpu.dispatch(
-        miss,
-        &miss_binds(b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view),
-        [ray::MISS_ACROSS, rows, 1],
-    );
+    let first = holes(gpu, b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view);
     let got = read_texture(&gpu.device, &gpu.queue, &map);
     let table_hand = gpu.read(&table_buf);
 
@@ -738,7 +696,7 @@ fn run_case(
         }
     }
 
-    // The next frame: the walk over the table alone first, then this pass for what it left.
+    // The next frame: the queue again, over the table the first left.
     let mut next = table_hand.clone();
     next[node_cache::FRAME as usize] = FRAME + 1;
     if let Some(e) = edited {
@@ -777,49 +735,12 @@ fn run_case(
     }
     let b = edited.map_or(b, |e| e.b);
     let w = edited.map_or(w, |e| e.w);
+    let mut list = listed(&slots);
     lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
     let list2 = gpu.buffer(&list, store_of());
-    let left = gpu.buffer(&ray::LEFT_EMPTY, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
-    gpu.dispatch(
-        hit,
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (8, list2.as_entire_binding()),
-            (9, next_buf.as_entire_binding()),
-            (10, wgpu::BindingResource::TextureView(&view2)),
-            (11, head_buf.as_entire_binding()),
-            (13, left.as_entire_binding()),
-        ],
-        [ray::MISS_ACROSS, rows, 1],
-    );
-    let after = gpu.read(&list2);
-    let args = gpu.read(&left);
-    // What it left, listed once each.
-    let mut still = vec![false; n as usize];
-    let mut twice = 0u32;
-    for p in 0..args[3] as usize {
-        let v = after[left_at + 1 + p];
-        let k = ((v >> 16) * SIZE + (v & 0xffff)) as usize;
-        twice += u32::from(still[k] || !walked[k]);
-        still[k] = true;
-    }
-    let slots_left = args[3];
-    let ended = slots.len() as u32 - slots_left;
-    if twice != 0 {
-        failed.push(format!(
-            "{name}: {twice} slots left listed twice or not listed"
-        ));
-        return;
-    }
-    gpu.queue
-        .write_buffer(&list2, left_at as u64 * 4, gpu::bytes(&[args[3]]));
-    gpu.dispatch(
-        miss,
-        &miss_binds(b, [&eye_buf, &head_buf, &next_buf, &list2], &view2),
-        [args[0], args[1], 1],
-    );
+    let next = holes(gpu, b, [&eye_buf, &head_buf, &next_buf, &list2], &view2);
     let got2 = read_texture(&gpu.device, &gpu.queue, &map2);
     // Each slot's word the next frame, ended by the table or walked again: the world's again.
     let mut next_differ = 0u32;
@@ -831,7 +752,7 @@ fn run_case(
                 next_axis_over += 1;
             } else {
                 next_differ += 1;
-                first_next.get_or_insert((k, still[k], got2[k], want[k]));
+                first_next.get_or_insert((k, got2[k], want[k]));
                 if next_differ <= TELLS {
                     tell_slot(w, case, &s, &starts, k as u32, [got2[k], want[k]]);
                 }
@@ -843,9 +764,13 @@ fn run_case(
         "{name}: {same} alike, {axis_over} an axis over, {differ} differ of {} ; {kinds:?}",
         kinds["slots"]
     );
+    let work = |q: &[u32]| [ray::QUEUE_VISITED, ray::QUEUE_ASKED].map(|w| q[w as usize]);
     eprintln!(
-        "  next frame: {ended} ended by the table, {slots_left} left, {next_axis_over} an axis over, {next_differ} differ"
+        "  nodes visited and asked over the node cache: first frame {:?}, next {:?}",
+        work(&first),
+        work(&next)
     );
+    eprintln!("  next frame: {next_axis_over} an axis over, {next_differ} differ");
     let mut fail = |what: String| failed.push(format!("{name}: {what}"));
     if differ != 0 {
         fail(format!("{differ} slots differ, first {first_differ:?}"));
@@ -855,7 +780,7 @@ fn run_case(
     }
     if next_differ != 0 {
         fail(format!(
-            "{next_differ} differ the next frame, first slot, walked again, got, wanted {first_next:?}"
+            "{next_differ} differ the next frame, first slot, got, wanted {first_next:?}"
         ));
     }
     if edited.is_some() && changed < 1000 {
@@ -910,25 +835,39 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
     )
 }
 
-/// `light_miss_cs`'s group, over the eye, the head, the table and the list.
-fn miss_binds<'a>(
-    b: &'a WorldBufs,
-    [eye, head, table, list]: [&'a wgpu::Buffer; 4],
-    view: &'a wgpu::TextureView,
-) -> Vec<(u32, wgpu::BindingResource<'a>)> {
-    vec![
+/// The light's list with `slots` listed in its misses' list (`light::misses_at`), and its
+/// holes' region last, a hole a slot (`ray::region_words`).
+fn listed(slots: &[u32]) -> Vec<u32> {
+    let region = ray::region_words(SIZE * SIZE, ray::CARRIED_LISTS);
+    let mut list = vec![0u32; (light::list_words(SIZE) + region) as usize];
+    let at = light::misses_cnt(SIZE) as usize;
+    list[at] = slots.len() as u32;
+    list[at + 1..at + 1 + slots.len()].copy_from_slice(slots);
+    list
+}
+
+/// The holes' queue over the slots the list holds (`Gpu::holes`), over the eye, the head, the
+/// table and the list, writing the map `view`: the queue's words as its walks left them.
+fn holes(
+    gpu: &Gpu,
+    b: &WorldBufs,
+    [eye, head, table, list]: [&wgpu::Buffer; 4],
+    view: &wgpu::TextureView,
+) -> Vec<u32> {
+    let binds = [
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
+        (3, wgpu::BindingResource::TextureView(view)),
         (4, b.palette.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
-        (9, table.as_entire_binding()),
-        (10, wgpu::BindingResource::TextureView(view)),
-        (11, head.as_entire_binding()),
         (8, list.as_entire_binding()),
-    ]
+        (9, table.as_entire_binding()),
+        (11, head.as_entire_binding()),
+    ];
+    gpu.holes(&binds, table, false)
 }
 
 /// The node cache never answers the world as it was: a frame's walks keep what a world whose
@@ -1039,8 +978,6 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
         pool: gpu.buffer(&built.pool, store),
     };
     let (before, after) = (bufs(&was), bufs(now));
-    let miss = gpu.pipeline(src(SHADER_LIGHT_MISS), "light_miss_cs");
-    let hit = gpu.pipeline(src(SHADER_LIGHT_MISS_HIT), "light_miss_hit_cs");
     let forget = gpu.pipeline(src(SHADER_FORGET), "forget_cs");
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let case = Case {
@@ -1066,8 +1003,6 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
     run_case(
         &gpu,
         &before,
-        &miss,
-        &hit,
         World {
             clipmap: &was,
             ..built.world()
@@ -1080,14 +1015,8 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
 }
 
 /// Each slot's word in a map cast fresh over the world `b`, the eye's cuts `cuts`, every tile
-/// read (`run_case`'s first frame): the slots listed, and `light_miss_cs`'s words.
-fn fresh_map(
-    gpu: &Gpu,
-    b: &WorldBufs,
-    miss: &wgpu::ComputePipeline,
-    case: &Case,
-    cuts: [Cut; 2],
-) -> (Vec<bool>, Vec<u32>) {
+/// read (`run_case`'s first frame): the slots listed, and the queue's words.
+fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool>, Vec<u32>) {
     let (s, starts) = box_of(case);
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&s.words());
@@ -1117,12 +1046,7 @@ fn fresh_map(
         .filter(|&k| walked[k as usize])
         .map(|k| (k % SIZE) | ((k / SIZE) << 16))
         .collect();
-    let mut list = vec![0u32; light::list_words(SIZE) as usize];
-    for at in [light::misses_cnt(SIZE), light::misses_left_at(SIZE)] {
-        let at = at as usize;
-        list[at] = slots.len() as u32;
-        list[at + 1..at + 1 + slots.len()].copy_from_slice(&slots);
-    }
+    let mut list = listed(&slots);
     lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
@@ -1130,12 +1054,7 @@ fn fresh_map(
     let view = array_view(&map);
     let table_buf = gpu.buffer(&table, store_of());
     let list_buf = gpu.buffer(&list, store_of());
-    let rows = (slots.len() as u32).div_ceil(ray::MISS_LANES * ray::MISS_ACROSS);
-    gpu.dispatch(
-        miss,
-        &miss_binds(b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view),
-        [ray::MISS_ACROSS, rows, 1],
-    );
+    holes(gpu, b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view);
     (walked, read_texture(&gpu.device, &gpu.queue, &map))
 }
 
@@ -1170,7 +1089,6 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         placed: gpu.buffer(&built.overwrites, store),
         pool: gpu.buffer(&built.pool, store),
     };
-    let miss = gpu.pipeline(src(SHADER_LIGHT_MISS), "light_miss_cs");
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let now = &built.clipmap;
     let after = bufs(now);
@@ -1273,8 +1191,8 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     ];
     for (case, [b0, b1], [w0, w1], [c0, c1], columns) in changes {
         let (s, starts) = box_of(case);
-        let (walked, got0) = fresh_map(&gpu, b0, &miss, case, c0);
-        let (_, got1) = fresh_map(&gpu, b1, &miss, case, c1);
+        let (walked, got0) = fresh_map(&gpu, b0, case, c0);
+        let (_, got1) = fresh_map(&gpu, b1, case, c1);
         let (mut q0, mut q1) = (Asking { w: w0, cuts: c0 }, Asking { w: w1, cuts: c1 });
         let (mut kept, mut reached, mut moved, mut differ, mut walks_differ) =
             (0u32, 0u32, 0u32, 0u32, 0u32);

@@ -95,7 +95,17 @@ pub(crate) const COUNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
 /// runs with the head; read, not written, by the passes it dispatches.
 pub const HITS_ARGS: u32 = COUNT_AT + COUNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
-pub const HEAD_WORDS: u32 = HITS_CNT + 1;
+/// The next ray the holes' queue's last walk takes (pxl-render queue_last.wgsl), each
+/// observer's in turn, and the slots it carries to the light's next cast, both set back to 0
+/// by the asks that run before it (queue_ask.wgsl).
+pub const LAST_TAKEN: u32 = HITS_CNT + 1;
+pub const CARRIED: u32 = LAST_TAKEN + 1;
+/// The light's holes' work so far in its cast, the nodes visited and those asked
+/// (`ray::QUEUE_VISITED`, `ray::QUEUE_ASKED`), which its last walk adds to, copied in from its
+/// queue's words before that walk.
+pub const VISITED: u32 = CARRIED + 1;
+pub const ASKED: u32 = VISITED + 1;
+pub const HEAD_WORDS: u32 = ASKED + 1;
 
 /// Where `observer`'s walks count lane `lane` (pxl-engine `count::BEAM`
 /// to `count::MISS`) in the head.
@@ -176,16 +186,16 @@ const _: () = assert!(
 );
 
 /// The writing passes of a frame's cast, each a tag of its own: the
-/// beam rays, the samples and the pixels that missed; then the light's beam
-/// rays, samples and slots that missed, which ask the same nodes at the
-/// zooms the eye asks them.
-pub const PASSES: u32 = 6;
+/// beam rays and the samples; the holes' queue, the eye's pixels and the
+/// light's slots alike (pxl-render queue_ask.wgsl, queue_last.wgsl); then the
+/// light's beam rays and samples, which ask the same nodes at the zooms the
+/// eye asks them.
+pub const PASSES: u32 = 5;
 pub const BEAM_PASS: u32 = 0;
 pub const SAMPLES_PASS: u32 = 1;
 pub const MISSED_PASS: u32 = 2;
 pub const LIGHT_BEAM_PASS: u32 = 3;
 pub const LIGHT_SAMPLES_PASS: u32 = 4;
-pub const LIGHT_MISSED_PASS: u32 = 5;
 
 /// A key's tag's bits, under its two zooms'.
 pub const TAG_BITS: u32 = 20;

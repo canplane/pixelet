@@ -1,8 +1,7 @@
 // pxl-render/miss_word.wgsl
 
-// A missed pixel's ray and the words its walk leaves there, as the walk over the observed
-// node cache alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
-// (grid.wgsl, hit.wgsl).
+// A missed pixel's ray and the words its walk leaves there, as the holes' queue takes and
+// leaves them (queue.wgsl; grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
@@ -35,10 +34,10 @@ fn hit_fill(w: Walked) -> u32 {
   return (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
 }
 
-/// Walk `w`'s hit at pixel `id`, entered through `face`, put as hit `r` for what lies about
-/// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`), and as a stop the
-/// record takes (record_stops.wgsl): the asset it stopped at, and the line its pixel's cell's
-/// rays resumed from, which that face's word is asked off.
+/// Walk `w`'s stop at pixel `id`, entered through `face` (`beam::HIT_LACKS` set where it
+/// lacks), put as stop `r` the record takes (`keep_hit`, `beam::HIT_WORDS`, record_stops.wgsl):
+/// its node, the asset it stopped at, and the line its pixel's cell's rays resumed from, which
+/// that face's word is asked off.
 fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
@@ -68,12 +67,6 @@ fn ray_word(w: Walked, face: u32, faces: u32) -> vec4<u32> {
     w.asset.y,
     faces,
   );
-}
-
-/// A marked pixel's word while it waits for the walk that asks (miss_hit.wgsl, miss.wgsl): how
-/// far its walk over the node cache came, in its distance's word (`ray_word`).
-fn write_left(id: vec2<u32>, t: f32) {
-  textureStore(rays, id, 1u, vec4<u32>(bitcast<u32>(t), 0u, 0u, 0u));
 }
 
 /// A ray's words written at pixel `id` (`write_ray`).

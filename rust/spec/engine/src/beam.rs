@@ -68,16 +68,15 @@ pub struct Grid {
     /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines and how far each hands on (`hand_at`);
     /// then the asks of the record's faces, a sample's room each (`asks_at`;
-    /// the voxels themselves are the record's, `record`), the missed pixels'
-    /// hits (`hits_at`), their asks (`hit_asks_at`), and the asks of the
-    /// record's faces the hits' stops opened (`stop_asks_at`), `HITS` each; then the hits
+    /// the voxels themselves are the record's, `record`), the holes' stops
+    /// (`hits_at`) and the asks of the record's faces they opened (`stop_asks_at`), `HITS`
+    /// each; then the hits
     /// whose stop met its key's claim, each one's number (`defers_at`), `HITS` at most, their
     /// count among the raster's args (`raster::DEFERRED_AT`).
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
     pub(crate) hits_at: u32,
-    pub hit_asks_at: u32,
     pub stop_asks_at: u32,
     pub defers_at: u32,
     /// The samples the walk over the node cache alone left (pxl-render
@@ -101,8 +100,7 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// The grid's words among the eye's (`eye::GRID`), where each field lies
 /// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
 /// `past`, `span`, `corners` and `samples`, across then up, the words where
-/// the cells' starts, the samples' hits, the boxes' asks, the missed pixels'
-/// hits and their asks start, `lattice`, and where the lists the walk over
+/// the cells' starts, the samples' hits, the boxes' asks and the holes' stops start, `lattice`, and where the lists the walk over
 /// the node cache alone leaves start, the samples' and the corners', and where the walked
 /// pixels' lists lie past the grid's words (`walked_at`, `ray::walked_words`); then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
@@ -122,16 +120,15 @@ pub const GRID_CELLS_AT: usize = 11;
 pub const GRID_SAMPLES_AT: usize = 12;
 pub const GRID_ASKS_AT: usize = 13;
 pub const GRID_HITS_AT: usize = 14;
-pub const GRID_HIT_ASKS_AT: usize = 15;
-pub const GRID_LATTICE: usize = 16;
-pub const GRID_LEFTS_AT: usize = 17;
-pub const GRID_WALKED_AT: usize = 18;
-pub const GRID_CORNERS_AT: usize = 19;
-pub const GRID_S_INVERSE: usize = 20;
-pub const GRID_SLOPE: usize = 21;
-pub const GRID_HANDS_AT: usize = 23;
-pub const GRID_STOP_ASKS_AT: usize = 24;
-pub const GRID_DEFERS_AT: usize = 25;
+pub const GRID_LATTICE: usize = 15;
+pub const GRID_LEFTS_AT: usize = 16;
+pub const GRID_WALKED_AT: usize = 17;
+pub const GRID_CORNERS_AT: usize = 18;
+pub const GRID_S_INVERSE: usize = 19;
+pub const GRID_SLOPE: usize = 20;
+pub const GRID_HANDS_AT: usize = 22;
+pub const GRID_STOP_ASKS_AT: usize = 23;
+pub const GRID_DEFERS_AT: usize = 24;
 pub const GRID_WORDS: usize = 28;
 
 impl Grid {
@@ -170,7 +167,6 @@ impl Grid {
             samples_at: 0,
             asks_at: 0,
             hits_at: 0,
-            hit_asks_at: 0,
             stop_asks_at: 0,
             defers_at: 0,
             lefts_at: 0,
@@ -183,8 +179,7 @@ impl Grid {
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
-        g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
-        g.stop_asks_at = g.hit_asks_at + HITS * ASK_WORDS;
+        g.stop_asks_at = g.hits_at + HITS * HIT_WORDS;
         g.defers_at = g.stop_asks_at + HITS * ASK_WORDS;
         g.lefts_at = g.defers_at + HITS;
         g.corners_at = g.lefts_at + 1 + samples[0] * samples[1];
@@ -209,14 +204,7 @@ impl Grid {
             w[GRID_SAMPLES_AT],
             w[GRID_ASKS_AT],
             w[GRID_HITS_AT],
-            w[GRID_HIT_ASKS_AT],
-        ) = (
-            self.cells_at,
-            self.samples_at,
-            self.asks_at,
-            self.hits_at,
-            self.hit_asks_at,
-        );
+        ) = (self.cells_at, self.samples_at, self.asks_at, self.hits_at);
         w[GRID_LATTICE] = self.lattice;
         (w[GRID_LEFTS_AT], w[GRID_WALKED_AT], w[GRID_CORNERS_AT]) =
             (self.lefts_at, self.size(), self.corners_at);
@@ -251,7 +239,6 @@ impl Grid {
             samples_at: w[GRID_SAMPLES_AT],
             asks_at: w[GRID_ASKS_AT],
             hits_at: w[GRID_HITS_AT],
-            hit_asks_at: w[GRID_HIT_ASKS_AT],
             stop_asks_at: w[GRID_STOP_ASKS_AT],
             defers_at: w[GRID_DEFERS_AT],
             lefts_at: w[GRID_LEFTS_AT],
@@ -491,8 +478,7 @@ pub const SAMPLE_SIDE: u32 = 8;
 /// `stop_asks_at`), asked by the first stop of the voxel to enter it across that
 /// face's axis, its node the record's entry (`record::entry_at`) and its face left at
 /// that axis among the entry's words (`record::R_FACES`), the word named under
-/// `record::TO_RECORD`; a missed pixel's hit's
-/// (`Grid::hit_ask_at`), its faces left in the hit (`HIT_OUT`).
+/// `record::TO_RECORD`.
 pub const ASK_NODE: u32 = 0;
 pub const ASK_FACE: u32 = 1;
 pub const ASK_LINE: u32 = 2;
@@ -500,31 +486,24 @@ pub const ASK_TO: u32 = 3;
 pub const ASK_WORDS: u32 = 4;
 pub const ASK_NONE: u32 = u32::MAX;
 
-/// The hits of the pixels that missed and walked again (pxl-render
-/// miss_word.wgsl `hit_put`) whose faces are asked, `HITS` at most, a number each as the
-/// walks take them, in words: its node (`NODE_WORDS`), the face its ray
-/// entered, its pixel, its row over its column, and what it is told
-/// (`HIT_OUT`): its faces where it asks them, else `HIT_FOLLOWS` and the
-/// number of the hit alike it takes them from, its pixel's left
-/// neighbor's, else the one above's, within its square of `HIT_SQUARE` a
-/// side, the pixels' columns and rows `HIT_SQUARE` divides. Its pixel's
-/// last ray word holds `HIT_WAITS` and its number until its faces are put
-/// there (`ray::FACES`), in the walk's own pass. A pixel past `HITS`
-/// asks none. Past them, what makes the hit a stop the record takes
-/// (`record`, pxl-render record_stops.wgsl): the asset it stopped at, and
-/// the first word of the line its pixel's cell's rays resumed from, which
-/// its face's word is asked off (`ASK_LINE`).
+/// The stops of the holes' rays (pxl-render miss_word.wgsl `hit_put`, queue.wgsl), every one
+/// whatever it stopped on, which the record takes (`record`, pxl-render record_stops.wgsl),
+/// `HITS` at most, a number each as the walks take them, in words: its node (`NODE_WORDS`),
+/// the face its ray entered, `HIT_LACKS` set where it lacks, its pixel, its row over its
+/// column, the asset it stopped at, and the first word of the line its pixel's cell's rays
+/// resumed from, which its face's word is asked off (`ASK_LINE`). A pixel whose stop's face
+/// word is asked holds `HIT_WAITS` and its number in its last ray word until it is put there
+/// off the record (`ray::FACES`, record_stops.wgsl `record_faces_cs`), in the cast's own pass.
+/// A pixel past `HITS` lists none.
 pub const HIT_NODE: u32 = 0;
 pub const HIT_FACE: u32 = NODE_WORDS;
 pub const HIT_PX: u32 = HIT_FACE + 1;
-pub const HIT_OUT: u32 = HIT_PX + 1;
-pub const HIT_ASSET: u32 = HIT_OUT + 1;
+pub const HIT_ASSET: u32 = HIT_PX + 1;
 pub const HIT_LINE: u32 = HIT_ASSET + 2;
 pub const HIT_WORDS: u32 = HIT_LINE + 1;
 pub const HITS: u32 = 1 << 19;
-pub const HIT_SQUARE: u32 = 16;
 pub const HIT_LANES: u32 = 64;
-pub const HIT_FOLLOWS: u32 = 1 << 31;
+pub const HIT_LACKS: u32 = 1 << 31;
 pub const HIT_WAITS: u32 = 1 << 31;
 const _: () = assert!(
     HITS.div_ceil(HIT_LANES) <= WORKGROUPS_MOST && HITS.div_ceil(FACES_LANES) <= WORKGROUPS_MOST,

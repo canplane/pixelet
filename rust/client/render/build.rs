@@ -313,7 +313,6 @@ fn walk_word() -> String {
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
         ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
-        ("LIGHT_MISSED_PASS", node_cache::LIGHT_MISSED_PASS),
         ("MISSED_PASS", node_cache::MISSED_PASS),
         (
             "EYE_MISS_COUNT",
@@ -356,11 +355,11 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_SLIDE", light::HEAD_SLIDE as u32),
         ("LIGHT_HEAD_WORLD", light::HEAD_WORLD as u32),
         ("LIGHT_HEAD_SLIDE_OWED", light::HEAD_SLIDE_OWED as u32),
+        ("LIGHT_HEAD_STANDS_WORLD", light::HEAD_STANDS_WORLD as u32),
         ("LIGHT_SLIDE_RAN", light::SLIDE_RAN),
         ("LIGHT_READS_FROM", light::READS_FROM),
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
-        ("LIGHT_HEAD_MISSES_LEFT", light::HEAD_MISSES_LEFT as u32),
         ("LIGHT_HEAD_CORNERS_LEFT", light::HEAD_CORNERS_LEFT as u32),
         ("LIGHT_HEAD_VOXELS", light::HEAD_VOXELS as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
@@ -417,7 +416,6 @@ fn walk_word() -> String {
         ("GRID_SAMPLES_AT", beam::GRID_SAMPLES_AT as u32),
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
-        ("GRID_HIT_ASKS_AT", beam::GRID_HIT_ASKS_AT as u32),
         ("GRID_STOP_ASKS_AT", beam::GRID_STOP_ASKS_AT as u32),
         ("GRID_DEFERS_AT", beam::GRID_DEFERS_AT as u32),
         ("GRID_LATTICE", beam::GRID_LATTICE as u32),
@@ -460,12 +458,31 @@ fn walk_word() -> String {
         ("HIT_FACE", beam::HIT_FACE),
         ("HIT_PX", beam::HIT_PX),
         ("HIT_WAITS", beam::HIT_WAITS),
-        ("HIT_OUT", beam::HIT_OUT),
+        ("HIT_LACKS", beam::HIT_LACKS),
+        ("QUEUE_LANES", ray::QUEUE_LANES),
+        ("QUEUE_GROUPS", ray::QUEUE_GROUPS),
+        ("QUEUE_STEPS", ray::QUEUE_STEPS),
+        ("QUEUE_TAKEN", ray::QUEUE_TAKEN),
+        ("QUEUE_TAKEN_AGAIN", ray::QUEUE_TAKEN_AGAIN),
+        ("QUEUE_ASKS", ray::QUEUE_ASKS),
+        ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
+        ("QUEUE_VISITED", ray::QUEUE_VISITED),
+        ("QUEUE_ASKED", ray::QUEUE_ASKED),
+        ("QUEUE_HITS", ray::QUEUE_HITS),
+        ("QUEUE_RECORDS_AT", ray::QUEUE_RECORDS_AT),
+        ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
+        ("QUEUE_RECORDS_ROOM", ray::QUEUE_RECORDS_ROOM),
+        ("VISITS_A_FRAME", light::VISITS_A_FRAME),
+        ("ASKS_A_FRAME", light::ASKS_A_FRAME),
+        ("CARRIED_LISTS", ray::CARRIED_LISTS),
+        ("STATE_WORDS", ray::STATE_WORDS),
+        ("PARKED", ray::PARKED),
+        ("LAST_TAKEN", node_cache::LAST_TAKEN),
+        ("CARRIED", node_cache::CARRIED),
+        ("VISITED", node_cache::VISITED),
+        ("ASKED", node_cache::ASKED),
         ("HIT_ASSET", beam::HIT_ASSET),
         ("HIT_LINE", beam::HIT_LINE),
-        ("HIT_SQUARE", beam::HIT_SQUARE),
-        ("HIT_FOLLOWS", beam::HIT_FOLLOWS),
-        ("MISS_ARGS_ROOM", ray::MISS_ARGS_ROOM),
         ("FACE_BOX", face::BOX),
         ("RAY_FACE_SHIFT", ray::FACE_SHIFT),
         ("RAY_ZOOM_SHIFT", ray::ZOOM_SHIFT),
@@ -1405,11 +1422,11 @@ fn assemble(out: &Path) {
                 "raster.wgsl's `Raster` against `RASTER_FLOATS`"
             );
         }
-        // The lists' words as pxl-engine lays them (list.wgsl `MissArgs`, `Left`; miss_hit.wgsl
-        // `MissLeft` begins as `Left`; light_stood.wgsl `Stood`): each member's first word.
+        // The lists' words as pxl-engine lays them (list.wgsl `MissArgs`, `Left`;
+        // light_stood.wgsl `Stood`): each member's first word.
         {
             use pxl_engine::{light, ray};
-            let words: [(&str, &[u32]); 4] = [
+            let words: [(&str, &[u32]); 3] = [
                 (
                     "MissArgs",
                     &[
@@ -1419,7 +1436,6 @@ fn assemble(out: &Path) {
                     ],
                 ),
                 ("Left", &[0, ray::LEFT_CNT]),
-                ("MissLeft", &[0, ray::LEFT_CNT]),
                 (
                     "Stood",
                     &[light::STOOD_LIST, light::STOOD_CNT, light::STOOD_SLIDE],

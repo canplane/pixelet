@@ -4,7 +4,7 @@
 // record, which it marks seen (pxl-engine `raster`, `record`; gpu/ray/raster.rs), or the
 // sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as light.wgsl takes a slot's
 // (visible.wgsl), with what lies about its face, the voxel's. Any other pixel takes no walk
-// here: its first word is the mark the walk again goes by (`ray::MISS`; miss_hit.wgsl), and
+// here: its first word is the mark the holes' queue goes by (`ray::MISS`; queue.wgsl), and
 // it is listed for that walk (walked.wgsl, list.wgsl `enlist`), in a list with room for every
 // pixel drawn, each listed once a cast.
 
@@ -92,7 +92,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
       return;
     }
   }
-  // Neither: marked and listed for its walk (miss_hit.wgsl), which reads and writes the
+  // Neither: marked and listed for the holes' queue (queue.wgsl), which reads and writes the
   // node cache. The list holds a place for every pixel drawn, and a pixel is listed once.
   add_cnt(on, COUNT_WALKED);
   textureStore(rays, p, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));

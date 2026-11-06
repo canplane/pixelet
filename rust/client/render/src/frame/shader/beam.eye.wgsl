@@ -6,7 +6,16 @@
 
 const WALK_PASS: u32 = BEAM_PASS;
 const VISITS_COUNT: u32 = EYE_BEAM_COUNT;
-const ASKED_COUNT: u32 = EYE_ASKED_COUNT;
+
+/// A beam ray's asks are not counted (pxl-engine `count::ASKED`).
+/// Its walks ask whatever they meet: no budget is theirs.
+fn may_ask() -> bool {
+  return true;
+}
+
+fn asked_at() -> u32 {
+  return NONE;
+}
 
 fn beam_lattice() -> vec2<u32> {
   return vec2<u32>(eye_word(GRID + GRID_CORNERS), eye_word(GRID + GRID_CORNERS + 1u));

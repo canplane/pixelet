@@ -28,16 +28,19 @@ pub const COMPUTE_BEAM: u32 = 15;
 pub const COMPUTE_CELL: u32 = 16;
 /// The drawn receivers' workgroups, a thread (`SHADER_LIGHT_MARK_DRAWS`).
 pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 17;
-/// The pixels the walk over the node cache left, walked again from their list (pxl-engine
-/// `ray::walked_left_at`), a thread each (`SHADER_MISS`).
-pub const COMPUTE_MISS_LIST: u32 = 18;
+/// The holes' queue (pxl-engine `ray::QUEUE_LANES`): the asks of the nodes its first and its
+/// second walk over the node cache were parked at, its last walk, which asks the world, and
+/// those two walks.
+pub const COMPUTE_QUEUE_ASK: u32 = 18;
 pub const COMPUTE_FORGET: u32 = 19;
 pub const COMPUTE_SAMPLE: u32 = 20;
 pub const COMPUTE_LIGHT: u32 = 21;
-pub const COMPUTE_LIGHT_MISS: u32 = 22;
+pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 22;
 pub const COMPUTE_SAMPLE_BOX: u32 = 23;
 pub const COMPUTE_FACE: u32 = 24;
-pub const COMPUTE_LIGHT_MARK: u32 = 25;
+/// The pixels the eye's cast walked apart, stood on off their list (pxl-engine
+/// `ray::WALKED_LIST`; light_mark.wgsl).
+pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 25;
 pub const COMPUTE_LIGHT_MARK_DRAWS: u32 = 26;
 pub const COMPUTE_LIGHT_PROPAGATE: u32 = 27;
 pub const COMPUTE_GENERATION_THIN: u32 = 28;
@@ -45,17 +48,19 @@ pub const COMPUTE_SCREEN_PROPAGATE: u32 = 29;
 pub const COMPUTE_SCREEN_MARK: u32 = 30;
 pub const COMPUTE_SCREEN_BOUND: u32 = 31;
 pub const COMPUTE_LIGHT_SLIDE: u32 = 32;
-pub const COMPUTE_HIT_LEAD: u32 = 33;
-pub const COMPUTE_HIT_FACES: u32 = 34;
+pub const COMPUTE_QUEUE_LAST: u32 = 33;
+/// What lies about each hole's stop's face put at its pixel off the record
+/// (`SHADER_RECORD_STOPS`).
+pub const COMPUTE_RECORD_FACES: u32 = 34;
 pub const COMPUTE_BOX_ARGS: u32 = 35;
 pub const COMPUTE_LIGHT_BEAM: u32 = 36;
 pub const COMPUTE_LIGHT_CELL: u32 = 37;
 pub const COMPUTE_LIGHT_SAMPLE: u32 = 38;
 pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 39;
 pub const COMPUTE_SAMPLE_HIT: u32 = 40;
-pub const COMPUTE_MISS_HIT: u32 = 41;
+pub const COMPUTE_QUEUE: u32 = 41;
 pub const COMPUTE_BEAM_HIT: u32 = 42;
-pub const COMPUTE_LIGHT_MISS_HIT: u32 = 43;
+pub const COMPUTE_QUEUE_PARKED: u32 = 43;
 pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 44;
 pub const COMPUTE_LIGHT_BEAM_HIT: u32 = 45;
 pub const COMPUTE_CAST_TILES: u32 = 46;
@@ -70,15 +75,11 @@ pub const COMPUTE_LIGHT_SAMPLE_OBSERVE: u32 = 51;
 /// (record_draw.wgsl).
 pub const COMPUTE_RECORD_FORGET: u32 = 52;
 pub const COMPUTE_RECORD_DRAW: u32 = 53;
-/// The pixels the eye's cast walked apart, stood on off their list (pxl-engine
-/// `ray::WALKED_LIST`), from the module whose first entry stands the voxels' boxes
-/// (`SHADER_LIGHT_MARK`).
-pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 54;
 /// The missed pixels' hits into the eye's record, and those whose stop met its key's claim
 /// (record_stops.wgsl).
-pub const COMPUTE_RECORD_STOPS: u32 = 55;
-pub const COMPUTE_RECORD_DEFERRED: u32 = 56;
-pub const COMPUTES: u32 = 57;
+pub const COMPUTE_RECORD_STOPS: u32 = 54;
+pub const COMPUTE_RECORD_DEFERRED: u32 = 55;
+pub const COMPUTES: u32 = 56;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -105,14 +106,13 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_WAY_RETURN => (SHADER_WAY_RETURN, "way_return_cs"),
         COMPUTE_BEAM => (SHADER_BEAM, "beam_cs"),
         COMPUTE_CELL => (SHADER_CELL, "cell_cs"),
-        COMPUTE_MISS_LIST => (SHADER_MISS, "miss_list_cs"),
+        COMPUTE_QUEUE_ASK => (SHADER_QUEUE_ASK, "queue_ask_cs"),
         COMPUTE_FORGET => (SHADER_FORGET, "forget_cs"),
         COMPUTE_SAMPLE => (SHADER_SAMPLE, "sample_cs"),
         COMPUTE_LIGHT => (SHADER_LIGHT, "light_cs"),
-        COMPUTE_LIGHT_MISS => (SHADER_LIGHT_MISS, "light_miss_cs"),
+        COMPUTE_QUEUE_ASK_PARKED => (SHADER_QUEUE_ASK, "queue_ask_parked_cs"),
         COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
         COMPUTE_FACE => (SHADER_FACE, "face_cs"),
-        COMPUTE_LIGHT_MARK => (SHADER_LIGHT_MARK, "light_mark_cs"),
         COMPUTE_LIGHT_MARK_WALKED => (SHADER_LIGHT_MARK, "light_mark_walked_cs"),
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
         COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_open_cs"),
@@ -122,8 +122,8 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
         COMPUTE_SCREEN_BOUND => (SHADER_SCREEN_BOUND, "screen_bound_cs"),
         COMPUTE_LIGHT_SLIDE => (SHADER_LIGHT_SLIDE, "light_slide_cs"),
-        COMPUTE_HIT_LEAD => (SHADER_HIT_LEAD, "hit_lead_cs"),
-        COMPUTE_HIT_FACES => (SHADER_HIT_FACES, "hit_faces_cs"),
+        COMPUTE_QUEUE_LAST => (SHADER_QUEUE_LAST, "queue_last_cs"),
+        COMPUTE_RECORD_FACES => (SHADER_RECORD_STOPS, "record_faces_cs"),
         COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
         COMPUTE_LIGHT_BEAM => (SHADER_LIGHT_BEAM, "beam_cs"),
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
@@ -132,9 +132,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_SAMPLE_OBSERVE => (SHADER_SAMPLE_BOX, "sample_observe_cs"),
         COMPUTE_LIGHT_SAMPLE_OBSERVE => (SHADER_LIGHT_SAMPLE_BOX, "light_sample_observe_cs"),
         COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
-        COMPUTE_MISS_HIT => (SHADER_MISS_HIT, "miss_hit_cs"),
+        COMPUTE_QUEUE => (SHADER_QUEUE, "queue_cs"),
         COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
-        COMPUTE_LIGHT_MISS_HIT => (SHADER_LIGHT_MISS_HIT, "light_miss_hit_cs"),
+        COMPUTE_QUEUE_PARKED => (SHADER_QUEUE, "queue_parked_cs"),
         COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_LIGHT_BEAM_HIT => (SHADER_LIGHT_BEAM_HIT, "beam_hit_cs"),
         COMPUTE_RECORD_FORGET => (SHADER_RECORD_DRAW, "record_forget_cs"),

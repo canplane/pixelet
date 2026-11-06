@@ -17,19 +17,19 @@
 //! each frame its samples are cast, and kept where only the pixels are
 //! cast again over them.
 
-use pxl_engine::{beam, eye, light, node_cache, raster, ray, record};
+use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE,
-    COMPUTE_RECORD_DEFERRED, COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FORGET, COMPUTE_RECORD_STOPS,
-    COMPUTE_SAMPLE_BOX, COMPUTE_SAMPLE_OBSERVE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, STORAGE,
-    STORAGE_RW, UNIFORM,
+    COMPUTE_RECORD_DEFERRED, COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_FORGET,
+    COMPUTE_RECORD_STOPS, COMPUTE_SAMPLE_BOX, COMPUTE_SAMPLE_OBSERVE, PIPELINE_RASTER,
+    PIPELINE_RASTER_GATE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes,
-    Format, Gpu, Load, RenderContext,
+    buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, texture_usage, view_entry,
+    word_bytes, Format, Gpu, Load, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -57,7 +57,7 @@ const SAMPLE_BOX_GROUP: [u32; 12] = [
 ];
 /// The record over every slot (record_draw.wgsl): its forgetting, over the node cache's
 /// head, and its drawing, over the eye, the boxes and the raster's args.
-const RECORD_GROUP: [u32; 15] = [
+const RECORD_GROUP: [u32; 27] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -73,14 +73,29 @@ const RECORD_GROUP: [u32; 15] = [
     RECORD_BINDING,
     COMPUTE,
     STORAGE_RW,
+    super::cast::HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+    21,
+    COMPUTE,
+    STORAGE_RW,
+    22,
+    COMPUTE,
+    STORAGE_RW,
 ];
-/// The missed pixels' hits into the record (record_stops.wgsl): the eye, the hits among the
+/// The holes' stops into the record (record_stops.wgsl): the eye, the rays, the stops among the
 /// beam rays' words, the node cache's head their count lies in, the faces' asks' args and
 /// the record.
-const STOPS_GROUP: [u32; 15] = [
+const STOPS_GROUP: [u32; 18] = [
     0,
     COMPUTE,
     UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
     8,
     COMPUTE,
     STORAGE_RW,
@@ -127,7 +142,7 @@ const _: () = assert!(
 /// size: a pixel's voxel (r32uint, drawn into as 2D and read as a
 /// one-layer array, `visibility`, the visibility buffer) and the depth it is
 /// tested by; and the groups of the record's writing, its forgetting and drawing, the
-/// boxes' drawing and the faces' asking, the record's and the missed pixels' hits', made
+/// boxes' drawing and the faces' asking, the samples' and the holes' stops', made
 /// again exactly when what they bind is another (`bindings`).
 pub(super) struct Raster {
     /// The samples' writing, the eye's into its record (sample_box.wgsl) and the shadow
@@ -142,6 +157,9 @@ pub(super) struct Raster {
     /// The missed pixels' hits into the record, and those put off (record_stops.wgsl).
     stops_built: Pipeline,
     deferred_built: Pipeline,
+    /// What lies about each stop's face put at its pixel off the record (record_stops.wgsl
+    /// `record_faces_cs`).
+    faces_put_built: Pipeline,
     pub(super) light_observe_built: Pipeline,
     /// The shadow map's samples' boxes (light_sample_box.wgsl),
     /// the light's head bound beside what the screen's binds.
@@ -153,9 +171,7 @@ pub(super) struct Raster {
     gate: Pipeline,
     pub(super) args: u32,
     pub(super) record: u32,
-    /// The boxes the record's draw writes and the raster draws, which the light's receivers
-    /// stand by (light_mark.wgsl `light_mark_cs`).
-    pub(super) boxes: u32,
+    boxes: u32,
     uniform: u32,
     visibility: u32,
     visibility_view: u32,
@@ -163,8 +179,12 @@ pub(super) struct Raster {
     depth: u32,
     depth_view: u32,
     size: [u32; 2],
-    groups: [u32; 7],
+    groups: [u32; 6],
     bindings: [u32; 9],
+    /// What the record's group binds past the raster's own, the light's: its head, its list,
+    /// its args and its stood list's args, where its receivers stand the boxes the record's
+    /// draw writes (record_draw.wgsl `record_draw_cs`; `record_group`).
+    record_bound: [u32; 6],
     /// The light's, made while its shadows are on (`light_made`,
     /// `light_release`).
     pub(super) light: LightRaster,
@@ -233,7 +253,11 @@ const _: () = assert!(
     ) && binds(&[COMPUTE_FACE], &FACE_GROUP)
         && binds(&[COMPUTE_RECORD_FORGET, COMPUTE_RECORD_DRAW], &RECORD_GROUP)
         && binds(
-            &[COMPUTE_RECORD_STOPS, COMPUTE_RECORD_DEFERRED],
+            &[
+                COMPUTE_RECORD_STOPS,
+                COMPUTE_RECORD_DEFERRED,
+                COMPUTE_RECORD_FACES
+            ],
             &STOPS_GROUP
         ),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
@@ -264,6 +288,7 @@ impl Raster {
             record_draw_built: pipelines.build_compute(g, COMPUTE_RECORD_DRAW, &RECORD_GROUP),
             stops_built: pipelines.build_compute(g, COMPUTE_RECORD_STOPS, &STOPS_GROUP),
             deferred_built: pipelines.build_compute(g, COMPUTE_RECORD_DEFERRED, &STOPS_GROUP),
+            faces_put_built: pipelines.build_compute(g, COMPUTE_RECORD_FACES, &STOPS_GROUP),
             faces_built: pipelines.build_compute(g, COMPUTE_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
@@ -293,8 +318,9 @@ impl Raster {
             depth: 0,
             depth_view: 0,
             size: [0; 2],
-            groups: [0; 7],
+            groups: [0; 6],
             bindings: [0; 9],
+            record_bound: [0; 6],
             light: LightRaster::default(),
         }
     }
@@ -307,8 +333,7 @@ impl Raster {
     /// `node_cache`, whose head the record is forgotten by, and, for the
     /// faces' asking, the world's query's buffers (the clip level, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool)
-    /// and the walk again's words (`marks`), which hold the missed pixels'
-    /// hits' args (`ask_hits`).
+    /// and the rays, at whose pixels the holes' stops' faces are put (`stops`).
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
@@ -316,7 +341,7 @@ impl Raster {
         size: [u32; 2],
         grid: &beam::Grid,
         (samples_cast, frame): (bool, u32),
-        [eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, marks]: [u32; 9],
+        [eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, rays]: [u32; 9],
     ) {
         g.write_buf(
             self.record,
@@ -384,7 +409,7 @@ impl Raster {
             // The draw's args none, and the faces' asks' none, laid where the grid lays them
             // (pxl-engine `raster::ASKED_AT`).
             let mut args = [0u32; (raster::ASKED_AT + raster::ARGS_WORDS) as usize];
-            args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+            args[..raster::ARGS_WORDS as usize].copy_from_slice(&draw_args());
             let asked = raster::ASKED_AT as usize;
             args[asked + raster::ARGS_FACES as usize + 1] = 1;
             args[asked + raster::ARGS_FACES as usize + 2] = 1;
@@ -409,15 +434,14 @@ impl Raster {
             bytes(&[0u32, 1, 1, 0]),
         );
         let bindings = [
-            eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, marks,
+            eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, rays,
         ];
         if bindings != self.bindings {
             for group in self.groups {
                 release(group);
             }
-            // The faces' pass over the record's asks, its args the raster's,
-            // or over the missed pixels' hits', theirs in the node cache's
-            // head: one pass, bound to either's args.
+            // The faces' pass over the record's asks, the samples' or the holes' stops',
+            // its args the raster's: one pass, bound to either's args.
             let faces = |args: u32, at: u32| {
                 g.bind_group(
                     self.faces_built.layouts[0],
@@ -449,22 +473,14 @@ impl Raster {
                     &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
                 faces(self.args, word_bytes(raster::ASKED_AT as usize)),
-                faces(marks, word_bytes(ray::MISS_ARGS_ROOM as usize)),
-                g.bind_group(
-                    self.record_draw_built.layouts[0],
-                    &[
-                        buf_entry(0, eye),
-                        buf_entry(9, node_cache),
-                        buf_entry(14, self.boxes),
-                        buf_entry(16, self.args),
-                        buf_entry(RECORD_BINDING, self.record),
-                    ],
-                ),
+                // Made over the light's buffers too (`record_group`).
+                0,
                 faces(self.args, word_bytes(raster::STOP_ASKED_AT as usize)),
                 g.bind_group(
                     self.stops_built.layouts[0],
                     &[
                         buf_entry(0, eye),
+                        view_entry(3, rays),
                         buf_entry(8, beams),
                         buf_entry(9, node_cache),
                         buf_entry(16, self.args),
@@ -473,54 +489,80 @@ impl Raster {
                 ),
             ];
             self.bindings = bindings;
+            self.record_bound = [0; 6];
         }
     }
 
-    /// The missed pixels' hits into the record, in the cast's pass `pass` once their walks
-    /// and their faces' passes are done (ray/cast.rs), a thread a hit off their count in the
-    /// node cache's head (`node_cache`, pxl-engine `node_cache::HITS_ARGS`); those whose stop
-    /// met its key's claim past that dispatch's end, off their count among the raster's args
+    /// The record's group (`RECORD_GROUP`), over the eye and the node cache the raster's
+    /// passes bind and the light's buffers its draw stands the boxes by, `light`: the light's
+    /// head, its list, its args and its stood list's args (light_stood.wgsl); made again exactly
+    /// when one of them is another, every frame the cast prepares, as the light's are made and
+    /// let go apart from the raster's.
+    pub(super) fn record_group(&mut self, g: &Gpu, light: [u32; 4]) {
+        let [eye, _, node_cache, ..] = self.bindings;
+        let [head, list, args, stood] = light;
+        let bound = [eye, node_cache, head, list, args, stood];
+        if eye == 0 || bound == self.record_bound {
+            return;
+        }
+        release(self.groups[3]);
+        self.groups[3] = g.bind_group(
+            self.record_draw_built.layouts[0],
+            &[
+                buf_entry(0, eye),
+                buf_entry(9, node_cache),
+                buf_entry(14, self.boxes),
+                buf_entry(16, self.args),
+                buf_entry(RECORD_BINDING, self.record),
+                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(12, list),
+                buf_entry(21, args),
+                buf_entry(22, stood),
+            ],
+        );
+        self.record_bound = bound;
+    }
+
+    /// The holes' stops into the record, in the cast's pass `pass` once the holes' queue is
+    /// done (ray/cast.rs), a thread a stop off their count in the node cache's head
+    /// (`node_cache`, pxl-engine `node_cache::HITS_ARGS`); those whose stop met its key's claim
+    /// past that dispatch's end, off their count among the raster's args
     /// (`raster::DEFERRED_AT`); then what lies about each face they opened asked, the faces'
-    /// pass over their asks, its args the raster's at `raster::STOP_ASKED_AT`.
+    /// pass over their asks, its args the raster's at `raster::STOP_ASKED_AT`; then each
+    /// stop's face's word put at its pixel off its entry, a thread a stop.
     pub(super) fn stops(&self, g: &Gpu, pass: u32, node_cache: u32) {
+        let hits = word_bytes(node_cache::HITS_ARGS as usize);
         g.set_pipeline(pass, self.stops_built.id);
-        g.set_bind_group(pass, 0, self.groups[6], &[]);
-        g.dispatch_indirect(pass, node_cache, word_bytes(node_cache::HITS_ARGS as usize));
+        g.set_bind_group(pass, 0, self.groups[5], &[]);
+        g.dispatch_indirect(pass, node_cache, hits);
         g.set_pipeline(pass, self.deferred_built.id);
         g.dispatch_indirect(pass, self.args, word_bytes(raster::DEFERRED_ARGS as usize));
         g.set_pipeline(pass, self.faces_built.id);
-        g.set_bind_group(pass, 0, self.groups[5], &[]);
+        g.set_bind_group(pass, 0, self.groups[4], &[]);
         let at = raster::STOP_ASKED_AT + raster::ARGS_FACES;
         g.dispatch_indirect(pass, self.args, word_bytes(at as usize));
+        g.set_pipeline(pass, self.faces_put_built.id);
+        g.set_bind_group(pass, 0, self.groups[5], &[]);
+        g.dispatch_indirect(pass, node_cache, hits);
     }
 
-    /// What lies about each missed pixel's hit's face asked once a square of
-    /// them, in the cast's pass `pass` (ray/cast.rs): the faces' pass over
-    /// the hits' asks, its args among the walk again's words (`marks`,
-    /// pxl-engine `ray::MISS_ARGS_ROOM`) as the boxes' are in its own.
-    pub(super) fn ask_hits(&self, g: &Gpu, pass: u32, marks: u32) {
-        g.set_pipeline(pass, self.faces_built.id);
-        g.set_bind_group(pass, 0, self.groups[3], &[]);
-        let at = ray::MISS_ARGS_ROOM + raster::ARGS_FACES;
-        g.dispatch_indirect(pass, marks, word_bytes(at as usize));
-    }
-
-    /// The samples written into the record, a thread a sample of `grid`, and the record's
-    /// voxels in view written as boxes, a thread a slot, where they were cast again
-    /// (`samples_cast`), else the last kept (span `sample_box`); and drawn into its targets as many as their args say,
+    /// The samples written into the record, a thread a sample of `grid`, where they were cast
+    /// again (`samples_cast`); the record's voxels in view written as boxes, a thread a slot,
+    /// where they were, or where the light's receivers stand this frame (`record_drawn`), else
+    /// the last kept (span `sample_box`); and drawn into its targets as many as their args say,
     /// cleared first, through the gate in the `claimed` tiles where the frame
     /// is not drawn whole (`Resolve::tiles`, `cnt` of them; span `sraster`).
     pub(super) fn draw(
         &self,
         ctx: &mut RenderContext,
         grid: &beam::Grid,
-        samples_cast: bool,
+        (samples_cast, record_drawn): (bool, bool),
         claimed: Option<((u32, u32), u32)>,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         if samples_cast {
-            // The samples into the record, the second pass reading what the first wrote;
-            // then every held voxel in view written as a box (pxl-engine `record`).
+            // The samples into the record, the second pass reading what the first wrote
+            // (pxl-engine `record`).
             let [x, y] = grid.samples;
             for built in [&self.boxes_built, &self.observe_built] {
                 let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
@@ -529,11 +571,9 @@ impl Raster {
                 g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
                 g.end(pass);
             }
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
-            g.set_bind_group(pass, 0, self.groups[4], &[]);
-            g.set_pipeline(pass, self.record_draw_built.id);
-            g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
-            g.end(pass);
+        }
+        if record_drawn {
+            self.record_draw(ctx);
         }
         // Gated, the depth starts at the nearest, which no box passes, and
         // the gate sets the claimed tiles back to the far plane; else it
@@ -576,10 +616,25 @@ impl Raster {
         g.end(pass);
     }
 
+    /// Every held voxel of the record in view written as a box, a thread a slot, its draw's
+    /// args first set to none, each box stood on by the light's receivers where they stand
+    /// this frame (record_draw.wgsl `record_draw_cs`, pxl-engine `light::HEAD_STANDS_WORLD`):
+    /// once a frame at most, by the raster's draw or, where the eye's pixels are not cast, by the
+    /// light's cast ahead of its receivers' passes (ray/cast.rs).
+    pub(super) fn record_draw(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        g.write_buf(self.args, 0, bytes(&draw_args()));
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
+        g.set_bind_group(pass, 0, self.groups[3], &[]);
+        g.set_pipeline(pass, self.record_draw_built.id);
+        g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
+        g.end(pass);
+    }
+
     /// The record forgotten in the cast's pass `pass`, where the node cache is, by its head's
     /// rule (pxl-engine `record`; record_draw.wgsl `record_forget_cs`).
     pub(super) fn forget(&self, g: &Gpu, pass: u32) {
-        g.set_bind_group(pass, 0, self.groups[4], &[]);
+        g.set_bind_group(pass, 0, self.groups[3], &[]);
         g.set_pipeline(pass, self.forget_built.id);
         g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
     }
@@ -593,6 +648,14 @@ impl Raster {
             (size / SAMPLE) * (size / SAMPLE),
         );
     }
+}
+
+/// The draw's args as the record's draw begins: its vertices a box, no box (pxl-engine
+/// `raster::ARGS_WORDS`).
+fn draw_args() -> [u32; raster::ARGS_WORDS as usize] {
+    let mut args = [0; raster::ARGS_WORDS as usize];
+    args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    args
 }
 
 /// The light's table of voxels past `samples` samples' boxes in `boxes` cleared (pxl-engine

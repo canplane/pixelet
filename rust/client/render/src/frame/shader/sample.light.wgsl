@@ -5,7 +5,16 @@
 
 const WALK_PASS: u32 = LIGHT_SAMPLES_PASS;
 const VISITS_COUNT: u32 = LIGHT_SAMPLE_COUNT;
-const ASKED_COUNT: u32 = LIGHT_ASKED_COUNT;
+
+/// Where its asks are counted (pxl-engine `count::ASKED`).
+/// Its walks ask whatever they meet: no budget is theirs.
+fn may_ask() -> bool {
+  return true;
+}
+
+fn asked_at() -> u32 {
+  return LIGHT_ASKED_COUNT;
+}
 
 fn sample_lattice() -> vec2<u32> {
   return vec2<u32>(head_word(LIGHT_HEAD_SAMPLES_ACROSS));

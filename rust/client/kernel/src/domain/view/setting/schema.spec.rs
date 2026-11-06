@@ -250,7 +250,7 @@ pub enum SettingKey {
     /// once more from the sun, or the moon where the sun is down, as the eye's
     /// rays are, none where neither is up; beams and samples on
     /// the node cache, the boxes they stop at drawn and a texel's sample
-    /// taken, the rest walked (pxl-render light_miss.wgsl), recast only where what it
+    /// taken, the rest walked (pxl-render queue.wgsl), recast only where what it
     /// reads moves; decor and the actors drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
     shadows = 11,

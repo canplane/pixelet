@@ -6,7 +6,8 @@
 // the top (`world_root`). The node cache's words all atomic, as
 // a slot's key is exchanged to claim it: no compare-and-swap, which Safari's WGSL compiler
 // writes Metal for that does not compile (doc/experiment/20261103-shaders-on-two-phones). A
-// pass names what its walks count and are tagged by (`WALK_PASS`, `VISITS_COUNT`, `ASKED_COUNT`).
+// pass names the tag its walks keep under (`WALK_PASS`), where its asks are counted
+// (`asked_at`) and whether it may ask another (`may_ask`).
 
 @group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
 
@@ -81,8 +82,9 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom:
 /// of whichever walk; else of the world, and kept (`keep`) under this pass's tag, what is handed
 /// it found there alone: from the top where `top` (`world_root`), else off what was handed its
 /// parent, `parent` (`world_child`). What it hands its children: the slot's where one kept it.
-/// One asked of the world counts in `ASKED_COUNT` where `counts`.
-fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, counts: bool) -> Answer {
+/// One asked of the world counts at word `asked`, none where `NONE`; where the pass may ask no
+/// more (`may_ask`), none is asked and the walk is left there (`KIND_LEFT`).
+fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
   let want = zooms << TAG_BITS;
   var kept = keeps(zoom, c);
   var first = 0u;
@@ -114,8 +116,21 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, c
       }
     }
   }
-  if (counts && node_cache_word(COUNT_ON) != 0u) {
-    atomicAdd(&node_cache[ASKED_COUNT], 1u);
+  if (!may_ask()) {
+    return Answer(KIND_LEFT, vec2<u32>(0u), vec4<u32>(0u));
+  }
+  let a = world_answer(parent, top, zoom, c, zooms, asked);
+  if (kept) {
+    keep(first, zoom, c, zooms, walk_tag(), a);
+  }
+  return a;
+}
+
+/// The node `c` at `zoom` asked of the world at `zooms`, what is handed it found from the top
+/// where `top`, else off `parent`; counted at word `asked`, none where `NONE`.
+fn world_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
+  if (asked != NONE && node_cache_word(COUNT_ON) != 0u) {
+    atomicAdd(&node_cache[asked], 1u);
   }
   var handed: vec4<u32>;
   if (top) {
@@ -123,20 +138,63 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, c
   } else {
     handed = world_child(parent, zoom, c);
   }
-  let a = world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
-  if (kept) {
-    keep(first, zoom, c, zooms, walk_tag(), a);
-  }
-  return a;
+  return world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
 }
 
-/// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in a slot
-/// of the bucket from `first` (pxl-engine node_cache.rs): a free one, the first from the
-/// node's at these zooms (`pair_hash`); else an earlier frame's, the first from the node's own
-/// (`node_hash`); none where a walk
-/// of this pass keeps the node at these zooms or claims it. A lost claim tries again over the
-/// bucket as it then stands.
+/// Whether a slot of the bucket from `first` keeps the node `c` at `zoom` at `zooms`, its key
+/// read as it stands, of whichever walk and frame.
+fn kept_at(first: u32, zoom: u32, c: vec3<i32>, zooms: u32) -> bool {
+  let want = zooms << TAG_BITS;
+  for (var k = 0u; k < BUCKET; k += 1u) {
+    let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
+    let key = node_cache_now(w);
+    if (key != 0u && (key & KEY_ZOOMS) == want && is_node_now(w, zoom, c)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// The node `c` at `zoom`, asked at `zooms`, asked of the world once for all the rays the queue
+/// parked at it (queue_ask.wgsl), what is handed it found as `world_answer` finds it: the slot
+/// claimed first (`claim`), so every other asker of the node at those zooms finds it claimed and
+/// asks nothing; then the world asked and the answer written there (`fill`). Nothing where a
+/// slot keeps it at those zooms, where it is not kept (`keeps`), where the pass may ask no more
+/// (`may_ask`), or where no slot can be claimed: the rays parked at it are walked on by the walk
+/// that asks (queue_last.wgsl). Counted at word `asked`, none where `NONE`.
+fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) {
+  if (!keeps(zoom, c)) {
+    return;
+  }
+  let first = bucket_of(zoom, c);
+  if (kept_at(first, zoom, c, zooms) || !may_ask()) {
+    return;
+  }
+  let tag = walk_tag();
+  let w = claim(first, zoom, c, zooms, tag);
+  if (w == NONE) {
+    return;
+  }
+  fill(w, zoom, c, zooms, tag, world_answer(parent, top, zoom, c, zooms, asked));
+}
+
+/// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in the
+/// slot it claims (`claim`, `fill`).
 fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
+  let w = claim(first, zoom, c, zooms, tag);
+  if (w != NONE) {
+    fill(w, zoom, c, zooms, tag, a);
+  }
+}
+
+/// Claims a slot of the bucket from `first` to keep the node `c` at `zoom` asked at `zooms`
+/// under this pass's `tag` (pxl-engine node_cache.rs): a free one, the first from the node's at
+/// these zooms (`pair_hash`); else an earlier frame's, the first from the node's own
+/// (`node_hash`). The slot's first word, its claim named, so no other walk keeps the node at
+/// these zooms beside it; `NONE` where a walk of this pass keeps the node at these zooms or
+/// claims it, or no slot is free or an earlier frame's. A lost claim tries again over the
+/// bucket as it then stands.
+fn claim(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> u32 {
   let key = tag | (zooms << TAG_BITS);
   let h = pair_hash(zoom, c, zooms);
   let mine = (h & ~CLAIM_MASK) | CLAIM_FAR;
@@ -156,7 +214,7 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
         held = node_cache_now(w);
       }
       if (held == CLAIMED || held == mine || (held == key && is_node_now(w, zoom, c))) {
-        return;
+        return NONE;
       }
       var turn = 2u * BUCKET;
       if (held == 0u) {
@@ -171,7 +229,7 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
       }
     }
     if (to == NONE) {
-      return;
+      return NONE;
     }
     let w = ENTRIES_AT + (first + to) * ENTRY_WORDS;
     if (node_cache_now(w) != was) {
@@ -180,27 +238,33 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
     let got = atomicExchange(&node_cache[w], CLAIMED);
     if (got == was) {
       atomicStore(&node_cache[w], mine);
-      atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.handed, zoom, c));
-      atomicStore(&node_cache[w + W_ASSET], a.asset.x);
-      atomicStore(&node_cache[w + W_ASSET + 1u], a.asset.y);
-      atomicStore(&node_cache[w + W_INHERITANCE], a.handed.x);
-      atomicStore(&node_cache[w + W_INHERITANCE + 1u], a.handed.y);
-      atomicStore(&node_cache[w + W_INHERITANCE + 2u], a.handed.z);
-      atomicStore(&node_cache[w + W_INHERITANCE + 3u], a.handed.w);
-      atomicStore(&node_cache[w + W_NODE], zoom);
-      atomicStore(&node_cache[w + W_NODE + 1u], u32(c.x));
-      atomicStore(&node_cache[w + W_NODE + 2u], u32(c.y));
-      atomicStore(&node_cache[w + W_NODE + 3u], u32(c.z));
-      atomicStore(&node_cache[w], key);
-      return;
+      return w;
     }
     if (got != CLAIMED) {
       put_back(w, got);
       if (got == mine) {
-        return;
+        return NONE;
       }
     }
   }
+  return NONE;
+}
+
+/// Writes the node `c` at `zoom` asked at `zooms`, answered `a`, in the slot at word `w` its
+/// walk claimed (`claim`): every word, then its key under `tag`, last.
+fn fill(w: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
+  atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.handed, zoom, c));
+  atomicStore(&node_cache[w + W_ASSET], a.asset.x);
+  atomicStore(&node_cache[w + W_ASSET + 1u], a.asset.y);
+  atomicStore(&node_cache[w + W_INHERITANCE], a.handed.x);
+  atomicStore(&node_cache[w + W_INHERITANCE + 1u], a.handed.y);
+  atomicStore(&node_cache[w + W_INHERITANCE + 2u], a.handed.z);
+  atomicStore(&node_cache[w + W_INHERITANCE + 3u], a.handed.w);
+  atomicStore(&node_cache[w + W_NODE], zoom);
+  atomicStore(&node_cache[w + W_NODE + 1u], u32(c.x));
+  atomicStore(&node_cache[w + W_NODE + 2u], u32(c.y));
+  atomicStore(&node_cache[w + W_NODE + 3u], u32(c.z));
+  atomicStore(&node_cache[w], tag | (zooms << TAG_BITS));
 }
 
 /// A key as it ranks for `put_back`: `CLAIMED`, then a named claim, then a key, each written
@@ -227,10 +291,10 @@ fn put_back(w: u32, got: u32) {
 }
 
 /// The node `c` at `zoom`, asked at `zooms`, as the walk asks it (walk.wgsl `walk`): `ask_node`,
-/// its handed words read whatever `hands`. A beam ray's asks are not counted, as a sample's and
-/// a walk again's are (pxl-engine `count::ASKED`).
+/// its handed words read whatever `hands`, its asks counted where the pass counts them
+/// (`asked_at`).
 fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
-  return ask_node(parent, top, zoom, c, zooms, WALK_PASS != BEAM_PASS && WALK_PASS != LIGHT_BEAM_PASS);
+  return ask_node(parent, top, zoom, c, zooms, asked_at());
 }
 
 /// What was handed the node a beam ray's walk ended at unasked, found here off its parent's,
@@ -244,9 +308,9 @@ fn hand_end(line: u32, parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>) ->
   return true;
 }
 
-/// The nodes a walk entered, counted in `VISITS_COUNT` where the walks count.
-fn count_visits(w: Walked) {
+/// `visits` nodes a walk entered, counted at word `at` where the walks count.
+fn count_visits(at: u32, visits: u32) {
   if (node_cache_word(COUNT_ON) != 0u) {
-    atomicAdd(&node_cache[VISITS_COUNT], w.visits);
+    atomicAdd(&node_cache[at], visits);
   }
 }

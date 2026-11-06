@@ -10,8 +10,11 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{cast, ray, FRAC_W};
-use pxl_render::frame::shader::record::{compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT};
+use pxl_engine::{cast, node_cache, ray, FRAC_W};
+use pxl_render::frame::shader::record::{
+    compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK,
+    COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_PARKED,
+};
 
 /// How long a test waits on the device for one submission before it fails.
 const WAIT: Duration = Duration::from_secs(60);
@@ -195,6 +198,59 @@ impl Gpu {
         let at = u64::from(light::corners_left_at(size)) * 4;
         self.queue.write_buffer(list, at, bytes(&args[3..]));
         self.dispatch(&pipeline(COMPUTE_LIGHT_BEAM), world, [args[0], args[1], 1]);
+    }
+
+    /// The holes' queue as the cast runs it over one observer's holes (pxl-render
+    /// gpu/ray/cast.rs `walk_holes`): its words empty, the two walks over the node cache alone
+    /// and the asks after each, what the last walk reads copied into `list` and, where `hits`,
+    /// and where `hits` the eye's hits into `table`, as the cast copies them, and the last
+    /// walk. `all` binds what any of its passes reads but the queue's words: the eye at 0, the
+    /// world's at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list, its holes'
+    /// region last, at 8, the node cache at 9, the observer's head at 11; each pass takes those
+    /// its entry reads. The queue's words as its walks left them.
+    pub fn holes(
+        &self,
+        all: &[(u32, wgpu::BindingResource)],
+        table: &wgpu::Buffer,
+        hits: bool,
+    ) -> Vec<u32> {
+        let mut words = vec![0u32; ray::QUEUE_WORDS as usize];
+        words[..ray::QUEUE_EMPTY.len()].copy_from_slice(&ray::QUEUE_EMPTY);
+        let queue = self.buffer(&words, wgpu::BufferUsages::STORAGE);
+        let take = |keep: &[u32]| {
+            let mut binds: Vec<_> = all
+                .iter()
+                .filter(|(b, _)| keep.contains(b))
+                .cloned()
+                .collect();
+            if keep.contains(&10) {
+                binds.push((10, queue.as_entire_binding()));
+            }
+            binds
+        };
+        let walk = take(&[0, 3, 8, 9, 10, 11]);
+        let ask = take(&[0, 1, 2, 4, 5, 6, 7, 9, 10, 11]);
+        let last = take(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11]);
+        let pipeline = |id| {
+            let (shader, entry) = compute(id);
+            self.pipeline(src(shader), entry)
+        };
+        let groups = [ray::QUEUE_GROUPS, 1, 1];
+        self.dispatch(&pipeline(COMPUTE_QUEUE), &walk, groups);
+        self.dispatch(&pipeline(COMPUTE_QUEUE_ASK), &ask, groups);
+        self.dispatch(&pipeline(COMPUTE_QUEUE_PARKED), &walk, groups);
+        self.dispatch(&pipeline(COMPUTE_QUEUE_ASK_PARKED), &ask, groups);
+        let q = self.read(&queue);
+        let v = ray::QUEUE_VISITED as usize;
+        let at = u64::from(node_cache::VISITED) * 4;
+        self.queue.write_buffer(table, at, bytes(&q[v..v + 2]));
+        if hits {
+            let h = ray::QUEUE_HITS as usize;
+            let at = u64::from(node_cache::HITS_ARGS) * 4;
+            self.queue.write_buffer(table, at, bytes(&q[h..h + 4]));
+        }
+        self.dispatch(&pipeline(COMPUTE_QUEUE_LAST), &last, groups);
+        q
     }
 }
 

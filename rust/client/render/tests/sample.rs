@@ -1413,9 +1413,11 @@ fn px_aim(obs: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail) {
     (Ray::new(d, *far), detail)
 }
 
+/// The holes' queue over the eye's marked pixels (queue.wgsl, queue_walk.wgsl, queue_ask.wgsl,
+/// queue_last.wgsl): every marked pixel's words as `cast::walk` from the root answers its ray,
+/// and no other pixel written.
 #[test]
 fn hand_missed_pixels_answer_as_cast_walk() {
-    use pxl_render::frame::shader::record::{SHADER_MISS, SHADER_MISS_HIT};
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -1469,8 +1471,6 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             marked_in: 3,
         },
     ];
-    let hit_p = gpu.pipeline(src(SHADER_MISS_HIT), "miss_hit_cs");
-    let list_p = gpu.pipeline(src(SHADER_MISS), "miss_list_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     for c in &eyes {
@@ -1489,10 +1489,14 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 unreachable!()
             };
             let (origin, grid) = (*origin, *grid);
-            // The walked pixels' lists past the grid's words, room for every pixel drawn.
+            // The walked pixels' list past the grid's words, room for every pixel drawn, and the
+            // holes' region last, a state a pixel.
             let drawn = s.size[0] * s.size[1];
             let walked = grid.walked_at() as usize;
-            words.resize(walked + ray::walked_words(drawn) as usize, 0);
+            words.resize(
+                walked + (ray::walked_words(drawn) + ray::region_words(drawn, 0)) as usize,
+                0,
+            );
 
             // The pixels the cast marked, and those it listed, in an order of their own as its
             // atomics take them.
@@ -1514,7 +1518,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 ray_words[p as usize] = ray::MISS;
             }
 
-            // The walk over the node cache alone, what it left listed, then the walks that ask.
+            // The holes' queue over them.
             let rays = texture(
                 &gpu.device,
                 &gpu.queue,
@@ -1528,39 +1532,14 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 ..Default::default()
             });
             let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+            // The eye's head, all zero (gpu/ray/cast.rs `eye_head`).
+            let head = gpu.buffer(&vec![0u32; light::HEAD_WORDS], wgpu::BufferUsages::UNIFORM);
             let beams = gpu.buffer(&words, store_of());
-            let table_buf = gpu.buffer(&table, store_of());
-            let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0, 0, 1, 1, 0], store_of());
-            gpu.dispatch(
-                &hit_p,
-                &[
-                    (0, eye_buf.as_entire_binding()),
-                    (3, wgpu::BindingResource::TextureView(&view)),
-                    (8, beams.as_entire_binding()),
-                    (9, table_buf.as_entire_binding()),
-                    (10, left.as_entire_binding()),
-                ],
-                [
-                    ray::MISS_ACROSS,
-                    (listed as u32)
-                        .div_ceil(ray::MISS_ACROSS * ray::MISS_LANES)
-                        .max(1),
-                    1,
-                ],
-            );
-            let args = gpu.read(&left);
-            let mut after = gpu.read(&beams);
-            after[walked + ray::walked_left_at(drawn) as usize] = args[3];
-            let mut table = gpu.read(&table_buf);
-            table[node_cache::HITS_ARGS as usize..(node_cache::HITS_CNT + 1) as usize]
-                .copy_from_slice(&args[4..8]);
-            let beams = gpu.buffer(&after, store_of());
             let table_buf = gpu.buffer(&table, store_of());
             let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
-            if args[1] != 0 {
-                gpu.dispatch(&list_p, &binds, [args[0], args[1], 1]);
-            }
+            binds.push((11, head.as_entire_binding()));
+            gpu.holes(&binds, &table_buf, true);
             let out = read_texture(&gpu.device, &gpu.queue, &rays);
 
             // Each marked pixel's stop as `cast::walk` from the root answers its ray.

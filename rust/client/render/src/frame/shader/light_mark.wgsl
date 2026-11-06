@@ -1,50 +1,24 @@
 // pxl-render/light_mark.wgsl
 
-// The world's receivers of the shadow map, stood on by the tiles the eye's answers lie on, by
-// the one rule every receiver stands by (pxl-engine `Light::box_tiles`): a box within the
-// effects' reach (`Light::reach`) stands on the tiles its corners lie on, and the footprint
-// about them where the head asks it (`light::HEAD_FOOTPRINT`). A drawn pixel took a voxel of
-// the eye's record whose box the raster drew, so hit on that box (visible.wgsl `visible_cell`,
-// record_draw.wgsl `record_draw_cs`, one planes' rule); met the sky, which receives
-// nothing; or was walked apart and listed (cast.wgsl `cast_cs`, `ray::WALKED_LIST`), in a list
-// with room for every pixel drawn. So every box the raster drew stands, a thread a box
-// (`light_mark_cs`), and every walked pixel's hit, a box of one point, a thread a pixel listed
-// (`light_mark_walked_cs`), past the grid's words among the eye's beam rays' (walked.wgsl). Run
-// after the eye's rays, before the drawn receivers
-// (light_mark_draws.wgsl) and the propagation (light_propagate.wgsl).
+// The world's receivers of the shadow map that the eye walked apart, stood on by the tiles
+// their hits lie on, by the one rule every receiver stands by (pxl-engine `Light::box_tiles`):
+// a box within the effects' reach (`Light::reach`) stands on the tiles its corners lie on, and
+// the footprint about them where the head asks it (`light::HEAD_FOOTPRINT`). A drawn pixel
+// took a voxel of the eye's record whose box the raster drew, so hit within that box, which
+// the record's draw stands as it writes it (record_draw.wgsl `record_draw_cs`); met the sky,
+// which receives nothing; or was walked apart and listed (cast.wgsl `cast_cs`,
+// `ray::WALKED_LIST`), in a list with room for every pixel drawn. So every walked pixel's hit
+// stands here, a box of one point, a thread a pixel listed (`light_mark_walked_cs`), past the
+// grid's words among the eye's beam rays' (walked.wgsl). Run after the eye's rays and its
+// record's draw, before the drawn receivers (light_mark_draws.wgsl) and the propagation
+// (light_propagate.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 /// The eye's beam rays' words, its walked pixels among them (walked.wgsl).
 @group(0) @binding(23) var<storage, read> eye_beams: array<u32>;
-/// The eye's raster's args, the boxes' count among them (`raster::ARGS_INSTANCES`).
-@group(0) @binding(24) var<storage, read> raster_args: array<u32>;
-/// The eye's raster's boxes, a voxel of its record each, its planes as it is drawn
-/// (`raster::BOX_LO`, `BOX_HI`; record_draw.wgsl `record_draw_cs`).
-@group(0) @binding(25) var<storage, read> eye_boxes: array<u32>;
 
 fn eye_beam(i: u32) -> u32 {
   return select(0u, eye_beams[i], i < arrayLength(&eye_beams));
-}
-
-fn eye_box(i: u32) -> f32 {
-  return bitcast<f32>(select(0u, eye_boxes[i], i < arrayLength(&eye_boxes)));
-}
-
-/// Box `id.x` the eye's raster drew, a thread a place, as many places as the record's slots:
-/// the voxel's cell inset by the share its asset keeps, units from the eye, as record_draw.wgsl
-/// writes it and visible.wgsl's `visible_cell` asks a pixel's ray into it.
-@compute @workgroup_size(ROW_LANES, 1, 1)
-fn light_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= in_room(raster_args[RASTER_ARGS_INSTANCES], RECORD_ENTRIES)) {
-    return;
-  }
-  let at = id.x * RASTER_BOX_WORDS;
-  let lo = vec3<f32>(eye_box(at + RASTER_BOX_LO), eye_box(at + RASTER_BOX_LO + 1u), eye_box(at + RASTER_BOX_LO + 2u));
-  let hi = vec3<f32>(eye_box(at + RASTER_BOX_HI), eye_box(at + RASTER_BOX_HI + 1u), eye_box(at + RASTER_BOX_HI + 2u));
-  let b = box_tiles(lo, hi);
-  if (b.got) {
-    stand_world_box(b.first, b.last);
-  }
 }
 
 /// Each pixel the eye's cast walked apart, at its place in their list: its hit, a box of one

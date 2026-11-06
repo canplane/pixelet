@@ -522,11 +522,12 @@ an angular cell and hands the rest to the rasterizer:
                    ├── none, and no sample met ───▶ the sky
                    │   anything
                    └── else ──────────────────────▶ listed, walked on
-                                                    its own (miss_list_cs)
+                                                    the holes' queue (queue.wgsl)
 ```
 
 The entries are pxl-render's WGSL (`beam.wgsl`, `sample.wgsl`, `raster.wgsl`,
-`cast.wgsl` `cast_cs`, the listed pixels' walks `miss_hit.wgsl`, `miss.wgsl`). Once
+`cast.wgsl` `cast_cs`, the listed pixels' walks `queue_walk.wgsl`, `queue_ask.wgsl`,
+`queue_last.wgsl`). Once
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
 times a scale, its beam rays on a lattice, both of which the `resolution`
@@ -595,7 +596,7 @@ It casts only what a receiver reads:
   decor, where it is placed               ├─▶ lists the tiles it stands on,
   an actor, the beacon, where drawn       ┘   within the effects' reach,
                                               and its footprint
-                                              (light_mark_cs, light_mark_walked_cs,
+                                              (record_draw_cs, light_mark_walked_cs,
                                                light_mark_draws_cs)
                                                    │
                                                    ▼
