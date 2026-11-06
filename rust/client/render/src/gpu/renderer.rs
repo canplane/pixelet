@@ -1127,11 +1127,18 @@ impl Renderer {
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
-        if quiet && !self.screen.casts_px() && !self.screen.light_casts() {
+        if quiet
+            && !self.screen.casts_px()
+            && !self.screen.light_casts()
+            && !self.screen.eye_queue()
+        {
             self.frame_read = read;
             let mut stat = self.stat(draws.records, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
+            if self.screen.wants_frame() {
+                REDRAW.set(true);
+            }
             stat.rays = self.screen.take_counts();
             (self.order, self.touched, self.bounded) = (order, touched, bounded);
             return (FrameKind::stood, stat);
@@ -1521,7 +1528,7 @@ impl Renderer {
                 self.screen.on_drawn();
             }
         }
-        // The light's owed work: its count mapped back the next frame, or a cast it owes.
+        // The observers' owed work: its count mapped back the next frame, or a run it owes.
         if self.screen.wants_frame() {
             REDRAW.set(true);
         }
@@ -1810,8 +1817,9 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// Whether what the device made since this last ran wants a frame: an
 /// image landed, to be taken (`api::images_landed`), a pipeline made, which
 /// the progress shows and the first frame waits on, the air's measures
-/// (`Atmosphere::landed`), or the light's owed work (`RaysPass::owed_landed`). Each wakes the turn as its fence is stored
-/// (xpute `RESULT`), so none is polled.
+/// (`Atmosphere::landed`), or an observer's owed work (`RaysPass::owed_landed`).
+/// Each wakes the turn as its fence is stored (xpute `RESULT`), so none is
+/// polled.
 pub fn landed() -> bool {
     let images = api::images_landed();
     let made = RENDERER.get(|| None).as_mut().is_some_and(|r| {

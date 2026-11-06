@@ -981,8 +981,9 @@ fn hand_pixels_answer_as_cast_entry() {
             [listed, per_tile, per_tile],
         );
 
-        // The Rust, along the device's ray, at each pixel the device drew: a pixel left as it
-        // stood or marked missed is the walk's to answer.
+        // The Rust, along the device's ray, at each pixel the device drew: a pixel the visible
+        // voxel answers, the sky, or a hole the walk is to answer, which holds what the record
+        // drew there until it does, the visible voxel at its box's entry or none.
         let got = read_texture(&gpu.device, &gpu.queue, &rays);
         let (mut want, mut have) = (Vec::new(), Vec::new());
         let mut drawn_cnt = 0u32;
@@ -990,11 +991,11 @@ fn hand_pixels_answer_as_cast_entry() {
         for (p, at) in probed.iter().enumerate() {
             let words = |w: &[u32]| [0, 1, 2, 3].map(|l| w[l * texels + p]);
             let drawn = words(&got);
-            let drew = drawn[0] != ray::MISS && drawn != words(&ray_words);
+            let drew = drawn != words(&ray_words);
             let v = visible[p];
             let r = Ray::new(at.dir, far);
-            let mut said = [ray::MISS, 0, 0, 0];
-            if v != 0 && v & raster::LACK == 0 {
+            let mut said = [0; 4];
+            if v != 0 {
                 let e = record::entry_at(raster::voxel_of(v)) as usize;
                 let w = |a: u32| cast.record[e + a as usize];
                 let node = entry_key(&cast.record, e, w(record::R_HELD)).node(cast.origin);
@@ -1004,21 +1005,24 @@ fn hand_pixels_answer_as_cast_entry() {
                 // device divides; a pixel at an edge as the device rounds it.
                 let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
                 let axis_was = e.axis;
-                let mut takes = e.enters && raster::accepts(faces, e.axis);
+                let lacks = v & raster::LACK != 0;
+                let mut takes =
+                    !lacks && e.enters && raster::accepts(faces, ray::face(at.dir, e.axis));
                 kinds.add("enters its sample", takes);
                 kinds.add(
                     "enters its sample past the eye's reach",
                     !takes && {
                         let r = Ray::new(at.dir, f32::INFINITY);
                         let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
-                        e.enters && raster::accepts(faces, e.axis)
+                        e.enters && raster::accepts(faces, ray::face(at.dir, e.axis))
                     },
                 );
-                if !takes && drew && at_edge(&e, at.dir) {
+                if !takes && !lacks && drew && at_edge(&e, at.dir) {
                     takes = true;
                     edges += 1;
                 }
-                if takes {
+                // A hole holds the voxel the record drew at its box's entry, as one it takes.
+                {
                     let face = ray::face(at.dir, axis_was);
                     let t = e.near[axis_was as usize].max(0.0);
                     let had = f32::from_bits(drawn[1]);
@@ -1033,12 +1037,13 @@ fn hand_pixels_answer_as_cast_entry() {
                         ray::first_word(asset[0], face, node.zoom),
                         t.to_bits(),
                         asset[1],
-                        w(record::R_FACES + axis_was),
+                        w(record::R_FACES + face),
                     ];
                     kinds.add(
                         "enters its sample, short of its cube",
-                        answer::fill_eighths(asset[0]) != answer::EIGHTHS,
+                        takes && answer::fill_eighths(asset[0]) != answer::EIGHTHS,
                     );
+                    kinds.add("a hole the record drew", !takes);
                 }
             } else if v == 0 {
                 let s0 = before[p];

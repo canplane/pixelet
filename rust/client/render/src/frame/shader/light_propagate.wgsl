@@ -226,7 +226,7 @@ fn claim(t: vec2<i32>, place: u32, current: u32) {
 /// of a ring that fits within `light::CLAIM_BUDGET` with the rings within it, and of the one
 /// ring that straddles it the first to take a place, none past; each a place of its own among
 /// the cast's claims (`light::ARGS_PLACED`). A tile not claimed stays wanted, its word as it
-/// was, is counted as the cast's owed work (`light::ARGS_LEFT`, `node_cache::OWED`), and is
+/// was, is counted as the cast's owed work (`light::ARGS_LEFT`, `node_cache::OWED_AT`), and is
 /// wanted again by the next cast that reads it. Run after the propagation.
 @compute @workgroup_size(LIGHT_LISTED_LANES, 1, 1)
 fn light_claim_cs(

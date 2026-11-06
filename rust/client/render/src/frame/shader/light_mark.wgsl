@@ -40,7 +40,7 @@ fn light_mark_walked_cs(
     return;
   }
   let first = textureLoad(rays, p, 0u).x;
-  if (first == 0u || first == RAY_MISS) {
+  if (first == 0u) {
     return;
   }
   let t = bitcast<f32>(textureLoad(rays, p, 1u).x);

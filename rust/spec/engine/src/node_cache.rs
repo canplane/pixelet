@@ -20,7 +20,7 @@
 //! - the entries, a slot each (`ENTRIES_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
-//! marked in their own rays (`ray::MISS`) and listed past the camera grid's words
+//! listed past the camera grid's words
 //! (`ray::walked_words`) by plain writes, their count kept apart (`ray::MISS_ARGS_CNT`) and
 //! copied in after (`ray::WALKED_CNT`).
 //!
@@ -98,17 +98,34 @@ pub const HITS_CNT: u32 = HITS_ARGS + 3;
 /// The next ray the holes' queue's last walk takes (pxl-render queue_last.wgsl), each
 /// observer's in turn, set back to 0 by the asks that run before it (queue_ask.wgsl).
 pub const LAST_TAKEN: u32 = HITS_CNT + 1;
-/// The light's holes' work so far in its cast, the nodes visited and those asked
-/// (`ray::QUEUE_VISITED`, `ray::QUEUE_ASKED`), which its last walk adds to, copied in from its
-/// queue's words before that walk.
+/// The holes' work so far in the frame, both observers' queues' (`ray::QUEUE_VISITED`,
+/// `ray::QUEUE_ASKED`), and the caps the queue that runs counts to (`ray::QUEUE_CAPS`): copied
+/// in from that queue's words before its last walk, which adds to them, and copied out into
+/// the next queue's words before its first (pxl-render gpu/ray/cast.rs `walk_holes`). Set to
+/// none by the host each frame a queue runs.
 pub const VISITED: u32 = LAST_TAKEN + 1;
 pub const ASKED: u32 = VISITED + 1;
-/// The light's work its cast leaves owed: the tiles it wanted and left unclaimed, copied in
-/// from its args after the claim (`light::ARGS_LEFT`), and the slots its last walk left parked
-/// (pxl-render queue_last.wgsl `unreached`), which add to it. None where the cast leaves
-/// nothing owed. Copied into the counts read back every light cast (`count::OWED`).
-pub const OWED: u32 = ASKED + 1;
-pub const HEAD_WORDS: u32 = OWED + 1;
+pub const VISITS_CAP: u32 = ASKED + 1;
+pub const ASKS_CAP: u32 = VISITS_CAP + 1;
+/// Each observer's work its last cast or queue leaves owed, `count::OBSERVERS` words (`owed_at`):
+/// the eye's, the pixels its last walk left parked (pxl-render queue_last.wgsl `unreached`);
+/// the light's, the tiles it wanted and left unclaimed, copied in from its args after the claim
+/// (`light::ARGS_LEFT`), and the slots its last walk left parked, which add to it. None where
+/// nothing is owed. Copied into the counts read back each frame the observer's queue runs
+/// (`count::OWED`).
+pub const OWED_AT: u32 = ASKS_CAP + 1;
+/// Whether the eye's cast keeps the states its holes were parked in, 1 or 0, the host's each
+/// frame the eye casts: where its rays are those its last cast walked, the view, the jitter,
+/// the world and the drawn size as they were, so a parked hole names the same ray and goes on
+/// from where it was parked (pxl-render cast.wgsl, queue_walk.wgsl); else every pixel the cast
+/// takes is set to no parked ray.
+pub const RESUMES: u32 = OWED_AT + count::OBSERVERS;
+pub const HEAD_WORDS: u32 = RESUMES + 1;
+
+/// The word of `observer`'s owed work (`OWED_AT`).
+pub const fn owed_at(observer: u32) -> u32 {
+    OWED_AT + observer
+}
 
 /// Where `observer`'s walks count lane `lane` (pxl-engine `count::BEAM`
 /// to `count::MISS`) in the head.

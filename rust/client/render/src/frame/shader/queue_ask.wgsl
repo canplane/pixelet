@@ -10,10 +10,10 @@
 
 const WALK_PASS: u32 = MISSED_PASS;
 
-/// Whether a node may be asked of the world: the eye's always; the light's one more within
-/// the frame's budget of asks (`light::ASKS_A_FRAME`), counted as it is taken.
+/// Whether a node may be asked of the world: one more within the cap this queue counts the
+/// frame's asks to (pxl-engine `ray::ASKS_A_FRAME`, `ray::caps`), counted as it is taken.
 fn may_ask() -> bool {
-  return !light_run() || atomicAdd(&queue[QUEUE_ASKED], 1u) < ASKS_A_FRAME;
+  return atomicAdd(&queue[QUEUE_ASKED], 1u) < atomicLoad(&queue[QUEUE_CAPS + 1u]);
 }
 
 /// The nodes the walk `again` or the first listed, each asked once.

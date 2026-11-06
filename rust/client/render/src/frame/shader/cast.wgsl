@@ -3,10 +3,14 @@
 // Each drawn pixel's ray off the visible voxel the raster kept at it, a voxel of the eye's
 // record, which it marks seen (pxl-engine `raster`, `record`; gpu/ray/raster.rs), or the
 // sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as light.wgsl takes a slot's
-// (visible.wgsl), with what lies about its face, the voxel's. Any other pixel takes no walk
-// here: its first word is the mark the holes' queue goes by (`ray::MISS`; queue.wgsl), and
-// it is listed for that walk (walked.wgsl, list.wgsl `enlist`), in a list with room for every
-// pixel drawn, each listed once a cast.
+// (visible.wgsl), with what lies about its face, the voxel's. Any other pixel, a hole, takes
+// no walk here: it is listed for the holes' queue (walked.wgsl, list.wgsl `enlist`; queue.wgsl),
+// in a list with room for every pixel drawn, each listed once a cast, and its words are what
+// the record drew there until the queue ends its ray: the visible voxel the record holds, at
+// its box's entry, or the zero of a ray that met nothing. So the pixel never waits on its walk,
+// and shows nothing the record does not hold. Every pixel the cast takes is set to no parked
+// ray, but a hole where the rays stand (`node_cache::RESUMES`), whose parked state the queue
+// goes on from.
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 /// The beam rays' words, the walked pixels' list past the grid's (walked.wgsl).
@@ -40,6 +44,14 @@ fn write_ray(p: vec2<u32>, w: vec4<u32>) {
   }
 }
 
+/// Pixel `p`'s parked state, of a target `size`, set to no parked ray.
+fn unpark_px(p: vec2<u32>, size: vec2<u32>) {
+  let at = eye_state_at(p, size, arrayLength(&beams)) + STATE_WORDS - 1u;
+  if (at < arrayLength(&beams)) {
+    beams[at] = 0u;
+  }
+}
+
 @compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
 fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
   let tile = claimed.at[w.x];
@@ -52,6 +64,8 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
   let aim = eye_aim(px);
   let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
   let on = node_cache[COUNT_ON] != 0u;
+  // What the record drew at the pixel, its words where it is a hole.
+  var drew = vec4<u32>(0u);
   if (visible != 0u) {
     // Seen this frame: no sample's claim takes its slot this frame or the next
     // (`record::victim`).
@@ -62,22 +76,24 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
     }
     // A slot forgotten since the boxes were drawn holds no voxel: the pixel walks.
     let held = record_word(e + R_HELD);
-    if ((visible & VISIBLE_LACK) == 0u && (held & RECORD_HELD) != 0u) {
+    if ((held & RECORD_HELD) != 0u) {
       let k = entry_kept(e, held);
       let asset = vec2<u32>(record_word(e + R_ASSET), record_word(e + R_ASSET + 1u));
       let fill = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
       let faces = record_word(e + R_STATE) & RECORD_FACES;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
-      if (entry.enters) {
-        // Its words, with what lies about its face, the voxel's (`word`, `ray::first_word`).
+      // Its words, with what lies about its face, the voxel's (`word`, `ray::first_word`).
+      let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
+      drew = vec4<u32>(
+        (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (k.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
+        bitcast<u32>(entry.t),
+        asset.y,
+        record_word(e + R_FACES + face),
+      );
+      if ((visible & VISIBLE_LACK) == 0u && entry.enters) {
         add_cnt(on, COUNT_REUSED);
-        let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
-        write_ray(p, vec4<u32>(
-          (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (k.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
-          bitcast<u32>(entry.t),
-          asset.y,
-          record_word(e + R_FACES + entry.axis),
-        ));
+        write_ray(p, drew);
+        unpark_px(p, size.xy);
         return;
       }
     }
@@ -90,13 +106,18 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
     if (went_on(k) && went_on(sample_word(s + vec2<u32>(1u, 0u))) && went_on(sample_word(s + vec2<u32>(0u, 1u))) && went_on(sample_word(s + vec2<u32>(1u)))) {
       add_cnt(on, COUNT_SKY);
       write_ray(p, vec4<u32>(0u));
+      unpark_px(p, size.xy);
       return;
     }
   }
-  // Neither: marked and listed for the holes' queue (queue.wgsl), which reads and writes the
-  // node cache. The list holds a place for every pixel drawn, and a pixel is listed once.
+  // Neither: what the record drew, and listed for the holes' queue (queue.wgsl), which reads
+  // and writes the node cache. The list holds a place for every pixel drawn, and a pixel is
+  // listed once.
   add_cnt(on, COUNT_WALKED);
-  textureStore(rays, p, 0u, vec4<u32>(RAY_MISS, 0u, 0u, 0u));
+  write_ray(p, drew);
+  if (node_cache[RESUMES] == 0u) {
+    unpark_px(p, size.xy);
+  }
   let drawn = size.x * size.y;
   let at = enlist(drawn);
   let place = walked_list_at(at);

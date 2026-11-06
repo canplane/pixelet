@@ -207,7 +207,8 @@ impl Gpu {
     /// walk. `all` binds what any of its passes reads but the queue's words: the eye at 0, the
     /// world's at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list, its holes'
     /// region last, at 8, the node cache at 9, the observer's head at 11; each pass takes those
-    /// its entry reads. The queue's words as its walks left them.
+    /// its entry reads. The queue counts to the whole budget, as a queue alone in its frame does
+    /// (`ray::caps`). The queue's words as its walks left them.
     pub fn holes(
         &self,
         all: &[(u32, wgpu::BindingResource)],
@@ -216,6 +217,8 @@ impl Gpu {
     ) -> Vec<u32> {
         let mut words = vec![0u32; ray::QUEUE_WORDS as usize];
         words[..ray::QUEUE_EMPTY.len()].copy_from_slice(&ray::QUEUE_EMPTY);
+        let caps = ray::QUEUE_CAPS as usize;
+        words[caps..caps + 2].copy_from_slice(&ray::caps(true, false));
         let queue = self.buffer(&words, wgpu::BufferUsages::STORAGE);
         let take = |keep: &[u32]| {
             let mut binds: Vec<_> = all
@@ -243,7 +246,7 @@ impl Gpu {
         let q = self.read(&queue);
         let v = ray::QUEUE_VISITED as usize;
         let at = u64::from(node_cache::VISITED) * 4;
-        self.queue.write_buffer(table, at, bytes(&q[v..v + 2]));
+        self.queue.write_buffer(table, at, bytes(&q[v..v + 4]));
         if hits {
             let h = ray::QUEUE_HITS as usize;
             let at = u64::from(node_cache::HITS_ARGS) * 4;

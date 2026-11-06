@@ -1,15 +1,18 @@
 // pxl-engine/record.rs
 
-//! gpu-portable: the eye's record of voxels, kept across frames (pxl-render record.wgsl,
-//! record_put.wgsl, sample_box.wgsl, record_stops.wgsl, record_draw.wgsl, cast.wgsl,
-//! face.wgsl; gpu/ray/raster.rs). A voxel is a node the eye's rays stopped on, the World
-//! Query's answer for it and the faces rays entered it across. The rays write it where they
+//! gpu-portable: an observer's record of voxels, kept across frames, the eye's and the
+//! light's, one table each laid and kept alike (pxl-render record.wgsl, record_put.wgsl,
+//! sample_box.wgsl, light_sample_box.wgsl, record_stops.wgsl, record_draw.wgsl,
+//! light_record.wgsl, cast.wgsl, light.wgsl, face.wgsl; gpu/ray/raster.rs). A voxel is a
+//! node the observer's rays stopped on, the World Query's answer for it and the faces rays
+//! entered it across. The rays write it where they
 //! stop; the raster draws every voxel the record holds, each frame, whatever the rays of that
 //! frame reached; the record decides what is drawn
 //! (doc/minutes/20261106-the-frame-is-what-it-must-draw.md).
 //!
 //! **The key** is the node, world-absolute: its zoom, its corner on the finest grid and the
-//! root it lies in (`Key`), with the band its ray asked (the eye's 0). A stopped cell's
+//! root it lies in (`Key`), with the band its ray asked (the light's, `light::Light::band`;
+//! the eye's 0). A stopped cell's
 //! answer is a function of its key: the query answers a node it stops in by its cell, which
 //! takes no asked zoom (pxl-render world_split.wgsl `world_node`), and a node coarser than
 //! asked answers only void, which no ray stops in. So an entry stays the world's answer as
@@ -20,8 +23,25 @@
 //! while a stop writes it (`claim_of`), or a key, written last, so a held word names words
 //! already written.
 //!
+//! **The light's** is laid, written and drawn as the eye's, by the same code, over its own
+//! table: its key's band the light's (`light::Light::band`), its frame the light's cast's
+//! number, its samples its stops (sample_box.wgsl over sample.light.wgsl), its faces' words
+//! asked none, as its slots read none (sample_box.light.wgsl), and its draw the light's
+//! (record_draw.wgsl `light_record_draw_cs`): every held voxel whose box lies on the light's
+//! box, in units from where box texel (0, 0)'s ray starts, fresh where its band is the band
+//! of the tile its box's middle lies on (`light_fresh`), stale behind. Its slots take only a
+//! voxel of their own band (light.wgsl), so a stale one is never taken, only kept from
+//! hiding a fresh one. What it holds is no answer of the light's direction: a node, its
+//! answer and the faces some light ray reached through air are the world's; the direction
+//! only places their boxes. So a step of the sun keeps every entry and redraws the map off
+//! them along the new direction, the tiles the cast claims (`light::claims`); what the new
+//! direction meets that no light ray met yet is not in the record, and the epoch the step
+//! begins casts the light's samples over every tile anew, nearest first within the budget,
+//! so the map converges to the new direction's answer as the eye's picture does.
+//!
 //! **Its writers, in a frame's order:**
-//! 1. Forget (pxl-render record_draw.wgsl `record_forget_cs`), with the node cache's: every
+//! 1. Forget (pxl-render record_draw.wgsl `record_forget_cs`), the eye's and the light's, with
+//!    the node cache's: every
 //!    slot where it forgets all; else a slot whose node, or a node beside it across a face,
 //!    the node cache's own rule forgets (forget.wgsl `forgets`, `over_box`). The faces'
 //!    words read the cells beside a face, so a change beside the node forgets it.
@@ -73,10 +93,14 @@
 //! the node cache's own predicates, in its pass (1. above); the record keeps its own table
 //! and evicts by its own rule alone (below), never because the node cache let a slot go.
 //!
-//! **The faces drawn** are every face some ray, from any eye, entered the node across: each
-//! such entry proves the face borders air at the node's zoom, a world fact until an edit
-//! forgets the entry, so it is drawn from any eye, and the depth test decides the rest. A
-//! face no ray entered is not drawn; a pixel that would show it is a hole, the rays' work.
+//! **The faces drawn** are every face, a side of six (`ray::face`), some ray, from any
+//! eye or any light, entered the node through: each such entry proves that side borders air
+//! at the node's zoom, a world fact until an edit forgets the entry, so it is drawn from any
+//! eye where it is turned to it, and the depth test decides the rest. A side no ray entered
+//! is not drawn, the other side of an entered one's axis among them, which may lie against
+//! what fills: an eye that moves past the node's plane, or a sun that turns across it, sees
+//! that side only once a ray reaches it, a hole until then, the rays' work. What lies about
+//! a face is asked a word a side.
 //!
 //! **A recorded voxel hides no nearer one from the rays:** the samples walk from their cells'
 //! starts, which the beam rays find from the eye, not from the record, so a sample stops on
@@ -93,6 +117,7 @@
 //! Where every slot was, it writes none, and its pixels walk.
 
 use crate::cast::{self, Detail, Node, Spacing};
+use crate::light::Light;
 use crate::{Zoom, WORKGROUPS_MOST};
 
 /// The head: the frame's number, the node cache's (`node_cache::FRAME`), which an entry is
@@ -114,7 +139,7 @@ const _: () = assert!(
 /// An entry's words: what it holds (`held`); its node's corner and its root, X, Y, Z,
 /// world-absolute (`Key`); the answer's asset; its state (`FACES`, `LACKS`, `WHOLE`); the
 /// last frame a sample stopped on it or a pixel took it; what lies about each face drawn, a
-/// word an axis (pxl-engine `face::word`).
+/// word a side, as `ray::face` numbers them (pxl-engine `face::word`).
 pub const R_HELD: u32 = 0;
 pub const R_CORNER: u32 = 1;
 pub const R_ROOTS: u32 = 4;
@@ -122,7 +147,7 @@ pub const R_ASSET: u32 = 7;
 pub const R_STATE: u32 = 9;
 pub const R_SEEN: u32 = 10;
 pub const R_FACES: u32 = 11;
-pub const ENTRY_WORDS: u32 = 14;
+pub const ENTRY_WORDS: u32 = 17;
 
 /// The buffer's words, whatever is drawn.
 pub const WORDS: u32 = HEAD_WORDS + ENTRIES * ENTRY_WORDS;
@@ -147,11 +172,11 @@ const _: () = assert!(
     "a zoom fits under a held word's band"
 );
 
-/// The state's bits: a face drawn an axis (`raster::faces`), whether the node lacks, and
+/// The state's bits: a face drawn a side (`raster::faces`), whether the node lacks, and
 /// whether its ray stopped on it coarser than it asked, a cell the query answers whole.
-pub const FACES: u32 = 7;
-pub const LACKS: u32 = 1 << 3;
-pub const WHOLE: u32 = 1 << 4;
+pub const FACES: u32 = (1 << 6) - 1;
+pub const LACKS: u32 = 1 << 6;
+pub const WHOLE: u32 = 1 << 7;
 
 /// Where an ask is the record's (`beam::ASK_TO`): the bit set on the word face.wgsl leaves
 /// the face's word in, among the record's words, not the beam rays'; its node then the
@@ -248,6 +273,21 @@ fn near(o: [i32; 3], n: &Node, range: [Zoom; 2]) -> Zoom {
             spacing: Spacing::NONE,
         },
     )[1]
+}
+
+/// Whether a light's ray that stopped on the node of key `k` stopped on it whole: coarser
+/// than its band, the one zoom it asks (`light::Light::band`).
+pub const fn light_whole(k: &Key) -> bool {
+    k.zoom < k.band
+}
+
+/// Whether the light's entry of key `k` is fresh for the light `l`, its map `size` a side,
+/// the eye's zooms `range`: its band is the band of the tile its box's middle `mid` lies on,
+/// units from the eye (`light::Light::tile_of`, `light::Light::band`), so the slots about it
+/// ask it at its band. A light's slot takes only a voxel of its own band (pxl-render
+/// light.wgsl), so a stale one is drawn behind every fresh one (`raster::STALE`).
+pub fn light_fresh(l: &Light, size: u32, range: [Zoom; 2], k: &Key, mid: [f32; 3]) -> bool {
+    l.band(size, range, l.tile_of(mid)) == k.band
 }
 
 /// Whether a ray from the origin `o` that stopped on the node `n` stopped on it whole:

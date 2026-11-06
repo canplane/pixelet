@@ -21,7 +21,8 @@ use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE,
+    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DEFERRED, COMPUTE_LIGHT_RECORD_DRAW,
+    COMPUTE_LIGHT_RECORD_STOPS, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE,
     COMPUTE_RECORD_DEFERRED, COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_FORGET,
     COMPUTE_RECORD_STOPS, COMPUTE_SAMPLE_BOX, COMPUTE_SAMPLE_OBSERVE, PIPELINE_RASTER,
     PIPELINE_RASTER_GATE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM,
@@ -33,10 +34,10 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use pxl_engine::param::light::SAMPLE;
 use pxl_engine::param::raster::GROWTH;
 
-/// Where the eye's record binds, every pass that reads or writes it (frame/shader/record.wgsl).
+/// Where an observer's record binds, every pass that reads or writes it, the eye's or the
+/// light's (frame/shader/record.wgsl).
 pub(super) const RECORD_BINDING: u32 = 23;
 
 /// The eye's samples' writing into its record (sample_box.wgsl): the eye, the samples'
@@ -109,8 +110,34 @@ const STOPS_GROUP: [u32; 18] = [
     COMPUTE,
     STORAGE_RW,
 ];
-/// The light's boxes' writing's group (light_sample_box.wgsl): the eye, the samples' words,
-/// the light's head, the boxes and the args.
+/// The light's holes' stops into its record (record_stops.wgsl over record_stops.light.wgsl):
+/// `STOPS_GROUP`, its map at 3 and its list at 8, and the light's head its slots' rays are
+/// aimed by.
+const LIGHT_STOPS_GROUP: [u32; 21] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE,
+    super::cast::HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    16,
+    COMPUTE,
+    STORAGE_RW,
+    RECORD_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+];
+/// The light's samples' writing into its record (sample_box.wgsl over sample.light.wgsl):
+/// the eye, the samples' words, the light's head, its raster's args and its record.
 const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -121,10 +148,10 @@ const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
     super::cast::HEAD_BINDING,
     COMPUTE,
     UNIFORM,
-    14,
+    16,
     COMPUTE,
     STORAGE_RW,
-    16,
+    RECORD_BINDING,
     COMPUTE,
     STORAGE_RW,
 ];
@@ -132,7 +159,8 @@ const _: () = assert!(
     floor::holds(&[&SAMPLE_BOX_GROUP])
         && floor::holds(&[&LIGHT_SAMPLE_BOX_GROUP])
         && floor::holds(&[&RECORD_GROUP])
-        && floor::holds(&[&STOPS_GROUP]),
+        && floor::holds(&[&STOPS_GROUP])
+        && floor::holds(&[&LIGHT_STOPS_GROUP]),
     "the boxes' writing's group binds past WebGPU's floor"
 );
 
@@ -145,23 +173,29 @@ const _: () = assert!(
 /// boxes' drawing and the faces' asking, the samples' and the holes' stops', made
 /// again exactly when what they bind is another (`bindings`).
 pub(super) struct Raster {
-    /// The samples' writing, the eye's into its record (sample_box.wgsl) and the shadow
-    /// map's into its boxes (light_sample_box.wgsl), each over its own group.
+    /// The samples' writing into their observer's record, the eye's and the shadow map's
+    /// (sample_box.wgsl), each over its own group.
     pub(super) boxes_built: Pipeline,
     /// The second of the samples' passes over the same group, the eye's and the light's
-    /// (sample_box.wgsl `sample_observe_cs`, boxes.wgsl `observe_box`).
+    /// (sample_box.wgsl `sample_observe_cs`).
     observe_built: Pipeline,
-    /// The record over every slot: forgotten, and drawn as boxes (record_draw.wgsl).
+    /// The record over every slot: forgotten, and drawn as boxes, the eye's and the light's
+    /// (record_draw.wgsl).
     forget_built: Pipeline,
     record_draw_built: Pipeline,
+    light_record_draw_built: Pipeline,
     /// The missed pixels' hits into the record, and those put off (record_stops.wgsl).
     stops_built: Pipeline,
     deferred_built: Pipeline,
     /// What lies about each stop's face put at its pixel off the record (record_stops.wgsl
     /// `record_faces_cs`).
     faces_put_built: Pipeline,
+    /// The light's holes' stops into its record, and those put off (record_stops.wgsl over
+    /// record_stops.light.wgsl).
+    light_stops_built: Pipeline,
+    light_deferred_built: Pipeline,
     pub(super) light_observe_built: Pipeline,
-    /// The shadow map's samples' boxes (light_sample_box.wgsl),
+    /// The shadow map's samples into its record (sample_box.wgsl over sample.light.wgsl),
     /// the light's head bound beside what the screen's binds.
     pub(super) light_boxes_built: Pipeline,
     faces_built: Pipeline,
@@ -190,14 +224,16 @@ pub(super) struct Raster {
     pub(super) light: LightRaster,
 }
 
-/// The light's samples' boxes, written by its own passes (`light_boxes_built`) and
-/// drawn from the light by the same draw (pxl-engine `param::light::SAMPLE`): its
-/// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
-/// view, a uniform; its targets at the map's side, in the box's order; and
-/// the draw's group.
+/// The light's record (pxl-engine `record`), written by its samples' passes
+/// (`light_boxes_built`), its boxes written off it (record_draw.wgsl `light_record_draw_cs`)
+/// and drawn from the light by the same draw: the record; its boxes, room for every slot of
+/// it; their args; its view, a uniform; its targets at the map's side, in the box's order;
+/// the draw's group; and the record's group, made again exactly when what it binds is
+/// another (`record_bound`).
 #[derive(Default)]
 pub(super) struct LightRaster {
-    pub(super) boxes: u32,
+    pub(super) record: u32,
+    boxes: u32,
     pub(super) args: u32,
     uniform: u32,
     visibility: u32,
@@ -206,6 +242,10 @@ pub(super) struct LightRaster {
     depth: u32,
     depth_view: u32,
     group: u32,
+    record_group: u32,
+    record_bound: [u32; 7],
+    /// Its holes' stops' group (`LIGHT_STOPS_GROUP`), made again with the record's.
+    stops_group: u32,
 }
 
 /// `face_cs`'s (face.wgsl): the eye, the world's query's buffers but the palette, which it
@@ -251,7 +291,14 @@ const _: () = assert!(
         &[COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE],
         &LIGHT_SAMPLE_BOX_GROUP
     ) && binds(&[COMPUTE_FACE], &FACE_GROUP)
-        && binds(&[COMPUTE_RECORD_FORGET, COMPUTE_RECORD_DRAW], &RECORD_GROUP)
+        && binds(
+            &[
+                COMPUTE_RECORD_FORGET,
+                COMPUTE_RECORD_DRAW,
+                COMPUTE_LIGHT_RECORD_DRAW
+            ],
+            &RECORD_GROUP
+        )
         && binds(
             &[
                 COMPUTE_RECORD_STOPS,
@@ -259,6 +306,10 @@ const _: () = assert!(
                 COMPUTE_RECORD_FACES
             ],
             &STOPS_GROUP
+        )
+        && binds(
+            &[COMPUTE_LIGHT_RECORD_STOPS, COMPUTE_LIGHT_RECORD_DEFERRED],
+            &LIGHT_STOPS_GROUP
         ),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
@@ -286,9 +337,24 @@ impl Raster {
             ),
             forget_built: pipelines.build_compute(g, COMPUTE_RECORD_FORGET, &RECORD_GROUP),
             record_draw_built: pipelines.build_compute(g, COMPUTE_RECORD_DRAW, &RECORD_GROUP),
+            light_record_draw_built: pipelines.build_compute(
+                g,
+                COMPUTE_LIGHT_RECORD_DRAW,
+                &RECORD_GROUP,
+            ),
             stops_built: pipelines.build_compute(g, COMPUTE_RECORD_STOPS, &STOPS_GROUP),
             deferred_built: pipelines.build_compute(g, COMPUTE_RECORD_DEFERRED, &STOPS_GROUP),
             faces_put_built: pipelines.build_compute(g, COMPUTE_RECORD_FACES, &STOPS_GROUP),
+            light_stops_built: pipelines.build_compute(
+                g,
+                COMPUTE_LIGHT_RECORD_STOPS,
+                &LIGHT_STOPS_GROUP,
+            ),
+            light_deferred_built: pipelines.build_compute(
+                g,
+                COMPUTE_LIGHT_RECORD_DEFERRED,
+                &LIGHT_STOPS_GROUP,
+            ),
             faces_built: pipelines.build_compute(g, COMPUTE_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
@@ -638,16 +704,6 @@ impl Raster {
         g.set_pipeline(pass, self.forget_built.id);
         g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
     }
-
-    /// The light's table of voxels cleared before its boxes are written (`clear_keys`).
-    pub(super) fn light_keys_cleared(&self, g: &Gpu, encoder: u32, size: u32) {
-        clear_keys(
-            g,
-            encoder,
-            self.light.boxes,
-            (size / SAMPLE) * (size / SAMPLE),
-        );
-    }
 }
 
 /// The draw's args as the record's draw begins: its vertices a box, no box (pxl-engine
@@ -658,30 +714,21 @@ fn draw_args() -> [u32; raster::ARGS_WORDS as usize] {
     args
 }
 
-/// The light's table of voxels past `samples` samples' boxes in `boxes` cleared (pxl-engine
-/// `raster::keys_at`).
-fn clear_keys(g: &Gpu, encoder: u32, boxes: u32, samples: u32) {
-    let at = raster::keys_at(samples);
-    let len = raster::words(samples) - at;
-    g.clear_buf(
-        encoder,
-        boxes,
-        word_bytes(at as usize) as u32,
-        word_bytes(len as usize) as u32,
-    );
-}
-
 impl Raster {
     /// The light's buffers and its targets at the map's `size`, made where
     /// they are not; whether they are.
     pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.light;
         if s.group == 0 {
-            let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
+            // Made zeroed: every slot free.
+            s.record = g.buf(word_bytes(record::WORDS as usize), storage);
+            s.boxes = g.buf(
+                word_bytes((record::ENTRIES * raster::BOX_WORDS) as usize),
+                storage,
+            );
             s.args = g.buf(
-                word_bytes(raster::ARGS_WORDS as usize),
+                word_bytes((raster::DEFERRED_AT + raster::DEFERRED_WORDS) as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
             s.uniform = g.buf(
@@ -708,6 +755,9 @@ impl Raster {
         let s = core::mem::take(&mut self.light);
         for id in [
             s.group,
+            s.record_group,
+            s.stops_group,
+            s.record,
             s.visibility_view,
             s.visibility_array,
             s.visibility,
@@ -722,12 +772,19 @@ impl Raster {
     }
 
     /// The light's view off the eye's words `e` (pxl-engine `light::Light`) for
-    /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
-    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
+    /// the map `size` a side, as `prepare` lays the eye's; the args cleared; its record's
+    /// frame the light's cast's `number` (`record::FRAME`), which its slots and its stops mark
+    /// an entry seen by.
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32, number: u32) {
         let s = &self.light;
         if s.group == 0 {
             return;
         }
+        g.write_buf(
+            s.record,
+            word_bytes(record::FRAME as usize),
+            bytes(&[number]),
+        );
         let words: &[u32; eye::LIGHT_WORDS] = e[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .try_into()
             .unwrap_or(&[0; eye::LIGHT_WORDS]);
@@ -763,7 +820,7 @@ impl Raster {
             n,
             v.t_max,
             // The boxes are laid from box texel (0, 0)'s start
-            // (frame/shader/light_sample_box.wgsl).
+            // (frame/shader/record_draw.wgsl `light_record_draw_cs`).
             0.0,
             0.0,
             0.0,
@@ -773,15 +830,99 @@ impl Raster {
         let mut args = [0u32; raster::ARGS_WORDS as usize];
         args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
         g.write_buf(s.args, 0, bytes(&args));
+        // No stop put off, a workgroup deep and high (pxl-engine `raster::DEFERRED_AT`).
+        g.write_buf(
+            s.args,
+            word_bytes(raster::DEFERRED_AT as usize),
+            bytes(&[0u32, 1, 1, 0]),
+        );
     }
 
-    /// The light's boxes drawn into its targets as many as their args say,
-    /// cleared first, timed in the span `light_raster`, after its boxes
-    /// are written.
+    /// The light's record's group (`RECORD_GROUP`) over the eye and the node cache the
+    /// raster's passes bind and the light's own buffers, `light`: its head, its list, its args,
+    /// its stood list's args, which only the eye's draw reads, and its map, which its stops'
+    /// group binds (`LIGHT_STOPS_GROUP`); made again, the stops' group with it, exactly when
+    /// one of them is another.
+    pub(super) fn light_record_group(&mut self, g: &Gpu, light: [u32; 5]) {
+        let [eye, _, node_cache, ..] = self.bindings;
+        let [head, list, args, stood, map] = light;
+        let bound = [eye, node_cache, head, list, args, stood, map];
+        let s = &mut self.light;
+        if eye == 0 || s.group == 0 || bound == s.record_bound {
+            return;
+        }
+        release(s.record_group);
+        s.record_group = g.bind_group(
+            self.light_record_draw_built.layouts[0],
+            &[
+                buf_entry(0, eye),
+                buf_entry(9, node_cache),
+                buf_entry(14, s.boxes),
+                buf_entry(16, s.args),
+                buf_entry(RECORD_BINDING, s.record),
+                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(12, list),
+                buf_entry(21, args),
+                buf_entry(22, stood),
+            ],
+        );
+        release(s.stops_group);
+        s.stops_group = g.bind_group(
+            self.light_stops_built.layouts[0],
+            &[
+                buf_entry(0, eye),
+                view_entry(3, map),
+                buf_entry(8, list),
+                buf_entry(9, node_cache),
+                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(16, s.args),
+                buf_entry(RECORD_BINDING, s.record),
+            ],
+        );
+        s.record_bound = bound;
+    }
+
+    /// The light's holes' stops into its record, every one its queue listed, dispatched off
+    /// their count in the node cache's head, then those put off (record_stops.wgsl over
+    /// record_stops.light.wgsl), in the pass `pass` after the light's queue: the light's
+    /// record's draw takes them in its next cast. Its slots read no face's word, so no face is
+    /// asked or put.
+    pub(super) fn light_stops(&self, g: &Gpu, pass: u32, node_cache: u32) {
+        let s = &self.light;
+        if s.stops_group == 0 {
+            return;
+        }
+        g.set_bind_group(pass, 0, s.stops_group, &[]);
+        g.set_pipeline(pass, self.light_stops_built.id);
+        g.dispatch_indirect(pass, node_cache, word_bytes(node_cache::HITS_ARGS as usize));
+        g.set_pipeline(pass, self.light_deferred_built.id);
+        g.dispatch_indirect(pass, s.args, word_bytes(raster::DEFERRED_ARGS as usize));
+    }
+
+    /// The light's record forgotten in the cast's pass `pass` with the eye's, by the node
+    /// cache's head's rule (record_draw.wgsl `record_forget_cs`), where it is made.
+    pub(super) fn light_forget(&self, g: &Gpu, pass: u32) {
+        if self.light.record_group == 0 {
+            return;
+        }
+        g.set_bind_group(pass, 0, self.light.record_group, &[]);
+        g.set_pipeline(pass, self.forget_built.id);
+        g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
+    }
+
+    /// The light's record's voxels on its box written as boxes, a thread a slot
+    /// (record_draw.wgsl `light_record_draw_cs`), then drawn into its targets as many as their
+    /// args say, cleared first, timed in the span `light_raster`.
     pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::light_raster);
         let s = &self.light;
+        let pass = g.compute_pass(encoder, stamp.pass());
+        g.set_bind_group(pass, 0, s.record_group, &[]);
+        g.set_pipeline(pass, self.light_record_draw_built.id);
+        g.dispatch(pass, record::ENTRIES / record::DRAW_LANES, 1, 1);
+        g.end(pass);
+        let stamp = ctx.stamp(GpuSpanName::light_raster);
         let pass = g.pass(
             encoder,
             &pass_desc(

@@ -7,9 +7,11 @@
 // `light_run`): one code for both, its pixel or slot, its ray, its start and its words chosen
 // by it. A ray is parked as its walk's state (`Walked`, walk.wgsl) at its hole's place in the
 // holes' region (`state_at`), from which a later walk goes on as one unbroken walk; the region
-// holds a state for every hole a cast can list, so every ray can be parked. A light's slot
-// still parked at its cast's end stays parked, its tile owed to the next claim, which takes
-// its state where it resumes (pxl-engine `light::READ_OWED`; light_propagate.wgsl).
+// holds a state for every hole a cast can list, so every ray can be parked. A hole still
+// parked at its queue's end stays parked and is owed (pxl-engine `node_cache::OWED_AT`): a
+// light's slot's tile to the next claim, which takes its state where it resumes
+// (`light::READ_OWED`; light_propagate.wgsl); an eye's pixel to the next frame's queue while
+// the rays stand, its cast having set every other pixel's state to no parked ray (cast.wgsl).
 
 /// A hole's pixel or slot, its column under its row.
 fn hole_at(hole: u32) -> vec2<u32> {
@@ -25,6 +27,20 @@ fn room() -> u32 {
   }
   let size = textureDimensions(rays);
   return size.x * size.y;
+}
+
+/// Where the observer's stops lie and their room (hit.wgsl): the eye's past the beam rays'
+/// words (`beam::Grid::hits_at`, `beam::HITS`); the light's past its holes' region, a stop each
+/// of the slots its cast claims (`light::hits_at`, `light::parked_room`).
+fn hits_at() -> u32 {
+  if (light_run()) {
+    return head_word(LIGHT_HEAD_HITS);
+  }
+  return eye_word(GRID + GRID_HITS_AT);
+}
+
+fn hits_room() -> u32 {
+  return select(HITS, LIGHT_PARKED_ROOM, light_run());
 }
 
 /// The holes the observer's cast listed: the light's slots (`light::misses_at`), the eye's
@@ -54,8 +70,7 @@ fn state_at(hole: u32) -> u32 {
     let k = (at.y % LIGHT_TILE) * LIGHT_TILE + at.x % LIGHT_TILE;
     return light_state_at(place, k, head_word(LIGHT_HEAD_CAST));
   }
-  let across = textureDimensions(rays).x;
-  return arrayLength(&beams) - room() * STATE_WORDS + (at.y * across + at.x) * STATE_WORDS;
+  return eye_state_at(at, textureDimensions(rays).xy, arrayLength(&beams));
 }
 
 /// A hole's ray.
@@ -116,19 +131,23 @@ fn unpark(hole: u32) {
   beams[state_at(hole) + 4u] = 0u;
 }
 
-/// Hole `hole`'s walk `w`, ended, its words written: a slot's depth; the eye's ray's, and its
-/// stop, whatever it stopped on, listed for the record (`keep_hit`, record_stops.wgsl): what
-/// lies about the face it stopped on its box's for a cell short of its cube (pxl-engine
-/// `face::BOX`), a lack's none, a whole cell's put there off the record once its stop is in
-/// (record_stops.wgsl `record_faces_cs`).
+/// Hole `hole`'s walk `w`, ended, its words written and its stop, whatever it stopped on,
+/// listed for its observer's record (`keep_hit`, record_stops.wgsl), the eye's and the
+/// light's alike: a slot's depth; the eye's ray's, what lies about the face it stopped on its
+/// box's for a cell short of its cube (pxl-engine `face::BOX`), a lack's none, a whole cell's
+/// put there off the record once its stop is in (record_stops.wgsl `record_faces_cs`). A
+/// parked ray keeps no stop until it ends.
 fn finish(hole: u32, aim: Aim, w: Walked) {
   unpark(hole);
   let at = hole_at(hole);
+  let face = face_of(aim, w);
   if (light_run()) {
+    if (w.ends == 1u || w.ends == 2u) {
+      _ = keep_hit(w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
+    }
     textureStore(rays, at, 0u, vec4<u32>(walked_word(w), 0u, 0u, 0u));
     return;
   }
-  let face = face_of(aim, w);
   var faces = 0u;
   // Both of a `select` are taken, so the stop is kept under an `if`.
   if (w.ends == 1u || w.ends == 2u) {

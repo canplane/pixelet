@@ -1,14 +1,15 @@
 // pxl-render/sample_box.wgsl
 
-// The eye's samples as stops into its record of voxels (record_put.wgsl `upsert`; pxl-engine
-// record.rs), a thread a sample of the camera grid, in two passes: the first
-// (`sample_box_cs`) has each sample that heads its node's run, no sample before it across or
-// up stopped on the node, find its entry or claim and write it; the second
-// (`sample_observe_cs`), once every write of the first is done, has every stopped sample find
-// its entry; a head that met its key's claim in the first is taken there, with every other
-// sample, past the dispatch's end. Each marks its entry seen and sets the face it entered
-// across, asking that face's word the first time. The light's samples write a cast's boxes of their own
-// (boxes.wgsl, light_sample_box.wgsl).
+// An observer's samples as stops into its record of voxels (record_put.wgsl `upsert`;
+// pxl-engine record.rs), the eye's and the light's alike, each as its sample.eye.wgsl or
+// sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl take it, a thread a
+// sample, in two passes: the first (`sample_box_cs`) has each sample that heads its node's
+// run, no sample before it across or up stopped on the node, find its entry or claim and
+// write it; the second (`sample_observe_cs`), once every write of the first is done, has
+// every stopped sample find its entry; a head that met its key's claim in the first is taken
+// there, with every other sample, past the dispatch's end. Each marks its entry seen and sets
+// the face it entered across, asking that face's word the first time where its observer reads
+// one (`sample_asks`).
 
 /// Whether sample `s` stopped on a node.
 fn stopped(s: vec2<u32>) -> bool {
@@ -27,9 +28,9 @@ fn same_node(a: vec2<u32>, b: vec2<u32>) -> bool {
   return true;
 }
 
-/// Sample `s`'s node as the record keys it.
+/// Sample `s`'s node as the record keys it, its roots from where its ray starts.
 fn sample_kept(s: vec2<u32>) -> Kept {
-  return kept_at(sample_word(s) + SAMPLE_NODE, sample_band(s));
+  return kept_at(sample_word(s) + SAMPLE_NODE, sample_band(s), sample_aim(s).origin);
 }
 
 /// Sample `s`'s stop: its answer, the face it entered across, and the line its cell's rays
@@ -42,15 +43,10 @@ fn sample_stop(s: vec2<u32>) -> Stop {
   return Stop(
     vec2<u32>(beams[w + SAMPLE_ASSET], beams[w + SAMPLE_ASSET + 1u]),
     beams[w + SAMPLE_LACKS] != 0u,
+    sample_whole(s, sample_kept(s)),
     2u * axis + select(0u, 1u, along > 0.0),
     sample_line(s),
   );
-}
-
-/// The samples' faces' asks (`beam::Grid::asks_at`), a sample's room each.
-fn sample_asks() -> Asks {
-  let n = sample_lattice();
-  return Asks(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);
 }
 
 /// The sample the thread at `id` takes, where the lattice holds it and it stopped.

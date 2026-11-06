@@ -1,14 +1,14 @@
 // pxl-render/queue_walk.wgsl
 
 // The holes' walks over the node cache alone (walk.wgsl, cached.wgsl, queue.wgsl): the first
-// over the queue's holes, a light's slot of an owed tile on from its parked state, the second
-// over the rays the first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next ray off
+// over the queue's holes, a hole parked before on from its parked state, the second over the
+// rays the first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next ray off
 // the queue's words when its own ends or is parked, walks it `QUEUE_STEPS` steps at a time,
 // and holds its state between them, so a lane whose ray ends early walks another while the
 // long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
 // left, and the node listed for the asks (queue_ask.wgsl), with what was handed its parent
-// where a slot keeps that; a light's ray the frame's budget of visits does not reach is
-// parked where it is. Nothing it reads of the node cache any thread of the pass writes.
+// where a slot keeps that; a ray the frame's budget of visits does not reach, up to the cap
+// the observer's queue counts to (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of the pass writes.
 
 /// The queue's words (pxl-engine `ray::QUEUE_WORDS`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
@@ -17,23 +17,23 @@
 /// `hit_put`, record_stops.wgsl):
 /// numbered as the walks take them, the dispatch over them raised by the number that opens a
 /// workgroup (`ray::QUEUE_HITS`, which the last walk goes on from as `node_cache::HITS_ARGS`),
-/// and its number marked waiting (`beam::HIT_WAITS`); none past `beam::HITS`.
+/// and its number marked waiting (`beam::HIT_WAITS`); none past its observer's room (`hits_room`).
 fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   let r = atomicAdd(&queue[QUEUE_HITS + 3u], 1u);
-  if (r >= HITS) {
+  if (r >= hits_room()) {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&queue[QUEUE_HITS], workgroups(r + 1u, HITS, HIT_LANES));
+    atomicMax(&queue[QUEUE_HITS], workgroups(r + 1u, hits_room(), HIT_LANES));
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
 
-/// Whether the light's budget of node visits is spent this frame (`light::VISITS_A_FRAME`);
-/// the eye's holes take no budget.
+/// Whether the frame's node visits so far reach the cap this queue counts to (pxl-engine
+/// `ray::VISITS_A_FRAME`, `ray::caps`), either observer's.
 fn spent() -> bool {
-  return light_run() && atomicLoad(&queue[QUEUE_VISITED]) >= VISITS_A_FRAME;
+  return atomicLoad(&queue[QUEUE_VISITED]) >= atomicLoad(&queue[QUEUE_CAPS]);
 }
 
 /// The node hole `hole`'s walk `w` was left at, no slot keeping it, listed for the asks of the
@@ -91,9 +91,11 @@ fn queue_walk(again: bool) {
         break;
       }
       let h = queued(k);
-      // A light's slot of an owed tile goes on from where its cast before parked it, as its
-      // claim took its state (light_propagate.wgsl `light_claim_cs`).
-      let resumes = again || (light_run() && parked(h));
+      // A hole parked before goes on from where it was parked: a light's slot of an owed tile,
+      // whose claim took its state (light_propagate.wgsl `light_claim_cs`); an eye's pixel
+      // whose rays stand, which its cast or the frame's queue alone left parked (cast.wgsl,
+      // pxl-engine `node_cache::RESUMES`). Any other hole's state holds no parked ray.
+      let resumes = again || parked(h);
       if (resumes && !parked(h)) {
         continue;
       }

@@ -340,9 +340,7 @@ fn hand_propagation_reads_what_stands() {
             }
         }
         // The list: the stood tiles listed, the reads some cast's each, the slide's words.
-        let mut list: Vec<u32> = (0..light::list_words(SIZE) + light::region_words())
-            .map(|k| mix(k, 3))
-            .collect();
+        let mut list: Vec<u32> = (0..light::buffer_words(SIZE)).map(|k| mix(k, 3)).collect();
         let stood_at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
         list[stood_at] = stood.len() as u32;
         for (e, t) in stood.iter().enumerate() {
@@ -482,7 +480,7 @@ fn hand_claim_takes_the_nearest_within_its_budget() {
         }
         set.into_iter().collect()
     };
-    let mut list = vec![0u32; (light::list_words(SIZE) + light::region_words()) as usize];
+    let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
     let mut args = vec![0u32; light::args_words(SIZE) as usize];
     let at = light::listed_at(SIZE, light::LISTED_WANTED) as usize;
     let rings = (light::ARGS_WORDS + light::rings_at(SIZE)) as usize;

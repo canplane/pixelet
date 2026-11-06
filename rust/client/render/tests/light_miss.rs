@@ -670,6 +670,22 @@ fn run_case(
     let got = read_texture(&gpu.device, &gpu.queue, &map);
     let table_hand = gpu.read(&table_buf);
 
+    // Every stop the queue kept names a slot it walked, one a slot at most, in the light's
+    // stops past its holes' region (queue.wgsl `finish`, `light::hits_at`).
+    let stops = table_hand[node_cache::HITS_CNT as usize].min(light::parked_room());
+    let words = gpu.read(&list_buf);
+    let at = light::hits_at(SIZE) as usize;
+    let mut kept = std::collections::BTreeSet::new();
+    let mut strays = 0u32;
+    for r in 0..stops as usize {
+        let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
+        let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
+        if k >= walked.len() || !walked[k] || !kept.insert(k) {
+            strays += 1;
+        }
+    }
+    assert_eq!(strays, 0, "stops of slots not walked, or twice, of {stops}");
+
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
     let (mut same, mut axis_over, mut differ) = (0u32, 0u32, 0u32);
     let mut first_differ = None;
@@ -839,7 +855,7 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
 /// of the map at a place of its own, its slots' parked rays there (`light::places_at`), and its
 /// holes' region last, none parked (`light::region_words`).
 fn listed(slots: &[u32]) -> Vec<u32> {
-    let mut list = vec![0u32; (light::list_words(SIZE) + light::region_words()) as usize];
+    let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
     let at = light::misses_cnt(SIZE) as usize;
     list[at] = slots.len() as u32;
     list[at + 1..at + 1 + slots.len()].copy_from_slice(slots);
@@ -853,7 +869,8 @@ fn listed(slots: &[u32]) -> Vec<u32> {
 }
 
 /// The holes' queue over the slots the list holds (`Gpu::holes`), over the eye, the head, the
-/// table and the list, writing the map `view`: the queue's words as its walks left them.
+/// table and the list, writing the map `view`, its stops kept in the list and counted in the
+/// table's head as the light's cast keeps them: the queue's words as its walks left them.
 fn holes(
     gpu: &Gpu,
     b: &WorldBufs,
@@ -873,7 +890,7 @@ fn holes(
         (9, table.as_entire_binding()),
         (11, head.as_entire_binding()),
     ];
-    gpu.holes(&binds, table, false)
+    gpu.holes(&binds, table, true)
 }
 
 /// The node cache never answers the world as it was: a frame's walks keep what a world whose

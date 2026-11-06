@@ -484,10 +484,8 @@ pub const HEAD_MARKS: usize = HEAD_CELLS + 11;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
 /// The beam rays the walk over the node cache left (`corners_left_at`).
 pub const HEAD_CORNERS_LEFT: usize = HEAD_LISTED + LISTS as usize;
-/// The voxels the boxes draw (`voxels_at`).
-pub const HEAD_VOXELS: usize = HEAD_CORNERS_LEFT + 1;
 /// The slide's two words (`slide_at`).
-pub const HEAD_SLIDE: usize = HEAD_VOXELS + 1;
+pub const HEAD_SLIDE: usize = HEAD_CORNERS_LEFT + 1;
 /// Past the words the map's side lays, two the host sets each cast: the number of the cast
 /// the world's receivers were last stood in, this one's where it stands them again
 /// (`LISTED_STOOD`; pxl-render light_mark.wgsl); and the number of the last cast before this
@@ -508,18 +506,21 @@ pub const HEAD_RINGS: usize = HEAD_REGION + 1;
 /// node cache forgot nothing since the cast before (`READ_OWED`; pxl-render
 /// light_propagate.wgsl `light_claim_cs`).
 pub const HEAD_CARRIES: usize = HEAD_RINGS + 1;
-const HEAD_LAID_VEC4S: usize = 9;
+/// The holes' stops (`hits_at`) and the stops put off (`defers_at`), laid by the map's side.
+pub const HEAD_HITS: usize = HEAD_CARRIES + 1;
+pub const HEAD_DEFERS: usize = HEAD_HITS + 1;
+const HEAD_LAID_VEC4S: usize = 10;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_CARRIES < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_DEFERS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
 /// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
+pub const fn head_layout(size: u32) -> [(usize, u32); 31] {
     [
         (HEAD_SIZE, size),
         (HEAD_MISSES_CNT, misses_cnt(size)),
@@ -535,11 +536,12 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 30] {
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
-        (HEAD_VOXELS, voxels_at(size)),
         (HEAD_SLIDE, slide_at(size)),
         (HEAD_PLACES, places_at(size)),
         (HEAD_REGION, list_words(size)),
         (HEAD_RINGS, rings_at(size)),
+        (HEAD_HITS, hits_at(size)),
+        (HEAD_DEFERS, defers_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -733,15 +735,9 @@ pub const TILE: u32 = 8;
 /// claimed and those owed (`READ_OWED`), by ring about the box's middle, so a new light frame,
 /// a slide or a changed column is cast over several frames, never more a frame. A tile wanted
 /// past it is wanted again by the next cast, which the work it leaves owed makes due where
-/// nothing else moves (`node_cache::OWED`); until it is claimed the map holds it lit, or as its
+/// nothing else moves (`node_cache::OWED_AT`); until it is claimed the map holds it lit, or as its
 /// last cast left it where owed (light_lay.wgsl).
 pub const CLAIM_BUDGET: u32 = 4096;
-
-/// The work the light's holes' queue may do in a cast (pxl-render queue.wgsl): the nodes its
-/// walks visit, and the nodes it asks of the world. The eye's holes take none of it: every one
-/// ends in its frame. To be set from the S23's hot drive.
-pub const VISITS_A_FRAME: u32 = 1 << 23;
-pub const ASKS_A_FRAME: u32 = 1 << 16;
 
 /// The light's beam (pxl-render beam_hit.wgsl, beam.wgsl, beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`):
@@ -1078,12 +1074,6 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
     at
 }
 
-/// The voxels the samples' boxes draw (pxl-render boxes.wgsl), past the beam rays left:
-/// `beam::VOXEL_WORDS` a box, a box a sample at most.
-pub const fn voxels_at(size: u32) -> u32 {
-    corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
-}
-
 /// The samples their walk over the node cache left, for the walk that asks the world
 /// (pxl-render sample_hit.wgsl, sample.wgsl), past the lists, as the eye's are past its words
 /// (`beam::Grid::lefts_at`): how many, copied in once it is done, then each, its X and its Y
@@ -1099,7 +1089,7 @@ pub const fn corners_left_at(size: u32) -> u32 {
     lefts_at(size) + 1 + (size / SAMPLE) * (size / SAMPLE)
 }
 
-/// Past the voxels, two words kept from cast to cast: the number of the last cast its
+/// Past the beam rays left, two words kept from cast to cast: the number of the last cast its
 /// slide ran in (`SLIDE_RAN`), set by the slide's first thread (pxl-render light_slide.wgsl);
 /// and the number of the first cast whose reads hold where a cast that owed a slide stood no
 /// receiver, so ran none (`READS_FROM`), set by the one thread that lists a cast's first stood
@@ -1107,7 +1097,7 @@ pub const fn corners_left_at(size: u32) -> u32 {
 /// light_stood.wgsl `stood_first`): the reads' epoch is the later of it and `HEAD_EPOCH`
 /// (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
-    voxels_at(size) + (size / SAMPLE) * (size / SAMPLE) * beam::VOXEL_WORDS
+    corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
 }
 pub const SLIDE_RAN: u32 = 0;
 pub const READS_FROM: u32 = 1;
@@ -1148,6 +1138,25 @@ pub const fn parked_room() -> u32 {
 /// while the queue writes the other (`ray::region_words`).
 pub const fn region_words() -> u32 {
     ray::region_words(2 * parked_room())
+}
+
+/// The light's holes' stops, past its holes' region: a stop each of the most holes a cast
+/// lists, every slot of the tiles it claims (`parked_room`), each `beam::HIT_WORDS`, kept by
+/// pxl-render queue.wgsl `finish` and taken into the light's record after its queue
+/// (record_stops.wgsl).
+pub const fn hits_at(size: u32) -> u32 {
+    list_words(size) + region_words()
+}
+
+/// The stops put off, a stop's number each, past the stops (record_stops.wgsl
+/// `record_stops_cs`, `record_deferred_cs`).
+pub const fn defers_at(size: u32) -> u32 {
+    hits_at(size) + parked_room() * beam::HIT_WORDS
+}
+
+/// The light's list, its holes' region and its stops with it: the buffer's words.
+pub const fn buffer_words(size: u32) -> u32 {
+    defers_at(size) + parked_room()
 }
 
 /// The rings of the box's tiles about its middle, a whole tile wide each: the order a cast
@@ -1218,7 +1227,7 @@ pub const ARGS_LAY: u32 = 18;
 /// The claim's dispatch over the tiles wanted (`LISTED_WANTED`), raised as they are listed; the
 /// claims' count, each claim's place (`places_at`); the count of the straddling ring's claims
 /// (`claims`); and the tiles wanted and left unclaimed, the first of the cast's owed work
-/// (`node_cache::OWED`); none at a cast's start.
+/// (`node_cache::OWED_AT`); none at a cast's start.
 pub const ARGS_CLAIM: u32 = 22;
 pub const ARGS_PLACED: u32 = 25;
 pub const ARGS_STRADDLE: u32 = 26;

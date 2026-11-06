@@ -110,6 +110,12 @@ const ROLL_SIDE: u32 = 4;
 /// regular lattice the spacing over `ROLL_SIDE` apart, `CELL`/16: a region whose projection
 /// holds a square of that side aligned to it, or any disc √2 · `CELL`/16 across, holds a
 /// sample of some offset, and is met within this many standing casts.
+///
+/// The spatial guarantee holds for each offset whose samples completed their cast. Every
+/// offset's samples complete in the frame that casts them, because the samples take no part
+/// of the holes' budget (`ray::VISITS_A_FRAME`): only the holes' queue is budgeted, and what
+/// it leaves parked never holds back a sample. So the bound of `ROLLS` standing casts holds as
+/// written.
 pub const ROLLS: u32 = ROLL_SIDE * ROLL_SIDE;
 
 /// The samples' offset in the `k`th cast of the rolled lattice (`ROLLS`), across and down,
@@ -510,17 +516,6 @@ pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_AXIS + 1;
 
-/// A light's voxel, a box's record, which a slot that takes the box reads (pxl-render
-/// boxes.wgsl, light.wgsl): written by the sample that draws the box (`raster::KEYS`), in
-/// words: its node (`NODE_WORDS`), its asset, 1 where it lacks, the band its samples asked
-/// (`light::Light::band`), and a word an axis no reader asks (`face::word`). Its faces drawn
-/// are its box's (`raster::BOX_FACES`). The eye's voxels are its record's (`record`).
-pub const VOXEL_NODE: u32 = 0;
-pub const VOXEL_ASSET: u32 = VOXEL_NODE + NODE_WORDS;
-pub const VOXEL_LACKS: u32 = VOXEL_ASSET + 2;
-pub const VOXEL_BAND: u32 = VOXEL_LACKS + 1;
-pub const VOXEL_FACES: u32 = VOXEL_BAND + 1;
-pub const VOXEL_WORDS: u32 = VOXEL_FACES + 3;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 /// While a sample is listed for the walk that asks the world (pxl-render sample_hit.wgsl,
 /// sample.wgsl), where its walk over the node cache left it, in its asset's first word: how far

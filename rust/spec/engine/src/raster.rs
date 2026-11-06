@@ -2,11 +2,9 @@
 
 //! gpu-portable: the voxels drawn as boxes, so the rasterizer keeps each drawn pixel's cell
 //! (pxl-render raster.wgsl, cast.wgsl `cast_cs`, light.wgsl, gpu/ray/raster.rs). The eye's
-//! voxels are the record's, kept across frames (`record`), every held one in view drawn each
-//! frame (pxl-render record_draw.wgsl); the light's are its samples' of one cast, drawn once
-//! where the samples of one node meet in the cast's table of voxels (`KEYS`, boxes.wgsl), and
-//! by a sample alone where its node is in no slot of it, a voxel twice then but never none.
-//! A box is a node as its ray stops on it (`cast::asset_box`). It draws, of its faces turned
+//! voxels and the light's are each one record's, kept across frames (`record`), every held
+//! one in view drawn each frame the observer casts (pxl-render record_draw.wgsl,
+//! light_record.wgsl). A box is a node as its ray stops on it (`cast::asset_box`). It draws, of its faces turned
 //! to the eye, those its rays entered it across (`faces`), a lack's every face turned to it,
 //! and a face keeps a pixel only where the pixel's own ray enters the box across that face's
 //! axis (`cast::entry`'s test; raster.wgsl `fs`): a face some ray reached through air is one
@@ -15,8 +13,6 @@
 //! test keeps the nearest box the pixel's ray enters, a fresh voxel's before any stale one's
 //! (`STALE`), leaving its voxel's number (`id_of`): its cell where a hit, and where a lack, a
 //! node it walks itself.
-
-use crate::beam;
 
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
@@ -39,8 +35,8 @@ use crate::beam;
 /// eye's origin, lowest then highest, f32 bits, its voxel's number
 /// (`id_of`), and its faces drawn, a bit an axis (`faces`), with `EYED`
 /// where the box lies about the eye (`is_eyed`) and `STALE` where its voxel
-/// is not the node the eye's walk stops on (`record::fresh`); past the light's,
-/// the cast's table of voxels (`keys_at`).
+/// is not the node the observer's walk stops on there (`record::fresh`,
+/// `record::light_fresh`).
 pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
@@ -73,61 +69,26 @@ const _: () = assert!(
         && STOP_ASKED_AT + ARGS_WORDS <= DEFERRED_AT
 );
 
-/// The light's cast's table of voxels, past its boxes: `KEYS` slots a sample, two words a slot,
-/// the number plus one of the sample that claimed it, 0 where free, then its voxel's
-/// number plus one once that sample wrote it. Only a sample whose node no sample before
-/// it across or up stopped on claims a slot; every sample then finds its node's
-/// (pxl-render boxes.wgsl). Cleared before every cast that writes boxes, so it holds that
-/// cast's voxels alone.
-pub const KEYS: u32 = 2;
-pub const KEY_WORDS: u32 = 2;
-
-/// The words the boxes' buffer takes for `samples` samples, each a box at
-/// most, and the table past them (`keys_at`).
-pub const fn words(samples: u32) -> u32 {
-    samples * (BOX_WORDS + KEYS * KEY_WORDS)
+/// A voxel's faces drawn, a bit a side, six: each face some ray entered it through
+/// (`ray::face`, twice its axis and one more where the ray ran up the axis, entering the low
+/// side), a side a ray reached through air from outside it. Not a bit an axis: the other face
+/// of an axis is one no ray may have reached, and may lie against what fills.
+pub fn faces(faces: impl IntoIterator<Item = u32>) -> u32 {
+    faces.into_iter().fold(0, |m, f| m | 1 << f)
 }
 
-/// The first word of the table of voxels for `samples` samples.
-pub const fn keys_at(samples: u32) -> u32 {
-    samples * BOX_WORDS
-}
-
-/// What a voxel is told apart by, the sample's at word `at` of `words`
-/// (`beam::SAMPLE_NODE`): its node, its zoom, corner and roots, and the band its
-/// ray asked (the light's, `light::Light::band`; the eye's 0). A stopped cell's
-/// answer is the world's query's for its node from what its parent handed it, the
-/// zooms asked aside (pxl-render world_split.wgsl `world_node`: a node the query
-/// stops in is answered by `world_cell`, which takes no zoom asked, and a split
-/// coarser than asked answers a cell only void, which no ray stops in), and the
-/// zooms a node is asked at are its key's alone: the eye's off its distance from
-/// the eye every eye's ray starts at (pxl-render walk.wgsl `walk`), the light's its
-/// band. So samples of one key hold one answer and one box.
-pub fn key(words: &[u32], at: usize, band: u32) -> ([u32; beam::NODE_WORDS as usize], u32) {
-    let k = at + beam::SAMPLE_NODE as usize;
-    (core::array::from_fn(|i| words[k + i]), band)
-}
-
-/// A voxel's faces drawn, a bit an axis: each axis one of its samples entered it
-/// across (`beam::SAMPLE_AXIS`), the face a ray entering across it reaches through
-/// air.
-pub fn faces(axes: impl IntoIterator<Item = u32>) -> u32 {
-    axes.into_iter().fold(0, |m, a| m | 1 << a)
-}
-
-/// Whether a pixel takes a voxel it enters across `axis`: a face drawn there
-/// (`faces`).
-pub fn accepts(faces: u32, axis: u32) -> bool {
-    faces >> axis & 1 != 0
+/// Whether a pixel takes a voxel it enters through face `face` (`ray::face`): a face drawn
+/// there (`faces`).
+pub fn accepts(faces: u32, face: u32) -> bool {
+    faces >> face & 1 != 0
 }
 
 /// A box's corners drawn: its three faces turned to the eye, one an axis,
 /// two triangles each (`corner`), a face not drawn left a point.
 pub const VERTICES: u32 = 18;
 
-/// A voxel's number as the raster leaves it at a pixel: the eye's its record's slot
-/// (`record::entry_at`), the light's its place among the cast's voxels (`light::voxels_at`),
-/// its box's, plus one, so 0 is none, and `LACK` where it lacks.
+/// A voxel's number as the raster leaves it at a pixel or a slot: its record's slot
+/// (`record::entry_at`), plus one, so 0 is none, and `LACK` where it lacks.
 pub const LACK: u32 = 1 << 31;
 
 pub const fn id_of(voxel: u32, lacks: bool) -> u32 {

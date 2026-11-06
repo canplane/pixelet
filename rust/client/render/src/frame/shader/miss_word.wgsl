@@ -51,8 +51,14 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
   beams[k + HIT_ASSET] = w.asset.x;
   beams[k + HIT_ASSET + 1u] = w.asset.y;
-  let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
-  beams[k + HIT_LINE] = beams[cell_start(cell) + CELL_CORNER] * LINE_WORDS;
+  // The line its pixel's cell's rays resumed from, the eye's; the light asks no face's word
+  // off a line (record_stops.light.wgsl `hit_asks`).
+  var line = NONE;
+  if (!light_run()) {
+    let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
+    line = beams[cell_start(cell) + CELL_CORNER] * LINE_WORDS;
+  }
+  beams[k + HIT_LINE] = line;
 }
 
 /// The ray's words where walk `w` ended, entered through `face`, `faces` what lies about that

@@ -178,10 +178,10 @@ pub const SHADER_LOCATION_BEACON_MARK: u32 = 70;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
 pub const SHADER_BOX_ARGS: u32 = 71;
-/// The shadow map's beam rays, cells, samples and samples' boxes: the
+/// The shadow map's beam rays, cells, samples and samples' stops into its record: the
 /// passes of `SHADER_BEAM`, `SHADER_CELL`, `SHADER_SAMPLE` and
 /// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl,
-/// light_cell.wgsl, sample.light.wgsl, light_sample_box.wgsl).
+/// light_cell.wgsl, sample.light.wgsl, sample_box.light.wgsl).
 pub const SHADER_LIGHT_BEAM: u32 = 72;
 pub const SHADER_LIGHT_CELL: u32 = 73;
 pub const SHADER_LIGHT_SAMPLE: u32 = 74;
@@ -213,7 +213,12 @@ pub const SHADER_RECORD_DRAW: u32 = 84;
 /// The holes' stops into the eye's record, those put off, and what lies about each one's face
 /// put at its pixel, by hand (record_stops.wgsl).
 pub const SHADER_RECORD_STOPS: u32 = 85;
-pub const SHADERS: u32 = 86;
+/// The screen's tiles that hold a pixel the eye's holes' queue left parked, set changed, by
+/// hand (parked_tiles.wgsl).
+pub const SHADER_PARKED_TILES: u32 = 86;
+/// `SHADER_RECORD_STOPS` for the light's record (record_stops.light.wgsl).
+pub const SHADER_LIGHT_RECORD_STOPS: u32 = 87;
+pub const SHADERS: u32 = 88;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -606,6 +611,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "light_aim",
         "light_list",
+        "record",
         "visible",
         "list",
         "light",
@@ -646,6 +652,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.eye",
         "record",
         "record_put",
+        "sample_box.eye",
         "sample_box",
     ],
     // SHADER_RASTER
@@ -866,8 +873,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_resume",
         "light_list",
         "sample.light",
-        "boxes",
-        "light_sample_box",
+        "record",
+        "record_put",
+        "sample_box.light",
+        "sample_box",
     ],
     // SHADER_SAMPLE_HIT
     &[
@@ -992,6 +1001,29 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "record",
         "record_put",
+        "record_stops.eye",
+        "record_stops",
+    ],
+    // SHADER_PARKED_TILES
+    &[
+        "walk_word",
+        "eye_bind",
+        "tile_word",
+        "walked",
+        "parked_tiles",
+    ],
+    // SHADER_LIGHT_RECORD_STOPS
+    &[
+        "walk_word",
+        "raster_box",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "light_aim",
+        "hit",
+        "record",
+        "record_put",
+        "record_stops.light",
         "record_stops",
     ],
 ];

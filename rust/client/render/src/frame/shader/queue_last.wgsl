@@ -4,10 +4,10 @@
 // node cache left parked, from the state each was parked in, asking the world where no slot
 // keeps a node. The lanes as the walks before (queue_walk.wgsl): each takes the next hole when
 // its own ray ends, off a word of the node cache's head the asks before it set back
-// (`node_cache::LAST_TAKEN`), a hole not parked passed. The eye's asks wherever no slot keeps a
-// node, so every eye hole ends in its frame. The light's counts against the frame's budget
-// where its walks before left it (`node_cache::VISITED`, `node_cache::ASKED`): a slot's ray
-// the budget does not reach stays parked, its tile owed (`unreached`).
+// (`node_cache::LAST_TAKEN`), a hole not parked passed. Either observer's counts against the
+// frame's budget where the walks before left it, up to its queue's caps (`node_cache::VISITED`
+// to `node_cache::ASKS_CAP`): a ray the budget does not reach stays parked and is owed
+// (`unreached`).
 
 const WALK_PASS: u32 = MISSED_PASS;
 
@@ -15,41 +15,46 @@ const WALK_PASS: u32 = MISSED_PASS;
 /// `hit_put`, record_stops.wgsl),
 /// numbered on from the walks over the node cache's (`node_cache::HITS_CNT`), the dispatch over
 /// them raised by the number that opens a workgroup (`node_cache::HITS_ARGS`), and its number
-/// marked waiting (`beam::HIT_WAITS`); none past `beam::HITS`.
+/// marked waiting (`beam::HIT_WAITS`); none past its observer's room (`hits_room`).
 fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
   let r = atomicAdd(&node_cache[HITS_CNT], 1u);
-  if (r >= HITS) {
+  if (r >= hits_room()) {
     return 0u;
   }
   if (r % HIT_LANES == 0u) {
-    atomicMax(&node_cache[HITS_ARGS], workgroups(r + 1u, HITS, HIT_LANES));
+    atomicMax(&node_cache[HITS_ARGS], workgroups(r + 1u, hits_room(), HIT_LANES));
   }
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
 
-/// Whether a node may be asked of the world: the eye's always; the light's one more within
-/// the frame's budget of asks (`light::ASKS_A_FRAME`), counted as it is taken.
+/// Whether a node may be asked of the world: one more within the cap this queue counts the
+/// frame's asks to (`node_cache::ASKS_CAP`), counted as it is taken.
 fn may_ask() -> bool {
-  return !light_run() || atomicAdd(&node_cache[ASKED], 1u) < ASKS_A_FRAME;
+  return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[ASKS_CAP]);
 }
 
-/// A light's slot's ray the frame's budget does not reach, at the node `corner`, `zoom`,
-/// `roots`, `t` along it, `step` steps taken: its word left as the map held it, its ray parked
-/// where its tile's place holds it, and its tile owed (pxl-engine `light::READ_OWED`), so the
-/// next claim takes it nearest first and the ray goes on from there; its word written when it
-/// ends, which that cast's lay of the tiles read takes (gpu/shadow.rs `begin`); and counted as
-/// the cast's owed work (`node_cache::OWED`), which the renderer reads back and wakes the next
-/// frame by. The tile's read word is the claim's and the slide's to write but for this bit,
-/// which every slot of the tile it sets sets alike.
+/// A hole's ray the frame's budget does not reach, at the node `corner`, `zoom`, `roots`, `t`
+/// along it, `step` steps taken: parked where its state lies, its word left as the cast wrote
+/// it, and counted as its observer's owed work (`node_cache::OWED_AT`), which the renderer
+/// reads back and wakes the next frame by. An eye's pixel keeps what the record drew there
+/// (cast.wgsl), and the frame's queue alone takes it on while the rays stand. A light's slot's
+/// tile is owed (pxl-engine `light::READ_OWED`), so the next claim takes it nearest first and
+/// the ray goes on from there; its word written when it ends, which that cast's lay of the
+/// tiles read takes (gpu/shadow.rs `begin`). The tile's read word is the claim's and the
+/// slide's to write but for this bit, which every slot of the tile it sets sets alike.
 fn unreached(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) {
   park(hole, t, corner, zoom, roots, step);
+  if (!light_run()) {
+    atomicAdd(&node_cache[EYE_OWED], 1u);
+    return;
+  }
   let tile = slot_texel(hole_at(hole)) / LIGHT_TILE;
   let w = head_word(LIGHT_HEAD_READS) + tile.y * head_word(LIGHT_HEAD_TILES) + tile.x;
   if (w < arrayLength(&beams)) {
     beams[w] = beams[w] | LIGHT_READ_OWED;
   }
-  atomicAdd(&node_cache[OWED], 1u);
+  atomicAdd(&node_cache[LIGHT_OWED], 1u);
 }
 
 @compute @workgroup_size(QUEUE_LANES)
@@ -84,7 +89,7 @@ fn queue_last_cs() {
       step = s.step;
       top = true;
     }
-    if (light_run() && atomicLoad(&node_cache[VISITED]) >= VISITS_A_FRAME) {
+    if (atomicLoad(&node_cache[VISITED]) >= atomicLoad(&node_cache[VISITS_CAP])) {
       unreached(hole, t, corner, zoom, roots, step);
       hole = NONE;
       continue;

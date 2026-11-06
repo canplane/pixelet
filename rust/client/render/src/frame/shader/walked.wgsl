@@ -14,3 +14,10 @@ fn walked_cnt_at() -> u32 {
 fn walked_list_at(k: u32) -> u32 {
   return eye_word(GRID + GRID_WALKED_AT) + WALKED_LIST + k;
 }
+
+/// The first word of pixel `p`'s parked state, of a target `size`, at its index in the eye's
+/// holes' region, the last words of the beam rays' `words` (pxl-engine `ray::region_words`,
+/// queue.wgsl `park`).
+fn eye_state_at(p: vec2<u32>, size: vec2<u32>, words: u32) -> u32 {
+  return words - size.x * size.y * STATE_WORDS + (p.y * size.x + p.x) * STATE_WORDS;
+}

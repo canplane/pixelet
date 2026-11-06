@@ -21,10 +21,10 @@ use crate::frame::shader::record::{
     COMPUTE_FOLD, COMPUTE_FORGET, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT,
     COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_CLAIM, COMPUTE_LIGHT_MARK_DRAWS,
     COMPUTE_LIGHT_MARK_DRAWS_OPEN, COMPUTE_LIGHT_MARK_WALKED, COMPUTE_LIGHT_PROPAGATE,
-    COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE,
-    COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_PARKED,
-    COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
-    TEXTURE_UINT_ARRAY, UNIFORM,
+    COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_PARKED_TILES,
+    COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_LAST,
+    COMPUTE_QUEUE_PARKED, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW,
+    STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
 };
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
@@ -37,6 +37,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
+use pxl_engine::count::{EYE, LIGHT};
 
 /// The GPU's cast this frame (frame/shader/cast.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -141,7 +142,7 @@ pub(super) struct CastBuffers {
     beam_room: u32,
     /// The node cache (pxl-engine `node_cache`): its buffer, no
     /// pixel's; the holes' queue (pxl-engine `ray::QUEUE_LANES`): the pixels
-    /// the cast's reading walk marked (pxl-engine `ray::MISS`), counted in
+    /// the cast's reading walk left to it, holding what the record drew there, counted in
     /// `marks` (pxl-engine `ray::MISS_ARGS_WORDS`) and listed (`ray::WALKED_LIST`),
     /// and the light's slots no voxel answered, walked off it by its passes
     /// (`queue_built` to `queue_last_built`), the eye's over `queue_groups` and its
@@ -291,6 +292,13 @@ pub(super) struct CastBuffers {
     /// Whether the light may cast this frame, the shadows on and its cast made: where it may
     /// not, the work it is owed asks no frame (`wants_frame`).
     light_on: bool,
+    /// Whether the eye may run its queue, a world to cast in; whether this frame's cast keeps
+    /// the states its holes were parked in, the rays standing (`node_cache::RESUMES`); and
+    /// whether this frame, casting nothing, runs the eye's queue alone over the holes its last
+    /// cast listed, owed work parked among them (`Readback::owed`).
+    eye_on: bool,
+    eye_resumes: bool,
+    eye_queue: bool,
     /// Whether the next cast stands the world's receivers on the eye's answers
     /// (record_draw.wgsl `record_draw_cs`, `light_mark_walked_cs`): held until one does; and whether the stands
     /// of the frame the eye stands in, its pixels' footprints, are owed, as the stands while
@@ -364,6 +372,10 @@ pub(super) struct CastBuffers {
     cast_tiles_built: Pipeline,
     cast_tiles: u32,
     cast_tiles_group: u32,
+    /// The screen's tiles that hold a parked pixel set changed after the eye's queue
+    /// (parked_tiles.wgsl), over the tiles' words, made again with them (`px_bound`).
+    parked_tiles_built: Pipeline,
+    parked_tiles_group: u32,
     /// What the light's cast and the eye's recast, counted where the setting
     /// asks (ray/count.rs).
     counter: Counter,
@@ -468,7 +480,8 @@ const _: () = assert!(
     "the asking walks' group binds past WebGPU's floor"
 );
 /// The light's slots' (`light_cs`): the list, the map it writes, the head, the visibility
-/// it reads and the missed slots' dispatch.
+/// it reads, the missed slots' dispatch and the light's record it reads the visible voxel off
+/// and marks seen.
 const LIGHT_GROUP: [u32; 21] = [
     0,
     COMPUTE,
@@ -482,13 +495,13 @@ const LIGHT_GROUP: [u32; 21] = [
     HEAD_BINDING,
     COMPUTE,
     UNIFORM,
-    14,
-    COMPUTE,
-    STORAGE,
     15,
     COMPUTE,
     TEXTURE_UINT_ARRAY,
     17,
+    COMPUTE,
+    STORAGE_RW,
+    super::raster::RECORD_BINDING,
     COMPUTE,
     STORAGE_RW,
 ];
@@ -528,6 +541,31 @@ const CAST_GROUP: [u32; 24] = [
 /// `cast_tiles_cs`'s (cast_tiles.wgsl): the list, the tiles' words and uniform.
 const CAST_TILES_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
+];
+/// While the eye is owed, its queue runs within every third frame: a run's count copied, mapped
+/// the frame after, read the frame after that, or the next frame due where it rode no copy
+/// (count.rs `Readback`). Each run sets the tiles of its parked pixels changed
+/// (parked_tiles.wgsl), so a tile holding one stays claimed through the gate.
+const _: () = assert!(
+    screen::CLAIMED_FOR > 2,
+    "a parked pixel's tile stays claimed between two runs of the eye's queue"
+);
+const PARKED_TILES_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE,
+    30,
+    COMPUTE,
+    STORAGE_RW,
+    31,
+    COMPUTE,
+    UNIFORM,
 ];
 const CAST_WORKGROUP: [u32; 3] = [ray::CAST_SIDE, ray::CAST_SIDE, 1];
 /// A tile's workgroups of `cast_cs`, across and down.
@@ -760,6 +798,7 @@ const _: () = assert!(
 const _: () = assert!(
     binds(&[COMPUTE_CAST], &CAST_GROUP)
         && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
+        && binds(&[COMPUTE_PARKED_TILES], &PARKED_TILES_GROUP)
         && binds(
             &[
                 COMPUTE_BEAM,
@@ -817,6 +856,8 @@ impl RaysPass {
         let group = &WORLD_GROUP;
         let pipeline = pipelines.build_compute(g, COMPUTE_CAST, &CAST_GROUP);
         let cast_tiles_built = pipelines.build_compute(g, COMPUTE_CAST_TILES, &CAST_TILES_GROUP);
+        let parked_tiles_built =
+            pipelines.build_compute(g, COMPUTE_PARKED_TILES, &PARKED_TILES_GROUP);
         let beam_built = pipelines.build_compute(g, COMPUTE_BEAM, &ASK_GROUP);
         let cells_built = pipelines.build_compute(g, COMPUTE_CELL, group);
         let sample_built = pipelines.build_compute(g, COMPUTE_SAMPLE, &ASK_GROUP);
@@ -856,6 +897,8 @@ impl RaysPass {
         let c = CastBuffers {
             pipeline,
             cast_tiles_built,
+            parked_tiles_built,
+            parked_tiles_group: 0,
             cast_tiles: 0,
             cast_tiles_group: 0,
             beam_built,
@@ -952,6 +995,9 @@ impl RaysPass {
             light_reached: false,
             light_carries: false,
             light_on: false,
+            eye_on: false,
+            eye_resumes: false,
+            eye_queue: false,
             light_forgot: false,
             light_world: false,
             light_footprint_owed: false,
@@ -1052,6 +1098,10 @@ impl RaysPass {
                 c.light_content.forget();
                 c.light_cast = false;
                 c.light_moved = 0;
+                c.light_on = false;
+                c.counter.off(LIGHT);
+                (c.eye_on, c.eye_resumes, c.eye_queue) = (false, false, false);
+                c.counter.off(EYE);
                 c.ungated = false;
                 c.rolls = beam::ROLLS;
             }
@@ -1426,6 +1476,15 @@ impl RaysPass {
         }
         let (kind, casts) = (self.kind, casts_px(self.kind));
         let walked_whole = !partial || c.ungated;
+        // The eye's rays stand where the view, the jitter, the world and the drawn size are
+        // those its last cast walked: a cast then keeps the states its holes were parked in,
+        // and a frame that casts nothing runs the eye's queue alone over them where the eye is
+        // owed (`node_cache::RESUMES`, `Readback::owed`). Any other cast sets every pixel it
+        // takes to no parked ray, as they name rays no longer cast.
+        let rays_stand = stands && !jittered;
+        c.eye_on = true;
+        c.eye_resumes = casts && rays_stand;
+        c.eye_queue = kind == FrameKind::standing && rays_stand && c.counter.owed(EYE);
         // The eye's place and look, where the host's draws stand and decor
         // compacted again: which tiles are read, not what a tile holds. Not
         // the jitter: a pixel's stands hold its footprint (`light_mark_walked_cs`).
@@ -1448,7 +1507,7 @@ impl RaysPass {
                 LightMoved::receivers => !receivers_held,
                 LightMoved::footprint => footprint_owed,
                 LightMoved::world => world_columns,
-                LightMoved::owed => c.counter.owed(),
+                LightMoved::owed => c.counter.owed(LIGHT),
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
         c.light_slid = held && slid;
@@ -1551,7 +1610,8 @@ impl RaysPass {
                 light::STOOD_KEPT as usize
             };
             g.write_buf(c.light_stood, word_bytes(from), bytes(&stood[from..]));
-            c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
+            c.raster
+                .light_prepare(g, &cast.eye, shadow::SIZE, c.light_number);
         }
         // No receiver stands where the light casts none: the head's flag the record's draw reads
         // every frame (`light::HEAD_STANDS_WORLD`).
@@ -1610,6 +1670,7 @@ impl RaysPass {
             // The hits' dispatch none, a workgroup deep and high.
             head[node_cache::HITS_ARGS as usize + 1] = 1;
             head[node_cache::HITS_ARGS as usize + 2] = 1;
+            head[node_cache::RESUMES as usize] = u32::from(c.eye_resumes);
             g.write_buf(c.node_cache, 0, bytes(&head));
             g.write_buf(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
             g.write_buf(c.queue, 0, bytes(&ray::QUEUE_EMPTY));
@@ -1639,11 +1700,40 @@ impl RaysPass {
             );
             c.light_forgot = false;
         }
+        // The holes' queues' work this frame starts at none, and each queue counts to its caps
+        // by the order they run in, the eye's first, short of the budget by the light's share
+        // where the light casts after it (`ray::caps`); the eye's queue words fresh where it
+        // runs alone, as a cast's are with the head above.
+        let eye_runs = casts || c.eye_queue;
+        if eye_runs {
+            if !casts {
+                g.write_buf(c.queue, 0, bytes(&ray::QUEUE_EMPTY));
+            }
+            let caps = ray::caps(true, c.light_cast);
+            g.write_buf(c.queue, word_bytes(ray::QUEUE_CAPS as usize), bytes(&caps));
+        }
+        if c.light_cast {
+            let caps = ray::caps(false, eye_runs);
+            g.write_buf(
+                c.light_queue,
+                word_bytes(ray::QUEUE_CAPS as usize),
+                bytes(&caps),
+            );
+        }
+        if !casts && (eye_runs || c.light_cast) {
+            let none = [0u32; (node_cache::owed_at(EYE) + 1 - node_cache::VISITED) as usize];
+            g.write_buf(
+                c.node_cache,
+                word_bytes(node_cache::VISITED as usize),
+                bytes(&none),
+            );
+        }
         let frame = count::Frame {
             number: frame,
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.light_cast],
+            queues: [eye_runs, c.light_cast],
             rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
         c.counter.begin(g, ray_counts, c.node_cache, frame);
@@ -1756,6 +1846,7 @@ impl RaysPass {
             if px_bound != c.px_bound {
                 release(c.px_group);
                 release(c.cast_tiles_group);
+                release(c.parked_tiles_group);
                 release(c.cast_tiles);
                 let [across, down] = c.size.map(|v| v.div_ceil(screen::TILE));
                 c.cast_tiles = g.buf(
@@ -1766,6 +1857,16 @@ impl RaysPass {
                     c.cast_tiles_built.layouts[0],
                     &[
                         buf_entry(0, c.cast_tiles),
+                        buf_entry(30, changed_at),
+                        buf_entry(31, uniform),
+                    ],
+                );
+                c.parked_tiles_group = g.bind_group(
+                    c.parked_tiles_built.layouts[0],
+                    &[
+                        buf_entry(0, c.eye),
+                        view_entry(3, rays.0),
+                        buf_entry(8, c.beams),
                         buf_entry(30, changed_at),
                         buf_entry(31, uniform),
                     ],
@@ -1826,7 +1927,7 @@ impl RaysPass {
                     c.node_cache,
                     c.light_head,
                     c.light_list,
-                    c.raster.light.boxes,
+                    c.raster.light.record,
                     c.raster.light.visibility_array,
                     c.raster.light.args,
                     c.light_misses,
@@ -1847,6 +1948,8 @@ impl RaysPass {
             c.light_idle
         };
         c.raster.record_group(g, [c.light_head, list, args, stood]);
+        c.raster
+            .light_record_group(g, [c.light_head, list, args, stood, light_map.0]);
         let eye = c.eye;
         self.regroup(g, [rays.0, eye]);
     }
@@ -1946,8 +2049,10 @@ impl RaysPass {
             if c.forgets != node_cache::FORGETS_NONE {
                 g.set_pipeline(pass, c.forget_built.id);
                 g.dispatch(pass, node_cache::ENTRIES.div_ceil(ROW_LANES), 1, 1);
-                // The eye's record by the same head, the same rule (pxl-engine `record`).
+                // The eye's record and the light's by the same head, the same rule (pxl-engine
+                // `record`).
                 c.raster.forget(g, pass);
+                c.raster.light_forget(g, pass);
             }
             g.end(pass);
             for (span, pipeline, [x, y], w) in [
@@ -2060,6 +2165,12 @@ impl RaysPass {
                 (c.beams, word_bytes((walked + ray::WALKED_CNT) as usize)),
                 4,
             );
+        }
+        // The eye's holes walked: its cast's, or, where it casts nothing, those its last cast
+        // listed, the parked among them going on (`eye_queue`); every stop into its record; and
+        // the tiles of the pixels still parked set changed, so the frames after claim them
+        // (parked_tiles.wgsl).
+        if casts || c.eye_queue {
             let pass = walk_holes(
                 ctx,
                 [GpuSpanName::miss; 2],
@@ -2080,6 +2191,12 @@ impl RaysPass {
             // Their stops into the eye's record, every one, their new faces asked and each
             // stop's face's word put at its pixel (ray/raster.rs `stops`): next frame draws them.
             c.raster.stops(g, pass, c.node_cache);
+            g.end(pass);
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::miss).pass());
+            g.set_bind_group(pass, 0, c.parked_tiles_group, &[]);
+            g.set_pipeline(pass, c.parked_tiles_built.id);
+            let pixels = c.size[0] * c.size[1];
+            g.dispatch(pass, pixels.div_ceil(screen::CAST_TILES_LANES), 1, 1);
             g.end(pass);
         }
         // The decor generated over the rays, before the light's cast, which
@@ -2209,11 +2326,14 @@ impl RaysPass {
                 );
             }
             // The tiles the claim left wanted, the first of the cast's owed work, which the
-            // queue's last walk adds its parked slots to (`node_cache::OWED`).
+            // queue's last walk adds its parked slots to (`node_cache::OWED_AT`).
             g.copy_buf(
                 encoder,
                 (c.light_args, word_bytes(light::ARGS_LEFT as usize)),
-                (c.node_cache, word_bytes(node_cache::OWED as usize)),
+                (
+                    c.node_cache,
+                    word_bytes(node_cache::owed_at(LIGHT) as usize),
+                ),
                 4,
             );
             // The beam, the samples, their boxes drawn, the slots taking
@@ -2273,9 +2393,8 @@ impl RaysPass {
             g.set_pipeline(pass, c.light_sample_built.id);
             g.dispatch_indirect(pass, c.light_sample_left, 0);
             g.end(pass);
-            // The light's table of voxels cleared, then its boxes' two passes, as the eye's
+            // The samples into the light's record, its two passes, as the eye's
             // (ray/raster.rs `draw`).
-            c.raster.light_keys_cleared(g, encoder, shadow::SIZE);
             for built in [&c.raster.light_boxes_built, &c.raster.light_observe_built] {
                 let stamp = ctx.stamp(GpuSpanName::light_raster).pass();
                 let pass = g.compute_pass(encoder, stamp);
@@ -2314,9 +2433,13 @@ impl RaysPass {
                     groups: [c.light_groups[8], c.light_groups[12], c.light_groups[3]],
                     queue: c.light_queue,
                     node_cache: c.node_cache,
-                    hits: false,
+                    hits: true,
                 },
             );
+            // Their stops into the light's record, every one its queue listed, after the queue
+            // and before anything reads the record again: the record's draw of the light's next
+            // cast (ray/raster.rs `light_stops`, `light_draw`).
+            c.raster.light_stops(g, pass, c.node_cache);
             g.end(pass);
         }
         let counted = Counts {
@@ -2364,6 +2487,8 @@ impl RaysPass {
             (c.light_list, c.light_args, c.light_stood) = (0, 0, 0);
             c.raster.light_release();
             c.light_ready = false;
+            c.light_on = false;
+            c.counter.off(LIGHT);
         }
     }
 
@@ -2374,16 +2499,22 @@ impl RaysPass {
         }
     }
 
-    /// Whether the light's owed work asks for the next frame: its count waits on that frame to
-    /// be mapped back (`Counter::owed_out`), or what came back owes a cast the light may make
-    /// (`Counter::owed`).
+    /// Whether an observer's owed work asks for the next frame: its count waits on that frame
+    /// to be mapped back, or what came back owes a run the observer may make: the light's cast,
+    /// the eye's queue alone while its rays stand (`Readback::wants_frame`).
     pub fn wants_frame(&self) -> bool {
         self.cast
             .as_ref()
-            .is_some_and(|c| c.counter.owed_out() || (c.light_on && c.counter.owed()))
+            .is_some_and(|c| c.counter.wants_frame([c.eye_on, c.light_on]))
     }
 
-    /// Whether the light's owed work landed for a frame to read (`Counter::owed_landed`).
+    /// Whether this frame runs the eye's queue alone over the holes its last cast left parked,
+    /// casting nothing (`eye_queue`): their pixels change, so the frame is drawn.
+    pub fn eye_queue(&self) -> bool {
+        self.cast.as_ref().is_some_and(|c| c.eye_queue)
+    }
+
+    /// Whether an observer's owed work landed for a frame to read (`Counter::owed_landed`).
     pub fn owed_landed(&self) -> bool {
         self.cast.as_ref().is_some_and(|c| c.counter.owed_landed())
     }
@@ -2579,10 +2710,11 @@ fn light_args_buf(g: &Gpu) -> u32 {
 }
 
 /// The light's list: the beam's lines and the cells' starts, the raster's
-/// samples and the misses past them (`light::list_words`).
+/// samples and the misses past them (`light::list_words`), its holes' region and its stops
+/// (`light::buffer_words`).
 fn light_list(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes((light::list_words(shadow::SIZE) + light::region_words()) as usize),
+        word_bytes(light::buffer_words(shadow::SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2625,7 +2757,7 @@ fn light_groups(
         queue_ask,
     ]: [&Pipeline; LIGHT_GROUPS],
     bindings: [u32; 13],
-    [node_cache, head, list, boxes, visibility, args, misses, light_args, queue, sample_left, beam_left, stood]: [u32;
+    [node_cache, head, list, record, visibility, args, misses, light_args, queue, sample_left, beam_left, stood]: [u32;
         12],
 ) -> [u32; LIGHT_GROUPS] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances, beams] =
@@ -2644,7 +2776,6 @@ fn light_groups(
         view_entry(10, light),
         buf_entry(HEAD_BINDING, head),
         buf_entry(12, list),
-        buf_entry(14, boxes),
         view_entry(15, visibility),
         buf_entry(16, args),
         buf_entry(17, misses),
@@ -2691,8 +2822,19 @@ fn light_groups(
             .collect();
         g.bind_group(layout, &e)
     };
+    // The slots' pass reads the light's record where the receivers' mark reads the eye's beam
+    // rays (`RECORD_BINDING`).
+    let slots = {
+        let layout = walk.layouts[0];
+        let e: Vec<Entry> = entries
+            .into_iter()
+            .filter(|e| layout.binds(e.binding) && e.binding != super::raster::RECORD_BINDING)
+            .chain([buf_entry(super::raster::RECORD_BINDING, record)])
+            .collect();
+        g.bind_group(layout, &e)
+    };
     [
-        of(walk),
+        slots,
         cast_group(g, world, [eye, clipmap, ground, list, node_cache, head]),
         g.bind_group(
             boxes_built.layouts[0],
@@ -2700,8 +2842,8 @@ fn light_groups(
                 buf_entry(0, eye),
                 buf_entry(8, list),
                 buf_entry(HEAD_BINDING, head),
-                buf_entry(14, boxes),
                 buf_entry(16, args),
+                buf_entry(super::raster::RECORD_BINDING, record),
             ],
         ),
         last,
@@ -2773,7 +2915,7 @@ fn queue_groups(
 /// An observer's holes' queue as its passes take it (pxl-engine `ray::QUEUE_LANES`): the
 /// pipelines of its first walk, its asks, its second walk, their asks and its last walk; its
 /// groups (`queue_groups`); its words; the node cache, whose head carries the holes' work done
-/// between the observers' queues and where, the eye's (`hits`), its stops go on.
+/// between the observers' queues and where its stops go on (`hits`), either observer's.
 struct Holes<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],
@@ -2798,6 +2940,13 @@ fn walk_holes(ctx: &mut RenderContext, spans: [GpuSpanName; 2], h: &Holes) -> Id
     let (g, encoder) = (ctx.g, ctx.encoder);
     let [walk, ask, walk_parked, ask_parked, last] = h.pipelines;
     let [walk_group, ask_group, last_group] = h.groups;
+    // The frame's work so far, the queues' before this one's, where its walks count on from.
+    g.copy_buf(
+        encoder,
+        (h.node_cache, word_bytes(node_cache::VISITED as usize)),
+        (h.queue, word_bytes(ray::QUEUE_VISITED as usize)),
+        word_bytes(2),
+    );
     let pass = g.compute_pass(encoder, ctx.stamp(spans[0]).pass());
     for (pipeline, group) in [
         (walk, walk_group),
@@ -2810,13 +2959,14 @@ fn walk_holes(ctx: &mut RenderContext, spans: [GpuSpanName; 2], h: &Holes) -> Id
         g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     }
     g.end(pass);
-    // The work its walks over the node cache did, the nodes visited and asked, where its last
-    // walk counts on from (`node_cache::VISITED`).
+    // The frame's work with its walks' over the node cache, the nodes visited and asked, and
+    // the caps it counts to, where its last walk counts on (`node_cache::VISITED` to
+    // `node_cache::ASKS_CAP`).
     g.copy_buf(
         encoder,
         (h.queue, word_bytes(ray::QUEUE_VISITED as usize)),
         (h.node_cache, word_bytes(node_cache::VISITED as usize)),
-        word_bytes(2),
+        word_bytes(4),
     );
     if h.hits {
         g.copy_buf(

@@ -42,11 +42,13 @@ pub struct RayCounts {
 
 /// What the CPU knew of a counted frame: the renderer's number it will
 /// take (renderer.rs `FrameStat::frame`), and an observer's each, whether it
-/// cast and its pixels or slots.
+/// cast, whether its holes' queue ran, its cast or its queue alone (`queues`),
+/// and its pixels or slots.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
     pub casts: [bool; count::OBSERVERS as usize],
+    pub queues: [bool; count::OBSERVERS as usize],
     pub rays: [u32; count::OBSERVERS as usize],
 }
 
@@ -59,34 +61,131 @@ pub(super) struct Counts {
     pub boxes: [u32; count::OBSERVERS as usize],
 }
 
-/// The array and its readback; whether this frame counts (`on`), what
-/// the CPU knew of the frame copied (`copied_frame`), whether that copy
-/// counted (`copied_on`) and carried the light's owed work (`copied_owed`),
-/// and the counts that landed, until taken (`take`).
+/// The observers, as the readback keeps them (pxl-engine `count::OBSERVERS`).
+const OBSERVERS: usize = count::OBSERVERS as usize;
+
+/// The one readback's slot and each observer's owed work as the CPU knows them, a pure state
+/// its frames step (`copy`, `ask`, `land`, `dropped`, `off`) and read (`wants_frame`, `wakes`),
+/// so every case is tested on the CPU (count.test.rs). One copy is out at a time, from the
+/// frame that encodes it (`copied`) to the mapping the next frame asks (`mapped`) and its
+/// landing. An observer's queue run, the eye's cast or its queue alone, the light's cast, is a
+/// generation of its own (`cast`), and its owed work (`count::OWED`) rides the copy its frame
+/// makes, named by that generation (`carried`); where none is made, the observer stays owed
+/// (`owed`). A copy of an older generation than an observer's last never clears what a newer
+/// run owes. So every run's work is read back or owed, and either asks for the frame that goes
+/// on with it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Readback {
+    /// A copy encoded, its mapping asked by the next frame.
+    pub copied: bool,
+    /// Its mapping out, until it lands.
+    pub mapped: bool,
+    /// Whether the copy out holds the lanes, the `ray_counts` setting's.
+    pub counted: bool,
+    /// Each observer's generation: its queue's runs, and each time it is let go, so far.
+    pub cast: [u32; OBSERVERS],
+    /// The generation whose owed work the copy out holds, an observer's each, if any.
+    pub carried: [Option<u32>; OBSERVERS],
+    /// Whether each observer is owed a run of its queue.
+    pub owed: [bool; OBSERVERS],
+}
+
+impl Readback {
+    /// After a frame's dispatches, where it counted its lanes (`counted`) or an observer's
+    /// queue ran (`ran`), a generation of its own each: whether its counts are copied, which
+    /// they are where none are out. A run whose work is copied owes nothing until it lands; one
+    /// whose work is not stays owed.
+    pub fn copy(&mut self, counted: bool, ran: [bool; OBSERVERS]) -> bool {
+        let copy = (counted || ran.contains(&true)) && !self.copied && !self.mapped;
+        if copy {
+            (self.copied, self.counted) = (true, counted);
+        }
+        for (o, &ran) in ran.iter().enumerate() {
+            if ran {
+                self.cast[o] = self.cast[o].wrapping_add(1);
+                self.owed[o] = !copy;
+            }
+            if copy {
+                self.carried[o] = ran.then_some(self.cast[o]);
+            }
+        }
+        copy
+    }
+
+    /// As a frame begins, the copy the frame before made asked to be mapped, the mapping
+    /// before it landed (`signaled`): whether to ask.
+    pub fn ask(&mut self, signaled: bool) -> bool {
+        let ask = self.copied && !self.mapped && signaled;
+        if ask {
+            (self.copied, self.mapped) = (false, true);
+        }
+        ask
+    }
+
+    /// Whether the copy out holds observer `o`'s owed work of its last generation.
+    fn current(&self, o: usize) -> bool {
+        self.carried[o] == Some(self.cast[o])
+    }
+
+    /// The mapping out landed, refused where not `ok`, each observer's owed work read as
+    /// `owed`: an observer whose last generation it holds is owed where that owes work or the
+    /// mapping was refused; an older one's reading changes nothing. Whether its lanes are
+    /// taken.
+    pub fn land(&mut self, ok: bool, owed: [u32; OBSERVERS]) -> bool {
+        self.mapped = false;
+        for (o, &owed) in owed.iter().enumerate() {
+            if self.current(o) {
+                self.owed[o] = !ok || owed != 0;
+            }
+        }
+        ok && self.counted
+    }
+
+    /// The frame dropped, its copy with it: what that copy held owed again.
+    pub fn dropped(&mut self) {
+        if self.copied {
+            self.copied = false;
+            for o in 0..OBSERVERS {
+                self.owed[o] |= self.carried[o].is_some();
+            }
+        }
+    }
+
+    /// Observer `o` let go, the light's cast released or no world to cast in: a generation of
+    /// its own, owing nothing, as its next run casts afresh.
+    pub fn off(&mut self, o: usize) {
+        self.cast[o] = self.cast[o].wrapping_add(1);
+        self.owed[o] = false;
+    }
+
+    /// Whether the frame after this one must run: a copy holding an observer's last owed work
+    /// waits on it to be mapped, or an observer that may run (`on`) is owed a run.
+    pub fn wants_frame(&self, on: [bool; OBSERVERS]) -> bool {
+        (0..OBSERVERS).any(|o| (self.copied && self.current(o)) || (on[o] && self.owed[o]))
+    }
+
+    /// Whether the mapping out, which holds an observer's last owed work, landed for a frame to
+    /// read (`signaled`), its fence's store having woken the turn.
+    pub fn wakes(&self, signaled: bool) -> bool {
+        self.mapped && signaled && (0..OBSERVERS).any(|o| self.current(o))
+    }
+}
+
+/// The array and its readback (`Readback`); whether this frame counts (`on`), what the CPU
+/// knew of the frame copied (`copied_frame`), and the counts that landed, until taken
+/// (`take`).
 pub(super) struct Counter {
     counts: u32,
     read: u32,
     on: bool,
     frame: Frame,
     copied_frame: Frame,
-    copied_on: bool,
-    copied_owed: bool,
-    /// Whether the light is owed a cast: what the last light cast's copy
-    /// read back where it was not none, and set where a light cast's work is
-    /// not read back (`copy`, `on_dropped`), so a cast whose owed work no
-    /// copy carried is followed by another. Cleared by each light cast whose
-    /// copy carries it, until that copy lands.
-    owed: bool,
-    /// Whether a light cast ran since the copy out, so what it reads back
-    /// is not the light's last.
-    cast_since: bool,
+    slot: Readback,
     read_counts: Box<[u32; WORDS]>,
     /// The mapping's fence and result, the host's, and the ticket it
     /// was last asked with, the kernel's: one mapping out at a time.
     mapping: Box<[u32; 2]>,
     ticket: u32,
-    copied: bool,
-    mapped: bool,
     ray_counts: Option<RayCounts>,
 }
 
@@ -105,15 +204,10 @@ impl Counter {
             on: false,
             frame: Frame::default(),
             copied_frame: Frame::default(),
-            copied_on: false,
-            copied_owed: false,
-            owed: false,
-            cast_since: false,
+            slot: Readback::default(),
             read_counts: Box::new([0; WORDS]),
             mapping: Box::new([0; 2]),
             ticket: 0,
-            copied: false,
-            mapped: false,
             ray_counts: None,
         }
     }
@@ -146,24 +240,22 @@ impl Counter {
 
     /// The counts gathered into the array and copied where none are out,
     /// after the frame's dispatches: each observer's that cast where the
-    /// frame counts, and the light's owed work where it cast. A light cast
-    /// whose owed work is not copied leaves the light owed a cast.
+    /// frame counts, and each observer's owed work where its queue ran
+    /// (`Readback::copy`).
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
-        let light = self.frame.casts[count::LIGHT as usize];
-        if light && (self.copied || self.mapped) {
-            (self.owed, self.cast_since) = (true, true);
-        }
-        if !(self.on || light) || self.copied || self.mapped {
+        let ran = self.frame.queues;
+        if !self.slot.copy(self.on, ran) {
             return;
         }
-        if light {
-            g.copy_buf(
-                encoder,
-                (from.node_cache, word_bytes(node_cache::OWED as usize)),
-                (self.counts, word_bytes(count::OWED as usize)),
-                word_bytes(1),
-            );
-            (self.owed, self.cast_since) = (false, false);
+        for o in 0..count::OBSERVERS {
+            if ran[o as usize] {
+                g.copy_buf(
+                    encoder,
+                    (from.node_cache, word_bytes(node_cache::owed_at(o) as usize)),
+                    (self.counts, word_bytes((count::OWED + o) as usize)),
+                    word_bytes(1),
+                );
+            }
         }
         for o in 0..count::OBSERVERS {
             let k = o as usize;
@@ -197,46 +289,39 @@ impl Counter {
             }
         }
         g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
-        (self.copied, self.copied_frame) = (true, self.frame);
-        (self.copied_on, self.copied_owed) = (self.on, light);
+        self.copied_frame = self.frame;
     }
 
     /// The counts copied last frame mapped back, and those that landed
     /// kept with what the CPU knew of their frame, until taken: after the
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
-        let landed = signaled(&self.mapping[0], self.ticket);
-        if self.mapped && landed && self.mapping[1] != RESULT::OK {
-            self.mapped = false;
-            self.owed |= self.copied_owed;
-        }
-        if self.mapped && landed && self.copied_owed && !self.cast_since {
-            self.owed = self.read_counts[count::OWED as usize] != 0;
-        }
-        if self.mapped && landed && !self.copied_on {
-            self.mapped = false;
-        }
-        if self.mapped && landed {
-            let (l, f) = (&self.read_counts, self.copied_frame);
-            let mut counts = [0.0; RAY_COUNTS];
-            for o in 0..count::OBSERVERS {
-                if !f.casts[o as usize] {
-                    continue;
+        let signaled = signaled(&self.mapping[0], self.ticket);
+        if self.slot.mapped && signaled {
+            let ok = self.mapping[1] == RESULT::OK;
+            let owed =
+                [count::EYE, count::LIGHT].map(|o| self.read_counts[(count::OWED + o) as usize]);
+            if self.slot.land(ok, owed) {
+                let (l, f) = (&self.read_counts, self.copied_frame);
+                let mut counts = [0.0; RAY_COUNTS];
+                for o in 0..count::OBSERVERS {
+                    if !f.casts[o as usize] {
+                        continue;
+                    }
+                    counts[count_at(o, CAST)] = 1.0;
+                    counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
+                    for lane in 0..count::LANES {
+                        let c = f64::from(l[count::at(o, lane) as usize]);
+                        counts[count_at(o, LANES_AT + lane as usize)] = c;
+                    }
                 }
-                counts[count_at(o, CAST)] = 1.0;
-                counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
-                for lane in 0..count::LANES {
-                    let c = f64::from(l[count::at(o, lane) as usize]);
-                    counts[count_at(o, LANES_AT + lane as usize)] = c;
-                }
+                self.ray_counts = Some(RayCounts {
+                    frame: f.number,
+                    counts,
+                });
             }
-            self.ray_counts = Some(RayCounts {
-                frame: f.number,
-                counts,
-            });
-            self.mapped = false;
         }
-        if self.copied && landed {
+        if self.slot.ask(signaled) {
             let addr = off_of(self.read_counts.as_ptr()) as u32;
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
@@ -247,24 +332,28 @@ impl Counter {
                 &self.mapping,
                 self.ticket,
             );
-            (self.copied, self.mapped) = (false, true);
         }
     }
 
-    /// Whether the light is owed a cast (`owed`).
-    pub(super) fn owed(&self) -> bool {
-        self.owed
+    /// Whether observer `o` is owed a run of its queue (`Readback::owed`).
+    pub(super) fn owed(&self, o: u32) -> bool {
+        self.slot.owed[o as usize]
     }
 
-    /// Whether the light's owed work waits on the next frame to be mapped
-    /// back (`back`); once mapped, its fence wakes the turn (`owed_landed`).
-    pub(super) fn owed_out(&self) -> bool {
-        self.copied_owed && self.copied
+    /// Whether the frame after this one must run for an observer's owed work, each observer
+    /// that may run `on` (`Readback::wants_frame`).
+    pub(super) fn wants_frame(&self, on: [bool; OBSERVERS]) -> bool {
+        self.slot.wants_frame(on)
     }
 
-    /// Whether the light's owed work landed for a frame to read (`back`).
+    /// Whether an observer's owed work landed for a frame to read (`Readback::wakes`).
     pub(super) fn owed_landed(&self) -> bool {
-        self.copied_owed && self.mapped && signaled(&self.mapping[0], self.ticket)
+        self.slot.wakes(signaled(&self.mapping[0], self.ticket))
+    }
+
+    /// Observer `o` let go (`Readback::off`).
+    pub(super) fn off(&mut self, o: u32) {
+        self.slot.off(o as usize);
     }
 
     /// The counts that landed since last taken.
@@ -274,9 +363,10 @@ impl Counter {
 
     /// The frame its copy was encoded in was dropped.
     pub(super) fn on_dropped(&mut self) {
-        if self.copied {
-            self.owed |= self.copied_owed;
-        }
-        self.copied = false;
+        self.slot.dropped();
     }
 }
+
+#[cfg(test)]
+#[path = "count.test.rs"]
+mod test;

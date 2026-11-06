@@ -1,11 +1,11 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The voxels drawn at the eye's rays' pixels (pxl-engine raster.rs), the eye's
-// record's (record_draw.wgsl) and the light's samples' (boxes.wgsl): each box an
-// instance, its three faces turned to the eye, one an axis, as `corner` winds them, the faces turned away never drawn, each grown in
-// its own plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn
-// pixel. A hit's box draws the faces across the axes its samples entered it by
-// (`raster::faces`), a lack's every face turned to the eye. A face keeps a pixel
+// The voxels drawn at the eye's rays' pixels (pxl-engine raster.rs), its record's and the
+// light's (record_draw.wgsl): each box an instance, its three faces turned to the eye, one an
+// axis, as `corner` winds them, the faces turned away never drawn, each grown in its own
+// plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn pixel. A hit's box
+// draws, of those, the sides some ray entered it through (`raster::faces`, a bit a side), a
+// lack's every face turned to the eye. A face keeps a pixel
 // only where the pixel's own ray enters the box across that face's axis
 // (`raster_enters`). A ray enters a box through one face, and the face lies in
 // its plane, so a kept fragment's depth is where the ray enters the box: the
@@ -77,7 +77,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   let hi = vec3f(raster_plane(w + RASTER_BOX_HI), raster_plane(w + RASTER_BOX_HI + 1u), raster_plane(w + RASTER_BOX_HI + 2u));
   o.lo = lo;
   o.hi = hi;
-  // A stale voxel's depth, the eye's alone, drawn behind every fresh one's.
+  // A stale voxel's depth, drawn behind every fresh one's.
   let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);
   if ((word & RASTER_EYED) != 0u) {
     o.axis = RASTER_ANY;
@@ -90,9 +90,6 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   }
   let a = vi / 6u;
   o.axis = a;
-  if (!lacks && (((word & RASTER_FACES_MASK) >> a) & 1u) == 0u) {
-    return o;
-  }
   let light = raster.turn.y != 0u;
   // The face across `a` turned to the eye: the high one where the eye is
   // past it, the low where before; none where the eye is between them.
@@ -109,6 +106,11 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   } else if (hi[a] < 0.0) {
     high = 1u;
   } else if (!(lo[a] > 0.0)) {
+    return o;
+  }
+  // Drawn where some ray entered the box through that side: the face a ray running up the
+  // axis enters is the low one (pxl-engine `ray::face`); a lack's every side.
+  if (!lacks && (((word & RASTER_FACES_MASK) >> (2u * a + 1u - high)) & 1u) == 0u) {
     return o;
   }
   let c = raster_corner(raster.turn.x + (2u * a + high) * 6u + vi % 6u);
@@ -128,7 +130,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     o.clip = vec4f(
       (i + 0.5) / raster.screen.y * 2.0 - 1.0,
       1.0 - (j + 0.5) / raster.screen.z * 2.0,
-      1.0 - dot(q, raster.forward.xyz) / raster.screen.w,
+      (1.0 - dot(q, raster.forward.xyz) / raster.screen.w) * behind,
       1.0,
     );
     return o;

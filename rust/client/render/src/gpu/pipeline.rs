@@ -33,7 +33,7 @@ pub struct Pipeline {
 const LAYOUTS: usize = PIPELINES as usize * GROUPS + COMPUTES as usize;
 /// Every pipeline the renderer makes, render and compute, each held to it
 /// as it is made.
-const PIPELINE_CAP: usize = 103;
+const PIPELINE_CAP: usize = 106;
 
 pub struct Pipelines {
     modules: [u32; SHADERS as usize],

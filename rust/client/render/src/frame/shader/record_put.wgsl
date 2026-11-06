@@ -20,12 +20,14 @@ const MET_CLAIM: u32 = 0xfffffffeu;
 const CLAIM_TRIES: u32 = 4u;
 
 /// What a ray found where it stopped on a node, the node's key apart (`Kept`; pxl-engine
-/// `record`): its answer, whether it lacks, the face its ray entered (2·axis, plus one where
-/// the ray runs up the axis), and the first word of the beam ray's line that face's word is
-/// asked off (`beam::ASK_LINE`).
+/// `record`): its answer, whether it lacks, whether the ray stopped on it whole, coarser than
+/// it asked there (`record::stopped_whole`, `record::light_whole`), the face its ray entered
+/// (2·axis, plus one where the ray runs up the axis), and the first word of the beam ray's
+/// line that face's word is asked off (`beam::ASK_LINE`).
 struct Stop {
   asset: vec2<u32>,
   lacks: bool,
+  whole: bool,
   face: u32,
   line: u32,
 }
@@ -56,14 +58,14 @@ fn eye_origin() -> vec3<i32> {
   return vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
 }
 
-/// The node at word `k` of the beam rays' words (`beam::NODE_WORDS`), as a walk from the eye
+/// The node at word `k` of the beam rays' words (`beam::NODE_WORDS`), as a walk from `origin`
 /// holds it, at band `band`, as the record keys it (`record::Key::of`).
-fn kept_at(k: u32, band: u32) -> Kept {
+fn kept_at(k: u32, band: u32, origin: vec3<i32>) -> Kept {
   let roots = vec3<i32>(i32(beams[k + NODE_ROOTS]), i32(beams[k + NODE_ROOTS + 1u]), i32(beams[k + NODE_ROOTS + 2u]));
   return Kept(
     beams[k + NODE_ZOOM],
     vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]),
-    roots + origin_roots(eye_origin()),
+    roots + origin_roots(origin),
     band,
   );
 }
@@ -104,9 +106,9 @@ fn yields(k: Kept, b: u32, pick: u32) -> bool {
   return false;
 }
 
-/// Stop `p` of `k` written into slot `slot` it claimed, from the eye at `o`: its key, its answer,
-/// its state, seen this frame, no face drawn yet; its held word last.
-fn write_entry(k: Kept, p: Stop, slot: u32, o: vec3<i32>) {
+/// Stop `p` of `k` written into slot `slot` it claimed: its key, its answer, its state, seen
+/// this frame, no face drawn yet; its held word last.
+fn write_entry(k: Kept, p: Stop, slot: u32) {
   let e = record_at(slot);
   atomicStore(&record[e + R_CORNER], k.corner.x);
   atomicStore(&record[e + R_CORNER + 1u], k.corner.y);
@@ -117,11 +119,11 @@ fn write_entry(k: Kept, p: Stop, slot: u32, o: vec3<i32>) {
   atomicStore(&record[e + R_ASSET], p.asset.x);
   atomicStore(&record[e + R_ASSET + 1u], p.asset.y);
   let lacks = select(0u, RECORD_LACKS, p.lacks);
-  let whole = select(0u, RECORD_WHOLE, stopped_whole(k, o));
+  let whole = select(0u, RECORD_WHOLE, p.whole);
   atomicStore(&record[e + R_STATE], lacks | whole);
   atomicStore(&record[e + R_SEEN], record_frame());
-  for (var axis = 0u; axis < 3u; axis += 1u) {
-    atomicStore(&record[e + R_FACES + axis], 0u);
+  for (var face = 0u; face < 6u; face += 1u) {
+    atomicStore(&record[e + R_FACES + face], 0u);
   }
   atomicStore(&record[e + R_HELD], kept_held(k));
 }
@@ -183,20 +185,19 @@ fn claim(k: Kept, p: Stop) -> u32 {
         atomicStore(&record[record_at(pick) + R_HELD], 0u);
         return find(k);
       }
-      write_entry(k, p, pick, eye_origin());
+      write_entry(k, p, pick);
       return pick;
     }
   }
   return NO_ENTRY;
 }
 
-/// The face stop `p` entered its entry at word `e` across set (`raster::faces`), and, the first
-/// time it is, what lies about it told at once where it needs no asking, a lack's none and a
+/// The side stop `p` entered its entry at word `e` through set (`raster::faces`, a bit a side),
+/// and, the first time it is, what lies about it told at once where it needs no asking, a lack's none and a
 /// cell short of its cube its box's (`face::BOX`), else asked of the faces' pass off the stop's
 /// line, laid among `asks`, its node the entry (`record::TO_RECORD`).
 fn observe(p: Stop, e: u32, asks: Asks) {
-  let axis = p.face / 2u;
-  let bit = 1u << axis;
+  let bit = 1u << p.face;
   let state = e + R_STATE;
   if ((record_word(state) & bit) != 0u || (atomicOr(&record[state], bit) & bit) != 0u) {
     return;
@@ -205,7 +206,11 @@ fn observe(p: Stop, e: u32, asks: Asks) {
     return;
   }
   if (((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u) {
-    atomicStore(&record[e + R_FACES + axis], FACE_BOX);
+    atomicStore(&record[e + R_FACES + p.face], FACE_BOX);
+    return;
+  }
+  // An observer that reads no face's word lays its asks in no room (the light's).
+  if (asks.room == 0u) {
     return;
   }
   let place = args_add(asks.args + RASTER_ARGS_CNT, 1u);
@@ -221,7 +226,7 @@ fn observe(p: Stop, e: u32, asks: Asks) {
   beams[a + ASK_NODE] = e;
   beams[a + ASK_FACE] = p.face;
   beams[a + ASK_LINE] = p.line;
-  beams[a + ASK_TO] = RECORD_TO | (e + R_FACES + axis);
+  beams[a + ASK_TO] = RECORD_TO | (e + R_FACES + p.face);
 }
 
 /// Stop `p` of `k` into the record: its key's entry found, or, where `claims`, claimed and

@@ -44,15 +44,7 @@ fn sample_band(s: vec2<u32>) -> u32 {
   return texel_band(slot_texel(s * LIGHT_SAMPLE));
 }
 
-/// The voxels its boxes draw (`light::voxels_at`).
-fn voxels_at() -> u32 {
-  return head_word(LIGHT_HEAD_VOXELS);
-}
-
-/// The light's slots read no faces' words.
-const SAMPLE_FACE_WORDS: bool = false;
-
-/// None asked (`SAMPLE_FACE_WORDS`).
+/// None asked: the light's slots read no faces' words (sample_box.light.wgsl `sample_asks`).
 fn sample_line(s: vec2<u32>) -> u32 {
   return NONE;
 }

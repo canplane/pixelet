@@ -1,6 +1,7 @@
 //! `light_cs` and the receivers' passes by hand (frame/shader/light.wgsl, light_mark.wgsl)
 //! answer as pxl-engine's light over the real world of tests/real_world. A slot of a tile the
-//! cast casts takes its visible voxel where its own ray enters it as the sample did
+//! cast casts takes its visible voxel, one of the light's record, where its own ray enters it
+//! as the sample did
 //! (`cast::entry_with`) at the band it asks (`Light::band`), its word
 //! `light::word(light::depth(..))`; else the sky where the four samples about it
 //! (`light::samples_about`) went on to their reach at its band; else it is listed for its walk.
@@ -219,8 +220,12 @@ fn run_slots(
 
     // The list's words noise, the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    // The voxels' boxes, read for the faces each draws.
-    let mut boxes = vec![0u32; raster::words(n * n) as usize];
+    // The light's record, a voxel a sample at the sample's number, as the slots read it by the
+    // visible id (pxl-engine `record`): its key, world-absolute from where the sample's ray
+    // starts, its asset, and its state the face the sample entered and whether it lacks.
+    let mut rec = vec![0u32; record::WORDS as usize];
+    rec[record::FRAME as usize] = CAST;
+    let mut origins = vec![[0i32; 3]; (n * n) as usize];
     let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
@@ -253,15 +258,22 @@ fn run_slots(
             list[k + beam::SAMPLE_AXIS as usize] = met.hit.axis;
             kinds.add("samples gone on", gone);
             kinds.add("samples stopped", !gone);
-            // A voxel a sample, at its number (boxes.wgsl `write_voxel`): its node, asset,
-            // lack and band, and the face it entered drawn in its box.
-            let v = (light::voxels_at(SIZE) + (j * n + i) * beam::VOXEL_WORDS) as usize;
-            for w in 0..(beam::VOXEL_BAND as usize) {
-                list[v + w] = list[k + w];
+            origins[(j * n + i) as usize] = o;
+            let key = record::Key::of(o, &met.hit.node, b);
+            let e = record::entry_at(j * n + i) as usize;
+            rec[e + record::R_HELD as usize] = if gone { record::FREE } else { key.held() };
+            for a in 0..3 {
+                rec[e + (record::R_CORNER + a) as usize] = key.corner[a as usize];
+                rec[e + (record::R_ROOTS + a) as usize] = key.roots[a as usize] as u32;
             }
-            list[v + beam::VOXEL_BAND as usize] = b;
-            let at = ((j * n + i) * raster::BOX_WORDS + raster::BOX_FACES) as usize;
-            boxes[at] = 1 << met.hit.axis;
+            rec[e + record::R_ASSET as usize] = met.hit.asset[0];
+            rec[e + record::R_ASSET as usize + 1] = met.hit.asset[1];
+            rec[e + record::R_STATE as usize] = raster::faces([ray::face(l.dir, met.hit.axis)])
+                | if met.ends == End::Lacks {
+                    record::LACKS
+                } else {
+                    0
+                };
         }
     }
     let stopped: Vec<u32> = (0..n * n)
@@ -424,6 +436,8 @@ fn run_slots(
         if visible != 0 && visible & raster::LACK == 0 {
             let s = raster::voxel_of(visible);
             let (node, asset, axis) = cell_of(&list, light::sample(SIZE, s) as usize);
+            // The node as the slot's ray holds it, its roots from where that ray starts.
+            let node = record::Key::of(origins[s as usize], &node, 0).node(o);
             let e = cast::entry_with(o, &r, inv, &node, asset[0]);
             let alike = sample_band([s % n, s / n]) == band;
             if e.enters && e.axis == axis && alike {
@@ -483,7 +497,7 @@ fn run_slots(
         let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
-        let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
+        let rec_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
         gpu.dispatch(
             pipe,
             &[
@@ -493,7 +507,7 @@ fn run_slots(
                 (11, head_buf.as_entire_binding()),
                 (15, wgpu::BindingResource::TextureView(&vis_v)),
                 (17, misses_buf.as_entire_binding()),
-                (14, boxes_buf.as_entire_binding()),
+                (23, rec_buf.as_entire_binding()),
             ],
             groups,
         );

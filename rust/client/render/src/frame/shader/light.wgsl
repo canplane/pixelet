@@ -2,7 +2,8 @@
 
 // The world's depth from the light into every slot of the tiles the cast claimed (light_list.wgsl
 // `light_item`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
-// voxel where its own ray enters it across a face its samples entered it by, or the sky where
+// voxel, one of the light's record (pxl-engine `record`), which it marks seen, where its own
+// ray enters it across a face some ray of the light entered it by, or the sky where
 // no sample about it met anything, as cast.wgsl takes a pixel's (visible.wgsl), each only where
 // that voxel was asked at the band the slot asks; the rest listed for the holes' queue
 // (queue.wgsl).
@@ -12,8 +13,6 @@
 /// The visible voxel at each texel of the box, in the box's order (`Light::texel`): its
 /// number (`raster::id_of`), 0 where it kept none.
 @group(0) @binding(15) var visibility: texture_2d_array<u32>;
-/// The voxels' boxes, read for the faces each draws (`raster::BOX_FACES`).
-@group(0) @binding(14) var<storage, read> boxes: array<u32>;
 /// The listed slots' dispatch, their count and the counts' lanes (list.wgsl `MissArgs`).
 @group(0) @binding(17) var<storage, read_write> args: MissArgs;
 
@@ -63,15 +62,26 @@ fn light_cs(
   let aim = light_aim(p);
   let band = aim.range.x;
   let visible = textureLoad(visibility, p, 0u, 0u).x;
-  if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    let v = (visible & ~VISIBLE_LACK) - 1u;
-    let k = head_word(LIGHT_HEAD_VOXELS) + v * VOXEL_WORDS;
-    let entry = visible_entry(aim, k, boxes[v * RASTER_BOX_WORDS + RASTER_BOX_FACES]);
-    // Taken only where the voxel was asked at the slot's band (pxl-engine `Light::band`).
-    if (entry.enters && beams[k + VOXEL_BAND] == band) {
-      add_cnt(on, COUNT_REUSED);
-      textureStore(light, at, 0u, vec4<u32>(stop_word(entry.t, entry.axis), 0u, 0u, 0u));
-      return;
+  if (visible != 0u) {
+    // A voxel of the light's record (pxl-engine `record`), seen this cast: no claim takes its
+    // slot this cast or the next (`record::victim`).
+    let e = record_at((visible & ~VISIBLE_LACK) - 1u);
+    let frame = record_frame();
+    if (record_word(e + R_SEEN) != frame) {
+      atomicStore(&record[e + R_SEEN], frame);
+    }
+    let held = record_word(e + R_HELD);
+    if ((visible & VISIBLE_LACK) == 0u && (held & RECORD_HELD) != 0u) {
+      let k = entry_kept(e, held);
+      let fill = (record_word(e + R_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+      let faces = record_word(e + R_STATE) & RECORD_FACES;
+      let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
+      // Taken only where the voxel was asked at the slot's band (pxl-engine `Light::band`).
+      if (entry.enters && k.band == band) {
+        add_cnt(on, COUNT_REUSED);
+        textureStore(light, at, 0u, vec4<u32>(stop_word(entry.t, entry.axis), 0u, 0u, 0u));
+        return;
+      }
     }
   }
   if (visible == 0u && sky(at, p, band)) {

@@ -125,3 +125,27 @@ fn kept_fresh(k: Kept, whole: bool, o: vec3<i32>) -> bool {
   let parent = Kept(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots, k.band);
   return zoom < asked_near(kept_planes(parent, o));
 }
+
+/// Whether slot `slot`, holding `k`, is a second entry of its key: a slot before it in its
+/// bucket holds `k` (two claims that each missed the other, pxl-engine `record`). It then
+/// gives that one the faces it holds that one does not, with their words, and goes free.
+fn joins_first(slot: u32, k: Kept) -> bool {
+  let b = slot & ~(RECORD_BUCKET - 1u);
+  for (var i = b; i < slot; i += 1u) {
+    let f = record_at(i);
+    let held = record_word(f + R_HELD);
+    if ((held & RECORD_HELD) != 0u && entry_holds(f, held, k)) {
+      let e = record_at(slot);
+      let mine = record_word(e + R_STATE) & RECORD_FACES;
+      let gained = mine & ~atomicOr(&record[f + R_STATE], mine);
+      for (var face = 0u; face < 6u; face += 1u) {
+        if (((gained >> face) & 1u) != 0u) {
+          atomicStore(&record[f + R_FACES + face], record_word(e + R_FACES + face));
+        }
+      }
+      atomicStore(&record[e + R_HELD], 0u);
+      return true;
+    }
+  }
+  return false;
+}

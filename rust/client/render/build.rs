@@ -120,8 +120,8 @@ fn main() {
     // is drawn at, short of a lack's 1: finite, as every literal here is.
     {
         use pxl_engine::raster::{
-            corner, BOX_FACES, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, KEYS, KEY_WORDS, LACK,
-            NEAR, STALE, STALE_DEPTH,
+            corner, BOX_FACES, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR, STALE,
+            STALE_DEPTH,
         };
         let n = word::BOX_VERTICES;
         let bits: Vec<u32> = (0..2 * n)
@@ -143,7 +143,7 @@ fn main() {
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_FACES: u32 = {BOX_FACES}u;\nconst RASTER_FACES_MASK: u32 = {}u;\nconst RASTER_KEYS: u32 = {KEYS}u;\nconst RASTER_KEY_WORDS: u32 = {KEY_WORDS}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_STALE: u32 = {STALE}u;\nconst RASTER_STALE_DEPTH: f32 = {STALE_DEPTH:?};\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_FACES: u32 = {BOX_FACES}u;\nconst RASTER_FACES_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_STALE: u32 = {STALE}u;\nconst RASTER_STALE_DEPTH: f32 = {STALE_DEPTH:?};\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
             corners.len(),
             corners.join(", "),
             EYED - 1
@@ -269,12 +269,6 @@ fn walk_word() -> String {
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
         ("NODE_WORDS", beam::NODE_WORDS),
-        ("VOXEL_NODE", beam::VOXEL_NODE),
-        ("VOXEL_ASSET", beam::VOXEL_ASSET),
-        ("VOXEL_LACKS", beam::VOXEL_LACKS),
-        ("VOXEL_BAND", beam::VOXEL_BAND),
-        ("VOXEL_FACES", beam::VOXEL_FACES),
-        ("VOXEL_WORDS", beam::VOXEL_WORDS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
         ("SAMPLE_SIDE", SAMPLE_SIDE),
@@ -320,7 +314,6 @@ fn walk_word() -> String {
         ),
         ("HITS_ARGS", node_cache::HITS_ARGS),
         ("HITS_CNT", node_cache::HITS_CNT),
-        ("RAY_MISS", ray::MISS),
         (
             "LIGHT_ASKED_COUNT",
             node_cache::lane_at(count::LIGHT, count::ASKED),
@@ -358,6 +351,8 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_STANDS_WORLD", light::HEAD_STANDS_WORLD as u32),
         ("LIGHT_HEAD_PLACES", light::HEAD_PLACES as u32),
         ("LIGHT_HEAD_REGION", light::HEAD_REGION as u32),
+        ("LIGHT_HEAD_HITS", light::HEAD_HITS as u32),
+        ("LIGHT_HEAD_DEFERS", light::HEAD_DEFERS as u32),
         ("LIGHT_HEAD_RINGS", light::HEAD_RINGS as u32),
         ("LIGHT_HEAD_CARRIES", light::HEAD_CARRIES as u32),
         ("LIGHT_READ_OWED", light::READ_OWED),
@@ -367,7 +362,6 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
         ("LIGHT_HEAD_CORNERS_LEFT", light::HEAD_CORNERS_LEFT as u32),
-        ("LIGHT_HEAD_VOXELS", light::HEAD_VOXELS as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
         ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
@@ -476,18 +470,21 @@ fn walk_word() -> String {
         ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
         ("QUEUE_VISITED", ray::QUEUE_VISITED),
         ("QUEUE_ASKED", ray::QUEUE_ASKED),
+        ("QUEUE_CAPS", ray::QUEUE_CAPS),
         ("QUEUE_HITS", ray::QUEUE_HITS),
         ("QUEUE_RECORDS_AT", ray::QUEUE_RECORDS_AT),
         ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
         ("QUEUE_RECORDS_ROOM", ray::QUEUE_RECORDS_ROOM),
-        ("VISITS_A_FRAME", light::VISITS_A_FRAME),
-        ("ASKS_A_FRAME", light::ASKS_A_FRAME),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
         ("LAST_TAKEN", node_cache::LAST_TAKEN),
         ("VISITED", node_cache::VISITED),
         ("ASKED", node_cache::ASKED),
-        ("OWED", node_cache::OWED),
+        ("VISITS_CAP", node_cache::VISITS_CAP),
+        ("ASKS_CAP", node_cache::ASKS_CAP),
+        ("EYE_OWED", node_cache::owed_at(count::EYE)),
+        ("LIGHT_OWED", node_cache::owed_at(count::LIGHT)),
+        ("RESUMES", node_cache::RESUMES),
         ("HIT_ASSET", beam::HIT_ASSET),
         ("HIT_LINE", beam::HIT_LINE),
         ("FACE_BOX", face::BOX),
