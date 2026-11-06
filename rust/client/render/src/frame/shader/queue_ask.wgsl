@@ -50,7 +50,15 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
     atomicStore(&node_cache[got.x], got.y);
     return;
   }
-  fill(got.x, zoom, c, zooms, tag, world_answer(parent, top, zoom, c, zooms, asked));
+  // Kept at the zooms its answer is kept at (ask.wgsl `key_zooms`); a cell another slot keeps
+  // by its node alone already keeps it, the claim let go.
+  let a = world_answer(parent, top, zoom, c, zooms, asked);
+  let kz = key_zooms(zoom, zooms, a);
+  if (kz != zooms && cell_kept(first, zoom, c, kz != CELL_FAR)) {
+    atomicStore(&node_cache[got.x], got.y);
+    return;
+  }
+  fill(got.x, zoom, c, kz, tag, a);
 }
 
 /// The nodes the walk `again` or the first listed, each asked once.

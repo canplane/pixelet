@@ -9,19 +9,20 @@
 @group(0) @binding(9) var<storage, read> node_cache: array<u32>;
 
 /// The node `c` at `zoom`, asked at `zooms`, far then near over `ZOOM_BITS`, off the slot that
-/// keeps it at those zooms, what was handed it read where `hands`; else `KIND_LEFT`. A slot
-/// keeping it at other zooms answers nothing, as pxl-engine's `Query` answers a node at the
-/// pair asked alone. `parent` and `top` are the asking walk's (ask.wgsl), unread here.
+/// keeps it for those zooms (walk_node.wgsl `holds_for`): at those zooms, or a cell by its node
+/// alone; what was handed it read where `hands`; else `KIND_LEFT`. A slot keeping a split at
+/// other zooms answers nothing, as pxl-engine's `Query` answers a node at the pair asked.
+/// `parent` and `top` are the asking walk's (ask.wgsl), unread here.
 fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
   if (keeps(zoom, c)) {
-    let want = zooms << TAG_BITS;
     let node = vec4<u32>(zoom, u32(c.x), u32(c.y), u32(c.z));
     let first = bucket_of(zoom, c);
     for (var k = 0u; k < BUCKET; k += 1u) {
       let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
       let held = node_cache[w];
-      // A claim reads as no zoom pair a walk asks (pxl-engine `node_cache::CLAIMED`).
-      if (held == 0u || (held & KEY_ZOOMS) != want) {
+      // A claim reads as no zoom pair a walk asks and no cell (pxl-engine
+      // `node_cache::CLAIMED`).
+      if (held == 0u || !holds_for(held, zoom, zooms)) {
         continue;
       }
       let n = vec4<u32>(node_cache[w + W_NODE], node_cache[w + W_NODE + 1u], node_cache[w + W_NODE + 2u], node_cache[w + W_NODE + 3u]);

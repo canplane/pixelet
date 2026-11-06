@@ -284,6 +284,7 @@ fn walk_word() -> String {
         ("CLAIMED", node_cache::CLAIMED),
         ("CLAIM_MASK", node_cache::CLAIM_MASK),
         ("CLAIM_FAR", node_cache::CLAIM_FAR),
+        ("CELL_FAR", node_cache::CELL_FAR),
         ("TAG_BITS", node_cache::TAG_BITS),
         ("KEY_ZOOMS", !((1u32 << node_cache::TAG_BITS) - 1)),
         ("KIND_SPLIT", answer::Kind::Split as u32),

@@ -62,12 +62,14 @@ fn is_claim(key: u32) -> bool {
 /// claimed it names it next.
 const CLAIM_READS = 8u;
 
-/// The stamp of an entry asked at `zooms`, far then near over `ZOOM_BITS`, a hash of its
-/// words under its kind (pxl-engine `node_cache::KIND_MASK`): a walk reads and writes at
-/// once here, so takes a slot only where the words it read hash to it.
+/// The stamp of an entry its key keeps at `zooms`, far then near over `ZOOM_BITS`
+/// (`key_zooms`), a hash of its words under its kind (pxl-engine `node_cache::KIND_MASK`): a
+/// walk reads and writes at once here, so takes a slot only where the words it read hash to it.
+/// A cell kept by its node alone hashes as `CELL_FAR`, whole or not, as a walk sets it whole
+/// over its key alone (`cell_kept`).
 fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom: u32, c: vec3<i32>) -> u32 {
   var h = node_hash(zoom, c);
-  h = mix_hash(h, zooms);
+  h = mix_hash(h, select(zooms, CELL_FAR, (zooms & ((1u << ZOOM_BITS) - 1u)) == CELL_FAR));
   h = mix_hash(h, kind);
   h = mix_hash(h, asset.x);
   h = mix_hash(h, asset.y);
@@ -85,7 +87,6 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom:
 /// One asked of the world counts at word `asked`, none where `NONE`; where the pass may ask no
 /// more (`may_ask`), none is asked and the walk is left there (`KIND_LEFT`).
 fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
-  let want = zooms << TAG_BITS;
   var kept = keeps(zoom, c);
   var first = 0u;
   if (kept) {
@@ -93,7 +94,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
     for (var k = 0u; k < BUCKET; k += 1u) {
       let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
       let slot_key = node_cache_word(w);
-      if (slot_key != 0u && (slot_key & KEY_ZOOMS) == want && is_node(w, zoom, c)) {
+      if (slot_key != 0u && holds_for(slot_key, zoom, zooms) && is_node(w, zoom, c)) {
         // Its key is written last (`keep`), but a plain load may give the other words from
         // before that write, or from a write over it since: an entry of any walk, this pass's
         // as an earlier frame's, is taken only where its words hash to its stamp
@@ -107,7 +108,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
         );
         let word = node_cache_word(w + W_KIND);
         let asset = vec2<u32>(node_cache_word(w + W_ASSET), node_cache_word(w + W_ASSET + 1u));
-        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, zooms, asset, held, zoom, c)) {
+        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, slot_key >> TAG_BITS, asset, held, zoom, c)) {
           return Answer(word & KIND_MASK, asset, held);
         }
         // Words of two writes: left to the walk that writes it.
@@ -141,26 +142,66 @@ fn world_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u3
   return world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
 }
 
-/// Whether a slot of the bucket from `first` keeps the node `c` at `zoom` at `zooms`, its key
-/// read as it stands, of whichever walk and frame.
+/// Whether a slot of the bucket from `first` keeps the node `c` at `zoom` for a walk asking it
+/// at `zooms` (`holds_for`), its key read as it stands, of whichever walk and frame.
 fn kept_at(first: u32, zoom: u32, c: vec3<i32>, zooms: u32) -> bool {
-  let want = zooms << TAG_BITS;
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
     let key = node_cache_now(w);
-    if (key != 0u && (key & KEY_ZOOMS) == want && is_node_now(w, zoom, c)) {
+    if (key != 0u && !is_claim(key) && holds_for(key, zoom, zooms) && is_node_now(w, zoom, c)) {
       return true;
     }
   }
   return false;
 }
 
+/// The zooms a key keeps the node of `zoom`, asked at `zooms` and answered `a`, at
+/// (pxl-engine `node_cache::key_zooms`): a cell the query answers by its cell, by its node
+/// alone (`CELL_FAR`), whole where it answered it coarser than asked, as no split answers a
+/// cell but void; else the zooms asked.
+fn key_zooms(zoom: u32, zooms: u32, a: Answer) -> u32 {
+  if (a.kind == KIND_SPLIT) {
+    return zooms;
+  }
+  if (zoom >= (zooms >> ZOOM_BITS)) {
+    return CELL_FAR;
+  }
+  if (a.kind == KIND_LACKS || a.asset.x != VALUE_VOID || a.asset.y != 0u) {
+    return CELL_FAR | (1u << ZOOM_BITS);
+  }
+  return zooms;
+}
+
+/// Whether the bucket from `first` keeps the node `c` at `zoom` by its node alone, its key read
+/// as it stands: where one does and the walk found it whole, `whole`, set whole where it is not
+/// (`holds_for`), as the query's answer for a node coarser than asked is whole whichever walk
+/// finds it so.
+fn cell_kept(first: u32, zoom: u32, c: vec3<i32>, whole: bool) -> bool {
+  for (var k = 0u; k < BUCKET; k += 1u) {
+    let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
+    let key = node_cache_now(w);
+    if (key == 0u || is_claim(key) || ((key >> TAG_BITS) & ((1u << ZOOM_BITS) - 1u)) != CELL_FAR || !is_node_now(w, zoom, c)) {
+      continue;
+    }
+    if (whole) {
+      atomicOr(&node_cache[w], 1u << (TAG_BITS + ZOOM_BITS));
+    }
+    return true;
+  }
+  return false;
+}
+
 /// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in the
-/// slot it claims (`claim`, `fill`).
+/// slot it claims (`claim`, `fill`), at the zooms its answer is kept at (`key_zooms`); none
+/// where a cell is kept by its node alone already (`cell_kept`).
 fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
-  let w = claim(first, zoom, c, zooms, tag);
+  let kz = key_zooms(zoom, zooms, a);
+  if (kz != zooms && cell_kept(first, zoom, c, kz != CELL_FAR)) {
+    return;
+  }
+  let w = claim(first, zoom, c, kz, tag);
   if (w != NONE) {
-    fill(w, zoom, c, zooms, tag, a);
+    fill(w, zoom, c, kz, tag, a);
   }
 }
 

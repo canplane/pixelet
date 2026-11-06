@@ -160,6 +160,18 @@ fn bucket_of(zoom: u32, c: vec3<i32>) -> u32 {
   return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
 }
 
+/// Whether the key `key`, held, keeps its node for a walk asking it at `zooms`, far then near over
+/// `ZOOM_BITS`, the node of `zoom` (pxl-engine `node_cache::holds_for`): kept at those zooms, or
+/// a cell kept by its node alone (`CELL_FAR`), where the query answers it its cell at these
+/// zooms too: asked at its zoom or coarser, or whole.
+fn holds_for(key: u32, zoom: u32, zooms: u32) -> bool {
+  let kz = key >> TAG_BITS;
+  if (kz == zooms) {
+    return true;
+  }
+  return (kz & ((1u << ZOOM_BITS) - 1u)) == CELL_FAR && ((zooms >> ZOOM_BITS) <= zoom || (kz >> ZOOM_BITS) != 0u);
+}
+
 /// Only nodes under the world's roots are kept (pxl-engine `node_cache::keeps`; tests/walk.rs
 /// `hand_keeps_as_the_engine`).
 fn keeps(zoom: u32, c: vec3<i32>) -> bool {

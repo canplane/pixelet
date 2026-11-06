@@ -27,14 +27,29 @@
 //! copied in after (`ray::WALKED_CNT`).
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
-//! its frame and its pass, and the zooms it was asked at — then the
+//! its frame and its pass, and the zooms it keeps the node at (`key_zooms`) — then the
 //! answer's kind and asset, what was handed the node after it was asked
 //! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (pxl-render forget.wgsl reads its column); then
 //! what draws it, none until a ray stops on it (`W_STATE`, `W_SEEN`, `W_FACES`), written by
 //! the stops, the draws and the faces' pass, and set to none where the slot is written.
 //!
-//! A walk that asked the world keeps the node at the zooms asked in a slot of
+//! **One fact, one entry:** a node the query answers by its cell (pxl-render world_split.wgsl
+//! `world_node`: asked at its zoom or coarser, or whole) has one answer and hands on the same
+//! words whatever zooms it and every node over it were asked at (world.test.rs
+//! `cell_answer_takes_no_zooms`). Such a cell is kept by its node alone, its key's far zoom
+//! `CELL_FAR`, its near zoom 1 where it was found whole and 0 else (`key_zooms`); a split, or
+//! a void a split's rule answered, which another pair may split, is kept at the pair asked. A
+//! walk asking a node at any pair takes the slot that keeps it at that pair, or keeps it as a
+//! cell its query would answer there too: asked at the cell's zoom or coarser, or the cell
+//! whole (`holds_for`; pxl-render ask.wgsl `ask_node`, `kept_at`, cached.wgsl
+//! `node_answer`). The two never both hold a node for one pair: where the query answers a
+//! node its cell at a pair, no split's rule answers it there. A walk that finds a cell whole,
+//! kept already but not whole, sets it whole (ask.wgsl `cell_kept`); its stamp takes no
+//! whole (`entry_stamp`). Forget, what draws an entry and eviction read the node and the
+//! frame, not the zooms, and are the same for either key.
+//!
+//! A walk that asked the world keeps the node at the zooms its answer is kept at in a slot of
 //! its bucket (pxl-render ask.wgsl `keep`): a free one, the first from the
 //! node's at those zooms; where none is, one an earlier frame wrote and no draw
 //! drew in the last two frames (`record::drawn`), a forgotten split among them,
@@ -58,6 +73,7 @@
 use crate::answer::Kind;
 use crate::clipmap::{self, EYE_CLIP_LEVELS};
 use crate::count;
+use crate::ground::VOID;
 use crate::overwrite::BOXES;
 use crate::world::INHERITANCE_WORDS;
 use crate::{Zoom, ZOOM_BITS};
@@ -230,6 +246,42 @@ pub const CLAIM_FAR: u32 = ((1 << ZOOM_BITS) - 1) << TAG_BITS;
 /// key holds reads as it, and no tag `FRAMES` leaves reads as a
 /// forgotten split's.
 pub const CLAIMED: u32 = u32::MAX;
+
+/// The far zoom of the key of a cell kept by its node alone, the zooms its key holds this and
+/// its whole bit over `ZOOM_BITS` (`key_zooms`): no zoom a walk asks, and no claim's.
+pub const CELL_FAR: u32 = (1 << ZOOM_BITS) - 2;
+const _: () = assert!(
+    crate::FINEST_ZOOM < CELL_FAR && CELL_FAR << TAG_BITS != CLAIM_FAR,
+    "a cell's key holds no zoom pair a walk asks, and is no claim"
+);
+
+/// The zooms, far then near over `ZOOM_BITS`, a key keeps the node of `zoom`, asked at
+/// `zooms`, at where the query answered it `kind` and `asset` (pxl-render ask.wgsl
+/// `key_zooms`): a cell its query answers by its cell, by its node alone (`CELL_FAR`), whole
+/// where it was answered coarser than asked, which no split's rule answers but void; else the
+/// zooms asked.
+pub const fn key_zooms(zoom: Zoom, zooms: u32, kind: Kind, asset: [u32; 2]) -> u32 {
+    if matches!(kind, Kind::Split) {
+        return zooms;
+    }
+    if zoom >= zooms >> ZOOM_BITS {
+        return CELL_FAR;
+    }
+    if matches!(kind, Kind::Lacks) || asset[0] != VOID || asset[1] != 0 {
+        return CELL_FAR | 1 << ZOOM_BITS;
+    }
+    zooms
+}
+
+/// Whether a held key `key` keeps its node, of `zoom`, for a walk asking it at `zooms` (pxl-render
+/// walk_node.wgsl `holds_for`): kept at those zooms, or a cell kept by its node alone that the
+/// query answers its cell at these zooms too, asked at its zoom or coarser, or whole.
+pub const fn holds_for(key: u32, zoom: Zoom, zooms: u32) -> bool {
+    let kz = key >> TAG_BITS;
+    kz == zooms
+        || kz & ((1 << ZOOM_BITS) - 1) == CELL_FAR
+            && (zooms >> ZOOM_BITS <= zoom || kz >> ZOOM_BITS != 0)
+}
 const _: () = assert!(
     crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1 && PASSES * FRAMES + PASSES - 1 < (1 << TAG_BITS) - 1,
     "a claim holds no zoom a walk asks, and is no key"
@@ -316,6 +368,41 @@ pub const fn bucket_of(zoom: Zoom, c: [i32; 3]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::answer::BOX_WHOLE as BOX;
+
+    /// A cell kept by its node alone holds for every pair its query answers it its cell at, and
+    /// no other; a split holds for its own pair alone; a claim holds for none.
+    #[test]
+    fn a_cell_key_holds_for_every_pair_that_stops_there() {
+        let pair = |far: Zoom, near: Zoom| far | near << ZOOM_BITS;
+        let cell = [VOID + 1, 0];
+        let tag = PASSES * 7 + 1;
+        for zoom in 0..=crate::FINEST_ZOOM {
+            for near in 0..=crate::FINEST_ZOOM {
+                for far in [0, near / 2, near] {
+                    let asked = pair(far, near);
+                    let kept = key_zooms(zoom, asked, Kind::Cell, cell);
+                    let key = tag | kept << TAG_BITS;
+                    let whole = zoom < near;
+                    assert_eq!(kept & ((1 << ZOOM_BITS) - 1), CELL_FAR);
+                    assert_eq!(kept >> ZOOM_BITS != 0, whole);
+                    for n2 in 0..=crate::FINEST_ZOOM {
+                        let other = pair(n2 / 2, n2);
+                        assert_eq!(
+                            holds_for(key, zoom, other),
+                            whole || n2 <= zoom,
+                            "{zoom} {near} {n2}"
+                        );
+                    }
+                    let split = tag | key_zooms(zoom, asked, Kind::Split, BOX) << TAG_BITS;
+                    assert!(holds_for(split, zoom, asked));
+                    assert!(!holds_for(CLAIMED, zoom, asked));
+                    assert!(!holds_for(CLAIM_FAR | 7, zoom, asked));
+                }
+            }
+        }
+    }
+
     use crate::cast::{point_at, Node, Ray, REACH, Z_START};
     use crate::{FRAC_W, HEIGHT_BITS};
 
