@@ -12,8 +12,9 @@
 //! `NO_WAKE` for only when something comes. A kick wakes it early: a submission, a completion, a call. A page
 //! runs the guest on its one thread in turns its strobe grants, each cut at
 //! the turn's quota (@xpute/host `Strobe`); a native host runs it on its own
-//! thread, at the strobe's kick where it answered 0, and asleep until its
-//! time or a kick otherwise (xpute-host native/thread.rs).
+//! thread, asleep until a kick, which the same strobe gives at the moment its
+//! policy admits for the wake the guest answered (xpute-host
+//! native/thread.rs).
 
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;

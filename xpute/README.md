@@ -170,8 +170,9 @@ The entry, `run`, is a turn: called with a quota of time, it applies what
 waits on the SQ, posts what it has on the CQ, and returns when it wants the
 next turn. On wasm32 the form is a module that exports `run`; anywhere else it
 is the native library, with its memory laid out from the machine, its own
-thread, which runs the guest while it has work and sleeps until a kick or the
-time it asked for, its allocator and xpute's stop hook, exported as
+thread, which runs the guest while it has work and sleeps until a kick, the
+strobe kicking at the moment its policy gives for the time the guest asked
+for, its allocator and xpute's stop hook, exported as
 `xpute_run`, `xpute_kick`, `xpute_mem`, `xpute_hostcall_on`,
 `xpute_notify_on`, `xpute_answer` and `xpute_ack`
 (`rust/host/include/xpute.h`), its GPU host's calls as

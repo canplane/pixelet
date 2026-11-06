@@ -46,15 +46,14 @@ export interface Guest {
    * `mem`, answered before the call returns. ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
   /** The guest's own thread, which runs while it has work and sleeps until
-   * it is kicked or the time it asked for comes (a native app's): `kick`
-   * wakes it after a submission, its next turn given at least `quota_ms`,
-   * none of its own where negative, and returns at once; `listen`'s `ack`
-   * is called on this thread once it has posted or asked since, with when it
-   * wants the next turn (0 also where its wake time began one, as the thread
-   * keeps that time; NaN once it has stopped) and the longest turn it ran.
-   * `pause` stops every turn but one `run` rings, and `resume` lets
-   * kicks and the wake time run turns again. `run` is then a turn waited
-   * for. None where the guest runs only inside `run` (a page's). */
+   * it is kicked (a native app's): `kick` wakes it, its next turn given at
+   * least `quota_ms`, none of its own where negative, and returns at once;
+   * `listen`'s `ack` is called on this thread once it has posted or asked
+   * since, with when it wants the next turn (0 for the next moment, NaN once
+   * it has stopped), which the strobe paces and kicks as it paces a page's,
+   * and the longest turn it ran. `pause` stops every turn but one `run`
+   * rings, and `resume` lets kicks run turns again. `run` is then a turn
+   * waited for. None where the guest runs only inside `run` (a page's). */
   thread?: {
     kick(quota_ms: f64): void;
     pause(): void;

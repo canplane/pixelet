@@ -32,10 +32,9 @@ interface Xpute {
   /** A turn wanted at once, the next given at least `quotaMs`, none of its
    * own where negative; nothing waited for. */
   kick(quotaMs: f64): void;
-  /** No turn begins but one `run` rings; a kick and the guest's wake time
-   * wait for `resume`. */
+  /** No turn begins but one `run` rings; a kick waits for `resume`. */
   pause(): void;
-  /** Turns begin again as kicks and the guest's wake time ask. */
+  /** Turns begin again as kicks ask. */
   resume(): void;
   /** The hostcall waiting, if one does, answered here. */
   answer(): void;

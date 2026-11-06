@@ -7,13 +7,18 @@
  * passes to the next.
  *
  * A guest on a thread of its own (host.ts `Guest.thread`) runs its turns as
- * kicks and its own wake time ask, so the strobe keeps no timer for it and
- * asks no turn for what the host sent, which the doorbell kicked. It paces
- * only what the guest's thread cannot see: the policy's moments, a display's
- * frames, each a frame's grant submitted and kicked with its quota, asked for
- * where the guest asked for the next at once (`Doorbell.ack`'s 0) or the
- * host did (`request`). The policy is
- * handed what the thread ran as the doorbell hears it.
+ * kicks ask and keeps no timer, so the strobe is its one scheduler as it is
+ * a page guest's: each wake the guest asks, at once or in `n` ms, as the
+ * doorbell hears it (`Doorbell.ack`, `ring`), and each the host asks
+ * (`request`), waits for the moment the policy gives and admits, where a
+ * frame's grant is submitted and kicked with its quota. It asks no turn for
+ * what the host sent, which the doorbell kicked. Every turn is heard
+ * (`Doorbell.on_turn`), the thread's whoever kicked it and each one rung,
+ * and lets go the timer and the moments asked for an earlier wake: a moment
+ * the policy hands back from before it runs nothing, and only a turn the
+ * host still wants is asked again, so the strobe holds no request it no
+ * longer means. The policy is handed what the thread ran as the doorbell
+ * hears it.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -24,8 +29,16 @@ import type { Grant, SchedulingPolicy } from "./policy.ts";
 const TIMER_REACH_MS = 2 ** 31 - 1;
 
 export class Strobe<G extends Grant = Grant> {
-  /** A moment is asked of the policy and not yet given. */
-  private _asked = false;
+  /** Bumped by every turn heard: a moment asked before it is no longer
+   * meant, since the wake that turn asks is told after it. */
+  private _gen = 0;
+  /** The generation each moment asked of the policy and not yet given was
+   * asked under, in the order the policy gives them. */
+  private readonly _asked_gens: number[] = [];
+  /** The host asked for a turn that has not run yet: kept past a turn heard. */
+  private _host_wants = false;
+  /** What `submit` sends goes with the turn being submitted. */
+  private _batching = false;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _timer_at = Infinity;
   private _last = -1;
@@ -48,8 +61,14 @@ export class Strobe<G extends Grant = Grant> {
     this._policy = policy;
     this._submit = submit;
     doorbell.wake = (wake_ms) => this._wake(wake_ms);
+    // A turn heard, whoever kicked or rang it, ends with the wake it asks,
+    // told next (`Doorbell.ack`, `ring`): the timer and the moments asked for
+    // an earlier wake go, and only what the host still wants is asked again.
     doorbell.on_turn = (turn_ms, wake_ms) => {
+      this._gen++;
+      this._drop_timer();
       if (this._granted) this._policy.observe(turn_ms, this._granted, wake_ms);
+      if (this._host_wants) this._ask();
     };
   }
 
@@ -65,8 +84,7 @@ export class Strobe<G extends Grant = Grant> {
   pause(): void {
     if (!this._running) return;
     this._running = false;
-    clearTimeout(this._timer);
-    this._timer_at = Infinity;
+    this._drop_timer();
   }
 
   /** Wakes the guest for what the host submitted: asks a moment for a guest
@@ -76,18 +94,32 @@ export class Strobe<G extends Grant = Grant> {
     if (!this._doorbell.kick) this.request();
   }
 
-  /** A moment asked of the policy; none while paused or once the guest
-   * stopped. */
+  /** A turn the host wants, at a moment asked of the policy; none while
+   * paused or once the guest stopped, and none for what goes with the turn
+   * being submitted. */
   request(): void {
-    if (this._asked || !this._running || this._doorbell.terminated) return;
-    this._asked = true;
+    if (this._batching) return;
+    this._host_wants = true;
+    this._ask();
+  }
+
+  /** A moment asked of the policy under this generation, once. */
+  private _ask(): void {
+    if (!this._running || this._doorbell.terminated) return;
+    if (this._asked_gens.at(-1) === this._gen) return;
+    this._asked_gens.push(this._gen);
     this._policy.next(this._consider);
+  }
+
+  private _drop_timer(): void {
+    clearTimeout(this._timer);
+    this._timer_at = Infinity;
   }
 
   private _wake(wake_ms: f64): void {
     if (!this._running) return;
-    if (wake_ms === 0) return this.request();
-    if (wake_ms < 0 || this._doorbell.kick) return;
+    if (wake_ms === 0) return this._ask();
+    if (wake_ms < 0) return;
     const wait_ms = Math.min(wake_ms, TIMER_REACH_MS);
     const at = performance.now() + wait_ms;
     if (at >= this._timer_at) return;
@@ -95,28 +127,28 @@ export class Strobe<G extends Grant = Grant> {
     this._timer_at = at;
     this._timer = setTimeout(() => {
       this._timer_at = Infinity;
-      this.request();
+      this._ask();
     }, wait_ms);
   }
 
   private _turn(now: f64): void {
-    this._asked = false;
+    if (this._asked_gens.shift() !== this._gen) return;
     if (!this._running || this._doorbell.terminated) return;
-    if (!this._policy.admit(now)) return this.request();
+    if (!this._policy.admit(now)) return this._ask();
+    this._host_wants = false;
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every turn worth reporting would land.
     const delta_s = Math.max(0, (now - this._last) / 1000);
     this._last = now;
-    clearTimeout(this._timer);
-    this._timer_at = Infinity;
+    this._drop_timer();
     const grant = this._policy.grant(performance.now());
     // What `submit` sends goes with this turn, so it asks for no other, and
     // kicks nothing before the turn's own kick.
-    this._asked = true;
+    this._batching = true;
     try {
       this._doorbell.batch(() => this._submit(grant, delta_s));
     } finally {
-      this._asked = false;
+      this._batching = false;
     }
     if (this._doorbell.kick) {
       this._granted = grant;

@@ -3,7 +3,8 @@
 //! The host for a guest linked into its own process: it reserves the core
 //! memory (`reserve`), runs the guest on the guest's own thread, where its
 //! `Global`s are sound, as a vCPU that runs while it has work and sleeps
-//! until it is kicked or the time it asked for comes (`thread`), hands each
+//! until it is kicked, at the moment the program's policy gives for the
+//! time it asked for (`thread`), hands each
 //! hostcall the guest makes to the thread that answers it (`answer_with`,
 //! `notify_on`), and keeps the guest's blocks in its memory (`Alloc`). One
 //! guest a process, since its base is one, so the C ABI is xpute's own names

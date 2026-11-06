@@ -4,19 +4,21 @@
 // turns.
 #![cfg(unix)]
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_host::native::{self, Config};
 
 static TURNS: AtomicU32 = AtomicU32::new(0);
+/// The wake each turn answers, in ms as f64 bits: 0 at first.
+static WAKE: AtomicU64 = AtomicU64::new(0);
 
-/// A turn that asks for the next at once, as one still at work does: it runs
-/// at the next kick, as a page's runs at its strobe's next moment.
+/// A turn that asks to be woken at `WAKE`, at once or in that many ms: it
+/// runs only at the next kick, as a page's runs at its strobe's moment.
 fn turn(_: f64) -> f64 {
     TURNS.fetch_add(1, Ordering::SeqCst);
-    0.0
+    f64::from_bits(WAKE.load(Ordering::SeqCst))
 }
 
 fn turns() -> u32 {
@@ -77,6 +79,18 @@ fn paused_runs_only_the_rung_turn() {
     native::kick_quota(-1.0);
     settle();
     assert_eq!(turns(), 2, "the kick runs it, and nothing after it");
+
+    WAKE.store(10.0_f64.to_bits(), Ordering::SeqCst);
+    let _ = native::ack();
+    native::kick_quota(-1.0);
+    settle();
+    let (wake, _) = native::ack();
+    assert!(
+        (0.0..=10.0).contains(&wake),
+        "a turn's timed wake is told the program, {wake} ms"
+    );
+    settle();
+    assert_eq!(turns(), 3, "and its time passes with no turn of its own");
 
     native::pause();
     settle();

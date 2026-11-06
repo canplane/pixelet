@@ -78,8 +78,10 @@ export class Doorbell implements PacketRoom {
    * is written in its slot, and room for one takes a turn. */
   private _later: [u32, u32, u32, i32, Encode | null][] = [];
   wake: ((wake_ms: f64) => void) | null = null;
-  /** Told what the guest's own thread ran since it was last heard: its
-   * longest turn and when it wants the next. */
+  /** Told of every turn heard, before `wake` is told the same wake: what
+   * the guest's own thread ran since it was last heard, whoever kicked it
+   * (`ack`), and each turn rung (`ring`): its longest turn and when it
+   * wants the next. */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
   /** Told once, as the guest stops. */
   onterminated: (() => void) | null = null;
@@ -175,6 +177,7 @@ export class Doorbell implements PacketRoom {
     if (this._reading) throw new InvariantError(Errno.EBUSY);
     if (this._terminated) return NO_WAKE;
     let wake: f64;
+    const t0 = performance.now();
     try {
       wake = this._run(quota_ms);
     } catch (err) {
@@ -194,6 +197,7 @@ export class Doorbell implements PacketRoom {
       );
       return NO_WAKE;
     }
+    this.on_turn?.(performance.now() - t0, wake);
     this.wake?.(wake);
     return wake;
   }

@@ -145,3 +145,25 @@ test("doorbell - a call answered in the turn that traps takes its answer once", 
     console.error = error;
   }
 });
+
+test("doorbell - a turn rung is heard before its wake", () => {
+  const sq_at = 8;
+  const cq_at = sq_at + ring_bytes(CAP);
+  const slots_at = cq_at + ring_bytes(CAP);
+  const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
+  Ring.init(mem, sq_at, CAP, slots_at, SLOT);
+  Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
+  // A guest on its own thread, whose rung turn asks for the next in 20 ms.
+  const door = new Doorbell(
+    mem,
+    sq_at,
+    cq_at,
+    () => 20,
+    () => {},
+  );
+  const heard: string[] = [];
+  door.on_turn = (_turn_ms, wake_ms) => heard.push(`turn ${wake_ms}`);
+  door.wake = (wake_ms) => heard.push(`wake ${wake_ms}`);
+  door.ring(0);
+  assert.deepStrictEqual(heard, ["turn 20", "wake 20"]);
+});

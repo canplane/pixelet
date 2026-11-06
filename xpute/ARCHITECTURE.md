@@ -364,26 +364,25 @@ call's reply and to send a `cmd`.
 Natively the guest runs on its own thread, a vCPU that runs while it has work,
 as Linux's idle loop and io_uring's submitter have it: submitting is not
 stopping (`xpute-host/native/thread.rs`). The thread runs a turn whenever it is
-kicked or the time the last turn asked for has come, and sleeps otherwise; a
-turn that answered 0 waits for the kick of the strobe's next admitted moment,
-as a page's turn does. It is the one scheduler of the guest's
-turns, and it keeps the wake time alone: the strobe sets no timer for it and
-asks no turn for what the host sent, which the doorbell kicked. The host's
-JavaScript writes the SQ, stores its tail with release and kicks
-(`xpute_kick`). The strobe and its policy pace only what the thread cannot
-see, the display's frames: a frame's grant is submitted and kicked with its
-quota where a turn asked for the next at once, or the host asked for one; a turn no kick gave a quota is given
-the last quota a kick gave. As a turn ends, the thread tells the JavaScript
+kicked, and sleeps otherwise; it keeps no timer. The strobe is the one
+scheduler of the guest's turns, as it is a page's: the wake a turn asks, at
+once or in `n` ms, reaches it as the thread tells it (`xpute_ack`, or
+`xpute_run`'s answer), it times a wait of `n` ms as it does a page's, and the
+policy gives and admits the moment, where a frame's grant is submitted and
+kicked with its quota; it asks no turn for what the host sent, which the
+doorbell kicked. The host's JavaScript writes the SQ, stores its tail with
+release and kicks (`xpute_kick`). A turn no kick gave a quota is given the
+last quota a kick gave. As a turn ends, the thread tells the JavaScript
 side (`xpute_notify_on`), which reads the CQ dry on its own thread and hands
 the policy what ran (`Doorbell.ack`); a read kicks too, for the room it
 made. A call stays synchronous to its caller: submitted, kicked, and waited
 for in `xpute_run` until a turn begun after it has ended. While the program
 is paused or hidden the thread is paused too (`xpute_pause`, `xpute_resume`):
-it runs only a turn a call rings, and its kicks and wake time wait. Three
+it runs only a turn a call rings, and its kicks wait. Three
 rules hold the loop:
 
 - **No kick is lost.** A kick sets a flag under the loop's lock and wakes the
-  thread; the thread reads the flag, its wake time and its work under that
+  thread; the thread reads the flag and its work under that
   lock before it waits on a condition variable, which gives the lock up as it
   sleeps, so a kick lands before the check or wakes the wait.
 - **Every wait has its answerer.** The guest's thread waits for an answer only

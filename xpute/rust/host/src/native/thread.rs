@@ -1,17 +1,15 @@
 // xpute-host/native/thread.rs
 
 //! The guest's own thread, a vCPU that runs while the guest has work: it runs
-//! a turn (`Vcpu::turn`) whenever it is kicked or the time the last turn asked
-//! to be woken at has come, and sleeps otherwise. A kick carries the least
-//! quota the next turn is given; a turn no kick gave one is given the last
-//! quota a kick gave (the slice). A caller's work (`run`), such as a device's,
-//! runs on it between turns while the caller waits. The thread keeps the
-//! guest's wake time alone, but for 0: a turn that answered 0 is told the
-//! program as one the guest wants at once (`ack`), and the next runs at the
-//! kick of the program's next paced moment, as a page's runs at the next
-//! moment its strobe's policy admits (@xpute/host sched/strobe.ts), so no
-//! turn runs between a display's frames. Paused (`pause`), it runs only the
-//! turns a caller rings, and its kicks and wake time wait for `resume`.
+//! a turn (`Vcpu::turn`) whenever it is kicked, and sleeps otherwise. A kick
+//! carries the least quota the next turn is given; a turn no kick gave one is
+//! given the last quota a kick gave (the slice). A caller's work (`run`), such
+//! as a device's, runs on it between turns while the caller waits. The thread
+//! keeps no timer: when a turn asks to be woken, at once or in `n` ms, it is
+//! told the program (`ack`, `ring`), whose strobe asks its policy for the
+//! moment, as a page's does (@xpute/host sched/strobe.ts), and kicks then, so
+//! no turn runs between a display's frames. Paused (`pause`), it runs only
+//! the turns a caller rings, and its kicks wait for `resume`.
 //!
 //! The guest's hostcalls are answered on a thread outside it. A hostcall made
 //! by a caller's work is handed to that caller. One made by a turn is handed
@@ -22,9 +20,9 @@
 //! Three rules hold the loop:
 //!
 //! - No kick is lost. A kick sets `kicked` under `LOOP`'s lock and wakes the
-//!   thread; the thread reads `kicked`, its wake time and its work under that
-//!   lock before it waits, and `Condvar::wait` gives the lock up as it
-//!   sleeps, so a kick lands before the check or wakes the wait.
+//!   thread; the thread reads `kicked` and its work under that lock before
+//!   it waits, and `Condvar::wait` gives the lock up as it sleeps, so a kick
+//!   lands before the check or wakes the wait.
 //! - Every wait has its answerer. The guest's thread waits for an answer only
 //!   while a hostcall is in `LOOP`: a caller waiting in `ring`, or in `run`
 //!   on the thread that rings, answers it there, and with none waiting the
@@ -86,8 +84,9 @@ struct Loop {
     quota: Option<f64>,
     /// What a turn no kick gave a quota is given: the last quota a kick gave.
     slice: f64,
-    /// When the last turn asked to be woken, past now: one that answered 0
-    /// waits for a kick (`Ack::resched`).
+    /// When the last turn asked to be woken, past now, as the program is
+    /// told it (`wake_of`); one that answered 0 is `Ack::resched`. The thread
+    /// waits on it not: the program's kick wakes it.
     wake_at: Option<Instant>,
     job: Option<Job>,
     job_ends: u64,
@@ -291,7 +290,7 @@ fn duration_of(ms: f64) -> Duration {
 }
 
 /// The next work or turn, waiting for it: a caller's work first, then a
-/// turn once kicked or due, where one may begin and the thread is not paused
+/// turn once kicked, where one may begin and the thread is not paused
 /// or a caller rings. Whether one may is read under the lock, so the
 /// program's read of the completion ring lands before it or is followed by
 /// the kick that wakes the wait below.
@@ -304,8 +303,7 @@ fn next(vcpu: Vcpu) -> Next {
                 g.busy = true;
                 return Next::Job(job);
             }
-            let timed = g.wake_at.is_some_and(|at| Instant::now() >= at);
-            if runs && (g.kicked || timed) {
+            if runs && g.kicked {
                 g.looks += 1;
                 g.kicked = false;
                 g.wake_at = None;
@@ -325,16 +323,7 @@ fn next(vcpu: Vcpu) -> Next {
                 }
             }
         }
-        g = match g.wake_at {
-            Some(at) if g.idlers == 0 && runs => {
-                let left = at.saturating_duration_since(Instant::now());
-                GUEST_CV
-                    .wait_timeout(g, left)
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .0
-            }
-            _ => wait(&GUEST_CV, g),
-        };
+        g = wait(&GUEST_CV, g);
     }
 }
 
@@ -400,14 +389,13 @@ fn answer_here<'a>(
     (g, true)
 }
 
-/// No turn begins from now on but one a caller rings (`ring`); a kick and
-/// the wake time wait for `resume`. A caller's work still runs.
+/// No turn begins from now on but one a caller rings (`ring`); a kick waits
+/// for `resume`. A caller's work still runs.
 pub fn pause() {
     state().paused = true;
 }
 
-/// Turns begin again as kicks and the wake time ask, a kick or a time that
-/// came while paused at once.
+/// Turns begin again as kicks ask, one that came while paused at once.
 pub fn resume() {
     state().paused = false;
     GUEST_CV.notify_all();

@@ -27,11 +27,10 @@ object Guest {
    * own where negative. */
   external fun kick(quotaMs: Double)
 
-  /** No turn begins but one `run` rings; a kick and the guest's wake time
-   * wait for `resume`. */
+  /** No turn begins but one `run` rings; a kick waits for `resume`. */
   external fun pause()
 
-  /** Turns begin again as kicks and the guest's wake time ask. */
+  /** Turns begin again as kicks ask. */
   external fun resume()
 
   /** The hostcall waiting, if one does, answered on this thread. */

@@ -3,9 +3,10 @@
 // The C ABI of a guest linked into its host's own process, as xpute-host's
 // `native_guest!` and `native_abi!` export it, for an app in C, Objective-C
 // or Swift. The guest runs on its own thread while it has work and sleeps
-// until it is kicked or the time it asked for comes (xpute-host
-// native/thread.rs); the app's thread waits on it only for a turn it rings,
-// and answers the guest's hostcalls.
+// until it is kicked, which the app does at the moment its policy gives for
+// the time the guest asked for (`xpute_ack`; xpute-host native/thread.rs);
+// the app's thread waits on it only for a turn it rings, and answers the
+// guest's hostcalls.
 
 #pragma once
 
@@ -24,12 +25,11 @@ double xpute_run(double quota_ms);
 // once. The calling thread answers the guest's hostcalls from now on.
 void xpute_kick(double quota_ms);
 
-// No turn begins from now on but one `xpute_run` rings; a kick and the time
-// the guest asked for wait for `xpute_resume`. For an app that is hidden.
+// No turn begins from now on but one `xpute_run` rings; a kick waits for
+// `xpute_resume`. For an app that is hidden.
 void xpute_pause(void);
 
-// Turns begin again as kicks and the guest's wake time ask, a kick or a time
-// that came while paused at once.
+// Turns begin again as kicks ask, one that came while paused at once.
 void xpute_resume(void);
 
 // The memory: its first byte, with its bytes written through `bytes` (which
@@ -56,5 +56,6 @@ void xpute_answer(void);
 // What the turns since the last call asked: when the guest wants the next, in
 // ms (0 at once, -1 for none, NaN once it has stopped), the longest of them,
 // in ms, written through `turn_ms` (which may be null). The guest's thread
-// keeps its wake time; a turn that answered 0 is told as 0.
+// keeps no timer: the app kicks at the moment its policy gives for that
+// wake; a turn that answered 0 is told as 0.
 double xpute_ack(double *turn_ms);
