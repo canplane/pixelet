@@ -2174,6 +2174,7 @@ dependencies = [
 name = "pxl-render"
 version = "0.0.0"
 dependencies = [
+ "fnv",
  "image",
  "libm",
  "naga",

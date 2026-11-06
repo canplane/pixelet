@@ -79,7 +79,7 @@ const OBSERVERS: usize = count::OBSERVERS as usize;
 /// ran it was dropped. A copy of an older generation than an observer's last never clears what
 /// a newer run owes. So every run's work is read back, waits to be, or is owed, and each asks
 /// for the frame that goes on with it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(super) struct Readback {
     /// A copy encoded, its mapping asked by the next frame.
     pub copied: bool,

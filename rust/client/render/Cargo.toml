@@ -40,6 +40,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # The passes by hand run on a device against pxl-engine (tests/).
 wgpu = { version = "30", default-features = false, features = ["wgsl", "metal", "vulkan", "naga-ir"] }
 pollster = "1"
+# The worlds the frame schedule reaches, kept as they are explored (gpu/ray/schedule.test.rs).
+fnv.workspace = true
 
 [lints]
 workspace = true

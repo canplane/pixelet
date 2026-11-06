@@ -15,7 +15,8 @@ use xpute_kit::status::errno::Errno;
 
 use super::count::{self, Counter, Counts, RayCounts};
 use super::raster::Raster;
-use super::{casts_px, GroundPipelines, RaysPass};
+use super::schedule::{Reads, Schedule};
+use super::{GroundPipelines, RaysPass};
 use crate::frame::draw::Stand;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -40,7 +41,7 @@ use crate::gpu::generator::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::shadow;
-use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
+use crate::gpu::span_spec::{FrameKind, GpuSpanName};
 use crate::gpu::tiles::Tiles;
 use pxl_engine::count::{EYE, LIGHT};
 
@@ -261,19 +262,13 @@ pub(super) struct CastBuffers {
     /// What a tile of the shadow map holds follows, as the light's cast last
     /// read it (`Read`): the light's frame (`Shadow::generation`), whether
     /// shadows are cast, the eye's zooms, and whether the world under it
-    /// moved; one moving begins an epoch (`light_epoch`).
+    /// moved; one moving begins an epoch (`light_epoch`). The box follows the eye a tile at a
+    /// time, and a tile's band is its place in it alone (`Light::band`), so nothing else of the
+    /// eye's place moves what a tile holds: where the box slid within the epoch
+    /// (`schedule::Light::slid`), the reads move with it, and the tiles it slid onto or into
+    /// another band are cast (`light_slide_cs`, pxl-engine `Light::keeps`), with those read
+    /// anew.
     light_content: Read,
-    /// Whether this frame's cast is in its epoch and the box slid, its
-    /// corner `light_corner` where the cast before was cast under
-    /// `light_corner_was` (`light::HEAD_CORNER_WAS`): the reads moved with the
-    /// box, and the tiles it slid onto or into another band cast
-    /// (`light_slide_cs`, pxl-engine `Light::keeps`), with those read
-    /// anew. The box follows the eye a tile at a time, and a tile's band is
-    /// its place in it alone (`Light::band`), so nothing else of the eye's
-    /// place moves what a tile holds.
-    light_slid: bool,
-    light_corner: [i32; 2],
-    light_corner_was: [i32; 2],
     /// The reads as the cast before left them, copied out where the box slid
     /// to be copied back moved with it.
     light_reads_was: u32,
@@ -287,58 +282,19 @@ pub(super) struct CastBuffers {
     /// What it is handed beside the eye's words (pxl-engine
     /// `light::HEAD_WORDS`).
     light_head: u32,
-    light_cast: bool,
-    /// Why the map cast this frame, a bit each in LIGHT_MOVED's order
-    /// (span.json); 0 where it did not.
-    light_moved: u32,
     /// The world's columns that changed this frame, units from the eye (pxl-engine
     /// `light::column_of`): the cast sets again only the tiles whose rays may meet them
     /// (`Light::reaches`), where the epoch goes on.
     light_columns: Vec<[f32; 4]>,
-    /// Whether this cast's columns set tiles again (`light_slide_cs`).
-    light_reached: bool,
-    /// Whether an owed tile's parked rays are resumed where it is claimed (`light_carries`,
-    /// `light::HEAD_CARRIES`): where its cast held the light's content, the box did not slide
-    /// and no changed column reached it, and the node cache forgot nothing since
-    /// (`light_forgot`). Else each slot of it is cast afresh when it is claimed.
-    light_carries: bool,
-    light_forgot: bool,
-    /// Whether the light may cast this frame, the shadows on and its cast made: where it may
-    /// not, the work it is owed asks no frame (`wants_frame`).
-    light_on: bool,
-    /// Whether the eye may run its queue, a world to cast in; whether this frame's cast keeps
-    /// the states its holes were parked in, the rays standing (`node_cache::RESUMES`); and
-    /// whether this frame, casting nothing, runs the eye's queue alone over the holes its last
-    /// cast listed, owed work parked among them (`Readback::owed`); and the eye's owed list
-    /// its last queue filled, which a queue run alone takes (`ray::owed_into`).
-    eye_on: bool,
-    eye_resumes: bool,
-    eye_queue: bool,
-    eye_owed: u32,
-    /// Whether the next cast stands the world's receivers on the eye's answers
-    /// (record_draw.wgsl `record_draw_cs`, `light_mark_walked_cs`): held until one does; and whether the stands
-    /// of the frame the eye stands in, its pixels' footprints, are owed, as the stands while
-    /// it moved took none (`light::HEAD_FOOTPRINT`).
-    light_world: bool,
-    light_footprint_owed: bool,
-    /// Whether the eye's walked pixels' list holds every drawn pixel's walk: its last pixels'
-    /// cast cast them all (`gated` not); and whether this cast's world's receivers are added to
-    /// those that stand (`light::HEAD_WORLD` kept), as its list holds the claimed tiles' alone.
-    walked_whole: bool,
-    light_world_adds: bool,
-    /// Whether this frame stands the world's receivers (`light::HEAD_STANDS_WORLD`), which the
-    /// record's draw stands its boxes by; and whether the record's draw ran this frame, once
-    /// at most (`Raster::record_draw`).
-    stands_world: bool,
+    /// What each frame runs of the eye's rays and the light's, and the state its plans step
+    /// (ray/schedule.rs).
+    schedule: Schedule,
+    /// Whether the record's draw ran this frame, once at most (`Raster::record_draw`).
     record_drawn: bool,
     /// Words the record's group binds in place of the light's list, args and stood list's
     /// args while the light's cast is not made, which no thread reads, the head saying no
     /// receiver stands (`Raster::record_group`).
     light_idle: [u32; 3],
-    /// Whether this frame casts every pixel whole though only the claimed tiles' moved, as
-    /// the world's receivers stand afresh off its walked list (`prepare`); the renderer draws
-    /// it whole (`RaysPass::ungated`).
-    ungated: bool,
     /// Whether the cast draws a receiver past the world's, an actor or decor
     /// (`light_mark_draws_cs`).
     light_draws: bool,
@@ -361,20 +317,8 @@ pub(super) struct CastBuffers {
     overwrite_revision: Option<u32>,
     generator: Generator,
     /// What the last cast read (`Read`) but the jitter and the grid, and
-    /// whether this frame's is the same: the view and the world stand.
+    /// whether this frame's is the same (`schedule::Reads::same`).
     read: Read,
-    /// The casts of the rolled lattice since the view or the world last moved, the next
-    /// one's offset (`beam::roll`): while under `beam::ROLLS` the samples are cast again
-    /// at the next offset; past it the eye's rays rest.
-    rolls: u32,
-    /// Where each pixel's ray went through it last (pxl-engine
-    /// `eye::JITTER`). It moving alone once the eye's rays rest, the beam rays,
-    /// the cells' starts and the samples stand, and the pixels are cast again off
-    /// the record.
-    jitter: [u32; 2],
-    /// Whether the samples' raster is drawn through its gate, in the claimed
-    /// tiles alone: where only the kernel's bounds moved.
-    gated: bool,
     /// The samples' hits handed to the rasterizer (ray/raster.rs), whose
     /// visible voxel at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`px_group`): the eye, the rays, the beam's words, the
@@ -1063,9 +1007,6 @@ impl RaysPass {
             light_world_number: 0,
             light_slide_owed: 0,
             light_content: Read::default(),
-            light_slid: false,
-            light_corner: [0; 2],
-            light_corner_was: [0; 2],
             light_reads_was: buf(
                 word_bytes((light::tiles(shadow::SIZE) * light::tiles(shadow::SIZE)) as usize),
                 buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
@@ -1076,22 +1017,8 @@ impl RaysPass {
                 word_bytes(light::HEAD_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            light_cast: false,
-            light_moved: 0,
             light_columns: Vec::with_capacity(light::COLUMNS + 1),
-            light_reached: false,
-            light_carries: false,
-            light_on: false,
-            eye_on: false,
-            eye_resumes: false,
-            eye_queue: false,
-            eye_owed: 0,
-            light_forgot: false,
-            light_world: false,
-            light_footprint_owed: false,
-            walked_whole: false,
-            light_world_adds: false,
-            stands_world: false,
+            schedule: Schedule::new(),
             record_drawn: false,
             light_idle: [0; 3].map(|_| {
                 buf(
@@ -1099,7 +1026,6 @@ impl RaysPass {
                     storage | buffer_usage::COPY_SRC,
                 )
             }),
-            ungated: false,
             light_draws: false,
             refold: false,
             group: 0,
@@ -1139,9 +1065,6 @@ impl RaysPass {
             overwrite_revision: None,
             generator: Generator::new(g, pipelines),
             read: Read::default(),
-            rolls: beam::ROLLS,
-            jitter: [0; 2],
-            gated: false,
             raster,
             px_group: 0,
             px_bound: [0; 7],
@@ -1182,17 +1105,10 @@ impl RaysPass {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
                 c.generator.off();
-                c.read.forget();
-                c.light_content.forget();
-                c.light_cast = false;
-                c.light_moved = 0;
-                c.light_on = false;
+                c.schedule.off();
                 c.counter.off(LIGHT);
-                (c.eye_on, c.eye_resumes, c.eye_queue) = (false, false, false);
                 c.counter.off(EYE);
                 c.counter.idle();
-                c.ungated = false;
-                c.rolls = beam::ROLLS;
             }
             return;
         };
@@ -1231,42 +1147,8 @@ impl RaysPass {
         r.read(&[*room as u32, *revision, rays.0]);
         // And the ground's bricks, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        let stands = r.end() && fresh == 0 && c.group != 0;
-        let jitter = [eye[eye::JITTER], eye[eye::JITTER + 1]];
-        let jittered = jitter != c.jitter;
-        c.jitter = jitter;
-        // A cast where the view or the world moved lays the grid the eye's words hold
-        // (pxl-engine `eye::GRID`) and starts the rolled lattice again; while they stand,
-        // the casts that follow keep the grid, its dispatches' sizes and the room for its
-        // corners' lines, its cells' starts and its samples' hits, and cast the samples at
-        // the next offset, until `beam::ROLLS` have run. Then the eye's rays rest: the
-        // frame stands, or, where the jitter moved, casts the pixels again off the record.
-        // The jitter moves where each pixel's ray goes through it, which no sample reads, so
-        // it wakes the pixels and not the roll.
-        let rolling = c.rolls < beam::ROLLS;
-        self.kind = match (stands, rolling, jittered) {
-            (true, false, false) => FrameKind::standing,
-            (true, false, true) => FrameKind::px,
-            (true, true, _) => FrameKind::cast,
-            (false, _, _) => {
-                let tan = [eye[eye::TAN], eye[eye::TAN + 1]].map(f32::from_bits);
-                c.grid = beam::Grid::of_words(
-                    tan,
-                    eye[eye::GRID..eye::GRID + eye::GRID_WORDS]
-                        .try_into()
-                        .or_bug(Errno::ENOTRECOVERABLE),
-                );
-                c.rolls = 0;
-                FrameKind::cast
-            }
-        };
-        if self.kind == FrameKind::cast {
-            c.grid = c.grid.rolled(c.rolls);
-            c.rolls += 1;
-        }
-        // A cast whose view stood, the roll's alone.
-        let rolled = stands && self.kind == FrameKind::cast;
-        let (kind, casts) = (self.kind, casts_px(self.kind));
+        let same = r.end() && fresh == 0 && c.group != 0;
+        let stands = c.schedule.stands(same);
         xpute_kit::ensure!(
             cast.clipmap.len() == (4 * clipmap::JOINED_AT) as usize,
             ENOTRECOVERABLE,
@@ -1277,21 +1159,6 @@ impl RaysPass {
             c.refold = true;
         }
         c.size = rays.1;
-        // The room for the grid's words, made again only where they outgrow
-        // it.
-        let need =
-            c.grid.walked_at() + ray::walked_words(c.size[0] * c.size[1]) + eye_region(c.size);
-        if need > c.beam_room {
-            if c.beams != 0 {
-                release(c.beams);
-            }
-            let size = word_bytes(need as usize);
-            xpute_kit::ensure!(floor::fits(size as u64, true), ENOTRECOVERABLE, need);
-            (c.beams, c.beam_room) = (
-                g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
-                need,
-            );
-        }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
             if c.shards != 0 {
@@ -1541,39 +1408,12 @@ impl RaysPass {
         let n = c.light_columns.len();
         let world_whole = world_moved && (c.forget || n == 0 || n > light::COLUMNS);
         r.mark(world_whole);
-        let held = r.end();
+        let content_same = r.end();
         let world_columns = world_moved && !world_whole;
         // The box, a tile at a time about the eye: what a tile holds moves
         // with its corner, kept where the slide kept its band
         // (`light_slide_cs`).
         let corner = light::CORNER.map(|k| cast.eye[eye::LIGHT + k] as i32);
-        let slid = corner != c.light_corner;
-        // The world's receivers stand afresh where the light's frame or the box moved, and a
-        // stand afresh takes every pixel's walk. Where the walked pixels' list would hold the
-        // claimed tiles' alone, as the last pixels' cast or this frame's is gated, every pixel
-        // is cast again now, whole (`ungated`), so the list holds every walk. The one condition
-        // the stand follows is then the list's (`walked_whole`): afresh where it holds every
-        // walk; else added to those that stand, the light and the box as they were.
-        let partial = if casts {
-            gated && kind == FrameKind::px
-        } else {
-            !c.walked_whole
-        };
-        c.ungated = shadows && c.light_ready && (!held || slid) && partial;
-        if c.ungated && self.kind == FrameKind::standing {
-            self.kind = FrameKind::px;
-        }
-        let (kind, casts) = (self.kind, casts_px(self.kind));
-        let walked_whole = !partial || c.ungated;
-        // The eye's rays stand where the view, the jitter, the world and the drawn size are
-        // those its last cast walked: a cast then keeps the states its holes were parked in,
-        // and a frame that casts nothing runs the eye's queue alone over them where the eye is
-        // owed (`node_cache::RESUMES`, `Readback::owed`). Any other cast sets every pixel it
-        // takes to no parked ray, as they name rays no longer cast.
-        let rays_stand = stands && !jittered;
-        c.eye_on = true;
-        c.eye_resumes = casts && rays_stand;
-        c.eye_queue = kind == FrameKind::standing && rays_stand && c.counter.owed(EYE);
         // Where the host's draws stand, each box units from the eye and the tiles it stands on
         // by the one rule every receiver stands by (pxl-engine `Light::box_tiles`, the
         // footprint where the eye stands, as the head asks it below), on the light the cast is
@@ -1607,44 +1447,59 @@ impl RaysPass {
             l.read(s.tiles.as_flattened());
         }
         l.mark(c.generator.counts());
-        // The first frame the eye stands in after it moved marks again, with
-        // the footprints the jitter's frames after it stand on; and every cast of
-        // the roll, whose samples found what the casts before did not.
-        let footprint_owed = rolled || (c.light_footprint_owed && stands);
-        let receivers_held = l.end();
-        let moved = LightMoved::ALL
-            .into_iter()
-            .filter(|m| match m {
-                LightMoved::content => !held,
-                LightMoved::slide => slid,
-                LightMoved::receivers => !receivers_held,
-                LightMoved::footprint => footprint_owed,
-                LightMoved::world => world_columns,
-                LightMoved::owed => c.counter.owed(LIGHT),
-            })
-            .fold(0, |bits, m| bits | 1 << m as u32);
-        c.light_slid = held && slid;
-        c.light_reached = held && world_columns;
-        c.light_carries = held && !slid && !world_columns;
-        if !c.light_ready {
-            c.light_content.forget();
+        let receivers_same = l.end();
+        // What the frame runs of the eye's rays and the light's (ray/schedule.rs).
+        let plan = c.schedule.plan(Reads {
+            same,
+            jitter: [cast.eye[eye::JITTER], cast.eye[eye::JITTER + 1]],
+            gated,
+            shadows,
+            light_made: c.light_ready,
+            content_same,
+            world_columns,
+            corner,
+            receivers_same,
+            forgets: c.forget || c.moved.iter().any(|&m| m != 0) || c.holding != 0 || c.writes != 0,
+            owed: [c.counter.owed(EYE), c.counter.owed(LIGHT)],
+        });
+        self.kind = plan.kind;
+        let (kind, casts) = (plan.kind, plan.casts());
+        // A cast where the view or the world moved lays the grid the eye's words hold
+        // (pxl-engine `eye::GRID`); the casts of the roll that follow keep it, its dispatches'
+        // sizes and the room for its corners' lines, its cells' starts and its samples' hits,
+        // and cast the samples at their offset.
+        if plan.lays {
+            let tan = [cast.eye[eye::TAN], cast.eye[eye::TAN + 1]].map(f32::from_bits);
+            c.grid = beam::Grid::of_words(
+                tan,
+                cast.eye[eye::GRID..eye::GRID + eye::GRID_WORDS]
+                    .try_into()
+                    .or_bug(Errno::ENOTRECOVERABLE),
+            );
         }
-        c.light_cast = shadows && moved != 0 && c.light_ready;
-        c.light_on = shadows && c.light_ready;
-        c.light_moved = if c.light_cast { moved } else { 0 };
-        // The world's receivers stand where the eye's answers lie: stood
-        // again by the next cast after the rays were cast anew, where an
-        // epoch begins or where the box slid, which moves the tiles they stand
-        // on. Else they stand on the tiles they stood on when they last were
-        // (`light::HEAD_WORLD`); the jitter's casts move a ray within its
-        // footprint, stood on already where the eye stood when they were.
-        c.light_world |= kind == FrameKind::cast || !held || footprint_owed || slid;
-        c.stands_world = c.light_cast && c.light_world;
-        if c.light_cast {
+        if let Some(k) = plan.roll {
+            c.grid = c.grid.rolled(k);
+        }
+        // The room for the grid's words, made again only where they outgrow
+        // it.
+        let need =
+            c.grid.walked_at() + ray::walked_words(c.size[0] * c.size[1]) + eye_region(c.size);
+        if need > c.beam_room {
+            if c.beams != 0 {
+                release(c.beams);
+            }
+            let size = word_bytes(need as usize);
+            xpute_kit::ensure!(floor::fits(size as u64, true), ENOTRECOVERABLE, need);
+            (c.beams, c.beam_room) = (
+                g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
+                need,
+            );
+        }
+        if let Some(due) = plan.light {
             // The head (pxl-engine `light::HEAD_WORDS`).
             let mut head = [0u32; light::HEAD_WORDS];
             c.light_number = c.light_number.wrapping_add(1).max(1);
-            if !held {
+            if due.epoch {
                 c.light_epoch = c.light_number;
             }
             head[light::HEAD_CAST] = c.light_number;
@@ -1653,36 +1508,27 @@ impl RaysPass {
             for (k, v) in light::head_layout(shadow::SIZE) {
                 head[k] = v;
             }
-            c.light_corner_was = core::mem::replace(&mut c.light_corner, corner);
-            head[light::HEAD_CORNER_WAS] = c.light_corner_was[0] as u32;
-            head[light::HEAD_CORNER_WAS + 1] = c.light_corner_was[1] as u32;
+            head[light::HEAD_CORNER_WAS] = due.corner_was[0] as u32;
+            head[light::HEAD_CORNER_WAS + 1] = due.corner_was[1] as u32;
             // The world's receivers stood afresh in this cast where the walked pixels' list
             // holds every walk; or added to those that stand, which hold the rest's, where it
-            // holds the claimed tiles' alone (`walked_whole`, above); else on where they were
-            // last. And the last cast before it that owed a slide (light_stood.wgsl
-            // `stood_first`).
-            let adds = !walked_whole;
-            xpute_kit::ensure!(!adds || (held && !slid), ENOTRECOVERABLE);
-            c.light_world_adds = c.light_world && adds;
-            if c.light_world && !adds {
+            // holds the claimed tiles' alone; else on where they were last. And the last cast
+            // before it that owed a slide (light_stood.wgsl `stood_first`).
+            let afresh = due.world && !due.adds;
+            if afresh {
                 c.light_world_number = c.light_number;
             }
             head[light::HEAD_WORLD] = c.light_world_number;
             head[light::HEAD_SLIDE_OWED] = c.light_slide_owed;
-            let owes = c.light_slid || c.light_reached;
+            let owes = due.slid || due.reached;
             if owes {
                 c.light_slide_owed = c.light_number;
             }
             // The footprints taken where the eye stands, its roll's casts too; while
             // it moves, the next frame's rays mark again, and the frame it stands in
             // owes them.
-            let footprint = stands;
-            head[light::HEAD_FOOTPRINT] = u32::from(footprint);
-            head[light::HEAD_STANDS_WORLD] = u32::from(c.light_world);
-            // Added, the claimed tiles' alone, the footprint stays owed to the rest.
-            if c.light_world {
-                c.light_footprint_owed = !footprint || adds;
-            }
+            head[light::HEAD_FOOTPRINT] = u32::from(due.footprint);
+            head[light::HEAD_STANDS_WORLD] = u32::from(due.world);
             let at = 4 * light::STARTS_AT;
             head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&light_map.2.words());
             // What the host draws that reads the map, receivers as decor is, a box each
@@ -1706,7 +1552,7 @@ impl RaysPass {
             }
             // The world's columns that changed, where the epoch goes on (`light_slide_cs`).
             let at = 4 * light::COLUMNS_AT;
-            if c.light_reached {
+            if due.reached {
                 head[at] = c.light_columns.len() as u32;
                 for (k, col) in c.light_columns.iter().enumerate() {
                     let w = at + 4 * (1 + k);
@@ -1747,7 +1593,6 @@ impl RaysPass {
             // left copied back in as the cast begins (`dispatch`); the slide's rows where it owes
             // one.
             let stood = light_stood(owes);
-            let afresh = c.light_world && !c.light_world_adds;
             let open = if afresh {
                 &sequence::OPEN_LIGHT_STOOD_AFRESH
             } else {
@@ -1766,7 +1611,7 @@ impl RaysPass {
         }
         // No receiver stands where the light casts none: the head's flag the record's draw reads
         // every frame (`light::HEAD_STANDS_WORLD`).
-        if !c.light_cast {
+        if plan.light.is_none() {
             g.write_buf(
                 c.light_head,
                 word_bytes(light::HEAD_STANDS_WORLD),
@@ -1774,15 +1619,11 @@ impl RaysPass {
             );
         }
         // The eye's words with the grid its cast laid (`grid`).
-        if casts || c.light_cast {
+        if casts || plan.light.is_some() {
             let mut words = cast.eye;
             words[eye::GRID..].copy_from_slice(&c.grid.words());
             g.write_buf(c.eye, 0, bytes(&words));
         }
-        // The samples' raster through its gate where only the kernel's
-        // bounds moved; the pixels' cast takes the tiles claimed alone
-        // (`CAST_TILES_START`).
-        c.gated = gated && kind == FrameKind::px && !c.ungated;
         if casts {
             c.forgets = if c.forget {
                 node_cache::FORGETS_ALL
@@ -1791,7 +1632,6 @@ impl RaysPass {
             } else {
                 node_cache::FORGETS_NONE
             };
-            c.light_forgot |= c.forgets != node_cache::FORGETS_NONE;
             // The head before the frame's dispatches: what it forgets and over
             // which entries; forgotten whole, its first frame, else the next.
             let mut head = [0u32; node_cache::HEAD_WORDS as usize];
@@ -1821,7 +1661,7 @@ impl RaysPass {
             // The hits' dispatch none, a workgroup deep and high.
             head[node_cache::HITS_ARGS as usize + 1] = 1;
             head[node_cache::HITS_ARGS as usize + 2] = 1;
-            head[node_cache::RESUMES as usize] = u32::from(c.eye_resumes);
+            head[node_cache::RESUMES as usize] = u32::from(plan.resumes);
             g.write_buf(
                 c.node_cache,
                 sequence::OPEN_NODE_CACHE.to_at(),
@@ -1852,23 +1692,20 @@ impl RaysPass {
         } else {
             c.sent_forget = None;
         }
-        if c.light_cast {
-            // Whether an owed tile's parked rays go on, the node cache's forgetting this frame
-            // known (`light::HEAD_CARRIES`).
-            let carries = u32::from(c.light_carries && !c.light_forgot);
+        if let Some(due) = plan.light {
+            // Whether an owed tile's parked rays go on (`light::HEAD_CARRIES`).
             g.write_buf(
                 c.light_head,
                 word_bytes(light::HEAD_CARRIES),
-                bytes(&[carries]),
+                bytes(&[u32::from(due.carries)]),
             );
-            c.light_forgot = false;
         }
         // The holes' queues' work this frame starts at none, and each queue counts to its caps
         // by the order they run in, the eye's first, short of the budget by the light's share
         // where the light casts after it (`ray::caps`); the eye's queue words fresh where it
         // runs alone, as a cast's are with the head above.
-        let eye_runs = casts || c.eye_queue;
-        if eye_runs {
+        let (eye_runs, light_casts) = (plan.eye_runs(), plan.light.is_some());
+        if let Some(from) = plan.from {
             if !casts {
                 g.write_buf(
                     c.queue,
@@ -1876,25 +1713,19 @@ impl RaysPass {
                     bytes(&ray::QUEUE_EMPTY),
                 );
             }
-            let caps = ray::caps(true, c.light_cast);
+            let caps = ray::caps(true, light_casts);
             g.write_buf(c.node_cache, sequence::OPEN_EYE_CAPS.to_at(), bytes(&caps));
             // The list the eye's queue takes: its cast's walked pixels, or, run alone, the
-            // pixels the queue before left parked, so it walks only what is owed; and the owed
-            // list it fills in turn (`ray::holes_from_at`).
-            let from = if casts {
-                ray::FROM_WALKED
-            } else {
-                ray::FROM_OWED + c.eye_owed
-            };
+            // pixels the queue before left parked, so it walks only what is owed
+            // (`ray::holes_from_at`).
             let drawn = c.size[0] * c.size[1];
             g.write_buf(
                 c.beams,
                 word_bytes((c.grid.walked_at() + ray::holes_from_at(drawn)) as usize),
                 bytes(&[from]),
             );
-            c.eye_owed = ray::owed_into(from);
         }
-        if c.light_cast {
+        if light_casts {
             let caps = ray::caps(false, eye_runs);
             g.write_buf(
                 c.node_cache,
@@ -1902,7 +1733,7 @@ impl RaysPass {
                 bytes(&caps),
             );
         }
-        if !casts && (eye_runs || c.light_cast) {
+        if !casts && (eye_runs || light_casts) {
             let none = [0u32; (node_cache::owed_at(EYE) + 1 - node_cache::VISITED) as usize];
             g.write_buf(
                 c.node_cache,
@@ -1927,8 +1758,8 @@ impl RaysPass {
             number: frame,
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
-            casts: [self.kind == FrameKind::cast, c.light_cast],
-            queues: [eye_runs, c.light_cast],
+            casts: [kind == FrameKind::cast, light_casts],
+            queues: [eye_runs, light_casts],
             rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
         c.counter.begin(g, ray_counts, c.node_cache, frame);
@@ -2014,7 +1845,7 @@ impl RaysPass {
                 &cast.eye,
                 c.size,
                 &c.grid,
-                self.kind == FrameKind::cast,
+                kind == FrameKind::cast,
                 [
                     c.eye,
                     c.beams,
@@ -2149,19 +1980,21 @@ impl RaysPass {
     /// Whether this frame casts every pixel whole, the world's receivers standing afresh off a
     /// walked list that would hold the claimed tiles' alone (`prepare`): the frame draws whole.
     pub fn ungated(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.ungated)
+        self.cast
+            .as_ref()
+            .is_some_and(|c| c.schedule.last().ungated)
     }
 
     /// Whether the eye's rolled lattice has casts left to run before its rays rest: the
     /// frames after are owed while the view stands.
     pub fn rolling(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.rolls < beam::ROLLS)
+        self.cast.as_ref().is_some_and(|c| c.schedule.rolling())
     }
 
     /// The frame draws whole after all: its samples' raster drawn whole.
     pub fn whole(&mut self) {
         if let Some(c) = self.cast.as_mut() {
-            c.gated = false;
+            c.schedule.whole();
         }
     }
 
@@ -2203,12 +2036,14 @@ impl RaysPass {
         let (generates, casts, kind) = (self.generates(), self.casts_px(), self.kind);
         let claimed = self.tiles;
         let Some(c) = self.cast.as_mut() else { return };
+        let plan = *c.schedule.last();
+        let lit = plan.light;
         // What the casts since the world's receivers were last stood afresh left in the stood
         // list's args, and the read list's count, copied back in, ahead of every pass that
         // stands a tile, the record's draw among the eye's, where this cast stands on them or
         // adds to them (`light::kept_at`).
         c.record_drawn = false;
-        if c.light_cast && (!c.light_world || c.light_world_adds) {
+        if lit.is_some_and(|l| !l.world || l.adds) {
             let back = &sequence::STOOD_BACK;
             g.copy_buf(
                 encoder,
@@ -2322,12 +2157,9 @@ impl RaysPass {
                     );
                 }
                 if span == GpuSpanName::px {
-                    let gated = c.gated.then_some(claimed);
-                    // The walked pixels' list holds every drawn pixel's walk where every pixel
-                    // is cast (`light_mark_walked_cs`).
-                    c.walked_whole = !c.gated;
+                    let gated = c.schedule.gated().then_some(claimed);
                     let samples_cast = kind == FrameKind::cast;
-                    c.record_drawn = samples_cast || c.stands_world;
+                    c.record_drawn = samples_cast || lit.is_some_and(|l| l.world);
                     c.raster
                         .draw(ctx, &c.grid, (samples_cast, c.record_drawn), gated);
                     group = c.px_group;
@@ -2373,10 +2205,10 @@ impl RaysPass {
             );
         }
         // The eye's holes walked: its cast's, or, where it casts nothing, those its last cast
-        // listed, the parked among them going on (`eye_queue`); every stop into the record; and
+        // listed, the parked among them going on (`Plan::queue`); every stop into the record; and
         // the tiles of the pixels still parked set changed, so the frames after claim them
         // (parked_tiles.wgsl).
-        if casts || c.eye_queue {
+        if plan.eye_runs() {
             let pass = walk_holes(
                 ctx,
                 [GpuSpanName::miss; 2],
@@ -2409,7 +2241,8 @@ impl RaysPass {
                 (
                     c.beams,
                     word_bytes(
-                        (c.grid.walked_at() + ray::owed_list_at(drawn, c.eye_owed)) as usize,
+                        (c.grid.walked_at() + ray::owed_list_at(drawn, c.schedule.owed_list()))
+                            as usize,
                     ),
                 ),
                 4,
@@ -2428,17 +2261,17 @@ impl RaysPass {
             c.generator.dispatch(g, pass);
             g.end(pass);
         }
-        if c.light_cast {
+        if let Some(due) = lit {
             // The reads moved with the box, a tile of it at a time: each
             // tile's word the word of the tile that held its world texels
             // under the corner before, copied out and back in, which the
             // slide's pass then sets to none where the box slid onto it or
             // into another band (`light_slide_cs`).
-            if c.light_slid {
+            if due.slid {
                 let n = light::tiles(shadow::SIZE) as i32;
                 let t = light::TILE as i32;
-                let dx = (c.light_corner[0] - c.light_corner_was[0]) / t;
-                let dy = (c.light_corner[1] - c.light_corner_was[1]) / t;
+                let dx = (due.corner[0] - due.corner_was[0]) / t;
+                let dy = (due.corner[1] - due.corner_was[1]) / t;
                 let shift = dy * n + dx;
                 let all = n * n;
                 if shift.abs() < all {
@@ -2461,10 +2294,9 @@ impl RaysPass {
             // thread each off their list, which has room for every pixel drawn, in a span of
             // their own (`light_receivers`, span.json `per_px`). Added to those that stand, theirs
             // copied back in before the frame's first pass (`dispatch`).
-            if c.light_world {
-                c.light_world = false;
+            if due.world {
                 // The record's boxes stood, its draw run here where the eye's pixels' cast ran
-                // none (`stands_world`).
+                // none (`schedule::Light::world`).
                 if !c.record_drawn {
                     c.raster.record_draw(ctx);
                 }
@@ -2729,7 +2561,7 @@ impl RaysPass {
             (c.light_draws_dispatch, c.light_claim_dispatch) = (0, 0);
             c.raster.light_release();
             c.light_ready = false;
-            c.light_on = false;
+            c.schedule.light_off();
             c.counter.off(LIGHT);
         }
     }
@@ -2748,7 +2580,7 @@ impl RaysPass {
     pub fn wants_frame(&self) -> bool {
         self.cast
             .as_ref()
-            .is_some_and(|c| c.counter.wants_frame([c.eye_on, c.light_on]))
+            .is_some_and(|c| c.counter.wants_frame(c.schedule.on()))
     }
 
     /// In a frame that stands, dispatching nothing, the owed work an observer's last run left
@@ -2760,9 +2592,9 @@ impl RaysPass {
     }
 
     /// Whether this frame runs the eye's queue alone over the holes its last cast left parked,
-    /// casting nothing (`eye_queue`): their pixels change, so the frame is drawn.
+    /// casting nothing (`Plan::queue`): their pixels change, so the frame is drawn.
     pub fn eye_queue(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.eye_queue)
+        self.cast.as_ref().is_some_and(|c| c.schedule.last().queue)
     }
 
     /// Whether an observer's owed work landed for a frame to read (`Counter::owed_landed`).
@@ -2776,7 +2608,9 @@ impl RaysPass {
     }
 
     pub fn light_casts(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.light_cast)
+        self.cast
+            .as_ref()
+            .is_some_and(|c| c.schedule.last().light.is_some())
     }
 
     /// The light's list, whose reads tell the tiles its epoch cast and which it lists read
@@ -2797,7 +2631,10 @@ impl RaysPass {
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
     /// order (span.json `LIGHT_MOVED`); 0 where it did not.
     pub fn light_moved(&self) -> u32 {
-        self.cast.as_ref().map_or(0, |c| c.light_moved)
+        self.cast
+            .as_ref()
+            .and_then(|c| c.schedule.last().light)
+            .map_or(0, |l| l.moved)
     }
 
     /// The boxes decor's slots are marked by to generate again this frame
@@ -2843,8 +2680,7 @@ impl RaysPass {
                     c.forget |= !note(&mut c.written_groups, &mut c.writes, first);
                 }
             }
-            c.read.forget();
-            c.light_content.forget();
+            c.schedule.dropped();
             c.generator.on_dropped();
             c.counter.on_dropped();
         }
