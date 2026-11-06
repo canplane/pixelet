@@ -1,8 +1,8 @@
 // pxl-render/sample.wgsl
 
 // The samples `sample_hit_cs` left, either observer's (sample.eye.wgsl, sample.light.wgsl),
-// walked on from where it left them asking the world (ask.wgsl, `beam::SAMPLE_LEFT_T`), a thread
-// each at its place in their list (list.wgsl).
+// walked on from where it left them asking the world (walk.wgsl, ask.wgsl,
+// `beam::SAMPLE_LEFT_T`), a thread each at its place in their list (list.wgsl).
 
 @compute @workgroup_size(MISS_LANES, 1, 1)
 fn sample_cs(
@@ -20,6 +20,7 @@ fn sample_cs(
   let aim = sample_aim(s);
   let base = sample_word(s);
   let start = sample_start_at(aim, s, bitcast<f32>(beams[base + SAMPLE_LEFT_T]));
-  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
+  let w = walk(aim, start, STEPS_MOST);
+  count_visits(w);
   sample_put(base, w);
 }

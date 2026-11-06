@@ -12,13 +12,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{cross, list_every, margins, read_texture, texture, unit, Gpu, Kinds, LightBox};
 use pxl_engine::answer;
-use pxl_engine::area::Shard;
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
-use pxl_engine::clipmap::Lookup;
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::node_cache;
-use pxl_engine::overwrite::{Cut, NodeSlot};
+use pxl_engine::overwrite::Cut;
 use pxl_engine::param;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, raster, ray, value, Zoom, FRAC_W, LEAF_CELL};
@@ -2486,10 +2484,8 @@ impl Keep<Inheritance> for Handed {
 /// holds part of what its beam rays meet: every beam ray stops where `cast::walk` from the root
 /// stops the same ray from the origin the pass laid, at the same node, hands on the same
 /// distance (`light::margin`, under a rounding a device may take, `margins`), and holds in its
-/// line what that walk handed the node and every node over it, or, through a node the node cache
-/// keeps at other zooms, what was handed it with the rest marked unknown (walk.wgsl `hand`). The
-/// first frame over an empty cache, the next over that frame's with every other entry finer than
-/// `KEPT_ZOOM` dropped.
+/// line what that walk handed the node and every node over it. The first frame over an empty
+/// cache, the next over that frame's with every other entry finer than `KEPT_ZOOM` dropped.
 #[test]
 fn hand_light_beam_rays_answer_as_cast_walk() {
     const KEPT_ZOOM: Zoom = 12;
@@ -2526,12 +2522,6 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
             size: SIZE,
             listed: None,
         },
-    ];
-    // What a line holds past a node the node cache keeps at other zooms (walk.wgsl `hand`).
-    let unknown = [
-        Shard::UNKNOWN.word(),
-        Lookup::NONE.word(),
-        NodeSlot::NOTHING.word(),
     ];
     let mut failed = Vec::new();
     for c in &cases {
@@ -2590,8 +2580,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
                     && handed.0.iter().enumerate().all(|(z, h)| {
                         let g = [0, 1, 2, 3]
                             .map(|i| at(beam::LINE_INHERITANCE + beam::LINE_STEP * z as u32 + i));
-                        let want = h.words();
-                        g == want || (g[0] == want[0] && g[1..] == unknown)
+                        g == h.words()
                     });
                 if !hand_alike || !line_alike {
                     differ += 1;
@@ -2614,14 +2603,12 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// A sample whose walk over the node cache goes blind, into a split the cache holds only at other
-/// zooms, then is left there (walk.wgsl): `sample_cs` goes on from where it was left, and every
-/// sample stops as `cast::walk` from the root stops it. A split's box holds all its descendants
-/// answer at the zooms asked, a lack among them (`world::node`), so the box the walk did not read
-/// passes by nothing a ray stops at. The cache the eye's first frame leaves at coarse zooms, the
-/// next frame asking finer, every other entry finer than `KEPT_ZOOM` dropped.
+/// A sample whose walk over the node cache meets a node the cache holds only at other zooms is
+/// left there (walk.wgsl, cached.wgsl): `sample_cs` goes on from where it was left, and every
+/// sample stops as `cast::walk` from the root stops it. The cache the eye's first frame leaves
+/// at coarse zooms, the next frame asking finer, every other entry finer than `KEPT_ZOOM` dropped.
 #[test]
-fn hand_blind_samples_answer_as_cast_walk() {
+fn hand_samples_over_other_zooms_answer_as_cast_walk() {
     const KEPT_ZOOM: Zoom = 12;
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);

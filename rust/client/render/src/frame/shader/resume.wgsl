@@ -53,7 +53,7 @@ fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
   let on = select(vec3<i32>(0), vec3<i32>(1), (d >= vec3<i32>(0)) & (p < og))
     + select(vec3<i32>(0), vec3<i32>(-1), (d < vec3<i32>(0)) & (p > og));
   if (any(node_r != on)) {
-    return Start(t, vec3<u32>(0u), 0u, vec3<i32>(0));
+    return start_at(t, vec3<u32>(0u), 0u, vec3<i32>(0));
   }
   let apart_from = (node_c.x ^ p.x) | (node_c.y ^ p.y) | (node_c.z ^ p.z);
   var zoom = min(beams[k + NODE_ZOOM], countLeadingZeros(apart_from));
@@ -70,5 +70,5 @@ fn line_resumed(aim: Aim, line: u32, t: f32, line_origin: u32) -> Start {
     zoom -= 1u;
     corner = corner & vec3<u32>(~under(zoom));
   }
-  return Start(t, corner, zoom, node_r);
+  return start_at(t, corner, zoom, node_r);
 }

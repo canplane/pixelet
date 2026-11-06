@@ -35,10 +35,11 @@ fn corners_left_at() -> u32 {
   return head_word(LIGHT_HEAD_CORNERS_LEFT);
 }
 
-/// Beam ray `c`'s ray, at the band of the tile its texel, which may lie past the box, lies on.
+/// Beam ray `c`'s ray, at the band of the tile its texel, which may lie past the box, lies on,
+/// its line `beam_line`.
 fn beam_aim(c: vec2<u32>) -> Aim {
   let band = tile_band(light_on(LEVEL_CORNER, c));
-  return light_ray(corner_texel(c), band, mix_hash(head_word(LIGHT_HEAD_CAST), c.x | (c.y << 16u)));
+  return beam_ray(light_ray(corner_texel(c), band), beam_line(c), beam_spacing());
 }
 
 /// How far apart its beam rays lie, `light::BEAM` texels (`Light::spacing`): the light's rays

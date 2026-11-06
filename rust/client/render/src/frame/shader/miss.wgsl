@@ -1,7 +1,7 @@
 // pxl-render/miss.wgsl
 
 // The pixels the walk over the node cache alone left (miss_hit.wgsl), their ray asking the world
-// (ask.wgsl, miss_word.wgsl): over their list, on from where that walk left them (`miss_list_cs`),
+// (walk.wgsl, ask.wgsl, miss_word.wgsl): over their list, on from where that walk left them (`miss_list_cs`),
 // and from their cell's start over every pixel where `cast_cs` found the list full (`miss_cs`). The two run after `cast_cs` in the cast's one pass and write every marked
 // pixel's words whole, so the mark never outlives the pass.
 
@@ -39,7 +39,8 @@ fn walk_missed(id: vec2<u32>, size: vec2<u32>, left: bool) {
     t = bitcast<f32>(textureLoad(rays, id, 1u).x);
   }
   let start = px_start_at(aim, id, size, t);
-  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, start);
+  let w = walk(aim, start, STEPS_MOST);
+  count_visits(w);
   let face = face_of(aim, w);
   var faces = 0u;
   // A cell short of its cube is its box's faces; a whole one's hit is kept to ask them. Both

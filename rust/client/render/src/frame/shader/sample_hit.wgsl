@@ -1,6 +1,6 @@
 // pxl-render/sample_hit.wgsl
 
-// The samples' walk over the node cache alone (walk.wgsl), either observer's
+// The samples' walk over the node cache alone (walk.wgsl, cached.wgsl), either observer's
 // (sample.eye.wgsl, sample.light.wgsl). One it leaves is listed for `sample_cs`, which goes on
 // from where it was left (pxl-engine `beam::SAMPLE_LEFT_T`); one that ends is put as that puts it
 // (sample_put.wgsl).
@@ -18,7 +18,7 @@ fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let base = sample_word(s);
   let aim = sample_aim(s);
-  let w = walk(aim, sample_start(aim, s), NONE, vec2<f32>(0.0));
+  let w = walk(aim, sample_start(aim, s), STEPS_MOST);
   if (w.ends == 4u) {
     beams[base + SAMPLE_LEFT_T] = bitcast<u32>(w.t);
     // The list holds a place for each sample of the lattice, each listed once.

@@ -1,6 +1,6 @@
 // pxl-render/miss_hit.wgsl
 
-// The pixels `cast_cs` listed, their walk over the node cache alone (walk.wgsl).
+// The pixels `cast_cs` listed, their walk over the node cache alone (walk.wgsl, cached.wgsl).
 // One it leaves stays marked, where it was left written (`write_left`), and is listed for
 // `miss_list_cs` (miss.wgsl); one that ends is written as that writes it (miss_word.wgsl).
 
@@ -43,7 +43,7 @@ fn miss_hit_cs(
     return;
   }
   let aim = px_aim(id, size);
-  let w = walk(aim, px_start(aim, id, size), NONE, vec2<f32>(0.0));
+  let w = walk(aim, px_start(aim, id, size), STEPS_MOST);
   if (w.ends == 4u) {
     write_left(id, w.t);
     let place = enlist(MARKS);

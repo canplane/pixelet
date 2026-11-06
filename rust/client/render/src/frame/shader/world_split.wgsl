@@ -31,16 +31,6 @@ fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
   return box_word(min(box_first(a), box_first(b)), max(box_past(a), box_past(b)));
 }
 
-fn box_first(w: vec2<u32>) -> vec3<u32> {
-  let m = BOX_STEPS - 1u;
-  return vec3<u32>(w.x & m, (w.x >> (2u * BOX_BITS)) & m, (w.y >> BOX_BITS) & m);
-}
-
-fn box_past(w: vec2<u32>) -> vec3<u32> {
-  let m = BOX_STEPS - 1u;
-  return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 1u;
-}
-
 // ---- overwrite.rs ----
 
 /// `overwrite::object_box`, under a split.

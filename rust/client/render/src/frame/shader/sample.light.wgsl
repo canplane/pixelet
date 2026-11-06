@@ -27,7 +27,7 @@ fn left_at() -> u32 {
 }
 
 fn sample_aim(s: vec2<u32>) -> Aim {
-  return light_aim(slot_texel(s * LIGHT_SAMPLE), mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)));
+  return light_aim(slot_texel(s * LIGHT_SAMPLE));
 }
 
 /// The band its ray asked, its tile's (light_aim.wgsl `texel_band`).

@@ -1,8 +1,8 @@
 // pxl-render/beam.wgsl
 
 // The beam rays `beam_hit_cs` left, either observer's (beam.eye.wgsl, beam.light.wgsl), each
-// walked on from where that left it asking the world (beam_walk.wgsl, ask.wgsl). A thread each
-// at its place in their list (list.wgsl).
+// walked on from where that left it asking the world (walk.wgsl, ask.wgsl). A thread each at
+// its place in their list (list.wgsl).
 
 @compute @workgroup_size(MISS_LANES, 1, 1)
 fn beam_cs(
@@ -17,14 +17,10 @@ fn beam_cs(
   }
   let listed = beams[at + 1u + place];
   let c = vec2<u32>(listed & 0xffffu, listed >> 16u);
-  let base = beam_line(c);
   let hand = beam_hand_at(c);
   let aim = beam_aim(c);
   // Where `beam_hit_cs` left it: its line's node at how far it came (resume.wgsl).
-  let start = line_resumed(aim, base, bitcast<f32>(beams[hand]), NONE);
-  let met = beam_walk(aim, beam_spacing(), base, start);
-  if (node_cache_word(COUNT_ON) != 0u) {
-    atomicAdd(&node_cache[VISITS_COUNT], met.visits);
-  }
+  let met = walk(aim, line_resumed(aim, aim.line, bitcast<f32>(beams[hand]), NONE), STEPS_MOST);
+  count_visits(met);
   beams[hand] = bitcast<u32>(beam_hand(met.t));
 }

@@ -184,7 +184,7 @@ impl Query for Stand {
     }
 }
 
-/// A beam ray's line as the shader leaves it (pxl-render beam_walk.wgsl,
+/// A beam ray's line as the shader leaves it (pxl-render walk.wgsl,
 /// resume.wgsl): the node it stopped at and what was handed each
 /// node from the root to it.
 #[derive(Clone, Copy)]

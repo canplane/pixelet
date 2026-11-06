@@ -623,8 +623,8 @@ pub struct Trace<A> {
     pub hit: Hit<A>,
 }
 
-/// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and each by
-/// hand (pxl-render beam_walk.wgsl, ask.wgsl, walk.wgsl) end there, gone to their reach. A
+/// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and the one
+/// by hand (pxl-render walk.wgsl), over either node module, end there, gone to their reach. A
 /// float gone wrong ends there, on a phone where a walk that does not end loses the device.
 /// Far more than a ray takes.
 pub const STEPS_MOST: u32 = 4096;

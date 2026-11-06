@@ -60,7 +60,7 @@ fn light_cs(
   }
   let on = head_word(LIGHT_HEAD_COUNTED) != 0u;
   let p = slot_texel(at);
-  let aim = light_aim(p, 0u);
+  let aim = light_aim(p);
   let band = aim.range.x;
   let visible = textureLoad(visibility, p, 0u, 0u).x;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {

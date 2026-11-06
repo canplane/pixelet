@@ -12,16 +12,25 @@ fn eye_cut(k: u32) -> vec4<i32> {
 /// A ray to walk: from `origin`, at the zooms `range` holds it to; `inv` its direction's
 /// reciprocal on each axis, 0 where it does not move along one (`Ray::inverse`), the eye's
 /// worked out once by the GPU (`eye_aim`), the light's the host's (light_aim.wgsl
-/// `light_aim`); `seed`, other rays' and other frames', says which asks again (walk.wgsl
-/// `revisits`).
+/// `light_aim`). What its origin decides beside (walk.wgsl `walk`): its stop rule, `until`
+/// (`cast::Until`); a beam ray's line, `line`, `NONE` for any other ray; and how far apart its
+/// beam's rays lie, `spacing`, `across` then `angle` (`cast::Spacing`), none for any other.
 struct Aim {
   origin: vec3<i32>,
   dir: vec3<f32>,
   inv: vec3<f32>,
   t_max: f32,
   range: vec2<u32>,
-  seed: u32,
+  until: u32,
+  line: u32,
+  spacing: vec2<f32>,
 }
+
+/// A ray's stop rule (`cast::Until`): at what it cannot see through, but not in the cell it
+/// starts in, and where it enters the box a cell keeping less than its cube is; or a beam
+/// ray's, at what is not transparent and at a split too narrow to share.
+const UNTIL_OPAQUE = 0u;
+const UNTIL_BEAM = 2u;
 
 /// The eye's ray at the tangents `tan_at`: the one place a GPU works out the eye's way and its
 /// reciprocal, a division and a square root its own (`cast::through`, `Ray::new`), so every
@@ -35,8 +44,15 @@ fn eye_aim(tan_at: vec2<f32>) -> Aim {
     ray_inv(ray_dir(dir)),
     eye_f32(FAR),
     vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
-    mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
+    UNTIL_OPAQUE,
+    NONE,
+    vec2<f32>(0.0),
   );
+}
+
+/// The beam ray `aim` of a beam whose rays lie `spacing` apart, its line at `line`.
+fn beam_ray(aim: Aim, line: u32, spacing: vec2<f32>) -> Aim {
+  return Aim(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, UNTIL_BEAM, line, spacing);
 }
 
 /// The ray's way, its axes it hardly moves along none (`Ray::new`).
@@ -48,21 +64,33 @@ fn ray_inv(dir: vec3<f32>) -> vec3<f32> {
   return select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
 }
 
-/// Where a walk starts: the node holding where the ray is at `t` (resume.wgsl).
+/// A ray's state between steps, where a walk starts (resume.wgsl): the node holding where the
+/// ray is at `t`; what was handed that node's parent, `parent`, unless the node is asked from
+/// the top, `top`; and the steps the walk took before (`cast::walk_at_most`).
 struct Start {
   t: f32,
   corner: vec3<u32>,
   zoom: u32,
   roots: vec3<i32>,
+  parent: vec4<u32>,
+  top: bool,
+  step: u32,
+}
+
+/// The node holding where the ray is at `t`, asked from the top, no step taken.
+fn start_at(t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> Start {
+  return Start(t, corner, zoom, roots, vec4<u32>(0u), true, 0u);
 }
 
 /// From the root of the origin, at 0.
 fn root_start() -> Start {
-  return Start(0.0, vec3<u32>(0u), 0u, vec3<i32>(0));
+  return start_at(0.0, vec3<u32>(0u), 0u, vec3<i32>(0));
 }
 
-/// Where a walk ended. `ends`: 1 at a cell it stops at, 2 where one lacks, 3 gone to
-/// its reach, 4 left to the walk that asks, at `t`.
+/// Where a walk ended or stopped, and its state there. `ends`: 1 at a cell it stops at, 2 where
+/// one lacks, 3 gone to its reach, 4 left to the walk that asks, 5 out of the steps it was
+/// given, the last two at `t`, at the node `zoom`, `corner` and `roots` name, which it goes on
+/// from with `parent`, `top` and `step` (`Start`); `visits` the nodes it entered.
 struct Walked {
   ends: u32,
   zoom: u32,
@@ -71,6 +99,10 @@ struct Walked {
   asset: vec2<u32>,
   axis: u32,
   t: f32,
+  visits: u32,
+  parent: vec4<u32>,
+  top: bool,
+  step: u32,
 }
 
 /// Units from the origin at `og` to `p`, in the root `roots` from it (pxl-engine

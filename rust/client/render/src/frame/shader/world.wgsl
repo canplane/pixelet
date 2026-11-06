@@ -16,13 +16,6 @@
 @group(0) @binding(6) var<storage, read> overwrites: array<u32>;
 @group(0) @binding(7) var<storage, read> pool: array<u32>;
 
-/// What is in a node (`world::node`) and what it hands its children.
-struct Answer {
-  kind: u32,
-  asset: vec2<u32>,
-  handed: vec4<u32>,
-}
-
 // ---- value.rs, answer.rs ----
 
 fn fills(asset: u32) -> bool {

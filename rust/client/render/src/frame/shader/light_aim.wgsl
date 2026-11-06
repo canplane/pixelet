@@ -95,22 +95,24 @@ fn light_inverse() -> vec3<f32> {
   return light_v3(LIGHT_INVERSE);
 }
 
-/// The ray of box texel `p`, which may lie past the box, asked at `band`, `seed` its asks'
-/// (`light::ray`, walk_node.wgsl `Aim`).
-fn light_ray(p: vec2<i32>, band: u32, seed: u32) -> Aim {
+/// The ray of box texel `p`, which may lie past the box, asked at `band` (`light::ray`,
+/// walk_node.wgsl `Aim`).
+fn light_ray(p: vec2<i32>, band: u32) -> Aim {
   return Aim(
     texel_start(light_corner() + p),
     light_v3(LIGHT_DIR),
     light_inverse(),
     eye_f32(LIGHT + LIGHT_T_MAX),
     vec2<u32>(band),
-    seed,
+    UNTIL_OPAQUE,
+    NONE,
+    vec2<f32>(0.0),
   );
 }
 
 /// The ray of box texel `texel`, at its tile's band.
-fn light_aim(texel: vec2<u32>, seed: u32) -> Aim {
-  return light_ray(vec2<i32>(texel), texel_band(texel), seed);
+fn light_aim(texel: vec2<u32>) -> Aim {
+  return light_ray(vec2<i32>(texel), texel_band(texel));
 }
 
 fn depth_word(d: f32) -> u32 {

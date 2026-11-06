@@ -1,110 +1,84 @@
 // pxl-render/walk.wgsl
 
-// A ray's walk over what the node cache keeps, by hand: no stack, no atomics
-// and no query of the world, so a thread holds little across its loop
-// (doc/experiment/20261103-the-walk-on-a-phone). A walk that meets a node no slot
-// keeps ends left, for the walk that asks the world to do again whole. What it
-// reads no thread of it writes.
+// A ray's walk, every walk's one (pxl-engine `cast::walk`): a step a node, no stack, over
+// what its kernel's node module answers each node with (`node_answer`): the node cache alone,
+// read only (cached.wgsl), or the node cache and the world asked where no slot keeps the node
+// (ask.wgsl). What the ray's origin decides is data the walk reads off its `Aim`: where it
+// starts (`Start`), the zooms its range holds it to, its stop rule (`UNTIL_OPAQUE`,
+// `UNTIL_BEAM`) and a beam ray's line. A node is answered at the zooms asked alone, the pair a
+// function of the node and the origin (`cast::ask_zooms`), as pxl-engine's `Query` answers
+// it: a walk that meets a node no slot keeps at that pair is left there (`KIND_LEFT`), never
+// passed on a slot of other zooms. So a ray walked by either module visits the nodes
+// `cast::walk` visits from the same start, in the same order, and stops where it stops. A ray
+// walked on from the state a walk returns (`Walked`, `Start`) goes on as one unbroken walk. A
+// ray the first module left and the second walks on from its `t` alone (resume.wgsl
+// `resumed_at`, `line_resumed`) stops where one unbroken walk stops, as the partition of its
+// interval past that point is the same; it looks again at the nodes over the one it was left
+// at, and counts its steps afresh.
 
-@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
+/// No slot keeps the node at the zooms asked: the walk is left there (cached.wgsl).
+const KIND_LEFT = 0xfffffffeu;
 
-/// The slot a walk takes for a node, its kind and asset; `w` `NONE` where none answers.
-struct Slot {
-  w: u32,
-  /// Held at other zooms than asked.
-  other: bool,
-  kind: u32,
-  asset: vec2<u32>,
+/// What was handed the line's node at `zoom`, at `line` (`beam::LINE_INHERITANCE`).
+fn line_handed(line: u32, zoom: u32) -> vec4<u32> {
+  let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
+  return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);
 }
 
-/// The slot holding the node at the zooms asked; else the first that holds it at other zooms
-/// and answers for the zooms asked. A split asked finer than itself is a split or air
-/// (`world::node`): a walk that goes in, taking no box of it, meets what its children answer
-/// either way. Air held no finer than asked stays air on nearly every node, and a ray goes past
-/// it (`revisits`). One scan of the bucket: each entry's key, its node only where the key holds
-/// an entry, its kind and asset only where it holds the node.
-fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Slot {
-  // The first at other zooms, held apart: no function's local is a struct (build.rs).
-  var other = NONE;
-  var other_kind = 0u;
-  var other_asset = vec2<u32>(0u);
-  if (!keeps(zoom, c)) {
-    return Slot(NONE, true, 0u, other_asset);
-  }
-  let want = (far << TAG_BITS) | (near << (TAG_BITS + ZOOM_BITS));
-  let node = vec4<u32>(zoom, u32(c.x), u32(c.y), u32(c.z));
-  let first = bucket_of(zoom, c);
-  for (var k = 0u; k < BUCKET; k += 1u) {
-    let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
-    let held = node_cache[w];
-    if (held == 0u || held == CLAIMED) {
-      continue;
-    }
-    let n = vec4<u32>(node_cache[w + W_NODE], node_cache[w + W_NODE + 1u], node_cache[w + W_NODE + 2u], node_cache[w + W_NODE + 3u]);
-    if (any(n != node)) {
-      continue;
-    }
-    let kind = node_cache[w + W_KIND] & KIND_MASK;
-    let asset = vec2<u32>(node_cache[w + W_ASSET], node_cache[w + W_ASSET + 1u]);
-    if ((held & KEY_ZOOMS) == want) {
-      return Slot(w, false, kind, asset);
-    }
-    if (other == NONE) {
-      let v = asset.x & VAL_MASK;
-      let air = kind == KIND_CELL && (v == VALUE_VOID || v == VALUE_AIR);
-      let split = kind == KIND_SPLIT && zoom < near;
-      if (split || (air && (held >> (TAG_BITS + ZOOM_BITS)) <= near)) {
-        other = w;
-        other_kind = kind;
-        other_asset = asset;
-      }
-    }
-  }
-  return Slot(other, true, other_kind, other_asset);
+fn line_hand(line: u32, zoom: u32, handed: vec4<u32>) {
+  let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
+  beams[k] = handed.x;
+  beams[k + 1u] = handed.y;
+  beams[k + 2u] = handed.z;
+  beams[k + 3u] = handed.w;
 }
 
-/// Whether this ray asks again of a node it could go past, one ray in `REVISIT_ONE_IN`, other
-/// rays on other frames: what it asks is kept at the zooms asked, for the next frame's.
-fn revisits(seed: u32) -> bool {
-  return (seed >> 8u) % REVISIT_ONE_IN == 0u;
-}
-
-/// What was handed the node at `zoom` off slot `w`, written in the beam ray's line at `line`.
-/// Through a node at other zooms, what was found under it is not taken: the next that asks
-/// finds it again (`Inheritance::of`), as a moved brick's may be gone.
-fn hand(line: u32, zoom: u32, w: u32, other_zooms: bool) {
-  let held = line + LINE_INHERITANCE + LINE_STEP * zoom;
-  beams[held] = node_cache[w + W_INHERITANCE];
-  beams[held + 1u] = select(node_cache[w + W_INHERITANCE + 1u], SHARD_UNKNOWN, other_zooms);
-  beams[held + 2u] = select(node_cache[w + W_INHERITANCE + 2u], LOOKUP_NONE, other_zooms);
-  beams[held + 3u] = select(node_cache[w + W_INHERITANCE + 3u], SLOT_NOTHING, other_zooms);
-}
-
-/// The ray `aim`, from `start`; or, where `line` is a beam ray's line and not `NONE`, from the
-/// root (`Until::Beam`), its beam's rays `spacing` apart (`cast::Spacing`), what was handed each
-/// node it goes into and the one it ends at written there at once, in place of a stack.
-fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
-  let beam = line != NONE;
+/// The ray `aim` from `start`, at most `steps` steps more, to the first cell its stop rule stops
+/// at, the first that lacks, its reach, or, for a beam ray, the first split too narrow to share
+/// with its beam's rays (`cast::walk_at_most`: at most `STEPS_MOST` steps in all, past which it
+/// has gone to its reach). A step is a node looked at; what it carries from one step to the
+/// next is `Start`'s words and nothing else, so a walk stopped after any step and walked on
+/// from the state it returns (`Walked`) looks at the nodes, and stops where, one walk given
+/// both their steps does. A beam ray's line (`aim.line`, `beam::LINE_WORDS`) holds what was
+/// handed each node it goes into and the one it ends at, written as it goes, and is read back
+/// where the walk pops to a node's child, in place of a stack; and the node it ends or is left
+/// at. `ends` (`Walked`): 4 by cached.wgsl, at a node no slot keeps or at the end of a line
+/// whose last node's handed words it cannot find; 5 where `steps` ran out first.
+fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
+  let beam = aim.until == UNTIL_BEAM;
+  let line = aim.line;
   let dir = ray_dir(aim.dir);
   let inv = aim.inv;
   let t_max = aim.t_max;
   let range = aim.range;
-  let origin = aim.origin;
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
-  let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
-  let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
+  let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
+  let r0 = vec3<i32>(aim.origin.x >> 31u, 0i, i32(u32(aim.origin.z) + Z_START) >> 31u);
   var t = start.t;
   var corner = start.corner;
   var zoom = start.zoom;
   var roots = start.roots;
-
-  // 0 goes on; 1 a hit; 2 lacks; 3 gone to its reach; 4 left to `sample_cs`.
+  // What was handed the node's parent, which an asked node's handed words are found off
+  // (`world_child`); else, `top`, the node is asked from the top (`world_root`): at a root,
+  // and past a pop where no line holds the parent's, as the first after a resume is. A line
+  // holds every node's over the one it is at.
+  var parent = start.parent;
+  var top = start.top;
+  if (line != NONE && zoom != 0u) {
+    parent = line_handed(line, zoom - 1u);
+    top = false;
+  }
+  let last = start.step + min(steps, STEPS_MOST - min(start.step, STEPS_MOST));
+  // 0 goes on.
   var ends = 0u;
   var asset = vec2<u32>(0u);
   var axis = 0u;
-  var hit_t = 0.0;
-  var blind = false;
-  for (var step = 0u; step < STEPS_MOST && ends == 0u; step += 1u) {
+  var hit_t = t_max;
+  var visits = 0u;
+  // Whether what was handed the node it ends at is in the line.
+  var handed_ended = false;
+  var step = start.step;
+  for (; step < last; step += 1u) {
     let u = under(zoom);
     let lo = units(corner, og, roots);
     let hi = far_of(corner, u, og, roots);
@@ -112,53 +86,37 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
     let t0 = max(t, largest(s.near));
     let t1 = min(t_max, smallest(s.far));
     var into = false;
-    var visited = false;
+    var stops = false;
+    var handed = vec4<u32>(0u);
+    // Only touched, at a face or an edge: not entered, nothing in it met.
     if (t1 > t0) {
-      // The zooms asked at its farthest corner and nearest point, squared (`node_dist_sq`);
-      // one range's alone, as the light's is.
-      var asked_far = range.x;
-      var asked_near = range.x;
+      // The zooms asked at its farthest corner and nearest point, far then near over
+      // `ZOOM_BITS` (`ask_zooms`, `node_dist_sq`); one range's alone, as the light's is.
+      var zooms = range.x | (range.x << ZOOM_BITS);
       if (range.x != range.y) {
-        asked_far = zoom_at(squared(max(-lo, hi)), range);
-        asked_near = zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range);
+        zooms = zoom_at(squared(max(-lo, hi)), range) | (zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range) << ZOOM_BITS);
       }
-      let c = idx_of(corner, zoom, roots, r0);
-      let slot = slot_of(zoom, c, asked_far, asked_near);
-      let w = slot.w;
-      let other_zooms = slot.other;
-      if (w == NONE || (other_zooms && slot.kind == KIND_CELL && revisits(aim.seed))) {
+      let a = node_answer(parent, top, zoom, idx_of(corner, zoom, roots, r0), zooms, line != NONE);
+      if (a.kind == KIND_LEFT) {
         ends = 4u;
         hit_t = t;
         break;
       }
-      visited = true;
-      let kind = slot.kind;
-      asset = slot.asset;
+      visits += 1u;
+      handed = a.handed;
+      asset = a.asset;
+      let v = asset.x & VAL_MASK;
+      let clear = v == VALUE_VOID || v == VALUE_AIR;
       var near_at = s.near;
-      if (other_zooms && kind == KIND_CELL) {
-        // Air: gone past.
-      } else if (other_zooms) {
-        // No box of it read. A beam ray stops at a split too narrow to share, which
-        // a box would decide: left.
-        let width = spacing_width(spacing, squared(max(-lo, hi)));
-        if (beam && narrow(hi.x - lo.x, width)) {
-          ends = 4u;
-          hit_t = t;
-          break;
-        }
-        into = true;
-        blind = true;
-      } else if (kind == KIND_SPLIT) {
-        // Whether its span meets the box its content lies in (`meets_box`).
-        let m = BOX_STEPS - 1u;
-        let first = vec3<u32>(asset.x & m, (asset.x >> (2u * BOX_BITS)) & m, (asset.y >> BOX_BITS) & m);
-        let past = vec3<u32>((asset.x >> BOX_BITS) & m, asset.y & m, (asset.y >> (2u * BOX_BITS)) & m) + vec3<u32>(1u);
-        // A beam ray's width at its far corner: it stops at a split it may not
-        // share with the rays about it, and clears one it clears by that.
-        let width = select(0.0, spacing_width(spacing, squared(max(-lo, hi))), beam);
+      if (a.kind == KIND_SPLIT) {
+        // Whether its span meets the box its content lies in (`meets_box`), grown for a beam
+        // ray by its width at the far corner: it stops at a split it may not share with the
+        // rays about it, and clears one it clears by that (`narrow`).
+        let width = select(0.0, spacing_width(aim.spacing, squared(max(-lo, hi))), beam);
         let too_narrow = beam && narrow(hi.x - lo.x, width);
         let grown = NARROW * width;
-        let box_lo = units(corner + box_step(first, u, 0u), og, roots) - vec3<f32>(grown);
+        let past = box_past(asset);
+        let box_lo = units(corner + box_step(box_first(asset), u, 0u), og, roots) - vec3<f32>(grown);
         let box_hi = select(
           units(corner + box_step(past, u, BOX_STEPS - 1u), og, roots),
           hi,
@@ -169,39 +127,42 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
         into = meets && !too_narrow;
         if (meets && too_narrow) {
           ends = 1u;
+          stops = true;
         }
-      } else if (kind == KIND_CELL) {
-        let v = asset.x & VAL_MASK;
-        let clear = v == VALUE_VOID || v == VALUE_AIR;
+      } else if (a.kind == KIND_CELL) {
         let inside = all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi);
         if (beam) {
           if (!clear) {
             ends = 1u;
+            stops = true;
           }
         } else if (!clear && !inside) {
+          // What the ray starts inside it does not stop at; a cell keeping less than its cube
+          // is the box its share fills (`fill_bounds`).
           let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
           if (k == 0u) {
             ends = 1u;
+            stops = true;
           } else {
             let inset = (hi - lo) * (0.5 * (1.0 - side(k)));
             let b = span_of(dir, inv, lo + inset, hi - inset, t, t_max);
-            near_at = b.near;
             if (min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
+              near_at = b.near;
               ends = 1u;
+              stops = true;
             }
           }
         }
       } else {
-        // Under a split it took no box of, a walk that read the box may have passed
-        // this: left.
-        ends = select(2u, 4u, blind);
+        ends = 2u;
+        stops = true;
       }
-      // The line holds what was handed the nodes it goes into and the one it ends at, which a
-      // walk resumed from it and a hit's faces read; one it is left at, `beam_cs` writes.
-      if (beam && (into || ends == 1u || ends == 2u || t1 >= t_max)) {
-        hand(line, zoom, w, other_zooms);
+      if (line != NONE && (into || stops || t1 >= t_max)) {
+        line_hand(line, zoom, handed);
+        handed_ended = !into;
       }
-      if (ends != 0u) {
+      if (stops) {
+        // Where the ray enters the node, or its share's box (`entry_plane`).
         axis = crossing(dir, near_at, true);
         hit_t = past_origin(near_at[axis]);
         break;
@@ -219,10 +180,11 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
       corner = corner | select(vec3<u32>(0u), vec3<u32>(half), crossed);
       zoom += 1u;
       t = t0;
+      parent = handed;
+      top = false;
     } else {
       if (t1 >= t_max) {
-        // Unvisited, what was handed it is not in the line: asked of the world.
-        ends = select(3u, 4u, beam && !visited);
+        ends = 3u;
         hit_t = t1;
         break;
       }
@@ -232,22 +194,46 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
       let old = corner[e];
       let new_c = select(old - u - 1u, old + u + 1u, up);
       t = max(t, t1);
+      handed_ended = false;
       if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
+        // Past a root: into the next, from its top.
         roots[e] += select(-1i, 1i, up);
         corner = vec3<u32>(0u);
         zoom = 0u;
+        top = true;
       } else {
         corner[e] = new_c;
         let h = 31u - countLeadingZeros(old ^ new_c);
         corner = corner & vec3<u32>(~((1u << h) - 1u));
         zoom = FINEST_ZOOM - h;
+        top = line == NONE;
+        if (!top) {
+          parent = line_handed(line, zoom - 1u);
+        }
       }
     }
   }
-  // Out of steps, it is left to the walk that asks, as one that meets a node no slot keeps.
   if (ends == 0u) {
-    ends = 4u;
-    hit_t = t;
+    // Out of its steps: gone to its reach where they were the last of `STEPS_MOST`, as a float
+    // gone wrong ends; else stopped where it is.
+    ends = select(5u, 3u, step >= STEPS_MOST);
+    hit_t = select(t, t_max, step >= STEPS_MOST);
   }
-  return Walked(ends, zoom, corner, roots, asset, axis, hit_t);
+  if (line != NONE) {
+    // The node it ended or was left at, which a walk resumed from the line starts from
+    // (resume.wgsl `line_resumed`); and what was handed the node it ended at, where that was
+    // not asked.
+    let n = line + LINE_NODE;
+    beams[n + NODE_ZOOM] = zoom;
+    beams[n + NODE_CORNER] = corner.x;
+    beams[n + NODE_CORNER + 1u] = corner.y;
+    beams[n + NODE_CORNER + 2u] = corner.z;
+    beams[n + NODE_ROOTS] = u32(roots.x);
+    beams[n + NODE_ROOTS + 1u] = u32(roots.y);
+    beams[n + NODE_ROOTS + 2u] = u32(roots.z);
+    if (ends <= 3u && !handed_ended && !hand_end(line, parent, top, zoom, idx_of(corner, zoom, roots, r0))) {
+      ends = 4u;
+    }
+  }
+  return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
 }

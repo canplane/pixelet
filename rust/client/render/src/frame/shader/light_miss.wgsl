@@ -1,7 +1,7 @@
 // pxl-render/light_miss.wgsl
 
 // The slots `light_miss_hit_cs` left (pxl-engine `light::misses_left_at`), their walk on from
-// where it left them, which each slot's word holds, asking the world (ask.wgsl,
+// where it left them, which each slot's word holds, asking the world (walk.wgsl, ask.wgsl,
 // light_resume.wgsl).
 
 const WALK_PASS: u32 = LIGHT_MISSED_PASS;
@@ -24,8 +24,9 @@ fn light_miss_cs(
   let listed = beams[at + 1u + k];
   let slot = vec2<u32>(listed & 0xffffu, listed >> 16u);
   let texel = slot_texel(slot);
-  let aim = light_aim(texel, 0u);
+  let aim = light_aim(texel);
   let t = bitcast<f32>(textureLoad(light, slot, 0).x);
-  let w = walk_asking(aim.origin, aim.dir, aim.inv, aim.t_max, aim.range, light_resumed_at(aim, texel, t));
+  let w = walk(aim, light_resumed_at(aim, texel, t), STEPS_MOST);
+  count_visits(w);
   textureStore(light, slot, 0, vec4<u32>(walked_word(w), 0u, 0u, 0u));
 }
