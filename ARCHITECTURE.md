@@ -29,7 +29,7 @@ generates its decor, and everything else the kernel draws, it lists for the rend
 (Drawing).
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel
-that runs as xpute's guest, the TypeScript around it, and Rust servers and
+that runs as xpute's core, the TypeScript around it, and Rust servers and
 bakes that share the kernel's model. The memory, the rings and the turn are
 xpute's and described there; this document is what pixelet builds on them.
 
@@ -56,11 +56,11 @@ the same way. The check-rules tool holds the order (pxl-tool
     │   layer/       the trunk: the base and the object             │
   ──┼───────────────────────────────────────────────────────────────┼───
   sys/                   what all of it stands on                   │
-    ▼   io/          reads, credits, the host's end                 │
+    ▼   io/          reads, credits, the runtime's end           │
         sched/       a turn's edge and its phases
         mem/         the core memory's sections
         boot · load · stop   bringing it up, what it loads, its end
-  machine.spec.rs        the machine it asks of its host (machine.json)
+  machine.spec.rs        the machine it asks of its runtime (machine.json)
   unpack.rs              the device transport's zstd decoder
 
   beside   perf/: reads anything; no decision reads it
@@ -150,7 +150,7 @@ the tree: what each node at the shard's zoom holding objects folds to
 top is read first, and its folds stand in the tree where their shards are not
 read, so a view from afar draws from it alone. A shard the top lists is read as
 a bake's tile is, the shards about the eye as the view asks the ground at the
-shard's zoom (Reads, and the one scheduler), and its leaves go into the one tree
+shard's zoom (Reads, and the one request scheduler), and its leaves go into the one tree
 in place of its folds; a shard it does not list is empty without asking, and a
 shard read stays.
 
@@ -484,7 +484,7 @@ with its own bound:
 | Drawing    | what each pixel's ray meets                   | the screen's rays                                                                     | `domain/scene/cast.rs`, `pxl-render gpu/ray/cast.rs`      |
 | Demand     | which records an observation requires         | a zoom's reach about the eye (`demand_tiles`)                                         | `pxl-spec space/layer/demand.rs`, `domain/view/demand.rs` |
 | Quadrant cache | which records are held, and why               | its slots, asserted at compile time                                                   | `domain/layer/tile_cache.rs`                              |
-| Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
+| Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-request-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
 Every number a person would tune is named once, with its reason, in a `param.rs`
 beside the lowest part that reads it (`pxl-kernel domain/view/param.rs`,
@@ -670,9 +670,9 @@ over        markers → debug lines → previews
 ```
 
 The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one
-stream, which xpute's GPU host runs: the page's on WebGPU after the turn returns
-(`@xpute/gpu` `WebGpu`, `ts/client/src/services/gpu.ts`), the device app's on
-wgpu around each turn (`xpute-gpu/host/native.rs`). A frame where nothing it
+stream, which xpute's GPU runtime runs: the page's on WebGPU after the turn returns
+(`@xpute/gpu` `WebGpu`, `ts/client/src/service/gpu.ts`), the device app's on
+wgpu around each turn (`xpute-gpu/runtime/native.rs`). A frame where nothing it
 reads moved submits nothing, and the canvas keeps its frame.
 
 The renderer is made before its first frame, in three steps
@@ -688,7 +688,7 @@ snapshot carries how much is made (`renderer_progress`), which the bar over the
 world shows until the view is first drawn (`shell/cover.ts`). Every pipeline it draws with
 is asked for in the second step, the cast's and the ground's included; one
 asked for once it draws is a bug (`EBUSY`). The device app's wgpu has no async
-call, and its GPU host answers the same op at once by the same ticket.
+call, and its GPU runtime answers the same op at once by the same ticket.
 
 A frame where only the draws the kernel bounds moved is drawn again in the
 screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
@@ -787,22 +787,22 @@ platform drew, so shaping, bidirectional text and emoji are each platform's own.
 # Below the view
 
 This part is what the view stands on, `sys/`, and the top that wires the kernel
-to its host: how what it asks for arrives, what it costs in time and memory, and
+to its runtime: how what it asks for arrives, what it costs in time and memory, and
 how a failure leaves what is drawn alone. Nothing in `sys/` names anything above
 it: a layer asks io for a tile, and io never asks what the tile is for.
 
-## The kernel and its host
+## The kernel and its runtime
 
 The kernel is a unikernel on a virtual machine: it holds the world and
 decides everything about it, but owns no device. `pxl-kernel` and
-`xpute-guest`, its library OS (its scheduler, door, memory and stop), are one
-image, a guest of xpute. Its **host** is its VMM: it implements the devices
+`xpute-core`, its library OS (its scheduler, door, memory and stop), are one
+image, a core of xpute. Its **runtime** is its VMM: it implements the devices
 the kernel's machine asks for and gives it the rest, one memory, granted once,
 and a share of time on each call, a **turn**
 ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md)). The kernel owns the
 abstractions and the policy over those grants.
 
-Around the kernel pixelet has three parts, by xpute's picture of a guest's
+Around the kernel pixelet has three parts, by xpute's picture of a core's
 world:
 
 - the **shell**, the screens and components, the client outside the VM (a
@@ -810,32 +810,44 @@ world:
   (`ts/client/src/shell/`);
 - the **services**, what answers the kernel's app ABI and what each platform
   gives — the surfaces, the position, storage, files, text and the server
-  (`ts/client/src/services/`, `port/`, `sys/`, `origin/`);
-- the **host**, xpute's, the kernel's VMM, booted once by the client
+  (`ts/client/src/service/`, `port/`, `sys/`, `origin/`);
+- the **runtime**, xpute's, the kernel's VMM, booted once by the client
   (`ts/client/src/abi/boot.ts`) and kept for the rest of it
-  (`ts/client/src/host/`).
+  (`ts/client/src/runtime/`).
 
-The kernel's crate is its artifact, in xpute's guest form for its target
-(`pxl-kernel lib.rs`, one `xpute_guest::guest!` over its machine,
+The kernel runs apart from the shell, so a turn holds none of the shell's
+events, and the runtime sits where the kernel's memory is
+(`ts/client/src/service/runtime.ts`, `runtime.native.ts`; both start it as
+`runtime/start.ts` does). A device runs the kernel on its own thread and the
+runtime on the shell's JavaScript thread. A page runs the kernel and the
+runtime in a worker (`runtime/worker.ts`) with the files, the network, the
+text and the GPU on the canvas the shell lends it, and the shell on the main
+thread: the shell's commands and the snapshot cross xpute's remote as frames,
+and the rest, where the boot stands, the GPU's and the network's states, the
+kept settings, a canvas lent and the profiler's readings, as
+`runtime/page.ts` says.
+
+The kernel's crate is its artifact, in xpute's core form for its target
+(`pxl-kernel lib.rs`, one `xpute_core::core!` over its machine,
 `rust/client/kernel/machine.json`): the kernel implements xpute's entry
-(`door.rs` `run`), and the form hands it what it hands any guest
-(`xpute_guest::entry` `BootInfo`: where a form sharing its process says what
-stopped it, `stop_hook`, and its GPU host's answer, `admit`). On wasm32 it is
-the WebAssembly module the page runs (`ts/client/src/services/guest.ts`);
+(`door.rs` `run`), and the form hands it what it hands any core
+(`xpute_core::entry` `BootInfo`: where a form sharing its process says what
+stopped it, `stop_hook`, and its GPU runtime's answer, `admit`). On wasm32 it is
+the WebAssembly module the page runs (`ts/client/src/service/kernel.ts`);
 anywhere else it is the library linked into the device app under xpute's native
-host (`xpute_gpu::native_guest!` over `xpute_host::native_guest!`), which runs
+runtime (`xpute_gpu::native_core!` over `xpute_runtime::native_core!`), which runs
 each call on the kernel's own thread, since a turn that draws through wgpu
-outgrows React Native's JavaScript stack, runs the GPU's host around each turn,
+outgrows React Native's JavaScript stack, runs the GPU's runtime around each turn,
 and exports it to the app through xpute's native module (`@xpute/native`). What
 the app calls besides xpute's names is the transport's decoder (`unpack.rs`,
 `rust/client/kernel/include/pxl_native.h`). Outside either form the kernel runs
 under `cargo test`.
 
 The kernel has two ABIs, xpute's two, on one number space. **xpute's predefined
-ABI**, majors under 0x10, is the host's, the kernel's devices: the kernel calls
+ABI**, majors under 0x10, is the runtime's, the kernel's devices: the kernel calls
 the file device for its files and posts its report, during a turn and taken
 after it returns, so each is done before the next turn begins
-(`sys/io/host.rs`), and the host raises the kernel's interrupts: its life
+(`sys/io/runtime.rs`), and the runtime raises the kernel's interrupts: its life
 (`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`) and a GPU answered
 (`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`). **The app's ABI** is what the
 app defines, `rust/client/kernel/shell.json`: the shell's intents and what the
@@ -847,7 +859,7 @@ the services submit; its imports are what the kernel posts unasked, the snapshot
 the view's azimuth and scale apart from it (`SHELL_VIEW`), the sensors it starts
 and stops, and the text it calls for, a text's lines
 and its pixels (`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
-(`sys/io/text.rs`, `ts/client/src/port/text.ts`): a page's host through the
+(`sys/io/text.rs`, `ts/client/src/port/text.ts`): a page's runtime through the
 module's import, a device's on the JavaScript thread that waits on the turn. A
 command's major is the module it is for (`INPUT`, `SENSOR`, `FS`, `SURFACE`,
 `SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `SHELL`, `TEXT`, `TURN`): the door
@@ -855,23 +867,23 @@ applies each major's in its own file (`door/apply/`), and the client sends each
 from its major's file in `port/`. Beside the two ABIs, only what xpute's form
 hands over is called directly. An answer comes back as a number, read once by
 `answer_of` into a count or one of xpute's `Errno` members; a code no member
-names is the host breaking the protocol.
+names is the runtime breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
-(`ts/client/src/abi/boot.ts`) boots `@xpute/host` (`boot`) as the kernel's
+(`ts/client/src/abi/boot.ts`) boots `@xpute/runtime` (`boot`) as the kernel's
 machine declares it (generated into `abi/machine.spec.ts`), which asks for both
 of xpute's devices, the GPU and the files (`gpu`, `fs`), with what backs the
 files (`sys/fs/namespace.ts` `namespace`), the stop report (`sys/abort.ts`), the
 app ABI's handlers (`shell_imports`), the frame pacing and each turn's
-submission (`port/surface.ts` `submit_grant`); `host/kernel.ts` keeps the host
+submission (`port/surface.ts` `submit_grant`); `runtime/kernel.ts` keeps the runtime
 and the generated stubs bound to it (`kernel`). What differs by platform is a
-file pair in `ts/client/src/services/`, `<x>.ts` the page's beside
+file pair in `ts/client/src/service/`, `<x>.ts` the page's beside
 `<x>.native.ts` the device's, which Metro picks by the platform it bundles for
 (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both share in
-`services/types.ts`: the guest's module or none on a device (`guest.ts`), the
+`service/types.ts`: the kernel's module or none on a device (`kernel.ts`), the
 GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`, `NativeGpu`), the sensors,
 the visibility, storage, text, the network and the surfaces; the app's own
-native module is bound in `services/pxl-platform.ts`. What answers the kernel's
+native module is bound in `service/pxl-platform.ts`. What answers the kernel's
 files is `ts/client/src/sys/`: their names, versions, kept keys and refusals
 (`sys/fs/`), and its stop report beside. What the app ABI's client end carries
 is `ts/client/src/port/`, a file a major (SHELL's snapshot in `snapshot.ts`,
@@ -887,29 +899,29 @@ only when what it is made of moved (`shell.rs` `SnapshotInputs`), and carries
 only what the kernel owns; what is rounded or timed for presentation is the
 shell's. The shell lends the kernel the surfaces to draw into and computes no
 coordinate, tile or draw; what it needs of the model is generated from the same
-JSON as the Rust. The host, `services/`, `sys/`, `port/`, `origin/`, `abi/` and
+JSON as the Rust. The runtime, `service/`, `sys/`, `port/`, `origin/`, `abi/` and
 the shell are one package, `ts/client`, which one Expo app, `ts/client`, bundles
 for iOS, Android and the page; the shell reaches the kernel, `sys/` and
 `origin/` through `port/` alone, and `port/` reaches the kernel through the
 generated stubs alone.
 
-The stack reads shell and services, kernel, host: the clients outside the VM,
+The stack reads shell and services, kernel, runtime: the clients outside the VM,
 the unikernel, and its VMM. Both ABIs ride xpute's one pair of rings, the device
-between the shell and the kernel, told apart by a command's major, and the host
-carries the app's submissions without reading them. The shell meets the host
+between the shell and the kernel, told apart by a command's major, and the runtime
+carries the app's submissions without reading them. The shell meets the runtime
 directly only for the surfaces it lends the GPU and the lifecycle (boot,
-visibility), through `@xpute/host`'s TypeScript API.
+visibility), through `@xpute/runtime`'s TypeScript API.
 
 ```text
   shell      React over the snapshot         ts/client/src/shell/
-  services   the app ABI's client end, what  ts/client/src/services/,
+  services   the app ABI's client end, what  ts/client/src/service/,
              each platform gives             port/, sys/, origin/
     │ ▲   the app's ABI, shell.json: commands submitted and completed;
-    ▼ │   upcalls: the snapshot, a sensor started, the text called for
-  kernel     decides all, owns no device     pxl-kernel's guest!
+    ▼ │   imports: the snapshot, a sensor started, the text called for
+  kernel     decides all, owns no device     pxl-kernel's core!
     │ ▲   xpute's ABI: the files and the report called, opens and closes
     ▼ │   completed; the life and GPU_READY raised
-  host       xpute's, the kernel's VMM       @xpute/host, ts/client/src/host/
+  runtime    xpute's, the kernel's VMM       @xpute/runtime, ts/client/src/runtime/
 ```
 
 What crosses each edge:
@@ -917,13 +929,13 @@ What crosses each edge:
 | Edge                                        | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | the shell and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`) and each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
-| kernel and host, xpute's ABI                | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole, the kernel's life, a GPU answered                                                                                                                                 |
-| host and guest, xpute                       | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions and events, hostcalls and the GPU stream's records, xpute's stop hook if it stops                                                                                        |
+| kernel and runtime, xpute's ABI             | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole, the kernel's life, a GPU answered                                                                                                                                 |
+| runtime and core, xpute                     | a turn with its deadline, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions, imports and the GPU stream's records, xpute's stop hook if it stops                                                                                            |
 
-## Reads, and the one scheduler
+## Reads, and the one request scheduler
 
 A read is a file in xpute's sense
-([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#the-file-device)):
+([xpute's imports and files](./xpute/ARCHITECTURE.md#the-file-device)):
 the kernel names a root by its number and an object below it by one name,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/sys/fs/namespace.ts` `namespace`). The roots are
@@ -990,7 +1002,7 @@ asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
 (`ts/client/src/shell/cover.ts` `coverOf`). A broken invariant is a **bug**,
-and it ends the kernel (`xpute_guest::stop`, its record `SYS_ABORT`), and
+and it ends the kernel (`xpute_core::stop`, its record `SYS_ABORT`), and
 the shell shows the blue screen with the errno and place as its
 stop code, as it does for a GPU lost for good: a page's module traps, and on a
 device xpute's stop hook says why and the kernel's thread stops there, the
@@ -998,8 +1010,8 @@ process going on. Memory pressure is neither; the memory map says how each range
 
 ## The turn
 
-The turn and its quota are xpute's: the host rings, the guest spends what it
-was given, and the falling edge says when to ring again
+The turn and its deadline are xpute's: the runtime rings, the core works to its
+deadline, and the falling edge says when to ring again
 ([the turn](./xpute/ARCHITECTURE.md#the-turn)). pixelet decides what fills a
 turn.
 
@@ -1024,20 +1036,20 @@ turn.
 ```
 
 Before each turn the client submits one `TURN_GRANT` on the kernel's rings,
-with the host's alone: the turn's pacing, the reads allowed out and
+with the runtime's alone: the turn's pacing, the reads allowed out and
 the clock (`ts/client/src/port/surface.ts` `submit_grant`); a turn rung for a
 command alone carries none and draws nothing. The view each frame is drawn at
 is the world surface's layout box, in CSS pixels (`SURFACE_RESIZE`), and a
-pointer is placed on it from its top left (`INPUT_POINTER`). The host's turns are paced to the display by
+pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
-`@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
+`@xpute/runtime/sched/frame_pacing.ts`), its numbers the kernel's
 (`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
 interactive (`ts/client/src/port/input.ts` `send_input`). The tick's phases are
 the kernel's (`spec/client/kernel/sys/sched/phase.json`), and `visible` holds back
 the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
 `interaction`, and after it what the pointer is over where the eye now stands,
 the edit it would make and its ghost; what the eye then sees, demand and the
-scene, in `visible`; and the later phases hold what the quota leaves them
+scene, in `visible`; and the later phases hold what the deadline leaves them
 (`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
@@ -1052,7 +1064,7 @@ The client's state is xpute's
 once and never moved, of the sizes the kernel's machine sets
 (`rust/client/kernel/machine.json`). Every address is an offset from its first
 byte, so the map holds in a tab and on a device alike. The front, from the
-stack to the GPU stream, is the machine's, and the host lays it before the
+stack to the GPU stream, is the machine's, and the runtime lays it before the
 first turn. On a device the stack and the kernel's data are the process's, so
 their ranges stand empty and the rest begins at the front's end
 (`global_base`).
@@ -1223,7 +1235,7 @@ Which version of each kind is served is the bucket's alone, in its declaration
 from another version (`pxl-geo-bake source.rs` `declaration`). Only the publish
 script writes it, refusing what a client would refuse (`bin/declare_source.rs`);
 what the client hands the kernel of it at boot is [Reads, and the one
-scheduler](#reads-and-the-one-scheduler)'s. Going back is serving an older
+request scheduler](#reads-and-the-one-request-scheduler)'s. Going back is serving an older
 version again.
 
 The bucket is private and read only by the Worker, which serves a tile under its

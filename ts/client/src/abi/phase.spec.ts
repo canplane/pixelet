@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/kernel/sys/sched/phase.json
 //
-// The kernel's tick phases, in the order they run on xpute's tick (xpute-guest
+// The kernel's tick phases, in the order they run on xpute's tick (xpute-core
 // sched/tick.rs): what moves the eye first, unbudgeted and O(1); then what is
 // visible, which holds back the content's share (pxl-kernel sys/sched/param.rs
 // `CONTENT_SHARE`); then content, then the cosmetic and the report. A phase's

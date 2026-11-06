@@ -1,6 +1,6 @@
 // pxl-kernel/sys/sched/param.rs
 
-//! How a turn's quota is spent.
+//! How a turn spends its time to the deadline.
 
 // ---- the turn's budget ----
 

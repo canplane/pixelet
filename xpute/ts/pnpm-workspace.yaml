@@ -2,10 +2,10 @@
 # root's tests, example and scripts read them by name.
 packages:
   - kit
-  - host
+  - runtime
   - gpu
   - native
 
-# koffi opens a native guest.
+# koffi opens a native core.
 onlyBuiltDependencies:
   - koffi

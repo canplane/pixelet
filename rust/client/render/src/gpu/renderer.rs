@@ -12,8 +12,8 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use xpute_guest::abi::handle::handle_slot;
-use xpute_guest::global::Global;
+use xpute_core::abi::handle::handle_slot;
+use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -1885,8 +1885,8 @@ fn carry_edits(cast: &Option<Cast>) {
 /// Without a device or the world's canvas, the lists are recorded for the frame that has both.
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
-    // The host has not handed the stream back: nothing is recorded, and the
-    // frame comes again (xpute_guest ipc/stream.rs R3).
+    // The runtime has not handed the stream back: nothing is recorded, and the
+    // frame comes again (xpute_core ipc/stream.rs R3).
     if !stream_free() {
         carry_edits(&input.cast);
         take_lists(None, &input.lists);

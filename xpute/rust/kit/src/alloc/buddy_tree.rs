@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! evanw/buddy-malloc ported line for line: the guest's page allocator, with
+//! evanw/buddy-malloc ported line for line: the core's page allocator, with
 //! `slab.rs` over it for anything smaller than a page. Two changes from the C:
 //! `update_max_ptr` asks the `Range` instead of `brk`, and there is no 8-byte
 //! header, since every caller passes the size back to `free`.
@@ -164,7 +164,7 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).allocs as usize }
     }
 
-    /// The host reads `base_ptr`, `max_ptr`, `end_ptr`, `live`, `releases`,
+    /// The runtime reads `base_ptr`, `max_ptr`, `end_ptr`, `live`, `releases`,
     /// `allocs` in place from here, so their order in `Heap` is a contract.
     pub fn stat(&self) -> *const usize {
         // SAFETY: single-threaded; the fields are laid out as the row.

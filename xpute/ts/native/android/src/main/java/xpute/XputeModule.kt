@@ -9,42 +9,42 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
  * xpute's module on Android (src/mod.ts), ios/XputeModule.swift's under the
- * same names: the guest (Guest.kt), its GPU host (Gpu.kt) and the view its
+ * same names: the core (Core.kt), its GPU runtime (Gpu.kt) and the view its
  * surface draws into (SurfaceView.kt).
  */
 class XputeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
-    /** The guest has posted or asked, a hostcall waits for `answer`, or the
-     * guest has stopped. Sent from the guest's thread; Expo carries the
+    /** The core has posted or asked, a call waits for `answer`, or the
+     * core has stopped. Sent from the core's thread; Expo carries the
      * event to the JavaScript thread. */
     Events("onNotify")
 
-    OnCreate { Guest.notify = { sendEvent("onNotify") } }
+    OnCreate { Core.notify = { sendEvent("onNotify") } }
 
     OnDestroy {
-      Guest.notify = null
-      Guest.answer = null
+      Core.notify = null
+      Core.answer = null
     }
 
-    // The region is the guest's for the app's life: nothing is let go when
+    // The region is the core's for the app's life: nothing is let go when
     // the buffer is.
-    Function("mem") { NativeArrayBuffer(Guest.mem()) }
+    Function("mem") { NativeArrayBuffer(Core.mem()) }
 
-    Function("run") { quotaMs: Double -> Guest.run(quotaMs) }
+    Function("run") { deadlineMs: Double -> Core.run(deadlineMs) }
 
-    Function("kick") { quotaMs: Double -> Guest.kick(quotaMs) }
+    Function("kick") { deadlineMs: Double -> Core.kick(deadlineMs) }
 
-    Function("pause") { Guest.pause() }
+    Function("pause") { Core.pause() }
 
-    Function("resume") { Guest.resume() }
+    Function("resume") { Core.resume() }
 
-    Function("answer") { Guest.answer() }
+    Function("answer") { Core.answer() }
 
-    Function("ack") { Guest.ack().toList() }
+    Function("ack") { Core.ack().toList() }
 
-    Function("hostcallOn") { answer: JavaScriptFunction<Int> -> Guest.answer = answer }
+    Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = answer }
 
     Function("gpuOpen") { Gpu.open() }
 

@@ -2163,10 +2163,10 @@ dependencies = [
  "pxl-spec",
  "serde_json",
  "wgpu",
+ "xpute-core",
  "xpute-gpu",
- "xpute-guest",
- "xpute-host",
  "xpute-kit",
+ "xpute-runtime",
  "zstd 0.13.3",
 ]
 
@@ -2183,8 +2183,8 @@ dependencies = [
  "pxl-engine",
  "pxl-spec",
  "wgpu",
+ "xpute-core",
  "xpute-gpu",
- "xpute-guest",
  "xpute-kit",
 ]
 
@@ -3602,6 +3602,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
+name = "xpute-core"
+version = "0.0.0"
+dependencies = [
+ "xpute-kit",
+]
+
+[[package]]
 name = "xpute-gpu"
 version = "0.0.0"
 dependencies = [
@@ -3610,33 +3617,26 @@ dependencies = [
  "pollster",
  "serde",
  "wgpu",
- "xpute-guest",
- "xpute-host",
+ "xpute-core",
  "xpute-kit",
+ "xpute-runtime",
  "zune-jpeg",
-]
-
-[[package]]
-name = "xpute-guest"
-version = "0.0.0"
-dependencies = [
- "xpute-kit",
-]
-
-[[package]]
-name = "xpute-host"
-version = "0.0.0"
-dependencies = [
- "jni-sys 0.3.1",
- "libc",
- "ndk-sys",
- "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
 name = "xpute-kit"
 version = "0.0.0"
+
+[[package]]
+name = "xpute-runtime"
+version = "0.0.0"
+dependencies = [
+ "jni-sys 0.3.1",
+ "libc",
+ "ndk-sys",
+ "xpute-core",
+ "xpute-kit",
+]
 
 [[package]]
 name = "xpute-tool"

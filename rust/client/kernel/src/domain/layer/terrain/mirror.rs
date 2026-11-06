@@ -10,7 +10,7 @@
 
 use pxl_engine::overwrite::Columns;
 use pxl_engine::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS, RECORD_WORDS};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// A chunk's child groups, 64 KiB of them: what the mirror grows by.
 const CHUNK_CHILD_GROUPS: u32 = 1024;

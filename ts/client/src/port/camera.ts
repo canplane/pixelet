@@ -5,8 +5,8 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Tracking } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/host/kernel.ts";
-import * as sensor from "@/services/sensor.ts";
+import { kernel } from "@/runtime/kernel.ts";
+import * as sensor from "@/service/sensor.ts";
 import { interactive } from "./input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */

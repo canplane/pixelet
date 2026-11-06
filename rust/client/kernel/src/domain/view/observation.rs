@@ -5,7 +5,7 @@
 
 use crate::sys::io::demand::Order;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;

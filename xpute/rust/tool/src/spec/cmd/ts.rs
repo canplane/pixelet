@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/ts.rs
 
 //! The command table as TypeScript: its enums, each packet's writer and each
-//! event's reader, for the host.
+//! import's reader, for the runtime.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
@@ -182,7 +182,11 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         let lower = c.name.to_lowercase();
         let pkts = [
             (c.pkt.as_ref(), lower.clone(), "packet"),
-            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{lower}_reply"), "completion's packet"),
+            (
+                c.reply.as_ref().filter(|r| !r.is_empty()),
+                format!("{lower}_reply"),
+                "completion's packet",
+            ),
         ];
         for (pkt, encode, what) in pkts {
             let Some(pkt) = pkt else {
@@ -223,20 +227,15 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             ));
             tail.push("}".into());
         }
-        if let Some(event) = &c.event {
+        if let Some(import) = &c.import {
             tail.extend([
                 String::new(),
-                format!("/** Command.{}'s event. */", c.name),
-                format!("export interface {name}Event {{"),
+                format!("/** Command.{}'s packet. */", c.name),
+                format!("export interface {name} {{"),
             ]);
-            tail.extend(uses.field_lines(spec, event)?);
+            tail.extend(uses.field_lines(spec, import)?);
             tail.extend(["}".to_string(), String::new()]);
-            tail.extend(ts_reader(
-                spec,
-                &c.name.to_lowercase(),
-                &format!("{name}Event"),
-                event,
-            )?);
+            tail.extend(ts_reader(spec, &c.name.to_lowercase(), &name, import)?);
         }
     }
     uses.arrays.sort();

@@ -44,8 +44,8 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_guest::clock;
-use xpute_guest::global::Global;
+use xpute_core::clock;
+use xpute_core::global::Global;
 
 /// The figures the companion holds, the person and the pet, each one
 /// actor's instance.

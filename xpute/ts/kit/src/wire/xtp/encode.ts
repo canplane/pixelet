@@ -487,6 +487,22 @@ export class PacketWriter {
     return at;
   }
 
+  /** The root branch's children as another writer wrote them: `pkt` is that
+   * packet whole, begun with the same count, and as nothing in a packet says
+   * where it lies, its bytes are this packet's. Only right after `begin`. */
+  copy(pkt: U8Array): this {
+    const f = this.frame;
+    if (f.root || f.written !== 0) throw new InvariantError(Errno.EINVAL);
+    f.written = f.cnt;
+    if (pkt.length > this.cap) {
+      this.spoil(Errno.EOVERFLOW);
+      return this;
+    }
+    this.bytes.set(pkt, this.start);
+    this.lim = pkt.length;
+    return this;
+  }
+
   /** Writing a different number of children than `cnt` throws. */
   branch(cnt: u32, fill: (w: this) => void): this {
     const at = this.branch_open(cnt);

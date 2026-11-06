@@ -22,7 +22,7 @@ use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::setting::store::{settings_store, CameraMode};
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 // A facing in spherical coordinates about the world's Z, θ = polar and

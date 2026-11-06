@@ -1,4 +1,4 @@
-// tsc checks and emits nothing. `@xpute/kit`, `@xpute/host` and `@xpute/gpu`
+// tsc checks and emits nothing. `@xpute/kit`, `@xpute/runtime` and `@xpute/gpu`
 // resolve as the packages they are (pnpm-workspace.yaml), as vitest resolves
 // them. A file a native app has of its own (platform.native.ts) is read
 // under tsconfig.native.json.
@@ -19,7 +19,7 @@
   },
   "include": [
     "kit",
-    "host",
+    "runtime",
     "gpu",
     "native",
     "example",

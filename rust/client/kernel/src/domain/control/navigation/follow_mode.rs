@@ -14,8 +14,8 @@ use crate::domain::control::sensor::reading::{
     device_location_store, device_orient_store, SensorStatus,
 };
 use crate::sys::sched::edge::wake_at;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 /// Per heading sample, not per frame: compass jitter (worse indoors) passes
 /// the store's 1.5° dead zone, and this smooths it before it reaches azimuth.

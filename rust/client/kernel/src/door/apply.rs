@@ -17,7 +17,7 @@ mod turn;
 use super::State;
 use crate::domain::control::cmd::{self as abi, shell};
 use crate::sys::sched::edge;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
@@ -41,7 +41,7 @@ fn bearing(deg: Option<f64>) -> bool {
 }
 
 /// A UI command: asks for a turn, and has this one raise what it asks of the
-/// host at its falling edge, so a sensor close sent while turns are paused is
+/// runtime at its falling edge, so a sensor close sent while turns are paused is
 /// still heard.
 fn ask_turn(s: &mut State) -> Outcome {
     edge::request_world_tick();

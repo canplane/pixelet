@@ -24,8 +24,8 @@ use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::view::frame::screen::size;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::edge::request_world_tick;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

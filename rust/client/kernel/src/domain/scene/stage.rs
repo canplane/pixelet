@@ -14,7 +14,7 @@ use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
 
@@ -30,7 +30,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::perf::report::{set_host_frame, GpuRead, RayRead};
+use crate::perf::report::{set_runtime_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -237,7 +237,7 @@ pub fn stage_render(pace: Pace) {
         });
     resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
-        set_host_frame(
+        set_runtime_frame(
             out.kind,
             GpuSample {
                 scale,
@@ -255,7 +255,7 @@ pub fn stage_render(pace: Pace) {
         .draws
         .iter()
         .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
-    set_host_frame(
+    set_runtime_frame(
         out.kind,
         GpuSample {
             scale,

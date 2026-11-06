@@ -18,7 +18,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;

@@ -18,7 +18,7 @@ use pxl_render::gpu::atlas::ATLAS_SCALE;
 use pxl_render::look::marker::{
     bubble_size, pill_size, point_size, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
 };
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

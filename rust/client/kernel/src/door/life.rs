@@ -1,21 +1,21 @@
 // pxl-kernel/door/life.rs
 
-//! The kernel's life as its host tells it (xpute's SYS commands): a host attached,
+//! The kernel's life as its runtime tells it (xpute's SYS commands): a runtime attached,
 //! the kernel about to be frozen, and woken.
 
-use super::{on_host_attached, State};
+use super::{on_runtime_attached, State};
 use crate::domain::control::sensor::device_orientation;
 use crate::domain::control::sensor::geolocation;
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store::settings_open;
 use crate::sys::sched::edge;
 use crate::turn::world_platform;
-use xpute_guest::ipc::door::{Life, Outcome};
+use xpute_core::ipc::door::{Life, Outcome};
 
 pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
     match life {
         Life::Attach => {
-            on_host_attached(s);
+            on_runtime_attached(s);
             // The settings' slot, read from a turn on: what waits on the
             // settings, the profiler and the snapshot's, starts once they
             // are in (turn.rs). The objects are read a shard at a time as

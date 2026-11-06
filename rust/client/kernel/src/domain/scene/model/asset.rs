@@ -8,7 +8,7 @@
 //! palette and a wheel would otherwise sit at the model's origin.
 //!
 //! A registration runs in its own task, as a parse does (sys/io/loader.rs
-//! `arrival`), and yields between units where the turn's quota is spent: a
+//! `arrival`), and yields between units where the turn's deadline has passed: a
 //! primitive, a run of `STEPS_PER_PAUSE` vertices, the joints, a clip, and
 //! the seal's passes (registry.rs `Model::seal`). The model joins the
 //! registry, and the table here, only once it is whole.
@@ -22,10 +22,10 @@ use fnv::FnvHashMap;
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf, GltfPrimitive};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use xpute_guest::global::Global;
-use xpute_guest::mem;
-use xpute_guest::sched::edge::yield_if_spent;
-use xpute_guest::sched::task;
+use xpute_core::global::Global;
+use xpute_core::mem;
+use xpute_core::sched::edge::yield_if_spent;
+use xpute_core::sched::task;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};

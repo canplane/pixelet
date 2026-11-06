@@ -25,7 +25,7 @@ void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at
 
 #ifdef __wasm__
 // libc++'s own definition prints to stderr, which on wasm imports WASI's file
-// calls, a second way to the host beside the contract.
+// calls, a second way to the runtime beside the contract.
 void std::__libcpp_verbose_abort(char const *, ...) noexcept {
     xpute::bug(xpute::Errno::enotrecoverable);
 }

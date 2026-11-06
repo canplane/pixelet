@@ -8,7 +8,7 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::mem::heap::Block;
+use xpute_core::mem::heap::Block;
 
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;

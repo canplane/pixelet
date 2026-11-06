@@ -2,37 +2,37 @@
 
 //! xpute's file table with an owner per descriptor, so an open's completion
 //! reaches its owner and one for a closed descriptor reaches no one. A
-//! native test has no host and opens nothing.
+//! native test has no runtime and opens nothing.
 //!
 //! Every file is a root's object by one name (file.json `root`): a tile and a
 //! shard's objects by the quadkey, an asset by its load's id, a storage file by
 //! its slot's, the sphere, the objects' top and their edits by their own. What
 //! it is called past that and where, a version, a URL or a storage key, is what
 //! the client
-//! (ts/client/src/sys/fs/) binds the root to, `@xpute/host`
+//! (ts/client/src/sys/fs/) binds the root to, `@xpute/runtime`
 //! carrying the open there. A file is bytes: how a platform keeps them, as
 //! text or otherwise, is its backend's.
 
 use core::fmt::{self, Write};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::ipc::door::Pos;
-pub use xpute_guest::ipc::door::Reading;
-use xpute_guest::ipc::file::Files;
-pub use xpute_guest::ipc::file::Opened;
-use xpute_guest::ipc::fs::{Fd, FsOpened};
+use xpute_core::ipc::door::Pos;
+pub use xpute_core::ipc::door::Reading;
+use xpute_core::ipc::file::Files;
+pub use xpute_core::ipc::file::Opened;
+use xpute_core::ipc::fs::{Fd, FsOpened};
 use xpute_kit::status::bug::OrBug;
 
 use crate::machine::MACHINE;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::file_spec::{format, object, root, storage};
-use crate::sys::io::host::{door, turn};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refusal;
+use crate::sys::io::runtime::{door, turn};
 use crate::sys::sched::edge::request_world_tick;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
 
 /// A file the kernel keeps in storage, by its slot (file.json `storage`).
@@ -107,7 +107,7 @@ fn files() -> &'static mut Files<Owner, OPEN> {
     FILES.get(Files::new)
 }
 
-/// Opens `root`'s object `path`; none where there is no host.
+/// Opens `root`'s object `path`; none where there is no runtime.
 pub fn open(_: Credit, root: u32, path: Path, owner: Owner) -> Option<Fd> {
     Some(files().open(door()?, root, path.as_str(), owner))
 }
@@ -184,7 +184,7 @@ enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused(Refusal),
-    /// The host's until its head has passed the read (`take_read`).
+    /// The runtime's until its head has passed the read (`take_read`).
     Reading(Reading),
     Read(StorageRead),
 }
@@ -231,8 +231,8 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The client's answer to `open_storage`, for a test with no host: `bytes`,
-/// read whole with the host's head past the read, or an open that came to no
+/// The client's answer to `open_storage`, for a test with no runtime: `bytes`,
+/// read whole with the runtime's head past the read, or an open that came to no
 /// bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
@@ -265,19 +265,19 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
     }
 }
 
-/// `dst` is filled once the host's head has passed the read: where it was
-/// posted, for `is_consumed`. An open is answered only where there is a host.
+/// `dst` is filled once the runtime's head has passed the read: where it was
+/// posted, for `is_consumed`. An open is answered only where there is a runtime.
 ///
 /// # Safety
 /// As `Door::read`: `dst` stays allocated, unmoved and unread until
-/// `is_consumed` says the host is done with it.
+/// `is_consumed` says the runtime is done with it.
 pub unsafe fn read(fd: Fd, dst: &mut [u8]) -> Pos {
     let door = door().or_bug(Errno::ENOTRECOVERABLE);
     // SAFETY: the caller's.
     unsafe { door.read(fd, dst) }
 }
 
-/// Whether the host's head has passed the read posted at `pos`, so its
+/// Whether the runtime's head has passed the read posted at `pos`, so its
 /// buffer is the kernel's again.
 pub fn is_consumed(pos: Pos) -> bool {
     door().or_bug(Errno::ENOTRECOVERABLE).is_consumed(pos)
@@ -287,7 +287,7 @@ pub fn is_consumed(pos: Pos) -> bool {
 /// one owner, so every file read whole waits on a refusal alike. Where the
 /// heap refuses its room the read is the owner's to ask again once
 /// `Refusal::over`; no descriptor is kept meanwhile. An open is answered only
-/// where there is a host.
+/// where there is a runtime.
 pub fn read_whole(fd: Fd, bytes: u32) -> Result<Reading, Refusal> {
     let door = door().or_bug(Errno::ENOTRECOVERABLE);
     files()
@@ -295,7 +295,7 @@ pub fn read_whole(fd: Fd, bytes: u32) -> Result<Reading, Refusal> {
         .map_err(|_| Refusal::now())
 }
 
-/// The bytes `reading` holds, once the host's head has passed its read; the
+/// The bytes `reading` holds, once the runtime's head has passed its read; the
 /// reading again before then.
 pub fn take_read(reading: Reading) -> Result<Vec<u8>, Reading> {
     reading.take(door().or_bug(Errno::ENOTRECOVERABLE))
@@ -399,7 +399,7 @@ static LAST_WRITE: Global<(u64, u32)> = Global::new();
 /// Writes `bytes` whole as `root`'s object `path`, where the turn has a
 /// write left (`WRITES_A_TURN`); false where it has none, nothing written,
 /// for its owner to write on a later turn. Nothing is written, and none
-/// counted, where there is no host.
+/// counted, where there is no runtime.
 pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
     let Some(door) = door() else { return true };
     let written = LAST_WRITE.get(|| (0, 0));
@@ -430,7 +430,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     }
 }
 
-/// An open the host completed, read once (`Opened::of`); xpute's table finds
+/// An open the runtime completed, read once (`Opened::of`); xpute's table finds
 /// its owner and lets its handle go where it failed. A file larger than the
 /// heap every device is given cannot be held anywhere: it is the client's
 /// answer refused, closed here, and the owner hears EFBIG.

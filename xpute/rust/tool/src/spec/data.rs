@@ -28,43 +28,43 @@ struct DataSpec {
 
 const DATA_SPECS: [DataSpec; 7] = [
     DataSpec {
-        json: "spec/conformance/guest.json",
-        ts: "ts/host/src/conformance.spec.ts",
-        rs: "rust/conformance/src/guest.spec.rs",
+        json: "spec/conformance/core.json",
+        ts: "ts/runtime/src/conformance.spec.ts",
+        rs: "rust/conformance/src/core.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/conformance/guest.spec.hpp", "xpute::conformance"),
-        mk: Some(("cpp/conformance/guest.spec.mk", "CONFORMANCE_")),
+        cpp: ("cpp/conformance/core.spec.hpp", "xpute::conformance"),
+        mk: Some(("cpp/conformance/core.spec.mk", "CONFORMANCE_")),
     },
     DataSpec {
         json: "spec/ipc/head.json",
-        ts: "ts/host/src/ipc/head.spec.ts",
-        rs: "rust/guest/src/ipc/head.spec.rs",
+        ts: "ts/runtime/src/ipc/head.spec.ts",
+        rs: "rust/core/src/ipc/head.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/head.spec.hpp", "xpute::head"),
+        cpp: ("cpp/xpute/core/ipc/head.spec.hpp", "xpute::head"),
         mk: None,
     },
     DataSpec {
         json: "spec/ipc/frame.json",
-        ts: "ts/host/src/ipc/frame.spec.ts",
-        rs: "rust/guest/src/ipc/frame.spec.rs",
+        ts: "ts/runtime/src/ipc/frame.spec.ts",
+        rs: "rust/core/src/ipc/frame.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/frame.spec.hpp", "xpute::frame"),
+        cpp: ("cpp/xpute/core/ipc/frame.spec.hpp", "xpute::frame"),
         mk: None,
     },
     DataSpec {
         json: "spec/ipc/ring.json",
-        ts: "ts/host/src/ipc/ring.spec.ts",
-        rs: "rust/guest/src/ipc/ring.spec.rs",
+        ts: "ts/runtime/src/ipc/ring.spec.ts",
+        rs: "rust/core/src/ipc/ring.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/ring.spec.hpp", "xpute::ring"),
+        cpp: ("cpp/xpute/core/ipc/ring.spec.hpp", "xpute::ring"),
         mk: None,
     },
     DataSpec {
         json: "spec/ipc/fs.json",
-        ts: "ts/host/src/ipc/fs.spec.ts",
-        rs: "rust/guest/src/ipc/fs.spec.rs",
+        ts: "ts/runtime/src/ipc/fs.spec.ts",
+        rs: "rust/core/src/ipc/fs.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/fs.spec.hpp", "xpute::fs"),
+        cpp: ("cpp/xpute/core/ipc/fs.spec.hpp", "xpute::fs"),
         mk: None,
     },
     DataSpec {
@@ -115,13 +115,13 @@ const DATA_SPECS: [DataSpec; 7] = [
 
 /// A TypeScript file's directory, and the name it is imported by.
 const TS_LAYOUT: [(&str, &str); 2] = [
-    ("ts/host/src/", "@xpute/host/"),
+    ("ts/runtime/src/", "@xpute/runtime/"),
     ("ts/gpu/src/", "@xpute/gpu/"),
 ];
 
 /// A Rust file's `src/`, and its crate's name.
 const RS_LAYOUT: [(&str, &str); 3] = [
-    ("rust/guest/src/", "xpute-guest"),
+    ("rust/core/src/", "xpute-core"),
     ("rust/gpu/src/", "xpute-gpu"),
     ("rust/conformance/src/", "xpute-conformance"),
 ];

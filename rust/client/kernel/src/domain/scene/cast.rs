@@ -10,7 +10,7 @@ use pxl_engine::eye;
 use pxl_render::gpu::ray::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
@@ -32,7 +32,7 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// The area (pxl-engine `area::Area`): every cell's nine by its key
 /// (`area::shard_key`), four a row; a row of none where none is declared,
 /// since a binding holds at least one, and a read past it is none. The
-/// renderer hands it where it lies, so a source declared while the host
+/// renderer hands it where it lies, so a source declared while the runtime
 /// holds it is made at a later call (pxl-render gpu/api.rs `in_flight`).
 pub fn shards() -> &'static [[i32; 4]] {
     let declared = source::top().is_some();

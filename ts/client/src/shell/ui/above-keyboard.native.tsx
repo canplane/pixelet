@@ -6,7 +6,7 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 import { type AboveKeyboardProps, bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { layer } from "@/shell/ui/theme.ts";
-import { useSafeArea } from "@/services/safe-area.ts";
+import { useSafeArea } from "@/service/safe-area.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;

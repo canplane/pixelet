@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# Builds the guest's module, the kernel (rust/client/kernel), to public/,
-# where the page fetches it as /guest.wasm
-# (ts/client/src/services/guest.ts).
+# Builds the kernel's module, the kernel (rust/client/kernel), to public/,
+# where the page fetches it as /kernel.wasm
+# (ts/client/src/service/kernel.ts).
 #
 #   ./script/build-wasm.py [--published]
 
@@ -30,9 +30,9 @@ RUST = REPO / "rust"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
 TARGET_DIR = Path(os.environ["CARGO_TARGET_DIR"]) if os.environ.get("CARGO_TARGET_DIR") else RUST / "target"
-OUT = APP / "public/guest.wasm"
+OUT = APP / "public/kernel.wasm"
 # The source path each number in a published module's panics stands for; kept by the deploy, never bundled.
-PATHS = APP / "guest.paths.json"
+PATHS = APP / "kernel.paths.json"
 
 # What `pnpm build:web` bundles: no dev features, numbered panic paths.
 PUBLISHED = "--published" in sys.argv[1:]
@@ -104,7 +104,7 @@ def main():
             env={**os.environ, "RUSTFLAGS": remapped()},
         )
     except FileNotFoundError as err:
-        print(f"[build-wasm] cargo did not run ({err}). The guest needs a Rust toolchain with the {TARGET} target: rustup target add {TARGET}", file=sys.stderr)
+        print(f"[build-wasm] cargo did not run ({err}). The kernel needs a Rust toolchain with the {TARGET} target: rustup target add {TARGET}", file=sys.stderr)
         return 1
     if status.returncode != 0:
         return status.returncode
@@ -115,7 +115,7 @@ def main():
     # build's only when the two are equal: the dev server's and the published
     # are each their own file, and either may have been finished last.
     if before is not None and mtime(BUILT) == before and mtime(OUT) == before:
-        print("[build-wasm] up to date -> public/guest.wasm")
+        print("[build-wasm] up to date -> public/kernel.wasm")
         return 0
 
     # One directory a run under cargo's target, removed whole: a failed run
@@ -138,7 +138,7 @@ def main():
         os.utime(done, ns=(built, built))
         os.replace(done, OUT)
         said = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
-        print(f"[build-wasm] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> public/guest.wasm")
+        print(f"[build-wasm] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> public/kernel.wasm")
         return 0
     except Failed as err:
         if str(err):

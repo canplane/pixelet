@@ -3,7 +3,7 @@
 // GENERATED from spec/gpu/enum.json
 //
 // WebGPU's own enumerations, each its spec's strings in order: a number is its
-// place in the list, so a host hands the string to the device as it is and a guest
+// place in the list, so a runtime hands the string to the device as it is and a core
 // names a member by its generated constant. Nothing here is any one program's; a
 // value WebGPU leaves optional is NONE (api.json) where unset.
 

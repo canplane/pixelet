@@ -2,10 +2,10 @@
 //
 // GENERATED from rust/example/machine.json
 
-/** The machine its JSON declares: the sizes a host may give, what a
+/** The machine its JSON declares: the sizes a runtime may give, what a
  * reservation is counted in, the rings' sizes, where the front's header,
  * the rings, their slots and the GPU stream lie (0 without a GPU), which
- * the host lays before the first turn, whether it asks for the file
+ * the runtime lays before the first turn, whether it asks for the file
  * device, and the GPU it asks for. */
 export const MACHINE = {
   mem_bytes: [2097152],

@@ -20,7 +20,7 @@ import {
 } from "@/shell/catalog/asset/mod.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
 import { OBJECT_SCALES } from "@/shell/world/object.spec.ts";
-import * as storage from "@/services/storage.ts";
+import * as storage from "@/service/storage.ts";
 import * as DockMode from "./mode.ts";
 import * as edit from "@/port/edit.ts";
 import * as scene from "@/port/scene.ts";
@@ -169,9 +169,13 @@ export function watchDockMode(
   });
 }
 
-/** Tells the kernel, and keeps it only where the kernel took it. */
-function hold(tool: Tool, id: AssetId, scaleSteps: i32): boolean {
-  const result = edit.tool(tool, id, scaleSteps);
+/** Tells the kernel, and keeps it only once the kernel took it. */
+async function hold(
+  tool: Tool,
+  id: AssetId,
+  scaleSteps: i32,
+): Promise<boolean> {
+  const result = await edit.tool(tool, id, scaleSteps);
   if (result < 0) {
     console.error(`[dock] the kernel refused the tool: ${strerror(result)}`);
     return false;
@@ -182,18 +186,21 @@ function hold(tool: Tool, id: AssetId, scaleSteps: i32): boolean {
 
 export function selectTool(tool: Tool): void {
   const { id, scaleSteps } = store.getState();
-  hold(tool, id, scaleSteps);
+  void hold(tool, id, scaleSteps);
 }
 
 export function selectScale(scaleSteps: i32): void {
   const { tool, id } = store.getState();
-  hold(tool, id, scaleSteps);
+  void hold(tool, id, scaleSteps);
 }
 
 /** Holds it to place, and puts it on the hotbar. */
 export function selectAsset(id: AssetId): void {
-  if (!hold(Tool.Item, id, store.getState().scaleSteps)) return;
-  store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
+  void hold(Tool.Item, id, store.getState().scaleSteps).then((held) => {
+    if (held) {
+      store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
+    }
+  });
 }
 
 export function useTool(): Tool {

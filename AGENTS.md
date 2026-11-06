@@ -2,26 +2,24 @@
 
 - Skills and this file are in English.
 - The kernel is a unikernel on a virtual machine: `pxl-kernel` and
-  `xpute-guest`, its library OS, are one image. Host and guest mean what they
-  mean in WebAssembly and in a virtual machine: the guest is the kernel, run
-  inside; the host is its VMM, which implements its devices and gives it its
-  time. The shell is the client outside the VM; the rings are the device
-  between them.
-- Under `xpute/`: host, guest and their contract only. No pixelet domain
+  `xpute-core`, its library OS, are one image, the core, run inside; the
+  runtime is its VMM, which implements its devices and gives it its time. The
+  shell is the client outside the VM; the rings are the device between them.
+- Under `xpute/`: runtime, core and their contract only. No pixelet domain
   (tiles, the world, sensors) and no pixelet name.
 - xpute's predefined ABI takes majors 0x00 to 0x0F (`xpute/spec/abi/`); the
   app's ABI takes majors from `PROGRAM_MAJOR`, 0x10
   (`rust/client/kernel/shell.json`). No ports.
 - pixelet's layers are the shell (`ts/client/src/shell/`), the services
-  (`ts/client/src/services/`, `port/`, `sys/`, `origin/`) and the host
-  (`ts/client/src/host/`); the kernel is `rust/client/kernel`.
+  (`ts/client/src/service/`, `port/`, `sys/`, `origin/`) and the runtime
+  (`ts/client/src/runtime/`); the kernel is `rust/client/kernel`.
 - The app is one Expo app, `ts/client` (`@pxl/client`), for iOS, Android and the
   page; the page is bundled by Metro. What differs by platform is a file pair
-  in `ts/client/src/services/`: `<x>.ts` the page's, `<x>.native.ts` the
-  device's, the shapes both share in `services/types.ts`. A piece of the shell
+  in `ts/client/src/service/`: `<x>.ts` the page's, `<x>.native.ts` the
+  device's, the shapes both share in `service/types.ts`. A piece of the shell
   the platforms draw differently is a file and its override beside it
   (`ts/client/src/shell/ui/README.md`).
-- The host gives no app number a meaning. What answers the kernel's files goes
+- The runtime gives no app number a meaning. What answers the kernel's files goes
   in `ts/client/src/sys/`: their names, versions, kept keys and refusals in
   `sys/fs/`, the stop report beside. What the app's ABI carries on the client
   goes in `ts/client/src/port/`, a file a major (SHELL's snapshot in
@@ -32,12 +30,12 @@
   tables, whether the device is online) is `ts/client/src/origin/`. The
   numbers both read, generated from `spec/` or written beside it (a state the
   client reports and the shell shows, `abi/state.ts`), and the boot are
-  `ts/client/src/abi/`. None of it goes into `@xpute/host` or `xpute-host`.
-- The shell computes no coordinate or tile and is not the host. It reaches the
+  `ts/client/src/abi/`. None of it goes into `@xpute/runtime` or `xpute-runtime`.
+- The shell computes no coordinate or tile and is not the runtime. It reaches the
   kernel, `sys/` and `origin/` through `port/` alone, and `port/` reaches the
   kernel through the generated stubs alone.
 - xpute is to be published for other programs. Don't propose removing a part
-  of xpute's `kit`, or its C++ guest, because nothing here calls it.
+  of xpute's `kit`, or its C++ core, because nothing here calls it.
 
 ## Reading and changing
 

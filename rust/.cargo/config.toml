@@ -4,8 +4,8 @@
 # and serve a dev run.
 [alias]
 # The module as it ships, in both builds, and the servers with their tests' code.
-lint-guest = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "--", "-D", "warnings"]
-lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-kernel", "--no-default-features", "--", "-D", "warnings"]
+lint-kernel = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "--", "-D", "warnings"]
+lint-kernel-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-kernel", "--no-default-features", "--", "-D", "warnings"]
 lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-api", "--", "-D", "warnings"]
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.

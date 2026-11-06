@@ -9,7 +9,7 @@ use crate::domain::control::edit::set_tool;
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::Tool;
 use crate::domain::layer::object::asset::Asset;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 

@@ -27,7 +27,7 @@ use crate::frame::shader::record::{
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_guest::mem::off_of;
+use xpute_core::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
@@ -295,7 +295,7 @@ pub struct Atmosphere {
     pending: u32,
     flying: u32,
     /// The words as they land, and their fence and result: on the heap,
-    /// as the host writes them and a native build's statics are outside its
+    /// as the runtime writes them and a native build's statics are outside its
     /// memory; the ticket the mapping was last asked with, the kernel's, and
     /// whether one is out or landed and not yet taken.
     landed_words: Box<[u32; SLOPES]>,

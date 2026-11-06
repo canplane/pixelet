@@ -5,16 +5,16 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Tool } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/host/kernel.ts";
+import { kernel } from "@/runtime/kernel.ts";
 
 /** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
-export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
+export function tool(tool: Tool, val: u32, scale_steps: i32): Promise<i32> {
   return kernel.edit_tool(tool, val, scale_steps);
 }
 
 /** The waiting marker's text as typed, which it is drawn with: 0, or a negative
  * errno where the kernel refused it whole, the text before staying. */
-export function marker_text(text: string): i32 {
+export function marker_text(text: string): Promise<i32> {
   return kernel.edit_marker_text(text);
 }
 

@@ -4,7 +4,7 @@
     "its stack, its rings and the GPU it asks for.",
     "",
     "`turn_posts` is what the kernel's turn may post besides its replies: a sensor's start",
-    "or stop each, the snapshot, the view, the files' hostcalls at their most and a call's slot",
+    "or stop each, the snapshot, the view, the files' imports at their most and a call's slot",
     "(door.rs `EVENTS`, which it checks against this)."
   ],
   "gen": {
@@ -27,7 +27,7 @@
       "it is checked against: the front, the module's data and the fixed ranges together",
       "must leave this much of the smaller size. Measured from where the heap begins, so",
       "the question is asked twice: at compile time against the lowest the heap could start",
-      "(the front's end plus the fixed ranges, xpute-guest machine.rs `check`), so a terrain",
+      "(the front's end plus the fixed ranges, xpute-core machine.rs `check`), so a terrain",
       "grown past a phone fails to build; and at boot against where it actually started and",
       "what the device gave.",
       "",
@@ -70,14 +70,14 @@
       "`slot_bytes`: a page, since a FS_MOUNT's or a SCENE_CHAT's packet can come near one.",
       "",
       "`sq_cap`: sized to what a turn is sent, not to a burst: a full ring loses nothing,",
-      "since the host rings with no quota until there is room (@xpute/host/ipc/doorbell.ts).",
+      "since the runtime rings with a deadline of 0 until there is room (@xpute/runtime/ipc/doorbell.ts).",
       "And small because every slot ends up resident: a position only grows, so each slot is",
       "written in turn.",
       "",
-      "`cq_cap`: everything one turn leaves, since the host reads it dry before it rings",
+      "`cq_cap`: everything one turn leaves, since the runtime reads it dry before it rings",
       "again: a reply to each command it applies and `turn_posts`, so a drain never stops",
       "partway. Nothing is overrun if it is short: a command whose posts and reply would not",
-      "fit waits for the next turn (xpute-guest ipc/door.rs)."
+      "fit waits for the next turn (xpute-core ipc/door.rs)."
     ],
     "slot_bytes": 4096,
     "sq_cap": 512,

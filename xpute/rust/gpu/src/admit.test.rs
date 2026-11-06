@@ -23,7 +23,7 @@ fn page_reads_block() {
     // SAFETY: the leaked block, its words only ever touched atomically.
     let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k)) };
     let (unfinished, status) = (word(2), word(3));
-    assert!(!page::<2>(), "the host has written no status");
+    assert!(!page::<2>(), "the runtime has written no status");
     unfinished.store(1, Ordering::Release);
     status.store(STATUS::READY, Ordering::Release);
     assert!(page::<2>(), "one of two unfinished");

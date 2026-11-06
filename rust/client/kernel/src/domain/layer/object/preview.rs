@@ -11,7 +11,7 @@ use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::octant::Octant;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
 /// — the pick, a walk, the camera's clearance, an edit's own reads, decor's

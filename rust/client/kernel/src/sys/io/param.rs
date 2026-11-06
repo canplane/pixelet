@@ -16,7 +16,7 @@ pub const RETRY_BASE_MS: f64 = 1_000.0;
 pub const RETRY_CAP_MS: f64 = 30_000.0;
 pub const RETRY_ATTEMPTS: u32 = 6;
 
-/// Most fetches out at once, whatever the host grants.
+/// Most fetches out at once, whatever the runtime grants.
 pub const MAX_CREDITS: u32 = 16;
 
 // ---- writes ----
@@ -24,7 +24,7 @@ pub const MAX_CREDITS: u32 = 16;
 /// Most files written in one turn by number (sys/io/file.rs `write`), an
 /// edit batch of the objects' each (domain/layer/object/repository.rs); one
 /// past them waits for a later turn. Counted in the files' frames a turn
-/// (sys/io/host.rs `FILE_FRAMES`).
+/// (sys/io/runtime.rs `FILE_FRAMES`).
 pub const WRITES_A_TURN: u32 = 8;
 
 // ---- bodies ----

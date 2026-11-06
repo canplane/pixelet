@@ -2,12 +2,12 @@
 //
 // GENERATED from spec/gpu/api.json
 //
-// The calls a guest makes to a GPU it cannot reach, as records of a stream (ipc/stream):
+// The calls a core makes to a GPU it cannot reach, as records of a stream (ipc/stream):
 // WebGPU's vocabulary, its descriptors written out as words, for any program. A record is
 // an op, a count and the op's words in the order each op's doc gives; bytes go as a count
-// and padded words, as the stream lays them. Objects are the guest's handles (abi/handle).
+// and padded words, as the stream lays them. Objects are the core's handles (abi/handle).
 // An optional field holds NONE where unset. Render and compute sit side by side.
-// A transaction (ipc/stream) that does not commit drops its records and gives back the handles they took, so the host never hears of the objects: the encoder's begin and commit open and close both.
+// A transaction (ipc/stream) that does not commit drops its records and gives back the handles they took, so the runtime never hears of the objects: the encoder's begin and commit open and close both.
 
 #pragma once
 
@@ -20,7 +20,7 @@ namespace xpute::gpu {
 // An optional field left unset, an index or a handle absent.
 inline constexpr std::uint32_t NONE = 4294967295u;
 
-// In CONFIGURE's format: the format the host's surface prefers.
+// In CONFIGURE's format: the format the runtime's surface prefers.
 inline constexpr std::uint32_t SURFACE_PREFERRED = 255u;
 
 // A bind group layout's entry (BIND_GROUP_LAYOUT).
@@ -71,16 +71,16 @@ inline constexpr std::uint32_t DESTROY = 12u;
 // buffer, offset, the bytes.
 inline constexpr std::uint32_t WRITE_BUFFER = 13u;
 
-// buffer, offset, address, bytes: the bytes read where they lie in the guest's memory as the host runs the record, no copy of them made; the guest neither rewrites nor frees them from the stream's publish until it loads END as 0 (ipc/stream R3).
+// buffer, offset, address, bytes: the bytes read where they lie in the core's memory as the runtime runs the record, no copy of them made; the core neither rewrites nor frees them from the stream's publish until it loads END as 0 (ipc/stream R3).
 inline constexpr std::uint32_t WRITE_BUFFER_AT = 14u;
 
 // texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes.
 inline constexpr std::uint32_t WRITE_TEXTURE = 15u;
 
-// as WRITE_TEXTURE, the bytes an address and a count in the guest's memory, read as WRITE_BUFFER_AT's are.
+// as WRITE_TEXTURE, the bytes an address and a count in the core's memory, read as WRITE_BUFFER_AT's are.
 inline constexpr std::uint32_t WRITE_TEXTURE_AT = 16u;
 
-// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture; the word and the one after it are its fence and result (RESULT): OK once the image is in the texture, REFUSED for one the host cannot decode. One whose texture went is answered nothing.
+// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the runtime decodes into the texture; the word and the one after it are its fence and result (RESULT): OK once the image is in the texture, REFUSED for one the runtime cannot decode. One whose texture went is answered nothing.
 inline constexpr std::uint32_t COPY_EXTERNAL_IMAGE = 17u;
 
 // id.
@@ -158,7 +158,7 @@ inline constexpr std::uint32_t END = 41u;
 // encoders' count, that many encoders, each finished and let go with the record.
 inline constexpr std::uint32_t SUBMIT = 42u;
 
-// buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address and the buffer unmapped; the word and the one after it are its fence and result (RESULT): OK, or REFUSED where the device refused the mapping and nothing was copied.
+// buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the core made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address and the buffer unmapped; the word and the one after it are its fence and result (RESULT): OK, or REFUSED where the device refused the mapping and nothing was copied.
 inline constexpr std::uint32_t MAP_ASYNC = 43u;
 
 // word, ticket: the word its fence (RESULT) once what was submitted before it is done.
@@ -173,16 +173,16 @@ inline constexpr std::uint32_t RESIZE = 46u;
 // id, surface: the surface's texture for this turn, as a view.
 inline constexpr std::uint32_t CURRENT = 47u;
 
-// address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then the frames unfinished, then STATUS. The frames unfinished are the frames the guest has drawn whose work the queue has not yet done, written by the host alone: before STATUS as the block is, and stored with release each time the count changes after. The guest loads it with acquire once STATUS reads READY, and draws a frame only while it is below its frame latency, the rule both hosts hold a frame to (xpute-gpu admit).
+// address, words: the runtime writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then the frames unfinished, then STATUS. The frames unfinished are the frames the core has drawn whose work the queue has not yet done, written by the runtime alone: before STATUS as the block is, and stored with release each time the count changes after. The core loads it with acquire once STATUS reads READY, and draws a frame only while it is below its frame latency, the rule both runtimes hold a frame to (xpute-gpu admit).
 inline constexpr std::uint32_t DEVICE = 48u;
 
-// RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync, the word its fence (RESULT) once the pipeline is made; the guest names the pipeline in no other record before. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A host with no async call makes it at once and writes the word by the same path, before the next turn reads it.
+// RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync, the word its fence (RESULT) once the pipeline is made; the core names the pipeline in no other record before. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A runtime with no async call makes it at once and writes the word by the same path, before the next turn reads it.
 inline constexpr std::uint32_t RENDER_PIPELINE_ASYNC = 49u;
 
 // COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's.
 inline constexpr std::uint32_t COMPUTE_PIPELINE_ASYNC = 50u;
 
-// id, the label as bytes: the name the host's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a host that cannot name an object after it is made ignores it.
+// id, the label as bytes: the name the runtime's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a runtime that cannot name an object after it is made ignores it.
 inline constexpr std::uint32_t LABEL = 51u;
 } // namespace op
 
@@ -265,7 +265,7 @@ inline constexpr std::uint32_t ALPHA = 8u;
 inline constexpr std::uint32_t ALL = 15u;
 } // namespace COLOR_WRITE
 
-// DEVICE's last word: what the host knows of the device, written by the host alone and stored with release once the block before it is; the guest loads it with acquire before it reads the block.
+// DEVICE's last word: what the runtime knows of the device, written by the runtime alone and stored with release once the block before it is; the core loads it with acquire before it reads the block.
 namespace STATUS {
 
 inline constexpr std::uint32_t READY = 1u;
@@ -273,7 +273,7 @@ inline constexpr std::uint32_t READY = 1u;
 inline constexpr std::uint32_t LOST = 2u;
 } // namespace STATUS
 
-// A completion (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE, RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC) names a fence and a ticket. The ticket is the guest's alone: a sequence it advances for that word, wrapping, with one request out on the word at a time. The fence is the host's alone: once what the request guards is written, the host stores there the ticket it finished, with release, after the result in the word after it where the request can fail (COPY_EXTERNAL_IMAGE, MAP_ASYNC). The guest loads the fence with acquire and holds the request done where it equals the ticket it asked with, an equality the sequence's wrap keeps, then reads the result and what the request guards. A late answer to a request dropped or superseded carries an older ticket and never equals the current one; a device lost answers none of its requests.
+// A completion (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE, RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC) names a fence and a ticket. The ticket is the core's alone: a sequence it advances for that word, wrapping, with one request out on the word at a time. The fence is the runtime's alone: once what the request guards is written, the runtime stores there the ticket it finished, with release, after the result in the word after it where the request can fail (COPY_EXTERNAL_IMAGE, MAP_ASYNC). The core loads the fence with acquire and holds the request done where it equals the ticket it asked with, an equality the sequence's wrap keeps, then reads the result and what the request guards. A late answer to a request dropped or superseded carries an older ticket and never equals the current one; a device lost answers none of its requests.
 namespace RESULT {
 
 inline constexpr std::uint32_t OK = 1u;

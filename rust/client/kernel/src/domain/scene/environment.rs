@@ -25,7 +25,7 @@ use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use pxl_render::param::night;
-use xpute_guest::clock::now;
+use xpute_core::clock::now;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
 /// nothing else asks for a frame while the view is still, so the clock asks
@@ -74,7 +74,7 @@ fn steps() -> [f64; 2] {
 
 pub struct EnvironmentDraw {
     started: bool,
-    /// Days since J2000.0 the sky is drawn for, from the host's wall clock
+    /// Days since J2000.0 the sky is drawn for, from the runtime's wall clock
     /// a step at a time (`observe`).
     days: f64,
     sun: [f64; 3],

@@ -6,7 +6,7 @@
 //! through it, and the scene lists into it.
 
 use pxl_render::frame::draw::DrawList;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::scene::model::registry::Models;
 

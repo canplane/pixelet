@@ -6,7 +6,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 # Naming
 
 - Use short, plain names, as in UNIX V6 and K&R's C.
-- The system — xpute, the commands' modules, what the kernel asks of its host
+- The system — xpute, the commands' modules, what the kernel asks of its runtime
   — takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application — the world, its drawing, its map, its UI —
   takes the word its own field uses (graphics, cartography, games). A metaphor
@@ -58,8 +58,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
   | what the shell asks of the kernel | a command | |
-  | a guest's call into its host, run now or after the turn | a hostcall | system call, hypercall |
-  | the number a frame names at the guest's far side, 0 the host | a port | endpoint, worker id |
+  | a core's command to its runtime, a frame on the CQ | an import | hostcall, system call, hypercall |
+  | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
   | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
@@ -67,7 +67,15 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a node's name as a number, its morton code | its `id` | subject, morton |
 
   `at` is where a thing is, `to` where it is going.
-- Keep WebGPU's words in xpute's `gpu/`.
+- xpute's names are the mechanism's: the core, the runtime, the UI, a device,
+  the SQ and the CQ. pixelet's are the policy's that runs on it: its core is
+  the kernel, its UI the shell. pixelet names its own by pixelet's words and
+  xpute's parts by xpute's (`xpute_core`, `Runtime.core`); `kernel.wasm` is
+  pixelet's build of its kernel.
+- A file or folder name is singular (`service/`, `remote.ts`), but where a tool
+  fixes the name (cargo's `tests/` and `examples/`).
+- Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
+  renderer's and a shader's words.
 - Treat a name between the client and a server as protocol, and a name kept in
   storage (a bucket object, a storage key, a baked file's field) as needing a
   version bump to change; a setting's name can change, since storage keeps its

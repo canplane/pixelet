@@ -37,7 +37,7 @@ use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use collision::{allowed_view, climb_polar};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::math::scalar::clamp;
 
 pub struct OrbitState {

@@ -3,8 +3,8 @@
     "The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:",
     "`major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet",
     "it carries — an XTP branch whose children are its fields, in order. A command with no",
-    "fields carries no packet. The kernel is the guest; the JavaScript around it is two",
-    "things to it, its host, which holds the turns and carries its hostcalls to what",
+    "fields carries no packet. The kernel is the core; the JavaScript around it is two",
+    "things to it, its runtime, which holds the turns and carries its imports to what",
     "answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user",
     "does and what the place's sensors, visibility and frames tell it",
     "(ts/client/src/port/). A command's major is the module it is for.",
@@ -115,9 +115,9 @@
       "name": "TURN_GRANT",
       "val": 7425,
       "$doc": [
-        "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
-        "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-        "its events on the completion ring, drawn by the kernel. It carries the host's alone:",
+        "The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in",
+        "what is left before the deadline, the fetches within the credits. The turn leaves",
+        "its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:",
         "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
         "world surface's (SURFACE_RESIZE)."
       ],
@@ -126,9 +126,9 @@
           "name": "refresh_ms",
           "type": "f64",
           "$doc": [
-            "The display's refresh, as the host measures it from the animation frames it is handed,",
+            "The display's refresh, as the runtime measures it from the animation frames it is handed,",
             "and the interval it paces turns at, a whole number of refreshes (the pacing the client",
-            "boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget."
+            "boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget."
           ]
         },
         {
@@ -342,7 +342,7 @@
           ]
         }
       ],
-      "call": true
+      "ackreq": true
     },
     {
       "name": "EDIT_MARKER_TEXT",
@@ -356,23 +356,21 @@
           "type": "str"
         }
       ],
-      "call": true
+      "ackreq": true
     },
     {
       "name": "EDIT_MARKER_CANCEL",
       "val": 6659,
       "$doc": [
         "The marker's draft dropped, nothing committed."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "EDIT_MARKER_COMMIT",
       "val": 6660,
       "$doc": [
         "The marker's draft committed with its text, where its place is still free or still a marker, and closed."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "INPUT_WHEEL",
@@ -405,9 +403,9 @@
       "name": "SURFACE_OPEN",
       "val": 5377,
       "$doc": [
-        "A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what."
+        "Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what."
       ],
-      "call": true
+      "ackreq": true
     },
     {
       "name": "SURFACE_RESIZE",
@@ -438,21 +436,20 @@
       "name": "SURFACE_CLOSE",
       "val": 5379,
       "$doc": [
-        "A call: the canvas is going, and what it drew and held on the device is let go before the call returns."
+        "The canvas is going: what it drew and held on the device is let go."
       ],
       "pkt": [
         {
           "name": "surface",
           "type": "u32"
         }
-      ],
-      "call": true
+      ]
     },
     {
       "name": "SCENE_DRAW",
       "val": 5892,
       "$doc": [
-        "A call, answered 0 or an errno: what a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the",
+        "What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the",
         "sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface",
         "replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL",
         "where the character's fields are not all given for a character, any is given for the world, or no character is",
@@ -485,14 +482,13 @@
             "What the character is drawn over, 0xRRGGBB, sRGB."
           ]
         }
-      ],
-      "call": true
+      ]
     },
     {
       "name": "SETTING_SET",
       "val": 5633,
       "$doc": [
-        "A setting set from the sheet or the character picker; EAGAIN until the kernel has read the",
+        "A setting set from the sheet or the character picker; refused until the kernel has read the",
         "kept settings, which would be read over it."
       ],
       "pkt": [
@@ -507,8 +503,7 @@
             "A toggle's 0 or 1, a choice's option by its index, or a number."
           ]
         }
-      ],
-      "call": true
+      ]
     },
     {
       "name": "SCENE_CHAT",
@@ -521,8 +516,7 @@
           "name": "text",
           "type": "str"
         }
-      ],
-      "call": true
+      ]
     },
     {
       "name": "CAMERA_TRACKING",
@@ -542,8 +536,7 @@
       "val": 6146,
       "$doc": [
         "The compass's press: north up."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "SENSOR_LOCATE",
@@ -552,8 +545,7 @@
         "The search panel's location card's press: the location asked for. The compass is",
         "asked for where it is used, entering follow mode (TRACKING), and never alone: nothing",
         "reads it without the location."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "CAMERA_GOTO",
@@ -595,8 +587,7 @@
             "The angle down from vertical in radians, clamped."
           ]
         }
-      ],
-      "call": true
+      ]
     },
     {
       "name": "INPUT_XR_POSE",
@@ -652,16 +643,14 @@
       "val": 6401,
       "$doc": [
         "A fresh recording window."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "PERF_STOP",
       "val": 6402,
       "$doc": [
         "The window frozen, so what is exported holds still."
-      ],
-      "call": true
+      ]
     },
     {
       "name": "PERF_STATS",
@@ -723,7 +712,7 @@
         "The text in the platform's own family at the weight and size, broken into lines no",
         "wider than the width where it can be; at `at` in the kernel's memory, how many lines,",
         "then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most",
-        "(sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
+        "(sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
       ],
       "pkt": [
         {
@@ -1060,7 +1049,7 @@
     {
       "name": "TurnMinor",
       "$doc": [
-        "A turn's: what the host grants it, the credits and the clock."
+        "A turn's: what the runtime grants it, the credits and the clock."
       ],
       "format": "hex2",
       "entries": [
@@ -1630,7 +1619,7 @@
           "type": "Message",
           "optional": true,
           "$doc": [
-            "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say."
+            "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say."
           ]
         },
         {

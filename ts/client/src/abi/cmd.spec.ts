@@ -6,8 +6,8 @@
  * The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:
  * `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
  * it carries — an XTP branch whose children are its fields, in order. A command with no
- * fields carries no packet. The kernel is the guest; the JavaScript around it is two
- * things to it, its host, which holds the turns and carries its hostcalls to what
+ * fields carries no packet. The kernel is the core; the JavaScript around it is two
+ * things to it, its runtime, which holds the turns and carries its imports to what
  * answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user
  * does and what the place's sensors, visibility and frames tell it
  * (ts/client/src/port/). A command's major is the module it is for.
@@ -61,7 +61,7 @@ import * as Message from "./cmd/message.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { Host, OnEvent } from "@xpute/host";
+import type { Sender, OnImport } from "@xpute/runtime";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -203,7 +203,7 @@ export interface Snapshot {
    * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
    * empty. */
   refused_files: RefusedFile[];
-  /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
+  /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say. */
   stall: Message | null;
   /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
   renderer_progress: f64;
@@ -373,7 +373,7 @@ export function encode_sensor_err(
 
 /** Command.TURN_GRANT's packet, written in place into `to`.
  *
- * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
+ * @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
 export function encode_turn_grant(
   to: PacketRoom,
@@ -613,26 +613,26 @@ export function encode_perf_stats(
   return to.writer(1).f64(window_ms);
 }
 
-/** Command.SENSOR_START's event. */
-export interface SensorStartEvent {
+/** Command.SENSOR_START's packet. */
+export interface SensorStart {
   sensor: Sensor;
 }
 
-export function read_sensor_start(b: BranchCursor): SensorStartEvent {
+export function read_sensor_start(b: BranchCursor): SensorStart {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.SENSOR_STOP's event. */
-export interface SensorStopEvent {
+/** Command.SENSOR_STOP's packet. */
+export interface SensorStop {
   sensor: Sensor;
 }
 
-export function read_sensor_stop(b: BranchCursor): SensorStopEvent {
+export function read_sensor_stop(b: BranchCursor): SensorStop {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.TEXT_LAYOUT's event. */
-export interface TextLayoutEvent {
+/** Command.TEXT_LAYOUT's packet. */
+export interface TextLayout {
   weight: u32;
   px: f64;
   /** 0 for one line. */
@@ -645,7 +645,7 @@ export interface TextLayoutEvent {
   text_len: u32;
 }
 
-export function read_text_layout(b: BranchCursor): TextLayoutEvent {
+export function read_text_layout(b: BranchCursor): TextLayout {
   return {
     weight: b.at(0).get<u32>(),
     px: b.at(1).get<f64>(),
@@ -657,8 +657,8 @@ export function read_text_layout(b: BranchCursor): TextLayoutEvent {
   };
 }
 
-/** Command.TEXT_RASTER's event. */
-export interface TextRasterEvent {
+/** Command.TEXT_RASTER's packet. */
+export interface TextRaster {
   weight: u32;
   px: f64;
   /** 0xRRGGBBAA. */
@@ -673,7 +673,7 @@ export interface TextRasterEvent {
   text_len: u32;
 }
 
-export function read_text_raster(b: BranchCursor): TextRasterEvent {
+export function read_text_raster(b: BranchCursor): TextRaster {
   return {
     weight: b.at(0).get<u32>(),
     px: b.at(1).get<f64>(),
@@ -687,31 +687,32 @@ export function read_text_raster(b: BranchCursor): TextRasterEvent {
   };
 }
 
-/** Command.SHELL_SNAPSHOT's event. */
-export interface ShellSnapshotEvent {
+/** Command.SHELL_SNAPSHOT's packet. */
+export interface ShellSnapshot {
   at: u32;
   len: u32;
 }
 
-export function read_shell_snapshot(b: BranchCursor): ShellSnapshotEvent {
+export function read_shell_snapshot(b: BranchCursor): ShellSnapshot {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }
 
-/** Command.SHELL_VIEW's event. */
-export interface ShellViewEvent {
+/** Command.SHELL_VIEW's packet. */
+export interface ShellView {
   /** The view's azimuth. */
   azimuth: f64;
   /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
   m_per_px: f64;
 }
 
-export function read_shell_view(b: BranchCursor): ShellViewEvent {
+export function read_shell_view(b: BranchCursor): ShellView {
   return { azimuth: b.at(0).get<f64>(), m_per_px: b.at(1).get<f64>() };
 }
 
-/** What the host sends on the shell protocol, bound to `host`: each
- * command rung, or called and answered before it returns. */
-export function shell_exports(host: Host) {
+/** What the runtime sends on the shell protocol, bound to `runtime`: each
+ * command sent, requested and answered later, or called and answered before
+ * it returns. */
+export function shell_exports(runtime: Sender) {
   return {
     sensor_pos: (
       lon: f64,
@@ -720,7 +721,7 @@ export function shell_exports(host: Host) {
       accuracy: f64 | null,
       course: f64 | null,
     ): void =>
-      host.send(Command.SENSOR_POS, (r) =>
+      runtime.send(Command.SENSOR_POS, (r) =>
         encode_sensor_pos(r, lon, lat, alt, accuracy, course),
       ),
     sensor_orient: (
@@ -729,11 +730,13 @@ export function shell_exports(host: Host) {
       beta: f64 | null,
       gamma: f64 | null,
     ): void =>
-      host.send(Command.SENSOR_ORIENT, (r) =>
+      runtime.send(Command.SENSOR_ORIENT, (r) =>
         encode_sensor_orient(r, webkit_compass_heading, alpha, beta, gamma),
       ),
     sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null): void =>
-      host.send(Command.SENSOR_ERR, (r) => encode_sensor_err(r, sensor, code)),
+      runtime.send(Command.SENSOR_ERR, (r) =>
+        encode_sensor_err(r, sensor, code),
+      ),
     turn_grant: (
       refresh_ms: f64,
       paced_ms: f64,
@@ -741,7 +744,7 @@ export function shell_exports(host: Host) {
       credits: u32,
       unix_ms: f64,
     ): void =>
-      host.send(Command.TURN_GRANT, (r) =>
+      runtime.send(Command.TURN_GRANT, (r) =>
         encode_turn_grant(
           r,
           refresh_ms,
@@ -752,15 +755,15 @@ export function shell_exports(host: Host) {
         ),
       ),
     fs_mount: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
-      host.call(Command.FS_MOUNT, (r) =>
+      runtime.call(Command.FS_MOUNT, (r) =>
         encode_fs_mount(r, top_zoom, format, shard),
       ),
     fs_truncated: (root: u32, path: string): void =>
-      host.send(Command.FS_TRUNCATED, (r) =>
+      runtime.send(Command.FS_TRUNCATED, (r) =>
         encode_fs_truncated(r, root, path),
       ),
     sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
-      host.send(Command.SENSOR_PERMISSION, (r) =>
+      runtime.send(Command.SENSOR_PERMISSION, (r) =>
         encode_sensor_permission(r, sensor, answer),
       ),
     sensor_platform: (
@@ -769,7 +772,7 @@ export function shell_exports(host: Host) {
       orient_permission: boolean,
       orient_silence_is_loss: boolean,
     ): void =>
-      host.send(Command.SENSOR_PLATFORM, (r) =>
+      runtime.send(Command.SENSOR_PLATFORM, (r) =>
         encode_sensor_platform(
           r,
           geolocation,
@@ -779,7 +782,7 @@ export function shell_exports(host: Host) {
         ),
       ),
     setting_development: (development: boolean): void =>
-      host.send(Command.SETTING_DEVELOPMENT, (r) =>
+      runtime.send(Command.SETTING_DEVELOPMENT, (r) =>
         encode_setting_development(r, development),
       ),
     input_pointer: (
@@ -790,63 +793,67 @@ export function shell_exports(host: Host) {
       x: f64,
       y: f64,
     ): void =>
-      host.send(Command.INPUT_POINTER, (r) =>
+      runtime.send(Command.INPUT_POINTER, (r) =>
         encode_input_pointer(r, phase, pointer_type, id, button, x, y),
       ),
-    edit_tool: (tool: Tool, val: u32, scale_steps: i32): i32 =>
-      host.call(Command.EDIT_TOOL, (r) =>
+    edit_tool: (tool: Tool, val: u32, scale_steps: i32): Promise<i32> =>
+      runtime.request(Command.EDIT_TOOL, (r) =>
         encode_edit_tool(r, tool, val, scale_steps),
       ),
-    edit_marker_text: (text: string): i32 =>
-      host.call(Command.EDIT_MARKER_TEXT, (r) =>
+    edit_marker_text: (text: string): Promise<i32> =>
+      runtime.request(Command.EDIT_MARKER_TEXT, (r) =>
         encode_edit_marker_text(r, text),
       ),
-    edit_marker_cancel: (): i32 => host.call(Command.EDIT_MARKER_CANCEL),
-    edit_marker_commit: (): i32 => host.call(Command.EDIT_MARKER_COMMIT),
+    edit_marker_cancel: (): void => runtime.send(Command.EDIT_MARKER_CANCEL),
+    edit_marker_commit: (): void => runtime.send(Command.EDIT_MARKER_COMMIT),
     input_wheel: (delta_y: f64): void =>
-      host.send(Command.INPUT_WHEEL, (r) => encode_input_wheel(r, delta_y)),
+      runtime.send(Command.INPUT_WHEEL, (r) => encode_input_wheel(r, delta_y)),
     input_move: (x: i32, y: i32): void =>
-      host.send(Command.INPUT_MOVE, (r) => encode_input_move(r, x, y)),
-    surface_open: (): i32 => host.call(Command.SURFACE_OPEN),
+      runtime.send(Command.INPUT_MOVE, (r) => encode_input_move(r, x, y)),
+    surface_open: (): Promise<i32> => runtime.request(Command.SURFACE_OPEN),
     surface_resize: (
       surface: u32,
       width: u32,
       height: u32,
       device_pixel_ratio: f64,
     ): void =>
-      host.send(Command.SURFACE_RESIZE, (r) =>
+      runtime.send(Command.SURFACE_RESIZE, (r) =>
         encode_surface_resize(r, surface, width, height, device_pixel_ratio),
       ),
-    surface_close: (surface: u32): i32 =>
-      host.call(Command.SURFACE_CLOSE, (r) => encode_surface_close(r, surface)),
+    surface_close: (surface: u32): void =>
+      runtime.send(Command.SURFACE_CLOSE, (r) =>
+        encode_surface_close(r, surface),
+      ),
     scene_draw: (
       surface: u32,
       content: SceneContent,
       group: u32 | null,
       number: u8 | null,
       bg: u32 | null,
-    ): i32 =>
-      host.call(Command.SCENE_DRAW, (r) =>
+    ): void =>
+      runtime.send(Command.SCENE_DRAW, (r) =>
         encode_scene_draw(r, surface, content, group, number, bg),
       ),
-    setting_set: (key: u32, value: u32): i32 =>
-      host.call(Command.SETTING_SET, (r) => encode_setting_set(r, key, value)),
-    scene_chat: (text: string): i32 =>
-      host.call(Command.SCENE_CHAT, (r) => encode_scene_chat(r, text)),
+    setting_set: (key: u32, value: u32): void =>
+      runtime.send(Command.SETTING_SET, (r) =>
+        encode_setting_set(r, key, value),
+      ),
+    scene_chat: (text: string): void =>
+      runtime.send(Command.SCENE_CHAT, (r) => encode_scene_chat(r, text)),
     camera_tracking: (tracking: Tracking): void =>
-      host.send(Command.CAMERA_TRACKING, (r) =>
+      runtime.send(Command.CAMERA_TRACKING, (r) =>
         encode_camera_tracking(r, tracking),
       ),
-    camera_north_up: (): i32 => host.call(Command.CAMERA_NORTH_UP),
-    sensor_locate: (): i32 => host.call(Command.SENSOR_LOCATE),
+    camera_north_up: (): void => runtime.send(Command.CAMERA_NORTH_UP),
+    sensor_locate: (): void => runtime.send(Command.SENSOR_LOCATE),
     camera_goto: (
       lon: f64,
       lat: f64,
       dist: f64 | null,
       azimuth: f64 | null,
       polar: f64 | null,
-    ): i32 =>
-      host.call(Command.CAMERA_GOTO, (r) =>
+    ): void =>
+      runtime.send(Command.CAMERA_GOTO, (r) =>
         encode_camera_goto(r, lon, lat, dist, azimuth, polar),
       ),
     input_xr_pose: (
@@ -858,49 +865,49 @@ export function shell_exports(host: Host) {
       qz: f64,
       qw: f64,
     ): void =>
-      host.send(Command.INPUT_XR_POSE, (r) =>
+      runtime.send(Command.INPUT_XR_POSE, (r) =>
         encode_input_xr_pose(r, x, y, z, qx, qy, qz, qw),
       ),
-    input_xr_pose_end: (): void => host.send(Command.INPUT_XR_POSE_END),
-    perf_start: (): i32 => host.call(Command.PERF_START),
-    perf_stop: (): i32 => host.call(Command.PERF_STOP),
+    input_xr_pose_end: (): void => runtime.send(Command.INPUT_XR_POSE_END),
+    perf_start: (): void => runtime.send(Command.PERF_START),
+    perf_stop: (): void => runtime.send(Command.PERF_STOP),
     perf_stats: (window_ms: f64 | null): i32 =>
-      host.call(Command.PERF_STATS, (r) => encode_perf_stats(r, window_ms)),
-    perf_rings: (): i32 => host.call(Command.PERF_RINGS),
+      runtime.call(Command.PERF_STATS, (r) => encode_perf_stats(r, window_ms)),
+    perf_rings: (): i32 => runtime.call(Command.PERF_RINGS),
   };
 }
 
 /** The shell protocol's stubs, bound. */
 export type ShellExports = ReturnType<typeof shell_exports>;
 
-/** What the program does with each command the guest posts on the shell protocol; a
+/** What the program does with each command the core posts on the shell protocol; a
  * call's answer is its return. */
 export interface ShellImports {
   /** Start watching. */
-  sensor_start(e: SensorStartEvent): void;
+  sensor_start(e: SensorStart): void;
   /** Stop watching. */
-  sensor_stop(e: SensorStopEvent): void;
+  sensor_stop(e: SensorStop): void;
   /** The text in the platform's own family at the weight and size, broken into lines no
    * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
    * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-   * (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
-  text_layout(e: TextLayoutEvent): i32;
+   * (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
+  text_layout(e: TextLayout): i32;
   /** One line drawn in the platform's own family, starting at x with the middle of its em
    * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
    * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
    * it returns. */
-  text_raster(e: TextRasterEvent): i32;
+  text_raster(e: TextRaster): i32;
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
-  shell_snapshot(e: ShellSnapshotEvent): void;
+  shell_snapshot(e: ShellSnapshot): void;
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
-  shell_view(e: ShellViewEvent): void;
+  shell_view(e: ShellView): void;
 }
 
-/** `h` as the handler a host routes the shell protocol's commands to, each one read and
+/** `h` as the handler a runtime routes the shell protocol's commands to, each one read and
  * handed to its member; ENOSYS for one the protocol does not carry. */
-export function shell_imports(h: ShellImports): OnEvent {
+export function shell_imports(h: ShellImports): OnImport {
   return (_tag, cmd, f) => {
     switch (cmd) {
       case Command.SENSOR_START:

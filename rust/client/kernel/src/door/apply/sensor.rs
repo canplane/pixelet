@@ -10,7 +10,7 @@ use crate::domain::control::sensor::device_orientation::OrientationPlatform;
 use crate::domain::control::sensor::geolocation;
 use crate::turn::world_platform;
 use crate::turn::{set_world_platform, Platform};
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn pos(c: abi::SensorPos) -> Outcome {

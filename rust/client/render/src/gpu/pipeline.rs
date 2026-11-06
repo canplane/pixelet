@@ -44,9 +44,9 @@ pub struct Pipelines {
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
     /// Each pipeline's fence, by its place in `pipelines`, where the
-    /// host stores `TICKET` once it is made: boxed, so it stays where the
+    /// runtime stores `TICKET` once it is made: boxed, so it stays where the
     /// records named it. Let go with the renderer, on a lost device alone,
-    /// whose host writes nothing more.
+    /// whose runtime writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
     /// How many of the pipelines are made, in whatever order WebGPU made
     /// them, as `made` last counted.

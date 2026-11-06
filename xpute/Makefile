@@ -4,8 +4,8 @@
 # Cargo's, its commands as aliases in rust/.cargo/config.toml; and cpp/ as
 # Make's (cpp/Makefile). script/ is the repository's own, run by path. Here
 # is a target a tree for each verb, the aggregates over them, and two
-# orders: the traces run after the guests they drive, and cpp/'s tests,
-# which build those guests too, after build has, so two makes never write
+# orders: the traces run after the cores they drive, and cpp/'s tests,
+# which build those cores too, after build has, so two makes never write
 # one object at once. Only code is formatted, each tree's by its own
 # formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
@@ -42,14 +42,14 @@ check-spec:
 spec:
 	+cd rust && cargo spec --write
 
-# What xpute builds: the guest the contract's traces drive, in Rust and in C++,
-# each a native library and a WebAssembly module; and the example's guest, a
+# What xpute builds: the core the contract's traces drive, in Rust and in C++,
+# each a native library and a WebAssembly module; and the example's core, a
 # module (rust/example).
 build: build-cpp build-rust
 build-cpp:
-	$(MAKE) -C cpp guest wasm
+	$(MAKE) -C cpp core wasm
 build-rust:
-	+cd rust && cargo guest && cargo guest-wasm
+	+cd rust && cargo core && cargo core-wasm
 
 test: test-ts test-cpp test-rust test-conformance test-example
 test-ts:
@@ -63,7 +63,7 @@ test-conformance: build
 test-example: build
 	pnpm --dir ts test:example
 
-# What needs a GPU: the web host in Chrome (ts/gpu/script/browser.ts), and the
+# What needs a GPU: the web runtime in Chrome (ts/gpu/script/browser.ts), and the
 # native one on wgpu.
 test-gpu: test-gpu-web test-gpu-native
 test-gpu-web:

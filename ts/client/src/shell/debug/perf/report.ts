@@ -19,9 +19,9 @@ import { n1, pct, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
-import { type LongFrame } from "@/services/types.ts";
-import * as long_frame from "@/services/long-frame.ts";
-import * as share from "@/services/share.ts";
+import { type LongFrame } from "@/service/types.ts";
+import * as long_frame from "@/service/long-frame.ts";
+import * as share from "@/service/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes in the one unit the figures are shown in, signed. */

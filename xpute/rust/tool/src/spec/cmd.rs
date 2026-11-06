@@ -1,9 +1,9 @@
 // xpute-tool/spec/cmd.rs
 
 //! A protocol over xpute's rings, xpute's own or a program's: its commands,
-//! as a WIT world names them from the guest's side, `export` what the guest
-//! implements and the host calls and `import` what the host implements and
-//! the guest calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
+//! as a WIT world names them from the core's side, `export` what the core
+//! implements and the runtime calls and `import` what the runtime implements and
+//! the core calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
 //! cmd/cpp.rs; cmd/service.rs writes each end's binding over xpute's ends.
 
 mod cpp;
@@ -41,8 +41,8 @@ struct Member {
     #[serde(skip)]
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
-    event: Option<Vec<Field>>,
-    /// An `import`'s completion's packet, which the host writes and the guest reads.
+    import: Option<Vec<Field>>,
+    /// An `import`'s completion's packet, which the runtime writes and the core reads.
     #[serde(skip)]
     reply: Option<Vec<Field>>,
 }
@@ -86,8 +86,8 @@ struct Record {
 }
 
 /// A command as its protocol lists it. `call`: the sender waits for the answer
-/// (an `export` the host calls, an `import` the host answers before it returns).
-/// `ackreq`: an `import` the host completes on a later turn, a frame of its tag
+/// (an `export` the runtime calls, an `import` the runtime answers before it returns).
+/// `ackreq`: an `import` the runtime completes on a later turn, a frame of its tag
 /// flagged RES, its packet `reply`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,9 +104,9 @@ struct Cmd {
     reply: Option<Vec<Field>>,
 }
 
-/// A protocol: the commands the host sends the guest (`export`) and those the
-/// guest posts to the host (`import`). `name` is the program's, for the generated
-/// code's names only. The bus reads none of it; a host routes a frame by its
+/// A protocol: the commands the runtime sends the core (`export`) and those the
+/// core posts to the runtime (`import`). `name` is the program's, for the generated
+/// code's names only. The bus reads none of it; a runtime routes a frame by its
 /// command's major.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -148,12 +148,14 @@ struct Spec {
 /// A protocol as the emitters read it.
 struct Protocol {
     name: String,
-    exports: Vec<(String, bool)>,
+    /// Each export's name, whether it is a call, and whether it is posted with
+    /// ACKREQ and answered later.
+    exports: Vec<(String, bool, bool)>,
     imports: Vec<(String, bool)>,
 }
 
 /// `json`'s protocol, its commands made `Command`'s members, each `export` a
-/// packet the guest reads and each `import` one it writes.
+/// packet the core reads and each `import` one it writes.
 fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
     let d: Doc = read_as(json)?;
     if d.enums.iter().any(|e| e.name == "Command") {
@@ -175,22 +177,25 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             section: format!("{}, {dir}", d.name),
         }));
         for c in cmds {
-            if (c.ackreq || c.reply.is_some()) && (dir == "export" || c.call) {
+            if c.ackreq && c.call {
+                return Err(format!("{shown}: {} is answered later, so no call", c.name));
+            }
+            if c.reply.is_some() && dir == "export" {
                 return Err(format!(
-                    "{shown}: {} is completed later, so an import and no call",
+                    "{shown}: {} is an export, answered by its result alone",
                     c.name
                 ));
             }
             if c.reply.is_some() && !c.ackreq {
                 return Err(format!("{shown}: {} has a reply and no ackreq", c.name));
             }
-            let (pkt, event) = if dir == "export" {
+            let (pkt, import) = if dir == "export" {
                 (c.pkt, None)
             } else {
                 (None, Some(c.pkt.unwrap_or_default()))
             };
             if dir == "export" {
-                of.exports.push((c.name.clone(), c.call));
+                of.exports.push((c.name.clone(), c.call, c.ackreq));
             } else {
                 of.imports.push((c.name.clone(), c.call));
             }
@@ -199,7 +204,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 val: c.val,
                 doc: c.doc,
                 pkt,
-                event,
+                import,
                 reply: c.reply,
             }));
         }
@@ -360,37 +365,37 @@ struct Target {
     rs_logical: &'static str,
     /// Where the number checks a packet's reader calls are.
     number: &'static str,
-    /// For a guest that raises the table's events: the module whose `Event`
-    /// each implements (`xpute_guest::ipc::door`).
-    event: Option<&'static str>,
+    /// For a core that raises the table's imports: the module whose `Import`
+    /// each implements (`xpute_core::ipc::door`).
+    import: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
-    /// For xpute's own protocols, where the host's TypeScript binding takes
-    /// the host's types from inside its own package.
-    host_ts: Option<&'static str>,
+    /// For xpute's own protocols, where the runtime's TypeScript binding takes
+    /// the runtime's types from inside its own package.
+    runtime_ts: Option<&'static str>,
 }
 
 const TARGETS: [Target; 2] = [
     Target {
         json: "spec/abi/cmd.json",
-        ts: "ts/host/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/host/abi/cmd.spec.ts",
-        rs: "rust/guest/src/abi/cmd.spec.rs",
-        rs_logical: "xpute-guest/abi/cmd.spec.rs",
+        ts: "ts/runtime/src/abi/cmd.spec.ts",
+        ts_logical: "@xpute/runtime/abi/cmd.spec.ts",
+        rs: "rust/core/src/abi/cmd.spec.rs",
+        rs_logical: "xpute-core/abi/cmd.spec.rs",
         number: "crate::abi::number",
-        event: Some("crate::ipc::door"),
-        cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-        host_ts: Some("../mod.ts"),
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/cmd.spec.hpp", "xpute::abi")),
+        runtime_ts: Some("../mod.ts"),
     },
     Target {
         json: "spec/abi/fs.json",
-        ts: "ts/host/src/abi/fs.spec.ts",
-        ts_logical: "@xpute/host/abi/fs.spec.ts",
-        rs: "rust/guest/src/abi/fs.spec.rs",
-        rs_logical: "xpute-guest/abi/fs.spec.rs",
+        ts: "ts/runtime/src/abi/fs.spec.ts",
+        ts_logical: "@xpute/runtime/abi/fs.spec.ts",
+        rs: "rust/core/src/abi/fs.spec.rs",
+        rs_logical: "xpute-core/abi/fs.spec.rs",
         number: "crate::abi::number",
-        event: Some("crate::ipc::door"),
-        cpp: Some(("cpp/xpute/guest/abi/fs.spec.hpp", "xpute::abi::fs")),
-        host_ts: Some("../mod.ts"),
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/fs.spec.hpp", "xpute::abi::fs")),
+        runtime_ts: Some("../mod.ts"),
     },
 ];
 
@@ -458,13 +463,13 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
         ts_logical: ts_at,
         rs: rs_at,
         rs_logical: rs_at,
-        number: "xpute_guest::abi::number",
-        event: Some("xpute_guest::ipc::door"),
+        number: "xpute_core::abi::number",
+        import: Some("xpute_core::ipc::door"),
         cpp: None,
-        host_ts: None,
+        runtime_ts: None,
     };
     let mut out = ts::emit(spec, &t)?;
-    let (imports, body) = service::ts(spec, "@xpute/host")?;
+    let (imports, body) = service::ts(spec, "@xpute/runtime")?;
     if let Some(first) = out.first_mut() {
         first.text = splice_ts(&first.text, &imports, &body);
     }
@@ -526,8 +531,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     check_once(&read)?;
     for (spec, t) in &specs {
         let mut ts = ts::emit(spec, t)?;
-        if let (Some(host), Some(first)) = (t.host_ts, ts.first_mut()) {
-            let (imports, body) = service::ts(spec, host)?;
+        if let (Some(runtime), Some(first)) = (t.runtime_ts, ts.first_mut()) {
+            let (imports, body) = service::ts(spec, runtime)?;
             first.text = splice_ts(&first.text, &imports, &body);
         }
         out.extend(ts);

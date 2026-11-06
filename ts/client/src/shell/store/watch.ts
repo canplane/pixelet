@@ -6,7 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { ShellViewEvent, Snapshot } from "@/abi/cmd.spec.ts";
+import type { ShellView, Snapshot } from "@/abi/cmd.spec.ts";
 import { watch_snapshot, watch_view } from "@/port/snapshot.ts";
 import type { Gpu, Source } from "@/abi/state.ts";
 import {
@@ -26,7 +26,7 @@ export function useKernel<T>(select: (s: Snapshot) => T): T {
 }
 
 /** The view's azimuth and scale, apart from the snapshot; `select` as `useKernel`'s. */
-export function useView<T>(select: (v: ShellViewEvent) => T): T {
+export function useView<T>(select: (v: ShellView) => T): T {
   return useSyncExternalStore(watch_view, () =>
     select(snapshot.current_view()),
   );

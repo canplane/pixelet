@@ -3,7 +3,7 @@
 //! The one atlas every marker draws into, mirrored by the renderer.
 
 use pxl_render::gpu::atlas::shelf::Atlas;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 static ATLAS: Global<Atlas> = Global::new();
 

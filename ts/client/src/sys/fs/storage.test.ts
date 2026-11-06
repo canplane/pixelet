@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 
 import { root, storage as slots } from "@/abi/file.spec.ts";
 import { follow_refused_files, set_aside_by_root } from "./refusal.ts";

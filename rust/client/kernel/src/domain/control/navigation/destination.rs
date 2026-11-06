@@ -17,7 +17,7 @@ use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
 use crate::sys::sched::edge;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 static DST: Global<Option<(Q3, Motion)>> = Global::new();
 

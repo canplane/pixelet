@@ -21,7 +21,7 @@
 use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
-use xpute_guest::sched::edge::{host_turn, yield_if_spent};
+use xpute_core::sched::edge::{runtime_turn, yield_if_spent};
 
 use crate::sys::io::demand::Ask;
 use crate::sys::io::failure::{Ended, Failure};
@@ -35,8 +35,8 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
 use pxl_spec::bake::publication::BaseLayer;
-use xpute_guest::global::Global;
-use xpute_guest::sched::task;
+use xpute_core::global::Global;
+use xpute_core::sched::task;
 
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
@@ -169,7 +169,7 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
     &l.wants
 }
 
-/// The credit ends when the host reports; parsing afterwards does not hold it.
+/// The credit ends when the runtime reports; parsing afterwards does not hold it.
 fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, id)| of_id(id));
     settle(key, ended, None);
@@ -270,7 +270,7 @@ pub fn on_images_lost() {
 }
 
 /// A file's bytes, taken in by its own task: no arrival waits on another's
-/// parse or landing. Where the turn's quota is spent before the tasks run, as
+/// parse or landing. Where the turn's deadline has passed before the tasks run, as
 /// it is while the frame outweighs its share, each task advances a step a
 /// turn, so k arrivals advance k steps, not one.
 fn arrive(kind: LoadKind, load: Load, reading: Reading) {
@@ -283,7 +283,7 @@ fn arrive(kind: LoadKind, load: Load, reading: Reading) {
 }
 
 /// An asset file arrived, read whole: a model parsed, an image kept until
-/// its texture lands, the catalog read, each once the host's head has passed
+/// its texture lands, the catalog read, each once the runtime's head has passed
 /// its read.
 async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
     let buf = loop {
@@ -291,7 +291,7 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
             Ok(buf) => break buf,
             Err(unread) => reading = unread,
         }
-        host_turn(world_edge).await;
+        runtime_turn(world_edge).await;
     };
     yield_if_spent(world_edge).await;
     match kind {

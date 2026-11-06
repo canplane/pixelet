@@ -10,7 +10,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/sys/fs/catalog.spec.ts";
 import { ASSET_FILES } from "@/origin/ingest.spec.ts";

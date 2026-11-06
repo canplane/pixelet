@@ -53,22 +53,22 @@ one Rust kernel drawing with WebGPU.
 ## What runs where
 
 The world lives in one Rust **kernel** (`pxl-kernel`, drawing through
-`pxl-render`). It runs as the guest of [xpute](./xpute/README.md), a
-unikernel on a virtual machine: the kernel and xpute's guest library, its
-library OS, are one image. The **host** is its VMM: it implements the devices
-the kernel's machine asks for, the GPU and the files, grants the guest one
-memory and a quota of time on each call into it, a **turn**, and does the
-outside work the guest asked for once the turn returns.
+`pxl-render`). It runs as the core of [xpute](./xpute/README.md), a
+unikernel on a virtual machine: the kernel and xpute's core library, its
+library OS, are one image. The **runtime** is its VMM: it implements the devices
+the kernel's machine asks for, the GPU and the files, grants the core one
+memory and a deadline on each call into it, a **turn**, and does the
+outside work the core asked for once the turn returns.
 
 The kernel's crate is its artifact, in the form xpute gives its target. One
 Expo app (`ts/client`) is built for iOS, Android and the page. In a browser tab
 the kernel is one WebAssembly module, which the page runs on the browser's
 WebGPU; on a device it is the library linked into the app, whose GPU calls
-xpute's host runs on wgpu. The app bundles the **client** (`ts/client`): the
-host (`src/host/`); the services, what each platform gives, the guest,
-storage, text, the network, the sensors and the surfaces (`src/services/`, a
+xpute's runtime runs on wgpu. The app bundles the **client** (`ts/client`): the
+runtime (`src/runtime/`); the services, what each platform gives, the kernel,
+storage, text, the network, the sensors and the surfaces (`src/service/`, a
 page's `x.ts` beside a device's `x.native.ts`), what answers the kernel's
-hostcalls, its files among them (`src/sys/`), what the app's ABI carries
+imports, its files among them (`src/sys/`), what the app's ABI carries
 (`src/port/`) and the server it reads from (`src/origin/`); the numbers both
 read and the boot (`src/abi/`); and the **shell** (`src/shell/`), the UI, the
 client outside the VM, which changes the world only by commands the kernel
@@ -148,8 +148,8 @@ to measure speed in.
 
 The page is Expo's web build, bundled by Metro into one HTML file over one
 bundle. `dev` runs `expo start --web` beside a Rust watcher that rebuilds the
-kernel's module, `ts/client/public/guest.wasm` (`ts/client/script/build-wasm.py`),
-which the page fetches as `/guest.wasm?v=<build id>`. `ts/client/index.html` is
+kernel's module, `ts/client/public/kernel.wasm` (`ts/client/script/build-wasm.py`),
+which the page fetches as `/kernel.wasm?v=<build id>`. `ts/client/index.html` is
 the page's template, which `ts/client/script/web.ts html` writes into `public/`;
 `web.ts stamp` writes `dist/build.json` after an export, and `web.ts serve`
 serves `dist/` for a preview. The dev server and the preview forward the
@@ -232,9 +232,9 @@ language by where a thing runs.
 ├── ts/                  # The TypeScript workspace (pnpm)
 │   ├── client/          #   the client the app bundles
 │   │   └── src/
-│   │       ├── host/     #     xpute's host, mounted
-│   │       ├── services/ #     what each platform gives
-│   │       ├── sys/      #     what answers the kernel's hostcalls
+│   │       ├── runtime/  #     xpute's runtime, mounted
+│   │       ├── service/ #     what each platform gives
+│   │       ├── sys/      #     what answers the kernel's imports
 │   │       ├── port/     #     what the app's ABI carries
 │   │       ├── origin/   #     the server the client reads from
 │   │       ├── abi/      #     the numbers both read, and the boot
@@ -264,7 +264,7 @@ What shares the model is Rust: the kernel, the servers and the bakes compile
 command numbers and routes, is generated into `ts/client/src/**/*.spec.ts` from
 the same JSON.
 
-Below the shell, Rust, xpute and the client's host, abi and namespace share one
+Below the shell, Rust, xpute and the client's runtime, abi and namespace share one
 `snake_case` vocabulary across the boundary; the shell and the scripts are
 `camelCase`, as TypeScript is. A name that crosses, a snapshot field, a packet's
 field or a catalog entry, keeps the kernel's.

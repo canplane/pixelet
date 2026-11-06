@@ -195,7 +195,7 @@ fn failed_object_dropped() {
 fn heap_refusal_waits_release() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_guest::mem::heap::HeapStat;
+    use xpute_core::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
     set_heap_stat(|| HeapStat {
@@ -236,7 +236,7 @@ fn heap_refusal_waits_release() {
 fn early_release_not_rewaited() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_guest::mem::heap::HeapStat;
+    use xpute_core::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
     set_heap_stat(|| HeapStat {

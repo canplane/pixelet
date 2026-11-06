@@ -9,7 +9,7 @@ use crate::domain::view::setting::store;
 use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::file_spec::root;
 use crate::sys::io::source;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn mount(c: abi::FsMount<'_>) -> Outcome {

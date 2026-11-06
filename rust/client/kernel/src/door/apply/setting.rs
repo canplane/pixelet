@@ -10,7 +10,7 @@ use crate::domain::view::setting::store::set_development;
 use crate::domain::view::setting::store::settings_store;
 use crate::domain::view::setting::store::SettingKey;
 use crate::perf::window::perf_follow;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {

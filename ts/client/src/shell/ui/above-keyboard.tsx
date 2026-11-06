@@ -2,12 +2,12 @@
 
 import { type AboveKeyboardProps, bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { layer } from "@/shell/ui/theme.ts";
-import { VISUAL_VIEWPORT_BOTTOM } from "@/services/types.ts";
-import { useSafeArea } from "@/services/safe-area.ts";
+import { VISUAL_VIEWPORT_BOTTOM } from "@/service/types.ts";
+import { useSafeArea } from "@/service/safe-area.ts";
 
 /**
  * A bottom layer standing `inset` above the keyboard via the page's
- * `VISUAL_VIEWPORT_BOTTOM` (services/viewport.ts), a CSS variable since it follows every frame. iOS
+ * `VISUAL_VIEWPORT_BOTTOM` (service/viewport.ts), a CSS variable since it follows every frame. iOS
  * streams viewport events or sends one final value, so `bottom` gets a short
  * ease.
  */

@@ -5,8 +5,8 @@
 
 use crate::domain::control::cmd::Message;
 pub use crate::domain::control::cmd::{PermissionAnswer, SensorStatus};
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {

@@ -1,14 +1,14 @@
 // pxl-kernel/door/apply/turn.rs
 
-//! TURN: a turn's: what the host grants it, the network's credits and the
+//! TURN: a turn's: what the runtime grants it, the network's credits and the
 //! clock.
 
 use super::refuse_unless;
 use crate::domain::control::cmd as abi;
 use crate::sys::sched::clock;
 use crate::turn;
-use crate::turn::HostFrame;
-use xpute_guest::ipc::door::Outcome;
+use crate::turn::RuntimeFrame;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn grant(c: abi::TurnGrant) -> Outcome {
@@ -24,7 +24,7 @@ pub(super) fn grant(c: abi::TurnGrant) -> Outcome {
     } else {
         0.0
     };
-    turn::on_world_frame_asked(HostFrame {
+    turn::on_world_frame_asked(RuntimeFrame {
         delta,
         refresh_ms: c.refresh_ms,
         paced_ms: c.paced_ms,

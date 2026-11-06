@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
-import { type InputDriver } from "@/services/types.ts";
-import * as surface from "@/services/surface.tsx";
-import { useSafeArea } from "@/services/safe-area.ts";
-import { useVisualViewport } from "@/services/viewport.ts";
+import { type InputDriver } from "@/service/types.ts";
+import * as surface from "@/service/surface.tsx";
+import { useSafeArea } from "@/service/safe-area.ts";
+import { useVisualViewport } from "@/service/viewport.ts";
 import { POINTER_KIND, POINTER_PHASE } from "@/port/input.ts";
 import { surface_driver } from "@/port/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
@@ -36,7 +36,7 @@ const WORLD = surface_driver(scene.draw_world);
 
 /** The place's input as the world takes it: pointers and keys through the
  * shell's own stores first (`worldPointer`, `keyDown`), the box and the wheel
- * to the kernel, and a moved box's turn to the strobe. */
+ * to the kernel, and a moved box's turn to the scheduler. */
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>

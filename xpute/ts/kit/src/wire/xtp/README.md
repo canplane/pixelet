@@ -7,7 +7,7 @@ format is the contract between them; the walkthrough below is the TypeScript
 API, which the others mirror in their own languages' shapes. Each also writes a
 packet in place, into bytes the caller holds, with no tree built first
 (`PacketWriter`), giving the bytes the tree encoder gives; the TypeScript one
-writes a root branch of scalars and strings, what the host sends.
+writes a root branch of scalars and strings, what the runtime sends.
 
 It is designed to stay simple at the surface:
 

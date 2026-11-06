@@ -25,7 +25,7 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::gpu::atlas::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::octant::Octant;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

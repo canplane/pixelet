@@ -3,7 +3,7 @@
 //! The frame's uniforms as the kernel decides them, in one lane of doubles at a
 //! fixed address; the renderer reads it in place.
 
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 pub const STAGE_WORDS: usize = STAGE_AT::SHADOWS + 1;
 

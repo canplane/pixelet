@@ -9,9 +9,9 @@ An override re-exports the default and replaces only what it draws itself, and
 `ts/client/src/shell/ui/conform.ts` holds each to its default's exports. What
 only the place gives — the kernel's memory, the GPU, storage, text, the
 network, the sensors, the surfaces — is not here but in the client's services
-(`ts/client/src/services/`), a page's file beside a device's: the world's
-surface, for one, is a canvas on the page (`services/surface.tsx`) and a
-native view on a device (`services/surface.native.tsx`). This page says
+(`ts/client/src/service/`), a page's file beside a device's: the world's
+surface, for one, is a canvas on the page (`service/surface.tsx`) and a
+native view on a device (`service/surface.native.tsx`). This page says
 each piece's implementation side by side, so where the platforms part shows in
 one place, as the colors that part do in `theme.ts`.
 

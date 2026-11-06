@@ -209,7 +209,7 @@ fn run() -> Result<(), String> {
         &symbol::render_ts(&symbols),
     )?;
 
-    // What the code is generated from: the host's table, the pack's layout
+    // What the code is generated from: the runtime's table, the pack's layout
     // and the catalog.
     write_formatted(
         &root.join("spec/spec/asset/ingest.json"),

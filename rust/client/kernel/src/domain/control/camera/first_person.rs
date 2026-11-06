@@ -15,7 +15,7 @@ use crate::domain::control::param::{
 };
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
 static TO: Global<Option<Q3>> = Global::new();

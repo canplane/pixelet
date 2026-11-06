@@ -2,12 +2,12 @@
 
 //! The world's turn edge: when its tasks run, and a frame asked for.
 
-use xpute_guest::sched::edge::Edge;
+use xpute_core::sched::edge::Edge;
 
 use crate::sys::load;
-use xpute_guest::clock;
-use xpute_guest::global::Global;
-use xpute_guest::sched::task;
+use xpute_core::clock;
+use xpute_core::global::Global;
+use xpute_core::sched::task;
 
 /// The kernel's tasks: the three that run for good (`world_tasks`), one for
 /// each file in flight, a slot's, the catalog's or the sphere's (sys/io/loader.rs
@@ -44,9 +44,8 @@ pub fn request_world_tick() {
 }
 
 /// The turn's tasks keep their share past the frame that ran before them
-/// (`param::CONTENT_SHARE` of the frame the host paces, the margin taken as
-/// the quota takes it), whatever the frame overran: what the frame owes the
-/// host comes off its own next quota.
+/// (`param::CONTENT_SHARE` of the frame the runtime paces, the margin taken as
+/// the deadline takes it), whatever the frame overran.
 pub fn tasks_after_frame(paced_ms: f64) {
     use crate::sys::sched::pacing_spec::MARGIN_SHARE;
     use crate::sys::sched::param::CONTENT_SHARE;

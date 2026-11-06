@@ -12,7 +12,7 @@ use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{self, BOUNDS};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::Answer;
 use crate::domain::query::World;

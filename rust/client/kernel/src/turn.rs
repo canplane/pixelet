@@ -11,7 +11,7 @@ use crate::domain::layer::Base as _;
 use crate::sys::mem::section;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
-use xpute_guest::sched::edge::{notified, Notify};
+use xpute_core::sched::edge::{notified, Notify};
 
 use crate::domain::control::camera::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
@@ -70,9 +70,9 @@ use crate::sys::sched::tick::{on_tick, run_tick, TickContext};
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::sched::tick::TickReport;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+use xpute_core::sched::tick::TickReport;
 
 use crate::sys::sched::phase_spec::Phase;
 
@@ -185,7 +185,7 @@ fn environment_tick(_: &mut TickContext) {
 }
 
 /// Registers the tick's steps and spawns the tasks. Called from outside a
-/// frame, since the frame task waits for the host's first frame.
+/// frame, since the frame task waits for the runtime's first frame.
 pub fn boot() {
     on_tick(
         Phase::interaction,
@@ -220,7 +220,7 @@ pub fn boot() {
 /// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
     use crate::sys::sched::edge::TaskPriority::*;
-    use xpute_guest::sched::task::spawn;
+    use xpute_core::sched::task::spawn;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(fetch::fetch_task(), Arrival as u8)
         && spawn(repository::task(), Background as u8);
@@ -301,18 +301,18 @@ pub fn world_platform() -> Platform {
 /// world holds still rather than leaping.
 const MAX_STEP_S: f64 = 0.1;
 
-pub struct HostFrame {
+pub struct RuntimeFrame {
     pub delta: f64,
-    /// The display's refresh, and the interval the host paces turns at, a
+    /// The display's refresh, and the interval the runtime paces turns at, a
     /// whole number of refreshes: the frame's budget (the pacing the client
-    /// boots xpute's host with, @xpute/host sched/frame_pacing.ts `FrameGrant`).
+    /// boots xpute's runtime with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
     pub credits: u32,
 }
 
-static FRAME: Global<Option<HostFrame>> = Global::new();
+static FRAME: Global<Option<RuntimeFrame>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static DRAWN: Global<bool> = Global::new();
 
@@ -320,12 +320,12 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-pub fn on_world_frame_asked(host: HostFrame) {
-    *FRAME.get(|| None) = Some(host);
+pub fn on_world_frame_asked(runtime: RuntimeFrame) {
+    *FRAME.get(|| None) = Some(runtime);
     frames().notify();
 }
 
-/// A turn carrying a frame polls the tasks whatever its quota, so an overrun quota still draws.
+/// A turn carrying a frame polls the tasks whatever its deadline, so a turn past its deadline still draws.
 pub fn world_frame_waiting() -> bool {
     FRAME.get(|| None).is_some()
 }
@@ -339,25 +339,25 @@ pub fn take_world_drawn() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
-        let Some(host) = FRAME.get(|| None).take() else {
+        let Some(runtime) = FRAME.get(|| None).take() else {
             continue;
         };
         let edge = world_edge();
-        let paced_ms = host.paced_ms;
-        world_frame(host, edge.quota_ms(), edge.edge_at());
+        let paced_ms = runtime.paced_ms;
+        world_frame(runtime, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
         DRAWN.set(true);
     }
 }
 
-fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
-    let HostFrame {
+fn world_frame(runtime: RuntimeFrame, deadline_ms: f64, edge_at: f64) -> TickReport {
+    let RuntimeFrame {
         delta,
         refresh_ms,
         paced_ms,
         interactive,
         credits,
-    } = host;
+    } = runtime;
     let t0 = now();
     set_credits(credits);
     text_rise();
@@ -369,7 +369,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    let report = run_tick(step, quota_ms, edge_at);
+    let report = run_tick(step, deadline_ms, edge_at);
     let after_tick = now();
     // The turn's one pump, after every producer has spoken: the effects, the
     // tick's tile streams (`demand_tick`), and the assets asked for by either.

@@ -13,7 +13,7 @@
 //! whose shard is not read holds what its source says it folds to, its
 //! children empty (`set_fold`), until the shard's leaves take its place.
 
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::{cube, AssetId};
@@ -233,7 +233,7 @@ impl Store {
         self.revision
     }
 
-    /// Whether the host holds the tree's lanes, which the renderer hands
+    /// Whether the runtime holds the tree's lanes, which the renderer hands
     /// where they lie (pxl-render gpu/api.rs `in_flight`): nothing writes the
     /// tree until it gives them back (repository.rs `Change`).
     pub(crate) fn is_in_flight(&self) -> bool {

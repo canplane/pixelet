@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 libm.workspace = true
-xpute-guest.workspace = true
+xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs);
@@ -19,7 +19,7 @@ pxl-engine.workspace = true
 pxl-content.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
-# the page's host and the device app's run alike.
+# the page's runtime and the device app's run alike.
 xpute-gpu.workspace = true
 
 [build-dependencies]

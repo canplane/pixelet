@@ -10,10 +10,7 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
 import {
   type FrameSummary,
-  perf_counts,
-  perf_summary,
-  perf_tasks,
-  perf_worst,
+  read,
   type RecordingSection,
   type Step,
   type TaskRecord,
@@ -21,7 +18,7 @@ import {
   type ViewSection,
   type Worst,
 } from "@/port/perf.ts";
-import type { LongFrame } from "@/services/types.ts";
+import type { LongFrame } from "@/service/types.ts";
 import { longFramesSince } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;
@@ -73,9 +70,12 @@ export interface Gauge {
   view: ViewSection;
 }
 
-export function perfGaugeRead(windowMs: f64): Gauge {
-  const s = perf_summary(windowMs);
-  const held = perf_counts();
+export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
+  const [s, held, recent] = await Promise.all([
+    read("summary", windowMs),
+    read("counts"),
+    read("summary", RECENT_MS),
+  ]);
   return {
     rec: {
       recording: s.recording_state.recording,
@@ -85,22 +85,26 @@ export function perfGaugeRead(windowMs: f64): Gauge {
       truncated: s.recording_state.truncated,
     },
     frames: s.frames,
-    recent: perf_summary(RECENT_MS).frames,
+    recent: recent.frames,
     tasks: s.tasks,
     view: s.view,
   };
 }
 
-export function perfReportRead(): PerfReport {
-  const s = perf_summary(null);
+export async function perfReportRead(): Promise<PerfReport> {
+  const [s, recent, worst] = await Promise.all([
+    read("summary", null),
+    read("tasks", RECENT_TASKS),
+    read("worst"),
+  ]);
   return {
     t: performance.now(),
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
     frames: s.frames,
     steps: s.steps,
     tasks: s.tasks,
-    recent: perf_tasks(RECENT_TASKS),
-    worst: perf_worst(),
+    recent,
+    worst,
     longs: longFramesSince(-Infinity),
     recording: s.recording,
     view: s.view,

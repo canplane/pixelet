@@ -12,7 +12,7 @@
 use pxl_spec::bake::tile::earth::EARTH_DIST;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
@@ -21,8 +21,8 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Response};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
-use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::pass::Pass;
+use xpute_core::mem::heap::Block;
+use xpute_core::sched::pass::Pass;
 use xpute_kit::status::errno::Errno;
 
 use fnv::FnvHashMap;

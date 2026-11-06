@@ -1,7 +1,7 @@
 // pxl-tool/spec/ingest.rs
 
 //! What the asset ingest wrote (`spec/spec/asset/ingest.json`), rendered:
-//! the host's table, which binds a file's number to its bucket key, and the
+//! the runtime's table, which binds a file's number to its bucket key, and the
 //! texture pack's layout, which the renderer reads. A path is the specs' and
 //! the tools' name for a file; what is generated names it by its number
 //! (`file_number`), and Carto's symbols by theirs (`symbol_number`).

@@ -4,8 +4,8 @@
 //! the scratch block a pass puts them in.
 
 use pxl_spec::space::coord::mat4::Mat4;
-use xpute_guest::mem;
-use xpute_guest::mem::heap::{alloc, free};
+use xpute_core::mem;
+use xpute_core::mem::heap::{alloc, free};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

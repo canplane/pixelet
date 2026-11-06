@@ -11,7 +11,7 @@ use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::sys::sched::edge::request_world_tick;
 use crate::turn::world_platform;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn tracking(c: abi::CameraTracking) -> Outcome {

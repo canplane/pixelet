@@ -2,7 +2,7 @@
 
 //! Which sections the memory has and where each begins:
 //!
-//!   front     the machine's (xpute-guest machine.rs): the stack, the header, the
+//!   front     the machine's (xpute-core machine.rs): the stack, the header, the
 //!             rings and the GPU stream, then the linker's data; on a device
 //!             the stack's and the data's ranges stand empty
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
@@ -11,10 +11,10 @@
 //! Everything ahead of the heap is checked against the machine's
 //! `min_heap_bytes`, at compile time (`Machine::check`) and again at boot.
 
-use xpute_guest::mem::section::Section;
+use xpute_core::mem::section::Section;
 
 use crate::machine::MACHINE;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {

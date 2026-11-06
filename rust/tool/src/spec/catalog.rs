@@ -6,7 +6,7 @@
 //! actor.json and of sky.json in its document order. The Rust names each
 //! slot; the catalog fills them with the file each names, by its number below
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
-//! layout). The host serves it, as hex in TypeScript.
+//! layout). The runtime serves it, as hex in TypeScript.
 
 use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};
@@ -101,7 +101,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "//",
         "// GENERATED from the asset specs and ingest.json",
         "//",
-        "// The catalog the host plugs in, served below the asset root at `CATALOG`",
+        "// The catalog the runtime plugs in, served below the asset root at `CATALOG`",
         "// (ts/client/src/sys/fs/asset.ts): the file each of the kernel's slots names and its",
         "// extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.",
         "",

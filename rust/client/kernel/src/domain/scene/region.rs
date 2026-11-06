@@ -4,7 +4,7 @@
 //! its own steps (`animated`), which the renderer reads so the resolve asks
 //! no frame after it (pxl-render `FrameInput::animated`).
 
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 #[derive(Default)]
 struct Region {

@@ -6,10 +6,10 @@
 
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::mem::heap::HeapStat;
-use xpute_guest::sched::tick::TickReport;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+use xpute_core::mem::heap::HeapStat;
+use xpute_core::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::door;
@@ -25,7 +25,7 @@ use crate::turn;
 /// What the renderer made of this turn's frame (domain/scene/stage.rs
 /// `stage_render`), and the reads of earlier frames, landed now.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct HostFrame {
+struct RuntimeFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
@@ -51,9 +51,9 @@ pub struct RayRead {
     pub rays: RaySample,
 }
 
-impl Default for HostFrame {
+impl Default for RuntimeFrame {
     fn default() -> Self {
-        HostFrame {
+        RuntimeFrame {
             kind: FrameKind::none,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
@@ -63,18 +63,18 @@ impl Default for HostFrame {
     }
 }
 
-static HOST: Global<HostFrame> = Global::new();
+static RUNTIME: Global<RuntimeFrame> = Global::new();
 
 /// The renderer's answer for this turn's frame, its figures zero where it
 /// drew none, and the reads of earlier frames, landed now.
-pub fn set_host_frame(
+pub fn set_runtime_frame(
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
     gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 ) {
-    HOST.set(HostFrame {
+    RUNTIME.set(RuntimeFrame {
         kind,
         gpu,
         device,
@@ -108,11 +108,11 @@ fn held_now(h: &HeapStat) -> RecordingSection {
 /// A frame turn's own measures (turn.rs `world_frame`).
 pub struct FrameTurn {
     pub tick: TickReport,
-    /// The host's gap that ended at this frame, which closes the interval
-    /// before it, and whether the host settled it, as it says with this frame.
+    /// The runtime's gap that ended at this frame, which closes the interval
+    /// before it, and whether the runtime settled it, as it says with this frame.
     pub interval_ms: f64,
-    /// The display's refresh and the interval the host paced this frame at
-    /// (turn.rs `HostFrame`).
+    /// The display's refresh and the interval the runtime paced this frame at
+    /// (turn.rs `RuntimeFrame`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub settled: bool,
@@ -130,14 +130,14 @@ pub fn perf_frame(t: FrameTurn) {
     let heap = boot::heap_stat();
     let held = held_now(&heap);
     let terrain_landed = f64::from(TerrainTile::tile_cache().take_landed());
-    let host = core::mem::take(HOST.get(HostFrame::default));
+    let runtime = core::mem::take(RUNTIME.get(RuntimeFrame::default));
     if !perf_recording() {
         return;
     }
-    if let Some(r) = host.gpu_read {
+    if let Some(r) = runtime.gpu_read {
         perf_record_gpu(r);
     }
-    if let Some(r) = host.rays {
+    if let Some(r) = runtime.rays {
         perf_record_rays(r);
     }
     perf_fold_recording(&held);
@@ -153,10 +153,10 @@ pub fn perf_frame(t: FrameTurn) {
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
         effects: turn::effect_times(),
-        kind: f64::from(host.kind as u8),
-        gpu: host.gpu,
+        kind: f64::from(runtime.kind as u8),
+        gpu: runtime.gpu,
         terrain_landed,
-        device: host.device,
+        device: runtime.device,
         heap_used_bytes: heap.peak as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()

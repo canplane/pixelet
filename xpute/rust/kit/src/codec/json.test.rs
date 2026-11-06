@@ -76,7 +76,7 @@ fn text(v: &Golden, key: &str) -> String {
 }
 
 #[test]
-fn matches_host_parse() {
+fn matches_runtime_parse() {
     let v = Golden::load(GOLDEN);
     v.each("grammar", |k| {
         let got = if read_json(&text(&v, &format!("{k}.text"))).is_some() {
@@ -89,7 +89,7 @@ fn matches_host_parse() {
 }
 
 #[test]
-fn big_number_as_host() {
+fn big_number_as_runtime() {
     let v = Golden::load(GOLDEN);
     v.each("number", |k| {
         let n = read_json(v.s(&format!("{k}.text")))

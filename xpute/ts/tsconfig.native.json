@@ -5,5 +5,5 @@
   "compilerOptions": {
     "moduleSuffixes": [".native", ""]
   },
-  "include": ["kit", "host", "gpu", "native"]
+  "include": ["kit", "runtime", "gpu", "native"]
 }

@@ -4,13 +4,13 @@
  * The one poll of the profiler the debug panels read: while the profiler
  * panel is up, the gauge over the live window, whose view the view panel
  * reads too; while only the view panel is open, the view alone
- * (abi/perf.ts `perf_view`); while neither, nothing.
+ * (port/perf.ts `read("view")`); while neither, nothing.
  */
 
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { perf_view } from "@/port/perf.ts";
+import { read as perf_read } from "@/port/perf.ts";
 import { type Gauge, perfGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;
@@ -27,9 +27,12 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 function read(): void {
   if (readers.gauge > 0) {
-    const gauge = perfGaugeRead(LIVE_WINDOW_MS);
-    store.setState({ gauge, view: gauge.view });
-  } else if (readers.view > 0) store.setState({ view: perf_view() });
+    void perfGaugeRead(LIVE_WINDOW_MS).then((gauge) =>
+      store.setState({ gauge, view: gauge.view }),
+    );
+  } else if (readers.view > 0) {
+    void perf_read("view").then((view) => store.setState({ view }));
+  }
 }
 
 /** Read at once, then every POLL_MS while anyone reads; the returned call stops reading. */

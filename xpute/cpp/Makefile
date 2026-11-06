@@ -1,18 +1,18 @@
 # cpp/Makefile
 #
 # xpute's C++, built with the platform's compiler ($CXX, or c++), and the
-# guest as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH,
+# core as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH,
 # or /opt/wasi-sdk). The library is xpute/, included from this directory by
-# its root ("xpute/kit/status/bug.hpp"); conformance/ is the guest the
+# its root ("xpute/kit/status/bug.hpp"); conformance/ is the core the
 # traces drive, beside it and never shipped. Output goes under
-# target/, where the traces look for the guests; the tests open their
+# target/, where the traces look for the cores; the tests open their
 # golden records from the tree's root. GNU Make 3.81, as macOS ships it, is
 # enough. Run it from cpp/: the paths below are this directory's.
 #
-#   make -C cpp check | test | guest | wasm | amalgamation      (-j for parallel compiles)
+#   make -C cpp check | test | core | wasm | amalgamation       (-j for parallel compiles)
 #
 # The amalgamation is the library in two files, xpute.hpp and xpute.cpp
-# (amalgamation.awk), under target/amalgamation/. The guests the
+# (amalgamation.awk), under target/amalgamation/. The cores the
 # traces drive are built from it, so what is traced is what ships; the
 # tests build every file of the tree on its own.
 
@@ -37,21 +37,21 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 # its own two files, as a program that compiles them would.
 PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/
-# The conformance guest's numbers a link reads, as make variables
+# The conformance core's numbers a link reads, as make variables
 # (`CONFORMANCE_STACK_BYTES`).
-include conformance/guest.spec.mk
-# A module guest's link, as xpute-guest wasm `link` prints it for a Rust
+include conformance/core.spec.mk
+# A module core's link, as xpute-core wasm `link` prints it for a Rust
 # one: its memory imported and its stack first; and its exports, the entry
-# the floor names, `run`, beside the guest's own boot.
+# the floor names, `run`, beside the core's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
 	-Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.
 TEST_ONLY := xpute/kit/test.cpp xpute/kit/test.hpp xpute/kit/golden.cpp xpute/kit/golden.hpp
-# The library, what the amalgamation holds: kit, then the guest end over it,
+# The library, what the amalgamation holds: kit, then the core end over it,
 # then the GPU's calls over that, in the order the two files read.
-LAYERS := kit guest gpu
+LAYERS := kit core gpu
 LIBRARY_HEADERS := $(filter-out $(TEST_ONLY),$(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp'))))
 LIBRARY_SOURCES := $(filter-out %.test.cpp $(TEST_ONLY),$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
 
@@ -69,22 +69,22 @@ COMPILERS := $(OUT)/compilers
 $(shell mkdir -p $(OUT) && { echo '$(CXX) | $(WASI_CXX)' | cmp -s - $(COMPILERS) || echo '$(CXX) | $(WASI_CXX)' > $(COMPILERS); })
 
 TEST_OBJECTS := $(SOURCES:%.cpp=$(OUT)/test/%.o)
-# The guest: the amalgamation, and the conformance guest's own source with
+# The core: the amalgamation, and the conformance core's own source with
 # its includes of the library made one of xpute.hpp.
-GUEST_OBJECTS := $(OUT)/guest/xpute.o $(OUT)/guest/conformance.o
+CORE_OBJECTS := $(OUT)/core/xpute.o $(OUT)/core/conformance.o
 WASM_OBJECTS := $(OUT)/wasm/xpute.o $(OUT)/wasm/conformance.o
 
-.PHONY: check test guest wasm wasi amalgamation
+.PHONY: check test core wasm wasi amalgamation
 
 check: $(TEST_OBJECTS)
 	@echo "cpp: $(words $(SOURCES)) files compile"
 
 # The tests, and the amalgamation compiled alone, natively and as wasm, into
-# the guests the traces drive.
-test: $(OUT)/test/xpute-test guest wasm
+# the cores the traces drive.
+test: $(OUT)/test/xpute-test core wasm
 	cd $(ROOT) && ./cpp/target/test/xpute-test
 
-guest: $(OUT)/$(LIBRARY)
+core: $(OUT)/$(LIBRARY)
 	@echo "cpp: cpp/target/$(LIBRARY)"
 
 wasm: wasi $(OUT)/xpute_conformance.wasm
@@ -99,7 +99,7 @@ wasi:
 $(OUT)/test/xpute-test: $(TEST_OBJECTS)
 	@$(CXX) $^ -o $@
 
-$(OUT)/$(LIBRARY): $(GUEST_OBJECTS)
+$(OUT)/$(LIBRARY): $(CORE_OBJECTS)
 	@$(CXX) -shared $^ -o $@
 
 $(OUT)/xpute_conformance.wasm: $(WASM_OBJECTS)
@@ -115,7 +115,7 @@ $(AMALGAMATION)/xpute.cpp: amalgamation.awk $(LIBRARY_HEADERS) $(LIBRARY_SOURCES
 	@mkdir -p $(@D)
 	@awk -f amalgamation.awk -v part=cpp $(LIBRARY_HEADERS) $(LIBRARY_SOURCES) > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
-$(OUT)/conformance/guest.cpp: conformance/guest.cpp amalgamation.awk $(LIBRARY_HEADERS) Makefile
+$(OUT)/conformance/core.cpp: conformance/core.cpp amalgamation.awk $(LIBRARY_HEADERS) Makefile
 	@mkdir -p $(@D)
 	@awk -f amalgamation.awk -v part=program $(LIBRARY_HEADERS) $< > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
@@ -130,11 +130,11 @@ $(OUT)/test/%.o: %.cpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
 	@$(CXX) $(FLAGS) -I . $(PREFIX_MAP) -MMD -MP -c $< -o $@
 
-$(OUT)/guest/xpute.o: $(AMALGAMATION)/xpute.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS)
+$(OUT)/core/xpute.o: $(AMALGAMATION)/xpute.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
 	@$(CXX) $(FLAGS) $(AMALGAMATION_MAP) -fPIC -MMD -MP -c $< -o $@
 
-$(OUT)/guest/conformance.o: $(OUT)/conformance/guest.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS)
+$(OUT)/core/conformance.o: $(OUT)/conformance/core.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
 	@$(CXX) $(FLAGS) -iquote conformance -iquote $(AMALGAMATION) $(AMALGAMATION_MAP) -fPIC -MMD -MP -c $< -o $@
 
@@ -142,8 +142,8 @@ $(OUT)/wasm/xpute.o: $(AMALGAMATION)/xpute.cpp $(AMALGAMATION)/xpute.hpp Makefil
 	@mkdir -p $(@D)
 	@"$(WASI_CXX)" $(FLAGS) $(AMALGAMATION_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
 
-$(OUT)/wasm/conformance.o: $(OUT)/conformance/guest.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS) | wasi
+$(OUT)/wasm/conformance.o: $(OUT)/conformance/core.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS) | wasi
 	@mkdir -p $(@D)
 	@"$(WASI_CXX)" $(FLAGS) -iquote conformance -iquote $(AMALGAMATION) $(AMALGAMATION_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
 
--include $(TEST_OBJECTS:.o=.d) $(GUEST_OBJECTS:.o=.d) $(WASM_OBJECTS:.o=.d)
+-include $(TEST_OBJECTS:.o=.d) $(CORE_OBJECTS:.o=.d) $(WASM_OBJECTS:.o=.d)

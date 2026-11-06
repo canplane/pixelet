@@ -1,11 +1,11 @@
 // xpute-example/lib.rs
 
-//! The smallest guest, read beside the host that drives it
+//! The smallest core, read beside the runtime that drives it
 //! (ts/example/sum.test.ts). Its machine (machine.json) declares its memory
-//! and its rings, which the host lays out as the machine places them; its one
-//! protocol (asker.json) has the host send SUM and the guest call ASK, and
+//! and its rings, which the runtime lays out as the machine places them; its one
+//! protocol (asker.json) has the runtime send SUM and the core call ASK, and
 //! both ends' code is generated from it. It answers SUM with the sum of its two numbers and
-//! the host's answer to ASK, answered before the call returns.
+//! the runtime's answer to ASK, answered before the call returns.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -15,13 +15,13 @@ mod abi;
 mod machine;
 
 use abi::asker;
-use xpute_guest::entry::BootInfo;
-use xpute_guest::ipc::door::{Outcome, Submission};
-use xpute_guest::sched::wake::NO_WAKE;
+use xpute_core::entry::BootInfo;
+use xpute_core::ipc::door::{Outcome, Submission};
+use xpute_core::sched::wake::NO_WAKE;
 use xpute_kit::status::error::MarshalError;
 
 // No fixed ranges: the heap starts on the page past the data.
-xpute_guest::guest!(machine::MACHINE, 0, entry);
+xpute_core::core!(machine::MACHINE, 0, entry);
 
 struct Example;
 
@@ -33,8 +33,8 @@ impl asker::Exports for Example {
 }
 
 /// A turn: what waits applied in order, then the next asked for while any is left.
-fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
-    let door = xpute_guest::machine::door();
+fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
+    let door = xpute_core::machine::door();
     door.rise();
     door.receive(|submission| match submission {
         // It keeps nothing across its life, and draws nothing.

@@ -5,8 +5,8 @@ package me.plei.pixelet.platform
 import java.nio.ByteBuffer
 
 /**
- * What the app calls in the guest (rust/client/kernel) besides xpute's own
- * (xpute.Guest, xpute.Gpu): the transport's decoder, reached through the
+ * What the app calls in the kernel (rust/client/kernel) besides xpute's own
+ * (xpute.Core, xpute.Gpu): the transport's decoder, reached through the
  * function its src/unpack.rs names for JNI, the same call an iPhone's Swift
  * makes through the C ABI (include/pxl_native.h).
  */

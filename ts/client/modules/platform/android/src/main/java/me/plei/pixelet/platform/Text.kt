@@ -10,7 +10,7 @@ import expo.modules.kotlin.typedarray.Uint8Array
 import java.util.Locale
 
 // Text in the platform's own family, as the kernel asks for it
-// (ts/client/src/services/text.native.ts): how wide a line runs, and a line
+// (ts/client/src/service/text.native.ts): how wide a line runs, and a line
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does — Text.swift's, on Android's engine.
 

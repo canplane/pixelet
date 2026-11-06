@@ -2,10 +2,10 @@
 //
 // GENERATED from rust/client/kernel/machine.json
 
-//! The machine its JSON declares (xpute-guest machine.rs), which a build
+//! The machine its JSON declares (xpute-core machine.rs), which a build
 //! script includes too as it links the module.
 
-use xpute_guest::machine::{Gpu, Machine};
+use xpute_core::machine::{Gpu, Machine};
 
 pub const MACHINE: Machine = Machine {
     mem_bytes: &[1073741824, 536870912],
@@ -26,7 +26,7 @@ pub const MACHINE: Machine = Machine {
     }),
 };
 
-// The host's MACHINE places the front's parts at these same numbers.
+// The runtime's MACHINE places the front's parts at these same numbers.
 const _: () = assert!(MACHINE.head_at() == 1048576);
 const _: () = assert!(MACHINE.sq_at() == 1052672);
 const _: () = assert!(MACHINE.cq_at() == 1064960);

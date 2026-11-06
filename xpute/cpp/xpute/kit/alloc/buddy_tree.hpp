@@ -33,7 +33,7 @@
 
 namespace xpute {
 
-// The bits a range's size and the exponents the buddy keeps fit in: a guest's
+// The bits a range's size and the exponents the buddy keeps fit in: a core's
 // memory is 32-bit whatever the machine, though on a native build a range's
 // base is a full pointer (xpute-kit alloc.rs `ADDR_BITS`).
 inline constexpr std::size_t ADDR_BITS = 32;
@@ -75,7 +75,7 @@ template <Range R> class BuddyMalloc {
     // A refused request can only be served once this has moved.
     std::uint32_t releases() const noexcept { return releases_; }
     // Base, max, end, live, then releases and allocs as half-words, read in
-    // place by a host.
+    // place by a runtime.
     const std::uintptr_t *stat() const noexcept { return &base_ptr_; }
     std::size_t allocs() const noexcept { return allocs_; }
 

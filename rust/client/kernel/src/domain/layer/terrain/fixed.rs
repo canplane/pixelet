@@ -17,8 +17,8 @@ use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_engine::clipmap::SLOTS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_guest::mem::range::arr_bytes;
-use xpute_guest::mem::range::OwnedRange;
+use xpute_core::mem::range::arr_bytes;
+use xpute_core::mem::range::OwnedRange;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: OwnedRange = OwnedRange::new();

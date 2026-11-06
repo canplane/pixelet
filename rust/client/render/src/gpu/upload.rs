@@ -3,8 +3,8 @@
 //! The draw list's uploads on the device by the list's handle, as the
 //! renderer and its passes read them.
 
-use xpute_guest::global::Global;
-use xpute_guest::mem;
+use xpute_core::global::Global;
+use xpute_core::mem;
 
 use crate::frame::draw;
 use crate::frame::shader::record::UPLOAD_LAYOUT;

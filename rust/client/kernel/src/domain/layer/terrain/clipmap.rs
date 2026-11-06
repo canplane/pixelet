@@ -26,8 +26,8 @@ use pxl_spec::bake::tile::terrain::{
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::global::Global;
-use xpute_guest::mem::off_of_slice;
+use xpute_core::global::Global;
+use xpute_core::mem::off_of_slice;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -40,7 +40,7 @@ use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
 use pxl_render::gpu::ray::{BrickFill, CellsBack, Filled};
-use xpute_guest::mem::range::arr;
+use xpute_core::mem::range::arr;
 
 /// Who a clip level is about.
 #[derive(Clone, Copy, PartialEq, Eq)]

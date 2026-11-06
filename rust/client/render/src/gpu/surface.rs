@@ -4,8 +4,8 @@
 //! the world inside it at its own (`render_px`). The page scales whatever
 //! buffer exists into the layout box, so a stale one still shows whole.
 
-use xpute_guest::abi::handle::{handle_slot, Table as Handles};
-use xpute_guest::global::Global;
+use xpute_core::abi::handle::{handle_slot, Table as Handles};
+use xpute_core::global::Global;
 use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;

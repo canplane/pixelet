@@ -9,13 +9,13 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view a guest's surface draws into, ios/SurfaceView.swift's on Android:
+ * A view a core's surface draws into, ios/SurfaceView.swift's on Android:
  * a system SurfaceView, a window of its own the system composes under the
  * app's views. The view binds the surface the app names (`surface`) while
  * the system's surface exists, and never past the moment the system takes it
- * back: `surfaceDestroyed` does not return until the guest's GPU host has let
+ * back: `surfaceDestroyed` does not return until the core's GPU runtime has let
  * it go. It says when it is bound (`onAttach`) and when it is not
- * (`onDetach`). The guest sizes the surface and draws every frame inside a
+ * (`onDetach`). The core sizes the surface and draws every frame inside a
  * turn, so nothing here draws.
  */
 class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, appContext), SurfaceHolder.Callback {
@@ -27,7 +27,7 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
     addView(it)
   }
 
-  /** The guest's surface the app wants shown here; 0 for none. */
+  /** The core's surface the app wants shown here; 0 for none. */
   var surface: Int = 0
     set(value) {
       field = value
@@ -58,7 +58,7 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
     rebind()
   }
 
-  /** Binds the guest's surface to what is wanted, letting go of what is not. */
+  /** Binds the core's surface to what is wanted, letting go of what is not. */
   private fun rebind() {
     val wanted = if (ready) surface else 0
     if (bound == wanted) return

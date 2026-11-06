@@ -11,7 +11,7 @@ use crate::domain::control::navigation::destination::{go_to_ground, pending};
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::navigation::support::unknown_z;
 use crate::domain::control::sensor::reading::{device_location_store, SensorStatus};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 fn fallback_seed() -> Q3 {
     // A place, not a height: it stands on the surface.

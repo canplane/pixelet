@@ -8,8 +8,8 @@
 
 use std::rc::Rc;
 
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 use crate::domain::scene::marker::design::Design;
 use crate::sys::sched::edge::wake_at;
@@ -17,7 +17,7 @@ use crate::sys::sched::edge::wake_at;
 /// Chat has no expiry of its own; a line shows this long.
 const SHOWN_MS: f64 = 8000.0;
 
-/// Stamped with the host's clock, not the frame's: a line said after a still
+/// Stamped with the runtime's clock, not the frame's: a line said after a still
 /// spell would take the last frame's time and read as long gone. A
 /// character swap cannot make a dismissed line look new.
 struct Line {

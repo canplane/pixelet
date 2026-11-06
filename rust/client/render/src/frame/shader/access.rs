@@ -59,7 +59,7 @@ pub const ARGS_WRITTEN: u32 = 6;
 pub const DISPATCH: u32 = 0;
 pub const DRAW: u32 = 1;
 pub const COPY: u32 = 2;
-pub const WRITE_BY_HOST: u32 = 3;
+pub const WRITE_BY_RUNTIME: u32 = 3;
 
 /// To a buffer's end.
 pub const END: u32 = u32::MAX;
@@ -227,7 +227,7 @@ impl Step {
     pub const fn write(name: &'static str, to: Range) -> Step {
         Step {
             to,
-            ..Step::new(name, 0, WRITE_BY_HOST)
+            ..Step::new(name, 0, WRITE_BY_RUNTIME)
         }
     }
 
@@ -907,7 +907,7 @@ pub const fn overlap(a: Range, b: Range) -> bool {
 pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
     let mut k = 0;
     match s.kind {
-        COPY | WRITE_BY_HOST => {
+        COPY | WRITE_BY_RUNTIME => {
             let r = if writing { s.to } else { s.from };
             if n == 0 && r.buf != NO_BUFFER {
                 return r;
@@ -1336,8 +1336,8 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
                     && !writes_into(t, r, read)
                     && !rewrites_kept(f, w, read)
                     && !within_bound(read, f.bounds)
-                    && s.kind != WRITE_BY_HOST
-                    && f.steps[w].kind != WRITE_BY_HOST
+                    && s.kind != WRITE_BY_RUNTIME
+                    && f.steps[w].kind != WRITE_BY_RUNTIME
                     && !one_writer(f, r, w)
                 {
                     return Some((w, read.buf));
@@ -1364,7 +1364,7 @@ const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
         let applies = applies(&kept, s.name);
         let owner = same(s.name, kept.owner) || applies;
         let atomic = within(kept.range, f.appends) && writes_atomic(s, kept.range.buf);
-        if (writes && !owner && s.kind != WRITE_BY_HOST && !owned_with(f, w, kept.owner))
+        if (writes && !owner && s.kind != WRITE_BY_RUNTIME && !owned_with(f, w, kept.owner))
             || (owner && !writes)
             || (applies && writes && !atomic)
         {

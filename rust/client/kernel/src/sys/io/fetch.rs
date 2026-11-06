@@ -9,11 +9,11 @@
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 
-use xpute_guest::ipc::door::Pos;
-use xpute_guest::ipc::fs::Fd;
-use xpute_guest::mem;
-use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::edge::{host_turn, notified, yield_if_spent, Notify};
+use xpute_core::ipc::door::Pos;
+use xpute_core::ipc::fs::Fd;
+use xpute_core::mem;
+use xpute_core::mem::heap::Block;
+use xpute_core::sched::edge::{notified, runtime_turn, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
@@ -25,8 +25,8 @@ use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 /// Assets are opened below the assets' root (sys/io/loader.rs), never here.
 pub fn start(credit: Credit, stream: Stream, id: u64) {
@@ -74,7 +74,7 @@ struct Arrival {
     key: u64,
     receipt: Receipt,
     /// The read that fills its body, none where nothing was read: the body
-    /// is the host's until `file::is_consumed` says its head has passed it.
+    /// is the runtime's until `file::is_consumed` says its head has passed it.
     read: Option<Pos>,
     net_ms: f64,
 }
@@ -153,7 +153,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             let got = match body::take(stream, n) {
                 Ok(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one
-                    // else's; the arrival holds it, unread, until the host's
+                    // else's; the arrival holds it, unread, until the runtime's
                     // head has passed the read.
                     read = Some(unsafe {
                         file::read(
@@ -188,7 +188,7 @@ pub async fn fetch_task() {
             yield_if_spent(world_edge).await;
             match arrival_queue().iter().position(Arrival::is_filled) {
                 Some(at) => on_fetch_arrived(arrival_queue().remove(at)),
-                None => host_turn(world_edge).await,
+                None => runtime_turn(world_edge).await,
             }
         }
     }

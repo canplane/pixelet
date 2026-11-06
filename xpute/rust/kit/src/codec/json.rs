@@ -84,7 +84,7 @@ fn skip_val(s: &[u8], at: usize, depth: u32) -> Option<usize> {
 }
 
 /// JSON's grammar, not `f64`'s: `+1`, `.5`, `1.` and `01` are refused, as
-/// the host's `JSON.parse` refuses them.
+/// the runtime's `JSON.parse` refuses them.
 fn skip_number(s: &[u8], mut at: usize) -> Option<usize> {
     let digits = |at: usize| s[at..].iter().take_while(|c| c.is_ascii_digit()).count();
     if s.get(at) == Some(&b'-') {
@@ -191,7 +191,7 @@ impl<'a> JsonValue<'a> {
         }
     }
 
-    /// The last field of that name, as the host's parse keeps.
+    /// The last field of that name, as the runtime's parse keeps.
     pub fn get(&self, key: &str) -> Option<JsonValue<'a>> {
         self.fields()
             .filter(|(k, _)| k.eq_str(key))

@@ -1,6 +1,6 @@
 // pxl-kernel/door/layout.rs
 
-//! The memory's layout past the machine's front (machine.json, xpute-guest
+//! The memory's layout past the machine's front (machine.json, xpute-core
 //! machine.rs): `.fixed`, which ranges it holds, each sized by its owner and
 //! handed to it at boot (`install`), and the heap after them.
 
@@ -17,16 +17,16 @@ use crate::machine::MACHINE;
 use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
-use crate::sys::io::host;
 use crate::sys::io::param;
+use crate::sys::io::runtime;
 use crate::sys::mem::section::{self, map};
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
-use xpute_guest::entry::BootInfo;
-use xpute_guest::machine::{self, Gpu};
-use xpute_guest::mem::section::span_of;
-use xpute_guest::mem::section::{Section, PAGE_BYTES};
+use xpute_core::entry::BootInfo;
+use xpute_core::machine::{self, Gpu};
+use xpute_core::mem::section::span_of;
+use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
 // The renderer draws through the machine's GPU socket.
@@ -37,7 +37,7 @@ const GPU: Gpu = match MACHINE.gpu {
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
 /// resident divisions' cells and the renderer's upload table. Each is mostly in use whenever
-/// the kernel runs, or the host's reservation; what is held only at times,
+/// the kernel runs, or the runtime's reservation; what is held only at times,
 /// or far below its worst most of the time, is the heap's
 /// (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
@@ -138,7 +138,7 @@ pub(crate) fn install(b: &BootInfo) {
     // SAFETY: `.fixed.uploads` and the GPU socket's stream, zeroed, each the
     // renderer's alone.
     unsafe {
-        host::set_host(host::Host {
+        runtime::set_runtime(runtime::Runtime {
             door: machine::door(),
             text: text_call,
         });

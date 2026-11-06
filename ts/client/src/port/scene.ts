@@ -5,7 +5,7 @@
 
 import type { u32, u8 } from "@xpute/kit/abi/word.ts";
 import { encode_scene_chat, SceneContent } from "@/abi/cmd.spec.ts";
-import { host, kernel } from "@/host/kernel.ts";
+import { control, kernel } from "@/runtime/kernel.ts";
 
 /** The world drawn into `surface`. */
 export function draw_world(surface: u32): void {
@@ -29,5 +29,5 @@ export function chat(text: string): void {
 
 /** Whether a line fits a command; one too long to send is refused whole. */
 export function chat_fits(text: string): boolean {
-  return host.doorbell.fits(encode_scene_chat(host.doorbell, text));
+  return control.fits((room) => encode_scene_chat(room, text));
 }

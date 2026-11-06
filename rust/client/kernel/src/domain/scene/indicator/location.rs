@@ -32,7 +32,7 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
-use xpute_guest::clock::now;
+use xpute_core::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.

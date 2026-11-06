@@ -13,7 +13,7 @@ use crate::domain::control::camera::input::camera_pointer_up;
 use crate::domain::control::camera::input::camera_wheel;
 use crate::domain::control::cmd as abi;
 use crate::pointer::tap;
-use xpute_guest::ipc::door::Outcome;
+use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn pointer(c: abi::InputPointer) -> Outcome {

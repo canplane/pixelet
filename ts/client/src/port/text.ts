@@ -9,14 +9,14 @@
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
 
-import type { TextLayoutEvent, TextRasterEvent } from "@/abi/cmd.spec.ts";
-import { LAYOUT_ANSWER, LINE } from "@/abi/host.spec.ts";
-import * as font from "@/services/text.ts";
-import { host } from "@/host/kernel.ts";
+import type { TextLayout, TextRaster } from "@/abi/cmd.spec.ts";
+import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
+import * as font from "@/service/text.ts";
+import { runtime } from "@/runtime/kernel.ts";
 
 /** The text a call names in the kernel's memory, held until the call returns. */
 function text_of(at: number, len: number): string {
-  return td.decode(new Uint8Array(host.guest.mem as ArrayBuffer, at, len));
+  return td.decode(new Uint8Array(runtime.core.mem as ArrayBuffer, at, len));
 }
 
 /** What no line starts with: closing marks, and in Japanese the small kana and
@@ -89,13 +89,13 @@ function line_ends(
 
 /** TEXT_LAYOUT: the text laid out a line at a time, each line's end and
  * width written at the call's `at`. */
-export function text_layout(e: TextLayoutEvent): i32 {
+export function text_layout(e: TextLayout): i32 {
   const { weight, px, max_width, at, lines, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
   const width = (s: string) => font.width(weight, px, s);
   const ends = line_ends(text, max_width, width).slice(0, lines);
   const out = new DataView(
-    host.guest.mem as ArrayBuffer,
+    runtime.core.mem as ArrayBuffer,
     at,
     4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
   );
@@ -114,7 +114,7 @@ export function text_layout(e: TextLayoutEvent): i32 {
 }
 
 /** TEXT_RASTER: one line's pixels written at the call's `at`. */
-export function text_raster(e: TextRasterEvent): i32 {
+export function text_raster(e: TextRaster): i32 {
   const { weight, px, color, at, width, height, x, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
   font.raster(
@@ -125,7 +125,7 @@ export function text_raster(e: TextRasterEvent): i32 {
     x,
     width,
     height,
-    new Uint8Array(host.guest.mem as ArrayBuffer, at, width * height * 4),
+    new Uint8Array(runtime.core.mem as ArrayBuffer, at, width * height * 4),
   );
   return 0;
 }

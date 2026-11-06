@@ -19,7 +19,7 @@ pub mod region;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
 use crate::domain::scene::character::preview::{preview_animate, preview_draw};

@@ -14,7 +14,7 @@ use crate::sys::io::failure::Failure;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 

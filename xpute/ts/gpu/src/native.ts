@@ -1,14 +1,14 @@
 // @xpute/gpu/native.ts
 
 /**
- * A native app's GPU, granted to a guest (@xpute/host `Gpu`). The device and
- * its host run in the app's own process (xpute-gpu host native), reached
- * through xpute's native module (@xpute/native), which runs the guest's
- * stream as the guest publishes it and kicks the guest for a completion;
- * here the device is opened and the guest is told it answered.
+ * A native app's GPU, granted to a core (@xpute/runtime `Gpu`). The device and
+ * its runtime run in the app's own process (xpute-gpu runtime native), reached
+ * through xpute's native module (@xpute/native), which runs the core's
+ * stream as the core publishes it and kicks the core for a completion;
+ * here the device is opened and the core is told it answered.
  */
 
-import type { Gpu, GpuGrant } from "@xpute/host";
+import type { Gpu, GpuGrant } from "@xpute/runtime";
 import { XPUTE } from "@xpute/native";
 import type { GpuState } from "./web.ts";
 
@@ -32,7 +32,7 @@ export class NativeGpu implements Gpu {
     to.ready();
   }
 
-  /** Run as the guest publishes it, natively. */
+  /** Run as the core publishes it, natively. */
   after_turn(): void {}
 
   private tell(state: GpuState): void {

@@ -3,7 +3,7 @@
 use super::*;
 use crate::sys;
 use crate::sys::io::room::Refusal;
-use xpute_guest::mem;
+use xpute_core::mem;
 
 fn runs() -> usize {
     slot_table().runs.len()
@@ -134,7 +134,7 @@ fn slot_cheaper_than_block() {
 fn slot_refusal_waits_slots() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_guest::mem::heap::HeapStat;
+    use xpute_core::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
     set_heap_stat(|| HeapStat {

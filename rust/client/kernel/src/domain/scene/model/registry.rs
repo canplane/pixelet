@@ -11,8 +11,8 @@ use core::ops::Range;
 
 use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
-use xpute_guest::mem;
-use xpute_guest::mem::heap::alloc;
+use xpute_core::mem;
+use xpute_core::mem::heap::alloc;
 
 // The most a parse lets one model draw fits a block's size.
 const _: () = assert!(

@@ -15,10 +15,10 @@ use pxl_tool::root;
 use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
-/// a pointer only through `xpute_guest::mem::at` or `Memory::at`.
+/// a pointer only through `xpute_core::mem::at` or `Memory::at`.
 const OFF_CRATES: [&str; 4] = [
-    "xpute/rust/guest/src/",
-    "xpute/rust/host/src/",
+    "xpute/rust/core/src/",
+    "xpute/rust/runtime/src/",
     "rust/client/kernel/src/",
     "rust/client/render/src/",
 ];
@@ -52,7 +52,7 @@ const HALF_FLOORED: [&str; 2] = [
 
 /// The kernel's order (ARCHITECTURE.md, "The kernel is one order of
 /// dependency"): a module names only what is at or below it, and neither
-/// head the other. The top wires everything; the machine it asks of its host
+/// head the other. The top wires everything; the machine it asks of its runtime
 /// and the device transport's decoder, which the device's app calls, are the
 /// bottom, naming none of the kernel. The profiler, reading anything, stands
 /// beside it, in no step of it.
@@ -208,7 +208,7 @@ fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
     lines
 }
 
-/// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
+/// xpute's words are runtime, core and their contract (AGENTS.md): pixelet's
 /// appear nowhere under it.
 const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|kernel|shell)\b";

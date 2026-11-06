@@ -7,7 +7,7 @@ use crate::domain::control::param::{
     DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST,
 };
 use crate::sys::sched::edge::request_world_tick;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 fn norm_dist(dist: f64) -> f64 {
     clamp(dist, MIN_DIST, MAX_DIST)

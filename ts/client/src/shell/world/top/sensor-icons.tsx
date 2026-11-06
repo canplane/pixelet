@@ -9,7 +9,7 @@ import { SensorStatus } from "@/abi/cmd.spec.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { color } from "@/shell/ui/theme.ts";
-import * as device from "@/services/device.ts";
+import * as device from "@/service/device.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /** A sensor's status as a color: `tone.pending` while its reading is asked

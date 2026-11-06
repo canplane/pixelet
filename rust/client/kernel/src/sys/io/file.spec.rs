@@ -19,7 +19,7 @@
 /// bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
 /// one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
 /// is called and where past that, a tile's version and URL, a storage key, is what the client
-/// (ts/client/src/sys/fs/) binds the root to, `@xpute/host` carrying the open there.
+/// (ts/client/src/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there.
 pub mod root {
     /// The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice.
     pub const STORAGE: u32 = 256;

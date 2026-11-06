@@ -102,7 +102,7 @@ function waitOf(s: Standing): Cover {
   return progress(s, s.placed ? "progress.area" : "progress.location");
 }
 
-/** The one place that says it, step by step: the guest opened, a GPU and the
+/** The one place that says it, step by step: the core opened, a GPU and the
  * source asked for, the world made. Broken once the kernel ran, a panic.
  * Before the app shows, failed or progress, which holds until the boot shows
  * it (abi/boot.ts), so neither ever comes over the app. None once it shows. */

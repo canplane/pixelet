@@ -16,7 +16,7 @@ use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, ShellViewEvent, Snapshot,
+    PivotState, RefusedFile, ShellView, Snapshot,
 };
 use crate::domain::control::edit::write;
 use crate::domain::control::navigation::follow_mode::following;
@@ -195,7 +195,7 @@ impl SnapshotMemo {
 
     /// The view now, where its azimuth or its scale moved since it was last
     /// sent; taken as sent.
-    pub fn take_view_moved(&mut self) -> Option<ShellViewEvent> {
+    pub fn take_view_moved(&mut self) -> Option<ShellView> {
         let now = (
             camera_state().intent.azimuth,
             m_per_px(units_per_px_at(dist()), controller::pivot()),
@@ -204,7 +204,7 @@ impl SnapshotMemo {
             return None;
         }
         self.last_view = Some(now);
-        Some(ShellViewEvent {
+        Some(ShellView {
             azimuth: now.0,
             m_per_px: now.1,
         })

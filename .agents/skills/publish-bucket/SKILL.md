@@ -85,7 +85,7 @@ make bake-earth
 ```bash
 make ingest-asset
 # -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json and
-#    what the spec generates from it (the host's table, the catalog, the pack's layout)
+#    what the spec generates from it (the runtime's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-bucket/asset \

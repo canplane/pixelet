@@ -6,8 +6,8 @@
 
 use crate::sys::sched::edge::TASKS;
 use embassy_executor::raw::Executor as Raw;
-use xpute_guest::global::Global;
-use xpute_guest::sched::task::{self, Executor, Priority, Task};
+use xpute_core::global::Global;
+use xpute_core::sched::task::{self, Executor, Priority, Task};
 
 struct OneThread;
 

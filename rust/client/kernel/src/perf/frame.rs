@@ -71,18 +71,18 @@ pub struct DeviceSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
     pub t: f64,
-    /// The host's interval from this frame to the next, which the turns in
+    /// The runtime's interval from this frame to the next, which the turns in
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
-    /// The display's refresh, and the interval the host paced this frame at,
-    /// a whole number of refreshes, as the host granted them (@xpute/host
+    /// The display's refresh, and the interval the runtime paced this frame at,
+    /// a whole number of refreshes, as the runtime granted them (@xpute/runtime
     /// sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
-    /// 1 where the host settled the interval, not interactive, as it says
+    /// 1 where the runtime settled the interval, not interactive, as it says
     /// with the frame that closes it: written once, as the interval lands.
     pub settled: f64,
-    /// Every turn the interval held, the frame's and those without a host
+    /// Every turn the interval held, the frame's and those without a runtime
     /// frame, and their time, rise to fall each.
     pub turns: f64,
     pub busy_ms: f64,
@@ -110,7 +110,7 @@ pub struct FrameSample {
     /// The terrain tiles the tile cache took in during the frame turn.
     pub terrain_landed: f64,
     pub device: DeviceSample,
-    /// The heap's high-water mark (xpute-guest mem/heap.rs `HeapStat`).
+    /// The heap's high-water mark (xpute-core mem/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
 }
 
@@ -256,9 +256,9 @@ pub const EFFECTS: usize = spec::EFFECT_NAMES;
 
 /// A frame that dropped a vsync while moving: its interval ran past the
 /// paced one by half a refresh or more, so it landed a refresh late at least.
-/// Half a refresh is the jitter the host's pacing allows a frame, skipping
-/// one nearer the last turn than the paced interval less that (xpute host
-/// sched/strobe.ts `turn`).
+/// Half a refresh is the jitter the runtime's pacing allows a frame, skipping
+/// one nearer the last turn than the paced interval less that (xpute runtime
+/// sched/scheduler.ts `turn`).
 pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }

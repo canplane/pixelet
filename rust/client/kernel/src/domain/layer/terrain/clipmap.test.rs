@@ -472,7 +472,7 @@ fn landing_shows_everywhere() {
 fn heap_wait_rehanded() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_guest::mem::heap::HeapStat;
+    use xpute_core::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
     set_heap_stat(|| HeapStat {

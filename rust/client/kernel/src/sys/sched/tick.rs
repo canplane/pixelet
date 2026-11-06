@@ -3,12 +3,12 @@
 //! The world's tick: xpute's tick mechanism with the kernel's phases
 //! (sys/sched/phase.spec.rs), what each holds back, and its step table.
 
-use xpute_guest::sched::tick::{StepStat, Tick, TickPolicy, TickReport};
-pub use xpute_guest::sched::tick::{TickContext, TickStep};
+use xpute_core::sched::tick::{StepStat, Tick, TickPolicy, TickReport};
+pub use xpute_core::sched::tick::{TickContext, TickStep};
 
 use crate::sys::sched::param;
 use crate::sys::sched::phase_spec::Phase;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// Each phase's share held back for the phases after it: the visible phase
 /// keeps the content's.
@@ -52,6 +52,6 @@ pub fn on_tick(phase: Phase, step: TickStep, name: u32) -> u32 {
     tick().on_tick(phase as u8, step, name)
 }
 
-pub fn run_tick(delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {
-    tick().run(delta, quota_ms, edge_at)
+pub fn run_tick(delta: f64, deadline_ms: f64, edge_at: f64) -> TickReport {
+    tick().run(delta, deadline_ms, edge_at)
 }

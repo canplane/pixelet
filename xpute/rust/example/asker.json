@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "The example's one protocol: the host sends SUM, and the guest calls ASK as it adds."
+    "The example's one protocol: the runtime sends SUM, and the core calls ASK as it adds."
   ],
   "gen": {
     "ts": "../../ts/example/asker.spec.ts",
@@ -32,7 +32,7 @@
       "name": "ASK",
       "val": 4098,
       "$doc": [
-        "A number the host answers, which the guest adds."
+        "A number the runtime answers, which the core adds."
       ],
       "call": true
     }

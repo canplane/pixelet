@@ -15,9 +15,9 @@ use pxl_engine::light;
 use pxl_spec::space::coord::q3::{from_real, ONE, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::between;
-use xpute_guest::global::Global;
-use xpute_guest::mem;
-use xpute_guest::mem::heap::{alloc, free};
+use xpute_core::global::Global;
+use xpute_core::mem;
+use xpute_core::mem::heap::{alloc, free};
 use xpute_kit::status::errno::Errno;
 
 /// Upload record: handle, address, byte length, vertex count, index count.

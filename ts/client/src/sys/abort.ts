@@ -1,11 +1,11 @@
 // @pxl/client/sys/abort.ts
 
-/** The kernel's last report, its hostcall SYS_ABORT (pxl-kernel
- * `sys/io/host.rs`), logged whole and kept short as a stop code for the shell's
+/** The kernel's last report, its import SYS_ABORT (pxl-kernel
+ * `sys/io/runtime.rs`), logged whole and kept short as a stop code for the shell's
  * panic. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { Abort } from "@xpute/host";
+import type { Abort } from "@xpute/runtime";
 import { BUILD_NUMBER } from "@/deploy.ts";
 
 let code: string | null = null;

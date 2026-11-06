@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::frame::shader::access::{
-    found, role, ARGS_INDIRECT, ARGS_WRITTEN, COPY, DRAW, NO_BUFFER, WRITE_BY_HOST,
+    found, role, ARGS_INDIRECT, ARGS_WRITTEN, COPY, DRAW, NO_BUFFER, WRITE_BY_RUNTIME,
 };
 
 /// The sources whose calls take their offsets from a step here.
@@ -151,7 +151,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
             .filter(|(_, n)| !n.ends_with("_PASS"))
             .collect();
         let starts: Vec<usize> = text.match_indices("fn ").map(|(k, _)| k).collect();
-        let by_host = |n: &str| FRAME.steps[place(n)].kind == WRITE_BY_HOST;
+        let by_host = |n: &str| FRAME.steps[place(n)].kind == WRITE_BY_RUNTIME;
         for w in at.windows(2) {
             let ((a, first), (b, second)) = (w[0], w[1]);
             let same_fn = !starts.iter().any(|&s| a < s && s < b);
@@ -165,7 +165,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
         named_anywhere.extend(at.iter().map(|(_, n)| place(n)));
     }
     for (k, step) in FRAME.steps.iter().enumerate() {
-        if step.indirect.buf != NO_BUFFER || step.kind == COPY || step.kind == WRITE_BY_HOST {
+        if step.indirect.buf != NO_BUFFER || step.kind == COPY || step.kind == WRITE_BY_RUNTIME {
             assert!(
                 named_anywhere.contains(&k),
                 "`{}` is a step no source calls",

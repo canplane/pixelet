@@ -7,7 +7,7 @@ use pxl_spec::space::coord::world;
 use crate::domain::control::camera::controller;
 use crate::domain::control::navigation::support::unknown_z;
 use crate::domain::control::sensor::reading::device_location_store;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OffCenter {

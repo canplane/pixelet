@@ -1,9 +1,9 @@
 // xpute-conformance/lib.rs
 
-//! The Rust conformance guest, a library a host opens and runs the traces
+//! The Rust conformance core, a library a runtime opens and runs the traces
 //! under spec/conformance/ against.
 
-#[path = "guest.spec.rs"]
+#[path = "core.spec.rs"]
 pub mod spec;
 
-pub mod guest;
+pub mod core;

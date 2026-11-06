@@ -7,7 +7,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { Dim } from "@/shell/ui/motion/dim.ts";
 import { DIM } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
-import * as device from "@/services/device.ts";
+import * as device from "@/service/device.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /**

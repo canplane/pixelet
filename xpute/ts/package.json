@@ -8,8 +8,8 @@
   "scripts": {
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
     "typecheck": "tsc -p . && tsc -p tsconfig.native.json",
-    "test": "vitest run --exclude host/src/conformance.test.ts --exclude 'example/**'",
-    "test:conformance": "vitest run host/src/conformance.test.ts",
+    "test": "vitest run --exclude runtime/src/conformance.test.ts --exclude 'example/**'",
+    "test:conformance": "vitest run runtime/src/conformance.test.ts",
     "test:example": "vitest run example/",
     "test:gpu:web": "node gpu/script/browser.ts",
     "fmt": "prettier --write .",
@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@xpute/gpu": "workspace:*",
-    "@xpute/host": "workspace:*",
+    "@xpute/runtime": "workspace:*",
     "@xpute/kit": "workspace:*",
     "@types/node": "^24",
     "@webgpu/types": "~0.1.74",

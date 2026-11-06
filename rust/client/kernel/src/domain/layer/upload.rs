@@ -6,7 +6,7 @@
 //! replaces it. A packet is freed unkept past the layer's bound (`keep`),
 //! and freed unsent past a full stream once nothing wants it (`send`).
 
-use xpute_guest::mem::heap::Block;
+use xpute_core::mem::heap::Block;
 
 use crate::sys::io::fetch::{body, release};
 

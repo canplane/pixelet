@@ -14,7 +14,7 @@ use pxl_spec::asset::decor::{Decor, DECORS};
 pub const MODELS_MAX: usize = generation::GROUPS as usize;
 
 /// Asks for each variant's model, a turn's effect: each registers in its
-/// own task, sliced by the turn's quota (`model_of`).
+/// own task, sliced by the turn's deadline (`model_of`).
 pub fn decor_models_step() {
     for v in DECORS.iter().flat_map(|decor| decor.variants.iter()) {
         model_of(v.model, None);

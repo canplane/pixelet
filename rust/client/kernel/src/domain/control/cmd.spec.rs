@@ -5,8 +5,8 @@
 //! The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:
 //! `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
 //! it carries — an XTP branch whose children are its fields, in order. A command with no
-//! fields carries no packet. The kernel is the guest; the JavaScript around it is two
-//! things to it, its host, which holds the turns and carries its hostcalls to what
+//! fields carries no packet. The kernel is the core; the JavaScript around it is two
+//! things to it, its runtime, which holds the turns and carries its imports to what
 //! answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user
 //! does and what the place's sensors, visibility and frames tell it
 //! (ts/client/src/port/). A command's major is the module it is for.
@@ -25,7 +25,7 @@
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
-// with no event or no enum read off the wire leaves a writer or a
+// with no import or no enum read off the wire leaves a writer or a
 // number's check unused.
 #![allow(
     non_camel_case_types,
@@ -39,7 +39,7 @@
 
 use core::fmt::Display;
 
-use xpute_guest::abi::number::{finite, integer, unknown};
+use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
 
@@ -180,7 +180,7 @@ impl SurfaceMinor {
     }
 }
 
-/// A turn's: what the host grants it, the credits and the clock.
+/// A turn's: what the runtime grants it, the credits and the clock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum TurnMinor {
@@ -624,9 +624,9 @@ pub enum Command {
     /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
-    /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
-    /// phases on what is left of the quota, the fetches within the credits. The turn leaves
-    /// its events on the completion ring, drawn by the kernel. It carries the host's alone:
+    /// The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in
+    /// what is left before the deadline, the fetches within the credits. The turn leaves
+    /// its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:
     /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
     /// world surface's (SURFACE_RESIZE).
     TURN_GRANT = 0x1d01,
@@ -662,19 +662,19 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_MOVE = 0x1106,
-    /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what.
+    /// Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what.
     SURFACE_OPEN = 0x1501,
     /// The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's.
     SURFACE_RESIZE = 0x1502,
-    /// A call: the canvas is going, and what it drew and held on the device is let go before the call returns.
+    /// The canvas is going: what it drew and held on the device is let go.
     SURFACE_CLOSE = 0x1503,
-    /// A call, answered 0 or an errno: what a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
+    /// What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
     /// sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
     /// replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
     /// where the character's fields are not all given for a character, any is given for the world, or no character is
     /// named by them.
     SCENE_DRAW = 0x1704,
-    /// A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
+    /// A setting set from the sheet or the character picker; refused until the kernel has read the
     /// kept settings, which would be read over it.
     SETTING_SET = 0x1601,
     /// A line the player said, shown over the character.
@@ -718,7 +718,7 @@ pub enum Command {
     /// The text in the platform's own family at the weight and size, broken into lines no
     /// wider than the width where it can be; at `at` in the kernel's memory, how many lines,
     /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-    /// (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
+    /// (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
     TEXT_LAYOUT = 0x1c01,
     /// One line drawn in the platform's own family, starting at x with the middle of its em
     /// box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
@@ -808,7 +808,7 @@ pub struct Snapshot<'a> {
     /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
     /// empty.
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
-    /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
+    /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say.
     pub stall: Option<Message>,
     /// How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it.
     pub renderer_progress: f64,
@@ -1074,9 +1074,9 @@ impl SensorErr {
 /// Command::TURN_GRANT's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct TurnGrant {
-    /// The display's refresh, as the host measures it from the animation frames it is handed,
+    /// The display's refresh, as the runtime measures it from the animation frames it is handed,
     /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
-    /// boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
+    /// boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget.
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
@@ -1500,12 +1500,12 @@ impl PerfStats {
     }
 }
 
-/// Command::SENSOR_START's event.
-pub struct SensorStartEvent {
+/// Command::SENSOR_START's packet.
+pub struct SensorStart {
     pub sensor: Sensor,
 }
 
-impl SensorStartEvent {
+impl SensorStart {
     /// The children it is written as.
     pub const FIELDS: u32 = 1;
 
@@ -1514,20 +1514,20 @@ impl SensorStartEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for SensorStartEvent {
+impl xpute_core::ipc::door::Import for SensorStart {
     const NUMBER: u32 = 4609;
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {
-        SensorStartEvent::write(self, w);
+        SensorStart::write(self, w);
     }
 }
 
-/// Command::SENSOR_STOP's event.
-pub struct SensorStopEvent {
+/// Command::SENSOR_STOP's packet.
+pub struct SensorStop {
     pub sensor: Sensor,
 }
 
-impl SensorStopEvent {
+impl SensorStop {
     /// The children it is written as.
     pub const FIELDS: u32 = 1;
 
@@ -1536,16 +1536,16 @@ impl SensorStopEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for SensorStopEvent {
+impl xpute_core::ipc::door::Import for SensorStop {
     const NUMBER: u32 = 4611;
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {
-        SensorStopEvent::write(self, w);
+        SensorStop::write(self, w);
     }
 }
 
-/// Command::TEXT_LAYOUT's event.
-pub struct TextLayoutEvent {
+/// Command::TEXT_LAYOUT's packet.
+pub struct TextLayout {
     pub weight: u32,
     pub px: f64,
     /// 0 for one line.
@@ -1558,7 +1558,7 @@ pub struct TextLayoutEvent {
     pub text_len: u32,
 }
 
-impl TextLayoutEvent {
+impl TextLayout {
     /// The children it is written as.
     pub const FIELDS: u32 = 7;
 
@@ -1573,16 +1573,16 @@ impl TextLayoutEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for TextLayoutEvent {
+impl xpute_core::ipc::door::Import for TextLayout {
     const NUMBER: u32 = 7169;
     const FIELDS: u32 = 7;
     fn write(&self, w: &mut PacketWriter) {
-        TextLayoutEvent::write(self, w);
+        TextLayout::write(self, w);
     }
 }
 
-/// Command::TEXT_RASTER's event.
-pub struct TextRasterEvent {
+/// Command::TEXT_RASTER's packet.
+pub struct TextRaster {
     pub weight: u32,
     pub px: f64,
     /// 0xRRGGBBAA.
@@ -1597,7 +1597,7 @@ pub struct TextRasterEvent {
     pub text_len: u32,
 }
 
-impl TextRasterEvent {
+impl TextRaster {
     /// The children it is written as.
     pub const FIELDS: u32 = 9;
 
@@ -1614,21 +1614,21 @@ impl TextRasterEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for TextRasterEvent {
+impl xpute_core::ipc::door::Import for TextRaster {
     const NUMBER: u32 = 7170;
     const FIELDS: u32 = 9;
     fn write(&self, w: &mut PacketWriter) {
-        TextRasterEvent::write(self, w);
+        TextRaster::write(self, w);
     }
 }
 
-/// Command::SHELL_SNAPSHOT's event.
-pub struct ShellSnapshotEvent {
+/// Command::SHELL_SNAPSHOT's packet.
+pub struct ShellSnapshot {
     pub at: u32,
     pub len: u32,
 }
 
-impl ShellSnapshotEvent {
+impl ShellSnapshot {
     /// The children it is written as.
     pub const FIELDS: u32 = 2;
 
@@ -1638,23 +1638,23 @@ impl ShellSnapshotEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for ShellSnapshotEvent {
+impl xpute_core::ipc::door::Import for ShellSnapshot {
     const NUMBER: u32 = 6913;
     const FIELDS: u32 = 2;
     fn write(&self, w: &mut PacketWriter) {
-        ShellSnapshotEvent::write(self, w);
+        ShellSnapshot::write(self, w);
     }
 }
 
-/// Command::SHELL_VIEW's event.
-pub struct ShellViewEvent {
+/// Command::SHELL_VIEW's packet.
+pub struct ShellView {
     /// The view's azimuth.
     pub azimuth: f64,
     /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
 }
 
-impl ShellViewEvent {
+impl ShellView {
     /// The children it is written as.
     pub const FIELDS: u32 = 2;
 
@@ -1664,52 +1664,52 @@ impl ShellViewEvent {
     }
 }
 
-impl xpute_guest::ipc::door::Event for ShellViewEvent {
+impl xpute_core::ipc::door::Import for ShellView {
     const NUMBER: u32 = 6914;
     const FIELDS: u32 = 2;
     fn write(&self, w: &mut PacketWriter) {
-        ShellViewEvent::write(self, w);
+        ShellView::write(self, w);
     }
 }
 
-/// The shell protocol's guest end: what it posts to the host and what it hears from it.
+/// The shell protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod shell {
     use super::*;
-    use xpute_guest::ipc::door::Outcome;
-    use xpute_guest::machine;
+    use xpute_core::ipc::door::Outcome;
+    use xpute_core::machine;
     use xpute_kit::status::errno::Errno;
 
-    /// Command::SENSOR_START, posted for the host.
-    pub fn sensor_start(e: &SensorStartEvent) {
+    /// Command::SENSOR_START, posted for the runtime.
+    pub fn sensor_start(e: &SensorStart) {
         machine::door().send(e);
     }
 
-    /// Command::SENSOR_STOP, posted for the host.
-    pub fn sensor_stop(e: &SensorStopEvent) {
+    /// Command::SENSOR_STOP, posted for the runtime.
+    pub fn sensor_stop(e: &SensorStop) {
         machine::door().send(e);
     }
 
-    /// Command::TEXT_LAYOUT, answered by the host before this returns.
-    pub fn text_layout(e: &TextLayoutEvent) -> Result<u32, Errno> {
+    /// Command::TEXT_LAYOUT, answered by the runtime before this returns.
+    pub fn text_layout(e: &TextLayout) -> Result<u32, Errno> {
         machine::door().call(e)
     }
 
-    /// Command::TEXT_RASTER, answered by the host before this returns.
-    pub fn text_raster(e: &TextRasterEvent) -> Result<u32, Errno> {
+    /// Command::TEXT_RASTER, answered by the runtime before this returns.
+    pub fn text_raster(e: &TextRaster) -> Result<u32, Errno> {
         machine::door().call(e)
     }
 
-    /// Command::SHELL_SNAPSHOT, posted for the host.
-    pub fn shell_snapshot(e: &ShellSnapshotEvent) {
+    /// Command::SHELL_SNAPSHOT, posted for the runtime.
+    pub fn shell_snapshot(e: &ShellSnapshot) {
         machine::door().send(e);
     }
 
-    /// Command::SHELL_VIEW, posted for the host.
-    pub fn shell_view(e: &ShellViewEvent) {
+    /// Command::SHELL_VIEW, posted for the runtime.
+    pub fn shell_view(e: &ShellView) {
         machine::door().send(e);
     }
 
-    /// What the program does with each command the host sends.
+    /// What the program does with each command the runtime sends.
     pub trait Exports {
         fn sensor_pos(&mut self, c: SensorPos) -> Outcome;
         fn sensor_orient(&mut self, c: SensorOrient) -> Outcome;

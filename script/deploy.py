@@ -32,8 +32,8 @@ REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
 APP = REPO / "ts/client"
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
-# The panics' `#n` → path table the page's build wrote beside its guest.
-PATHS = APP / "guest.paths.json"
+# The panics' `#n` → path table the page's build wrote beside its kernel.
+PATHS = APP / "kernel.paths.json"
 BUILT = EDGE / "dist/index.html"
 # The custom domain the Worker answers on (spec/spec/route.json `origins`).
 SITE = json.loads((REPO / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]

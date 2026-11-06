@@ -1,21 +1,21 @@
 // xpute-gpu/include/xpute_gpu.h
 
-// The C ABI of the GPU's host beside a guest linked into its host's own
+// The C ABI of the GPU's runtime beside a core linked into its runtime's own
 // process (xpute.h), as xpute-gpu's `native_abi!` exports it. Each call
-// reaches the host on the guest's thread while the caller waits. The host
-// runs the guest's stream as the guest publishes it, and a completion kicks
-// the guest.
+// reaches the runtime on the core's thread while the caller waits. The runtime
+// runs the core's stream as the core publishes it, and a completion kicks
+// the core.
 
 #pragma once
 
 #include <stdint.h>
 
 // Opens the device: 0 when it is open, -1 when none opened as the program
-// asks. What it is, the guest reads from the block its first call asks the
-// host for.
+// asks. What it is, the core reads from the block its first call asks the
+// runtime for.
 int32_t xpute_gpu_open(void);
 
-// Binds the guest's surface `handle` to `window`, on an Apple platform a
+// Binds the core's surface `handle` to `window`, on an Apple platform a
 // view's CAMetalLayer, which the caller keeps until it has unbound it: 0, or
 // -2 when no device is open, -3 when the system would not make a surface of
 // it, -4 when a newer handle has bound its slot since.

@@ -37,11 +37,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-# xpute's C ABI for the guest and its GPU host, which Swift imports as one
+# xpute's C ABI for the core and its GPU runtime, which Swift imports as one
 # module (`import CXpute`, ios/CXpute/module.modulemap).
 XPUTE = Path(__file__).resolve().parents[3]
 HEADERS = [
-    XPUTE / "rust/host/include/xpute.h",
+    XPUTE / "rust/runtime/include/xpute.h",
     XPUTE / "rust/gpu/include/xpute_gpu.h",
     XPUTE / "ts/native/ios/CXpute/module.modulemap",
 ]

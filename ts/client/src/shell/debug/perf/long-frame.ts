@@ -1,11 +1,11 @@
 // @pxl/client/shell/debug/perf/long-frame.ts
 //
-// The platform's long frames (services/long-frame.ts) kept in one ring, placed
+// The platform's long frames (service/long-frame.ts) kept in one ring, placed
 // beside the kernel's frames by `performance.now()`.
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { type LongFrame } from "@/services/types.ts";
-import * as long_frame from "@/services/long-frame.ts";
+import { type LongFrame } from "@/service/types.ts";
+import * as long_frame from "@/service/long-frame.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
 
 // The kernel's rings' window, one number (perf.json `LIMIT.WINDOW_MS`).

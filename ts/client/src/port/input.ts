@@ -8,13 +8,13 @@ import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import {
   type PointerKind,
   type PointerPhase as PlacePhase,
-} from "@/services/types.ts";
-import * as sensor from "@/services/sensor.ts";
-import { host, kernel, pacing } from "@/host/kernel.ts";
+} from "@/service/types.ts";
+import * as sensor from "@/service/sensor.ts";
+import { control, kernel } from "@/runtime/kernel.ts";
 
 /** The next turn made interactive, as an input asks. */
 export function interactive(): void {
-  pacing.input(performance.now());
+  control.input();
 }
 
 export function pointer(
@@ -41,17 +41,17 @@ export function keys(x: i32, y: i32): void {
 
 /** The world's view opened: turns run while it is open. */
 export function open(): () => void {
-  host.resume();
+  control.resume();
   const unfollow = sensor.follow();
   return () => {
     unfollow();
-    host.pause();
+    control.pause();
   };
 }
 
 /** A turn asked for now, as a moved box needs one. */
 export function frame(): void {
-  host.wake();
+  control.wake();
 }
 
 /** A place's pointer phase, as the kernel numbers it. */

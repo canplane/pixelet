@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Worker probe</title>
+<style>
+  body { margin: 16px; font: 13px ui-monospace, monospace; background: #fff; color: #111; }
+  canvas { width: 160px; height: 90px; border: 1px solid #888; }
+  pre { white-space: pre-wrap; }
+</style>
+<canvas id="c" width="320" height="180"></canvas>
+<pre id="out">running</pre>
+<script type="module">
+  import { SAMPLES, measure } from "./text.js";
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
+  const intervals = (ts) => ts.slice(1).map((t, i) => t - ts[i]);
+
+  const result = { ua: navigator.userAgent, main: {}, worker: null, compare: {} };
+  const worker = new Worker("./worker.js", { type: "module" });
+  const replies = new Map();
+  let next = 0;
+  worker.onmessage = ({ data }) => { replies.get(data.id)?.(data); replies.delete(data.id); };
+  worker.onerror = (e) => { result.worker_error = String(e.message); };
+  const ask = (msg, transfer = []) => new Promise((r) => { const id = ++next; replies.set(id, r); worker.postMessage({ ...msg, id }, transfer); });
+
+  result.main.crossOriginIsolated = self.crossOriginIsolated;
+  result.main.gpu = "gpu" in navigator;
+  result.main.text = await measure();
+
+  // The world's canvas handed to the worker, which draws it with WebGPU.
+  const canvas = document.getElementById("c");
+  let offscreen = null;
+  try { offscreen = canvas.transferControlToOffscreen(); } catch (e) { result.main.transfer_error = String(e); }
+  result.worker = await ask({ kind: "start", canvas: offscreen }, offscreen ? [offscreen] : []);
+
+  // The round trip a command with a reply would take: a message out and its answer back.
+  const trips = [];
+  for (let i = 0; i < 300; i++) { const a = performance.now(); await ask({ kind: "echo" }); trips.push(performance.now() - a); }
+  result.compare.round_trip_ms = { median: median(trips), max: Math.max(...trips) };
+
+  // A snapshot's bytes sliced out and transferred, as the worker host would post one.
+  for (const bytes of [4 << 10, 64 << 10, 1 << 20]) {
+    const a = performance.now();
+    const r = await ask({ kind: "slab", bytes });
+    result.compare[`slab_${bytes}_ms`] = { total: performance.now() - a, slice_in_worker: r.slice_ms, got: r.buf.byteLength };
+  }
+
+  // The display's frames as each side sees them, over the same two seconds.
+  const main_ts = [];
+  const until = performance.now() + 2000;
+  const frames = ask({ kind: "frames", ms: 2000 });
+  await new Promise((done) => { const f = (t) => { main_ts.push(t); performance.now() < until ? requestAnimationFrame(f) : done(); }; requestAnimationFrame(f); });
+  const w = await frames;
+  result.compare.raf = {
+    main: { n: main_ts.length, median_ms: median(intervals(main_ts)) },
+    worker: w.raf ? { n: w.ts.length, median_ms: median(intervals(w.ts)), presented: w.presented } : { none: true, presented: w.presented },
+    // each worker frame's time against the nearest main frame's: 0 where both run on the same vsync
+    offset_ms: w.raf ? median(w.ts.map((t) => Math.min(...main_ts.map((m) => Math.abs(m - t))))) : null,
+  };
+
+  // The worker's text against the page's, sample by sample.
+  if (result.worker.text) {
+    const differ = [];
+    SAMPLES.forEach((s, i) => {
+      const m = result.main.text[i], k = result.worker.text[i];
+      if (m.width !== k.width || m.hash !== k.hash) differ.push({ sample: s, main: m, worker: k });
+    });
+    result.compare.text = { samples: SAMPLES.length, differ };
+  }
+
+  const pixel = await ask({ kind: "pixel" });
+  result.compare.pixel = pixel;
+
+  window.__probe = result;
+  document.getElementById("out").textContent = JSON.stringify(result, null, 1);
+</script>

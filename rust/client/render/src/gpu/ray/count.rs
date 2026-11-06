@@ -12,7 +12,7 @@
 //! (`owed`).
 
 use pxl_engine::{count, node_cache, raster, ray};
-use xpute_guest::mem::off_of;
+use xpute_core::mem::off_of;
 
 use super::sequence;
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
@@ -239,7 +239,7 @@ pub(super) struct Counter {
     copied_frame: Frame,
     slot: Readback,
     read_counts: Box<[u32; WORDS]>,
-    /// The mapping's fence and result, the host's, and the ticket it
+    /// The mapping's fence and result, the runtime's, and the ticket it
     /// was last asked with, the kernel's: one mapping out at a time.
     mapping: Box<[u32; 2]>,
     ticket: u32,

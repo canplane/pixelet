@@ -101,5 +101,5 @@ export async function perfDrive(seconds = 60): Promise<string> {
   await wait(seconds * 1000);
   clearInterval(step);
   pointer("pointerup", on(start), 0);
-  return perfReportText(perfReportRead());
+  return perfReportText(await perfReportRead());
 }

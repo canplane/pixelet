@@ -13,8 +13,8 @@
 use pxl_render::frame::draw::{DrawId, DrawList, Position, Stand, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_guest::mem;
-use xpute_guest::mem::heap::{alloc, free};
+use xpute_core::mem;
+use xpute_core::mem::heap::{alloc, free};
 
 use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
@@ -22,7 +22,7 @@ use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
 use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
 use crate::sys::sched::edge::wake_at;
-use xpute_guest::clock::now;
+use xpute_core::clock::now;
 
 #[derive(Clone, Copy)]
 struct Playing {

@@ -33,7 +33,7 @@ use crate::domain::view::frame::pose::ray_of;
 use crate::domain::view::observation;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, Zoom};
 use pxl_spec::space::layer::octant::Octant;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// What the pointer holds, as the shell chose it (`EDIT_TOOL`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

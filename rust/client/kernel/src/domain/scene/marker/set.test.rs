@@ -4,7 +4,7 @@ use super::*;
 use crate::sys;
 use pxl_render::frame::draw::{lists_bytes, set_lists};
 use pxl_render::gpu::atlas::shelf::Paint;
-use xpute_guest::mem::heap::alloc;
+use xpute_core::mem::heap::alloc;
 
 /// A marker's instance holds its stand's Q3 bit for bit, X across the i32's
 /// seam and words whose bits read as a NaN among them, and nothing of the

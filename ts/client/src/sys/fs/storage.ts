@@ -18,18 +18,24 @@ import {
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 
 import { storage } from "@/abi/file.spec.ts";
-import * as local from "@/services/storage.ts";
+import * as local from "@/service/storage.ts";
 
-/** Storage as the platform gives it (services/storage.ts): a refused write keeps nothing, and does not throw. */
+/** Storage as the platform gives it (service/storage.ts): a refused write keeps nothing, and does not throw. */
 export interface Storage {
   get(key: string): string | null;
   set(key: string, value: string): void;
 }
 
-export const STORAGE: Storage = local;
+export let STORAGE: Storage = local;
+
+/** Storage kept elsewhere: a page's worker keeps a copy of the page's, and
+ * writes back to it (runtime/worker.ts). */
+export function set_storage(s: Storage): void {
+  STORAGE = s;
+}
 
 /** The bytes `text` keeps; EBADMSG for text that keeps none. */
 function bytes_of(text: string): U8Array {

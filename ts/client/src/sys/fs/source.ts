@@ -24,7 +24,7 @@ import {
   SOURCE_REFUSED,
   type Source,
 } from "@/abi/state.ts";
-import * as origin from "@/services/origin.ts";
+import * as origin from "@/service/origin.ts";
 import { fs_mount } from "@/port/fs.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
@@ -125,6 +125,16 @@ export function source_versions(): Declaration["version"] | null {
 }
 
 export const watch_source = listeners.watch;
+
+/** Where the source stands as the kernel's worker has it, for a page's UI,
+ * which holds no files. */
+export function mirror_source(
+  next: Source,
+  declaration: Declaration | null,
+): void {
+  cur_declaration = declaration;
+  set(next);
+}
 
 /** The most wait after a refused ask, doubled each time up to the most, and
  * the wait drawn below it (full jitter): clients one outage failed together

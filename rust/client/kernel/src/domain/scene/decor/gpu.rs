@@ -21,7 +21,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
@@ -186,7 +186,7 @@ pub fn step(eye: V3, hide: Option<Octant>, scattered: Option<[i32; 3]>) {
     if h.walked == Some(walked) && !met {
         return;
     }
-    // The renderer hands the records where they lie: while the host holds
+    // The renderer hands the records where they lie: while the runtime holds
     // them they stay, walked again at a later frame (pxl-render gpu/api.rs
     // `in_flight`).
     if api::in_flight(&h.placed) {

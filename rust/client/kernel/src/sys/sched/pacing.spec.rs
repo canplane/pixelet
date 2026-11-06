@@ -2,8 +2,8 @@
 //
 // GENERATED from spec/client/kernel/sys/sched/pacing.json
 //
-// The numbers of the scheduling policy pixelet boots xpute's host with on a page or a
-// device (@xpute/host sched/frame_pacing.ts): turns paced to the display, each given
+// The numbers of the scheduling policy pixelet boots xpute's runtime with on a page or a
+// device (@xpute/runtime sched/frame_pacing.ts): turns paced to the display, each given
 // what its frames leave. The client's boot injects them (ts/client/src/abi/boot.ts),
 // and the kernel reads the margin to size its tasks past a full frame
 // (pxl-kernel sys/sched/edge.rs).
@@ -23,7 +23,7 @@
 /// refresh.
 pub const PACE_HZ: f64 = 60.0;
 
-/// Share of the frame left unspent for the host's own work; a share, so a fast display
+/// Share of the frame left unspent for the runtime's own work; a share, so a fast display
 /// does not lose most of its frame to it.
 pub const MARGIN_SHARE: f64 = 0.15;
 

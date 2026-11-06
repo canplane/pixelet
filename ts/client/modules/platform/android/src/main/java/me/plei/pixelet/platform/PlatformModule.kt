@@ -16,7 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
- * The device's half of the client's services (ts/client/src/services/, the
+ * The device's half of the client's services (ts/client/src/service/, the
  * .native files) on Android, the module an iPhone's PlatformModule.swift is: what the shell
  * asks of the system, under the same names. The kernel and the view it draws
  * into are xpute's module (@xpute/native). An image's decode runs off the
@@ -29,7 +29,7 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the transport (services/origin.native.ts) ----
+    // ---- the transport (service/origin.native.ts) ----
 
     /** A body fetched still zstd, decoded off the JavaScript thread on the
      * module's queue, into a direct buffer JavaScript takes without a copy. */
@@ -37,7 +37,7 @@ class PlatformModule : Module() {
       NativeArrayBuffer(PxlNative.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
     }
 
-    // ---- storage (services/storage.native.ts) ----
+    // ---- storage (service/storage.native.ts) ----
     //
     // SharedPreferences, the system's store for an app's small values, as a
     // page's localStorage is the browser's.
@@ -48,14 +48,14 @@ class PlatformModule : Module() {
       preferences().edit().putString(key, value).apply()
     }
 
-    // ---- the clipboard (services/share.native.ts) ----
+    // ---- the clipboard (service/share.native.ts) ----
 
     Function("clipboardSet") { text: String ->
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
     }
 
-    // ---- text (services/text.native.ts, Text.kt) ----
+    // ---- text (service/text.native.ts, Text.kt) ----
 
     Function("textLanguage") { tag: String -> setTextLanguage(tag) }
 
@@ -68,7 +68,7 @@ class PlatformModule : Module() {
       if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
     }
 
-    // ---- the compass (services/sensor.native.ts) ----
+    // ---- the compass (service/sensor.native.ts) ----
 
     /** Whether the device has a compass at all, which expo-horizon-location only says
      * by failing a watch — and a failed watch reads as a compass lost, not
@@ -78,7 +78,7 @@ class PlatformModule : Module() {
       sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
 
-    // ---- the safe area (services/safe-area.native.ts) ----
+    // ---- the safe area (service/safe-area.native.ts) ----
 
     /** How much of the screen's bottom inset takes a touch, in
      * density-independent pixels: the navigation buttons' bar, or none with

@@ -5,7 +5,7 @@
  * (source.ts, refusal.ts). */
 
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/host/kernel.ts";
+import { kernel } from "@/runtime/kernel.ts";
 
 /** The top zoom, the formats and the shards (FS_MOUNT); false where they are
  * more than a command carries or the kernel refuses them. */

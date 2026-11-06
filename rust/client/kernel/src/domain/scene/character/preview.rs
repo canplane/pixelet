@@ -21,7 +21,7 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::surface;
 use pxl_spec::asset::actor::IDLE_CLIP;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// Under the sea below the eye, past any terrain, so the world never draws it.

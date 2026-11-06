@@ -15,7 +15,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 #[derive(Default)]
 struct Changes {

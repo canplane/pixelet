@@ -25,8 +25,8 @@ import { ease, SLIDE, SLIDE_AWAY } from "@/shell/ui/motion/transition.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { alpha, chrome, color, layer, material } from "@/shell/ui/theme.ts";
 import { touches } from "@/shell/ui/touch.ts";
-import { useSafeArea } from "@/services/safe-area.ts";
-import { useWindowSize } from "@/services/viewport.ts";
+import { useSafeArea } from "@/service/safe-area.ts";
+import { useWindowSize } from "@/service/viewport.ts";
 
 export const PANEL_CONTROL = chrome.target;
 /** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
@@ -48,7 +48,7 @@ export interface PanelProps {
   children: ReactNode;
 }
 
-/** A host drops a panel only after `gone`, once it has slid away. */
+/** A runtime drops a panel only after `gone`, once it has slid away. */
 export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
   { open: true, gone: () => {} },
 );

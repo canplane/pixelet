@@ -2,7 +2,7 @@
 
 //! Text laid out and drawn by the platform, called with the shell's commands
 //! (TEXT_LAYOUT, TEXT_RASTER) and answered before the call returns. Each world frame keeps
-//! only the answers the frame before read. A native test has no host: a text
+//! only the answers the frame before read. A native test has no runtime: a text
 //! is one line of fixed width per character and is never drawn.
 
 use std::collections::hash_map::Entry;
@@ -12,14 +12,14 @@ use fnv::FnvHashMap;
 use pxl_render::gpu::atlas::ATLAS_SCALE;
 use pxl_render::gpu::text::{raster_box, Raster};
 use pxl_render::look::marker::Font;
-use xpute_guest::mem::off_of_slice;
+use xpute_core::mem::off_of_slice;
 
-use crate::sys::io::host;
-use crate::sys::io::host_spec::{LAYOUT_ANSWER, LINE};
-use xpute_guest::global::Global;
+use crate::sys::io::runtime;
+use crate::sys::io::runtime_spec::{LAYOUT_ANSWER, LINE};
+use xpute_core::global::Global;
 
 /// What the kernel asks of the platform's text, answered before the call
-/// returns, each written at its `at` (host.json `LAYOUT_ANSWER`, `LINE`; the
+/// returns, each written at its `at` (runtime.json `LAYOUT_ANSWER`, `LINE`; the
 /// commands TEXT_LAYOUT and TEXT_RASTER, which the kernel's top makes of it).
 pub enum TextCall<'a> {
     /// `text` broken into lines no wider than `max_width` (0 for one line),
@@ -74,7 +74,7 @@ fn text() -> &'static mut Text {
     TEXT.get(Text::default)
 }
 
-/// The host that was asked is gone; an answer it never ran would read as empty forever.
+/// The runtime that was asked is gone; an answer it never ran would read as empty forever.
 pub fn text_forget() {
     let t = text();
     t.layouts.clear();
@@ -115,7 +115,7 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
                 lines,
                 text: text_in,
             };
-            match host::call(&call) {
+            match runtime::call(&call) {
                 None => return Some(unlaid(text_in)),
                 Some(Err(_)) => return None,
                 Some(Ok(_)) => {}
@@ -187,7 +187,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         x: f64::from(origin[0]),
         text: text_in,
     };
-    if !matches!(host::call(&call), Some(Ok(_))) {
+    if !matches!(runtime::call(&call), Some(Ok(_))) {
         return None;
     }
     let at = RasterAt {

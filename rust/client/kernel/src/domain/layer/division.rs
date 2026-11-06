@@ -14,9 +14,9 @@ use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_guest::global::Global;
-use xpute_guest::mem::range;
-use xpute_guest::mem::range::OwnedRange;
+use xpute_core::global::Global;
+use xpute_core::mem::range;
+use xpute_core::mem::range::OwnedRange;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};

@@ -10,11 +10,11 @@ use crate::perf::read;
 use crate::perf::record;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::ipc::door::Outcome;
-use xpute_guest::mem::off_of;
-use xpute_guest::mem::off_of_slice;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+use xpute_core::ipc::door::Outcome;
+use xpute_core::mem::off_of;
+use xpute_core::mem::off_of_slice;
 use xpute_kit::status::errno::Errno;
 
 /// The profiler records only while its setting is on.

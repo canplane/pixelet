@@ -5,7 +5,7 @@
 
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::coord::v3::V3;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::query::decor::claim;

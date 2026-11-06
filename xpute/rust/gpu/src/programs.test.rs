@@ -3,10 +3,10 @@
 //! The programs spec/golden/gpu/programs.tsv records, as the Rust encoder
 //! writes them; cpp/xpute/gpu/encode.test.cpp writes the same calls in C++.
 //! Each turn ends through `turn` with a request whose ticket is the turn's
-//! number from 1, which the next turn waits for the host to store at the
+//! number from 1, which the next turn waits for the runtime to store at the
 //! fence; the last reads the result back to the record's place.
 
-use xpute_guest::ipc::stream::Stream;
+use xpute_core::ipc::stream::Stream;
 
 use crate::encode::*;
 use crate::enums::*;
@@ -33,7 +33,7 @@ impl At {
         unsafe { core::slice::from_raw_parts(self.base.add(self.input), self.input_len) }
     }
 
-    /// The fence and the result after it (spec RESULT), the host's.
+    /// The fence and the result after it (spec RESULT), the runtime's.
     fn done(&self) -> &'static [u32; 2] {
         // SAFETY: as `input`; the places do not overlap.
         unsafe { &*self.base.add(self.done).cast::<[u32; 2]>() }

@@ -1,7 +1,7 @@
 // pxl-kernel/domain/layer/upload.test.rs
 
 use super::*;
-use xpute_guest::mem::heap::alloc;
+use xpute_core::mem::heap::alloc;
 
 fn block() -> Block {
     alloc(64).unwrap()

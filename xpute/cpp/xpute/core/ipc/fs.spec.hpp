@@ -1,0 +1,35 @@
+// cpp/xpute/core/ipc/fs.spec.hpp
+//
+// GENERATED from spec/ipc/fs.json
+//
+// The file device's numbers (abi/fs.json, its protocol, Major FS): a core's files,
+// posted as frames on the completion ring for the device's port, which the runtime takes
+// once the turn has returned and before the next begins. A frame may name memory the
+// core holds: the runtime reads or writes it in that gap, or, for FS_WRITE, at FS_CLOSE, and
+// the core keeps it that long.
+//
+// Files borrow Plan 9's file namespace, in POSIX's words. The core issues the descriptor,
+// a generational handle, and names a file by a root the program numbers and a path below
+// it; the program binds each root to where it keeps things, and a path that leaves it is
+// refused. FS_OPENAT and FS_CLOSE are requests io_uring's way: each is completed once, by
+// its tag, the descriptor; an open once the file can be read whole, a close once a
+// written file is replaced. FS_READ and FS_WRITE are done in the gap and completed by
+// nothing.
+
+#pragma once
+
+#include <cstdint>
+
+namespace xpute::fs {
+
+// How FS_OPENAT opens.
+namespace flag {
+
+// To read, whole.
+inline constexpr std::uint32_t O_RDONLY = 0u;
+
+// To write: created where it is not, and replaced whole at FS_CLOSE (O_CREAT | O_TRUNC).
+inline constexpr std::uint32_t O_WRONLY = 1u;
+} // namespace flag
+
+} // namespace xpute::fs

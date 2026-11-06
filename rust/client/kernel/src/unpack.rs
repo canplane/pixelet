@@ -2,23 +2,23 @@
 
 //! A body the app's fetch hands over still zstd, decoded before anything
 //! reads it: the device asks for zstd, as the bake stores its objects, and
-//! undoes it in its transport (ts/client/src/services/origin.native.ts), as a
+//! undoes it in its transport (ts/client/src/service/origin.native.ts), as a
 //! browser undoes it in its own. Any frame RFC 8878 allows decodes, a
 //! stored object's or one the edge made on the fly, which need not say its
 //! size: so the decoded bytes are the library's, handed out and let go by
 //! the caller. Called from the module's queue, never the JavaScript thread
 //! or the kernel's: it touches only the caller's bytes and its own, so it
-//! takes no handoff (xpute-host native `Guest::run`). An Android app reaches
+//! takes no handoff (xpute-runtime native `Core::run`). An Android app reaches
 //! it through Kotlin's `PxlNative` (`Java_me_plei_pixelet_platform_PxlNative_unpack`),
 //! an iPhone's Swift through the C ABI (include/pxl_native.h). A page has
 //! none: its browser undoes zstd itself.
 
 #[cfg(target_os = "android")]
-use xpute_host::jni;
-#[cfg(target_os = "android")]
 use xpute_kit::status::bug::OrBug;
 #[cfg(target_os = "android")]
 use xpute_kit::status::errno::Errno;
+#[cfg(target_os = "android")]
+use xpute_runtime::jni;
 use zstd::stream;
 
 /// Every frame of `body` decoded, its skippable frames passed over; none

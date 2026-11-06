@@ -6,7 +6,7 @@
 //! through POSITION_UNAVAILABLE and TIMEOUT
 //! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
 //! retried here; a device's module re-arms its own watch where its platform
-//! ends one (ts/client/src/services/sensor.native.ts).
+//! ends one (ts/client/src/service/sensor.native.ts).
 
 use crate::domain::control::cmd::GeolocationErrorCode;
 use crate::domain::control::cmd::Message;
@@ -15,7 +15,7 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeolocationCommand {

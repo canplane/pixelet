@@ -26,7 +26,7 @@
 //! the view stood still, so moving starts a fresh window, and the quiet
 //! windows judged before the pause still count. A window is
 //! `RES_WINDOW_MS` of the moving frames' budgets, the paced interval the
-//! host grants (@xpute/host sched/frame_pacing.ts `FrameGrant::paced_ms`) no tighter
+//! runtime grants (@xpute/runtime sched/frame_pacing.ts `FrameGrant::paced_ms`) no tighter
 //! than `RES_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
 //! summed against their own budgets. Where the device keeps timestamps a
 //! sample is a GPU read's that landed, which not every frame has, timed at
@@ -60,16 +60,16 @@ use pxl_engine::grid::LATTICE_MAX;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// A frame as the turn paced it.
 #[derive(Clone, Copy)]
 pub struct Pace {
-    /// The interval the host paced it at, in ms.
+    /// The interval the runtime paced it at, in ms.
     pub paced_ms: f64,
     /// The real gap since the last frame, in ms.
     pub gap_ms: f64,
-    /// The view moved (the host's `interactive`).
+    /// The view moved (the runtime's `interactive`).
     pub moving: bool,
 }
 

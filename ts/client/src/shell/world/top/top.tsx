@@ -19,7 +19,7 @@ import { ViewButtons } from "./view-buttons.tsx";
 import { BusyDim } from "@/shell/world/busy-dim.tsx";
 import { useChromeTop } from "@/shell/world/chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
-import { useWindowSize } from "@/services/viewport.ts";
+import { useWindowSize } from "@/service/viewport.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 export function TopOverlays() {

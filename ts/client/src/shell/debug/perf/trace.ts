@@ -11,18 +11,12 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
 
-import {
-  type Frame,
-  is_list,
-  COLUMNS,
-  perf_frames,
-  perf_tasks,
-} from "@/port/perf.ts";
+import { type Frame, is_list, COLUMNS, read } from "@/port/perf.ts";
 import { LIST_NAMES } from "./column.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
-import * as share from "@/services/share.ts";
+import * as share from "@/service/share.ts";
 
 const PID = 1;
 const TID_FRAMES = 1;
@@ -83,9 +77,8 @@ function frameArgs(f: Frame): Args {
   return args;
 }
 
-function perfTraceJson(): string {
-  const frames = perf_frames();
-  const tasks = perf_tasks();
+async function perfTraceJson(): Promise<string> {
+  const [frames, tasks] = await Promise.all([read("frames"), read("tasks")]);
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
@@ -201,7 +194,7 @@ function perfTraceJson(): string {
 }
 
 export async function perfTraceSave(): Promise<string> {
-  const json = perfTraceJson();
+  const json = await perfTraceJson();
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `perf-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {

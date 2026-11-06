@@ -1,10 +1,10 @@
 # @pxl/native/modules/platform/ios/PxlPlatform.podspec
 #
-# The device's half of the client's services (ts/client/src/services/, the
+# The device's half of the client's services (ts/client/src/service/, the
 # .native files): what the shell asks of the system — storage, the
-# clipboard, text, the compass — and the guest's own calls besides xpute's
-# (`import PxlNative`, the transport's decoder). The guest is built and linked by xpute's pod (@xpute/native,
-# Xpute.podspec), which puts the guest's include/ beside xpute's headers.
+# clipboard, text, the compass — and the kernel's own calls besides xpute's
+# (`import PxlNative`, the transport's decoder). The core is built and linked by xpute's pod (@xpute/native,
+# Xpute.podspec), which puts the kernel's include/ beside xpute's headers.
 
 require 'json'
 

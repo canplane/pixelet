@@ -1,0 +1,41 @@
+// @xpute/runtime
+
+/**
+ * What a program takes of the runtime: a core booted as its machine declares,
+ * by this build's platform (`boot`), or mounted where the program opened it
+ * (`mount`), with all the program decides — what backs its files, what hears
+ * its commands, its policy — and the runtime that gives (`Runtime`). The files
+ * under `src/` are xpute's own.
+ */
+
+export {
+  type Abort,
+  boot,
+  type Config,
+  type Gpu,
+  type GpuAsk,
+  type GpuGrant,
+  type Core,
+  type Runtime,
+  type Sender,
+  type Machine,
+  type ModuleSource,
+  mount,
+} from "./runtime.ts";
+export type { Encode, OnImport } from "./ipc/doorbell.ts";
+export {
+  connect,
+  type MemoryOf,
+  type OnUiImport,
+  type Remote,
+  serve,
+  close,
+} from "./remote.ts";
+export { type Binding, Namespace } from "./ipc/ns.ts";
+export { FileError, type Fs, FsServer } from "./ipc/fs.ts";
+export { type Front, Head } from "./ipc/head.ts";
+export { reserve_mem } from "./mem/reserve.ts";
+export { open_module } from "./module.ts";
+export { Timeslice } from "./sched/timeslice.ts";
+export { type FrameGrant, FramePacing } from "./sched/frame_pacing.ts";
+export type { Grant, SchedulingPolicy } from "./sched/policy.ts";

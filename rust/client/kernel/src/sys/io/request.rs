@@ -27,9 +27,9 @@ use crate::sys::io::policy::Policy;
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
 use fnv::FnvHashMap;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::mem::off_of_slice;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+use xpute_core::mem::off_of_slice;
 use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -164,7 +164,7 @@ pub struct RequestScheduler<S> {
     /// Where `declare` lays a stream's run before the run takes its place:
     /// as wide as the widest room.
     run_stage: Box<[Want]>,
-    /// A slot's index and generation are the key the host holds; a key is valid
+    /// A slot's index and generation are the key the runtime holds; a key is valid
     /// only while its attempt is out.
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
     generation: [u32; MAX_CREDITS as usize],
@@ -398,7 +398,7 @@ impl<S: Serve> RequestScheduler<S> {
             .push((key_of(slot, self.generation[slot]), stream, w.id));
     }
 
-    /// Ends the slot's attempt; its key is spent, so whatever the host still
+    /// Ends the slot's attempt; its key is spent, so whatever the runtime still
     /// reports under it (an abort or a body that raced the stop) is dropped.
     fn end(&mut self, slot: usize) -> Attempt {
         let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
@@ -501,7 +501,7 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
-    /// The module is being reset under a host that will not answer what it was told to run.
+    /// The module is being reset under a runtime that will not answer what it was told to run.
     pub fn reset(&mut self) {
         for slot in 0..self.attempt.len() {
             if self.attempt[slot].is_some() {
@@ -584,7 +584,7 @@ pub fn set_credits(credits: u32) {
     sched().set_credits(credits);
 }
 
-/// The most credits the host has granted: a body on each may still be out
+/// The most credits the runtime has granted: a body on each may still be out
 /// after a grant of fewer.
 pub fn most_credits() -> u32 {
     sched().most_credits

@@ -25,10 +25,10 @@ use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use xpute_guest::global::Global;
-use xpute_guest::mem;
-use xpute_guest::mem::heap::{alloc, free};
-use xpute_guest::sched::pass::Pass;
+use xpute_core::global::Global;
+use xpute_core::mem;
+use xpute_core::mem::heap::{alloc, free};
+use xpute_core::sched::pass::Pass;
 
 use crate::domain::scene::column::{self, GroupColumns};
 use crate::domain::scene::decor::gpu::{cull_dist_u, decor_impostor_angle, decor_model_angle};

@@ -13,8 +13,8 @@ import jaDev from "./dev/ja.json" with { type: "json" };
 import koDev from "./dev/ko.json" with { type: "json" };
 import zhHansDev from "./dev/zh-Hans.json" with { type: "json" };
 import zhHantDev from "./dev/zh-Hant.json" with { type: "json" };
-import * as locale from "@/services/locale.ts";
-import * as storage from "@/services/storage.ts";
+import * as locale from "@/service/locale.ts";
+import * as storage from "@/service/storage.ts";
 
 interface Catalog {
   [key: string]: string | Catalog;

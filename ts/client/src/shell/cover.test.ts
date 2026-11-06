@@ -72,7 +72,7 @@ test("coverOf - before it ran: failed where it will not, progress while it waits
   }
 });
 
-test("coverOf - opening the guest: its own step, before any GPU is asked for", () => {
+test("coverOf - opening the core: its own step, before any GPU is asked for", () => {
   expect(coverOf({ ...starting, boot: BOOT_OPENING })).toEqual({
     kind: "progress",
     of: "progress.app",

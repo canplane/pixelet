@@ -3,8 +3,8 @@
 //! What the model passes (decor, impostors, actors) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
+use xpute_core::global::Global;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
-use xpute_guest::global::Global;
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;

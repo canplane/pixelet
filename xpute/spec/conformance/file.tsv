@@ -1,13 +1,13 @@
-# A guest's files (xpute-guest ipc/file, the hostcalls in ARCHITECTURE.md): what a guest
-# owes the host's completions of its opens. The host's own end — roots, paths, reads, writes — is
-# fs/file.tsv's; this is the guest's, held across every guest. A descriptor is a handle, so the
+# A core's files (xpute-core ipc/file, the imports in ARCHITECTURE.md): what a core
+# owes the runtime's completions of its opens. The runtime's own end — roots, paths, reads, writes — is
+# fs/file.tsv's; this is the core's, held across every core. A descriptor is a handle, so the
 # trace binds them by name and holds them to relations, as handle.tsv does.
 #
-# The host completes an open, FS_OPENAT tagged with its descriptor (spec/abi/fs.json), on a later
+# The runtime completes an open, FS_OPENAT tagged with its descriptor (spec/abi/fs.json), on a later
 # turn however much later, with ECANCELED where its close came first; here a step completes it, so
 # the completion can be made to arrive after the descriptor it names has closed.
-# A failed open leaves no descriptor: the guest's library lets its handle go as the completion is
-# applied, so the guest's own CLOSE of it finds nothing.
+# A failed open leaves no descriptor: the core's library lets its handle go as the completion is
+# applied, so the core's own CLOSE of it finds nothing.
 scenarios	files.stale files.failed
 
 files.stale.step.0	submit 1 OPEN ack 5

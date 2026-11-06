@@ -9,8 +9,8 @@
 
 use core::mem::size_of;
 
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
 use crate::perf::report::{GpuRead, RayRead};
@@ -247,8 +247,8 @@ pub fn perf_record(row: impl FnOnce() -> TaskRow) {
 }
 
 /// A frame turn, `s` its record: closes the interval in progress with
-/// `interval_ms`, the host's gap that just ended, and `settled`, whether the
-/// host settled it, lands it, and opens `s`'s. `frame_task_ms` is how long
+/// `interval_ms`, the runtime's gap that just ended, and `settled`, whether the
+/// runtime settled it, lands it, and opens `s`'s. `frame_task_ms` is how long
 /// the frame task ran, the turn's end's to take out of the tasks' time.
 pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_task_ms: f64) {
     let l = perf();

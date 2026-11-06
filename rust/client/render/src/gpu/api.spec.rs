@@ -25,11 +25,11 @@ pub mod surface_role {
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
-/// (xpute-guest ipc/stream.rs) in the kernel's machine's GPU socket, which the
-/// kernel writes its calls into during a turn and the host runs once the turn
+/// (xpute-core ipc/stream.rs) in the kernel's machine's GPU socket, which the
+/// kernel writes its calls into during a turn and the runtime runs once the turn
 /// has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).
 ///
-/// Its head, past the stream's own words, is what the host writes for the
+/// Its head, past the stream's own words, is what the runtime writes for the
 /// kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
 /// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
 /// ticks. gpu/api.rs lays them out, and the stream says the head's length itself.
@@ -47,17 +47,17 @@ pub mod stream {
     pub const MODULE_BYTES: u32 = 131072;
 }
 
-/// What a device's GPU host runs the renderer's stream by (xpute-gpu host
+/// What a device's GPU runtime runs the renderer's stream by (xpute-gpu runtime
 /// `Config`), which the kernel hands it (pxl-kernel lib.rs `GPU`, xpute-gpu
 /// `Numbers`); a page's browser paces its frames and stages its writes itself.
 pub mod device {
     /// The frames drawn and not yet finished on the GPU at once: a turn draws only
-    /// while fewer are (xpute-gpu host `GpuHost::admit`), and a surface queues as
+    /// while fewer are (xpute-gpu runtime `GpuRuntime::admit`), and a surface queues as
     /// many. Two, as wgpu configures a surface by default
     /// (`Surface::get_default_config`): one frame's lag behind the input, with the
     /// GPU kept busy while the next is drawn.
     pub const FRAME_LATENCY: u32 = 2;
-    /// The chunk the host stages buffer writes in, each mapped once and reused: a
+    /// The chunk the runtime stages buffer writes in, each mapped once and reused: a
     /// mesh, the largest write a frame makes, is about a MiB, and a larger write
     /// takes a chunk of its own.
     pub const UPLOAD_CHUNK_BYTES: u32 = 1048576;

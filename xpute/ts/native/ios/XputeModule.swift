@@ -3,33 +3,33 @@
 import CXpute
 import ExpoModulesCore
 
-/// xpute's module on an iPhone (src/mod.ts): the guest and its GPU host
-/// through xpute's C ABI (xpute.h, xpute_gpu.h), and the view the guest's
+/// xpute's module on an iPhone (src/mod.ts): the core and its GPU runtime
+/// through xpute's C ABI (xpute.h, xpute_gpu.h), and the view the core's
 /// surface draws into (SurfaceView.swift). android/'s XputeModule.kt is the
 /// same under the same names.
 public class XputeModule: Module {
   /// The module `xpute_notify_on`'s function sends through.
   nonisolated(unsafe) static weak var current: XputeModule?
-  /// What answers the guest's hostcalls, called on the JavaScript thread,
+  /// What answers the core's calls, called on the JavaScript thread,
   /// inside `run` or `answer`.
   nonisolated(unsafe) static var answer: JavaScriptValue?
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
-    /// The guest has posted or asked, a hostcall waits for `answer`, or the
-    /// guest has stopped.
+    /// The core has posted or asked, a call waits for `answer`, or the
+    /// core has stopped.
     Events("onNotify")
 
     OnCreate {
       XputeModule.current = self
       // A C function captures nothing, so it reaches the module through the
-      // static. Called from the guest's thread: Expo's sendEvent schedules
+      // static. Called from the core's thread: Expo's sendEvent schedules
       // the event onto the JavaScript thread itself.
       xpute_notify_on { XputeModule.current?.sendEvent("onNotify") }
       // On the JavaScript thread, inside `run` or `answer`, which may call
-      // into JavaScript there. A host that throws refused it (EIO).
-      xpute_hostcall_on { at in
+      // into JavaScript there. A runtime that throws refused it (EIO).
+      xpute_call_on { at in
         guard let answer = XputeModule.answer else { return -38 }
         guard let res = try? answer.getFunction().call(arguments: Int(at)) else { return -5 }
         return Int32(truncatingIfNeeded: res.getInt())
@@ -38,24 +38,24 @@ public class XputeModule: Module {
     OnDestroy {
       XputeModule.current = nil
       XputeModule.answer = nil
-      xpute_hostcall_on(nil)
+      xpute_call_on(nil)
       xpute_notify_on(nil)
     }
 
     Function("mem") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
       guard let at = xpute_mem(&bytes) else { throw MemoryException() }
-      // The region is the guest's for the app's life: nothing is let go when
+      // The region is the core's for the app's life: nothing is let go when
       // the buffer is.
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
     }
 
-    Function("run") { (quotaMs: Double) -> Double in
-      xpute_run(quotaMs)
+    Function("run") { (deadlineMs: Double) -> Double in
+      xpute_run(deadlineMs)
     }
 
-    Function("kick") { (quotaMs: Double) in
-      xpute_kick(quotaMs)
+    Function("kick") { (deadlineMs: Double) in
+      xpute_kick(deadlineMs)
     }
 
     Function("pause") {
@@ -77,7 +77,7 @@ public class XputeModule: Module {
     }
 
     /// Kept past the call, so a copy of the value it was handed.
-    Function("hostcallOn") { (answer: JavaScriptValue) in
+    Function("callOn") { (answer: JavaScriptValue) in
       XputeModule.answer = answer.copy()
     }
 
@@ -96,6 +96,6 @@ public class XputeModule: Module {
 
 internal final class MemoryException: Exception, @unchecked Sendable {
   override var reason: String {
-    "the guest has no memory"
+    "the core has no memory"
   }
 }

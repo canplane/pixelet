@@ -35,10 +35,10 @@ use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::edge::{notified, Notify};
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+use xpute_core::mem::heap::Block;
+use xpute_core::sched::edge::{notified, Notify};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -84,7 +84,7 @@ struct State {
     /// How many times what `want` reads of it moved: the top or a shard
     /// read, a file refused or emptied.
     revision: u32,
-    /// The changes the store takes, in order, held while the host holds its
+    /// The changes the store takes, in order, held while the runtime holds its
     /// lanes (`change`).
     changes: Vec<Change>,
 }
@@ -98,7 +98,7 @@ enum Change {
     Edit(Write),
 }
 
-/// `c` made now, where the host holds none of the store's lanes and no
+/// `c` made now, where the runtime holds none of the store's lanes and no
 /// change waits before it; else held for `step`, in order. Only the store's
 /// writers wait.
 fn change(c: Change) {
@@ -441,7 +441,7 @@ fn saves() -> &'static mut Notify {
 }
 
 pub fn step() {
-    // The changes held while the host held the store's lanes, all now that
+    // The changes held while the runtime held the store's lanes, all now that
     // it holds none: nothing hands them between.
     if !state().changes.is_empty() && !object().is_in_flight() {
         let mut changes = core::mem::take(&mut state().changes);

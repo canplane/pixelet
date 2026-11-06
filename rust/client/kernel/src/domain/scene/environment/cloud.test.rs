@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::view::lens;
 use crate::sys;
 use pxl_render::frame::draw::{lists_bytes, set_lists};
-use xpute_guest::mem::heap::alloc;
+use xpute_core::mem::heap::alloc;
 
 /// The drift's step as it was written before the view held the seen step:
 /// a twelfth of a cell at the nearest drawn, over the wind's speed.

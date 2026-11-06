@@ -10,8 +10,8 @@ use crate::domain::control::sensor::reading::{
     device_orient_store, PermissionAnswer, SensorState, SensorStatus,
 };
 use crate::sys::sched::edge::wake_at;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 /// Orientation has no Permissions API, so revocation cannot be pushed; a long
 /// gap while tracking is taken as loss. Only valid where the sensor talks

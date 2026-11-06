@@ -28,7 +28,7 @@ use core::cell::Cell;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::camera::controller;

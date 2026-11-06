@@ -1,12 +1,12 @@
 //! Whole frames of the kernel, run as a device runs them: the kernel linked as its native
-//! guest (lib.rs `guest!`, xpute-gpu's `native_guest!`), driven through its rings as the
+//! core (lib.rs `core!`, xpute-gpu's `native_core!`), driven through its rings as the
 //! app's shell drives it (ts/client/src/port/), a frame's turn a refresh after the last on
-//! the guest's clock however long the machine takes (pace.rs), its world surface drawn
+//! the core's clock however long the machine takes (pace.rs), its world surface drawn
 //! offscreen on a wgpu device. A pass by hand binds its own groups and reads one usage
 //! scope; only the renderer's frames bind what the frame binds, so only they meet what WebGPU
 //! refuses of a whole frame.
 //!
-//! The frames fail on any error WebGPU's validation raises, which a scope on the guest's
+//! The frames fail on any error WebGPU's validation raises, which a scope on the core's
 //! thread holds turn by turn (gpu.rs); on the kernel's stop, a broken invariant's report
 //! (the encode rule's ENOTRECOVERABLE in pxl-render gpu/api.rs among them) or a trap; on
 //! owed work that has not come to rest within `REST_FRAMES` idle turns of a view left
@@ -14,12 +14,11 @@
 
 mod fs;
 mod gpu;
-mod host;
 mod pace;
+mod runtime;
 mod spec;
 mod watch;
 
-use host::Host;
 use pxl_engine::beam::ROLLS;
 use pxl_engine::screen::JITTERS;
 use pxl_engine::SHARD_ZOOM;
@@ -28,13 +27,14 @@ use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, TOP_ZOOM};
+use runtime::Runtime;
 use spec::V;
-use xpute_host::native::{pause, Guest};
+use xpute_runtime::native::{pause, Core};
 
 /// The display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
 
-/// What the client allows out at once (ts/client/src/services/origin.ts `credits`).
+/// What the client allows out at once (ts/client/src/service/origin.ts `credits`).
 const CREDITS: f64 = 6.0;
 
 /// The surface's size in pixels, a phone's at a device pixel ratio of 1.
@@ -81,21 +81,21 @@ fn shard_of([lon, lat]: [f64; 2]) -> Quadrant {
 }
 
 struct Run {
-    host: Host,
-    guest: Guest,
+    runtime: Runtime,
+    core: Core,
     clock_ms: f64,
     frames: u32,
 }
 
 impl Run {
-    /// A turn granted as the strobe grants one (ts/client/src/port/surface.ts
+    /// A turn granted as the scheduler grants one (ts/client/src/port/surface.ts
     /// `submit_grant`), then held to what the frames must keep: whether the kernel wants
     /// the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
         pace::frame();
         self.clock_ms += REFRESH_MS;
         self.frames += 1;
-        self.host.send(
+        self.runtime.send(
             "TURN_GRANT",
             &[
                 ("refresh_ms", V::Num(REFRESH_MS)),
@@ -106,7 +106,7 @@ impl Run {
             ],
         );
         watch::waiting(format!("frame {}: its turn", self.frames));
-        let wake = self.host.turn(REFRESH_MS);
+        let wake = self.runtime.turn(REFRESH_MS);
         self.check(wake.is_some());
         wake == Some(0.0)
     }
@@ -114,27 +114,27 @@ impl Run {
     fn check(&mut self, ran: bool) {
         let frame = self.frames;
         watch::waiting(format!("frame {frame}: the device's work"));
-        let errors = gpu::take(self.guest);
+        let errors = gpu::take(self.core);
         assert!(
             errors.is_empty(),
             "frame {frame}: the device refused what the frame encoded:\n{}",
             errors.join("\n")
         );
-        if let Some(report) = &self.host.abort {
+        if let Some(report) = &self.runtime.abort {
             panic!("frame {frame}: the kernel stopped: {report}");
         }
         assert!(ran, "frame {frame}: the kernel trapped");
         assert!(
-            self.host.refused.is_empty(),
+            self.runtime.refused.is_empty(),
             "frame {frame}: the kernel refused {:?}",
-            self.host.refused
+            self.runtime.refused
         );
     }
 
     /// A call of the shell's, checked as a frame is.
     fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
         watch::waiting(format!("frame {}: {name}'s answer", self.frames));
-        let r = self.host.call(name, values);
+        let r = self.runtime.call(name, values);
         self.check(true);
         assert!(r >= 0, "{name} answered {r}");
         r
@@ -169,7 +169,7 @@ impl Run {
     }
 
     fn pointer(&mut self, phase: &str, x: f64, y: f64) {
-        let shell = &self.host.shell;
+        let shell = &self.runtime.shell;
         let values = [
             ("phase", V::Num(shell.member("PointerPhase", phase).into())),
             (
@@ -182,7 +182,7 @@ impl Run {
             ("x", V::Num(x)),
             ("y", V::Num(y)),
         ];
-        self.host.send("INPUT_POINTER", &values);
+        self.runtime.send("INPUT_POINTER", &values);
         self.frame(true);
     }
 }
@@ -193,26 +193,26 @@ fn main() {
 }
 
 fn frames() {
-    let guest = pxl_kernel::guest();
-    // Every turn is one this test rings, none the guest's own thread runs, on the display's
+    let core = pxl_kernel::core();
+    // Every turn is one this test rings, none the core's own thread runs, on the display's
     // clock.
     pause();
-    pace::install(guest);
-    let host = Host::lay(guest);
+    pace::install(core);
+    let runtime = Runtime::lay(core);
     watch::waiting("the device's opening".to_string());
-    if gpu::open(guest).is_none() {
+    if gpu::open(core).is_none() {
         eprintln!("no adapter answers: the frames are not run");
         return;
     }
     let mut run = Run {
-        host,
-        guest,
+        runtime,
+        core,
         clock_ms: NOON_MS,
         frames: 0,
     };
-    // The boot as abi/boot.ts orders it: the host's attach, what the platform is, the GPU.
-    run.host.send_xpute("SYS_ATTACH");
-    run.host.send(
+    // The boot as abi/boot.ts orders it: the runtime's attach, what the platform is, the GPU.
+    run.runtime.send_xpute("SYS_ATTACH");
+    run.runtime.send(
         "SENSOR_PLATFORM",
         &[
             ("geolocation", V::Bool(false)),
@@ -221,9 +221,9 @@ fn frames() {
             ("orient_silence_is_loss", V::Bool(false)),
         ],
     );
-    run.host
+    run.runtime
         .send("SETTING_DEVELOPMENT", &[("development", V::Bool(true))]);
-    run.host.send_xpute("GPU_READY");
+    run.runtime.send_xpute("GPU_READY");
     run.frame(false);
     // The tile source as source.ts declares it: the place's shard alone, every tile of it
     // a page its version leaves out (fs.rs), so the world there is the sea's.
@@ -241,7 +241,7 @@ fn frames() {
     let surface = run.call("SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));
-    run.host.send(
+    run.runtime.send(
         "SURFACE_RESIZE",
         &[
             ("surface", surface.clone()),
@@ -250,13 +250,13 @@ fn frames() {
             ("device_pixel_ratio", V::Num(1.0)),
         ],
     );
-    let world = run.host.shell.member("SceneContent", "World");
+    let world = run.runtime.shell.member("SceneContent", "World");
     run.call(
         "SCENE_DRAW",
         &[("surface", surface), ("content", V::Num(world.into()))],
     );
     let mut made = 0;
-    while run.host.shown.renderer_progress < 1.0 {
+    while run.runtime.shown.renderer_progress < 1.0 {
         made += 1;
         assert!(
             made <= PIPELINE_FRAMES,
@@ -286,7 +286,8 @@ fn frames() {
     run.frames(JITTERS);
 
     // A zoom step.
-    run.host.send("INPUT_WHEEL", &[("delta_y", V::Num(100.0))]);
+    run.runtime
+        .send("INPUT_WHEEL", &[("delta_y", V::Num(100.0))]);
     run.frame(true);
     run.frames(JITTERS);
 

@@ -14,9 +14,9 @@ export const SENSOR_ORIENT = 0x1205;
  * or cut off; the compass's, where the platform says so (SYS_BOOT's
  * orient_silence_is_loss). */
 export const SENSOR_ERR = 0x120b;
-/** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
- * phases on what is left of the quota, the fetches within the credits. The turn leaves
- * its events on the completion ring, drawn by the kernel. It carries the host's alone:
+/** The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in
+ * what is left before the deadline, the fetches within the credits. The turn leaves
+ * its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:
  * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
  * world surface's (SURFACE_RESIZE). */
 export const TURN_GRANT = 0x1d01;
@@ -52,19 +52,19 @@ export const EDIT_MARKER_COMMIT = 0x1a04;
 export const INPUT_WHEEL = 0x1103;
 /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
 export const INPUT_MOVE = 0x1106;
-/** A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what. */
+/** Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what. */
 export const SURFACE_OPEN = 0x1501;
 /** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */
 export const SURFACE_RESIZE = 0x1502;
-/** A call: the canvas is going, and what it drew and held on the device is let go before the call returns. */
+/** The canvas is going: what it drew and held on the device is let go. */
 export const SURFACE_CLOSE = 0x1503;
-/** A call, answered 0 or an errno: what a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
+/** What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
  * sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
  * replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
  * where the character's fields are not all given for a character, any is given for the world, or no character is
  * named by them. */
 export const SCENE_DRAW = 0x1704;
-/** A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
+/** A setting set from the sheet or the character picker; refused until the kernel has read the
  * kept settings, which would be read over it. */
 export const SETTING_SET = 0x1601;
 /** A line the player said, shown over the character. */
@@ -109,7 +109,7 @@ export const SENSOR_STOP = 0x1203;
 /** The text in the platform's own family at the weight and size, broken into lines no
  * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
  * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
- * (sys/io/host.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
+ * (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
 export const TEXT_LAYOUT = 0x1c01;
 /** One line drawn in the platform's own family, starting at x with the middle of its em
  * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,

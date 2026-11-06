@@ -16,8 +16,8 @@ use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::mem;
-use xpute_guest::mem::heap::Block;
+use xpute_core::mem;
+use xpute_core::mem::heap::Block;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -31,8 +31,8 @@ use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
 use crate::sys::io::request;
 use pxl_spec::bake::tile::Occupancy;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
@@ -89,7 +89,7 @@ impl Base for TerrainTile {
 }
 
 /// The most terrain packets waiting at once: the body slots (`BODY_SLOTS`)
-/// less one for the most credits the host has granted and one for every
+/// less one for the most credits the runtime has granted and one for every
 /// Earth frame,
 /// so the packets waiting, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (sys/io/body.rs). A packet past it is

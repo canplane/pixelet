@@ -28,7 +28,7 @@ pub struct TaskRow {
     pub outcome: f64,
     pub fail: f64,
     pub detail: f64,
-    /// Failure location: file name address and length, and line. 0 when the host raised it.
+    /// Failure location: file name address and length, and line. 0 when the runtime raised it.
     pub at_file: f64,
     pub at_file_bytes: f64,
     pub at_line: f64,

@@ -19,7 +19,7 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;

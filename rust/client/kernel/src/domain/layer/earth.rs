@@ -12,8 +12,8 @@ use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::global::Global;
-use xpute_guest::mem::heap::Block;
+use xpute_core::global::Global;
+use xpute_core::mem::heap::Block;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::upload::{Uploads, Uptake};

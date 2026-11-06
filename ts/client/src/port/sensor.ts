@@ -1,7 +1,7 @@
 // @pxl/client/port/sensor.ts
 
 /** SENSOR on the shell's port: what the place's sensors heard, in its words
- * (services/types.ts `SensorListener`), sent as the kernel numbers it; the kernel's
+ * (service/types.ts `SensorListener`), sent as the kernel numbers it; the kernel's
  * asks that one start or stop, passed to the place's; and the location the
  * search panel's card asks for. */
 
@@ -10,12 +10,12 @@ import {
   GeolocationErrorCode,
   PermissionAnswer,
   Sensor,
-  type SensorStartEvent,
-  type SensorStopEvent,
+  type SensorStart,
+  type SensorStop,
 } from "@/abi/cmd.spec.ts";
-import { type SensorListener } from "@/services/types.ts";
-import * as sensor from "@/services/sensor.ts";
-import { kernel } from "@/host/kernel.ts";
+import { type SensorListener } from "@/service/types.ts";
+import * as sensor from "@/service/sensor.ts";
+import { kernel } from "@/runtime/kernel.ts";
 
 export function locate(): void {
   kernel.sensor_locate();
@@ -81,14 +81,14 @@ export const SENSOR_LISTENER: SensorListener = {
 };
 
 /** The kernel's SENSOR_START. */
-export function sensor_start(e: SensorStartEvent): void {
+export function sensor_start(e: SensorStart): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.start();
   } else sensor.orient.start();
 }
 
 /** The kernel's SENSOR_STOP. */
-export function sensor_stop(e: SensorStopEvent): void {
+export function sensor_stop(e: SensorStop): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.stop();
   } else sensor.orient.stop();

@@ -22,7 +22,7 @@ export function installConsole(): void {
   g.xpute = shell.door;
   g.pxl = {
     perf: {
-      report: () => perfReportText(perfReportRead()),
+      report: async () => perfReportText(await perfReportRead()),
       read: perfReportRead,
       trace: perfTraceSave,
       drive: perfDrive,

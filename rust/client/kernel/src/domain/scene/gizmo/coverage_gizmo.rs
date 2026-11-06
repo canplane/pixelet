@@ -23,7 +23,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;

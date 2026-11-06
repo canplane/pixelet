@@ -249,7 +249,9 @@ export function PerfPanel() {
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
-            void perfReportCopy(perfReportText(perfReportRead())).then(setSaid)
+            void perfReportRead()
+              .then((r) => perfReportCopy(perfReportText(r)))
+              .then(setSaid)
           }
         />
         <PanelButton

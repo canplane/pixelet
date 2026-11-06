@@ -1,16 +1,20 @@
 // pxl-render/gpu/api.rs
 
 //! The WebGPU calls the renderer makes, written through xpute's encoder
-//! (xpute-gpu encode) into one stream in the kernel's memory, which the host
+//! (xpute-gpu encode) into one stream in the kernel's memory, which the runtime
 //! runs after the turn: the page's on WebGPU, the device app's on wgpu
-//! (xpute-gpu host), the same records either way. What is pixelet's stays
+//! (xpute-gpu runtime), the same records either way. What is pixelet's stays
 //! here: the pipeline records expanded into descriptors, a pass's shape and
 //! the spans' timing.
 //!
-//! The stream's head holds what the host writes for the kernel: the device's
+//! The stream's head holds what the runtime writes for the kernel: the device's
 //! block (limits, features, timestamp period, preferred surface format,
 //! status) and the spans' times.
 
+use xpute_core::abi::handle::handle_slot;
+use xpute_core::global::Global;
+use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::mem;
 pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
@@ -21,14 +25,10 @@ use xpute_gpu::enums::{
     VertexStepMode, FEATURE_NAME, LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
-use xpute_guest::abi::handle::handle_slot;
-use xpute_guest::global::Global;
-use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// A fence or the device's STATUS as the host last stored it.
+/// A fence or the device's STATUS as the runtime last stored it.
 pub use xpute_gpu::encode::load_acquire;
 /// Whether a completion's fence holds the ticket it was asked with
 /// (xpute spec RESULT).
@@ -83,7 +83,7 @@ const DEVICE_WORDS: usize = PERIOD_AT + 4;
 /// The head's words past the stream's own: the device's block, then the
 /// spans' reads, `READS` of them, each its fence and result, then the
 /// begin and end ticks of the frame it timed, two words a tick (`read_at`). The stream says the
-/// head's length itself, so the host reads none of this.
+/// head's length itself, so the runtime reads none of this.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
 const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
 /// The spans' reads on their way at once, each its own mapped buffer: a
@@ -516,7 +516,7 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
 }
 
 /// Whether two entries bind one resource at one binding: a resource's handle
-/// is generational (xpute_guest abi/handle.rs), so one let go and made again
+/// is generational (xpute_core abi/handle.rs), so one let go and made again
 /// is another handle, never the one it had.
 fn same_entry(a: &Entry, b: &Entry) -> bool {
     use encode::Resource::{Buffer, Sampler, View};
@@ -544,7 +544,7 @@ fn same_entry(a: &Entry, b: &Entry) -> bool {
 /// its owner sets it before the frame's commands (`frame_begin`), each frame
 /// it draws, as a frame lets go in it each object it makes; and lets it go
 /// with itself. The group it replaces names a resource already let go,
-/// destroyed by the host, and is let go then.
+/// destroyed by the runtime, and is let go then.
 #[derive(Default)]
 pub struct Group {
     layout: Id,
@@ -638,17 +638,17 @@ struct State {
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
-    /// The objects let go while the host held the stream, destroyed once it
+    /// The objects let go while the runtime held the stream, destroyed once it
     /// hands it back (`writable`).
     frees: Vec<Id>,
-    /// A device answered while the host held the stream: its block is asked
+    /// A device answered while the runtime held the stream: its block is asked
     /// once it hands it back.
     device_pending: bool,
-    /// The device's block said LOST when last read: the host alone writes
+    /// The device's block said LOST when last read: the runtime alone writes
     /// the block, so a loss is taken once by this, not by clearing it.
     lost: bool,
     /// The ranges each WRITE_BUFFER_AT names, address and bytes: those
-    /// recorded since the last publish, and those of the hand-off the host
+    /// recorded since the last publish, and those of the hand-off the runtime
     /// holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
@@ -681,11 +681,11 @@ fn state() -> &'static mut State {
 
 fn head(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
-    // SAFETY: a word of the stream's head, the kernel's and the host's alone.
+    // SAFETY: a word of the stream's head, the kernel's and the runtime's alone.
     unsafe { &mut *mem::at::<u32>(at) }
 }
 
-/// Read `r`'s fence and result, the host's to write.
+/// Read `r`'s fence and result, the runtime's to write.
 fn read_fence(r: usize) -> &'static [u32; 2] {
     let at = state().at as usize + read_at(r) * WORD;
     // SAFETY: two words of the stream's head, which the kernel only reads.
@@ -722,7 +722,7 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
 
 /// The calls' state over a stream in a region of its own, apart from the kernel's memory, its
 /// encoder beside it, and `device` as though its block were in: what a test makes the renderer
-/// on, no host running the stream.
+/// on, no runtime running the stream.
 #[cfg(test)]
 pub(crate) fn install_apart(device: Device) {
     const WORDS: usize = 1 << 25;
@@ -780,7 +780,7 @@ impl State {
     }
 }
 
-/// Where the stream lies in the kernel's memory, once installed: what a host
+/// Where the stream lies in the kernel's memory, once installed: what a runtime
 /// runs after each turn.
 pub fn stream_at() -> Option<u32> {
     STATE.get(|| None).as_ref().map(|s| s.at)
@@ -792,8 +792,8 @@ pub fn gpu() -> Option<&'static Gpu> {
     device().filter(|_| stream_free()).map(|_| &GPU)
 }
 
-/// Whether the host has handed the stream back since the kernel last
-/// published it (xpute_guest ipc/stream.rs R3): until then the kernel
+/// Whether the runtime has handed the stream back since the kernel last
+/// published it (xpute_core ipc/stream.rs R3): until then the kernel
 /// records nothing, and a frame is held.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
@@ -820,7 +820,7 @@ fn writable(s: &mut State) -> bool {
     true
 }
 
-/// The device as its block says, once the host has written it: asked for on
+/// The device as its block says, once the runtime has written it: asked for on
 /// the first call after a device answers (`on_device_answered`).
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
@@ -864,7 +864,7 @@ pub fn device() -> Option<Device> {
 }
 
 /// A device answered: its block is asked for, once the stream is the
-/// kernel's to write, and read once the host has written it.
+/// kernel's to write, and read once the runtime has written it.
 pub fn on_device_answered() {
     let s = state();
     if writable(s) {
@@ -876,15 +876,15 @@ pub fn on_device_answered() {
 
 fn ask_device(s: &mut State) {
     let at = s.at as usize + DEVICE_AT * WORD;
-    // SAFETY: the head's block, the host's to write.
+    // SAFETY: the head's block, the runtime's to write.
     let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE_WORDS) };
     call::device(&mut s.stream, block);
     s.device_out = true;
 }
 
-/// Whether the device went since this was last asked, as its host says in
+/// Whether the device went since this was last asked, as its runtime says in
 /// the device's block (xpute STATUS.LOST); taken once, the block left as
-/// the host wrote it.
+/// the runtime wrote it.
 pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
@@ -988,7 +988,7 @@ pub fn on_device_lost() {
     }
 }
 
-/// The turn's records handed to the host, and with them the ranges they
+/// The turn's records handed to the runtime, and with them the ranges they
 /// name (`in_flight`).
 pub fn gpu_publish() {
     if let Some(s) = STATE.get(|| None).as_mut() {
@@ -1000,9 +1000,9 @@ pub fn gpu_publish() {
     }
 }
 
-/// Whether the host holds memory of `vals`: a WRITE_BUFFER_AT names it, of
-/// the records not yet published or of the hand-off the host has not given
-/// back (xpute_guest ipc/stream.rs R3). Their writer leaves them as they
+/// Whether the runtime holds memory of `vals`: a WRITE_BUFFER_AT names it, of
+/// the records not yet published or of the hand-off the runtime has not given
+/// back (xpute_core ipc/stream.rs R3). Their writer leaves them as they
 /// are, and where they are, until neither does.
 pub fn in_flight<T>(vals: &[T]) -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
@@ -1093,7 +1093,7 @@ fn handle_of(id: Option<Id>) -> Id {
     }
 }
 
-/// Lets an object go: the host destroys it, and its handle is free. 0 is nothing.
+/// Lets an object go: the runtime destroys it, and its handle is free. 0 is nothing.
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
@@ -1417,7 +1417,7 @@ impl Gpu {
     /// group layouts, drawing into `targets` colors of `format`, at locations
     /// from 0, and `depth`, `stencil` the stencil beside it: into the depth
     /// alone where `format` is depth32's, its fragment writing no color (the
-    /// shadow map, gpu/shadow.rs). Made by WebGPU's async call: the host
+    /// shadow map, gpu/shadow.rs). Made by WebGPU's async call: the runtime
     /// stores `ticket` at the fence once it is made, and nothing names it
     /// before (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
@@ -1586,9 +1586,9 @@ impl Gpu {
         call::write_buffer(&mut self.s().stream, id, off, bytes);
     }
 
-    /// `bytes` read where they lie when the host runs the turn, one record
-    /// however large: the host's from the turn's publish until it hands the
-    /// stream back (xpute_guest ipc/stream.rs R3), their owner asking `in_flight`
+    /// `bytes` read where they lie when the runtime runs the turn, one record
+    /// however large: the runtime's from the turn's publish until it hands the
+    /// stream back (xpute_core ipc/stream.rs R3), their owner asking `in_flight`
     /// before it writes them again.
     pub fn upload_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         let s = self.s();
@@ -1620,10 +1620,10 @@ impl Gpu {
     /// once, on this device, for the one that takes it. None while it
     /// lands, the first ask handing it to the device; none for good for a
     /// file whose size no header gives (pxl-spec `asset::image_size`),
-    /// which the kernel does not hand, for one the host could not decode,
+    /// which the kernel does not hand, for one the runtime could not decode,
     /// and for the empty file of one already taken on this device.
     /// The file's bytes are its asker's until it is taken (`take_landed`);
-    /// the host copies them out as it runs the turn.
+    /// the runtime copies them out as it runs the turn.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let s = self.s();
         if let Some(k) = s.images.iter().position(|a| a.image == image) {
@@ -2003,7 +2003,7 @@ impl Gpu {
         s.stamps_out[r] = s.stamps_asked_cnt;
         let at = s.at as usize + read_at(r) * WORD;
         // SAFETY: the head's read: its fence, its result and its ticks,
-        // the host's to write.
+        // the runtime's to write.
         let (fence, ticks) = unsafe {
             (
                 &*mem::at::<[u32; 2]>(at),

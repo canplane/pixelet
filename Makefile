@@ -44,7 +44,7 @@ check-ts:
 # The module as it ships in both builds, the servers, what runs here alone
 # (the tests' code, the bakes, the tools) and both device targets.
 check-rust:
-	+cd rust && cargo fmt --check && cargo lint-guest && cargo lint-guest-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
+	+cd rust && cargo fmt --check && cargo lint-kernel && cargo lint-kernel-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
 check-rules:
 	+cd rust && cargo check-rules
 check-spec:
@@ -84,7 +84,7 @@ spec:
 # kind's set under ./out. The two local ones run the three servers beside the
 # client, each its own job, so Ctrl-C stops them all. Each dev target runs
 # the module's watcher beside the client (ts/client/script/watch-wasm.py): a
-# change under rust/ rebuilds public/guest.wasm and the page is reloaded by
+# change under rust/ rebuilds public/kernel.wasm and the page is reloaded by
 # hand. `preview` is the bundle a deploy builds, to measure the client by.
 dev: sync-build-number
 	$(MAKE) -j2 watch-wasm web

@@ -46,9 +46,9 @@
 //! to be freed: a first arrival a window wants is kept outside that
 //! reckoning, and may take the place a tile asked again was counted on.
 
-use xpute_guest::global::Global;
-use xpute_guest::mem::heap::{alloc, free, Block};
-use xpute_guest::mem::section::PAGE_BYTES;
+use xpute_core::global::Global;
+use xpute_core::mem::heap::{alloc, free, Block};
+use xpute_core::mem::section::PAGE_BYTES;
 
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};

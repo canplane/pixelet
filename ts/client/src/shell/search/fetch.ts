@@ -4,7 +4,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { SEARCH_URL } from "@/port/shell.ts";
 import type { NamePart } from "@/shell/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
-import * as origin from "@/services/origin.ts";
+import * as origin from "@/service/origin.ts";
 import type { SEARCH_KIND } from "./search.spec.ts";
 
 /** A part as the API writes it: its subtype's number, and `approx` where no area holds the point. */

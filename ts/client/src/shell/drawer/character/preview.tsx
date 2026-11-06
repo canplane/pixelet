@@ -11,7 +11,7 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { surface_driver } from "@/port/surface.ts";
 import type { Character } from "./character.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { Preview } from "@/services/surface.tsx";
+import { Preview } from "@/service/surface.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import * as scene from "@/port/scene.ts";
 

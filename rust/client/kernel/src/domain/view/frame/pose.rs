@@ -17,7 +17,7 @@ use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_spec::procedural::height_u_per_m;
 use pxl_spec::space::camera::grid::fov;
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -6,11 +6,11 @@
 # and the two processes sit inside it.
 #
 # The client is one core, pxl-render and pxl-kernel, and pxl-kernel is its
-# artifact: one `xpute_guest::guest!` makes it the WebAssembly module the
+# artifact: one `xpute_core::core!` makes it the WebAssembly module the
 # main thread and each worker instantiate for themselves, and the library
-# linked into a device's app, which draws with wgpu where the page's host
+# linked into a device's app, which draws with wgpu where the page's runtime
 # draws with the browser's WebGPU. The form is xpute's for its target
-# (xpute-guest's wasm, xpute-host's native, xpute-gpu's host). The server end
+# (xpute-core's wasm, xpute-runtime's native, xpute-gpu's runtime). The server end
 # is native: pxl-geo and pxl-api over
 # pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
 # and pxl-geo-spec where the two geo halves read the same tables.
@@ -20,7 +20,7 @@
 # Nothing else crosses: a third-party dependency in either ships every byte
 # to the client and is read as this tree's own code, so each one below is
 # there because it was held to what it replaced and did not differ — and
-# nothing in the client's crates may assume WebAssembly; the guest's form,
+# nothing in the client's crates may assume WebAssembly; the core's form,
 # xpute's, is what tells the targets apart.
 
 [workspace]
@@ -55,9 +55,9 @@ hex = "0.4"
 # names another by name. pxl-kernel and xpute-kit default to nothing here: a
 # crate that wants their defaults says so.
 xpute-kit = { path = "../xpute/rust/kit", default-features = false }
-xpute-guest = { path = "../xpute/rust/guest" }
+xpute-core = { path = "../xpute/rust/core" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
-xpute-host = { path = "../xpute/rust/host" }
+xpute-runtime = { path = "../xpute/rust/runtime" }
 pxl-engine = { path = "spec/engine" }
 pxl-content = { path = "spec/content" }
 pxl-spec = { path = "spec" }
@@ -67,14 +67,14 @@ pxl-server = { path = "server" }
 pxl-geo-spec = { path = "server/geo-spec" }
 
 # The client's crates name the kernel's memory by offsets from one base
-# (xpute-guest mem.rs), and an offset cast straight to a pointer
+# (xpute-core mem.rs), and an offset cast straight to a pointer
 # reads the wrong memory wherever the base is not 0 — on a device, where the
 # kernel faulted reading a terrain page from address 92 MB. `as` spells that
 # cast and every harmless one alike, so the harmless ones are made to say
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # pxl-tool's check_rules refuses. A crate takes these with `[lints]
-# workspace = true`; xpute-guest and xpute-host, in their own workspace, spell
+# workspace = true`; xpute-core and xpute-runtime, in their own workspace, spell
 # them themselves.
 [workspace.lints.rust]
 # A path no longer than what is already in scope.

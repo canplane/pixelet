@@ -1,9 +1,9 @@
 // pxl-kernel/sys/sched/clock.rs
 
-//! The wall clock, as each frame the host hands tells it: what the world's
+//! The wall clock, as each frame the runtime hands tells it: what the world's
 //! time of day reads, set where the door takes the frame.
 
-use xpute_guest::global::Global;
+use xpute_core::global::Global;
 
 static WALL_MS: Global<f64> = Global::new();
 

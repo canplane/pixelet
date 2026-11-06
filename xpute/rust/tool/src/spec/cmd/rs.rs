@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/rs.rs
 
 //! The command table as Rust: its enums, each packet's reader and each
-//! event's writer, for a Rust guest.
+//! import's writer, for a Rust core.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
@@ -243,7 +243,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "",
             "// A list a record carries is a function handing out its items, whose",
             "// type is long to spell and is spelled once, here, for each. A table",
-            "// with no event or no enum read off the wire leaves a writer or a",
+            "// with no import or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
             "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
@@ -257,7 +257,13 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.pkt.iter().chain(c.event.iter()).chain(c.reply.iter()).flatten())
+        .flat_map(|c| {
+            c.pkt
+                .iter()
+                .chain(c.import.iter())
+                .chain(c.reply.iter())
+                .flatten()
+        })
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
@@ -322,7 +328,11 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         let pascal_name = pascal(&c.name);
         let pkts = [
             (c.pkt.as_ref(), pascal_name.clone(), "packet"),
-            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{pascal_name}Reply"), "completion's packet"),
+            (
+                c.reply.as_ref().filter(|r| !r.is_empty()),
+                format!("{pascal_name}Reply"),
+                "completion's packet",
+            ),
         ];
         for (pkt, name, what) in pkts {
             let Some(pkt) = pkt else {
@@ -366,18 +376,22 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ]);
         }
         let name = pascal_name;
-        if let Some(event) = &c.event {
-            let doc = [format!("Command::{}'s event.", c.name)];
-            rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;
-            if let Some(door) = t.event {
-                let lt = if rs_borrows(spec, event)? { "<'_>" } else { "" };
+        if let Some(import) = &c.import {
+            let doc = [format!("Command::{}'s packet.", c.name)];
+            rs_writer(spec, &mut out, &name, Some(&doc), import)?;
+            if let Some(door) = t.import {
+                let lt = if rs_borrows(spec, import)? {
+                    "<'_>"
+                } else {
+                    ""
+                };
                 out.extend([
                     String::new(),
-                    format!("impl {door}::Event for {name}Event{lt} {{"),
+                    format!("impl {door}::Import for {name}{lt} {{"),
                     format!("    const NUMBER: u32 = {};", c.val),
-                    format!("    const FIELDS: u32 = {};", event.len()),
+                    format!("    const FIELDS: u32 = {};", import.len()),
                     "    fn write(&self, w: &mut PacketWriter) {".to_string(),
-                    format!("        {name}Event::write(self, w);"),
+                    format!("        {name}::write(self, w);"),
                     "    }".to_string(),
                     "}".to_string(),
                 ]);

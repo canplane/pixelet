@@ -1,12 +1,12 @@
 {
   "$doc": [
-    "The file device, on major FS: a guest's files, opened below a root the host bound, as",
+    "The file device, on major FS: a core's files, opened below a root the runtime bound, as",
     "POSIX's `openat` and io_uring's submission and completion name them (ipc/fs.json).",
-    "The guest posts its calls (`import`), FS_OPENAT and FS_CLOSE with ACKREQ, tagged with",
-    "the descriptor; the host completes each of those on a later turn, a frame of the same",
+    "The core posts its calls (`import`), FS_OPENAT and FS_CLOSE with ACKREQ, tagged with",
+    "the descriptor; the runtime completes each of those on a later turn, a frame of the same",
     "tag and command flagged RES on the submission ring, and does the rest in the gap.",
-    "xpute ships both ends: the guest's calls (xpute-guest ipc/door.rs, ipc/file.rs) and the",
-    "host's server (@xpute/host). A program binds only its roots to what backs them."
+    "xpute ships both ends: the core's calls (xpute-core ipc/door.rs, ipc/file.rs) and the",
+    "runtime's server (@xpute/runtime). A program binds only its roots to what backs them."
   ],
   "name": "fs",
   "export": [],
@@ -46,7 +46,7 @@
           "name": "detail",
           "type": "u32",
           "$doc": [
-            "Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."
+            "Whatever number the runtime refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."
           ]
         }
       ]
@@ -55,7 +55,7 @@
       "name": "FS_READ",
       "val": 771,
       "$doc": [
-        "The opened file's first `len` bytes copied to `at` in the guest's memory."
+        "The opened file's first `len` bytes copied to `at` in the core's memory."
       ],
       "pkt": [
         {
@@ -76,8 +76,8 @@
       "name": "FS_WRITE",
       "val": 772,
       "$doc": [
-        "The `len` bytes at `at` added to what the file opened for writing holds. The host",
-        "reads them at FS_CLOSE, and the guest keeps them unchanged until FS_CLOSE is completed."
+        "The `len` bytes at `at` added to what the file opened for writing holds. The runtime",
+        "reads them at FS_CLOSE, and the core keeps them unchanged until FS_CLOSE is completed."
       ],
       "pkt": [
         {

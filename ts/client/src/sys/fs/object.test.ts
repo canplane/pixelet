@@ -3,12 +3,12 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 
 import { format, object } from "@/abi/file.spec.ts";
-import type { Tx } from "@/services/types.ts";
+import type { Tx } from "@/service/types.ts";
 import {
   decode_top,
   decode_writes,

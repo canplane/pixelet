@@ -11,5 +11,5 @@ export const SUM = 0x1001;
 
 // ---- asker, import ----
 
-/** A number the host answers, which the guest adds. */
+/** A number the runtime answers, which the core adds. */
 export const ASK = 0x1002;

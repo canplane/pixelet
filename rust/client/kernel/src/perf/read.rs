@@ -30,8 +30,8 @@ use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 const STATS_WORDS: usize = STAT::WORDS as usize;
 const NOW_WORDS: usize = NOW::WORDS as usize;

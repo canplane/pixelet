@@ -7,7 +7,7 @@ use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
 use crate::sys;
 use pxl_render::frame::draw::{lists_bytes, set_lists, DRAW_PIPELINES};
 use pxl_spec::space::coord::mat4;
-use xpute_guest::mem::heap::alloc;
+use xpute_core::mem::heap::alloc;
 
 /// A turn whose eye moved and whose world did not sets the same draws with
 /// the same uniforms and the same stands, so it changes none of them

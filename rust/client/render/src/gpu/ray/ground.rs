@@ -9,7 +9,7 @@ use pxl_engine::clipmap::{
     FILL_BRICK, FILL_CAP, FILL_WORDS, HANDED_WORDS, LINES_AT, PALETTE_AT, SLOTS,
 };
 use pxl_engine::{fill, way};
-use xpute_guest::mem::off_of;
+use xpute_core::mem::off_of;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -194,9 +194,9 @@ pub(super) struct GroundBuffers {
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands bricks a mapping still out a frame more (`READS`);
     /// each one's brick and the fill it carries (`FREE` where none), its
-    /// mapping's own fence and result (`read_back`), which the host
-    /// writes, held where the guest's allocator puts it, inside the region
-    /// the host addresses, as an arriving image's are (a static is outside
+    /// mapping's own fence and result (`read_back`), which the runtime
+    /// writes, held where the kernel's allocator puts it, inside the region
+    /// the runtime addresses, as an arriving image's are (a static is outside
     /// it on a device), and the ticket it was last mapped with, the
     /// kernel's, one mapping out at a time.
     reads: [u32; READS],
@@ -411,7 +411,7 @@ impl GroundBuffers {
     /// read the new one; the cast's groups follow its id (`prepare`).
     ///
     /// A known gap: a device out of memory may fail to make the doubled
-    /// buffer, and nothing hears it, the host keeping no error scope, so the
+    /// buffer, and nothing hears it, the runtime keeping no error scope, so the
     /// renderer reads on with a buffer the device holds as an error. The
     /// last doubling holds the old pool beside the new, 32 MiB with 64,
     /// until the copy is submitted; the scratch's growth has the same gap.
@@ -736,7 +736,7 @@ impl RaysPass {
     /// nothing asks a turn for it.
     ///
     /// On a device, a mapping that completes after the last asked turn is
-    /// seen at the next turn: the host learns of it only by polling the
+    /// seen at the next turn: the runtime learns of it only by polling the
     /// device, and a thread waiting there (wgpu `poll(Wait)`) holds the lock a
     /// surface's present takes (wgpu-core's `Device::poll` reads its
     /// `snatchable_lock` across the fence wait, `Surface::present` writes

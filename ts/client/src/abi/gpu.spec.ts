@@ -14,11 +14,11 @@ import * as stream from "./gpu/stream.spec.ts";
 export { surface_role };
 
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
- * (xpute-guest ipc/stream.rs) in the kernel's machine's GPU socket, which the
- * kernel writes its calls into during a turn and the host runs once the turn
+ * (xpute-core ipc/stream.rs) in the kernel's machine's GPU socket, which the
+ * kernel writes its calls into during a turn and the runtime runs once the turn
  * has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).
  *
- * Its head, past the stream's own words, is what the host writes for the
+ * Its head, past the stream's own words, is what the runtime writes for the
  * kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
  * of them (gpu/api.rs `READS`), each its word, then each span's begin and end
  * ticks. gpu/api.rs lays them out, and the stream says the head's length itself. */
