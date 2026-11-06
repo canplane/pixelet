@@ -127,3 +127,18 @@ fn a_render_pass_names_args_written_anywhere_in_it() {
     );
     assert_eq!(s.binds_read(PASS, 7), None);
 }
+
+/// A render pass that declares what it draws names a pipeline set in it of no record it
+/// declares, or of none; a pass that declares none names none.
+#[test]
+fn a_declared_render_pass_names_a_pipeline_it_does_not_declare() {
+    let mut s = with_args();
+    s.recorded(20, 7);
+    s.recorded(21, 8);
+    s.opened(PASS, ENCODER, false, None);
+    assert_eq!(s.undeclared(PASS, 21), None, "none declared");
+    s.declared(PASS, &[7]);
+    assert_eq!(s.undeclared(PASS, 20), None);
+    assert_eq!(s.undeclared(PASS, 21), Some(8));
+    assert_eq!(s.undeclared(PASS, 22), Some(u32::MAX), "made of no record");
+}

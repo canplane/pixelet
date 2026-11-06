@@ -46,6 +46,9 @@ pub struct Open {
     /// as a render pass is one usage scope whole.
     drawn_groups: Vec<Id>,
     drawn_args: Vec<Id>,
+    /// A render pass's declared pipelines, by their records' numbers (gpu/ray/sequence.rs
+    /// `Step::in_pass`); none where the pass declares none.
+    declared: &'static [u32],
 }
 
 /// The args buffers the device holds, each with the source line that made it
@@ -57,6 +60,7 @@ pub struct Splits {
     writes: Vec<(Id, Vec<(u32, Id)>)>,
     chains: Vec<Chain>,
     open: Vec<Open>,
+    records: Vec<(Id, u32)>,
 }
 
 impl Splits {
@@ -95,6 +99,35 @@ impl Splits {
     pub fn let_go(&mut self, id: Id) {
         self.args.retain(|&(b, _)| b != id);
         self.writes.retain(|(g, _)| *g != id);
+        self.records.retain(|&(p, _)| p != id);
+    }
+
+    /// A render pipeline made of record `record` (frame/shader/record.rs `pipeline`).
+    pub fn recorded(&mut self, pipeline: Id, record: u32) {
+        self.let_go(pipeline);
+        self.records.push((pipeline, record));
+    }
+
+    /// Render pass `pass` declared to draw `pipelines` alone, by their records' numbers.
+    pub fn declared(&mut self, pass: Id, pipelines: &'static [u32]) {
+        if let Some(o) = self.open(pass) {
+            o.declared = pipelines;
+        }
+    }
+
+    /// Where `pipeline` is set in a pass that declares what it draws and is not among those,
+    /// its record's number (`u32::MAX` for a pipeline made of none).
+    pub fn undeclared(&self, pass: Id, pipeline: Id) -> Option<u32> {
+        let o = self.open_of(pass)?;
+        if o.declared.is_empty() {
+            return None;
+        }
+        let record = self
+            .records
+            .iter()
+            .find(|&&(p, _)| p == pipeline)
+            .map_or(u32::MAX, |&(_, r)| r);
+        (!o.declared.contains(&record)).then_some(record)
     }
 
     /// An encoder begun, recorded into itself until it is cut.
@@ -201,6 +234,7 @@ impl Splits {
             end,
             drawn_groups: Vec::new(),
             drawn_args: Vec::new(),
+            declared: &[],
         });
     }
 

@@ -2,11 +2,11 @@
 
 use super::*;
 use crate::frame::shader::access::{
-    found, role, ARGS_INDIRECT, ARGS_WRITTEN, COPY, NO_BUFFER, WRITE_BY_HOST,
+    found, role, ARGS_INDIRECT, ARGS_WRITTEN, COPY, DRAW, NO_BUFFER, WRITE_BY_HOST,
 };
 
 /// The sources whose calls take their offsets from a step here.
-const SOURCES: [(&str, &str); 7] = [
+const SOURCES: [(&str, &str); 8] = [
     ("ray/cast.rs", include_str!("cast.rs")),
     ("ray/count.rs", include_str!("count.rs")),
     ("ray/raster.rs", include_str!("raster.rs")),
@@ -14,7 +14,46 @@ const SOURCES: [(&str, &str); 7] = [
     ("shadow.rs", include_str!("../shadow.rs")),
     ("pass/decor.rs", include_str!("../pass/decor.rs")),
     ("pass/impostor.rs", include_str!("../pass/impostor.rs")),
+    ("renderer.rs", include_str!("../renderer.rs")),
 ];
+
+/// Every render pass a draw of the frame's runs in declared where the host begins it: each
+/// list a draw names (`Step::in_pass`) held to a pass by `Gpu::declare_pass`, which refuses
+/// any other pipeline the pass sets; and every pass declared so holds a list of the frame's.
+#[test]
+fn the_host_declares_each_render_pass_of_an_indirect_draw() {
+    let lists = [
+        ("RASTER_PASS", RASTER_PASS),
+        ("LIGHT_RASTER_PASS", LIGHT_RASTER_PASS),
+        ("MAP_PASS", MAP_PASS),
+        ("LIT_PASS", LIT_PASS),
+    ];
+    let declared: Vec<&str> = SOURCES
+        .iter()
+        .flat_map(|(file, text)| {
+            calls(text, "declare_pass(").into_iter().map(move |(_, s)| {
+                named(s).unwrap_or_else(|| panic!("{file}: a pass declared off no list: {s}"))
+            })
+        })
+        .collect();
+    for step in FRAME.steps.iter().filter(|s| s.kind == DRAW) {
+        let (name, _) = lists
+            .iter()
+            .find(|(_, list)| core::ptr::eq(*list, step.pass))
+            .unwrap_or_else(|| panic!("`{}` draws in a pass of no list here", step.name));
+        assert!(
+            declared.contains(name),
+            "`{}` draws in `{name}`, which no source declares where it begins the pass",
+            step.name
+        );
+    }
+    for name in &declared {
+        assert!(
+            lists.iter().any(|(n, _)| n == name),
+            "a pass declared off `{name}`, no list a draw names"
+        );
+    }
+}
 
 /// The hazards the frame holds, each as the build names it in `KNOWN`.
 #[test]
@@ -104,10 +143,12 @@ fn the_host_calls_off_the_steps_in_their_order() {
                 }
             }
         }
-        // The steps a function names, in its text's order, against the frame's.
+        // The steps a function names, in its text's order, against the frame's; a pass's list
+        // is no step.
         let at: Vec<(usize, &str)> = text
             .match_indices("sequence::")
             .filter_map(|(k, _)| named(&text[k..]).map(|n| (k, n)))
+            .filter(|(_, n)| !n.ends_with("_PASS"))
             .collect();
         let starts: Vec<usize> = text.match_indices("fn ").map(|(k, _)| k).collect();
         let by_host = |n: &str| FRAME.steps[place(n)].kind == WRITE_BY_HOST;

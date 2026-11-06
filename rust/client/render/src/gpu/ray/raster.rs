@@ -720,6 +720,7 @@ impl Raster {
                 ctx.stamp(GpuSpanName::sraster).pass(),
             ),
         );
+        g.declare_pass(pass, sequence::RASTER_PASS);
         if let Some((tiles, cnt)) = claimed {
             let group = g.bind_group(
                 self.gate.layouts[0],
@@ -1031,6 +1032,7 @@ impl Raster {
                 stamp.pass(),
             ),
         );
+        g.declare_pass(pass, sequence::LIGHT_RASTER_PASS);
         g.set_pipeline(pass, self.draw_built.id);
         g.set_bind_group(pass, 0, s.group, &[]);
         g.draw_indirect(pass, s.args, sequence::LIGHT_RASTER.at());

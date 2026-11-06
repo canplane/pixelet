@@ -529,6 +529,7 @@ impl Shadow {
         let desc = pass_desc(0, Load::Clear, t.map_view, load, 1.0, stamp.pass());
         let (desc, number) = tiles.gate(desc, gated);
         let pass = g.pass(encoder, &desc);
+        g.declare_pass(pass, sequence::MAP_PASS);
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);

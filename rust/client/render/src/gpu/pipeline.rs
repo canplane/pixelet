@@ -222,6 +222,7 @@ impl Pipelines {
             (depth, stencil),
             (word, ticket),
         );
+        g.recorded(b.id, id);
         self.keep(place, key, b)
     }
 

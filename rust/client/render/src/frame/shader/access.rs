@@ -13,7 +13,7 @@
 //! A frame declares more facts of a range: a count several passes add to (`appends`), one
 //! fact with several appenders; the copy that opens such a count before any of them adds to it
 //! (`seeds`), its value what the frame starts counting from; a count read as a bound while it
-//! is added to (`bounds`), a reader taking what is added so far; and what it keeps over frames
+//! is added to (`bounds`), a reader taking what is added so far, its overrun named; and what it keeps over frames
 //! (`kept`), each kept range with the one step or the one rule that owns it and what makes it
 //! stale.
 //!
@@ -275,8 +275,28 @@ pub struct Frame {
     pub steps: &'static [Step],
     pub appends: &'static [Range],
     pub seeds: &'static [&'static str],
-    pub bounds: &'static [Range],
+    pub bounds: &'static [Bound],
     pub kept: &'static [Kept],
+}
+
+/// A count read as a bound while it is added to, and the most it may run past the bound a
+/// reader took before the adds after it land, as its owner bounds it.
+#[derive(Clone, Copy)]
+pub struct Bound {
+    pub range: Range,
+    pub overrun: u32,
+}
+
+/// Whether `r` lies within one of `bounds`.
+const fn within_bound(r: Range, bounds: &[Bound]) -> bool {
+    let mut k = 0;
+    while k < bounds.len() {
+        if within(r, &[bounds[k].range]) {
+            return true;
+        }
+        k += 1;
+    }
+    false
 }
 
 /// A range kept over frames: its words; the one step that writes them (or those run in place
@@ -342,6 +362,7 @@ pub const TOUCHES: &[Touch] = {
     const QUEUE_VISITED: [u32; 2] = [ray::QUEUE_VISITED, 1];
     /// The frame's holes' work so far in the node cache's head, and every observer's caps.
     const WORK_DONE: [u32; 2] = [node_cache::VISITED, 2];
+    const VISITS_DONE: [u32; 2] = [node_cache::VISITED, 1];
     const CAPS: [u32; 2] = [node_cache::CAPS_AT, 2 * count::OBSERVERS];
     &[
         // The eye's samples into its record, their faces' asks (sample_box.eye.wgsl); the
@@ -553,13 +574,13 @@ pub const TOUCHES: &[Touch] = {
             compute: COMPUTE_QUEUE,
             binding: 9,
             writes: &[],
-            reads: &[WORK_DONE, CAPS],
+            reads: &[VISITS_DONE, CAPS],
         },
         Touch {
             compute: COMPUTE_QUEUE_PARKED,
             binding: 9,
             writes: &[],
-            reads: &[WORK_DONE, CAPS],
+            reads: &[VISITS_DONE, CAPS],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK,
@@ -847,6 +868,14 @@ pub const fn declared(f: &Frame) {
         }
         k += 1;
     }
+    // A bound is a count the frame appends to.
+    let mut k = 0;
+    while k < f.bounds.len() {
+        if !within(f.bounds[k].range, f.appends) {
+            panic!("{}", f.buffers[f.bounds[k].range.buf as usize].name);
+        }
+        k += 1;
+    }
     // A seed is a copy of the frame whose destination lies in a count it appends to.
     let mut k = 0;
     while k < f.seeds.len() {
@@ -1095,7 +1124,7 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
                 } else if f.steps[w].stage == s.stage
                     && !writes_into(t, r, read)
                     && !rewrites_kept(f, w, read)
-                    && !within(read, f.bounds)
+                    && !within_bound(read, f.bounds)
                     && s.kind != WRITE_BY_HOST
                     && f.steps[w].kind != WRITE_BY_HOST
                     && !one_writer(f, r, w)

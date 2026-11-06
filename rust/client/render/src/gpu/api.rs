@@ -1830,10 +1830,28 @@ impl Gpu {
         s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         let s = self.s();
+        // A render pass that declares what it draws draws nothing else (gpu/ray/sequence.rs
+        // `Step::in_pass`): another pipeline is refused at the call's line, naming its record
+        // and the pass.
+        if let Some(record) = s.splits.undeclared(pass, pipeline) {
+            xpute_kit::bug!(ENOTRECOVERABLE, u64::from(record), u64::from(pass));
+        }
         call::set_pipeline(&mut s.stream, s.splits.pass_at(pass), pipeline);
         s.splits.piped(pass, pipeline);
+    }
+
+    /// Render pass `pass` held to draw `pipelines` alone, by their records' numbers, as the
+    /// frame's declarations name them (gpu/ray/sequence.rs `Step::in_pass`).
+    pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
+        self.s().splits.declared(pass, pipelines);
+    }
+
+    /// Render pipeline `pipeline` made of record `record`, which a declared pass is held to.
+    pub fn recorded(&self, pipeline: Id, record: u32) {
+        self.s().splits.recorded(pipeline, record);
     }
 
     /// What the pass draws held to `[x, y, width, height]` of its targets.

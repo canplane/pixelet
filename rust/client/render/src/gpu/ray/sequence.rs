@@ -23,8 +23,8 @@ use crate::frame::draw::{
     PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_SKINNED,
 };
 use crate::frame::shader::access::{
-    check, light_marks, Bind, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END, LIST,
-    NO_RANGE, STATE,
+    check, light_marks, Bind, Bound, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END,
+    LIST, NO_RANGE, STATE,
 };
 use crate::frame::shader::record::*;
 use crate::gpu::generator::{ARGS_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP};
@@ -318,15 +318,15 @@ const LIGHT_DEFERRED_BINDS: Group = Group {
 /// (`Raster::light_draw`); the shadow map's pass (gpu/shadow.rs `Shadow::begin`, then the
 /// decor's and the actors' depth, gpu/renderer.rs `frame`); and the world's lit pass, from its
 /// gate to the ghosts (gpu/renderer.rs `frame`).
-const RASTER_PASS: &[u32] = &[PIPELINE_RASTER_GATE, PIPELINE_RASTER];
-const LIGHT_RASTER_PASS: &[u32] = &[PIPELINE_RASTER];
-const MAP_PASS: &[u32] = &[
+pub const RASTER_PASS: &[u32] = &[PIPELINE_RASTER_GATE, PIPELINE_RASTER];
+pub const LIGHT_RASTER_PASS: &[u32] = &[PIPELINE_RASTER];
+pub const MAP_PASS: &[u32] = &[
     PIPELINE_LIGHT_GATE,
     PIPELINE_LIGHT_MAP,
     PIPELINE_DECOR_DEPTH,
     PIPELINE_SKINNED_DEPTH,
 ];
-const LIT_PASS: &[u32] = &[
+pub const LIT_PASS: &[u32] = &[
     PIPELINE_SCREEN_GATE,
     PIPELINE_DECOR,
     PIPELINE_SCREEN_RAY,
@@ -1186,8 +1186,19 @@ const SEEDS: &[&str] = &["hits", "light_hits", "stood_back", "read_count_back"];
 
 /// The counts read as a bound while they are added to: the frame's work so far, which every
 /// walk's budget reads before the asks after it fold its own visits in (queue_walk.wgsl
-/// `spent`, queue_ask.wgsl `fold_visits`).
-const BOUNDS: &[Range] = &[at(NODE_CACHE, node_cache::VISITED, 2)];
+/// `spent`, queue_ask.wgsl `fold_visits`). The visits run past the cap a walk read by what its
+/// lanes may visit before they read it again (pxl-engine `ray::OVERRUN`); the asks are counted
+/// one at a time and run past none.
+const BOUNDS: &[Bound] = &[
+    Bound {
+        range: at(NODE_CACHE, node_cache::VISITED, 1),
+        overrun: ray::OVERRUN,
+    },
+    Bound {
+        range: at(NODE_CACHE, node_cache::ASKED, 1),
+        overrun: 0,
+    },
+];
 
 /// The stood marks in the light's args.
 const fn stood_marks() -> Range {

@@ -61,6 +61,7 @@ use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::{put_mat, put_steps};
+use crate::gpu::ray::sequence;
 use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
 use crate::gpu::read::{Read, Written};
 use crate::gpu::resolve::Resolve;
@@ -1510,6 +1511,7 @@ impl Renderer {
         );
         let (desc, number) = self.resolve.tiles.gate(desc, gated);
         let pass = g.pass(encoder, &desc);
+        g.declare_pass(pass, sequence::LIT_PASS);
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(number) = number {
             pass.set_stencil_reference(number);
@@ -1539,7 +1541,9 @@ impl Renderer {
                 0.0,
                 ctx.stamp(GpuSpanName::world_rest).pass(),
             );
-            pass = TrackedRenderPass::new(g, g.pass(ctx.encoder, &desc));
+            let rest = g.pass(ctx.encoder, &desc);
+            g.declare_pass(rest, sequence::LIT_PASS);
+            pass = TrackedRenderPass::new(g, rest);
         }
         // Its map over the color in the tiles drawn again, as the tiles'
         // quads, before what the kernel animates is drawn.
