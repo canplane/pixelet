@@ -4,7 +4,7 @@
 // the node cache's rule forgets (`record_forget_cs`, forget.wgsl), and drawn, a key one entry
 // (`joins_first`), every held voxel in view written as a box for the raster's draw
 // (`record_draw_cs`, raster.wgsl), a stale one behind every fresh one (pxl-engine
-// `raster::STALE`); and each box it writes stood on by the light's receivers, where they are
+// `raster::STALE`), a stale one about the eye not at all; and each box it writes stood on by the light's receivers, where they are
 // stood this frame (`light::HEAD_STANDS_WORLD`), by the one rule every receiver stands by
 // (light_box.wgsl `box_tiles`, light_stood.wgsl), as a pixel that takes the box's voxel hits
 // within it (visible.wgsl `visible_cell`). The light's record by the same passes, over its
@@ -131,6 +131,10 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let state = record_word(e + R_STATE);
   let fresh = kept_fresh(k, (state & RECORD_WHOLE) != 0u, o);
+  // A stale box about the eye is not drawn (pxl-engine `record`, Fresh or stale).
+  if (near && !fresh) {
+    return;
+  }
   let box_at = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
   if (box_at >= RECORD_ENTRIES) {
     return;

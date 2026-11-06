@@ -78,9 +78,16 @@
 //! its nearest point, or it stopped whole) and its parent does not. A node's ancestor is
 //! nearer at its nearest point, so asked no coarser, and the parent's test holds for every
 //! ancestor: two fresh entries never nest. A stale entry is drawn behind every fresh one
-//! (`raster::STALE`): where no fresh voxel covers a pixel it shows what the record last
-//! found there, and where one does, the fresh one, so neither a hole nor a second surface.
-//! A stale node at the zoom now asked is another key, written where a sample finds it.
+//! (`raster::STALE`) and is never a pixel's answer, as the light's stale one is never taken:
+//! where no fresh voxel covers a pixel, the pixel is a hole that shows what the record last
+//! found there until its walk ends (pxl-render cast.wgsl `cast_cs`), and the walk's stop
+//! writes the fresh voxel, after which the stale one goes unseen and is evicted (`victim`).
+//! Where a fresh voxel covers the pixel, the pixel takes the fresh one, so no second surface.
+//! A stale box about the eye (`raster::is_eyed`) is not drawn: drawn over the whole screen
+//! at the nearest stale depth, it would stand before every other stale box and show at
+//! every pixel no fresh box covers, where it lies at none of them.
+//! A stale node at the zoom now asked is another key, written where a sample or a hole's walk
+//! finds it.
 //!
 //! **Edits:** every write of what is placed that changes the tree or a record names the
 //! cube it wrote (pxl-kernel domain/layer/object/store.rs `Store::write`, `set_fold`,

@@ -1062,3 +1062,180 @@ fn hand_pixels_answer_as_cast_entry() {
         "the device's reciprocal {inv_off} ulps off the Rust's"
     );
 }
+
+/// A pixel whose visible voxel is stale from the eye that now casts (`record::fresh`) is a
+/// hole: `cast_cs` lists it for the holes' queue, holding what the record drew there, and does
+/// not take the stale voxel as the pixel's answer. The record is the one an eye's samples
+/// wrote; the eye that casts asks every node finer than any it holds, so every entry is stale
+/// from it, as a coarse voxel recorded from far is once the eye comes near.
+#[test]
+fn hand_stale_voxel_is_a_hole() {
+    let Some(gpu) = device() else { return };
+    let face_p = gpu.pipeline(src(SHADER_FACE), "face_cs");
+    let cast_p = gpu.pipeline(src(SHADER_CAST), "cast_cs");
+    let cast_tiles_p = gpu.pipeline(src(SHADER_CAST_TILES), "cast_tiles_cs");
+    let size = [256u32, 160u32];
+    let [wd, ht] = size;
+    let texels = (wd * ht) as usize;
+    let asked = FINEST + 1;
+    let (mut stale_entered, mut stale_taken) = (0u32, 0u32);
+    let worlds = worlds();
+    for (built, cases) in &worlds {
+        for c in cases {
+            let b = world_bufs(&gpu, built);
+            let cast = cast_of(&gpu, &b, c, &face_p);
+            let g = &cast.grid;
+            let mut eye = cast.eye.clone();
+            eye[eye::RANGE] = asked;
+            eye[eye::RANGE + 1] = asked;
+            let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
+            let rays = texture(
+                &gpu.device,
+                &gpu.queue,
+                size,
+                ray::WORDS,
+                wgpu::TextureUsages::STORAGE_BINDING,
+                &vec![0u32; ray::WORDS as usize * texels],
+            );
+            let rays_view = array_view(&rays);
+
+            // Each pixel's visible voxel: the record's entry of the sample at or before it.
+            let mut voxel_at = std::collections::BTreeMap::new();
+            for slot in (0..record::ENTRIES).rev() {
+                let e = record::entry_at(slot) as usize;
+                let held = cast.record[e + record::R_HELD as usize];
+                if held & record::HELD != 0 {
+                    voxel_at.insert(entry_key(&cast.record, e, held), slot);
+                }
+            }
+            let n = g.samples[0];
+            let mut rays_of = Vec::with_capacity(texels);
+            let visible: Vec<u32> = (0..wd * ht)
+                .map(|p| {
+                    let px = [p % wd, p / wd];
+                    let t = px_tan(
+                        &Screen {
+                            size,
+                            jitter: [0.0; 2],
+                            reach: 1.0,
+                            unclaimed_in: 0,
+                        },
+                        g.tan,
+                        px,
+                    );
+                    let d = cast::through(cast.axes[0], cast.axes[1], cast.axes[2], t[0], t[1]);
+                    rays_of.push(Ray::new(d, cast.far));
+                    let s = g.sample_before(t);
+                    let k = g.sample_at(s);
+                    let w = |a: u32| cast.beams[(k + a) as usize];
+                    if s[0] >= n || w(beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE {
+                        return 0;
+                    }
+                    let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
+                    match voxel_at.get(&record::Key::of(cast.origin, &node, 0)) {
+                        Some(&v) if w(beam::SAMPLE_LACKS) == 0 => raster::id_of(v, false),
+                        _ => 0,
+                    }
+                })
+                .collect();
+            let vis = texture(
+                &gpu.device,
+                &gpu.queue,
+                size,
+                1,
+                wgpu::TextureUsages::TEXTURE_BINDING,
+                &visible,
+            );
+            let vis_view = array_view(&vis);
+
+            // Every tile claimed this frame.
+            let now = 77u32;
+            let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
+            let changed = vec![now; (tiles[0] * tiles[1]) as usize];
+            let mut uniform = [0u32; screen::TILES_WORDS];
+            uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::CLAIMED_FOR, now]);
+            let changed_buf = gpu.buffer(&changed, store());
+            let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
+            let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
+            let per_tile = screen::TILE / ray::CAST_SIDE;
+            list_words[1..3].copy_from_slice(&[per_tile, per_tile]);
+            let list = gpu.buffer(&list_words, store());
+            gpu.dispatch(
+                &cast_tiles_p,
+                &[
+                    (0, list.as_entire_binding()),
+                    (30, changed_buf.as_entire_binding()),
+                    (31, tiles_buf.as_entire_binding()),
+                ],
+                [
+                    (tiles[0] * tiles[1]).div_ceil(screen::CAST_TILES_LANES),
+                    1,
+                    1,
+                ],
+            );
+            let listed = gpu.read(&list)[0];
+            let table_buf = gpu.buffer(&cast.table, store());
+            let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
+            // Room past the grid's words for this screen's walked list and holes' states.
+            let mut padded = cast.beams.clone();
+            let walked_at = (g.walked_at() + ray::WALKED_LIST) as usize;
+            padded.resize(walked_at.max(padded.len()) + texels * 17 + 64, 0);
+            let beams = gpu.buffer(&padded, store());
+            let rec = gpu.buffer(&cast.record, store());
+            gpu.dispatch(
+                &cast_p,
+                &[
+                    (0, eye_buf.as_entire_binding()),
+                    (3, wgpu::BindingResource::TextureView(&rays_view)),
+                    (8, beams.as_entire_binding()),
+                    (9, table_buf.as_entire_binding()),
+                    (13, wgpu::BindingResource::TextureView(&vis_view)),
+                    (14, marks.as_entire_binding()),
+                    (23, rec.as_entire_binding()),
+                    (30, list.as_entire_binding()),
+                ],
+                [listed, per_tile, per_tile],
+            );
+            let cnt = gpu.read(&marks)[3];
+            let words = gpu.read(&beams);
+            let at = (g.walked_at() + ray::WALKED_LIST) as usize;
+            let walked: std::collections::BTreeSet<u32> = words[at..at + cnt.min(wd * ht) as usize]
+                .iter()
+                .copied()
+                .collect();
+            for (p, &v) in visible.iter().enumerate() {
+                if v == 0 {
+                    continue;
+                }
+                let e = record::entry_at(raster::voxel_of(v)) as usize;
+                let w = |a: u32| cast.record[e + a as usize];
+                let key = entry_key(&cast.record, e, w(record::R_HELD));
+                let whole = w(record::R_STATE) & record::WHOLE != 0;
+                if record::fresh(cast.origin, &key, whole, [asked, asked]) {
+                    continue;
+                }
+                let node = key.node(cast.origin);
+                let faces = w(record::R_STATE) & record::FACES;
+                let r = &rays_of[p];
+                let en = cast::entry_with(cast.origin, r, r.inverse(), &node, w(record::R_ASSET));
+                if !(en.enters && raster::accepts(faces, ray::face(r.dir, en.axis))) {
+                    continue;
+                }
+                stale_entered += 1;
+                let px = [p as u32 % wd, p as u32 / wd];
+                if !walked.contains(&((px[1] << 16) | px[0])) {
+                    stale_taken += 1;
+                }
+            }
+        }
+    }
+    eprintln!("stale voxels a pixel's ray enters: {stale_entered}, taken unwalked: {stale_taken}");
+    assert!(
+        stale_entered > 100,
+        "too few stale voxels entered: {stale_entered}"
+    );
+    assert_eq!(
+        stale_taken, 0,
+        "a pixel took a stale voxel as its answer and was not walked"
+    );
+}

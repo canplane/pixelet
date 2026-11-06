@@ -2389,7 +2389,24 @@ fn record_case(
             }
         }
     }
-    // Every voxel in view drawn; one at the edge of the view as the device rounds it told.
+    // Every voxel in view drawn, but a stale one about the eye; one at the edge of the view as
+    // the device rounds it told.
+    let fresh_of = |key: &Key| {
+        let node = Node {
+            zoom: key.0[beam::NODE_ZOOM as usize],
+            corner: [0, 1, 2].map(|a| key.0[beam::NODE_CORNER as usize + a]),
+            roots: [0, 1, 2].map(|a| key.0[beam::NODE_ROOTS as usize + a] as i32),
+        };
+        let state = held.get(key).map_or(0, |slots| {
+            got[(record::entry_at(slots[0]) + record::R_STATE) as usize]
+        });
+        record::fresh(
+            origin,
+            &record::Key::of(origin, &node, key.1),
+            state & record::WHOLE != 0,
+            range,
+        )
+    };
     let mut missed = 0u64;
     for (key, w) in &want {
         if drawn.contains(key) || !held.contains_key(key) {
@@ -2400,6 +2417,10 @@ fn record_case(
         let hi = [0, 1, 2].map(|a| b(raster::BOX_HI + a));
         let grown = [tan[0] * 1.001, tan[1] * 1.001];
         let eyed = w[raster::BOX_FACES as usize] & raster::EYED != 0;
+        if eyed && !fresh_of(key) {
+            kinds.add("boxes, eyed, stale, not drawn", true);
+            continue;
+        }
         if eyed || record::in_view((lo, hi), axes, tan, far) {
             missed += 1;
         } else {
@@ -2704,6 +2725,168 @@ fn hand_eye_record_answers_as_raster() {
         failed
             .push("an inset's product rounded, which a fused sum may round otherwise".to_string());
     }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A voxel the eye's record holds, its fill cube about an eye that has since come into it: the
+/// record a cast from over the ground wrote, then the draw alone from the middle of each
+/// coarse voxel's box, asking finer there than the voxel, so it is stale (`record::fresh`) and
+/// about the eye (`raster::is_eyed`). The draw writes no box for it: a stale box about the
+/// eye would be drawn over the whole screen, before every other stale box, and every pixel no
+/// fresh box covers would take it (pxl-engine `record`, Fresh or stale).
+#[test]
+fn hand_eye_stale_box_about_the_eye_undrawn() {
+    use pxl_render::frame::shader::record::{SHADER_RECORD_DRAW, SHADER_SAMPLE_BOX};
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let case = |name, origin| EyeCase {
+        name,
+        origin,
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 2000.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
+    let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
+    let observe = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_observe_cs");
+    let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs");
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    let far_eye = case(
+        "the eye, over the ground",
+        over([EYE[0] + 90, EYE[1] + 90], 60),
+    );
+    let obs = eye_of(&far_eye, [0; 3]);
+    let table = gpu.buffer(&frame_table(), store_of());
+    let lines = eye_beams(&gpu, &b, &obs, &table);
+    let table = gpu.read(&table);
+    let words = stopped(&gpu, &b, &obs, &lines, None, &table, &hit, &world);
+    let Rays::Eye { origin, grid, .. } = &obs.rays else {
+        unreachable!()
+    };
+    let kept = record_case(
+        &gpu,
+        [&pass, &observe, &draw],
+        &obs,
+        &words,
+        (*origin, grid),
+        (None, FRAME),
+        &mut kinds,
+        &mut failed,
+    );
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+
+    // The coarsest voxels that keep a share of their cube, each an eye come into its box.
+    let q = (1 << FRAC_W) as f32;
+    let mut inside: Vec<(u32, [i32; 3])> = (0..record::ENTRIES)
+        .filter_map(|slot| {
+            let e = record::entry_at(slot) as usize;
+            let held = kept[e + record::R_HELD as usize];
+            let state = kept[e + record::R_STATE as usize];
+            if held & record::HELD == 0 || state & (record::LACKS | record::WHOLE) != 0 {
+                return None;
+            }
+            let zoom = record::zoom_of(held);
+            if zoom + 2 > FINEST {
+                return None;
+            }
+            let key = record::Key {
+                zoom,
+                corner: [0, 1, 2].map(|a| kept[e + (record::R_CORNER + a) as usize]),
+                roots: [0, 1, 2].map(|a| kept[e + (record::R_ROOTS + a) as usize] as i32),
+                band: 0,
+            };
+            let asset = kept[e + record::R_ASSET as usize];
+            let (lo, hi) = cast::asset_box(*origin, &key.node(*origin), asset);
+            let mid = |a: usize| ((lo[a] + hi[a]) / 2.0 * q).round_ties_even() as i32;
+            Some((
+                zoom,
+                [
+                    origin[0].wrapping_add(mid(0)),
+                    origin[1] + mid(1),
+                    origin[2] + mid(2),
+                ],
+            ))
+            .map(|(z, at)| (z * record::ENTRIES + slot, at))
+        })
+        .collect();
+    inside.sort_unstable();
+    let mut tried = 0u32;
+    for &(k, at) in inside.iter().take(8) {
+        let slot = k % record::ENTRIES;
+        let near = eye_of(&case("the eye, come into a voxel's box", at), [0; 3]);
+        let e = record::entry_at(slot) as usize;
+        let held = kept[e + record::R_HELD as usize];
+        let key = record::Key {
+            zoom: record::zoom_of(held),
+            corner: [0, 1, 2].map(|a| kept[e + (record::R_CORNER + a) as usize]),
+            roots: [0, 1, 2].map(|a| kept[e + (record::R_ROOTS + a) as usize] as i32),
+            band: 0,
+        };
+        let asset = kept[e + record::R_ASSET as usize];
+        let (lo, hi) = cast::asset_box(at, &key.node(at), asset);
+        if record::fresh(at, &key, false, far_eye.range) || !raster::is_eyed(lo, hi, far_eye.tan) {
+            continue;
+        }
+        tried += 1;
+        let mut rec = kept.clone();
+        rec[record::FRAME as usize] = FRAME + 1;
+        let asked = raster::ASKED_AT as usize;
+        let mut laid_args = vec![0u32; asked + raster::ARGS_WORDS as usize];
+        laid_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+        let eye_buf = gpu.buffer(&near.eye, wgpu::BufferUsages::UNIFORM);
+        let args = gpu.buffer(&laid_args, store_of());
+        let rec_buf = gpu.buffer(&rec, store_of());
+        let boxes = gpu.buffer(
+            &vec![UNWRITTEN; (record::ENTRIES * raster::BOX_WORDS) as usize],
+            store_of(),
+        );
+        let size = shadow::SIZE;
+        let mut light_head = vec![0u32; light::HEAD_WORDS];
+        for (k, v) in light::head_layout(size) {
+            light_head[k] = v;
+        }
+        light_head[light::HEAD_STANDS_WORLD] = 0;
+        let light_head_buf = gpu.buffer(&light_head, wgpu::BufferUsages::UNIFORM);
+        let light_list_buf = gpu.buffer(&vec![0u32; light::list_words(size) as usize], store_of());
+        let light_args_buf = gpu.buffer(&vec![0u32; light::args_words(size) as usize], store_of());
+        let stood_buf = gpu.buffer(&vec![0u32; light::STOOD_WORDS as usize], store_of());
+        gpu.dispatch(
+            &draw,
+            &[
+                (0, eye_buf.as_entire_binding()),
+                (11, light_head_buf.as_entire_binding()),
+                (12, light_list_buf.as_entire_binding()),
+                (14, boxes.as_entire_binding()),
+                (16, args.as_entire_binding()),
+                (21, light_args_buf.as_entire_binding()),
+                (22, stood_buf.as_entire_binding()),
+                (23, rec_buf.as_entire_binding()),
+            ],
+            [record::ENTRIES / record::DRAW_LANES, 1, 1],
+        );
+        let got_args = gpu.read(&args);
+        let got = gpu.read(&boxes);
+        let cnt = got_args[raster::ARGS_CNT as usize].min(record::ENTRIES) as usize;
+        let id = raster::id_of(slot, false);
+        if let Some(b) = (0..cnt).find(|&b| {
+            got[b * raster::BOX_WORDS as usize + raster::BOX_ID as usize] & !raster::LACK == id
+        }) {
+            let faces = got[b * raster::BOX_WORDS as usize + raster::BOX_FACES as usize];
+            failed.push(format!(
+                "slot {slot}, zoom {}: a stale box about the eye drawn, faces {faces:#x}",
+                key.zoom
+            ));
+        }
+    }
+    eprintln!("stale voxels about the eye tried: {tried}");
+    assert!(tried > 0, "no voxel's box held the eye stale");
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 

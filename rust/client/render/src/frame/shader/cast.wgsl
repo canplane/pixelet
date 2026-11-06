@@ -1,13 +1,13 @@
 // pxl-render/cast.wgsl
 
-// Each drawn pixel's ray off the visible voxel the raster kept at it, a voxel of the eye's
-// record, which it marks seen (pxl-engine `raster`, `record`; gpu/ray/raster.rs), or the
+// Each drawn pixel's ray off the visible voxel the raster kept at it, a fresh voxel of the
+// eye's record, which it marks seen (pxl-engine `raster`, `record::fresh`; gpu/ray/raster.rs), or the
 // sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as light.wgsl takes a slot's
 // (visible.wgsl), with what lies about its face, the voxel's. Any other pixel, a hole, takes
 // no walk here: it is listed for the holes' queue (walked.wgsl, list.wgsl `enlist`; queue.wgsl),
 // in a list with room for every pixel drawn, each listed once a cast, and its words are what
-// the record drew there until the queue ends its ray: the visible voxel the record holds, at
-// its box's entry, or the zero of a ray that met nothing. So the pixel never waits on its walk,
+// the record drew there until the queue ends its ray: the visible voxel the record holds,
+// fresh or stale, at its box's entry, or the zero of a ray that met nothing. So the pixel never waits on its walk,
 // and shows nothing the record does not hold. Every pixel the cast takes is set to no parked
 // ray, but a hole where the rays stand (`node_cache::RESUMES`), whose parked state the queue
 // goes on from.
@@ -80,7 +80,9 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
       let k = entry_kept(e, held);
       let asset = vec2<u32>(record_word(e + R_ASSET), record_word(e + R_ASSET + 1u));
       let fill = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
-      let faces = record_word(e + R_STATE) & RECORD_FACES;
+      let state = record_word(e + R_STATE);
+      let faces = state & RECORD_FACES;
+      let fresh = kept_fresh(k, (state & RECORD_WHOLE) != 0u, vec3<i32>(aim.origin));
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       // Its words, with what lies about its face, the voxel's (`word`, `ray::first_word`).
       let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
@@ -90,7 +92,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
         asset.y,
         record_word(e + R_FACES + face),
       );
-      if ((visible & VISIBLE_LACK) == 0u && entry.enters) {
+      if ((visible & VISIBLE_LACK) == 0u && entry.enters && fresh) {
         add_cnt(on, COUNT_REUSED);
         write_ray(p, drew);
         unpark_px(p, size.xy);
