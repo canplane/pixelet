@@ -218,7 +218,17 @@ pub const SHADER_RECORD_STOPS: u32 = 85;
 pub const SHADER_PARKED_TILES: u32 = 86;
 /// `SHADER_RECORD_STOPS` for the light's record (record_stops.light.wgsl).
 pub const SHADER_LIGHT_RECORD_STOPS: u32 = 87;
-pub const SHADERS: u32 = 88;
+/// The holes' stops put off by `SHADER_RECORD_STOPS`, the eye's and the light's, taken past
+/// its dispatch's end (record_deferred.wgsl), modules of their own, as they do not bind the
+/// dispatch they read their count from.
+pub const SHADER_RECORD_DEFERRED: u32 = 88;
+pub const SHADER_LIGHT_RECORD_DEFERRED: u32 = 89;
+/// The light's claim (light_claim.wgsl), a module apart from the propagation, which writes the
+/// dispatch it reads its count from; and the drawn receivers' dispatch opened
+/// (light_mark_draws_open.wgsl), a module apart from the receivers' pass that reads it.
+pub const SHADER_LIGHT_CLAIM: u32 = 90;
+pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 91;
+pub const SHADERS: u32 = 92;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -721,6 +731,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_box",
         "light_list",
         "light_stand",
+        "light_enlist",
         "light_propagate",
     ],
     // SHADER_GENERATION_THIN
@@ -1002,6 +1013,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "record",
         "record_put",
         "record_stops.eye",
+        "record_hits",
         "record_stops",
     ],
     // SHADER_PARKED_TILES
@@ -1024,6 +1036,68 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "record",
         "record_put",
         "record_stops.light",
+        "record_hits",
         "record_stops",
+    ],
+    // SHADER_RECORD_DEFERRED
+    &[
+        "walk_word",
+        "raster_box",
+        "eye_bind",
+        "walk_node",
+        "hit",
+        "record",
+        "record_put",
+        "record_stops.eye",
+        "record_hits",
+        "record_deferred",
+    ],
+    // SHADER_LIGHT_RECORD_DEFERRED
+    &[
+        "walk_word",
+        "raster_box",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "light_aim",
+        "hit",
+        "record",
+        "record_put",
+        "record_stops.light",
+        "record_hits",
+        "record_deferred",
+    ],
+    // SHADER_LIGHT_CLAIM
+    &[
+        "walk_word",
+        "decor_word",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "light_enlist",
+        "light_claim",
+    ],
+    // SHADER_LIGHT_MARK_DRAWS_OPEN
+    &[
+        "walk_word",
+        "world_word",
+        "decor_word",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "seed",
+        "light_aim",
+        "light_box",
+        "light_list",
+        "light_stand",
+        "list",
+        "light_stood",
+        "decor_ball",
+        "light_mark_draws",
+        "light_mark_draws_open",
     ],
 ];

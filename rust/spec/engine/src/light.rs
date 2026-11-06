@@ -1021,7 +1021,7 @@ impl Light {
 /// three (pxl-render light_list.wgsl `light_item`): `LIST_ACROSS` workgroups of
 /// `LISTED_LANES` a row, an entry its side's square of them, a cast that begins an epoch as
 /// any other (`CLAIM_BUDGET`); the propagation a thread a stood tile; the claim a thread a tile
-/// wanted, as many rows (`ARGS_CLAIM`).
+/// wanted, as many rows (`CLAIM_DISPATCH`).
 pub const LISTED_CORNERS: u32 = 0;
 pub const LISTED_FED: u32 = 1;
 pub const LISTED_CLAIMED: u32 = 2;
@@ -1210,29 +1210,36 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// own: each pass's three words (x, y, z) from its `ARGS_*` word; the map's lay's four
 /// (`ARGS_LAY`), a draw's; `ARGS_PASSES` in all; each list's count (`ARGS_COUNTS`). A cast
 /// starts with none, `LIST_ACROSS` workgroups a row and no row, no list holding any; a tile
-/// claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the rows what it
-/// lists takes (`listed_at`); a cast that claims none, as where the receivers moved only within
-/// the tiles cast, casts none. The drawn receivers' (`ARGS_DRAWS`) holds as many as they are
-/// (light_mark_draws.wgsl `light_mark_draws_open_cs`); the lay six vertices and an instance a
-/// tile read (light_propagate.wgsl). So a cast whose receivers stand on nothing claims, lays
-/// and draws no tile. Past `ARGS_WORDS`, which a cast writes, the lists' marks and the drawn
-/// receivers', which last from cast to cast (`args_words`).
+/// claimed as the cast's to cast (pxl-render light_claim.wgsl) opens the rows what it lists
+/// takes (`listed_at`); a cast that claims none, as where the receivers moved only within the
+/// tiles cast, casts none. The lay six vertices and an instance a tile read
+/// (light_propagate.wgsl). So a cast whose receivers stand on nothing claims, lays and draws
+/// no tile. Past `ARGS_WORDS`, which a cast writes, the lists' marks and the drawn receivers',
+/// which last from cast to cast (`args_words`). The passes that write these read no count of
+/// theirs here: the drawn receivers' and the claim's dispatches are buffers of their own
+/// (`DRAWS_DISPATCH_WORDS`, `CLAIM_DISPATCH`).
 pub const ARGS_BEAM: u32 = 0;
 pub const ARGS_CELLS: u32 = 3;
 pub const ARGS_SAMPLE: u32 = 6;
 pub const ARGS_SAMPLE_BOX: u32 = 9;
 pub const ARGS_SLOT: u32 = 12;
-pub const ARGS_DRAWS: u32 = 15;
-pub const ARGS_LAY: u32 = 18;
-/// The claim's dispatch over the tiles wanted (`LISTED_WANTED`), raised as they are listed; the
-/// claims' count, each claim's place (`places_at`); the count of the straddling ring's claims
-/// (`claims`); and the tiles wanted and left unclaimed, the first of the cast's owed work
-/// (`node_cache::OWED_AT`); none at a cast's start.
-pub const ARGS_CLAIM: u32 = 22;
-pub const ARGS_PLACED: u32 = 25;
-pub const ARGS_STRADDLE: u32 = 26;
-pub const ARGS_LEFT: u32 = 27;
-pub const ARGS_PASSES: u32 = 28;
+pub const ARGS_LAY: u32 = 15;
+/// The claims' count, each claim's place (`places_at`); the count of the straddling ring's
+/// claims (`claims`); and the tiles wanted and left unclaimed, the first of the cast's owed
+/// work (`node_cache::OWED_AT`); none at a cast's start.
+pub const ARGS_PLACED: u32 = 19;
+pub const ARGS_STRADDLE: u32 = 20;
+pub const ARGS_LEFT: u32 = 21;
+pub const ARGS_PASSES: u32 = 22;
+/// The drawn receivers' dispatch, a buffer of its own, as many workgroups as they are, written
+/// whole each cast by the pass that opens it (pxl-render light_mark_draws_open.wgsl) and read
+/// by theirs, which writes the lists' marks here (light_mark_draws.wgsl).
+pub const DRAWS_DISPATCH_WORDS: u32 = 3;
+/// The claim's dispatch over the tiles wanted (`LISTED_WANTED`), a buffer of its own, as a
+/// cast starts: `LIST_ACROSS` workgroups a row and no row; the propagation raises its rows as
+/// it lists them (pxl-render light_propagate.wgsl `want`), and the claim, which writes these
+/// args, reads its count from it (light_claim.wgsl).
+pub const CLAIM_DISPATCH: [u32; 3] = [LIST_ACROSS, 0, 1];
 pub const ARGS_COUNTS: u32 = ARGS_PASSES;
 pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
 /// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).

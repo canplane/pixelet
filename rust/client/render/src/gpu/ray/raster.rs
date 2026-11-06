@@ -90,7 +90,7 @@ const RECORD_GROUP: [u32; 27] = [
 /// The holes' stops into the record (record_stops.wgsl): the eye, the rays, the stops among the
 /// beam rays' words, the node cache's head their count lies in, the faces' asks' args and
 /// the record.
-const STOPS_GROUP: [u32; 18] = [
+const STOPS_GROUP: [u32; 21] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -109,11 +109,34 @@ const STOPS_GROUP: [u32; 18] = [
     RECORD_BINDING,
     COMPUTE,
     STORAGE_RW,
+    DEFERRED_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+];
+/// The binding of the dispatch over the stops put off (record_stops.wgsl `deferred`).
+const DEFERRED_BINDING: u32 = 24;
+/// The stops put off taken past the stops' dispatch's end (record_deferred.wgsl): the eye,
+/// the beam rays' words their numbers and the stops lie in, the args they count and lay their
+/// faces' asks in, and the record; not the dispatch they are taken by, which this pass reads
+/// its count from.
+const DEFERRED_GROUP: [u32; 12] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    16,
+    COMPUTE,
+    STORAGE_RW,
+    RECORD_BINDING,
+    COMPUTE,
+    STORAGE_RW,
 ];
 /// The light's holes' stops into its record (record_stops.wgsl over record_stops.light.wgsl):
 /// `STOPS_GROUP`, its map at 3 and its list at 8, and the light's head its slots' rays are
 /// aimed by.
-const LIGHT_STOPS_GROUP: [u32; 21] = [
+const LIGHT_STOPS_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -126,6 +149,29 @@ const LIGHT_STOPS_GROUP: [u32; 21] = [
     9,
     COMPUTE,
     STORAGE,
+    super::cast::HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    16,
+    COMPUTE,
+    STORAGE_RW,
+    RECORD_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+    DEFERRED_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+];
+/// The light's stops put off (record_deferred.wgsl over record_stops.light.wgsl): as
+/// `DEFERRED_GROUP`, its list for the beam rays' words, and the light's head its slots' rays
+/// are aimed by.
+const LIGHT_DEFERRED_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    8,
+    COMPUTE,
+    STORAGE_RW,
     super::cast::HEAD_BINDING,
     COMPUTE,
     UNIFORM,
@@ -204,6 +250,9 @@ pub(super) struct Raster {
     /// the claimed tiles (`Resolve::tiles`).
     gate: Pipeline,
     pub(super) args: u32,
+    /// The dispatch over the stops put off (`raster::DEFERRED_DISPATCH`), apart from the args
+    /// the pass that takes them writes.
+    deferred: u32,
     pub(super) record: u32,
     boxes: u32,
     uniform: u32,
@@ -213,7 +262,7 @@ pub(super) struct Raster {
     depth: u32,
     depth_view: u32,
     size: [u32; 2],
-    groups: [u32; 6],
+    groups: [u32; 7],
     bindings: [u32; 9],
     /// What the record's group binds past the raster's own, the light's: its head, its list,
     /// its args and its stood list's args, where its receivers stand the boxes the record's
@@ -235,6 +284,8 @@ pub(super) struct LightRaster {
     pub(super) record: u32,
     boxes: u32,
     pub(super) args: u32,
+    /// The dispatch over its stops put off, as the eye's (`Raster::deferred`).
+    deferred: u32,
     uniform: u32,
     visibility: u32,
     visibility_view: u32,
@@ -244,8 +295,10 @@ pub(super) struct LightRaster {
     group: u32,
     record_group: u32,
     record_bound: [u32; 7],
-    /// Its holes' stops' group (`LIGHT_STOPS_GROUP`), made again with the record's.
+    /// Its holes' stops' group (`LIGHT_STOPS_GROUP`) and its stops put off's
+    /// (`LIGHT_DEFERRED_GROUP`), made again with the record's.
     stops_group: u32,
+    deferred_group: u32,
 }
 
 /// `face_cs`'s (face.wgsl): the eye, the world's query's buffers but the palette, which it
@@ -299,18 +352,10 @@ const _: () = assert!(
             ],
             &RECORD_GROUP
         )
-        && binds(
-            &[
-                COMPUTE_RECORD_STOPS,
-                COMPUTE_RECORD_DEFERRED,
-                COMPUTE_RECORD_FACES
-            ],
-            &STOPS_GROUP
-        )
-        && binds(
-            &[COMPUTE_LIGHT_RECORD_STOPS, COMPUTE_LIGHT_RECORD_DEFERRED],
-            &LIGHT_STOPS_GROUP
-        ),
+        && binds(&[COMPUTE_RECORD_STOPS, COMPUTE_RECORD_FACES], &STOPS_GROUP)
+        && binds(&[COMPUTE_RECORD_DEFERRED], &DEFERRED_GROUP)
+        && binds(&[COMPUTE_LIGHT_RECORD_STOPS], &LIGHT_STOPS_GROUP)
+        && binds(&[COMPUTE_LIGHT_RECORD_DEFERRED], &LIGHT_DEFERRED_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 const _: () = assert!(
@@ -343,7 +388,7 @@ impl Raster {
                 &RECORD_GROUP,
             ),
             stops_built: pipelines.build_compute(g, COMPUTE_RECORD_STOPS, &STOPS_GROUP),
-            deferred_built: pipelines.build_compute(g, COMPUTE_RECORD_DEFERRED, &STOPS_GROUP),
+            deferred_built: pipelines.build_compute(g, COMPUTE_RECORD_DEFERRED, &DEFERRED_GROUP),
             faces_put_built: pipelines.build_compute(g, COMPUTE_RECORD_FACES, &STOPS_GROUP),
             light_stops_built: pipelines.build_compute(
                 g,
@@ -353,7 +398,7 @@ impl Raster {
             light_deferred_built: pipelines.build_compute(
                 g,
                 COMPUTE_LIGHT_RECORD_DEFERRED,
-                &LIGHT_STOPS_GROUP,
+                &LIGHT_DEFERRED_GROUP,
             ),
             faces_built: pipelines.build_compute(g, COMPUTE_FACE, &FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
@@ -364,6 +409,10 @@ impl Raster {
                     | buffer_usage::COPY_DST
                     | buffer_usage::INDIRECT
                     | buffer_usage::COPY_SRC,
+            ),
+            deferred: g.buf(
+                word_bytes(raster::DEFERRED_DISPATCH.len()),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::INDIRECT,
             ),
             // Made zeroed: every slot free.
             record: g.buf(
@@ -384,7 +433,7 @@ impl Raster {
             depth: 0,
             depth_view: 0,
             size: [0; 2],
-            groups: [0; 6],
+            groups: [0; 7],
             bindings: [0; 9],
             record_bound: [0; 6],
             light: LightRaster::default(),
@@ -493,12 +542,14 @@ impl Raster {
             word_bytes(raster::STOP_ASKED_AT as usize),
             bytes(&stop_args),
         );
-        // No hit put off, a workgroup deep and high (pxl-engine `raster::DEFERRED_AT`).
+        // No hit put off, its dispatch none, a workgroup deep and high (pxl-engine
+        // `raster::DEFERRED_CNT`, `raster::DEFERRED_DISPATCH`).
         g.write_buf(
             self.args,
-            word_bytes(raster::DEFERRED_AT as usize),
-            bytes(&[0u32, 1, 1, 0]),
+            word_bytes(raster::DEFERRED_CNT as usize),
+            bytes(&[0u32]),
         );
+        g.write_buf(self.deferred, 0, bytes(&raster::DEFERRED_DISPATCH));
         let bindings = [
             eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, rays,
         ];
@@ -551,6 +602,16 @@ impl Raster {
                         buf_entry(9, node_cache),
                         buf_entry(16, self.args),
                         buf_entry(RECORD_BINDING, self.record),
+                        buf_entry(DEFERRED_BINDING, self.deferred),
+                    ],
+                ),
+                g.bind_group(
+                    self.deferred_built.layouts[0],
+                    &[
+                        buf_entry(0, eye),
+                        buf_entry(8, beams),
+                        buf_entry(16, self.args),
+                        buf_entry(RECORD_BINDING, self.record),
                     ],
                 ),
             ];
@@ -592,8 +653,8 @@ impl Raster {
     /// The holes' stops into the record, in the cast's pass `pass` once the holes' queue is
     /// done (ray/cast.rs), a thread a stop off their count in the node cache's head
     /// (`node_cache`, pxl-engine `node_cache::HITS_ARGS`); those whose stop met its key's claim
-    /// past that dispatch's end, off their count among the raster's args
-    /// (`raster::DEFERRED_AT`); then what lies about each face they opened asked, the faces'
+    /// past that dispatch's end, off their dispatch's own buffer (`raster::DEFERRED_DISPATCH`),
+    /// over a group that binds the args they write and not it; then what lies about each face they opened asked, the faces'
     /// pass over their asks, its args the raster's at `raster::STOP_ASKED_AT`; then each
     /// stop's face's word put at its pixel off its entry, a thread a stop.
     pub(super) fn stops(&self, g: &Gpu, pass: u32, node_cache: u32) {
@@ -601,8 +662,9 @@ impl Raster {
         g.set_pipeline(pass, self.stops_built.id);
         g.set_bind_group(pass, 0, self.groups[5], &[]);
         g.dispatch_indirect(pass, node_cache, hits);
+        g.set_bind_group(pass, 0, self.groups[6], &[]);
         g.set_pipeline(pass, self.deferred_built.id);
-        g.dispatch_indirect(pass, self.args, word_bytes(raster::DEFERRED_ARGS as usize));
+        g.dispatch_indirect(pass, self.deferred, 0);
         g.set_pipeline(pass, self.faces_built.id);
         g.set_bind_group(pass, 0, self.groups[4], &[]);
         let at = raster::STOP_ASKED_AT + raster::ARGS_FACES;
@@ -731,6 +793,10 @@ impl Raster {
                 word_bytes((raster::DEFERRED_AT + raster::DEFERRED_WORDS) as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
+            s.deferred = g.buf(
+                word_bytes(raster::DEFERRED_DISPATCH.len()),
+                storage | buffer_usage::INDIRECT,
+            );
             s.uniform = g.buf(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -757,6 +823,7 @@ impl Raster {
             s.group,
             s.record_group,
             s.stops_group,
+            s.deferred_group,
             s.record,
             s.visibility_view,
             s.visibility_array,
@@ -765,6 +832,7 @@ impl Raster {
             s.depth,
             s.uniform,
             s.args,
+            s.deferred,
             s.boxes,
         ] {
             release(id);
@@ -830,12 +898,14 @@ impl Raster {
         let mut args = [0u32; raster::ARGS_WORDS as usize];
         args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
         g.write_buf(s.args, 0, bytes(&args));
-        // No stop put off, a workgroup deep and high (pxl-engine `raster::DEFERRED_AT`).
+        // No stop put off, its dispatch none, a workgroup deep and high (pxl-engine
+        // `raster::DEFERRED_CNT`, `raster::DEFERRED_DISPATCH`).
         g.write_buf(
             s.args,
-            word_bytes(raster::DEFERRED_AT as usize),
-            bytes(&[0u32, 1, 1, 0]),
+            word_bytes(raster::DEFERRED_CNT as usize),
+            bytes(&[0u32]),
         );
+        g.write_buf(s.deferred, 0, bytes(&raster::DEFERRED_DISPATCH));
     }
 
     /// The light's record's group (`RECORD_GROUP`) over the eye and the node cache the
@@ -877,6 +947,18 @@ impl Raster {
                 buf_entry(super::cast::HEAD_BINDING, head),
                 buf_entry(16, s.args),
                 buf_entry(RECORD_BINDING, s.record),
+                buf_entry(DEFERRED_BINDING, s.deferred),
+            ],
+        );
+        release(s.deferred_group);
+        s.deferred_group = g.bind_group(
+            self.light_deferred_built.layouts[0],
+            &[
+                buf_entry(0, eye),
+                buf_entry(8, list),
+                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(16, s.args),
+                buf_entry(RECORD_BINDING, s.record),
             ],
         );
         s.record_bound = bound;
@@ -895,8 +977,9 @@ impl Raster {
         g.set_bind_group(pass, 0, s.stops_group, &[]);
         g.set_pipeline(pass, self.light_stops_built.id);
         g.dispatch_indirect(pass, node_cache, word_bytes(node_cache::HITS_ARGS as usize));
+        g.set_bind_group(pass, 0, s.deferred_group, &[]);
         g.set_pipeline(pass, self.light_deferred_built.id);
-        g.dispatch_indirect(pass, s.args, word_bytes(raster::DEFERRED_ARGS as usize));
+        g.dispatch_indirect(pass, s.deferred, 0);
     }
 
     /// The light's record forgotten in the cast's pass `pass` with the eye's, by the node

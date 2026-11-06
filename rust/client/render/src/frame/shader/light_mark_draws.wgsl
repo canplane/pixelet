@@ -5,7 +5,8 @@
 // stands within as its draw is recorded, a thread each (`light::STANDS_AT`); then
 // the decor generated, a thread a slot of its instances (gpu/generator.rs), as many as
 // are placed, where each stands, as decor_compact.wgsl lays it, the threads as many as the
-// cast's one thread opens (`light_mark_draws_open_cs`, `light::ARGS_DRAWS`). Seen where a
+// cast's one thread opens in a buffer of their own, which this pass reads its count from and
+// does not bind (light_mark_draws_open.wgsl, `light::DRAWS_DISPATCH_WORDS`). Seen where a
 // ball about its box, a placed decor's about its middle as wide as decor is tall and wide,
 // meets the view (`eye::sees`); the box stands, as every receiver's does (`box_tiles`). The
 // host's are those frame/draw.rs `DrawList` records, no more than `light::STANDS`. Run after
@@ -100,17 +101,4 @@ fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       stand_drawn(vec2<i32>(i, j));
     }
   }
-}
-
-/// The drawn receivers' workgroups (`light::ARGS_DRAWS`), the cast's one thread: the host's
-/// boxes' threads, and past them the placed decor's where any is placed.
-@compute @workgroup_size(1)
-fn light_mark_draws_open_cs() {
-  let stands = min(u32(head[LIGHT_STANDS_AT].x), LIGHT_STANDS);
-  let placed = instance_cnt();
-  let room = LIGHT_STANDS + instance_cap();
-  let threads = select(stands, LIGHT_STANDS + placed, placed != 0u);
-  atomicStore(&light_args[LIGHT_ARGS_DRAWS], workgroups(threads, room, ROW_LANES));
-  atomicStore(&light_args[LIGHT_ARGS_DRAWS + 1u], 1u);
-  atomicStore(&light_args[LIGHT_ARGS_DRAWS + 2u], 1u);
 }

@@ -10,7 +10,9 @@ mod gpu;
 use pxl_content::generation::TALLEST;
 use pxl_engine::light::{self, Light};
 use pxl_engine::{eye, ray, Zoom, LEAF_CELL};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE};
+use pxl_render::frame::shader::record::{
+    src, SHADER_LIGHT_CLAIM, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE,
+};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_render::gpu::shadow;
 
@@ -266,7 +268,7 @@ fn hand_propagation_reads_what_stands() {
         return;
     };
     let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
-    let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_claim_cs");
+    let claim = gpu.pipeline(src(SHADER_LIGHT_CLAIM), "light_claim_cs");
     let mut tally = Tally::default();
     let (current, epoch) = (40u32, 30u32);
     let mut over_budget = false;
@@ -367,6 +369,8 @@ fn hand_propagation_reads_what_stands() {
         let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
+        // The claim's dispatch, a buffer of its own, as a cast starts (`light::CLAIM_DISPATCH`).
+        let claims = gpu.buffer(&light::CLAIM_DISPATCH, wgpu::BufferUsages::STORAGE);
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
         gpu.dispatch(
             &p,
@@ -375,12 +379,22 @@ fn hand_propagation_reads_what_stands() {
                 (11, head.as_entire_binding()),
                 (12, list_buf.as_entire_binding()),
                 (21, args_buf.as_entire_binding()),
+                (25, claims.as_entire_binding()),
             ],
             [ray::MISS_ACROSS, (stood.len() as u32).div_ceil(per), 1],
         );
-        // Then the claim over what it wants, as many rows as it opened.
+        // Then the claim over what it wants, as many rows as it opened in the claim's
+        // dispatch: a row for each `LIST_ACROSS · LISTED_LANES` wanted.
         let wanted = gpu.read(&args_buf)[(light::ARGS_COUNTS + light::LISTED_WANTED) as usize];
         over_budget |= wanted > light::CLAIM_BUDGET;
+        let opened = gpu.read(&claims);
+        let rows = wanted.div_ceil(light::LIST_ACROSS * light::LISTED_LANES);
+        tally.compare(
+            &format!("{case}: the claim's dispatch"),
+            &[light::LIST_ACROSS, rows, 1],
+            &opened,
+            |k| ["across", "rows", "deep"][k].into(),
+        );
         gpu.dispatch(
             &claim,
             &[
@@ -389,13 +403,7 @@ fn hand_propagation_reads_what_stands() {
                 (12, list_buf.as_entire_binding()),
                 (21, args_buf.as_entire_binding()),
             ],
-            [
-                light::LIST_ACROSS,
-                wanted
-                    .div_ceil(light::LIST_ACROSS * light::LISTED_LANES)
-                    .max(1),
-                1,
-            ],
+            [opened[0], opened[1].max(1), opened[2]],
         );
         let out = gpu.read(&list_buf);
         let out_args = gpu.read(&args_buf);
@@ -506,7 +514,7 @@ fn hand_claim_takes_the_nearest_within_its_budget() {
         eprintln!("no adapter: skipped");
         return;
     };
-    let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_claim_cs");
+    let p = gpu.pipeline(src(SHADER_LIGHT_CLAIM), "light_claim_cs");
     let mut tally = Tally::default();
     let (current, epoch) = (40u32, 30u32);
     let l = box_of([0.3, 0.2, -0.93], 0.0625, 0.75, [1304, -896]);

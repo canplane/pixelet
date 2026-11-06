@@ -423,8 +423,8 @@ impl Layout {
             .any(|w| w[0] == binding)
     }
 
-    /// The buffers of `entries` bound as writable storage.
-    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = Id> + 'e {
+    /// The buffers of `entries` bound as writable storage, each at its binding.
+    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + 'e {
         let words = self.group.as_chunks::<3>().0;
         entries.iter().filter_map(move |e| match e.resource {
             encode::Resource::Buffer { buffer, .. }
@@ -432,7 +432,7 @@ impl Layout {
                     .iter()
                     .any(|w| w[0] == e.binding && w[2] == record::STORAGE_RW) =>
             {
-                Some(buffer)
+                Some((e.binding, buffer))
             }
             _ => None,
         })
@@ -1246,7 +1246,9 @@ impl Gpu {
                 mapped_at_creation: false,
             },
         ));
-        s.splits.made(buf, usage & buffer_usage::INDIRECT != 0);
+        let at = core::panic::Location::caller();
+        s.splits
+            .made(buf, usage & buffer_usage::INDIRECT != 0, at.line());
         self.label(buf, "buffer", core::panic::Location::caller());
         buf
     }
@@ -1688,6 +1690,18 @@ impl Gpu {
     #[track_caller]
     fn indirect(&self, pass: Id, buf: Id) -> Id {
         let s = self.s();
+        // A call reads its count from a buffer it does not write: one bound writable in a
+        // group set for it, or, in a render pass, in any group set in the pass, is refused at
+        // the call's line, naming the group (its index, or a render pass's group's handle) and
+        // the binding, then the line that made the buffer and the buffer, each pair a word's
+        // halves.
+        if let Some((idx, binding)) = s.splits.binds_writable(pass, buf) {
+            xpute_kit::bug!(
+                ENOTRECOVERABLE,
+                u64::from(idx) << 32 | u64::from(binding),
+                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+            );
+        }
         if !s.splits.cuts(pass, buf) {
             return s.splits.pass_at(pass);
         }
@@ -1827,8 +1841,19 @@ impl Gpu {
         call::set_scissor(&mut self.s().stream, pass, rect);
     }
 
+    #[track_caller]
     pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
         let s = self.s();
+        // A render pass is one usage scope whole: a group binding writable what one of its
+        // indirect draws read its count from is refused, as the draw would be after it
+        // (`indirect`), named alike.
+        if let Some((buf, binding)) = s.splits.binds_read(pass, group) {
+            xpute_kit::bug!(
+                ENOTRECOVERABLE,
+                u64::from(group) << 32 | u64::from(binding),
+                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+            );
+        }
         call::set_bind_group(&mut s.stream, s.splits.pass_at(pass), idx, group, offsets);
         s.splits.bound(pass, idx, group, offsets);
     }

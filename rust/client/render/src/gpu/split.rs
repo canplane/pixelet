@@ -42,37 +42,50 @@ pub struct Open {
     pub pipeline: Id,
     pub groups: [(Id, Vec<u32>); GROUPS],
     pub end: Option<(Id, u32)>,
+    /// A render pass's: every group set in it, and every buffer an indirect draw of it read,
+    /// as a render pass is one usage scope whole.
+    drawn_groups: Vec<Id>,
+    drawn_args: Vec<Id>,
 }
 
-/// The args buffers the device holds, the args each bind group binds
-/// writable, and the encoders and passes being recorded.
+/// The args buffers the device holds, each with the source line that made it
+/// (gpu/api.rs `Gpu::buf`), the args each bind group binds writable, each at its
+/// binding, and the encoders and passes being recorded.
 #[derive(Default)]
 pub struct Splits {
-    args: Vec<Id>,
-    writes: Vec<(Id, Vec<Id>)>,
+    args: Vec<(Id, u32)>,
+    writes: Vec<(Id, Vec<(u32, Id)>)>,
     chains: Vec<Chain>,
     open: Vec<Open>,
 }
 
 impl Splits {
-    /// A buffer made: an args buffer where it was made `INDIRECT`.
-    pub fn made(&mut self, buf: Id, indirect: bool) {
+    /// A buffer made at source line `line`: an args buffer where it was made `INDIRECT`.
+    pub fn made(&mut self, buf: Id, indirect: bool, line: u32) {
         self.let_go(buf);
         if indirect {
-            self.args.push(buf);
+            self.args.push((buf, line));
         }
     }
 
     /// Whether `buf` is an args buffer.
     pub fn is_args(&self, buf: Id) -> bool {
-        self.args.contains(&buf)
+        self.args.iter().any(|&(b, _)| b == buf)
     }
 
-    /// A bind group made, binding `writable` as writable storage: the args
-    /// among them are what a call through it writes.
-    pub fn grouped(&mut self, group: Id, writable: impl Iterator<Item = Id>) {
+    /// The source line that made args buffer `buf`, 0 for another.
+    pub fn made_at(&self, buf: Id) -> u32 {
+        self.args
+            .iter()
+            .find(|&&(b, _)| b == buf)
+            .map_or(0, |&(_, line)| line)
+    }
+
+    /// A bind group made, binding `writable` as writable storage, each at its
+    /// binding: the args among them are what a call through it writes.
+    pub fn grouped(&mut self, group: Id, writable: impl Iterator<Item = (u32, Id)>) {
         self.let_go(group);
-        let args: Vec<Id> = writable.filter(|b| self.is_args(*b)).collect();
+        let args: Vec<(u32, Id)> = writable.filter(|(_, b)| self.is_args(*b)).collect();
         if !args.is_empty() {
             self.writes.push((group, args));
         }
@@ -80,7 +93,7 @@ impl Splits {
 
     /// An object let go: its handle may name another next.
     pub fn let_go(&mut self, id: Id) {
-        self.args.retain(|&b| b != id);
+        self.args.retain(|&(b, _)| b != id);
         self.writes.retain(|(g, _)| *g != id);
     }
 
@@ -123,6 +136,49 @@ impl Splits {
             .is_some_and(|c| c.written.contains(&buf))
     }
 
+    /// The binding at which `group` binds `buf` writable, if it does.
+    fn writes_at(&self, group: Id, buf: Id) -> Option<u32> {
+        let (_, args) = self.writes.iter().find(|(w, _)| *w == group)?;
+        args.iter()
+            .find(|(_, b)| *b == buf)
+            .map(|&(binding, _)| binding)
+    }
+
+    /// Where a group of `pass` binds `buf` writable, where an indirect call of the pass reads
+    /// its count from `buf`: the group, as its index among those set or, for a render pass,
+    /// its handle, and the binding. A compute dispatch is one usage scope, so the groups set
+    /// for it; a render pass is one whole, so every group set in it. WebGPU refuses a scope
+    /// holding `buf` both `INDIRECT` and writable storage; `buf` is then read, for a later
+    /// group of a render pass to be held to (`binds_read`).
+    pub fn binds_writable(&mut self, pass: Id, buf: Id) -> Option<(u32, u32)> {
+        let o = self.open_of(pass)?;
+        if !o.compute {
+            let found = o
+                .drawn_groups
+                .iter()
+                .find_map(|&g| self.writes_at(g, buf).map(|b| (g, b)));
+            if let Some(o) = self.open(pass) {
+                if !o.drawn_args.contains(&buf) {
+                    o.drawn_args.push(buf);
+                }
+            }
+            return found;
+        }
+        o.groups
+            .iter()
+            .enumerate()
+            .find_map(|(idx, (g, _))| self.writes_at(*g, buf).map(|binding| (idx as u32, binding)))
+    }
+
+    /// Where `group`, set in render pass `pass`, binds writable a buffer an indirect draw of
+    /// the pass read its count from: that buffer and the binding.
+    pub fn binds_read(&self, pass: Id, group: Id) -> Option<(Id, u32)> {
+        let o = self.open_of(pass).filter(|o| !o.compute)?;
+        o.drawn_args
+            .iter()
+            .find_map(|&buf| self.writes_at(group, buf).map(|b| (buf, b)))
+    }
+
     /// `encoder` recorded into `next` from here, the command buffer it was
     /// recorded into ended.
     pub fn split(&mut self, encoder: Id, next: Id) {
@@ -143,6 +199,8 @@ impl Splits {
             pipeline: 0,
             groups: Default::default(),
             end,
+            drawn_groups: Vec::new(),
+            drawn_args: Vec::new(),
         });
     }
 
@@ -177,6 +235,9 @@ impl Splits {
     pub fn bound(&mut self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
         if let Some(o) = self.open(pass) {
             o.groups[idx as usize] = (group, offsets.to_vec());
+            if !o.compute && !o.drawn_groups.contains(&group) {
+                o.drawn_groups.push(group);
+            }
         }
     }
 
@@ -190,7 +251,7 @@ impl Splits {
             .groups
             .iter()
             .filter_map(|(g, _)| self.writes.iter().find(|(w, _)| w == g))
-            .flat_map(|(_, args)| args.iter().copied())
+            .flat_map(|(_, args)| args.iter().map(|&(_, b)| b))
             .collect();
         if let Some(c) = self.chain_mut(encoder) {
             for a in written {

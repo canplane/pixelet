@@ -25,7 +25,7 @@ use pxl_engine::{area, eye, ray, value, wrap_idx, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
     SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
-    SHADER_LIGHT_MARK_DRAWS,
+    SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN,
 };
 use pxl_render::frame::shader::word::ROW_LANES;
 use wgpu::util::DeviceExt;
@@ -2848,10 +2848,13 @@ impl Chain<'_> {
             (21, &light_args),
             (22, &stood),
         ];
-        let open = [binds[1], binds[4], binds[5], binds[6]];
+        // Their dispatch, a buffer of its own the opening pass writes and theirs does not bind
+        // (`light::DRAWS_DISPATCH_WORDS`).
+        let draws = buffer(d, &vec![0u32; light::DRAWS_DISPATCH_WORDS as usize]);
+        let open = [binds[1], binds[4], binds[5], (24, &draws)];
         dispatch(d, q, self.mark_draws_open, &open, [1, 1, 1]);
-        let opened = read(d, q, &light_args, frame.name);
-        let at = light::ARGS_DRAWS as usize;
+        let opened = read(d, q, &draws, frame.name);
+        let at = 0;
         let placed =
             read(d, q, &self.regions, frame.name)[2 * drawn::REGIONS as usize - 1].min(self.cap);
         let threads = if placed == 0 {
@@ -2920,7 +2923,7 @@ fn hand_frames_answer_as_the_rust() {
     let mark_draws_open = pipeline(
         &device,
         "light_mark_draws_open by hand",
-        src(SHADER_LIGHT_MARK_DRAWS),
+        src(SHADER_LIGHT_MARK_DRAWS_OPEN),
         "light_mark_draws_open_cs",
     );
     let mut totals = Tally::default();

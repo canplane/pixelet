@@ -46,13 +46,15 @@ pub const ARGS_WORDS: u32 = 9;
 pub const ASKED_AT: u32 = 64;
 /// The faces' asks the record's stops open past the samples' (`record`), laid as theirs.
 pub const STOP_ASKED_AT: u32 = 128;
-/// The hits whose stop met its key's claim (`record`, `beam::Grid::defers_at`): the dispatch
-/// over them, `beam::HIT_LANES` a workgroup, raised by the one that opens each, the other two
-/// 1 (`DEFERRED_ARGS`), then their count (`DEFERRED_CNT`).
+/// The hits whose stop met its key's claim (`record`, `beam::Grid::defers_at`): their count
+/// (`DEFERRED_CNT`). The dispatch over them, `beam::HIT_LANES` a workgroup, raised by the one
+/// that opens each, the other two 1, is a buffer of its own (`DEFERRED_DISPATCH`, as each frame
+/// begins it): the pass that takes them reads its count from it and writes the faces' asks'
+/// here, so it binds these args and not that (pxl-render record_deferred.wgsl).
 pub const DEFERRED_AT: u32 = 192;
-pub const DEFERRED_ARGS: u32 = DEFERRED_AT;
-pub const DEFERRED_CNT: u32 = DEFERRED_AT + 3;
-pub const DEFERRED_WORDS: u32 = 4;
+pub const DEFERRED_CNT: u32 = DEFERRED_AT;
+pub const DEFERRED_WORDS: u32 = 1;
+pub const DEFERRED_DISPATCH: [u32; 3] = [0, 1, 1];
 pub const FACES_LANES: u32 = 64;
 pub const BOX_LO: u32 = 0;
 pub const BOX_HI: u32 = 3;

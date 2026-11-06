@@ -243,6 +243,11 @@ pub(super) struct CastBuffers {
     /// where a tile is claimed, and what propagation claims and counts
     /// (pxl-engine `light::args_words`), made as `light_list` is.
     light_args: u32,
+    /// The drawn receivers' dispatch (`light::DRAWS_DISPATCH_WORDS`) and the claim's
+    /// (`light::CLAIM_DISPATCH`), each a buffer of its own, apart from the light's args the
+    /// passes that read them write.
+    light_draws_dispatch: u32,
+    light_claim_dispatch: u32,
     /// The stood list's args: the propagation's dispatch and the count, and the slide's
     /// (pxl-engine `light::STOOD_WORDS`), made as `light_list` is.
     light_stood: u32,
@@ -583,7 +588,7 @@ const _: () = assert!(
 /// one's workgroups across and down, and none counted (cast_tiles.wgsl).
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// The light's cast's groups (`light_groups`).
-const LIGHT_GROUPS: usize = 13;
+const LIGHT_GROUPS: usize = 15;
 /// The light's receivers' passes' groups: the eye, the head and the list; the stood list's
 /// args and the light's args, whose marks they swap (light_stood.wgsl); and the rays the eye's
 /// pixels met the world by and its beam rays' words, its walked pixels listed past the grid's
@@ -638,7 +643,57 @@ const LIGHT_MARK_DRAWS_GROUP: [u32; 24] = [
     COMPUTE,
     STORAGE_RW,
 ];
-const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
+/// The drawn receivers' dispatch opened (light_mark_draws_open.wgsl): their pass's group and
+/// the dispatch it reads its count from.
+const LIGHT_MARK_DRAWS_OPEN_GROUP: [u32; 27] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+    18,
+    COMPUTE,
+    STORAGE,
+    19,
+    COMPUTE,
+    STORAGE,
+    20,
+    COMPUTE,
+    STORAGE,
+    21,
+    COMPUTE,
+    STORAGE_RW,
+    22,
+    COMPUTE,
+    STORAGE_RW,
+    DRAWS_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+];
+const LIGHT_PROPAGATE_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    HEAD_BINDING,
+    COMPUTE,
+    UNIFORM,
+    12,
+    COMPUTE,
+    STORAGE_RW,
+    21,
+    COMPUTE,
+    STORAGE_RW,
+    CLAIM_BINDING,
+    COMPUTE,
+    STORAGE_RW,
+];
+/// The claim's (light_claim.wgsl): the propagation's but the claim's dispatch, which the
+/// claim reads its count from.
+const LIGHT_CLAIM_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -652,6 +707,11 @@ const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
     COMPUTE,
     STORAGE_RW,
 ];
+/// The bindings of the drawn receivers' dispatch (light_mark_draws_open.wgsl) and the claim's
+/// (light_propagate.wgsl), each written by the pass before the one that reads its count from
+/// it.
+const DRAWS_BINDING: u32 = 24;
+const CLAIM_BINDING: u32 = 25;
 /// `light_slide_cs`'s (light_slide.wgsl): the eye, the head and the list.
 const LIGHT_SLIDE_GROUP: [u32; 9] = [
     0,
@@ -835,14 +895,13 @@ const _: () = assert!(
         && binds(&[COMPUTE_QUEUE_LAST], &QUEUE_LAST_GROUP)
         && binds(&[COMPUTE_LIGHT], &LIGHT_GROUP)
         && binds(&[COMPUTE_LIGHT_MARK_WALKED], &LIGHT_MARK_GROUP)
+        && binds(&[COMPUTE_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
         && binds(
-            &[COMPUTE_LIGHT_MARK_DRAWS, COMPUTE_LIGHT_MARK_DRAWS_OPEN],
-            &LIGHT_MARK_DRAWS_GROUP
+            &[COMPUTE_LIGHT_MARK_DRAWS_OPEN],
+            &LIGHT_MARK_DRAWS_OPEN_GROUP
         )
-        && binds(
-            &[COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_CLAIM],
-            &LIGHT_PROPAGATE_GROUP
-        )
+        && binds(&[COMPUTE_LIGHT_PROPAGATE], &LIGHT_PROPAGATE_GROUP)
+        && binds(&[COMPUTE_LIGHT_CLAIM], &LIGHT_CLAIM_GROUP)
         && binds(&[COMPUTE_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
     "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
 );
@@ -888,12 +947,14 @@ impl RaysPass {
             pipelines.build_compute(g, COMPUTE_LIGHT_MARK_WALKED, &LIGHT_MARK_GROUP);
         let light_mark_draws_built =
             pipelines.build_compute(g, COMPUTE_LIGHT_MARK_DRAWS, &LIGHT_MARK_DRAWS_GROUP);
-        let light_mark_draws_open_built =
-            pipelines.build_compute(g, COMPUTE_LIGHT_MARK_DRAWS_OPEN, &LIGHT_MARK_DRAWS_GROUP);
+        let light_mark_draws_open_built = pipelines.build_compute(
+            g,
+            COMPUTE_LIGHT_MARK_DRAWS_OPEN,
+            &LIGHT_MARK_DRAWS_OPEN_GROUP,
+        );
         let light_propagate_built =
             pipelines.build_compute(g, COMPUTE_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
-        let light_claim_built =
-            pipelines.build_compute(g, COMPUTE_LIGHT_CLAIM, &LIGHT_PROPAGATE_GROUP);
+        let light_claim_built = pipelines.build_compute(g, COMPUTE_LIGHT_CLAIM, &LIGHT_CLAIM_GROUP);
         let light_slide_built = pipelines.build_compute(g, COMPUTE_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
         let counter = Counter::new(g);
@@ -978,6 +1039,8 @@ impl RaysPass {
                 storage | buffer_usage::COPY_SRC,
             ),
             light_args: 0,
+            light_draws_dispatch: 0,
+            light_claim_dispatch: 0,
             light_stood: 0,
             light_world_number: 0,
             light_slide_owed: 0,
@@ -1605,6 +1668,7 @@ impl RaysPass {
             g.write_buf(c.light_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
             g.write_buf(c.light_queue, 0, bytes(&ray::QUEUE_EMPTY));
             g.write_buf(c.light_args, 0, bytes(&light_args()));
+            g.write_buf(c.light_claim_dispatch, 0, bytes(&light::CLAIM_DISPATCH));
             // No tile wanted in any ring yet (`light::rings_at`).
             let rings = (light::ARGS_WORDS + light::rings_at(shadow::SIZE)) as usize;
             let none = [0u32; light::rings(shadow::SIZE) as usize];
@@ -1958,6 +2022,8 @@ impl RaysPass {
                     &c.light_sample_built,
                     &c.light_beam_hit_built,
                     &c.queue_ask_built,
+                    &c.light_mark_draws_open_built,
+                    &c.light_claim_built,
                 ],
                 light_bound,
                 [
@@ -1973,6 +2039,8 @@ impl RaysPass {
                     c.light_sample_left,
                     c.light_beam_left,
                     c.light_stood,
+                    c.light_draws_dispatch,
+                    c.light_claim_dispatch,
                 ],
             );
             c.light_bound = light_bound;
@@ -2320,12 +2388,12 @@ impl RaysPass {
             if c.light_draws {
                 let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
                 let pass = g.compute_pass(encoder, stamp);
-                g.set_bind_group(pass, 0, c.light_groups[5], &[]);
+                g.set_bind_group(pass, 0, c.light_groups[13], &[]);
                 g.set_pipeline(pass, c.light_mark_draws_open_built.id);
                 g.dispatch(pass, 1, 1, 1);
+                g.set_bind_group(pass, 0, c.light_groups[5], &[]);
                 g.set_pipeline(pass, c.light_mark_draws_built.id);
-                let draws = word_bytes(light::ARGS_DRAWS as usize);
-                g.dispatch_indirect(pass, c.light_args, draws);
+                g.dispatch_indirect(pass, c.light_draws_dispatch, 0);
                 g.end(pass);
             }
             // The stood tiles' count where the propagation reads it; then, once a tile is
@@ -2353,10 +2421,11 @@ impl RaysPass {
             let list = word_bytes(light::STOOD_LIST as usize);
             g.dispatch_indirect(pass, c.light_stood, list);
             // Then the tiles it wants claimed, nearest first, a thread a tile wanted, as many
-            // rows as it opened (`light_claim_cs`, `light::ARGS_CLAIM`).
+            // rows as it opened in the claim's own dispatch (`light_claim_cs`,
+            // `light::CLAIM_DISPATCH`).
+            g.set_bind_group(pass, 0, c.light_groups[14], &[]);
             g.set_pipeline(pass, c.light_claim_built.id);
-            let claim = word_bytes(light::ARGS_CLAIM as usize);
-            g.dispatch_indirect(pass, c.light_args, claim);
+            g.dispatch_indirect(pass, c.light_claim_dispatch, 0);
             g.end(pass);
             // The claimed lists' counts where the passes that take them read them.
             for which in [
@@ -2518,6 +2587,13 @@ impl RaysPass {
                 if c.light_list == 0 {
                     c.light_list = light_list(g);
                     c.light_args = light_args_buf(g);
+                    let dispatch = buffer_usage::STORAGE | buffer_usage::INDIRECT;
+                    c.light_draws_dispatch =
+                        g.buf(word_bytes(light::DRAWS_DISPATCH_WORDS as usize), dispatch);
+                    c.light_claim_dispatch = g.buf(
+                        word_bytes(light::CLAIM_DISPATCH.len()),
+                        dispatch | buffer_usage::COPY_DST,
+                    );
                     c.light_stood = g.buf(
                         word_bytes(light::STOOD_WORDS as usize),
                         buffer_usage::STORAGE
@@ -2535,8 +2611,11 @@ impl RaysPass {
             (c.light_groups, c.light_bound) = ([0; LIGHT_GROUPS], [0; 13]);
             release(c.light_list);
             release(c.light_args);
+            release(c.light_draws_dispatch);
+            release(c.light_claim_dispatch);
             release(c.light_stood);
             (c.light_list, c.light_args, c.light_stood) = (0, 0, 0);
+            (c.light_draws_dispatch, c.light_claim_dispatch) = (0, 0);
             c.raster.light_release();
             c.light_ready = false;
             c.light_on = false;
@@ -2713,8 +2792,8 @@ fn px_group(
 }
 
 /// The workgroups of the passes that cast the light's tiles as a cast starts: none, a list's
-/// row across and no row; the drawn receivers' none; and the lay's tiles' vertices and no
-/// instance (`light::ARGS_WORDS`).
+/// row across and no row; and the lay's tiles' vertices and no instance
+/// (`light::ARGS_WORDS`).
 fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     let mut args = [0; light::ARGS_WORDS as usize];
     for w in [
@@ -2723,7 +2802,6 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
         light::ARGS_SAMPLE,
         light::ARGS_SAMPLE_BOX,
         light::ARGS_SLOT,
-        light::ARGS_CLAIM,
     ] {
         args[w as usize..w as usize + 3].copy_from_slice(&[light::LIST_ACROSS, 0, 1]);
     }
@@ -2801,10 +2879,12 @@ fn light_groups(
         sample,
         beam_hit,
         queue_ask,
+        mark_draws_open,
+        claim,
     ]: [&Pipeline; LIGHT_GROUPS],
     bindings: [u32; 13],
-    [node_cache, head, list, record, visibility, args, misses, light_args, queue, sample_left, beam_left, stood]: [u32;
-        12],
+    [node_cache, head, list, record, visibility, args, misses, light_args, queue, sample_left, beam_left, stood, draws, claims]: [u32;
+        14],
 ) -> [u32; LIGHT_GROUPS] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances, beams] =
         bindings;
@@ -2831,6 +2911,8 @@ fn light_groups(
         buf_entry(21, light_args),
         buf_entry(22, stood),
         buf_entry(23, beams),
+        buf_entry(DRAWS_BINDING, draws),
+        buf_entry(CLAIM_BINDING, claims),
     ];
     // Each group takes the entries its layout binds; the samples' and the beam rays' walks
     // over the node cache alone, each its own list's atomics at 10.
@@ -2902,6 +2984,8 @@ fn light_groups(
         of(sample),
         hit(beam_hit, beam_left),
         ask,
+        of(mark_draws_open),
+        of(claim),
     ]
 }
 
