@@ -114,15 +114,13 @@ fn walk(aim: Aim, start: Start, line: u32, spacing: vec2<f32>) -> Walked {
     var into = false;
     var visited = false;
     if (t1 > t0) {
-      // The zooms asked at its farthest corner and nearest point, squared, on the face the
-      // ray enters it across (`node_dist_sq`, `node_slant`); one range's alone, as the light's
-      // is.
+      // The zooms asked at its farthest corner and nearest point, squared (`node_dist_sq`);
+      // one range's alone, as the light's is.
       var asked_far = range.x;
       var asked_near = range.x;
       if (range.x != range.y) {
-        let slant = node_slant(dir, s.near);
-        asked_far = zoom_at(squared(max(-lo, hi)), slant, range);
-        asked_near = zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), slant, range);
+        asked_far = zoom_at(squared(max(-lo, hi)), range);
+        asked_near = zoom_at(squared(min(max(lo, vec3<f32>(0.0)), hi)), range);
       }
       let c = idx_of(corner, zoom, roots, r0);
       let slot = slot_of(zoom, c, asked_far, asked_near);

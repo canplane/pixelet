@@ -27,7 +27,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let v = vec3<f32>(bitcast<f32>(probe[k]), bitcast<f32>(probe[k + 1u]), bitcast<f32>(probe[k + 2u]));
   let r2 = squared(v);
   probe[k + 3u] = bitcast<u32>(r2);
-  probe[k + 4u] = zoom_at(r2, 0u, vec2<u32>(0u, FINEST_ZOOM));
+  probe[k + 4u] = zoom_at(r2, vec2<u32>(0u, FINEST_ZOOM));
   let width = spacing_width(vec2<f32>(0.0, v.y), v.z);
   probe[k + 5u] = bitcast<u32>(width);
   probe[k + 6u] = select(0u, 1u, narrow(v.x, width));

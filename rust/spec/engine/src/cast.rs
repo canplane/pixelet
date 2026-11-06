@@ -25,7 +25,7 @@
 use crate::answer::{
     box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS,
 };
-use crate::grid::{self, cell_zoom_on, INV_SPLIT2};
+use crate::grid::cell_zoom_at;
 use crate::overwrite::{y_start, z_start};
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS, UNIT_ZOOM};
 
@@ -67,9 +67,9 @@ impl Spacing {
     }
 }
 
-/// The zoom asked at each distance from the walk's origin, on a face met at
-/// a slant: the camera grid's cells there (`grid::cell_zoom_on`), held to
-/// `range`, asked of a distance squared and the face's slant (`on`). A stated zoom's cells wherever they are is a range of that
+/// The zoom asked at each distance from the walk's origin: the camera
+/// grid's cells there (`cell_zoom_at`), held to `range`, asked of a distance
+/// squared (`at`). A stated zoom's cells wherever they are is a range of that
 /// zoom alone, as the light's walks ask their band (pxl-engine
 /// `light::Light::band`). `spacing` is how far a beam ray lies from the next
 /// of its grid (`Spacing`, `Until::Beam`).
@@ -80,16 +80,10 @@ pub struct Detail {
 }
 
 impl Detail {
-    /// At `d2`, a distance squared, on a face met head-on (`on`).
+    /// At `d2`, a distance squared. Held by `max` then `min`, not `clamp`,
+    /// which aborts where `range` inverts (lib.rs): there, its finest.
     pub fn at(self, d2: f32) -> Zoom {
-        self.on(d2, 0)
-    }
-
-    /// At `d2`, a distance squared, on a face `slant` octaves foreshortened
-    /// (`grid::slant`). Held by `max` then `min`, not `clamp`, which aborts
-    /// where `range` inverts (lib.rs): there, its finest.
-    pub fn on(self, d2: f32, slant: u32) -> Zoom {
-        self.hold(cell_zoom_on(d2 * INV_SPLIT2, slant))
+        self.hold(cell_zoom_at(d2))
     }
 
     /// Zoom `z` held to `range`, as `at` holds it.
@@ -659,21 +653,14 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     [squared(far), squared(near)]
 }
 
-/// The zooms a node is asked at by a ray from the origin that enters it
-/// across a face `slant` octaves foreshortened (`node_slant`), from its
-/// farthest corner to its nearest point (`node_dist_sq`, `Detail::on`): a
-/// function of the node, the origin and the face, so a node's answer is one
-/// for every ray through it across that face.
-fn ask_zooms(detail: Detail, [far, near]: [f32; 2], slant: u32) -> [Zoom; 2] {
-    [detail.on(far, slant), detail.on(near, slant)]
-}
-
-/// How foreshortened the face is that a ray enters a node across, its near
-/// planes reached at `near` (`entry_plane`, `grid::slant`): what the cell it
-/// stops on shows the eye of its side, so the zoom it is asked at
-/// (`ask_zooms`).
-fn node_slant(ray: &Ray, near: [f32; 3]) -> u32 {
-    grid::slant(axis(ray.dir, crossing(ray.dir, near, true)))
+/// The zooms a node is asked at by every ray from the origin in it, from
+/// its farthest corner to its nearest point (`node_dist_sq`, `Detail::at`). A
+/// function of the node and the origin alone, so a node's answer is one for
+/// every ray through it; a ray asks within it no coarser than the farthest
+/// corner, so this only adds coarser zooms than its own, which splits more
+/// and stops on the same cell.
+fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+    [detail.at(far), detail.at(near)]
 }
 
 /// A vector's length squared.
@@ -835,14 +822,7 @@ pub fn walk_at_most<Q: Query>(
         let mut into = false;
         if t1 > t0 {
             let dist_sq = node_dist_sq(lo, hi);
-            let slant = node_slant(ray, [x.0, y.0, z.0]);
-            let i = q.node(
-                &mut at,
-                n.zoom,
-                n.idx(o),
-                ask_zooms(detail, dist_sq, slant),
-                t0,
-            );
+            let i = q.node(&mut at, n.zoom, n.idx(o), ask_zooms(detail, dist_sq), t0);
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
                 && lo[1] <= 0.0

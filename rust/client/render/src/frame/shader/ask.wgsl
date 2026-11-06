@@ -263,13 +263,12 @@ fn walk_asking(origin: vec3<i32>, aimed: vec3<f32>, inv: vec3<f32>, t_max: f32, 
     var kind = KIND_NONE;
     asset = vec2<u32>(0u);
     // Touched at a face or an edge alone, it is not entered: not asked. Else asked at the zooms
-    // its farthest corner and nearest point ask on the face the ray enters it across, far then
-    // near over `ZOOM_BITS` (`ask_zooms`, `node_dist_sq`, `node_slant`).
+    // its farthest corner and nearest point ask, far then near over `ZOOM_BITS` (`ask_zooms`,
+    // `node_dist_sq`).
     if (t1 > t0) {
-      let slant = node_slant(dir, s.near);
       let far_v = max(-lo, hi);
       let near_v = min(max(lo, vec3<f32>(0.0)), hi);
-      let zooms = zoom_at(squared(far_v), slant, range) | (zoom_at(squared(near_v), slant, range) << ZOOM_BITS);
+      let zooms = zoom_at(squared(far_v), range) | (zoom_at(squared(near_v), range) << ZOOM_BITS);
       // The root it starts in (`roots_of`), X's wrapped away as the world names it.
       let r0 = vec3<i32>(0i, 0i, i32(og.z) >> 31u);
       let a = ask_node(parent, !from_parent, zoom, idx_of(corner, zoom, roots, r0), zooms, true, tag);
