@@ -695,12 +695,15 @@ fn world_root(zoom: u32, c: vec3<i32>) -> vec4<u32> {
 }
 
 /// The ways' cursor of a node whose ground's cells were found at `place`: its parent's
-/// where that names the same brick, found from that brick's root where it names another.
+/// where that names the same brick, found from that brick's root where it names another or
+/// where the node is the first the tree's nodes are the world's at, nothing coarser
+/// (pxl-engine world.rs `WAYS_FROM`).
 fn ways_at(place: u32, before: u32, trail: u32, zoom: u32, c: vec3<i32>) -> u32 {
-  if (((place ^ before) & LOOKUP_AT) == 0u) {
+  let enters = zoom == SHARD_ZOOM + 1u && lookup_here(place);
+  if (((place ^ before) & LOOKUP_AT) == 0u && !enters) {
     return trail;
   }
-  if (!lookup_here(place)) {
+  if (!lookup_here(place) || zoom <= SHARD_ZOOM) {
     return SLOT_NOTHING;
   }
   return way_cursor(ground[brick_at(lookup_slot(place)) + ROOT_AT], lookup_from(place), zoom, c);

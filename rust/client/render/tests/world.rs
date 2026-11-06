@@ -2,7 +2,10 @@
 //! `world::node` does: real world buffers made here on the CPU, as the fill and the
 //! store lay them, nodes asked along whole descents of the Rust, each step asked again
 //! of the hand query on a device, and each node's answer compared, its kind and its asset.
-//! Skipped where no adapter answers.
+//! Before that, on the CPU, each node of a descent is asked again with nothing handed it
+//! (`Inheritance::of`), and answers as it did off what its parent handed it: the world's
+//! answer is the node's, whichever way a walk came to it. The device's part is skipped
+//! where no adapter answers.
 
 mod real_world;
 
@@ -100,6 +103,8 @@ fn descend(
     let root = idx(start);
     let mut at = Inheritance::of(&w, (start, root));
     tally.add("root", true);
+    // Whether a node over it was handed another descent's place.
+    let mut foreign = false;
     for z in start..=stop {
         let c = idx(z);
         if z > start {
@@ -123,11 +128,26 @@ fn descend(
         // name a brick since gone.
         if moving && *seen != Lookup::NONE && draw.next().is_multiple_of(16) {
             at.ground = *seen;
+            foreign = true;
             tally.add("handed another descent's place", true);
         }
         let before = at;
         let mut held = w;
         let got = world::node(&mut held, &w, &w, &pool, &mut at, (z, c), zooms, cuts);
+        // Handed what its parent was alone: another descent's place is no state of its own.
+        if z > start && !foreign {
+            let mut top = Inheritance::of(&w, (z, c));
+            let mut held = w;
+            let again = world::node(&mut held, &w, &w, &pool, &mut top, (z, c), zooms, cuts);
+            tally.add("asked again from the top", true);
+            if again != got {
+                tally.add(OTHERWISE, true);
+                eprintln!(
+                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, handed {:x?}",
+                    before.words()
+                );
+            }
+        }
         asks.push(
             (OP_NODE, z, c),
             zooms,
@@ -140,6 +160,10 @@ fn descend(
         tell(w, before, (z, c), zooms, cuts, got, at, tally);
     }
 }
+
+/// A node of a descent that answered otherwise asked from the top than off what its parent
+/// handed it (`descend`).
+const OTHERWISE: &str = "answered otherwise from the top";
 
 /// Which kinds of answer one fell among.
 #[expect(clippy::too_many_arguments, reason = "an answer and what it was asked")]
@@ -379,18 +403,6 @@ fn taken(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderModule
 
 #[test]
 fn hand_world_answers_as_the_rust() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
-        eprintln!("no adapter: skipped");
-        return;
-    };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-
     let built = real_world::build(EYE);
     let w = built.world();
     let (clipmap, ground_words, palette_words, shards, overwrites, pool) = (
@@ -804,6 +816,23 @@ fn hand_world_answers_as_the_rust() {
     for (name, n) in &tally.0 {
         eprintln!("  {n:>8}  {name}");
     }
+    assert_eq!(
+        tally.0.get(OTHERWISE).copied().unwrap_or(0),
+        0,
+        "a node answers as it does from the top off what its parent handed it"
+    );
+
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter: the hand query skipped");
+        return;
+    };
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_limits: adapter.limits(),
+        ..Default::default()
+    }))
+    .unwrap();
 
     // Asked again of the hand query, a chunk at a time.
     use wgpu::util::DeviceExt as _;

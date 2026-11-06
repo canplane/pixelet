@@ -18,7 +18,7 @@ use crate::ground::{self, VOID};
 use crate::overwrite::{self, Columns, Cut, AIR, CELL, OBJECT_ROOT, SPLIT};
 use crate::way;
 use crate::way::tree;
-use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
 /// descent asks each node's sources once:
@@ -101,13 +101,24 @@ impl Inheritance {
     }
 }
 
+/// The first zoom whose nodes are the ways' tree's own (`way::tree::cursor`): the tree
+/// counts its nodes along z by a leaf's Z shifted down, and the world counts one node
+/// through the height at the shards' zoom and coarser (`overwrite::z_start`), so a
+/// node there is no node of the tree, and a cursor stepped from one to its children
+/// names another node than theirs. Its cursor is nothing there, and found at the
+/// first zoom past them, where the tree's nodes are the world's and every cursor
+/// stepped from it is the one found for the node from the top.
+const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
+
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, `at` what
 /// the node over it handed it (`Inheritance`): its shard is found first, before any
 /// layer answers, so a stop's shard is its own whichever layer stops it;
 /// where the ground's cells of a node over it were held becomes its own
 /// (`ground::node`), and the ways' cursor is stepped from its parent's where
 /// that names the same brick, found from that brick's root where it names
-/// another, as the cells' place itself is found again (`clipmap::step`). A
+/// another, as the cells' place itself is found again (`clipmap::step`), or
+/// where the node is the first the tree's nodes are the world's at
+/// (`WAYS_FROM`), nothing coarser. A
 /// preview's `carve` and `hide` (`overwrite::Cut`) are read with what is
 /// placed.
 ///
@@ -197,8 +208,9 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     if place.from() != before.from()
         || place.slot() != before.slot()
         || place.here() != before.here()
+        || place.here() && zoom == WAYS_FROM
     {
-        *trail = if place.here() {
+        *trail = if place.here() && zoom >= WAYS_FROM {
             tree::cursor(
                 pool,
                 bricks.root(place.from(), place.slot()),
