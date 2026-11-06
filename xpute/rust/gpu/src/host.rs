@@ -149,6 +149,13 @@ impl GpuHost {
         }
     }
 
+    /// The device the stream runs on, for the program's own calls on the
+    /// thread that runs the stream: an error scope pushed there holds what
+    /// the records run after it raise.
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
     fn on_lost(&mut self, memory: &mut Memory<'_>) {
         self.objects.clear();
         self.pending.clear();

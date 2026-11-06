@@ -58,6 +58,12 @@ xpute-guest.workspace = true
 # The records a test holds the kernel to beside the client
 # (spec/golden/object/top.tsv).
 xpute-kit = { workspace = true, features = ["std", "golden"] }
+# The kernel's whole frames on a device (tests/frame/): the protocols' JSON they speak by,
+# the catalog's hex, and the device's error scopes, waited out without a runtime.
+serde_json = "1"
+hex.workspace = true
+wgpu = { version = "30", default-features = false, features = ["metal", "vulkan"] }
+pollster = "1"
 
 [features]
 # What a development build has and a published one does not: the settings
@@ -71,3 +77,10 @@ dev = []
 
 [lints]
 workspace = true
+
+# The kernel's whole frames (tests/frame/), a program of their own: one guest a process, its
+# turns rung by the program alone, and a clock of its own that ends the process on a hang.
+[[test]]
+name = "frame"
+path = "tests/frame/main.rs"
+harness = false
