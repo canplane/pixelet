@@ -1329,7 +1329,7 @@ impl Renderer {
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
-        self.light_tiles.mark(g, (map_gated, false), None);
+        self.light_tiles.mark(g, (map_gated, false, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
         // whose pixels read them are propagated to on the GPU
@@ -1347,10 +1347,10 @@ impl Renderer {
         // mark did, however much of the screen they and the tiles still
         // gathering cover; every one where anything else did. What the gate,
         // the resolve and the finish draw.
-        self.resolve.tiles.mark(g, (gated, quiet), sheets);
+        self.resolve.tiles.mark(g, (gated, quiet, animated), sheets);
         if screen_marking {
             let now = self.resolve.tiles.now();
-            self.resolve.tiles.marked_in(now);
+            self.resolve.tiles.marked_in(now, animated);
         }
 
         self.set_groups(g, world);
@@ -1659,9 +1659,9 @@ impl Renderer {
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it. The eye's rolled lattice run
-            // through the same way, a cast a frame, until its rays rest.
-            if self.screen.rolling() || (self.resolve.gathering() && (quiet || !animated)) {
+            // step, held to the pixels about it, and asks no frame between. The eye's
+            // rolled lattice run through the same way, a cast a frame, until its rays rest.
+            if self.screen.rolling() || (self.resolve.asks() && (quiet || !animated)) {
                 REDRAW.set(true);
             }
             if self.screen.generates() {

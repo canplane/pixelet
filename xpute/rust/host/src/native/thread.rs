@@ -38,6 +38,7 @@
 //!   a turn the guest asked for itself carries the program's kicks too.
 
 use core::cell::Cell;
+use core::panic::AssertUnwindSafe;
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -249,7 +250,20 @@ enum Next {
     Turn { quota_ms: f64 },
 }
 
+/// The guest's thread: its turns and callers' work until a panic unwinds out of one, the
+/// guest's stop, which its hook has told (xpute-guest stop.rs, `stopped`). The thread then
+/// ends the guest here, outside the hook (`terminate`), and stays, with the guest's memory
+/// as the panic left it, so the process goes on without it.
 fn run_loop(vcpu: Vcpu) {
+    if std::panic::catch_unwind(AssertUnwindSafe(|| turns(vcpu))).is_err() {
+        terminate();
+    }
+    loop {
+        std::thread::park();
+    }
+}
+
+fn turns(vcpu: Vcpu) {
     loop {
         let next = next(vcpu);
         match next {
@@ -483,19 +497,32 @@ pub fn ring(quota_ms: f64) -> Option<f64> {
     out
 }
 
-/// Terminates the guest, on its own thread: every caller waiting is told, and
-/// so is the program, and this thread stays here, with the guest's stack and
-/// locks as they are, so the process goes on without it.
-pub fn terminate() -> ! {
+/// The guest has stopped, told by its hook on the guest's thread, inside the panic hook
+/// (say.rs `stop_hook`). Where a panic unwinds it returns, and the thread ends the guest
+/// outside the hook (`run_loop`).
+pub(super) fn stopped() {
+    // Where a panic aborts, nothing unwinds out of the hook, and returning would end the
+    // process, which outlives its guest to show the stop's report: the guest is ended here
+    // and its thread kept inside the hook, which nothing in such a program replaces.
+    #[cfg(panic = "abort")]
+    {
+        terminate();
+        loop {
+            std::thread::park();
+        }
+    }
+}
+
+/// The guest has stopped, told from its own thread: every caller waiting is told, and so
+/// is the program.
+fn terminate() {
     let mut g = state();
     g.terminated = true;
+    g.busy = false;
     g.ack.told = true;
     HOST_CV.notify_all();
     drop(g);
     notify();
-    loop {
-        std::thread::park();
-    }
 }
 
 /// `f` on the guest's thread between turns, the caller waiting; each hostcall

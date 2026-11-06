@@ -21,8 +21,10 @@ pub enum Stop<'a> {
         b: u64,
     },
     Panic(&'a std::panic::PanicHookInfo<'a>),
-    /// The guest has stopped, told last: the form ends its thread here
-    /// (xpute-host native `terminate`), or the process goes with it.
+    /// The guest has stopped, told last, inside the panic hook: the form
+    /// ends its thread outside the hook once the panic has unwound out of
+    /// the turn, or inside it where a panic aborts (xpute-host native
+    /// `stopped`); without a form, the process goes with it.
     End,
 }
 

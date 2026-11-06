@@ -253,6 +253,13 @@ impl Resolve {
     pub fn gathering(&self) -> bool {
         self.tiles.claiming()
     }
+
+    /// Whether the frames left of the jitter's sequence are asked for: gathering since a
+    /// change that is not the scene's animation alone (`Tiles::asking`), whose own steps
+    /// take its places of the sequence.
+    pub fn asks(&self) -> bool {
+        self.tiles.asking()
+    }
 }
 
 /// `i`'s radical inverse in `base`: the Halton sequence's `i`th.

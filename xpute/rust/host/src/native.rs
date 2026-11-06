@@ -25,8 +25,8 @@ use xpute_guest::mem::section::PAGE_BYTES;
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
 pub use thread::{
-    ack, answer, answer_with, kick, kick_quota, notify_on, pause, resume, ring, terminate, Answer,
-    Notify, Vcpu,
+    ack, answer, answer_with, kick, kick_quota, notify_on, pause, resume, ring, Answer, Notify,
+    Vcpu,
 };
 pub use xpute_guest::entry::{run, BootInfo, Entry};
 pub use xpute_guest::machine::Machine;
@@ -131,8 +131,7 @@ impl Guest {
         thread::run(f).expect("the guest has stopped")
     }
 
-    /// `run`, none where the guest has stopped, in this call or before it
-    /// (`terminate`).
+    /// `run`, none where the guest has stopped, in this call or before it.
     pub fn turn<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
         thread::run(f)
     }

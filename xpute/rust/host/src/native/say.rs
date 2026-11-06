@@ -6,11 +6,11 @@
 
 use xpute_guest::stop::Stop;
 
-use super::terminate;
+use super::thread::stopped;
 
 /// xpute's stop hook for a guest linked into its host's process
 /// (`BootInfo::stop_hook`): a broken invariant's or a panic's line said
-/// (`say`), and the guest's thread ended once it has stopped (`terminate`).
+/// (`say`), and the guest's end told its thread (`stopped`).
 pub fn stop_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(
@@ -20,7 +20,10 @@ pub fn stop_hook(stop: Stop<'_>) {
             at.column()
         ),
         Stop::Panic(info) => format!("{info}"),
-        Stop::End => terminate(),
+        Stop::End => {
+            stopped();
+            return;
+        }
     };
     say(&line);
 }

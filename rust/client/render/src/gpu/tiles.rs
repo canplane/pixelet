@@ -114,6 +114,10 @@ pub struct Tiles {
     size: [u32; 2],
     now: u32,
     marked_at: u32,
+    /// The last frame a mark was handed or drawn in that asks the frames of its claim: one
+    /// not made by what the scene animates alone, whose own steps take the claim's frames
+    /// (`claiming`, `asking`).
+    asked_at: u32,
     /// The marks' pass; its uniform, the mark's tiles and its head; and the
     /// tiles this frame's mark sets, 0 where it sets none.
     mark: Pipeline,
@@ -183,6 +187,7 @@ impl Tiles {
             size: [0; 2],
             now: 0,
             marked_at: 0,
+            asked_at: 0,
             mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &MARK_GROUP),
             mark_uniform: g.buf(
                 word_bytes(8),
@@ -238,13 +243,20 @@ impl Tiles {
     /// The mark this frame hands, the frame numbered anew: where it is
     /// drawn through the gate (`gated`), the tiles `mark` covers
     /// (`mark_of`); else none where nothing it draws moved (`quiet`), one of
-    /// every tile where anything did. The tiles the frame draws: the claimed alone where it is gated,
+    /// every tile where anything did. A mark through the gate in a turn the
+    /// scene's animation stepped (`animated`) is that animation's, and asks no
+    /// frame of its claim (`asking`). The tiles the frame draws: the claimed alone where it is gated,
     /// else every one. Set on the GPU, before anything reads them, by
     /// `dispatch_marks`; but a whole frame's stamp where a tile is claimed
     /// the frame it changed alone (`claimed_for` 1, the map's): that frame
     /// claims every tile by its uniform, and a later one through the gate
     /// only those set in it, so no frame reads the stamp.
-    pub fn mark(&mut self, g: &Gpu, (gated, quiet): (bool, bool), mark: Option<Mark>) {
+    pub fn mark(
+        &mut self,
+        g: &Gpu,
+        (gated, quiet, animated): (bool, bool, bool),
+        mark: Option<Mark>,
+    ) {
         let squares = self.squares();
         self.now = self.now.wrapping_add(1);
         let whole = !gated && !quiet;
@@ -263,6 +275,9 @@ impl Tiles {
         };
         if tiles.is_some() {
             self.marked_at = self.now;
+            if !(gated && animated) {
+                self.asked_at = self.now;
+            }
         }
         let stamped = tiles.filter(|_| gated || self.claimed_for > 1);
         self.mark_cnt = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
@@ -421,8 +436,20 @@ impl Tiles {
     /// this one: a mark was handed, or drawn (`marked_in`), so lately its
     /// tile is claimed under a claim a frame shorter (`screen::claimed`).
     pub fn claiming(&self) -> bool {
-        let age = screen::age(self.now, self.marked_at);
-        screen::claimed(age, self.claimed_for.saturating_sub(1))
+        self.claims(self.marked_at)
+    }
+
+    /// `claiming`, of the marks that ask the frames of their claim alone: a tile changed by
+    /// what the scene animates alone is gathered at the animation's own steps.
+    pub fn asking(&self) -> bool {
+        self.claims(self.asked_at)
+    }
+
+    fn claims(&self, at: u32) -> bool {
+        screen::claimed(
+            screen::age(self.now, at),
+            self.claimed_for.saturating_sub(1),
+        )
     }
 
     /// This frame's number.
@@ -433,10 +460,15 @@ impl Tiles {
     /// A mark a pass beside set in the frame numbered `at`, the draws that
     /// changed drawn and the propagation their frame's (gpu/pass/mark.rs,
     /// gpu/propagate.rs): the tiles gather from it as from one handed, where it
-    /// is later than the last.
-    pub fn marked_in(&mut self, at: u32) {
-        if screen::age(self.now, at) < screen::age(self.now, self.marked_at) {
+    /// is later than the last, and ask its frames unless the scene's animation
+    /// made it (`animated`).
+    pub fn marked_in(&mut self, at: u32, animated: bool) {
+        let later = |last: u32| screen::age(self.now, at) < screen::age(self.now, last);
+        if later(self.marked_at) {
             self.marked_at = at;
+        }
+        if !animated && later(self.asked_at) {
+            self.asked_at = at;
         }
     }
 }

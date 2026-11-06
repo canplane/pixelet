@@ -2,16 +2,19 @@
 
 use super::*;
 
-/// A guest that stops ends its thread and not the process: the call in it and every
-/// later one come back with none.
+/// A guest that stops ends its thread and not the process, outside the panic hook: the
+/// call it stopped in and every later one come back with none, and the hook is free for
+/// the process's next panic.
 #[test]
-fn terminate_ends_the_guest_alone() {
+fn a_stop_ends_the_guest_alone() {
     let vcpu = Vcpu {
         turn: |_| -1.0,
         ready: || true,
     };
     start("guest", 1 << 20, vcpu, || {});
     assert_eq!(run(|| 1), Some(1));
-    assert_eq!(run::<()>(|| terminate()), None);
+    assert_eq!(run::<()>(|| panic!("the guest stops")), None);
     assert_eq!(run(|| 2), None);
+    let taken = std::panic::take_hook();
+    std::panic::set_hook(taken);
 }
