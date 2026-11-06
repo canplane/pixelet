@@ -10,19 +10,26 @@
 //! (`TOUCHES`); where none are, an args buffer is touched through its whole view and a list
 //! or a state not at all.
 //!
+//! A frame declares two more facts of a range: a count several passes add to (`appends`),
+//! one fact with several appenders; and what it keeps over frames (`kept`), each kept range
+//! with the one step that owns it and what makes it stale.
+//!
 //! `check` refuses, as the crate is built:
 //! 1. a call that reads its count from a buffer a group set for it binds writable (a
 //!    dispatch's groups, every group of a render pass), which WebGPU refuses in one usage
 //!    scope;
 //! 2. two calls of one stage that write one word, one of them not run in place of the other
-//!    (`Step::one_of`);
-//! 3. a call that reads a word no call before it in the frame wrote, or that a later call of
-//!    its own stage writes, a word it does not write itself.
+//!    (`Step::one_of`), but a count both add to through atomics;
+//! 3. a call that reads a word no call before it in the frame wrote, unless the word is kept
+//!    over frames, or that a later call of its own stage writes, a word it does not write
+//!    itself, but the kept word's owner writing it for the frames after;
+//! 4. a kept range written by a call that is not its owner, or an owner that writes it not.
 //!
 //! Each hazard the frame holds today is named in its known list, and one named there that it
 //! no longer holds is refused as well.
 
 use crate::frame::shader::record::{compute, ACCESS, NONE, STAGES, STORAGE_RW};
+use crate::gpu::shadow::SIZE;
 use pxl_engine::{count, light, node_cache, raster, ray};
 
 /// A pass's access to a binding, as its shader uses it: read, written, and through atomics.
@@ -179,6 +186,27 @@ impl Step {
         }
     }
 
+    /// Render pipeline `render` drawn in a pass setting `groups`, a draw a region, each region's
+    /// count in `buf` where the host lays it (`Step::off`).
+    pub const fn draw_regions(
+        name: &'static str,
+        stage: u32,
+        render: u32,
+        groups: &'static [&'static Group],
+        buf: u32,
+    ) -> Step {
+        Step {
+            pipeline: render,
+            groups,
+            indirect: Range {
+                buf,
+                at: 0,
+                words: END,
+            },
+            ..Step::new(name, stage, DRAW)
+        }
+    }
+
     /// `from` copied to `to`.
     pub const fn copy(name: &'static str, stage: u32, from: Range, to: Range) -> Step {
         Step {
@@ -208,6 +236,19 @@ impl Step {
     pub const fn at(&self) -> u32 {
         self.indirect.at * 4
     }
+
+    /// The byte `bytes` past it, where the host picks a region among the step's.
+    pub const fn off(&self, bytes: u32) -> u32 {
+        self.at() + bytes
+    }
+
+    /// The bytes a copy's source and a copy's or a host's write's destination start at.
+    pub const fn from_at(&self) -> u32 {
+        self.from.at * 4
+    }
+    pub const fn to_at(&self) -> u32 {
+        self.to.at * 4
+    }
 }
 
 /// The frame's calls in the order the host encodes them, its stages' names, and the buffers
@@ -216,10 +257,21 @@ pub struct Frame {
     pub stages: &'static [&'static str],
     pub buffers: &'static [Buffer],
     pub steps: &'static [Step],
+    pub appends: &'static [Range],
+    pub kept: &'static [Kept],
 }
 
-/// A hazard the frame holds today: its rule (1, 2 or 3), the call and the other call or the
-/// buffer it holds it with.
+/// A range kept over frames: its words, the one step that writes them (or those run in place
+/// of it, `Step::one_of`), and what makes what it holds stale, said.
+#[derive(Clone, Copy)]
+pub struct Kept {
+    pub range: Range,
+    pub owner: &'static str,
+    pub invalidation: &'static str,
+}
+
+/// A hazard the frame holds today: its rule (1 to 4), the call and the other call, the buffer
+/// or the kept range's owner it holds it with.
 #[derive(Clone, Copy)]
 pub struct Known {
     pub rule: u32,
@@ -227,11 +279,25 @@ pub struct Known {
     pub with: &'static str,
 }
 
+/// List `which`'s marks in the light's args (pxl-engine `light::listed_marks_at`): a word a
+/// tile, the number of the cast that last listed it.
+pub const fn light_marks(which: u32) -> [u32; 2] {
+    [
+        light::ARGS_WORDS + light::listed_marks_at(SIZE, which),
+        light::listed_room(SIZE, which),
+    ]
+}
+
+/// The drawn receivers' marks in the light's args, past the lists' (`light::drawn_marks_at`).
+pub const LIGHT_DRAWN_MARKS: [u32; 2] = [
+    light::ARGS_WORDS + light::drawn_marks_at(SIZE),
+    light::tiles(SIZE) * light::tiles(SIZE),
+];
+
 /// The words each pass touches where it shares a buffer with others, within the binding's view
 /// (the binding's group's `Bind::at`), as its shader's text indexes them.
 pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
-    use crate::gpu::shadow::SIZE;
     /// The light's args (pxl-engine `light::ARGS_WORDS`): a pass's dispatch's x, raised by
     /// the claim as it lists (light_enlist.wgsl `opened`); the claims' counts; each list's
     /// count; each list's marks past the counts, the drawn receivers' and the rings'.
@@ -242,15 +308,9 @@ pub const TOUCHES: &[Touch] = {
         [light::ARGS_COUNTS + which, 1]
     }
     const fn marks(which: u32) -> [u32; 2] {
-        [
-            light::ARGS_WORDS + light::listed_marks_at(SIZE, which),
-            light::listed_room(SIZE, which),
-        ]
+        light_marks(which)
     }
-    const DRAWN_MARKS: [u32; 2] = [
-        light::ARGS_WORDS + light::drawn_marks_at(SIZE),
-        light::tiles(SIZE) * light::tiles(SIZE),
-    ];
+    const DRAWN_MARKS: [u32; 2] = LIGHT_DRAWN_MARKS;
     const RINGS: [u32; 2] = [
         light::ARGS_WORDS + light::rings_at(SIZE),
         light::rings(SIZE),
@@ -439,17 +499,17 @@ pub const TOUCHES: &[Touch] = {
             writes: &[STOOD],
             reads: &[STOOD],
         },
-        // The node cache's head: the stops' dispatch raised by the last walk, and each
+        // The node cache's head: the stops' dispatch and count the last walk adds to, and each
         // observer's owed counted (queue_last.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_LAST,
             binding: 9,
             writes: &[
-                [node_cache::HITS_ARGS, 1],
+                [node_cache::HITS_ARGS, 4],
                 [node_cache::OWED_AT, count::OBSERVERS],
             ],
             reads: &[
-                [node_cache::HITS_ARGS, 1],
+                [node_cache::HITS_ARGS, 4],
                 [node_cache::OWED_AT, count::OBSERVERS],
             ],
         },
@@ -619,6 +679,51 @@ pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
     }
 }
 
+/// Whether step `s` writes buffer `buf` through atomics alone: a dispatch whose binding of it
+/// its shader holds atomic. A copy's or the host's write is plain.
+pub const fn writes_atomic(s: &Step, buf: u32) -> bool {
+    if s.kind != DISPATCH {
+        return false;
+    }
+    let binds = s.groups[0].binds;
+    let mut b = 0;
+    while b < binds.len() {
+        if binds[b].buf == buf {
+            let a = access(s.pipeline, binds[b].binding);
+            if a & WRITE != 0 && a & ATOMIC == 0 {
+                return false;
+            }
+        }
+        b += 1;
+    }
+    true
+}
+
+/// Whether `r` lies within one of `ranges`.
+const fn within(r: Range, ranges: &[Range]) -> bool {
+    let mut k = 0;
+    while k < ranges.len() {
+        let o = ranges[k];
+        if o.buf == r.buf && o.at <= r.at && end(r) <= end(o) {
+            return true;
+        }
+        k += 1;
+    }
+    false
+}
+
+/// The kept range `r` lies within, if one does.
+const fn kept_of(f: &Frame, r: Range) -> Option<usize> {
+    let mut k = 0;
+    while k < f.kept.len() {
+        if within(r, &[f.kept[k].range]) {
+            return Some(k);
+        }
+        k += 1;
+    }
+    None
+}
+
 /// Binding `binding`'s role in step `s`: its buffer's, or args the call reads its count from
 /// or writes; `NONE` where the call's groups bind none of the frame's buffers there.
 pub const fn role(f: &Frame, s: &Step, binding: u32) -> u32 {
@@ -670,6 +775,13 @@ pub const fn declared(f: &Frame) {
         t += 1;
     }
     let mut k = 0;
+    while k < f.kept.len() {
+        if f.kept[k].invalidation.is_empty() || !named(f, f.kept[k].owner) {
+            panic!("{}", f.kept[k].owner);
+        }
+        k += 1;
+    }
+    let mut k = 0;
     while k < f.steps.len() {
         let s = &f.steps[k];
         let mut g = 0;
@@ -704,6 +816,18 @@ pub const fn declared(f: &Frame) {
         }
         k += 1;
     }
+}
+
+/// Whether a step of the frame is named `name`.
+const fn named(f: &Frame, name: &str) -> bool {
+    let mut k = 0;
+    while k < f.steps.len() {
+        if same(f.steps[k].name, name) {
+            return true;
+        }
+        k += 1;
+    }
+    false
 }
 
 /// Rule 1: where a group set for step `k`'s call binds writable the buffer it reads its count
@@ -804,7 +928,8 @@ const fn one_writer(f: &Frame, a: usize, b: usize) -> bool {
     a == b || (x.one_of != 0 && x.one_of == y.one_of && x.stage == y.stage)
 }
 
-/// Rule 2: the step after `a` in its stage, and the buffer, where both write one word.
+/// Rule 2: the step after `a` in its stage, and the buffer, where both write one word, but a
+/// count both add to through atomics (`Frame::appends`).
 const fn second_writer(f: &Frame, t: &Table, a: usize) -> Option<(usize, u32)> {
     let s = &f.steps[a];
     if s.kind != DISPATCH && s.kind != COPY {
@@ -819,8 +944,11 @@ const fn second_writer(f: &Frame, t: &Table, a: usize) -> Option<(usize, u32)> {
         {
             let mut n = 0;
             while n < t.written[a] {
-                if writes_into(t, b, t.writes[a][n]) {
-                    return Some((b, t.writes[a][n].buf));
+                let w = t.writes[a][n];
+                let appended =
+                    within(w, f.appends) && writes_atomic(s, w.buf) && writes_atomic(other, w.buf);
+                if writes_into(t, b, w) && !appended {
+                    return Some((b, w.buf));
                 }
                 n += 1;
             }
@@ -830,7 +958,8 @@ const fn second_writer(f: &Frame, t: &Table, a: usize) -> Option<(usize, u32)> {
     None
 }
 
-/// Rule 3: where a word step `r` reads is written by no step before it, the buffer; or, a word
+/// Rule 3: where a word step `r` reads is written by no step before it, and kept over frames
+/// by none (`Frame::kept`), the buffer; or, a word
 /// it does not write itself, by a later step of its own stage, that step. Two that write a
 /// word, each reading what it adds to, are rule 2's.
 const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> {
@@ -846,6 +975,7 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
                     before = true;
                 } else if f.steps[w].stage == s.stage
                     && !writes_into(t, r, read)
+                    && !rewrites_kept(f, w, read)
                     && s.kind != WRITE_BY_HOST
                     && f.steps[w].kind != WRITE_BY_HOST
                     && !one_writer(f, r, w)
@@ -855,12 +985,52 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
             }
             w += 1;
         }
-        if !before {
+        if !before && kept_of(f, read).is_none() {
             return Some((usize::MAX, read.buf));
         }
         n += 1;
     }
     None
+}
+
+/// Rule 4: where step `w` writes a kept range not its owner's, the kept range's place; or, `w`
+/// its owner, where it writes it not at all.
+const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
+    let s = &f.steps[w];
+    let mut k = 0;
+    while k < f.kept.len() {
+        let kept = f.kept[k];
+        let writes = writes_into(t, w, kept.range);
+        let owner = same(s.name, kept.owner);
+        if (writes && !owner && s.kind != WRITE_BY_HOST && !owned_with(f, w, kept.owner))
+            || (owner && !writes)
+        {
+            return Some(k);
+        }
+        k += 1;
+    }
+    None
+}
+
+/// Whether step `w` runs in place of the step named `owner`.
+const fn owned_with(f: &Frame, w: usize, owner: &str) -> bool {
+    let mut k = 0;
+    while k < f.steps.len() {
+        if same(f.steps[k].name, owner) {
+            return one_writer(f, w, k);
+        }
+        k += 1;
+    }
+    false
+}
+
+/// Whether step `w` is the owner of the kept range `read` lies within, which writes it for the
+/// frames after the one that read it.
+const fn rewrites_kept(f: &Frame, w: usize, read: Range) -> bool {
+    match kept_of(f, read) {
+        Some(k) => same(f.steps[w].name, f.kept[k].owner) || owned_with(f, w, f.kept[k].owner),
+        None => false,
+    }
 }
 
 /// The most hazards a frame is held to.
@@ -879,7 +1049,15 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
     let mut n = 0;
     let mut k = 0;
     while k < f.steps.len() {
-        let mut each = [none; 3];
+        let mut each = [none; 4];
+        if let Some(kept) = not_owner(f, &t, k) {
+            each[3] = Found {
+                rule: 4,
+                step: k,
+                other: kept,
+                buf: f.kept[kept].range.buf,
+            };
+        }
         if let Some(g) = bound_writable(f, k) {
             each[0] = Found {
                 rule: 1,
@@ -923,7 +1101,9 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
 /// What a hazard is held with, as a known one names it: the other step, or the buffer where
 /// there is none (rule 1, rule 3 with no writer before).
 pub const fn with(f: &Frame, found: &Found) -> &'static str {
-    if found.rule == 2 || (found.rule == 3 && found.other != usize::MAX) {
+    if found.rule == 4 {
+        f.kept[found.other].owner
+    } else if found.rule == 2 || (found.rule == 3 && found.other != usize::MAX) {
         f.steps[found.other].name
     } else {
         f.buffers[found.buf as usize].name

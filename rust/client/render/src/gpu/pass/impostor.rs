@@ -23,6 +23,7 @@ use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::ray::sequence;
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
@@ -283,6 +284,11 @@ impl ImpostorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
+        let step = if d.gate.is_none() {
+            &sequence::IMPOSTOR_LIT
+        } else {
+            &sequence::IMPOSTOR_LIT_GATED
+        };
         pass.set_pipeline(self.draw.id);
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(2, self.group, &[]);
@@ -292,7 +298,7 @@ impl ImpostorPass {
                 continue;
             }
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
-            pass.draw_indirect(d.args, d.args_at(2 * group + 1));
+            pass.draw_indirect(d.args, step.off(d.args_at(2 * group + 1)));
         }
     }
 }

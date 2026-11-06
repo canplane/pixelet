@@ -530,7 +530,7 @@ impl Raster {
             args[asked + raster::ARGS_FACES as usize + 1] = 1;
             args[asked + raster::ARGS_FACES as usize + 2] = 1;
             args[asked + raster::ARGS_ASKS as usize] = grid.asks_at;
-            g.write_buf(self.args, 0, bytes(&args));
+            g.write_buf(self.args, sequence::OPEN_RASTER_ARGS.to_at(), bytes(&args));
         }
         // The faces' asks the hits' stops open none, every frame the pixels are cast, laid
         // where the grid lays them (pxl-engine `raster::STOP_ASKED_AT`).
@@ -540,17 +540,21 @@ impl Raster {
         stop_args[raster::ARGS_ASKS as usize] = grid.stop_asks_at;
         g.write_buf(
             self.args,
-            word_bytes(raster::STOP_ASKED_AT as usize),
+            sequence::OPEN_RASTER_STOP_ASKS.to_at(),
             bytes(&stop_args),
         );
         // No hit put off, its dispatch none, a workgroup deep and high (pxl-engine
         // `raster::DEFERRED_CNT`, `raster::DEFERRED_DISPATCH`).
         g.write_buf(
             self.args,
-            word_bytes(raster::DEFERRED_CNT as usize),
+            sequence::OPEN_RASTER_DEFERRED_CNT.to_at(),
             bytes(&[0u32]),
         );
-        g.write_buf(self.deferred, 0, bytes(&raster::DEFERRED_DISPATCH));
+        g.write_buf(
+            self.deferred,
+            sequence::OPEN_RASTER_DEFERRED.to_at(),
+            bytes(&raster::DEFERRED_DISPATCH),
+        );
         let bindings = [
             eye, beams, node_cache, clipmap, ground, shards, overwrites, pool, rays,
         ];
@@ -749,7 +753,11 @@ impl Raster {
     /// light's cast ahead of its receivers' passes (ray/cast.rs).
     pub(super) fn record_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        g.write_buf(self.args, 0, bytes(&draw_args()));
+        g.write_buf(
+            self.args,
+            sequence::OPEN_RASTER_DRAW_ARGS.to_at(),
+            bytes(&draw_args()),
+        );
         let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
         g.set_bind_group(pass, 0, self.groups[3], &[]);
         g.set_pipeline(pass, self.record_draw_built.id);
@@ -895,15 +903,23 @@ impl Raster {
         g.write_buf(s.uniform, 0, bytes(&uniform));
         let mut args = [0u32; raster::ARGS_WORDS as usize];
         args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-        g.write_buf(s.args, 0, bytes(&args));
+        g.write_buf(
+            s.args,
+            sequence::OPEN_LIGHT_RASTER_ARGS.to_at(),
+            bytes(&args),
+        );
         // No stop put off, its dispatch none, a workgroup deep and high (pxl-engine
         // `raster::DEFERRED_CNT`, `raster::DEFERRED_DISPATCH`).
         g.write_buf(
             s.args,
-            word_bytes(raster::DEFERRED_CNT as usize),
+            sequence::OPEN_LIGHT_RASTER_DEFERRED_CNT.to_at(),
             bytes(&[0u32]),
         );
-        g.write_buf(s.deferred, 0, bytes(&raster::DEFERRED_DISPATCH));
+        g.write_buf(
+            s.deferred,
+            sequence::OPEN_LIGHT_RASTER_DEFERRED.to_at(),
+            bytes(&raster::DEFERRED_DISPATCH),
+        );
     }
 
     /// The light's record's group (`RECORD_GROUP`) over the eye and the node cache the

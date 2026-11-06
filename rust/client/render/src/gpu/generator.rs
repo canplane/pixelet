@@ -429,10 +429,14 @@ impl Generator {
             put(generation::LIST_EVERY, u32::from(self.stale));
             put(generation::LIST_BOXES, n as u32);
             put(generation::LIST_PARTS, 0);
-            g.write_buf(self.list, 0, bytes(&head));
             g.write_buf(
                 self.list,
-                generation::BOXES_AT * 4,
+                sequence::OPEN_GENERATION_LIST.to_at(),
+                bytes(&head),
+            );
+            g.write_buf(
+                self.list,
+                sequence::OPEN_GENERATION_BOXES.to_at(),
                 bytes(&boxes[..n * generation::BOX_WORDS as usize]),
             );
         }
@@ -695,6 +699,7 @@ impl Generator {
             args: self.args,
             uniform_group: self.uniform_group,
             gated: self.gated.map(|gated| (gated.group, gated.args)),
+            gate: None,
         })
     }
 
@@ -771,6 +776,8 @@ pub struct IndirectDraw {
     pub uniform_group: u32,
     /// The group and the args a frame draws by through each gate (`Generator::gate`).
     pub gated: [(u32, u32); 2],
+    /// The gate it is drawn through, none where it is drawn whole.
+    pub gate: Option<Gate>,
 }
 
 impl IndirectDraw {
@@ -781,6 +788,7 @@ impl IndirectDraw {
         IndirectDraw {
             instances_group,
             args,
+            gate: Some(gate),
             ..self
         }
     }

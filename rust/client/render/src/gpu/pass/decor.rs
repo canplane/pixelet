@@ -21,6 +21,7 @@ use crate::gpu::pass::model::{
     ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::ray::sequence;
 use crate::gpu::upload::Uploads;
 use pxl_content::generation;
 
@@ -289,6 +290,12 @@ impl DecorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
+        let step = match (stage, d.gate) {
+            (Stage::Depth, None) => &sequence::DECOR_MAP,
+            (Stage::Depth, Some(_)) => &sequence::DECOR_MAP_GATED,
+            (Stage::Lit, None) => &sequence::DECOR_LIT,
+            (Stage::Lit, Some(_)) => &sequence::DECOR_LIT_GATED,
+        };
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
@@ -299,7 +306,7 @@ impl DecorPass {
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
             pass.set_bind_group(2, skin, &[]);
             bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
-            pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
+            pass.draw_indexed_indirect(d.args, step.off(d.args_at(2 * group)));
         }
     }
 }
