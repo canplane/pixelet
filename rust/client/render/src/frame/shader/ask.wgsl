@@ -129,7 +129,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
 /// The node `c` at `zoom` asked of the world at `zooms`, what is handed it found from the top
 /// where `top`, else off `parent`; counted at word `asked`, none where `NONE`.
 fn world_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
-  if (asked != NONE && node_cache_word(COUNT_ON) != 0u) {
+  if (asked != NONE && counts(asked)) {
     atomicAdd(&node_cache[asked], 1u);
   }
   var handed: vec4<u32>;
@@ -291,9 +291,17 @@ fn hand_end(line: u32, parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>) ->
   return true;
 }
 
-/// `visits` nodes a walk entered, counted at word `at` where the walks count.
+/// Whether the observer whose walks count into lane word `at` counts this frame
+/// (`node_cache::COUNT_ON`, `node_cache::lane_at`): its lanes lie `COUNT_WALKS` an observer from
+/// the eye's first.
+fn counts(at: u32) -> bool {
+  let observer = (at - EYE_BEAM_COUNT) / COUNT_WALKS;
+  return ((node_cache_word(COUNT_ON) >> observer) & 1u) != 0u;
+}
+
+/// `visits` nodes a walk entered, counted at word `at` where its observer counts.
 fn count_visits(at: u32, visits: u32) {
-  if (node_cache_word(COUNT_ON) != 0u) {
+  if (counts(at)) {
     atomicAdd(&node_cache[at], visits);
   }
 }

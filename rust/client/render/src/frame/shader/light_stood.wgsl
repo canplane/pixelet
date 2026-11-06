@@ -3,11 +3,12 @@
 // The tiles of the box a receiver stands on, as the receivers' passes list them (pxl-engine
 // `light::LISTED_STOOD`; light_mark.wgsl, light_mark_draws.wgsl), for the propagation, a
 // thread a tile listed (light_propagate.wgsl). Each tile is listed once while it stands: by
-// the first thread to swap its mark, the world's receivers' the number of the cast they were
-// last stood in (`light::HEAD_WORLD`), which they stand on in every cast after it until stood
-// again; the drawn receivers' the cast's own, in a word of their own, none where the world's
-// stand on it already (`light::drawn_marks_at`). The list's count and the propagation's rows
-// are the stood list's args', raised as list.wgsl `enlist` raises a list walked apart's.
+// the first thread to swap its mark to the number of the cast the world's receivers were last
+// stood afresh in (`light::HEAD_WORLD`), the world's receivers' and the drawn ones' alike, so
+// it stays listed in every cast after it until they are stood afresh again (`light::kept_at`).
+// A mark read first is swapped only where it differs, so a tile many receivers stand on takes
+// one swap a cast that stands it anew. The list's count and the propagation's rows are the
+// stood list's args', raised as list.wgsl `enlist` raises a list walked apart's.
 
 /// The stood list's args (pxl-engine `light::STOOD_WORDS`): the propagation's dispatch and the
 /// count, as `enlist` names them; then the slide's dispatch, its workgroups across opened by
@@ -52,46 +53,28 @@ fn stood_put(t: vec2<i32>) {
   }
 }
 
-/// Tile `t` stood on by the world's receivers, listed where it is not yet since they were last
-/// stood; none past the box.
-fn stand_world(t: vec2<i32>) {
+/// Tile `t` stood on by a receiver, listed where none stood on it since the world's receivers
+/// were last stood afresh; none past the box.
+fn stand(t: vec2<i32>) {
   let w = tile_place(t);
   if (w == NO_TILE) {
     return;
   }
   let world = head_word(LIGHT_HEAD_WORLD);
   let mark = MARKS_FIRST + listed_marks_at(LIGHT_LISTED_STOOD) + w;
-  if (atomicExchange(&light_args[mark], world) != world) {
+  if (atomicLoad(&light_args[mark]) != world && atomicExchange(&light_args[mark], world) != world) {
     stood_put(t);
   }
 }
 
-/// Tile `t` stood on by a drawn receiver, listed where neither the world's receivers nor
-/// another drawn one in the cast stand on it yet; none past the box.
-fn stand_drawn(t: vec2<i32>) {
-  let w = tile_place(t);
-  if (w == NO_TILE) {
-    return;
-  }
-  let world = MARKS_FIRST + listed_marks_at(LIGHT_LISTED_STOOD) + w;
-  if (atomicLoad(&light_args[world]) == head_word(LIGHT_HEAD_WORLD)) {
-    return;
-  }
-  let current = cast_number();
-  let mark = MARKS_FIRST + head_word(LIGHT_HEAD_DRAWN_MARKS) + w;
-  if (atomicExchange(&light_args[mark], current) != current) {
-    stood_put(t);
-  }
-}
-
-/// The tiles from `first` to `last` stood on by the world's receivers, kept to the box.
-fn stand_world_box(first: vec2<i32>, last: vec2<i32>) {
+/// The tiles from `first` to `last` stood on by a receiver, kept to the box.
+fn stand_box(first: vec2<i32>, last: vec2<i32>) {
   let n = i32(light_tiles());
   let lo = max(first, vec2<i32>(0));
   let hi = min(last, vec2<i32>(n - 1i));
   for (var j = lo.y; j <= hi.y; j += 1i) {
     for (var i = lo.x; i <= hi.x; i += 1i) {
-      stand_world(vec2<i32>(i, j));
+      stand(vec2<i32>(i, j));
     }
   }
 }

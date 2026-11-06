@@ -20,8 +20,8 @@ use super::raster::{
 };
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use crate::frame::shader::access::{
-    check, light_marks, Bind, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END,
-    LIGHT_DRAWN_MARKS, LIST, NO_RANGE, STATE,
+    check, light_marks, Bind, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END, LIST,
+    NO_RANGE, STATE,
 };
 use crate::frame::shader::record::*;
 use crate::gpu::generator::{ARGS_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP};
@@ -628,6 +628,12 @@ pub const OPEN_LIGHT_STOOD: Step = Step::write(
         light::STOOD_WORDS - light::STOOD_KEPT,
     ),
 );
+/// None of the stood list propagated where the world's receivers are stood afresh
+/// (`light::kept_at`).
+pub const OPEN_STOOD_PROPAGATED: Step = Step::write(
+    "open_stood_propagated",
+    at(LIGHT_LIST, light::kept_at(SIZE) + light::STOOD_CNT, 1),
+);
 pub const OPEN_LIGHT_CLAIMS: Step = Step::write("open_light_claims", at(LIGHT_CLAIMS, 0, 3));
 pub const OPEN_LIGHT_MISSES: Step = Step::write(
     "open_light_misses",
@@ -671,6 +677,14 @@ pub const STOOD_BACK: Step = Step::copy(
     at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
 );
+/// The read list's count the casts since the world's receivers were stood afresh left, copied
+/// back in where this cast adds to them, the count its propagation goes on from.
+pub const READ_COUNT_BACK: Step = Step::copy(
+    "read_count_back",
+    IN_LIGHT,
+    at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
+    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
+);
 pub const BEAM_LEFT_COUNT: Step = Step::copy(
     "beam_left_count",
     IN_EYE,
@@ -695,11 +709,31 @@ pub const EYE_OWED: Step = Step::copy(
     at(NODE_CACHE, node_cache::owed_at(count::EYE), 1),
     NO_RANGE,
 );
+/// Each observer's owed work copied out of the node cache's head into a word of its own where
+/// its queue ran (ray/count.rs `Counter::owed`).
+pub const EYE_OWED_KEEP: Step = Step::copy(
+    "eye_owed_keep",
+    IN_LIGHT_HOLES,
+    at(NODE_CACHE, node_cache::owed_at(count::EYE), 1),
+    NO_RANGE,
+);
+pub const LIGHT_OWED_KEEP: Step = Step::copy(
+    "light_owed_keep",
+    IN_LIGHT_HOLES,
+    at(NODE_CACHE, node_cache::owed_at(count::LIGHT), 1),
+    NO_RANGE,
+);
 pub const STOOD_KEEP: Step = Step::copy(
     "stood_keep",
     IN_LIGHT,
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
     at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
+);
+pub const READ_COUNT_KEEP: Step = Step::copy(
+    "read_count_keep",
+    IN_LIGHT,
+    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
+    at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
 );
 pub const STOOD_COUNT: Step = Step::copy(
     "stood_count",
@@ -834,6 +868,7 @@ pub const FRAME: Frame = Frame {
     stages: STAGES,
     buffers: BUFFERS,
     appends: APPENDS,
+    seeds: SEEDS,
     kept: KEPT,
     steps: &[
         // The host's writes as a frame is prepared (ray/cast.rs `RaysPass::prepare`,
@@ -853,6 +888,7 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_RINGS,
         OPEN_LIGHT_STOOD,
         OPEN_LIGHT_STOOD_AFRESH,
+        OPEN_STOOD_PROPAGATED,
         OPEN_LIGHT_CLAIMS,
         OPEN_LIGHT_MISSES,
         OPEN_LIGHT_QUEUE,
@@ -891,9 +927,11 @@ pub const FRAME: Frame = Frame {
             COMPUTE_BOX_ARGS,
             &[&LIGHT_BOX_BINDS],
         ),
-        // What the world's receivers left in the stood list's args copied back in, before every
-        // pass that stands a tile, the eye's record's draw among them.
+        // What the casts since the world's receivers were stood afresh left in the stood list's
+        // args and the read list's count copied back in, before every pass that stands a tile,
+        // the eye's record's draw among them.
         STOOD_BACK,
+        READ_COUNT_BACK,
         // The same through the light's gate.
         Step::dispatch(
             "decor_gate_args_light",
@@ -1004,7 +1042,6 @@ pub const FRAME: Frame = Frame {
             &[&RECORD_BINDS],
         ),
         LIGHT_MARK_WALKED,
-        STOOD_KEEP,
         Step::dispatch(
             "light_mark_draws_open",
             IN_LIGHT,
@@ -1015,6 +1052,14 @@ pub const FRAME: Frame = Frame {
         STOOD_COUNT,
         LIGHT_SLIDE,
         LIGHT_PROPAGATE,
+        STOOD_KEEP,
+        READ_COUNT_KEEP,
+        Step::dispatch(
+            "light_want",
+            IN_LIGHT,
+            COMPUTE_LIGHT_WANT,
+            &[&LIGHT_PROPAGATE_BINDS],
+        ),
         LIGHT_CLAIM,
         CORNERS_COUNT,
         FED_COUNT,
@@ -1074,6 +1119,10 @@ pub const FRAME: Frame = Frame {
         ),
         LIGHT_STOPS,
         LIGHT_STOPS_DEFERRED,
+        // Each observer's owed work kept apart where its queue ran, which the readback's copy
+        // carries (ray/count.rs `Counter::copy`).
+        EYE_OWED_KEEP,
+        LIGHT_OWED_KEEP,
         MAP_GATE,
         MAP_LAY,
         DECOR_MAP,
@@ -1090,7 +1139,8 @@ pub const FRAME: Frame = Frame {
 /// stops and those put off (record_put.wgsl `observe`); the stops each observer's holes' two
 /// walks over the node cache list (queue_walk.wgsl); the stood list the record's draw and both
 /// receivers' passes list a tile on (light_stood.wgsl `stood_put`); the node cache's stops'
-/// dispatch the last walk raises.
+/// dispatch the last walk raises; the read list's count the propagation lists a tile by
+/// (light_propagate.wgsl `read_tile`).
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::STOP_ASKED_AT, raster::ARGS_WORDS),
@@ -1100,7 +1150,15 @@ const APPENDS: &[Range] = &[
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
     at(GATED_SCREEN_ARGS, 0, END),
     at(GATED_LIGHT_ARGS, 0, END),
+    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
 ];
+
+/// The copies that open a count before the passes that add to it: the stops the holes' walks
+/// over the node cache listed, copied into the node cache's head before the last walk adds its
+/// own (ray/cast.rs `walk_holes`, queue_last.wgsl `keep_hit`), each observer's; the stood
+/// list's args and the read list's count the casts since the world's receivers were stood
+/// afresh left, copied back in before this cast's receivers and propagation add to them.
+const SEEDS: &[&str] = &["hits", "light_hits", "stood_back", "read_count_back"];
 
 const fn marks_kept(which: u32, owner: &'static str) -> Kept {
     let [first, words] = light_marks(which);
@@ -1108,7 +1166,20 @@ const fn marks_kept(which: u32, owner: &'static str) -> Kept {
         range: at(LIGHT_ARGS, first, words),
         owner,
         invalidation: "a tile's mark is the number of the cast that last listed it, stale under \
-            any other cast's (light_stood.wgsl, light_enlist.wgsl `enlist_in`)",
+            any other cast's (light_enlist.wgsl `enlist_in`)",
+    }
+}
+
+/// The stood and the read lists' marks: the number of the cast the world's receivers were last
+/// stood afresh in (pxl-engine `light::HEAD_WORLD`).
+const fn world_marks_kept(which: u32, owner: &'static str) -> Kept {
+    let [first, words] = light_marks(which);
+    Kept {
+        range: at(LIGHT_ARGS, first, words),
+        owner,
+        invalidation: "a tile's mark is the number of the cast the world's receivers were last \
+            stood afresh in, stale under any other: every tile stood on or read is listed again \
+            where they are (light_stood.wgsl `stand`, light_propagate.wgsl `read_tile`)",
     }
 }
 
@@ -1131,45 +1202,39 @@ const KEPT: &[Kept] = &[
             before this frame's lays them anew; none drawn where decor is off \
             (gpu/generator.rs `indirect_draw`)",
     },
-    marks_kept(light::LISTED_STOOD, "light_mark_walked"),
-    marks_kept(light::LISTED_READ, "light_propagate"),
+    world_marks_kept(light::LISTED_STOOD, "light_mark_walked"),
+    world_marks_kept(light::LISTED_READ, "light_propagate"),
     marks_kept(light::LISTED_CORNERS, "light_claim"),
     marks_kept(light::LISTED_FED, "light_claim"),
     marks_kept(light::LISTED_CLAIMED, "light_claim"),
     Kept {
-        range: at(LIGHT_ARGS, LIGHT_DRAWN_MARKS[0], LIGHT_DRAWN_MARKS[1]),
-        owner: "light_mark_draws",
-        invalidation: "a tile's mark is the number of the cast whose drawn receivers stood on \
-            it, stale under any other cast's (light_stood.wgsl `stand_drawn`)",
-    },
-    Kept {
         range: at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
         owner: "stood_keep",
-        invalidation: "the stood list's args the world's receivers left, stale where they are \
-            stood afresh: the host then writes the stood list empty and copies none back in \
-            (ray/cast.rs `RaysPass::prepare`, `dispatch`)",
+        invalidation: "the stood list's args the casts since the world's receivers were stood \
+            afresh left, its count the tiles propagated, stale where they are stood afresh: the \
+            host then writes the stood list empty and none of it propagated, and copies none \
+            back in (ray/cast.rs `RaysPass::prepare`, `dispatch`)",
+    },
+    Kept {
+        range: at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
+        owner: "read_count_keep",
+        invalidation: "the read list's count the casts since the world's receivers were stood \
+            afresh left, stale where they are stood afresh: the host then writes the light's \
+            args with the count none and copies none back in (ray/cast.rs `RaysPass::prepare`, \
+            `dispatch`)",
     },
 ];
 
 /// The hazards the frame holds today, each by its rule, its step and what it holds it with.
 pub const KNOWN: &[Known] = &[
-    // A count seeded by a plain copy beside the passes that add to it: the stops the holes'
-    // walks over the node cache listed, copied into the node cache's head before the last walk
-    // adds its own (ray/cast.rs `walk_holes`, queue_last.wgsl `keep_hit`), each observer's; and
-    // the stood list's args the world's receivers left, copied back in before the eye's record's
-    // draw lists on.
-    known(2, "hits", "queue_last"),
-    known(2, "light_hits", "light_queue_last"),
-    known(2, "stood_back", "record_draw"),
-    // The stood marks, kept over frames, written by three passes where one owns them: the
-    // record's draw, the eye's or the light's cast's, and the walked receivers' mark, each
-    // standing the world's tiles (light_stood.wgsl `stand_world_box`, `stand_world`).
+    // The stood marks, kept over frames, written by four passes where one owns them: the
+    // record's draw, the eye's or the light's cast's, the walked receivers' mark and the drawn
+    // receivers', each standing tiles by the one rule (light_stood.wgsl `stand_box`, `stand`).
     known(4, "record_draw", "light_mark_walked"),
     known(4, "record_draw_for_light", "light_mark_walked"),
     known(2, "record_draw_for_light", "light_mark_walked"),
-    // The stood list's args kept for the next cast read while the drawn receivers have yet to
-    // list theirs: what is kept is the world's alone, by its place in the stage.
-    known(3, "stood_keep", "light_mark_draws"),
+    known(4, "light_mark_draws", "light_mark_walked"),
+    known(2, "light_mark_walked", "light_mark_draws"),
     // The frame's work counted so far read out of the node cache's head into each observer's
     // queue, before its walks' count is copied back over it (ray/cast.rs `walk_holes`): a
     // round trip through two copies, the read ahead of the write in one stage.

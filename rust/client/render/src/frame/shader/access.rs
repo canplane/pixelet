@@ -10,16 +10,18 @@
 //! (`TOUCHES`); where none are, an args buffer is touched through its whole view and a list
 //! or a state not at all.
 //!
-//! A frame declares two more facts of a range: a count several passes add to (`appends`),
-//! one fact with several appenders; and what it keeps over frames (`kept`), each kept range
-//! with the one step that owns it and what makes it stale.
+//! A frame declares three more facts of a range: a count several passes add to (`appends`),
+//! one fact with several appenders; the copy that opens such a count before any of them adds
+//! to it (`seeds`), its value what the frame starts counting from; and what it keeps over
+//! frames (`kept`), each kept range with the one step that owns it and what makes it stale.
 //!
 //! `check` refuses, as the crate is built:
 //! 1. a call that reads its count from a buffer a group set for it binds writable (a
 //!    dispatch's groups, every group of a render pass), which WebGPU refuses in one usage
 //!    scope;
 //! 2. two calls of one stage that write one word, one of them not run in place of the other
-//!    (`Step::one_of`), but a count both add to through atomics;
+//!    (`Step::one_of`), but a count both add to through atomics, or that the first, a copy
+//!    declared its seed, opens before the second adds to it;
 //! 3. a call that reads a word no call before it in the frame wrote, unless the word is kept
 //!    over frames, or that a later call of its own stage writes, a word it does not write
 //!    itself, but the kept word's owner writing it for the frames after;
@@ -258,6 +260,7 @@ pub struct Frame {
     pub buffers: &'static [Buffer],
     pub steps: &'static [Step],
     pub appends: &'static [Range],
+    pub seeds: &'static [&'static str],
     pub kept: &'static [Kept],
 }
 
@@ -288,19 +291,13 @@ pub const fn light_marks(which: u32) -> [u32; 2] {
     ]
 }
 
-/// The drawn receivers' marks in the light's args, past the lists' (`light::drawn_marks_at`).
-pub const LIGHT_DRAWN_MARKS: [u32; 2] = [
-    light::ARGS_WORDS + light::drawn_marks_at(SIZE),
-    light::tiles(SIZE) * light::tiles(SIZE),
-];
-
 /// The words each pass touches where it shares a buffer with others, within the binding's view
 /// (the binding's group's `Bind::at`), as its shader's text indexes them.
 pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
     /// The light's args (pxl-engine `light::ARGS_WORDS`): a pass's dispatch's x, raised by
     /// the claim as it lists (light_enlist.wgsl `opened`); the claims' counts; each list's
-    /// count; each list's marks past the counts, the drawn receivers' and the rings'.
+    /// count; each list's marks past the counts, and the rings'.
     const fn opened(w: u32) -> [u32; 2] {
         [w + 1, 1]
     }
@@ -310,7 +307,6 @@ pub const TOUCHES: &[Touch] = {
     const fn marks(which: u32) -> [u32; 2] {
         light_marks(which)
     }
-    const DRAWN_MARKS: [u32; 2] = LIGHT_DRAWN_MARKS;
     const RINGS: [u32; 2] = [
         light::ARGS_WORDS + light::rings_at(SIZE),
         light::rings(SIZE),
@@ -353,7 +349,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[],
         },
         // The record's boxes counted into its draw's args, each box's tiles stood on by the
-        // world's receivers (record_draw.wgsl, light_stood.wgsl `stand_world_box`).
+        // world's receivers (record_draw.wgsl, light_stood.wgsl `stand_box`).
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 16,
@@ -406,8 +402,8 @@ pub const TOUCHES: &[Touch] = {
             writes: &[],
             reads: &[DRAW_ARGS],
         },
-        // The receivers' marks: the tiles stood on, the world's and the drawn's
-        // (light_stood.wgsl).
+        // The receivers' marks: the tiles stood on, the world's and the drawn's alike
+        // (light_stood.wgsl `stand`).
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 21,
@@ -417,26 +413,25 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_LIGHT_MARK_DRAWS,
             binding: 21,
-            writes: &[DRAWN_MARKS],
-            reads: &[marks(light::LISTED_STOOD), DRAWN_MARKS],
+            writes: &[marks(light::LISTED_STOOD)],
+            reads: &[marks(light::LISTED_STOOD)],
         },
-        // The propagation: the tiles read and wanted listed, each wanted's ring counted, and
-        // the lay's tiles raised (light_propagate.wgsl).
+        // The propagation: the tiles read listed (light_propagate.wgsl `light_propagate_cs`).
         Touch {
             compute: COMPUTE_LIGHT_PROPAGATE,
             binding: 21,
-            writes: &[
-                [light::ARGS_LAY + 1, 1],
-                count(light::LISTED_READ),
-                count(light::LISTED_WANTED),
-                marks(light::LISTED_READ),
-                RINGS,
-            ],
+            writes: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
+            reads: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
+        },
+        // The wanting: each tile read wanted where it is due, its ring counted, and the lay's
+        // tiles set to those read (light_propagate.wgsl `light_want_cs`).
+        Touch {
+            compute: COMPUTE_LIGHT_WANT,
+            binding: 21,
+            writes: &[[light::ARGS_LAY + 1, 1], count(light::LISTED_WANTED), RINGS],
             reads: &[
-                [light::ARGS_LAY + 1, 1],
                 count(light::LISTED_READ),
                 count(light::LISTED_WANTED),
-                marks(light::LISTED_READ),
                 RINGS,
             ],
         },
@@ -781,6 +776,21 @@ pub const fn declared(f: &Frame) {
         }
         k += 1;
     }
+    // A seed is a copy of the frame whose destination lies in a count it appends to.
+    let mut k = 0;
+    while k < f.seeds.len() {
+        let mut found = false;
+        let mut s = 0;
+        while s < f.steps.len() {
+            let step = &f.steps[s];
+            found |= same(step.name, f.seeds[k]) && step.kind == COPY && within(step.to, f.appends);
+            s += 1;
+        }
+        if !found {
+            panic!("{}", f.seeds[k]);
+        }
+        k += 1;
+    }
     let mut k = 0;
     while k < f.steps.len() {
         let s = &f.steps[k];
@@ -922,6 +932,18 @@ const fn writes_into(t: &Table, k: usize, r: Range) -> bool {
     false
 }
 
+/// Whether the step named `name` is declared a seed (`Frame::seeds`).
+const fn seeds(f: &Frame, name: &str) -> bool {
+    let mut k = 0;
+    while k < f.seeds.len() {
+        if same(f.seeds[k], name) {
+            return true;
+        }
+        k += 1;
+    }
+    false
+}
+
 /// Whether steps `a` and `b` are one writer: the same step, or run in place of each other.
 const fn one_writer(f: &Frame, a: usize, b: usize) -> bool {
     let (x, y) = (&f.steps[a], &f.steps[b]);
@@ -945,8 +967,8 @@ const fn second_writer(f: &Frame, t: &Table, a: usize) -> Option<(usize, u32)> {
             let mut n = 0;
             while n < t.written[a] {
                 let w = t.writes[a][n];
-                let appended =
-                    within(w, f.appends) && writes_atomic(s, w.buf) && writes_atomic(other, w.buf);
+                let opens = writes_atomic(s, w.buf) || (s.kind == COPY && seeds(f, s.name));
+                let appended = within(w, f.appends) && opens && writes_atomic(other, w.buf);
                 if writes_into(t, b, w) && !appended {
                     return Some((b, w.buf));
                 }

@@ -83,9 +83,9 @@ pub const MOVED_BRICKS_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const BOXES_AT: u32 = MOVED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN_CAP: u32 = 32;
-/// Whether the walks count what they ask, where the `ray_counts` setting
-/// asks, and the words they count into, each observer's walks' lanes
-/// (`lane_at`).
+/// Which observers' walks and pixels count what they ask, a bit an observer (`count::EYE`,
+/// `count::LIGHT`), set where the `ray_counts` setting asks and the observer casts, and the
+/// words they count into, each observer's walks' lanes (`lane_at`).
 pub const COUNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub(crate) const COUNT_AT: u32 = COUNT_ON + 1;
 pub(crate) const COUNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
@@ -111,8 +111,8 @@ pub const ASKS_CAP: u32 = VISITS_CAP + 1;
 /// the eye's, the pixels its last walk left parked (pxl-render queue_last.wgsl `unreached`);
 /// the light's, the tiles it wanted and left unclaimed, copied in from its args after the claim
 /// (`light::ARGS_LEFT`), and the slots its last walk left parked, which add to it. None where
-/// nothing is owed. Copied into the counts read back each frame the observer's queue runs
-/// (`count::OWED`).
+/// nothing is owed. Kept apart each frame the observer's queue runs, as a later frame's head
+/// written clears it, and read back from there (`count::OWED`).
 pub const OWED_AT: u32 = ASKS_CAP + 1;
 /// Whether the eye's cast keeps the states its holes were parked in, 1 or 0, the host's each
 /// frame the eye casts: where its rays are those its last cast walked, the view, the jitter,

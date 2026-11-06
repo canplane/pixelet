@@ -1282,6 +1282,7 @@ impl Renderer {
             let mut stat = self.stat(&draws, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
+            self.screen.copy_pending(g);
             if self.screen.wants_frame() {
                 REDRAW.set(true);
             }

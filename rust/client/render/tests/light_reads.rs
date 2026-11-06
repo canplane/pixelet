@@ -253,8 +253,11 @@ fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
 /// (`light::LISTED_STOOD`), against this test's reading of its rule: a tile is read where it
 /// lies within the disk a receiver reads grown by `light::TILE_READ_PAD` and within the taps
 /// (`light::READ_TILES`) of a step up the way up decor's tallest from a stood tile; each read
-/// tile listed once (`light::LISTED_READ`), the lay opened to as many (`light::ARGS_LAY`); and
-/// one read wanted where its word names a cast before the reads' epoch, the later of the host's
+/// tile listed once (`light::LISTED_READ`), the lay opened to as many (`light::ARGS_LAY`). The
+/// stood tiles propagated in two casts, as a cast adds to what the casts before stood on and
+/// propagated (`light::kept_at`): the second takes only the tiles past the count kept, and the
+/// reads the two list are those all of them read. Then (`light_want_cs`) each tile read wanted
+/// where its word names a cast before the reads' epoch, the later of the host's
 /// and the one a slide unrun began (`light::reads_epoch`), or says it owed
 /// (`light::READ_OWED`), counted as many as it wants (`light::LISTED_WANTED`), then claimed by
 /// the claim pass (`light_claim_cs`) by pxl-engine's rule (`light::claims`): every one where
@@ -268,6 +271,7 @@ fn hand_propagation_reads_what_stands() {
         return;
     };
     let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
+    let want = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_want_cs");
     let claim = gpu.pipeline(src(SHADER_LIGHT_CLAIM), "light_claim_cs");
     let mut tally = Tally::default();
     let (current, epoch) = (40u32, 30u32);
@@ -363,8 +367,15 @@ fn hand_propagation_reads_what_stands() {
         list[slide + light::READS_FROM as usize] = reads_from;
         let mut args = vec![0u32; light::args_words(SIZE) as usize];
         args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
+        // The stood tiles' first half propagated by a cast before, which stood the world's
+        // receivers afresh (`light::HEAD_WORLD`); none of them yet.
+        let kept = light::kept_at(SIZE) as usize;
+        let half = stood.len() / 2;
+        list[stood_at] = half as u32;
+        list[kept + light::STOOD_CNT as usize] = 0;
         let mut head = head_words(current, epoch, [1304, -896]);
         head[light::HEAD_SLIDE_OWED] = 0;
+        head[light::HEAD_WORLD] = current - 3;
         let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
         let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
@@ -372,16 +383,38 @@ fn hand_propagation_reads_what_stands() {
         // The claim's dispatch, a buffer of its own, as a cast starts (`light::CLAIM_DISPATCH`).
         let claims = gpu.buffer(&light::CLAIM_DISPATCH, wgpu::BufferUsages::STORAGE);
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
+        // The propagation's group as each of its passes reads it: the stood tiles' reads over
+        // the eye's light, the wanting over the claim's dispatch.
+        let propagation = |list: &wgpu::Buffer, p: &wgpu::ComputePipeline, groups: [u32; 3]| {
+            gpu.dispatch(
+                p,
+                &[
+                    (0, eye.as_entire_binding()),
+                    (11, head.as_entire_binding()),
+                    (12, list.as_entire_binding()),
+                    (21, args_buf.as_entire_binding()),
+                ],
+                groups,
+            );
+        };
+        let rows = |cnt: usize| [ray::MISS_ACROSS, (cnt as u32).div_ceil(per), 1];
+        propagation(&list_buf, &p, rows(half));
+        // Then this cast: the rest stood on, the first half's count kept as propagated, the
+        // reads kept with their count (the args, as the host copies the count back in).
+        let mut now = gpu.read(&list_buf);
+        now[stood_at] = stood.len() as u32;
+        now[kept + light::STOOD_CNT as usize] = half as u32;
+        let list_buf = gpu.buffer(&now, wgpu::BufferUsages::STORAGE);
+        propagation(&list_buf, &p, rows(stood.len()));
         gpu.dispatch(
-            &p,
+            &want,
             &[
-                (0, eye.as_entire_binding()),
                 (11, head.as_entire_binding()),
                 (12, list_buf.as_entire_binding()),
                 (21, args_buf.as_entire_binding()),
                 (25, claims.as_entire_binding()),
             ],
-            [ray::MISS_ACROSS, (stood.len() as u32).div_ceil(per), 1],
+            [(N * N).div_ceil(light::LISTED_LANES), 1, 1],
         );
         // Then the claim over what it wants, as many rows as it opened in the claim's
         // dispatch: a row for each `LIST_ACROSS · LISTED_LANES` wanted.

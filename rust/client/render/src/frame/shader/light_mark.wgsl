@@ -47,6 +47,6 @@ fn light_mark_walked_cs(
   let at = eye_aim(px_tan(p, drawn)).dir * t;
   let b = box_tiles(at, at);
   if (b.got) {
-    stand_world_box(b.first, b.last);
+    stand_box(b.first, b.last);
   }
 }

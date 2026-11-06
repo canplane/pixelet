@@ -438,8 +438,8 @@ pub const COLUMNS: usize = 64;
 /// (`HEAD_CELLS`), then the world's columns that changed (`COLUMNS_AT`).
 pub const HEAD_VEC4S: usize = COLUMNS_AT + 1 + COLUMNS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
-/// The cast's number, counted up from one each cast, which a tile listed and read in it is
-/// marked with (`listed_marks_at`, `reads_at`).
+/// The cast's number, counted up from one each cast, which a tile it lists to cast is marked
+/// with (`listed_marks_at`) and a tile it claims named by (`reads_at`).
 pub const HEAD_CAST: usize = 0;
 pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
@@ -475,7 +475,8 @@ pub const HEAD_LEFTS: usize = HEAD_CELLS + 4;
 pub const HEAD_READS: usize = HEAD_CELLS + 5;
 pub const HEAD_TILES: usize = HEAD_CELLS + 6;
 pub const HEAD_HANDS: usize = HEAD_CELLS + 7;
-pub const HEAD_DRAWN_MARKS: usize = HEAD_CELLS + 8;
+/// What a cast keeps for the next (`kept_at`).
+pub const HEAD_KEPT: usize = HEAD_CELLS + 8;
 pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 9;
 pub const HEAD_MISSES: usize = HEAD_CELLS + 10;
 /// Each list's marks (`listed_marks_at`), then each list (`listed_at`), a word each in the
@@ -532,7 +533,7 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 31] {
         (HEAD_READS, reads_at(size)),
         (HEAD_TILES, tiles(size)),
         (HEAD_HANDS, hand_at(size, 0)),
-        (HEAD_DRAWN_MARKS, drawn_marks_at(size)),
+        (HEAD_KEPT, kept_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
@@ -1014,10 +1015,11 @@ impl Light {
 /// count, then its entries, the count copied in once propagation is done (`ARGS_COUNTS`), as
 /// the eye's is (`ray::WALKED_CNT`); and a word for every place of each, in the args'
 /// buffer (`listed_marks_at`): the last cast that listed it, so each is listed once a cast,
-/// but the stood list's, which names the cast the world's receivers were last stood in
-/// (`HEAD_WORLD`), as they stand on in every cast after it until they are stood again. The
-/// drawn receivers' tiles each take a word of their own past the marks (`drawn_marks_at`),
-/// the last cast that listed it. The passes that cast tiles take their threads off the first
+/// but the stood list's and the read list's, which name the cast the world's receivers were
+/// last stood afresh in (`HEAD_WORLD`): a tile stood on, the world's receivers' or a drawn
+/// one's, and a tile read, stays listed in every cast after it until they are stood afresh
+/// again, each cast adding what it stands on and what that reads (`kept_at`). The passes that
+/// cast tiles take their threads off the first
 /// three (pxl-render light_list.wgsl `light_item`): `LIST_ACROSS` workgroups of
 /// `LISTED_LANES` a row, an entry its side's square of them, a cast that begins an epoch as
 /// any other (`CLAIM_BUDGET`); the propagation a thread a stood tile; the claim a thread a tile
@@ -1056,11 +1058,6 @@ pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
         k += 1;
     }
     at
-}
-
-/// The drawn receivers' marks past the lists', a word a tile (`LISTED_STOOD`).
-pub const fn drawn_marks_at(size: u32) -> u32 {
-    listed_marks_at(size, LISTS)
 }
 
 /// List `which`'s count, its entries after it (`LISTED_CORNERS`).
@@ -1102,12 +1099,17 @@ pub const fn slide_at(size: u32) -> u32 {
 pub const SLIDE_RAN: u32 = 0;
 pub const READS_FROM: u32 = 1;
 
-/// Past them, what the world's receivers left in the stood list's args where they were last
-/// stood (`HEAD_WORLD`), copied out once they are and back in each cast that stands on them
-/// again (gpu/ray/cast.rs): its first `STOOD_KEPT` words.
+/// Past them, what a cast keeps for the next until the world's receivers are stood afresh
+/// (`HEAD_WORLD`), copied out once its propagation is done and back in as the next begins
+/// (gpu/ray/cast.rs): the stood list's args' first `STOOD_KEPT` words, then the read list's
+/// count (`KEPT_READ`). The count kept is the stood tiles the casts before propagated, so a
+/// cast propagates only those stood after them (pxl-render light_propagate.wgsl); none where
+/// they are stood afresh.
 pub const fn kept_at(size: u32) -> u32 {
     slide_at(size) + 2
 }
+pub const KEPT_READ: u32 = STOOD_KEPT;
+pub const KEPT_WORDS: u32 = KEPT_READ + 1;
 
 /// Past them, the place each tile holds the light's holes' parked rays at, a word a tile by its
 /// slots' tile (`tiles` a row, the slots' own grid, which the box slides over), its number among
@@ -1115,7 +1117,7 @@ pub const fn kept_at(size: u32) -> u32 {
 /// (light_propagate.wgsl `light_claim_cs`, which writes it; pxl-render light_aim.wgsl
 /// `light_place_at`, which the queue reads it by).
 pub const fn places_at(size: u32) -> u32 {
-    kept_at(size) + STOOD_KEPT
+    kept_at(size) + KEPT_WORDS
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
@@ -1188,8 +1190,8 @@ pub const fn claims(before: u32, own: u32, rank: u32) -> bool {
 /// (`STOOD_LIST`), and their count (`STOOD_CNT`); then the slide's dispatch (`STOOD_SLIDE`):
 /// its tiles' workgroups across once a tile is stood, the stood list's first setting it, and
 /// down where the cast owes a slide, the host's, so a cast that owes one and stands nothing
-/// slides nothing (`READS_FROM`). The world's receivers' part, the first `STOOD_KEPT`, is
-/// theirs to keep (`kept_at`); the host sets the rest each cast.
+/// slides nothing (`READS_FROM`). The first `STOOD_KEPT` are kept from cast to cast until the
+/// world's receivers are stood afresh (`kept_at`); the host sets the rest each cast.
 pub const STOOD_LIST: u32 = 0;
 pub const STOOD_CNT: u32 = 3;
 pub const STOOD_SLIDE: u32 = 4;
@@ -1214,8 +1216,10 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// takes (`listed_at`); a cast that claims none, as where the receivers moved only within the
 /// tiles cast, casts none. The lay six vertices and an instance a tile read
 /// (light_propagate.wgsl). So a cast whose receivers stand on nothing claims, lays and draws
-/// no tile. Past `ARGS_WORDS`, which a cast writes, the lists' marks and the drawn receivers',
-/// which last from cast to cast (`args_words`). The passes that write these read no count of
+/// no tile. Past `ARGS_WORDS`, which a cast writes, the lists' marks, which last from cast to
+/// cast (`args_words`). The lay's instances are the read list's count, kept from cast to cast
+/// with the list (`KEPT_READ`), set once the tiles wanted are listed (light_propagate.wgsl
+/// `light_want_cs`). The passes that write these read no count of
 /// theirs here: the drawn receivers' and the claim's dispatches are buffers of their own
 /// (`DRAWS_DISPATCH_WORDS`, `CLAIM_DISPATCH`).
 pub const ARGS_BEAM: u32 = 0;
@@ -1236,19 +1240,19 @@ pub const ARGS_PASSES: u32 = 22;
 /// by theirs, which writes the lists' marks here (light_mark_draws.wgsl).
 pub const DRAWS_DISPATCH_WORDS: u32 = 3;
 /// The claim's dispatch over the tiles wanted (`LISTED_WANTED`), a buffer of its own, as a
-/// cast starts: `LIST_ACROSS` workgroups a row and no row; the propagation raises its rows as
-/// it lists them (pxl-render light_propagate.wgsl `want`), and the claim, which writes these
-/// args, reads its count from it (light_claim.wgsl).
+/// cast starts: `LIST_ACROSS` workgroups a row and no row; the pass that wants them raises its
+/// rows as it lists them (pxl-render light_propagate.wgsl `want`), and the claim, which writes
+/// these args, reads its count from it (light_claim.wgsl).
 pub const CLAIM_DISPATCH: [u32; 3] = [LIST_ACROSS, 0, 1];
 pub const ARGS_COUNTS: u32 = ARGS_PASSES;
 pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
 /// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).
 pub const LAY_VERTICES: u32 = 6;
 
-/// The tiles a cast wants by ring (`rings`), past the drawn receivers' marks, counted as the
-/// propagation lists them (light_propagate.wgsl) and read by the claim, none at a cast's start.
+/// The tiles a cast wants by ring (`rings`), past the lists' marks, counted as they are
+/// wanted (light_propagate.wgsl `want`) and read by the claim, none at a cast's start.
 pub const fn rings_at(size: u32) -> u32 {
-    drawn_marks_at(size) + tiles(size) * tiles(size)
+    listed_marks_at(size, LISTS)
 }
 
 /// The args' buffer's words on the map `size` texels a side.

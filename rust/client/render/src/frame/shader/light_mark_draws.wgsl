@@ -98,7 +98,7 @@ fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   for (var j = b.first.y; j <= b.last.y; j += 1i) {
     for (var i = b.first.x; i <= b.last.x; i += 1i) {
-      stand_drawn(vec2<i32>(i, j));
+      stand(vec2<i32>(i, j));
     }
   }
 }

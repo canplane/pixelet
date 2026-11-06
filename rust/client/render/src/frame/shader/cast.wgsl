@@ -52,26 +52,53 @@ fn unpark_px(p: vec2<u32>, size: vec2<u32>) {
   }
 }
 
+/// The record entry each pixel of the workgroup took, 0 where none, so the first of them to take
+/// an entry marks it seen for them all.
+var<workgroup> took: array<u32, CAST_SIDE * CAST_SIDE>;
+
+/// The visible voxel's entry, numbered as the raster keeps it (its lack dropped), that lane
+/// `lane` took and no lane before it in the workgroup did.
+fn first_to_take(lane: u32, entry: u32) -> bool {
+  for (var k = 0u; k < lane; k += 1u) {
+    if (took[k] == entry) {
+      return false;
+    }
+  }
+  return true;
+}
+
 @compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
-fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
+fn cast_cs(
+  @builtin(workgroup_id) w: vec3<u32>,
+  @builtin(local_invocation_id) l: vec3<u32>,
+  @builtin(local_invocation_index) lane: u32,
+) {
   let tile = claimed.at[w.x];
   let p = vec2<u32>(tile & 0xffffu, tile >> 16u) * SCREEN_TILE + w.yz * CAST_SIDE + l.xy;
   let size = textureDimensions(rays);
-  if (p.x >= size.x || p.y >= size.y) {
+  let inside = p.x < size.x && p.y < size.y;
+  var visible = 0u;
+  if (inside) {
+    visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
+  }
+  took[lane] = visible & ~VISIBLE_LACK;
+  workgroupBarrier();
+  if (!inside) {
     return;
   }
   let px = px_tan(p, size.xy);
   let aim = eye_aim(px);
-  let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
-  let on = node_cache[COUNT_ON] != 0u;
+  let on = ((node_cache[COUNT_ON] >> COUNT_EYE) & 1u) != 0u;
   // What the record drew at the pixel, its words where it is a hole.
   var drew = vec4<u32>(0u);
   if (visible != 0u) {
     // Seen this frame: no sample's claim takes its slot this frame or the next
-    // (`record::victim`).
+    // (`record::victim`). Marked by the first pixel of the workgroup that took it alone, where
+    // it is not marked this frame yet, so a voxel that fills the screen takes a store a
+    // workgroup, not one a pixel, all to one word.
     let e = record_at((visible & ~VISIBLE_LACK) - 1u);
     let frame = record_frame();
-    if (record_word(e + R_SEEN) != frame) {
+    if (first_to_take(lane, visible & ~VISIBLE_LACK) && record_word(e + R_SEEN) != frame) {
       atomicStore(&record[e + R_SEEN], frame);
     }
     // A slot forgotten since the boxes were drawn holds no voxel: the pixel walks.

@@ -6,8 +6,9 @@ use crate::frame::shader::access::{
 };
 
 /// The sources whose calls take their offsets from a step here.
-const SOURCES: [(&str, &str); 6] = [
+const SOURCES: [(&str, &str); 7] = [
     ("ray/cast.rs", include_str!("cast.rs")),
+    ("ray/count.rs", include_str!("count.rs")),
     ("ray/raster.rs", include_str!("raster.rs")),
     ("generator.rs", include_str!("../generator.rs")),
     ("shadow.rs", include_str!("../shadow.rs")),
@@ -156,6 +157,7 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         stages: &["the light's cast"],
         buffers: &[buffer("light_args", ARGS)],
         appends: &[],
+        seeds: &[],
         kept: &[],
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),

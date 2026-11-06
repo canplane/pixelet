@@ -152,7 +152,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (head_word(LIGHT_HEAD_STANDS_WORLD) != 0u) {
     let b = box_tiles(lo, hi);
     if (b.got) {
-      stand_world_box(b.first, b.last);
+      stand_box(b.first, b.last);
     }
   }
 }

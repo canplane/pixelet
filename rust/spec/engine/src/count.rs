@@ -34,9 +34,10 @@ pub const SKY: u32 = 6;
 pub const BOXES: u32 = 7;
 pub const LANES: u32 = 8;
 /// Past the lanes, each observer's owed work as its last cast or queue left it
-/// (`node_cache::OWED_AT`), a word an observer: copied each frame the observer's queue runs,
-/// counted or not, and read back with the lanes, so the renderer asks for the next frame
-/// while it is not none (pxl-render gpu/ray/count.rs `Readback`).
+/// (`node_cache::OWED_AT`), a word an observer: kept in a word of its own each frame the
+/// observer's queue runs, counted or not, copied in by the first copy free and read back with
+/// the lanes, so the renderer asks for the next frame while it is not none (pxl-render
+/// gpu/ray/count.rs `Readback`, `Counter`).
 pub const OWED: u32 = OBSERVERS * LANES;
 pub const WORDS: u32 = OWED + OBSERVERS;
 

@@ -23,10 +23,10 @@ use crate::frame::shader::record::{
     COMPUTE_FOLD, COMPUTE_FORGET, COMPUTE_LIGHT, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT,
     COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_CLAIM, COMPUTE_LIGHT_MARK_DRAWS,
     COMPUTE_LIGHT_MARK_DRAWS_OPEN, COMPUTE_LIGHT_MARK_WALKED, COMPUTE_LIGHT_PROPAGATE,
-    COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_PARKED_TILES,
-    COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_LAST,
-    COMPUTE_QUEUE_PARKED, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE, STORAGE_RW,
-    STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
+    COMPUTE_LIGHT_SAMPLE, COMPUTE_LIGHT_SAMPLE_HIT, COMPUTE_LIGHT_SLIDE, COMPUTE_LIGHT_WANT,
+    COMPUTE_PARKED_TILES, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED,
+    COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_PARKED, COMPUTE_SAMPLE, COMPUTE_SAMPLE_HIT, STORAGE,
+    STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM,
 };
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
@@ -209,8 +209,9 @@ pub(super) struct CastBuffers {
     light_mark_draws_built: Pipeline,
     light_mark_draws_open_built: Pipeline,
     light_propagate_built: Pipeline,
-    /// The tiles the propagation wants claimed nearest first, at most `light::CLAIM_BUDGET` a
-    /// cast (`light_claim_cs`), over the propagation's group.
+    /// The tiles read wanted, over the propagation's group (`light_want_cs`); then claimed
+    /// nearest first, at most `light::CLAIM_BUDGET` a cast (`light_claim_cs`).
+    light_want_built: Pipeline,
     light_claim_built: Pipeline,
     /// The tiles the box slid onto, or slid into another band, set back to
     /// be read anew (`light_slide_cs`, pxl-engine `Light::keeps`), before
@@ -280,6 +281,9 @@ pub(super) struct CastBuffers {
     /// and look, the boxes the host's draws stand in, decor placed again. One moving alone
     /// casts only the tiles read anew.
     light_receivers: Read,
+    /// The host's draws' boxes within the effects' reach this frame (`StandOn`): what the
+    /// receivers read of them and the head is handed.
+    light_stands: Vec<StandOn>,
     /// What it is handed beside the eye's words (pxl-engine
     /// `light::HEAD_WORDS`).
     light_head: u32,
@@ -586,6 +590,15 @@ const _: () = assert!(
     screen::TILE.is_multiple_of(ray::CAST_SIDE),
     "a tile is a whole number of the cast's workgroups"
 );
+/// A box a host's draw stands within, within the effects' reach: its corners in units from the
+/// eye, as the light's passes read them (`Stand::from_eye`), and the first and last tiles of the
+/// light's box it stands on (pxl-engine `Light::box_tiles`).
+#[derive(Clone, Copy)]
+struct StandOn {
+    bounds: [[f32; 3]; 2],
+    tiles: [[i32; 2]; 2],
+}
+
 /// The claimed tiles' list as a frame's cast starts: `cast_cs`'s dispatch, no tile yet, each
 /// one's workgroups across and down, and none counted (cast_tiles.wgsl).
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
@@ -902,7 +915,10 @@ const _: () = assert!(
             &[COMPUTE_LIGHT_MARK_DRAWS_OPEN],
             &LIGHT_MARK_DRAWS_OPEN_GROUP
         )
-        && binds(&[COMPUTE_LIGHT_PROPAGATE], &LIGHT_PROPAGATE_GROUP)
+        && binds(
+            &[COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_WANT],
+            &LIGHT_PROPAGATE_GROUP
+        )
         && binds(&[COMPUTE_LIGHT_CLAIM], &LIGHT_CLAIM_GROUP)
         && binds(&[COMPUTE_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
     "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
@@ -956,6 +972,8 @@ impl RaysPass {
         );
         let light_propagate_built =
             pipelines.build_compute(g, COMPUTE_LIGHT_PROPAGATE, &LIGHT_PROPAGATE_GROUP);
+        let light_want_built =
+            pipelines.build_compute(g, COMPUTE_LIGHT_WANT, &LIGHT_PROPAGATE_GROUP);
         let light_claim_built = pipelines.build_compute(g, COMPUTE_LIGHT_CLAIM, &LIGHT_CLAIM_GROUP);
         let light_slide_built = pipelines.build_compute(g, COMPUTE_LIGHT_SLIDE, &LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
@@ -1027,6 +1045,7 @@ impl RaysPass {
             light_mark_draws_built,
             light_mark_draws_open_built,
             light_propagate_built,
+            light_want_built,
             light_claim_built,
             light_slide_built,
             light_groups: [0; LIGHT_GROUPS],
@@ -1055,6 +1074,7 @@ impl RaysPass {
                 buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
             ),
             light_receivers: Read::default(),
+            light_stands: Vec::with_capacity(light::STANDS),
             light_head: buf(
                 word_bytes(light::HEAD_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -1173,6 +1193,7 @@ impl RaysPass {
                 c.counter.off(LIGHT);
                 (c.eye_on, c.eye_resumes, c.eye_queue) = (false, false, false);
                 c.counter.off(EYE);
+                c.counter.idle();
                 c.ungated = false;
                 c.rolls = beam::ROLLS;
             }
@@ -1556,14 +1577,38 @@ impl RaysPass {
         c.eye_on = true;
         c.eye_resumes = casts && rays_stand;
         c.eye_queue = kind == FrameKind::standing && rays_stand && c.counter.owed(EYE);
-        // The eye's place and look, where the host's draws stand and decor
-        // compacted again: which tiles are read, not what a tile holds. Not
-        // the jitter: a pixel's stands hold its footprint (`light_mark_walked_cs`).
+        // Where the host's draws stand, each box units from the eye and the tiles it stands on
+        // by the one rule every receiver stands by (pxl-engine `Light::box_tiles`, the
+        // footprint where the eye stands, as the head asks it below), on the light the cast is
+        // aimed by; a box past the effects' reach stands on none and is left out, so what moves
+        // past it never casts the light. None where no shadow is cast.
+        c.light_stands.clear();
+        if shadows {
+            let words = cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
+                .try_into()
+                .or_bug(Errno::ENOTRECOVERABLE);
+            let lit = light::Light::of_words(words);
+            let origin: [i32; 3] = core::array::from_fn(|k| cast.eye[eye::ORIGIN + k] as i32);
+            for s in cast.stands.iter().take(light::STANDS) {
+                let [lo, hi] = s.from_eye(origin);
+                if let Some(tiles) = lit.box_tiles(shadow::SIZE, lo, hi, stands) {
+                    c.light_stands.push(StandOn {
+                        bounds: [lo, hi],
+                        tiles,
+                    });
+                }
+            }
+        }
+        // The eye's place and look, the tiles the host's draws stand on and decor compacted
+        // again: which tiles are read, not what a tile holds. Not the jitter: a pixel's stands
+        // hold its footprint (`light_mark_walked_cs`).
         let l = &mut c.light_receivers;
         l.begin();
         l.read(&cast.eye[eye::ORIGIN..eye::ORIGIN + 3]);
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
-        l.read(cast.stands);
+        for s in &c.light_stands {
+            l.read(s.tiles.as_flattened());
+        }
         l.mark(c.generator.counts());
         // The first frame the eye stands in after it moved marks again, with
         // the footprints the jitter's frames after it stand on; and every cast of
@@ -1646,13 +1691,18 @@ impl RaysPass {
             // What the host draws that reads the map, receivers as decor is, a box each
             // (`light_mark_draws_cs`), in units from the eye's origin, the Q3 the
             // generated decor is placed against, rounded outward (`Stand::from_eye`).
+            // Those within the effects' reach alone (`light_stands`).
             let at = 4 * light::STANDS_AT;
-            let n = cast.stands.len().min(light::STANDS);
+            let n = c.light_stands.len();
             c.light_draws = n != 0 || c.generator.instances().is_some();
             head[at] = n as u32;
-            let origin: [i32; 3] = core::array::from_fn(|k| cast.eye[eye::ORIGIN + k] as i32);
-            for (k, s) in cast.stands[..n].iter().enumerate() {
-                let [lo, hi] = s.from_eye(origin);
+            for (
+                k,
+                &StandOn {
+                    bounds: [lo, hi], ..
+                },
+            ) in c.light_stands.iter().enumerate()
+            {
                 let w = at + 4 * (1 + 2 * k);
                 head[w..w + 3].copy_from_slice(&lo.map(f32::to_bits));
                 head[w + 4..w + 7].copy_from_slice(&hi.map(f32::to_bits));
@@ -1695,8 +1745,10 @@ impl RaysPass {
                 sequence::OPEN_LIGHT_RINGS.to_at(),
                 bytes(&none),
             );
-            // The stood list empty where the world's receivers are stood afresh, else theirs
-            // copied back in as the cast begins (`dispatch`); the slide's rows where it owes one.
+            // The stood list empty where the world's receivers are stood afresh, and none of it
+            // propagated, the read list empty with it (`light_args`); else what the casts since
+            // left copied back in as the cast begins (`dispatch`); the slide's rows where it owes
+            // one.
             let stood = light_stood(owes);
             let afresh = c.light_world && !c.light_world_adds;
             let open = if afresh {
@@ -1706,6 +1758,13 @@ impl RaysPass {
             };
             let from = open.to.at as usize;
             g.write_buf(c.light_stood, open.to_at(), bytes(&stood[from..]));
+            if afresh {
+                g.write_buf(
+                    c.light_list,
+                    sequence::OPEN_STOOD_PROPAGATED.to_at(),
+                    bytes(&[0u32]),
+                );
+            }
             c.raster
                 .light_prepare(g, &cast.eye, shadow::SIZE, c.light_number);
         }
@@ -2155,9 +2214,10 @@ impl RaysPass {
         let (generates, casts, kind) = (self.generates(), self.casts_px(), self.kind);
         let claimed = self.tiles;
         let Some(c) = self.cast.as_mut() else { return };
-        // What the world's receivers left in the stood list's args copied back in, ahead of
-        // every pass that stands a tile, the record's draw among the eye's, where this cast
-        // stands on them or adds to them (`light::kept_at`).
+        // What the casts since the world's receivers were last stood afresh left in the stood
+        // list's args, and the read list's count, copied back in, ahead of every pass that
+        // stands a tile, the record's draw among the eye's, where this cast stands on them or
+        // adds to them (`light::kept_at`).
         c.record_drawn = false;
         if c.light_cast && (!c.light_world || c.light_world_adds) {
             let back = &sequence::STOOD_BACK;
@@ -2166,6 +2226,13 @@ impl RaysPass {
                 (c.light_list, back.from_at()),
                 (c.light_stood, back.to_at()),
                 word_bytes(light::STOOD_KEPT as usize),
+            );
+            let back = &sequence::READ_COUNT_BACK;
+            g.copy_buf(
+                encoder,
+                (c.light_list, back.from_at()),
+                (c.light_args, back.to_at()),
+                4,
             );
         }
         if casts {
@@ -2408,8 +2475,7 @@ impl RaysPass {
             // where that ran none (`record_drawn`); then every pixel the eye walked apart, a
             // thread each off their list, which has room for every pixel drawn, in a span of
             // their own (`light_receivers`, span.json `per_px`). Added to those that stand, theirs
-            // copied back in before the frame's first pass (`dispatch`). What they left in the
-            // stood list's args kept, and copied back in each cast that stands on them again.
+            // copied back in before the frame's first pass (`dispatch`).
             if c.light_world {
                 c.light_world = false;
                 // The record's boxes stood, its draw run here where the eye's pixels' cast ran
@@ -2423,19 +2489,13 @@ impl RaysPass {
                 g.set_pipeline(pass, c.light_mark_walked_built.id);
                 g.dispatch_indirect(pass, c.marks, sequence::LIGHT_MARK_WALKED.at());
                 g.end(pass);
-                let keep = &sequence::STOOD_KEEP;
-                g.copy_buf(
-                    encoder,
-                    (c.light_stood, keep.from_at()),
-                    (c.light_list, keep.to_at()),
-                    word_bytes(light::STOOD_KEPT as usize),
-                );
             }
-            // The tiles the drawn receivers stand on, timed with the beam: where the decor and
-            // what else the host draws that reads the map stand, as many threads as its one thread opens
-            // (`light_mark_draws_open_cs`, `light_mark_draws_cs`), where any is drawn.
+            // The tiles the drawn receivers stand on, in a span of their own: where the decor
+            // and what else the host draws that reads the map stand, as many threads as its one
+            // thread opens (`light_mark_draws_open_cs`, `light_mark_draws_cs`), where any is
+            // drawn.
             if c.light_draws {
-                let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
+                let stamp = ctx.stamp(GpuSpanName::light_draws).pass();
                 let pass = g.compute_pass(encoder, stamp);
                 g.set_bind_group(pass, 0, c.light_groups[13], &[]);
                 g.set_pipeline(pass, c.light_mark_draws_open_built.id);
@@ -2453,24 +2513,52 @@ impl RaysPass {
             // stood, the tiles the box slid onto or into another band, or whose rays may meet
             // a column of the world that changed, set back to be read anew, a thread a tile,
             // where the cast owes it (`light_slide_cs`); then the tiles they read, a thread a
-            // tile stood on (`light_propagate_cs`). A cast that stands on no tile runs neither.
+            // tile stood on since the casts before propagated theirs (`light_propagate_cs`). A
+            // cast that stands on no tile runs neither. Each stage a pass timed in its own span.
             g.copy_buf(
                 encoder,
                 (c.light_stood, sequence::STOOD_COUNT.from_at()),
                 (c.light_list, sequence::STOOD_COUNT.to_at()),
                 4,
             );
-            let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
+            let stamp = ctx.stamp(GpuSpanName::light_slide).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[7], &[]);
             g.set_pipeline(pass, c.light_slide_built.id);
             g.dispatch_indirect(pass, c.light_stood, sequence::LIGHT_SLIDE.at());
+            g.end(pass);
+            let stamp = ctx.stamp(GpuSpanName::light_propagate).pass();
+            let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
             g.set_pipeline(pass, c.light_propagate_built.id);
             g.dispatch_indirect(pass, c.light_stood, sequence::LIGHT_PROPAGATE.at());
-            // Then the tiles it wants claimed, nearest first, a thread a tile wanted, as many
-            // rows as it opened in the claim's own dispatch (`light_claim_cs`,
-            // `light::CLAIM_DISPATCH`).
+            g.end(pass);
+            // What the cast stood on and read kept for the next, the count propagated with them
+            // (`light::kept_at`).
+            let keep = &sequence::STOOD_KEEP;
+            g.copy_buf(
+                encoder,
+                (c.light_stood, keep.from_at()),
+                (c.light_list, keep.to_at()),
+                word_bytes(light::STOOD_KEPT as usize),
+            );
+            let keep = &sequence::READ_COUNT_KEEP;
+            g.copy_buf(
+                encoder,
+                (c.light_args, keep.from_at()),
+                (c.light_list, keep.to_at()),
+                4,
+            );
+            // Then every tile read wanted where its epoch has not cast it or it is owed, a
+            // thread a place of the box (`light_want_cs`); and the tiles wanted claimed, nearest
+            // first, a thread a tile wanted, as many rows as the wanting opened in the claim's
+            // own dispatch (`light_claim_cs`, `light::CLAIM_DISPATCH`): one span.
+            let stamp = ctx.stamp(GpuSpanName::light_claim).pass();
+            let pass = g.compute_pass(encoder, stamp);
+            g.set_bind_group(pass, 0, c.light_groups[6], &[]);
+            g.set_pipeline(pass, c.light_want_built.id);
+            let n = light::tiles(shadow::SIZE);
+            g.dispatch(pass, (n * n).div_ceil(light::LISTED_LANES), 1, 1);
             g.set_bind_group(pass, 0, c.light_groups[14], &[]);
             g.set_pipeline(pass, c.light_claim_built.id);
             g.dispatch_indirect(pass, c.light_claim_dispatch, sequence::LIGHT_CLAIM.at());
@@ -2500,7 +2588,7 @@ impl RaysPass {
             // their visible voxel, a workgroup a tile (pxl-engine
             // `light::TILE`), and the rest walked off their list as the eye's
             // missed pixels are: each a pass timed in its own span.
-            let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
+            let stamp = ctx.stamp(GpuSpanName::light_beam_hit).pass();
             let pass = g.compute_pass(encoder, stamp);
             // The beam over the node cache alone, as many workgroups as the
             // propagation left it (`light::ARGS_WORDS`); then what it left over
@@ -2682,12 +2770,21 @@ impl RaysPass {
     }
 
     /// Whether an observer's owed work asks for the next frame: its count waits on that frame
-    /// to be mapped back, or what came back owes a run the observer may make: the light's cast,
-    /// the eye's queue alone while its rays stand (`Readback::wants_frame`).
+    /// to be mapped back or for a copy to take it, or what came back owes a run the observer
+    /// may make: the light's cast, the eye's queue alone while its rays stand
+    /// (`Readback::wants_frame`).
     pub fn wants_frame(&self) -> bool {
         self.cast
             .as_ref()
             .is_some_and(|c| c.counter.wants_frame([c.eye_on, c.light_on]))
+    }
+
+    /// In a frame that stands, dispatching nothing, the owed work an observer's last run left
+    /// that no copy could take yet, copied alone (`Counter::copy_pending`).
+    pub fn copy_pending(&mut self, g: &Gpu) {
+        if let Some(c) = self.cast.as_mut() {
+            c.counter.copy_pending(g);
+        }
     }
 
     /// Whether this frame runs the eye's queue alone over the holes its last cast left parked,

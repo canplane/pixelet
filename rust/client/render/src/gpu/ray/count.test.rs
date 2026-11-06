@@ -21,12 +21,15 @@ struct Turn {
     dropped: bool,
 }
 
-/// The readback and what the device holds beside it: the owed work the copy out holds, and
-/// whether each observer's last run left work owed on the device (`truth`): its count where
-/// it ran, owed where it was dropped (its content then cast afresh), none where it was let go.
+/// The readback and what the device holds beside it: each observer's owed work as its last
+/// run that was not dropped kept it (`kept`, `Counter::owed`), the owed work the copy out
+/// holds, and whether each observer's last run left work owed on the device (`truth`): its
+/// count where it ran, owed where it was dropped (its content then cast afresh), none where it
+/// was let go.
 #[derive(Clone, Copy, Debug, Default)]
 struct World {
     slot: Readback,
+    kept: [u32; 2],
     held: [u32; 2],
     truth: [bool; 2],
     on: [bool; 2],
@@ -41,8 +44,13 @@ impl World {
         }
         self.slot.ask(fence);
         let ran = [0, 1].map(|o| t.ran[o] && self.on[o]);
+        for (kept, (&ran, &owed)) in self.kept.iter_mut().zip(ran.iter().zip(&t.owed)) {
+            if ran && !t.dropped {
+                *kept = owed;
+            }
+        }
         if self.slot.copy(t.counted, ran) {
-            self.held = t.owed;
+            self.held = self.kept;
         }
         for (o, &ran) in ran.iter().enumerate() {
             if ran {
@@ -189,21 +197,21 @@ fn a_copied_count_lands_as_owed_or_rest() {
     }
 }
 
-/// A run while a mapping is out is copied nowhere: its observer stays owed, so a frame is
-/// asked, and the mapping out, of an older generation, never clears it when it lands, even as
-/// none; the next run copied is the observer's last again. The other observer's reading in the
-/// same copy still counts.
+/// A run while a mapping is out is copied nowhere: its observer's work waits for a copy, owing
+/// no run, so a frame is asked, and the mapping out, of an older generation, never settles it
+/// when it lands, even as none; the next copy carries the observer's last again. The other
+/// observer's reading in the same copy still counts.
 #[test]
 fn a_stale_generation_never_clears_a_newer_run() {
     let mut r = Readback::default();
     assert!(r.copy(false, [true, true]));
     assert!(r.ask(true));
     assert!(!r.copy(false, [true, false]));
-    assert!(r.owed[EYE] && r.wants_frame([true; 2]));
+    assert!(r.pending[EYE] && !r.owed[EYE] && r.wants_frame([true; 2]));
     r.land(true, [0, 5]);
     assert!(
-        r.owed[EYE],
-        "an older generation cleared the eye's owed: {r:?}"
+        r.pending[EYE] && !r.owed[EYE],
+        "an older generation settled the eye's last run: {r:?}"
     );
     assert!(
         r.owed[LIGHT],
@@ -211,6 +219,38 @@ fn a_stale_generation_never_clears_a_newer_run() {
     );
     assert!(r.copy(false, [true, false]));
     assert!(!r.owed[EYE] && r.carried[EYE] == Some(r.cast[EYE]));
+}
+
+/// A run whose work no copy could take owes no run for it: it waits, asks for a frame, and a
+/// frame that runs nothing copies it alone (`copies_pending`), which lands as owed or rest,
+/// each observer its own; a frame dropped after its copy took it waits for a copy again.
+#[test]
+fn a_run_not_copied_is_copied_alone_and_lands() {
+    for o in [EYE, LIGHT] {
+        for (owed, then) in [(0, false), (3, true)] {
+            let mut ran = [false; 2];
+            ran[o] = true;
+            let mut r = Readback::default();
+            assert!(r.copy(false, [true; 2]));
+            assert!(r.ask(true));
+            assert!(!r.copy(false, ran));
+            assert!(r.pending[o] && !r.owed[o] && !r.copies_pending());
+            assert!(r.wants_frame([true; 2]));
+            r.land(true, [0; 2]);
+            assert!(r.copies_pending());
+            assert!(r.copy(false, [false; 2]));
+            r.dropped();
+            assert!(r.pending[o] && !r.owed[o] && r.copies_pending());
+            assert!(r.copy(false, [false; 2]));
+            assert!(!r.pending[o] && r.carried[o] == Some(r.cast[o]));
+            assert!(r.carried[1 - o].is_none());
+            assert!(r.ask(true));
+            let mut read = [0; 2];
+            read[o] = owed;
+            r.land(true, read);
+            assert_eq!((r.owed[o], r.wants_frame([true; 2])), (then, then));
+        }
+    }
 }
 
 /// A refused mapping owes each observer whose work it held; one of the lanes alone owes

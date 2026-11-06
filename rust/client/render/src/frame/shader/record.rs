@@ -90,7 +90,10 @@ pub const COMPUTE_PARKED_TILES: u32 = 58;
 /// record_stops.light.wgsl).
 pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 59;
 pub const COMPUTE_LIGHT_RECORD_DEFERRED: u32 = 60;
-pub const COMPUTES: u32 = 61;
+/// Each tile the light's cast lists read, wanted where its epoch has not cast it or it is owed
+/// (light_propagate.wgsl `light_want_cs`).
+pub const COMPUTE_LIGHT_WANT: u32 = 61;
+pub const COMPUTES: u32 = 62;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -129,6 +132,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS_OPEN, "light_mark_draws_open_cs"),
         COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
         COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_CLAIM, "light_claim_cs"),
+        COMPUTE_LIGHT_WANT => (SHADER_LIGHT_PROPAGATE, "light_want_cs"),
         COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
         COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
         COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
