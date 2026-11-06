@@ -3,7 +3,7 @@
 //! Markers drawn flat to the camera, as one set of instances, each where
 //! it stands.
 
-use pxl_render::frame::draw::{DrawList, MirroredBlock, Position, PIPELINE_MARKER};
+use pxl_render::frame::draw::{DrawId, DrawList, MirroredBlock, Position, PIPELINE_MARKER};
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::q3::Q3;
 
@@ -54,6 +54,7 @@ pub(super) fn instance(
 pub(super) struct Set {
     block: MirroredBlock,
     cnt: u32,
+    id: DrawId,
 }
 
 impl Set {
@@ -78,6 +79,7 @@ impl Set {
     pub(super) fn draw(&self, draw: &mut DrawList) {
         if self.cnt > 0 && self.block.handle != 0 {
             draw.draw_as(
+                &self.id,
                 PIPELINE_MARKER,
                 self.block.handle,
                 self.cnt,

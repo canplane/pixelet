@@ -16,14 +16,13 @@ struct Draw {
   _p2: f32,
 };
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
-@group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
-
-fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_words[0].xyz), draw_words[2].xyz); }
-fn draw_rot() -> f32 { return draw_words[0].w; }
-fn draw_opacity() -> f32 { return draw_words[1].x; }
-fn draw_scale() -> f32 { return draw_words[1].y; }
+// Read field by field from vec4 words (`draw_word`, skinned_slot.wgsl or
+// skinned_mark_draw.wgsl), never as a struct: a struct here lost Safari's
+// WebGPU its GPU process.
+fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_word(0u).xyz), draw_word(2u).xyz); }
+fn draw_rot() -> f32 { return draw_word(0u).w; }
+fn draw_opacity() -> f32 { return draw_word(1u).x; }
+fn draw_scale() -> f32 { return draw_word(1u).y; }
 
 // The palette is read as vec4 columns: a Galaxy S23's Vulkan misread
 // `array<mat4x4f>` in storage.
@@ -39,6 +38,8 @@ struct VertexIn {
   @location(2) uv: vec2f,
   @location(3) joints: vec4<u32>,
   @location(4) weights: vec4f,
+  // Which draw it is of (`draw_at`).
+  @builtin(instance_index) instance: u32,
 };
 
 fn skin_of(v: VertexIn) -> mat4x4f {
@@ -53,6 +54,7 @@ fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
 
 @vertex
 fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+  draw_at(v.instance);
   return jittered(frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0));
 }
 

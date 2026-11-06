@@ -13,14 +13,24 @@ struct Draw {
   layer: u32,
   idx: u32,
   r: vec3f,
-  _p: f32,
+  // 1 for a cloud's draw, which drifts with the wind; else 0.
+  drifts: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
-fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_words[0].xyz), draw_words[2].xyz); }
+// A cloud's draw holds its place on the cloud field's map, which it is drawn
+// moved back from by how far the wind has carried the field, Q3 from Q3 first,
+// so the difference keeps every step (frame/draw.rs `Position`).
+fn draw_translation() -> vec3f {
+  let drifts = draw_words[2].w != 0.0;
+  let q = bitcast<vec3i>(draw_words[0].xyz);
+  let back_q = select(vec2i(0), bitcast<vec2i>(frame_drift_q()), drifts);
+  let back_r = select(vec2f(0.0), frame_drift_r(), drifts);
+  return from_eye(q - vec3i(back_q, 0), draw_words[2].xyz - vec3f(back_r, 0.0));
+}
 fn draw_off() -> u32 { return bitcast<u32>(draw_words[0].w); }
 fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }

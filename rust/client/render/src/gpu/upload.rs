@@ -1,67 +1,14 @@
 // pxl-render/gpu/upload.rs
 
-//! The draw list's uploads on the device by the list's handle, and its
-//! records by pipeline, as the renderer and its passes read them.
+//! The draw list's uploads on the device by the list's handle, as the
+//! renderer and its passes read them.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
 use crate::frame::draw;
-use crate::frame::draw::DRAW_WORDS;
-use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
+use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};
-
-/// Records sorted by pipeline with a stable counting sort, so a pass walks
-/// only its own records.
-pub struct Draws<'a> {
-    pub(crate) records: &'a [[u32; DRAW_WORDS]],
-    order: &'a [u32],
-    starts: [u32; PIPELINES as usize + 1],
-}
-
-impl<'a> Draws<'a> {
-    pub(crate) fn sort(records: &'a [[u32; DRAW_WORDS]], order: &'a mut Vec<u32>) -> Draws<'a> {
-        let mut starts = [0u32; PIPELINES as usize + 1];
-        for d in records {
-            if let Some(n) = starts.get_mut(d[4] as usize + 1) {
-                *n += 1;
-            }
-        }
-        for p in 0..PIPELINES as usize {
-            starts[p + 1] += starts[p];
-        }
-        order.clear();
-        order.resize(starts[PIPELINES as usize] as usize, 0);
-        let mut next = starts;
-        for (i, d) in records.iter().enumerate() {
-            if let Some(at) = next.get_mut(d[4] as usize).filter(|_| d[4] < PIPELINES) {
-                order[*at as usize] = i as u32;
-                *at += 1;
-            }
-        }
-        Draws {
-            records,
-            order,
-            starts,
-        }
-    }
-
-    pub fn of(
-        &self,
-        pipeline: u32,
-    ) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
-        let p = (pipeline as usize).min(PIPELINES as usize);
-        let end = if p < PIPELINES as usize {
-            self.starts[p + 1]
-        } else {
-            self.starts[p]
-        };
-        let records = self.records;
-        self.order[self.starts[p] as usize..end as usize]
-            .iter()
-            .map(move |&i| &records[i as usize])
-    }
-}
 
 const EMPTY: u32 = 0;
 

@@ -254,7 +254,12 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_DECOR
     lit!["place", "instance", "decor_place", "decor"],
     // SHADER_SKINNED
-    lit!["place", "skinned_place", "skinned_mesh"],
+    lit![
+        "place",
+        "skinned_draw.slot",
+        "skinned_place",
+        "skinned_mesh"
+    ],
     // SHADER_LOCATION_ZONE
     &[
         "frame",
@@ -779,7 +784,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SCREEN_BOUND
     &["tile_word", "screen_tiles", "screen_bound"],
     // SHADER_SKINNED_MARK
-    &["frame", "place", "skinned_place", "tile_mark"],
+    &[
+        "frame",
+        "place",
+        "skinned_draw.mark",
+        "skinned_place",
+        "tile_mark",
+    ],
     // SHADER_LIGHT_SLIDE
     &[
         "walk_word",

@@ -17,7 +17,7 @@ use pxl_content::cloud::{cloud_draw, drift, holds_cloud};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{
-    DrawList, Position, Stand, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    DrawId, DrawList, Position, Stand, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
 };
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
@@ -38,7 +38,6 @@ use crate::domain::scene::environment::param::{
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;
 use crate::domain::view::lens;
@@ -100,6 +99,8 @@ struct Patch {
     handle: u32,
     idx: u32,
     heights: [f32; 2],
+    /// Each variant's draws, its models' and its impostors'.
+    draws: [[DrawId; 2]; VARIANTS.len()],
 }
 
 #[derive(Default)]
@@ -301,12 +302,14 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             idx: b.idx,
             bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
+            stood: stood_corner(key, off, eye),
             side: PATCH,
             heights: b.heights,
+            draws: &b.draws,
         };
-        // The patch's corner as the drift leaves it, finer than Q3, on its
-        // own lap of X: its draw holds no eye.
-        let pos = Position::of([corner[0], corner[1], 0.0]);
+        // The patch's corner on the field's map, on Q3, which the renderer
+        // moves back by the wind's drift: its draw holds no eye and no drift.
+        let pos = patch_place(key);
         let groups = VARIANTS.iter().enumerate().map(|(k, &a)| {
             (
                 (FIRST_GROUP + k) as u32,
@@ -315,6 +318,37 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         });
         present_patch(draw, &patch, pos, eye, groups, opacity, &mut c.impostors);
     }
+}
+
+/// The patch `key`'s corner on the field's map, on Q3, as its draws hold it:
+/// the renderer moves it back by the wind's drift (pxl-render frame/draw.rs
+/// `DrawList::draw_instances`).
+fn patch_place(key: [i64; 2]) -> Position {
+    Position::of([key[0] as f64 * PATCH, key[1] as f64 * PATCH, 0.0])
+}
+
+/// The patch `key`'s corner its draws stand by, on the lap of X nearest
+/// `eye`: where the drift `off` held to a whole cell, the lattice's unit,
+/// leaves it. The corner as drawn lies within a cell short of it, so a stand
+/// grown a cell back from it (`present_patch`) holds the patch drawn at every
+/// drift until the drift crosses into the next cell, and stands still
+/// meanwhile, as long as the wind takes to carry the field a cell.
+fn stood_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
+    let held = off.map(|v| libm::floor(v / CELL) * CELL);
+    let x = key[0] as f64 * PATCH - held[0];
+    [nearest(x, eye[0]), key[1] as f64 * PATCH - held[1]]
+}
+
+/// The box a patch's draws stand within, its corner `stood`
+/// (`stood_corner`), its side `side`, its instances between the heights
+/// `[zlo, zhi]`, its models reaching `e` past them: grown a cell back from
+/// the corner, so it holds the patch at every drift the corner holds.
+fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> Stand {
+    let [x, y] = stood;
+    Stand::of(
+        [x - CELL - e, y - CELL - e, zlo - e],
+        [x + side + e, y + side + e, zhi + e],
+    )
 }
 
 /// A cloud of a patch, about the patch's corner on the field's map.
@@ -451,19 +485,23 @@ fn build(
         handle,
         idx,
         heights: if instances == 0 { [0.0; 2] } else { heights },
+        draws: core::array::from_fn(|_| Default::default()),
     })
 }
 
 /// A patch of the clouds' columns as `present_patch` reads it: its square's corner
 /// about the eye's lap, its side, and the heights its instances stand between.
-struct PatchDraw {
+struct PatchDraw<'a> {
     handle: u32,
     at: u32,
     idx: u32,
     bytes: u32,
     corner: [f64; 2],
+    /// The corner its draws stand by (`stood_corner`).
+    stood: [f64; 2],
     side: f64,
     heights: [f32; 2],
+    draws: &'a [[DrawId; 2]],
 }
 
 /// Lists one patch's instances, model, impostor or nothing each, under the
@@ -506,7 +544,8 @@ fn present_patch(
     // A patch all within THIN_FROM shows every cloud, and asks none.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
-    for ((off, cnt), (group, (extent, [least, most]))) in column::groups(columns_of).zip(groups) {
+    let variants = column::groups(columns_of).zip(groups).zip(b.draws);
+    for (((off, cnt), (group, (extent, [least, most]))), [model_id, impostor_id]) in variants {
         let column = GroupColumns {
             first: off as usize,
             cnt: cnt as usize,
@@ -551,12 +590,9 @@ fn present_patch(
         at += impostors.len();
         let idx = b.idx / 4 + first as u32;
         // Its group's draws read the sun's map, so they stand within the patch's box grown by
-        // as far as the group's models reach at their most scale, in the world.
-        let e = extent * most;
-        let stand = Stand::of(
-            [x0 - e, y0 - e, zlo - e],
-            [x0 + b.side + e, y0 + b.side + e, zhi + e],
-        );
+        // as far as the group's models reach at their most scale, in the world, at every
+        // drift the stood corner holds: a cell back from it (`stood_corner`).
+        let stand = patch_stand(b.stood, b.side, extent * most, [zlo, zhi]);
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -564,6 +600,7 @@ fn present_patch(
                 PIPELINE_DECOR
             };
             draw.draw_instances(
+                model_id,
                 pipeline,
                 b.handle,
                 group,
@@ -571,11 +608,13 @@ fn present_patch(
                 [off, cnt, idx],
                 pos,
                 opacity,
+                true,
                 Some(stand),
             );
         }
         if !impostors.is_empty() {
             draw.draw_instances(
+                impostor_id,
                 PIPELINE_IMPOSTOR,
                 b.handle,
                 group,
@@ -583,6 +622,7 @@ fn present_patch(
                 [off, cnt, idx + models],
                 pos,
                 1.0,
+                true,
                 Some(stand),
             );
         }
@@ -590,9 +630,6 @@ fn present_patch(
     if changed {
         draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
-    // The patch's draws the scene bounds: the wind moves them, and each
-    // that changed marks where it was and where it is.
-    region::note_draw(b.handle);
 }
 
 #[cfg(test)]

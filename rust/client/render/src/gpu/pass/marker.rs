@@ -10,6 +10,7 @@ use crate::frame::draw::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::draw::Draws;
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
@@ -22,7 +23,7 @@ use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
-use crate::gpu::upload::{Draws, Uploads};
+use crate::gpu::upload::Uploads;
 use crate::look::marker::{
     bubble_box_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
     DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP,

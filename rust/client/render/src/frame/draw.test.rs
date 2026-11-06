@@ -151,18 +151,21 @@ fn finer_within_an_ulp() {
 /// rounding moves it.
 const R_HALF_ULP: f64 = 1.0 / (1u64 << 33) as f64;
 
-/// Two lists written alike compare alike, the i32 words read bit for bit, their stands
-/// with them.
+/// A draw set as it was is no change, its i32 words read bit for bit, and its stand is handed
+/// again; a draw that changed is one with what it was, one drawn first one with nothing, and
+/// one no longer set one let go, its slot drawn anew under another name.
 #[test]
-fn lists_alike() {
-    let mut a = DrawList::default();
-    let mut b = DrawList::default();
+fn a_draw_set_as_it_was_is_no_change() {
+    let _l = test_lists();
+    let mut d = DrawList::default();
+    let (marker, ghost, debug) = (DrawId::default(), DrawId::default(), DrawId::default());
+    // An i32 whose bits read as a NaN.
+    let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
     let box_at = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
-    for l in [&mut a, &mut b] {
-        // An i32 whose bits read as a NaN.
-        let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
-        l.draw_as(PIPELINE_MARKER, 3, 2, 0, at, 0.0, 1.0, None);
-        l.draw_in(
+    let turn = |d: &mut DrawList, stand: Stand, debug_at: Option<f64>| {
+        d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, 0.0, 1.0, None);
+        d.draw_in(
+            &ghost,
             PIPELINE_GHOST_BOX,
             4,
             1,
@@ -171,36 +174,123 @@ fn lists_alike() {
             0.5,
             1.0,
             0.25,
-            Some(box_at),
+            Some(stand),
+        );
+        if let Some(x) = debug_at {
+            d.draw_as(
+                &debug,
+                PIPELINE_DEBUG,
+                5,
+                1,
+                0,
+                Position::of([x; 3]),
+                0.0,
+                1.0,
+                None,
+            );
+        }
+    };
+    turn(&mut d, box_at, None);
+    let l = d.take();
+    assert_eq!(l.changes.len(), 2, "both drawn first");
+    assert!(l.changes.iter().all(|c| c.was.is_none()));
+    turn(&mut d, box_at, None);
+    let l = d.take();
+    assert!(l.changes.is_empty() && !l.reordered);
+    assert_eq!(l.stands, &[box_at]);
+    let moved = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
+    turn(&mut d, moved, None);
+    let l = d.take();
+    assert!(l.changes.is_empty(), "a stand is no draw's");
+    assert_eq!(l.stands, &[moved], "a stand moved");
+    turn(&mut d, box_at, Some(0.0));
+    let l = d.take();
+    assert_eq!(l.changes.len(), 1);
+    let slot = l.changes[0].slot;
+    assert!(l.changes[0].was.is_none() && l.draws.now(slot).is_some());
+    turn(&mut d, box_at, Some(1.0));
+    let l = d.take();
+    let was = l.changes[0]
+        .was
+        .map(|(r, u)| (r[0], Position::in_uniform(&u)));
+    assert_eq!(
+        (l.changes.len(), was),
+        (1, Some((5, Position::of([0.0; 3]))))
+    );
+    turn(&mut d, box_at, None);
+    let l = d.take();
+    assert_eq!(l.changes.len(), 1);
+    assert!(
+        l.changes[0].was.is_some() && l.draws.now(slot).is_none(),
+        "let go"
+    );
+    assert_eq!(l.draws.of(PIPELINE_DEBUG).len(), 0);
+    turn(&mut d, box_at, Some(1.0));
+    let l = d.take();
+    assert_eq!(l.changes.len(), 1);
+    assert!(l.changes[0].was.is_none(), "drawn anew");
+}
+
+/// Each pipeline's draws are drawn in the order the turn set them, a draw set in another
+/// order said so, and a pipeline changed moves the draw into the other's.
+#[test]
+fn draws_keep_the_order_they_are_set_in() {
+    let _l = test_lists();
+    let mut d = DrawList::default();
+    let ids: Vec<DrawId> = (0..3).map(|_| DrawId::default()).collect();
+    let set = |d: &mut DrawList, order: &[usize], pipeline: [u32; 3]| {
+        for &k in order {
+            d.draw_as(
+                &ids[k],
+                pipeline[k],
+                k as u32 + 1,
+                0,
+                0,
+                Position::NONE,
+                0.0,
+                1.0,
+                None,
+            );
+        }
+    };
+    let handles = |l: &Lists, p: u32| l.draws.of(p).map(|r| r[0]).collect::<Vec<_>>();
+    let m = PIPELINE_MARKER;
+    set(&mut d, &[0, 1, 2], [m; 3]);
+    let l = d.take();
+    assert_eq!(handles(&l, m), [1, 2, 3]);
+    set(&mut d, &[2, 0, 1], [m; 3]);
+    let l = d.take();
+    assert_eq!(handles(&l, m), [3, 1, 2]);
+    assert!(l.changes.is_empty() && l.reordered);
+    set(&mut d, &[2, 0, 1], [m, PIPELINE_DEBUG, m]);
+    let l = d.take();
+    assert_eq!(
+        (handles(&l, m), handles(&l, PIPELINE_DEBUG)),
+        (vec![3, 1], vec![2])
+    );
+    assert_eq!(l.changes.len(), 1);
+}
+
+/// A draw set twice in a turn is refused.
+#[test]
+#[should_panic]
+fn a_draw_set_twice_is_refused() {
+    let _l = test_lists();
+    let mut d = DrawList::default();
+    let id = DrawId::default();
+    for _ in 0..2 {
+        d.draw_as(
+            &id,
+            PIPELINE_MARKER,
+            1,
+            0,
+            0,
+            Position::NONE,
+            0.0,
+            1.0,
+            None,
         );
     }
-    assert!(a.same_draws(&b));
-    let mut c = DrawList::default();
-    c.draw_as(
-        PIPELINE_MARKER,
-        3,
-        2,
-        0,
-        Position::of([q3::to_real(-1), 5.5, 1.0e-3]),
-        0.0,
-        1.0,
-        None,
-    );
-    let moved = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
-    let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
-    c.draw_in(PIPELINE_GHOST_BOX, 4, 1, 0, at, 0.5, 1.0, 0.25, Some(moved));
-    assert!(!a.same_draws(&c), "a stand moved");
-    b.draw_as(
-        PIPELINE_DEBUG,
-        5,
-        1,
-        0,
-        Position::of([0.0; 3]),
-        0.0,
-        1.0,
-        None,
-    );
-    assert!(!a.same_draws(&b));
 }
 
 /// The draws that read the shadow map are the lit ones: decor, its ghost and impostor, the
@@ -230,9 +320,11 @@ fn every_lit_draw_stands_its_box() {
     let mut d = DrawList::default();
     let n = light::STANDS + 5;
     let unit = |v: usize| (v as i64 * ONE) as i32;
-    for k in 0..n {
+    let ids: Vec<DrawId> = (0..=n).map(|_| DrawId::default()).collect();
+    for (k, id) in ids.iter().enumerate().take(n) {
         let v = k as f64;
         d.draw_as(
+            id,
             PIPELINE_LOCATION_BEACON,
             0,
             0,
@@ -243,7 +335,17 @@ fn every_lit_draw_stands_its_box() {
             Some(Stand::of([v; 3], [v + 1.0; 3])),
         );
     }
-    d.draw_as(PIPELINE_MARKER, 0, 0, 0, Position::NONE, 0.0, 1.0, None);
+    d.draw_as(
+        &ids[n],
+        PIPELINE_MARKER,
+        0,
+        0,
+        0,
+        Position::NONE,
+        0.0,
+        1.0,
+        None,
+    );
     assert_eq!(d.stands.len(), light::STANDS);
     let last = d.stands[light::STANDS - 1];
     assert_eq!(last, Stand([[unit(light::STANDS - 1); 3], [unit(n); 3]]));
@@ -262,6 +364,48 @@ fn boxes_held_across_the_seam() {
     let [lo, hi] = s.from_eye([i32::MAX - 10, 0, 0]);
     assert_eq!(lo, [0.0, -3.0 / 256.0, 0.0]);
     assert_eq!(hi, [20.0 / 256.0, 4.0 / 256.0, 8.0 / 256.0]);
+}
+
+/// A cloud's draw at its place on the field's map, moved back by the drift as the shaders
+/// move it (`drifted`, instance.wgsl `draw_translation`), stands from the eye where the place
+/// as the drift leaves it does, within an ulp and the remainder's own rounding, across X's
+/// seam too; one that does not drift is not moved.
+#[test]
+fn a_drifted_cloud_stands_where_the_drift_leaves_it() {
+    let mut n = Noise(0x3c6e_f372_fe94_f82b);
+    for _ in 0..100_000 {
+        let at = [n.about(ROUND), n.about(4.0e6), 0.0];
+        let off = [n.next() * 1.0e5, n.next() * 4.0e4, 0.0];
+        let eye = [
+            at[0] - off[0] + n.about(DRAW_DIST),
+            at[1] - off[1] + n.about(DRAW_DIST),
+            0.0,
+        ];
+        let p = Position::of(at);
+        let mut u = [0.0f32; DRAW_FLOATS];
+        u[..3].copy_from_slice(&p.q_words());
+        u[8..11].copy_from_slice(&p.r);
+        u[7] = 1.0;
+        drifted(&mut u, Position::of(off));
+        assert_eq!(u[7], 0.0);
+        let got = Position::in_uniform(&u).from_eye(q3_of(eye));
+        let want = Position::of([at[0] - off[0], at[1] - off[1], 0.0]).from_eye(q3_of(eye));
+        for k in 0..2 {
+            let slack = 2.0 * f32::EPSILON * want[k].abs() + 4.0 / 256.0 * f32::EPSILON;
+            assert!(
+                (got[k] - want[k]).abs() <= slack,
+                "{at:?} off {off:?}: {got:?} {want:?}"
+            );
+        }
+    }
+    let mut u = [1.0f32; DRAW_FLOATS];
+    u[7] = 0.0;
+    drifted(&mut u, Position::of([3.0, 4.0, 0.0]));
+    assert_eq!(u, {
+        let mut w = [1.0f32; DRAW_FLOATS];
+        w[7] = 0.0;
+        w
+    });
 }
 
 /// A ball's box holds the ball decor_ball.wgsl draws a receiver by.
@@ -311,6 +455,7 @@ fn a_stand_from_the_eye_holds_its_box() {
 fn a_lit_draw_without_its_box_is_refused() {
     let mut d = DrawList::default();
     d.draw_as(
+        &DrawId::default(),
         PIPELINE_LOCATION_BEACON,
         0,
         0,

@@ -66,46 +66,51 @@ impl Read {
     }
 }
 
-/// A buffer's bytes as they were last written to the device, so a frame
-/// writes again only the records that changed.
+/// Whether a buffer of `unit`-byte slots holds what was last written to it,
+/// so a frame writes again only the slots its writer says changed.
 #[derive(Default)]
 pub(crate) struct Written {
-    bytes: Vec<u8>,
     held: bool,
+    /// The changed slots, sorted, kept for their room.
+    slots: Vec<u32>,
 }
 
 impl Written {
     /// `now` written over `buf` from 0: where the buffer holds what was last
-    /// written, only the runs of `unit`-byte records that differ and the
-    /// bytes past what was written; else, or where those runs do not fit
-    /// the stream, the whole of it, one record however large. Whether
-    /// anything was written.
-    pub(crate) fn write(&mut self, g: &Gpu, buf: u32, now: &[u8], unit: usize) -> bool {
-        if self.held && self.bytes == now {
-            return false;
-        }
+    /// written, only the runs of the `unit`-byte slots `changed` names that
+    /// `now` holds; else, or where those runs do not fit the stream, the
+    /// whole of it, one record however large. Whether anything was written.
+    pub(crate) fn write(
+        &mut self,
+        g: &Gpu,
+        buf: u32,
+        now: &[u8],
+        unit: usize,
+        changed: impl Iterator<Item = u32>,
+    ) -> bool {
         if self.held {
-            let common = self.bytes.len().min(now.len());
-            let tail = (common < now.len()).then_some((common, now.len()));
-            let changed = || runs(&self.bytes[..common], &now[..common], unit).chain(tail);
-            let need: usize = changed().map(|(a, b)| write_buffer_bytes(&now[a..b])).sum();
+            let n = (now.len() / unit) as u32;
+            self.slots.clear();
+            self.slots.extend(changed.filter(|&s| s < n));
+            self.slots.sort_unstable();
+            self.slots.dedup();
+            if self.slots.is_empty() {
+                return false;
+            }
+            let need: usize = runs(&self.slots)
+                .map(|(a, b)| write_buffer_bytes(&now[a as usize * unit..b as usize * unit]))
+                .sum();
             if room(need) {
-                for (a, b) in changed() {
+                for (a, b) in runs(&self.slots) {
+                    let (a, b) = (a as usize * unit, b as usize * unit);
                     g.write_buf(buf, a as u32, &now[a..b]);
                 }
-                self.keep(now);
                 return true;
             }
         }
         g.upload_buf(buf, 0, now);
-        self.keep(now);
-        true
-    }
-
-    fn keep(&mut self, now: &[u8]) {
-        self.bytes.clear();
-        self.bytes.extend_from_slice(now);
         self.held = true;
+        true
     }
 
     /// The buffer no longer holds what was written: the next write is whole.
@@ -114,30 +119,17 @@ impl Written {
     }
 }
 
-/// The byte ranges of the `unit`-byte records `was` and `now` differ in,
-/// records next to each other one range.
-fn runs<'a>(
-    was: &'a [u8],
-    now: &'a [u8],
-    unit: usize,
-) -> impl Iterator<Item = (usize, usize)> + 'a {
-    let n = now.len().div_ceil(unit);
-    let differs = move |k: usize| {
-        let (a, b) = (k * unit, ((k + 1) * unit).min(now.len()));
-        was[a..b] != now[a..b]
-    };
+/// The runs of sorted `slots`, each from its first to past its last.
+fn runs(slots: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
     let mut k = 0;
     core::iter::from_fn(move || {
-        while k < n && !differs(k) {
+        let first = *slots.get(k)?;
+        let mut end = first + 1;
+        k += 1;
+        while slots.get(k) == Some(&end) {
+            end += 1;
             k += 1;
         }
-        if k == n {
-            return None;
-        }
-        let first = k;
-        while k < n && differs(k) {
-            k += 1;
-        }
-        Some((first * unit, (k * unit).min(now.len())))
+        Some((first, end))
     })
 }

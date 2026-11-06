@@ -13,10 +13,13 @@ struct VertexOut {
   @location(5) @interpolate(flat) fill: vec3f,
   @location(6) @interpolate(flat) sun: vec3f,
   @location(7) @interpolate(flat) other: vec3f,
+  // The draw's, which the fragment reads no draw for.
+  @location(8) @interpolate(flat) opacity: f32,
 };
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
+  draw_at(v.instance);
   let m = skin_of(v);
   let world = skinned_world(v, m);
   let n = (m * vec4f(v.normal, 0.0)).xyz;
@@ -32,6 +35,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.sun = l.sun;
   o.other = l.other;
   o.fill = l.fill;
+  o.opacity = draw_opacity();
   return o;
 }
 
@@ -40,5 +44,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
   let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered), Light(i.sun, i.other, i.fill));
-  return vec4f(tone(color), draw_opacity());
+  return vec4f(tone(color), i.opacity);
 }

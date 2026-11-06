@@ -6,7 +6,7 @@
 //! tiles it covers where it was and where it is (gpu/pass/mark.rs), its
 //! instances the upload it reads.
 
-use crate::frame::draw::uniform_of;
+use crate::frame::draw::{uniform_of, Draw};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -18,7 +18,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
-use crate::gpu::pass::mark::{self, Marks, UploadCopies};
+use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
@@ -55,7 +55,7 @@ pub struct ImpostorPass {
 
 /// A mark's uniform, as the draw's (`put_instances`), its atlas layer its
 /// group's.
-fn put_mark(buf: &mut [u8], (d, u): &mark::Draw) {
+fn put_mark(buf: &mut [u8], (d, u): &Draw) {
     put_instances(buf, u, d[1]);
 }
 
@@ -125,24 +125,22 @@ impl ImpostorPass {
                 pipelines,
                 PIPELINE_IMPOSTOR_MARK,
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
         }
     }
 
     /// The marks this frame of the listed draws (gpu/pass/mark.rs
     /// `Marks::prepare`). Whether any.
-    pub fn prepare_marks<'a>(
+    pub fn prepare_marks(
         &mut self,
         g: &Gpu,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-        touched: &[u32],
+        m: &MarkInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> bool {
         self.marks
-            .prepare(g, draws, uniforms, touched, uploads, last_frame_uploads)
+            .prepare(g, &[PIPELINE_IMPOSTOR], m, uploads, last_frame_uploads)
     }
 
     /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
@@ -166,16 +164,6 @@ impl ImpostorPass {
         out: &mut Vec<u32>,
     ) {
         self.marks.reads(draws, out);
-    }
-
-    /// What this frame listed of `draws` kept for the next's marks where it
-    /// was.
-    pub fn keep<'a>(
-        &mut self,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-    ) {
-        self.marks.keep(draws, uniforms);
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {

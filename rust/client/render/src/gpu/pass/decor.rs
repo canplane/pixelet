@@ -11,16 +11,17 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 
+use crate::frame::draw::{Draw, Draws};
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::mark::{self, Marks, UploadCopies};
+use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
     ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::{Draws, Uploads};
+use crate::gpu::upload::Uploads;
 use pxl_content::generation;
 
 const _: () = assert!(
@@ -41,7 +42,7 @@ pub struct DecorPass {
 }
 
 /// A mark's uniform, as the draw's (`put_instances`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
+fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     put_instances(buf, u, 0);
 }
 
@@ -63,14 +64,14 @@ impl DecorPass {
                 pipelines,
                 PIPELINE_DECOR_MARK,
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
             ghost_marks: Marks::new(
                 g,
                 pipelines,
                 PIPELINE_DECOR_MARK,
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
         }
     }
@@ -81,20 +82,16 @@ impl DecorPass {
     pub fn prepare_marks(
         &mut self,
         g: &Gpu,
-        draws: &Draws,
-        uniforms: &[f32],
-        touched: &[u32],
+        m: &MarkInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> (bool, bool) {
-        let opaque = draws.of(PIPELINE_DECOR);
         let casts = self
             .marks
-            .prepare(g, opaque, uniforms, touched, uploads, last_frame_uploads);
-        let ghost = draws.of(PIPELINE_GHOST_DECOR);
+            .prepare(g, &[PIPELINE_DECOR], m, uploads, last_frame_uploads);
         let blended =
             self.ghost_marks
-                .prepare(g, ghost, uniforms, touched, uploads, last_frame_uploads);
+                .prepare(g, &[PIPELINE_GHOST_DECOR], m, uploads, last_frame_uploads);
         (casts || blended, casts)
     }
 
@@ -131,13 +128,6 @@ impl DecorPass {
     pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
         self.marks.reads(draws.of(PIPELINE_DECOR), out);
         self.ghost_marks.reads(draws.of(PIPELINE_GHOST_DECOR), out);
-    }
-
-    /// What this frame listed kept for the next's marks where it was.
-    pub fn keep(&mut self, draws: &Draws, uniforms: &[f32]) {
-        self.marks.keep(draws.of(PIPELINE_DECOR), uniforms);
-        self.ghost_marks
-            .keep(draws.of(PIPELINE_GHOST_DECOR), uniforms);
     }
 
     pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {

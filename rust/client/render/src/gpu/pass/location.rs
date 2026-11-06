@@ -7,13 +7,14 @@
 use crate::frame::draw::{
     uniform_of, DRAW_WORDS, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
 };
+use crate::frame::draw::{Draw, Draws};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
-use crate::gpu::pass::mark::{self, Marks, UploadCopies};
+use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::{buf_size, Draws, Uploads};
+use crate::gpu::upload::{buf_size, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::location::beacon;
@@ -97,7 +98,7 @@ pub struct LocationPass {
 
 /// A mark's uniform: the draw's position and turn, where the lit pass reads
 /// them (location.wgsl `Draw`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
+fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
         u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0, u[8], u[9], u[10], 0.0,
     ]));
@@ -138,14 +139,14 @@ impl LocationPass {
                 pipelines,
                 PIPELINE_LOCATION_ZONE_MARK,
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |d| d[1] > 0),
             ),
             beacon_marks: Marks::new(
                 g,
                 pipelines,
                 PIPELINE_LOCATION_BEACON_MARK,
                 align,
-                (|_| 0, put_mark),
+                (|_| 0, put_mark, |_| true),
             ),
         }
     }
@@ -155,24 +156,20 @@ impl LocationPass {
     pub fn prepare_marks(
         &mut self,
         g: &Gpu,
-        draws: &Draws,
-        uniforms: &[f32],
-        touched: &[u32],
+        m: &MarkInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> bool {
-        let zones = self.zone_marks.prepare(
+        let zones =
+            self.zone_marks
+                .prepare(g, &[PIPELINE_LOCATION_ZONE], m, uploads, last_frame_uploads);
+        let beacon = self.beacon_marks.prepare(
             g,
-            zones(draws),
-            uniforms,
-            touched,
+            &[PIPELINE_LOCATION_BEACON],
+            m,
             uploads,
             last_frame_uploads,
         );
-        let beacons = draws.of(PIPELINE_LOCATION_BEACON);
-        let beacon =
-            self.beacon_marks
-                .prepare(g, beacons, uniforms, touched, uploads, last_frame_uploads);
         zones || beacon
     }
 
@@ -199,13 +196,6 @@ impl LocationPass {
         self.zone_marks.reads(zones(draws), out);
         self.beacon_marks
             .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
-    }
-
-    /// What this frame listed kept for the next's marks where it was.
-    pub fn keep(&mut self, draws: &Draws, uniforms: &[f32]) {
-        self.zone_marks.keep(zones(draws), uniforms);
-        self.beacon_marks
-            .keep(draws.of(PIPELINE_LOCATION_BEACON), uniforms);
     }
 
     /// Each draw's uniform in a slot of its own, written once before the

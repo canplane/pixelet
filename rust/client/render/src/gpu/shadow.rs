@@ -32,7 +32,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
-use crate::frame::shader::word::frame::{EYE, VIEW_PROJ};
+use crate::frame::shader::word::frame::{DRIFT_Q, EYE, VIEW_PROJ};
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
@@ -475,6 +475,13 @@ impl Shadow {
     /// light takes its position against the same eye (frame.wgsl `from_eye`).
     pub fn put_eye(&mut self, eye: [f32; 3]) {
         self.light[EYE..EYE + 3].copy_from_slice(&eye);
+    }
+
+    /// The wind's drift in the light's frame, as in the eye's: a cloud drawn
+    /// from the light is moved back by the same drift (instance.wgsl
+    /// `draw_translation`).
+    pub fn put_drift(&mut self, drift: &[f32]) {
+        self.light[DRIFT_Q..DRIFT_Q + 4].copy_from_slice(drift);
     }
 
     pub fn write(&self, g: &Gpu) {

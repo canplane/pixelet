@@ -543,6 +543,14 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
+/// The list's uniforms by slot, read only, which an actor's draw reads at the
+/// slot its first instance names (skinned_draw.slot.wgsl): one group a pass,
+/// the renderer's (gpu/pass/skinned_mesh.rs `SkinnedPass::set_draws`).
+const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
+/// An actor's, lit and its depth from the light, as a model's but its draw
+/// read off the list's uniforms (`DRAWS`).
+const SKINNED_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAWS, &SKIN, &UPLOAD];
+const SKINNED_DEPTH_GROUPS: [Group; 4] = [FRAME, &DRAWS, &SKIN, &UPLOAD];
 /// A draw's mark (tile_mark.wgsl): the eye's frame or the light's, the
 /// tiles' words, their uniform and the box of the tiles the frame's marks
 /// cover in group 0; the rest as its depth reads them.
@@ -622,7 +630,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_SKINNED => Descriptor::new(
             lit(SHADER_SKINNED, CULL_BACK),
             &SKINNED_BUFFERS,
-            &MODEL_GROUPS,
+            &SKINNED_GROUPS,
         ),
         PIPELINE_LOCATION_ZONE => Descriptor::new(
             blended(SHADER_LOCATION_ZONE, CULL_NONE),
@@ -707,9 +715,11 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_BUFFERS, &DEPTH_GROUPS)
         }
-        PIPELINE_SKINNED_DEPTH => {
-            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_BUFFERS, &DEPTH_GROUPS)
-        }
+        PIPELINE_SKINNED_DEPTH => Descriptor::new(
+            depth_only(SHADER_SKINNED),
+            &SKINNED_BUFFERS,
+            &SKINNED_DEPTH_GROUPS,
+        ),
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
         PIPELINE_SKINNED_MARK => {

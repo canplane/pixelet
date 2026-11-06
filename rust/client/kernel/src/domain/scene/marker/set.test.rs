@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::sys;
-use pxl_render::frame::draw::{lists_bytes, set_lists, DRAW_WORDS};
+use pxl_render::frame::draw::{lists_bytes, set_lists};
 use pxl_render::gpu::atlas::shelf::Paint;
 use xpute_guest::mem::heap::alloc;
 
@@ -10,7 +10,7 @@ use xpute_guest::mem::heap::alloc;
 /// seam and words whose bits read as a NaN among them, and nothing of the
 /// eye: the same markers lay the same words, and the set draws the same
 /// record, wherever the eye is, so an eye that moves rewrites no instance
-/// and writes no draw (pxl-render gpu/read.rs `Written`).
+/// and changes no draw (pxl-render frame/draw.rs `Change`).
 #[test]
 fn a_marker_is_where_it_stands() {
     let _g = sys::serial();
@@ -41,13 +41,13 @@ fn a_marker_is_where_it_stands() {
     let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
     // SAFETY: a block of the heap's, the lists' alone for the test's run.
     unsafe { set_lists(at, LIVE) };
-    let (mut a, mut b) = (DrawList::default(), DrawList::default());
+    let mut list = DrawList::default();
     let mut set = Set::default();
-    set.write(&mut a, &was);
-    for list in [&mut a, &mut b] {
-        list.begin_frame();
-        set.draw(list);
-    }
-    assert!(a.same_draws(&b));
-    assert_eq!(a.take().draws.len(), DRAW_WORDS, "the set is drawn");
+    set.write(&mut list, &was);
+    set.draw(&mut list);
+    let l = list.take();
+    assert_eq!(l.draws.of(PIPELINE_MARKER).len(), 1, "the set is drawn");
+    assert_eq!(l.changes.len(), 1);
+    set.draw(&mut list);
+    assert!(list.take().changes.is_empty(), "drawn again as it was");
 }

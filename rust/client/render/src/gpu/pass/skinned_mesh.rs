@@ -1,26 +1,30 @@
 // pxl-render/gpu/pass/skinned_mesh.rs
 
 //! Actors: each model's mesh upload skinned by each actor's joint palette. A
-//! case of the variant picker draws one actor in a pass of its own. An actor
-//! whose draw changed marks the tiles it covers where it was and where it is
+//! case of the variant picker draws one actor in a pass of its own. An actor's
+//! vertices read its draw off the list's uniforms at its slot. An actor whose
+//! draw changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its palette the upload it reads.
 
-use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
 
-use crate::gpu::api::{bytes, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass};
-use crate::gpu::pass::mark::{Draw, Marks, UploadCopies};
-use crate::gpu::pass::model::{
-    draw_model, draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
+use crate::frame::draw::Draw;
+use crate::gpu::api::{
+    buf_entry, bytes, release, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass,
 };
+use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
+use crate::gpu::pass::model::{bind_mesh, draw_model, skin_group, skin_made, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 pub struct SkinnedPass {
     lit: Pipeline,
     depth: Pipeline,
-    uniforms: DrawUniforms,
+    /// The list's uniforms as the lit pass and the depth pass bind them, and
+    /// their buffer (`set_draws`).
+    draws: [u32; 2],
+    draws_buf: u32,
     /// Each model's skin image, as the frame hands them.
     skins: Vec<(u32, Image)>,
     marks: Marks,
@@ -42,31 +46,30 @@ impl SkinnedPass {
                 Format::depth32float,
                 Stencil::Gated,
             ),
-            uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            draws: [0; 2],
+            draws_buf: 0,
             skins: Vec::new(),
             marks: Marks::new(
                 g,
                 pipelines,
                 PIPELINE_SKINNED_MARK,
                 align,
-                (|d| d[1], put_mark),
+                (|d| d[1], put_mark, |_| true),
             ),
         }
     }
 
     /// The marks this frame of `draws` (gpu/pass/mark.rs `Marks::prepare`),
     /// each reading its palette. Whether any.
-    pub fn prepare_marks<'a>(
+    pub fn prepare_marks(
         &mut self,
         g: &Gpu,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-        touched: &[u32],
+        m: &MarkInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> bool {
         self.marks
-            .prepare(g, draws, uniforms, touched, uploads, last_frame_uploads)
+            .prepare(g, &[PIPELINE_SKINNED], m, uploads, last_frame_uploads)
     }
 
     /// Group 0's layout of the marks (tile_mark.wgsl).
@@ -100,16 +103,6 @@ impl SkinnedPass {
         self.marks.reads(draws, out);
     }
 
-    /// What this frame drew of `draws` kept for the next's marks where it
-    /// was.
-    pub fn keep<'a>(
-        &mut self,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-    ) {
-        self.marks.keep(draws, uniforms);
-    }
-
     pub fn set_skins(&mut self, skins: &[(u32, Image)]) {
         self.skins.clear();
         self.skins.extend_from_slice(skins);
@@ -122,30 +115,31 @@ impl SkinnedPass {
             .map(|&(_, image)| image)
     }
 
+    /// The list's uniforms, the buffer `buf`, as the lit pass and the depth
+    /// pass bind them in group 1, made again only where the buffer is
+    /// another; before the frame's commands, as a group made in a frame
+    /// dropped would be gone.
+    pub fn set_draws(&mut self, g: &Gpu, buf: u32) {
+        if buf == self.draws_buf {
+            return;
+        }
+        for group in self.draws {
+            release(group);
+        }
+        let layouts = [self.lit.layouts[1], self.depth.layouts[1]];
+        self.draws = layouts.map(|l| g.bind_group(l, &[buf_entry(0, buf)]));
+        self.draws_buf = buf;
+    }
+
     /// Every palette and skin group the draws will bind is made here, so
     /// drawing makes nothing that outlives its frame; a skin whose image
     /// lands later is drawn on a later frame.
-    /// `moved` whether the lists the draws are made from moved.
     pub fn prepare<'a>(
         &mut self,
         g: &Gpu,
-        draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone,
-        uniforms: &[f32],
-        moved: bool,
+        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         uploads: &mut Uploads,
     ) {
-        self.uniforms.write(
-            g,
-            self.lit.layouts[1],
-            draws.len() as u32,
-            draws.clone(),
-            moved,
-            |buf, d| {
-                // Its position's Q3, turn about Z, opacity, scale, padding,
-                // its position's remainder (skinned_place.wgsl `Draw`).
-                buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
-            },
-        );
         for d in draws {
             uploads.group(g, d[1]);
             if let Some(image) = self.image_of(d[2]) {
@@ -155,7 +149,10 @@ impl SkinnedPass {
     }
 
     /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
-    /// 0 the stage reads.
+    /// 0 the stage reads: the list's uniforms bound once (`set_draws`), and
+    /// each actor drawn as the instance its slot names, which its vertices
+    /// read their draw at (skinned_draw.slot.wgsl), with its own mesh, skin and
+    /// palette.
     pub fn draw<'a>(
         &self,
         pass: &mut TrackedRenderPass,
@@ -164,26 +161,35 @@ impl SkinnedPass {
         stage: Stage,
         frame: u32,
     ) {
-        let Some(slots) = self.uniforms.slots() else {
+        let (pipeline, group) = match stage {
+            Stage::Depth => (self.depth.id, self.draws[1]),
+            _ => (self.lit.id, self.draws[0]),
+        };
+        if group == 0 {
             return;
-        };
-        let pipeline = match stage {
-            Stage::Depth => self.depth.id,
-            _ => self.lit.id,
-        };
-        draw_models(pass, &self.lit, pipeline, frame, slots, draws, |d| {
-            let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;
-            let skin = skin_made(self.image_of(d[2])?.0)?;
-            Some(ModelDraw {
-                groups: [skin, uploads.group_of(d[1])?],
-                mesh: Some((mesh, vertex_cnt, idx_cnt)),
-                instances: 1,
-            })
-        });
+        }
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(1, group, &[]);
+        for d in draws {
+            let Some((mesh, vertex_cnt, idx_cnt)) = uploads.get(d[0]) else {
+                continue;
+            };
+            let skin = self.image_of(d[2]).and_then(|i| skin_made(i.0));
+            let (Some(skin), Some(palette)) = (skin, uploads.group_of(d[1])) else {
+                continue;
+            };
+            pass.set_bind_group(2, skin, &[]);
+            pass.set_bind_group(3, palette, &[]);
+            bind_mesh(pass, &self.lit, mesh, vertex_cnt, idx_cnt);
+            pass.draw_indexed(idx_cnt, 1, 0, d[3]);
+        }
     }
 
     pub fn release(mut self) {
-        self.uniforms.release();
+        for group in self.draws {
+            release(group);
+        }
         self.marks.release();
     }
 }

@@ -175,8 +175,8 @@ pub fn stage_render(pace: Pace) {
         landed.set(true);
         clipmap::on_filled(b, ticket, filled);
     };
-    // The draws the scene bounds, and whether what it animates stepped.
-    let (bounded, animated) = region::take();
+    // Whether what the scene animates stepped.
+    let animated = region::take();
     let out = render_frame(FrameInput {
         lists,
         environment: &scene().environment.out,
@@ -212,7 +212,6 @@ pub fn stage_render(pace: Pace) {
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
-        bounded_draws: bounded,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a
@@ -313,7 +312,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         let (scene, list) = (scene(), draw_list());
         let models = model::models();
         let animating = scene.tick(list, models, &frame);
-        scene.begin(list, models);
+        scene.draw(list, models);
         animating
     });
     {

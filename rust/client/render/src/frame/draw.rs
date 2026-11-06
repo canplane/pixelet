@@ -2,7 +2,10 @@
 
 //! Draw lists the kernel fills and the renderer executes without deciding.
 //! A free cancels its block's pending upload and rewrites: the block may be
-//! reused before the list runs.
+//! reused before the list runs. The draws are kept from turn to turn, each
+//! at its slot, and what a turn changed of them is handed with them.
+
+use core::cell::Cell;
 
 use crate::frame::shader::record::reads_shadow_map;
 use crate::frame::shader::word::DRAW_FLOATS;
@@ -19,11 +22,32 @@ use xpute_kit::status::errno::Errno;
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
-/// Draw record: handle, two pipeline-specific words, uniform index, pipeline.
+/// Draw record: handle, two pipeline-specific words, the slot its uniform
+/// lies at, pipeline.
 pub const DRAW_WORDS: usize = 5;
 
 pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
     &uniforms[d[3] as usize * DRAW_FLOATS..][..DRAW_FLOATS]
+}
+
+/// Whether a draw's uniform says it drifts with the wind
+/// (`DrawList::draw_instances`).
+pub fn drifts(u: &[f32]) -> bool {
+    u[7] != 0.0
+}
+
+/// A draw's uniform `u` with the wind's drift `drift` taken into its position,
+/// where it drifts, as instance.wgsl `draw_translation` takes it: Q3 from Q3,
+/// remainder from remainder, X and Y. Then it says it drifts no more, so a
+/// shader reading it moves it by no frame's drift.
+pub fn drifted(u: &mut [f32], drift: Position) {
+    if drifts(u) {
+        for k in 0..2 {
+            u[k] = f32::from_bits((u[k].to_bits() as i32).wrapping_sub(drift.q[k]) as u32);
+            u[8 + k] -= drift.r[k];
+        }
+        u[7] = 0.0;
+    }
 }
 
 /// Where a draw stands in the world, free of the eye: its Q3, and the f32
@@ -207,6 +231,47 @@ pub unsafe fn set_lists(at: usize, live: usize) {
     });
 }
 
+/// A producer's name for its draw in the list, kept across turns: the slot
+/// its uniform lies at, and the slot's generation, which moves on as the slot
+/// is let go. None until it is first drawn; a name whose slot was let go is
+/// drawn anew in another.
+#[derive(Default, Debug)]
+pub struct DrawId(Cell<Option<(u32, u32)>>);
+
+/// A draw as the list holds it: its record and its uniform.
+pub type Draw = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
+
+/// A draw the turn changed: its slot, and what it was as the turn before
+/// left it, none where this turn drew it first. What it is now is the list's
+/// (`Draws::now`), none where this turn let it go.
+#[derive(Clone, Copy, Debug)]
+pub struct Change {
+    pub slot: u32,
+    pub was: Option<Draw>,
+}
+
+/// The pipeline of a slot no draw holds.
+const FREE: u32 = u32::MAX;
+
+#[derive(Clone, Copy)]
+pub struct Slot {
+    gen: u32,
+    /// Its draw's pipeline, `FREE` where it holds none.
+    pipeline: u32,
+    /// Its record's place among its pipeline's.
+    at: u32,
+    /// The turns its draw was last set in and last changed in.
+    set: u32,
+    changed: u32,
+    /// Whether the uniforms' other side lacks what this slot holds.
+    behind: bool,
+}
+
+/// The draws a turn sets, kept from turn to turn: each turn sets every draw
+/// it draws, by its producer's name (`DrawId`), and one it sets no longer is
+/// let go as the lists are taken. A draw set as it was is no change; what
+/// changed, with what it was, is the turn's changes (`Change`), all the
+/// renderer reads to tell what moved.
 #[derive(Default)]
 pub struct DrawList {
     /// The lists' side written, and how much of each is.
@@ -214,16 +279,38 @@ pub struct DrawList {
     uploads: usize,
     frees: usize,
     rewrites: Vec<u32>,
-    draws: Vec<u32>,
-    /// The frame's uniforms, written into whichever of the two the host
-    /// does not hold (gpu/api.rs `in_flight`): the renderer hands them where
-    /// they lie.
-    uniforms: Vec<f32>,
-    other_uniforms: Vec<f32>,
     next_handle: u32,
     taken: Vec<u32>,
-    /// The box each drawn thing that reads the shadow map stands within (`Stand`).
+    /// Each pipeline's records, those this turn set first, in the order it set
+    /// them, which is the order they are drawn in, and how many those are.
+    records: [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
+    set: [usize; DRAW_PIPELINES.len()],
+    slots: Vec<Slot>,
+    /// The slots let go, which a new draw takes first.
+    free_slots: Vec<u32>,
+    /// The uniforms by slot, `DRAW_FLOATS` a slot, written into whichever of
+    /// the two the host does not hold (gpu/api.rs `in_flight`): the renderer
+    /// hands them where they lie. The slots written since the other was last
+    /// written into are copied into it as it is taken (`behind`).
+    uniforms: Vec<f32>,
+    other_uniforms: Vec<f32>,
+    behind: Vec<u32>,
+    /// Whether this turn chose the side its uniforms are written into.
+    begun: bool,
+    /// The turn, and its changes so far, and those `take` handed.
+    turn: u32,
+    changes: Vec<Change>,
+    taken_changes: Vec<Change>,
+    /// Whether a record moved in its pipeline's order this turn, and in the
+    /// turn `take` handed.
+    reordered: bool,
+    taken_reordered: bool,
+    /// The draws that drift with the wind.
+    drifting: u32,
+    /// The box each drawn thing that reads the shadow map stands within
+    /// (`Stand`), as this turn set them, and as `take` handed them.
     stands: Vec<Stand>,
+    taken_stands: Vec<Stand>,
 }
 
 /// The box a drawn thing that reads the shadow map stands within, in the world, free of the
@@ -297,12 +384,63 @@ pub struct Lists<'a> {
     pub uploads: &'a [u32],
     pub rewrites: &'a [u32],
     pub frees: &'a [u32],
-    pub draws: &'a [u32],
-    /// Handed where they lie (`DrawList::begin_frame`).
-    pub uniforms: &'a [f32],
+    pub draws: Draws<'a>,
+    /// What the turn changed of the draws (`Change`), and whether it drew any
+    /// in another order.
+    pub changes: &'a [Change],
+    pub reordered: bool,
     /// The box each drawn thing that reads the shadow map stands within, as its draw is
-    /// recorded (`Stand`).
+    /// set (`Stand`).
     pub stands: &'a [Stand],
+}
+
+/// The draws as a turn left them: each pipeline's records in the order they
+/// are drawn, a record's uniform at its slot (`uniform_of`), handed where they
+/// lie.
+#[derive(Clone, Copy)]
+pub struct Draws<'a> {
+    records: &'a [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
+    slots: &'a [Slot],
+    pub uniforms: &'a [f32],
+    turn: u32,
+    drifting: u32,
+}
+
+impl<'a> Draws<'a> {
+    pub fn of(&self, pipeline: u32) -> core::slice::Iter<'a, [u32; DRAW_WORDS]> {
+        self.records
+            .get(pipeline as usize)
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+    }
+
+    pub fn all(&self) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + 'a {
+        self.records.iter().flatten()
+    }
+
+    /// The draw at `slot`; none where none is.
+    pub fn now(&self, slot: u32) -> Option<Draw> {
+        let s = self
+            .slots
+            .get(slot as usize)
+            .filter(|s| s.pipeline != FREE)?;
+        let d = self.records[s.pipeline as usize][s.at as usize];
+        let mut u = [0.0; DRAW_FLOATS];
+        u.copy_from_slice(uniform_of(self.uniforms, &d));
+        Some((d, u))
+    }
+
+    /// Whether the turn changed the draw at `slot` (`Lists::changes`).
+    pub fn changed(&self, slot: u32) -> bool {
+        self.slots
+            .get(slot as usize)
+            .is_some_and(|s| s.changed == self.turn)
+    }
+
+    /// Whether any draw drifts with the wind.
+    pub fn drifting(&self) -> bool {
+        self.drifting > 0
+    }
 }
 
 impl DrawList {
@@ -373,15 +511,142 @@ impl DrawList {
         self.rewrites.extend_from_slice(&[handle, at, from, bytes]);
     }
 
-    pub fn begin_frame(&mut self) {
+    /// The side the turn writes its uniforms into: the other where the host
+    /// holds this one, the slots it lacks copied in first. One frame a hand-off
+    /// hands them, so the host holds one at most.
+    fn begin(&mut self) {
+        if self.begun {
+            return;
+        }
+        self.begun = true;
         if in_flight(&self.uniforms) {
             core::mem::swap(&mut self.uniforms, &mut self.other_uniforms);
+            if self.uniforms.len() < self.other_uniforms.len() {
+                self.uniforms.resize(self.other_uniforms.len(), 0.0);
+            }
+            for &slot in &self.behind {
+                let at = slot as usize * DRAW_FLOATS;
+                self.uniforms[at..at + DRAW_FLOATS]
+                    .copy_from_slice(&self.other_uniforms[at..at + DRAW_FLOATS]);
+                self.slots[slot as usize].behind = false;
+            }
+            self.behind.clear();
         }
-        // One frame a hand-off hands them, so the host holds one at most.
         xpute_kit::ensure!(!in_flight(&self.uniforms), EBUSY);
-        self.draws.clear();
-        self.uniforms.clear();
-        self.stands.clear();
+    }
+
+    fn write(&mut self, slot: u32, u: &[f32; DRAW_FLOATS]) {
+        self.begin();
+        let at = slot as usize * DRAW_FLOATS;
+        if self.uniforms.len() < at + DRAW_FLOATS {
+            self.uniforms.resize(at + DRAW_FLOATS, 0.0);
+        }
+        self.uniforms[at..at + DRAW_FLOATS].copy_from_slice(u);
+        let s = &mut self.slots[slot as usize];
+        if !s.behind {
+            s.behind = true;
+            self.behind.push(slot);
+        }
+    }
+
+    fn uniform(&self, slot: u32) -> [f32; DRAW_FLOATS] {
+        let mut u = [0.0; DRAW_FLOATS];
+        let at = slot as usize * DRAW_FLOATS;
+        u.copy_from_slice(&self.uniforms[at..at + DRAW_FLOATS]);
+        u
+    }
+
+    /// `slot` among the turn's changes, as it was before the turn changed it.
+    fn change(&mut self, slot: u32, was: Option<Draw>) {
+        let s = &mut self.slots[slot as usize];
+        if s.changed != self.turn {
+            s.changed = self.turn;
+            self.changes.push(Change { slot, was });
+        }
+    }
+
+    /// The slot `id` names, or a slot taken for it where it names none live.
+    fn slot_of(&mut self, id: &DrawId) -> u32 {
+        let live = id.0.get().filter(|&(slot, gen)| {
+            self.slots
+                .get(slot as usize)
+                .is_some_and(|s| s.gen == gen && s.pipeline != FREE)
+        });
+        if let Some((slot, _)) = live {
+            return slot;
+        }
+        let slot = self.free_slots.pop().unwrap_or_else(|| {
+            self.slots.push(Slot {
+                gen: 0,
+                pipeline: FREE,
+                at: 0,
+                set: u32::MAX,
+                changed: u32::MAX,
+                behind: false,
+            });
+            self.slots.len() as u32 - 1
+        });
+        id.0.set(Some((slot, self.slots[slot as usize].gen)));
+        slot
+    }
+
+    /// `slot`'s record out of its pipeline's, the last of them put in its
+    /// place: both lie past those the turn set.
+    fn unlist(&mut self, slot: u32) {
+        let s = self.slots[slot as usize];
+        let records = &mut self.records[s.pipeline as usize];
+        records.swap_remove(s.at as usize);
+        if let Some(moved) = records.get(s.at as usize) {
+            self.slots[moved[3] as usize].at = s.at;
+        }
+    }
+
+    /// The draw `id` names set to `record`'s first three words and the uniform
+    /// `u`, in `pipeline`, next in its order: a change where either differs
+    /// from what it was, bit for bit.
+    fn set(&mut self, id: &DrawId, pipeline: u32, words: [u32; 3], u: [f32; DRAW_FLOATS]) {
+        let p = pipeline as usize;
+        xpute_kit::ensure!(p < DRAW_PIPELINES.len(), EINVAL, pipeline);
+        let slot = self.slot_of(id);
+        let s = self.slots[slot as usize];
+        // A draw set twice in a turn would be drawn once, as the second says.
+        xpute_kit::ensure!(s.set != self.turn, EEXIST, slot);
+        self.slots[slot as usize].set = self.turn;
+        let record = [words[0], words[1], words[2], slot, pipeline];
+        let was = (s.pipeline != FREE).then(|| {
+            (
+                self.records[s.pipeline as usize][s.at as usize],
+                self.uniform(slot),
+            )
+        });
+        let same =
+            was.is_some_and(|(r, w)| r == record && w.map(f32::to_bits) == u.map(f32::to_bits));
+        if !same {
+            self.change(slot, was);
+            let was_drifts = was.is_some_and(|(_, w)| drifts(&w));
+            self.drifting = self.drifting + u32::from(drifts(&u)) - u32::from(was_drifts);
+            self.write(slot, &u);
+        }
+        if s.pipeline == pipeline {
+            self.records[p][s.at as usize] = record;
+        } else {
+            if s.pipeline != FREE {
+                self.unlist(slot);
+            }
+            self.records[p].push(record);
+            let s = &mut self.slots[slot as usize];
+            (s.pipeline, s.at) = (pipeline, self.records[p].len() as u32 - 1);
+        }
+        // Next in its pipeline's order: the record there, not set yet this
+        // turn, takes its place.
+        let (at, next) = (self.slots[slot as usize].at as usize, self.set[p]);
+        if at != next {
+            self.records[p].swap(at, next);
+            self.slots[self.records[p][at][3] as usize].at = at as u32;
+            self.slots[slot as usize].at = next as u32;
+            self.reordered = true;
+        }
+        self.set[p] += 1;
     }
 
     /// Where the draw of `pipeline` stands: the box `stand`, which every draw whose shader reads
@@ -401,26 +666,23 @@ impl DrawList {
         }
     }
 
-    /// Whether `other` lists the same draws with the same uniforms, bit for bit, and the same
-    /// stands: what the renderer writes of the one over the other is nothing (gpu/read.rs
-    /// `Written`), and the light's receivers read the same (gpu/ray/cast.rs).
-    pub fn same_draws(&self, other: &DrawList) -> bool {
-        let bits = |u: &[f32]| u.iter().map(|v| v.to_bits()).collect::<Vec<_>>();
-        self.draws == other.draws
-            && bits(&self.uniforms) == bits(&other.uniforms)
-            && self.stands == other.stands
-    }
-
-    /// A draw's uniform, its index: `at`'s Q3, the five words its pipeline
-    /// reads past it, and `at`'s remainder (`Position`).
-    fn put(&mut self, at: Position, words: [f32; 5]) -> u32 {
-        let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
+    /// A draw set: `at`'s Q3, the five words its pipeline reads past it, and
+    /// `at`'s remainder (`Position`) its uniform, and where it stands.
+    fn put(
+        &mut self,
+        id: &DrawId,
+        pipeline: u32,
+        record: [u32; 3],
+        at: Position,
+        words: [f32; 5],
+        stand: Option<Stand>,
+    ) {
+        self.stand(pipeline, stand);
         let [q0, q1, q2] = at.q_words();
         let [r0, r1, r2] = at.r;
         let [w3, w4, w5, w6, w7] = words;
-        self.uniforms
-            .extend_from_slice(&[q0, q1, q2, w3, w4, w5, w6, w7, r0, r1, r2, 0.0]);
-        uniform
+        let u = [q0, q1, q2, w3, w4, w5, w6, w7, r0, r1, r2, 0.0];
+        self.set(id, pipeline, record, u);
     }
 
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
@@ -430,6 +692,7 @@ impl DrawList {
     )]
     pub fn draw_scaled(
         &mut self,
+        id: &DrawId,
         pipeline: u32,
         handle: u32,
         a: u32,
@@ -440,10 +703,8 @@ impl DrawList {
         scale: f32,
         stand: Option<Stand>,
     ) {
-        self.stand(pipeline, stand);
-        let uniform = self.put(at, [fourth, opacity, scale, 0.0, 0.0]);
-        self.draws
-            .extend_from_slice(&[handle, a, b, uniform, pipeline]);
+        let words = [fourth, opacity, scale, 0.0, 0.0];
+        self.put(id, pipeline, [handle, a, b], at, words, stand);
     }
 
     #[expect(
@@ -452,6 +713,7 @@ impl DrawList {
     )]
     pub fn draw_as(
         &mut self,
+        id: &DrawId,
         pipeline: u32,
         handle: u32,
         a: u32,
@@ -461,10 +723,8 @@ impl DrawList {
         opacity: f32,
         stand: Option<Stand>,
     ) {
-        self.stand(pipeline, stand);
-        let uniform = self.put(at, [fourth, opacity, 0.0, 0.0, 0.0]);
-        self.draws
-            .extend_from_slice(&[handle, a, b, uniform, pipeline]);
+        let words = [fourth, opacity, 0.0, 0.0, 0.0];
+        self.put(id, pipeline, [handle, a, b], at, words, stand);
     }
 
     /// The eighth float pads the record's first two vec4s, and the twelfth
@@ -476,6 +736,7 @@ impl DrawList {
     )]
     pub fn draw_in(
         &mut self,
+        id: &DrawId,
         pipeline: u32,
         handle: u32,
         vertex_cnt: u32,
@@ -486,19 +747,29 @@ impl DrawList {
         z_step: f32,
         stand: Option<Stand>,
     ) {
-        self.stand(pipeline, stand);
-        let uniform = self.put(at, [0.0, opacity, unit, z_step, 0.0]);
-        self.draws
-            .extend_from_slice(&[handle, vertex_cnt, idx_cnt, uniform, pipeline]);
+        let words = [0.0, opacity, unit, z_step, 0.0];
+        self.put(
+            id,
+            pipeline,
+            [handle, vertex_cnt, idx_cnt],
+            at,
+            words,
+            stand,
+        );
     }
 
-    /// Words are exact in an f32 up to 2^24.
+    /// Words are exact in an f32 up to 2^24. One that `drifts` is a cloud's:
+    /// `at` its place on the cloud field's map, which the wind carries, and
+    /// it is drawn moved back by how far the wind has carried the field
+    /// (word.rs `frame::DRIFT_Q`, instance.wgsl `draw_translation`), so it
+    /// stands still in the list while the wind blows.
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
     )]
     pub fn draw_instances(
         &mut self,
+        id: &DrawId,
         pipeline: u32,
         handle: u32,
         group: u32,
@@ -506,18 +777,42 @@ impl DrawList {
         columns: [u32; 3],
         at: Position,
         opacity: f32,
+        drifts: bool,
         stand: Option<Stand>,
     ) {
         let [off, stride, idx] = columns;
-        self.stand(pipeline, stand);
-        let uniform = self.put(at, [off as f32, opacity, stride as f32, idx as f32, 0.0]);
-        self.draws
-            .extend_from_slice(&[handle, group, cnt, uniform, pipeline]);
+        let drift = if drifts { 1.0 } else { 0.0 };
+        let words = [off as f32, opacity, stride as f32, idx as f32, drift];
+        self.put(id, pipeline, [handle, group, cnt], at, words, stand);
     }
 
-    /// Uploads, rewrites and frees start fresh, on the lists' other side;
-    /// draws stay until the next frame.
+    /// Uploads, rewrites and frees start fresh, on the lists' other side; the
+    /// draws the turn did not set are let go, its changes handed, and the
+    /// next turn's start fresh.
     pub fn take(&mut self) -> Lists<'_> {
+        for p in 0..DRAW_PIPELINES.len() {
+            while self.records[p].len() > self.set[p] {
+                let Some(d) = self.records[p].pop() else {
+                    break;
+                };
+                let slot = d[3];
+                let u = self.uniform(slot);
+                self.change(slot, Some((d, u)));
+                self.drifting -= u32::from(drifts(&u));
+                let s = &mut self.slots[slot as usize];
+                (s.pipeline, s.gen) = (FREE, s.gen.wrapping_add(1));
+                self.free_slots.push(slot);
+            }
+            self.set[p] = 0;
+        }
+        core::mem::swap(&mut self.changes, &mut self.taken_changes);
+        self.changes.clear();
+        core::mem::swap(&mut self.stands, &mut self.taken_stands);
+        self.stands.clear();
+        self.taken_reordered = core::mem::take(&mut self.reordered);
+        let turn = self.turn;
+        self.turn = self.turn.wrapping_add(1);
+        self.begun = false;
         let (side, uploads, frees) = (self.side, self.uploads, self.frees);
         (self.side, self.uploads, self.frees) = (1 - side, 0, 0);
         core::mem::swap(&mut self.taken, &mut self.rewrites);
@@ -527,9 +822,16 @@ impl DrawList {
             uploads: &l.uploads[side][..uploads],
             rewrites: &self.taken,
             frees: &l.frees[side][..frees],
-            draws: &self.draws,
-            uniforms: &self.uniforms,
-            stands: &self.stands,
+            draws: Draws {
+                records: &self.records,
+                slots: &self.slots,
+                uniforms: &self.uniforms,
+                turn,
+                drifting: self.drifting,
+            },
+            changes: &self.taken_changes,
+            reordered: self.taken_reordered,
+            stands: &self.taken_stands,
         }
     }
 }
@@ -578,6 +880,22 @@ impl MirroredBlock {
             self.handle = 0;
         }
     }
+}
+
+/// The lists' arrays, set once for the tests, which take them one at a time:
+/// they are a `Global`, and tests run on several threads.
+#[cfg(test)]
+pub(crate) fn test_lists() -> std::sync::MutexGuard<'static, ()> {
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    static SET: std::sync::Once = std::sync::Once::new();
+    let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    SET.call_once(|| {
+        const LIVE: usize = 64;
+        let block = Box::leak(vec![0u32; lists_bytes(LIVE) as usize / 4].into_boxed_slice());
+        // SAFETY: a block of its own for the process's life, 4-aligned.
+        unsafe { set_lists(block.as_mut_ptr() as usize, LIVE) };
+    });
+    guard
 }
 
 #[cfg(test)]

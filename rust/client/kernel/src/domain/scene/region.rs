@@ -1,20 +1,13 @@
 // pxl-kernel/domain/scene/region.rs
 
-//! What the scene animates, as each turn draws it: the keys of the draws it
-//! bounds among those whose moves would otherwise draw the frame whole
-//! (`note_draw`), which the renderer lets move and marks, each that changed drawn
-//! where it was and where it is (pxl-render `FrameInput::bounded`,
-//! gpu/pass/mark.rs). Whether anything it animates stepped this turn, waking
-//! the turn at its own steps, is marked beside (`animated`).
+//! Whether anything the scene animates stepped this turn, waking the turn at
+//! its own steps (`animated`), which the renderer reads so the resolve asks
+//! no frame after it (pxl-render `FrameInput::animated`).
 
 use xpute_guest::global::Global;
 
 #[derive(Default)]
 struct Region {
-    /// The turn's keys as they are drawn, and those `take` last handed,
-    /// which the renderer reads.
-    now: Vec<u32>,
-    handed: Vec<u32>,
     animated: bool,
 }
 
@@ -24,24 +17,13 @@ fn region() -> &'static mut Region {
     REGION.get(Region::default)
 }
 
-/// A draw this turn the scene bounds, `key` the handle its record names.
-pub fn note_draw(key: u32) {
-    region().now.push(key);
-}
-
 /// What the scene animates stepped this turn: what wakes the turn at its
 /// own steps, so no frame is asked after it.
 pub fn note_animation() {
     region().animated = true;
 }
 
-/// The keys of the turn's bounded draws (pxl-render `FrameInput::bounded`),
-/// and whether what is animated stepped; the turn's taken.
-pub fn take() -> (&'static [u32], bool) {
-    let b = region();
-    let animated = core::mem::take(&mut b.animated);
-    core::mem::swap(&mut b.handed, &mut b.now);
-    b.now.clear();
-    let b: &'static Region = b;
-    (&b.handed, animated)
+/// Whether what is animated stepped; the turn's taken.
+pub fn take() -> bool {
+    core::mem::take(&mut region().animated)
 }

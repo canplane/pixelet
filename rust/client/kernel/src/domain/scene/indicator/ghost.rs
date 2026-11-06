@@ -8,7 +8,7 @@
 //! a decor until it can be drawn as itself.
 
 use pxl_render::frame::draw::{
-    DrawList, MirroredBlock, Position, Stand, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
+    DrawId, DrawList, MirroredBlock, Position, Stand, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
 };
 use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::word::NO_LAYER;
@@ -52,6 +52,8 @@ pub struct GhostDraw {
     z_step: f64,
     /// A box's min corner, a decor instance's base.
     at: V3,
+    /// Its draw, a box's or a decor's.
+    id: DrawId,
 }
 
 /// Where a decor instance's base stands, its turn and its scale.
@@ -192,6 +194,7 @@ impl GhostDraw {
                 // unit by under one.
                 let stand = Stand::of(whole, whole.map(|v| v + 1.0 + size));
                 draw.draw_in(
+                    &self.id,
                     PIPELINE_GHOST_BOX,
                     self.block.handle,
                     1,
@@ -206,6 +209,7 @@ impl GhostDraw {
             Shape::Decor { group, .. } => {
                 let idx = GroupColumns::words(1) as u32;
                 draw.draw_instances(
+                    &self.id,
                     PIPELINE_GHOST_DECOR,
                     self.block.handle,
                     group,
@@ -213,6 +217,7 @@ impl GhostDraw {
                     [0, 1, idx],
                     Position::of(self.at),
                     GHOST_OPACITY,
+                    false,
                     Some(Stand::ball(self.at)),
                 );
             }

@@ -9,7 +9,7 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::draw::{uniform_of, Position, DRAW_WORDS};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, DRIFT_Q, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
@@ -147,6 +147,8 @@ impl Preview {
         // Drawn at one sample a pixel, its frames gathered by none.
         u[JITTER] = 0.0;
         u[JITTER + 1] = 0.0;
+        // An actor drifts with no wind.
+        u[DRIFT_Q..DRIFT_Q + 4].fill(0.0);
         let r = &mut self.read;
         r.begin();
         r.read(&frame);

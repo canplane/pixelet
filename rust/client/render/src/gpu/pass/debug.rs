@@ -2,6 +2,7 @@
 
 //! The dev gizmos, over the finished world in passes of their own.
 
+use crate::frame::draw::Draws;
 use crate::frame::draw::{uniform_of, PIPELINE_DEBUG};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
@@ -10,7 +11,7 @@ use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::upload::{Draws, Uploads};
+use crate::gpu::upload::Uploads;
 
 /// Their faces go into the canvas's depth, cleared once what is drawn over
 /// the world is done with it, and their lines are drawn against those faces alone, so a gizmo

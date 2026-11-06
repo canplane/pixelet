@@ -18,7 +18,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
-use crate::frame::draw::{q3_of, uniform_of};
+use crate::frame::draw::{drifts, q3_of, uniform_of, Draws, Position};
 use crate::frame::draw::{
     stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
     PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
@@ -26,9 +26,9 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, EYE, JITTER, LIGHT_STEPS,
-    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
-    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CELL, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, EYE,
+    JITTER, LIGHT_STEPS, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON,
+    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -53,7 +53,7 @@ use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::location::{LocationPass, BEACON_VERTICES};
-use crate::gpu::pass::mark::UploadCopies;
+use crate::gpu::pass::mark::{MarkInput, UploadCopies};
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
@@ -72,10 +72,11 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::tiles::{self, Mark, Tiles};
-use crate::gpu::upload::{uploads, Draws, Uploads};
+use crate::gpu::upload::{uploads, Uploads};
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SKY, ENV_SUN};
 use crate::param::cloud;
+use pxl_content::cloud::drift;
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -85,6 +86,23 @@ const _: () = assert!(
 );
 
 type Frame = [f32; FRAME_FLOATS];
+
+/// The wind's drift a frame's words hold (`DRIFT_Q`), bit for bit.
+fn drift_bits(frame: &Frame) -> [u32; 4] {
+    core::array::from_fn(|k| frame[DRIFT_Q + k].to_bits())
+}
+
+/// The wind's drift a frame's words hold, as a `Position` on the map's plane.
+fn drift_at(frame: &Frame) -> Position {
+    Position {
+        q: [
+            frame[DRIFT_Q].to_bits() as i32,
+            frame[DRIFT_Q + 1].to_bits() as i32,
+            0,
+        ],
+        r: [frame[DRIFT_R], frame[DRIFT_R + 1], 0.0],
+    }
+}
 
 pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
@@ -115,11 +133,6 @@ pub struct FrameInput<'a> {
     /// Whether its draws are counted (`FrameStat::draws`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
-    /// The draws among `BESIDE`'s the kernel bounds, by their handles
-    /// (pxl-kernel region.rs `drawn`): each that changed marks the tiles it
-    /// covers and shades where it was and where it is, as every listed draw
-    /// outside `BESIDE` does (gpu/pass/mark.rs).
-    pub bounded_draws: &'a [u32],
     /// Whether what the kernel animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
     pub animated: bool,
@@ -172,14 +185,135 @@ fn least_height(alt_km: f64) -> f64 {
     -libm::sin(libm::acos(r / (r + alt_km.max(0.0))) + SUN_ANGULAR_RADIUS)
 }
 
-/// The world's draws that mark no tiles: any of theirs the kernel does not
-/// bound (`FrameInput::bounded`) that moved draws the frame whole.
+/// The world's draws whose moves draw the frame whole (`beside`).
 const BESIDE: [u32; 4] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR,
 ];
+
+/// Whether the draw `d`, its uniform `u`, is one whose moves draw the frame
+/// whole: one of `BESIDE`'s but a cloud's, which drifts with the wind, and
+/// which the marks of decor and of the impostors carry where it was and where
+/// it is, each at its frame's drift (gpu/pass/mark.rs).
+fn beside(d: &[u32; DRAW_WORDS], u: &[f32]) -> bool {
+    BESIDE.contains(&d[4]) && !drifts(u)
+}
+
+/// Whether the turn moved a draw whose moves draw the frame whole
+/// (`beside`): it changed one, as it was or as it is, or an upload one reads
+/// moved (`touched`, sorted).
+fn beside_changed(lists: &Lists, touched: &[u32]) -> bool {
+    let draws = lists.draws;
+    let changed = lists.changes.iter().any(|c| {
+        draws.now(c.slot).is_some_and(|(d, u)| beside(&d, &u))
+            || c.was.is_some_and(|(d, u)| beside(&d, &u))
+    });
+    let read_moved = || {
+        BESIDE.iter().any(|&p| {
+            draws.of(p).any(|d| {
+                beside(d, uniform_of(draws.uniforms, d)) && touched.binary_search(&d[0]).is_ok()
+            })
+        })
+    };
+    changed || (!touched.is_empty() && read_moved())
+}
+
+/// Whether what the lists changed so far was seen by a frame drawn, a pure
+/// state the turns step (`frame`, `dropped`, `put_off`), explored whole in
+/// renderer.test.rs: a frame dropped leaves the lists' changes unseen, and a
+/// turn put off leaves those of the draws whose moves draw the frame whole
+/// (`beside`) unseen; the next frame reads them as moved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Seen {
+    lists: bool,
+    beside: bool,
+}
+
+impl Seen {
+    const NONE: Seen = Seen {
+        lists: false,
+        beside: false,
+    };
+
+    /// A frame drawn over lists that `moved` (a draw changed, drawn in
+    /// another order, or its uniforms written whole), uploads that moved, the
+    /// drift moved under a draw that drifts (`drifted`), and whether the turn
+    /// moved a draw whose moves draw the frame whole (`beside_changed`):
+    /// whether the listed draws are drawn as the last frame drew them, and
+    /// whether such a draw moved since.
+    fn frame(
+        &mut self,
+        moved: bool,
+        uploads_moved: bool,
+        drifted: bool,
+        beside_changed: bool,
+    ) -> (bool, bool) {
+        let same = self.lists && !moved && !uploads_moved && !drifted;
+        let beside = !self.beside || beside_changed;
+        *self = Seen {
+            lists: true,
+            beside: true,
+        };
+        (same, beside)
+    }
+
+    /// The frame's commands dropped: what it saw no frame drew.
+    fn dropped(&mut self) {
+        *self = Seen::NONE;
+    }
+
+    /// The lists taken and no frame drawn: the draws they moved unseen.
+    fn put_off(&mut self) {
+        self.beside = false;
+    }
+}
+
+/// What a frame read that decides what it draws (`Decided`): whether nothing
+/// but the listed draws that mark moved before its cast (`partial`); whether
+/// all it reads read as last time but its lists and its jitter, over rays cast
+/// again at most at their pixels (`stands`); whether the listed draws are drawn
+/// as the last frame drew them (`listed_same`, `Seen`); whether the sheets seen
+/// moved (`clouds_drawn`); and the rays' own: whether their light stands afresh
+/// (`RaysPass::ungated`), whether they cast pixels, whether the light casts and
+/// whether the eye's queue runs alone.
+#[derive(Clone, Copy, Debug, Default)]
+struct Reads {
+    partial: bool,
+    stands: bool,
+    listed_same: bool,
+    clouds_drawn: bool,
+    ungated: bool,
+    casts_px: bool,
+    light_casts: bool,
+    eye_queue: bool,
+}
+
+/// What a frame draws, a pure function of what it read (`Reads`), explored
+/// whole in renderer.test.rs: `quiet` where nothing moved but the jitter;
+/// `gated` where only the listed draws that mark moved, the claimed tiles
+/// alone drawn again, else the frame drawn whole, its pixels cast whole, as it
+/// is where the light's receivers stand afresh off every pixel's walk; and
+/// `stood` where nothing moved, the jitter neither, nothing cast, nothing
+/// drawn, nothing submitted, the canvases keeping the frame they show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Decided {
+    quiet: bool,
+    gated: bool,
+    stood: bool,
+}
+
+impl Decided {
+    fn of(r: Reads) -> Decided {
+        let quiet = r.stands && r.listed_same && !r.clouds_drawn;
+        Decided {
+            quiet,
+            gated: r.partial && r.stands && !r.ungated,
+            stood: quiet && !r.casts_px && !r.light_casts && !r.eye_queue,
+        }
+    }
+}
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
@@ -391,14 +525,12 @@ pub struct Renderer {
     /// the markers' atlas, the clouds' words and the previews, and what came or
     /// was drawn again without words.
     frame_read: Read,
-    /// The jitter in the frame's words as the GPU holds them (`JITTER`).
+    /// The jitter and the drift in the frame's words as the GPU holds them
+    /// (`JITTER`, `DRIFT_Q`).
     jitter_written: [f32; 2],
-    /// The lists as the last frame drew them, apart from the rest of its
-    /// input: their records, uniforms and uploads (`lists_read`), and the
-    /// records and uniforms of the draws the kernel does not bound, with
-    /// whether an upload they read moved (`beside`, `BESIDE`).
-    lists_read: Read,
-    beside: Read,
+    drift_written: [u32; 4],
+    /// Whether the lists' changes so far were seen by a frame drawn (`Seen`).
+    seen: Seen,
     /// The sheets' words as last written (`CloudPass::words`).
     clouds_read: Read,
     /// The gate a frame not drawn whole is drawn through, over the tiles'
@@ -417,10 +549,10 @@ pub struct Renderer {
     /// The uploads the draws that mark read, as the last frame drew them
     /// (gpu/pass/mark.rs).
     last_frame_uploads: UploadCopies,
-    /// The frame's words as the last frame drawn drew with them, kept
-    /// beside what the marks keep of its draws (`Marks::keep`), and their
+    /// The frame's words as the last frame drawn drew with them, and their
     /// buffer, written where the screen's marks draw: a draw as it was is
-    /// marked by them, at the jitter it was drawn at (gpu/pass/mark.rs).
+    /// marked by them, at the jitter it was drawn at, and at the wind's drift
+    /// it was drawn at (gpu/pass/mark.rs).
     frame_was: Frame,
     frame_was_buf: u32,
     /// The eye's view-projection as `prepare` took it, which the sheets are
@@ -432,13 +564,12 @@ pub struct Renderer {
     /// these, and the occlusion found again only where they moved.
     ao_read: Read,
     previews: [Option<Preview>; SURFACES],
-    order: Vec<u32>,
-    /// The draws' uniforms as the device holds them (`draws_buf`).
+    /// Whether the device holds the draws' uniforms as the lists left them
+    /// (`draws_buf`).
     uniforms_written: Written,
     /// A frame's lookups, kept for their room: the handles its lists
-    /// touch, the draws the kernel bounds and the uploads its marks read.
+    /// touch and the uploads its marks read.
     touched: Vec<u32>,
-    bounded: Vec<u32>,
     read_uploads: Vec<u32>,
 }
 
@@ -505,8 +636,8 @@ impl Renderer {
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
-            lists_read: Read::default(),
-            beside: Read::default(),
+            drift_written: [u32::MAX; 4],
+            seen: Seen::NONE,
             clouds_read: Read::default(),
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
             gate_group: Group::default(),
@@ -544,10 +675,8 @@ impl Renderer {
             pack,
             moon,
             previews: [const { None }; SURFACES],
-            order: Vec::new(),
             uniforms_written: Written::default(),
             touched: Vec::new(),
-            bounded: Vec::new(),
             read_uploads: Vec::new(),
         };
         r.screen.make(g, &mut r.pipelines);
@@ -643,6 +772,7 @@ impl Renderer {
         let mut e = self.lit_entries(self.frame_buf);
         e.push(buf_entry(3, self.draws_buf));
         self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
+        self.skinned_mesh.set_draws(g, self.draws_buf);
         let lit = self.lit_entries(self.frame_buf);
         self.screen.set_lit(lit);
     }
@@ -685,6 +815,14 @@ impl Renderer {
             u[EYE + k] = f32::from_bits(v as u32);
         }
         self.shadow.put_eye([u[EYE], u[EYE + 1], u[EYE + 2]]);
+        // How far the wind has carried the clouds, as the kernel lays them
+        // by (pxl-kernel domain/scene/environment/cloud.rs `step`).
+        let off = drift(f64::from(env[ENV_SKY + 1]));
+        let back = Position::of([off[0], off[1], 0.0]);
+        u[DRIFT_Q] = f32::from_bits(back.q[0] as u32);
+        u[DRIFT_Q + 1] = f32::from_bits(back.q[1] as u32);
+        u[DRIFT_R..DRIFT_R + 2].copy_from_slice(&back.r[..2]);
+        self.shadow.put_drift(&u[DRIFT_Q..DRIFT_Q + 4]);
         self.resolve.prepare(&m, eye_world);
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m);
@@ -832,36 +970,15 @@ impl Renderer {
         out.dedup();
     }
 
-    /// A turn whose lists were taken and no frame drawn: the uploads they
-    /// moved the next frame does not see, so it draws whole, and what the
-    /// marks read is copied again (`UploadCopies::forget`).
+    /// A turn whose lists were taken and no frame drawn: the uploads and the
+    /// draws they moved the next frame does not see, so it draws whole, the
+    /// draws' uniforms are written whole, and what the marks read is copied
+    /// again (`UploadCopies::forget`).
     fn put_off(&mut self) {
         self.frame_read.forget();
-        self.beside.forget();
+        self.seen.put_off();
+        self.uniforms_written.forget();
         self.last_frame_uploads.forget();
-    }
-
-    /// Whether a draw the kernel does not bound moved since the last
-    /// frame (`BESIDE`): its record or uniform, or an upload it reads
-    /// (`touched`, the handles this frame's lists upload, rewrite or free),
-    /// `touched` and `bounded` sorted.
-    fn beside_moved(
-        &mut self,
-        records: &[u32],
-        uniforms: &[f32],
-        touched: &[u32],
-        bounded: &[u32],
-    ) -> bool {
-        let r = &mut self.beside;
-        r.begin();
-        for d in records.as_chunks::<DRAW_WORDS>().0 {
-            if BESIDE.contains(&d[4]) && bounded.binary_search(&d[0]).is_err() {
-                r.read(d);
-                r.read(uniform_of(uniforms, d));
-                r.mark(touched.binary_search(&d[0]).is_ok());
-            }
-        }
-        !r.end()
     }
 
     /// The world image's opaque models: the decor generated over the world. The
@@ -920,8 +1037,8 @@ impl Renderer {
                 .sync_atlas(g, &self.mips, input.atlas, input.text),
         );
         let lists = input.lists;
-        // The handles this frame's lists upload, rewrite or free, and the
-        // draws the kernel bounds, sorted to be looked up.
+        // The handles this frame's lists upload, rewrite or free, sorted to
+        // be looked up.
         let mut touched = core::mem::take(&mut self.touched);
         touched.clear();
         touched.extend(
@@ -943,13 +1060,11 @@ impl Renderer {
         touched.extend_from_slice(lists.frees);
         touched.sort_unstable();
         touched.dedup();
-        let mut bounded = core::mem::take(&mut self.bounded);
-        bounded.clear();
-        bounded.extend_from_slice(input.bounded_draws);
-        bounded.sort_unstable();
-        let (records, uniforms, uploads_moved) = take_lists(Some(g), lists);
-        // The draws' uniforms, in a buffer of room for them: what changed of
-        // them written, a draw's record a run.
+        let uploads_moved = take_lists(Some(g), &lists);
+        let draws = lists.draws;
+        let uniforms = draws.uniforms;
+        // The draws' uniforms, in a buffer of room for them: the slots the
+        // turn changed written, a run of slots next to each other a record.
         let uniform_bytes = word_bytes(uniforms.len());
         let grew = uniform_bytes > self.draws_bytes;
         if grew {
@@ -967,13 +1082,11 @@ impl Renderer {
             self.draws_buf,
             bytes(uniforms),
             word_bytes(DRAW_FLOATS) as usize,
+            lists.changes.iter().map(|c| c.slot),
         );
-        let l = &mut self.lists_read;
-        l.begin();
-        l.mark(uploads_moved || uniforms_moved);
-        let lists_moved = l.read(records) | uniforms_moved;
-        let listed_same = l.end();
-        let beside_moved = self.beside_moved(records, uniforms, &touched, &bounded);
+        // What the passes made of the draws stands where the turn changed none,
+        // drew none in another order, and the device holds their uniforms.
+        let lists_moved = uniforms_moved || !lists.changes.is_empty() || lists.reordered;
         read.read(input.previews);
 
         targets(g, world);
@@ -1036,17 +1149,25 @@ impl Renderer {
         if ao_remade {
             read.mark(true);
         }
-        let mut order = core::mem::take(&mut self.order);
-        let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        // The jitter apart: where only it moved, the frame draws its pixels
-        // again and stands once it holds (gpu/resolve.rs).
+        // The jitter and the drift apart: where only the jitter moved, the
+        // frame draws its pixels again and stands once it holds
+        // (gpu/resolve.rs); where the drift did, the clouds mark.
         let jitter = [self.frame[JITTER], self.frame[JITTER + 1]];
+        let drift_now = drift_bits(&self.frame);
+        let drift_moved = drift_now != self.drift_written;
         let words_moved = read.read(&self.frame[..JITTER]);
-        if words_moved || jitter != self.jitter_written {
+        if words_moved || jitter != self.jitter_written || drift_moved {
             g.write_buf(self.frame_buf, 0, bytes(&self.frame));
             self.jitter_written = jitter;
+            self.drift_written = drift_now;
         }
-        if words_moved {
+        // Whether the listed draws are drawn as the last frame drew them, and
+        // whether one whose moves draw the frame whole moved (`Seen`).
+        let drifted = draws.drifting() && drift_now != drift_bits(&self.frame_was);
+        let beside = beside_changed(&lists, &touched);
+        let (listed_same, beside_moved) =
+            self.seen.frame(lists_moved, uploads_moved, drifted, beside);
+        if words_moved || drift_moved {
             // The light's frame is of the same words.
             self.shadow.write(g);
         }
@@ -1065,8 +1186,7 @@ impl Renderer {
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
         self.impostor
             .prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
-        self.skinned_mesh
-            .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
+        self.skinned_mesh.prepare(g, draws.of(PIPELINE_SKINNED), b);
         self.location.prepare(g, &draws, uniforms, lists_moved, b);
         self.marker
             .prepare(g, world.screen_depth_view, world.screen, &draws, b);
@@ -1111,7 +1231,7 @@ impl Renderer {
         // decor turned off generates nothing and casts no ray again, yet the
         // frame stands without it.
         read.read(&[u32::from(self.screen.generated().is_some())]);
-        self.prepare_previews(g, &draws, uniforms, input.previews, lists_moved);
+        self.prepare_previews(g, &draws, input.previews);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [TimestampWrites; GPU_SPAN_NAMES] =
@@ -1143,32 +1263,30 @@ impl Renderer {
             && self.screen.kind != FrameKind::cast
             && !self.screen.generates()
             && !gridded;
-        // Nothing moved but the jitter.
-        let quiet = stands && listed_same && !clouds_drawn;
-        // Only the listed draws that mark moved: the claimed tiles alone are
-        // drawn again. Else the frame is drawn whole, its pixels cast whole, as it is where the
-        // light's receivers stand afresh off every pixel's walk (`RaysPass::ungated`).
-        let gated = partial && stands && !self.screen.ungated();
+        let decided = Decided::of(Reads {
+            partial,
+            stands,
+            listed_same,
+            clouds_drawn,
+            ungated: self.screen.ungated(),
+            casts_px: self.screen.casts_px(),
+            light_casts: self.screen.light_casts(),
+            eye_queue: self.screen.eye_queue(),
+        });
+        let (quiet, gated) = (decided.quiet, decided.gated);
         if !gated {
             self.screen.whole();
         }
-        // The frame stands where nothing moved, the jitter neither: nothing
-        // is drawn, nothing submitted, and the canvases keep the frame they
-        // show.
-        if quiet
-            && !self.screen.casts_px()
-            && !self.screen.light_casts()
-            && !self.screen.eye_queue()
-        {
+        if decided.stood {
             self.frame_read = read;
-            let mut stat = self.stat(draws.records, input.counted, [0.0; GPU_SPAN_NAMES]);
+            let mut stat = self.stat(&draws, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
             if self.screen.wants_frame() {
                 REDRAW.set(true);
             }
             stat.rays = self.screen.take_counts();
-            (self.order, self.touched, self.bounded) = (order, touched, bounded);
+            self.touched = touched;
             return (FrameKind::stood, stat);
         }
 
@@ -1179,15 +1297,16 @@ impl Renderer {
         // the frame's commands.
         let (screen_marking, casters_marking) = if gated {
             let k = &self.last_frame_uploads;
-            let t = &touched;
-            let actors =
-                self.skinned_mesh
-                    .prepare_marks(g, draws.of(PIPELINE_SKINNED), uniforms, t, b, k);
-            let (decor, decor_casts) = self.decor.prepare_marks(g, &draws, uniforms, t, b, k);
-            let impostors =
-                self.impostor
-                    .prepare_marks(g, draws.of(PIPELINE_IMPOSTOR), uniforms, t, b, k);
-            let location = self.location.prepare_marks(g, &draws, uniforms, t, b, k);
+            let m = MarkInput {
+                draws,
+                changes: lists.changes,
+                touched: &touched,
+                drift: [drift_at(&self.frame), drift_at(&self.frame_was)],
+            };
+            let actors = self.skinned_mesh.prepare_marks(g, &m, b, k);
+            let (decor, decor_casts) = self.decor.prepare_marks(g, &m, b, k);
+            let impostors = self.impostor.prepare_marks(g, &m, b, k);
+            let location = self.location.prepare_marks(g, &m, b, k);
             (
                 actors || decor || impostors || location,
                 actors || decor_casts,
@@ -1454,13 +1573,10 @@ impl Renderer {
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
         let squares = self.resolve.tiles.squares();
-        // What the listed draws were drawn with this frame, the frame's
-        // words with them, kept for the next's marks where they were.
+        // The frame's words the listed draws were drawn with, kept for the
+        // next's marks where they were; the draws as they were are the next
+        // turn's changes' (frame/draw.rs `Change`).
         self.frame_was = self.frame;
-        self.skinned_mesh.keep(draws.of(PIPELINE_SKINNED), uniforms);
-        self.decor.keep(&draws, uniforms);
-        self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
-        self.location.keep(&draws, uniforms);
         self.last_frame_uploads
             .keep(g, ctx.encoder, &read_uploads, &touched, b);
         // The depth's bound the propagation reads, in the tiles the world's
@@ -1530,8 +1646,7 @@ impl Renderer {
                 preview.read.forget();
             }
             read.forget();
-            self.lists_read.forget();
-            self.beside.forget();
+            self.seen.dropped();
             self.ao_read.forget();
             // The stencil holds what the last drawn frame left: the next
             // gated frame clears it.
@@ -1566,14 +1681,14 @@ impl Renderer {
         } else {
             self.screen.kind
         };
-        let mut stat = self.stat(draws.records, input.counted, gpu_spans);
+        let mut stat = self.stat(&draws, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         stat.gpu_busy_ms = gpu_busy_ms;
         stat.gpu_px = gpu_px;
         stat.gpu_lattice = gpu_lattice;
         stat.gpu_frame = gpu_frame;
         stat.rays = self.screen.take_counts();
-        (self.order, self.touched, self.bounded) = (order, touched, bounded);
+        self.touched = touched;
         self.read_uploads = read_uploads;
         (kind, stat)
     }
@@ -1596,14 +1711,7 @@ impl Renderer {
 
     /// Each preview's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_previews(
-        &mut self,
-        g: &Gpu,
-        draws: &Draws,
-        uniforms: &[f32],
-        previews: &[(u32, u32, Image, u32)],
-        moved: bool,
-    ) {
+    fn prepare_previews(&mut self, g: &Gpu, draws: &Draws, previews: &[(u32, u32, Image, u32)]) {
         for (id, model, image, _, own) in Self::previews(draws, previews) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
@@ -1619,9 +1727,10 @@ impl Renderer {
             }
             let preview = self.previews[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             preview.skinned_mesh.set_skins(&[(model, image)]);
+            preview.skinned_mesh.set_draws(g, self.draws_buf);
             preview
                 .skinned_mesh
-                .prepare(g, core::iter::once(own), uniforms, moved, uploads());
+                .prepare(g, core::iter::once(own), uploads());
             preview.set_groups(g, s);
         }
     }
@@ -1647,15 +1756,10 @@ impl Renderer {
     /// What the scheduler asked for: a draw passed over because its upload, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
     /// only while `counted`, the profiler's, so a frame no one reads counts none.
-    fn stat(
-        &self,
-        draws: &[[u32; DRAW_WORDS]],
-        counted: bool,
-        gpu_spans: [f64; GPU_SPAN_NAMES],
-    ) -> FrameStat {
+    fn stat(&self, draws: &Draws, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES]) -> FrameStat {
         let b = uploads();
         let mut stats: DrawStats = [[0.0; 2]; DRAW_PIPELINES.len()];
-        for d in draws.iter().filter(|_| counted) {
+        for d in draws.all().filter(|_| counted) {
             let tris = match d[4] {
                 PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
@@ -1780,7 +1884,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     // frame comes again (xpute_guest ipc/stream.rs R3).
     if !stream_free() {
         carry_edits(&input.cast);
-        take_lists(None, input.lists);
+        take_lists(None, &input.lists);
         if let Some(r) = RENDERER.get(|| None).as_mut() {
             r.put_off();
         }
@@ -1793,7 +1897,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         carry_edits(&input.cast);
-        take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
+        take_lists(RENDERER.get(|| None).as_ref().and(gpu()), &input.lists);
         if let Some(r) = RENDERER.get(|| None).as_mut() {
             r.put_off();
         }
@@ -1806,7 +1910,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     // The surfaces would block: skip rather than wait (`Renderer::put_off`).
     if !(input.admit)() {
         carry_edits(&input.cast);
-        take_lists(Some(g), input.lists);
+        take_lists(Some(g), &input.lists);
         if let Some(r) = RENDERER.get(|| None).as_mut() {
             r.put_off();
         }
@@ -1830,7 +1934,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     }
     if !slot.as_mut().is_some_and(|r| r.made(g)) {
         carry_edits(&input.cast);
-        take_lists(slot.as_ref().map(|_| g), input.lists);
+        take_lists(slot.as_ref().map(|_| g), &input.lists);
         if let Some(r) = slot.as_mut() {
             r.put_off();
         }
@@ -1870,9 +1974,8 @@ pub fn landed() -> bool {
 }
 
 /// Uploads listed with no device wait in the table for the next one.
-/// The draws and their uniforms, and whether an upload was let go, made or
-/// rewritten.
-fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], bool) {
+/// Whether an upload was let go, made or rewritten.
+fn take_lists(g: Option<&Gpu>, lists: &Lists) -> bool {
     let b = uploads();
     // Frees first, so the table never holds an upload beside its replacement.
     for &handle in lists.frees {
@@ -1884,8 +1987,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], b
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2], r[3]);
     }
-    let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
-    (lists.draws, lists.uniforms, moved)
+    !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty())
 }
 
 #[cfg(test)]

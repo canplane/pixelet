@@ -56,9 +56,8 @@ impl Scene {
             | self.environment.tick(frame)
     }
 
-    /// Begins the frame's list with the scene's own layers.
-    pub fn begin(&mut self, draw: &mut DrawList, models: &Models) {
-        draw.begin_frame();
+    /// Sets the scene's own layers' draws into the turn's list.
+    pub fn draw(&mut self, draw: &mut DrawList, models: &Models) {
         self.ghost.draw(draw);
         companion_draw(draw, models);
         preview_draw(draw, models);

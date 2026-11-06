@@ -10,7 +10,7 @@
 //! impostor's, and nothing below that, as decor smaller than that is none
 //! (`decor::gpu`).
 
-use pxl_render::frame::draw::{DrawList, Position, Stand, PIPELINE_SKINNED};
+use pxl_render::frame::draw::{DrawId, DrawList, Position, Stand, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
@@ -66,6 +66,8 @@ pub struct Actor {
     /// (`lens::Stepped`), and the reading its clip last took (`clip_time`).
     clock: Stepped,
     clip_time: f64,
+    /// Its draw in the list.
+    id: DrawId,
 }
 
 impl Actor {
@@ -107,6 +109,7 @@ impl Actor {
             last: 0.0,
             clock: Stepped::default(),
             clip_time: 0.0,
+            id: DrawId::default(),
         })
     }
 
@@ -273,6 +276,7 @@ impl Actor {
             return;
         }
         draw.draw_scaled(
+            &self.id,
             PIPELINE_SKINNED,
             m.handle(),
             self.palette_handle,

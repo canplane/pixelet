@@ -126,9 +126,18 @@ uniform! {
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
         /// height) of `VIEWPORT`. What is drawn into the world's color is
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
-        /// Last: the words before it are what a frame reads as moved
+        /// The words before it are what a frame reads as moved
         /// (gpu/renderer.rs `frame`).
         JITTER: Vec2 = 72,
+        /// How far the wind has carried the cloud field, X and Y in units
+        /// (pxl-content cloud.rs `drift`), as a `Position`: its Q3, an i32's
+        /// bits, and its remainder. A cloud's draw holds its place on the
+        /// field's map and is drawn moved back by it (instance.wgsl
+        /// `draw_translation`). Past `JITTER`, so a frame read as moved is
+        /// not read so where the drift alone moved: the clouds mark where they
+        /// were and are (gpu/pass/mark.rs).
+        DRIFT_Q: Vec2u = 74,
+        DRIFT_R: Vec2 = 76,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
