@@ -3,6 +3,7 @@
 //! Shaders and pipeline records from one source, so a shader's bindings and its
 //! pipeline layout cannot disagree.
 
+pub mod access;
 pub mod floor;
 pub mod part;
 pub mod record;

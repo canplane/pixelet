@@ -10,6 +10,7 @@ mod cast;
 mod count;
 mod ground;
 mod raster;
+pub(crate) mod sequence;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{

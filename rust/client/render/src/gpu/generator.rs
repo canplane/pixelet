@@ -13,6 +13,7 @@
 //! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
 //! is generated.
 
+use crate::gpu::ray::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
 use pxl_engine::{clipmap, eye, overwrite};
@@ -636,13 +637,13 @@ impl Generator {
                 1,
             );
             let listed = [
-                (&self.thin, self.groups[1], generation::THIN_ARGS),
-                (&self.generate, self.groups[2], generation::GENERATE_ARGS),
+                (&self.thin, self.groups[1], &sequence::THIN),
+                (&self.generate, self.groups[2], &sequence::GENERATE),
             ];
-            for (pipeline, group, args) in listed {
+            for (pipeline, group, step) in listed {
                 g.set_pipeline(pass, pipeline.id);
                 g.set_bind_group(pass, 0, group, &[]);
-                g.dispatch_indirect(pass, self.list, args * 4);
+                g.dispatch_indirect(pass, self.list, step.at());
             }
         }
         if !self.counting {

@@ -17,7 +17,8 @@
 //! each frame its samples are cast, and kept where only the pixels are
 //! cast again over them.
 
-use pxl_engine::{beam, eye, light, node_cache, raster, record};
+use super::sequence;
+use pxl_engine::{beam, eye, light, raster, record};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -42,7 +43,7 @@ pub(super) const RECORD_BINDING: u32 = 23;
 
 /// The eye's samples' writing into its record (sample_box.wgsl): the eye, the samples'
 /// words, the faces' asks' args and the record.
-const SAMPLE_BOX_GROUP: [u32; 12] = [
+pub(super) const SAMPLE_BOX_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -58,7 +59,7 @@ const SAMPLE_BOX_GROUP: [u32; 12] = [
 ];
 /// The record over every slot (record_draw.wgsl): its forgetting, over the node cache's
 /// head, and its drawing, over the eye, the boxes and the raster's args.
-const RECORD_GROUP: [u32; 27] = [
+pub(super) const RECORD_GROUP: [u32; 27] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -90,7 +91,7 @@ const RECORD_GROUP: [u32; 27] = [
 /// The holes' stops into the record (record_stops.wgsl): the eye, the rays, the stops among the
 /// beam rays' words, the node cache's head their count lies in, the faces' asks' args and
 /// the record.
-const STOPS_GROUP: [u32; 21] = [
+pub(super) const STOPS_GROUP: [u32; 21] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -114,12 +115,12 @@ const STOPS_GROUP: [u32; 21] = [
     STORAGE_RW,
 ];
 /// The binding of the dispatch over the stops put off (record_stops.wgsl `deferred`).
-const DEFERRED_BINDING: u32 = 24;
+pub(super) const DEFERRED_BINDING: u32 = 24;
 /// The stops put off taken past the stops' dispatch's end (record_deferred.wgsl): the eye,
 /// the beam rays' words their numbers and the stops lie in, the args they count and lay their
 /// faces' asks in, and the record; not the dispatch they are taken by, which this pass reads
 /// its count from.
-const DEFERRED_GROUP: [u32; 12] = [
+pub(super) const DEFERRED_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -136,7 +137,7 @@ const DEFERRED_GROUP: [u32; 12] = [
 /// The light's holes' stops into its record (record_stops.wgsl over record_stops.light.wgsl):
 /// `STOPS_GROUP`, its map at 3 and its list at 8, and the light's head its slots' rays are
 /// aimed by.
-const LIGHT_STOPS_GROUP: [u32; 24] = [
+pub(super) const LIGHT_STOPS_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -165,7 +166,7 @@ const LIGHT_STOPS_GROUP: [u32; 24] = [
 /// The light's stops put off (record_deferred.wgsl over record_stops.light.wgsl): as
 /// `DEFERRED_GROUP`, its list for the beam rays' words, and the light's head its slots' rays
 /// are aimed by.
-const LIGHT_DEFERRED_GROUP: [u32; 15] = [
+pub(super) const LIGHT_DEFERRED_GROUP: [u32; 15] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -184,7 +185,7 @@ const LIGHT_DEFERRED_GROUP: [u32; 15] = [
 ];
 /// The light's samples' writing into its record (sample_box.wgsl over sample.light.wgsl):
 /// the eye, the samples' words, the light's head, its raster's args and its record.
-const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
+pub(super) const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -304,7 +305,7 @@ pub(super) struct LightRaster {
 /// `face_cs`'s (face.wgsl): the eye, the world's query's buffers but the palette, which it
 /// reads none of, the beam's words it asks off and leaves a hit's faces in, the args it is
 /// bound to, and the record it leaves a voxel's faces in.
-const FACE_GROUP: [u32; 27] = [
+pub(super) const FACE_GROUP: [u32; 27] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -658,20 +659,18 @@ impl Raster {
     /// pass over their asks, its args the raster's at `raster::STOP_ASKED_AT`; then each
     /// stop's face's word put at its pixel off its entry, a thread a stop.
     pub(super) fn stops(&self, g: &Gpu, pass: u32, node_cache: u32) {
-        let hits = word_bytes(node_cache::HITS_ARGS as usize);
         g.set_pipeline(pass, self.stops_built.id);
         g.set_bind_group(pass, 0, self.groups[5], &[]);
-        g.dispatch_indirect(pass, node_cache, hits);
+        g.dispatch_indirect(pass, node_cache, sequence::STOPS.at());
         g.set_bind_group(pass, 0, self.groups[6], &[]);
         g.set_pipeline(pass, self.deferred_built.id);
-        g.dispatch_indirect(pass, self.deferred, 0);
+        g.dispatch_indirect(pass, self.deferred, sequence::STOPS_DEFERRED.at());
         g.set_pipeline(pass, self.faces_built.id);
         g.set_bind_group(pass, 0, self.groups[4], &[]);
-        let at = raster::STOP_ASKED_AT + raster::ARGS_FACES;
-        g.dispatch_indirect(pass, self.args, word_bytes(at as usize));
+        g.dispatch_indirect(pass, self.args, sequence::STOP_FACES.at());
         g.set_pipeline(pass, self.faces_put_built.id);
         g.set_bind_group(pass, 0, self.groups[5], &[]);
-        g.dispatch_indirect(pass, node_cache, hits);
+        g.dispatch_indirect(pass, node_cache, sequence::STOP_FACES_PUT.at());
     }
 
     /// The samples written into the record, a thread a sample of `grid`, where they were cast
@@ -729,7 +728,7 @@ impl Raster {
         }
         g.set_pipeline(pass, self.draw_built.id);
         g.set_bind_group(pass, 0, self.groups[1], &[]);
-        g.draw_indirect(pass, self.args, 0);
+        g.draw_indirect(pass, self.args, sequence::RASTER.at());
         g.end(pass);
         // What lies about each new face of the record, before the pixels read it off
         // their visible voxel; asked where the samples were cast.
@@ -739,8 +738,7 @@ impl Raster {
         let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.id);
-        let asked = raster::ASKED_AT + raster::ARGS_FACES;
-        g.dispatch_indirect(pass, self.args, word_bytes(asked as usize));
+        g.dispatch_indirect(pass, self.args, sequence::FACE.at());
         g.end(pass);
     }
 
@@ -976,10 +974,10 @@ impl Raster {
         }
         g.set_bind_group(pass, 0, s.stops_group, &[]);
         g.set_pipeline(pass, self.light_stops_built.id);
-        g.dispatch_indirect(pass, node_cache, word_bytes(node_cache::HITS_ARGS as usize));
+        g.dispatch_indirect(pass, node_cache, sequence::LIGHT_STOPS.at());
         g.set_bind_group(pass, 0, s.deferred_group, &[]);
         g.set_pipeline(pass, self.light_deferred_built.id);
-        g.dispatch_indirect(pass, s.deferred, 0);
+        g.dispatch_indirect(pass, s.deferred, sequence::LIGHT_STOPS_DEFERRED.at());
     }
 
     /// The light's record forgotten in the cast's pass `pass` with the eye's, by the node
@@ -1019,7 +1017,7 @@ impl Raster {
         );
         g.set_pipeline(pass, self.draw_built.id);
         g.set_bind_group(pass, 0, s.group, &[]);
-        g.draw_indirect(pass, s.args, 0);
+        g.draw_indirect(pass, s.args, sequence::LIGHT_RASTER.at());
         g.end(pass);
     }
 }

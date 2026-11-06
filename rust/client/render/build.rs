@@ -1424,13 +1424,13 @@ fn held_to_faults(module: &naga::Module, name: &str) {
 /// entry points (`STAGES`, in OUT_DIR), which every pipeline's groups take their
 /// visibility from (record.rs `pipeline`).
 fn assemble(out: &Path) {
-    use naga::valid::{Capabilities, ValidationFlags, Validator};
+    use naga::valid::{Capabilities, GlobalUse, ValidationFlags, Validator};
     let read = |name: &str| {
         std::fs::read_to_string(out.join(format!("{name}.wgsl")))
             .unwrap_or_else(|e| panic!("{name}.wgsl: {e}"))
     };
     let constant = read("constant");
-    let (mut sources, mut stages) = (String::new(), String::new());
+    let (mut sources, mut stages, mut access) = (String::new(), String::new(), String::new());
     let mut rastered = false;
     for (kind, parts) in part::PARTS.iter().enumerate() {
         let mut text = constant.clone() + "\n";
@@ -1518,6 +1518,37 @@ fn assemble(out: &Path) {
         sources += &format!(
             "        {kind} => include_str!(concat!(env!(\"OUT_DIR\"), \"/shader/assembled/{file}\")),\n"
         );
+        // Each compute entry point's bindings and what it does with each: reads, writes, and
+        // whether through atomics (frame/shader/access.rs `READ`, `WRITE`, `ATOMIC`).
+        let mut accessed = Vec::new();
+        for (i, entry) in module.entry_points.iter().enumerate() {
+            if entry.stage != naga::ShaderStage::Compute {
+                continue;
+            }
+            let mut by: Vec<[u32; 3]> = Vec::new();
+            for (handle, var) in module.global_variables.iter() {
+                let Some(b) = var.binding else { continue };
+                let used = info.get_entry_point(i)[handle];
+                if used.is_empty() {
+                    continue;
+                }
+                let read = used.intersects(GlobalUse::READ | GlobalUse::QUERY);
+                let write = used.contains(GlobalUse::WRITE);
+                let atomic = holds_atomic(&module, var.ty);
+                let bits = u32::from(read) | u32::from(write) << 1 | u32::from(atomic) << 2;
+                match by.iter_mut().find(|a| a[0] == b.group && a[1] == b.binding) {
+                    Some(a) => a[2] |= bits,
+                    None => by.push([b.group, b.binding, bits]),
+                }
+            }
+            by.sort();
+            let by: Vec<String> = by
+                .iter()
+                .map(|[g, b, a]| format!("[{g}, {b}, {a}]"))
+                .collect();
+            accessed.push(format!("(\"{}\", &[{}])", entry.name, by.join(", ")));
+        }
+        access += &format!("    &[{}],\n", accessed.join(", "));
         // Each binding, the stages whose entry points read it, and the layout kinds that take
         // it as it is declared.
         let mut read_by: Vec<(u32, u32, Vec<&str>, String, u32)> = Vec::new();
@@ -1621,7 +1652,7 @@ fn assemble(out: &Path) {
     .expect("the shaders' sources");
     std::fs::write(
         root.join("stages.rs"),
-        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADERS as usize] = [\n{stages}];\n{BINDS}"),
+        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADERS as usize] = [\n{stages}];\n/// Each shader's compute entry points, each with the bindings it uses, [group, binding, its\n/// access (access.rs `READ`, `WRITE`, `ATOMIC`)], read off it by build.rs.\npub const ACCESS: [&[EntryAccess]; SHADERS as usize] = [\n{access}];\n/// A compute entry point's name and its bindings' access, as `ACCESS` holds them.\npub type EntryAccess = (&'static str, &'static [[u32; 3]]);\n{BINDS}"),
     )
     .expect("the shaders' stages");
 }
@@ -1676,6 +1707,18 @@ pub const fn binds(pipelines: &[u32], group: &[u32]) -> bool {
     true
 }
 ";
+
+/// Whether type `ty` of `module` holds an atomic, itself, in an array or in a member.
+fn holds_atomic(module: &naga::Module, ty: naga::Handle<naga::Type>) -> bool {
+    match &module.types[ty].inner {
+        naga::TypeInner::Atomic(_) => true,
+        naga::TypeInner::Array { base, .. } => holds_atomic(module, *base),
+        naga::TypeInner::Struct { members, .. } => {
+            members.iter().any(|m| holds_atomic(module, m.ty))
+        }
+        _ => false,
+    }
+}
 
 /// The layout kinds (api.json's record words) that take `var` as its declaration has it, as
 /// the bits of an expression over record.rs's names; none for a kind no record word lays out.

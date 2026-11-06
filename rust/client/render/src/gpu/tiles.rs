@@ -68,7 +68,7 @@ const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
 
 /// What the box's args' pass binds (box_args.wgsl): the marks' box, the
 /// args and the tiles' words.
-const BOX_ARGS_GROUP: [u32; 9] = [
+pub(crate) const BOX_ARGS_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
 ];
 

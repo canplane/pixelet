@@ -18,6 +18,7 @@
 //! they set alone (gpu/tiles.rs), through a gate of its own
 //! (light_gate.wgsl), as the world's pass is.
 
+use crate::gpu::ray::sequence;
 use pxl_engine::beam::{CORNER_SIDE, SAMPLE_SIDE};
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
@@ -528,12 +529,12 @@ impl Shadow {
             pass.set_pipeline(self.gate.id);
             pass.set_bind_group(0, self.gate_group.id(), &[]);
             if let Some(args) = tiles.box_args() {
-                pass.draw_indirect(args, 0);
+                pass.draw_indirect(args, sequence::MAP_GATE.at());
             }
         } else if cast {
             pass.set_pipeline(self.lay.id);
             pass.set_bind_group(0, self.lay_group.id(), &[]);
-            pass.draw_indirect(args, word_bytes(light::ARGS_LAY as usize));
+            pass.draw_indirect(args, sequence::MAP_LAY.at());
         }
         pass
     }
