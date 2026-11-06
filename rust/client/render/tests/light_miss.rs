@@ -557,9 +557,6 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
-    let squares = (light::coarse(SIZE) * light::coarse(SIZE)) as usize;
-    let coarse = light::coarse_at(SIZE) as usize;
-    list[coarse..coarse + squares].fill(CAST);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table, store_of());

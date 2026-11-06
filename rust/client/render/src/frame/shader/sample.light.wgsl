@@ -17,12 +17,6 @@ fn sample_item(id: vec2<u32>) -> vec2<u32> {
   return light_item(LEVEL_SAMPLE, id);
 }
 
-/// Whether a tile sample `s` may feed, its own and those about it, is one this cast casts
-/// (light_list.wgsl `light_needs`).
-fn sample_needed(s: vec2<u32>) -> bool {
-  return light_needs(LEVEL_SAMPLE, s);
-}
-
 /// The first word of sample `s` (light_list.wgsl `light_sample_at`).
 fn sample_word(s: vec2<u32>) -> u32 {
   return light_sample_at(s);
@@ -34,6 +28,24 @@ fn left_at() -> u32 {
 
 fn sample_aim(s: vec2<u32>) -> Aim {
   return light_aim(slot_texel(s * LIGHT_SAMPLE), mix_hash(head_word(LIGHT_HEAD_CAST), s.x | (s.y << 16u)));
+}
+
+/// The band its ray asked, its tile's (light_aim.wgsl `texel_band`).
+fn sample_band(s: vec2<u32>) -> u32 {
+  return texel_band(slot_texel(s * LIGHT_SAMPLE));
+}
+
+/// The voxels its boxes draw (`light::voxels_at`).
+fn voxels_at() -> u32 {
+  return head_word(LIGHT_HEAD_VOXELS);
+}
+
+/// The light's slots read no faces' words.
+const SAMPLE_FACE_WORDS: bool = false;
+
+/// None asked (`SAMPLE_FACE_WORDS`).
+fn sample_line(s: vec2<u32>) -> u32 {
+  return NONE;
 }
 
 /// Off the cell of the box its texel lies in (light_resume.wgsl).

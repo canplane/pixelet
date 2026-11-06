@@ -479,24 +479,25 @@ pub const HEAD_READS: usize = HEAD_CELLS + 5;
 pub const HEAD_TILES: usize = HEAD_CELLS + 6;
 pub const HEAD_HANDS: usize = HEAD_CELLS + 7;
 pub const HEAD_STANDS: usize = HEAD_CELLS + 8;
-pub const HEAD_COARSE: usize = HEAD_CELLS + 9;
-pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 10;
-pub const HEAD_MISSES: usize = HEAD_CELLS + 11;
+pub const HEAD_BEAM_ACROSS: usize = HEAD_CELLS + 9;
+pub const HEAD_MISSES: usize = HEAD_CELLS + 10;
 /// Each list's marks (`listed_marks_at`), then each list (`listed_at`), a word each in the
 /// lists' order (`LISTED_CORNERS`).
-pub const HEAD_MARKS: usize = HEAD_CELLS + 12;
+pub const HEAD_MARKS: usize = HEAD_CELLS + 11;
 pub const HEAD_LISTED: usize = HEAD_MARKS + LISTS as usize;
 /// The slots the walk over the node cache left (`misses_left_at`).
 pub const HEAD_MISSES_LEFT: usize = HEAD_LISTED + LISTS as usize;
 /// The beam rays the same walk left (`corners_left_at`).
 pub const HEAD_CORNERS_LEFT: usize = HEAD_MISSES_LEFT + 1;
-const HEAD_LAID_VEC4S: usize = 5;
+/// The voxels the boxes draw (`voxels_at`).
+pub const HEAD_VOXELS: usize = HEAD_CORNERS_LEFT + 1;
+const HEAD_LAID_VEC4S: usize = 6;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
 /// of four floats, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = ACTORS_AT + 1 + ACTORS + HEAD_LAID_VEC4S;
 const _: () = assert!(
-    HEAD_CORNERS_LEFT < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
+    HEAD_VOXELS < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
     "the head holds the words it lays"
 );
 
@@ -514,11 +515,11 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 22] {
         (HEAD_TILES, tiles(size)),
         (HEAD_HANDS, hand_at(size, 0)),
         (HEAD_STANDS, stands_at(size)),
-        (HEAD_COARSE, coarse_at(size)),
         (HEAD_BEAM_ACROSS, beam_across(size)),
         (HEAD_MISSES, misses_at(size)),
         (HEAD_MISSES_LEFT, misses_left_at(size)),
         (HEAD_CORNERS_LEFT, corners_left_at(size)),
+        (HEAD_VOXELS, voxels_at(size)),
         (
             HEAD_MARKS + LISTED_CORNERS as usize,
             listed_marks_at(size, LISTED_CORNERS),
@@ -910,30 +911,10 @@ pub fn footprint(a: [i32; 2], b: [i32; 2]) -> Option<[[i32; 2]; 2]> {
     (!apart && lo != hi).then_some([lo, hi])
 }
 
-/// The reads by the square of `COARSE` tiles a side, past them, `coarse`
-/// a row: the cast's number where a tile in the square is the cast's to
-/// cast, read in place of the tiles where a span of them is asked
-/// (pxl-render light_list.wgsl `light_needs`).
-pub const COARSE: u32 = 8;
-
-pub const fn coarse(size: u32) -> u32 {
-    tiles(size) / COARSE
-}
-
-pub const fn coarse_at(size: u32) -> u32 {
-    reads_at(size) + tiles(size) * tiles(size)
-}
-
-/// The word of the square tile `[i, j]` lies in, among the squares'
-/// (`coarse_at`); the map's tiles a whole number of squares a side.
-pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
-    coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
-}
-
 /// What a cast within its epoch casts, listed as its tiles are claimed
 /// (pxl-render light_propagate.wgsl): what feeds a claimed tile
 /// at each level of the lattice, by the reach it feeds within (pxl-render
-/// light_list.wgsl `light_needs`), each the box tile it lies on: the beam rays'
+/// light_propagate.wgsl `enlist`), each the box tile it lies on: the beam rays'
 /// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
 /// (`LISTED_FED`), and the tiles claimed, whose slots it casts
 /// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
@@ -980,7 +961,7 @@ pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
 
 /// List `which`'s count, its entries after it (`LISTED_CORNERS`).
 pub const fn listed_at(size: u32, which: u32) -> u32 {
-    let mut at = coarse_at(size) + coarse(size) * coarse(size);
+    let mut at = reads_at(size) + tiles(size) * tiles(size);
     let mut k = 0;
     while k < which {
         at += 1 + listed_room(size, k);
@@ -991,8 +972,15 @@ pub const fn listed_at(size: u32, which: u32) -> u32 {
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
 /// stands, the reads, their squares, the lists, the samples left, the beam
-/// rays left.
+/// rays left, the voxels.
 pub const fn list_words(size: u32) -> u32 {
+    voxels_at(size) + (size / SAMPLE) * (size / SAMPLE) * beam::VOXEL_WORDS
+}
+
+/// The voxels the samples' boxes draw (pxl-render boxes.wgsl), past the beam rays left, as the
+/// eye's are past its samples (`beam::Grid::voxels_at`): `beam::VOXEL_WORDS` a box, a box a
+/// sample at most.
+pub const fn voxels_at(size: u32) -> u32 {
     corners_left_at(size) + 1 + beam_across(size) * beam_across(size)
 }
 

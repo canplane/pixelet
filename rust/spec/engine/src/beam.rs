@@ -68,11 +68,13 @@ pub struct Grid {
     hands_at: u32,
     /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines and how far each hands on (`hand_at`);
-    /// then the boxes' asks, a sample's room
-    /// each (`asks_at`), the missed pixels' hits (`hits_at`) and their
-    /// asks (`hit_asks_at`), `HITS` each.
+    /// then the voxels the boxes draw, a sample's room each (`voxels_at`,
+    /// `VOXEL_WORDS`); then the boxes' asks, a sample's room each
+    /// (`asks_at`), the missed pixels' hits (`hits_at`) and their asks
+    /// (`hit_asks_at`), `HITS` each.
     cells_at: u32,
     samples_at: u32,
+    pub voxels_at: u32,
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub hit_asks_at: u32,
@@ -105,7 +107,8 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// the node cache alone leaves start; then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
 /// (`slope`), f32 bits, each rounded once by the host; then where how far each
-/// beam ray hands on starts (`hand_at`): whole vec4s.
+/// beam ray hands on starts (`hand_at`), and where the voxels start
+/// (`voxels_at`).
 pub const GRID_S: usize = 0;
 
 pub const GRID_KEEP: usize = 1;
@@ -127,7 +130,8 @@ pub const GRID_CORNERS_AT: usize = 19;
 pub const GRID_S_INVERSE: usize = 20;
 pub const GRID_SLOPE: usize = 21;
 pub const GRID_HANDS_AT: usize = 23;
-pub const GRID_WORDS: usize = 24;
+pub const GRID_VOXELS_AT: usize = 24;
+pub const GRID_WORDS: usize = 28;
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells
@@ -163,6 +167,7 @@ impl Grid {
             hands_at: 0,
             cells_at: 0,
             samples_at: 0,
+            voxels_at: 0,
             asks_at: 0,
             hits_at: 0,
             hit_asks_at: 0,
@@ -175,7 +180,8 @@ impl Grid {
         g.hands_at = g.corners[0] * g.corners[1] * LINE_WORDS;
         g.cells_at = g.hands_at + g.corners[0] * g.corners[1];
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
-        g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
+        g.voxels_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
+        g.asks_at = g.voxels_at + samples[0] * samples[1] * VOXEL_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
         g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
         g.lefts_at = g.hit_asks_at + HITS * ASK_WORDS;
@@ -214,6 +220,7 @@ impl Grid {
         (w[GRID_LEFTS_AT], w[GRID_MISSES_AT], w[GRID_CORNERS_AT]) =
             (self.lefts_at, self.misses_at, self.corners_at);
         w[GRID_HANDS_AT] = self.hands_at;
+        w[GRID_VOXELS_AT] = self.voxels_at;
         let slope = self.slope();
         (w[GRID_S_INVERSE], w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (
             self.s_inverse().to_bits(),
@@ -240,6 +247,7 @@ impl Grid {
             hands_at: w[GRID_HANDS_AT],
             cells_at: w[GRID_CELLS_AT],
             samples_at: w[GRID_SAMPLES_AT],
+            voxels_at: w[GRID_VOXELS_AT],
             asks_at: w[GRID_ASKS_AT],
             hits_at: w[GRID_HITS_AT],
             hit_asks_at: w[GRID_HIT_ASKS_AT],
@@ -428,19 +436,30 @@ pub const CELL_WORDS: u32 = 3;
 /// enters (`raster`), and walks only where none does. The lattice runs
 /// `NEAR` samples past the screen on each side.
 ///
-/// What a sample leaves for the pixels, in words: the node it stopped at
+/// What a sample leaves for the boxes, in words: the node it stopped at
 /// (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to its reach,
 /// the asset there, 1 where that node lacks, which a pixel entering it
 /// before any cell walks itself, and the axis the sample entered it
-/// across: a face its ray reached through air, so one a pixel may show only
-/// where it enters across the same; what lies about that face
-/// (`face::word`), asked once here for every pixel that shows it.
+/// across: a face its ray reached through air (`raster::faces`).
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
-pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
-pub const SAMPLE_WORDS: u32 = SAMPLE_FACES + 1;
+pub const SAMPLE_WORDS: u32 = SAMPLE_AXIS + 1;
+
+/// A voxel, a box's record, which a pixel that takes the box reads (pxl-render
+/// boxes.wgsl, cast.wgsl, light.wgsl): written by the sample that draws the box
+/// (`raster::KEYS`), in words: its node (`NODE_WORDS`), its asset, 1 where it lacks,
+/// the band its samples asked, the light's (`light::Light::band`; the eye's 0), and
+/// what lies about each of its faces drawn, a word an axis (`face::word`), asked once
+/// a face for every pixel that shows it. Its faces drawn are its box's
+/// (`raster::BOX_FACES`).
+pub const VOXEL_NODE: u32 = 0;
+pub const VOXEL_ASSET: u32 = VOXEL_NODE + NODE_WORDS;
+pub const VOXEL_LACKS: u32 = VOXEL_ASSET + 2;
+pub const VOXEL_BAND: u32 = VOXEL_LACKS + 1;
+pub const VOXEL_FACES: u32 = VOXEL_BAND + 1;
+pub const VOXEL_WORDS: u32 = VOXEL_FACES + 3;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 /// While a sample is listed for the walk that asks the world (pxl-render sample_hit.wgsl,
 /// sample.wgsl), where its walk over the node cache left it, in its asset's first word: how far
@@ -462,10 +481,10 @@ pub const SAMPLE_SIDE: u32 = 8;
 /// the beam rays' words, the face its ray entered (pxl-engine `ray`),
 /// the first word of the beam ray's line its faces are asked off, the line
 /// its cell's rays resumed from (`CELL_CORNER`), and the word its faces are
-/// left in, `ASK_NONE` where it asks none. A box's (`Grid::ask_at`), its
-/// sample's hit's, its faces left in its sample's words (`SAMPLE_FACES`);
-/// a missed pixel's hit's (`Grid::hit_ask_at`), its faces left in the
-/// hit (`HIT_OUT`).
+/// left in, `ASK_NONE` where it asks none. A voxel's face's (`Grid::ask_at`), asked
+/// by the first sample of the voxel to enter it across that face's axis, its face
+/// left at that axis among the voxel's words (`VOXEL_FACES`); a missed pixel's hit's
+/// (`Grid::hit_ask_at`), its faces left in the hit (`HIT_OUT`).
 pub const ASK_NODE: u32 = 0;
 pub const ASK_FACE: u32 = 1;
 pub const ASK_LINE: u32 = 2;

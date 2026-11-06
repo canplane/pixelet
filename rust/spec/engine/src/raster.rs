@@ -2,19 +2,28 @@
 
 //! gpu-portable: the samples' hits drawn as boxes, so the rasterizer keeps
 //! each drawn pixel's cell (pxl-render boxes.wgsl, cast.wgsl `cast_cs`,
-//! gpu/ray/raster.rs, raster.wgsl). Each sample that
-//! stopped is a box, the cell as the cast stops on it (`cast::asset_box`),
-//! unless the sample before it across or up stopped alike, which some
-//! sample before it in turn draws. A box draws its face turned to the eye
-//! across the axis its sample entered by, a lack's every face turned to
-//! it, and a face keeps a pixel only where the pixel's own ray enters the
-//! box across that face's axis (`cast::entry`'s test; raster.wgsl `fs`): the
-//! face a sample's ray reached through air is one the pixel's may show only
-//! where it enters across the same. A ray enters a box through one face, so
+//! gpu/ray/raster.rs, raster.wgsl). A box is a voxel: a node samples
+//! stopped on (`key`), the cell as the cast stops on it (`cast::asset_box`),
+//! drawn once where the samples of one node meet in the cast's table of
+//! voxels (`KEYS`), and by a sample alone where its node is in no slot of it,
+//! a voxel twice then but never none. A box draws, of its faces turned to the
+//! eye, those its samples entered it across (`faces`), a lack's every face
+//! turned to it, and a face keeps a pixel only where the pixel's own ray
+//! enters the box across that face's axis (`cast::entry`'s test; raster.wgsl
+//! `fs`): a face some sample's ray reached through air is one the pixel's may
+//! show where it enters across it. A ray enters a box through one face, so
 //! what is kept lies where the ray enters, at the depth the raster draws
 //! it, and the depth test keeps the nearest box the pixel's ray enters of
-//! every sample's, leaving its sample's number (`id_of`): the pixel's cell
-//! where a hit, and where a lack, a node it walks itself.
+//! every voxel's, leaving its voxel's number (`id_of`), whose words
+//! (`beam::VOXEL_WORDS`) the pixel takes: its cell where a hit, and where a
+//! lack, a node it walks itself.
+//!
+//! The boxes of the samples drawn one a sample, each its face across its own
+//! axis, and the voxels' draw the same: the samples of one node hold one
+//! answer and one box (`key`), so a voxel's box is each of theirs, and its
+//! faces are the union of theirs; every face a sample's box drew is a voxel's,
+//! at the same planes, and none else, so every pixel meets the same faces at
+//! the same depths and keeps the same nearest.
 
 use crate::beam;
 
@@ -32,54 +41,94 @@ use crate::beam;
 /// 270 thousand on a 16:9 view whatever its pixels. The missed pixels'
 /// hits' faces are asked by args laid alike, their count where the boxes'
 /// is (`ray::MISS_ARGS_ROOM`).
+/// The draw's args are its own words alone; the faces' asks', a voxel's face each, laid the
+/// same way at `ASKED_AT`, a storage binding's alignment past them, which the faces' pass binds
+/// alone.
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
-/// eye's origin, lowest then highest, f32 bits, its sample's number
-/// (`id_of`), and the axis its sample entered across, with `EYED` where the
-/// box lies about the eye (`is_eyed`).
+/// eye's origin, lowest then highest, f32 bits, its voxel's number
+/// (`id_of`), and its faces drawn, a bit an axis (`faces`), with `EYED`
+/// where the box lies about the eye (`is_eyed`); past them the cast's table
+/// of voxels (`keys_at`).
 pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
 pub const ARGS_ASKS: u32 = 7;
 pub const ARGS_CNT: u32 = 8;
 pub const ARGS_WORDS: u32 = 9;
+pub const ASKED_AT: u32 = 64;
 pub const FACES_LANES: u32 = 64;
 pub const BOX_LO: u32 = 0;
 pub const BOX_HI: u32 = 3;
 pub const BOX_ID: u32 = 6;
-pub const BOX_AXIS: u32 = 7;
+pub const BOX_FACES: u32 = 7;
 pub const BOX_WORDS: u32 = 8;
 pub const EYED: u32 = 1 << 8;
+const _: () = assert!(ARGS_WORDS <= ASKED_AT && (ASKED_AT * 4).is_multiple_of(256));
+
+/// The cast's table of voxels, past the boxes: `KEYS` slots a sample, two words a slot,
+/// the number plus one of the sample that claimed it, 0 where free, then its voxel's
+/// number plus one once that sample wrote it. Only a sample whose node no sample before
+/// it across or up stopped on claims a slot; every sample then finds its node's
+/// (pxl-render boxes.wgsl). Cleared before every cast that writes boxes, so it holds that
+/// cast's voxels alone.
+pub const KEYS: u32 = 2;
+pub const KEY_WORDS: u32 = 2;
 
 /// The words the boxes' buffer takes for `samples` samples, each a box at
-/// most.
+/// most, and the table past them (`keys_at`).
 pub const fn words(samples: u32) -> u32 {
+    samples * (BOX_WORDS + KEYS * KEY_WORDS)
+}
+
+/// The first word of the table of voxels for `samples` samples.
+pub const fn keys_at(samples: u32) -> u32 {
     samples * BOX_WORDS
+}
+
+/// What a voxel is told apart by, the sample's at word `at` of `words`
+/// (`beam::SAMPLE_NODE`): its node, its zoom, corner and roots, and the band its
+/// ray asked (the light's, `light::Light::band`; the eye's 0). A stopped cell's
+/// answer is the world's query's for its node from what its parent handed it, the
+/// zooms asked aside (pxl-render world_split.wgsl `world_node`: a node the query
+/// stops in is answered by `world_cell`, which takes no zoom asked, and a split
+/// coarser than asked answers a cell only void, which no ray stops in), and the
+/// zooms a node is asked at are its key's alone: the eye's off its distance from
+/// the eye every eye's ray starts at (pxl-render walk.wgsl `walk`), the light's its
+/// band. So samples of one key hold one answer and one box.
+pub fn key(words: &[u32], at: usize, band: u32) -> ([u32; beam::NODE_WORDS as usize], u32) {
+    let k = at + beam::SAMPLE_NODE as usize;
+    (core::array::from_fn(|i| words[k + i]), band)
+}
+
+/// A voxel's faces drawn, a bit an axis: each axis one of its samples entered it
+/// across (`beam::SAMPLE_AXIS`), the face a ray entering across it reaches through
+/// air.
+pub fn faces(axes: impl IntoIterator<Item = u32>) -> u32 {
+    axes.into_iter().fold(0, |m, a| m | 1 << a)
+}
+
+/// Whether a pixel takes a voxel it enters across `axis`: a face drawn there
+/// (`faces`).
+pub fn accepts(faces: u32, axis: u32) -> bool {
+    faces >> axis & 1 != 0
 }
 
 /// A box's corners drawn: its three faces turned to the eye, one an axis,
 /// two triangles each (`corner`), a face not drawn left a point.
 pub const VERTICES: u32 = 18;
 
-/// A sample's number as the raster leaves it at a pixel: its index among
-/// the samples (`beam::Grid::sample_at`'s, `j · samples[0] + i`) plus one,
-/// so 0 is none, and `LACK` where the sample lacks.
+/// A voxel's number as the raster leaves it at a pixel: its place among the
+/// voxels (`beam::Grid::voxels_at`, `light::voxels_at`), its box's, plus one,
+/// so 0 is none, and `LACK` where it lacks.
 pub const LACK: u32 = 1 << 31;
 
-pub const fn id_of(sample: u32, lacks: bool) -> u32 {
-    (sample + 1) | if lacks { LACK } else { 0 }
+pub const fn id_of(voxel: u32, lacks: bool) -> u32 {
+    (voxel + 1) | if lacks { LACK } else { 0 }
 }
 
-/// The sample an id names (`id_of`), none for 0.
-pub const fn sample_of(id: u32) -> u32 {
+/// The voxel an id names (`id_of`), none for 0.
+pub const fn voxel_of(id: u32) -> u32 {
     (id & !LACK) - 1
-}
-
-/// Whether the samples whose words begin at `a` and `b` of `words` stopped alike, so the later
-/// draws no box of its own: alike in every word a pixel reads of them, those before
-/// `beam::SAMPLE_FACES` (pxl-render boxes.wgsl `alike`).
-pub fn alike(words: &[u32], a: usize, b: usize) -> bool {
-    let read = beam::SAMPLE_FACES as usize;
-    words[a..a + read] == words[b..b + read]
 }
 
 /// The raster's reversed depth: a face at view depth `w` drawn at `NEAR /
@@ -216,13 +265,13 @@ mod tests {
         }
     }
 
-    /// An id names its sample again, and says whether it lacks.
+    /// An id names its voxel again, and says whether it lacks.
     #[test]
     fn id_names_sample() {
         for (s, lacks) in [(0, false), (7, true), ((1 << 25) - 1, false)] {
             let id = id_of(s, lacks);
             assert_ne!(id, 0);
-            assert_eq!(sample_of(id), s);
+            assert_eq!(voxel_of(id), s);
             assert_eq!(id & LACK != 0, lacks);
         }
     }

@@ -1,17 +1,19 @@
 // pxl-render/light.wgsl
 
-// The world's depth from the light into every slot the cast needs (light_list.wgsl
-// `light_needs`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
-// sample where its own ray enters it as that sample entered it, or the sky where no sample
-// about it met anything, as cast.wgsl takes a pixel's (visible.wgsl), each only where that
-// sample asked the band the slot asks; the rest listed for their walk (light_miss_hit.wgsl,
-// light_miss.wgsl).
+// The world's depth from the light into every slot of the tiles the cast claimed (light_list.wgsl
+// `light_item`): a workgroup a tile (`light::TILE`), a thread a slot, each taking the visible
+// voxel where its own ray enters it across a face its samples entered it by, or the sky where
+// no sample about it met anything, as cast.wgsl takes a pixel's (visible.wgsl), each only where
+// that voxel was asked at the band the slot asks; the rest listed for their walk
+// (light_miss_hit.wgsl, light_miss.wgsl).
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(10) var light: texture_storage_2d_array<r32uint, read_write>;
-/// The visible sample at each texel of the box, in the box's order (`Light::texel`): its
-/// sample's number (`raster::id_of`), 0 where it kept none.
+/// The visible voxel at each texel of the box, in the box's order (`Light::texel`): its
+/// number (`raster::id_of`), 0 where it kept none.
 @group(0) @binding(15) var visibility: texture_2d_array<u32>;
+/// The voxels' boxes, read for the faces each draws (`raster::BOX_FACES`).
+@group(0) @binding(14) var<storage, read> boxes: array<u32>;
 /// The listed slots' dispatch, their count and the counts' lanes (list.wgsl `MissArgs`).
 @group(0) @binding(17) var<storage, read_write> args: MissArgs;
 
@@ -44,9 +46,8 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
     && went_on_alike(s + vec2<u32>(1u, 1u), band, p);
 }
 
-/// Each slot of the tiles the cast claimed, every one it needs (light_list.wgsl `light_item`,
-/// `light_needs`): its word off its visible sample or the sky, else listed for its walk as the
-/// eye's missed pixels are. The list holds every slot, so none finds it full.
+/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): its word off its
+/// visible voxel or the sky, else listed for its walk as the eye's missed pixels are. The list holds every slot, so none finds it full.
 @compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
 fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
@@ -63,11 +64,11 @@ fn light_cs(
   let band = aim.range.x;
   let visible = textureLoad(visibility, p, 0u, 0u).x;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    let n = size / LIGHT_SAMPLE;
-    let id = (visible & ~VISIBLE_LACK) - 1u;
-    let s = vec2<u32>(id % n, id / n);
-    let entry = visible_entry(aim, light_sample_at(s));
-    if (entry.enters && asks_alike(s, band, p)) {
+    let v = (visible & ~VISIBLE_LACK) - 1u;
+    let k = head_word(LIGHT_HEAD_VOXELS) + v * VOXEL_WORDS;
+    let entry = visible_entry(aim, k, boxes[v * RASTER_BOX_WORDS + RASTER_BOX_FACES]);
+    // Taken only where the voxel was asked at the slot's band (pxl-engine `Light::band`).
+    if (entry.enters && beams[k + VOXEL_BAND] == band) {
       add_cnt(on, COUNT_REUSED);
       textureStore(light, at, 0u, vec4<u32>(stop_word(entry.t, entry.axis), 0u, 0u, 0u));
       return;

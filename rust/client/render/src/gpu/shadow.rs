@@ -4,7 +4,7 @@
 //! orthographic about the eye and as wide as every effect reaches (the
 //! kernel's `STAGE_AT::EFFECT_REACH`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the visible sample (light.wgsl `light_cs`), into
+//! rays are, off samples and the visible voxel (light.wgsl `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order, one triangle over it

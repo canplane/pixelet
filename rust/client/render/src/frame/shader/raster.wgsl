@@ -1,16 +1,17 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The samples' hits drawn at the eye's rays' pixels (pxl-engine raster.rs):
-// each box an instance, its three faces turned to the eye, one an axis, as
-// `corner` winds them, the faces turned away never drawn, each grown in its own
-// plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn pixel. A
-// hit's box draws the face across its sample's axis alone, a lack's every face
-// turned to the eye. A face keeps a pixel only where the pixel's own ray enters
-// the box across that face's axis (`raster_enters`). A ray enters a box through
-// one face, and the face lies in its plane, so a kept fragment's depth is where
-// the ray enters the box: the depth test, early, keeps the nearest box the
-// pixel's ray enters of every sample's. A pixel keeps that face's sample's
-// number, which the cast's pixels read (cast.wgsl `cast_cs`). A box
+// The voxels the samples stopped on drawn at the eye's rays' pixels (pxl-engine
+// raster.rs): each box an instance, its three faces turned to the eye, one an
+// axis, as `corner` winds them, the faces turned away never drawn, each grown in
+// its own plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn
+// pixel. A hit's box draws the faces across the axes its samples entered it by
+// (`raster::faces`), a lack's every face turned to the eye. A face keeps a pixel
+// only where the pixel's own ray enters the box across that face's axis
+// (`raster_enters`). A ray enters a box through one face, and the face lies in
+// its plane, so a kept fragment's depth is where the ray enters the box: the
+// depth test, early, keeps the nearest box the pixel's ray enters of every
+// voxel's. A pixel keeps its voxel's number, which the cast's pixels read
+// (cast.wgsl `cast_cs`). A box
 // about the eye (`RASTER_EYED`), which the near plane may cut, is drawn over
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.
@@ -46,7 +47,7 @@ struct Raster {
 @group(0) @binding(0) var<uniform> raster: Raster;
 @group(0) @binding(1) var<storage, read> boxes: array<u32>;
 
-// A face's sample's number; its box's planes; and the axis a pixel's ray
+// A face's voxel's number; its box's planes; and the axis a pixel's ray
 // must enter it across, `RASTER_ANY` for a box about the eye.
 struct RasterOut {
   @builtin(position) clip: vec4f,
@@ -69,7 +70,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   o.id = boxes[w + RASTER_BOX_ID];
   // Past the near plane: a corner of a face not drawn.
   o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
-  let word = boxes[w + RASTER_BOX_AXIS];
+  let word = boxes[w + RASTER_BOX_FACES];
   let lacks = (o.id & RASTER_LACK) != 0u;
   let lo = vec3f(raster_plane(w + RASTER_BOX_LO), raster_plane(w + RASTER_BOX_LO + 1u), raster_plane(w + RASTER_BOX_LO + 2u));
   let hi = vec3f(raster_plane(w + RASTER_BOX_HI), raster_plane(w + RASTER_BOX_HI + 1u), raster_plane(w + RASTER_BOX_HI + 2u));
@@ -86,7 +87,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   }
   let a = vi / 6u;
   o.axis = a;
-  if (!lacks && a != (word & RASTER_AXIS_MASK)) {
+  if (!lacks && (((word & RASTER_FACES_MASK) >> a) & 1u) == 0u) {
     return o;
   }
   let light = raster.turn.y != 0u;
@@ -203,7 +204,7 @@ fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
   return t1 > t0 && (a == RASTER_ANY || e == a);
 }
 
-// Its sample's number (pxl-engine raster.rs `id_of`) where the pixel's
+// Its voxel's number (pxl-engine raster.rs `id_of`) where the pixel's
 // ray enters its box across this face (`raster_enters`): the eye's from the
 // eye, its direction as pxl-engine cast.rs `through` forms it; the light's
 // from its texel's middle on the near plane, along the light.

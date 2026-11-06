@@ -5,7 +5,7 @@
 //! `face_cs`: each box's ask answered with the bits `face::word` gives, every cell beside the
 //! hit asked off the line down to it as `support::sub_line` and `support::asset` ask it.
 //!
-//! `cast_cs`: each pixel it draws holds the words `cast::entry` takes off the visible sample
+//! `cast_cs`: each pixel it draws holds the words `cast::entry` takes off the visible voxel
 //! the test lays at it, or the sky where the four samples about it (`Grid::sample_before`)
 //! went on; a cell past the eye's reach is not entered. A pixel it leaves, or marks missed,
 //! is the walk's to answer (tests/sample.rs). The device's own tangents, way and reciprocal of
@@ -112,7 +112,10 @@ struct Cast {
     asked: Vec<u32>,
     beams: Vec<u32>,
     table: Vec<u32>,
-    boxes: u32,
+    /// The faces' asks laid, the voxels, and the boxes, their words (`raster::BOX_WORDS`).
+    asks: u32,
+    voxels: u32,
+    boxes: Vec<u32>,
 }
 
 fn device() -> Option<Gpu> {
@@ -267,26 +270,31 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     }
     let samples = grid.samples[0] * grid.samples[1];
     let boxes = gpu.buffer(&vec![0u32; raster::words(samples) as usize], store());
-    let mut laid = [0u32; raster::ARGS_WORDS as usize];
+    // The draw's args, then the faces' asks' (`raster::ASKED_AT`).
+    let asked_at = raster::ASKED_AT as usize;
+    let mut laid = vec![0u32; asked_at + raster::ARGS_WORDS as usize];
     laid[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-    laid[raster::ARGS_FACES as usize + 1] = 1;
-    laid[raster::ARGS_FACES as usize + 2] = 1;
-    laid[raster::ARGS_ASKS as usize] = grid.asks_at;
+    laid[asked_at + raster::ARGS_FACES as usize + 1] = 1;
+    laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
+    laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
     let box_args = gpu.buffer(&laid, store());
-    gpu.dispatch(
-        &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (8, beams.as_entire_binding()),
-            (14, boxes.as_entire_binding()),
-            (16, box_args.as_entire_binding()),
-        ],
-        [
-            grid.samples[0].div_ceil(SQUARE_SIDE),
-            grid.samples[1].div_ceil(SQUARE_SIDE),
-            1,
-        ],
-    );
+    // The boxes' two passes, the second reading what the first claimed.
+    for entry in ["sample_box_cs", "sample_observe_cs"] {
+        gpu.dispatch(
+            &gpu.pipeline(src(SHADER_SAMPLE_BOX), entry),
+            &[
+                (0, eye_buf.as_entire_binding()),
+                (8, beams.as_entire_binding()),
+                (14, boxes.as_entire_binding()),
+                (16, box_args.as_entire_binding()),
+            ],
+            [
+                grid.samples[0].div_ceil(SQUARE_SIDE),
+                grid.samples[1].div_ceil(SQUARE_SIDE),
+                1,
+            ],
+        );
+    }
     let asked = gpu.read(&beams);
     let laid = gpu.read(&box_args);
     let (mut stopped, mut lacks) = (0, 0);
@@ -307,8 +315,8 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
 
     gpu.dispatch(
         face_p,
-        &face_binds(b, &eye_buf, &beams, &box_args),
-        [laid[raster::ARGS_FACES as usize], 1, 1],
+        &face_binds(b, &eye_buf, &beams, &box_args, raster::ASKED_AT),
+        [laid[asked_at + raster::ARGS_FACES as usize], 1, 1],
     );
     Cast {
         eye,
@@ -320,7 +328,9 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         asked,
         beams: gpu.read(&beams),
         table: gpu.read(&table),
-        boxes: laid[raster::ARGS_INSTANCES as usize],
+        asks: laid[asked_at + raster::ARGS_INSTANCES as usize],
+        voxels: laid[raster::ARGS_INSTANCES as usize],
+        boxes: gpu.read(&boxes),
     }
 }
 
@@ -329,6 +339,7 @@ fn face_binds<'a>(
     eye: &'a wgpu::Buffer,
     beams: &'a wgpu::Buffer,
     args: &'a wgpu::Buffer,
+    at: u32,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
     vec![
         (0, eye.as_entire_binding()),
@@ -338,7 +349,14 @@ fn face_binds<'a>(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, beams.as_entire_binding()),
-        (16, args.as_entire_binding()),
+        (
+            16,
+            wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: args,
+                offset: u64::from(at) * 4,
+                size: std::num::NonZeroU64::new(u64::from(raster::ARGS_WORDS) * 4),
+            }),
+        ),
     ]
 }
 
@@ -628,7 +646,7 @@ fn hand_faces_answer_as_face_word() {
 
         // Each box's ask answered where it says, as the Rust answers it.
         let (mut want, mut have) = (Vec::new(), Vec::new());
-        for i in 0..cast.boxes {
+        for i in 0..cast.asks {
             let a = g.ask_at(i);
             let to = cast.asked[(a + beam::ASK_TO) as usize];
             if to == beam::ASK_NONE {
@@ -825,9 +843,19 @@ fn hand_pixels_answer_as_cast_entry() {
             inv_off = inv_off.max(off);
         }
 
-        // The visible sample the raster would leave: mostly one of the four about the pixel,
-        // some none, some a lack, some a sample far off.
+        // The visible voxel the raster would leave: mostly that of one of the four samples
+        // about the pixel, some none, some a lack, some a sample's far off.
         let n = g.samples[0];
+        // Each voxel by its node, the first written where one is twice (`raster::key`).
+        let mut voxel_at = std::collections::BTreeMap::new();
+        for v in (0..cast.voxels).rev() {
+            let r = (g.voxels_at + v * beam::VOXEL_WORDS) as usize;
+            voxel_at.insert(raster::key(&cast.beams, r, 0), v);
+        }
+        let voxel_of = |i: u32| -> Option<u32> {
+            let k = g.sample_at([i % n, i / n]) as usize;
+            voxel_at.get(&raster::key(&cast.beams, k, 0)).copied()
+        };
         let stopped: Vec<u32> = (0..n * g.samples[1])
             .filter(|&i| {
                 let k = g.sample_at([i % n, i / n]);
@@ -849,7 +877,10 @@ fn hand_pixels_answer_as_cast_entry() {
                 if w(beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE {
                     return 0;
                 }
-                raster::id_of(i, w(beam::SAMPLE_LACKS) != 0 || h % 16 == 2)
+                let Some(v) = voxel_of(i) else {
+                    return 0;
+                };
+                raster::id_of(v, w(beam::SAMPLE_LACKS) != 0 || h % 16 == 2)
             })
             .collect();
         let vis = texture(
@@ -900,6 +931,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
         let beams = gpu.buffer(&cast.beams, store());
+        let boxes = gpu.buffer(&cast.boxes, store());
         gpu.dispatch(
             &cast_p,
             &[
@@ -909,6 +941,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (9, table_buf.as_entire_binding()),
                 (13, wgpu::BindingResource::TextureView(&vis_view)),
                 (14, marks.as_entire_binding()),
+                (15, boxes.as_entire_binding()),
                 (30, list.as_entire_binding()),
             ],
             [listed, per_tile, per_tile],
@@ -928,23 +961,24 @@ fn hand_pixels_answer_as_cast_entry() {
             let r = Ray::new(at.dir, far);
             let mut said = [ray::MISS, 0, 0, 0];
             if v != 0 && v & raster::LACK == 0 {
-                let i = raster::sample_of(v);
-                let k = g.sample_at([i % n, i / n]);
+                let i = raster::voxel_of(v);
+                let k = g.voxels_at + i * beam::VOXEL_WORDS;
                 let w = |a: u32| cast.beams[(k + a) as usize];
-                let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
-                let asset = [w(beam::SAMPLE_ASSET), w(beam::SAMPLE_ASSET + 1)];
+                let node = node_at(&cast.beams, k + beam::VOXEL_NODE);
+                let asset = [w(beam::VOXEL_ASSET), w(beam::VOXEL_ASSET + 1)];
+                let faces = cast.boxes[(i * raster::BOX_WORDS + raster::BOX_FACES) as usize];
                 // The entry along the device's reciprocal, its plane's t a few ulps off as the
                 // device divides; a pixel at an edge as the device rounds it.
-                let axis_was = w(beam::SAMPLE_AXIS);
                 let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
-                let mut takes = e.enters && e.axis == axis_was;
+                let axis_was = e.axis;
+                let mut takes = e.enters && raster::accepts(faces, e.axis);
                 kinds.add("enters its sample", takes);
                 kinds.add(
                     "enters its sample past the eye's reach",
                     !takes && {
                         let r = Ray::new(at.dir, f32::INFINITY);
                         let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
-                        e.enters && e.axis == axis_was
+                        e.enters && raster::accepts(faces, e.axis)
                     },
                 );
                 if !takes && drew && at_edge(&e, at.dir) {
@@ -966,7 +1000,7 @@ fn hand_pixels_answer_as_cast_entry() {
                         ray::first_word(asset[0], face, node.zoom),
                         t.to_bits(),
                         asset[1],
-                        w(beam::SAMPLE_FACES),
+                        w(beam::VOXEL_FACES + axis_was),
                     ];
                     kinds.add(
                         "enters its sample, short of its cube",

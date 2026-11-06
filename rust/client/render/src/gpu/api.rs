@@ -1930,6 +1930,13 @@ impl Gpu {
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
+    /// `size` bytes of buffer `id` from `at` set to zero, in the encoder's order.
+    pub fn clear_buf(&self, encoder: Id, id: Id, at: u32, size: u32) {
+        let s = self.s();
+        call::clear_buffer(&mut s.stream, s.splits.at(encoder), id, at, Some(size));
+        s.splits.copied(encoder, id);
+    }
+
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
         let s = self.s();
         call::copy_buffer_to_buffer(

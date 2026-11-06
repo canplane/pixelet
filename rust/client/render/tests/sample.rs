@@ -131,6 +131,22 @@ impl Observed {
         }
     }
 
+    /// The band sample `s`'s ray asked, the light's (`raster::key`); the eye's 0.
+    fn band(&self, s: [u32; 2]) -> u32 {
+        match &self.rays {
+            Rays::Eye { .. } => 0,
+            Rays::Light { .. } => self.aim(s).2.range[0],
+        }
+    }
+
+    /// Where the voxels lie among the words (`beam::Grid::voxels_at`, `light::voxels_at`).
+    fn voxels_at(&self) -> u32 {
+        match &self.rays {
+            Rays::Eye { grid, .. } => grid.voxels_at,
+            Rays::Light { size, .. } => light::voxels_at(*size),
+        }
+    }
+
     fn sample_at(&self, s: [u32; 2]) -> u32 {
         match &self.rays {
             Rays::Eye { grid, .. } => grid.sample_at(s),
@@ -416,10 +432,6 @@ fn light_beams(
     let mut list = obs.words.clone();
     let reads_at = light::reads_at(size) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
-    // And their squares, which a beam ray's corner reads where it feeds many tiles.
-    let coarse_at = light::coarse_at(size) as usize;
-    let squares = light::coarse(size) * light::coarse(size);
-    list[coarse_at..coarse_at + squares as usize].fill(CAST);
     // Every tile fed, as a cast that claims them all lists them; its samples' passes over the
     // list, a tile's samples a side each (`list_every`).
     let fed = list_every(&mut list, size, light::LISTED_FED, 1);
@@ -1684,22 +1696,23 @@ fn stopped(
 /// A box as pxl-engine `raster` has it written (`raster::BOX_WORDS`).
 type BoxWords = [u32; raster::BOX_WORDS as usize];
 
-/// Each box the samples' words `words` draw from `origin`, by its sample's id
-/// (`raster::id_of`): a sample that stopped, unless the one across or up before it that the
-/// cast needs stopped alike (`raster::alike`), which one before is asked and in what order
-/// this test's own reading of boxes.wgsl `sample_box`; the cell as the cast stops on it
-/// (`cast::asset_box`), and `raster::EYED` where `tan` is the screen's and it lies about the
-/// eye (`raster::is_eyed`).
+/// A voxel's key (`raster::key`).
+type Key = ([u32; beam::NODE_WORDS as usize], u32);
+
+/// Each voxel the samples' words `words` draw from `origin`, by its key (`raster::key`): a
+/// node a sample that stopped stopped on at its band, its box the cell as the cast stops on it
+/// (`cast::asset_box`), `raster::EYED` where `tan` is the screen's and it lies about the eye
+/// (`raster::is_eyed`), its faces drawn each axis a sample of it entered across
+/// (`raster::faces`), and its id but the voxel's number, which the boxes' order gives
+/// (`BOX_ID` left 0).
 fn boxes_want(
     obs: &Observed,
     words: &[u32],
     origin: [i32; 3],
     tan: Option<[f32; 2]>,
     kinds: &mut Kinds,
-) -> BTreeMap<u32, BoxWords> {
-    let mut want = BTreeMap::new();
-    let n = obs.lattice;
-    let alike = |a: usize, b: usize| raster::alike(words, a, b);
+) -> BTreeMap<Key, BoxWords> {
+    let mut want: BTreeMap<Key, BoxWords> = BTreeMap::new();
     let mut add = |k: &'static str, yes: bool| kinds.add(k, yes);
     for s in obs.taken() {
         let k = obs.sample_at(s) as usize;
@@ -1710,23 +1723,15 @@ fn boxes_want(
             add("past its reach, no box", true);
             continue;
         }
-        // A sample before that the cast does not need is not compared, whatever it holds.
-        for b in [[s[0].wrapping_sub(1), s[1]], [s[0], s[1].wrapping_sub(1)]] {
-            if b[0] < n[0] && b[1] < n[1] && !obs.needed(b) {
-                add(
-                    "a sample before not needed, alike as it stood",
-                    alike(k, obs.sample_at(b) as usize),
-                );
-            }
-        }
-        let across = s[0] > 0 && obs.needed([s[0] - 1, s[1]]);
-        if across && alike(k, obs.sample_at([s[0] - 1, s[1]]) as usize) {
-            add("alike the one across", true);
-            continue;
-        }
-        let up = s[1] > 0 && obs.needed([s[0], s[1] - 1]);
-        if up && alike(k, obs.sample_at([s[0], s[1] - 1]) as usize) {
-            add("alike the one up", true);
+        let axis = words[k + beam::SAMPLE_AXIS as usize];
+        let key = raster::key(words, k, obs.band(s));
+        if let Some(w) = want.get_mut(&key) {
+            add("a voxel another sample drew", true);
+            add(
+                "a voxel another sample drew, across another axis",
+                w[raster::BOX_FACES as usize] >> axis & 1 == 0,
+            );
+            w[raster::BOX_FACES as usize] |= raster::faces([axis]);
             continue;
         }
         let cell = Node {
@@ -1755,15 +1760,13 @@ fn boxes_want(
         }
         let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
         let eyed = tan.is_some_and(|t| raster::is_eyed(lo, hi, t));
-        let id = raster::id_of(s[1] * n[0] + s[0], lacks);
         let mut w = [0u32; raster::BOX_WORDS as usize];
         for a in 0..3 {
             w[(raster::BOX_LO as usize) + a] = lo[a].to_bits();
             w[(raster::BOX_HI as usize) + a] = hi[a].to_bits();
         }
-        w[raster::BOX_ID as usize] = id;
-        let axis = words[k + beam::SAMPLE_AXIS as usize];
-        w[raster::BOX_AXIS as usize] = axis | if eyed { raster::EYED } else { 0 };
+        w[raster::BOX_ID as usize] = if lacks { raster::LACK } else { 0 };
+        w[raster::BOX_FACES as usize] = raster::faces([axis]) | if eyed { raster::EYED } else { 0 };
         add("boxes", true);
         add("boxes, eyed", eyed);
         add("boxes, eyed, a cell", eyed && !lacks);
@@ -1796,23 +1799,25 @@ fn boxes_want(
             answer::fill_eighths(asset) < answer::EIGHTHS,
         );
         add("boxes, in another root", cell.roots != [0; 3]);
-        want.insert(id, w);
+        want.insert(key, w);
     }
     want
 }
 
-/// The boxes' writing by hand over `words` from `origin` against `boxes_want`: as many boxes,
-/// each once, word for word. Fails into `failed`.
+/// The boxes' two passes by hand over `words` from `origin` against `boxes_want`: a voxel's
+/// box for each key, word for word, its voxel's words its node's, and its faces drawn, over
+/// every box of its key, the axes its samples entered across; a key drawn twice told, never
+/// none. `asks_at` lays the faces' asks. Fails into `failed`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the device, the pass, its observer, words, origin and screen, what to tell and what failed"
+    reason = "the device, the pass, its observer, words, origin and asks, screen, what to tell and what failed"
 )]
 fn boxes_case(
     gpu: &Gpu,
-    pass: &wgpu::ComputePipeline,
+    passes: [&wgpu::ComputePipeline; 2],
     obs: &Observed,
     words: &[u32],
-    origin: [i32; 3],
+    (origin, asks_at): ([i32; 3], u32),
     grid: Option<&Grid>,
     groups: [u32; 2],
     kinds: &mut Kinds,
@@ -1821,20 +1826,19 @@ fn boxes_case(
     let name = &obs.name;
     let want = boxes_want(obs, words, origin, grid.map(|g| g.tan), kinds);
     let samples = obs.lattice[0] * obs.lattice[1];
-    let mut laid_args = vec![0u32; raster::ARGS_WORDS as usize];
+    let asked = raster::ASKED_AT as usize;
+    let mut laid_args = vec![0u32; asked + raster::ARGS_WORDS as usize];
     laid_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-    if let Some(g) = grid {
-        laid_args[raster::ARGS_FACES as usize + 1] = 1;
-        laid_args[raster::ARGS_FACES as usize + 2] = 1;
-        laid_args[raster::ARGS_ASKS as usize] = g.asks_at;
-    }
+    laid_args[asked + raster::ARGS_FACES as usize + 1] = 1;
+    laid_args[asked + raster::ARGS_FACES as usize + 2] = 1;
+    laid_args[asked + raster::ARGS_ASKS as usize] = asks_at;
     let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buffer(words, store_of());
-    let boxes = gpu.buffer(
-        &vec![UNWRITTEN; raster::words(samples) as usize],
-        store_of(),
-    );
+    // The boxes unwritten, the table of voxels past them cleared, as the cast clears it.
+    let mut laid = vec![UNWRITTEN; raster::words(samples) as usize];
+    laid[raster::keys_at(samples) as usize..].fill(0);
+    let boxes = gpu.buffer(&laid, store_of());
     let args = gpu.buffer(&laid_args, store_of());
     let mut binds = vec![
         (0, eye_buf.as_entire_binding()),
@@ -1845,29 +1849,39 @@ fn boxes_case(
     if obs.apart {
         binds.push((11, head_buf.as_entire_binding()));
     }
-    gpu.dispatch(pass, &binds, [groups[0], groups[1], 1]);
+    for pass in passes {
+        gpu.dispatch(pass, &binds, [groups[0], groups[1], 1]);
+    }
     let got_args = gpu.read(&args);
     let got_boxes = gpu.read(&boxes);
+    let got_words = gpu.read(&beams);
 
     let mut fail = |what: String| failed.push(format!("{name}: {what}"));
     let cnt = got_args[raster::ARGS_INSTANCES as usize];
-    if cnt != want.len() as u32 {
-        fail(format!("{cnt} boxes drawn, want {}", want.len()));
-    }
-    // Each box once, word for word.
-    let (mut same, mut differ) = (0u64, 0u64);
-    let mut seen = BTreeSet::new();
+    // Each box its key's, word for word but its faces, which its key's boxes draw together.
+    let (mut same, mut differ, mut twice) = (0u64, 0u64, 0u64);
+    let mut faces: BTreeMap<Key, u32> = BTreeMap::new();
+    let voxels = obs.voxels_at() as usize;
     for place in 0..(samples as usize).min(cnt as usize) {
         let at = place * raster::BOX_WORDS as usize;
         let b = &got_boxes[at..at + raster::BOX_WORDS as usize];
-        let id = b[raster::BOX_ID as usize];
-        let Some(w) = want.get(&id).filter(|_| seen.insert(id)) else {
+        let r = voxels + place * beam::VOXEL_WORDS as usize;
+        let band = got_words[r + beam::VOXEL_BAND as usize];
+        let key = raster::key(&got_words, r, band);
+        let Some(w) = want.get(&key) else {
             differ += 1;
             if differ <= 3 {
-                eprintln!("DIFFERS {name}: box {place} {b:x?}, no such sample's or twice");
+                eprintln!("DIFFERS {name}: box {place} {b:x?}, no such voxel");
             }
             continue;
         };
+        let mut w = *w;
+        w[raster::BOX_ID as usize] |= place as u32 + 1;
+        let drawn = b[raster::BOX_FACES as usize];
+        w[raster::BOX_FACES as usize] = drawn;
+        if faces.insert(key, drawn).is_some() {
+            twice += 1;
+        }
         if b != w {
             differ += 1;
             if differ <= 3 {
@@ -1877,13 +1891,27 @@ fn boxes_case(
             same += 1;
         }
     }
+    // Every key's faces, over its boxes, the axes its samples entered across.
+    let mut drawn: BTreeMap<Key, u32> = BTreeMap::new();
+    for place in 0..(samples as usize).min(cnt as usize) {
+        let r = voxels + place * beam::VOXEL_WORDS as usize;
+        let key = raster::key(&got_words, r, got_words[r + beam::VOXEL_BAND as usize]);
+        let f = got_boxes[place * raster::BOX_WORDS as usize + raster::BOX_FACES as usize];
+        *drawn.entry(key).or_default() |= f & !raster::EYED;
+    }
+    let faces_differ = want
+        .iter()
+        .filter(|(k, w)| drawn.get(*k) != Some(&(w[raster::BOX_FACES as usize] & !raster::EYED)))
+        .count();
     eprintln!(
-        "{name}: {same} boxes alike, {differ} differ of {} wanted, {cnt} written",
+        "{name}: {same} boxes alike, {differ} differ, {twice} a voxel's again, of {} voxels, \
+         {cnt} written, {faces_differ} voxels' faces differ",
         want.len()
     );
-    if differ != 0 || same != want.len() as u64 {
+    kinds.count("a voxel drawn again", twice);
+    if differ != 0 || faces_differ != 0 || same != want.len() as u64 + twice {
         fail(format!(
-            "{differ} boxes differ, {same} alike of {}",
+            "{differ} boxes differ, {faces_differ} voxels' faces, {same} alike of {}",
             want.len()
         ));
     }
@@ -1896,7 +1924,7 @@ fn boxes_case(
 /// coarser, its node taken a zoom coarser at the same corner, one row in eight: the words a pixel
 /// reads alike but the zoom. How many.
 fn coarser(obs: &Observed, words: &mut [u32]) -> u64 {
-    let read = beam::SAMPLE_FACES as usize;
+    let read = beam::SAMPLE_WORDS as usize;
     let mut cut = 0;
     for j in (0..obs.lattice[1]).step_by(8) {
         for i in 1..obs.lattice[0] {
@@ -2028,6 +2056,7 @@ fn hand_eye_boxes_answer_as_raster() {
     let hit = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
     let world = gpu.pipeline(src(SHADER_SAMPLE), "sample_cs");
     let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
+    let observe = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_observe_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     // `coarse`: some samples' nodes taken a zoom coarser (`coarser`).
@@ -2048,10 +2077,10 @@ fn hand_eye_boxes_answer_as_raster() {
         let groups = grid.samples.map(|n| n.div_ceil(SQUARE_SIDE));
         boxes_case(
             &gpu,
-            &pass,
+            [&pass, &observe],
             &obs,
             &words,
-            origin,
+            (origin, grid.asks_at),
             Some(&grid),
             groups,
             kinds,
@@ -2224,6 +2253,7 @@ fn hand_light_boxes_answer_as_raster() {
     let hit = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_HIT), "sample_hit_cs");
     let world = gpu.pipeline(src(SHADER_LIGHT_SAMPLE), "sample_cs");
     let pass = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "light_sample_box_cs");
+    let observe = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "light_sample_observe_cs");
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     let mut run = |b: &WorldBufs, c: &LightCase, kinds: &mut Kinds| {
@@ -2262,12 +2292,13 @@ fn hand_light_boxes_answer_as_raster() {
         // The rows the list's entries open, as the sample pass's.
         let groups = obs.groups;
         kinds.add("listed", c.listed.is_some());
+        // The light's asks none: its slots read no faces' words.
         boxes_case(
             &gpu,
-            &pass,
+            [&pass, &observe],
             &obs,
             &words,
-            origin,
+            (origin, 0),
             None,
             groups,
             kinds,

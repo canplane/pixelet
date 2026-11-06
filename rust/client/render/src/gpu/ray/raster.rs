@@ -19,8 +19,9 @@ use pxl_engine::{beam, eye, light, raster, ray};
 
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_SAMPLE_BOX, PIPELINE_RASTER,
-    PIPELINE_RASTER_GATE, STORAGE, STORAGE_RW, UNIFORM,
+    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE,
+    COMPUTE_SAMPLE_BOX, COMPUTE_SAMPLE_OBSERVE, PIPELINE_RASTER, PIPELINE_RASTER_GATE, STORAGE,
+    STORAGE_RW, UNIFORM,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
@@ -72,6 +73,10 @@ pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (sample_box.wgsl,
     /// light_sample_box.wgsl), each over its own group.
     pub(super) boxes_built: Pipeline,
+    /// The second of the boxes' passes over the same group, the eye's and the light's
+    /// (boxes.wgsl `observe_box`).
+    observe_built: Pipeline,
+    pub(super) light_observe_built: Pipeline,
     /// The shadow map's samples' boxes (light_sample_box.wgsl),
     /// the light's head bound beside what the screen's binds.
     pub(super) light_boxes_built: Pipeline,
@@ -81,7 +86,7 @@ pub(super) struct Raster {
     /// the claimed tiles (`Resolve::tiles`).
     gate: Pipeline,
     pub(super) args: u32,
-    boxes: u32,
+    pub(super) boxes: u32,
     room: u32,
     uniform: u32,
     visibility: u32,
@@ -126,9 +131,13 @@ const FACE_GROUP: [u32; 24] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
-        && binds(&[COMPUTE_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
-        && binds(&[COMPUTE_FACE], &FACE_GROUP),
+    binds(
+        &[COMPUTE_SAMPLE_BOX, COMPUTE_SAMPLE_OBSERVE],
+        &SAMPLE_BOX_GROUP
+    ) && binds(
+        &[COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_LIGHT_SAMPLE_OBSERVE],
+        &LIGHT_SAMPLE_BOX_GROUP
+    ) && binds(&[COMPUTE_FACE], &FACE_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 const _: () = assert!(
@@ -142,6 +151,12 @@ impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         Raster {
             boxes_built: pipelines.build_compute(g, COMPUTE_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
+            observe_built: pipelines.build_compute(g, COMPUTE_SAMPLE_OBSERVE, &SAMPLE_BOX_GROUP),
+            light_observe_built: pipelines.build_compute(
+                g,
+                COMPUTE_LIGHT_SAMPLE_OBSERVE,
+                &LIGHT_SAMPLE_BOX_GROUP,
+            ),
             light_boxes_built: pipelines.build_compute(
                 g,
                 COMPUTE_LIGHT_SAMPLE_BOX,
@@ -151,7 +166,7 @@ impl Raster {
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
             args: g.buf(
-                word_bytes(raster::ARGS_WORDS as usize),
+                word_bytes((raster::ASKED_AT + raster::ARGS_WORDS) as usize),
                 buffer_usage::STORAGE
                     | buffer_usage::COPY_DST
                     | buffer_usage::INDIRECT
@@ -261,11 +276,14 @@ impl Raster {
         ];
         g.write_buf(self.uniform, 0, bytes(&uniform));
         if samples_cast {
-            let mut args = [0u32; raster::ARGS_WORDS as usize];
+            // The draw's args none, and the faces' asks' none, laid where the grid lays them
+            // (pxl-engine `raster::ASKED_AT`).
+            let mut args = [0u32; (raster::ASKED_AT + raster::ARGS_WORDS) as usize];
             args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-            args[raster::ARGS_FACES as usize + 1] = 1;
-            args[raster::ARGS_FACES as usize + 2] = 1;
-            args[raster::ARGS_ASKS as usize] = grid.asks_at;
+            let asked = raster::ASKED_AT as usize;
+            args[asked + raster::ARGS_FACES as usize + 1] = 1;
+            args[asked + raster::ARGS_FACES as usize + 2] = 1;
+            args[asked + raster::ARGS_ASKS as usize] = grid.asks_at;
             g.write_buf(self.args, 0, bytes(&args));
         }
         let bindings = [
@@ -307,7 +325,7 @@ impl Raster {
                     self.draw_built.layouts[0],
                     &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
-                faces(self.args, 0),
+                faces(self.args, word_bytes(raster::ASKED_AT as usize)),
                 faces(marks, word_bytes(ray::MISS_ARGS_ROOM as usize)),
             ];
             self.bindings = bindings;
@@ -339,12 +357,18 @@ impl Raster {
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         if samples_cast {
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
-            g.set_bind_group(pass, 0, self.groups[0], &[]);
-            g.set_pipeline(pass, self.boxes_built.id);
+            // The cast's table of voxels cleared, so it holds this cast's alone (pxl-engine
+            // `raster::KEYS`); then the boxes' two passes, the second reading what the first
+            // claimed.
             let [x, y] = grid.samples;
-            g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
-            g.end(pass);
+            clear_keys(g, encoder, self.boxes, x * y);
+            for built in [&self.boxes_built, &self.observe_built] {
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
+                g.set_bind_group(pass, 0, self.groups[0], &[]);
+                g.set_pipeline(pass, built.id);
+                g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
+                g.end(pass);
+            }
         }
         // Gated, the depth starts at the nearest, which no box passes, and
         // the gate sets the claimed tiles back to the far plane; else it
@@ -375,7 +399,7 @@ impl Raster {
         g.draw_indirect(pass, self.args, 0);
         g.end(pass);
         // What lies about each box's face, before the pixels read it off
-        // their visible sample: what the samples' last cast left, where they
+        // their visible voxel: what the samples' last cast left, where they
         // stand.
         if !samples_cast {
             return;
@@ -383,9 +407,33 @@ impl Raster {
         let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.id);
-        g.dispatch_indirect(pass, self.args, word_bytes(raster::ARGS_FACES as usize));
+        let asked = raster::ASKED_AT + raster::ARGS_FACES;
+        g.dispatch_indirect(pass, self.args, word_bytes(asked as usize));
         g.end(pass);
     }
+
+    /// The light's table of voxels cleared before its boxes are written (`clear_keys`).
+    pub(super) fn light_keys_cleared(&self, g: &Gpu, encoder: u32, size: u32) {
+        clear_keys(
+            g,
+            encoder,
+            self.light.boxes,
+            (size / SAMPLE) * (size / SAMPLE),
+        );
+    }
+}
+
+/// The table of voxels past `samples` samples' boxes in `boxes` cleared (pxl-engine
+/// `raster::keys_at`).
+fn clear_keys(g: &Gpu, encoder: u32, boxes: u32, samples: u32) {
+    let at = raster::keys_at(samples);
+    let len = raster::words(samples) - at;
+    g.clear_buf(
+        encoder,
+        boxes,
+        word_bytes(at as usize) as u32,
+        word_bytes(len as usize) as u32,
+    );
 }
 
 impl Raster {

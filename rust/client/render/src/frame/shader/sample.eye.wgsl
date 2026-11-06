@@ -15,10 +15,6 @@ fn sample_item(id: vec2<u32>) -> vec2<u32> {
   return id;
 }
 
-fn sample_needed(s: vec2<u32>) -> bool {
-  return true;
-}
-
 fn left_at() -> u32 {
   return eye_word(GRID + GRID_LEFTS_AT);
 }
@@ -39,6 +35,25 @@ fn sample_cell_word(s: vec2<u32>) -> u32 {
   );
   return cell_start(cell);
 }
+
+/// The first word of the line its cell's rays resume from.
+fn sample_line(s: vec2<u32>) -> u32 {
+  return beams[sample_cell_word(s) + CELL_CORNER] * LINE_WORDS;
+}
+
+/// The band its ray asked: the eye's every ray asks a node by its distance from the eye
+/// alone, so none.
+fn sample_band(s: vec2<u32>) -> u32 {
+  return 0u;
+}
+
+/// The voxels its boxes draw (`Grid::voxels_at`).
+fn voxels_at() -> u32 {
+  return eye_word(GRID + GRID_VOXELS_AT);
+}
+
+/// What lies about each face drawn is asked for the pixels that show it (`ray::FACES`).
+const SAMPLE_FACE_WORDS: bool = true;
 
 /// Off its cell.
 fn sample_start(aim: Aim, s: vec2<u32>) -> Start {

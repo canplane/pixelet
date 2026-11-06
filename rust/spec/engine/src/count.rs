@@ -21,7 +21,7 @@ pub const OBSERVERS: u32 = 2;
 /// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walks
 /// that ask the world by hand, its samples' and the light's walk again,
 /// those asked of the world (`ASKED`), no slot answering; its pixels or
-/// slots that reused the visible sample, those that walked and those that took
+/// slots that reused the visible voxel, those that walked and those that took
 /// the sky (`REUSED`, `WALKED`, `SKY`), together every one it cast again; the
 /// boxes drawn (`BOXES`).
 pub const BEAM: u32 = 0;

@@ -62,7 +62,10 @@ pub const COMPUTE_CAST_TILES: u32 = 46;
 pub const COMPUTE_CLAIMED_BOX: u32 = 47;
 pub const COMPUTE_DECOR_GATE_ARGS: u32 = 48;
 pub const COMPUTE_DECOR_GATE: u32 = 49;
-pub const COMPUTES: u32 = 50;
+/// The second of the boxes' passes, the eye's and the light's (boxes.wgsl `observe_box`).
+pub const COMPUTE_SAMPLE_OBSERVE: u32 = 50;
+pub const COMPUTE_LIGHT_SAMPLE_OBSERVE: u32 = 51;
+pub const COMPUTES: u32 = 52;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -112,6 +115,8 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
         COMPUTE_LIGHT_SAMPLE => (SHADER_LIGHT_SAMPLE, "sample_cs"),
         COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "light_sample_box_cs"),
+        COMPUTE_SAMPLE_OBSERVE => (SHADER_SAMPLE_BOX, "sample_observe_cs"),
+        COMPUTE_LIGHT_SAMPLE_OBSERVE => (SHADER_LIGHT_SAMPLE_BOX, "light_sample_observe_cs"),
         COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_MISS_HIT => (SHADER_MISS_HIT, "miss_hit_cs"),
         COMPUTE_BEAM_HIT => (SHADER_BEAM_HIT, "beam_hit_cs"),
@@ -738,7 +743,7 @@ const fn desc_of(id: u32) -> Descriptor {
             ]],
         ),
         // Every box's faces turned to the eye, the nearest a pixel's ray
-        // enters kept, reversed: its sample's number into a target of its
+        // enters kept, reversed: its voxel's number into a target of its
         // own (gpu/ray/raster.rs). The vertex stage draws only the faces
         // turned to the eye, so none is culled by its winding.
         PIPELINE_RASTER => Descriptor::new(

@@ -6,8 +6,8 @@
 // tile one stands on (`up`, `up_at`: a point that far up lies that many
 // tiles over or one more, its taps a tile either side), as decor and the actors stand on
 // what the eye meets and are no taller. One read that no cast of the epoch read is the
-// cast's to cast: its word names the cast (`light::reads_at`), and its square's
-// (`light::coarse_at`), where it lies within the epoch's budget (`within_budget`); what
+// cast's to cast: its word names the cast (`light::reads_at`), where it lies within the
+// epoch's budget (`within_budget`); what
 // feeds it is listed for the passes that cast it (`enlist`). A tile's words are its own
 // thread's alone.
 
@@ -92,8 +92,8 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
   }
 }
 
-/// What feeds claimed tile `t` listed at each level (light_list.wgsl `light_needs`, its
-/// rule the other way): a slot its own tile; a cell a tile either way; a beam ray the cells whose
+/// What feeds claimed tile `t` listed at each level: a slot its own tile; a cell a tile either
+/// way; a beam ray the cells whose
 /// window of `2 + 2 · BEAM_WINDOW` holds it, its number less the tile beam ray 0 lies on
 /// (`light_on`).
 fn enlist(current: u32, t: vec2<i32>) {
@@ -151,7 +151,6 @@ fn light_propagate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let w = reads_at() + id.y * n + id.x;
   if (is_read && list_at(w) < epoch && within_budget(t, current, epoch)) {
     list_put(w, current);
-    list_put(coarse_square(id.xy), current);
     enlist(current, t);
   }
 }

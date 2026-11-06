@@ -191,7 +191,7 @@ pub(super) struct CastBuffers {
     /// The world's depth from the light, a texel of the shadow map each
     /// (`light_cs`), cast with the eye's rays where the shadows are on.
     light_built: Pipeline,
-    /// The slots that took no visible sample walked apart (`light_miss_cs`), first
+    /// The slots that took no visible voxel walked apart (`light_miss_cs`), first
     /// over the node cache alone (`light_miss_hit_cs`).
     light_miss_built: Pipeline,
     light_miss_hit_built: Pipeline,
@@ -310,13 +310,13 @@ pub(super) struct CastBuffers {
     /// tiles alone: where only the kernel's bounds moved.
     gated: bool,
     /// The samples' hits handed to the rasterizer (ray/raster.rs), whose
-    /// visible sample at each pixel the pixels read (`cast_cs`), over a group
+    /// visible voxel at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`px_group`): the eye, the rays, the beam's words, the
-    /// node cache, the visibility buffer and the claimed tiles (`px_bound`),
+    /// node cache, the visibility buffer, the claimed tiles and the boxes (`px_bound`),
     /// made again exactly when one of them is another.
     raster: Raster,
     px_group: u32,
-    px_bound: [u32; 7],
+    px_bound: [u32; 8],
     /// The claimed tiles, listed ahead of the pixels in their pass, and the words their
     /// dispatch takes (cast_tiles.wgsl), made again with the tiles (`px_bound`).
     cast_tiles_built: Pipeline,
@@ -427,7 +427,7 @@ const _: () = assert!(
 );
 /// The light's slots' (`light_cs`): the list, the map it writes, the head, the visibility
 /// it reads and the missed slots' dispatch.
-const LIGHT_GROUP: [u32; 18] = [
+const LIGHT_GROUP: [u32; 21] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -440,6 +440,9 @@ const LIGHT_GROUP: [u32; 18] = [
     HEAD_BINDING,
     COMPUTE,
     UNIFORM,
+    14,
+    COMPUTE,
+    STORAGE,
     15,
     COMPUTE,
     TEXTURE_UINT_ARRAY,
@@ -471,7 +474,7 @@ const MISS_HIT_GROUP: [u32; 15] = [
 /// `cast_cs`'s (cast.wgsl): the eye, the rays, the beam's words, the node cache it lists the
 /// marked pixels in, the visibility buffer, the walk again's words and the claimed tiles' list
 /// (`px_group`).
-const CAST_GROUP: [u32; 21] = [
+const CAST_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -487,6 +490,9 @@ const CAST_GROUP: [u32; 21] = [
     13,
     COMPUTE,
     TEXTURE_UINT_ARRAY,
+    15,
+    COMPUTE,
+    STORAGE,
     14,
     COMPUTE,
     STORAGE_RW,
@@ -977,7 +983,7 @@ impl RaysPass {
             gated: false,
             raster,
             px_group: 0,
-            px_bound: [0; 7],
+            px_bound: [0; 8],
             counter,
         };
         self.cast = Some(c);
@@ -1649,6 +1655,7 @@ impl RaysPass {
                 c.raster.visibility_array,
                 changed_at,
                 uniform,
+                c.raster.boxes,
             ];
             if px_bound != c.px_bound {
                 release(c.px_group);
@@ -1667,7 +1674,12 @@ impl RaysPass {
                         buf_entry(31, uniform),
                     ],
                 );
-                c.px_group = px_group(g, &c.pipeline, px_bound, c.marks, c.cast_tiles);
+                c.px_group = px_group(
+                    g,
+                    &c.pipeline,
+                    px_bound,
+                    [c.marks, c.cast_tiles, c.raster.boxes],
+                );
                 c.px_bound = px_bound;
             }
         }
@@ -1790,7 +1802,7 @@ impl RaysPass {
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes written and drawn between the samples and the
-            // pixels, which take the visible sample (ray/raster.rs, spans
+            // pixels, which take the visible voxel (ray/raster.rs, spans
             // `sample_box` and `sraster`). Where
             // only the jitter moved (`FrameKind::px`), the beam rays, the
             // cells' starts and the samples stand, and the rest is cast again
@@ -1994,7 +2006,7 @@ impl RaysPass {
                 g.end(pass);
             }
             // The beam, the samples, their boxes drawn, the slots taking
-            // their visible sample, a workgroup a tile (pxl-engine
+            // their visible voxel, a workgroup a tile (pxl-engine
             // `light::TILE`), and the rest walked off their list as the eye's
             // missed pixels are: each a pass timed in its own span.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
@@ -2089,11 +2101,17 @@ impl RaysPass {
             g.set_pipeline(pass, c.light_sample_built.id);
             g.dispatch_indirect(pass, c.light_sample_left, 0);
             g.end(pass);
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
-            g.set_bind_group(pass, 0, c.light_groups[2], &[]);
-            g.set_pipeline(pass, c.raster.light_boxes_built.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE_BOX));
-            g.end(pass);
+            // The light's table of voxels cleared, then its boxes' two passes, as the eye's
+            // (ray/raster.rs `draw`).
+            c.raster.light_keys_cleared(g, encoder, shadow::SIZE);
+            for built in [&c.raster.light_boxes_built, &c.raster.light_observe_built] {
+                let stamp = ctx.stamp(GpuSpanName::light_raster).pass();
+                let pass = g.compute_pass(encoder, stamp);
+                g.set_bind_group(pass, 0, c.light_groups[2], &[]);
+                g.set_pipeline(pass, built.id);
+                g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE_BOX));
+                g.end(pass);
+            }
             c.raster.light_draw(ctx);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_slot).pass());
             g.set_bind_group(pass, 0, c.light_groups[0], &[]);
@@ -2329,7 +2347,12 @@ fn hit_groups(g: &Gpu, [lead, faces]: [&Pipeline; 2], bindings: [u32; 5]) -> [u3
 /// the node cache, which the marked pixels are listed in, the visibility buffer,
 /// a one-layer array, the words the marked are counted in (`marks`) and the claimed tiles' list.
 /// No world: a pixel walks nothing of its own (`cast_cs`).
-fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32, list: u32) -> u32 {
+fn px_group(
+    g: &Gpu,
+    pipeline: &Pipeline,
+    bindings: [u32; 8],
+    [marks, list, boxes]: [u32; 3],
+) -> u32 {
     let [eye, rays, beams, node_cache, visibility, ..] = bindings;
     let entries = [
         buf_entry(0, eye),
@@ -2338,15 +2361,11 @@ fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32, list: 
         buf_entry(9, node_cache),
         view_entry(13, visibility),
         buf_entry(14, marks),
+        buf_entry(15, boxes),
         buf_entry(30, list),
     ];
     g.bind_group(pipeline.layouts[0], &entries)
 }
-
-const _: () = assert!(
-    light::tiles(shadow::SIZE).is_multiple_of(light::COARSE),
-    "the map's tiles are a whole number of squares a side (`light::coarse_square`)"
-);
 
 /// The workgroups of the passes that cast the light's tiles as a cast starts: none, a list's
 /// row across and no row (`light::ARGS_WORDS`).

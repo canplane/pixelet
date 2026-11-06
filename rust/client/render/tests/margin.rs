@@ -154,9 +154,6 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
     let mut list = vec![0u32; light::list_words(SIZE) as usize];
     let reads_at = light::reads_at(SIZE) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
-    let coarse_at = light::coarse_at(SIZE) as usize;
-    let squares = light::coarse(SIZE) * light::coarse(SIZE);
-    list[coarse_at..coarse_at + squares as usize].fill(CAST);
     let fed = list_every(&mut list, SIZE, light::LISTED_FED, 1);
     let beams = gpu.buffer(&list, store_of());
     gpu.light_beam(

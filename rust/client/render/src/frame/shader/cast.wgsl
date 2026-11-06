@@ -1,8 +1,8 @@
 // pxl-render/cast.wgsl
 
-// Each drawn pixel's ray off the visible sample the raster kept at it (pxl-engine `raster`;
+// Each drawn pixel's ray off the visible voxel the raster kept at it (pxl-engine `raster`;
 // gpu/ray/raster.rs), or the sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as
-// light.wgsl takes a slot's (visible.wgsl), with what lies about its face, the sample's. Any
+// light.wgsl takes a slot's (visible.wgsl), with what lies about its face, the voxel's. Any
 // other pixel takes no walk here: its first word is the mark the walk again goes by
 // (`ray::MISS`; miss_hit.wgsl), and it is listed for that walk (`node_cache::MARKS_AT`,
 // list.wgsl `enlist`); the first past the list's room has the walk over every pixel
@@ -11,9 +11,11 @@
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 @group(0) @binding(8) var<storage, read> beams: array<u32>;
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
-/// Each drawn pixel's visible sample (gpu/ray/raster.rs): its number (`raster::id_of`), 0
+/// Each drawn pixel's visible voxel (gpu/ray/raster.rs): its number (`raster::id_of`), 0
 /// where it kept none, read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
+/// The voxels' boxes, read for the faces each draws (`raster::BOX_FACES`).
+@group(0) @binding(15) var<storage, read> boxes: array<u32>;
 /// The walk again's words (list.wgsl `MissArgs`).
 @group(0) @binding(14) var<storage, read_write> args: MissArgs;
 /// The tiles claimed, this pass's dispatch ahead of them (cast_tiles.wgsl).
@@ -51,23 +53,21 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
   let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
   let on = node_cache[COUNT_ON] != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    let n = eye_word(GRID + GRID_SAMPLES);
-    let s = (visible & ~VISIBLE_LACK) - 1u;
-    let k = sample_word(vec2<u32>(s % n, s / n));
-    let entry = visible_entry(aim, k);
+    let v = (visible & ~VISIBLE_LACK) - 1u;
+    let k = eye_word(GRID + GRID_VOXELS_AT) + v * VOXEL_WORDS;
+    let entry = visible_entry(aim, k, boxes[v * RASTER_BOX_WORDS + RASTER_BOX_FACES]);
     if (entry.enters) {
-      // Its words, with what lies about its face and the nodes its walk visited, the sample's
-      // (`word`, `ray::first_word`).
+      // Its words, with what lies about its face, the voxel's (`word`, `ray::first_word`).
       add_cnt(on, COUNT_REUSED);
-      let asset = vec2<u32>(beams[k + SAMPLE_ASSET], beams[k + SAMPLE_ASSET + 1u]);
-      let zoom = beams[k + SAMPLE_NODE + NODE_ZOOM];
+      let asset = vec2<u32>(beams[k + VOXEL_ASSET], beams[k + VOXEL_ASSET + 1u]);
+      let zoom = beams[k + VOXEL_NODE + NODE_ZOOM];
       let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
       let fill = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
       write_ray(p, vec4<u32>(
         (asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
         bitcast<u32>(entry.t),
         asset.y,
-        beams[k + SAMPLE_FACES],
+        beams[k + VOXEL_FACES + entry.axis],
       ));
       return;
     }

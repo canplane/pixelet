@@ -120,7 +120,7 @@ fn main() {
     // is drawn at, short of a lack's 1: finite, as every literal here is.
     {
         use pxl_engine::raster::{
-            corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
+            corner, BOX_FACES, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, KEYS, KEY_WORDS, LACK, NEAR,
         };
         let n = word::BOX_VERTICES;
         let bits: Vec<u32> = (0..2 * n)
@@ -142,7 +142,7 @@ fn main() {
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_FACES: u32 = {BOX_FACES}u;\nconst RASTER_FACES_MASK: u32 = {}u;\nconst RASTER_KEYS: u32 = {KEYS}u;\nconst RASTER_KEY_WORDS: u32 = {KEY_WORDS}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
             corners.len(),
             corners.join(", "),
             EYED - 1
@@ -265,6 +265,13 @@ fn walk_word() -> String {
         ("SAMPLE_LEFT_T", beam::SAMPLE_LEFT_T),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
+        ("NODE_WORDS", beam::NODE_WORDS),
+        ("VOXEL_NODE", beam::VOXEL_NODE),
+        ("VOXEL_ASSET", beam::VOXEL_ASSET),
+        ("VOXEL_LACKS", beam::VOXEL_LACKS),
+        ("VOXEL_BAND", beam::VOXEL_BAND),
+        ("VOXEL_FACES", beam::VOXEL_FACES),
+        ("VOXEL_WORDS", beam::VOXEL_WORDS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
         ("SAMPLE_SIDE", SAMPLE_SIDE),
@@ -345,11 +352,11 @@ fn walk_word() -> String {
         ("LIGHT_HEAD_TILES", light::HEAD_TILES as u32),
         ("LIGHT_HEAD_HANDS", light::HEAD_HANDS as u32),
         ("LIGHT_HEAD_STANDS", light::HEAD_STANDS as u32),
-        ("LIGHT_HEAD_COARSE", light::HEAD_COARSE as u32),
         ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
         ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
         ("LIGHT_HEAD_MISSES_LEFT", light::HEAD_MISSES_LEFT as u32),
         ("LIGHT_HEAD_CORNERS_LEFT", light::HEAD_CORNERS_LEFT as u32),
+        ("LIGHT_HEAD_VOXELS", light::HEAD_VOXELS as u32),
         ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
         ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
@@ -359,7 +366,6 @@ fn walk_word() -> String {
         ("LIGHT_LINE_WORDS", light::LINE_WORDS),
         ("LIGHT_LINE_ORIGIN", light::LINE_ORIGIN),
         ("LIGHT_BEAM_WINDOW", light::BEAM_WINDOW),
-        ("LIGHT_COARSE", light::COARSE),
         ("LIGHT_LISTED_CORNERS", light::LISTED_CORNERS),
         ("LIGHT_LISTED_FED", light::LISTED_FED),
         ("LIGHT_LISTED_CLAIMED", light::LISTED_CLAIMED),
@@ -409,6 +415,7 @@ fn walk_word() -> String {
         ("GRID_MISSES_AT", beam::GRID_MISSES_AT as u32),
         ("GRID_CORNERS_AT", beam::GRID_CORNERS_AT as u32),
         ("GRID_HANDS_AT", beam::GRID_HANDS_AT as u32),
+        ("GRID_VOXELS_AT", beam::GRID_VOXELS_AT as u32),
         ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
         ("GRID_SLOPE", beam::GRID_SLOPE as u32),
         ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
@@ -456,7 +463,7 @@ fn walk_word() -> String {
         ("CAST_SIDE", ray::CAST_SIDE),
         ("MISS_ARGS_WHOLE", ray::MISS_ARGS_WHOLE),
         ("SCREEN_TILE", screen::TILE),
-        ("SAMPLE_FACES", beam::SAMPLE_FACES),
+        ("RASTER_ASKED_AT", raster::ASKED_AT),
         ("CORNER_SIDE", CORNER_SIDE),
         ("BEAM_PASS", node_cache::BEAM_PASS),
         (

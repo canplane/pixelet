@@ -1,11 +1,11 @@
 //! `light_cs` and `light_mark_cs` by hand (frame/shader/light.wgsl, light_mark.wgsl) answer as
 //! pxl-engine's light over the real world of tests/real_world. A slot of a tile the cast casts
-//! takes its visible sample where its own ray enters it as the sample did (`cast::entry_with`)
+//! takes its visible voxel where its own ray enters it as the sample did (`cast::entry_with`)
 //! at the band it asks (`Light::band`), its word `light::word(light::depth(..))`; else the sky
 //! where the four samples about it (`light::samples_about`) went on to their reach at its band;
 //! else it is listed for its walk. That composition is this test's own reading of light.wgsl
 //! `light_cs`, which pxl-engine has no one function for. The samples are each walked by
-//! `cast::first` over the world, and each texel's visible sample is the nearest of those about
+//! `cast::first` over the world, and each texel's visible voxel is the nearest of those about
 //! it its ray enters, as the raster keeps it, some put out of place. A drawn pixel whose ray met
 //! the world marks the tile it met it on (`Light::tile_of`), and where the head asks the
 //! footprint, the tiles between it and each later neighbor's (`light::footprint`). Every word of
@@ -221,6 +221,8 @@ fn run_slots(
 
     // The list's words noise, the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
+    // The voxels' boxes, read for the faces each draws.
+    let mut boxes = vec![0u32; raster::words(n * n) as usize];
     let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
@@ -253,6 +255,15 @@ fn run_slots(
             list[k + beam::SAMPLE_AXIS as usize] = met.hit.axis;
             kinds.add("samples gone on", gone);
             kinds.add("samples stopped", !gone);
+            // A voxel a sample, at its number (boxes.wgsl `write_voxel`): its node, asset,
+            // lack and band, and the face it entered drawn in its box.
+            let v = (light::voxels_at(SIZE) + (j * n + i) * beam::VOXEL_WORDS) as usize;
+            for w in 0..(beam::VOXEL_BAND as usize) {
+                list[v + w] = list[k + w];
+            }
+            list[v + beam::VOXEL_BAND as usize] = b;
+            let at = ((j * n + i) * raster::BOX_WORDS + raster::BOX_FACES) as usize;
+            boxes[at] = 1 << met.hit.axis;
         }
     }
     let stopped: Vec<u32> = (0..n * n)
@@ -262,7 +273,7 @@ fn run_slots(
         })
         .collect();
 
-    // Each texel's visible sample, as the raster keeps it: the nearest of those about it whose
+    // Each texel's visible voxel, as the raster keeps it: the nearest of those about it whose
     // box its ray enters across the axis the sample entered by. Some none, some another's that
     // stopped, some marked lacking.
     let mut vis = vec![0u32; (SIZE * SIZE) as usize];
@@ -413,7 +424,7 @@ fn run_slots(
         let band = band_of(p);
         let visible = vis[(p[1] * SIZE + p[0]) as usize];
         if visible != 0 && visible & raster::LACK == 0 {
-            let s = raster::sample_of(visible);
+            let s = raster::voxel_of(visible);
             let (node, asset, axis) = cell_of(&list, light::sample(SIZE, s) as usize);
             let e = cast::entry_with(o, &r, inv, &node, asset[0]);
             let alike = sample_band([s % n, s / n]) == band;
@@ -474,6 +485,7 @@ fn run_slots(
         let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
+        let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
         gpu.dispatch(
             pipe,
             &[
@@ -483,6 +495,7 @@ fn run_slots(
                 (11, head_buf.as_entire_binding()),
                 (15, wgpu::BindingResource::TextureView(&vis_v)),
                 (17, misses_buf.as_entire_binding()),
+                (14, boxes_buf.as_entire_binding()),
             ],
             groups,
         );
@@ -582,7 +595,7 @@ fn run_slots(
     kinds.count("slots a depth a product fused into a sum", u64::from(fused));
 }
 
-/// A slot's answer: the depth `t` along its ray and the axis it enters its visible sample's
+/// A slot's answer: the depth `t` along its ray and the axis it enters its visible voxel's
 /// cell across, the sky, or its walk; and the word a pass left it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Answer {
@@ -592,7 +605,7 @@ enum Answer {
     Word(u32),
 }
 
-/// The word of a slot that took its visible sample `t` along its ray across `axis`
+/// The word of a slot that took its visible voxel `t` along its ray across `axis`
 /// (`light::depth`, `light::word`), and every word a GPU may leave for it: its share of the
 /// box's depth, `t` times the reach's reciprocal, rounded or fused into the push added, and
 /// the product with `DEPTH_ONE` rounded or fused into the half added. Nothing is divided.

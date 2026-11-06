@@ -45,7 +45,7 @@ pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
 pub const SHADER_MARKER_REGION: u32 = 23;
 /// The eye's rays drawn at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
-/// Each drawn pixel's ray off the visible sample or the sky, the rest marked and listed
+/// Each drawn pixel's ray off the visible voxel or the sky, the rest marked and listed
 /// for their walk again, by hand (cast.wgsl): its one compute entry.
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
@@ -103,7 +103,7 @@ pub const SHADER_FORGET: u32 = 42;
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 43;
 /// The world's depth from the light into its clipmap (pxl-engine `light`):
-/// every slot taking the visible sample, a workgroup a tile (light.wgsl), a
+/// every slot taking the visible voxel, a workgroup a tile (light.wgsl), a
 /// compute entry; that depth laid into the map (light_map.wgsl,
 /// gpu/shadow.rs); and the slots that took none walked apart (pxl-engine
 /// `light::misses_at`, light_miss.wgsl), a compute entry of its own.
@@ -367,6 +367,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_CAST
     &[
         "walk_word",
+        "raster_box",
         "eye_bind",
         "grid",
         "walk_node",
@@ -592,6 +593,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT
     &[
         "walk_word",
+        "raster_box",
         "eye_bind",
         "walk_node",
         "side",
