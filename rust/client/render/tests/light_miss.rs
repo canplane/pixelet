@@ -785,7 +785,7 @@ fn run_case(
     let work = |frames: &[Vec<u32>]| {
         frames
             .iter()
-            .map(|q| [ray::QUEUE_VISITED, ray::QUEUE_ASKED].map(|w| q[w as usize]))
+            .map(|done| [done[0], done[1]])
             .collect::<Vec<_>>()
     };
     eprintln!(

@@ -155,7 +155,7 @@ const _: () = assert!(
 );
 
 /// The caps a queue's work counts to, the frame's work so far included, the visits' and the
-/// asks' (`QUEUE_CAPS`): the whole budget where it runs last or alone; short of it by the
+/// asks' (`node_cache::caps_at`): the whole budget where it runs last or alone; short of it by the
 /// share reserved for the queue after it, and by what its lanes may overrun, where it runs
 /// `first` and another runs after it (`shared`). So the queue after it does at least the
 /// reserved share of each.
@@ -173,11 +173,10 @@ pub const fn caps(first: bool, shared: bool) -> [u32; 2] {
 /// The queue's words, an observer's buffer of them (pxl-render queue_walk.wgsl
 /// `queue`, queue_ask.wgsl): the next hole the first walk takes (`QUEUE_TAKEN`) and the next the
 /// second takes (`QUEUE_TAKEN_AGAIN`); the nodes each walk was parked at, listed for the asks
-/// (`QUEUE_ASKS`, `QUEUE_ASKS_AGAIN`); the work its walks over the node cache did, the nodes
-/// visited and those asked, the frame's work before it included, which the budget counts and
-/// its last walk goes on from (`QUEUE_VISITED`, `QUEUE_ASKED`; `node_cache::VISITED`); the caps
-/// they count to, the host's each frame (`QUEUE_CAPS`, `caps`); the stops the two walks
-/// listed, as `node_cache::HITS_ARGS` lays them (`QUEUE_HITS`); then the asks' records
+/// (`QUEUE_ASKS`, `QUEUE_ASKS_AGAIN`); the nodes the walk over the node cache last run visited,
+/// which it counts against its budget beside the frame's (`node_cache::VISITED`) and the asks
+/// after it fold into the frame's (`QUEUE_VISITED`); the stops the two walks listed, as
+/// `node_cache::HITS_ARGS` lays them (`QUEUE_HITS`); then the asks' records
 /// (`QUEUE_RECORDS_AT`, `QUEUE_RECORD_WORDS` each, `QUEUE_RECORDS_ROOM` a walk: as many as the
 /// frame may ask). Each frame's start is `QUEUE_EMPTY`.
 pub const QUEUE_TAKEN: u32 = 0;
@@ -185,16 +184,14 @@ pub const QUEUE_TAKEN_AGAIN: u32 = 1;
 pub const QUEUE_ASKS: u32 = 2;
 pub const QUEUE_ASKS_AGAIN: u32 = 3;
 pub const QUEUE_VISITED: u32 = 4;
-pub const QUEUE_ASKED: u32 = 5;
-pub const QUEUE_CAPS: u32 = 6;
-pub const QUEUE_HITS: u32 = 8;
-pub const QUEUE_RECORDS_AT: u32 = 12;
+pub const QUEUE_HITS: u32 = 5;
+pub const QUEUE_RECORDS_AT: u32 = 9;
 /// An ask's record: the node's zoom, its index's three words, the zooms it is asked at, far then
 /// near over `ZOOM_BITS`, whether it is asked from the top, and what was handed its parent.
 pub const QUEUE_RECORD_WORDS: u32 = 10;
 pub const QUEUE_RECORDS_ROOM: u32 = ASKS_A_FRAME;
 pub const QUEUE_WORDS: u32 = QUEUE_RECORDS_AT + 2 * QUEUE_RECORDS_ROOM * QUEUE_RECORD_WORDS;
-pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0];
+pub const QUEUE_EMPTY: [u32; QUEUE_RECORDS_AT as usize] = [0, 0, 0, 0, 0, 0, 1, 1, 0];
 
 /// The holes' region, the last words of an observer's list, which every walk of the queue binds
 /// (pxl-render queue.wgsl `state_at`), a state for each of the most holes a cast lists,

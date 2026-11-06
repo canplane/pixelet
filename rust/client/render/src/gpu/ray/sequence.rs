@@ -18,7 +18,10 @@ use super::raster::{
     DEFERRED_BINDING, DEFERRED_GROUP, FACE_GROUP, LIGHT_DEFERRED_GROUP, LIGHT_SAMPLE_BOX_GROUP,
     LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP, STOPS_GROUP,
 };
-use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_IMPOSTOR};
+use crate::frame::draw::{
+    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_SKINNED,
+};
 use crate::frame::shader::access::{
     check, light_marks, Bind, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END, LIST,
     NO_RANGE, STATE,
@@ -310,6 +313,35 @@ const LIGHT_DEFERRED_BINDS: Group = Group {
 
 // Each step a host's call names, in the order the frame encodes them.
 
+/// The render pipelines each render pass with an indirect draw draws, whose groups are all the
+/// pass sets: the eye's raster (ray/raster.rs `Raster::draw`) and the light's
+/// (`Raster::light_draw`); the shadow map's pass (gpu/shadow.rs `Shadow::begin`, then the
+/// decor's and the actors' depth, gpu/renderer.rs `frame`); and the world's lit pass, from its
+/// gate to the ghosts (gpu/renderer.rs `frame`).
+const RASTER_PASS: &[u32] = &[PIPELINE_RASTER_GATE, PIPELINE_RASTER];
+const LIGHT_RASTER_PASS: &[u32] = &[PIPELINE_RASTER];
+const MAP_PASS: &[u32] = &[
+    PIPELINE_LIGHT_GATE,
+    PIPELINE_LIGHT_MAP,
+    PIPELINE_DECOR_DEPTH,
+    PIPELINE_SKINNED_DEPTH,
+];
+const LIT_PASS: &[u32] = &[
+    PIPELINE_SCREEN_GATE,
+    PIPELINE_DECOR,
+    PIPELINE_SCREEN_RAY,
+    PIPELINE_IMPOSTOR,
+    PIPELINE_AO_APPLY,
+    PIPELINE_SKY,
+    PIPELINE_STAR,
+    PIPELINE_SKINNED,
+    PIPELINE_CLOUD,
+    PIPELINE_LOCATION_BEACON,
+    PIPELINE_LOCATION_ZONE,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_DECOR,
+];
+
 /// The eye's beam rays left, the samples left and the pixels' claimed tiles (ray/cast.rs
 /// `RaysPass::dispatch`).
 pub const BEAM: Step =
@@ -322,7 +354,8 @@ pub const SAMPLE: Step = Step::dispatch_off(
     (SAMPLE_LEFT, 0),
 );
 /// The record's draw and its faces' pass (ray/raster.rs `Raster::draw`).
-pub const RASTER: Step = Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0));
+pub const RASTER: Step =
+    Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
 pub const FACE: Step = Step::dispatch_off(
     "face",
     IN_EYE,
@@ -473,7 +506,8 @@ pub const LIGHT_RASTER: Step = Step::draw_off(
     PIPELINE_RASTER,
     &[],
     (LIGHT_RASTER_ARGS, 0),
-);
+)
+.in_pass(LIGHT_RASTER_PASS);
 pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     "light_slots",
     IN_LIGHT,
@@ -505,7 +539,8 @@ pub const MAP_GATE: Step = Step::draw_off(
     &[],
     (LIGHT_BOX_ARGS, 0),
 )
-.one_of(1);
+.one_of(1)
+.in_pass(MAP_PASS);
 pub const MAP_LAY: Step = Step::draw_off(
     "map_lay",
     IN_MAP,
@@ -513,7 +548,8 @@ pub const MAP_LAY: Step = Step::draw_off(
     &[],
     (LIGHT_ARGS, light::ARGS_LAY),
 )
-.one_of(1);
+.one_of(1)
+.in_pass(MAP_PASS);
 
 /// The decor generated drawn: into the shadow map, as its depth, and in the world's lit pass,
 /// with the impostors; each whole, off the generation's args, or through its gate, off the
@@ -525,7 +561,8 @@ pub const DECOR_MAP: Step = Step::draw_regions(
     &[],
     GENERATION_ARGS,
 )
-.one_of(2);
+.one_of(2)
+.in_pass(MAP_PASS);
 pub const DECOR_MAP_GATED: Step = Step::draw_regions(
     "decor_map_gated",
     IN_MAP,
@@ -533,9 +570,12 @@ pub const DECOR_MAP_GATED: Step = Step::draw_regions(
     &[],
     GATED_LIGHT_ARGS,
 )
-.one_of(2);
+.one_of(2)
+.in_pass(MAP_PASS);
 pub const DECOR_LIT: Step =
-    Step::draw_regions("decor_lit", IN_LIT, PIPELINE_DECOR, &[], GENERATION_ARGS).one_of(3);
+    Step::draw_regions("decor_lit", IN_LIT, PIPELINE_DECOR, &[], GENERATION_ARGS)
+        .one_of(3)
+        .in_pass(LIT_PASS);
 pub const DECOR_LIT_GATED: Step = Step::draw_regions(
     "decor_lit_gated",
     IN_LIT,
@@ -543,7 +583,8 @@ pub const DECOR_LIT_GATED: Step = Step::draw_regions(
     &[],
     GATED_SCREEN_ARGS,
 )
-.one_of(3);
+.one_of(3)
+.in_pass(LIT_PASS);
 pub const IMPOSTOR_LIT: Step = Step::draw_regions(
     "impostor_lit",
     IN_LIT,
@@ -551,7 +592,8 @@ pub const IMPOSTOR_LIT: Step = Step::draw_regions(
     &[],
     GENERATION_ARGS,
 )
-.one_of(4);
+.one_of(4)
+.in_pass(LIT_PASS);
 pub const IMPOSTOR_LIT_GATED: Step = Step::draw_regions(
     "impostor_lit_gated",
     IN_LIT,
@@ -559,7 +601,8 @@ pub const IMPOSTOR_LIT_GATED: Step = Step::draw_regions(
     &[],
     GATED_SCREEN_ARGS,
 )
-.one_of(4);
+.one_of(4)
+.in_pass(LIT_PASS);
 
 /// The holes' last walk's count of stops copied into the node cache's head, where their passes
 /// read it (ray/cast.rs `walk_holes`), the eye's and the light's.
@@ -785,16 +828,21 @@ pub const LIGHT_MISSES_COUNT: Step = Step::copy(
 );
 
 /// The host's writes past the opens above: the raster's draw args set to none where the
-/// record's draw runs (ray/raster.rs `record_draw`); each queue's caps (ray/cast.rs
+/// record's draw runs (ray/raster.rs `record_draw`); each observer's caps (ray/cast.rs
 /// `RaysPass::prepare`); the node cache's counts and frame where nothing casts; the decor's
 /// boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
     at(RASTER_ARGS, 0, raster::ARGS_WORDS),
 );
-pub const OPEN_QUEUE_CAPS: Step = Step::write("open_queue_caps", at(QUEUE, ray::QUEUE_CAPS, 2));
-pub const OPEN_LIGHT_QUEUE_CAPS: Step =
-    Step::write("open_light_queue_caps", at(LIGHT_QUEUE, ray::QUEUE_CAPS, 2));
+pub const OPEN_EYE_CAPS: Step = Step::write(
+    "open_eye_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::EYE), 2),
+);
+pub const OPEN_LIGHT_CAPS: Step = Step::write(
+    "open_light_caps",
+    at(NODE_CACHE, node_cache::caps_at(count::LIGHT), 2),
+);
 pub const OPEN_NODE_CACHE_COUNTS: Step = Step::write(
     "open_node_cache_counts",
     at(
@@ -814,32 +862,6 @@ pub const OPEN_GENERATION_BOXES: Step = Step::write(
         generation::BOXES_AT,
         generation::BOX_CAP * generation::BOX_WORDS,
     ),
-);
-/// The frame's work so far into each observer's queue's words, and its walks' back into the
-/// node cache's head, where its last walk counts on from (ray/cast.rs `walk_holes`).
-pub const VISITED: Step = Step::copy(
-    "visited",
-    IN_EYE_HOLES,
-    at(NODE_CACHE, node_cache::VISITED, 2),
-    at(QUEUE, ray::QUEUE_VISITED, 2),
-);
-pub const VISITED_BACK: Step = Step::copy(
-    "visited_back",
-    IN_EYE_HOLES,
-    at(QUEUE, ray::QUEUE_VISITED, 4),
-    at(NODE_CACHE, node_cache::VISITED, 4),
-);
-pub const LIGHT_VISITED: Step = Step::copy(
-    "light_visited",
-    IN_LIGHT_HOLES,
-    at(NODE_CACHE, node_cache::VISITED, 2),
-    at(LIGHT_QUEUE, ray::QUEUE_VISITED, 2),
-);
-pub const LIGHT_VISITED_BACK: Step = Step::copy(
-    "light_visited_back",
-    IN_LIGHT_HOLES,
-    at(LIGHT_QUEUE, ray::QUEUE_VISITED, 4),
-    at(NODE_CACHE, node_cache::VISITED, 4),
 );
 /// The light's tiles' reads, moved with the box: copied out, and back in where the box slid
 /// them (ray/cast.rs `RaysPass::dispatch`).
@@ -869,6 +891,7 @@ pub const FRAME: Frame = Frame {
     buffers: BUFFERS,
     appends: APPENDS,
     seeds: SEEDS,
+    bounds: BOUNDS,
     kept: KEPT,
     steps: &[
         // The host's writes as a frame is prepared (ray/cast.rs `RaysPass::prepare`,
@@ -899,8 +922,8 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_RASTER_DEFERRED,
         OPEN_GENERATION_LIST,
         OPEN_RASTER_DRAW_ARGS,
-        OPEN_QUEUE_CAPS,
-        OPEN_LIGHT_QUEUE_CAPS,
+        OPEN_EYE_CAPS,
+        OPEN_LIGHT_CAPS,
         OPEN_NODE_CACHE_COUNTS,
         OPEN_NODE_CACHE_FRAME,
         OPEN_GENERATION_BOXES,
@@ -983,7 +1006,6 @@ pub const FRAME: Frame = Frame {
         PX,
         MARKS_COUNT,
         // The eye's holes walked, their stops into its record, and its owed counted.
-        VISITED,
         Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &[&WALK_BINDS]),
         Step::dispatch(
             "queue_ask",
@@ -1003,7 +1025,6 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_ASK_PARKED,
             &[&WALK_ASK_BINDS],
         ),
-        VISITED_BACK,
         HITS,
         Step::dispatch(
             "queue_last",
@@ -1084,7 +1105,6 @@ pub const FRAME: Frame = Frame {
         LIGHT_SLOTS,
         LIGHT_MISSES_COUNT,
         // The light's holes walked and their stops into its record.
-        LIGHT_VISITED,
         Step::dispatch(
             "light_queue",
             IN_LIGHT_HOLES,
@@ -1109,7 +1129,6 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_ASK_PARKED,
             &[&LIGHT_WALK_ASK_BINDS],
         ),
-        LIGHT_VISITED_BACK,
         LIGHT_HITS,
         Step::dispatch(
             "light_queue_last",
@@ -1134,7 +1153,8 @@ pub const FRAME: Frame = Frame {
     ],
 };
 
-/// The counts several passes of a stage add to through atomics, each pass before any that
+/// The counts several passes of a stage add to through atomics, each a copy may seed ahead of
+/// them, each pass before any that
 /// reads it: the eye's faces' asks, laid by both of the samples' passes, and by the holes'
 /// stops and those put off (record_put.wgsl `observe`); the stops each observer's holes' two
 /// walks over the node cache list (queue_walk.wgsl); the stood list the record's draw and both
@@ -1148,9 +1168,13 @@ const APPENDS: &[Range] = &[
     at(LIGHT_QUEUE, ray::QUEUE_HITS, 4),
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
+    stood_marks(),
     at(GATED_SCREEN_ARGS, 0, END),
     at(GATED_LIGHT_ARGS, 0, END),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
+    at(NODE_CACHE, node_cache::VISITED, 2),
+    at(QUEUE, ray::QUEUE_VISITED, 1),
+    at(LIGHT_QUEUE, ray::QUEUE_VISITED, 1),
 ];
 
 /// The copies that open a count before the passes that add to it: the stops the holes' walks
@@ -1160,11 +1184,23 @@ const APPENDS: &[Range] = &[
 /// afresh left, copied back in before this cast's receivers and propagation add to them.
 const SEEDS: &[&str] = &["hits", "light_hits", "stood_back", "read_count_back"];
 
+/// The counts read as a bound while they are added to: the frame's work so far, which every
+/// walk's budget reads before the asks after it fold its own visits in (queue_walk.wgsl
+/// `spent`, queue_ask.wgsl `fold_visits`).
+const BOUNDS: &[Range] = &[at(NODE_CACHE, node_cache::VISITED, 2)];
+
+/// The stood marks in the light's args.
+const fn stood_marks() -> Range {
+    let [first, words] = light_marks(light::LISTED_STOOD);
+    at(LIGHT_ARGS, first, words)
+}
+
 const fn marks_kept(which: u32, owner: &'static str) -> Kept {
     let [first, words] = light_marks(which);
     Kept {
         range: at(LIGHT_ARGS, first, words),
         owner,
+        by: &[],
         invalidation: "a tile's mark is the number of the cast that last listed it, stale under \
             any other cast's (light_enlist.wgsl `enlist_in`)",
     }
@@ -1177,6 +1213,7 @@ const fn world_marks_kept(which: u32, owner: &'static str) -> Kept {
     Kept {
         range: at(LIGHT_ARGS, first, words),
         owner,
+        by: &[],
         invalidation: "a tile's mark is the number of the cast the world's receivers were last \
             stood afresh in, stale under any other: every tile stood on or read is listed again \
             where they are (light_stood.wgsl `stand`, light_propagate.wgsl `read_tile`)",
@@ -1192,17 +1229,30 @@ const KEPT: &[Kept] = &[
             light::tiles(SIZE) * light::tiles(SIZE),
         ),
         owner: "light_reads_in",
+        by: &[],
         invalidation: "a tile's read: the cast that last read its texels, moved with the box \
             and none where the box slid onto it or into another band (light_slide.wgsl)",
     },
     Kept {
         range: at(GENERATION_ARGS, 0, END),
         owner: "generation_args",
+        by: &[],
         invalidation: "the regions' args the last generation laid out, drawn through the gates \
             before this frame's lays them anew; none drawn where decor is off \
             (gpu/generator.rs `indirect_draw`)",
     },
-    world_marks_kept(light::LISTED_STOOD, "light_mark_walked"),
+    // The stood marks: one rule stands a tile to the cast's number, atomic and alike wherever
+    // it runs, applied by the record's draw, the eye's or the light's cast's, and the walked and
+    // the drawn receivers' marks (light_stood.wgsl `stand`, `stand_box`).
+    Kept {
+        by: &[
+            "record_draw",
+            "record_draw_for_light",
+            "light_mark_walked",
+            "light_mark_draws",
+        ],
+        ..world_marks_kept(light::LISTED_STOOD, "light_stood.wgsl `stand`")
+    },
     world_marks_kept(light::LISTED_READ, "light_propagate"),
     marks_kept(light::LISTED_CORNERS, "light_claim"),
     marks_kept(light::LISTED_FED, "light_claim"),
@@ -1210,6 +1260,7 @@ const KEPT: &[Kept] = &[
     Kept {
         range: at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
         owner: "stood_keep",
+        by: &[],
         invalidation: "the stood list's args the casts since the world's receivers were stood \
             afresh left, its count the tiles propagated, stale where they are stood afresh: the \
             host then writes the stood list empty and none of it propagated, and copies none \
@@ -1218,6 +1269,7 @@ const KEPT: &[Kept] = &[
     Kept {
         range: at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
         owner: "read_count_keep",
+        by: &[],
         invalidation: "the read list's count the casts since the world's receivers were stood \
             afresh left, stale where they are stood afresh: the host then writes the light's \
             args with the count none and copies none back in (ray/cast.rs `RaysPass::prepare`, \
@@ -1226,25 +1278,7 @@ const KEPT: &[Kept] = &[
 ];
 
 /// The hazards the frame holds today, each by its rule, its step and what it holds it with.
-pub const KNOWN: &[Known] = &[
-    // The stood marks, kept over frames, written by four passes where one owns them: the
-    // record's draw, the eye's or the light's cast's, the walked receivers' mark and the drawn
-    // receivers', each standing tiles by the one rule (light_stood.wgsl `stand_box`, `stand`).
-    known(4, "record_draw", "light_mark_walked"),
-    known(4, "record_draw_for_light", "light_mark_walked"),
-    known(2, "record_draw_for_light", "light_mark_walked"),
-    known(4, "light_mark_draws", "light_mark_walked"),
-    known(2, "light_mark_walked", "light_mark_draws"),
-    // The frame's work counted so far read out of the node cache's head into each observer's
-    // queue, before its walks' count is copied back over it (ray/cast.rs `walk_holes`): a
-    // round trip through two copies, the read ahead of the write in one stage.
-    known(3, "visited", "visited_back"),
-    known(3, "light_visited", "light_visited_back"),
-];
-
-const fn known(rule: u32, step: &'static str, with: &'static str) -> Known {
-    Known { rule, step, with }
-}
+pub const KNOWN: &[Known] = &[];
 
 const _: () = check(&FRAME, KNOWN);
 

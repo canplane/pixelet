@@ -158,6 +158,7 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         buffers: &[buffer("light_args", ARGS)],
         appends: &[],
         seeds: &[],
+        bounds: &[],
         kept: &[],
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),

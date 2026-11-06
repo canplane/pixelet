@@ -10,10 +10,18 @@
 
 const WALK_PASS: u32 = MISSED_PASS;
 
+/// The visits the walk before left in the queue's words folded into the frame's, by the one
+/// thread `k` 0 (pxl-engine `ray::QUEUE_VISITED`, `node_cache::VISITED`).
+fn fold_visits(k: u32) {
+  if (k == 0u) {
+    atomicAdd(&node_cache[VISITED], atomicExchange(&queue[QUEUE_VISITED], 0u));
+  }
+}
+
 /// Whether a node may be asked of the world: one more within the cap this queue counts the
 /// frame's asks to (pxl-engine `ray::ASKS_A_FRAME`, `ray::caps`), counted as it is taken.
 fn may_ask() -> bool {
-  return atomicAdd(&queue[QUEUE_ASKED], 1u) < atomicLoad(&queue[QUEUE_CAPS + 1u]);
+  return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[queue_caps() + 1u]);
 }
 
 /// The node `c` at `zoom`, asked at `zooms`, asked of the world once for all the rays the queue
@@ -68,6 +76,7 @@ fn queue_ask(again: bool, id: u32) {
 
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  fold_visits(id.x);
   queue_ask(false, id.x);
 }
 
@@ -78,5 +87,6 @@ fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
     atomicStore(&node_cache[LAST_TAKEN], 0u);
   }
+  fold_visits(id.x);
   queue_ask(true, id.x);
 }

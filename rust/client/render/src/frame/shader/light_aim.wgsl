@@ -16,6 +16,12 @@ fn light_run() -> bool {
   return head_word(LIGHT_HEAD_SIZE) != 0u;
 }
 
+/// The first of the caps the running queue counts the frame's work to, the visits' and the
+/// asks', in the node cache's head (pxl-engine `node_cache::caps_at`).
+fn queue_caps() -> u32 {
+  return select(EYE_CAPS, LIGHT_CAPS, light_run());
+}
+
 fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }

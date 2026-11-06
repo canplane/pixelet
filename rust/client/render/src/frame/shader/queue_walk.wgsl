@@ -33,7 +33,7 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 /// Whether the frame's node visits so far reach the cap this queue counts to (pxl-engine
 /// `ray::VISITS_A_FRAME`, `ray::caps`), either observer's.
 fn spent() -> bool {
-  return atomicLoad(&queue[QUEUE_VISITED]) >= atomicLoad(&queue[QUEUE_CAPS]);
+  return node_cache[VISITED] + atomicLoad(&queue[QUEUE_VISITED]) >= node_cache[queue_caps()];
 }
 
 /// The node hole `hole`'s walk `w` was left at, no slot keeping it, listed for the asks of the

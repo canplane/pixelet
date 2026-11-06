@@ -98,29 +98,35 @@ pub const HITS_CNT: u32 = HITS_ARGS + 3;
 /// The next ray the holes' queue's last walk takes (pxl-render queue_last.wgsl), each
 /// observer's in turn, set back to 0 by the asks that run before it (queue_ask.wgsl).
 pub const LAST_TAKEN: u32 = HITS_CNT + 1;
-/// The holes' work so far in the frame, both observers' queues' (`ray::QUEUE_VISITED`,
-/// `ray::QUEUE_ASKED`), and the caps the queue that runs counts to (`ray::QUEUE_CAPS`): copied
-/// in from that queue's words before its last walk, which adds to them, and copied out into
-/// the next queue's words before its first (pxl-render gpu/ray/cast.rs `walk_holes`). Set to
-/// none by the host each frame a queue runs.
+/// The holes' work so far in the frame, both observers' queues', the nodes visited and those
+/// asked: added to through atomics by each queue's asks, the visits its walk over the node
+/// cache before them left in its words folded in (pxl-render queue_ask.wgsl, `ray::QUEUE_VISITED`),
+/// and by its last walk; read by every walk's budget against its observer's caps (`caps_at`).
+/// Set to none by the host each frame a queue runs.
 pub const VISITED: u32 = LAST_TAKEN + 1;
 pub const ASKED: u32 = VISITED + 1;
-pub const VISITS_CAP: u32 = ASKED + 1;
-pub const ASKS_CAP: u32 = VISITS_CAP + 1;
 /// Each observer's work its last cast or queue leaves owed, `count::OBSERVERS` words (`owed_at`):
 /// the eye's, the pixels its last walk left parked (pxl-render queue_last.wgsl `unreached`);
 /// the light's, the tiles it wanted and left unclaimed, copied in from its args after the claim
 /// (`light::ARGS_LEFT`), and the slots its last walk left parked, which add to it. None where
 /// nothing is owed. Kept apart each frame the observer's queue runs, as a later frame's head
 /// written clears it, and read back from there (`count::OWED`).
-pub const OWED_AT: u32 = ASKS_CAP + 1;
+pub const OWED_AT: u32 = ASKED + 1;
+/// Each observer's caps its queue counts the frame's work to, the visits' and the asks'
+/// (`ray::caps`), two words an observer (`caps_at`): the host's each frame its queue runs.
+pub const CAPS_AT: u32 = OWED_AT + count::OBSERVERS;
 /// Whether the eye's cast keeps the states its holes were parked in, 1 or 0, the host's each
 /// frame the eye casts: where its rays are those its last cast walked, the view, the jitter,
 /// the world and the drawn size as they were, so a parked hole names the same ray and goes on
 /// from where it was parked (pxl-render cast.wgsl, queue_walk.wgsl); else every pixel the cast
 /// takes is set to no parked ray.
-pub const RESUMES: u32 = OWED_AT + count::OBSERVERS;
+pub const RESUMES: u32 = CAPS_AT + 2 * count::OBSERVERS;
 pub const HEAD_WORDS: u32 = RESUMES + 1;
+
+/// The first of `observer`'s caps (`CAPS_AT`).
+pub const fn caps_at(observer: u32) -> u32 {
+    CAPS_AT + 2 * observer
+}
 
 /// The word of `observer`'s owed work (`OWED_AT`).
 pub const fn owed_at(observer: u32) -> u32 {

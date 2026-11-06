@@ -1132,6 +1132,23 @@ pub fn pipeline(id: u32) -> &'static [u32] {
     &words[..*n]
 }
 
+/// Whether render pipeline `id`'s groups lay out a buffer as writable storage.
+pub const fn lays_out_writable(id: u32) -> bool {
+    let groups = desc_of(id).groups;
+    let mut g = 0;
+    while g < groups.len() {
+        let mut e = 0;
+        while e < groups[g].len() {
+            if groups[g][e][1] == STORAGE_RW {
+                return true;
+            }
+            e += 1;
+        }
+        g += 1;
+    }
+    false
+}
+
 /// Whether render pipeline `id`'s shader reads the light's shadow map: whether its parts hold
 /// shadow.wgsl's (`PARTS`), its record's first word its shader. Whatever is drawn by one is a
 /// receiver of the map, and stands (frame/draw.rs `DrawList`).

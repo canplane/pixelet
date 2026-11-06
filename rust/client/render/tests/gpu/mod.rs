@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{cast, node_cache, ray, FRAC_W};
+use pxl_engine::{cast, count, node_cache, ray, FRAC_W};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_LIGHT_BEAM, COMPUTE_LIGHT_BEAM_HIT, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK,
     COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_PARKED,
@@ -201,14 +201,15 @@ impl Gpu {
     }
 
     /// The holes' queue as the cast runs it over one observer's holes (pxl-render
-    /// gpu/ray/cast.rs `walk_holes`): its words empty, the two walks over the node cache alone
-    /// and the asks after each, what the last walk reads copied into `list` and, where `hits`,
-    /// and where `hits` the eye's hits into `table`, as the cast copies them, and the last
-    /// walk. `all` binds what any of its passes reads but the queue's words: the eye at 0, the
-    /// world's at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list, its holes'
-    /// region last, at 8, the node cache at 9, the observer's head at 11; each pass takes those
-    /// its entry reads. The queue counts to the whole budget, as a queue alone in its frame does
-    /// (`ray::caps`). The queue's words as its walks left them.
+    /// gpu/ray/cast.rs `walk_holes`): its words empty, its caps in the node cache's head
+    /// (`table`), the two walks over the node cache alone and the asks after each, which fold
+    /// each walk's visits into the frame's there, where `hits` the eye's hits copied into
+    /// `table` as the cast copies them, and the last walk. `all` binds what any of its passes
+    /// reads but the queue's words: the eye at 0, the world's at 1, 2 and 4 to 7, the rays or
+    /// the map at 3, the observer's list, its holes' region last, at 8, the node cache at 9, the
+    /// observer's head at 11; each pass takes those its entry reads. The queue counts to the
+    /// whole budget, as a queue alone in its frame does (`ray::caps`). The frame's work its
+    /// passes did, the nodes visited and asked (`node_cache::VISITED`, `node_cache::ASKED`).
     pub fn holes(
         &self,
         all: &[(u32, wgpu::BindingResource)],
@@ -218,7 +219,8 @@ impl Gpu {
         self.holes_within(all, table, hits, ray::caps(true, false))
     }
 
-    /// `holes`, the queue counting the frame's visits and asks to `caps` (`ray::QUEUE_CAPS`).
+    /// `holes`, the queue counting the frame's visits and asks to `caps`
+    /// (`node_cache::caps_at`).
     pub fn holes_within(
         &self,
         all: &[(u32, wgpu::BindingResource)],
@@ -228,9 +230,12 @@ impl Gpu {
     ) -> Vec<u32> {
         let mut words = vec![0u32; ray::QUEUE_WORDS as usize];
         words[..ray::QUEUE_EMPTY.len()].copy_from_slice(&ray::QUEUE_EMPTY);
-        let at = ray::QUEUE_CAPS as usize;
-        words[at..at + 2].copy_from_slice(&caps);
         let queue = self.buffer(&words, wgpu::BufferUsages::STORAGE);
+        // Either observer's caps, the walks taking their own by the head they are handed.
+        for observer in [count::EYE, count::LIGHT] {
+            let at = u64::from(node_cache::caps_at(observer)) * 4;
+            self.queue.write_buffer(table, at, bytes(&caps));
+        }
         let take = |keep: &[u32]| {
             let mut binds: Vec<_> = all
                 .iter()
@@ -255,16 +260,16 @@ impl Gpu {
         self.dispatch(&pipeline(COMPUTE_QUEUE_PARKED), &walk, groups);
         self.dispatch(&pipeline(COMPUTE_QUEUE_ASK_PARKED), &ask, groups);
         let q = self.read(&queue);
-        let v = ray::QUEUE_VISITED as usize;
-        let at = u64::from(node_cache::VISITED) * 4;
-        self.queue.write_buffer(table, at, bytes(&q[v..v + 4]));
         if hits {
             let h = ray::QUEUE_HITS as usize;
             let at = u64::from(node_cache::HITS_ARGS) * 4;
             self.queue.write_buffer(table, at, bytes(&q[h..h + 4]));
         }
         self.dispatch(&pipeline(COMPUTE_QUEUE_LAST), &last, groups);
-        q
+        let done = self.read(table);
+        [node_cache::VISITED, node_cache::ASKED]
+            .map(|w| done[w as usize])
+            .to_vec()
     }
 }
 

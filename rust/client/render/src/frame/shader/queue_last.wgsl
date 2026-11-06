@@ -5,8 +5,8 @@
 // keeps a node. The lanes as the walks before (queue_walk.wgsl): each takes the next hole when
 // its own ray ends, off a word of the node cache's head the asks before it set back
 // (`node_cache::LAST_TAKEN`), a hole not parked passed. Either observer's counts against the
-// frame's budget where the walks before left it, up to its queue's caps (`node_cache::VISITED`
-// to `node_cache::ASKS_CAP`): a ray the budget does not reach stays parked and is owed
+// frame's budget where the asks before left it, up to its observer's caps (`node_cache::VISITED`,
+// `node_cache::caps_at`): a ray the budget does not reach stays parked and is owed
 // (`unreached`).
 
 const WALK_PASS: u32 = MISSED_PASS;
@@ -29,9 +29,9 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 }
 
 /// Whether a node may be asked of the world: one more within the cap this queue counts the
-/// frame's asks to (`node_cache::ASKS_CAP`), counted as it is taken.
+/// frame's asks to (`node_cache::caps_at`), counted as it is taken.
 fn may_ask() -> bool {
-  return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[ASKS_CAP]);
+  return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[queue_caps() + 1u]);
 }
 
 /// A hole's ray the frame's budget does not reach, at the node `corner`, `zoom`, `roots`, `t`
@@ -95,7 +95,7 @@ fn queue_last_cs() {
       step = s.step;
       top = true;
     }
-    if (atomicLoad(&node_cache[VISITED]) >= atomicLoad(&node_cache[VISITS_CAP])) {
+    if (atomicLoad(&node_cache[VISITED]) >= atomicLoad(&node_cache[queue_caps()])) {
       unreached(hole, t, corner, zoom, roots, step);
       hole = NONE;
       continue;

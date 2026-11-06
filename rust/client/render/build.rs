@@ -472,8 +472,6 @@ fn walk_word() -> String {
         ("QUEUE_ASKS", ray::QUEUE_ASKS),
         ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
         ("QUEUE_VISITED", ray::QUEUE_VISITED),
-        ("QUEUE_ASKED", ray::QUEUE_ASKED),
-        ("QUEUE_CAPS", ray::QUEUE_CAPS),
         ("QUEUE_HITS", ray::QUEUE_HITS),
         ("QUEUE_RECORDS_AT", ray::QUEUE_RECORDS_AT),
         ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
@@ -484,8 +482,8 @@ fn walk_word() -> String {
         ("LAST_TAKEN", node_cache::LAST_TAKEN),
         ("VISITED", node_cache::VISITED),
         ("ASKED", node_cache::ASKED),
-        ("VISITS_CAP", node_cache::VISITS_CAP),
-        ("ASKS_CAP", node_cache::ASKS_CAP),
+        ("EYE_CAPS", node_cache::caps_at(count::EYE)),
+        ("LIGHT_CAPS", node_cache::caps_at(count::LIGHT)),
         ("EYE_OWED", node_cache::owed_at(count::EYE)),
         ("LIGHT_OWED", node_cache::owed_at(count::LIGHT)),
         ("RESUMES", node_cache::RESUMES),
@@ -1537,7 +1535,10 @@ fn assemble(out: &Path) {
                 }
                 let read = used.intersects(GlobalUse::READ | GlobalUse::QUERY);
                 let write = used.contains(GlobalUse::WRITE);
-                let atomic = holds_atomic(&module, var.ty);
+                // Written through atomics alone: it holds atomics, and no plain store the entry
+                // point reaches writes it, a plain member beside an atomic one among them.
+                let atomic = holds_atomic(&module, var.ty)
+                    && !stores_plainly(&module, &entry.function, handle, &mut Vec::new());
                 let bits = u32::from(read) | u32::from(write) << 1 | u32::from(atomic) << 2;
                 match by.iter_mut().find(|a| a[0] == b.group && a[1] == b.binding) {
                     Some(a) => a[2] |= bits,
@@ -1710,6 +1711,81 @@ pub const fn binds(pipelines: &[u32], group: &[u32]) -> bool {
     true
 }
 ";
+
+/// Whether `function`, or a function it calls, stores plainly into global `global`: a
+/// `Store` of no atomic into the global or a member or an element of it. `seen` holds the
+/// functions already walked.
+fn stores_plainly(
+    module: &naga::Module,
+    function: &naga::Function,
+    global: naga::Handle<naga::GlobalVariable>,
+    seen: &mut Vec<naga::Handle<naga::Function>>,
+) -> bool {
+    use naga::{Expression, Statement};
+    /// The global a pointer is into and the type it points at, where it is a global or a
+    /// member or an element of one.
+    fn pointee(
+        module: &naga::Module,
+        f: &naga::Function,
+        e: naga::Handle<Expression>,
+    ) -> Option<(naga::Handle<naga::GlobalVariable>, naga::Handle<naga::Type>)> {
+        use naga::TypeInner;
+        let element =
+            |ty: naga::Handle<naga::Type>, index: Option<u32>| match &module.types[ty].inner {
+                TypeInner::Array { base, .. } => Some(*base),
+                TypeInner::Struct { members, .. } => index.map(|i| members[i as usize].ty),
+                _ => None,
+            };
+        match f.expressions[e] {
+            Expression::GlobalVariable(g) => Some((g, module.global_variables[g].ty)),
+            Expression::AccessIndex { base, index } => {
+                let (g, ty) = pointee(module, f, base)?;
+                Some((g, element(ty, Some(index))?))
+            }
+            Expression::Access { base, .. } => {
+                let (g, ty) = pointee(module, f, base)?;
+                Some((g, element(ty, None)?))
+            }
+            _ => None,
+        }
+    }
+    fn block(
+        module: &naga::Module,
+        f: &naga::Function,
+        b: &naga::Block,
+        global: naga::Handle<naga::GlobalVariable>,
+        seen: &mut Vec<naga::Handle<naga::Function>>,
+    ) -> bool {
+        b.iter().any(|st| match st {
+            // An `atomicStore` is a store to an atomic; a plain one to anything else.
+            Statement::Store { pointer, .. } => {
+                pointee(module, f, *pointer).is_some_and(|(g, ty)| {
+                    g == global && !matches!(module.types[ty].inner, naga::TypeInner::Atomic(_))
+                })
+            }
+            Statement::Block(inner) => block(module, f, inner, global, seen),
+            Statement::If { accept, reject, .. } => {
+                block(module, f, accept, global, seen) || block(module, f, reject, global, seen)
+            }
+            Statement::Switch { cases, .. } => cases
+                .iter()
+                .any(|c| block(module, f, &c.body, global, seen)),
+            Statement::Loop {
+                body, continuing, ..
+            } => block(module, f, body, global, seen) || block(module, f, continuing, global, seen),
+            Statement::Call { function, .. } => {
+                if seen.contains(function) {
+                    return false;
+                }
+                seen.push(*function);
+                let called = &module.functions[*function];
+                block(module, called, &called.body, global, seen)
+            }
+            _ => false,
+        })
+    }
+    block(module, function, &function.body, global, seen)
+}
 
 /// Whether type `ty` of `module` holds an atomic, itself, in an array or in a member.
 fn holds_atomic(module: &naga::Module, ty: naga::Handle<naga::Type>) -> bool {

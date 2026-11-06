@@ -1653,7 +1653,7 @@ fn marked_answers(
 
 /// The eye's holes' queue run alone frame after frame while its rays stand, as the host runs it
 /// where the eye is owed (gpu/ray/cast.rs `eye_queue`), each frame's budget of visits and asks
-/// far less than its holes take (`ray::QUEUE_CAPS`): the first frame over the cast's walked
+/// far less than its holes take (`node_cache::caps_at`): the first frame over the cast's walked
 /// pixels, each after over the owed list the one before filled (`ray::holes_from_at`,
 /// `ray::owed_list_at`), its count the eye's owed word (`node_cache::OWED_AT`), the node
 /// cache's frame numbered on and the frame's work set to none each frame. Each frame's owed

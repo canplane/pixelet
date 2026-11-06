@@ -1881,7 +1881,7 @@ impl RaysPass {
                 );
             }
             let caps = ray::caps(true, c.light_cast);
-            g.write_buf(c.queue, sequence::OPEN_QUEUE_CAPS.to_at(), bytes(&caps));
+            g.write_buf(c.node_cache, sequence::OPEN_EYE_CAPS.to_at(), bytes(&caps));
             // The list the eye's queue takes: its cast's walked pixels, or, run alone, the
             // pixels the queue before left parked, so it walks only what is owed; and the owed
             // list it fills in turn (`ray::holes_from_at`).
@@ -1901,8 +1901,8 @@ impl RaysPass {
         if c.light_cast {
             let caps = ray::caps(false, eye_runs);
             g.write_buf(
-                c.light_queue,
-                sequence::OPEN_LIGHT_QUEUE_CAPS.to_at(),
+                c.node_cache,
+                sequence::OPEN_LIGHT_CAPS.to_at(),
                 bytes(&caps),
             );
         }
@@ -2407,7 +2407,7 @@ impl RaysPass {
                     queue: c.queue,
                     node_cache: c.node_cache,
                     hits: true,
-                    steps: [&sequence::VISITED, &sequence::VISITED_BACK, &sequence::HITS],
+                    hits_step: &sequence::HITS,
                 },
             );
             // Their stops into the eye's record, every one, their new faces asked and each
@@ -2689,11 +2689,7 @@ impl RaysPass {
                     queue: c.light_queue,
                     node_cache: c.node_cache,
                     hits: true,
-                    steps: [
-                        &sequence::LIGHT_VISITED,
-                        &sequence::LIGHT_VISITED_BACK,
-                        &sequence::LIGHT_HITS,
-                    ],
+                    hits_step: &sequence::LIGHT_HITS,
                 },
             );
             // Their stops into the light's record, every one its queue listed, after the queue
@@ -3192,17 +3188,16 @@ fn queue_groups(
 
 /// An observer's holes' queue as its passes take it (pxl-engine `ray::QUEUE_LANES`): the
 /// pipelines of its first walk, its asks, its second walk, their asks and its last walk; its
-/// groups (`queue_groups`); its words; the node cache, whose head carries the holes' work done
-/// between the observers' queues and where its stops go on (`hits`), either observer's.
+/// groups (`queue_groups`); its words; the node cache, whose head counts the holes' work done
+/// by both observers' queues and where its stops go on (`hits`), either observer's; and the
+/// step that copies its stops' count there (`sequence::HITS`).
 struct Holes<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],
     queue: u32,
     node_cache: u32,
     hits: bool,
-    /// Its copies: the frame's work into its words, its walks' back, and its stops' count
-    /// into the node cache's head (`sequence::VISITED`, `VISITED_BACK`, `HITS`).
-    steps: [&'a Step; 3],
+    hits_step: &'a Step,
 }
 
 /// The eye's holes' region, a state a drawn pixel of `size` (`ray::region_words`), its holes
@@ -3213,22 +3208,13 @@ fn eye_region(size: [u32; 2]) -> u32 {
 
 /// The holes' queue's passes, each a fixed dispatch over what the one before wrote, no
 /// indirect call among them: the two walks over the node cache alone, each followed by the asks
-/// of the nodes it parked rays at, in the span `spans[0]`; their work copied into the node
-/// cache's head, where the last walk counts on from; then, the eye's, its stops'
-/// count and dispatch into the node cache's head, and the last walk, in a pass of the span
-/// `spans[1]` left open for what follows it.
+/// of the nodes it parked rays at, which fold the walk's visits into the frame's, in the span
+/// `spans[0]`; then its stops' count and dispatch into the node cache's head, and the last
+/// walk, in a pass of the span `spans[1]` left open for what follows it.
 fn walk_holes(ctx: &mut RenderContext, spans: [GpuSpanName; 2], h: &Holes) -> Id {
     let (g, encoder) = (ctx.g, ctx.encoder);
     let [walk, ask, walk_parked, ask_parked, last] = h.pipelines;
     let [walk_group, ask_group, last_group] = h.groups;
-    // The frame's work so far, the queues' before this one's, where its walks count on from.
-    let [visited, visited_back, hits] = h.steps;
-    g.copy_buf(
-        encoder,
-        (h.node_cache, visited.from_at()),
-        (h.queue, visited.to_at()),
-        word_bytes(2),
-    );
     let pass = g.compute_pass(encoder, ctx.stamp(spans[0]).pass());
     for (pipeline, group) in [
         (walk, walk_group),
@@ -3241,20 +3227,11 @@ fn walk_holes(ctx: &mut RenderContext, spans: [GpuSpanName; 2], h: &Holes) -> Id
         g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     }
     g.end(pass);
-    // The frame's work with its walks' over the node cache, the nodes visited and asked, and
-    // the caps it counts to, where its last walk counts on (`node_cache::VISITED` to
-    // `node_cache::ASKS_CAP`).
-    g.copy_buf(
-        encoder,
-        (h.queue, visited_back.from_at()),
-        (h.node_cache, visited_back.to_at()),
-        word_bytes(4),
-    );
     if h.hits {
         g.copy_buf(
             encoder,
-            (h.queue, hits.from_at()),
-            (h.node_cache, hits.to_at()),
+            (h.queue, h.hits_step.from_at()),
+            (h.node_cache, h.hits_step.to_at()),
             word_bytes(4),
         );
     }
