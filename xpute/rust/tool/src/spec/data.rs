@@ -63,6 +63,22 @@ pub struct DataSpec {
     pub mk: Option<(&'static str, &'static str)>,
 }
 
+impl DataSpec {
+    /// A spec that writes nothing: a table's row names what differs from it.
+    pub const DEFAULT: DataSpec = DataSpec {
+        json: "",
+        uses: &[],
+        ts: None,
+        ts_names: None,
+        rs: None,
+        module: "spec",
+        rs_also: &[],
+        enums: Enums::None,
+        cpp: None,
+        mk: None,
+    };
+}
+
 /// A spec's run of slots: the spec, its first slot, and how many it holds.
 pub type Run<'a> = (&'a str, u16, u16);
 
@@ -110,96 +126,59 @@ pub struct Layout<'a> {
 const DATA_SPECS: [DataSpec; 8] = [
     DataSpec {
         json: "spec/conformance/core.json",
-        uses: &[],
         ts: Some("ts/runtime/src/conformance.spec.ts"),
-        ts_names: None,
         rs: Some("rust/conformance/src/core.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/conformance/core.spec.hpp", "xpute::conformance")),
         mk: Some(("cpp/conformance/core.spec.mk", "CONFORMANCE_")),
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/ipc/head.json",
-        uses: &[],
         ts: Some("ts/runtime/src/ipc/head.spec.ts"),
-        ts_names: None,
         rs: Some("rust/core/src/ipc/head.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/xpute/core/ipc/head.spec.hpp", "xpute::head")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/ipc/frame.json",
-        uses: &[],
         ts: Some("ts/runtime/src/ipc/frame.spec.ts"),
-        ts_names: None,
         rs: Some("rust/core/src/ipc/frame.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/xpute/core/ipc/frame.spec.hpp", "xpute::frame")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/ipc/ring.json",
-        uses: &[],
         ts: Some("ts/runtime/src/ipc/ring.spec.ts"),
-        ts_names: None,
         rs: Some("rust/core/src/ipc/ring.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/xpute/core/ipc/ring.spec.hpp", "xpute::ring")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/ipc/fs.json",
-        uses: &[],
         ts: Some("ts/runtime/src/ipc/fs.spec.ts"),
-        ts_names: None,
         rs: Some("rust/core/src/ipc/fs.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/xpute/core/ipc/fs.spec.hpp", "xpute::fs")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/ipc/stream.json",
-        uses: &[],
         ts: Some("ts/runtime/src/ipc/stream.spec.ts"),
-        ts_names: None,
         rs: Some("rust/core/src/ipc/stream.spec.rs"),
-        module: "spec",
-        rs_also: &[],
-        enums: Enums::None,
         cpp: Some(("cpp/xpute/core/ipc/stream.spec.hpp", "xpute::stream")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/gpu/api.json",
-        uses: &[],
         ts: Some("ts/gpu/src/api.spec.ts"),
-        ts_names: None,
         rs: Some("rust/gpu/src/api.spec.rs"),
-        module: "spec",
-        rs_also: &[],
         enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         cpp: Some(("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/gpu/enum.json",
-        uses: &[],
         ts: Some("ts/gpu/src/enum.spec.ts"),
-        ts_names: None,
         rs: Some("rust/gpu/src/enum.spec.rs"),
-        module: "spec",
-        rs_also: &[],
         enums: Enums::Named(&[
             "TEXTURE_FORMAT",
             "VERTEX_FORMAT",
@@ -230,7 +209,7 @@ const DATA_SPECS: [DataSpec; 8] = [
             "LIMIT_NAME",
         ]),
         cpp: Some(("cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),
-        mk: None,
+        ..DataSpec::DEFAULT
     },
 ];
 
