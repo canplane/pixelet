@@ -219,6 +219,10 @@ pub fn num(c: Cursor<'_>) -> f64 {
     c.get_number().expect("a number")
 }
 
+pub fn flag(c: Cursor<'_>) -> bool {
+    c.get_bool().expect("a bool")
+}
+
 /// A setting's number by its key (spec/client/kernel/domain/view/setting/schema.json).
 pub fn setting(key: &str) -> u32 {
     let j = json("spec/client/kernel/domain/view/setting/schema.json");

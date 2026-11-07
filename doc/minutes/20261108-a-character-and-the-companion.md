@@ -84,11 +84,18 @@ scene.rs      animate, draw: the parts in order, the previews' groups
 - A `Scene` struct holding every part: main had made each part keep its own
   state (`f746a20019`), and check-rules refuses a part naming the scene's root.
 
+## The frame test
+
+The kernel's frame test failed from `065a4246b1` on: "the view did not rest
+within 10 idle turns". That commit took the bound down to `JITTERS +
+FRAME_LATENCY` and the frames before it, while the wheel's zoom eases for some
+50 turns, so the idle turns were counted over a camera still moving: it moved
+to the 32nd of them, and the last ask came 7 turns after it stopped. The kernel
+was right. The harness now lets the zoom's ease end, by the snapshot's
+`zooming`, before it counts (`Run::settle`).
+
 ## Open
 
-- The kernel's frame test fails at main as it does here: "frame 82: the view
-  did not rest within 10 idle turns, the last asked 18 turns in"
-  (`rust/client/kernel/tests/frame/main.rs`).
 - `layer/object/preview.rs`, the edit not yet made, keeps its name; `pending`
   was weighed and refused, as the kernel's "pending" is what is asked and not
   yet answered.

@@ -17,10 +17,12 @@ use xpute_runtime::native::{ring, turns, Core};
 use crate::fs::Files;
 use crate::spec::{self, Protocol, V};
 
-/// What the last snapshot said: how many of the renderer's pipelines are made, a share.
+/// What the last snapshot said: how many of the renderer's pipelines are made, a share, and
+/// whether a zoom is still arriving.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Shown {
     pub renderer_progress: f64,
+    pub zooming: bool,
 }
 
 pub struct Runtime {
@@ -249,6 +251,10 @@ impl Runtime {
             renderer_progress: spec::num(
                 s.at(self.shell.record_at("Snapshot", "renderer_progress"))
                     .expect("the progress"),
+            ),
+            zooming: spec::flag(
+                s.at(self.shell.record_at("Snapshot", "zooming"))
+                    .expect("the zoom"),
             ),
         };
     }

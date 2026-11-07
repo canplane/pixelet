@@ -60,6 +60,9 @@ const REST_FRAMES: u32 = JITTERS + FRAME_LATENCY;
 /// Frames the renderer's pipelines are given to be made in before the world is drawn.
 const PIPELINE_FRAMES: u32 = 600;
 
+/// Frames a zoom's ease is given to end in, its step's fifty or so twice over.
+const EASE_FRAMES: u32 = 120;
+
 /// The shard the place lies in, the one the source serves: found from the top down, each
 /// zoom's tile the one whose square holds it.
 fn shard_of([lon, lat]: [f64; 2]) -> Quadrant {
@@ -148,6 +151,21 @@ impl Run {
     /// `n` frames, nothing sent.
     fn frames(&mut self, n: u32) {
         for _ in 0..n {
+            self.frame(false);
+        }
+    }
+
+    /// Frames until the zoom's ease ends, the last of the camera's as the last input it took:
+    /// the view stands from there.
+    fn settle(&mut self) {
+        let mut eased = 0;
+        while self.runtime.shown.zooming {
+            eased += 1;
+            assert!(
+                eased <= EASE_FRAMES,
+                "frame {}: the zoom did not end in {EASE_FRAMES} frames",
+                self.frames
+            );
             self.frame(false);
         }
     }
@@ -311,11 +329,12 @@ fn frames() {
     );
     run.frames(JITTERS);
 
-    // Idle turns until the view rests.
+    // The camera at the end of its ease, then idle turns until the view rests.
+    run.settle();
     let rested = run.rest();
     eprintln!(
         "{} frames: the pipelines made in {made}, the view at rest {rested} idle turns after \
-         the last input",
+         the camera stood",
         run.frames
     );
 
