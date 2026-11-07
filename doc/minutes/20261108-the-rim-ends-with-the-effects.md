@@ -9,8 +9,8 @@ the rules that draw it.
 shadows had gone and the rim alone stayed, so the ground changed at once and each coarse cell
 stood apart. This changes "the rim reaches as far as the eye draws".
 
-**The far zoom's floating box stays for now.** Drawing a coarse top on the cell under it would
-undo 10-28's decision; it is taken up only if the fragments still show after the rim.
+**The far zoom's floating box stays.** Seen with the rim gone, the user keeps it as it is. The
+surface's effects end at one boundary; past it the light and the air alone are left.
 
 **A shadow at dawn on flat ground stays as strong as it is.**
 

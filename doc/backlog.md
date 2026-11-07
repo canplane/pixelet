@@ -26,8 +26,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   backlog is done, and it waits on the CPU fill's renderer work. The counts put a list near
   100 k cells (the journal, 11-08). First `list::light` on the CPU, held to `cast::first`,
   which measures the real list.
-- **The far zoom's floating boxes**, if they still show as fragments now the rim ends with the
-  effects ([the rim ends with the effects](./minutes/20261108-the-rim-ends-with-the-effects.md)).
+- **A bright teal wedge beside the character at load.** At 38.1193, 128.4656, by its right arm,
+  since it stands clear of the wall. Read as the location zone on the step's wall, unchecked.
 
 ## P2
 
