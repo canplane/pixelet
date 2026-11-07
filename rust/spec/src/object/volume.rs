@@ -1,6 +1,6 @@
 // pxl-spec/object/volume.rs
 
-//! The objects' sparse tree folded as it is written (pxl-kernel
+//! The objects' sparse tree folded as it is written (pxl-core
 //! domain/layer/object/store.rs), each branch its eight by the overwrites' one
 //! rule (pxl-engine `overwrite::fold`).
 

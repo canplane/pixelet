@@ -1,18 +1,18 @@
 // ts/client/src/abi/cmd.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 /**
- * The shell's protocol with the kernel: its commands, by number (@xpute/kit/abi/cmd.ts:
+ * The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
  * `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
  * it carries — an XTP branch whose children are its fields, in order. A command with no
- * fields carries no packet. The kernel is the core; the JavaScript around it is two
+ * fields carries no packet. The JavaScript around the core is two
  * things to it, its runtime, which holds the turns and carries its imports to what
- * answers them (ts/client/src/sys/), and its shell, the UI, which sends what the user
+ * answers them (ts/client/src/sys/), and its UI, which sends what the user
  * does and what the place's sensors, visibility and frames tell it
  * (ts/client/src/port/). A command's major is the module it is for.
  *
- * `export` is what the shell sends the kernel and `import` what the kernel posts to it, `call`
+ * `export` is what the UI sends the core and `import` what the core posts to it, `call`
  * one its sender waits on. Each is written and read by what this file generates, on
  * both sides, so no field is found by its position anywhere else.
  *
@@ -44,7 +44,7 @@ import * as SceneMinor from "./cmd/scene_minor.spec.ts";
 import * as CameraMinor from "./cmd/camera_minor.spec.ts";
 import * as PerfMinor from "./cmd/perf_minor.spec.ts";
 import * as EditMinor from "./cmd/edit_minor.spec.ts";
-import * as ShellMinor from "./cmd/shell_minor.spec.ts";
+import * as UiMinor from "./cmd/ui_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
 import * as Tool from "./cmd/tool.spec.ts";
@@ -101,9 +101,9 @@ export { PerfMinor };
 type EditMinor = (typeof EditMinor)[keyof typeof EditMinor];
 export { EditMinor };
 
-/** One of ShellMinor's, as its enum was a type. */
-type ShellMinor = (typeof ShellMinor)[keyof typeof ShellMinor];
-export { ShellMinor };
+/** One of UiMinor's, as its enum was a type. */
+type UiMinor = (typeof UiMinor)[keyof typeof UiMinor];
+export { UiMinor };
 
 /** One of PointerPhase's, as its enum was a type. */
 type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
@@ -166,7 +166,7 @@ function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
   return present === undefined ? null : read(present.as_branch());
 }
 
-/** What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole. */
+/** What the page's UI shows of the core (ui.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
   pivot: PivotState;
   location: LocationState;
@@ -180,22 +180,22 @@ export interface Snapshot {
   zooming: boolean;
   /** The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft. */
   over_marker: boolean;
-  /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
+  /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the core
    * has read its storage file, a few turns from boot. */
   settings: u32[];
   /** The division the pivot is in and every one above it, broad to narrow; empty
    * where the pivot is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
-  /** The surfaces a character is drawn on: its model and skin have arrived. The shell shows one loading until its surface is here. */
+  /** The surfaces a character is drawn on: its model and skin have arrived. The UI shows one loading until its surface is here. */
   character_surfaces: u32[];
-  /** The files the kernel refused, not of their format, not decoding, or too large for any
+  /** The files the core refused, not of their format, not decoding, or too large for any
    * heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
-   * kernel read none of it and writes nothing over it until FS_CHANGED says it is
+   * core read none of it and writes nothing over it until FS_CHANGED says it is
    * empty. */
   refused_files: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say. */
   stall: Message | null;
-  /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
+  /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the UI's to draw of it. */
   renderer_progress: f64;
   /** How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for. */
   area_progress: f64;
@@ -227,7 +227,7 @@ export interface PivotState {
   is_off_center: boolean;
   /** The pivot in degrees: what the search measures distance from. */
   lon_lat: LonLat | null;
-  /** The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
+  /** The pivot is past the service area: the source serves no shard over it (pxl-core sys/io/source.rs). */
   outside: boolean;
 }
 
@@ -252,7 +252,7 @@ export function read_lon_lat(b: BranchCursor): LonLat {
 export interface LocationState {
   status: SensorStatus;
   has_location: boolean;
-  /** Present exactly when status is Error: the failure the kernel chose. */
+  /** Present exactly when status is Error: the failure the core chose. */
   err: Message | null;
 }
 
@@ -278,7 +278,7 @@ export function read_companion_state(b: BranchCursor): CompanionState {
 
 export interface OrientationState {
   status: SensorStatus;
-  /** Present exactly when status is Error: the failure the kernel chose. */
+  /** Present exactly when status is Error: the failure the core chose. */
   err: Message | null;
 }
 
@@ -310,11 +310,11 @@ export function read_division_part(b: BranchCursor): DivisionPart {
   };
 }
 
-/** A file the kernel refused, as it opened it. */
+/** A file the core refused, as it opened it. */
 export interface RefusedFile {
   /** file.json's `root`. */
   root: u32;
-  /** Its path below the root, as the kernel opened it. */
+  /** Its path below the root, as the core opened it. */
   path: string;
 }
 
@@ -581,25 +581,25 @@ export function read_sensor_stop(b: BranchCursor): SensorStop {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.SHELL_SNAPSHOT's packet. */
-export interface ShellSnapshot {
+/** Command.UI_SNAPSHOT's packet. */
+export interface UiSnapshot {
   at: u32;
   len: u32;
 }
 
-export function read_shell_snapshot(b: BranchCursor): ShellSnapshot {
+export function read_ui_snapshot(b: BranchCursor): UiSnapshot {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }
 
-/** Command.SHELL_VIEW's packet. */
-export interface ShellView {
+/** Command.UI_VIEW's packet. */
+export interface UiView {
   /** The view's azimuth. */
   azimuth: f64;
-  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
+  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the UI's to make of it; which division names show, the core's (`DivisionPart.shown`). */
   m_per_px: f64;
 }
 
-export function read_shell_view(b: BranchCursor): ShellView {
+export function read_ui_view(b: BranchCursor): UiView {
   return { azimuth: b.at(0).get<f64>(), m_per_px: b.at(1).get<f64>() };
 }
 
@@ -613,10 +613,10 @@ export function read_turn_pace(b: BranchCursor): TurnPace {
   return { interval_ms: b.at(0).get<f64>() };
 }
 
-/** What the runtime sends on the shell protocol, bound to `runtime`: each
+/** What the runtime sends on the ui protocol, bound to `runtime`: each
  * command sent, requested and answered later, or called and answered before
  * it returns. */
-export function shell_exports(runtime: Sender) {
+export function ui_exports(runtime: Sender) {
   return {
     sensor_pos: (
       lon: f64,
@@ -754,41 +754,41 @@ export function shell_exports(runtime: Sender) {
   };
 }
 
-/** The shell protocol's stubs, bound. */
-export type ShellExports = ReturnType<typeof shell_exports>;
+/** The ui protocol's stubs, bound. */
+export type UiExports = ReturnType<typeof ui_exports>;
 
-/** What the program does with each command the core posts on the shell protocol; a
+/** What the program does with each command the core posts on the ui protocol; a
  * call's answer is its return. */
-export interface ShellImports {
+export interface UiImports {
   /** Start watching. */
   sensor_start(e: SensorStart): void;
   /** Stop watching. */
   sensor_stop(e: SensorStop): void;
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
-   * block the kernel holds, valid until the next snapshot. */
-  shell_snapshot(e: ShellSnapshot): void;
+   * block the core holds, valid until the next snapshot. */
+  ui_snapshot(e: UiSnapshot): void;
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
-  shell_view(e: ShellView): void;
-  /** The least interval the kernel asks between its turns: its load's word on the rate, which
+  ui_view(e: UiView): void;
+  /** The least interval the core asks between its turns: its load's word on the rate, which
    * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
    * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
   turn_pace(e: TurnPace): void;
 }
 
-/** `h` as the handler a runtime routes the shell protocol's commands to, each one read and
+/** `h` as the handler a runtime routes the ui protocol's commands to, each one read and
  * handed to its member; ENOSYS for one the protocol does not carry. */
-export function shell_imports(h: ShellImports): OnImport {
+export function ui_imports(h: UiImports): OnImport {
   return (_tag, cmd, f) => {
     switch (cmd) {
       case Command.SENSOR_START:
         return h.sensor_start(read_sensor_start(need(f)));
       case Command.SENSOR_STOP:
         return h.sensor_stop(read_sensor_stop(need(f)));
-      case Command.SHELL_SNAPSHOT:
-        return h.shell_snapshot(read_shell_snapshot(need(f)));
-      case Command.SHELL_VIEW:
-        return h.shell_view(read_shell_view(need(f)));
+      case Command.UI_SNAPSHOT:
+        return h.ui_snapshot(read_ui_snapshot(need(f)));
+      case Command.UI_VIEW:
+        return h.ui_view(read_ui_view(need(f)));
       case Command.TURN_PACE:
         return h.turn_pace(read_turn_pace(need(f)));
       default:
@@ -797,12 +797,12 @@ export function shell_imports(h: ShellImports): OnImport {
   };
 }
 
-/** The core's memory a command on the shell protocol names, where it is and how
+/** The core's memory a command on the ui protocol names, where it is and how
  * long; null for none. */
-export function shell_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {
+export function ui_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {
   switch (cmd) {
-    case Command.SHELL_SNAPSHOT: {
-      const e = read_shell_snapshot(need(f));
+    case Command.UI_SNAPSHOT: {
+      const e = read_ui_snapshot(need(f));
       return [e.at, e.len];
     }
     default:

@@ -1,10 +1,10 @@
 // @pxl/client/sys/fs/object_tree.ts
 
 /**
- * The placed objects' tree as their source keeps it beside the kernel: a
+ * The placed objects' tree as their source keeps it beside the core: a
  * leaf's octkey, its first digits its shard's quadkey, a write laid over a shard's
  * leaves, and what a node at `SHARD_ZOOM` folds to, the top of the tree.
- * The kernel's store owns the tree (pxl-kernel
+ * The core's store owns the tree (pxl-core
  * domain/layer/object/store.rs); what is here is its rules held a second
  * time, ported, and held to the store by one record both read
  * (rust/spec/golden/object/top.tsv): an octkey's digits (pxl-spec

@@ -1,0 +1,421 @@
+// pxl-core/domain/scene/indicator/location.rs
+
+//! The device's location indicator: a zone of cells about the fix, each on the
+//! ground under it, and a beacon above that eases, spins and bobs.
+
+use pxl_render::frame::shader::record::PIPELINE_LOCATION_ZONE;
+use pxl_render::gpu::api::bytes;
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, Stand};
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::world;
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
+
+use crate::domain::query::changes::Memo;
+use crate::domain::query::World;
+use crate::domain::scene::animation;
+use crate::domain::scene::environment;
+use crate::domain::scene::frame::Frame;
+use crate::domain::scene::indicator::param::{
+    BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
+    ZONE_FOOTPRINT_U,
+};
+use crate::domain::scene::model::draw_list;
+use crate::domain::smooth::smoothing_factor;
+use crate::domain::view::frame::coord;
+use crate::domain::view::lens;
+use crate::domain::view::lens::{seen_step_s, Stepped};
+use crate::sys::sched::edge::{request_world_tick, wake_at};
+use pxl_render::frame::shader::word;
+use pxl_render::param::location::beacon;
+use xpute_core::clock::now;
+use xpute_core::global::Global;
+
+// The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
+// one-cell diagonal correction.
+const ZONE_RADIUS_CELL: f64 = ZONE_FOOTPRINT_U / units(GROUND.cell()) - 0.707;
+const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
+/// The zone's, past which the beacon snaps to its target rather than slide.
+const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
+
+/// Which of its sides (top, bottom, right, left) lie on the zone's border.
+struct ZoneSample {
+    /// In the ground's cells from the center.
+    at: [i32; 2],
+    off: V3,
+    borders: [f64; 4],
+}
+
+/// How far the zone reaches from its center along an axis, in cells.
+fn zone_extent() -> i32 {
+    ZONE_RADIUS_CELL.ceil() as i32
+}
+
+fn zone_samples() -> impl Iterator<Item = ZoneSample> {
+    let range = zone_extent();
+    let flag = |b: bool| if b { 1.0 } else { 0.0 };
+    (-range..=range)
+        .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
+        .filter_map(move |(dx, dy)| {
+            let (dx2, dy2) = (dx * dx, dy * dy);
+            if dx2 + dy2 > ZONE_RADIUS2_CELL {
+                return None;
+            }
+            let d_top = dx2 + (dy + 1.0) * (dy + 1.0);
+            let d_bottom = dx2 + (dy - 1.0) * (dy - 1.0);
+            let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
+            let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
+            Some(ZoneSample {
+                at: [dx as i32, dy as i32],
+                off: [
+                    dx * units(GROUND.cell()),
+                    dy * units(GROUND.cell()),
+                    -units(GROUND.cell()),
+                ],
+                borders: [
+                    flag(d_top > ZONE_RADIUS2_CELL),
+                    flag(d_bottom > ZONE_RADIUS2_CELL),
+                    flag(d_right > ZONE_RADIUS2_CELL),
+                    flag(d_left > ZONE_RADIUS2_CELL),
+                ],
+            })
+        })
+}
+
+/// What grounding the zone is made of, by value: the fix, and where it is
+/// in the eye's frame. With the ground its queries read (`Columns`), it is all.
+#[derive(Clone, Copy, PartialEq)]
+struct Key {
+    device: Q3,
+    pos: V3,
+}
+
+static LOCATION: Global<LocationIndicator> = Global::new();
+
+fn location() -> &'static mut LocationIndicator {
+    LOCATION.get(LocationIndicator::default)
+}
+
+pub fn location_step(device_coord: Option<Q3>) {
+    location().step(draw_list(), device_coord, environment::night());
+}
+
+/// The beacon advanced (`LocationIndicator::tick`); whether it wants frames.
+pub fn location_animate(frame: &Frame) -> bool {
+    location().tick(frame)
+}
+
+/// The zone and the beacon into the frame's list.
+pub fn location_draw(draw: &mut DrawList) {
+    location().draw(draw);
+}
+
+/// The zone's instances about `center_pos` into `instances`, ZONE_INSTANCE_FLOATS
+/// floats an instance: each cell's ground asked of `ground` once, of the
+/// zone and of the ring its sides look across to, `rise` the room it is
+/// kept in.
+fn lay_zone(
+    center_pos: V3,
+    mut ground: impl FnMut(&Q3) -> Option<f64>,
+    rise: &mut Vec<Option<f64>>,
+    instances: &mut Vec<f32>,
+) {
+    instances.clear();
+    let cell = units(GROUND.cell());
+    const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let ring = zone_extent() + 1;
+    let across = (2 * ring + 1) as usize;
+    let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    rise.clear();
+    rise.resize(across * across, None);
+    for s in zone_samples() {
+        for d in [[0, 0]].iter().chain(&BESIDE) {
+            let at = [s.at[0] + d[0], s.at[1] + d[1]];
+            if rise[idx(at)].is_none() {
+                let off = [
+                    s.off[0] + f64::from(d[0]) * cell,
+                    s.off[1] + f64::from(d[1]) * cell,
+                ];
+                let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
+                // An unloaded neighbor tile falls back to the center's height.
+                let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
+                rise[idx(at)] = Some(ground - center_pos[2]);
+            }
+        }
+    }
+    // The box on the ground's cell `d` from the sample, relative to the center.
+    let box_at = |s: &ZoneSample, d: [i32; 2]| {
+        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let off = [
+            s.off[0] + f64::from(d[0]) * cell,
+            s.off[1] + f64::from(d[1]) * cell,
+        ];
+        v3::center(&[off[0], off[1], s.off[2] + delta_ele], cell)
+    };
+    for s in zone_samples() {
+        let v = box_at(&s, [0, 0]);
+        // A side is open over a lower cell beside it, the top always, the
+        // bottom never: bit k for face k, in the box's order (+x, -x, +y,
+        // -y, +z, -z).
+        let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
+            open | u32::from(box_at(&s, d)[2] < v[2]) << k
+        });
+        instances.extend([
+            v[0] as f32,
+            v[1] as f32,
+            v[2] as f32,
+            s.borders[0] as f32,
+            s.borders[1] as f32,
+            s.borders[2] as f32,
+            s.borders[3] as f32,
+            open as f32,
+        ]);
+    }
+}
+
+/// The beacon's fastest motion, in u/s: at its middle the bob's, and the
+/// spin's at its tips, the octahedron's radius out (pxl-render param.rs
+/// `location::beacon::RADIUS`), at right angles and at their peaks together.
+fn beacon_speed() -> f64 {
+    libm::hypot(
+        BEACON_BOB * BEACON_BOB_RATE,
+        BEACON_SPIN_RATE * f64::from(beacon::RADIUS),
+    )
+}
+
+/// The box's center relative to the zone's (3), its border flags (4), and
+/// the faces open to the air it draws (1, a bit a face): the stride
+/// location_zone.wgsl reads (pxl-render frame/shader/word.rs
+/// `LOCATION_ZONE_INSTANCE_FLOATS`).
+pub const ZONE_INSTANCE_FLOATS: usize = word::LOCATION_ZONE_INSTANCE_FLOATS as usize;
+
+/// The zone shown and its beacon.
+struct Zone {
+    center: V3,
+    /// Relative to the center.
+    target: [f64; 2],
+    beacon_at: Option<[f64; 2]>,
+    night: bool,
+    /// The bob's and the spin's clock as drawn, in seconds: stepped a seen
+    /// step at a time (`lens::Stepped`) off `run`, which runs by the turn's
+    /// step, held past a stall (`frame.delta_s`), while the bob spans a
+    /// camera cell.
+    time: f64,
+    run: f64,
+    clock: Stepped,
+    visible: bool,
+    /// Whether the ground under the zone is drawn in its own cells, a leaf's
+    /// (`GROUND`), or finer: where it is drawn coarser, the zone's cells are
+    /// less than the cells they stand on, and it is not drawn.
+    zone_drawn: bool,
+}
+
+#[derive(Default)]
+pub struct LocationIndicator {
+    /// Holds across a GPS dropout.
+    last_known_device_coord: Option<Q3>,
+    /// None until grounded.
+    last_known_center_z: Option<f64>,
+    /// The center the zone was last grounded at, none where it found no
+    /// height, kept while the fix stands and no change touched what
+    /// grounding it read (`Memo`).
+    ground_center: Memo<Key, Option<V3>>,
+    /// The zone grounded this step, kept so a step allocates nothing.
+    instances: Vec<f32>,
+    /// Each cell's ground over the zone's center, of the zone and the ring
+    /// about it, kept as `instances` is.
+    rise: Vec<Option<f64>>,
+    /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
+    /// which `block` holds, so grounding it again to the same heights draws
+    /// nothing anew.
+    drawn: Vec<f32>,
+    block: MirroredBlock,
+    /// None where nothing is shown.
+    zone: Option<Zone>,
+    /// The zone's draw and the beacon's.
+    zone_id: DrawId,
+    beacon_id: DrawId,
+}
+
+impl LocationIndicator {
+    fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>, night: bool) {
+        if device_coord.is_some() {
+            self.last_known_device_coord = device_coord;
+        }
+        let Some(device) = self.last_known_device_coord else {
+            return self.clear(draw);
+        };
+
+        let seen = Key {
+            device,
+            pos: coord::to_world(&device),
+        };
+        // Looked at each turn, so each change is seen once.
+        let mut grounded = core::mem::take(&mut self.ground_center);
+        grounded.forget_touched();
+        let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
+        self.ground_center = grounded;
+        let Some(center_pos) = center_pos else {
+            return self.clear(draw);
+        };
+        let pos = seen.pos;
+
+        // The beacon adds back what the zone's cell flooring dropped, so it moves
+        // smoothly rather than in whole-cell jumps.
+        if let Some(zone) = self.zone.as_mut() {
+            zone.target = [pos[0] - center_pos[0], pos[1] - center_pos[1]];
+            zone.night = night;
+        }
+    }
+
+    /// The zone grounded at the fix and drawn where it changed: its center, none
+    /// where the fix has no height yet.
+    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> Option<V3> {
+        let (device, pos) = (key.device, key.pos);
+        // The fix names a place and not how high.
+        if let Some(z) = world.surface_support(&device).val().flatten() {
+            self.last_known_center_z = Some(z);
+        }
+        let center_z = self.last_known_center_z?;
+        let raw = [pos[0], pos[1], center_z];
+        let center_pos = v3::floor(&raw, units(GROUND.cell()));
+
+        let (mut instances, mut rise) = (
+            core::mem::take(&mut self.instances),
+            core::mem::take(&mut self.rise),
+        );
+        lay_zone(
+            center_pos,
+            |at| world.surface_support(at).val().flatten(),
+            &mut rise,
+            &mut instances,
+        );
+        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != instances {
+            self.block.write(draw, bytes(&instances));
+            match self.zone.as_mut() {
+                // Follows the center, so a whole-cell move does not play as a slide back.
+                Some(z) => {
+                    if let Some(s) = z.beacon_at.as_mut() {
+                        s[0] -= center_pos[0] - z.center[0];
+                        s[1] -= center_pos[1] - z.center[1];
+                    }
+                    z.center = center_pos;
+                }
+                None => {
+                    self.zone = Some(Zone {
+                        center: center_pos,
+                        target: [0.0; 2],
+                        beacon_at: None,
+                        night: false,
+                        time: 0.0,
+                        run: 0.0,
+                        clock: Stepped::default(),
+                        visible: false,
+                        zone_drawn: false,
+                    });
+                }
+            }
+            core::mem::swap(&mut self.drawn, &mut instances);
+            request_world_tick();
+        }
+        (self.instances, self.rise) = (instances, rise);
+        Some(center_pos)
+    }
+
+    fn clear(&mut self, draw: &mut DrawList) {
+        if self.zone.take().is_none() {
+            return;
+        }
+        self.block.free(draw);
+        self.drawn.clear();
+        request_world_tick();
+    }
+
+    /// Whether the beacon slides and wants frames. The location indicator is
+    /// drawn where a character would be (domain/scene/character.rs `tick`): in the frustum and
+    /// spanning a camera cell at its distance; its zone only where the ground
+    /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
+    /// target, a frame a step, only where the slide spans one. Its bob and
+    /// spin are stepped a seen step at a time where the bob spans one, the
+    /// turn woken for the next (`lens::Stepped`); else they hold.
+    pub fn tick(&mut self, frame: &Frame) -> bool {
+        let Some(p) = self.zone.as_mut() else {
+            return false;
+        };
+        let dt = frame.delta_s;
+        let to = v3::sub(&frame.world_of(p.center), &frame.camera);
+        let cell_there = lens::cell_there(v3::len(&to));
+        p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
+        p.zone_drawn = p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.cell();
+        let shown = p.beacon_at.get_or_insert(p.target);
+        let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
+        let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;
+        if slides {
+            let a = smoothing_factor(BEACON_SMOOTH_RATE, dt);
+            shown[0] += (p.target[0] - shown[0]) * a;
+            shown[1] += (p.target[1] - shown[1]) * a;
+        } else {
+            *shown = p.target;
+        }
+        // Measured to the beacon, over the zone's center by its bias.
+        let beacon = v3::add(&to, &[shown[0], shown[1], BEACON_Z_BIAS]);
+        let mut stepped = false;
+        if p.visible && 2.0 * BEACON_BOB >= cell_there {
+            p.run += dt;
+            let step = seen_step_s(v3::len(&beacon), beacon_speed());
+            let (time, next, s) = p.clock.at(p.run, |at| at + step);
+            p.time = time;
+            stepped = s;
+            wake_at(now() + (next - p.run) * 1000.0);
+        }
+        if slides || stepped {
+            animation::note_animation();
+        }
+        slides
+    }
+
+    pub fn draw(&self, draw: &mut DrawList) {
+        let Some(p) = &self.zone else { return };
+        if !p.visible || self.block.handle == 0 {
+            return;
+        }
+        let shown = p.beacon_at.unwrap_or(p.target);
+        // The zone about its center, on Q3, and the beacon at its own
+        // position over where it is shown, finer than Q3: the beacon's bob
+        // and slide move it alone, as the zone reads no time; each, its draw
+        // changed, marks where it was and where it is (pxl-render
+        // gpu/pass/mark.rs).
+        if p.zone_drawn {
+            let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
+            draw.draw_as(
+                &self.zone_id,
+                PIPELINE_LOCATION_ZONE,
+                self.block.handle,
+                cnt,
+                0,
+                Position::of(p.center),
+                None,
+            );
+        }
+        let (x, y) = (p.center[0] + shown[0], p.center[1] + shown[1]);
+        let rest = p.center[2] + BEACON_Z_BIAS;
+        let beacon = Position::of([
+            x,
+            y,
+            rest + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB,
+        ]);
+        // It reads the sun's map, so it stands within the box its whole bob sweeps, which
+        // holds still while it bobs (pxl-render gpu/draw.rs `Stand`).
+        let r = f64::from(beacon::RADIUS);
+        let bob = BEACON_BOB + r;
+        let stand = Stand::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);
+        let spin = (p.time * BEACON_SPIN_RATE) as f32;
+        draw.draw_beacon(&self.beacon_id, beacon, spin, p.night, stand);
+    }
+}
+
+#[cfg(test)]
+#[path = "location.test.rs"]
+mod test;

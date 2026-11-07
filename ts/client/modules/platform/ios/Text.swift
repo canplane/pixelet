@@ -3,7 +3,7 @@
 import CoreText
 import UIKit
 
-// Text in the platform's own family, as the kernel asks for it
+// Text in the platform's own family, as the core asks for it
 // (ts/client/src/service/text.native.ts): how wide a line runs, and a line
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does.
@@ -27,7 +27,7 @@ func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, 
   // CoreGraphics counts up from the bottom row.
   context.textPosition = CGPoint(x: x, y: Double(height) / 2 - Double(f.ascender + f.descender) / 2)
   CTLineDraw(line(text, weight, px, rgba), context)
-  // CoreGraphics draws premultiplied, and the kernel reads straight alpha: a
+  // CoreGraphics draws premultiplied, and the core reads straight alpha: a
   // page's canvas hands its pixels back straight whatever it drew them as,
   // so straight is what both platforms can give.
   let bytes = out.assumingMemoryBound(to: UInt8.self)

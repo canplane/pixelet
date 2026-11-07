@@ -17,7 +17,7 @@
 )]
 
 /// The cumulus, drawn on the wind's moving field as decor is drawn, each
-/// cloud one of its models (pxl-kernel domain/scene/environment/cloud.rs).
+/// cloud one of its models (pxl-core domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.
 pub mod cumulus {
     pub const models: [crate::asset::catalog::Slot; 3] = [

@@ -4,7 +4,7 @@
 # debugging pipe. Read off the app's own profiler (`pxl.perf.read`,
 # `pxl.perf.drive`): the first load's longest frame, which its long-frame
 # observer replays from load (perf/long-frame.ts), and the GPU's busy time and
-# the kernel's tick over the one measurement (perf/drive.ts). Fails where the
+# the core's tick over the one measurement (perf/drive.ts). Fails where the
 # change's median runs past the base's: its load's longest frame by more than
 # `LOAD_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than `P50_SHARE`
 # or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`.

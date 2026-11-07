@@ -7,7 +7,7 @@ import PxlNative
 import UIKit
 
 /// The device's half of the client's services (ts/client/src/service/, the
-/// .native files), as one module: what the shell asks of the system. The kernel and the view it
+/// .native files), as one module: what the UI asks of the system. The core and the view it
 /// draws into are xpute's module (@xpute/native). An image's decode runs off
 /// the JavaScript thread.
 public class PlatformModule: Module {
@@ -15,7 +15,7 @@ public class PlatformModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- @expo/ui modifiers the shell names (SheetContent.swift) ----
+    // ---- @expo/ui modifiers the UI names (SheetContent.swift) ----
 
     OnCreate {
       ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
@@ -85,7 +85,7 @@ public class PlatformModule: Module {
       CLLocationManager.headingAvailable()
     }
 
-    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.swift) ----
+    // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
     //
     View(KeyboardDock.self) {
       Events("onLift")
@@ -100,7 +100,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- the segmented control (ts/client/src/shell/ui/segmented.ios.tsx, SegmentedControl.swift) ----
+    // ---- the segmented control (ts/client/src/ui/component/segmented.ios.tsx, SegmentedControl.swift) ----
 
     View(SegmentedControl.self) {
       Events("onPick")
@@ -112,7 +112,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- a see-through backing's blur (ts/client/src/shell/ui/backing.ios.tsx, Blur.swift) ----
+    // ---- a see-through backing's blur (ts/client/src/ui/component/backing.ios.tsx, Blur.swift) ----
 
     View(Blur.self) {}
   }

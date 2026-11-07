@@ -1,6 +1,6 @@
 // pxl-render/gpu/ray/ground.rs
 
-//! The clip levels' bricks on the GPU, a copy of what the kernel fills: each
+//! The clip levels' bricks on the GPU, a copy of what the core fills: each
 //! brick's words, its four palette indices a cell and its ways' tree, read
 //! where they lie as the frame hands them (`hand`).
 
@@ -16,16 +16,16 @@ use crate::gpu::api::{buffer_usage, bytes, release, room, write_buffer_bytes, Gp
 /// bricks in `SLOTS` slots): the bricks to hand it, and the child groups its
 /// pool must hold (`GroundBuffers::grow`).
 pub struct GroundBricks<'a> {
-    /// Hands each brick the kernel filled to the writer.
+    /// Hands each brick the core filled to the writer.
     pub upload: &'a mut TerrainUpload,
     pub pool: u32,
 }
 
 /// A brick handed to the GPU, the record the ground's clip levels hand on
-/// (pxl-kernel domain/layer/terrain/clipmap.rs `upload`): its slot, its cells'
+/// (pxl-core domain/layer/terrain/clipmap.rs `upload`): its slot, its cells'
 /// zoom and the brick; its words (pxl-engine `clipmap::BRICK_WORDS`), its four
 /// palette indices a cell, and its ways' tree, a piece each its first child
-/// group and its words. They lie as the kernel holds them, its owner asking
+/// group and its words. They lie as the core holds them, its owner asking
 /// `in_flight` before it writes them again.
 pub struct BrickWrite<'a> {
     pub slot: u32,
@@ -127,7 +127,7 @@ const _: () = assert!(
 );
 
 impl RaysPass {
-    /// The bricks the kernel filled written into the GPU's, each a record however
+    /// The bricks the core filled written into the GPU's, each a record however
     /// large, read where it lies; whether or not an eye casts, as a tile's
     /// cells are no eye's. Before the frame's cast, which reads the table
     /// their handing moved.

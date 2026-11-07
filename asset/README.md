@@ -45,7 +45,7 @@ what the spec generates from the table:
 - `ts/client/src/origin/ingest.spec.ts` — the host's table, a key for each
   file's number
 - `ts/client/src/sys/fs/catalog.spec.ts` — the catalog the host plugs in,
-  which file each of the kernel's slots names
+  which file each of the core's slots names
 - `rust/spec/src/asset/ingest.spec.rs` — the pack's layout, which the renderer
   compiles
 

@@ -20,7 +20,7 @@ use pxl_tool::root;
 use pxl_tool::spec;
 use pxl_tool::spec::asset;
 
-/// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
+/// Mirrored by the Worker's `KEY_RE` and the UI's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
 
 fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
@@ -205,7 +205,7 @@ fn run() -> Result<(), String> {
         &symbol::render_rs(&symbols),
     )?;
     write_formatted(
-        &root.join("ts/client/src/shell/search/place-symbol.ts"),
+        &root.join("ts/client/src/ui/search/place-symbol.ts"),
         &symbol::render_ts(&symbols),
     )?;
 

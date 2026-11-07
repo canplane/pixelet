@@ -1,0 +1,44 @@
+// pxl-core/domain/control/camera/gesture.rs
+
+//! A control a gesture drives asks a function of where the gesture began and
+//! where the hand is now, never a sum of moves. Where the camera takes less
+//! than asked, the anchor moves to what it took, so a refusal is never owed
+//! back and a reversal answers at once.
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Anchor {
+    val: f64,
+    at: f64,
+}
+
+impl Anchor {
+    pub const fn new(val: f64, at: f64) -> Anchor {
+        Anchor { val, at }
+    }
+
+    /// `map(value, at, now)`.
+    pub fn ask(&self, now: f64, map: impl Fn(f64, f64, f64) -> f64) -> f64 {
+        map(self.val, self.at, now)
+    }
+
+    /// Where it took less than asked, the gesture goes on from there.
+    pub fn settle(&mut self, asked: f64, took: f64, now: f64) {
+        if took != asked {
+            *self = Anchor::new(took, now);
+        }
+    }
+}
+
+/// The value moved by the hand's travel times `gain`.
+pub fn linear(gain: f64) -> impl Fn(f64, f64, f64) -> f64 {
+    move |val, at, now| val + (now - at) * gain
+}
+
+/// Spreading the fingers brings the camera nearer.
+pub fn spread(val: f64, at: f64, now: f64) -> f64 {
+    val * at / now
+}
+
+#[cfg(test)]
+#[path = "gesture.test.rs"]
+mod test;

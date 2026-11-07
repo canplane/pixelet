@@ -3,7 +3,7 @@
 //! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
 //! world's pass against its depth, both reading the cloud field (`pxl-content cloud.rs`) as a tile baked once
 //! per device.
-//! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
+//! The cumulus is drawn as decor is (`pxl-core domain/scene/environment/cloud.rs`).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -126,7 +126,7 @@ impl CloudPass {
         mips.release();
     }
 
-    /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
+    /// `shown`, how much of the clouds the core shows; `over`, the eye's
     /// place on the map in the world's doubles; `drift`, how far the wind has
     /// carried the field; `draw_dist_km` how far it draws: past it no sheet
     /// is drawn. The field moves with the wind, so its words are the clouds'

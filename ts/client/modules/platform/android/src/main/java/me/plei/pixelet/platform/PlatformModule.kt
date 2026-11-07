@@ -17,8 +17,8 @@ import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
  * The device's half of the client's services (ts/client/src/service/, the
- * .native files) on Android, the module an iPhone's PlatformModule.swift is: what the shell
- * asks of the system, under the same names. The kernel and the view it draws
+ * .native files) on Android, the module an iPhone's PlatformModule.swift is: what the UI
+ * asks of the system, under the same names. The core and the view it draws
  * into are xpute's module (@xpute/native). An image's decode runs off the
  * JavaScript thread.
  */
@@ -81,19 +81,19 @@ class PlatformModule : Module() {
 
     /** How much of the screen's bottom inset takes a touch, in
      * density-independent pixels: the navigation buttons' bar, or none with
-     * gesture navigation, whose handle only takes a swipe. What the shell
-     * rests its bottom chrome clear of (ts/client/src/shell/ui/bottom-rest.ts). */
+     * gesture navigation, whose handle only takes a swipe. What the UI
+     * rests its bottom chrome clear of (ts/client/src/ui/component/bottom-rest.ts). */
     Function("tappableBottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
       insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
     }
 
-    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.kt) ----
+    // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.kt) ----
 
     View(KeyboardDock::class) {
       Events("onLift")
-      // The shell's lengths are in density-independent pixels, the view's in
+      // The UI's lengths are in density-independent pixels, the view's in
       // the screen's.
       Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
       Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }

@@ -3,8 +3,8 @@
 //! What an observation requires: a tile, its column known at its zoom. What
 //! estimates them names a superset of the exact demand from what is
 //! known; never less, since a requirement left out is ground that never
-//! refines. What is known of a node is the kernel's query
-//! (`pxl-kernel domain/layer/query.rs`), asked in the grid's cells.
+//! refines. What is known of a node is the core's query
+//! (`pxl-core domain/layer/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
 use super::quadrant::{quad_rows, Quadrant, LEAF_ZOOM};

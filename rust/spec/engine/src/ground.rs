@@ -46,7 +46,7 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_idx`): the
-/// one producer of a cell's height, which the kernel's fill and the bake run
+/// one producer of a cell's height, which the core's fill and the bake run
 /// alike (fill.rs `columns`). Catmull-Rom over the
 /// 4 × 4 samples about the center, rounded half to even and held to their
 /// range, so a bound over the surface is the samples' own.

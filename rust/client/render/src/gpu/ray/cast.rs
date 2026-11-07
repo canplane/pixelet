@@ -68,10 +68,10 @@ use crate::gpu::tiles::Tiles;
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye (pxl-engine `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
+    /// The eye (pxl-engine `eye`; pxl-core domain/view/lens.rs `gpu_cast`,
     /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// The clipmap's table (pxl-engine `clipmap::Entry`; pxl-kernel
+    /// The clipmap's table (pxl-engine `clipmap::Entry`; pxl-core
     /// domain/layer/terrain/clipmap.rs `table`), four words a row: every clip
     /// level's entries, the eye's first, from the top's, each the brick it
     /// wants, X and Y, the slot holding it plus one while present (`Entry::slot`)
@@ -79,7 +79,7 @@ pub struct Cast<'a> {
     /// (`clipmap::ORIGIN_AT`).
     pub clipmap: &'a [i32],
     /// The service area's index (pxl-engine `area::Area`), its keys four a
-    /// row (pxl-kernel domain/scene/cast.rs `shards`); handed where it lies,
+    /// row (pxl-core domain/scene/cast.rs `shards`); handed where it lies,
     /// its writer asking `held` (gpu/api.rs) before it writes it again.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
@@ -94,7 +94,7 @@ pub struct Cast<'a> {
     pub ray_counts: bool,
 }
 
-/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it
+/// The overwrites' tree (pxl-core domain/layer/object/store.rs) as it
 /// lives: its child pointer and data lanes, handed where they lie, their
 /// writer asking `held` (gpu/api.rs) before it writes them again; the room
 /// either has before it grows, the revision they are at, and the child
@@ -200,7 +200,7 @@ pub(super) struct CastBuffers {
     /// `light::LISTED_STOOD`): the eye's voxels' boxes, stood by its record's draw as it writes
     /// them (record_draw.wgsl `record_draw_cs`, `Raster::record_draw`), and the pixels it
     /// walked apart, off their list (`light_mark_walked_cs`); and where the decor and what
-    /// the kernel draws that reads the map stand (`light_mark_draws_cs`), as many threads as its one thread opens
+    /// the core draws that reads the map stand (`light_mark_draws_cs`), as many threads as its one thread opens
     /// (`light_mark_draws_open_cs`); then those they read (`light_propagate_cs`).
     light_mark_walked_built: Pipeline,
     light_mark_draws_built: Pipeline,

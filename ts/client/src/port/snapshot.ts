@@ -7,7 +7,7 @@ import {
   GroundStatus,
   read_snapshot,
   SensorStatus,
-  type ShellView,
+  type UiView,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
 
@@ -38,8 +38,8 @@ const INIT: Snapshot = {
 let snapshot: Snapshot = INIT;
 const listeners = new Listeners();
 
-/** The kernel's SHELL_SNAPSHOT, its bytes where it lies, valid until the
- * runtime's head passes it: read whole now, as the kernel writes the next in
+/** The core's UI_SNAPSHOT, its bytes where it lies, valid until the
+ * runtime's head passes it: read whole now, as the core writes the next in
  * the same place. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
@@ -52,18 +52,18 @@ export function current(): Snapshot {
   return snapshot;
 }
 
-let view: ShellView = { azimuth: 0, m_per_px: 0 };
+let view: UiView = { azimuth: 0, m_per_px: 0 };
 const view_listeners = new Listeners();
 
-/** The kernel's SHELL_VIEW, which a rotation or a zoom posts every frame:
+/** The core's UI_VIEW, which a rotation or a zoom posts every frame:
  * told only to what watches the view, the snapshot's readers left asleep. */
-export function view_posted(e: ShellView): void {
+export function view_posted(e: UiView): void {
   view = e;
   view_listeners.notify();
 }
 
 export const watch_view = view_listeners.watch;
 
-export function current_view(): ShellView {
+export function current_view(): UiView {
   return view;
 }

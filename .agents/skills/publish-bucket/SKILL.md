@@ -64,7 +64,7 @@ A missing place or division tile is not an error.
 
 The plain `publish.py <kind>` is for a version in the format the deployed
 client reads. A client takes `source` only where every kind is in its own
-format exactly (pxl-kernel `sys/io/source.rs`, `reads_every`), and
+format exactly (pxl-core `sys/io/source.rs`, `reads_every`), and
 `declare_source` judges by the tree's format, not the deployed client's, so it
 lets through a format no deployed client reads. A version in a new format is
 uploaded with `upload` and served with `serve` when the client that reads it

@@ -2091,6 +2091,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-core"
+version = "0.0.0"
+dependencies = [
+ "critical-section",
+ "embassy-executor",
+ "fnv",
+ "hex",
+ "libm",
+ "pollster",
+ "pxl-content",
+ "pxl-engine",
+ "pxl-render",
+ "pxl-spec",
+ "serde_json",
+ "wgpu",
+ "xpute-core",
+ "xpute-gpu",
+ "xpute-kit",
+ "xpute-runtime",
+ "zstd 0.13.3",
+]
+
+[[package]]
 name = "pxl-engine"
 version = "0.0.0"
 dependencies = [
@@ -2145,29 +2168,6 @@ dependencies = [
  "fnv",
  "pxl-spec",
  "serde_json",
-]
-
-[[package]]
-name = "pxl-kernel"
-version = "0.0.0"
-dependencies = [
- "critical-section",
- "embassy-executor",
- "fnv",
- "hex",
- "libm",
- "pollster",
- "pxl-content",
- "pxl-engine",
- "pxl-render",
- "pxl-spec",
- "serde_json",
- "wgpu",
- "xpute-core",
- "xpute-gpu",
- "xpute-kit",
- "xpute-runtime",
- "zstd 0.13.3",
 ]
 
 [[package]]

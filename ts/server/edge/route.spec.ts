@@ -12,10 +12,10 @@
 // is a change to the one server that answers it and to nothing else. This file
 // is where all of them read it from: the client, the Worker and the
 // servers are written from it, and wrangler's and Caddy's configurations take
-// their part of it. The kernel names what it opens and never an address.
+// their part of it. The core names what it opens and never an address.
 
 // The Worker is bundled for the Workers runtime rather than from src/, so it
-// cannot import the shell's copy — but it can import this one, which sits
+// cannot import the UI's copy — but it can import this one, which sits
 // beside it and is written from the same JSON. It relays by prefix, so the
 // prefixes are all it is given.
 

@@ -296,7 +296,7 @@ pub struct Atmosphere {
     flying: u32,
     /// The words as they land, and their fence and result: on the heap,
     /// as the runtime writes them and a native build's statics are outside its
-    /// memory; the ticket the mapping was last asked with, the kernel's, and
+    /// memory; the ticket the mapping was last asked with, the core's, and
     /// whether one is out or landed and not yet taken.
     landed_words: Box<[u32; SLOPES]>,
     mapping: Box<[u32; 2]>,

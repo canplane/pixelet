@@ -253,7 +253,7 @@ pub struct Handed {
     pub lines: Vec<u32>,
 }
 
-/// A brick as the kernel fills it. Its ways' middles are added to `ways`.
+/// A brick as the core fills it. Its ways' middles are added to `ways`.
 pub fn handed(
     eye: [i32; 2],
     cell: Zoom,

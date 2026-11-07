@@ -1,13 +1,13 @@
 // pxl-render/gpu/api.rs
 
 //! The WebGPU calls the renderer makes, written through xpute's encoder
-//! (xpute-gpu encode) into one stream in the kernel's memory, which the runtime
+//! (xpute-gpu encode) into one stream in the core's memory, which the runtime
 //! runs after the turn: the page's on WebGPU, the device app's on wgpu
 //! (xpute-gpu runtime), the same records either way. What is pixelet's stays
 //! here: the pipeline records expanded into descriptors, a pass's shape and
 //! the spans' timing.
 //!
-//! The stream's head holds what the runtime writes for the kernel: the device's
+//! The stream's head holds what the runtime writes for the core: the device's
 //! block (limits, features, timestamp period, preferred surface format,
 //! status) and the spans' times.
 
@@ -601,7 +601,7 @@ struct State {
     /// At the range's end, past the stream: never built or moved, as all-zero
     /// bytes are an encoder that has made nothing (xpute-gpu encode).
     encoder: &'static mut Encoder<OBJECTS>,
-    /// Where the stream's words begin in the kernel's memory.
+    /// Where the stream's words begin in the core's memory.
     at: u32,
     /// Inside a frame's transaction, where a record that does not fit drops
     /// the frame rather than being a bug.
@@ -682,14 +682,14 @@ fn state() -> &'static mut State {
 
 fn head(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
-    // SAFETY: a word of the stream's head, the kernel's and the runtime's alone.
+    // SAFETY: a word of the stream's head, the core's and the runtime's alone.
     unsafe { &mut *mem::at::<u32>(at) }
 }
 
 /// Read `r`'s fence and result, the runtime's to write.
 fn read_fence(r: usize) -> &'static [u32; 2] {
     let at = state().at as usize + read_at(r) * WORD;
-    // SAFETY: two words of the stream's head, which the kernel only reads.
+    // SAFETY: two words of the stream's head, which the core only reads.
     unsafe { &*mem::at::<[u32; 2]>(at) }
 }
 
@@ -721,7 +721,7 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     at
 }
 
-/// The calls' state over a stream in a region of its own, apart from the kernel's memory, its
+/// The calls' state over a stream in a region of its own, apart from the core's memory, its
 /// encoder beside it, and `device` as though its block were in: what a test makes the renderer
 /// on, no runtime running the stream.
 #[cfg(test)]
@@ -781,20 +781,20 @@ impl State {
     }
 }
 
-/// Where the stream lies in the kernel's memory, once installed: what a runtime
+/// Where the stream lies in the core's memory, once installed: what a runtime
 /// runs after each turn.
 pub fn stream_at() -> Option<u32> {
     STATE.get(|| None).as_ref().map(|s| s.at)
 }
 
 /// The renderer's calls, once the device has told what it is, on a turn
-/// the stream is the kernel's to write (`stream_free`).
+/// the stream is the core's to write (`stream_free`).
 pub fn gpu() -> Option<&'static Gpu> {
     device().filter(|_| stream_free()).map(|_| &GPU)
 }
 
-/// Whether the runtime has handed the stream back since the kernel last
-/// published it (xpute_core ipc/stream.rs R3): until then the kernel
+/// Whether the runtime has handed the stream back since the core last
+/// published it (xpute_core ipc/stream.rs R3): until then the core
 /// records nothing, and a frame is held.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
@@ -865,7 +865,7 @@ pub fn device() -> Option<Device> {
 }
 
 /// A device answered: its block is asked for, once the stream is the
-/// kernel's to write, and read once the runtime has written it.
+/// core's to write, and read once the runtime has written it.
 pub fn on_device_answered() {
     let s = state();
     if writable(s) {
@@ -1659,7 +1659,7 @@ impl Gpu {
     /// once, on this device, for the one that takes it. None while it
     /// lands, the first ask handing it to the device; none for good for a
     /// file whose size no header gives (pxl-spec `asset::image_size`),
-    /// which the kernel does not hand, for one the runtime could not decode,
+    /// which the core does not hand, for one the runtime could not decode,
     /// and for the empty file of one already taken on this device.
     /// The file's bytes are its asker's until it is taken (`take_landed`);
     /// the runtime copies them out as it runs the turn.
@@ -2150,7 +2150,7 @@ impl Gpu {
 
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied
     /// into on an encoder submitted before, mapped back from `offset` into
-    /// the kernel's memory at `address`; `fence`, the mapping's own fence
+    /// the core's memory at `address`; `fence`, the mapping's own fence
     /// and result, holds `ticket` once they are in or refused, a turn or
     /// more later, and only then may `id` be mapped again (xpute MAP_ASYNC).
     pub fn map_read(
@@ -2162,7 +2162,7 @@ impl Gpu {
         fence: &[u32; 2],
         ticket: u32,
     ) {
-        // SAFETY: the kernel's own range, which it asked to be written and
+        // SAFETY: the core's own range, which it asked to be written and
         // does not read while the mapping is out.
         let into = unsafe {
             core::slice::from_raw_parts_mut(mem::at::<u8>(addr as usize), length as usize)

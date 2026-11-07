@@ -1,21 +1,21 @@
 // @pxl/client/abi/pacing.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/sched/pacing.json
+// GENERATED from spec/client/core/sys/sched/pacing.json
 //
 // The numbers of the scheduling policy pixelet boots xpute's runtime with on a page or a
 // device (@xpute/runtime sched/frame_pacing.ts): turns paced to the display, each given
 // what its frames leave. The client's runtime injects them (ts/client/src/runtime/start.ts),
-// and the kernel reads the margin to size its tasks past a full frame
-// (pxl-kernel sys/sched/edge.rs).
+// and the core reads the margin to size its tasks past a full frame
+// (pxl-core sys/sched/edge.rs).
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** The rate turns are paced at where the kernel asks none slower: the most whole refreshes
+/** The rate turns are paced at where the core asks none slower: the most whole refreshes
  * of the display that fit one interval at this rate, one at least, so a 120 Hz display
  * runs a turn every second refresh. */
 export const PACE_HZ: f64 = 60 as number;
 
-/** The slowest rate the kernel's load asks (pxl-kernel domain/scene/resolution.rs): past
+/** The slowest rate the core's load asks (pxl-core domain/scene/resolution.rs): past
  * it the pixels give way, not the motion. */
 export const RATE_MIN_HZ: f64 = 30 as number;
 

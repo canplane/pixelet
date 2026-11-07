@@ -31,7 +31,7 @@ fn the_renderer_makes_every_group_as_its_layout_lays_it_out() {
 
 /// A draw a scripted turn sets: its name's index, its record's words, where it
 /// is, its opacity, and whether it is a cloud's, which drifts and which the
-/// kernel bounds.
+/// core bounds.
 #[derive(Clone, Copy)]
 struct Spec {
     id: usize,
@@ -194,7 +194,7 @@ fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
 #[test]
 fn kept_draws_answer_as_the_rebuilt_lists_did() {
     let _l = test_lists();
-    // In the order the kernel sets them (pxl-kernel domain/scene/stage.rs
+    // In the order the core sets them (pxl-core domain/scene/stage.rs
     // `visible_step`): the ghost first, then the characters, the location, the
     // gizmos, the clouds and the markers.
     let base = vec![

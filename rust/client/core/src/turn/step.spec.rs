@@ -1,0 +1,94 @@
+// pxl-core/turn/step.spec.rs
+//
+// GENERATED from spec/client/core/turn/step.json
+//
+// The turn's vocabulary, the core's and the UI's: the steps a tick runs, as turn.rs
+// registers them, and the effects a turn runs around them. The profiler records and
+// reports them by these names (spec/client/core/perf/perf.json).
+
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    non_camel_case_types,
+    dead_code,
+    reason = "generated from the spec"
+)]
+
+pub const STEP_NAMES: usize = 9;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum StepName {
+    controller = 0,
+    input = 1,
+    camera = 2,
+    edit = 3,
+    ghost = 4,
+    environment = 5,
+    companion = 6,
+    demand = 7,
+    scene = 8,
+}
+
+impl StepName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [StepName; 9] = [
+        StepName::controller,
+        StepName::input,
+        StepName::camera,
+        StepName::edit,
+        StepName::ghost,
+        StepName::environment,
+        StepName::companion,
+        StepName::demand,
+        StepName::scene,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<StepName> {
+        StepName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}
+
+pub const EFFECT_NAMES: usize = 9;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum EffectName {
+    navigation = 0,
+    bootstrap = 1,
+    orient = 2,
+    follow = 3,
+    dst = 4,
+    decor = 5,
+    objects = 6,
+    location = 7,
+    settings = 8,
+}
+
+impl EffectName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [EffectName; 9] = [
+        EffectName::navigation,
+        EffectName::bootstrap,
+        EffectName::orient,
+        EffectName::follow,
+        EffectName::dst,
+        EffectName::decor,
+        EffectName::objects,
+        EffectName::location,
+        EffectName::settings,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<EffectName> {
+        EffectName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}

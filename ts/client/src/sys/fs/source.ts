@@ -2,7 +2,7 @@
 
 /**
  * The tile source's declaration (the bucket's, which script/publish.py writes,
- * or a dev tile server's), asked until it answers and read once. The kernel is
+ * or a dev tile server's), asked until it answers and read once. The core is
  * handed its own part, the top zoom, the formats and the shards
  * (SOURCE_DECLARE), and observes nothing before; the versions stay here, for the
  * bakes' objects (tile.ts) and the settings.
@@ -26,7 +26,7 @@ import {
 } from "@/abi/state.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
- * format, for the kernel; each kind's version, and a shard's own. */
+ * format, for the core; each kind's version, and a shard's own. */
 export interface Declaration {
   top_zoom: number;
   format: Record<BaseLayer, number>;
@@ -46,9 +46,9 @@ function is_version(s: string): boolean {
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment, the top zoom and each kind's format are u32s, and the
- * shards are named; none where it is not, and the kernel, never handed it,
+ * shards are named; none where it is not, and the core, never handed it,
  * observes nothing. Which zooms, formats and shard names it follows is the
- * kernel's to refuse (pxl-kernel sys/io/source.rs). */
+ * core's to refuse (pxl-core sys/io/source.rs). */
 export function declaration(text: string): Declaration | null {
   let d: unknown;
   try {
@@ -112,7 +112,7 @@ export function source_state(): Source {
   return state;
 }
 
-/** The declaration handed to the kernel; none until then. */
+/** The declaration handed to the core; none until then. */
 export function source_declaration(): Declaration | null {
   return cur_declaration;
 }
@@ -138,7 +138,7 @@ export function settled(): Promise<boolean> {
   });
 }
 
-/** Where the source stands as the kernel's worker has it, for a page's UI,
+/** Where the source stands as the core's worker has it, for a page's UI,
  * which holds no files. */
 export function mirror_source(
   next: Source,
@@ -170,8 +170,8 @@ async function ask_declaration(): Promise<string | null> {
   }
 }
 
-/** Hands the kernel its part of the declaration (SOURCE_DECLARE); false where
- * it is more than a command carries or the kernel refuses it, a format this
+/** Hands the core its part of the declaration (SOURCE_DECLARE); false where
+ * it is more than a command carries or the core refuses it, a format this
  * build does not read among what it refuses. */
 export type SendSource = (
   top_zoom: number,
@@ -212,7 +212,7 @@ export async function declare_source(send: SendSource): Promise<void> {
     )
   ) {
     console.error(
-      `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
+      `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
     cur_declaration = null;
     set(SOURCE_REFUSED);

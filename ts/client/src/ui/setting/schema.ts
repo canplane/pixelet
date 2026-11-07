@@ -1,0 +1,34 @@
+// @pxl/client/ui/setting/schema.ts
+
+/**
+ * Every setting as the sheet draws it, keyed by the core's number. Adding
+ * one is a schema.json entry plus its strings under `settings.<section>.<name>`.
+ */
+
+import {
+  SETTING as EVERY,
+  SETTING_PRODUCTION as PRODUCTION,
+} from "@/abi/schema.spec.ts";
+
+type Spec = typeof EVERY;
+
+/** A constant-folded choice, not a filter, so dev rows are absent from the
+ * production artifact rather than hidden. */
+export const SETTING = (__IS_DEV__ ? EVERY : PRODUCTION) as Spec;
+
+export type SettingName = keyof Spec;
+
+export type Setting = Spec[SettingName];
+
+export type SettingSection = Setting["section"];
+
+/** What a setting costs, whole or by option: every `cost` and every option's `costs`, "" a free one. */
+export type SettingCost =
+  | Extract<Setting, { cost: unknown }>["cost"]
+  | Exclude<Extract<Setting, { costs: unknown }>["costs"][number], "">;
+
+const SETTING_NAMES = Object.keys(SETTING) as SettingName[];
+
+export function settingsIn(section: SettingSection): SettingName[] {
+  return SETTING_NAMES.filter((name) => SETTING[name].section === section);
+}

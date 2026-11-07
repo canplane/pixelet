@@ -4,9 +4,9 @@
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, the layers' order, where nothing names
 //! what is above it, across a crate's folders and the client's, and inside
-//! the kernel's heads', pxl-render's,
+//! the core's heads', pxl-render's,
 //! the camera's and the view's, the profiler named by the top alone, no renderer under the
-//! kernel's sys/, the layers read by the query alone, the screen's pixels read
+//! core's sys/, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
@@ -22,7 +22,7 @@ use regex::Regex;
 const OFF_CRATES: [&str; 4] = [
     "xpute/rust/core/src/",
     "xpute/rust/runtime/src/",
-    "rust/client/kernel/src/",
+    "rust/client/core/src/",
     "rust/client/render/src/",
 ];
 
@@ -42,7 +42,7 @@ const ROUNDING_VARIANT_FILES: [&str; 4] = [
 const NOT_EVEN: [&str; 4] = [
     r"\bMath\.round\(",
     r"\bstd::round\b",
-    // A number's text rounds its last place half up: `fixed` (ts/client shell/fixed.ts) rounds it half to even.
+    // A number's text rounds its last place half up: `fixed` (ts/client ui/fixed.ts) rounds it half to even.
     r"\.toFixed\(",
     r"\.toPrecision\(",
 ];
@@ -69,20 +69,20 @@ struct Order {
     own: Option<u8>,
 }
 
-/// The kernel's order (ARCHITECTURE.md, "The kernel is one order of
+/// The core's order (ARCHITECTURE.md, "The core is one order of
 /// dependency"): a module names only what is at or below it, and neither
-/// head the other. The top wires everything, the shell's protocol among it;
+/// head the other. The top wires everything, the UI's protocol among it;
 /// the protocol's enums the domain reads, and an edit not yet made, which
 /// the top hands from control to the scene, stand where both heads may name
 /// them. The machine it asks of its runtime and the device transport's
 /// decoder, which the device's app calls, are the bottom, naming none of the
-/// kernel. The profiler, reading anything, stands beside it, in no step of
+/// core. The profiler, reading anything, stands beside it, in no step of
 /// it, and only the top, which records into it, names it.
-const KERNEL: &str = "rust/client/kernel/src/";
-const KERNEL_ORDER: [(&str, u8); 16] = [
+const CORE: &str = "rust/client/core/src/";
+const CORE_ORDER: [(&str, u8); 16] = [
     ("turn", 7),
     ("door", 7),
-    ("shell", 7),
+    ("ui", 7),
     ("pointer", 7),
     ("scene", 6),
     ("control", 6),
@@ -97,8 +97,8 @@ const KERNEL_ORDER: [(&str, u8); 16] = [
     ("machine", 0),
     ("unpack", 0),
 ];
-const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
-const KERNEL_BESIDE: [&str; 1] = ["perf"];
+const CORE_HEADS: [&str; 2] = ["scene", "control"];
+const CORE_BESIDE: [&str; 1] = ["perf"];
 
 /// Control's own order (domain/control.rs): the pointer's edits and its
 /// gestures, then navigation, the camera, and under them the sensors and
@@ -293,9 +293,9 @@ const PASS_ORDER: [(&str, u8); 9] = [
     ("impostor", 3),
 ];
 
-/// The client's order (ts/client/src, AGENTS.md): its entry over the shell
+/// The client's order (ts/client/src, AGENTS.md): its entry over the UI
 /// and the wiring that opens the runtime, the two heads; under them the port,
-/// the one way to the kernel; the files the kernel opens; the server they
+/// the one way to the core; the files the core opens; the server they
 /// are read from; what each platform gives; and at the bottom the numbers
 /// both read and the build's values.
 const CLIENT: &str = "ts/client/src/";
@@ -303,7 +303,7 @@ const CLIENT_ORDER: [(&str, u8); 12] = [
     ("app", 6),
     ("boot", 6),
     ("page", 6),
-    ("shell", 5),
+    ("ui", 5),
     ("runtime", 5),
     ("port", 4),
     ("sys", 3),
@@ -313,7 +313,7 @@ const CLIENT_ORDER: [(&str, u8); 12] = [
     ("deploy", 0),
     ("remote-console", 0),
 ];
-const CLIENT_HEADS: [&str; 2] = ["shell", "runtime"];
+const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
 
 /// Where TypeScript's aliases are (`paths`), every reader's.
 const TSCONFIG: &str = "ts/tsconfig.json";
@@ -322,11 +322,11 @@ const TSCONFIG: &str = "ts/tsconfig.json";
 /// root's own a level over all of them, so no part reaches back to it.
 const ORDERS: [Order; 13] = [
     Order {
-        root: KERNEL,
+        root: CORE,
         path: "crate",
-        levels: &KERNEL_ORDER,
-        heads: &KERNEL_HEADS,
-        beside: &KERNEL_BESIDE,
+        levels: &CORE_ORDER,
+        heads: &CORE_HEADS,
+        beside: &CORE_BESIDE,
         own: None,
     },
     Order {
@@ -354,7 +354,7 @@ const ORDERS: [Order; 13] = [
         own: None,
     },
     Order {
-        root: "rust/client/kernel/src/domain/control/",
+        root: "rust/client/core/src/domain/control/",
         path: "crate::domain::control",
         levels: &CONTROL_ORDER,
         heads: &[],
@@ -362,7 +362,7 @@ const ORDERS: [Order; 13] = [
         own: Some(5),
     },
     Order {
-        root: "rust/client/kernel/src/domain/control/camera/",
+        root: "rust/client/core/src/domain/control/camera/",
         path: "crate::domain::control::camera",
         levels: &CAMERA_ORDER,
         heads: &[],
@@ -370,7 +370,7 @@ const ORDERS: [Order; 13] = [
         own: Some(0),
     },
     Order {
-        root: "rust/client/kernel/src/domain/view/",
+        root: "rust/client/core/src/domain/view/",
         path: "crate::domain::view",
         levels: &VIEW_ORDER,
         heads: &[],
@@ -378,7 +378,7 @@ const ORDERS: [Order; 13] = [
         own: Some(4),
     },
     Order {
-        root: "rust/client/kernel/src/domain/scene/",
+        root: "rust/client/core/src/domain/scene/",
         path: "crate::domain::scene",
         levels: &SCENE_ORDER,
         heads: &[],
@@ -427,30 +427,30 @@ const ORDERS: [Order; 13] = [
     },
 ];
 
-/// The kernel's sys/ stands below everything that draws: it names no
+/// The core's sys/ stands below everything that draws: it names no
 /// renderer (`pxl_render`), and, beside its order, no profiler
-/// (`KERNEL_BESIDE`).
-const SYS: &str = "rust/client/kernel/src/sys/";
+/// (`CORE_BESIDE`).
+const SYS: &str = "rust/client/core/src/sys/";
 const SYS_REFUSED: &str = r"\bpxl_render\b";
 
 /// What the world shows is decided in angles, the camera grid's cell; a
 /// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
-/// The kernel reads the view's CSS pixels through one module, the screen
+/// The core reads the view's CSS pixels through one module, the screen
 /// (domain/view/frame/screen.rs), and only these name it: the view's own
 /// frame, the camera's gestures, the markers' layout and selection, the
-/// stage's pixels a unit and the shell. A path is a file, or a folder by its
+/// stage's pixels a unit and the UI. A path is a file, or a folder by its
 /// trailing slash.
 const SCREEN_USERS: [&str; 7] = [
-    "rust/client/kernel/src/domain/view/frame/",
-    "rust/client/kernel/src/domain/control/camera/controller.rs",
-    "rust/client/kernel/src/domain/control/input.rs",
-    "rust/client/kernel/src/domain/scene/marker/arrangement.rs",
-    "rust/client/kernel/src/domain/scene/marker/selection.rs",
-    "rust/client/kernel/src/domain/scene/stage.rs",
-    "rust/client/kernel/src/shell.rs",
+    "rust/client/core/src/domain/view/frame/",
+    "rust/client/core/src/domain/control/camera/controller.rs",
+    "rust/client/core/src/domain/control/input.rs",
+    "rust/client/core/src/domain/scene/marker/arrangement.rs",
+    "rust/client/core/src/domain/scene/marker/selection.rs",
+    "rust/client/core/src/domain/scene/stage.rs",
+    "rust/client/core/src/ui.rs",
 ];
 
-/// The lines of `text`, a kernel source, comments left out, that reach the
+/// The lines of `text`, a core source, comments left out, that reach the
 /// screen: a path through it (`screen::`), a group naming it (`frame::{…
 /// screen …}`, over as many lines as it runs), a glob or an alias of the
 /// frame that would reach it unnamed, or a re-export of it, which would lend
@@ -477,21 +477,21 @@ fn screen_reached(text: &str) -> Vec<usize> {
 /// only seam"): the layers' reads, the form both answer (`Query`), the
 /// terrain's and the store's past it (`TerrainQuery`, `ObjectQuery`), the clip
 /// levels as the CPU reads them (`CpuClipmap`) and the ways' pool, are named
-/// in the kernel by the layers and the query alone, and the query lends none
+/// in the core by the layers and the query alone, and the query lends none
 /// of them on. A path is a file, or a folder by its trailing slash.
 const LAYERS: [&str; 2] = [
-    "rust/client/kernel/src/domain/layer.rs",
-    "rust/client/kernel/src/domain/layer/",
+    "rust/client/core/src/domain/layer.rs",
+    "rust/client/core/src/domain/layer/",
 ];
 const LAYER_READERS: [&str; 3] = [
-    "rust/client/kernel/src/domain/query.rs",
-    "rust/client/kernel/src/domain/query/",
-    "rust/client/kernel/src/domain/query.test.rs",
+    "rust/client/core/src/domain/query.rs",
+    "rust/client/core/src/domain/query/",
+    "rust/client/core/src/domain/query.test.rs",
 ];
 const LAYER_READS: &str =
     r"\b(?:Query|TerrainQuery|ObjectQuery|CpuClipmap)\b|\bclipmap::(?:\{[^}]*\bpool\b|pool\b)";
 
-/// The lines of `text`, a kernel source, comments left out, that name a
+/// The lines of `text`, a core source, comments left out, that name a
 /// layer's read (`LAYER_READS`), or glob a module that would bring one in
 /// unnamed: where `lent`, only a re-export of one past the query.
 fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
@@ -518,10 +518,10 @@ fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
 /// xpute's words are runtime, core and their contract (AGENTS.md): pixelet's
 /// appear nowhere under it.
 const XPUTE: &str = "xpute/";
-const PIXELET_WORDS: &str = r"(?i)\b(pixelet|kernel|shell)\b";
+const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
 /// The modules `text` names past `path`, a `domain::` step past it passed
-/// over (the kernel's heads and trunk live under it), a group's every first
+/// over (the core's heads and trunk live under it), a group's every first
 /// name among them, each with the line it is named on; `path` itself, named
 /// whole, is its root, an empty name.
 fn named(text: &str, path: &str) -> Vec<(usize, String)> {
@@ -639,7 +639,7 @@ fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, St
 }
 
 /// Where `f` stands in `order` under `root`: its first step past `root`, or
-/// past `domain/` for the kernel's heads and trunk.
+/// past `domain/` for the core's heads and trunk.
 fn standing(f: &str, root: &str) -> String {
     let rest = &f[root.len()..];
     let rest = rest.strip_prefix("domain/").unwrap_or(rest);
@@ -938,9 +938,7 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
     for f in files.iter().filter(|f| {
-        f.starts_with(KERNEL)
-            && f.ends_with(".rs")
-            && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
+        f.starts_with(CORE) && f.ends_with(".rs") && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
     }) {
         for line in screen_reached(&read(f).unwrap_or_default()) {
             problems.push(format!(
@@ -950,7 +948,7 @@ fn run() -> Result<Vec<String>, String> {
     }
     for f in files
         .iter()
-        .filter(|f| f.starts_with(KERNEL) && f.ends_with(".rs"))
+        .filter(|f| f.starts_with(CORE) && f.ends_with(".rs"))
     {
         if LAYERS.iter().any(|l| f.starts_with(l)) {
             continue;
@@ -970,8 +968,7 @@ fn run() -> Result<Vec<String>, String> {
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
-            // Make's `$(shell …)` is the build tool's, not pixelet's shell.
-            if pixelet.is_match(&line.replace("$(shell", "")) {
+            if pixelet.is_match(line) {
                 problems.push(format!(
                     "{f}:{}: names pixelet's word under xpute: {}",
                     n + 1,
@@ -1153,7 +1150,7 @@ mod spec;"
     fn client_order_refuses_an_import_up() {
         const LEVELS: [(&str, u8); 5] = [
             ("app", 3),
-            ("shell", 2),
+            ("ui", 2),
             ("runtime", 2),
             ("port", 1),
             ("abi", 0),
@@ -1162,16 +1159,16 @@ mod spec;"
             root: "ts/c/src/",
             path: "",
             levels: &LEVELS,
-            heads: &["shell", "runtime"],
+            heads: &["ui", "runtime"],
             beside: &[],
             own: None,
         };
         let files = [
             "ts/tsconfig.json",
             "ts/c/src/app.tsx",
-            "ts/c/src/shell/view.tsx",
+            "ts/c/src/ui/view.tsx",
             "ts/c/src/runtime/open.ts",
-            "ts/c/src/port/kernel.ts",
+            "ts/c/src/port/core.ts",
             "ts/c/src/abi/cmd.spec.ts",
         ];
         let read = |f: &str| {
@@ -1180,17 +1177,17 @@ mod spec;"
                     "ts/tsconfig.json" => {
                         "// The aliases.\n{ \"compilerOptions\": { \"paths\": { \"@/*\": [\"./c/src/*\"], \"@pxl/c/*\": [\"./c/src/*\"] } } }"
                     }
-                    "ts/c/src/app.tsx" => "import { App } from \"@/shell/view.tsx\";\nimport \"./runtime/open.ts\";",
-                    "ts/c/src/shell/view.tsx" => {
-                        "import { k } from \"@/port/kernel.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
+                    "ts/c/src/app.tsx" => "import { App } from \"@/ui/view.tsx\";\nimport \"./runtime/open.ts\";",
+                    "ts/c/src/ui/view.tsx" => {
+                        "import { k } from \"@/port/core.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
                     }
                     "ts/c/src/runtime/open.ts" => {
-                        "import {\n  k,\n} from \"@pxl/c/port/kernel.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
+                        "import {\n  k,\n} from \"@pxl/c/port/core.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
                     }
-                    "ts/c/src/port/kernel.ts" => {
-                        "import type { View } from \"@pxl/c/shell/view.tsx\";\nimport { useState } from \"react\";"
+                    "ts/c/src/port/core.ts" => {
+                        "import type { View } from \"@pxl/c/ui/view.tsx\";\nimport { useState } from \"react\";"
                     }
-                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../port/kernel.ts\";",
+                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../port/core.ts\";",
                     _ => "",
                 }
                 .to_string(),
@@ -1203,8 +1200,8 @@ mod spec;"
         assert_eq!(
             found,
             [
-                "ts/c/src/shell/view.tsx:3",
-                "ts/c/src/port/kernel.ts:1",
+                "ts/c/src/ui/view.tsx:3",
+                "ts/c/src/port/core.ts:1",
                 "ts/c/src/abi/cmd.spec.ts:1"
             ]
         );

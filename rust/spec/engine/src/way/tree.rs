@@ -46,7 +46,7 @@ pub trait Pool: Columns {
 }
 
 /// Word `slot`'s child pointer's place in a pool whose child groups lie whole,
-/// its eight child pointers then its eight data words, as the kernel's
+/// its eight child pointers then its eight data words, as the core's
 /// and a GPU's do (pxl-render world.wgsl).
 const fn first_child_at(slot: u32) -> u32 {
     slot / overwrite::CHILDREN * CHILD_GROUP_WORDS + slot % overwrite::CHILDREN
@@ -91,7 +91,7 @@ impl Columns for Read<'_> {
 /// The most child groups the pool grows to, eight slots each, every brick's
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
-/// The kernel's pool grows as bricks take it, up to this (pxl-kernel
+/// The core's pool grows as bricks take it, up to this (pxl-core
 /// domain/layer/terrain/pool.rs), the GPU's following it (pxl-render
 /// gpu/ray/ground.rs `GroundBuffers::grow`); a tree past what it holds is
 /// refused, its brick left absent. Child group 0

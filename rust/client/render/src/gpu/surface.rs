@@ -1,6 +1,6 @@
 // pxl-render/gpu/surface.rs
 
-//! The canvases the kernel draws into, each at its display's device pixels,
+//! The canvases the core draws into, each at its display's device pixels,
 //! the world inside it at its own (`render_px`). The page scales whatever
 //! buffer exists into the layout box, so a stale one still shows whole.
 
@@ -49,7 +49,7 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
+    /// The device pixels per CSS pixel the core has it drawn at (pxl-core
     /// domain/scene/resolution.rs): the display's, or under load a share of
     /// them, the finish bringing them up to the canvas's (`render_px`).
     pub ratio: f64,
@@ -130,7 +130,7 @@ impl Surface {
         f64::from(self.width) * self.dpr / f64::from(self.px_w.max(1))
     }
 
-    /// The world's pixels: the canvas's at the kernel's share of them
+    /// The world's pixels: the canvas's at the core's share of them
     /// (`ratio` over the display's), which the finish brings up to the
     /// canvas, and no more than every device draws
     /// (`drawn_fits`), the canvas's shape kept: its share brought down until

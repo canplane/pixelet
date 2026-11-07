@@ -1,9 +1,9 @@
 // @pxl/client/abi/runtime.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/runtime.json
+// GENERATED from spec/client/core/sys/io/runtime.json
 //
-// What the platform's text writes into the kernel's memory as it answers the kernel's
-// calls TEXT_LAYOUT and TEXT_RASTER (rust/client/kernel/text.json, pxl-kernel sys/io/text.rs,
+// What the platform's text writes into the core's memory as it answers the core's
+// calls TEXT_LAYOUT and TEXT_RASTER (rust/client/core/text.json, pxl-core sys/io/text.rs,
 // ts/client/src/port/text.ts), before they return.
 
 import * as LAYOUT_ANSWER from "./runtime/layout_answer.spec.ts";

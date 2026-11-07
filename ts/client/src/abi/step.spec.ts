@@ -1,10 +1,10 @@
 // @pxl/client/abi/step.spec.ts
 //
-// GENERATED from spec/client/kernel/turn/step.json
+// GENERATED from spec/client/core/turn/step.json
 //
-// The turn's vocabulary, the kernel's and the shell's: the steps a tick runs, as turn.rs
+// The turn's vocabulary, the core's and the UI's: the steps a tick runs, as turn.rs
 // registers them, and the effects a turn runs around them. The profiler records and
-// reports them by these names (spec/client/kernel/perf/perf.json).
+// reports them by these names (spec/client/core/perf/perf.json).
 
 export const STEP_NAMES = [
   "controller",

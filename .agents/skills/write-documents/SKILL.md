@@ -42,7 +42,7 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Checks
 
-- The parts are named the kernel, the shell and the runtime in pixelet's
+- The parts are named the core, the UI and the runtime in pixelet's
   documents, and the core, the runtime and the program in xpute's.
 - What the old version named (paths, identifiers, constants) is still there
   or was cut on purpose, and nothing points at what was cut.

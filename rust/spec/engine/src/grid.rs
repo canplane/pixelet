@@ -16,7 +16,7 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 /// angle, so what is observed is the display's pixels' to draw.
 pub const CELLS_A_RAD: f32 = 96.0;
 
-/// The tangent of half the vertical field of view, the view's (pxl-kernel
+/// The tangent of half the vertical field of view, the view's (pxl-core
 /// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
 /// distance, a field of 53.13 degrees (pxl-spec space/camera/grid.rs `fov`).
 pub const HALF_TAN: f32 = 0.5;

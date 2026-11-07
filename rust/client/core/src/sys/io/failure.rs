@@ -1,0 +1,91 @@
+// pxl-core/sys/io/failure.rs
+
+//! What a task's run came to, and why it failed.
+
+use core::panic::Location;
+
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
+
+use crate::sys::io::file::Opened;
+use crate::sys::io::room::Refusal;
+
+pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
+
+/// Why a task failed, as numbers the statistics count by. A core-made
+/// failure carries its source location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Failure {
+    pub errnum: Errno,
+    pub detail: u16,
+    pub at: Option<&'static Location<'static>>,
+}
+
+impl From<Errno> for Failure {
+    #[track_caller]
+    fn from(errnum: Errno) -> Failure {
+        Failure {
+            errnum,
+            detail: 0,
+            at: Some(Location::caller()),
+        }
+    }
+}
+
+/// An open that came to no bytes, as its run's failure.
+impl From<Opened> for Failure {
+    #[track_caller]
+    fn from(opened: Opened) -> Failure {
+        match opened {
+            Opened::Failed { errnum, detail } => Failure {
+                errnum,
+                detail: detail as u16,
+                at: None,
+            },
+            Opened::Absent => Failure::from(Errno::ENOENT),
+            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
+        }
+    }
+}
+
+impl From<MarshalError> for Failure {
+    fn from(err: MarshalError) -> Failure {
+        Failure {
+            errnum: err.errnum,
+            detail: 0,
+            at: Some(err.at),
+        }
+    }
+}
+
+/// How a run ended: one value, so a run that ended well carries no failure
+/// and a failed one always does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ended {
+    Ok,
+    Aborted,
+    Failed(Failure),
+    /// Its body was refused room, by the heap or the body slots: no failure
+    /// of the object's or the server's, and over once what refused it gives
+    /// some back (`Refusal::over`).
+    Refused(Refusal),
+}
+
+impl Ended {
+    pub fn outcome(&self) -> Outcome {
+        match self {
+            Ended::Ok => Outcome::ok,
+            Ended::Aborted => Outcome::aborted,
+            Ended::Failed(_) | Ended::Refused(_) => Outcome::err,
+        }
+    }
+}
+
+impl From<Result<(), Failure>> for Ended {
+    fn from(result: Result<(), Failure>) -> Ended {
+        match result {
+            Ok(()) => Ended::Ok,
+            Err(fail) => Ended::Failed(fail),
+        }
+    }
+}

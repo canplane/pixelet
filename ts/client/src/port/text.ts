@@ -1,9 +1,9 @@
 // @pxl/client/port/text.ts
 
 /**
- * TEXT, the text device's protocol (rust/client/kernel/text.json): the
- * kernel's calls TEXT_LAYOUT and TEXT_RASTER, answered from the platform's text
- * before they return, so what they write in the kernel's memory is in place
+ * TEXT, the text device's protocol (rust/client/core/text.json): the
+ * core's calls TEXT_LAYOUT and TEXT_RASTER, answered from the platform's text
+ * before they return, so what they write in the core's memory is in place
  * when the call returns.
  */
 
@@ -15,7 +15,7 @@ import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
 import * as font from "@/service/text.ts";
 import { mem } from "@xpute/runtime";
 
-/** The text a call names in the kernel's memory, held until the call returns. */
+/** The text a call names in the core's memory, held until the call returns. */
 function text_of(at: number, len: number): string {
   return td.decode(new Uint8Array(mem, at, len));
 }
@@ -47,7 +47,7 @@ function isSurrogate(unit: number): boolean {
 
 /** Greedy by words; a word too wide alone (Korean, Japanese or Chinese typed
  * without spaces) breaks between characters. A space stays at the next line's
- * head for the kernel to trim. */
+ * head for the core to trim. */
 function line_ends(
   text: string,
   max_width: number,

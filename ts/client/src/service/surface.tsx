@@ -1,7 +1,7 @@
 // @pxl/client/service/surface.tsx
 
 /**
- * The canvas the kernel draws into on the web, and the page's input driver:
+ * The canvas the core draws into on the web, and the page's input driver:
  * its box, pointer, wheel, keys and the tab's visibility.
  */
 
@@ -59,7 +59,7 @@ function openSurface(
   let gone = false;
   void surface.open().then((handle) => {
     if (handle === 0) return;
-    // Closed before the kernel answered: the handle is let go at once.
+    // Closed before the core answered: the handle is let go at once.
     if (gone) return surface.close(handle);
     close = bound(canvas, surface, handle, opened);
   });
@@ -104,7 +104,7 @@ function bound(
   };
 }
 
-/** A field's own keys, which the shell routes apart. */
+/** A field's own keys, which the UI routes apart. */
 function inField(e: KeyboardEvent): boolean {
   const target = e.target;
   return (
@@ -177,7 +177,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
   // What the world held of the keyboard and the pointer is let go as the page
-  // hides; the kernel hears the hiding from the platform (visibility.ts).
+  // hides; the core hears the hiding from the platform (visibility.ts).
   const onVisibility = () => {
     if (document.visibilityState !== "visible") {
       releaseKeys();
@@ -270,6 +270,6 @@ export function CharacterSurface({
     return openSurface(canvas, driver, (handle) => open.current(handle));
   }, [openKey]);
 
-  // A canvas each surface: one crosses to the kernel's worker once, for good.
+  // A canvas each surface: one crosses to the core's worker once, for good.
   return <canvas key={openKey} ref={ref} style={FILL} />;
 }

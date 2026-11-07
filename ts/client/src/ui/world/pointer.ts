@@ -1,0 +1,68 @@
+// @pxl/client/ui/world/pointer.ts
+
+/**
+ * A pointer on the world, sent to the core. A touch that starts there puts
+ * the keyboard away, and while the dock is for typing it puts the typing away
+ * instead of tapping: its lift ends the gesture with no tap, and its drag
+ * still moves the world. Typing, the pointer is off the world, so nothing
+ * hovers there and no tool shows what a tap would do.
+ */
+
+import type { f64, i32 } from "@xpute/kit/abi/word.ts";
+import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
+import { putKeyboardAway } from "@/ui/component/keyboard.tsx";
+import {
+  DockMode,
+  dockMode,
+  setDockMode,
+  watchDockMode,
+} from "@/ui/world/dock/store.ts";
+import * as input from "@/port/input.ts";
+
+/** The pointers spent putting the typing away. */
+const spent = new Set<i32>();
+/** The pointers pressed, whose moves drag rather than hover, each with its kind. */
+const pressed = new Map<i32, PointerType>();
+
+watchDockMode((mode) => {
+  if (mode === DockMode.Message)
+    input.pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
+});
+
+export function worldPointer(
+  phase: PointerPhase,
+  pointerType: PointerType,
+  id: i32,
+  button: i32,
+  x: f64,
+  y: f64,
+): void {
+  const typing = dockMode() === DockMode.Message;
+  switch (phase) {
+    case PointerPhase.Down:
+      pressed.set(id, pointerType);
+      putKeyboardAway();
+      if (typing) {
+        spent.add(id);
+        setDockMode(DockMode.Palette);
+      }
+      break;
+    case PointerPhase.Move:
+      if (typing && !pressed.has(id)) return;
+      break;
+    case PointerPhase.Up:
+    case PointerPhase.Cancel:
+      pressed.delete(id);
+      if (spent.delete(id)) phase = PointerPhase.Cancel;
+      break;
+  }
+  input.pointer(phase, pointerType, id, button, x, y);
+}
+
+/** Each pointer still pressed ends with a cancel: the page lost it (blur,
+ * hidden, the surface gone) and its lift will not come. */
+export function releasePointers(): void {
+  for (const [id, pointerType] of pressed) {
+    worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);
+  }
+}

@@ -126,7 +126,7 @@ pub struct Generator {
     /// The world its groups bind: grouped again exactly when it is another.
     bindings: World,
     on: bool,
-    /// The kinds' zooms as last written, a constant of the table the kernel
+    /// The kinds' zooms as last written, a constant of the table the core
     /// hands once; the clip levels' table, the cuts and the placed decor as
     /// last handed; and whether this frame marks slots to generate.
     zooms_read: Read,

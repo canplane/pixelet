@@ -40,7 +40,7 @@ function orient_gated(): boolean {
 let geo_watch: number | null = null;
 
 /** How long the world waits on a location prompt no one answers, then opens at
- * the kernel's fallback; a later answer moves it. A device's prompt is the
+ * the core's fallback; a later answer moves it. A device's prompt is the
  * system's, and holds the app itself. A product number. */
 const PROMPT_MS = 5000;
 
@@ -86,7 +86,7 @@ function geo_start(): void {
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
-      // so it is left running on any other; the kernel shows the failure until a fix lands.
+      // so it is left running on any other; the core shows the failure until a fix lands.
       switch (err.code) {
         case err.PERMISSION_DENIED:
           geo_stop();
@@ -135,7 +135,7 @@ function orient_start(): void {
   );
 }
 
-/** A grant in the browser's site settings reaches the kernel, since nothing re-asks after a refusal. */
+/** A grant in the browser's site settings reaches the core, since nothing re-asks after a refusal. */
 export function follow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;

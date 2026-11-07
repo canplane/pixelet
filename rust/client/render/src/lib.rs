@@ -1,7 +1,7 @@
 // pxl-render/lib.rs
 
 //! pixelet's view: what the model looks like drawn, and the device that draws
-//! it. It knows the model and nothing of the kernel.
+//! it. It knows the model and nothing of the core.
 
 /// The protocol's words over xpute's GPU calls (spec/client/render/gpu/api.json):
 /// the stream, a pipeline record's codes, a surface's role. Data naming

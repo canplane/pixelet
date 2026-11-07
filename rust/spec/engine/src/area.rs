@@ -60,7 +60,7 @@ pub const fn shard_over(zoom: Zoom, c: [i32; 2]) -> (Zoom, [i32; 2]) {
 /// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
 /// from it, its own among them, as `Shard::served_bits` holds them: a cell's
 /// word in the area (`Area::nine`), laid once where the area is made
-/// (pxl-kernel sys/io/source.rs), so a node's shard is one read (`Shard::at`).
+/// (pxl-core sys/io/source.rs), so a node's shard is one read (`Shard::at`).
 pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
     let mut bits = 0u32;
     let mut k = 0u32;
@@ -222,7 +222,7 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// area's edge. The area alone says it, off `shard`, the node `(cell, b)`'s
 /// (`Shard::at`). What a column is read as (`clipmap::ground`), what the
 /// ways' fill writes no way in (`way::Columns::is_walled`), and what
-/// `World::within` and `World::editable` refuse (pxl-kernel
+/// `World::within` and `World::editable` refuse (pxl-core
 /// domain/query/limit.rs).
 pub fn is_wall(shard: Shard, cell: Zoom, b: [i32; 2]) -> bool {
     if cell < LEAF_CELL {

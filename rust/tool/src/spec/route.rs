@@ -220,7 +220,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     worker.extend(
         [
             "// The Worker is bundled for the Workers runtime rather than from src/, so it",
-            "// cannot import the shell's copy — but it can import this one, which sits",
+            "// cannot import the UI's copy — but it can import this one, which sits",
             "// beside it and is written from the same JSON. It relays by prefix, so the",
             "// prefixes are all it is given.",
             "",

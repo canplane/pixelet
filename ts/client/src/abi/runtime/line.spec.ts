@@ -1,6 +1,6 @@
 // @pxl/client/abi/runtime/line.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/runtime.json
+// GENERATED from spec/client/core/sys/io/runtime.json
 
 export const end = 0 as number;
 

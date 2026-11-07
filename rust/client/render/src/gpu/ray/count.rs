@@ -71,7 +71,7 @@ pub(super) struct Counter {
     mapped: bool,
     read_counts: Box<[u32; WORDS]>,
     /// The mapping's fence and result, the runtime's, and the ticket it
-    /// was last asked with, the kernel's: one mapping out at a time.
+    /// was last asked with, the core's: one mapping out at a time.
     mapping: Box<[u32; 2]>,
     ticket: u32,
     ray_counts: Option<RayCounts>,

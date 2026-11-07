@@ -48,7 +48,7 @@ fn on_q3(units: f64) -> f64 {
 
 /// The world's X round in units, half each side of 0.
 const HALF_ROUND: f64 = ROUND / 2.0;
-/// The draw distance's 2^17 units (pxl-kernel control/param.rs `MAX_DIST`).
+/// The draw distance's 2^17 units (pxl-core control/param.rs `MAX_DIST`).
 const DRAW_DIST: f64 = (1 << 17) as f64;
 
 /// An eye on Q3 anywhere over the world and a point `reach` from it.

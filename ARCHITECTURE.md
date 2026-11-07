@@ -25,15 +25,15 @@ How finely the world is drawn is one rule too: a node is drawn at the zoom at
 which it spans one angular cell of the camera grid, and what a zoom folds away
 is not there, to draw, to walk on or to miss (The camera grid). Each kind of
 thing is drawn wholly on one side: the GPU's rays find the world and the GPU
-generates its decor, and everything else the kernel draws, it lists for the renderer
+generates its decor, and everything else the core draws, it lists for the renderer
 (Drawing).
 
-pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel
-that runs as xpute's core, the TypeScript around it, and Rust servers and
-bakes that share the kernel's model. The memory, the rings and the turn are
+pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust core
+linked with `xpute-core` into one image, the TypeScript around it, and Rust
+servers and bakes that share the core's model. The memory, the rings and the turn are
 xpute's and described there; this document is what pixelet builds on them.
 
-The kernel is one order of dependency (`rust/client/kernel/src/`): an edge may
+The core is one order of dependency (`rust/client/core/src/`): an edge may
 skip a level but never points up, and its folders are that order. The domain is
 two heads, the scene and control, over one trunk, the view, the query and the
 layers, and neither head names the other. A question goes down from a head
@@ -42,7 +42,7 @@ the same way. The check-rules tool holds the order (pxl-tool
 `bin/check_rules.rs`).
 
 ```text
-  turn · door · shell · pointer   the top: wires everything
+  turn · door · ui · pointer      the top: wires everything
   ──────────────────────────────────────────────────────────────────────
   domain/                the world and the eye, two heads over one trunk
 
@@ -51,7 +51,7 @@ the same way. The check-rules tool holds the order (pxl-tool
     │   control/     a head: moves the eye, asks the query          │
     │   smooth.rs    the smoothing both heads share                 │
     │   param.rs     the tuned numbers both heads share             │
-    │   cmd.spec.rs  the shell's enums both heads may read          │
+    │   cmd.spec.rs  the UI's enums both heads may read             │
     │   preview.rs   an edit not yet made, control's to the scene's │
     │   view/        the trunk: the pose, the lens, demand          │
     │   query/       the trunk: the only seam                       │
@@ -68,10 +68,10 @@ the same way. The check-rules tool holds the order (pxl-tool
   beside   perf/: reads anything; no decision reads it
 ```
 
-The parts follow that order. **The world** is what the kernel carries: sizes,
+The parts follow that order. **The world** is what the core carries: sizes,
 positions, layers and what fills a cell. **The eye** goes from the eye down to
 the layers. **Drawing** is the last step up, from the eye's rays and the
-kernel's list to a frame. **Below the view** is what all of it stands on.
+core's list to a frame. **Below the view** is what all of it stands on.
 **Making the data** is a chain of its own, run ahead of the view, that ends
 where the view reads.
 
@@ -111,7 +111,7 @@ adapters and the pyramid's keys are
 
 The world is stored as **layers**. A layer is a payload and a one-zoom fold: a
 tile at z is folded from the tiles at z + 1 under it, by the layer's own rule
-(`pxl-kernel domain/layer.rs` `Base`, the object store's own). Which tiles are
+(`pxl-core domain/layer.rs` `Base`, the object store's own). Which tiles are
 fetched is the eye's, never a layer's.
 
 The layers split on what changes. The **base** is baked from the sources, and a
@@ -138,7 +138,7 @@ the elevation as a brick is filled, never sent (`pxl-engine ground.rs`
 `height`).
 
 **Objects** are placed, not baked: one sparse tree, each leaf an asset's id at
-its node and each branch its eight folded (`pxl-kernel
+its node and each branch its eight folded (`pxl-core
 domain/layer/object/store.rs`). A write splits leaves only on its path and joins
 eight equal leaves into one, so one picture has one tree. A leaf of `AIR` erases
 what a lower layer would show. A leaf may carry an **extension**, such as a
@@ -148,7 +148,7 @@ object/ext.rs` `class_of`), placed and erased with its leaf.
 They come from the **objects' source**, below the `OBJECT` root, which keeps
 them a file a shard, a shard with none having no file, and keeps the **top** of
 the tree: what each node at the shard's zoom holding objects folds to
-(`file.json` `object.TOP`; `pxl-kernel domain/layer/object/repository.rs`). The
+(`file.json` `object.TOP`; `pxl-core domain/layer/object/repository.rs`). The
 top is read first, and its folds stand in the tree where their shards are not
 read, so a view from afar draws from it alone. A shard the top lists is read as
 a bake's tile is, the shards about the eye as the view asks the ground at the
@@ -159,11 +159,11 @@ shard read stays.
 Writes go up as **edits**: each batch the writes `<key, id, ext>` the tree took,
 in the order made (`object.EDITS`), sent a while after the first and no more
 than a turn allows. The objects' source applies them to its shards and rebuilds
-the top's rows of the shards they reach; the kernel writes no shard and no top.
+the top's rows of the shards they reach; the core writes no shard and no top.
 It folds as the tree does, a rule the client's `OBJECT` backend holds again
 (`ts/client/src/sys/fs/object_tree.ts`), held to the store by one
 record both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
-client's own database or a server, the kernel cannot tell.
+client's own database or a server, the core cannot tell.
 
 **Places** are tiles named like the ground tiles under them, each holding what
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
@@ -186,7 +186,7 @@ axes:
   object layer.
 
 So decor is no layer. A generated tree and a placed tree are one kind from two
-sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
+sources, arriving as one record (`pxl-core domain/layer/instance.rs`
 `Instance`).
 
 | Kind   | Base                                         | Object          |
@@ -236,7 +236,7 @@ that box, the eye's, the sun's and the pointer's alike (`cast.rs` `entry`).
 ```
 
 A folded cell is a summary: nothing in it is struck, hidden, cut by a preview or
-pointed at (`pxl-kernel domain/control/edit.rs` `Pick`).
+pointed at (`pxl-core domain/control/edit.rs` `Pick`).
 
 ---
 
@@ -300,7 +300,7 @@ for a distance follows from the same bands (`pxl-spec space/layer/lattice.rs`
 
 The query is the only place a layer's shape is known. Terrain and the object
 store answer one question of a node, a tile or a cube, at a cell zoom the asker
-states (`pxl-kernel domain/layer/query.rs` `Query`); places, divisions and the
+states (`pxl-core domain/layer/query.rs` `Query`); places, divisions and the
 Earth answer none.
 
 - Its **bound** is empty or inside a conservative box. What is not held is not a
@@ -314,7 +314,7 @@ The query fetches and keeps nothing, so reading costs what is asked, not what a
 tile holds.
 
 The **world** composes the layers into one answer, for drawing and for control
-alike (`pxl-engine world.rs` `node`, which `pxl-kernel domain/query/world.rs`
+alike (`pxl-engine world.rs` `node`, which `pxl-core domain/query/world.rs`
 `World` answers on the CPU):
 
 1. the ground's grid, each cell a cube shifted up to its height;
@@ -331,7 +331,7 @@ A ray descends the pyramid, by one function the CPU and the GPU compile alike
 asks is not what is drawn there, so it is asked only whether anything under it
 fills at the zooms the ray asks; what those zooms fold away is not there to
 miss. Each part answers that from what it already keeps, a bound, a hash node or
-nothing held under the node (`pxl-kernel domain/query/node.rs` `World::node`).
+nothing held under the node (`pxl-core domain/query/node.rs` `World::node`).
 
 ```text
 a node coarser than the zoom its distance asks
@@ -351,7 +351,7 @@ about the cells beside one it reached asks them off that line, from the deepest
 node holding each (`support.rs` `asset`), never again from the top.
 
 Control asks the same world, one ray at a time, at the zoom the eye's rays draw
-there, so what control meets is what is drawn (`pxl-kernel domain/query/ray.rs`
+there, so what control meets is what is drawn (`pxl-core domain/query/ray.rs`
 `first_hit`). A walker stands on the first cell that fills down its cell's
 columns, at the finest zoom placed there (`domain/query/support.rs`), and the
 pointer's ray strikes decor as the box it claims where the rays draw decor as it
@@ -398,7 +398,7 @@ in its own **tile cache** (`domain/layer/tile_cache.rs`):
   every tile demanded shows, exact or coarser (`TileCache::is_shown`).
 - Nothing is prefetched: a view converges to exact on its misses alone.
 
-The kernel holds the ground's cells in a **clipmap** (Tanner, Migdal and Jones
+The core holds the ground's cells in a **clipmap** (Tanner, Migdal and Jones
 1998): a **clipmap level** a zoom about a center, addressed modulo its size. A
 ray observes a zoom's cells only within a fixed reach of the eye
 (`pxl-engine clipmap.rs` `RADIUS`), so a clipmap level about a center holds
@@ -485,7 +485,7 @@ with its own bound:
 | Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-request-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
 Every number a person would tune is named once, with its reason, in a `param.rs`
-beside the lowest part that reads it (`pxl-kernel domain/view/param.rs`,
+beside the lowest part that reads it (`pxl-core domain/view/param.rs`,
 `sys/io/param.rs`). None is a correctness bound: set to its least, the view
 still converges, only coarser or later.
 
@@ -493,7 +493,7 @@ still converges, only coarser or later.
 
 # Drawing
 
-This part turns the eye's rays and the kernel's list into a frame.
+This part turns the eye's rays and the core's list into a frame.
 
 ## A ray a pixel
 
@@ -526,7 +526,7 @@ an angular cell and hands the rest to the rasterizer:
 The entries are pxl-render's WGSL (`beam.wgsl`, `sample.wgsl`, `raster.wgsl`,
 `cast.wgsl` `cast_cs`, the listed pixels' walks `queue_walk.wgsl`, `queue_ask.wgsl`,
 `queue_last.wgsl`). Once
-a frame the kernel hands them the eye and the camera grid's layout
+a frame the core hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
 times a scale, which the `resolution` setting picks
 (`domain/scene/resolution.rs`).
@@ -547,7 +547,7 @@ runs over it a knob steps down, the rate to 30 Hz first (`RATE_MIN_HZ`), then
 the scale to its least, and a knob steps up, the scale first and the rate last,
 where the step above, the rest of the GPU's time as it is and the per-pixel
 spans' grown by their pixels, would fit its budget; one step a settling window.
-The rate is the runtime's: the kernel asks it (`TURN_PACE`) and reads it back off
+The rate is the runtime's: the core asks it (`TURN_PACE`) and reads it back off
 each turn's grant. Without timestamps it reads the frames' gaps, which cannot
 foresee room, so only the scale moves, and a step up is a probe whose failure
 doubles the wait before the next.
@@ -631,13 +631,13 @@ depth only. A receiver compares nine taps, each moved by its own plane's slope,
 and casters are pushed by the same formula, so a plane does not shadow itself
 (`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
 outline an edge that meets the air, lift a rim, and shade corners or run N8AO
-(`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
+(`spec/client/core/domain/view/setting/schema.json`, section `lighting`).
 
 ## The frame
 
 Each turn ends with a **draw list** (`pxl-render gpu/draw.rs`): entries tagged
 by the pipeline that draws them, each with its mesh and uniform, for what the
-kernel decides to draw beside the world — the cumulus clouds, the characters,
+core decides to draw beside the world — the cumulus clouds, the characters,
 the location indicator that shows where the device is, an edit's ghost box, the
 markers and the debug lines. A character's draw also records where it stands
 (`DrawList::stand`), for the shadow map. The rays and the generated decor are
@@ -646,7 +646,7 @@ shows the companion's person or pet by an eye of its own, its draw handed to
 it apart from the list, so what the world's eye sees of the character moves
 nothing there (`gpu/pass/character.rs`).
 
-The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
+The core stages the frame (`domain/scene/stage.rs`) and calls the renderer
 (`gpu/renderer.rs` `render_frame`), which draws every open surface, the world
 and the character surfaces, and reports what the frame cost and
 whether it wants another turn. Its passes are modules by what they draw
@@ -683,14 +683,14 @@ browser presents waits on: every shader's module, a few a turn, within
 pipelines made by WebGPU's async call, which compiles off that thread, its
 completion a ticket's word (xpute `RENDER_PIPELINE_ASYNC`,
 `COMPUTE_PIPELINE_ASYNC`); then no frame until every word says it is made. A
-frame turn before then draws nothing and asks for the next, and the kernel's
+frame turn before then draws nothing and asks for the next, and the core's
 snapshot carries how much is made (`renderer_progress`), which the bar over the
-world shows until the view is first drawn (`shell/cover.ts`). Every pipeline it draws with
+world shows until the view is first drawn (`ui/cover.ts`). Every pipeline it draws with
 is asked for in the second step, the cast's and the ground's included; one
 asked for once it draws is a bug (`EBUSY`). The device app's wgpu has no async
 call, and its GPU runtime answers the same op at once by the same ticket.
 
-A frame where only the draws the kernel bounds moved is drawn again in the
+A frame where only the draws the core bounds moved is drawn again in the
 screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
 casts by: what moved marks the tiles it covered and covers; the light's map is
 drawn again in the tiles its casters that moved mark, and the change is
@@ -785,86 +785,86 @@ platform drew, so shaping, bidirectional text and emoji are each platform's own.
 
 # Below the view
 
-This part is what the view stands on, `sys/`, and the top that wires the kernel
+This part is what the view stands on, `sys/`, and the top that wires the core
 to its runtime: how what it asks for arrives, what it costs in time and memory, and
 how a failure leaves what is drawn alone. Nothing in `sys/` names anything above
 it: a layer asks io for a tile, and io never asks what the tile is for.
 
-## The kernel and its runtime
+## The core and its runtime
 
-The kernel is a unikernel on a virtual machine: it holds the world and
-decides everything about it, but owns no device. `pxl-kernel` and
-`xpute-core`, its library OS (its scheduler, door, memory and stop), are one
-image, a core of xpute. Its **runtime** is its VMM: it implements the devices
-the kernel's machine asks for and gives it the rest, one memory, granted once,
+The core holds the world and decides everything about it, but owns no device.
+`pxl-core` and `xpute-core`, its library OS (its scheduler, door, memory and
+stop), are linked into one image, a unikernel on a virtual machine. Its
+**runtime** is its VMM: it implements the devices
+the core's machine asks for and gives it the rest, one memory, granted once,
 and a share of time on each call, a **turn**
-([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md)). The kernel owns the
+([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md)). The core owns the
 abstractions and the policy over those grants.
 
-Around the kernel pixelet has three parts, by xpute's picture of a core's
+Around the core pixelet has three parts, by xpute's picture of a core's
 world:
 
-- the **shell**, the screens and components, the client outside the VM (a
-  unikernel has no userspace): React over the kernel's snapshot
-  (`ts/client/src/shell/`);
-- the **services**, what answers the kernel's app ABI and what each platform
+- the **UI**, the screens and components, the client outside the VM (a
+  unikernel has no userspace): React over the core's snapshot
+  (`ts/client/src/ui/`);
+- the **services**, what answers the core's app ABI and what each platform
   gives — the surfaces, the position, storage, files, text and the server
   (`ts/client/src/service/`, `port/`, `sys/`, `origin/`);
-- the **runtime**, xpute's, the kernel's VMM, booted once by the client
+- the **runtime**, xpute's, the core's VMM, booted once by the client
   (`ts/client/src/runtime/boot.ts`) and kept for the rest of it
   (`ts/client/src/runtime/`).
 
-The kernel runs apart from the shell, so a turn holds none of the shell's
-events, and the runtime sits where the kernel's memory is
+The core runs apart from the UI, so a turn holds none of the UI's
+events, and the runtime sits where the core's memory is
 (`ts/client/src/runtime/open.ts`, `open.native.ts`; both start it as
-`runtime/start.ts` does). A device runs the kernel on its own thread and the
-runtime on the shell's JavaScript thread. A page runs the kernel and the
+`runtime/start.ts` does). A device runs the core on its own thread and the
+runtime on the UI's JavaScript thread. A page runs the core and the
 runtime in a worker (`runtime/worker.ts`) with the files, the network, the
-text and the GPU on the canvas the shell lends it, and the shell on the main
-thread: the shell's commands and the snapshot cross xpute's remote as frames,
+text and the GPU on the canvas the UI lends it, and the UI on the main
+thread: the UI's commands and the snapshot cross xpute's remote as frames,
 and the rest, where the boot stands, the GPU's and the network's states, the
 kept settings, a canvas lent and the profiler's readings, as
 `runtime/page.ts` says.
 
-The kernel's crate is its artifact, in xpute's core form for its target
-(`pxl-kernel lib.rs`, one `xpute_core::core!` over its machine,
-`rust/client/kernel/machine.json`): the kernel implements xpute's entry
+The core's crate is its artifact, in xpute's core form for its target
+(`pxl-core lib.rs`, one `xpute_core::core!` over its machine,
+`rust/client/core/machine.json`): the core implements xpute's entry
 (`door.rs` `run`), and the form hands it what it hands any core
 (`xpute_core::entry` `BootInfo`: where a form sharing its process says what
 stopped it, `stop_hook`, and its GPU runtime's answer, `admit`). On wasm32 it is
-the WebAssembly module the page runs (`ts/client/src/service/kernel.ts`);
+the WebAssembly module the page runs (`ts/client/src/service/core.ts`);
 anywhere else it is the library linked into the device app under xpute's native
 runtime (`xpute_gpu::native_core!` over `xpute_runtime::native_core!`), which runs
-each call on the kernel's own thread, since a turn that draws through wgpu
+each call on the core's own thread, since a turn that draws through wgpu
 outgrows React Native's JavaScript stack, runs the GPU's runtime around each turn,
 and exports it to the app through xpute's native module (`@xpute/native`). What
 the app calls besides xpute's names is the transport's decoder (`unpack.rs`,
-`rust/client/kernel/include/pxl_native.h`). Outside either form the kernel runs
+`rust/client/core/include/pxl_native.h`). Outside either form the core runs
 under `cargo test`.
 
-The kernel has two ABIs, xpute's two, on one number space. **xpute's predefined
-ABI**, majors under 0x10, is the runtime's, the kernel's devices: the kernel calls
+The core has two ABIs, xpute's two, on one number space. **xpute's predefined
+ABI**, majors under 0x10, is the runtime's, the core's devices: the core calls
 the file device for its files and posts its report, during a turn and taken
 after it returns, so each is done before the next turn begins
-(`sys/io/runtime.rs`), and the runtime raises the kernel's interrupts: its life
+(`sys/io/runtime.rs`), and the runtime raises the core's interrupts: its life
 (`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`) and a GPU answered
 (`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`). **The app's ABI** is what the
-app defines, two protocols: the shell's, `rust/client/kernel/shell.json`, its
+app defines, two protocols: the UI's, `rust/client/core/ui.json`, its
 intents and what the platform's services give, the surfaces, the sensors, the
 data and each turn's grant; and the text device's, `text.json` beside it, the
 platform's text, which the runtime answers beside the core. Both sides' readers,
 writers and bindings are generated from each (`door/cmd.spec.rs`, the enums the
 domain reads apart in `domain/cmd.spec.rs`, and `ts/client/src/abi/cmd.spec.ts`;
 `sys/io/text.spec.rs`, `ts/client/src/abi/text.spec.ts`), each packet an XTP tree, xpute's relocatable
-binary tree. The shell's exports are what the shell and the services submit; its
-imports are what the kernel posts unasked, the snapshot, the view's azimuth and
-scale apart from it (`SHELL_VIEW`) and the sensors it starts and stops. The text
+binary tree. The UI's exports are what the UI and the services submit; its
+imports are what the core posts unasked, the snapshot, the view's azimuth and
+scale apart from it (`UI_VIEW`) and the sensors it starts and stops. The text
 device's are the calls for a text's lines and its pixels (`TEXT_LAYOUT`,
 `TEXT_RASTER`), answered before the call returns (`sys/io/text.rs`,
 `ts/client/src/runtime/start.ts`, `port/text.ts`): a page's runtime through the
 module's import, a device's on the JavaScript thread that waits on the turn. A
 command's major is the module it is for (`INPUT`, `SENSOR`, `FS`, `SURFACE`,
-`SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `SHELL`, `TEXT`, `TURN`): the door
+`SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `UI`, `TEXT`, `TURN`): the door
 applies each major's in its own file (`door/apply/`), and the client sends each
 from its major's file in `port/`. Beside the two ABIs, only what xpute's form
 hands over is called directly. An answer comes back as a number, read once by
@@ -872,92 +872,92 @@ hands over is called directly. An answer comes back as a number, read once by
 names is the runtime breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
-(`ts/client/src/runtime/boot.ts`) starts the kernel with `@xpute/runtime`'s
+(`ts/client/src/runtime/boot.ts`) starts the core with `@xpute/runtime`'s
 `start` where the platform runs it (`runtime/open.ts`, `.native.ts`), as the
-kernel's machine declares it (generated into `abi/machine.spec.ts`), which asks
+core's machine declares it (generated into `abi/machine.spec.ts`), which asks
 for both of xpute's devices, the GPU and the files (`gpu`, `fs`). The config,
-made where the kernel runs (`runtime/start.ts`), holds what backs the files
-(`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`shell_imports`),
-what the kernel places with the shell, the frame pacing and each turn's
-submission (`port/surface.ts` `submit_grant`); `port/kernel.ts` keeps the
-runtime's link and the generated stubs bound to it (`kernel`). What else differs
+made where the core runs (`runtime/start.ts`), holds what backs the files
+(`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`ui_imports`),
+what the core places with the UI, the frame pacing and each turn's
+submission (`port/surface.ts` `submit_grant`); `port/core.ts` keeps the
+runtime's link and the generated stubs bound to it (`core`). What else differs
 by platform is a file pair in `ts/client/src/service/`, `<x>.ts` the page's
 beside `<x>.native.ts` the device's, which Metro picks by the platform it
 bundles for (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both
-share in `service/types.ts`: the kernel's module or none on a device
-(`kernel.ts`), the GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`,
+share in `service/types.ts`: the core's module or none on a device
+(`core.ts`), the GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`,
 `NativeGpu`), the sensors, the visibility, storage, text, the network and the
 surfaces; the app's own native module is bound in `service/pxl-platform.ts`.
-What answers the kernel's files is `ts/client/src/sys/`: their names, versions,
+What answers the core's files is `ts/client/src/sys/`: their names, versions,
 kept keys and refusals (`sys/fs/`), and its stop report beside. What the app
-ABI's client end carries is `ts/client/src/port/`, a file a major (SHELL's
-snapshot in `snapshot.ts`, `shell.ts` the shell's way in). The server the client
+ABI's client end carries is `ts/client/src/port/`, a file a major (UI's
+snapshot in `snapshot.ts`, `ui.ts` the UI's way in). The server the client
 reads from, its routes, its published tables and whether the device is online,
 is `ts/client/src/origin/`; the numbers both read, generated from `spec/` or,
-for the states the client reports and the shell shows, written beside it
+for the states the client reports and the UI shows, written beside it
 (`abi/state.ts`), are `ts/client/src/abi/`.
 
-The **shell** (`ts/client/src/shell/`) is React over the kernel's **snapshot**,
+The **UI** (`ts/client/src/ui/`) is React over the core's **snapshot**,
 where every control is a command. The snapshot is replaced whole after a turn
-only when what it is made of moved (`shell.rs` `SnapshotInputs`), and carries
-only what the kernel owns; what is rounded or timed for presentation is the
-shell's. The shell lends the kernel the surfaces to draw into and computes no
+only when what it is made of moved (`ui.rs` `SnapshotInputs`), and carries
+only what the core owns; what is rounded or timed for presentation is the
+UI's. The UI lends the core the surfaces to draw into and computes no
 coordinate, tile or draw; what it needs of the model is generated from the same
 JSON as the Rust. The runtime, `service/`, `sys/`, `port/`, `origin/`, `abi/` and
-the shell are one package, `ts/client`, which one Expo app, `ts/client`, bundles
-for iOS, Android and the page; the shell reaches the kernel, `sys/` and
-`origin/` through `port/` alone, and `port/` reaches the kernel through the
+the UI are one package, `ts/client`, which one Expo app, `ts/client`, bundles
+for iOS, Android and the page; the UI reaches the core, `sys/` and
+`origin/` through `port/` alone, and `port/` reaches the core through the
 generated stubs alone.
 
-The stack reads shell and services, kernel, runtime: the clients outside the VM,
+The stack reads UI and services, core, runtime: the clients outside the VM,
 the unikernel, and its VMM. Both ABIs ride xpute's one pair of rings, the device
-between the shell and the kernel, told apart by a command's major, and the runtime
-carries the app's submissions without reading them. The shell meets the runtime
+between the UI and the core, told apart by a command's major, and the runtime
+carries the app's submissions without reading them. The UI meets the runtime
 directly only for the surfaces it lends the GPU and the lifecycle (boot,
 visibility), through `@xpute/runtime`'s TypeScript API.
 
 ```text
-  shell      React over the snapshot         ts/client/src/shell/
+  UI         React over the snapshot         ts/client/src/ui/
   services   the app ABI's client end, what  ts/client/src/service/,
              each platform gives             port/, sys/, origin/
-    │ ▲   the app's ABI, shell.json and text.json: commands submitted and
+    │ ▲   the app's ABI, ui.json and text.json: commands submitted and
     ▼ │   completed; imports: the snapshot, a sensor started, the text called for
-  kernel     decides all, owns no device     pxl-kernel's core!
+  core       decides all, owns no device     pxl-core's core!
     │ ▲   xpute's ABI: the files and the report called, opens and closes
     ▼ │   completed; the life and GPU_READY raised
-  runtime    xpute's, the kernel's VMM       @xpute/runtime, ts/client/src/runtime/
+  runtime    xpute's, the core's VMM         @xpute/runtime, ts/client/src/runtime/
 ```
 
 What crosses each edge:
 
 | Edge                                        | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| the shell and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part (`SOURCE_DECLARE`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
-| kernel and runtime, xpute's ABI             | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole or changed (`FS_CHANGED`), the kernel's life and each turn's pacing (`SYS_TURN`), a GPU answered and the surfaces the shell lends (`GPU_SURFACE_*`)                                                                                                                                 |
+| the UI and services, and core, `port/`      | a command for each control and the input it routes (`INPUT_*`), each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part (`SOURCE_DECLARE`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
+| core and runtime, xpute's ABI               | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole or changed (`FS_CHANGED`), the core's life and each turn's pacing (`SYS_TURN`), a GPU answered and the surfaces the UI lends (`GPU_SURFACE_*`)                                                                                                                                      |
 | runtime and core, xpute                     | a turn with its deadline, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions, imports and the GPU stream's records, xpute's stop hook if it stops                                                                                            |
 
 ## Reads, and the one request scheduler
 
 A read is a file in xpute's sense
 ([xpute's imports and files](./xpute/ARCHITECTURE.md#the-file-device)):
-the kernel names a root by its number and an object below it by one name,
+the core names a root by its number and an object below it by one name,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/sys/fs/namespace.ts` `namespace`). The roots are
-`spec/client/kernel/sys/io/file.json` `root`'s: the bakes and the assets
-read-only, `STORAGE` holding the kernel's own files, each a **storage file** on
+`spec/client/core/sys/io/file.json` `root`'s: the bakes and the assets
+read-only, `STORAGE` holding the core's own files, each a **storage file** on
 the device, and `OBJECT` the placed objects' source, its shards and their top
 read and its edits written:
 
-| Root               | The kernel's path                               | What the client binds it to                                                                               |
+| Root               | The core's path                                 | What the client binds it to                                                                               |
 | ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | each bake, by kind | a tile's quadkey; the Earth's `sphere`          | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`sys/fs/tile.ts`) |
 | `ASSET`            | a load's id, in decimal                         | the shipped asset that id is, by its hash (`sys/fs/asset.ts`)                                             |
 | `STORAGE`          | a storage file's id, in decimal (`storage`)     | the platform's storage, under a key it picks (`sys/fs/storage.ts`)                                        |
 | `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS` | for now a loopback over the place's database, which applies the edits (`sys/fs/object.ts`)                |
 
-So the kernel names no URL, version, storage key or platform: a path is a
+So the core names no URL, version, storage key or platform: a path is a
 name, and where it leads is the client's. The client reads the declaration
-(The query, the only seam) once at boot, hands the kernel the top zoom, each
+(The query, the only seam) once at boot, hands the core the top zoom, each
 kind's format and the shards it serves (`SOURCE_DECLARE`, `sys/io/source.rs`), and
 keeps the versions; the world's floor and its service area follow from it.
 
@@ -987,15 +987,15 @@ Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
 objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its id
-(`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
+(`sys/io/file.rs` `StorageFile`). A file is bytes to the core; a backend over
 a platform that keeps text keeps their base64url (`sys/fs/storage.ts`), and
 `OBJECT`'s database keeps the bytes. A storage file begins with its slot's
 format byte, and each file below `OBJECT` with its own (`file.json` `format`);
-the kernel refuses one of another format, one its backend cannot read as bytes,
+the core refuses one of another format, one its backend cannot read as bytes,
 or one that does not decode, as a driver refuses a superblock it does
 not know, and never writes over it. It names each refused file in the snapshot
 (`refused_files`); the client sets it aside, empties it and says so
-(xpute's `FS_CHANGED`, `sys/fs/refusal.ts`), and the kernel reads it again. A shard
+(xpute's `FS_CHANGED`, `sys/fs/refusal.ts`), and the core reads it again. A shard
 whose file is refused stays unread meanwhile, and no edit stands in it.
 
 ## When something goes wrong
@@ -1005,11 +1005,11 @@ detail and the source location (`sys/io/failure.rs` `Ended`): a failed fetch is
 asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
-(`ts/client/src/shell/cover.ts` `coverOf`). A broken invariant is a **bug**,
-and it ends the kernel (`xpute_core::stop`, its record `SYS_ABORT`), and
-the shell shows the blue screen with the errno and place as its
+(`ts/client/src/ui/cover.ts` `coverOf`). A broken invariant is a **bug**,
+and it ends the core (`xpute_core::stop`, its record `SYS_ABORT`), and
+the UI shows the blue screen with the errno and place as its
 stop code, as it does for a GPU lost for good: a page's module traps, and on a
-device xpute's stop hook says why and the kernel's thread stops there, the
+device xpute's stop hook says why and the core's thread stops there, the
 process going on. Memory pressure is neither; the memory map says how each range meets it.
 
 ## The turn
@@ -1039,7 +1039,7 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the client submits one `TURN_GRANT` on the kernel's rings, the
+Before each turn the client submits one `TURN_GRANT` on the core's rings, the
 turn's pacing and the reads allowed out (`ts/client/src/port/surface.ts`
 `submit_grant`), and the runtime then its `SYS_TURN`, the clock; a turn rung
 for a command alone carries neither and draws nothing. The view each frame is
@@ -1047,19 +1047,19 @@ drawn at is the world surface's layout box, in CSS pixels
 (`GPU_SURFACE_RESIZE`), and a
 pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/runtime/start.ts`,
-`@xpute/runtime/sched/frame_pacing.ts`), its numbers the kernel's
-(`spec/client/kernel/sys/sched/pacing.json`), at no less than the interval the
-kernel last asked (`TURN_PACE`); an input makes the turns after it
+`@xpute/runtime/sched/frame_pacing.ts`), its numbers the core's
+(`spec/client/core/sys/sched/pacing.json`), at no less than the interval the
+core last asked (`TURN_PACE`); an input makes the turns after it
 interactive (`ts/client/src/port/input.ts` `send_input`) and hurries none past
 that interval. The tick's phases are
-the kernel's (`spec/client/kernel/sys/sched/phase.json`), and `visible` holds back
+the core's (`spec/client/core/sys/sched/phase.json`), and `visible` holds back
 the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
 `interaction`, and after it what the pointer is over where the eye now stands,
 the edit it would make and its ghost; what the eye then sees, demand and the
 scene, in `visible`; and the later phases hold what the deadline leaves them
 (`turn.rs`).
 
-Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
+Once a turn, before the layers observe, the core says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store
 wrote. A tile's identity fixes its content, so a list of identities is all a
 reader needs.
@@ -1068,11 +1068,11 @@ reader needs.
 
 The client's state is xpute's
 [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once), placed
-once and never moved, of the sizes the kernel's machine sets
-(`rust/client/kernel/machine.json`). Every address is an offset from its first
+once and never moved, of the sizes the core's machine sets
+(`rust/client/core/machine.json`). Every address is an offset from its first
 byte, so the map holds in a tab and on a device alike. The front, from the
 stack to the GPU stream, is the machine's, and the runtime lays it before the
-first turn. On a device the stack and the kernel's data are the process's, so
+first turn. On a device the stack and the core's data are the process's, so
 their ranges stand empty and the rest begins at the front's end
 (`global_base`).
 
@@ -1083,13 +1083,13 @@ range               what it holds                    placed by
 the header          where the rings and stream are   machine.json
 the rings           their frames, then their slots   machine.json
 the GPU stream      the renderer's calls             machine.json
-.rodata .data .bss  the kernel's data                the linker
+.rodata .data .bss  the core's data                  the linker
 .fixed              each owner's range               door/layout.rs
 .heap               the rest                         the allocator
 ──────────────────────────────────────────────────────────────────
 ```
 
-The map is `pxl-kernel sys/mem/section.rs`'s. `.stack` is first so an overflow
+The map is `pxl-core sys/mem/section.rs`'s. `.stack` is first so an overflow
 wraps below zero and traps, the only guard without an MMU. Each range is sized
 by what full means to what it holds:
 
@@ -1241,7 +1241,7 @@ Which version of each kind is served is the bucket's alone, in its declaration
 ([The query, the only seam](#the-query-the-only-seam)), with any shard served
 from another version (`pxl-geo-bake source.rs` `declaration`). Only the publish
 script writes it, refusing what a client would refuse (`bin/declare_source.rs`);
-what the client hands the kernel of it at boot is [Reads, and the one
+what the client hands the core of it at boot is [Reads, and the one
 request scheduler](#reads-and-the-one-request-scheduler)'s. Going back is serving an older
 version again.
 
@@ -1261,12 +1261,12 @@ JSON (`pxl-tool bin/spec.rs`). Both sides compile them, so none is sent.
 Which assets exist is compiled too: each is a definition in `spec/spec/asset/`,
 numbered by its id ([What fills a cell](#what-fills-a-cell)). A file a
 definition references, a model, a skin or the texture pack, is compiled as an
-**asset slot**, so the kernel knows "the cumulus' skin" and never which file it
+**asset slot**, so the core knows "the cumulus' skin" and never which file it
 is. Which file fills each asset slot, and what the ingest measured of it, is the
-**catalog**: the one file the client plugs in, through which the kernel finds
+**catalog**: the one file the client plugs in, through which the core finds
 every other (`pxl-spec asset/catalog.rs` `Catalog`). Until it lands every asset
-slot reads as still loading, and its asset slots bound the files the kernel
-loads at once (`pxl-kernel sys/load.rs` `LOAD_FILES`).
+slot reads as still loading, and its asset slots bound the files the core
+loads at once (`pxl-core sys/load.rs` `LOAD_FILES`).
 
 The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
@@ -1293,7 +1293,7 @@ them.
 | Precedent                                                                                                                              | Where                                                                                   | What is taken                                                                                                                            |
 | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Google Earth and the web map's tile pyramid                                                                                            | the pyramid (`pxl-spec space/`)                                                         | Structure, storage, tiling and invalidation across zooms                                                                                 |
-| Cesium 3D Tiles, `skipLevelOfDetail` and `preloadAncestors`                                                                            | `pxl-kernel sys/io/demand.rs`                                                           | A tile tree whose nodes arrive out of order; a held ancestor shown at once                                                               |
+| Cesium 3D Tiles, `skipLevelOfDetail` and `preloadAncestors`                                                                            | `pxl-core sys/io/demand.rs`                                                             | A tile tree whose nodes arrive out of order; a held ancestor shown at once                                                               |
 | Morton order                                                                                                                           | tile and shard names (`pxl-spec space/hierarchy/morton.rs`)                             | One base-4 digit a zoom, coarsest first                                                                                                  |
 | Web Mercator (EPSG:3857), WGS 84                                                                                                       | `pxl-spec space/coord/`                                                                 | The plane a position follows; the sphere's radius                                                                                        |
 | Mapbox's globe                                                                                                                         | `pxl-spec space/coord/globe.rs`                                                         | The air's planet under the eye: its radius as the map is stretched there                                                                 |
@@ -1303,8 +1303,8 @@ them.
 | Minecraft Beta's `replaceBlocksForBiome`                                                                                               | `pxl-content strata.rs` `by_depth`                                                      | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                 | `spec/spec/asset/color.json` underground                                                | The colors of soil, sandstone and stone                                                                                                  |
 | Minecraft 1.18's noise caves; Ken Perlin's improved noise (SIGGRAPH 2002)                                                              | `pxl-content cave.rs`                                                                   | Tunnels where two noises are both near zero, caverns where one is high; the fade and the gradients                                       |
-| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | `pxl-kernel domain/query/support.rs` `step_slide`                                       | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
-| Amanatides and Woo's voxel traversal                                                                                                   | `pxl-engine cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                    | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
+| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | `pxl-core domain/query/support.rs` `step_slide`                                         | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
+| Amanatides and Woo's voxel traversal                                                                                                   | `pxl-engine cast.rs` `walk`, `pxl-core domain/query/support.rs`                      | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                          | `pxl-engine cast.rs` `walk`                                                          | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
 | Laine and Karras's beams; Reshetov et al.                                                                                              | pxl-render `beam.wgsl`, `pxl-engine cast.rs` `Until::Beam`                           | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
 | Tevs, Ihrke and Seidel's maximum mipmaps                                                                                               | `pxl-engine clipmap.rs` `bounded`                                                    | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
@@ -1321,9 +1321,9 @@ them.
 | ACES as Stephen Hill fits it                                                                                                           | `pxl-render frame/shader/finish.wgsl`                                                   | One tone curve for every pass                                                                                                            |
 | N8AO                                                                                                                                   | `pxl-render gpu/ao.rs`                                                                  | Screen-space ambient occlusion, ported to WGSL                                                                                           |
 | Kasten and Young; Ballesteros                                                                                                          | `pxl-render frame/shader/star.wgsl`, `gpu/star.rs`                                      | Airmass at the horizon; a star's color from B−V                                                                                          |
-| Duffett-Smith                                                                                                                          | `pxl-kernel domain/scene/environment/celestial.rs`                                      | The sun's, the moon's and the stars' positions                                                                                           |
+| Duffett-Smith                                                                                                                          | `pxl-core domain/scene/environment/celestial.rs`                                        | The sun's, the moon's and the stars' positions                                                                                           |
 | Stöckli et al. (Blue Marble)                                                                                                           | `pxl-geo-bake bin/bake_earth.rs`                                                        | The imagery's bytes read back as reflectance                                                                                             |
-| three.js                                                                                                                               | `pxl-kernel domain/scene/character.rs`, `pxl-render frame/shader/atmos_view.wgsl`           | A clip's cross-fade; Lambert as its standard material                                                                                    |
+| three.js                                                                                                                               | `pxl-core domain/scene/character.rs`, `pxl-render frame/shader/atmos_view.wgsl`             | A clip's cross-fade; Lambert as its standard material                                                                                    |
 | Howard Hinnant's date algorithm                                                                                                        | `pxl-geo-bake util.rs`                                                                  | A civil date from a day count                                                                                                            |
-| Figma                                                                                                                                  | `pxl-kernel`                                                                            | A compiled engine in the page over one memory                                                                                            |
-| iOS's interface guidelines, Material's motion, SF Symbols                                                                              | `ts/client/src/shell/ui/theme.ts`, `shell/ui/motion/transition.ts`, `shell/ui/icon.tsx` | Touch targets and type scale, easing, the icons' names                                                                                   |
+| Figma                                                                                                                                  | `pxl-core`                                                                              | A compiled engine in the page over one memory                                                                                            |
+| iOS's interface guidelines, Material's motion, SF Symbols                                                                              | `ts/client/src/ui/component/theme.ts`, `ui/component/motion/transition.ts`, `ui/component/icon.tsx` | Touch targets and type scale, easing, the icons' names                                                                                   |

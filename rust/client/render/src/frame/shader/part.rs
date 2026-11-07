@@ -101,7 +101,7 @@ pub const SHADER_RASTER: u32 = 42;
 pub const SHADER_FACE: u32 = 43;
 /// The tiles of the light's box its receivers stand on (pxl-engine
 /// `light::LISTED_STOOD`): the pixels the eye walked apart (its voxels' boxes stood by the
-/// record's draw, `SHADER_RECORD_DRAW`), and where the decor and what the kernel draws that
+/// record's draw, `SHADER_RECORD_DRAW`), and where the decor and what the core draws that
 /// reads the map stand; then those they read (`light::LISTED_READ`,
 /// `light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.

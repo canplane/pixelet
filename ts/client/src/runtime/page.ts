@@ -1,9 +1,9 @@
 // @pxl/client/runtime/page.ts
 
 /**
- * What crosses between a page's shell and the kernel's worker besides xpute's
+ * What crosses between a page's UI and the core's worker besides xpute's
  * port: what a worker cannot read of the page, what the worker keeps, the
- * files the kernel refused, the source as the worker has it, and the
+ * files the core refused, the source as the worker has it, and the
  * profiler's reads.
  */
 
@@ -20,14 +20,14 @@ export interface Page {
   handheld: boolean;
 }
 
-/** The shell to the worker. */
-export type ToKernel =
+/** The UI to the worker. */
+export type ToCore =
   | Page
   | { kind: "refused"; files: readonly RefusedFile[] }
   | { kind: "perf"; id: u32; what: string; args: unknown[] };
 
-/** The worker to the shell. */
-export type ToShell =
+/** The worker to the UI. */
+export type ToUi =
   | { kind: "source"; state: Source; declaration: Declaration | null }
   | { kind: "keep"; key: string; value: string }
   | { kind: "perf"; id: u32; value: unknown };

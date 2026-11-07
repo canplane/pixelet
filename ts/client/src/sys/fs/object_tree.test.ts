@@ -13,7 +13,7 @@ import {
   type TopRow,
 } from "./object_tree.ts";
 
-/** The record the kernel's store is held to too (pxl-kernel
+/** The record the core's store is held to too (pxl-core
  * domain/layer/object/repository.test.rs `top_golden`). */
 const GOLDEN = new URL(
   "../../../../../rust/spec/golden/object/top.tsv",

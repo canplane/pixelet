@@ -1,7 +1,7 @@
 // @pxl/client/port/sensor.ts
 
-/** SENSOR on the shell's port: what the place's sensors heard, in its words
- * (service/types.ts `SensorListener`), sent as the kernel numbers it; the kernel's
+/** SENSOR on the UI's port: what the place's sensors heard, in its words
+ * (service/types.ts `SensorListener`), sent as the core numbers it; the core's
  * asks that one start or stop, passed to the place's; and the location the
  * search panel's card asks for. */
 
@@ -15,10 +15,10 @@ import {
 } from "@/abi/cmd.spec.ts";
 import { type SensorListener } from "@/service/types.ts";
 import * as sensor from "@/service/sensor.ts";
-import { kernel } from "@/port/kernel.ts";
+import { core } from "@/port/core.ts";
 
 export function locate(): void {
-  kernel.sensor_locate();
+  core.sensor_locate();
 }
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
@@ -26,23 +26,23 @@ function given(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
 
-function kernel_pos(
+function core_pos(
   lon: f64,
   lat: f64,
   alt: f64 | null,
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
-  kernel.sensor_pos(lon, lat, given(alt), given(accuracy), given(course));
+  core.sensor_pos(lon, lat, given(alt), given(accuracy), given(course));
 }
 
-function kernel_orient(
+function core_orient(
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
   beta: f64 | null,
   gamma: f64 | null,
 ): void {
-  kernel.sensor_orient(
+  core.sensor_orient(
     given(webkit_compass_heading),
     given(alpha),
     given(beta),
@@ -71,23 +71,23 @@ const ANSWER = {
 
 /** What the place's sensors heard, handed to it once at boot. */
 export const SENSOR_LISTENER: SensorListener = {
-  position: kernel_pos,
-  positionError: (error) => kernel.sensor_err(Sensor.Geolocation, ERR[error]),
-  orientation: kernel_orient,
+  position: core_pos,
+  positionError: (error) => core.sensor_err(Sensor.Geolocation, ERR[error]),
+  orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => kernel.sensor_err(Sensor.Orientation, null),
+  orientationLost: () => core.sensor_err(Sensor.Orientation, null),
   permission: (sensor, answer) =>
-    kernel.sensor_permission(SENSOR[sensor], ANSWER[answer]),
+    core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
 };
 
-/** The kernel's SENSOR_START. */
+/** The core's SENSOR_START. */
 export function sensor_start(e: SensorStart): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.start();
   } else sensor.orient.start();
 }
 
-/** The kernel's SENSOR_STOP. */
+/** The core's SENSOR_STOP. */
 export function sensor_stop(e: SensorStop): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.stop();

@@ -1,6 +1,6 @@
 // @pxl/client/abi/schema.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/view/setting/schema.json
+// GENERATED from spec/client/core/domain/view/setting/schema.json
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -10,16 +10,16 @@
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
-// is in the kernel's table in every build and offered only under a
-// development one; the shell's production bundle carries SETTING_PRODUCTION,
+// is in the core's table in every build and offered only under a
+// development one; the UI's production bundle carries SETTING_PRODUCTION,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
-// A setting carries its `number` (the kernel's SettingKey), and a choice's
+// A setting carries its `number` (the core's SettingKey), and a choice's
 // `options` names one of the lists below, which numbers each option. The
 // numbers are what crosses and what storage keeps; the names are the
-// shell's alone, for its rows and the locale. A number is given out once;
+// UI's alone, for its rows and the locale. A number is given out once;
 // the generator refuses one given twice. An `index` is a place in a list
 // kept elsewhere — the person and the pet are by theirs in character.json — and
 // crosses as itself.
@@ -55,7 +55,7 @@ export const SETTING = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -272,7 +272,7 @@ export const SETTING_PRODUCTION = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,

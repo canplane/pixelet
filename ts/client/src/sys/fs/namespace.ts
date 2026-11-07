@@ -1,7 +1,7 @@
 // @pxl/client/sys/fs/namespace.ts
 
 /**
- * The kernel's namespace: each root it opens a file under (file.json `root`)
+ * The core's namespace: each root it opens a file under (file.json `root`)
  * bound to what fetches or keeps its bytes, a path below it the file's one
  * name. The boot hands it to `@xpute/runtime`'s system calls
  * (runtime/start.ts).

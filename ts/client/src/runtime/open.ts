@@ -1,9 +1,9 @@
 // @pxl/client/runtime/open.ts
 
 /**
- * A page's kernel, in a worker of its own (worker.ts): the shell's
+ * A page's core, in a worker of its own (worker.ts): the UI's
  * link is xpute's, across the worker's port; what a worker cannot read of the
- * page and the files the kernel refused go to it, and what it keeps and reads
+ * page and the files the core refused go to it, and what it keeps and reads
  * comes back (page.ts).
  */
 
@@ -12,8 +12,8 @@ import { start } from "@xpute/runtime";
 import { mirror_source, settled } from "@/sys/fs/source.ts";
 import { is_kept } from "@/sys/fs/storage.ts";
 import { set_online } from "@/origin/online.ts";
-import { set_kernel } from "@/port/kernel.ts";
-import type { ToKernel, ToShell } from "@/runtime/page.ts";
+import { set_core } from "@/port/core.ts";
+import type { ToCore, ToUi } from "@/runtime/page.ts";
 import { manifest } from "@/runtime/start.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
 import { gpu_present } from "@/port/gpu.ts";
@@ -29,10 +29,10 @@ export async function open(on: OnOpen): Promise<boolean> {
   const worker = new Worker(new URL("./worker.ts", location.href), {
     type: "module",
   });
-  const ask = (m: ToKernel) => worker.postMessage(m);
+  const ask = (m: ToCore) => worker.postMessage(m);
   const reads = new Map<u32, (value: unknown) => void>();
   let next = 0;
-  worker.onmessage = ({ data: m }: MessageEvent<ToShell>) => {
+  worker.onmessage = ({ data: m }: MessageEvent<ToUi>) => {
     switch (m.kind) {
       case "source":
         return mirror_source(m.state, m.declaration);
@@ -56,7 +56,7 @@ export async function open(on: OnOpen): Promise<boolean> {
     ui(on, (files) => ask({ kind: "refused", files })),
     () => worker,
   );
-  set_kernel(
+  set_core(
     link,
     (what, args) =>
       new Promise((done) => {

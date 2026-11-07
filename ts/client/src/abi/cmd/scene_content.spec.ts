@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/scene_content.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // What a surface draws (SCENE_DRAW).
 

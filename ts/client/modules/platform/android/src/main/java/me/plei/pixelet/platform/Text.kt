@@ -8,7 +8,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import expo.modules.kotlin.typedarray.Uint8Array
 
-// Text in the platform's own family, as the kernel asks for it
+// Text in the platform's own family, as the core asks for it
 // (ts/client/src/service/text.native.ts): how wide a line runs, and a line
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does — Text.swift's, on Android's engine.
@@ -26,7 +26,7 @@ fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, 
   val metrics = paint.fontMetrics
   // Android counts down from the top row, and its ascent is negative.
   Canvas(bitmap).drawText(text, x.toFloat(), height / 2f - (metrics.ascent + metrics.descent) / 2f, paint)
-  // A bitmap's pixels copy out as RGBA bytes, premultiplied; the kernel reads
+  // A bitmap's pixels copy out as RGBA bytes, premultiplied; the core reads
   // straight alpha, which a page's canvas hands back whatever it drew in, so
   // straight is what both platforms give.
   val bytes = ByteArray(width * height * 4)

@@ -34,7 +34,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/marker.json",
-        ts: Some("ts/client/src/shell/catalog/asset/marker.spec.ts"),
+        ts: Some("ts/client/src/ui/catalog/asset/marker.spec.ts"),
         ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
         module: "marker",
@@ -42,7 +42,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
-        ts: Some("ts/client/src/shell/catalog/asset/id.spec.ts"),
+        ts: Some("ts/client/src/ui/catalog/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
         enums: Enums::All,
@@ -50,19 +50,19 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/division.json",
-        ts: Some("ts/client/src/shell/division/division.spec.ts"),
+        ts: Some("ts/client/src/ui/division/division.spec.ts"),
         rs: Some("rust/spec/src/division.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/search.json",
-        ts: Some("ts/client/src/shell/search/search.spec.ts"),
+        ts: Some("ts/client/src/ui/search/search.spec.ts"),
         rs: Some("rust/spec/src/search.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/character.json",
-        ts: Some("ts/client/src/shell/catalog/asset/character.spec.ts"),
+        ts: Some("ts/client/src/ui/catalog/asset/character.spec.ts"),
         ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",
@@ -76,9 +76,9 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/domain/scene/gizmo/gizmo.json",
+        json: "spec/client/core/domain/scene/gizmo/gizmo.json",
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
-        rs: Some("rust/client/kernel/src/domain/scene/gizmo/gizmo.spec.rs"),
+        rs: Some("rust/client/core/src/domain/scene/gizmo/gizmo.spec.rs"),
         module: "gizmo_spec",
         ..DataSpec::DEFAULT
     },
@@ -91,46 +91,46 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/sys/io/file.json",
+        json: "spec/client/core/sys/io/file.json",
         ts: Some("ts/client/src/abi/file.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/io/file.spec.rs"),
+        rs: Some("rust/client/core/src/sys/io/file.spec.rs"),
         module: "file_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/sys/io/runtime.json",
+        json: "spec/client/core/sys/io/runtime.json",
         ts: Some("ts/client/src/abi/runtime.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/io/runtime.spec.rs"),
+        rs: Some("rust/client/core/src/sys/io/runtime.spec.rs"),
         module: "runtime_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/sys/sched/pacing.json",
+        json: "spec/client/core/sys/sched/pacing.json",
         ts: Some("ts/client/src/abi/pacing.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/sched/pacing.spec.rs"),
+        rs: Some("rust/client/core/src/sys/sched/pacing.spec.rs"),
         module: "pacing_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/sys/io/demand.json",
+        json: "spec/client/core/sys/io/demand.json",
         ts: Some("ts/client/src/abi/demand.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/io/demand.spec.rs"),
+        rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
         module: "demand_spec",
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/sys/sched/phase.json",
+        json: "spec/client/core/sys/sched/phase.json",
         ts: Some("ts/client/src/abi/phase.spec.ts"),
-        rs: Some("rust/client/kernel/src/sys/sched/phase.spec.rs"),
+        rs: Some("rust/client/core/src/sys/sched/phase.spec.rs"),
         module: "phase_spec",
         enums: Enums::Named(&["PHASES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/turn/step.json",
+        json: "spec/client/core/turn/step.json",
         ts: Some("ts/client/src/abi/step.spec.ts"),
-        rs: Some("rust/client/kernel/src/turn/step.spec.rs"),
+        rs: Some("rust/client/core/src/turn/step.spec.rs"),
         enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
         ..DataSpec::DEFAULT
     },
@@ -143,15 +143,15 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/kernel/perf/perf.json",
+        json: "spec/client/core/perf/perf.json",
         uses: &[
-            "spec/client/kernel/sys/sched/phase.json",
-            "spec/client/kernel/sys/io/demand.json",
-            "spec/client/kernel/turn/step.json",
+            "spec/client/core/sys/sched/phase.json",
+            "spec/client/core/sys/io/demand.json",
+            "spec/client/core/turn/step.json",
             "spec/client/render/gpu/span.json",
         ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
-        rs: Some("rust/client/kernel/src/perf/perf.spec.rs"),
+        rs: Some("rust/client/core/src/perf/perf.spec.rs"),
         enums: Enums::Named(&["WAKES", "HIT_KINDS"]),
         ..DataSpec::DEFAULT
     },
@@ -162,7 +162,7 @@ const TS_LAYOUT: [(&str, &str); 1] = [("ts/client/src/", "@pxl/client/")];
 
 /// A Rust file's `src/`, and its crate's name.
 const RS_LAYOUT: [(&str, &str); 3] = [
-    ("rust/client/kernel/src/", "pxl-kernel"),
+    ("rust/client/core/src/", "pxl-core"),
     ("rust/client/render/src/", "pxl-render"),
     ("rust/spec/src/", "pxl-spec"),
 ];

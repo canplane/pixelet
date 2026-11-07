@@ -6,7 +6,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 # Naming
 
 - Use short, plain names, as in UNIX V6 and K&R's C.
-- The system — xpute, the commands' modules, what the kernel asks of its runtime
+- The system — xpute, the commands' modules, what the core asks of its runtime
   — takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application — the world, its drawing, its map, its UI —
   takes the word its own field uses (graphics, cartography, games). A metaphor
@@ -39,7 +39,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   or guard to enforce it.
 - Mind a loose word where several modules use it for different things.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
-  React shell's own names stay whole (`let cfg: Config`).
+  React UI's own names stay whole (`let cfg: Config`).
 - In TypeScript, a `private` member takes a leading `_` (`private _cap`,
   `private _grow()`), `protected` is for a class that is extended, and no
   field is `#`.
@@ -65,7 +65,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
-  | what the shell asks of the kernel | a command | |
+  | what the UI asks of the core      | a command | |
   | a core's command to its runtime, a frame on the CQ | an import | hostcall, system call, hypercall |
   | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
@@ -76,10 +76,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 
   `at` is where a thing is, `to` where it is going.
 - xpute's names are the mechanism's: the core, the runtime, the UI, a device,
-  the SQ and the CQ. pixelet's are the policy's that runs on it: its core is
-  the kernel, its UI the shell. pixelet names its own by pixelet's words and
-  xpute's parts by xpute's (`xpute_core`, `Runtime.core`); `kernel.wasm` is
-  pixelet's build of its kernel.
+  the SQ and the CQ. pixelet names its parts by the side of xpute they sit on,
+  the owner given by the prefix (`pxl_core`, `xpute_core`, `Runtime.core`);
+  `core.wasm` is pixelet's build of its core.
 - A file, folder or type name is singular (`service/`, `remote.ts`,
   `component/`), even where its field's habit is plural; only a value that is
   a collection (`let cmds`), or a name a tool fixes (cargo's `tests/` and

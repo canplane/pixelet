@@ -67,7 +67,7 @@ env:
   # sh. A job installs from a file rather than being told, so the number is in
   # one place.
   #
-  # wasm-opt prints the import/export mapping the shell imports, and which
+  # wasm-opt prints the import/export mapping the UI imports, and which
   # letters it assigns is the optimizer's own business — so the version is
   # pinned rather than taken from apt, where it also lags by years.
   BINARYEN_VERSION: "132"

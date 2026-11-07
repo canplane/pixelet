@@ -1,6 +1,6 @@
 // pxl-render/gpu/draw.rs
 
-//! Draw lists the kernel fills and the renderer executes without deciding.
+//! Draw lists the core fills and the renderer executes without deciding.
 //! A free cancels its block's pending upload and rewrites: the block may be
 //! reused before the list runs. The draws are kept from turn to turn, each
 //! at its slot, and what a turn changed of them is handed with them.
@@ -72,7 +72,7 @@ pub fn drifted(u: &mut [f32], drift: Position) {
 ///   eye does.
 /// - Y and Z do not go round: their wrapping difference is the true one
 ///   while it is under 2^31 Q3, and a drawn record lies within the draw
-///   distance (pxl-kernel control/param.rs `MAX_DIST`, 2^17 units, 2^25 Q3)
+///   distance (pxl-core control/param.rs `MAX_DIST`, 2^17 units, 2^25 Q3)
 ///   of the eye.
 /// - On Q3 (`r` zero) the result is the eye-relative translation the
 ///   records held before, `f32((at - eye) as f64)`: the f64 difference is

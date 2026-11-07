@@ -64,7 +64,7 @@ impl Quadrant {
     }
 
     /// Its key, its quadkey as text: a digit a zoom, coarsest first, what a baked
-    /// tile is stored as, on disk and in the bucket alike, and what the kernel
+    /// tile is stored as, on disk and in the bucket alike, and what the core
     /// opens it by.
     pub fn key(self) -> String {
         morton::name::<2>(self.bits())

@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/bake/publication.json
 
-/** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
+/** The base layers by the number the core names one by: the root a bake's objects are opened below (xpute's OPENAT). */
 export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;
 
 export type BaseLayer = (typeof BASE_LAYERS)[number];

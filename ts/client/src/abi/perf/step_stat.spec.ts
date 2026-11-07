@@ -1,6 +1,6 @@
 // @pxl/client/abi/perf/step_stat.spec.ts
 //
-// GENERATED from spec/client/kernel/perf/perf.json
+// GENERATED from spec/client/core/perf/perf.json
 
 export const phase = 0 as number;
 

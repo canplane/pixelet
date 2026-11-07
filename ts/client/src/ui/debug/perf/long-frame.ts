@@ -1,0 +1,42 @@
+// @pxl/client/ui/debug/perf/long-frame.ts
+//
+// The platform's long frames (service/long-frame.ts) kept in one ring, placed
+// beside the core's frames by `performance.now()`.
+
+import type { f64 } from "@xpute/kit/abi/word.ts";
+import { type LongFrame } from "@/service/types.ts";
+import * as long_frame from "@/service/long-frame.ts";
+import { LIMIT } from "@/abi/perf.spec.ts";
+
+// The core's rings' window, one number (perf.json `LIMIT.WINDOW_MS`).
+const WINDOW_MS = LIMIT.WINDOW_MS;
+const CAP = 1_024;
+
+const ring: LongFrame[] = [];
+
+function land(l: LongFrame): void {
+  const cutoff = l.t - WINDOW_MS;
+  let drop = 0;
+  while (drop < ring.length && ring[drop].t < cutoff) drop++;
+  if (drop > 0) ring.splice(0, drop);
+  if (ring.length === CAP) ring.shift();
+  ring.push(l);
+}
+
+/** Filtered, not searched: two sources feed the ring out of order. */
+export function longFramesSince(t: f64): LongFrame[] {
+  return ring.filter((l) => l.t >= t);
+}
+
+export function longFramesClear(): void {
+  ring.length = 0;
+}
+
+let installed = false;
+
+/** Idempotent; a place that reports no long frames feeds the ring none. */
+export function installLongFrameObservers(): void {
+  if (installed) return;
+  installed = true;
+  long_frame.watch(land);
+}

@@ -1,9 +1,9 @@
 // @pxl/client/abi/file.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json
 //
-// The kernel's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-kernel sys/io/file.rs, ts/client/src/sys/fs/).
+// The core's files: the roots it opens them below, the names below each and what a
+// file holds (pxl-core sys/io/file.rs, ts/client/src/sys/fs/).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as root from "./file/root.spec.ts";
@@ -12,7 +12,7 @@ import * as top from "./file/top.spec.ts";
 import * as storage from "./file/storage.spec.ts";
 import * as format from "./file/format.spec.ts";
 
-/** The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
+/** The roots the core opens files below (xpute's OPENAT). Below STORAGE a root is a
  * bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
  * one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
  * is called and where past that, a tile's version and URL, a storage key, is what the client
@@ -36,14 +36,14 @@ export const object = {
 } as const;
 
 /** The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the
- * kernel holds this to (domain/layer/object/repository.rs). A key's first digits to it name
+ * core holds this to (domain/layer/object/repository.rs). A key's first digits to it name
  * the shard, and each past it is a zoom's 0 to 7, on three axes (pxl-spec
  * space/hierarchy/morton.rs). */
 export const SHARD_ZOOM: u32 = 8 as number;
 
 /** The children of the tree packet a shard's file and an edit batch hold after their
  * format byte, by index: each row a write `<key, id, ext>`, a leaf as the write that made
- * it in a shard's file, in the order made in a batch, where VOID erases (pxl-kernel
+ * it in a shard's file, in the order made in a batch, where VOID erases (pxl-core
  * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
  * its row and its fields as columns. */
 export { write };
@@ -52,13 +52,13 @@ export { write };
  * each row a shard holding objects, which only its leaves are under. */
 export { top };
 
-/** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
- * owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs). */
+/** The files the core keeps below STORAGE, by slot. What a slot holds is its
+ * owner's, written whole, its slot's `format` first (pxl-core sys/io/file.rs). */
 export { storage };
 
 /** Each kept file's format, the first byte of what it holds: a storage slot's by its
  * name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
- * kernel reads a file of its format and refuses any other, reading none of it and never
+ * core reads a file of its format and refuses any other, reading none of it and never
  * writing over it, as a driver refuses a volume whose superblock it does not know; what
  * to do with the file is the client's. Bump one whenever a change makes an older file mean
  * something other than it meant when it was written. */

@@ -54,7 +54,7 @@
   "xpute": {
     "core": {
       "workspace": "../../rust",
-      "package": "pxl-kernel",
+      "package": "pxl-core",
       "profile": {
         "debug": "native-watch",
         "release": "native"

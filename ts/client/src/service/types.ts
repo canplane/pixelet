@@ -80,7 +80,7 @@ export interface OrientationSensor {
 
 /** A surface the core draws into, by the handle it gave; 0 is none. */
 export interface SurfaceDriver {
-  /** The kernel's handle for a new surface, 0 where it has none left. */
+  /** The core's handle for a new surface, 0 where it has none left. */
   open(): Promise<u32>;
   size(handle: u32, width: u32, height: u32, dpr: f64): void;
   close(handle: u32): void;
@@ -112,7 +112,7 @@ export interface InputDriver {
   keyUp(code: string): void;
   releaseKeys(): void;
   releasePointers(): void;
-  /** A turn, for a box that moved without the kernel's asking. */
+  /** A turn, for a box that moved without the core's asking. */
   requestFrame(): void;
 }
 
@@ -131,7 +131,7 @@ export interface CharacterSurfaceProps {
 /** The entry a place hears a long frame by: a long animation frame, or a long task. */
 export type LongFrameSource = "loaf" | "longtask";
 
-/** A long frame of the place's own, on `performance.now()`'s clock, which the kernel's frames are on too. */
+/** A long frame of the place's own, on `performance.now()`'s clock, which the core's frames are on too. */
 export interface LongFrame {
   source: LongFrameSource;
   t: f64;
@@ -143,5 +143,5 @@ export interface LongFrame {
 
 /** The CSS variable a page's `useVisualViewport` keeps on its root, every frame: how far the
  * visual viewport's bottom stands above the layout viewport's, the keyboard's height, in px. Set by
- * the page (service/viewport.ts) and read by the shell's CSS (shell/ui/above-keyboard.tsx); the device sets none. */
+ * the page (service/viewport.ts) and read by the UI's CSS (ui/component/above-keyboard.tsx); the device sets none. */
 export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";

@@ -10,7 +10,7 @@ fn levels(c: f32) -> f32 {
 }
 
 #[test]
-fn a_clear_encodes_back_to_the_shells_bytes() {
+fn a_clear_encodes_back_to_the_uis_bytes() {
     // The finish's dither is half a level either way: within a tenth of a
     // level, a byte stays itself but at the dither's very ends.
     for v in 0..=255u32 {

@@ -1,6 +1,6 @@
 // @pxl/client/abi/perf/stats.spec.ts
 //
-// GENERATED from spec/client/kernel/perf/perf.json
+// GENERATED from spec/client/core/perf/perf.json
 
 export const stats_at = 0 as number;
 

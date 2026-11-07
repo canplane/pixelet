@@ -1,7 +1,7 @@
 // @pxl/client/service/surface.native.tsx
 
 /**
- * The kernel's surface on a device: xpute's native view (@xpute/native
+ * The core's surface on a device: xpute's native view (@xpute/native
  * `SurfaceView`) drawn by wgpu directly. The view says when its layer is bound, since the
  * layer arrives after mount. The world's view is also the app's input driver.
  */
@@ -49,7 +49,7 @@ function useSurface(
     let gone = false;
     void driver.open().then((opened) => {
       if (opened === 0) return;
-      // Closed before the kernel answered: the handle is let go at once.
+      // Closed before the core answered: the handle is let go at once.
       if (gone) return driver.close(opened);
       surface = opened;
       setHandle(surface);

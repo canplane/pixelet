@@ -1,10 +1,10 @@
 // @pxl/client/abi/demand.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/demand.json
+// GENERATED from spec/client/core/sys/io/demand.json
 //
-// A request's vocabulary, the kernel's and the shell's: what stream it is in, how
+// A request's vocabulary, the core's and the UI's: what stream it is in, how
 // its run came to an end, and the phases a run reports its time in. The profiler
-// records and reports them by these names (spec/client/kernel/perf/perf.json).
+// records and reports them by these names (spec/client/core/perf/perf.json).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

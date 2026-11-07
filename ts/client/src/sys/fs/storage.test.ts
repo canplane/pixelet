@@ -82,7 +82,7 @@ test("follow_refused_files - each refused file is set aside and emptied once", a
   assert.deepStrictEqual(told.length, 1);
 });
 
-test("storage - the keys kept are the kernel's files and those set aside, no other", () => {
+test("storage - the keys kept are the core's files and those set aside, no other", () => {
   assert.deepStrictEqual(
     ["pxl:settings", "pxl:settings:aside:7-1", "pxl:lang", "pxl:ui"].map(
       is_kept,

@@ -52,16 +52,16 @@ pub const fn eye_cell(w: u32) -> Zoom {
 }
 /// Every clip level: the eye's; the pivot's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
-/// its ground, found exactly (pxl-kernel domain/layer/terrain/clipmap.rs).
+/// its ground, found exactly (pxl-core domain/layer/terrain/clipmap.rs).
 pub const CLIP_LEVELS: u32 = EYE_CLIP_LEVELS + 3;
 /// The slots every clip level's bricks are held in, `CLIP_LEVELS` an entry,
-/// slot `k × ENTRIES + s` entry `s`'s `k`-th (pxl-kernel
+/// slot `k × ENTRIES + s` entry `s`'s `k`-th (pxl-core
 /// domain/layer/terrain/clipmap.rs `Slot`): no more bricks want an entry than
 /// there are clip levels, so the most held at once, where no two clip levels
 /// at a zoom overlap. A brick two of them want takes one.
 pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
-/// The bricks a frame hands the GPU at most, the kernel's fill having filled
-/// them (pxl-kernel domain/layer/terrain/clipmap.rs `upload`): each is a box of
+/// The bricks a frame hands the GPU at most, the core's fill having filled
+/// them (pxl-core domain/layer/terrain/clipmap.rs `upload`): each is a box of
 /// decor's generation (pxl-content `generation::BOX_CAP`), and what is past
 /// them is handed by the frames after.
 pub const FRAME_BRICKS: u32 = 9;
@@ -608,7 +608,7 @@ pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
 /// ground's and the ways' (`ground::bounds_word`): a row of the clip levels'
 /// buffer, an `IVec4` as their entry table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
-/// A row of the clip levels' table, as the kernel writes it (pxl-kernel
+/// A row of the clip levels' table, as the core writes it (pxl-core
 /// domain/layer/terrain/clipmap.rs `table`) and the GPU reads it (pxl-render
 /// clip.wgsl), an `IVec4` of its buffer: the brick an entry's clip level wants
 /// there; and where its cells are present, the slot holding them plus one
@@ -687,7 +687,7 @@ pub const JOINED_AT: u32 = ORIGIN_AT + CLIP_LEVELS;
 /// FIRST_CELL` a run of `JOINED_ENTRIES`.
 pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_CLIP_LEVELS;
 /// The clip levels' buffer in words: its entries, its first bricks and the eye's
-/// clip levels' levels, all of it the kernel's (pxl-kernel
+/// clip levels' levels, all of it the core's (pxl-core
 /// domain/layer/terrain/clipmap.rs `table`).
 pub const TABLE_WORDS: u32 = 4 * JOINED_AT + EYE_JOINED_WORDS;
 

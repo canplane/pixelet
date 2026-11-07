@@ -1,7 +1,7 @@
 // pxl-engine/eye.rs
 
-//! gpu-portable: the eye a cast is from, as the words the kernel writes
-//! (pxl-kernel domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
+//! gpu-portable: the eye a cast is from, as the words the core writes
+//! (pxl-core domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
 //! reader takes (pxl-render eye_bind.wgsl, gpu/ray/cast.rs and
 //! gpu/generator.rs, the screen pass). Each is a word's place among them, one
 //! layout written here alone.
@@ -43,19 +43,19 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// of the steps across and down (`light::W_INVERSE` to `light::W_DOWN2_INVERSE`); then the
 /// width squared over the split distance squared (`light::W_BAND_SCALE`). All zero where no shadow is cast. The renderer
 /// writes them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the
-/// kernel leaves them zero.
+/// core leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;
 pub const LIGHT_WORDS: usize = 27;
 /// Where each pixel's ray goes through it this frame, its offset from the
 /// pixel's middle in drawn pixels, X right and Y down, f32 bits, at the first four past the
 /// light's words, as the eye is laid out in fours; then two words unused, as it is. The
-/// renderer's to write; the kernel leaves it zero.
+/// renderer's to write; the core leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
 pub const JITTER: usize = (LIGHT + LIGHT_WORDS).next_multiple_of(4);
 pub(crate) const JITTER_WORDS: usize = 4;
 /// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
-/// `words`), worked out once off the tangents above where the kernel
+/// `words`), worked out once off the tangents above where the core
 /// writes them: every thread of the cast and the renderer's dispatches and
 /// buffer read it here. Past the words a cast is from, those before
 /// `LIGHT`: the frames that stand on a cast's samples keep its grid, and

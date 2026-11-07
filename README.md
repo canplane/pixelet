@@ -46,33 +46,32 @@ geometry, OpenStreetMap's coastline and
 tiles, fetched only when the view lacks one. What players build is kept as they
 place it, and the trees and cars the ground generates are worked out where they
 stand, never stored. The same world runs in a browser and on a device, through
-one Rust kernel drawing with WebGPU.
+one Rust core drawing with WebGPU.
 
 ---
 
 ## What runs where
 
-The world lives in one Rust **kernel** (`pxl-kernel`, drawing through
-`pxl-render`). It runs as the core of [xpute](./xpute/README.md), a
-unikernel on a virtual machine: the kernel and xpute's core library, its
-library OS, are one image. The **runtime** is its VMM: it implements the devices
-the kernel's machine asks for, the GPU and the files, grants the core one
-memory and a deadline on each call into it, a **turn**, and does the
-outside work the core asked for once the turn returns.
+The world lives in one Rust **core** (`pxl-core`, drawing through
+`pxl-render`), on [xpute](./xpute/README.md): `pxl-core` and `xpute-core`, its
+library OS, are linked into one image, a unikernel on a virtual machine. The
+**runtime** is its VMM: it implements the devices the core's machine asks for,
+the GPU and the files, grants the core one memory and a deadline on each call
+into it, a **turn**, and does the outside work the core asked for once the turn
+returns.
 
-The kernel's crate is its artifact, in the form xpute gives its target. One
+The core's crate is its artifact, in the form xpute gives its target. One
 Expo app (`ts/client`) is built for iOS, Android and the page. In a browser tab
-the kernel is one WebAssembly module, which the page runs on the browser's
+the core is one WebAssembly module, which the page runs on the browser's
 WebGPU; on a device it is the library linked into the app, whose GPU calls
 xpute's runtime runs on wgpu. The app bundles the **client** (`ts/client`): the
-runtime (`src/runtime/`); the services, what each platform gives, the kernel,
+runtime (`src/runtime/`); the services, what each platform gives, the core,
 storage, text, the network, the sensors and the surfaces (`src/service/`, a
-page's `x.ts` beside a device's `x.native.ts`), what answers the kernel's
+page's `x.ts` beside a device's `x.native.ts`), what answers the core's
 imports, its files among them (`src/sys/`), what the app's ABI carries
 (`src/port/`) and the server it reads from (`src/origin/`); the numbers both
-read and the boot (`src/abi/`); and the **shell** (`src/shell/`), the UI, the
-client outside the VM, which changes the world only by commands the kernel
-applies.
+read and the boot (`src/abi/`); and the **UI** (`src/ui/`), the client outside
+the VM, which changes the world only by commands the core applies.
 
 Almost nothing is computed at request time. Tiles and assets are served from a
 bucket under names that never come to mean something else, a tile under its
@@ -81,8 +80,8 @@ queries a database when asked.
 
 | Layer     | Technology                                                                     |
 | --------- | ------------------------------------------------------------------------------ |
-| Shell     | TypeScript, React 19 in React Native through Expo: react-native-web on a page   |
-| Kernel    | Rust, one WebAssembly module on a page, a static library in the device app     |
+| UI        | TypeScript, React 19 in React Native through Expo: react-native-web on a page   |
+| Core      | Rust, one WebAssembly module on a page, a static library in the device app     |
 | Rendering | WebGPU (WGSL): the browser's, or wgpu over Metal or Vulkan on a device          |
 | Edge      | Cloudflare Worker + R2                                                         |
 | Servers   | Rust: axum, tokio-postgres, one per URL root, one database each, on one VM     |
@@ -148,8 +147,8 @@ to measure speed in.
 
 The page is Expo's web build, bundled by Metro into one HTML file over one
 bundle. `dev` runs `expo start --web` beside a Rust watcher that rebuilds the
-kernel's module, `ts/client/public/kernel.wasm` (`ts/client/script/build-wasm.py`),
-which the page fetches as `/kernel.wasm?v=<build id>`. `ts/client/index.html` is
+core's module, `ts/client/public/core.wasm` (`ts/client/script/build-wasm.py`),
+which the page fetches as `/core.wasm?v=<build id>`. `ts/client/index.html` is
 the page's template, which `ts/client/script/web.ts html` writes into `public/`;
 `web.ts stamp` writes `dist/build.json` after an export, and `web.ts serve`
 serves `dist/` for a preview. The dev server and the preview forward the
@@ -165,7 +164,7 @@ environment says:
 
 In `ts/client`, `pnpm web`, `web:oven` and `web:shelf` are the dev server,
 `build:web` the export a deploy publishes, `preview[:oven|:shelf]` the export
-served, `build:wasm[:published]` the kernel's module and `build:brand` the
+served, `build:wasm[:published]` the core's module and `build:brand` the
 symbol's outline.
 
 | Target                          | Description                                                          |
@@ -194,9 +193,9 @@ out/oven`, or `out/<kind>*` to bake a kind from nothing); db-geo is filled by
 each source's ingest ([infra/geo/README.md](./infra/geo/README.md)).
 
 A development page puts two things in the browser console
-(`ts/client/src/shell/debug/console.ts`): `xpute.cmd(command, ...args)`, which
-sends the kernel any command by its number
-(`rust/client/kernel/shell.json`), and `pxl.perf`, the profiler
+(`ts/client/src/ui/debug/console.ts`): `xpute.cmd(command, ...args)`, which
+sends the core any command by its number
+(`rust/client/core/ui.json`), and `pxl.perf`, the profiler
 panel's `report()` and `trace()`.
 
 The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures
@@ -211,10 +210,10 @@ ln -sfn ../.agents/skills .claude/skills
 
 ### On a device
 
-On a device `ts/client` bundles the client, links the kernel in and takes every
+On a device `ts/client` bundles the client, links the core in and takes every
 route from the live deployment. Its native projects (`ts/client/ios/`,
-`ts/client/android/`) are generated by `expo prebuild` and not kept. The kernel,
-`pxl-kernel`, is built with the app by a step of its native build, through
+`ts/client/android/`) are generated by `expo prebuild` and not kept. The core,
+`pxl-core`, is built with the app by a step of its native build, through
 xpute's React Native module, `@xpute/native`
 (`xpute/ts/native/script/build-core.py`); the app's own native module is
 `ts/client/modules/platform/`. Setting a machine up, building and installing are
@@ -234,11 +233,11 @@ language by where a thing runs.
 │   │   └── src/
 │   │       ├── runtime/  #     xpute's runtime, mounted
 │   │       ├── service/ #     what each platform gives
-│   │       ├── sys/      #     what answers the kernel's imports
+│   │       ├── sys/      #     what answers the core's imports
 │   │       ├── port/     #     what the app's ABI carries
 │   │       ├── origin/   #     the server the client reads from
 │   │       ├── abi/      #     the numbers both read, and the boot
-│   │       └── shell/    #     the UI
+│   │       └── ui/       #     the UI
 │   ├── app/             #   the Expo app: iOS, Android and the page
 │   ├── server/edge/     #   the Cloudflare Worker that serves it all
 │   └── build/           #   what the bundlers read the workspace through
@@ -246,7 +245,7 @@ language by where a thing runs.
 │   ├── spec/            #   pxl-spec: the model every crate shares
 │   │   ├── engine/      #     pxl-engine: what CPU and GPU both compute
 │   │   └── content/     #     pxl-content: pixelet's content over it
-│   ├── client/          #   pxl-kernel and pxl-render, its shaders WGSL by
+│   ├── client/          #   pxl-core and pxl-render, its shaders WGSL by
 │   │                    #     hand
 │   ├── server/          #   pxl-geo (/geo), pxl-api (/api), pxl-server,
 │   │                    #     pxl-geo-spec; pxl-geo-bake, the bakes
@@ -259,21 +258,21 @@ language by where a thing runs.
 └── doc/                 # The record: backlog, minutes, experiments
 ```
 
-What shares the model is Rust: the kernel, the servers and the bakes compile
+What shares the model is Rust: the core, the servers and the bakes compile
 `pxl-spec`. The client is TypeScript, and what it needs of the model, catalogs,
 command numbers and routes, is generated into `ts/client/src/**/*.spec.ts` from
 the same JSON.
 
-Below the shell, Rust, xpute and the client's runtime, abi and namespace share one
-`snake_case` vocabulary across the boundary; the shell and the scripts are
+Below the UI, Rust, xpute and the client's runtime, abi and namespace share one
+`snake_case` vocabulary across the boundary; the UI and the scripts are
 `camelCase`, as TypeScript is. A name that crosses, a snapshot field, a packet's
-field or a catalog entry, keeps the kernel's.
+field or a catalog entry, keeps the core's.
 
 ---
 
 ## Learn More
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part,
+[ARCHITECTURE.md](./ARCHITECTURE.md) follows the core part by part,
 [AGENTS.md](./AGENTS.md) is how to work in the tree, and
 [doc/backlog.md](./doc/backlog.md) what is queued next.
 

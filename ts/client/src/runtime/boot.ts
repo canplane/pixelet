@@ -3,11 +3,11 @@
 /**
  * Boots the client, bottom up, on its platform's services (service/): the
  * runtime opened where its platform places it (open.ts, a page's in the
- * kernel's worker; open.native.ts, a device's beside the shell), the kernel's
+ * core's worker; open.native.ts, a device's beside the UI), the core's
  * commands bound to it, then where the boot stands as the runtime starts, the
- * GPU answers, the world's source is declared and the kernel's snapshots come.
- * The shell is no part of it: it reads where the boot stands through the port
- * (port/shell.ts), and what the kernel shows it once it has started.
+ * GPU answers, the world's source is declared and the core's snapshots come.
+ * The UI is no part of it: it reads where the boot stands through the port
+ * (port/ui.ts), and what the core shows it once it has started.
  */
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
@@ -37,7 +37,7 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Called once by the app, ahead of the shell (src/boot.ts); where it stands
+/** Called once by the app, ahead of the UI (src/boot.ts); where it stands
  * is `boot_state`. A second call is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);

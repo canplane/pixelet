@@ -1,7 +1,7 @@
 // pxl-engine/support.rs
 
 //! gpu-portable: where something stands, asked of the world's one query
-//! (pxl-kernel domain/query/support.rs, a walker's support): a column's
+//! (pxl-core domain/query/support.rs, a walker's support): a column's
 //! column surface, the first cell a ray down it from the world's top cannot see
 //! through at a cell zoom, its top as drawn (`column_surface`); and the query's
 //! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line

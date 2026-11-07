@@ -1,0 +1,257 @@
+// pxl-core/domain/view/setting/store.test.rs
+
+use super::*;
+use crate::domain::view::setting::schema_spec::SettingKind;
+use crate::sys;
+use xpute_kit::status::errno::Errno;
+
+fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for &(number, val) in pairs {
+        leb(&mut bytes, number);
+        leb(&mut bytes, val);
+    }
+    bytes
+}
+
+/// The stored form is a contract with storage, which outlives a build.
+#[test]
+fn stored_round_trip() {
+    let mut s = Settings::DEFAULT;
+    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let ao = AoMode::ALL
+        .into_iter()
+        .map(|o| o as u32)
+        .find(|&o| o != Settings::DEFAULT.get(SettingKey::ao))
+        .expect("a second option");
+    // Past 127, so its LEB128 takes two bytes.
+    let person = Settings::DEFAULT.get(SettingKey::person) + 200;
+    assert!(
+        s.set(SettingKey::tilt_lock, tilt)
+            && s.set(SettingKey::ao, ao)
+            && s.set(SettingKey::person, person)
+    );
+    let bytes = s.storage_bytes();
+    let back = read_stored(&bytes);
+    for key in SettingKey::ALL {
+        assert_eq!(
+            back.get(key),
+            s.get(key),
+            "{key:?} read back from {bytes:?}"
+        );
+    }
+    assert!(
+        Settings::DEFAULT.storage_bytes().is_empty(),
+        "the defaults keep nothing"
+    );
+}
+
+#[test]
+fn stored_pair_format() {
+    let ao = AoMode::ALL
+        .into_iter()
+        .find(|&o| o as u32 != Settings::DEFAULT.get(SettingKey::ao))
+        .expect("a second option");
+    let mut s = Settings::DEFAULT;
+    assert!(s.set(SettingKey::ao, ao as u32));
+    assert_eq!(
+        s.storage_bytes(),
+        storage_of(&[(SettingKey::ao as u32, ao as u32)])
+    );
+}
+
+#[test]
+fn unknown_stays_default() {
+    let unknown = SettingKey::SLOTS as u32 + 1000;
+    for bytes in [
+        storage_of(&[(SettingKey::ao as u32, 99)]),
+        storage_of(&[(SettingKey::tilt_lock as u32, 2)]),
+        storage_of(&[(unknown, 1)]),
+        // A pair cut short.
+        vec![SettingKey::tilt_lock as u8],
+        vec![0x80],
+    ] {
+        let back = read_stored(&bytes);
+        for key in SettingKey::ALL {
+            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{bytes:?}");
+        }
+    }
+}
+
+#[test]
+fn reads_past_unknown_pair() {
+    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let back = read_stored(&storage_of(&[
+        (SettingKey::SLOTS as u32 + 1000, 1),
+        (SettingKey::ao as u32, 99),
+        (SettingKey::tilt_lock as u32, tilt),
+    ]));
+    assert_eq!(back.get(SettingKey::tilt_lock), tilt);
+    assert_eq!(
+        back.get(SettingKey::ao),
+        Settings::DEFAULT.get(SettingKey::ao)
+    );
+}
+
+/// A setting schema.json marks `stored` false is the session's: it is not in
+/// what is kept, a change to it alone asks for no write, and one found in
+/// the slot reads as its default. A dev one this build does not offer
+/// takes no change at all (`is_offered`), so only the offered are changed.
+#[test]
+fn session_setting_not_stored() {
+    let _g = sys::serial();
+    let session: Vec<SettingKey> = SettingKey::ALL
+        .into_iter()
+        .filter(|k| !k.is_stored())
+        .collect();
+    assert!(
+        session.contains(&SettingKey::place) && session.contains(&SettingKey::camera_mode),
+        "places shown and the camera mode are the session's"
+    );
+    let other = |key: SettingKey| match key.kind() {
+        SettingKind::Choice => (0..=u32::from(u8::MAX))
+            .find(|&v| v != Settings::DEFAULT.get(key) && Settings::DEFAULT.clone().set(key, v))
+            .expect("a second option"),
+        _ => 1 - Settings::DEFAULT.get(key),
+    };
+    let mut s = Settings::DEFAULT;
+    for &key in &session {
+        assert!(s.set(key, other(key)));
+    }
+    assert!(
+        s.storage_bytes().is_empty(),
+        "nothing of {session:?} is bytes"
+    );
+    let back = read_stored(&storage_of(
+        &session
+            .iter()
+            .map(|&key| (key as u32, other(key)))
+            .collect::<Vec<_>>(),
+    ));
+    assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
+    open_slot();
+    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
+    assert!(settings_load_step());
+    for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
+        assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
+    }
+    assert!(
+        !*UNSAVED.get(|| false),
+        "a session's change asks for no write"
+    );
+}
+
+/// What storage holds of the slot, as the client hands it over.
+fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
+    let mut bytes = vec![StorageFile::Settings.format()];
+    bytes.extend(storage_of(pairs));
+    bytes
+}
+
+/// The slot opened at boot, with nothing waiting and nothing to keep.
+fn open_slot() {
+    file::on_emptied(StorageFile::Settings);
+    while file::take_storage(StorageFile::Settings).is_some() {}
+    settings_open();
+    UNSAVED.set(false);
+}
+
+/// One change, then a keep: whether it was held, unwritten.
+fn held_after_a_change() -> bool {
+    let tilt = 1 - settings_store().get(SettingKey::tilt_lock);
+    assert_eq!(
+        settings_store().set_setting(SettingKey::tilt_lock, tilt),
+        Some(true)
+    );
+    settings_keep_step();
+    *UNSAVED.get(|| false)
+}
+
+/// The slot is read on the storage root once its file lands, and nothing is
+/// written before; what was read is not written back.
+#[test]
+fn read_before_write() {
+    let _g = sys::serial();
+    open_slot();
+    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    assert!(
+        !settings_load_step() && !are_settings_loaded(),
+        "nothing has landed"
+    );
+    assert!(
+        held_after_a_change(),
+        "nothing is written before the slot is read"
+    );
+    file::on_storage_answered(
+        StorageFile::Settings,
+        Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
+    );
+    assert!(settings_load_step() && are_settings_loaded());
+    assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
+    assert!(!*UNSAVED.get(|| false), "what was read is not written back");
+    assert!(!held_after_a_change(), "a read slot keeps what changes");
+    assert!(!settings_load_step(), "read once");
+}
+
+/// An empty slot is the defaults, written from the first change.
+#[test]
+fn empty_slot_defaults() {
+    let _g = sys::serial();
+    open_slot();
+    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
+    assert!(settings_load_step());
+    assert_eq!(*settings_store(), Settings::DEFAULT);
+    assert!(!held_after_a_change());
+}
+
+/// A file too large for any heap, or of another format (the JSON by name the
+/// slot held before), is refused: the defaults, nothing written over it until
+/// the client sets it aside and empties the slot, and then what changed meanwhile.
+#[test]
+fn bad_slot_refused() {
+    let _g = sys::serial();
+    for answer in [
+        Err(file::Opened::Failed {
+            errnum: Errno::EFBIG,
+            detail: 0,
+        }),
+        Ok(&br#"{"ao":"screen"}"#[..]),
+    ] {
+        open_slot();
+        file::on_storage_answered(StorageFile::Settings, answer);
+        assert!(
+            settings_load_step() && are_settings_loaded(),
+            "the world need not wait on it"
+        );
+        assert_eq!(*settings_store(), Settings::DEFAULT);
+        assert!(file::is_refused(StorageFile::Settings));
+        assert!(
+            held_after_a_change(),
+            "a refused slot's change waits for it to be emptied"
+        );
+        file::on_emptied(StorageFile::Settings);
+        on_settings_emptied();
+        settings_keep_step();
+        assert!(!*UNSAVED.get(|| false));
+    }
+}
+
+/// One that fails to open otherwise is not the client's to set aside: the
+/// defaults, never written over this session.
+#[test]
+fn unreadable_slot_stored() {
+    let _g = sys::serial();
+    open_slot();
+    file::on_storage_answered(
+        StorageFile::Settings,
+        Err(file::Opened::Failed {
+            errnum: Errno::EIO,
+            detail: 0,
+        }),
+    );
+    assert!(settings_load_step());
+    assert!(!file::is_refused(StorageFile::Settings));
+    assert!(held_after_a_change());
+    on_settings_emptied();
+    assert!(held_after_a_change());
+}

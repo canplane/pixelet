@@ -5,7 +5,7 @@
  * properties, the app's build script and the daemon's criteria `expo
  * prebuild` generates (android/ is its, and not kept).
  *
- * - One ABI, arm64-v8a: the kernel is built for aarch64-linux-android alone
+ * - One ABI, arm64-v8a: the core is built for aarch64-linux-android alone
  *   (@xpute/native script/build-core.py), and an ABI packed without it is an app that
  *   dies loading its library on the phones that take that ABI.
  * - The SDK floor: the Vulkan this build takes for wgpu.

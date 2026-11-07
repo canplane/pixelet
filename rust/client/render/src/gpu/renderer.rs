@@ -1,6 +1,6 @@
 // pxl-render/gpu/renderer.rs
 
-//! Executes the scheduler's draw lists on the device, in the kernel's own turn,
+//! Executes the scheduler's draw lists on the device, in the core's own turn,
 //! in the device's depth (`mat4::perspective`).
 
 use pxl_content::generation::GROUPS;
@@ -112,9 +112,9 @@ pub struct FrameInput<'a> {
     pub view_proj: Mat4,
     /// The eye, in the world's doubles.
     pub eye: V3,
-    /// The CSS pixels a unit spans a unit from the eye, as the kernel's screen
-    /// counts them (pxl-kernel domain/view/frame/screen.rs `px_per_unit`):
-    /// what the markers are sized by, as the kernel lays them out.
+    /// The CSS pixels a unit spans a unit from the eye, as the core's screen
+    /// counts them (pxl-core domain/view/frame/screen.rs `px_per_unit`):
+    /// what the markers are sized by, as the core lays them out.
     pub px_per_unit: f64,
     /// How much a crease darkens, a rim brightens and the inside of a cube's
     /// corners darkens, each none where its setting is off.
@@ -128,7 +128,7 @@ pub struct FrameInput<'a> {
     pub shadows: bool,
     /// How much of the clouds shows, none to all, and how far the wind has
     /// carried them, X and Y in units (pxl-content cloud.rs `drift`), as the
-    /// kernel lays them by.
+    /// core lays them by.
     pub clouds: f64,
     pub drift: [f64; 2],
     pub lists: Lists<'a>,
@@ -157,7 +157,7 @@ pub struct FrameInput<'a> {
     /// Whether its draws are counted (`FrameStat::draws`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
-    /// Whether what the kernel animates stepped this turn: it wakes the turn
+    /// Whether what the core animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
     pub animated: bool,
 }
@@ -435,7 +435,7 @@ static RENDERER: Global<Option<Renderer>> = Global::new();
 static MAKING: Global<Option<Pipelines>> = Global::new();
 
 /// How much of what the renderer makes before its first frame is made, 0 to
-/// 1 (`Pipelines::share`): what the shell's progress bar shows. 0 with no
+/// 1 (`Pipelines::share`): what the UI's progress bar shows. 0 with no
 /// device, 1 once it draws.
 pub fn renderer_progress() -> f64 {
     if let Some(r) = RENDERER.get(|| None).as_ref() {
@@ -815,7 +815,7 @@ impl Renderer {
         // taken against the eye's Q3 on the GPU (gpu/draw.rs `Position`),
         // the Q3 the rays leave from (`eye::ORIGIN`), so what is rasterized
         // stands about the eye the world is drawn from; none without a
-        // cast, which draws no world. The eye is held on Q3 steps (pxl-kernel
+        // cast, which draws no world. The eye is held on Q3 steps (pxl-core
         // view/frame/pose.rs `view_compose`), so its Q3 is exact.
         let origin = cast.map_or([0.0; 3], |c| {
             core::array::from_fn(|k| f32::from_bits(c.eye[eye::ORIGIN + k]))
@@ -1433,7 +1433,7 @@ impl Renderer {
         // The occlusion, a field over the screen as the light's map is over
         // the world: found again from the depth the static opaque draws lay
         // where what it reads moved, held where nothing did (gpu/ao.rs). A
-        // gated frame moves nothing it reads: what the kernel animates is
+        // gated frame moves nothing it reads: what the core animates is
         // drawn after.
         let ao_found = self.screen_ao && {
             let a = &mut self.ao_read;
@@ -1507,7 +1507,7 @@ impl Renderer {
             pass = TrackedRenderPass::new(g, rest);
         }
         // Its map over the color in the tiles drawn again, as the tiles'
-        // quads, before what the kernel animates is drawn.
+        // quads, before what the core animates is drawn.
         if self.screen_ao {
             let [across, down] = self.resolve.tiles.squares();
             self.ao.apply(&mut pass, across * down);
@@ -1517,7 +1517,7 @@ impl Renderer {
         pass.set_bind_group(0, self.sky_group, &[]);
         pass.draw(3, 1, 0, 0);
         self.stars.draw(&mut pass);
-        // The characters, whose clips play, and the clouds the kernel lists, the
+        // The characters, whose clips play, and the clouds the core lists, the
         // cumulus, which the wind carries: drawn over the world against its
         // depth, the occlusion not laid over them.
         let frame_group = self.models.frame;

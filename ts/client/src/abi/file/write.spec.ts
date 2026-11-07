@@ -1,6 +1,6 @@
 // @pxl/client/abi/file/write.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json
 
 /** strs: each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom. */
 export const KEY = 0 as number;

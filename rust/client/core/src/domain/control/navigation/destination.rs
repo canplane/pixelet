@@ -1,0 +1,92 @@
+// pxl-core/domain/control/navigation/destination.rs
+
+//! Where the camera goes when a place is named by its X and Y (a fix, a
+//! search, the start): put there once, on the ground, when the ground is
+//! known exactly. A fix's altitude picks the floor nearest it; with none,
+//! the surface. A place named with its own height is put as it is (`go_to`).
+
+use pxl_spec::space::coord::adapter::epsg4326;
+use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+
+use crate::domain::control::camera::controller;
+use crate::domain::control::camera::controller::{put_pivot, Motion};
+use crate::domain::control::camera::state::IntentPatch;
+use crate::domain::control::navigation::follow_mode;
+use crate::domain::control::support::{exact, is_unknown, nearest, unknown_z};
+use crate::sys::sched::edge;
+use xpute_core::global::Global;
+
+static DST: Global<Option<(Q3, Motion)>> = Global::new();
+
+fn dst() -> &'static mut Option<(Q3, Motion)> {
+    DST.get(|| None)
+}
+
+/// A later destination or a `go_to` replaces it. `at`'s Z, where known, is
+/// the height whose nearest floor it stands on; unknown, the surface.
+pub fn go_to_ground(at: Q3, motion: Motion) {
+    *dst() = Some((at, motion));
+    edge::request_world_tick();
+}
+
+/// A pending destination is dropped: this was asked last.
+pub fn go_to(at: Q3, motion: Motion) {
+    cancel();
+    put_pivot(at, motion);
+}
+
+/// The user put the pivot by hand; reaching the destination after would
+/// undo it. Turning or zooming leaves it.
+pub fn cancel() {
+    *dst() = None;
+}
+
+/// The place asked for and not yet put.
+pub fn pending() -> Option<Q3> {
+    dst().map(|(at, _)| at)
+}
+
+/// Whose ground the terrain is asked for.
+pub fn tile() -> Option<Quadrant> {
+    dst().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
+}
+
+/// Only the exact ground puts it; a coarser tile over it is not its ground.
+pub fn dst_step() {
+    let Some((at, motion)) = *dst() else {
+        return;
+    };
+    let Some(to) = (if is_unknown(&at) {
+        exact(&at)
+    } else {
+        nearest(&at)
+    }) else {
+        return;
+    };
+    *dst() = None;
+    put_pivot(to, motion);
+}
+
+/// A marker's height is its zoom's, coarser than where the pivot stands, so
+/// the pivot goes on the surface once it is known exactly.
+pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
+    follow_mode::set_following(false);
+    go_to_ground(unknown_z(&to), motion);
+}
+
+/// A place, as the location button goes to one: a view far out comes in.
+pub fn go_to_place(to: Q3) {
+    go_on_ground(to, Motion::Smooth);
+    controller::come_in_to_default();
+}
+
+/// A search's place and the view asked with it: a view far out comes in,
+/// and the view is asked after, so a dist asked wins over the coming in.
+pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
+    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    controller::come_in_to_default();
+    controller::set_intent(view);
+}

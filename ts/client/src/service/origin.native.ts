@@ -12,7 +12,7 @@ export const remote: boolean = true;
  * `maxRequestsPerHost`, which React Native's OkHttpClientProvider leaves at its
  * default). On iOS URLSession caps connections, not requests, and the origin
  * speaks HTTP/2, one connection carrying every read, so nothing caps it below
- * the six the kernel's body slots are sized by (pxl-kernel sys/io/param.rs
+ * the six the core's body slots are sized by (pxl-core sys/io/param.rs
  * `BODY_SLOTS`). */
 export const credits = Platform.OS === "android" ? 5 : 6;
 

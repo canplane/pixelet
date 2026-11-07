@@ -5,8 +5,8 @@
 //! column's ground top and its cell as laid (`columns`), its ways' spans off
 //! its lines, each column's once, into its scratch (`spans`,
 //! `clipmap::SPANS_AT`), and off them its levels, level 0 each column's own
-//! (`level`), and its ways' tree (`way::tree`). The kernel runs these a
-//! part at a time, as its turns have room (pxl-kernel
+//! (`level`), and its ways' tree (`way::tree`). The core runs these a
+//! part at a time, as its turns have room (pxl-core
 //! domain/layer/terrain/clipmap.rs `fill_share`), and a bake runs them in
 //! order over one brick (`brick`), so the spans it sizes a tile's room by are
 //! the ones a client keeps.

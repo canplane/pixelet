@@ -1,7 +1,7 @@
 // pxl-engine/overwrite.rs
 
 //! gpu-portable: what is placed, as a descent asks it — the objects' one
-//! tree (pxl-kernel domain/layer/object/store.rs), read where it lives: two columns
+//! tree (pxl-core domain/layer/object/store.rs), read where it lives: two columns
 //! of a word a slot, `first_child` a branch's child group's first slot with `BRANCH` set or
 //! 0 for a leaf, and `data` a leaf's value and its record's handle, or a
 //! branch's fold, the kind most of its fill is and the share filled. The
@@ -29,9 +29,9 @@ use crate::answer::FULL;
 /// `FULL`'s bits: a share shifted past them is none.
 const FULL_BITS: u32 = FULL.trailing_zeros();
 
-/// The edits a frame hands what reads them at most (pxl-kernel
+/// The edits a frame hands what reads them at most (pxl-core
 /// domain/scene/decor/gpu.rs): each the columns an overwrite wrote, a box
-/// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel
+/// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the core
 /// unions the rest into the last.
 pub const EDITS: u32 = 8;
 /// The boxes of leaf cells a frame's edits and a preview's cuts changed:
@@ -85,7 +85,7 @@ pub const fn high(word: u32) -> u32 {
 /// voxel fills it whole, one of none fills nothing): the share of the cube
 /// filled, the mean of theirs, and the kind most of that fill is, a tie to
 /// the corner `majority`'s alternates to (pxl-engine `ground::majority`).
-/// The objects' store folds its tree by it as it is written (pxl-kernel
+/// The objects' store folds its tree by it as it is written (pxl-core
 /// domain/layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (low, high);

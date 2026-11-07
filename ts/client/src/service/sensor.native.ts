@@ -38,7 +38,7 @@ async function geo_permit(): Promise<boolean> {
   return granted;
 }
 
-/** A grant made in the device's settings reaches the kernel on return. */
+/** A grant made in the device's settings reaches the core on return. */
 export function follow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
@@ -125,7 +125,7 @@ function geo_start(): void {
       // onLocationError empty, and the fused provider keeps the request);
       // iOS rides out locationUnknown as CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is said as one: the
-      // kernel starts it again on a grant or a return to the foreground.
+      // core starts it again on a grant or a return to the foreground.
       () => geo_fail(watch, "other"),
     );
     watch_keep(watch, subscription);

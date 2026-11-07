@@ -274,7 +274,7 @@ pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 uniform! {
     /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs).
     clouds {
-        /// How much of the clouds the kernel shows (pxl-kernel
+        /// How much of the clouds the core shows (pxl-core
         /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
         /// How far the eye draws, in km: past it no sheet is drawn.
@@ -328,7 +328,7 @@ pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 
 /// A marker's instance, in words, its first three its stand's Q3 and the
 /// rest floats, and a location indicator zone's box's, in floats, as the
-/// kernel lays them (pxl-kernel domain/scene/marker/set.rs, location.rs)
+/// core lays them (pxl-core domain/scene/marker/set.rs, location.rs)
 /// and marker.wgsl and location_zone.wgsl read them.
 pub const MARKER_INSTANCE_WORDS: u32 = 11;
 pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;

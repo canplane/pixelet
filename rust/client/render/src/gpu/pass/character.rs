@@ -1,7 +1,7 @@
 // pxl-render/gpu/pass/character.rs
 
 //! A character surface: the companion's character in a frame of its
-//! own, over the flat color the shell asks for, drawn at one sample with no
+//! own, over the flat color the UI asks for, drawn at one sample with no
 //! shadow, a blank map bound and no strength to read it by. Its draw is
 //! handed to it whole, held by none of the world's lists, so what the
 //! world's eye sees of the character moves nothing here: its uniform at

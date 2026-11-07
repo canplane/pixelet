@@ -16,8 +16,8 @@
     reason = "generated from the spec"
 )]
 
-/// What a canvas the shell hands over shows (gpu/surface.rs): the world, a character alone, or
-/// nothing yet, as a canvas opens before the shell says what it draws.
+/// What a canvas the UI hands over shows (gpu/surface.rs): the world, a character alone, or
+/// nothing yet, as a canvas opens before the UI says what it draws.
 pub mod surface_role {
     pub const WORLD: u32 = 0;
     pub const CHARACTER: u32 = 1;
@@ -25,12 +25,12 @@ pub mod surface_role {
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
-/// (xpute-core ipc/stream.rs) in the kernel's machine's GPU socket, which the
-/// kernel writes its calls into during a turn and the runtime runs once the turn
-/// has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).
+/// (xpute-core ipc/stream.rs) in the core's machine's GPU socket, which the
+/// core writes its calls into during a turn and the runtime runs once the turn
+/// has returned. Its size is the socket's (rust/client/core/machine.json `gpu`).
 ///
 /// Its head, past the stream's own words, is what the runtime writes for the
-/// kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
+/// core: the device's block (xpute DEVICE) and the timed spans' reads, three
 /// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
 /// ticks. gpu/api.rs lays them out, and the stream says the head's length itself.
 pub mod stream {
@@ -48,7 +48,7 @@ pub mod stream {
 }
 
 /// What a device's GPU runtime runs the renderer's stream by (xpute-gpu runtime
-/// `Config`), which the kernel hands it (pxl-kernel lib.rs `GPU`, xpute-gpu
+/// `Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu
 /// `Numbers`); a page's browser paces its frames and stages its writes itself.
 pub mod device {
     /// The frames drawn and not yet finished on the GPU at once: a turn draws only

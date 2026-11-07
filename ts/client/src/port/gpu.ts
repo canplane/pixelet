@@ -1,6 +1,6 @@
 // @pxl/client/port/gpu.ts
 
-/** The place's GPU state, kept for the shell to show. The kernel hears of
+/** The place's GPU state, kept for the UI to show. The core hears of
  * the device itself on the GPU's own port (@xpute/gpu). */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";

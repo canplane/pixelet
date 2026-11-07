@@ -203,7 +203,7 @@ const FAR: f32 = 300.0;
 
 /// The eye looking north, `DOWN` below the horizon, at the screen's
 /// tangents `tan`: its origin, its axes and the zooms it asks, as the
-/// kernel writes its words (pxl-kernel domain/view/lens.rs `gpu_cast`).
+/// core writes its words (pxl-core domain/view/lens.rs `gpu_cast`).
 struct View {
     origin: [i32; 3],
     axes: [[f32; 3]; 3],

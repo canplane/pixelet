@@ -1,6 +1,6 @@
 ---
 name: performance
-description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps, the cause found in the code, measurement only to confirm, the work removed before it is sped up, and a three-line report. Use for any profiling, performance analysis or optimization, in the renderer, the kernel, the shell or the tools.
+description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps, the cause found in the code, measurement only to confirm, the work removed before it is sped up, and a three-line report. Use for any profiling, performance analysis or optimization, in the renderer, the core, the UI or the tools.
 ---
 
 # Performance

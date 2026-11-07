@@ -3,9 +3,9 @@
 import ExpoModulesCore
 import UIKit
 
-/// A view that stands on the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx).
-/// Its layout is the shell's, where it rests with no keyboard up, `rest` off
-/// the bottom edge (ts/client/src/shell/ui/bottom-rest.ts). While a keyboard is up, the
+/// A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx).
+/// Its layout is the UI's, where it rests with no keyboard up, `rest` off
+/// the bottom edge (ts/client/src/ui/component/bottom-rest.ts). While a keyboard is up, the
 /// view is lifted to stand `clearance` above it, in the animation the
 /// keyboard's own change runs in — its duration and its curve,
 /// the keyboard's private one among them — so the view and the keys move as
@@ -16,18 +16,18 @@ import UIKit
 /// view where its layout put it, and a press that slid a point on a view
 /// lifted where no measure looks is taken for one that had left it. So the
 /// transform is only ever the part of the lift the layout has not taken yet.
-/// Once the keys have arrived, the lift is said (`onLift`), the shell lays
+/// Once the keys have arrived, the lift is said (`onLift`), the UI lays
 /// the view out that much higher and says so (`layoutLift`), and the transform
 /// is none: at rest, the view is where the layout says it is. The view takes
 /// no touch of its own, only what stands on it.
 class KeyboardDock: ExpoView {
-  /// The gap the shell keeps from the bottom edge and from the keyboard.
+  /// The gap the UI keeps from the bottom edge and from the keyboard.
   /// Not `inset`, which React Native reads as a layout style.
   var clearance: CGFloat = 0
-  /// How far off the bottom edge the shell rests the view; the lift is
-  /// measured from there, so the rule of where it rests is the shell's alone.
+  /// How far off the bottom edge the UI rests the view; the lift is
+  /// measured from there, so the rule of where it rests is the UI's alone.
   var rest: CGFloat = 0
-  /// How much of the lift the shell's layout carries.
+  /// How much of the lift the UI's layout carries.
   var layoutLift: CGFloat = 0 {
     didSet { transform = CGAffineTransform(translationX: 0, y: -(lift - layoutLift)) }
   }

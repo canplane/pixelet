@@ -1,13 +1,13 @@
 // ts/client/src/abi/text.spec.ts
 //
-// GENERATED from rust/client/kernel/text.json
+// GENERATED from rust/client/core/text.json
 
 /**
- * The platform's text, a device of the app's ABI beside the shell's protocol
- * (shell.json): what the kernel calls of it, numbered as shell.json numbers its
+ * The platform's text, a device of the app's ABI beside the UI's protocol
+ * (ui.json): what the core calls of it, numbered as ui.json numbers its
  * own, each a call the runtime answers beside the core before it returns
  * (ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the
- * kernel's memory is laid out in spec/client/kernel/sys/io/runtime.json.
+ * core's memory is laid out in spec/client/core/sys/io/runtime.json.
  */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
@@ -39,7 +39,7 @@ export interface TextLayout {
   max_width: f64;
   at: u32;
   lines: u32;
-  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
+  /** Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
   text_at: u32;
   /** Its bytes. */
   text_len: u32;
@@ -67,7 +67,7 @@ export interface TextRaster {
   width: u32;
   height: u32;
   x: f64;
-  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
+  /** Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
   text_at: u32;
   /** Its bytes. */
   text_len: u32;
@@ -91,12 +91,12 @@ export function read_text_raster(b: BranchCursor): TextRaster {
  * call's answer is its return. */
 export interface TextImports {
   /** The text in the platform's own family at the weight and size, broken into lines no
-   * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
+   * wider than the width where it can be; at `at` in the core's memory, how many lines,
    * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
    * (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
   text_layout(e: TextLayout): i32;
   /** One line drawn in the platform's own family, starting at x with the middle of its em
-   * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
+   * box on the middle row, into `width` by `height` pixels at `at` in the core's memory,
    * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
    * it returns. */
   text_raster(e: TextRaster): i32;

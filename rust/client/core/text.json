@@ -1,0 +1,156 @@
+{
+  "$doc": [
+    "The platform's text, a device of the app's ABI beside the UI's protocol",
+    "(ui.json): what the core calls of it, numbered as ui.json numbers its",
+    "own, each a call the runtime answers beside the core before it returns",
+    "(ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the",
+    "core's memory is laid out in spec/client/core/sys/io/runtime.json."
+  ],
+  "gen": {
+    "ts": "../../../ts/client/src/abi/text.spec.ts",
+    "rs": "src/sys/io/text.spec.rs"
+  },
+  "name": "text",
+  "import": [
+    {
+      "name": "TEXT_LAYOUT",
+      "val": 7169,
+      "$doc": [
+        "The text in the platform's own family at the weight and size, broken into lines no",
+        "wider than the width where it can be; at `at` in the core's memory, how many lines,",
+        "then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most",
+        "(sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
+      ],
+      "pkt": [
+        {
+          "name": "weight",
+          "type": "u32"
+        },
+        {
+          "name": "px",
+          "type": "f64"
+        },
+        {
+          "name": "max_width",
+          "type": "f64",
+          "$doc": [
+            "0 for one line."
+          ]
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "lines",
+          "type": "u32"
+        },
+        {
+          "name": "text_at",
+          "type": "u32",
+          "$doc": [
+            "Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+          ]
+        },
+        {
+          "name": "text_len",
+          "type": "u32",
+          "$doc": [
+            "Its bytes."
+          ]
+        }
+      ],
+      "call": true
+    },
+    {
+      "name": "TEXT_RASTER",
+      "val": 7170,
+      "$doc": [
+        "One line drawn in the platform's own family, starting at x with the middle of its em",
+        "box on the middle row, into `width` by `height` pixels at `at` in the core's memory,",
+        "RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before",
+        "it returns."
+      ],
+      "pkt": [
+        {
+          "name": "weight",
+          "type": "u32"
+        },
+        {
+          "name": "px",
+          "type": "f64"
+        },
+        {
+          "name": "color",
+          "type": "u32",
+          "$doc": [
+            "0xRRGGBBAA."
+          ]
+        },
+        {
+          "name": "at",
+          "type": "u32"
+        },
+        {
+          "name": "width",
+          "type": "u32"
+        },
+        {
+          "name": "height",
+          "type": "u32"
+        },
+        {
+          "name": "x",
+          "type": "f64"
+        },
+        {
+          "name": "text_at",
+          "type": "u32",
+          "$doc": [
+            "Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns."
+          ]
+        },
+        {
+          "name": "text_len",
+          "type": "u32",
+          "$doc": [
+            "Its bytes."
+          ]
+        }
+      ],
+      "call": true
+    }
+  ],
+  "enums": [
+    {
+      "name": "Major",
+      "$doc": [
+        "The module a command is for: the text device's."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "TEXT",
+          "val": 28
+        }
+      ]
+    },
+    {
+      "name": "TextMinor",
+      "$doc": [
+        "What the core asks the platform's text, answered before the call returns."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "LAYOUT",
+          "val": 1
+        },
+        {
+          "name": "RASTER",
+          "val": 2
+        }
+      ]
+    }
+  ]
+}

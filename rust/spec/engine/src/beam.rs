@@ -25,8 +25,8 @@ use crate::world;
 use crate::WORKGROUPS_MOST;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
-/// from the screen's tangents (`of`), where the kernel writes the
-/// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-engine
+/// from the screen's tangents (`of`), where the core writes the
+/// eye's words (pxl-core domain/view/lens.rs `gpu_cast`, pxl-engine
 /// `eye::GRID`): every thread of the cast reads it off them
 /// (pxl-render grid.wgsl), and the renderer sizes the cast's dispatches
 /// and its buffer off the same words.

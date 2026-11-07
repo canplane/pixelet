@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# Builds the kernel's module again (build-wasm.py) on each change under rust/
+# Builds the core's module again (build-wasm.py) on each change under rust/
 # outside a target/, one build at a time: a change during a build queues one
-# more. It says when public/kernel.wasm was replaced; Metro does not watch
+# more. It says when public/core.wasm was replaced; Metro does not watch
 # public/, so the page is reloaded by hand. `make dev` runs it beside the dev
 # server, which builds the module once at its start.
 #
@@ -16,7 +16,7 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
 BUILD = APP / "script/build-wasm.py"
-OUT = APP / "public/kernel.wasm"
+OUT = APP / "public/core.wasm"
 RUST = APP.parent.parent / "rust"
 
 
@@ -48,7 +48,7 @@ def mtime(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Rebuild the kernel's module on each change under rust/.")
+    parser = argparse.ArgumentParser(description="Rebuild the core's module on each change under rust/.")
     parser.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tree (0.5)")
     args = parser.parse_args()
 
@@ -67,7 +67,7 @@ def main():
         if status != 0:
             print(f"[watch-wasm] build failed ({status}); the page keeps the module it has", file=sys.stderr, flush=True)
         elif mtime(OUT) != before:
-            print("[watch-wasm] public/kernel.wasm rebuilt: reload the page", flush=True)
+            print("[watch-wasm] public/core.wasm rebuilt: reload the page", flush=True)
 
 
 if __name__ == "__main__":

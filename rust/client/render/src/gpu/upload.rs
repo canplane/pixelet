@@ -29,7 +29,7 @@ pub struct Uploads {
     idx_cnt: &'static mut [u32],
     buf: &'static mut [u32],
     group: &'static mut [u32],
-    /// The most the owners can hold live (kernel door/layout.rs `MAX_LIVE_UPLOADS`).
+    /// The most the owners can hold live (pxl-core door/layout.rs `MAX_LIVE_UPLOADS`).
     live: u32,
     pub(crate) cnt: u32,
     pub(crate) bytes: u64,

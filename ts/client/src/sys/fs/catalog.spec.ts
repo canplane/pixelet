@@ -3,7 +3,7 @@
 // GENERATED from the asset specs and ingest.json
 //
 // The catalog the runtime plugs in, served below the asset root at `CATALOG`
-// (ts/client/src/sys/fs/asset.ts): the file each of the kernel's slots names and its
+// (ts/client/src/sys/fs/asset.ts): the file each of the core's slots names and its
 // extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.
 
 export const CATALOG_HEX =

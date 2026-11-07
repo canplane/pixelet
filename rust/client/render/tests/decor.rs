@@ -2948,7 +2948,7 @@ fn hand_frames_answer_as_the_rust() {
         };
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let shards_flat: Vec<u32> = built.shards.iter().flatten().copied().collect();
-        // What the kernel shows, a decor's zooms where it stands.
+        // What the core shows, a decor's zooms where it stands.
         let mut shown = [0u32; DECORS.len()];
         for (k, d) in DECORS.iter().enumerate() {
             for cell in FIRST_CELL..=LEAF_CELL {
@@ -2971,7 +2971,7 @@ fn hand_frames_answer_as_the_rust() {
             make(&shown),
             make(&meshes),
         );
-        // Placed decor, as the kernel hands it: over a workgroup's runs.
+        // Placed decor, as the core hands it: over a workgroup's runs.
         let placed = generation::RUNS + 5;
         let cap = generation::SLOT_RECORDS + placed.next_power_of_two().max(64);
         let workgroups = generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS);

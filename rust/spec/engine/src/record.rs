@@ -82,7 +82,7 @@
 //! another node, drawn where a sample or a hole's walk stops on it.
 //!
 //! **Edits:** every write of what is placed that changes the tree or a record names the
-//! cube it wrote (pxl-kernel domain/layer/object/store.rs `Store::write`, `set_fold`,
+//! cube it wrote (pxl-core domain/layer/object/store.rs `Store::write`, `set_fold`,
 //! `clear_fold`), handed the GPU as its leaf cells' columns, joined past their room, never
 //! dropped (domain/scene/decor/gpu.rs `note_edited`; gpu/ray/cast.rs `hold`); a write that
 //! names none, or child groups past their room, forgets all. A cell's answer reads the

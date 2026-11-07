@@ -1,10 +1,10 @@
 // ts/client/src/abi/cmd/command.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // Every command, by the side that sends it.
 
-// ---- shell, export ----
+// ---- ui, export ----
 
 /** A GPS fix; a field is absent where the browser gave none. */
 export const SENSOR_POS = 0x1202;
@@ -22,22 +22,22 @@ export const TURN_GRANT = 0x1d01;
  * `source`, the published one out of the bucket or the dev tile server's, read by the
  * client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
- * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
+ * tile is asked for that no shard it serves is over or under (pxl-core sys/io/source.rs). */
 export const SOURCE_DECLARE = 0x1301;
-/** A permission as the shell's prompt or the browser's change reported it. */
+/** A permission as the UI's prompt or the browser's change reported it. */
 export const SENSOR_PERMISSION = 0x1206;
 /** What the place's sensors are: whether it has a position and a heading, whether the
- * heading asks a permission, and how it says it is lost. Sent once the kernel is attached. */
+ * heading asks a permission, and how it says it is lost. Sent once the core is attached. */
 export const SENSOR_PLATFORM = 0x120d;
 /** Whether this is a development build, which offers the settings schema.json marks `dev`.
- * Sent once the kernel is attached. */
+ * Sent once the core is attached. */
 export const SETTING_DEVELOPMENT = 0x1602;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
  * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;
-/** The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
+/** The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
-/** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit. */
+/** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit. */
 export const EDIT_MARKER_TEXT = 0x1a02;
 /** The marker's draft dropped, nothing committed. */
 export const EDIT_MARKER_CANCEL = 0x1a03;
@@ -46,13 +46,13 @@ export const EDIT_MARKER_COMMIT = 0x1a04;
 export const INPUT_WHEEL = 0x1103;
 /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
 export const INPUT_MOVE = 0x1106;
-/** What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the
+/** What a surface the UI opened draws, until its GPU_SURFACE_CLOSE. The world, with the
  * sensors watched while it shows; or the companion's character of a group alone, as the picker shows it, a second one
  * on the same surface replacing the first. EBADF where the surface is not open, EBUSY where it already draws the
  * other content, EINVAL where the character's fields are not all given for a character or any is given for the
  * world. */
 export const SCENE_DRAW = 0x1704;
-/** A setting set from the sheet or the character picker; refused until the kernel has read the
+/** A setting set from the sheet or the character picker; refused until the core has read the
  * kept settings, which would be read over it. */
 export const SETTING_SET = 0x1601;
 /** A line the player said, shown over the character. */
@@ -88,19 +88,19 @@ export const PERF_STATS = 0x1903;
 /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn. */
 export const PERF_RINGS = 0x1904;
 
-// ---- shell, import ----
+// ---- ui, import ----
 
 /** Start watching. */
 export const SENSOR_START = 0x1201;
 /** Stop watching. */
 export const SENSOR_STOP = 0x1203;
 /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
- * block the kernel holds, valid until the next snapshot. */
-export const SHELL_SNAPSHOT = 0x1b01;
+ * block the core holds, valid until the next snapshot. */
+export const UI_SNAPSHOT = 0x1b01;
 /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
  * zoom, which moves them every frame, leaves the snapshot as it was. */
-export const SHELL_VIEW = 0x1b02;
-/** The least interval the kernel asks between its turns: its load's word on the rate, which
+export const UI_VIEW = 0x1b02;
+/** The least interval the core asks between its turns: its load's word on the rate, which
  * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
  * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
 export const TURN_PACE = 0x1d02;

@@ -12,7 +12,7 @@
 // is a change to the one server that answers it and to nothing else. This file
 // is where all of them read it from: the client, the Worker and the
 // servers are written from it, and wrangler's and Caddy's configurations take
-// their part of it. The kernel names what it opens and never an address.
+// their part of it. The core names what it opens and never an address.
 
 /// The world's data: what is baked from Overture and the elevation raster,
 /// and the one query over it that cannot be baked. pxl-geo answers what the

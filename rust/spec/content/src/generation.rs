@@ -668,7 +668,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// stands at or finer, so it stands where one the ground generates of its
 /// size would. A generated one is asked at the zoom held where it stands
 /// (`held_at`), as a ray there draws. Each clip level generates what stands
-/// as itself at it (pxl-kernel domain/scene/decor/gpu.rs `shown`,
+/// as itself at it (pxl-core domain/scene/decor/gpu.rs `shown`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
     if placed {
