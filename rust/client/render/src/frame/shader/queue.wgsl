@@ -18,11 +18,10 @@ fn hole_at(hole: u32) -> vec2<u32> {
 }
 
 /// The holes a cast can list (pxl-engine `ray::region_words`): the eye's drawn pixels, the
-/// light's slots.
+/// slots of the tiles the light's cast claims (`light::parked_room`).
 fn room() -> u32 {
   if (light_run()) {
-    let size = head_word(LIGHT_HEAD_SIZE);
-    return size * size;
+    return LIGHT_PARKED_ROOM;
   }
   let size = textureDimensions(rays);
   return size.x * size.y;

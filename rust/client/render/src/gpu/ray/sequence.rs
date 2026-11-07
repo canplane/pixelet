@@ -37,36 +37,29 @@ use pxl_engine::{count, light, node_cache, raster, ray};
 /// The buffers, by their place in `BUFFERS`.
 const MARKS: u32 = 0;
 const NODE_CACHE: u32 = 1;
-const QUEUE: u32 = 2;
-const CORNERS_QUEUE: u32 = 3;
-const SAMPLES_QUEUE: u32 = 4;
-const CAST_TILES: u32 = 5;
-const RASTER_ARGS: u32 = 6;
-const RASTER_STOPS: u32 = 7;
-const LIGHT_ARGS: u32 = 8;
-const LIGHT_LIST: u32 = 9;
-const LIGHT_STOOD: u32 = 10;
-const LIGHT_DRAWS: u32 = 11;
-const LIGHT_CLAIMS: u32 = 12;
-const LIGHT_CORNERS_QUEUE: u32 = 13;
-const LIGHT_SAMPLES_QUEUE: u32 = 14;
-const LIGHT_MISSES: u32 = 15;
-const LIGHT_QUEUE: u32 = 16;
-const LIGHT_RASTER_ARGS: u32 = 17;
-const LIGHT_RASTER_STOPS: u32 = 18;
-const LIGHT_BOX_ARGS: u32 = 19;
-const GENERATION_LIST: u32 = 20;
-const GENERATION_ARGS: u32 = 21;
-const GATED_SCREEN_ARGS: u32 = 22;
-const GATED_LIGHT_ARGS: u32 = 23;
+const QUEUES: u32 = 2;
+const CAST_TILES: u32 = 3;
+const RASTER_ARGS: u32 = 4;
+const RASTER_STOPS: u32 = 5;
+const LIGHT_ARGS: u32 = 6;
+const LIGHT_LIST: u32 = 7;
+const LIGHT_STOOD: u32 = 8;
+const LIGHT_DRAWS: u32 = 9;
+const LIGHT_CLAIMS: u32 = 10;
+const LIGHT_MISSES: u32 = 11;
+const LIGHT_RASTER_ARGS: u32 = 12;
+const LIGHT_RASTER_STOPS: u32 = 13;
+const LIGHT_BOX_ARGS: u32 = 14;
+const GENERATION_LIST: u32 = 15;
+const GENERATION_ARGS: u32 = 16;
+const GATED_SCREEN_ARGS: u32 = 17;
+const GATED_LIGHT_ARGS: u32 = 18;
 
 /// Each buffer, as the host names its field, and its role.
 const BUFFERS: &[Buffer] = &[
     buffer("marks", ARGS),
     buffer("node_cache", STATE),
-    buffer("queue", STATE),
-    buffer("corners_queue", STATE),
-    buffer("samples_queue", STATE),
+    buffer("queues", STATE),
     buffer("cast_tiles", ARGS),
     buffer("raster.args", ARGS),
     buffer("raster.stops", ARGS),
@@ -75,10 +68,7 @@ const BUFFERS: &[Buffer] = &[
     buffer("light_stood", ARGS),
     buffer("light_draws_dispatch", ARGS),
     buffer("light_claim_dispatch", ARGS),
-    buffer("light_corners_queue", STATE),
-    buffer("light_samples_queue", STATE),
     buffer("light_misses", ARGS),
-    buffer("light_queue", STATE),
     buffer("raster.light.args", ARGS),
     buffer("raster.light.stops", ARGS),
     buffer("light_tiles.box_args", ARGS),
@@ -94,6 +84,20 @@ const fn buffer(name: &'static str, role: u32) -> Buffer {
 
 const fn at(buf: u32, at: u32, words: u32) -> Range {
     Range { buf, at, words }
+}
+
+/// A run's queue's view, binding 10 from its head (pxl-engine `ray::queue_at`).
+const fn queue_bind(queue: u32) -> Bind {
+    Bind {
+        binding: 10,
+        buf: QUEUES,
+        at: ray::queue_at(queue),
+    }
+}
+
+/// Words `word` to `word + words` of queue `queue`'s head.
+const fn head(queue: u32, word: u32, words: u32) -> Range {
+    at(QUEUES, ray::queue_at(queue) + word, words)
 }
 
 const fn bind(binding: u32, buf: u32) -> Bind {
@@ -137,19 +141,19 @@ const STAGES: &[&str] = &[
 // gpu/generator.rs `regroup`; gpu/tiles.rs `Tiles::new`): each binding to a buffer here.
 const CORNERS_WALK_BINDS: Group = Group {
     layout: &LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, CORNERS_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_CORNERS)],
 };
 const CORNERS_ASK_BINDS: Group = Group {
     layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, CORNERS_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_CORNERS)],
 };
 const SAMPLES_WALK_BINDS: Group = Group {
     layout: &LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, SAMPLES_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_SAMPLES)],
 };
 const SAMPLES_ASK_BINDS: Group = Group {
     layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, SAMPLES_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_SAMPLES)],
 };
 const LATTICE_LAST_BINDS: Group = Group {
     layout: &LATTICE_LAST_GROUP,
@@ -208,11 +212,11 @@ const PIXELS_BINDS: Group = Group {
 };
 const WALK_BINDS: Group = Group {
     layout: &QUEUE_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
 };
 const WALK_ASK_BINDS: Group = Group {
     layout: &QUEUE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
 };
 const LAST_BINDS: Group = Group {
     layout: &QUEUE_LAST_GROUP,
@@ -289,19 +293,19 @@ const LIGHT_CLAIM_BINDS: Group = Group {
 };
 const LIGHT_CORNERS_WALK_BINDS: Group = Group {
     layout: &LIGHT_LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_CORNERS_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_CORNERS)],
 };
 const LIGHT_CORNERS_ASK_BINDS: Group = Group {
     layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_CORNERS_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_CORNERS)],
 };
 const LIGHT_SAMPLES_WALK_BINDS: Group = Group {
     layout: &LIGHT_LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_SAMPLES_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_SAMPLES)],
 };
 const LIGHT_SAMPLES_ASK_BINDS: Group = Group {
     layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_SAMPLES_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_SAMPLES)],
 };
 const LIGHT_LATTICE_LAST_BINDS: Group = Group {
     layout: &LIGHT_LATTICE_LAST_GROUP,
@@ -317,11 +321,11 @@ const LIGHT_SLOTS_BINDS: Group = Group {
 };
 const LIGHT_WALK_BINDS: Group = Group {
     layout: &QUEUE_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
 };
 const LIGHT_WALK_ASK_BINDS: Group = Group {
     layout: &QUEUE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(10, LIGHT_QUEUE)],
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
 };
 const LIGHT_STOPS_BINDS: Group = Group {
     layout: &LIGHT_STOPS_GROUP,
@@ -582,13 +586,13 @@ pub const IMPOSTOR_LIT_GATED: Step = Step::draw_regions(
 pub const HITS: Step = Step::copy(
     "hits",
     IN_EYE_HOLES,
-    at(QUEUE, ray::QUEUE_HITS, 4),
+    head(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
 );
 pub const LIGHT_HITS: Step = Step::copy(
     "light_hits",
     IN_LIGHT_HOLES,
-    at(LIGHT_QUEUE, ray::QUEUE_HITS, 4),
+    head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
 );
 
@@ -596,14 +600,17 @@ pub const LIGHT_HITS: Step = Step::copy(
 pub const OPEN_NODE_CACHE: Step =
     Step::write("open_node_cache", at(NODE_CACHE, 0, node_cache::HEAD_WORDS));
 pub const OPEN_MARKS: Step = Step::write("open_marks", at(MARKS, 0, ray::MISS_ARGS_WORDS as u32));
-pub const OPEN_QUEUE: Step = Step::write("open_queue", at(QUEUE, 0, ray::QUEUE_EMPTY.len() as u32));
+pub const OPEN_QUEUE: Step = Step::write(
+    "open_queue",
+    head(ray::QUEUE_EYE_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
+);
 pub const OPEN_CORNERS_QUEUE: Step = Step::write(
     "open_corners_queue",
-    at(CORNERS_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
+    head(ray::QUEUE_EYE_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_SAMPLES_QUEUE: Step = Step::write(
     "open_samples_queue",
-    at(SAMPLES_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
+    head(ray::QUEUE_EYE_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_CAST_TILES: Step = Step::write("open_cast_tiles", at(CAST_TILES, 0, 4));
 pub const OPEN_RASTER_ARGS: Step = Step::write(
@@ -651,15 +658,15 @@ pub const OPEN_LIGHT_MISSES: Step = Step::write(
 );
 pub const OPEN_LIGHT_QUEUE: Step = Step::write(
     "open_light_queue",
-    at(LIGHT_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
+    head(ray::QUEUE_LIGHT_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_CORNERS_QUEUE: Step = Step::write(
     "open_light_corners_queue",
-    at(LIGHT_CORNERS_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
+    head(ray::QUEUE_LIGHT_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_SAMPLES_QUEUE: Step = Step::write(
     "open_light_samples_queue",
-    at(LIGHT_SAMPLES_QUEUE, 0, ray::QUEUE_EMPTY.len() as u32),
+    head(ray::QUEUE_LIGHT_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_RASTER_ARGS: Step = Step::write(
     "open_light_raster_args",
@@ -1212,8 +1219,8 @@ pub const FRAME: Frame = Frame {
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::STOP_ASKED_AT, raster::ARGS_WORDS),
-    at(QUEUE, ray::QUEUE_HITS, 4),
-    at(LIGHT_QUEUE, ray::QUEUE_HITS, 4),
+    head(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
+    head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
     stood_marks(),
@@ -1221,12 +1228,12 @@ const APPENDS: &[Range] = &[
     at(GATED_LIGHT_ARGS, 0, END),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
     at(NODE_CACHE, node_cache::VISITED, 2),
-    at(QUEUE, ray::QUEUE_VISITED, 1),
-    at(LIGHT_QUEUE, ray::QUEUE_VISITED, 1),
-    at(SAMPLES_QUEUE, ray::QUEUE_VISITED, 1),
-    at(LIGHT_SAMPLES_QUEUE, ray::QUEUE_VISITED, 1),
-    at(CORNERS_QUEUE, ray::QUEUE_VISITED, 1),
-    at(LIGHT_CORNERS_QUEUE, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_EYE_HOLES, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_EYE_SAMPLES, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_LIGHT_SAMPLES, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_EYE_CORNERS, ray::QUEUE_VISITED, 1),
+    head(ray::QUEUE_LIGHT_CORNERS, ray::QUEUE_VISITED, 1),
 ];
 
 /// The copies that open a count before the passes that add to it: the stops the holes' walks

@@ -91,6 +91,11 @@ pub const HEIGHT_BITS: u32 = 16;
 /// held under it by the room it lists into.
 pub const WORKGROUPS_MOST: u32 = 65_535;
 
+/// The words a storage buffer's view is bound at a multiple of: WebGPU's
+/// `minStorageBufferOffsetAlignment` at its default, 256 bytes, the most any
+/// device asks.
+pub const STORAGE_ALIGN_WORDS: u32 = 256 / 4;
+
 /// The coarsest cube: a tile here is as wide as the world is tall, so the
 /// pyramid is alike on every axis from here finer, and 3D begins. A tile of
 /// it with the world's whole height over it is a **shard**, the unit the

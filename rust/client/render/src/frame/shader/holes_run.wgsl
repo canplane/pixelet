@@ -13,6 +13,12 @@ fn queue_caps() -> u32 {
   return select(EYE_HOLES_CAPS, LIGHT_HOLES_CAPS, light_run());
 }
 
+/// Where the asks' records lie in its observer's queue's view (pxl-engine
+/// `ray::queue_records_at`, `ray::QUEUE_EYE_HOLES`, `ray::QUEUE_LIGHT_HOLES`).
+fn queue_records_at() -> u32 {
+  return select(EYE_HOLES_RECORDS_AT, LIGHT_HOLES_RECORDS_AT, light_run());
+}
+
 /// The lanes of the nodes its walks visit and ask (pxl-engine `count::MISS`, `count::ASKED`).
 fn visits_at() -> u32 {
   return select(EYE_MISS_COUNT, LIGHT_MISS_COUNT, light_run());

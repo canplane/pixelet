@@ -12,6 +12,12 @@ fn queue_caps() -> u32 {
   return LIGHT_LATTICE_CAPS;
 }
 
+/// Where the asks' records lie in its queue's view (pxl-engine `ray::queue_records_at`,
+/// `ray::QUEUE_LIGHT_SAMPLES`).
+fn queue_records_at() -> u32 {
+  return LIGHT_SAMPLES_RECORDS_AT;
+}
+
 fn visits_at() -> u32 {
   return LIGHT_SAMPLE_COUNT;
 }

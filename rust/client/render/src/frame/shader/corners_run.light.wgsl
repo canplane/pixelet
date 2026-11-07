@@ -12,6 +12,12 @@ fn queue_caps() -> u32 {
   return LIGHT_LATTICE_CAPS;
 }
 
+/// Where the asks' records lie in its queue's view (pxl-engine `ray::queue_records_at`,
+/// `ray::QUEUE_LIGHT_CORNERS`).
+fn queue_records_at() -> u32 {
+  return LIGHT_CORNERS_RECORDS_AT;
+}
+
 fn visits_at() -> u32 {
   return LIGHT_BEAM_COUNT;
 }

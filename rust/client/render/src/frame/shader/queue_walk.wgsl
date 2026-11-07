@@ -12,7 +12,8 @@
 // caps (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of
 // the pass writes.
 
-/// The queue's words (pxl-engine `ray::QUEUE_WORDS`).
+/// The run's queue's words, its head first (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`), the
+/// asks' records every queue shares past the heads (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
 /// The next stop's number, as these walks number the stops their items keep for the record
@@ -54,7 +55,7 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
     top = p.kind == KIND_LEFT;
     handed = p.handed;
   }
-  let at = QUEUE_RECORDS_AT + (select(0u, QUEUE_RECORDS_ROOM, again) + r) * QUEUE_RECORD_WORDS;
+  let at = queue_records_at() + r * QUEUE_RECORD_WORDS;
   atomicStore(&queue[at], w.zoom);
   atomicStore(&queue[at + 1u], u32(c.x));
   atomicStore(&queue[at + 2u], u32(c.y));

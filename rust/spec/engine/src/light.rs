@@ -906,7 +906,8 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (`light_cs`), as the eye's missed pixels are, by the same listing
 /// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`). Past the samples: how many,
 /// copied in once the slots are done, as the eye's count is (`ray::WALKED_CNT`), then a slot
-/// each, its X and its Y over 16 bits; `size²` of them, a slot listed once a cast.
+/// each, its X and its Y over 16 bits; a slot listed once a cast, and only a claimed tile's
+/// slots are cast, so `parked_room` of them.
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
@@ -924,7 +925,7 @@ pub const fn misses_at(size: u32) -> u32 {
 /// written by the claim (light_propagate.wgsl `light_claim_cs`) and set to none by the slide
 /// (light_slide.wgsl), and read under `READ_OWED` (`read_cast`).
 pub const fn reads_at(size: u32) -> u32 {
-    misses_at(size) + size * size
+    misses_at(size) + parked_room()
 }
 
 /// A tile owed: one cast that still holds a slot its queue's budget did not finish, carried

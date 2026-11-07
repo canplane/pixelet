@@ -38,8 +38,8 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Entry,
-    Gpu, RenderContext,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
+    write_buffer_bytes, Entry, Gpu, RenderContext,
 };
 use crate::gpu::generator::{
     cut_boxes, hold, DecorFrame, Gate, Generation, Generator, IndirectDraw,
@@ -116,28 +116,24 @@ pub(super) struct CastBuffers {
     /// `grid` lays them, none a pixel's; room for `beam_room` words.
     cells_built: Pipeline,
     /// The eye's beam rays' run through the queue (pxl-engine `count::EYE_LATTICE`), as the
-    /// samples': its pipelines, its groups and its queue's words.
+    /// samples': its pipelines and its groups.
     corners_built: [Pipeline; 5],
     corners_groups: [u32; 3],
-    corners_queue: u32,
     /// The eye's samples' run through the queue (pxl-engine `count::EYE_LATTICE`), its passes
     /// as a run's (`Run`): its walks over the node cache alone, its asks, its last walk; its
-    /// groups and its queue's words.
+    /// groups.
     samples_built: [Pipeline; 5],
     samples_groups: [u32; 3],
-    samples_queue: u32,
     /// The close of a frame the eye's queue runs in, where its samples were cast and where they
     /// were not (roll.wgsl), over the node cache alone.
     roll_built: [Pipeline; 2],
     roll_group: u32,
     /// The same passes for the shadow map (beam.light.wgsl, light_cell.wgsl,
     /// sample.light.wgsl): the cells over the same group, the beam rays' and the samples' runs
-    /// as the eye's, each over its own queue.
+    /// as the eye's, each over its own queue's head.
     light_cells_built: Pipeline,
     light_corners_built: [Pipeline; 5],
-    light_corners_queue: u32,
     light_samples_built: [Pipeline; 5],
-    light_samples_queue: u32,
     beams: u32,
     /// The eye's head, all zero: a head naming no map (pxl-engine
     /// `light::HEAD_SIZE`), which tells a pass both take the eye's.
@@ -149,8 +145,8 @@ pub(super) struct CastBuffers {
     /// the cast's reading walk left to it, holding what the record drew there, counted in
     /// `marks` (pxl-engine `ray::MISS_ARGS_WORDS`) and listed (`ray::WALKED_LIST`),
     /// and the light's slots no voxel answered, walked off it by its passes
-    /// (`queue_built` to `queue_last_built`), the eye's over `queue_groups` and its
-    /// words (`queue`), the light's over `light_groups` and `light_queue`; the node
+    /// (`queue_built` to `queue_last_built`), the eye's over `queue_groups`, the light's over
+    /// `light_groups`, each from its own head of `queues`; the node
     /// cache forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's clip levels' entries that moved
@@ -171,7 +167,9 @@ pub(super) struct CastBuffers {
     /// The eye's groups of the queue's walks over the node cache alone, its asks and its last
     /// walk, over the cast's group's buffers.
     queue_groups: [u32; 3],
-    queue: u32,
+    /// Every run's queue, a head each and the asks' records they share (`ray::QUEUE_WORDS`,
+    /// `ray::queue_at`).
+    queues: u32,
     marks: u32,
     forget_built: Pipeline,
     node_cache: u32,
@@ -196,8 +194,6 @@ pub(super) struct CastBuffers {
     /// The world's depth from the light, a texel of the shadow map each
     /// (`light_cs`), cast with the eye's rays where the shadows are on.
     light_built: Pipeline,
-    /// The light's holes' queue's words (`ray::QUEUE_WORDS`), as the eye's (`queue`).
-    light_queue: u32,
     /// The tiles of the light's box its receivers stand on (pxl-engine
     /// `light::LISTED_STOOD`): the eye's voxels' boxes, stood by its record's draw as it writes
     /// them (record_draw.wgsl `record_draw_cs`, `Raster::record_draw`), and the pixels it
@@ -1017,17 +1013,13 @@ impl RaysPass {
             cells_built,
             samples_built,
             samples_groups: [0; 3],
-            samples_queue: buf(word_bytes(ray::QUEUE_WORDS as usize), storage),
             roll_built,
             roll_group: 0,
             corners_built,
             corners_groups: [0; 3],
-            corners_queue: buf(word_bytes(ray::QUEUE_WORDS as usize), storage),
             light_corners_built,
-            light_corners_queue: buf(word_bytes(ray::QUEUE_WORDS as usize), storage),
             light_cells_built,
             light_samples_built,
-            light_samples_queue: buf(word_bytes(ray::QUEUE_WORDS as usize), storage),
             beams: 0,
             // Never written: a buffer is made zeroed.
             eye_head: buf(word_bytes(light::HEAD_WORDS), buffer_usage::UNIFORM),
@@ -1039,7 +1031,7 @@ impl RaysPass {
             queue_ask_parked_built,
             queue_last_built,
             queue_groups: [0; 3],
-            queue: buf(
+            queues: buf(
                 word_bytes(ray::QUEUE_WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
@@ -1068,10 +1060,6 @@ impl RaysPass {
             cuts: [0; eye::CUTS],
             fold_built,
             light_built,
-            light_queue: buf(
-                word_bytes(ray::QUEUE_WORDS as usize),
-                storage | buffer_usage::COPY_SRC,
-            ),
             light_mark_walked_built,
             light_mark_draws_built,
             light_mark_draws_open_built,
@@ -1640,7 +1628,7 @@ impl RaysPass {
                 bytes(&ray::MISS_ARGS_EMPTY),
             );
             g.write_buf(
-                c.light_queue,
+                c.queues,
                 open(&sequence::OPEN_LIGHT_QUEUE),
                 bytes(&ray::QUEUE_EMPTY),
             );
@@ -1746,7 +1734,7 @@ impl RaysPass {
                 bytes(&ray::MISS_ARGS_EMPTY),
             );
             g.write_buf(
-                c.queue,
+                c.queues,
                 sequence::OPEN_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
@@ -1786,12 +1774,12 @@ impl RaysPass {
         };
         if plan.kind == FrameKind::cast {
             g.write_buf(
-                c.corners_queue,
+                c.queues,
                 sequence::OPEN_CORNERS_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
             g.write_buf(
-                c.samples_queue,
+                c.queues,
                 sequence::OPEN_SAMPLES_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
@@ -1813,7 +1801,7 @@ impl RaysPass {
         if let Some(from) = plan.from {
             if !casts {
                 g.write_buf(
-                    c.queue,
+                    c.queues,
                     sequence::OPEN_QUEUE.to_at(),
                     bytes(&ray::QUEUE_EMPTY),
                 );
@@ -1835,12 +1823,12 @@ impl RaysPass {
         }
         if light_casts {
             g.write_buf(
-                c.light_corners_queue,
+                c.queues,
                 sequence::OPEN_LIGHT_CORNERS_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
             g.write_buf(
-                c.light_samples_queue,
+                c.queues,
                 sequence::OPEN_LIGHT_SAMPLES_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
@@ -1922,7 +1910,8 @@ impl RaysPass {
                 g,
                 [&c.queue_built, &c.queue_ask_built, &c.queue_last_built],
                 world,
-                [bindings[3], beams, node_cache, c.queue, head],
+                [bindings[3], beams, node_cache, c.queues, head],
+                ray::QUEUE_EYE_HOLES,
             );
             for group in c.samples_groups {
                 release(group);
@@ -1932,7 +1921,8 @@ impl RaysPass {
                 g,
                 [walk, ask, last],
                 world,
-                [bindings[3], beams, node_cache, c.samples_queue, head],
+                [bindings[3], beams, node_cache, c.queues, head],
+                ray::QUEUE_EYE_SAMPLES,
             );
             release(c.roll_group);
             c.roll_group = g.bind_group(c.roll_built[0].layouts[0], &[buf_entry(9, node_cache)]);
@@ -1944,7 +1934,8 @@ impl RaysPass {
                 g,
                 [walk, ask, last],
                 world,
-                [bindings[3], beams, node_cache, c.corners_queue, head],
+                [bindings[3], beams, node_cache, c.queues, head],
+                ray::QUEUE_EYE_CORNERS,
             );
             c.bindings = bindings;
         }
@@ -2065,9 +2056,7 @@ impl RaysPass {
                     c.raster.light.args,
                     c.light_misses,
                     c.light_args,
-                    c.light_queue,
-                    c.light_samples_queue,
-                    c.light_corners_queue,
+                    c.queues,
                     c.light_stood,
                     c.light_draws_dispatch,
                     c.light_claim_dispatch,
@@ -2206,7 +2195,7 @@ impl RaysPass {
                     &Run {
                         pipelines: [walk, ask, walk_parked, ask_parked, last],
                         groups: c.corners_groups,
-                        queue: c.corners_queue,
+                        queue: c.queues,
                         node_cache: c.node_cache,
                         hits: None,
                     },
@@ -2237,7 +2226,7 @@ impl RaysPass {
                             &Run {
                                 pipelines: [walk, ask, walk_parked, ask_parked, last],
                                 groups: c.samples_groups,
-                                queue: c.samples_queue,
+                                queue: c.queues,
                                 node_cache: c.node_cache,
                                 hits: None,
                             },
@@ -2304,7 +2293,7 @@ impl RaysPass {
                         &c.queue_last_built,
                     ],
                     groups: c.queue_groups,
-                    queue: c.queue,
+                    queue: c.queues,
                     node_cache: c.node_cache,
                     hits: Some(&sequence::HITS),
                 },
@@ -2511,7 +2500,7 @@ impl RaysPass {
                 &Run {
                     pipelines: [walk, ask, walk_parked, ask_parked, last],
                     groups: [c.light_groups[10], c.light_groups[11], c.light_groups[17]],
-                    queue: c.light_corners_queue,
+                    queue: c.queues,
                     node_cache: c.node_cache,
                     hits: None,
                 },
@@ -2529,7 +2518,7 @@ impl RaysPass {
                 &Run {
                     pipelines: [walk, ask, walk_parked, ask_parked, last],
                     groups: [c.light_groups[9], c.light_groups[15], c.light_groups[16]],
-                    queue: c.light_samples_queue,
+                    queue: c.queues,
                     node_cache: c.node_cache,
                     hits: None,
                 },
@@ -2567,7 +2556,7 @@ impl RaysPass {
                         &c.queue_last_built,
                     ],
                     groups: [c.light_groups[8], c.light_groups[12], c.light_groups[3]],
-                    queue: c.light_queue,
+                    queue: c.queues,
                     node_cache: c.node_cache,
                     hits: Some(&sequence::LIGHT_HITS),
                 },
@@ -2902,8 +2891,8 @@ fn light_groups(
         corners_last,
     ]: [&Pipeline; LIGHT_GROUPS],
     bindings: [u32; 13],
-    [node_cache, head, list, visibility, args, misses, light_args, queue, samples_queue, corners_queue, stood, draws, claims]: [u32;
-        13],
+    [node_cache, head, list, visibility, args, misses, light_args, queues, stood, draws, claims]: [u32;
+        11],
 ) -> [u32; LIGHT_GROUPS] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances, beams] =
         bindings;
@@ -2947,19 +2936,22 @@ fn light_groups(
         g,
         [queue_walk, queue_ask, queue_last],
         worlds,
-        [light, list, node_cache, queue, head],
+        [light, list, node_cache, queues, head],
+        ray::QUEUE_LIGHT_HOLES,
     );
     let [samples_walk, samples_ask, samples_last] = queue_groups(
         g,
         [samples_walk, samples_ask, samples_last],
         worlds,
-        [light, list, node_cache, samples_queue, head],
+        [light, list, node_cache, queues, head],
+        ray::QUEUE_LIGHT_SAMPLES,
     );
     let [corners_walk, corners_ask, corners_last] = queue_groups(
         g,
         [corners_walk, corners_ask, corners_last],
         worlds,
-        [light, list, node_cache, corners_queue, head],
+        [light, list, node_cache, queues, head],
+        ray::QUEUE_LIGHT_CORNERS,
     );
     let of = |p: &Pipeline| {
         let layout = p.layouts[0];
@@ -3004,13 +2996,15 @@ fn light_groups(
 /// its asks and its last walk, over `world`, the eye and the world's buffers the asks read (the
 /// clip level, the tiles' frames, the bricks' palette indices, the service area's index, the
 /// overwrites and the ways' pool), and the run's: the rays or the map its holes write, its
-/// observer's list, the node cache, the queue's words and its observer's head; each group the
-/// entries its pipeline's layout binds.
+/// observer's list, the node cache, the queues' words from the run's `queue`'s head
+/// (`ray::queue_at`) and its observer's head; each group the entries its pipeline's layout
+/// binds.
 fn queue_groups(
     g: &Gpu,
     pipelines: [&Pipeline; 3],
     world: [u32; 7],
-    [out, list, node_cache, queue, head]: [u32; 5],
+    [out, list, node_cache, queues, head]: [u32; 5],
+    queue: u32,
 ) -> [u32; 3] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool] = world;
     let entries = [
@@ -3024,7 +3018,12 @@ fn queue_groups(
         buf_entry(7, pool),
         buf_entry(8, list),
         buf_entry(9, node_cache),
-        buf_entry(10, queue),
+        buf_range_entry(
+            10,
+            queues,
+            word_bytes(ray::queue_at(queue) as usize),
+            word_bytes((ray::QUEUE_WORDS - ray::queue_at(queue)) as usize),
+        ),
         buf_entry(HEAD_BINDING, head),
     ];
     pipelines.map(|p| {
@@ -3039,9 +3038,9 @@ fn queue_groups(
 
 /// A run as its passes take it (pxl-engine `ray::QUEUE_LANES`): the pipelines of its first
 /// walk, its asks, its second walk, their asks and its last walk; its groups
-/// (`queue_groups`); its queue's words; the node cache, whose head counts the frame's work
-/// done by every run; and, for the holes, the step that copies its stops' count there
-/// (`sequence::HITS`), either observer's.
+/// (`queue_groups`); the queues' words, its head among them; the node cache, whose head
+/// counts the frame's work done by every run; and, for the holes, the step that copies its
+/// stops' count there (`sequence::HITS`), either observer's.
 struct Run<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],

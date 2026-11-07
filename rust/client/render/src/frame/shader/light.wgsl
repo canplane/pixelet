@@ -54,7 +54,8 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
 /// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): its word as it stands
 /// where the cast before answered it and its tile was carried over (`ray::KEPT`); else off its
 /// visible voxel or the sky, else listed for its walk as the eye's missed pixels are. The list
-/// holds every slot, so none finds it full.
+/// holds every slot of the tiles a cast claims (pxl-engine `light::parked_room`), so none finds
+/// it full.
 @compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
 fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
@@ -100,8 +101,8 @@ fn light_cs(
     return;
   }
   add_cnt(on, COUNT_WALKED);
-  let place = enlist(size * size);
-  if (place < size * size) {
+  let place = enlist(LIGHT_PARKED_ROOM);
+  if (place < LIGHT_PARKED_ROOM) {
     beams[head_word(LIGHT_HEAD_MISSES) + place] = (at.y << 16u) | at.x;
   }
 }

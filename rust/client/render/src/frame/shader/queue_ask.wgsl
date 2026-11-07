@@ -5,7 +5,8 @@
 // (pxl-engine `ray::QUEUE_GROUPS`) that takes the list in strides. What it keeps is there when
 // the next walk goes on from the parked states, past this dispatch's end.
 
-/// The queue's words (pxl-engine `ray::QUEUE_WORDS`).
+/// The run's queue's words, its head first (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`), the
+/// asks' records every queue shares past the heads (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
 /// The visits the walk before left in the queue's words folded into the frame's, by the one
@@ -63,7 +64,7 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
 fn queue_ask(again: bool, id: u32) {
   let n = in_room(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_ROOM);
   for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
-    let at = QUEUE_RECORDS_AT + (select(0u, QUEUE_RECORDS_ROOM, again) + k) * QUEUE_RECORD_WORDS;
+    let at = queue_records_at() + k * QUEUE_RECORD_WORDS;
     let c = vec3<i32>(
       i32(atomicLoad(&queue[at + 1u])),
       i32(atomicLoad(&queue[at + 2u])),
