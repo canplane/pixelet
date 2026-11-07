@@ -9,7 +9,7 @@
  */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { TILE_SOURCE_ROUTE } from "@/origin/route.ts";
+import { get, TILE_SOURCE_ROUTE } from "@/origin/route.ts";
 import { online, when_online } from "@/origin/online.ts";
 import {
   BASE_LAYERS,
@@ -24,7 +24,6 @@ import {
   SOURCE_REFUSED,
   type Source,
 } from "@/abi/state.ts";
-import * as origin from "@/service/origin.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
  * format, for the kernel; each kind's version, and a shard's own. */
@@ -158,7 +157,7 @@ const ASK_AGAIN_MOST_MS = 60_000;
 
 async function ask_declaration(): Promise<string | null> {
   try {
-    const res = await origin.get(TILE_SOURCE_ROUTE);
+    const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();

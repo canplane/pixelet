@@ -2,11 +2,10 @@
 
 import { Platform } from "react-native";
 
-import { SITE_URL } from "@pxl/client/origin/route.spec.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */
-export const url = SITE_URL;
+export const remote: boolean = true;
 
 /** The reads Expo's fetch runs at once. On Android its OkHttp client runs at most
  * five calls a host, a sixth waiting in OkHttp's own queue (`Dispatcher`
@@ -26,11 +25,11 @@ const ZSTD = "zstd";
  * decodes its own, so no reader sees an encoding; a failed decode is a
  * transport failure. */
 export async function get(
-  route: string,
+  url: string,
   signal?: AbortSignal,
 ): Promise<Response> {
   try {
-    const res = await fetch(`${url}${route}`, {
+    const res = await fetch(url, {
       signal,
       headers: { "accept-encoding": ZSTD },
     });
