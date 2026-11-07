@@ -12,7 +12,7 @@ use pxl_engine::value::TRANSPORTS;
 use pxl_engine::way::tree::Read;
 use pxl_engine::way::BRIDGE;
 use pxl_spec::bake::separation::{self, Separation};
-use pxl_spec::bake::tile::terrain;
+use pxl_spec::bake::tile::terrain::{self, GroundId};
 
 /// A tile as `hold` takes it: a cell's own palette index and its height, row by row
 /// from its first, and its lines.
@@ -282,7 +282,6 @@ fn fill_room() -> &'static mut Clipmap {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
     FILL.set(FillScratch {
-        room: vec![0; PALETTE_COLUMN].leak(),
         ele: vec![0; ELE_COLUMN].leak(),
         lines: vec![0; LINES_WORDS as usize].leak(),
         pairs: vec![(0, 0); WAYS_BRICK_SEGMENTS as usize].leak(),

@@ -27,7 +27,7 @@ use pxl_engine::LEAF_CELL;
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, palette_cells, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, four_palette_indices, palette_cells, TerrainTile, ELE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -686,11 +686,9 @@ const _: () = assert!(
 );
 
 /// The room a brick's fill works in, arrays of `.fixed.terrain` (fixed.rs
-/// `FILL_ARRAY_BYTES`): a tile's palette indices four a cell as a packet
-/// gives them, its samples, its lines and the pairs they are laid with, its
-/// spans, its tree as it is built, and the walk that lays it in the pool.
+/// `FILL_ARRAY_BYTES`): a tile's samples, its lines and the pairs they are laid
+/// with, its spans, its tree as it is built, and the walk that lays it in the pool.
 struct FillScratch {
-    room: &'static mut [GroundId],
     ele: &'static mut [i16],
     lines: &'static mut [u32],
     pairs: &'static mut [(u32, u32)],
@@ -707,13 +705,12 @@ fn fill_scratch() -> &'static mut FillScratch {
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
             FillScratch {
-                room: arr(r, fill_off(0), PALETTE_COLUMN),
-                ele: arr(r, fill_off(1), ELE_COLUMN),
-                lines: arr(r, fill_off(2), LINES_WORDS as usize),
-                pairs: arr(r, fill_off(3), WAYS_BRICK_SEGMENTS as usize),
-                spans: arr(r, fill_off(4), SPANS_WORDS as usize),
-                build: arr(r, fill_off(5), BUILD_WORDS),
-                order: arr(r, fill_off(6), tree::BRICK_CHILD_GROUPS as usize + 1),
+                ele: arr(r, fill_off(0), ELE_COLUMN),
+                lines: arr(r, fill_off(1), LINES_WORDS as usize),
+                pairs: arr(r, fill_off(2), WAYS_BRICK_SEGMENTS as usize),
+                spans: arr(r, fill_off(3), SPANS_WORDS as usize),
+                build: arr(r, fill_off(4), BUILD_WORDS),
+                order: arr(r, fill_off(5), tree::BRICK_CHILD_GROUPS as usize + 1),
             }
         }
     })
@@ -737,20 +734,11 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
     if !(0..SLOTS).any(|b| slot_wants(w, tile, b)) {
         return;
     }
-    let f = fill_scratch();
-    let Ok(indices) = palette_cells(pkt, f.room) else {
+    let Ok(cells) = palette_cells(pkt) else {
         w.filled = true;
         return;
     };
-    let four = |c: usize| {
-        let at = 4 * c;
-        u32::from_le_bytes([
-            indices[at],
-            indices[at + 1],
-            indices[at + 2],
-            indices[at + 3],
-        ])
-    };
+    let four = |c: usize| u32::from_le_bytes(four_palette_indices(cells, c));
     for b in 0..SLOTS {
         if !slot_wants(w, tile, b) {
             continue;
