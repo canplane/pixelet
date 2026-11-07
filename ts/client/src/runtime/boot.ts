@@ -1,17 +1,15 @@
-// @pxl/client/abi/boot.ts
+// @pxl/client/runtime/boot.ts
 
 /**
  * Boots the client, bottom up, on its platform's services (service/): the
- * runtime opened where its platform places it (runtime/open.ts, a page's
- * in the kernel's worker; runtime/open.native.ts, a device's beside the
- * shell), the kernel's commands bound to it, then where the boot stands as the
- * runtime starts, the GPU answers, the world's source is declared and the
- * kernel's snapshots come. The shell is no part of it: it reads where the
- * boot stands through the port (port/shell.ts), and what the kernel shows it
- * once it has started.
+ * runtime opened where its platform places it (open.ts, a page's in the
+ * kernel's worker; open.native.ts, a device's beside the shell), the kernel's
+ * commands bound to it, then where the boot stands as the runtime starts, the
+ * GPU answers, the world's source is declared and the kernel's snapshots come.
+ * The shell is no part of it: it reads where the boot stands through the port
+ * (port/shell.ts), and what the kernel shows it once it has started.
  */
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { GroundStatus, type Snapshot } from "@/abi/cmd.spec.ts";
@@ -22,26 +20,12 @@ import {
   BOOT_STARTED,
   BOOT_STARTING,
   BOOT_TERMINATED,
-  type Boot,
 } from "@/abi/state.ts";
+import { boot_state, set_boot } from "@/port/boot.ts";
 import * as snapshot from "@/port/snapshot.ts";
 import { open } from "@/runtime/open.ts";
 
 let called = false;
-let state: Boot = BOOT_OPENING;
-const listeners = new Listeners();
-
-function set(next: Boot): void {
-  state = next;
-  listeners.notify();
-}
-
-/** Where the boot stands, read through the port. */
-export function boot_state(): Boot {
-  return state;
-}
-
-export const watch_boot = listeners.watch;
 
 /** Whether the world has come, or nothing will show of it: every pipeline made,
  * and the view drawn or past the service area. A failed location draws the view
@@ -60,21 +44,23 @@ export function boot(): void {
   called = true;
   open({
     started: () => {
-      if (state === BOOT_OPENING) set(BOOT_STARTING);
+      if (boot_state() === BOOT_OPENING) set_boot(BOOT_STARTING);
     },
     snapshot: () => {
-      if (state === BOOT_LOADING && loaded(snapshot.current()))
-        set(BOOT_STARTED);
+      if (boot_state() === BOOT_LOADING && loaded(snapshot.current()))
+        set_boot(BOOT_STARTED);
     },
     // Its turns end with it.
-    terminated: () => set(BOOT_TERMINATED),
+    terminated: () => set_boot(BOOT_TERMINATED),
   }).then(
     (declared) => {
-      if (declared && state === BOOT_STARTING) set(BOOT_LOADING);
+      if (declared && boot_state() === BOOT_STARTING) set_boot(BOOT_LOADING);
     },
     (err) => {
       console.error("[boot] the client did not start:", err);
-      if (state === BOOT_OPENING || state === BOOT_STARTING) set(BOOT_FAILED);
+      const state = boot_state();
+      if (state === BOOT_OPENING || state === BOOT_STARTING)
+        set_boot(BOOT_FAILED);
     },
   );
 }

@@ -4,6 +4,6 @@
  * a page and of the shell everywhere, so the worker and the kernel's module
  * load while those evaluate. */
 
-import { boot } from "@/abi/boot.ts";
+import { boot } from "@/runtime/boot.ts";
 
 boot();

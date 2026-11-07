@@ -30,8 +30,9 @@
   profiler. The server the client reads from (its routes, its published
   tables, whether the device is online) is `ts/client/src/origin/`. The
   numbers both read, generated from `spec/` or written beside it (a state the
-  client reports and the shell shows, `abi/state.ts`), and the boot are
-  `ts/client/src/abi/`. None of it goes into `@xpute/runtime` or `xpute-runtime`.
+  client reports and the shell shows, `abi/state.ts`), are
+  `ts/client/src/abi/`; the boot is `runtime/`. None of it goes into
+  `@xpute/runtime` or `xpute-runtime`.
 - The shell computes no coordinate or tile and is not the runtime. It reaches the
   kernel, `sys/` and `origin/` through `port/` alone, and `port/` reaches the
   kernel through the generated stubs alone.

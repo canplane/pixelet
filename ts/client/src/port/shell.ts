@@ -1,11 +1,9 @@
 // @pxl/client/port/shell.ts
 
-/** The kernel as the shell reaches it, beside each major's own commands
- * (input.ts, edit.ts, camera.ts, scene.ts, setting.ts, sensor.ts, surface.ts,
- * perf.ts, snapshot.ts, fs.ts, gpu.ts, sys.ts), and what the client's
- * services (sys/, origin/) show the UI: the shell reaches the kernel, sys/ and
- * origin/ through here alone, and the platform's services (service/) itself
- * (AGENTS.md). */
+/** The kernel as the shell reaches it, beside each major's own commands, and
+ * what the client's services (sys/, origin/) show the UI: the shell reaches
+ * the kernel, sys/ and origin/ through here alone, and the platform's services
+ * (service/) itself (AGENTS.md). */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { NodeValue, NodeView } from "@xpute/kit/wire/xtp/mod.ts";
@@ -14,7 +12,7 @@ import { MACHINE } from "@/abi/machine.spec.ts";
 import { ui } from "@/port/kernel.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
-export { boot_state, watch_boot } from "@/abi/boot.ts";
+export { boot_state, watch_boot } from "@/port/boot.ts";
 export { stop_code } from "@/sys/abort.ts";
 
 // What the client's services show the UI: the GPU's state, the network's, the world's

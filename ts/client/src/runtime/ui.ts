@@ -25,7 +25,7 @@ import * as snapshot from "@/port/snapshot.ts";
 import * as sensor from "@/service/sensor.ts";
 import * as visibility from "@/service/visibility.ts";
 
-/** What the client's boot hears as the runtime opens (abi/boot.ts). */
+/** What the client's boot hears as the runtime opens (boot.ts). */
 export interface OnOpen {
   /** The runtime started, and the kernel's commands reach it. */
   started(): void;

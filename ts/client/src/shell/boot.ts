@@ -1,7 +1,7 @@
 // @pxl/client/shell/boot.ts
 
 /** Where the client's boot stands, as the shell reads it through the port: the
- * app boots the client (abi/boot.ts), and the shell only shows what came of it. */
+ * app boots the client (runtime/boot.ts), and the shell only shows what came of it. */
 
 import { useEffect, useSyncExternalStore } from "react";
 
