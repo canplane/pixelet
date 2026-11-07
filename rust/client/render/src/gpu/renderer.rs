@@ -357,18 +357,35 @@ pub struct FrameOutput {
     pub stat: Option<FrameStat>,
 }
 
+/// A GPU read as it lands: the number of the frame it timed
+/// (`FrameStat::frame` as it was), its spans, the time they ran, those that
+/// overlap counted once, the frame's GPU time where its passes overlap
+/// (`Gpu::gpu_busy_ms`), and the world's pixels that frame drew, what the
+/// spans were measured over.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GpuRead {
+    pub frame: f64,
+    pub spans: [f64; GPU_SPAN_NAMES],
+    pub busy_ms: f64,
+    pub px: f64,
+}
+
+impl GpuRead {
+    /// Its time in the spans that run threads over the world's drawn pixels
+    /// (span.json `per_px`, `GpuSpanName::PER_PX`): what its drawn resolution
+    /// can buy back.
+    pub fn px_ms(&self) -> f64 {
+        GpuSpanName::PER_PX
+            .iter()
+            .map(|&s| self.spans[s as usize])
+            .sum()
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct FrameStat {
-    /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's, `gpu_busy_ms` the time they ran, those that overlap counted
-    /// once, the frame's GPU time where its passes overlap (`Gpu::gpu_busy_ms`),
-    /// `gpu_px` the world's pixels the frame it timed drew, what the spans
-    /// were measured over, and `gpu_frame` that frame's number (`frame` as it was); else they are 0,
-    /// as nothing was measured with this frame.
-    pub gpu_read: bool,
-    pub gpu_busy_ms: f64,
-    pub gpu_px: f64,
-    pub gpu_frame: f64,
+    /// The GPU read that landed with this frame; none where none did.
+    pub gpu: Option<GpuRead>,
     /// This frame's number, from 1, a frame the renderer encoded each; 0
     /// where it stood and drew nothing.
     pub frame: f64,
@@ -380,7 +397,6 @@ pub struct FrameStat {
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub draws: DrawStats,
-    pub gpu_spans: [f64; GPU_SPAN_NAMES],
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
     /// order (gpu/ray/cast.rs `light_moved`), and the boxes decor's slots were
     /// marked by to generate again (gpu/generator.rs `marked_boxes`): 0
@@ -390,13 +406,6 @@ pub struct FrameStat {
     /// The eye's cast's and the light's counts of an earlier frame, landed
     /// with this one, by that frame's number (gpu/ray/count.rs `RayCounts`).
     pub rays: Option<RayCounts>,
-}
-
-/// A frame's GPU time in the spans that run threads over the world's drawn
-/// pixels (span.json `per_px`, `GpuSpanName::PER_PX`): what its drawn
-/// resolution can buy back.
-pub fn px_ms(spans: &[f64]) -> f64 {
-    GpuSpanName::PER_PX.iter().map(|&s| spans[s as usize]).sum()
 }
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
@@ -1246,7 +1255,7 @@ impl Renderer {
         }
         if decided.stood {
             self.frame_read = read;
-            let mut stat = self.stat(&draws, input.counted, [0.0; GPU_SPAN_NAMES]);
+            let mut stat = self.stat(&draws, input.counted, None);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
             stat.rays = self.screen.take_counts();
@@ -1585,17 +1594,12 @@ impl Renderer {
         release(canvas_view);
         // The read that landed is one that was on its way, of the frame it
         // timed; this frame's is kept in the read it was asked in.
-        let landed = g.gpu_landed().filter(|_| q != 0);
-        let gpu_read = landed.is_some();
-        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = match landed {
-            Some(r) => (
-                core::array::from_fn(|k| g.gpu_ms(k as u32)),
-                g.gpu_busy_ms(),
-                self.read_px[r],
-                self.read_frame[r],
-            ),
-            None => ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0),
-        };
+        let gpu = g.gpu_landed().filter(|_| q != 0).map(|r| GpuRead {
+            frame: self.read_frame[r],
+            spans: core::array::from_fn(|k| g.gpu_ms(k as u32)),
+            busy_ms: g.gpu_busy_ms(),
+            px: self.read_px[r],
+        });
         let frame = DRAWN_FRAMES.get(|| 0.0);
         *frame += 1.0;
         if let Some(r) = asked {
@@ -1640,11 +1644,7 @@ impl Renderer {
         } else {
             self.screen.kind()
         };
-        let mut stat = self.stat(&draws, input.counted, gpu_spans);
-        stat.gpu_read = gpu_read;
-        stat.gpu_busy_ms = gpu_busy_ms;
-        stat.gpu_px = gpu_px;
-        stat.gpu_frame = gpu_frame;
+        let mut stat = self.stat(&draws, input.counted, gpu);
         stat.rays = self.screen.take_counts();
         self.touched = touched;
         self.read_uploads = read_uploads;
@@ -1706,7 +1706,7 @@ impl Renderer {
     /// What the scheduler asked for: a draw passed over because its upload, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
     /// only while `counted`, the profiler's, so a frame no one reads counts none.
-    fn stat(&self, draws: &Draws, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES]) -> FrameStat {
+    fn stat(&self, draws: &Draws, counted: bool, gpu: Option<GpuRead>) -> FrameStat {
         let b = uploads();
         let mut stats: DrawStats = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.all().filter(|_| counted) {
@@ -1727,16 +1727,12 @@ impl Renderer {
             c[1] += tris as f64;
         }
         FrameStat {
-            gpu_read: false,
-            gpu_busy_ms: 0.0,
-            gpu_px: 0.0,
-            gpu_frame: 0.0,
+            gpu,
             frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
             pack_bytes: self.pack.bytes as f64,
             draws: stats,
-            gpu_spans,
             light_moved: f64::from(self.screen.light_moved()),
             decor_boxes: f64::from(self.screen.decor_boxes()),
             rays: None,

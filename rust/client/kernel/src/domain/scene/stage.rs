@@ -56,14 +56,13 @@ use crate::domain::scene::marker;
 use crate::domain::scene::model;
 use crate::domain::scene::param;
 use crate::domain::scene::resolution;
-use crate::domain::scene::resolution::{GpuMeasure, Pace};
+use crate::domain::scene::resolution::Pace;
 use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
 use pxl_engine::way::tree;
 use pxl_render::gpu::api;
-use pxl_render::gpu::renderer;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
@@ -202,16 +201,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     api::take_landed(loader::on_image_landed);
     // The scale the world was drawn at, before a read can move the next.
     let scale = resolution::drawn_scale();
-    let gpu = out
-        .stat
-        .as_ref()
-        .filter(|stat| stat.gpu_read)
-        .map(|stat| GpuMeasure {
-            px_ms: renderer::px_ms(&stat.gpu_spans),
-            busy_ms: stat.gpu_busy_ms,
-            px: stat.gpu_px,
-        });
-    let interval_ms = resolution::load(pace, gpu);
+    let interval_ms = resolution::load(pace, out.stat.and_then(|stat| stat.gpu));
     if out.stat.is_some() {
         SCREEN_DEVICE.set(Some(api::device_generation()));
     }

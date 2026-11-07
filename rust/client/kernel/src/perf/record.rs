@@ -9,11 +9,12 @@
 
 use core::mem::size_of;
 
+use pxl_render::gpu::renderer::GpuRead;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
 use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
-use crate::perf::report::{GpuRead, RayRead};
+use crate::perf::report::RayRead;
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
 use crate::perf::task::TaskRow;

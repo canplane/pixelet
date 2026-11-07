@@ -4,6 +4,7 @@
 //! made of its frame, and the terrain tiles it took in, taken once its frame
 //! is drawn, so every figure in it is that one turn's.
 
+use pxl_render::gpu::renderer::GpuRead;
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::clock::now;
@@ -14,7 +15,7 @@ use xpute_core::sched::tick::TickReport;
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::Drawn;
 use crate::door;
-use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, GPU_SPANS};
+use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample};
 use crate::perf::record::{
     perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
 };
@@ -32,16 +33,6 @@ struct RendererFrame {
     device: DeviceSample,
     gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
-}
-
-/// A GPU read as it lands: the renderer's number of the frame it timed, its
-/// spans and that frame's world's pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GpuRead {
-    pub frame: f64,
-    pub spans: [f64; GPU_SPANS],
-    pub busy_ms: f64,
-    pub px: f64,
 }
 
 /// A frame's ray counts as they land: the renderer's number of the frame
@@ -102,12 +93,7 @@ pub fn set_renderer_frame(drawn: &Drawn) {
             uploads_bytes: stat.upload_bytes,
             pack_bytes: stat.pack_bytes,
         },
-        gpu_read: stat.gpu_read.then_some(GpuRead {
-            frame: stat.gpu_frame,
-            spans: stat.gpu_spans,
-            busy_ms: stat.gpu_busy_ms,
-            px: stat.gpu_px,
-        }),
+        gpu_read: stat.gpu,
         rays: stat.rays.map(|r| RayRead {
             frame: r.frame,
             rays: RaySample::of(r.counts),

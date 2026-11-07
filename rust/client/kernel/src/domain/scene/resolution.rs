@@ -31,8 +31,8 @@
 //! summed against their own budgets. Where the device keeps timestamps a
 //! sample is a GPU read's that landed, which not every frame has, timed at
 //! the pixels drawn now: its per-pixel spans' time P (pxl-render
-//! gpu/renderer.rs `px_ms`) and the rest of the GPU's busy time F; a window
-//! none landed in is not judged. Timed, a window whose load, F + P, is over
+//! gpu/renderer.rs `GpuRead::px_ms`) and the rest of the GPU's busy time F; a
+//! window none landed in is not judged. Timed, a window whose load, F + P, is over
 //! its budget by more than `RES_BAND` steps down at once, and
 //! `RES_UP_WINDOWS` windows in a row in which the step above, F + P·(its
 //! share over this one)², fits under its budget, this one's by the interval
@@ -57,6 +57,7 @@ use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
+use pxl_render::gpu::renderer::GpuRead;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use xpute_core::global::Global;
 
@@ -96,16 +97,6 @@ impl Pace {
 /// The frame's budget turns `paced_ms` apart take, in ms.
 fn budget(paced_ms: f64) -> f64 {
     paced_ms.max(param::RES_BUDGET_FLOOR_MS)
-}
-
-/// A frame as a GPU read that landed timed it (pxl-render gpu/renderer.rs
-/// `FrameStat`): its per-pixel spans' time (`px_ms`) and its busy time, in
-/// ms, and the world's pixels it was drawn at.
-#[derive(Clone, Copy)]
-pub struct GpuMeasure {
-    pub px_ms: f64,
-    pub busy_ms: f64,
-    pub px: f64,
 }
 
 /// A frame's cost, the judge's sample of it, in ms: the time the scale buys
@@ -348,11 +339,11 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 }
 
 /// A frame was paced: `gpu`, where a GPU read landed with it, is what that
-/// read timed (`GpuMeasure`). A frame drawn at another size than now is not
-/// counted, and a read timed at another size is no sample; the world's
+/// read timed. A frame drawn at another size than now is not counted, and a
+/// read timed at another size is no sample; the world's
 /// surface takes the scale the setting and the judge leave. The interval a rate changed asks of the
 /// runtime, 0 for its own under any setting but `auto`.
-pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
+pub fn load(pace: Pace, gpu: Option<GpuRead>) -> Option<f64> {
     let s = world()?;
     let mut interval_ms = None;
     let k = state();
@@ -369,9 +360,12 @@ pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
         let timed = api::device().is_some_and(|d| d.timestamps);
         let cost = if timed {
             gpu.filter(|t| t.busy_ms > 0.0 && t.px > 0.0 && t.px == drawn)
-                .map(|t| Cost {
-                    px_ms: t.px_ms,
-                    rest_ms: (t.busy_ms - t.px_ms).max(0.0),
+                .map(|t| {
+                    let px_ms = t.px_ms();
+                    Cost {
+                        px_ms,
+                        rest_ms: (t.busy_ms - px_ms).max(0.0),
+                    }
                 })
         } else {
             Some(Cost {
