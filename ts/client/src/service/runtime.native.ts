@@ -10,7 +10,7 @@ import { follow_refused_files } from "@/sys/fs/refusal.ts";
 import { declare_source, settled } from "@/sys/fs/source.ts";
 import { set_online } from "@/origin/online.ts";
 import { manifest, perf_here } from "@/runtime/start.ts";
-import { set_kernel } from "@/runtime/kernel.ts";
+import { set_kernel } from "@/port/kernel.ts";
 import { started, ui } from "@/runtime/open.ts";
 import { gpu_present } from "@/port/gpu.ts";
 import * as device from "@/service/device.ts";

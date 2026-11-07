@@ -1,4 +1,4 @@
-// @pxl/client/runtime/kernel.ts
+// @pxl/client/port/kernel.ts
 
 /** The kernel as the client reaches it once started: its commands, bound to
  * the shell's link (`ui`), and the profiler's reads (`perf`), made where the

@@ -25,7 +25,7 @@ import { namespace } from "@/sys/fs/namespace.ts";
 import { submit_grant } from "@/port/surface.ts";
 import { text_layout, text_raster } from "@/port/text.ts";
 import { answer, type PerfRead } from "@/port/perf.ts";
-import type { Perf } from "@/runtime/kernel.ts";
+import type { Perf } from "@/port/kernel.ts";
 import { source } from "@/service/kernel.ts";
 import { gpu } from "@/service/gpu.ts";
 

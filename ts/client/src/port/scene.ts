@@ -5,7 +5,7 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { encode_scene_chat, SceneContent } from "@/abi/cmd.spec.ts";
-import { kernel, ui } from "@/runtime/kernel.ts";
+import { kernel, ui } from "@/port/kernel.ts";
 
 /** The world drawn into `surface`. */
 export function draw_world(surface: u32): void {

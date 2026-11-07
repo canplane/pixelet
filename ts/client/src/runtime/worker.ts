@@ -20,7 +20,7 @@ import { follow_refused_files } from "@/sys/fs/refusal.ts";
 import { set_storage } from "@/sys/fs/storage.ts";
 import { set_online } from "@/origin/online.ts";
 import { config, perf_here } from "@/runtime/start.ts";
-import { set_kernel } from "@/runtime/kernel.ts";
+import { set_kernel } from "@/port/kernel.ts";
 import type { Page, ToKernel, ToShell } from "@/runtime/page.ts";
 import { answer, type PerfRead } from "@/port/perf.ts";
 import * as online from "@/service/online.ts";

@@ -5,7 +5,7 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Tracking } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/runtime/kernel.ts";
+import { kernel } from "@/port/kernel.ts";
 import * as sensor from "@/service/sensor.ts";
 import { interactive } from "./input.ts";
 

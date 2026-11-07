@@ -15,7 +15,7 @@ import {
 } from "@/abi/cmd.spec.ts";
 import { type SensorListener } from "@/service/types.ts";
 import * as sensor from "@/service/sensor.ts";
-import { kernel } from "@/runtime/kernel.ts";
+import { kernel } from "@/port/kernel.ts";
 
 export function locate(): void {
   kernel.sensor_locate();

@@ -10,7 +10,7 @@ import {
   type PointerPhase as PlacePhase,
 } from "@/service/types.ts";
 import * as sensor from "@/service/sensor.ts";
-import { kernel, ui } from "@/runtime/kernel.ts";
+import { kernel, ui } from "@/port/kernel.ts";
 
 /** The next turn made interactive, as an input asks. */
 export function interactive(): void {

@@ -5,7 +5,7 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Tool } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/runtime/kernel.ts";
+import { kernel } from "@/port/kernel.ts";
 
 /** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
 export function tool(tool: Tool, val: u32, scale_steps: i32): Promise<i32> {

@@ -39,7 +39,7 @@ import {
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { mem } from "@xpute/runtime";
-import { kernel, perf } from "@/runtime/kernel.ts";
+import { kernel, perf } from "@/port/kernel.ts";
 
 const WORD = 8;
 /** A task's `path` column, its bytes (perf.json `TASK`). */

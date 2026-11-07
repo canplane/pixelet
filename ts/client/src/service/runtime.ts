@@ -12,7 +12,7 @@ import { start } from "@xpute/runtime";
 import { mirror_source, settled } from "@/sys/fs/source.ts";
 import { is_kept } from "@/sys/fs/storage.ts";
 import { set_online } from "@/origin/online.ts";
-import { set_kernel } from "@/runtime/kernel.ts";
+import { set_kernel } from "@/port/kernel.ts";
 import type { ToKernel, ToShell } from "@/runtime/page.ts";
 import { manifest } from "@/runtime/start.ts";
 import { started, ui } from "@/runtime/open.ts";

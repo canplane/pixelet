@@ -18,7 +18,7 @@ import {
   read_shell_view,
 } from "@/abi/cmd.spec.ts";
 import { onabort } from "@/sys/abort.ts";
-import { kernel, ui as link } from "@/runtime/kernel.ts";
+import { kernel, ui as link } from "@/port/kernel.ts";
 import { GPU_STATE, set_gpu } from "@/port/gpu.ts";
 import { SENSOR_LISTENER, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import * as snapshot from "@/port/snapshot.ts";

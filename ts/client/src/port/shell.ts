@@ -11,7 +11,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { NodeValue, NodeView } from "@xpute/kit/wire/xtp/mod.ts";
 import { encode_args } from "@xpute/runtime";
 import { MACHINE } from "@/abi/machine.spec.ts";
-import { ui } from "@/runtime/kernel.ts";
+import { ui } from "@/port/kernel.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
 export { boot_state, watch_boot } from "@/abi/boot.ts";

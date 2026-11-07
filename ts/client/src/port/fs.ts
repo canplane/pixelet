@@ -5,7 +5,7 @@
 
 import { fs_exports } from "@xpute/runtime";
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
-import { ui } from "@/runtime/kernel.ts";
+import { ui } from "@/port/kernel.ts";
 
 /** A refused file set aside, so the kernel reads it again (FS_CHANGED). */
 export function fs_changed(f: RefusedFile): void {

@@ -8,7 +8,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { type FrameGrant, gpu_exports } from "@xpute/runtime";
 import { type SurfaceDriver } from "@/service/types.ts";
 import * as origin from "@/service/origin.ts";
-import { kernel, ui } from "@/runtime/kernel.ts";
+import { kernel, ui } from "@/port/kernel.ts";
 
 /** A surface as the place drives it: 0 opened when the kernel has none left;
  * `draw`, where given, says what it draws as it opens (scene.ts). */
