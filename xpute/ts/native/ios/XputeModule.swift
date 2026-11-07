@@ -50,6 +50,15 @@ public class XputeModule: Module {
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
     }
 
+    // A word's number as a Double: every u32 fits, and Expo's fast path takes it.
+    Function("load") { (at: Double) -> Double in
+      Double(xpute_load(UInt32(at)))
+    }
+
+    Function("store") { (at: Double, word: Double) in
+      xpute_store(UInt32(at), UInt32(word))
+    }
+
     Function("run") { (deadlineMs: Double) -> Double in
       xpute_run(deadlineMs)
     }

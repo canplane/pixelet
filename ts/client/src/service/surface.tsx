@@ -270,5 +270,6 @@ export function Preview({
     return openSurface(canvas, driver, (handle) => open.current(handle));
   }, [openKey]);
 
-  return <canvas ref={ref} style={FILL} />;
+  // A canvas each surface: one crosses to the kernel's worker once, for good.
+  return <canvas key={openKey} ref={ref} style={FILL} />;
 }

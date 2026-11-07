@@ -34,6 +34,9 @@ export function open(
           const [wake_ms, turn_ms] = XPUTE.turns();
           heard(wake_ms, turn_ms);
         });
+        // The core outlives a JavaScript reload, and tells nothing more until
+        // what it told before the reload is asked for.
+        XPUTE.turns();
       },
     },
   });

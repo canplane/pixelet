@@ -60,4 +60,11 @@ object Core {
 
   /** The memory, a direct buffer over the whole region the core took. */
   external fun mem(): ByteBuffer
+
+  /** The word at byte `at` of the memory, loaded with acquire, a Double since
+   * Kotlin's Int stops short of a u32. */
+  external fun load(at: Double): Double
+
+  /** `word` stored at byte `at` of the memory with release. */
+  external fun store(at: Double, word: Double)
 }

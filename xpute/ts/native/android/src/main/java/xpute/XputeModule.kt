@@ -32,6 +32,10 @@ class XputeModule : Module() {
     // the buffer is.
     Function("mem") { NativeArrayBuffer(Core.mem()) }
 
+    Function("load") { at: Double -> Core.load(at) }
+
+    Function("store") { at: Double, word: Double -> Core.store(at, word) }
+
     Function("run") { deadlineMs: Double -> Core.run(deadlineMs) }
 
     Function("kick") { deadlineMs: Double -> Core.kick(deadlineMs) }

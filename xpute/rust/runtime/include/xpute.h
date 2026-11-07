@@ -38,6 +38,12 @@ void xpute_resume(void);
 // reads the rings through.
 uint8_t *xpute_mem(uint32_t *bytes);
 
+// The word at byte `at` of the memory, loaded with acquire, and `word` stored
+// there with release: for an app whose language has no atomics of its own, a
+// ring's positions among what it reads and writes beside the core's thread.
+uint32_t xpute_load(uint32_t at);
+void xpute_store(uint32_t at, uint32_t word);
+
 // `answer`, or none for null, answers the core's calls: each a frame
 // laid at an offset of the memory, answered on the thread waiting in
 // `xpute_run` or the one calling `xpute_answer`, with a value or -errno. It

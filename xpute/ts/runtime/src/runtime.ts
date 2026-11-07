@@ -87,13 +87,15 @@ export type GpuState =
 export type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
 /** The core's memory, where its stream begins, what it asks; `ready` tells
- * the core a device answered (GPU_READY), `wake` asks a turn. */
+ * the core a device answered (GPU_READY), `wake` asks a turn, `shown` says
+ * whether the UI shows the core (`Link.visible`). */
 export interface GpuGrant {
   mem: ArrayBuffer;
   at: u32;
   ask: GpuAsk;
   ready(): void;
   wake(): void;
+  shown(): boolean;
 }
 
 /** The core's report as it aborts: the errno it broke, where, and two
@@ -193,7 +195,8 @@ export interface Link extends Sender {
   pause(): void;
   /** Shown or hidden; each change told the core (SYS_RESUME, SYS_SUSPEND). */
   visible(visible: boolean): void;
-  /** A canvas lent to the GPU under the core's handle, and let go. */
+  /** A canvas lent to the GPU under the core's handle, and let go. Across a
+   * port a canvas is lent once: it crosses for good. */
   bind(handle: u32, canvas: Canvas): void;
   unbind(handle: u32): void;
 }
@@ -291,6 +294,10 @@ export function mount<G extends Grant>(
   };
   core.answer_with((at) => doorbell.answer(at));
 
+  // Turns run while resumed and shown.
+  let resumed = false;
+  let shown = true;
+
   if (gpu) {
     gpu.watch(ui.gpu);
     gpu.grant({
@@ -299,12 +306,10 @@ export function mount<G extends Grant>(
       ask: m.gpu!,
       ready: () => send(GpuCommand.GPU_READY),
       wake: () => scheduler.wake(),
+      shown: () => shown,
     });
   }
 
-  // Turns run while resumed and shown.
-  let resumed = false;
-  let shown = true;
   function steer(): void {
     if (resumed && shown) {
       thread?.resume();

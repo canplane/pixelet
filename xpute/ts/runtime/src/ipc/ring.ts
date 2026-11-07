@@ -1,9 +1,10 @@
 // @xpute/runtime/ipc/ring.ts
 
 /** A ring of frames, laid out by spec/ipc/ring.json. Each end writes one of
- * the positions, the producer TAIL and the consumer HEAD, each stored with
- * release after the frames it covers and loaded with acquire before them
- * (Atomics), so a core on another thread reads what they say. */
+ * the positions, the producer TAIL and the consumer HEAD: it reads its own as
+ * it stands, stores it with release after the frames it covers, and loads the
+ * other's with acquire before them (atomic.ts), so a core on another thread
+ * reads what they say. */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -12,6 +13,7 @@ import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { HDR_SZ, WORD_SZ } from "@xpute/kit/wire/xtp/spec.ts";
 
+import { load_acquire, store_release } from "./atomic";
 import * as frame from "./frame.ts";
 import {
   CAP,
@@ -105,15 +107,16 @@ export class Ring {
   }
 
   get head(): u32 {
-    return Atomics.load(this.words, HEAD);
+    return load_acquire(this.words, HEAD);
   }
 
   get tail(): u32 {
-    return Atomics.load(this.words, TAIL);
+    return load_acquire(this.words, TAIL);
   }
 
+  /** The frames not yet taken, as their producer counts them. */
   get len(): u32 {
-    return (this.tail - this.head) >>> 0;
+    return (this.words[TAIL] - this.head) >>> 0;
   }
 
   entry_at(pos: u32): u32 {
@@ -131,7 +134,7 @@ export class Ring {
     w.begin(
       this.slots,
       this.slot_view,
-      this.slot_at(this.tail),
+      this.slot_at(this.words[TAIL]),
       this.slot_bytes,
       cnt,
     );
@@ -148,23 +151,23 @@ export class Ring {
     result: i32 = 0,
   ): i32 {
     if (this.len >= this.cap) return Errno.EAGAIN;
+    const w = this.words;
+    const tail = w[TAIL];
     let pkt_at = 0;
     if (pkt !== null) {
-      const start = this.slot_at(this.tail);
+      const start = this.slot_at(tail);
       if (pkt.start !== start) {
         throw new InvariantError(Errno.ENOTRECOVERABLE);
       }
       if (pkt.finish() < 0) return Errno.EMSGSIZE;
       pkt_at = this.slot_base + start;
     }
-    const w = this.words;
-    const tail = this.tail;
     const at = this.entry_at(tail);
     w[at + frame.TAG] = tag;
     w[at + frame.CMD] = frame.cmd_word(cmd, flags);
     w[at + frame.RESULT] = result >>> 0;
     w[at + frame.PKT] = pkt_at;
-    Atomics.store(w, TAIL, (tail + 1) >>> 0);
+    store_release(w, TAIL, (tail + 1) >>> 0);
     return Errno.OK;
   }
 
@@ -184,7 +187,8 @@ export class Ring {
 
   /** -1 when empty. */
   peek(): number {
-    return this.len === 0 ? -1 : this.entry_at(this.head);
+    const head = this.words[HEAD];
+    return this.tail === head ? -1 : this.entry_at(head);
   }
 
   tag(at: u32): u32 {
@@ -219,8 +223,8 @@ export class Ring {
     return this.slots.subarray(off, off + len);
   }
 
+  /** Past the entry `peek` gave. */
   advance(): void {
-    if (this.len === 0) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    Atomics.store(this.words, HEAD, (this.head + 1) >>> 0);
+    store_release(this.words, HEAD, (this.words[HEAD] + 1) >>> 0);
   }
 }

@@ -70,12 +70,13 @@ export interface Hello {
 }
 
 /** The UI's end of `port`, what comes down handed to `ui`; `rose` settles
- * once the core is up. */
+ * once the core is up, and `stop` is the core's stop where the worker that
+ * ran it died with no word of its own. */
 export function connect(
   port: MessagePort,
   slot_bytes: u32,
   ui: Ui,
-): { link: Link; rose: Promise<void> } {
+): { link: Link; rose: Promise<void>; stop(): void } {
   const buf = new Uint8Array(slot_bytes);
   const view = new DataView(buf.buffer);
   const w = new PacketWriter();
@@ -83,7 +84,6 @@ export function connect(
     writer: (n) => ((cnt = n), w.begin(buf, view, 0, buf.length, n)),
   };
   const waiting = new Map<u32, (res: i32) => void>();
-  const lent = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
   const rose = Promise.withResolvers<void>();
   const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
   let cnt = 0;
@@ -99,14 +99,19 @@ export function connect(
   }
 
   function bind(handle: u32, canvas: Canvas): void {
-    if (canvas instanceof OffscreenCanvas) {
-      return up({ kind: "bind", handle, canvas }, [canvas]);
-    }
-    const had = lent.get(canvas);
-    if (had) return up({ kind: "bind", handle, canvas: had });
-    const off = canvas.transferControlToOffscreen();
-    lent.set(canvas, off);
+    const off =
+      canvas instanceof OffscreenCanvas
+        ? canvas
+        : canvas.transferControlToOffscreen();
     up({ kind: "bind", handle, canvas: off }, [off]);
+  }
+
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE));
+    waiting.clear();
+    ui.stop();
   }
 
   const call = (name: Call, arg?: unknown) => up({ kind: "call", name, arg });
@@ -128,10 +133,7 @@ export function connect(
       case "gpu":
         return ui.gpu(m.state);
       case "stop":
-        stopped = true;
-        waiting.forEach((done) => done(Errno.ENOTRECOVERABLE));
-        waiting.clear();
-        return ui.stop();
+        return stop();
       case "rose":
         return m.why === null ? rose.resolve() : rose.reject(new Error(m.why));
     }
@@ -159,7 +161,7 @@ export function connect(
     bind,
     unbind: (handle) => call("unbind", handle),
   };
-  return { link, rose: rose.promise };
+  return { link, rose: rose.promise, stop };
 }
 
 /** The worker's end of `port`: its runtime `r`, what the UI takes posted down

@@ -116,22 +116,13 @@ export class WebGpu implements Gpu {
     );
   }
 
-  /** A hidden page draws nothing, so it waits to be shown; a worker, which
-   * has no document, asks again on the timer. */
+  /** A hidden page draws nothing, so an ask waits to be shown and spends no
+   * try; a worker has no document, so the core's runtime says. */
   private retry(): void {
-    if (
-      typeof document === "undefined" ||
-      document.visibilityState === "visible"
-    ) {
-      setTimeout(() => this.request(), RETRY_MS);
-      return;
-    }
-    const shown = () => {
-      if (document.visibilityState !== "visible") return;
-      document.removeEventListener("visibilitychange", shown);
-      this.request();
-    };
-    document.addEventListener("visibilitychange", shown);
+    setTimeout(
+      () => (this.granted!.shown() ? this.request() : this.retry()),
+      RETRY_MS,
+    );
   }
 
   /** False where no adapter answered. What the device is, the core reads

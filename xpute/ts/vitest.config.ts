@@ -6,6 +6,7 @@ export default defineConfig({
       "kit/src/**/*.test.ts",
       "runtime/src/**/*.test.ts",
       "gpu/src/runtime.frames.test.ts",
+      "gpu/src/web.test.ts",
       "example/**/*.test.ts",
     ],
     testTimeout: 0,

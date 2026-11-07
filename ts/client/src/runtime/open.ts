@@ -9,6 +9,7 @@
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { read_abort, type Ui } from "@xpute/runtime";
+import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import { Command as Sys } from "@xpute/runtime/abi/sys.spec.ts";
 import {
   Command,
@@ -27,13 +28,18 @@ import type { OnOpen } from "@/service/types.ts";
 
 type Take = (f: BranchCursor, named: U8Array | null) => void;
 
-/** The shell, as the UI the kernel tells. */
-export function ui(on: OnOpen): Ui {
+/** The shell, as the UI the kernel tells. The snapshot is read here alone;
+ * `refused` takes what it says of the files to where the files are. */
+export function ui(
+  on: OnOpen,
+  refused: (files: readonly RefusedFile[]) => void,
+): Ui {
   const take = new Map<number, Take>([
     [
       Command.SHELL_SNAPSHOT,
       (_f, named) => {
         snapshot.set_snapshot(named!);
+        refused(snapshot.current().refused_files);
         on.snapshot();
       },
     ],

@@ -99,8 +99,9 @@ export class Doorbell implements PacketRoom {
    * is written in its slot, and room for one takes a turn. */
   private _later: [u32, u32, u32, i32, Encode | null][] = [];
   on_wake: ((wake_ms: f64) => void) | null = null;
-  /** Told of every turn heard, before `on_wake` is told the same wake: what
-   * the core's own thread ran since it was last heard, whoever kicked it
+  /** Told of every turn heard, before what it posted is read and `on_wake`
+   * told the same wake, so what that read asks outlives the turn: what the
+   * core's own thread ran since it was last heard, whoever kicked it
    * (`turns`), and each turn rung (`ring`): its longest turn and when it
    * wants the next. */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
@@ -223,6 +224,7 @@ export class Doorbell implements PacketRoom {
       this._terminate("the core trapped", err, true);
       return NO_WAKE;
     }
+    this.on_turn?.(performance.now() - t0, wake);
     try {
       this._read();
     } catch (err) {
@@ -235,7 +237,6 @@ export class Doorbell implements PacketRoom {
       );
       return NO_WAKE;
     }
-    this.on_turn?.(performance.now() - t0, wake);
     this.on_wake?.(wake);
     return wake;
   }
@@ -261,6 +262,7 @@ export class Doorbell implements PacketRoom {
       this._terminate("the core stopped", null, true);
       return;
     }
+    this.on_turn?.(turn_ms, wake_ms);
     try {
       this._read();
     } catch (err) {
@@ -271,7 +273,6 @@ export class Doorbell implements PacketRoom {
       );
       return;
     }
-    this.on_turn?.(turn_ms, wake_ms);
     this.on_wake?.(wake_ms);
   }
 

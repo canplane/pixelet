@@ -10,6 +10,14 @@ export function get(key: string): string | null {
   }
 }
 
+export function keys(): string[] {
+  try {
+    return Object.keys(globalThis.localStorage);
+  } catch {
+    return [];
+  }
+}
+
 export function set(key: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(key, value);

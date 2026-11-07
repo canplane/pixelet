@@ -16,6 +16,7 @@ mod say;
 mod thread;
 
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU32, Ordering};
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -139,6 +140,28 @@ impl Core {
         )
     }
 
+    /// The word at byte `at` of the memory, loaded with acquire: for a runtime
+    /// whose language has no atomics of its own.
+    pub fn load(self, at: u32) -> u32 {
+        self.word(at).load(Ordering::Acquire)
+    }
+
+    /// `word` stored at byte `at` of the memory with release (`load`).
+    pub fn store(self, at: u32, word: u32) {
+        self.word(at).store(word, Ordering::Release);
+    }
+
+    fn word(self, at: u32) -> &'static AtomicU32 {
+        let (mem, bytes) = self.mem();
+        assert!(
+            at.is_multiple_of(4) && at as usize + 4 <= bytes,
+            "no word at {at} of a {bytes}-byte memory"
+        );
+        // SAFETY: an aligned word inside the memory, which lives as long as the
+        // process, and which both ends touch only as an atomic.
+        unsafe { AtomicU32::from_ptr(mem.as_ptr().add(at as usize).cast()) }
+    }
+
     pub fn heap_stat(self) -> HeapStat {
         alloc::stat()
     }
@@ -176,8 +199,10 @@ pub fn turn(machine: &Machine, deadline_ms: f64, boot: fn() -> BootInfo, entry: 
 /// or written with the memory's size; `xpute_call_on(int32_t
 /// (*answer)(uint32_t))` (`answer_with`); `xpute_notify_on(void (*f)(void))`
 /// (`notify_on`); `xpute_answer(void)` (`answer`); and
-/// `xpute_turns(double *turn_ms) -> double` (`turns`). `core()` is the
-/// program's for its own calls.
+/// `xpute_turns(double *turn_ms) -> double` (`turns`), and
+/// `xpute_load(uint32_t at) -> uint32_t` and
+/// `xpute_store(uint32_t at, uint32_t word)` (`Core::load`, `Core::store`).
+/// `core()` is the program's for its own calls.
 #[macro_export]
 macro_rules! native_abi {
     ($cfg:expr, $entry:expr $(,)?) => {
@@ -236,6 +261,16 @@ macro_rules! native_abi {
         #[no_mangle]
         pub extern "C" fn xpute_kick(deadline_ms: f64) {
             xpute_native::kick(deadline_ms)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_load(at: u32) -> u32 {
+            xpute_native::core().load(at)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_store(at: u32, word: u32) {
+            xpute_native::core().store(at, word);
         }
 
         #[no_mangle]
@@ -301,7 +336,8 @@ macro_rules! native_abi {
 /// `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
 /// `kick(deadlineMs: Double)`, `pause()`, `resume()`, `answer()`,
 /// `turns(): DoubleArray` (the wake,
-/// then the longest turn) and `mem(): ByteBuffer`, calling back its static
+/// then the longest turn), `mem(): ByteBuffer`, `load(at: Double): Double`
+/// and `store(at: Double, word: Double)`, calling back its static
 /// `call(at: Int): Int` for each call and `onNotify()` for what
 /// `xpute_notify_on`'s function is told.
 #[macro_export]
@@ -420,6 +456,31 @@ macro_rules! native_core {
         ) -> $crate::jni::sys::jobject {
             // SAFETY: the environment JNI called with.
             unsafe { $crate::jni::turns(env) }
+        }
+
+        /// # Safety
+        /// Called by JNI.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_load(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            at: $crate::jni::sys::jdouble,
+        ) -> $crate::jni::sys::jdouble {
+            f64::from(xpute_load(at as u32))
+        }
+
+        /// # Safety
+        /// Called by JNI.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_store(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            at: $crate::jni::sys::jdouble,
+            word: $crate::jni::sys::jdouble,
+        ) {
+            xpute_store(at as u32, word as u32);
         }
 
         /// # Safety

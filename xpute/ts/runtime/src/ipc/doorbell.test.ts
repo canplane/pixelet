@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
+import { Scheduler } from "../sched/scheduler.ts";
+import { NO_WAKE } from "../sched/wake.ts";
 import { Doorbell } from "./doorbell.ts";
 import * as frame from "./frame.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
@@ -167,6 +169,37 @@ test("doorbell - a turn rung is heard before its wake", () => {
   door.on_wake = (wake_ms) => heard.push(`wake ${wake_ms}`);
   door.ring(0);
   assert.deepStrictEqual(heard, ["turn 20", "wake 20"]);
+});
+
+test("doorbell - a rung core's read asks the next turn, which the turn heard lets stand", () => {
+  const { mem, cq, sq_at, cq_at } = rings();
+  let turns = 0;
+  // A core with no wake of its own, whose first turn posts a frame.
+  const door = new Doorbell(mem, sq_at, cq_at, () => {
+    if (++turns === 1) cq.push(0, 2);
+    return NO_WAKE;
+  });
+  const moments: ((now: number) => void)[] = [];
+  const scheduler = new Scheduler(
+    door,
+    {
+      next: (consider) => moments.push(consider),
+      admit: () => true,
+      grant: () => ({ deadline: Infinity }),
+      observe: () => {},
+    },
+    () => {},
+  );
+  scheduler.resume();
+  moments.shift()!(0);
+  assert.deepStrictEqual(turns, 1);
+  moments.shift()!(0);
+  assert.deepStrictEqual(turns, 2, "a task may wait on the head passing");
+  assert.deepStrictEqual(
+    moments.length,
+    0,
+    "a turn that read nothing asks none",
+  );
 });
 
 test("doorbell - a request is answered by the reply its turn posts, and waits for no turn", async () => {

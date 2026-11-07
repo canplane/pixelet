@@ -24,6 +24,10 @@ interface Xpute {
    * waits for `answer`, or the core has stopped. */
   addListener(event: "onNotify", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
+  /** The word at byte `at` of the memory, loaded with acquire. */
+  load(at: u32): u32;
+  /** `word` stored at byte `at` of the memory with release. */
+  store(at: u32, word: u32): void;
   /** A turn ending no sooner than `deadlineMs` from its rise, waited for, its calls answered
    * here meanwhile: when the core wants the next, in ms; NaN once it has
    * terminated. Back early where no turn may begin until the completion ring
