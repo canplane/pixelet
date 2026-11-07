@@ -6,7 +6,6 @@ pub mod asset;
 #[path = "../../spec/src/directory.rs"]
 pub mod directory;
 pub mod fetch;
-pub mod fmt;
 pub mod spec;
 
 use std::path::{Path, PathBuf};

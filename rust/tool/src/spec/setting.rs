@@ -7,7 +7,8 @@
 //! the `dev` settings so the bundler drops them.
 //! A setting whose `stored` is false the kernel's store neither keeps nor reads.
 
-use super::data::ts_literal;
+use xpute_tool::spec::data::ts_literal;
+
 use super::{
     casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node,
     Output,
@@ -516,7 +517,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         format!(
             "export const SETTING = {} as const;",
-            ts_literal(&table(&|_| true)?, "f64", "")?
+            ts_literal(&table(&|_| true)?, "f64", "", &[])?
         ),
     ]);
     ts.extend([
@@ -525,7 +526,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .into(),
         format!(
             "export const SETTING_PRODUCTION = {} as const;",
-            ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
+            ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "", &[])?
         ),
     ]);
 

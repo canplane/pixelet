@@ -1,7 +1,7 @@
 // pxl-tool/spec/bake.rs
 
 use super::ingest::symbol_number;
-use super::{file, json_str, line_comments, packed, read, rs_doc, ts_doc, Output};
+use super::{file, json_str, line_comments, read, rgb, rs_doc, ts_doc, Output};
 
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/spec/bake/publication.json")?;
@@ -315,7 +315,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let color = |k: &str, f: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at(f)) {
             None => Ok("0".into()),
-            Some(c) => packed(c).map(|n| format!("0x{n:06x}ff")),
+            Some(c) => rgb(c).map(|n| format!("0x{n:06x}ff")),
         }
     };
     let mut rs = vec![
@@ -410,7 +410,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let fill = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at("fill")) {
             None => Ok(json_str("")),
-            Some(c) => packed(c).map(|n| json_str(&format!("#{n:06x}"))),
+            Some(c) => rgb(c).map(|n| json_str(&format!("#{n:06x}"))),
         }
     };
     for (doc, name, ty, each) in [

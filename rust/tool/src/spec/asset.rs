@@ -134,7 +134,7 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
         .map(|(n, e)| {
             Ok((
                 n.clone(),
-                super::packed(
+                super::rgb(
                     e.str_at("hex")
                         .ok_or(format!("color.json: ground.{n} has no hex"))?,
                 )?,

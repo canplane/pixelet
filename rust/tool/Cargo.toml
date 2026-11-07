@@ -11,7 +11,7 @@ doctest = false
 # No crate a generator writes into is a dependency: the generators must build
 # when that output is broken.
 [dependencies]
-# The command table's generator is xpute's, handed pixelet's table (spec/cmd.rs).
+# The generators are xpute's, handed pixelet's tables (spec/cmd.rs, spec/data.rs).
 xpute-tool = { path = "../../xpute/rust/tool" }
 fnv.workspace = true
 libm.workspace = true
