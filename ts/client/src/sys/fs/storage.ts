@@ -52,6 +52,15 @@ const KEYS: ReadonlyMap<string, string> = new Map([
   [String(storage.SETTINGS), "pxl:settings"],
 ]);
 
+/** Whether `key` holds a storage file or one set aside: what a page hands its
+ * kernel's worker of its storage (service/runtime.ts). */
+export function is_kept(key: string): boolean {
+  for (const k of KEYS.values()) {
+    if (key === k || key.startsWith(`${k}:aside:`)) return true;
+  }
+  return false;
+}
+
 /** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.
  * False, the key as it was, where the copy did not read back: storage that
  * refuses the write must not see the file emptied. */

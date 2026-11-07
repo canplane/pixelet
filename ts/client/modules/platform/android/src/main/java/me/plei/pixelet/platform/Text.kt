@@ -7,19 +7,11 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import expo.modules.kotlin.typedarray.Uint8Array
-import java.util.Locale
 
 // Text in the platform's own family, as the kernel asks for it
 // (ts/client/src/service/text.native.ts): how wide a line runs, and a line
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does — Text.swift's, on Android's engine.
-
-/** The language text is drawn in, which picks a Han character's form. */
-private var language: Locale? = null
-
-fun setTextLanguage(tag: String) {
-  language = Locale.forLanguageTag(tag)
-}
 
 /** How far a line of `text` runs at a CSS weight and a size, in pixels. */
 fun textWidth(text: String, weight: Double, px: Double): Double = paint(weight, px, 0xffffffffL).measureText(text).toDouble()
@@ -56,7 +48,6 @@ fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, 
 private fun paint(weight: Double, px: Double, rgba: Long): Paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
   typeface = Typeface.create(Typeface.DEFAULT, weight.toInt().coerceIn(1, 1000), false)
   textSize = px.toFloat()
-  language?.let { textLocale = it }
   val argb = ((rgba and 0xff) shl 24) or ((rgba ushr 8) and 0xffffff)
   color = argb.toInt()
 }

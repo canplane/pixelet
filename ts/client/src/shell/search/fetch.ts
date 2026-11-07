@@ -1,10 +1,9 @@
 // @pxl/client/shell/search/fetch.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { SEARCH_URL } from "@/port/shell.ts";
+import { get, SEARCH_URL } from "@/port/shell.ts";
 import type { NamePart } from "@/shell/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
-import * as origin from "@/service/origin.ts";
 import type { SEARCH_KIND } from "./search.spec.ts";
 
 /** A part as the API writes it: its subtype's number, and `approx` where no area holds the point. */
@@ -37,10 +36,7 @@ export async function fetchSearch(
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await origin.get(
-    `${SEARCH_URL}?${params.toString()}`,
-    opts?.signal,
-  );
+  const res = await get(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
   if (!res.ok) {
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();

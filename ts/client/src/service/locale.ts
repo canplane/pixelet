@@ -1,7 +1,5 @@
 // @pxl/client/service/locale.ts
 
-import { setLanguage } from "./text.ts";
-
 export function list(): readonly string[] {
   return navigator.languages ?? [navigator.language];
 }
@@ -9,5 +7,4 @@ export function list(): readonly string[] {
 /** index.html ships a static lang="en" for crawlers. */
 export function show(lng: string): void {
   document.documentElement.lang = lng;
-  setLanguage(lng);
 }

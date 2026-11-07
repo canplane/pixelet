@@ -57,7 +57,6 @@ class PlatformModule : Module() {
 
     // ---- text (service/text.native.ts, Text.kt) ----
 
-    Function("textLanguage") { tag: String -> setTextLanguage(tag) }
 
     Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
 

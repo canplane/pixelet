@@ -7,14 +7,13 @@ import { decor } from "@/shell/catalog/asset/decor.spec.ts";
 import { type Cube, cubeHex } from "@/shell/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
-import { asset_url } from "@/port/shell.ts";
+import { asset_url, href } from "@/port/shell.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
-import * as origin from "@/service/origin.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cube);
-  return key ? `${origin.url}${asset_url(key)}` : null;
+  return key ? href(asset_url(key)) : null;
 }
 
 interface CubeSwatchProps {

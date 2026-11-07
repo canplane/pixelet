@@ -8,13 +8,6 @@ import UIKit
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does.
 
-/// The language text is drawn in, which picks a Han character's form.
-private var language: String?
-
-func setTextLanguage(_ tag: String) {
-  language = tag
-}
-
 /// How far a line of `text` runs at a CSS weight and a size, in pixels.
 func textWidth(_ text: String, _ weight: Double, _ px: Double) -> Double {
   Double(CTLineGetTypographicBounds(line(text, weight, px, 0xffffffff), nil, nil, nil))
@@ -67,9 +60,6 @@ private func line(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32
   let color = CGColor(
     srgbRed: CGFloat(rgba >> 24) / 255, green: CGFloat((rgba >> 16) & 0xff) / 255, blue: CGFloat((rgba >> 8) & 0xff) / 255,
     alpha: CGFloat(rgba & 0xff) / 255)
-  var attributes: [NSAttributedString.Key: Any] = [.font: font(weight, px), .foregroundColor: color]
-  if let language {
-    attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language
-  }
+  let attributes: [NSAttributedString.Key: Any] = [.font: font(weight, px), .foregroundColor: color]
   return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
 }

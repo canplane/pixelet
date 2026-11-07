@@ -13,7 +13,6 @@ interface PxlPlatform {
   storageSet(key: string, value: string): void;
   clipboardSet(text: string): void;
   /** The language text is drawn in, which picks a Han character's form. */
-  textLanguage(tag: string): void;
   textWidth(weight: u32, px: f32, text: string): f32;
   textRaster(
     weight: u32,

@@ -7,30 +7,20 @@
 
 import type { f32, u32 } from "@xpute/kit/abi/word.ts";
 
-/** The language the text is drawn in, which picks a Han character's form. */
-let language = "";
-
-export function setLanguage(lng: string): void {
-  language = lng;
-}
-
 function face(weight: u32, px: f32): string {
   return `${weight} ${px}px system-ui`;
 }
 
-/** `lang` is in the HTML standard and not yet in TypeScript's DOM types. */
-type TextContext = OffscreenCanvasRenderingContext2D & { lang: string };
+let canvas: OffscreenCanvasRenderingContext2D | null | undefined;
 
-let canvas: TextContext | null | undefined;
-
-function context(): TextContext | null {
+function context(): OffscreenCanvasRenderingContext2D | null {
   if (canvas === undefined) {
     canvas =
       typeof OffscreenCanvas === "undefined"
         ? null
         : (new OffscreenCanvas(1, 1).getContext("2d", {
             willReadFrequently: true,
-          }) as TextContext | null);
+          }) as OffscreenCanvasRenderingContext2D | null);
   }
   return canvas;
 }
@@ -38,7 +28,6 @@ function context(): TextContext | null {
 export function width(weight: u32, px: f32, text: string): f32 {
   const ctx = context();
   if (ctx === null) return text.length * px * 0.6;
-  ctx.lang = language;
   ctx.font = face(weight, px);
   return ctx.measureText(text).width;
 }
@@ -60,7 +49,6 @@ export function raster(
   if (c.width < width) c.width = width;
   if (c.height < height) c.height = height;
   ctx.clearRect(0, 0, width, height);
-  ctx.lang = language;
   ctx.font = face(weight, px);
   ctx.fillStyle = `rgba(${rgba >>> 24},${(rgba >>> 16) & 0xff},${
     (rgba >>> 8) & 0xff
