@@ -43,8 +43,8 @@ LOAD_CAP_S = 90
 EVAL_CAP_S = 120
 DRIVE_S = 20
 
-READ = """(() => {
-  const r = pxl.perf.read();
+READ = """(async () => {
+  const r = await pxl.perf.read();
   const f = r.frames;
   return {
     load: Math.max(0, ...r.longs.map((l) => l.durationMs)),
