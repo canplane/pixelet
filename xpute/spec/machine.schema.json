@@ -61,7 +61,7 @@
           "type": "integer"
         },
         "turn_posts": {
-          "description": "What one turn posts besides its replies: its events, its imports, and a call's slot.",
+          "description": "What one turn posts besides its replies: its imports and a call's slot.",
           "type": "integer",
           "minimum": 0
         }

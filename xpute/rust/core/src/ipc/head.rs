@@ -20,7 +20,7 @@ pub struct Head {
     pub slot_bytes: u32,
     pub sq_at: u32,
     pub cq_at: u32,
-    /// 0 without the GPU socket.
+    /// 0 without the GPU device.
     pub gpu_at: u32,
 }
 

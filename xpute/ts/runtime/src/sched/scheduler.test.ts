@@ -22,7 +22,7 @@ function setup() {
   const moments: ((now: number) => void)[] = [];
   const doorbell = {
     terminated: false,
-    wake: null as ((wake_ms: number) => void) | null,
+    on_wake: null as ((wake_ms: number) => void) | null,
     on_turn: null as ((turn_ms: number, wake_ms: number) => void) | null,
     kick: (deadline_ms: number) => kicks.push(deadline_ms),
     batch: (f: () => void) => f(),
@@ -39,14 +39,14 @@ function setup() {
     () => {},
   );
   /** A turn the thread ran that the scheduler did not kick, a device's, heard
-   * as `Doorbell.ack` hears it: the turn, then its wake. */
+   * as `Doorbell.turns` hears it: the turn, then its wake. */
   const heard = (wake_ms: number) => {
     doorbell.on_turn!(1, wake_ms);
-    doorbell.wake!(wake_ms);
+    doorbell.on_wake!(wake_ms);
   };
   /** The policy's next moment, given. */
   const moment = () => moments.shift()?.(performance.now());
-  return { scheduler, wake: doorbell.wake!, heard, kicks, moments, moment };
+  return { scheduler, wake: doorbell.on_wake!, heard, kicks, moments, moment };
 }
 
 test("a thread core's timed wake waits for its time and the policy's moment", () => {

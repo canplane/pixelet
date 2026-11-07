@@ -1,7 +1,7 @@
 // xpute-core/entry.rs
 
 //! The one call a core runs inside, `run`, and what its runtime's form hands
-//! it there. The floor names the entry it calls, as a C runtime names `main`:
+//! it there. xpute names the entry it calls, as a C runtime names `main`:
 //! a module exports `run` (`wasm`), a native library's thread loops on it
 //! (xpute-runtime `native`), and the program implements it.
 //!
@@ -28,7 +28,7 @@ pub struct BootInfo {
     /// Where the core's own ranges may begin: in a module where the linker
     /// stopped; in a native library, the end of its config's front.
     pub data_end: u32,
-    pub clock: fn() -> f64,
+    pub now: fn() -> f64,
     pub call: crate::call::Call,
     pub heap_stat: fn() -> HeapStat,
     /// Where a form whose core shares its process with the runtime says why
@@ -38,7 +38,7 @@ pub struct BootInfo {
     /// Whether the GPU's runtime takes a frame now without blocking (xpute-gpu
     /// `admit`): a native runtime's own count, or a page's as its device's
     /// block tells it; none where the core draws nothing.
-    pub admit: Option<fn() -> bool>,
+    pub admit_frame: Option<fn() -> bool>,
     /// What runs the stream the core has just published at once, on the
     /// core's thread, rung as END is stored (`ipc::stream`, xpute-gpu
     /// `runtime::native::publish`); none where the runtime runs it as the turn
@@ -57,7 +57,7 @@ pub fn run(deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
     if !crate::call::is_set() {
         let b = boot();
         if !crate::clock::is_set() {
-            crate::clock::set(b.clock);
+            crate::clock::set(b.now);
         }
         crate::call::set(b.call);
         crate::ipc::stream::on_publish(b.publish);

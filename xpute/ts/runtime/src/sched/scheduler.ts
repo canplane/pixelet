@@ -9,7 +9,7 @@
  * A core on a thread of its own (runtime.ts `Core.thread`) runs its turns as
  * kicks ask and keeps no timer, so the scheduler is its one scheduler as it is
  * a page core's: each wake the core asks, at once or in `n` ms, as the
- * doorbell hears it (`Doorbell.ack`, `ring`), and each the runtime asks
+ * doorbell hears it (`Doorbell.turns`, `ring`), and each the runtime asks
  * (`wake`), waits for the moment the policy gives and admits, where a
  * frame's grant is submitted and kicked with its deadline. It asks no turn for
  * what the runtime sent, which the doorbell kicked. Every turn is heard
@@ -60,9 +60,9 @@ export class Scheduler<G extends Grant = Grant> {
     this._doorbell = doorbell;
     this._policy = policy;
     this._submit = submit;
-    doorbell.wake = (wake_ms) => this._wake_in(wake_ms);
+    doorbell.on_wake = (wake_ms) => this._wake_in(wake_ms);
     // A turn heard, whoever kicked or rang it, ends with the wake it asks,
-    // told next (`Doorbell.ack`, `ring`): the timer and the moments asked for
+    // told next (`Doorbell.turns`, `ring`): the timer and the moments asked for
     // an earlier wake go, and only what the runtime still wants is asked again.
     doorbell.on_turn = (turn_ms, wake_ms) => {
       this._gen++;

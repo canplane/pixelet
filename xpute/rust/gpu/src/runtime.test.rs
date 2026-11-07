@@ -54,12 +54,15 @@ fn runtime_paces_frames() {
         runtime(&adapter, &device, &queue, 1),
         runtime(&adapter, &device, &queue, 2),
     );
-    assert!(busy.admit());
+    assert!(busy.admit_frame());
     busy.present();
-    assert!(!busy.admit(), "its one frame is unfinished");
-    assert!(other.admit(), "another runtime's frames are not its own");
+    assert!(!busy.admit_frame(), "its one frame is unfinished");
+    assert!(
+        other.admit_frame(),
+        "another runtime's frames are not its own"
+    );
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
-    assert!(busy.admit(), "its frame ended with the queue's work");
+    assert!(busy.admit_frame(), "its frame ended with the queue's work");
 }
 
 /// A frame's callback takes it off its count whether the queue calls it or
@@ -83,7 +86,7 @@ fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
     let mut h = runtime(&adapter, &device, &queue, 1);
     let count = h.unfinished_cnt.clone();
-    assert!(h.admit());
+    assert!(h.admit_frame());
     h.present();
     assert_eq!(
         count.load(Ordering::Relaxed),

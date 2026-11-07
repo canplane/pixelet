@@ -35,11 +35,11 @@ const FRONT: Front = {
 };
 /** A command of the program's, and one of xpute's own, the core posts
  * each turn. */
-const PROGRAM_EVENT = (frame.PROGRAM_MAJOR << 8) | 9;
-const OWN_EVENT = 0x0109;
+const PROGRAM_IMPORT = (frame.PROGRAM_MAJOR << 8) | 9;
+const OWN_IMPORT = 0x0109;
 
 /** A core that opens the rings its runtime laid, then each turn answers what
- * was sent it, 0, and posts PROGRAM_EVENT and OWN_EVENT; `trap` makes a turn
+ * was sent it, 0, and posts PROGRAM_IMPORT and OWN_IMPORT; `trap` makes a turn
  * throw. */
 function core(trap: () => boolean = () => false): Core & { turns: number[] } {
   const mem = new ArrayBuffer(FRONT.cq_slots_at + slots_bytes(CAP, SLOT));
@@ -58,8 +58,8 @@ function core(trap: () => boolean = () => false): Core & { turns: number[] } {
         cq.push(sq.tag(at), sq.cmd(at), frame.RES);
         sq.advance();
       }
-      cq.push(0, PROGRAM_EVENT);
-      cq.push(0, OWN_EVENT);
+      cq.push(0, PROGRAM_IMPORT);
+      cq.push(0, OWN_IMPORT);
       return -1;
     },
     answer_with() {},
@@ -102,8 +102,8 @@ test("mount - lays the front before any turn, and hands the program only its own
     [runtime.head.sq_at, runtime.head.cq_at, runtime.head.gpu_at],
     [SQ_AT, CQ_AT, STREAM_AT],
   );
-  runtime.call(PROGRAM_EVENT);
-  assert.deepStrictEqual(cmds, [PROGRAM_EVENT]);
+  runtime.call(PROGRAM_IMPORT);
+  assert.deepStrictEqual(cmds, [PROGRAM_IMPORT]);
 });
 
 test("mount - a front already laid is kept as it is, its rings' positions with it", () => {
@@ -152,7 +152,7 @@ test("mount - a core that stops runs no more turns and is told once", () => {
       },
     );
     trapping = true;
-    assert.deepStrictEqual(runtime.call(PROGRAM_EVENT), Errno.ENOTRECOVERABLE);
+    assert.deepStrictEqual(runtime.call(PROGRAM_IMPORT), Errno.ENOTRECOVERABLE);
     runtime.resume();
     assert.deepStrictEqual(terminated, 1);
     assert.deepStrictEqual(
@@ -183,6 +183,6 @@ test("mount - grants the GPU the core's stream and memory, and runs it as each t
     submit: () => {},
   });
   assert.deepStrictEqual([granted, ran], [[STREAM_AT], 0]);
-  runtime.call(PROGRAM_EVENT);
+  runtime.call(PROGRAM_IMPORT);
   assert.deepStrictEqual(ran, 1);
 });

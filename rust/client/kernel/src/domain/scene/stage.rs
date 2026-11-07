@@ -30,7 +30,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::perf::report::{set_runtime_frame, GpuRead, RayRead};
+use crate::perf::report::{set_renderer_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -206,7 +206,7 @@ pub fn stage_render(pace: Pace) {
         }),
         text: text_raster,
         atlas: atlas(),
-        admit: boot::admit(),
+        admit_frame: boot::admit_frame(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
         animated,
@@ -237,7 +237,7 @@ pub fn stage_render(pace: Pace) {
         });
     resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
-        set_runtime_frame(
+        set_renderer_frame(
             out.kind,
             GpuSample {
                 scale,
@@ -255,7 +255,7 @@ pub fn stage_render(pace: Pace) {
         .draws
         .iter()
         .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
-    set_runtime_frame(
+    set_renderer_frame(
         out.kind,
         GpuSample {
             scale,

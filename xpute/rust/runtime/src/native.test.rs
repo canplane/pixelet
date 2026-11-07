@@ -19,9 +19,9 @@ fn cfg(heap_at: u32) -> Config {
         heap_at,
         stack_bytes: 1 << 20,
         thread_name: "test-core",
-        clock: || 42.0,
+        now: || 42.0,
         stop_hook: None,
-        admit: None,
+        admit_frame: None,
         publish: None,
         ready: || true,
     }
@@ -42,7 +42,9 @@ fn mem_aligned_zeroed() {
     let (at, bytes) = core().mem();
     assert_eq!(bytes, MEM_BYTES as usize);
     assert!(at.as_ptr().addr().is_multiple_of(PAGE_BYTES as usize));
-    let base = core().run(|| xpute_core::mem::core().base());
+    let base = core()
+        .run_on(|| xpute_core::mem::core().base())
+        .expect("the core has stopped");
     assert_eq!(base, at.as_ptr().addr());
     // SAFETY: the reserved memory, mapped for the process; nothing else reads
     // its last page here.
@@ -52,12 +54,14 @@ fn mem_aligned_zeroed() {
 
 #[test]
 fn call_on_core_thread() {
-    let (name, marked) = core().run(|| {
-        (
-            std::thread::current().name().map(str::to_owned),
-            on_marked_thread(),
-        )
-    });
+    let (name, marked) = core()
+        .run_on(|| {
+            (
+                std::thread::current().name().map(str::to_owned),
+                on_marked_thread(),
+            )
+        })
+        .expect("the core has stopped");
     assert_eq!(name.as_deref(), Some("test-core"));
     assert!(marked);
     assert!(off_marked_thread(), "a caller is not the core's thread");
@@ -68,7 +72,13 @@ fn callers_take_turns() {
     let g = core();
     let sums: Vec<u64> = std::thread::scope(|s| {
         let calls: Vec<_> = (0..4u64)
-            .map(|k| s.spawn(move || (0..100).map(|n| g.run(move || k * n)).sum::<u64>()))
+            .map(|k| {
+                s.spawn(move || {
+                    (0..100)
+                        .map(|n| g.run_on(move || k * n).expect("the core has stopped"))
+                        .sum::<u64>()
+                })
+            })
             .collect();
         calls.into_iter().map(|c| c.join().unwrap()).collect()
     });
@@ -84,7 +94,11 @@ fn call_answered_by_caller() {
     native::answer_with(Some(answer));
     let g = core();
     let boot = g.boot_info(&cfg(HEAP_AT));
-    assert_eq!(g.run(move || (boot.call)(41)), 42);
+    assert_eq!(
+        g.run_on(move || (boot.call)(41))
+            .expect("the core has stopped"),
+        42
+    );
 }
 
 #[test]
@@ -102,10 +116,10 @@ fn ring_waits_for_a_turn() {
 #[test]
 fn a_kick_runs_a_turn() {
     core();
-    let _ = native::ack();
+    let _ = native::turns();
     native::kick_deadline(-1.0);
     assert_eq!(native::ring(0.0), Some(-1.0));
-    let (_, turn_ms) = native::ack();
+    let (_, turn_ms) = native::turns();
     assert!(turn_ms >= 0.0);
 }
 
@@ -130,7 +144,9 @@ fn bad_heap_refused() {
 fn first_intr_installs_clock() {
     let boot = || core().boot_info(&cfg(HEAP_AT));
     assert_eq!(
-        core().run(move || native::run(0.0, boot, |_, _| xpute_core::clock::now())),
+        core()
+            .run_on(move || native::run(0.0, boot, |_, _| xpute_core::clock::now()))
+            .expect("the core has stopped"),
         42.0
     );
 }
@@ -138,7 +154,9 @@ fn first_intr_installs_clock() {
 #[test]
 fn bad_while_idle_refused() {
     let g = core();
-    let inner = g.run(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
+    let inner = g
+        .run_on(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err())
+        .expect("the core has stopped");
     assert!(inner, "the core's thread would wait for its caller");
     let nested =
         g.while_idle(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
@@ -146,17 +164,24 @@ fn bad_while_idle_refused() {
         nested,
         "a second hold on one thread would wait for the first"
     );
-    let called = g.while_idle(move || std::panic::catch_unwind(move || g.run(|| ())).is_err());
+    let called = g.while_idle(move || {
+        std::panic::catch_unwind(move || g.run_on(|| ()).expect("the core has stopped")).is_err()
+    });
     assert!(called, "a call inside while_idle would wait for it");
     // Each refusal left the handoff as it was.
-    assert_eq!(g.run(|| 7), 7);
+    assert_eq!(g.run_on(|| 7).expect("the core has stopped"), 7);
     assert_eq!(g.while_idle(|| 8), 8);
 }
 
 #[test]
 fn self_call_refused() {
     let g = core();
-    let inner = g.run(move || std::panic::catch_unwind(move || g.run(|| ())).is_err());
+    let inner = g
+        .run_on(move || {
+            std::panic::catch_unwind(move || g.run_on(|| ()).expect("the core has stopped"))
+                .is_err()
+        })
+        .expect("the core has stopped");
     assert!(inner, "it would wait for itself");
 }
 

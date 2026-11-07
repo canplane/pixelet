@@ -25,7 +25,7 @@ use crate::turn;
 /// What the renderer made of this turn's frame (domain/scene/stage.rs
 /// `stage_render`), and the reads of earlier frames, landed now.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct RuntimeFrame {
+struct RendererFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
@@ -51,9 +51,9 @@ pub struct RayRead {
     pub rays: RaySample,
 }
 
-impl Default for RuntimeFrame {
+impl Default for RendererFrame {
     fn default() -> Self {
-        RuntimeFrame {
+        RendererFrame {
             kind: FrameKind::none,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
@@ -63,18 +63,18 @@ impl Default for RuntimeFrame {
     }
 }
 
-static RUNTIME: Global<RuntimeFrame> = Global::new();
+static RENDERER: Global<RendererFrame> = Global::new();
 
 /// The renderer's answer for this turn's frame, its figures zero where it
 /// drew none, and the reads of earlier frames, landed now.
-pub fn set_runtime_frame(
+pub fn set_renderer_frame(
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
     gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 ) {
-    RUNTIME.set(RuntimeFrame {
+    RENDERER.set(RendererFrame {
         kind,
         gpu,
         device,
@@ -130,14 +130,14 @@ pub fn perf_frame(t: FrameTurn) {
     let heap = boot::heap_stat();
     let held = held_now(&heap);
     let terrain_landed = f64::from(TerrainTile::tile_cache().take_landed());
-    let runtime = core::mem::take(RUNTIME.get(RuntimeFrame::default));
+    let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
         return;
     }
-    if let Some(r) = runtime.gpu_read {
+    if let Some(r) = renderer.gpu_read {
         perf_record_gpu(r);
     }
-    if let Some(r) = runtime.rays {
+    if let Some(r) = renderer.rays {
         perf_record_rays(r);
     }
     perf_fold_recording(&held);
@@ -153,10 +153,10 @@ pub fn perf_frame(t: FrameTurn) {
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
         effects: turn::effect_times(),
-        kind: f64::from(runtime.kind as u8),
-        gpu: runtime.gpu,
+        kind: f64::from(renderer.kind as u8),
+        gpu: renderer.gpu,
         terrain_landed,
-        device: runtime.device,
+        device: renderer.device,
         heap_used_bytes: heap.peak as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()

@@ -125,11 +125,11 @@ pub fn publish(core: Core, stream_at: u32) {
 
 /// The runtime's admission (`crate::admit`), handed the core with its boot
 /// (xpute-core `BootInfo::admit`): a frame while the runtime admits one
-/// (`GpuRuntime::admit`), so taking a surface's texture never blocks the
+/// (`GpuRuntime::admit_frame`), so taking a surface's texture never blocks the
 /// core's thread, which a caller may be waiting on (xpute-runtime native
 /// `ring`); every frame before the device opens.
-pub fn admit() -> bool {
-    runtime().is_none_or(|h| h.admit())
+pub fn admit_frame() -> bool {
+    runtime().is_none_or(|h| h.admit_frame())
 }
 
 /// What the exports below answer besides 0, done: the C ABI's numbers, which
@@ -153,7 +153,7 @@ pub fn say_refused(e: &OpenError) {
 /// open, or what refused it.
 pub fn open(core: Core, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
     let _ = CORE.set(core);
-    let opened = core.turn(move || {
+    let opened = core.run_on(move || {
         if device().is_some() {
             return Ok(());
         }
@@ -201,7 +201,7 @@ fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
 #[cfg(any(target_vendor = "apple", target_os = "android"))]
 pub unsafe fn bind(core: Core, handle: u32, window: NonNull<c_void>) -> i32 {
     let at = window.as_ptr().expose_provenance();
-    let bound = core.turn(move || {
+    let bound = core.run_on(move || {
         let Some(d) = device() else { return NOT_OPEN };
         let Some(window) = NonNull::new(core::ptr::with_exposed_provenance_mut(at)) else {
             return NO_SURFACE;
@@ -222,7 +222,7 @@ pub unsafe fn bind(core: Core, handle: u32, window: NonNull<c_void>) -> i32 {
 /// (`GpuRuntime::unbind`). A stopped core's thread keeps what it held, the window
 /// among it, as the process goes on.
 pub fn unbind(core: Core, handle: u32) {
-    let _ = core.turn(move || {
+    let _ = core.run_on(move || {
         if let Some(h) = runtime() {
             h.unbind(handle);
         }
@@ -356,7 +356,7 @@ macro_rules! native_abi {
 /// `native_core!` with this runtime its device (`poll` before each turn,
 /// `publish` over the stream at the machine's `gpu_at` as the core rings,
 /// and its admission, `admit`), and `native_abi!` with the device the
-/// machine's GPU socket asks for (`Ask::of`) and `numbers` made a `Config`
+/// machine's GPU device asks for (`Ask::of`) and `numbers` made a `Config`
 /// with the platform's defaults (`config`). The program's crate depends on
 /// xpute-core and xpute-runtime besides this crate.
 #[macro_export]
@@ -369,7 +369,7 @@ macro_rules! native_core {
             device: ::xpute_runtime::native::Device {
                 poll: $crate::runtime::native::poll,
                 publish: |core| $crate::runtime::native::publish(core, $machine.gpu_at()),
-                admit: Some($crate::runtime::native::admit),
+                admit_frame: Some($crate::runtime::native::admit_frame),
             }
         );
 
@@ -379,7 +379,7 @@ macro_rules! native_core {
 
             pub(super) const GPU: ::xpute_core::machine::Gpu = match $machine.gpu {
                 Some(gpu) => gpu,
-                None => panic!("a core with the GPU's runtime takes the GPU socket"),
+                None => panic!("a core with the GPU's runtime takes the GPU device"),
             };
         }
 

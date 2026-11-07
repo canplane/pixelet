@@ -2,7 +2,7 @@
 
 //! The machine a program declares (its machine.json, written as `MACHINE` by
 //! xpute-tool): the memory it is given, its stack, its rings and whether it
-//! takes the GPU socket. The front of the memory follows from it, the same on
+//! takes the GPU device. The front of the memory follows from it, the same on
 //! every platform and on both ends:
 //!
 //! ```text
@@ -26,7 +26,7 @@ use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::wasm::LinkConfig;
 
-/// The GPU socket: a stream the core writes its GPU calls into and the runtime
+/// The GPU device: a stream the core writes its GPU calls into and the runtime
 /// runs once it is published (xpute-gpu), which says its own head
 /// (ipc/stream.rs).
 #[derive(Clone, Copy)]
@@ -86,7 +86,7 @@ impl Machine {
         self.sq_slots_at() + slots_bytes(self.sq_cap, self.slot_bytes)
     }
 
-    /// Where the GPU stream is, past the slots; 0 without the socket.
+    /// Where the GPU stream is, past the slots; 0 without the GPU device.
     pub const fn gpu_at(&self) -> u32 {
         match self.gpu {
             Some(_) => self.cq_slots_at() + slots_bytes(self.cq_cap, self.slot_bytes),
@@ -228,7 +228,7 @@ pub fn booted() -> bool {
 /// for every target but wasm32.
 ///
 /// Given `gpu`, the numbers its native GPU runtime runs by (xpute-gpu
-/// `Numbers`), the machine takes the GPU socket, and off WebAssembly it is
+/// `Numbers`), the machine takes the GPU device, and off WebAssembly it is
 /// xpute-gpu's `native_core!` instead: the GPU's runtime a device beside the
 /// core, polled before each turn and rung as the core publishes its stream
 /// (`BootInfo::publish`), and its admission handed the entry
@@ -262,7 +262,7 @@ macro_rules! core {
             $crate::wasm::Config {
                 heap_at: |data_end| $machine.heap_at(data_end, $fixed_bytes),
                 stack_bytes: $machine.stack_bytes,
-                admit: $admit,
+                admit_frame: $admit,
             },
             xpute_core_machine::xpute_turn
         );
@@ -272,7 +272,7 @@ macro_rules! core {
         const _: $crate::entry::Entry = $entry;
         const _: () = assert!(
             $machine.gpu.is_some(),
-            "a core given the GPU's numbers takes the GPU socket"
+            "a core given the GPU's numbers takes the GPU device"
         );
         const _: () = {
             let _ = $gpu;

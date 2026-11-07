@@ -15,7 +15,7 @@ import { MAGIC, VERSION, WORDS, word } from "./head.spec.ts";
 import * as ring from "./ring.spec.ts";
 
 /** The front a machine declares: the rings' sizes, and where the rings,
- * their slots and the GPU stream lie (0 without the GPU socket). */
+ * their slots and the GPU stream lie (0 without the GPU device). */
 export interface Front {
   sq_cap: u32;
   cq_cap: u32;

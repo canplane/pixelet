@@ -37,7 +37,7 @@ object Core {
   external fun answer()
 
   /** The wake the turns since asked, then the longest of them, in ms. */
-  external fun ack(): DoubleArray
+  external fun turns(): DoubleArray
 
   /** What answers the core's calls (@xpute/runtime), on the JavaScript
    * thread. */

@@ -38,8 +38,8 @@ struct Bound {
 /// The window's texture, shown at the turn's end; or, where it gives none,
 /// one never shown, as WebGPU's getCurrentTexture always gives a texture.
 pub(super) enum Frame {
-    Shown(wgpu::SurfaceTexture),
-    Unshown(wgpu::Texture),
+    Surface(wgpu::SurfaceTexture),
+    Offscreen(wgpu::Texture),
 }
 
 impl Default for Surface {
@@ -59,8 +59,8 @@ impl Default for Surface {
 impl Frame {
     pub(super) fn texture(&self) -> &wgpu::Texture {
         match self {
-            Frame::Shown(f) => &f.texture,
-            Frame::Unshown(t) => t,
+            Frame::Surface(f) => &f.texture,
+            Frame::Offscreen(t) => t,
         }
     }
 }
@@ -179,11 +179,11 @@ impl GpuRuntime {
                 break;
             };
             match b.surface.get_current_texture() {
-                wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Shown(f),
+                wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Surface(f),
                 wgpu::CurrentSurfaceTexture::Suboptimal(f) => {
                     b.stale = true;
                     self.configure_at.ask();
-                    return Frame::Shown(f);
+                    return Frame::Surface(f);
                 }
                 wgpu::CurrentSurfaceTexture::Outdated if !asked => {
                     asked = true;
@@ -220,7 +220,7 @@ impl GpuRuntime {
             })
         });
         s.offscreen = Some(texture.clone());
-        Frame::Unshown(texture)
+        Frame::Offscreen(texture)
     }
 
     pub(super) fn surface(&mut self, surface: u32) -> &mut Surface {

@@ -20,7 +20,7 @@ import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 interface Xpute {
-  /** `onNotify`: the core has posted or asked since `ack`, a call
+  /** `onNotify`: the core has posted or asked since `turns`, a call
    * waits for `answer`, or the core has stopped. */
   addListener(event: "onNotify", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
@@ -41,7 +41,7 @@ interface Xpute {
   /** What the turns since asked: when the core wants the next, in ms (0 at
    * once, NaN once it has stopped), then the longest of
    * them, in ms. */
-  ack(): [f64, f64];
+  turns(): [f64, f64];
   /** `answer` answers the core's calls from here on. */
   callOn(answer: (at: u32) => i32): void;
   /** Whether a device opened; what it is, the core reads from its runtime. */

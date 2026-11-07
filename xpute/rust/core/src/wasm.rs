@@ -42,7 +42,7 @@ pub struct Config {
     /// What it is handed as `BootInfo::admit`: the page's admission where it
     /// draws (xpute-gpu `admit::page`, `core!` given the GPU), none where
     /// it draws nothing.
-    pub admit: Option<fn() -> bool>,
+    pub admit_frame: Option<fn() -> bool>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -55,11 +55,11 @@ pub fn boot_info(
     crate::entry::BootInfo {
         given: u32::try_from(given()).unwrap_or(u32::MAX),
         data_end: data_end(),
-        clock: now,
+        now,
         call,
         heap_stat,
         stop_hook: None,
-        admit: cfg.admit,
+        admit_frame: cfg.admit_frame,
         publish: None,
     }
 }

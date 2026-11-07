@@ -173,7 +173,7 @@ thread, which runs the core while it has work and sleeps until a kick, the
 scheduler kicking at the moment its policy gives for the time the core asked
 for, its allocator and xpute's stop hook, exported as
 `xpute_run`, `xpute_kick`, `xpute_mem`, `xpute_call_on`,
-`xpute_notify_on`, `xpute_answer` and `xpute_ack`
+`xpute_notify_on`, `xpute_answer` and `xpute_turns`
 (`rust/runtime/include/xpute.h`), its GPU runtime's calls as
 `xpute_gpu_*` (`rust/gpu/include/xpute_gpu.h`), and on Android the same calls
 under the Kotlin classes `xpute.Core` and `xpute.Gpu`.

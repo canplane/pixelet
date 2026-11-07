@@ -54,7 +54,7 @@ pub struct Config {
     /// web's `getPreferredCanvasFormat`.
     pub preferred_format: wgpu::TextureFormat,
     pub configure_at: ConfigureAt,
-    /// The frames admitted and unfinished at once (`GpuRuntime::admit`), and
+    /// The frames admitted and unfinished at once (`GpuRuntime::admit_frame`), and
     /// each surface's `desired_maximum_frame_latency`; at least one. A
     /// surface keeps one texture more, so taking one never blocks.
     pub frame_latency: u32,

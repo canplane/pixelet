@@ -43,7 +43,7 @@ pub const GAP_PAGES: u32 = 3;
 pub const SQ_CAP: u32 = 16;
 
 /// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
-/// events each leave, so a trace that sends those makes a turn's output outgrow it.
+/// frames each leave, so a trace that sends those makes a turn's output outgrow it.
 pub const CQ_CAP: u32 = 128;
 
 /// A ring slot's payload: a packet of one number fits.
@@ -63,7 +63,7 @@ pub const HEAP_BYTES: u32 = 65536;
 /// Slots in the core's handle table, slot 0 never handed out.
 pub const HANDLES: u32 = 16;
 
-/// The most events one RAISE asks for; more is refused with EINVAL.
+/// The most frames one RAISE asks for; more is refused with EINVAL.
 pub const MOST_RAISE: u32 = 32;
 
 /// The core's own commands, `major << 8 | minor`, past xpute's majors (ipc/frame.json). A
@@ -73,7 +73,7 @@ pub mod cmd {
     pub const OK: u32 = 4097;
     /// Fails with EINVAL.
     pub const FAIL: u32 = 4098;
-    /// Raises the packet's number of EVENTs, tagged 0 up, then replies with that number.
+    /// Raises the packet's number of NOTEs, tagged 0 up, then replies with that number.
     pub const RAISE: u32 = 4099;
     /// Writes one record to the stream, its op the packet's number and no words; replies 0.
     pub const RECORD: u32 = 4100;
@@ -98,11 +98,11 @@ pub mod cmd {
     /// EINVAL, writing nothing.
     pub const INC: u32 = 4109;
     /// What RAISE raises.
-    pub const EVENT: u32 = 4353;
+    pub const NOTE: u32 = 4353;
     /// An open completed: tagged with its owner, its result the runtime's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "CALL", "INC", "EVENT", "OPENED",
+        "CLOSE", "CALL", "INC", "NOTE", "OPENED",
     ];
 }

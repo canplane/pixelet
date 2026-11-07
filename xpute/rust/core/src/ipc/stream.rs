@@ -62,9 +62,10 @@ thread_local! {
     static ON_PUBLISH: Cell<Option<fn()>> = const { Cell::new(None) };
 }
 
-/// What `publish` rings once END is stored (`entry::BootInfo::publish`).
-pub fn on_publish(ring: Option<fn()>) {
-    ON_PUBLISH.with(|c| c.set(ring));
+/// What `publish` runs once END is stored (`entry::BootInfo::publish`): a
+/// device that runs the stream as it is published.
+pub fn on_publish(run: Option<fn()>) {
+    ON_PUBLISH.with(|c| c.set(run));
 }
 
 /// A record's words: its op and count, `args`, and `bytes` as their count then words.
@@ -148,7 +149,7 @@ impl Stream {
     }
 
     /// Where the stream's words begin in its memory, `END` first.
-    pub fn head_at(&self) -> usize {
+    pub fn at(&self) -> usize {
         self.at
     }
 

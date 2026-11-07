@@ -7,7 +7,7 @@
 //! was sent, as a page's doorbell rings for it. A caller's work (`run`), such
 //! as a device's, runs on it between turns while the caller waits. The thread
 //! keeps no timer: when a turn asks to be woken, at once or in `n` ms, it is
-//! told the program (`ack`, `ring`), whose scheduler asks its policy for the
+//! told the runtime (`turns`, `ring`), whose scheduler asks its policy for the
 //! moment, as a page's does (@xpute/runtime sched/scheduler.ts), and kicks then, so
 //! no turn runs between a display's frames. Paused (`pause`), it runs only
 //! the turns a caller rings, and its kicks wait for `resume`.
@@ -27,16 +27,16 @@
 //! - Every wait has its answerer. The core's thread waits for an answer only
 //!   while a call is in `LOOP`: a caller waiting in `ring`, or in `run`
 //!   on the thread that rings, answers it there, and with none waiting the
-//!   program is told and answers it on that thread. The program's thread
+//!   program is told and answers it on that thread. The runtime's thread
 //!   waits on the core only in `ring` and `run`, and answers in both, so the
 //!   two never wait on each other.
 //! - A turn begins only where the core can post what one may (`Vcpu::ready`,
 //!   the door's room in the completion ring), read under the lock. Where it
-//!   cannot, the thread says so to a caller in `ring` and to the program, and
-//!   waits for the kick that follows the program's read.
+//!   cannot, the thread says so to a caller in `ring` and to the runtime, and
+//!   waits for the kick that follows the runtime's read.
 //! - Every pass drains the submission ring first: a turn applies what waits
 //!   there before any phase's budget (xpute-core ipc/door.rs `receive`), so
-//!   a turn the core asked for itself carries the program's kicks too.
+//!   a turn the core asked for itself carries the runtime's kicks too.
 
 use core::cell::Cell;
 use core::panic::AssertUnwindSafe;
@@ -70,13 +70,13 @@ enum Asker {
     Turn,
 }
 
-/// What the program reads of the turns since it last asked (`ack`).
-struct Ack {
+/// What the runtime reads of the turns since it last asked (`turns`).
+struct Turns {
     /// A turn answered 0: the core wants the next at once.
     resched: bool,
     /// The longest turn, in ms.
     turn_ms: f64,
-    /// The program is told and has not asked since, so it is not told again.
+    /// The runtime is told and has not asked since, so it is not told again.
     told: bool,
 }
 
@@ -84,9 +84,9 @@ struct Loop {
     kicked: bool,
     /// The next turn's deadline, the latest a kick since gave.
     deadline: Option<f64>,
-    /// When the last turn asked to be woken, past now, as the program is
-    /// told it (`wake_of`); one that answered 0 is `Ack::resched`. The thread
-    /// waits on it not: the program's kick wakes it.
+    /// When the last turn asked to be woken, past now, as the runtime is
+    /// told it (`wake_of`); one that answered 0 is `Turns::resched`. The thread
+    /// waits on it not: the runtime's kick wakes it.
     wake_at: Option<Instant>,
     job: Option<Job>,
     job_ends: u64,
@@ -109,7 +109,7 @@ struct Loop {
     busy: bool,
     /// No turn begins but a caller's in `ring` (`pause`, `resume`).
     paused: bool,
-    ack: Ack,
+    turns: Turns,
     terminated: bool,
 }
 
@@ -130,7 +130,7 @@ static LOOP: Mutex<Loop> = Mutex::new(Loop {
     idlers: 0,
     busy: false,
     paused: false,
-    ack: Ack {
+    turns: Turns {
         resched: false,
         turn_ms: 0.0,
         told: false,
@@ -155,7 +155,7 @@ fn wait<'a>(cv: &Condvar, g: MutexGuard<'a, Loop>) -> MutexGuard<'a, Loop> {
     cv.wait(g).unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The program's answer to a call, run on the answering thread.
+/// The runtime's answer to a call, run on the answering thread.
 pub type Answer = extern "C" fn(at: u32) -> i32;
 
 static ANSWER: Mutex<Option<Answer>> = Mutex::new(None);
@@ -170,15 +170,15 @@ fn answer_of(at: u32) -> i32 {
     answer.map_or(xpute_kit::status::errno::Errno::ENOSYS as i32, |f| f(at))
 }
 
-/// What tells the program, from the core's thread, that the core has
-/// posted or asked since it last read (`ack`), that a turn's call
+/// What tells the runtime, from the core's thread, that the core has
+/// posted or asked since it last read (`turns`), that a turn's call
 /// waits for its answer (`answer`), or that the core has stopped. It must
-/// not call into the core: it hands the news to the program's thread.
+/// not call into the core: it hands the news to the runtime's thread.
 pub type Notify = extern "C" fn();
 
 static NOTIFY: Mutex<Option<Notify>> = Mutex::new(None);
 
-/// `notify` tells the program from the next news on; none, nothing is told.
+/// `notify` tells the runtime from the next news on; none, nothing is told.
 pub fn notify_on(notify: Option<Notify>) {
     *NOTIFY.lock().unwrap_or_else(PoisonError::into_inner) = notify;
 }
@@ -253,7 +253,7 @@ enum Next {
 /// ends the core here, outside the hook (`terminate`), and stays, with the core's memory
 /// as the panic left it, so the process goes on without it.
 fn run_loop(vcpu: Vcpu) {
-    if std::panic::catch_unwind(AssertUnwindSafe(|| turns(vcpu))).is_err() {
+    if std::panic::catch_unwind(AssertUnwindSafe(|| serve(vcpu))).is_err() {
         terminate();
     }
     loop {
@@ -261,7 +261,7 @@ fn run_loop(vcpu: Vcpu) {
     }
 }
 
-fn turns(vcpu: Vcpu) {
+fn serve(vcpu: Vcpu) {
     loop {
         let next = next(vcpu);
         match next {
@@ -284,10 +284,10 @@ fn turns(vcpu: Vcpu) {
                 g.busy = false;
                 g.ends += 1;
                 g.wake_at = (wake > 0.0).then(|| Instant::now() + duration_of(wake));
-                g.ack.resched |= wake == 0.0;
-                g.ack.turn_ms = g.ack.turn_ms.max(turn_ms);
+                g.turns.resched |= wake == 0.0;
+                g.turns.turn_ms = g.turns.turn_ms.max(turn_ms);
                 RUNTIME_CV.notify_all();
-                let tell = g.ringers == 0 && !core::mem::replace(&mut g.ack.told, true);
+                let tell = g.ringers == 0 && !core::mem::replace(&mut g.turns.told, true);
                 drop(g);
                 if tell {
                     notify();
@@ -327,7 +327,7 @@ fn next(vcpu: Vcpu) -> Next {
                 }
                 g.stall_at = g.looks;
                 RUNTIME_CV.notify_all();
-                if g.ringers == 0 && !core::mem::replace(&mut g.ack.told, true) {
+                if g.ringers == 0 && !core::mem::replace(&mut g.turns.told, true) {
                     drop(g);
                     notify();
                     g = state();
@@ -354,10 +354,10 @@ fn kick_locked(g: &mut Loop, deadline: Option<f64>) {
 }
 
 /// When the core wants the next turn, in ms from now: 0 where a turn since
-/// the program last read answered 0, `NO_WAKE` for none.
+/// the runtime last read answered 0, `NO_WAKE` for none.
 fn wake_of(g: &Loop) -> f64 {
     match g.wake_at {
-        _ if g.ack.resched => 0.0,
+        _ if g.turns.resched => 0.0,
         Some(at) => at.saturating_duration_since(Instant::now()).as_secs_f64() * 1000.0,
         None => xpute_core::sched::wake::NO_WAKE,
     }
@@ -369,7 +369,7 @@ pub fn kick() {
     kick_with(None);
 }
 
-/// The program's kick, after it has written the submission ring: the next
+/// The runtime's kick, after it has written the submission ring: the next
 /// turn ending no sooner than `deadline_ms` from its rise, none of its own where negative. This
 /// thread is the one that answers a turn's calls from now on.
 pub fn kick_deadline(deadline_ms: f64) {
@@ -411,7 +411,7 @@ pub fn resume() {
 }
 
 /// The core's call, on its own thread: handed to its answerer, which
-/// runs the program's answer, the core waiting.
+/// runs the runtime's answer, the core waiting.
 pub(super) fn call(at: u32) -> i32 {
     let asker = if IN_JOB.with(Cell::get) {
         Asker::Job
@@ -444,21 +444,21 @@ pub fn answer() {
     let _ = answer_here(g, |a| a == Asker::Turn);
 }
 
-/// What the turns since the last call asked, for the program's thread: when
+/// What the turns since the last call asked, for the runtime's thread: when
 /// the core wants the next, in ms (0 where a turn answered 0, `NO_WAKE` for
 /// none, NaN once it has stopped), and the longest of them, in ms.
-pub fn ack() -> (f64, f64) {
+pub fn turns() -> (f64, f64) {
     let mut g = state();
-    g.ack.told = false;
+    g.turns.told = false;
     let wake = if g.terminated { f64::NAN } else { wake_of(&g) };
-    g.ack.resched = false;
-    (wake, core::mem::take(&mut g.ack.turn_ms))
+    g.turns.resched = false;
+    (wake, core::mem::take(&mut g.turns.turn_ms))
 }
 
 /// A turn ending no sooner than `deadline_ms` from its rise, this thread waiting until one begun
 /// after this call has ended, answering the turns' calls meanwhile: when
 /// the core wants the next, in ms. Back early where no turn may begin until
-/// the program reads the completion ring; none where the core has stopped.
+/// the runtime reads the completion ring; none where the core has stopped.
 pub fn ring(deadline_ms: f64) -> Option<f64> {
     let _hold = hold();
     let mut g = state();
@@ -509,12 +509,12 @@ pub(super) fn stopped() {
 }
 
 /// The core has stopped, told from its own thread: every caller waiting is told, and so
-/// is the program.
+/// is the runtime.
 fn terminate() {
     let mut g = state();
     g.terminated = true;
     g.busy = false;
-    g.ack.told = true;
+    g.turns.told = true;
     RUNTIME_CV.notify_all();
     drop(g);
     notify();

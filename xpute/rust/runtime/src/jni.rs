@@ -20,7 +20,7 @@ use sys::{
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::native::{ack as ack_of, answer_with, notify_on, Core};
+use crate::native::{answer_with, notify_on, turns as turns_of, Core};
 
 /// JNI's functions, as the environment a call is given holds them.
 ///
@@ -152,13 +152,13 @@ extern "C" fn notify() {
     }
 }
 
-/// `Core.ack`: the wake and the longest turn since it was last asked
-/// (`native::ack`), as a `double[]` of two.
+/// `Core.turns`: the wake and the longest turn since it was last asked
+/// (`native::turns`), as a `double[]` of two.
 ///
 /// # Safety
 /// `e` is the environment JNI called with.
-pub unsafe fn ack(e: *mut JNIEnv) -> jobject {
-    let (wake, turn_ms) = ack_of();
+pub unsafe fn turns(e: *mut JNIEnv) -> jobject {
+    let (wake, turn_ms) = turns_of();
     // SAFETY: the environment JNI called this with; an array of two made
     // here and filled with two.
     unsafe {

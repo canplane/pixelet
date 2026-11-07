@@ -270,7 +270,7 @@ mod wasm {
         Config {
             heap_at: |data_end| range_at(data_end) + HEAP_AT,
             stack_bytes: spec::STACK_BYTES,
-            admit: None,
+            admit_frame: None,
         },
         entry
     );
@@ -328,7 +328,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(k, spec::cmd::EVENT, 0, 0);
+                door.post(k, spec::cmd::NOTE, 0, 0);
             }
             Ok(Some(n as i32))
         }

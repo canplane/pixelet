@@ -46,7 +46,7 @@ pub const PROGRAM_MAJOR: u32 = 16;
 /// Where the flags start in the CMD word.
 pub const FLAG_SHIFT: u32 = 16;
 
-/// A flag: a reply, as against an import. Set by the sender, never by a handler.
+/// A flag: a reply's frame, as against an import's. Set by the sender, never by a handler.
 pub const RES: u32 = 1;
 
 /// A flag: always reply; without it, only a failure is replied to.

@@ -40,14 +40,14 @@ pub fn open(core: Core) -> Option<()> {
     if pxl_kernel::xpute_gpu_open() != 0 {
         return None;
     }
-    core.run(push);
+    core.run_on(push).expect("the core has stopped");
     Some(())
 }
 
 /// The device's work waited out, then what the scopes held since they opened, each scope
 /// opened again at once: an error a line; none where the core has stopped.
 pub fn take(core: Core) -> Vec<String> {
-    let taken = core.turn(|| {
+    let taken = core.run_on(|| {
         device()
             .poll(wgpu::PollType::Wait {
                 submission_index: None,

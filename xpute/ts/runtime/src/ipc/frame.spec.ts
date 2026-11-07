@@ -38,7 +38,7 @@ export const PROGRAM_MAJOR: u32 = 16 as number;
 /** Where the flags start in the CMD word. */
 export const FLAG_SHIFT: u32 = 16 as number;
 
-/** A flag: a reply, as against an import. Set by the sender, never by a handler. */
+/** A flag: a reply's frame, as against an import's. Set by the sender, never by a handler. */
 export const RES: u32 = 1 as number;
 
 /** A flag: always reply; without it, only a failure is replied to. */

@@ -4,7 +4,7 @@
 //! frame only while fewer of its frames than its frame latency are unfinished
 //! on the GPU (`admits`), the one rule every runtime holds a frame to. A runtime in
 //! the core's own process applies it to its own count
-//! (`runtime::native::admit` over `GpuRuntime::admit`); a page's runtime tells the
+//! (`runtime::native::admit_frame` over `GpuRuntime::admit_frame`); a page's runtime tells the
 //! core its count in the device's block (spec DEVICE), and `page` applies it
 //! there. Either reaches the core with its boot (xpute-core
 //! `BootInfo::admit`).

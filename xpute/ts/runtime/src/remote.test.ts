@@ -59,7 +59,7 @@ test("remote - a UI's send and request reach the runtime as they were encoded", 
   port1.close();
 });
 
-test("remote - an import placed with the UI comes with its packet and the memory it names", async () => {
+test("remote - an import's frame placed with the UI comes with its packet and the memory it names", async () => {
   const { port1, port2 } = new MessageChannel();
   const { rt } = runtime();
   const raise = serve(rt, port2, (cmd) =>

@@ -7,7 +7,7 @@
  * is a `Sender`, so a protocol's generated stubs bind to it as they bind to a
  * runtime beside them; it posts each command's packet as bytes, encoded in
  * its own memory. The runtime's end (`serve`) submits each on the SQ as it
- * came, and posts back a request's reply and every import the program places
+ * came, and posts back a request's reply and every import's frame the program places
  * with the UI, its packet copied before the runtime's head passes it, with
  * what else of the core's memory the program says the frame names.
  *
@@ -61,7 +61,7 @@ interface StopMessage {
   kind: "stop";
 }
 
-/** What the UI hears of an import it was placed: as `OnImport`, with the
+/** What the UI hears of an import's frame placed with it: as `OnImport`, with the
  * bytes of the core's memory the frame names, the UI's to keep. */
 export type OnUiImport = (
   tag: u32,
@@ -151,7 +151,7 @@ export function connect(port: MessagePort, slot_bytes: u32): Remote {
   return remote;
 }
 
-/** What else of the core's memory an import names, copied while its frame
+/** What else of the core's memory an import's frame names, copied while it
  * is read; null for none. */
 export type MemoryOf = (cmd: u32, f: BranchCursor | null) => U8Array | null;
 

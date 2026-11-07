@@ -24,9 +24,9 @@ fn core() -> Core {
                 heap_at: HEAP_AT,
                 stack_bytes: 1 << 20,
                 thread_name: "test-core",
-                clock: native::now,
+                now: native::now,
                 stop_hook: None,
-                admit: None,
+                admit_frame: None,
                 publish: None,
                 ready: || true,
             },
@@ -45,7 +45,9 @@ fn in_heap(p: *const u8) -> bool {
 #[test]
 fn block_ownership() {
     let g = core();
-    let theirs = g.run(|| Box::into_raw(Box::new([7u8; 100])).expose_provenance());
+    let theirs = g
+        .run_on(|| Box::into_raw(Box::new([7u8; 100])).expose_provenance())
+        .expect("the core has stopped");
     assert!(in_heap(core::ptr::with_exposed_provenance(theirs)));
     let ours = Box::new([7u8; 100]);
     assert!(!in_heap(ours.as_ptr()));
@@ -57,12 +59,12 @@ fn block_ownership() {
 fn free_by_addr() {
     let g = core();
     // The heap's block, let go here, goes back to the heap.
-    let made = g.run(|| vec![1u32; 1000]);
+    let made = g.run_on(|| vec![1u32; 1000]).expect("the core has stopped");
     assert!(in_heap(made.as_ptr().cast()));
     drop(made);
     // The system's block, let go on the core's thread, goes back to the system.
     let mine = vec![2u32; 1000];
-    g.run(move || drop(mine));
+    g.run_on(move || drop(mine)).expect("the core has stopped");
 }
 
 #[test]
@@ -70,10 +72,12 @@ fn grow_across_moves() {
     let g = core();
     let mut v = vec![3u8; 16];
     assert!(!in_heap(v.as_ptr()));
-    let v = g.run(move || {
-        v.reserve(1 << 16);
-        v
-    });
+    let v = g
+        .run_on(move || {
+            v.reserve(1 << 16);
+            v
+        })
+        .expect("the core has stopped");
     assert!(in_heap(v.as_ptr()));
     assert_eq!(&v[..16], &[3u8; 16]);
     let mut v = v;
@@ -87,7 +91,9 @@ fn heap_ends_with_mem() {
     let g = core();
     let (at, bytes) = g.mem();
     let end = at.as_ptr().addr() + bytes;
-    let block = g.run(|| vec![0u8; 1 << 20]);
+    let block = g
+        .run_on(|| vec![0u8; 1 << 20])
+        .expect("the core has stopped");
     assert!(block.as_ptr().addr() + block.len() <= end);
     assert!(g.heap_stat().range <= bytes);
 }

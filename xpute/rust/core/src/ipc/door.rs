@@ -19,9 +19,10 @@
 //! beside it beginning a turn only while the completion ring has room for
 //! one (`has_room`); and two more, io_uring's too:
 //!
-//! - R3, as the door keeps it: memory an import names by its address is the
-//!   runtime's until the runtime's head has passed the import (`last_pos`,
-//!   `is_consumed`), so the core writes it again, or frees it, only then.
+//! - R3, as the door keeps it: memory an import's frame names by its address
+//!   is the runtime's until the runtime's head has passed the frame
+//!   (`last_pos`, `is_consumed`), so the core writes it again, or frees it,
+//!   only then.
 //!   Memory a call names is the runtime's only until the call returns, and the
 //!   bytes an FS_WRITE names are the runtime's until its descriptor's FS_CLOSE
 //!   is completed.
@@ -61,7 +62,7 @@ pub trait Import {
 /// How much of a report's path is kept where the whole would not fit a slot.
 const ABORT_PATH_BYTES: usize = 32;
 
-/// Where an import was posted in the completion ring: asked of `is_consumed`.
+/// Where an import's frame was posted in the completion ring: asked of `is_consumed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pos(u32);
 
@@ -90,14 +91,14 @@ impl Reading {
 pub type Outcome = Result<Option<i32>, MarshalError>;
 
 /// What the door hands the program: a turn of its life its runtime told it, its
-/// GPU grant answered, an open or a close the runtime completed, or a command of
+/// the GPU answered, an open or a close the runtime completed, or a command of
 /// the program's own, its number and its packet. A completion is answered by
 /// nothing, so what the program returns for one is dropped. A drain runs before any phase's
 /// budget, so the program records what it is handed and returns.
 pub enum Submission<'a> {
     Life(Life),
     /// The GPU the machine asked for answered, the first time or again after
-    /// a loss (GPU_READY): the GPU grant's state, not the core's life.
+    /// a loss (GPU_READY): the GPU's state, not the core's life.
     GpuReady,
     Opened(FsOpened),
     Closed(FsClosed),
@@ -143,13 +144,13 @@ pub struct Door {
 }
 
 impl Door {
-    /// `most_events` is the most one command raises, or the turn once its
+    /// `most_frames` is the most one command raises, or the turn once its
     /// drain is done: the program's bound.
-    pub fn new(sq: Ring, cq: Ring, most_events: u32) -> Door {
+    pub fn new(sq: Ring, cq: Ring, most_frames: u32) -> Door {
         Door {
             sq,
             cq,
-            reserve: most_events + 2,
+            reserve: most_frames + 2,
             stat: Cell::default(),
             writes: RefCell::new(Vec::new()),
             reads: RefCell::new(Vec::new()),
@@ -435,7 +436,7 @@ impl Door {
 }
 
 /// xpute's commands applied, NOP answering its value and the core's life
-/// and its GPU grant's answer handed over, and any other of xpute's numbers
+/// and its GPU's answer handed over, and any other of xpute's numbers
 /// refused; every command past xpute's majors handed to
 /// the program.
 fn apply_frame(

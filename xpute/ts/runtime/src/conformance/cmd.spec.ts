@@ -8,7 +8,7 @@ export const OK = 4097 as number;
 /** Fails with EINVAL. */
 export const FAIL = 4098 as number;
 
-/** Raises the packet's number of EVENTs, tagged 0 up, then replies with that number. */
+/** Raises the packet's number of NOTEs, tagged 0 up, then replies with that number. */
 export const RAISE = 4099 as number;
 
 /** Writes one record to the stream, its op the packet's number and no words; replies 0. */
@@ -44,7 +44,7 @@ export const CALL = 4108 as number;
 export const INC = 4109 as number;
 
 /** What RAISE raises. */
-export const EVENT = 4353 as number;
+export const NOTE = 4353 as number;
 
 /** An open completed: tagged with its owner, its result the runtime's. */
 export const OPENED = 4354 as number;

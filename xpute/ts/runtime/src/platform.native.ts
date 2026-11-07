@@ -28,11 +28,11 @@ export function open(
       kick: (deadline_ms) => XPUTE.kick(deadline_ms),
       pause: () => XPUTE.pause(),
       resume: () => XPUTE.resume(),
-      listen(ack) {
+      listen(heard) {
         XPUTE.addListener("onNotify", () => {
           XPUTE.answer();
-          const [wake_ms, turn_ms] = XPUTE.ack();
-          ack(wake_ms, turn_ms);
+          const [wake_ms, turn_ms] = XPUTE.turns();
+          heard(wake_ms, turn_ms);
         });
       },
     },

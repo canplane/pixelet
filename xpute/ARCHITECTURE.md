@@ -31,8 +31,8 @@ JavaScript thread, which shares the core's memory. On a page, whose main
 thread shares no memory with a worker, the core and the runtime run in a
 worker and the UI on the main thread; only the UI's frames cross, over a
 MessagePort (`@xpute/runtime/remote.ts`: the UI's end, `connect`, is what the
-generated stubs send through; the runtime's, `serve`, posts back each import
-placed with the UI, its packet and the memory it names copied before the
+generated stubs send through; the runtime's, `serve`, posts back each import's
+frame placed with the UI, its packet and the memory it names copied before the
 runtime's head passes it), and what is large, the network's, the
 files' and the GPU's, stays in the worker. Both relations ride the same ring
 pair, told apart by a command's major; the runtime carries the UI's
@@ -378,7 +378,7 @@ as Linux's idle loop and io_uring's submitter have it: submitting is not
 stopping (`xpute-runtime/native/thread.rs`). The thread runs a turn whenever it is
 kicked, and sleeps otherwise; it keeps no timer. The scheduler is the one
 that times the core's turns, as it is a page's: the wake a turn asks, at
-once or in `n` ms, reaches it as the thread tells it (`xpute_ack`, or
+once or in `n` ms, reaches it as the thread tells it (`xpute_turns`, or
 `xpute_run`'s answer), it times a wait of `n` ms as it does a page's, and the
 policy gives and admits the moment, where a frame's grant is submitted and
 kicked with its deadline; it asks no turn for what the runtime sent, which the
@@ -386,7 +386,7 @@ doorbell kicked. The runtime's JavaScript writes the SQ, stores its tail with
 release and kicks (`xpute_kick`). A turn no kick gave a deadline has a
 deadline of 0 and applies what was sent, as a page's doorbell rings for it. As a turn ends, the thread tells the JavaScript
 side (`xpute_notify_on`), which reads the CQ dry on its own thread and hands
-the policy what ran (`Doorbell.ack`); a read kicks too, for the room it
+the policy what ran (`Doorbell.turns`); a read kicks too, for the room it
 made. A call stays synchronous to its caller: submitted, kicked, and waited
 for in `xpute_run` until a turn begun after it has ended. While the program
 is paused or hidden the thread is paused too (`xpute_pause`, `xpute_resume`):

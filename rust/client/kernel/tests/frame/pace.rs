@@ -24,7 +24,8 @@ fn now() -> f64 {
 /// The core's clock made the display's, before its first turn (xpute-core `entry::run`
 /// installs its boot's clock only where none is set).
 pub fn install(core: Core) {
-    core.run(|| clock::set(now));
+    core.run_on(|| clock::set(now))
+        .expect("the core has stopped");
 }
 
 /// A frame's turn is granted, a refresh after the last.

@@ -77,7 +77,7 @@ class Stream {
 
     Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head = OWN_WORDS) noexcept;
 
-    std::uint32_t head_at() const noexcept { return at_; }
+    std::uint32_t at() const noexcept { return at_; }
 
     Memory mem() const noexcept { return mem_; }
 

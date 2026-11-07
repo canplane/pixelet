@@ -70,9 +70,9 @@ public class XputeModule: Module {
       xpute_answer()
     }
 
-    Function("ack") { () -> [Double] in
+    Function("turns") { () -> [Double] in
       var turnMs: Double = 0
-      let wake = xpute_ack(&turnMs)
+      let wake = xpute_turns(&turnMs)
       return [wake, turnMs]
     }
 

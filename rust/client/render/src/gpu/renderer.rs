@@ -130,7 +130,7 @@ pub struct FrameInput<'a> {
     pub text: TextOf,
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
-    pub admit: fn() -> bool,
+    pub admit_frame: fn() -> bool,
     /// Whether its draws are counted (`FrameStat::draws`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
@@ -1913,7 +1913,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         };
     };
     // The surfaces would block: skip rather than wait (`Renderer::put_off`).
-    if !(input.admit)() {
+    if !(input.admit_frame)() {
         carry_edits(&input.cast);
         take_lists(Some(g), &input.lists);
         if let Some(r) = RENDERER.get(|| None).as_mut() {

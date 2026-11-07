@@ -22,7 +22,7 @@ struct Head {
     std::uint32_t slot_bytes;
     std::uint32_t sq_at;
     std::uint32_t cq_at;
-    // 0 without the GPU socket.
+    // 0 without the GPU device.
     std::uint32_t gpu_at;
 
     // Every word, in the header's order.

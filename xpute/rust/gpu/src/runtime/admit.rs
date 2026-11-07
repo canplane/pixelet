@@ -33,7 +33,7 @@ impl GpuRuntime {
     /// Whether this turn may draw a frame: while fewer than its frame
     /// latency are unfinished, so each surface's next texture is free and
     /// taking it does not block. Asked once a turn, before it draws.
-    pub fn admit(&mut self) -> bool {
+    pub fn admit_frame(&mut self) -> bool {
         self.admitted = crate::admit::admits(
             self.unfinished_cnt.load(Ordering::Relaxed),
             self.frame_latency,
@@ -57,7 +57,7 @@ impl GpuRuntime {
     /// unfinished until the queue has done the work submitted with it.
     pub fn present(&mut self) {
         for s in &mut self.surfaces {
-            if let Some(Frame::Shown(frame)) = s.frame.take() {
+            if let Some(Frame::Surface(frame)) = s.frame.take() {
                 self.queue.present(frame);
             }
         }

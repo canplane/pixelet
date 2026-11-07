@@ -4,7 +4,7 @@
 // `native_core!` and `native_abi!` export it, for an app in C, Objective-C
 // or Swift. The core runs on its own thread while it has work and sleeps
 // until it is kicked, which the app does at the moment its policy gives for
-// the time the core asked for (`xpute_ack`; xpute-runtime native/thread.rs);
+// the time the core asked for (`xpute_turns`; xpute-runtime native/thread.rs);
 // the app's thread waits on it only for a turn it rings, and answers the
 // core's calls.
 
@@ -45,10 +45,10 @@ uint8_t *xpute_mem(uint32_t *bytes);
 void xpute_call_on(int32_t (*answer)(uint32_t at));
 
 // `f`, or none for null, is called from the core's thread when the core has
-// posted or asked since the app last called `xpute_ack`, when a call
+// posted or asked since the app last called `xpute_turns`, when a call
 // waits for `xpute_answer`, and when the core has stopped. It must not call
 // into the core: it hands the news to the app's thread, which then calls
-// `xpute_answer` and `xpute_ack` and reads the completion ring.
+// `xpute_answer` and `xpute_turns` and reads the completion ring.
 void xpute_notify_on(void (*f)(void));
 
 // The call waiting for its answer, if one does, answered on this thread.
@@ -59,4 +59,4 @@ void xpute_answer(void);
 // in ms, written through `turn_ms` (which may be null). The core's thread
 // keeps no timer: the app kicks at the moment its policy gives for that
 // wake; a turn that answered 0 is told as 0.
-double xpute_ack(double *turn_ms);
+double xpute_turns(double *turn_ms);

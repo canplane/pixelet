@@ -11,7 +11,7 @@
  * A core on a thread of its own (runtime.ts `Core.thread`) is kicked after
  * each submission and after each read of the completion ring, which may have
  * made the room a turn waits for, and runs on its own; what it posts is read
- * as it says it has (`ack`). A ring is then a turn waited for, a call's. A
+ * as it says it has (`turns`). A ring is then a turn waited for, a call's. A
  * core that runs only when rung is asked a turn after a read that took
  * frames instead, for what the head passing gave back.
  */
@@ -80,10 +80,10 @@ export class Doorbell implements PacketRoom {
    * tag, command, flags, result and packet, submitted once it is: a packet
    * is written in its slot, and room for one takes a turn. */
   private _later: [u32, u32, u32, i32, Encode | null][] = [];
-  wake: ((wake_ms: f64) => void) | null = null;
-  /** Told of every turn heard, before `wake` is told the same wake: what
+  on_wake: ((wake_ms: f64) => void) | null = null;
+  /** Told of every turn heard, before `on_wake` is told the same wake: what
    * the core's own thread ran since it was last heard, whoever kicked it
-   * (`ack`), and each turn rung (`ring`): its longest turn and when it
+   * (`turns`), and each turn rung (`ring`): its longest turn and when it
    * wants the next. */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
   /** Told once, as the core stops. */
@@ -231,7 +231,7 @@ export class Doorbell implements PacketRoom {
       return NO_WAKE;
     }
     this.on_turn?.(performance.now() - t0, wake);
-    this.wake?.(wake);
+    this.on_wake?.(wake);
     return wake;
   }
 
@@ -250,7 +250,7 @@ export class Doorbell implements PacketRoom {
   /** The core's own thread has posted or asked since it was last heard:
    * the completion ring read dry, and what it asked told, or, where it has
    * stopped (`wake_ms` NaN), what it posted read and its stop told. */
-  ack(wake_ms: f64, turn_ms: f64): void {
+  turns(wake_ms: f64, turn_ms: f64): void {
     if (this._terminated) return;
     if (Number.isNaN(wake_ms)) {
       this._terminate("the core stopped", null, true);
@@ -267,11 +267,11 @@ export class Doorbell implements PacketRoom {
       return;
     }
     this.on_turn?.(turn_ms, wake_ms);
-    this.wake?.(wake_ms);
+    this.on_wake?.(wake_ms);
   }
 
   /** The core is gone: printed here, once, and told, since a turn's caller is
-   * a timer or an import with nothing to do about it. `read` first reads what
+   * a timer or an import's handler with nothing to do about it. `read` first reads what
    * it posted. */
   private _terminate(why: string, err: unknown, read: boolean): void {
     console.error(`[xpute/doorbell] ${why}:`, err);
@@ -385,7 +385,7 @@ export class Doorbell implements PacketRoom {
     // asked (xpute-core sched/edge.rs `runtime_turn`).
     if (read > 0) {
       if (this.kick) this.kick(-1);
-      else this.wake?.(0);
+      else this.on_wake?.(0);
     }
     const later = this._later;
     this._later = [];

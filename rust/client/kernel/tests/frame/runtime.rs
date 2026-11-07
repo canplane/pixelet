@@ -12,7 +12,7 @@ use xpute_core::ipc::head;
 use xpute_core::ipc::ring::Ring;
 use xpute_core::mem::Memory;
 use xpute_kit::status::errno::Errno;
-use xpute_runtime::native::{ack, ring, Core};
+use xpute_runtime::native::{ring, turns, Core};
 
 use crate::fs::Files;
 use crate::spec::{self, Protocol, V};
@@ -151,7 +151,7 @@ impl Runtime {
     pub fn turn(&mut self, deadline_ms: f64) -> Option<f64> {
         let wake = ring(deadline_ms);
         // What the turns asked is read here, so the next ring's wake is its own.
-        let _ = ack();
+        let _ = turns();
         self.drain();
         wake
     }

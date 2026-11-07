@@ -36,7 +36,7 @@ export const GAP_PAGES: u32 = 3 as number;
 export const SQ_CAP: u32 = 16 as number;
 
 /** Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
- * events each leave, so a trace that sends those makes a turn's output outgrow it. */
+ * frames each leave, so a trace that sends those makes a turn's output outgrow it. */
 export const CQ_CAP: u32 = 128 as number;
 
 /** A ring slot's payload: a packet of one number fits. */
@@ -56,7 +56,7 @@ export const HEAP_BYTES: u32 = 65536 as number;
 /** Slots in the core's handle table, slot 0 never handed out. */
 export const HANDLES: u32 = 16 as number;
 
-/** The most events one RAISE asks for; more is refused with EINVAL. */
+/** The most frames one RAISE asks for; more is refused with EINVAL. */
 export const MOST_RAISE: u32 = 32 as number;
 
 /** The core's own commands, `major << 8 | minor`, past xpute's majors (ipc/frame.json). A

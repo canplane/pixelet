@@ -1,7 +1,7 @@
 // xpute-tool/spec/machine.rs
 
 //! A program's machine (spec/machine.schema.json): the sockets xpute gives
-//! its core — the memory, the stack, the rings and the GPU socket — written
+//! its core — the memory, the stack, the rings and the GPU device — written
 //! as `MACHINE` for both ends where its `gen` says: the front's places among
 //! it, which the runtime lays and the core holds its header to. Nothing a
 //! protocol carries is in it.

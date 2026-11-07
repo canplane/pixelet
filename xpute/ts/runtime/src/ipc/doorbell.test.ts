@@ -38,7 +38,7 @@ function rings(): {
 test("doorbell - a call from inside a listener is refused and leaves nothing submitted", () => {
   const { mem, sq, cq, sq_at, cq_at } = rings();
 
-  // A core whose every turn raises one import.
+  // A core whose every turn raises one import's frame.
   const door = new Doorbell(mem, sq_at, cq_at, () => {
     cq.push(0, 2);
     return -1;
@@ -164,7 +164,7 @@ test("doorbell - a turn rung is heard before its wake", () => {
   );
   const heard: string[] = [];
   door.on_turn = (_turn_ms, wake_ms) => heard.push(`turn ${wake_ms}`);
-  door.wake = (wake_ms) => heard.push(`wake ${wake_ms}`);
+  door.on_wake = (wake_ms) => heard.push(`wake ${wake_ms}`);
   door.ring(0);
   assert.deepStrictEqual(heard, ["turn 20", "wake 20"]);
 });

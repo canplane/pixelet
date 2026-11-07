@@ -38,7 +38,7 @@ import { open } from "./platform";
  * grows; its entry, `run`, a turn that returns when it wants the next, in
  * ms; where its calls are answered; and, where it runs on a thread of
  * its own, that thread.
- * The floor names the entry, as a C runtime names `main`. */
+ * xpute names the entry, as a C runtime names `main`. */
 export interface Core {
   mem: ArrayBuffer;
   run(deadline_ms: f64): f64;
@@ -48,7 +48,7 @@ export interface Core {
   /** The core's own thread, which runs while it has work and sleeps until
    * it is kicked (a native app's): `kick` wakes it, its next turn given at
    * least `deadline_ms`, none of its own where negative, and returns at once;
-   * `listen`'s `ack` is called on this thread once it has posted or asked
+   * `listen`'s `heard` is called on this thread once it has posted or asked
    * since, with when it wants the next turn (0 for the next moment, NaN once
    * it has stopped), which the scheduler paces and kicks as it paces a page's,
    * and the longest turn it ran. `pause` stops every turn but one `run`
@@ -58,7 +58,7 @@ export interface Core {
     kick(deadline_ms: f64): void;
     pause(): void;
     resume(): void;
-    listen(ack: (wake_ms: f64, turn_ms: f64) => void): void;
+    listen(heard: (wake_ms: f64, turn_ms: f64) => void): void;
   };
 }
 
@@ -203,7 +203,7 @@ export function mount<G extends Grant>(core: Core, cfg: Config<G>): Runtime {
     },
     core.thread ? (deadline_ms) => core.thread?.kick(deadline_ms) : null,
   );
-  core.thread?.listen((wake_ms, turn_ms) => doorbell.ack(wake_ms, turn_ms));
+  core.thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
   const scheduler = new Scheduler(doorbell, cfg.policy, cfg.submit);
   let resumed = false;
   let shown = true;

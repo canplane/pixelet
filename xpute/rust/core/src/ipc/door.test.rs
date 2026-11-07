@@ -7,7 +7,7 @@ use crate::mem::Memory;
 const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
-const MOST_EVENTS: u32 = 64;
+const MOST_FRAMES: u32 = 64;
 /// A command of the program's own, past xpute's majors.
 const PROGRAM: u32 = frame::PROGRAM_MAJOR << 8 | 1;
 
@@ -30,18 +30,18 @@ fn door_of(slot: u32) -> (Door, Box<[u8]>) {
             Ring::init(mem, cq_desc as usize, CQ, cq_slot, slot),
         )
     };
-    (Door::new(sq, cq, MOST_EVENTS), buf)
+    (Door::new(sq, cq, MOST_FRAMES), buf)
 }
 
 #[test]
 fn command_needs_reply_room() {
     let (d, _buf) = door();
-    for _ in 0..CQ - MOST_EVENTS {
+    for _ in 0..CQ - MOST_FRAMES {
         d.post(0, 2, 0, 0);
     }
     assert_eq!(d.sq().push(0, PROGRAM, frame::ACKREQ, 0, None), Errno::OK);
     d.receive(|_| {
-        for _ in 0..MOST_EVENTS {
+        for _ in 0..MOST_FRAMES {
             d.post(0, 2, 0, 0);
         }
         Ok(Some(7))
@@ -56,7 +56,7 @@ fn command_needs_reply_room() {
 fn ring_peaks() {
     let (d, _buf) = door();
     // Three commands start before the reserve runs out, so five of eight wait.
-    for _ in 0..CQ - (MOST_EVENTS + 2) - 2 {
+    for _ in 0..CQ - (MOST_FRAMES + 2) - 2 {
         d.post(0, 2, 0, 0);
     }
     for _ in 0..SQ {
@@ -66,7 +66,7 @@ fn ring_peaks() {
     assert_eq!(
         d.take_stat(),
         DoorStat {
-            cq_peak: CQ - MOST_EVENTS - 1,
+            cq_peak: CQ - MOST_FRAMES - 1,
             sq_peak: SQ,
             left_peak: SQ - 3
         }
@@ -228,7 +228,7 @@ fn xpute_number_unknown_refused() {
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }
 
-/// What `call` sends, an import with no fields.
+/// What `call` sends, an import's frame with no fields.
 struct Ping;
 
 impl Import for Ping {

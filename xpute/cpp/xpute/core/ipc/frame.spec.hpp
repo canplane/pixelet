@@ -42,7 +42,7 @@ inline constexpr std::uint32_t PROGRAM_MAJOR = 16u;
 // Where the flags start in the CMD word.
 inline constexpr std::uint32_t FLAG_SHIFT = 16u;
 
-// A flag: a reply, as against an import. Set by the sender, never by a handler.
+// A flag: a reply's frame, as against an import's. Set by the sender, never by a handler.
 inline constexpr std::uint32_t RES = 1u;
 
 // A flag: always reply; without it, only a failure is replied to.

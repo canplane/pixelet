@@ -42,7 +42,7 @@ class XputeModule : Module() {
 
     Function("answer") { Core.answer() }
 
-    Function("ack") { Core.ack().toList() }
+    Function("turns") { Core.turns().toList() }
 
     Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = answer }
 

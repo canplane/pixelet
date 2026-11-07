@@ -25,8 +25,8 @@ use xpute_core::mem::section::PAGE_BYTES;
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
 pub use thread::{
-    ack, answer, answer_with, kick, kick_deadline, notify_on, pause, resume, ring, Answer, Notify,
-    Vcpu,
+    answer, answer_with, kick, kick_deadline, notify_on, pause, resume, ring, turns, Answer,
+    Notify, Vcpu,
 };
 pub use xpute_core::entry::{run, BootInfo, Entry};
 pub use xpute_core::machine::Machine;
@@ -42,11 +42,11 @@ pub struct Config {
     pub heap_at: u32,
     pub stack_bytes: usize,
     pub thread_name: &'static str,
-    pub clock: fn() -> f64,
+    pub now: fn() -> f64,
     /// `BootInfo::stop_hook`.
     pub stop_hook: Option<PanicHook>,
     /// `BootInfo::admit`.
-    pub admit: Option<fn() -> bool>,
+    pub admit_frame: Option<fn() -> bool>,
     /// `BootInfo::publish`.
     pub publish: Option<fn()>,
     /// `Vcpu::ready`: whether a turn may begin (`ready`, for a core with
@@ -63,7 +63,7 @@ pub struct Config {
 pub struct Device {
     pub poll: fn(Core),
     pub publish: fn(Core),
-    pub admit: Option<fn() -> bool>,
+    pub admit_frame: Option<fn() -> bool>,
 }
 
 impl Device {
@@ -71,7 +71,7 @@ impl Device {
     pub const NONE: Device = Device {
         poll: |_| {},
         publish: |_| {},
-        admit: None,
+        admit_frame: None,
     };
 }
 
@@ -118,22 +118,17 @@ pub fn boot(cfg: &Config, turn: fn(deadline_ms: f64) -> f64) -> Core {
 }
 
 impl Core {
-    /// `f` on the core's thread between turns, the caller waiting, and
-    /// answering on its own thread each call `f` makes (`answer_with`),
-    /// a turn's too where the caller is the thread that rings. Refused on the
-    /// core's thread, inside `while_idle` and inside an answer, where it
-    /// would wait for itself. For what a stopped core is never asked; else
-    /// `turn`.
-    pub fn run<R: Send>(self, f: impl FnOnce() -> R + Send) -> R {
-        thread::run(f).expect("the core has stopped")
-    }
-
-    /// `run`, none where the core has stopped, in this call or before it.
-    pub fn turn<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
+    /// `f` on the core's thread between turns, the caller waiting, as QEMU's
+    /// `run_on_cpu` runs work on a vCPU's thread, and answering on its own
+    /// thread each call `f` makes (`answer_with`), a turn's too where the
+    /// caller is the thread that rings; none where the core has stopped, in
+    /// this call or before it. Refused on the core's thread, inside
+    /// `while_idle` and inside an answer, where it would wait for itself.
+    pub fn run_on<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
         thread::run(f)
     }
 
-    /// `f` on this thread while the core's runs nothing. Refused where `run` is.
+    /// `f` on this thread while the core's runs nothing. Refused where `run_on` is.
     pub fn while_idle<R>(self, f: impl FnOnce() -> R) -> R {
         thread::while_idle(f)
     }
@@ -158,11 +153,11 @@ impl Core {
         BootInfo {
             given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
             data_end: cfg.data_end,
-            clock: cfg.clock,
+            now: cfg.now,
             call: thread::call,
             heap_stat: alloc::stat,
             stop_hook: cfg.stop_hook,
-            admit: cfg.admit,
+            admit_frame: cfg.admit_frame,
             publish: cfg.publish,
         }
     }
@@ -191,7 +186,7 @@ pub fn turn(machine: &Machine, deadline_ms: f64, boot: fn() -> BootInfo, entry: 
 /// or written with the memory's size; `xpute_call_on(int32_t
 /// (*answer)(uint32_t))` (`answer_with`); `xpute_notify_on(void (*f)(void))`
 /// (`notify_on`); `xpute_answer(void)` (`answer`); and
-/// `xpute_ack(double *turn_ms) -> double` (`ack`). `core()` is the
+/// `xpute_turns(double *turn_ms) -> double` (`turns`). `core()` is the
 /// program's for its own calls.
 #[macro_export]
 macro_rules! native_abi {
@@ -281,8 +276,8 @@ macro_rules! native_abi {
         /// # Safety
         /// `turn_ms` is null or points at an `f64` the caller owns.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_ack(turn_ms: *mut f64) -> f64 {
-            let (wake, ms) = $crate::native::ack();
+        pub unsafe extern "C" fn xpute_turns(turn_ms: *mut f64) -> f64 {
+            let (wake, ms) = $crate::native::turns();
             // SAFETY: the caller's word, or none.
             if let Some(out) = unsafe { turn_ms.as_mut() } {
                 *out = ms;
@@ -315,7 +310,7 @@ macro_rules! native_abi {
 /// On Android it also exports the C ABI's calls to JNI under the Kotlin class
 /// `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
 /// `kick(deadlineMs: Double)`, `pause()`, `resume()`, `answer()`,
-/// `ack(): DoubleArray` (the wake,
+/// `turns(): DoubleArray` (the wake,
 /// then the longest turn) and `mem(): ByteBuffer`, calling back its static
 /// `call(at: Int): Int` for each call and `onNotify()` for what
 /// `xpute_notify_on`'s function is told.
@@ -351,9 +346,9 @@ macro_rules! native_core {
                 heap_at: $machine.heap_at($machine.global_base(), $fixed_bytes),
                 stack_bytes: $machine.thread_stack_bytes as usize,
                 thread_name: "xpute-core",
-                clock: $crate::native::now,
+                now: $crate::native::now,
                 stop_hook: Some($crate::native::stop_hook),
-                admit: xpute_native_core::DEVICE.admit,
+                admit_frame: xpute_native_core::DEVICE.admit_frame,
                 publish: Some(xpute_native_core::publish),
                 ready: $crate::native::ready,
             },
@@ -427,12 +422,12 @@ macro_rules! native_core {
         /// Called by JNI.
         #[cfg(target_os = "android")]
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_ack(
+        unsafe extern "system" fn Java_xpute_Core_turns(
             env: *mut $crate::jni::sys::JNIEnv,
             _this: $crate::jni::sys::jobject,
         ) -> $crate::jni::sys::jobject {
             // SAFETY: the environment JNI called with.
-            unsafe { $crate::jni::ack(env) }
+            unsafe { $crate::jni::turns(env) }
         }
 
         /// # Safety

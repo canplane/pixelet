@@ -39,7 +39,7 @@ inline constexpr std::uint32_t GAP_PAGES = 3u;
 inline constexpr std::uint32_t SQ_CAP = 16u;
 
 // Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
-// events each leave, so a trace that sends those makes a turn's output outgrow it.
+// frames each leave, so a trace that sends those makes a turn's output outgrow it.
 inline constexpr std::uint32_t CQ_CAP = 128u;
 
 // A ring slot's payload: a packet of one number fits.
@@ -59,7 +59,7 @@ inline constexpr std::uint32_t HEAP_BYTES = 65536u;
 // Slots in the core's handle table, slot 0 never handed out.
 inline constexpr std::uint32_t HANDLES = 16u;
 
-// The most events one RAISE asks for; more is refused with EINVAL.
+// The most frames one RAISE asks for; more is refused with EINVAL.
 inline constexpr std::uint32_t MOST_RAISE = 32u;
 
 // The core's own commands, `major << 8 | minor`, past xpute's majors (ipc/frame.json). A
@@ -72,7 +72,7 @@ inline constexpr std::uint32_t OK = 4097u;
 // Fails with EINVAL.
 inline constexpr std::uint32_t FAIL = 4098u;
 
-// Raises the packet's number of EVENTs, tagged 0 up, then replies with that number.
+// Raises the packet's number of NOTEs, tagged 0 up, then replies with that number.
 inline constexpr std::uint32_t RAISE = 4099u;
 
 // Writes one record to the stream, its op the packet's number and no words; replies 0.
@@ -108,7 +108,7 @@ inline constexpr std::uint32_t CALL = 4108u;
 inline constexpr std::uint32_t INC = 4109u;
 
 // What RAISE raises.
-inline constexpr std::uint32_t EVENT = 4353u;
+inline constexpr std::uint32_t NOTE = 4353u;
 
 // An open completed: tagged with its owner, its result the runtime's.
 inline constexpr std::uint32_t OPENED = 4354u;

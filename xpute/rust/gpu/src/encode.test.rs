@@ -53,8 +53,7 @@ fn programs_match_record() {
                 let words = unsafe {
                     core::slice::from_raw_parts(
                         base.cast::<u32>(),
-                        head + xpute_core::mem::core().word(s.head_at() + Stream::END * WORD)
-                            as usize,
+                        head + xpute_core::mem::core().word(s.at() + Stream::END * WORD) as usize,
                     )
                 };
                 let got: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -65,7 +64,7 @@ fn programs_match_record() {
                     p.name
                 );
                 // Read as a runtime runs it, and handed back.
-                xpute_core::mem::core().set_word(s.head_at() + Stream::END * WORD, 0);
+                xpute_core::mem::core().set_word(s.at() + Stream::END * WORD, 0);
                 turn += 1;
             },
         );

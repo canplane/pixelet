@@ -23,11 +23,11 @@ pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
     set(BootInfo {
         given: 0,
         data_end: 0,
-        clock: || 0.0,
+        now: || 0.0,
         call: |_| Errno::ENOSYS as i32,
         heap_stat,
         stop_hook: None,
-        admit: None,
+        admit_frame: None,
         publish: None,
     });
 }
@@ -40,8 +40,8 @@ pub fn heap_stat() -> HeapStat {
 /// Whether the GPU's runtime takes a frame now (xpute_gpu::admit), as its
 /// runtime's form hands it (`BootInfo::admit`); every frame where it hands none
 /// or before the first turn.
-pub fn admit() -> Admit {
+pub fn admit_frame() -> Admit {
     BOOT.get(|| None)
-        .and_then(|b| b.admit)
+        .and_then(|b| b.admit_frame)
         .unwrap_or(admit::every)
 }

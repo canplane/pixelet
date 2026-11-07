@@ -29,10 +29,10 @@ use xpute_core::mem::section::span_of;
 use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
-// The renderer draws through the machine's GPU socket.
+// The renderer draws through the machine's GPU device.
 const GPU: Gpu = match MACHINE.gpu {
     Some(g) => g,
-    None => panic!("the kernel's machine takes the GPU socket"),
+    None => panic!("the kernel's machine takes the GPU device"),
 };
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
@@ -130,12 +130,12 @@ pub(crate) fn range(f: Fixed) -> Section {
 }
 
 /// Lays the memory map and hands each range of `.fixed` to its owner, and
-/// the GPU socket's stream to the renderer.
+/// the GPU device's stream to the renderer.
 pub(crate) fn install(b: &BootInfo) {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
-    // SAFETY: `.fixed.uploads` and the GPU socket's stream, zeroed, each the
+    // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the
     // renderer's alone.
     unsafe {
         runtime::set_runtime(runtime::Runtime {

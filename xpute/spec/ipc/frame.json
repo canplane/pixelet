@@ -61,7 +61,7 @@
   "RES": {
     "$val": 1,
     "$type": "u32",
-    "$doc": ["A flag: a reply, as against an import. Set by the sender, never by a handler."]
+    "$doc": ["A flag: a reply's frame, as against an import's. Set by the sender, never by a handler."]
   },
 
   "ACKREQ": {

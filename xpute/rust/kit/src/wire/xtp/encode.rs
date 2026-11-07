@@ -164,7 +164,7 @@ const fn align(n: u32, unit: u32) -> u32 {
 /// The table a writer's entries go in: a branch's, or the root's, a branch
 /// of one whose entry is the header.
 #[derive(Clone, Copy)]
-struct Frame {
+struct Table {
     base: u32,
     cnt: u32,
     written: u32,
@@ -178,7 +178,7 @@ struct Frame {
 /// miscount panics.
 pub struct PacketWriter<'a> {
     buf: &'a mut [u8],
-    frame: Frame,
+    table: Table,
     root_type: u8,
     lim: u32,
     /// The first reason only.
@@ -192,7 +192,7 @@ impl<'a> PacketWriter<'a> {
         let cap = buf.len().min(MAX_PKT_SZ as usize);
         let mut w = PacketWriter {
             buf: &mut buf[..cap],
-            frame: Frame {
+            table: Table {
                 base: 0,
                 cnt: 1,
                 written: 0,
@@ -216,7 +216,7 @@ impl<'a> PacketWriter<'a> {
         let mut w = PacketWriter::root(buf);
         let at = w.branch_open(cnt);
         w.root_type = SpecialType::BRANCH as u8;
-        w.frame = Frame {
+        w.table = Table {
             base: at.unwrap_or(ROOT),
             cnt,
             written: 0,
@@ -253,7 +253,7 @@ impl<'a> PacketWriter<'a> {
     }
 
     fn entry(&mut self, at: Option<u32>, type_: u8) -> &mut Self {
-        let f = self.frame;
+        let f = self.table;
         crate::ensure!(f.written < f.cnt, ENOSPC, f.cnt);
         if f.root {
             self.root_type = type_;
@@ -264,7 +264,7 @@ impl<'a> PacketWriter<'a> {
                 type_ as u32,
             );
         }
-        self.frame.written += 1;
+        self.table.written += 1;
         self
     }
 
@@ -546,8 +546,8 @@ impl<'a> PacketWriter<'a> {
         // A branch that did not fit still counts its children, against a base
         // nothing is written at.
         let outer = core::mem::replace(
-            &mut self.frame,
-            Frame {
+            &mut self.table,
+            Table {
                 base: at.unwrap_or(ROOT),
                 cnt,
                 written: 0,
@@ -556,12 +556,12 @@ impl<'a> PacketWriter<'a> {
         );
         fill(self);
         crate::ensure!(
-            self.frame.written == self.frame.cnt,
+            self.table.written == self.table.cnt,
             ENOTRECOVERABLE,
-            self.frame.cnt,
-            self.frame.written
+            self.table.cnt,
+            self.table.written
         );
-        self.frame = outer;
+        self.table = outer;
         let at = self.branch_close(at);
         self.entry(at, SpecialType::BRANCH as u8)
     }
@@ -602,7 +602,7 @@ impl<'a> PacketWriter<'a> {
 
     /// The length, header included and to the word, or why it was refused.
     pub fn finish(mut self) -> Result<u32, MarshalError> {
-        let f = self.frame;
+        let f = self.table;
         crate::ensure!(f.written == f.cnt, ENOTRECOVERABLE, f.cnt, f.written);
         // The root branch `new` opened, closed as `branch` closes one.
         if !f.root {

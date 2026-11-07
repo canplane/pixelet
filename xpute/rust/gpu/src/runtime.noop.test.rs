@@ -128,9 +128,9 @@ fn native_tells_unfinished() {
     let mut bytes = [0u8; 16];
     let mut memory = Memory::of(&mut bytes);
     h.block = Some((0, 4));
-    assert!(h.admit());
+    assert!(h.admit_frame());
     h.present();
-    assert!(!h.admit(), "its one frame unfinished");
+    assert!(!h.admit_frame(), "its one frame unfinished");
     h.tell_unfinished(&mut memory);
     assert_eq!(memory.load_acquire(8), 1);
     h.poll(&mut memory);
@@ -139,5 +139,5 @@ fn native_tells_unfinished() {
         0,
         "the frame done as the device is polled"
     );
-    assert!(h.admit());
+    assert!(h.admit_frame());
 }

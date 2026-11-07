@@ -40,9 +40,9 @@ fn paused_runs_only_the_rung_turn() {
             heap_at: 16 * PAGE_BYTES,
             stack_bytes: 1 << 20,
             thread_name: "pause-core",
-            clock: || 0.0,
+            now: || 0.0,
             stop_hook: None,
-            admit: None,
+            admit_frame: None,
             publish: None,
             ready: || true,
         },
@@ -71,7 +71,7 @@ fn paused_runs_only_the_rung_turn() {
         "resumed, a turn that asked for the next at once waits for a paced kick"
     );
     assert_eq!(
-        native::ack().0,
+        native::turns().0,
         0.0,
         "and the program is told the core wants it at once"
     );
@@ -81,10 +81,10 @@ fn paused_runs_only_the_rung_turn() {
     assert_eq!(turns(), 2, "the kick runs it, and nothing after it");
 
     WAKE.store(10.0_f64.to_bits(), Ordering::SeqCst);
-    let _ = native::ack();
+    let _ = native::turns();
     native::kick_deadline(-1.0);
     settle();
-    let (wake, _) = native::ack();
+    let (wake, _) = native::turns();
     assert!(
         (0.0..=10.0).contains(&wake),
         "a turn's timed wake is told the program, {wake} ms"

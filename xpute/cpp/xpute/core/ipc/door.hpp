@@ -16,9 +16,9 @@
 // whether its runtime takes turns with the core or runs beside it; and two more,
 // io_uring's too:
 //
-// - R3, as the door keeps it: memory an import names by its address is the
-//   runtime's until the runtime's head has passed the import (`last_pos`, `is_consumed`),
-//   so the core writes it again, or frees it, only then. Memory a call names
+// - R3, as the door keeps it: memory an import's frame names by its address is
+//   the runtime's until the runtime's head has passed the frame (`last_pos`,
+//   `is_consumed`), so the core writes it again, or frees it, only then. Memory a call names
 //   is the runtime's only until the call returns, and the bytes an FS_WRITE
 //   names are the runtime's until its descriptor's FS_CLOSE is completed.
 //
@@ -82,7 +82,7 @@ struct DoorStat {
     bool operator==(const DoorStat &) const = default;
 };
 
-// Where an import was posted in the completion ring: asked of `is_consumed`.
+// Where an import's frame was posted in the completion ring: asked of `is_consumed`.
 struct Pos {
     std::uint32_t pos;
 
@@ -172,9 +172,9 @@ inline constexpr std::size_t ABORT_PATH_BYTES = 32;
 
 class Door {
   public:
-    // `most_events` is the most one command raises, or the turn once its drain
+    // `most_frames` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 2) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_frames) noexcept : sq_(sq), cq_(cq), reserve_(most_frames + 2) {}
 
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
