@@ -17,7 +17,6 @@ use xpute_core::ipc::head::{self, Head};
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::ipc::stream::Stream;
 use xpute_core::mem::Memory;
-use xpute_core::sched::wake::NO_WAKE;
 use xpute_kit::math::rng::SplitMix32;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
@@ -205,30 +204,20 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
 unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Core { door, state } = unsafe { &mut *mem.at::<Core>((range + STATE_AT) as usize) };
-    door.rise();
-    door.receive(|submission| match submission {
-        // It keeps nothing across its life, reads no file again, and draws
-        // nothing: a surface opened is answered 0, none.
-        Submission::Life(_)
-        | Submission::Turn(_)
-        | Submission::GpuReady
-        | Submission::Surface(_)
-        | Submission::Changed(_) => Ok(Some(0)),
+    let wake = door.turn(|submission| match submission {
         Submission::Opened(opened) => {
             if let Some(owner) = state.files.complete_open(&opened) {
                 door.post(owner, spec::cmd::OPENED, 0, opened.res);
             }
             Ok(Some(0))
         }
-        Submission::Closed(_) => Ok(Some(0)),
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
+        // It keeps nothing across its life, reads no file again, and draws
+        // nothing: a surface opened is answered 0, none.
+        _ => Ok(Some(0)),
     });
     state.stream.publish();
-    if door.pending() {
-        0.0
-    } else {
-        NO_WAKE
-    }
+    wake
 }
 
 /// # Safety

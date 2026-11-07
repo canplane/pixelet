@@ -51,6 +51,7 @@ use crate::ipc::frame;
 use crate::ipc::fs::{Fd, FsClosed, FsOpened};
 use crate::ipc::ring::Ring;
 use crate::mem::off_of_slice;
+use crate::sched::wake::NO_WAKE;
 
 /// An import a table generates (xpute-tool `spec/cmd`): its number, the
 /// children it is written as, and its writer.
@@ -97,7 +98,9 @@ pub type Outcome = Result<Option<i32>, MarshalError>;
 /// under it, or a command of the program's own, its number and its packet. A
 /// completion is answered by nothing, so what the program returns for one is
 /// dropped. A drain runs before any phase's budget, so the program records
-/// what it is handed and returns.
+/// what it is handed and returns. xpute may hand more kinds: a program
+/// answers those it takes and leaves the rest to a wildcard.
+#[non_exhaustive]
 pub enum Submission<'a> {
     Life(Life),
     /// A turn the scheduling policy grants, and the wall clock (SYS_TURN).
@@ -378,6 +381,19 @@ impl Door {
     /// and before a turn does, by a runtime that runs beside the core.
     pub fn has_room(&self) -> bool {
         self.cq.len() + self.reserve <= self.cq.cap
+    }
+
+    /// A turn's drain: the reads let go (`rise`), what waits handed to
+    /// `handle` in order (`receive`), and when the core wants the next turn:
+    /// at once where any is left, else only when something comes.
+    pub fn turn(&self, handle: impl FnMut(Submission) -> Outcome) -> f64 {
+        self.rise();
+        self.receive(handle);
+        if self.pending() {
+            0.0
+        } else {
+            NO_WAKE
+        }
     }
 
     pub fn pending(&self) -> bool {

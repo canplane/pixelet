@@ -17,7 +17,6 @@ mod machine;
 use abi::asker;
 use xpute_core::entry::BootInfo;
 use xpute_core::ipc::door::{Outcome, Submission};
-use xpute_core::sched::wake::NO_WAKE;
 use xpute_kit::status::error::MarshalError;
 
 // No fixed ranges: the heap starts on the page past the data.
@@ -32,24 +31,10 @@ impl asker::Exports for Example {
     }
 }
 
-/// A turn: what waits applied in order, then the next asked for while any is left.
+/// A turn: its own commands answered, xpute's taken as they come.
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
-    let door = xpute_core::machine::door();
-    door.rise();
-    door.receive(|submission| match submission {
-        // It keeps nothing across its life or its turns, and draws nothing: a
-        // surface opened is answered 0, none.
-        Submission::Life(_)
-        | Submission::Turn(_)
-        | Submission::GpuReady
-        | Submission::Surface(_) => Ok(Some(0)),
-        // It opens no file.
-        Submission::Opened(_) | Submission::Closed(_) | Submission::Changed(_) => Ok(None),
+    xpute_core::machine::door().turn(|s| match s {
         Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
-    });
-    if door.pending() {
-        0.0
-    } else {
-        NO_WAKE
-    }
+        _ => Ok(Some(0)),
+    })
 }

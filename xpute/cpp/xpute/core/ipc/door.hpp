@@ -54,6 +54,7 @@
 #include "frame.hpp"
 #include "ring.hpp"
 #include "fs.hpp"
+#include "xpute/core/sched/wake.hpp"
 
 namespace xpute {
 
@@ -356,6 +357,15 @@ class Door {
     }
 
     bool pending() const noexcept { return !sq_.empty(); }
+
+    // A turn's drain: the reads let go (`rise`), what waits handed to `handle`
+    // in order (`receive`), and when the core wants the next turn: at once
+    // where any is left, else only when something comes.
+    template <class Handle> double turn(Handle &&handle) const noexcept {
+        rise();
+        receive(handle);
+        return pending() ? 0.0 : NO_WAKE;
+    }
 
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }

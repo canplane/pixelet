@@ -220,6 +220,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         }
         Submission::Closed(_) => Ok(Some(0)),
         Submission::Program(number, pkt) => cmd::shell::apply(s, number, &pkt),
+        _ => Ok(None),
     });
     let drained = now();
     if deadline_ms > 0.0 || world_frame_waiting() {

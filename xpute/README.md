@@ -133,10 +133,13 @@ stream says its own head.
 ## Embedding a core
 
 The smallest program shows the whole of it: a core that answers one command
-(`rust/example`) and the runtime that drives it (`ts/example/sum.test.ts`), which
-`make test` runs. Its machine is `rust/example/machine.json`, and its one
-protocol `rust/example/asker.json`: the runtime sends `SUM`, and the core calls
-`ASK` as it adds, answered before the call returns.
+(`rust/example`), the runtime that drives it beside it (`ts/example/sum.test.ts`),
+which `make test` runs, and a page that starts it in a worker (`ts/example/web`,
+for any bundler that takes `new Worker(new URL(…, import.meta.url))`; the core
+built first, `make build`). Its machine is
+`rust/example/machine.json`, and its one protocol `rust/example/asker.json`: the
+UI sends `SUM`, and the core calls `ASK` as it adds, answered before the call
+returns.
 
 The **generator** writes both ends' code from the machine and the protocol
 files in the core crate: `MACHINE` for each end, and for each protocol a
@@ -177,7 +180,9 @@ xpute_core::core!(MACHINE, FIXED_BYTES, my_core::run, gpu: GPU);
 
 The entry, `run`, is a turn: called with a deadline of time, it applies what
 waits on the SQ, posts what it has on the CQ, and returns when it wants the
-next turn. On wasm32 the form is a module that exports `run`; anywhere else it
+next turn. Its door does the waiting part (`Door::turn`): it hands each
+submission over, the program answering its own commands and leaving xpute's to
+a wildcard, and says when the next turn is wanted. On wasm32 the form is a module that exports `run`; anywhere else it
 is the native library, with its memory laid out from the machine, its own
 thread, which runs the core while it has work and sleeps until a kick, the
 scheduler kicking at the moment its policy gives for the time the core asked

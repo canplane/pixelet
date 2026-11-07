@@ -191,10 +191,9 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
 
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
-    s.door.rise();
     // It keeps nothing across its life, reads no file again, and draws nothing:
     // a surface opened is answered 0, none.
-    s.door.receive([&s](const Submission &sub) {
+    double wake = s.door.turn([&s](const Submission &sub) {
         if (const FsOpened *opened = std::get_if<FsOpened>(&sub)) {
             if (std::optional<std::uint32_t> owner = s.files.complete_open(*opened)) s.door.post(*owner, cmd::OPENED, 0, opened->res);
             return Outcome{};
@@ -203,7 +202,7 @@ double turn(Memory m, std::uint32_t range) {
         return Outcome{};
     });
     s.stream.publish();
-    return s.door.pending() ? 0.0 : NO_WAKE;
+    return wake;
 }
 
 #ifdef __wasm__
