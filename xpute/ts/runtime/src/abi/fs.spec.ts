@@ -10,6 +10,7 @@
  * tag and command flagged RES on the submission ring, and does the rest in the gap.
  * xpute ships both ends: the core's calls (xpute-core ipc/door.rs, ipc/file.rs) and the
  * runtime's server (@xpute/runtime). A program binds only its roots to what backs them.
+ * The runtime tells the core a file changed under it (FS_CHANGED, `export`).
  */
 
 import type {
@@ -23,7 +24,7 @@ import * as FsMinor from "./fs/fs_minor.spec.ts";
 import * as Command from "./fs/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { OnImport } from "../mod.ts";
+import type { Sender, OnImport } from "../mod.ts";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -36,6 +37,17 @@ export { FsMinor };
 /** One of Command's, as its enum was a type. */
 type Command = (typeof Command)[keyof typeof Command];
 export { Command };
+
+/** Command.FS_CHANGED's packet, written in place into `to`.
+ *
+ * @param path Its path below the root, as the core opened it. */
+export function encode_fs_changed(
+  to: PacketRoom,
+  root: u32,
+  path: string,
+): PacketWriter {
+  return to.writer(2).u32(root).str(path);
+}
 
 /** Command.FS_OPENAT's completion's packet, written in place into `to`.
  *
@@ -103,6 +115,19 @@ export interface FsClose {
 export function read_fs_close(b: BranchCursor): FsClose {
   return { fd: b.at(0).get<u32>() };
 }
+
+/** What the runtime sends on the fs protocol, bound to `runtime`: each
+ * command sent, requested and answered later, or called and answered before
+ * it returns. */
+export function fs_exports(runtime: Sender) {
+  return {
+    fs_changed: (root: u32, path: string): void =>
+      runtime.send(Command.FS_CHANGED, (r) => encode_fs_changed(r, root, path)),
+  };
+}
+
+/** The fs protocol's stubs, bound. */
+export type FsExports = ReturnType<typeof fs_exports>;
 
 /** What the program does with each command the core posts on the fs protocol; a
  * call's answer is its return. */

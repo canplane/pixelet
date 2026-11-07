@@ -10,15 +10,9 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Gpu, GpuGrant } from "@xpute/runtime";
+import type { Canvas, Gpu, GpuGrant, GpuState } from "@xpute/runtime";
 import { each_record } from "@xpute/runtime/ipc/stream.ts";
 import { GpuRuntime } from "./runtime.ts";
-
-/** Whether there is a GPU: one, none yet while it asks again, none it will
- * ask for again, none again after one it drew with, no WebGPU here, or none
- * outside a secure context. */
-export type GpuState =
-  "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an
@@ -31,8 +25,8 @@ const TRIES = 10;
 export class WebGpu implements Gpu {
   private runtime: GpuRuntime | null = null;
   private granted: GpuGrant | null = null;
-  /** What the program is told of the GPU, and the last it was told. */
-  private report: (state: GpuState) => void = () => {};
+  /** Who is told of the GPU, and the last they were told. */
+  private readonly _reports: ((state: GpuState) => void)[] = [];
   private state: GpuState | null = null;
   /** So an outage is logged once at start and once at end. */
   private tries = 0;
@@ -40,14 +34,10 @@ export class WebGpu implements Gpu {
   private had = false;
   /** In the order they were bound, so a device acquired again binds each
    * slot's newest last. */
-  private readonly canvases = new Map<
-    u32,
-    HTMLCanvasElement | OffscreenCanvas
-  >();
+  private readonly canvases = new Map<u32, Canvas>();
 
-  /** `report` is told whether there is a GPU, the last word at once. */
   watch(report: (state: GpuState) => void): void {
-    this.report = report;
+    this._reports.push(report);
     if (this.state !== null) report(this.state);
   }
 
@@ -72,7 +62,7 @@ export class WebGpu implements Gpu {
 
   /** A canvas drawn where it is: a page's own, or the one a page transferred
    * to the worker its runtime runs in. */
-  bind(handle: u32, canvas: HTMLCanvasElement | OffscreenCanvas): void {
+  bind(handle: u32, canvas: Canvas): void {
     this.canvases.delete(handle);
     this.canvases.set(handle, canvas);
     this.runtime?.bind(handle, canvas.getContext("webgpu")!);
@@ -85,7 +75,7 @@ export class WebGpu implements Gpu {
 
   private tell(state: GpuState): void {
     this.state = state;
-    this.report(state);
+    for (const report of this._reports) report(state);
   }
 
   private request(): void {

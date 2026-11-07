@@ -58,6 +58,24 @@ export type Encode = (room: PacketRoom) => PacketWriter | null;
 type Run = (deadline_ms: f64) => f64;
 type Kick = (deadline_ms: f64) => void;
 
+/** A packet whose fields are `args` in turn, each lowered as XTP lowers a
+ * value (wire/xtp `TreeView.set`), each grafted into a slot of `slot_bytes`;
+ * none for no arguments: what a console sends. */
+export function encode_args(
+  args: NodeValue<NodeView>[],
+  slot_bytes: u32,
+): Encode {
+  return (room) => {
+    if (args.length === 0) return null;
+    const pkt = room.writer(args.length);
+    const cap = { init_cap: slot_bytes, max_cap: slot_bytes };
+    for (const a of args) {
+      pkt.graft(encoder.encode(new TreeView().set(a), cap));
+    }
+    return pkt;
+  };
+}
+
 export class Doorbell implements PacketRoom {
   private readonly _sq: Ring;
   /** The one writer every packet is written with, in place in its slot. */
@@ -185,25 +203,12 @@ export class Doorbell implements PacketRoom {
     if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** `cmd` sent and rung, its arguments its packet's fields in turn, each
-   * lowered as XTP lowers a value (wire/xtp `TreeView.set`): a command from
-   * outside the runtime's own code, a console's. */
+  /** `cmd` sent and rung, its arguments its packet's fields in turn
+   * (`encode_args`): a command from outside the runtime's own code, a
+   * console's. */
   cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
-    this.send(cmd, () => this.lower(args));
+    this.send(cmd, encode_args(args, this._sq.slot_bytes));
     this.ring(0);
-  }
-
-  /** The next submission's packet, `args` its fields in turn, each lowered as
-   * XTP lowers a value (wire/xtp `TreeView.set`); none for no arguments. */
-  lower(args: NodeValue<NodeView>[]): PacketWriter | null {
-    if (args.length === 0) return null;
-    const pkt = this.writer(args.length);
-    // Each is grafted into the slot, so a slot is its most.
-    const cap = { init_cap: this._sq.slot_bytes, max_cap: this._sq.slot_bytes };
-    for (const a of args) {
-      pkt.graft(encoder.encode(new TreeView().set(a), cap));
-    }
-    return pkt;
   }
 
   ring(deadline_ms: f64): f64 {

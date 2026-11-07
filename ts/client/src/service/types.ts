@@ -8,8 +8,6 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Gpu as RuntimeGpu } from "@xpute/runtime";
-import type { GpuState } from "@xpute/gpu/web.ts";
 
 /** A transaction on the place's database: files of bytes by key, null none. */
 export interface Tx {
@@ -21,14 +19,6 @@ export interface Tx {
  * those its machine allows. A place that links the core in needs none. */
 export interface Config {
   bytes: u32;
-}
-
-/** A place's GPU, which xpute grants the kernel as its machine asks
- * (@xpute/gpu `WebGpu`, `NativeGpu`); `watch` tells whether there is one. A
- * GPU counts as present until a place says otherwise, and a place says only
- * what it hears. */
-export interface Gpu extends RuntimeGpu {
-  watch(report: (state: GpuState) => void): void;
 }
 
 export interface SafeArea {

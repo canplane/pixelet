@@ -37,7 +37,29 @@ impl Output {
     }
 }
 
+/// The packages' version, said once in rust/Cargo.toml's workspace: each
+/// TypeScript package's `package.json` must say the same.
+fn check_versions() -> Result<(), String> {
+    let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
+    let toml = read("rust/Cargo.toml")?;
+    let version = toml
+        .split("[workspace.package]")
+        .nth(1)
+        .and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("version = ")))
+        .map(|v| v.trim_matches('"').to_string())
+        .ok_or("rust/Cargo.toml: no workspace version")?;
+    for p in ["kit", "runtime", "gpu", "native"].map(|n| format!("ts/{n}/package.json")) {
+        let json: serde_json::Value =
+            serde_json::from_str(&read(&p)?).map_err(|e| format!("{p}: {e}"))?;
+        if json["version"].as_str() != Some(version.as_str()) {
+            return Err(format!("{p}: version is not rust/Cargo.toml's {version}"));
+        }
+    }
+    Ok(())
+}
+
 pub fn outputs() -> Result<Vec<Output>, String> {
+    check_versions()?;
     let mut out = cmd::outputs()?;
     // The example's machine and protocol, kept beside xpute's own code.
     out.extend(machine::outputs(&root(), "rust/example/machine.json")?);

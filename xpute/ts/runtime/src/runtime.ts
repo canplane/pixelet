@@ -1,26 +1,32 @@
 // @xpute/runtime/runtime.ts
 
 /**
- * A runtime mounted on a core its platform opened: the front it lays before
- * the first turn (ipc/head.ts), a doorbell whose every turn reads what the
- * core left as it ends (a trapped turn's too, so its report is read before
- * the doorbell hears it stop), what answers the core's commands by their
- * major — xpute's own below PROGRAM_MAJOR (abi/cmd.json: the core's report
- * as it aborts; the file device where the program backs one, ipc/fs.ts), the
- * program's from there — and the scheduler, which runs turns as the scheduling
- * policy the program boots it with says (sched/policy.ts).
+ * A runtime mounted on a core its platform opened.
+ *
+ * - The front is laid before the first turn (ipc/head.ts).
+ * - Each turn is rung by the doorbell, which reads what the core left as the
+ *   turn ends, a trapped turn's too.
+ * - What the core posts is answered by its major: xpute's own below
+ *   PROGRAM_MAJOR (the stop report, the file device), the program's from
+ *   there; each the UI takes goes to it too.
+ * - The scheduler runs turns as the policy says (sched/policy.ts).
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
+import { InvariantError } from "@xpute/kit/status/error.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   Command,
+  encode_sys_turn,
   Major,
-  runtime_imports,
+  read_sys_abort,
+  sys_imports,
   type SysAbort,
-} from "@xpute/runtime/abi/cmd.spec.ts";
+} from "@xpute/runtime/abi/sys.spec.ts";
+import { Command as GpuCommand } from "@xpute/runtime/abi/gpu.spec.ts";
 import * as fs from "@xpute/runtime/abi/fs.spec.ts";
 import { type Front, Head, laid, lay } from "@xpute/runtime/ipc/head.ts";
 import * as frame from "@xpute/runtime/ipc/frame.ts";
@@ -35,25 +41,19 @@ import { Scheduler } from "@xpute/runtime/sched/scheduler.ts";
 import { open } from "./platform";
 
 /** The core as its platform opened it: its memory, which never moves or
- * grows; its entry, `run`, a turn that returns when it wants the next, in
- * ms; where its calls are answered; and, where it runs on a thread of
- * its own, that thread.
+ * grows; `run`, a turn, which returns when it wants the next, in ms; where
+ * its calls are answered; and, where it runs on its own thread, that thread.
  * xpute names the entry, as a C runtime names `main`. */
 export interface Core {
   mem: ArrayBuffer;
   run(deadline_ms: f64): f64;
-  /** `answer` answers each call from here on: a frame laid at an offset of
-   * `mem`, answered before the call returns. ENOSYS until it is set. */
+  /** `answer` answers each call from here on; ENOSYS until it is set. */
   answer_with(answer: (at: u32) => i32): void;
-  /** The core's own thread, which runs while it has work and sleeps until
-   * it is kicked (a native app's): `kick` wakes it, its next turn given at
-   * least `deadline_ms`, none of its own where negative, and returns at once;
-   * `listen`'s `heard` is called on this thread once it has posted or asked
-   * since, with when it wants the next turn (0 for the next moment, NaN once
-   * it has stopped), which the scheduler paces and kicks as it paces a page's,
-   * and the longest turn it ran. `pause` stops every turn but one `run`
-   * rings, and `resume` lets kicks run turns again. `run` is then a turn
-   * waited for. None where the core runs only inside `run` (a page's). */
+  /** A native core's thread, which runs while it has work and sleeps until
+   * kicked: `kick` wakes it, a turn given at least `deadline_ms`; `heard`
+   * is told when it wants the next turn (NaN once it stopped) and the
+   * longest turn it ran; `pause` stops its turns, `resume` lets kicks run
+   * them. None for a page's core, which runs only inside `run`. */
   thread?: {
     kick(deadline_ms: f64): void;
     pause(): void;
@@ -62,27 +62,32 @@ export interface Core {
   };
 }
 
-/** What a core asks of the GPU it is granted (its machine's `gpu`): a power
- * preference, and features the device must have and those it takes where the
- * adapter has them, by WebGPU's names. */
+/** What a core asks of its GPU (its machine's `gpu`), by WebGPU's names. */
 export interface GpuAsk {
   power: string;
   features: { required: readonly string[]; optional: readonly string[] };
 }
 
-/** A platform's GPU, granted to a core: it opens a device as the core asks,
- * runs the core's stream on it as each turn returns (a native one, as the
- * core publishes it), and says when a device has answered. What
- * `after_turn` throws ends the core, as a trap does. */
+/** A platform's GPU: it opens a device as the core asks, runs the core's
+ * stream as each turn returns, says when a device answers and whether there
+ * is one, and draws the canvases it is lent. What `after_turn` throws ends
+ * the core. A native GPU binds its views itself and takes no canvas. */
 export interface Gpu {
   grant(to: GpuGrant): void;
   after_turn(): void;
+  watch(report: (state: GpuState) => void): void;
+  bind?(handle: u32, canvas: Canvas): void;
+  unbind?(handle: u32): void;
 }
 
-/** What a GPU is granted to: the core's memory, which never moves; where its
- * stream begins; what it asks; `ready`, which tells the core a device
- * answered (GPU_READY); and `wake`, a turn asked for, as a
- * completion the core did not hear of came. */
+export type GpuState =
+  "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure";
+
+/** A page's canvas, or one transferred to the worker its runtime runs in. */
+export type Canvas = HTMLCanvasElement | OffscreenCanvas;
+
+/** The core's memory, where its stream begins, what it asks; `ready` tells
+ * the core a device answered (GPU_READY), `wake` asks a turn. */
 export interface GpuGrant {
   mem: ArrayBuffer;
   at: u32;
@@ -91,8 +96,8 @@ export interface GpuGrant {
   wake(): void;
 }
 
-/** The core's report as it aborts: the errno of the invariant it broke, where,
- * and two numbers it gave. */
+/** The core's report as it aborts: the errno it broke, where, and two
+ * numbers it gave. */
 export interface Abort {
   errnum: number;
   file: string;
@@ -100,6 +105,11 @@ export interface Abort {
   column: u32;
   a: bigint;
   b: bigint;
+}
+
+/** The report a SYS_ABORT carries. */
+export function read_abort(f: BranchCursor): Abort {
+  return abort_of(read_sys_abort(f));
 }
 
 function abort_of(e: SysAbort): Abort {
@@ -120,78 +130,103 @@ function log_abort(r: Abort): void {
   );
 }
 
-/** What the program mounts its core with: all it decides, and nothing of
- * the order the runtime is put together in. */
+/** What the core runs with, all the app decides: its module where a page
+ * loads one; what backs its files and the GPU it is granted, where its
+ * machine asks; what answers its commands; the policy and what goes with
+ * each turn; and where an import names its memory, as its protocol's
+ * generated `<name>_mem` says. */
 export interface Config<G extends Grant = Grant> {
-  /** Where the front's header is. */
-  head_at: u32;
-  /** The front the runtime lays there before the first turn, unless one is
-   * laid: a core that outlived its runtime's reload keeps its rings as they
-   * are. Unset for a core that laid its own. */
-  lay?: Front;
-  /** What backs the file device (Major FS), where it is given. */
+  core?: ModuleSource;
   fs?: Fs;
-  /** The core's report as it aborts (SYS_ABORT); logged where
-   * none takes it. */
-  onabort?(report: Abort): void;
-  /** The GPU granted and what the core asks of it (set by `boot` from the
-   * machine); its stream is where the header says. */
-  gpu?: { by: Gpu; ask: GpuAsk };
-  /** What the program hears the core send or call it with, its commands
-   * those of PROGRAM_MAJOR and up; a call it does not take is ENOSYS. */
+  gpu?: Gpu;
   program?: OnImport;
-  /** When turns run and how much each gets, the program's policy. */
   policy: SchedulingPolicy<G>;
-  /** Fills the rings before each turn the scheduler grants is rung. */
   submit(grant: G, delta_s: f64): void;
-  /** Told once the core has stopped. */
-  onterminated?(): void;
+  mem_of?(cmd: u32, f: BranchCursor | null): [u32, u32] | null;
 }
 
-export interface Runtime {
-  core: Core;
-  head: Head;
-  doorbell: Doorbell;
-  /** Sent with the next turn, its packet written by `encode`; while the
-   * completion ring is read, once it is. */
+/** What a UI hears of its core: the imports it takes (`cmds`, SYS_ABORT
+ * among them where it shows the stop), with `named` the memory one names
+ * and `pkt` its packet; the GPU's state; the stop. */
+export interface Ui {
+  cmds: readonly u32[];
+  on(
+    tag: u32,
+    cmd: u32,
+    f: BranchCursor | null,
+    named: U8Array | null,
+    pkt: U8Array | null,
+  ): void;
+  gpu(state: GpuState): void;
+  stop(): void;
+}
+
+/** A UI that hears nothing. */
+export const QUIET: Ui = { cmds: [], on() {}, gpu() {}, stop() {} };
+
+/** What a protocol's generated stubs send through. */
+export interface Sender {
+  /** Sent with the next turn. */
   send(cmd: u32, encode?: Encode): void;
-  /** Sent with ACKREQ, with the next turn; its answer is the core's reply,
-   * read with the completion ring, and nothing waits for it. What a UI uses
-   * for a command it wants answered: it never waits on a turn. */
+  /** Sent with ACKREQ; the core's reply comes with a later turn. */
   request(cmd: u32, encode?: Encode | null): Promise<i32>;
-  /** Rung at once with a deadline of 0 until the core answers, so it is heard
-   * while turns are paused too; then a turn is asked for. `read` reads the
-   * answer; without it, the result is returned and a failure is logged, as
-   * an answer no one reads is. */
+  /** Rung at once until the core answers, turns paused or not. */
   call(cmd: u32, encode?: Encode | null): i32;
   call<T>(
     cmd: u32,
     encode: Encode | null,
     read: (result: i32, reply: BranchCursor | null) => T,
   ): T;
-  /** A turn asked for, as something the core did not hear of changed. */
-  wake(): void;
-  /** Turns run from now on, as the policy gives them, while the platform
-   * shows the program; nothing where they already run or the core stopped. */
-  resume(): void;
-  /** No turn runs until `resume`; a `call` still rings at once. */
-  pause(): void;
-  /** Whether the platform shows the program: a hidden one runs no turn, as a
-   * hidden page gets no frame. Each change is told the core at once
-   * (SYS_SUSPEND, SYS_RESUME). */
-  visible(visible: boolean): void;
 }
 
-/** What a protocol's generated stubs send through: a runtime beside them,
- * or a UI's end of one in another thread (remote.ts `connect`). */
-export type Sender = Pick<Runtime, "send" | "request" | "call">;
+/** The UI's link to its runtime, beside it or across a port. */
+export interface Link extends Sender {
+  /** Whether a command's packet fits a slot. */
+  fits(encode: Encode): boolean;
+  /** A turn asked for. */
+  wake(): void;
+  /** An input now, for the policy. */
+  input(): void;
+  /** Turns run, while the program is shown. */
+  resume(): void;
+  /** No turn runs; a call still rings. */
+  pause(): void;
+  /** Shown or hidden; each change told the core (SYS_RESUME, SYS_SUSPEND). */
+  visible(visible: boolean): void;
+  /** A canvas lent to the GPU under the core's handle, and let go. */
+  bind(handle: u32, canvas: Canvas): void;
+  unbind(handle: u32): void;
+}
 
-export function mount<G extends Grant>(core: Core, cfg: Config<G>): Runtime {
-  if (cfg.lay && !laid(core.mem, cfg.head_at)) {
-    lay(core.mem, cfg.head_at, cfg.lay);
-  }
-  const head = new Head(core.mem, cfg.head_at);
-  const gpu = cfg.gpu?.by;
+export interface Runtime extends Link {
+  core: Core;
+  head: Head;
+  doorbell: Doorbell;
+}
+
+/** The memory of the core last mounted here. */
+export let mem: ArrayBuffer;
+
+/** The runtime on `core`, its front laid as `m` places it unless laid, the
+ * GPU granted where `m` asks for one. */
+export function mount<G extends Grant>(
+  core: Core,
+  m: Front & Pick<Machine, "head_at" | "gpu">,
+  cfg: Config<G>,
+  ui: Ui,
+): Runtime {
+  if (!laid(core.mem, m.head_at)) lay(core.mem, m.head_at, m);
+  mem = core.mem;
+  const head = new Head(core.mem, m.head_at);
+  const gpu = m.gpu ? cfg.gpu : undefined;
+  const policy = cfg.policy;
+  const span = cfg.mem_of ?? (() => null);
+  const named = (cmd: u32, f: BranchCursor | null) => {
+    const s = span(cmd, f);
+    return s && new Uint8Array(core.mem, s[0], s[1]);
+  };
+  const thread = core.thread;
+
   const doorbell = new Doorbell(
     core.mem,
     head.sq_at,
@@ -201,160 +236,155 @@ export function mount<G extends Grant>(core: Core, cfg: Config<G>): Runtime {
       gpu?.after_turn();
       return wake;
     },
-    core.thread ? (deadline_ms) => core.thread?.kick(deadline_ms) : null,
+    thread ? (deadline_ms) => thread.kick(deadline_ms) : null,
   );
-  core.thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
-  const scheduler = new Scheduler(doorbell, cfg.policy, cfg.submit);
-  let resumed = false;
-  let shown = true;
-  const steer = () => {
-    if (resumed && shown) {
-      core.thread?.resume();
-      scheduler.resume();
-    } else {
-      scheduler.pause();
-      core.thread?.pause();
-    }
-  };
-  // A core on its own thread runs no turn of its own before `resume`, as a
-  // page's is rung for none.
-  core.thread?.pause();
-  const send = (cmd: u32, encode?: Encode) => {
-    doorbell.send(cmd, encode);
-    scheduler.kick();
-  };
-  const own = new Map<u32, OnImport>([
-    [
-      Major.SYS,
-      runtime_imports({
-        sys_abort: (e) => (cfg.onabort ?? log_abort)(abort_of(e)),
-      }),
-    ],
-  ]);
-  if (cfg.fs) {
-    const files = new FsServer(cfg.fs, core.mem, (tag, cmd, res, encode) => {
-      doorbell.complete(tag, cmd, res, encode);
-      scheduler.kick();
-    });
-    own.set(fs.Major.FS, fs.fs_imports(files));
-  }
-  doorbell.listen((tag, cmd, f, pkt) => {
-    const major = frame.major_of(cmd);
-    const listener = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
-    if (listener) return listener(tag, cmd, f, pkt);
-    return major === fs.Major.FS ? Errno.ENODEV : Errno.ENOSYS;
+  const scheduler = new Scheduler(doorbell, policy, (grant, delta_s) => {
+    cfg.submit(grant, delta_s);
+    doorbell.send(Command.SYS_TURN, (room) =>
+      encode_sys_turn(room, Date.now()),
+    );
   });
-  core.answer_with((at) => doorbell.answer(at));
-  if (cfg.gpu) {
-    cfg.gpu.by.grant({
-      mem: core.mem,
-      at: head.gpu_at,
-      ask: cfg.gpu.ask,
-      ready: () => send(Command.GPU_READY),
-      wake: () => scheduler.wake(),
-    });
-  }
-  doorbell.onterminated = () => {
-    scheduler.pause();
-    cfg.onterminated?.();
-  };
+  thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
+  thread?.pause();
+
+  const kick = <T>(v: T): T => (scheduler.kick(), v);
+  const send = (cmd: u32, encode?: Encode) => kick(doorbell.send(cmd, encode));
   function call<T>(
     cmd: u32,
     encode: Encode | null = null,
     read?: (result: i32, reply: BranchCursor | null) => T,
   ): T | i32 {
-    const out = doorbell.call(cmd, encode, (result, reply) => {
-      if (read) return read(result, reply);
-      if (result < 0) {
-        console.warn(
-          `[xpute/runtime] command 0x${cmd.toString(16)} failed: ${strerror(result)}`,
-        );
-      }
-      return result;
-    });
-    scheduler.kick();
-    return out;
+    return kick(
+      doorbell.call(cmd, encode, (res, reply) => {
+        if (read) return read(res, reply);
+        if (res < 0)
+          console.warn(`[xpute] 0x${cmd.toString(16)}: ${strerror(res)}`);
+        return res;
+      }),
+    );
   }
-  // The core hears a runtime attach before anything else it is sent.
+
+  const own = new Map<u32, OnImport>([
+    [Major.SYS, sys_imports({ sys_abort: (e) => log_abort(abort_of(e)) })],
+  ]);
+  if (cfg.fs) {
+    const files = new FsServer(cfg.fs, core.mem, (tag, cmd, res, encode) =>
+      kick(doorbell.complete(tag, cmd, res, encode)),
+    );
+    own.set(fs.Major.FS, fs.fs_imports(files));
+  }
+  const taken = new Set(ui.cmds);
+  doorbell.listen((tag, cmd, f, pkt) => {
+    const major = frame.major_of(cmd);
+    const on = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
+    const res = on
+      ? on(tag, cmd, f, pkt)
+      : major === fs.Major.FS
+        ? Errno.ENODEV
+        : Errno.ENOSYS;
+    if (taken.has(cmd)) ui.on(tag, cmd, f, named(cmd, f), pkt);
+    return res;
+  });
+  doorbell.onterminated = () => {
+    scheduler.pause();
+    ui.stop();
+  };
+  core.answer_with((at) => doorbell.answer(at));
+
+  if (gpu) {
+    gpu.watch(ui.gpu);
+    gpu.grant({
+      mem: core.mem,
+      at: head.gpu_at,
+      ask: m.gpu!,
+      ready: () => send(GpuCommand.GPU_READY),
+      wake: () => scheduler.wake(),
+    });
+  }
+
+  // Turns run while resumed and shown.
+  let resumed = false;
+  let shown = true;
+  function steer(): void {
+    if (resumed && shown) {
+      thread?.resume();
+      scheduler.resume();
+    } else {
+      scheduler.pause();
+      thread?.pause();
+    }
+  }
+  function canvas(): Required<Pick<Gpu, "bind" | "unbind">> {
+    if (!gpu?.bind || !gpu.unbind) throw new InvariantError(Errno.ENOTSUP);
+    return gpu as Required<Gpu>;
+  }
+
+  // The core hears a runtime attach before anything else.
   doorbell.send(Command.SYS_ATTACH);
   return {
     core,
     head,
     doorbell,
     send,
-    request: (cmd, encode) => {
-      const answer = doorbell.request(cmd, encode ?? null);
-      scheduler.kick();
-      return answer;
-    },
+    request: (cmd, encode) => kick(doorbell.request(cmd, encode ?? null)),
     call,
+    fits: (encode) => {
+      const pkt = encode(doorbell);
+      return pkt === null || doorbell.fits(pkt);
+    },
     wake: () => scheduler.wake(),
-    resume: () => {
-      resumed = true;
-      steer();
-    },
-    pause: () => {
-      resumed = false;
-      steer();
-    },
-    visible: (visible) => {
+    input: () => policy.input?.(performance.now()),
+    resume: () => ((resumed = true), steer()),
+    pause: () => ((resumed = false), steer()),
+    visible(visible) {
       if (visible === shown) return;
       shown = visible;
       steer();
-      // At once: a hidden page gets no frame, and hiding is the last sure
-      // moment the core has to keep what it holds.
+      // At once: hiding is the core's last sure moment to keep what it holds.
       call(visible ? Command.SYS_RESUME : Command.SYS_SUSPEND);
     },
+    bind: (handle, c) => canvas().bind(handle, c),
+    unbind: (handle) => canvas().unbind(handle),
   };
 }
 
-/** What the runtime reads of a core's machine (its generated `MACHINE`): the
- * memory sizes it allows and their region, where the front's header is and
- * the front the runtime lays there, and the GPU it asks for, none where it takes
- * no GPU. What the program's commands carry is the program's. */
+/** A core's machine as its generated `MACHINE` gives it: the memory sizes it
+ * allows, where the front's header is and the front, and the devices it asks
+ * for. */
 export interface Machine extends Front {
   mem_bytes: readonly u32[];
   region_bytes: u32;
   head_at: u32;
-  /** Whether it asks for the file device. */
   fs: boolean;
   gpu: GpuAsk | null;
 }
 
-/** Where a page finds its core: its module, fetched from a URL or given as
- * bytes, `init` the fetch's, and the bytes of its memory, one of the sizes
- * its machine allows. A native core is linked in and takes none. */
+/** A page's core: its module, fetched or given as bytes, and the bytes of its
+ * memory, a size its machine allows. */
 export interface ModuleSource {
   module: URL | BufferSource;
   bytes: u32;
   init?: RequestInit;
 }
 
-/** The core opened as `machine` declares, by this build's platform
- * (platform.ts, platform.native.ts), from `core` on a page; the runtime
- * mounted on it, its front laid, the file device backed by `fs` and the GPU
- * granted by `gpu` where its machine asks for them. A machine that asks for
- * files is refused a boot without `fs`, and one that does not is refused one
- * with it. */
+/** An app's core, declared once: its machine, and its config, made where the
+ * core runs. */
+export interface Manifest<G extends Grant = Grant> {
+  machine: Machine;
+  core(): Config<G> | Promise<Config<G>>;
+}
+
+/** The core of `m` opened by this build's platform and the runtime mounted
+ * on it, what it tells a UI told `ui`. A machine that asks for files is
+ * refused a config without `fs`, and one that does not, one with it; a GPU
+ * the machine does not ask for is not granted. */
 export async function boot<G extends Grant>(
-  machine: Machine,
-  cfg: Omit<Config<G>, "head_at" | "lay" | "gpu"> & {
-    core?: ModuleSource;
-    gpu?: Gpu;
-  },
+  m: Manifest<G>,
+  ui: Ui,
 ): Promise<Runtime> {
-  const { core, gpu, ...rest } = cfg;
-  if (machine.fs !== (rest.fs !== undefined)) {
-    throw new Error(
-      machine.fs
-        ? "the machine asks for the file device, and the program backs none"
-        : "the program backs a file device the machine does not ask for",
-    );
+  const cfg = await m.core();
+  if (m.machine.fs !== (cfg.fs !== undefined)) {
+    throw new InvariantError(Errno.EINVAL);
   }
-  return mount(await open(machine, core), {
-    ...rest,
-    head_at: machine.head_at,
-    lay: machine,
-    gpu: gpu && machine.gpu ? { by: gpu, ask: machine.gpu } : undefined,
-  });
+  return mount(await open(m.machine, cfg.core), m.machine, cfg, ui);
 }

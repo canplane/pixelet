@@ -12,7 +12,7 @@ pub mod spec;
 use crate::mem::Memory;
 use spec::word;
 
-/// What the header says past MAGIC and VERSION.
+/// What the header says past MAGIC.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Head {
     pub sq_cap: u32,
@@ -29,7 +29,6 @@ impl Head {
     pub const fn words(&self) -> [u32; spec::WORDS as usize] {
         let mut w = [0; spec::WORDS as usize];
         w[word::MAGIC as usize] = spec::MAGIC;
-        w[word::VERSION as usize] = spec::VERSION;
         w[word::SQ_CAP as usize] = self.sq_cap;
         w[word::CQ_CAP as usize] = self.cq_cap;
         w[word::SLOT_BYTES as usize] = self.slot_bytes;

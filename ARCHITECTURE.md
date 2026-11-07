@@ -870,13 +870,15 @@ hands over is called directly. An answer comes back as a number, read once by
 names is the runtime breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
-(`ts/client/src/abi/boot.ts`) boots `@xpute/runtime` (`boot`) as the kernel's
+(`ts/client/src/abi/boot.ts`) starts the kernel with `@xpute/runtime`'s `start`
+where the platform runs it (`service/runtime.ts`, `.native.ts`), as the kernel's
 machine declares it (generated into `abi/machine.spec.ts`), which asks for both
-of xpute's devices, the GPU and the files (`gpu`, `fs`), with what backs the
-files (`sys/fs/namespace.ts` `namespace`), the stop report (`sys/abort.ts`), the
-app ABI's handlers (`shell_imports`), the frame pacing and each turn's
-submission (`port/surface.ts` `submit_grant`); `runtime/kernel.ts` keeps the runtime
-and the generated stubs bound to it (`kernel`). What differs by platform is a
+of xpute's devices, the GPU and the files (`gpu`, `fs`). The config, made where
+the kernel runs (`runtime/start.ts`), holds what backs the files
+(`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`shell_imports`),
+what the kernel places with the shell, the frame pacing and each turn's
+submission (`port/surface.ts` `submit_grant`); `runtime/kernel.ts` keeps the
+runtime's link and the generated stubs bound to it (`kernel`). What differs by platform is a
 file pair in `ts/client/src/service/`, `<x>.ts` the page's beside
 `<x>.native.ts` the device's, which Metro picks by the platform it bundles for
 (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both share in
@@ -928,8 +930,8 @@ What crosses each edge:
 
 | Edge                                        | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| the shell and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`) and each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part and a refused file emptied (`FS_*`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
-| kernel and runtime, xpute's ABI             | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole, the kernel's life, a GPU answered                                                                                                                                 |
+| the shell and services, and kernel, `port/` | a command for each control and the input it routes (`INPUT_*`), each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part (`SOURCE_DECLARE`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
+| kernel and runtime, xpute's ABI             | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole or changed (`FS_CHANGED`), the kernel's life and each turn's pacing (`SYS_TURN`), a GPU answered and the surfaces the shell lends (`GPU_SURFACE_*`)                                                                                                                                 |
 | runtime and core, xpute                     | a turn with its deadline, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions, imports and the GPU stream's records, xpute's stop hook if it stops                                                                                            |
 
 ## Reads, and the one request scheduler
@@ -954,7 +956,7 @@ read and its edits written:
 So the kernel names no URL, version, storage key or platform: a path is a
 name, and where it leads is the client's. The client reads the declaration
 (The query, the only seam) once at boot, hands the kernel the top zoom, each
-kind's format and the shards it serves (`FS_MOUNT`, `sys/io/source.rs`), and
+kind's format and the shards it serves (`SOURCE_DECLARE`, `sys/io/source.rs`), and
 keeps the versions; the world's floor and its service area follow from it.
 
 An open answers that the file is there and how long, that there is none, or that
@@ -991,7 +993,7 @@ the kernel refuses one of another format, one its backend cannot read as bytes,
 or one that does not decode, as a driver refuses a superblock it does
 not know, and never writes over it. It names each refused file in the snapshot
 (`refused_files`); the client sets it aside, empties it and says so
-(`FS_TRUNCATED`, `sys/fs/refusal.ts`), and the kernel reads it again. A shard
+(xpute's `FS_CHANGED`, `sys/fs/refusal.ts`), and the kernel reads it again. A shard
 whose file is refused stays unread meanwhile, and no edit stands in it.
 
 ## When something goes wrong
@@ -1035,11 +1037,12 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the client submits one `TURN_GRANT` on the kernel's rings,
-with the runtime's alone: the turn's pacing, the reads allowed out and
-the clock (`ts/client/src/port/surface.ts` `submit_grant`); a turn rung for a
-command alone carries none and draws nothing. The view each frame is drawn at
-is the world surface's layout box, in CSS pixels (`SURFACE_RESIZE`), and a
+Before each turn the client submits one `TURN_GRANT` on the kernel's rings, the
+turn's pacing and the reads allowed out (`ts/client/src/port/surface.ts`
+`submit_grant`), and the runtime then its `SYS_TURN`, the clock; a turn rung
+for a command alone carries neither and draws nothing. The view each frame is
+drawn at is the world surface's layout box, in CSS pixels
+(`GPU_SURFACE_RESIZE`), and a
 pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
 `@xpute/runtime/sched/frame_pacing.ts`), its numbers the kernel's

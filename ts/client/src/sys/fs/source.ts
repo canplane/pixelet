@@ -4,7 +4,7 @@
  * The tile source's declaration (the bucket's, which script/publish.py writes,
  * or a dev tile server's), asked until it answers and read once. The kernel is
  * handed its own part, the top zoom, the formats and the shards
- * (FS_MOUNT), and observes nothing before; the versions stay here, for the
+ * (SOURCE_DECLARE), and observes nothing before; the versions stay here, for the
  * bakes' objects (tile.ts) and the settings.
  */
 
@@ -25,7 +25,7 @@ import {
   type Source,
 } from "@/abi/state.ts";
 import * as origin from "@/service/origin.ts";
-import { fs_mount } from "@/port/fs.ts";
+import { source_declare } from "@/port/source.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
  * format, for the kernel; each kind's version, and a shard's own. */
@@ -126,6 +126,20 @@ export function source_versions(): Declaration["version"] | null {
 
 export const watch_source = listeners.watch;
 
+/** Settled: true where the source is declared, false where it is refused. */
+export function settled(): Promise<boolean> {
+  return new Promise((done) => {
+    const look = () => {
+      if (state === SOURCE_DECLARED || state === SOURCE_REFUSED) {
+        done(state === SOURCE_DECLARED);
+        return true;
+      }
+      return false;
+    };
+    if (!look()) watch_source(() => void look());
+  });
+}
+
 /** Where the source stands as the kernel's worker has it, for a page's UI,
  * which holds no files. */
 export function mirror_source(
@@ -158,7 +172,7 @@ async function ask_declaration(): Promise<string | null> {
   }
 }
 
-/** Hands the kernel its part of the declaration (FS_MOUNT); false where
+/** Hands the kernel its part of the declaration (SOURCE_DECLARE); false where
  * it is more than a command carries or the kernel refuses it, a format this
  * build does not read among what it refuses. */
 export type SendSource = (
@@ -169,7 +183,7 @@ export type SendSource = (
 
 /** Settled once the source is declared or refused (`source_state`). */
 export async function declare_source(
-  send: SendSource = fs_mount,
+  send: SendSource = source_declare,
 ): Promise<void> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
@@ -192,7 +206,7 @@ export async function declare_source(
     return;
   }
   const shards = Object.keys(read.shard);
-  // Before FS_MOUNT: a frame in that call opens a tile under it.
+  // Before SOURCE_DECLARE: a frame in that call opens a tile under it.
   cur_declaration = read;
   if (
     !send(

@@ -37,8 +37,7 @@ import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Major from "./cmd/major.spec.ts";
 import * as InputMinor from "./cmd/input_minor.spec.ts";
 import * as SensorMinor from "./cmd/sensor_minor.spec.ts";
-import * as FsMinor from "./cmd/fs_minor.spec.ts";
-import * as SurfaceMinor from "./cmd/surface_minor.spec.ts";
+import * as SourceMinor from "./cmd/source_minor.spec.ts";
 import * as TurnMinor from "./cmd/turn_minor.spec.ts";
 import * as SettingMinor from "./cmd/setting_minor.spec.ts";
 import * as SceneMinor from "./cmd/scene_minor.spec.ts";
@@ -75,13 +74,9 @@ export { InputMinor };
 type SensorMinor = (typeof SensorMinor)[keyof typeof SensorMinor];
 export { SensorMinor };
 
-/** One of FsMinor's, as its enum was a type. */
-type FsMinor = (typeof FsMinor)[keyof typeof FsMinor];
-export { FsMinor };
-
-/** One of SurfaceMinor's, as its enum was a type. */
-type SurfaceMinor = (typeof SurfaceMinor)[keyof typeof SurfaceMinor];
-export { SurfaceMinor };
+/** One of SourceMinor's, as its enum was a type. */
+type SourceMinor = (typeof SourceMinor)[keyof typeof SourceMinor];
+export { SourceMinor };
 
 /** One of TurnMinor's, as its enum was a type. */
 type TurnMinor = (typeof TurnMinor)[keyof typeof TurnMinor];
@@ -200,7 +195,7 @@ export interface Snapshot {
   previews: u32[];
   /** The files the kernel refused, not of their format, not decoding, or too large for any
    * heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
-   * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
+   * kernel read none of it and writes nothing over it until FS_CHANGED says it is
    * empty. */
   refused_files: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say. */
@@ -373,31 +368,28 @@ export function encode_sensor_err(
 
 /** Command.TURN_GRANT's packet, written in place into `to`.
  *
- * @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget.
- * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
+ * @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget. */
 export function encode_turn_grant(
   to: PacketRoom,
   refresh_ms: f64,
   paced_ms: f64,
   interactive: boolean,
   credits: u32,
-  unix_ms: f64,
 ): PacketWriter {
   return to
-    .writer(5)
+    .writer(4)
     .f64(refresh_ms)
     .f64(paced_ms)
     .bool(interactive)
-    .u32(credits)
-    .f64(unix_ms);
+    .u32(credits);
 }
 
-/** Command.FS_MOUNT's packet, written in place into `to`.
+/** Command.SOURCE_DECLARE's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_fs_mount(
+export function encode_source_declare(
   to: PacketRoom,
   top_zoom: u32,
   format: u32[],
@@ -408,18 +400,6 @@ export function encode_fs_mount(
     .u32(top_zoom)
     .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
     .strs(shard);
-}
-
-/** Command.FS_TRUNCATED's packet, written in place into `to`.
- *
- * @param root file.json's `root`.
- * @param path Its path below the root, as the kernel opened it. */
-export function encode_fs_truncated(
-  to: PacketRoom,
-  root: u32,
-  path: string,
-): PacketWriter {
-  return to.writer(2).u32(root).str(path);
 }
 
 /** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
@@ -511,30 +491,6 @@ export function encode_input_move(
   y: i32,
 ): PacketWriter {
   return to.writer(2).i32(x).i32(y);
-}
-
-/** Command.SURFACE_RESIZE's packet, written in place into `to`. */
-export function encode_surface_resize(
-  to: PacketRoom,
-  surface: u32,
-  width: u32,
-  height: u32,
-  device_pixel_ratio: f64,
-): PacketWriter {
-  return to
-    .writer(4)
-    .u32(surface)
-    .u32(width)
-    .u32(height)
-    .f64(device_pixel_ratio);
-}
-
-/** Command.SURFACE_CLOSE's packet, written in place into `to`. */
-export function encode_surface_close(
-  to: PacketRoom,
-  surface: u32,
-): PacketWriter {
-  return to.writer(1).u32(surface);
 }
 
 /** Command.SCENE_DRAW's packet, written in place into `to`.
@@ -742,25 +698,13 @@ export function shell_exports(runtime: Sender) {
       paced_ms: f64,
       interactive: boolean,
       credits: u32,
-      unix_ms: f64,
     ): void =>
       runtime.send(Command.TURN_GRANT, (r) =>
-        encode_turn_grant(
-          r,
-          refresh_ms,
-          paced_ms,
-          interactive,
-          credits,
-          unix_ms,
-        ),
+        encode_turn_grant(r, refresh_ms, paced_ms, interactive, credits),
       ),
-    fs_mount: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
-      runtime.call(Command.FS_MOUNT, (r) =>
-        encode_fs_mount(r, top_zoom, format, shard),
-      ),
-    fs_truncated: (root: u32, path: string): void =>
-      runtime.send(Command.FS_TRUNCATED, (r) =>
-        encode_fs_truncated(r, root, path),
+    source_declare: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
+      runtime.call(Command.SOURCE_DECLARE, (r) =>
+        encode_source_declare(r, top_zoom, format, shard),
       ),
     sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
       runtime.send(Command.SENSOR_PERMISSION, (r) =>
@@ -810,20 +754,6 @@ export function shell_exports(runtime: Sender) {
       runtime.send(Command.INPUT_WHEEL, (r) => encode_input_wheel(r, delta_y)),
     input_move: (x: i32, y: i32): void =>
       runtime.send(Command.INPUT_MOVE, (r) => encode_input_move(r, x, y)),
-    surface_open: (): Promise<i32> => runtime.request(Command.SURFACE_OPEN),
-    surface_resize: (
-      surface: u32,
-      width: u32,
-      height: u32,
-      device_pixel_ratio: f64,
-    ): void =>
-      runtime.send(Command.SURFACE_RESIZE, (r) =>
-        encode_surface_resize(r, surface, width, height, device_pixel_ratio),
-      ),
-    surface_close: (surface: u32): void =>
-      runtime.send(Command.SURFACE_CLOSE, (r) =>
-        encode_surface_close(r, surface),
-      ),
     scene_draw: (
       surface: u32,
       content: SceneContent,
@@ -926,6 +856,19 @@ export function shell_imports(h: ShellImports): OnImport {
         return Errno.ENOSYS;
     }
   };
+}
+
+/** The core's memory a command on the shell protocol names, where it is and how
+ * long; null for none. */
+export function shell_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {
+  switch (cmd) {
+    case Command.SHELL_SNAPSHOT: {
+      const e = read_shell_snapshot(need(f));
+      return [e.at, e.len];
+    }
+    default:
+      return null;
+  }
 }
 
 /** A packet the command carries, which a frame without one breaks. */

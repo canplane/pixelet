@@ -15,7 +15,7 @@
 
 namespace xpute {
 
-// What the header says past MAGIC and VERSION.
+// What the header says past MAGIC.
 struct Head {
     std::uint32_t sq_cap;
     std::uint32_t cq_cap;
@@ -29,7 +29,6 @@ struct Head {
     constexpr std::array<std::uint32_t, head::WORDS> words() const noexcept {
         std::array<std::uint32_t, head::WORDS> w{};
         w[head::word::MAGIC] = head::MAGIC;
-        w[head::word::VERSION] = head::VERSION;
         w[head::word::SQ_CAP] = sq_cap;
         w[head::word::CQ_CAP] = cq_cap;
         w[head::word::SLOT_BYTES] = slot_bytes;

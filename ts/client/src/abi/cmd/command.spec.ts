@@ -14,22 +14,16 @@ export const SENSOR_ORIENT = 0x1205;
  * or cut off; the compass's, where the platform says so (SYS_BOOT's
  * orient_silence_is_loss). */
 export const SENSOR_ERR = 0x120b;
-/** The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in
- * what is left before the deadline, the fetches within the credits. The turn leaves
- * its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:
- * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
- * world surface's (SURFACE_RESIZE). */
+/** What the runtime's frame pacing grants the turn it rings next, and the network's
+ * credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the
+ * frame's budget, whether it follows an input, and the fetches its tick may start. */
 export const TURN_GRANT = 0x1d01;
 /** What the tile source declares of itself, once the client has it: the tile root's
  * `source`, the published one out of the bucket or the dev tile server's, read by the
  * client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
  * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
-export const FS_MOUNT = 0x1301;
-/** A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
- * own again, what it held set aside by the client: the kernel reads it again, and writes
- * a storage file from then on. */
-export const FS_TRUNCATED = 0x1302;
+export const SOURCE_DECLARE = 0x1301;
 /** A permission as the shell's prompt or the browser's change reported it. */
 export const SENSOR_PERMISSION = 0x1206;
 /** What the place's sensors are: whether it has a position and a heading, whether the
@@ -39,7 +33,7 @@ export const SENSOR_PLATFORM = 0x120d;
  * Sent once the kernel is attached. */
 export const SETTING_DEVELOPMENT = 0x1602;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
- * (transforms aside), as the world surface's size is (SURFACE_RESIZE). */
+ * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;
 /** The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
@@ -52,13 +46,7 @@ export const EDIT_MARKER_COMMIT = 0x1a04;
 export const INPUT_WHEEL = 0x1103;
 /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
 export const INPUT_MOVE = 0x1106;
-/** Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what. */
-export const SURFACE_OPEN = 0x1501;
-/** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */
-export const SURFACE_RESIZE = 0x1502;
-/** The canvas is going: what it drew and held on the device is let go. */
-export const SURFACE_CLOSE = 0x1503;
-/** What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
+/** What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the
  * sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
  * replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
  * where the character's fields are not all given for a character, any is given for the world, or no character is

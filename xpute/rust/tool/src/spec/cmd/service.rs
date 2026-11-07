@@ -253,6 +253,33 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             "}".into(),
         ]);
     }
+    if !p.mem.is_empty() {
+        out.extend([
+            String::new(),
+            format!(
+                "/** The core's memory a command on the {} protocol names, where it is and how",
+                p.name
+            ),
+            " * long; null for none. */".into(),
+            format!("export function {name}_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {{"),
+            "  switch (cmd) {".into(),
+        ]);
+        for (cmd, [at, len]) in &p.mem {
+            out.push(format!("    case Command.{cmd}: {{"));
+            out.push(format!(
+                "      const e = read_{}(need(f));",
+                cmd.to_lowercase()
+            ));
+            out.push(format!("      return [e.{at}, e.{len}];"));
+            out.push("    }".into());
+        }
+        out.extend([
+            "    default:".into(),
+            "      return null;".into(),
+            "  }".into(),
+            "}".into(),
+        ]);
+    }
     let has_imports = !spec.protocol.imports.is_empty();
     if has_imports {
         imports.push("import * as Errno from \"@xpute/kit/status/errno.spec.ts\";".into());

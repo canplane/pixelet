@@ -49,8 +49,7 @@ use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
 pub enum Major {
     INPUT = 0x11,
     SENSOR = 0x12,
-    FS = 0x13,
-    SURFACE = 0x15,
+    SOURCE = 0x13,
     SETTING = 0x16,
     SCENE = 0x17,
     CAMERA = 0x18,
@@ -62,11 +61,10 @@ pub enum Major {
 }
 
 impl Major {
-    pub const ALL: [Major; 12] = [
+    pub const ALL: [Major; 11] = [
         Major::INPUT,
         Major::SENSOR,
-        Major::FS,
-        Major::SURFACE,
+        Major::SOURCE,
         Major::SETTING,
         Major::SCENE,
         Major::CAMERA,
@@ -141,42 +139,19 @@ impl SensorMinor {
     }
 }
 
-/// The kernel's files: a root mounted, a storage file truncated.
+/// What the tile source declares of itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum FsMinor {
-    MOUNT = 0x01,
-    TRUNCATED = 0x02,
+pub enum SourceMinor {
+    DECLARE = 0x01,
 }
 
-impl FsMinor {
-    pub const ALL: [FsMinor; 2] = [FsMinor::MOUNT, FsMinor::TRUNCATED];
+impl SourceMinor {
+    pub const ALL: [SourceMinor; 1] = [SourceMinor::DECLARE];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<FsMinor> {
-        FsMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// A surface's: opened, resized, closed, and the frame drawn into the surfaces.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum SurfaceMinor {
-    OPEN = 0x01,
-    RESIZE = 0x02,
-    CLOSE = 0x03,
-}
-
-impl SurfaceMinor {
-    pub const ALL: [SurfaceMinor; 3] = [
-        SurfaceMinor::OPEN,
-        SurfaceMinor::RESIZE,
-        SurfaceMinor::CLOSE,
-    ];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<SurfaceMinor> {
-        SurfaceMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SourceMinor> {
+        SourceMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -624,22 +599,16 @@ pub enum Command {
     /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
-    /// The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in
-    /// what is left before the deadline, the fetches within the credits. The turn leaves
-    /// its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:
-    /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
-    /// world surface's (SURFACE_RESIZE).
+    /// What the runtime's frame pacing grants the turn it rings next, and the network's
+    /// credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the
+    /// frame's budget, whether it follows an input, and the fetches its tick may start.
     TURN_GRANT = 0x1d01,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
     /// client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
-    FS_MOUNT = 0x1301,
-    /// A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
-    /// own again, what it held set aside by the client: the kernel reads it again, and writes
-    /// a storage file from then on.
-    FS_TRUNCATED = 0x1302,
+    SOURCE_DECLARE = 0x1301,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
     /// What the place's sensors are: whether it has a position and a heading, whether the
@@ -649,7 +618,7 @@ pub enum Command {
     /// Sent once the kernel is attached.
     SETTING_DEVELOPMENT = 0x1602,
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
-    /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
+    /// (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
     /// The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
@@ -662,13 +631,7 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_MOVE = 0x1106,
-    /// Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what.
-    SURFACE_OPEN = 0x1501,
-    /// The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's.
-    SURFACE_RESIZE = 0x1502,
-    /// The canvas is going: what it drew and held on the device is let go.
-    SURFACE_CLOSE = 0x1503,
-    /// What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the
+    /// What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the
     /// sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
     /// replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
     /// where the character's fields are not all given for a character, any is given for the world, or no character is
@@ -734,13 +697,12 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 38] = [
+    pub const ALL: [Command; 34] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
         Command::TURN_GRANT,
-        Command::FS_MOUNT,
-        Command::FS_TRUNCATED,
+        Command::SOURCE_DECLARE,
         Command::SENSOR_PERMISSION,
         Command::SENSOR_PLATFORM,
         Command::SETTING_DEVELOPMENT,
@@ -751,9 +713,6 @@ impl Command {
         Command::EDIT_MARKER_COMMIT,
         Command::INPUT_WHEEL,
         Command::INPUT_MOVE,
-        Command::SURFACE_OPEN,
-        Command::SURFACE_RESIZE,
-        Command::SURFACE_CLOSE,
         Command::SCENE_DRAW,
         Command::SETTING_SET,
         Command::SCENE_CHAT,
@@ -805,7 +764,7 @@ pub struct Snapshot<'a> {
     pub previews: &'a [u32],
     /// The files the kernel refused, not of their format, not decoding, or too large for any
     /// heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
-    /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
+    /// kernel read none of it and writes nothing over it until FS_CHANGED says it is
     /// empty.
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say.
@@ -1081,9 +1040,6 @@ pub struct TurnGrant {
     pub paced_ms: f64,
     pub interactive: bool,
     pub credits: u32,
-    /// The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and
-    /// the step the tick takes, its change since the last frame.
-    pub unix_ms: f64,
 }
 
 impl TurnGrant {
@@ -1094,14 +1050,13 @@ impl TurnGrant {
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
             credits: integer::<u32>(f.at(3)?.get_number()?)?,
-            unix_ms: finite(f.at(4)?.get_number()?)?,
         })
     }
 }
 
-/// Command::FS_MOUNT's packet.
+/// Command::SOURCE_DECLARE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct FsMount<'a> {
+pub struct SourceDeclare<'a> {
     /// The coarsest zoom the source supplies whole.
     pub top_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
@@ -1112,32 +1067,13 @@ pub struct FsMount<'a> {
     pub shard: Strs<'a>,
 }
 
-impl<'a> FsMount<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<FsMount<'a>, MarshalError> {
+impl<'a> SourceDeclare<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<SourceDeclare<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(FsMount {
+        Ok(SourceDeclare {
             top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
             format: f.at(1)?.get_array::<u32>()?,
             shard: f.at(2)?.get_strs()?,
-        })
-    }
-}
-
-/// Command::FS_TRUNCATED's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct FsTruncated<'a> {
-    /// file.json's `root`.
-    pub root: u32,
-    /// Its path below the root, as the kernel opened it.
-    pub path: &'a str,
-}
-
-impl<'a> FsTruncated<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<FsTruncated<'a>, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(FsTruncated {
-            root: integer::<u32>(f.at(0)?.get_number()?)?,
-            path: f.at(1)?.get_str_ref()?,
         })
     }
 }
@@ -1291,42 +1227,6 @@ impl InputMove {
         Ok(InputMove {
             x: integer::<i32>(f.at(0)?.get_number()?)?,
             y: integer::<i32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::SURFACE_RESIZE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SurfaceResize {
-    pub surface: u32,
-    pub width: u32,
-    pub height: u32,
-    pub device_pixel_ratio: f64,
-}
-
-impl SurfaceResize {
-    pub fn read(pkt: &[u8]) -> Result<SurfaceResize, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SurfaceResize {
-            surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            width: integer::<u32>(f.at(1)?.get_number()?)?,
-            height: integer::<u32>(f.at(2)?.get_number()?)?,
-            device_pixel_ratio: finite(f.at(3)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::SURFACE_CLOSE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SurfaceClose {
-    pub surface: u32,
-}
-
-impl SurfaceClose {
-    pub fn read(pkt: &[u8]) -> Result<SurfaceClose, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SurfaceClose {
-            surface: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }
@@ -1715,8 +1615,7 @@ pub mod shell {
         fn sensor_orient(&mut self, c: SensorOrient) -> Outcome;
         fn sensor_err(&mut self, c: SensorErr) -> Outcome;
         fn turn_grant(&mut self, c: TurnGrant) -> Outcome;
-        fn fs_mount(&mut self, c: FsMount<'_>) -> Outcome;
-        fn fs_truncated(&mut self, c: FsTruncated<'_>) -> Outcome;
+        fn source_declare(&mut self, c: SourceDeclare<'_>) -> Outcome;
         fn sensor_permission(&mut self, c: SensorPermission) -> Outcome;
         fn sensor_platform(&mut self, c: SensorPlatform) -> Outcome;
         fn setting_development(&mut self, c: SettingDevelopment) -> Outcome;
@@ -1727,9 +1626,6 @@ pub mod shell {
         fn edit_marker_commit(&mut self) -> Outcome;
         fn input_wheel(&mut self, c: InputWheel) -> Outcome;
         fn input_move(&mut self, c: InputMove) -> Outcome;
-        fn surface_open(&mut self) -> Outcome;
-        fn surface_resize(&mut self, c: SurfaceResize) -> Outcome;
-        fn surface_close(&mut self, c: SurfaceClose) -> Outcome;
         fn scene_draw(&mut self, c: SceneDraw) -> Outcome;
         fn setting_set(&mut self, c: SettingSet) -> Outcome;
         fn scene_chat(&mut self, c: SceneChat<'_>) -> Outcome;
@@ -1760,10 +1656,7 @@ pub mod shell {
             x if x == Command::TURN_GRANT as u32 => h.turn_grant(TurnGrant::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
-            x if x == Command::FS_MOUNT as u32 => h.fs_mount(FsMount::read(
-                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
-            )?),
-            x if x == Command::FS_TRUNCATED as u32 => h.fs_truncated(FsTruncated::read(
+            x if x == Command::SOURCE_DECLARE as u32 => h.source_declare(SourceDeclare::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::SENSOR_PERMISSION as u32 => h.sensor_permission(
@@ -1790,13 +1683,6 @@ pub mod shell {
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::INPUT_MOVE as u32 => h.input_move(InputMove::read(
-                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
-            )?),
-            x if x == Command::SURFACE_OPEN as u32 => h.surface_open(),
-            x if x == Command::SURFACE_RESIZE as u32 => h.surface_resize(SurfaceResize::read(
-                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
-            )?),
-            x if x == Command::SURFACE_CLOSE as u32 => h.surface_close(SurfaceClose::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::SCENE_DRAW as u32 => h.scene_draw(SceneDraw::read(

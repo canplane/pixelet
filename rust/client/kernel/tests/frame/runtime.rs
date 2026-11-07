@@ -80,7 +80,7 @@ impl Runtime {
             next_call: 0,
             replies: BTreeMap::new(),
             shell: Protocol::load("rust/client/kernel/shell.json"),
-            xpute: Protocol::load("xpute/spec/abi/cmd.json"),
+            xpute: Protocol::load_each(&["xpute/spec/abi/sys.json", "xpute/spec/abi/gpu.json"]),
             files: Files::new(),
             fs,
             abort: None,
@@ -112,25 +112,25 @@ impl Runtime {
         }
     }
 
-    /// xpute's command `name` (abi/cmd.json), which carries no packet.
-    pub fn send_xpute(&mut self, name: &str) {
-        let cmd = self.xpute.number(name);
-        self.push(0, cmd, 0, 0, |_| None);
-    }
-
-    /// The shell's command `name`, its fields by name, sent with the next turn.
+    /// The command `name`, the shell's or xpute's (abi/sys.json, abi/gpu.json),
+    /// its fields by name, sent with the next turn.
     pub fn send(&mut self, name: &str, values: &[(&str, V)]) {
         self.submit(name, values, 0, 0);
     }
 
     fn submit(&mut self, name: &str, values: &[(&str, V)], tag: u32, flags: u32) {
-        let command = self.shell.command(name).clone();
+        let command = self
+            .shell
+            .get(name)
+            .or_else(|| self.xpute.get(name))
+            .unwrap_or_else(|| panic!("no command {name}"))
+            .clone();
         self.push(tag, command.val, flags, 0, |slot| {
             spec::write(&command, values, slot)
         });
     }
 
-    /// The shell's call `name`, rung with a deadline of 0 until the kernel answers it: its result.
+    /// The call `name`, the shell's or xpute's, rung with a deadline of 0 until the kernel answers it: its result.
     pub fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
         self.next_call = self.next_call.wrapping_add(1).max(1);
         let tag = self.next_call;

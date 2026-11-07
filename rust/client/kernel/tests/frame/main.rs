@@ -94,8 +94,8 @@ struct Run {
 }
 
 impl Run {
-    /// A turn granted as the scheduler grants one (ts/client/src/port/surface.ts
-    /// `submit_grant`), then held to what the frames must keep: whether the kernel wants
+    /// A turn granted as the runtime grants one (ts/client/src/port/surface.ts
+    /// `submit_grant`, then @xpute/runtime's SYS_TURN), then held to what the frames must keep: whether the kernel wants
     /// the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
         pace::frame();
@@ -108,9 +108,10 @@ impl Run {
                 ("paced_ms", V::Num(REFRESH_MS)),
                 ("interactive", V::Bool(interactive)),
                 ("credits", V::Num(CREDITS)),
-                ("unix_ms", V::Num(self.clock_ms)),
             ],
         );
+        self.runtime
+            .send("SYS_TURN", &[("unix_ms", V::Num(self.clock_ms))]);
         watch::waiting(format!("frame {}: its turn", self.frames));
         let wake = self.runtime.turn(REFRESH_MS);
         self.check(wake.is_some());
@@ -217,7 +218,7 @@ fn frames() {
         frames: 0,
     };
     // The boot as abi/boot.ts orders it: the runtime's attach, what the platform is, the GPU.
-    run.runtime.send_xpute("SYS_ATTACH");
+    run.runtime.send("SYS_ATTACH", &[]);
     run.runtime.send(
         "SENSOR_PLATFORM",
         &[
@@ -229,13 +230,13 @@ fn frames() {
     );
     run.runtime
         .send("SETTING_DEVELOPMENT", &[("development", V::Bool(true))]);
-    run.runtime.send_xpute("GPU_READY");
+    run.runtime.send("GPU_READY", &[]);
     run.frame(false);
     // The tile source as source.ts declares it: the place's shard alone, every tile of it
     // a page its version leaves out (fs.rs), so the world there is the sea's.
     let format = BaseLayer::ALL.map(|l| FORMAT.of(l)).to_vec();
     run.call(
-        "FS_MOUNT",
+        "SOURCE_DECLARE",
         &[
             ("top_zoom", V::Num(TOP_ZOOM.into())),
             ("format", V::Nums(format)),
@@ -244,12 +245,12 @@ fn frames() {
     );
 
     // The world's surface, as the scene's place opens it (port/surface.ts, port/scene.ts).
-    let surface = run.call("SURFACE_OPEN", &[]);
+    let surface = run.call("GPU_SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));
     let resize = |run: &mut Run, [w, h]: [f64; 2]| {
         run.runtime.send(
-            "SURFACE_RESIZE",
+            "GPU_SURFACE_RESIZE",
             &[
                 ("surface", surface.clone()),
                 ("width", V::Num(w)),

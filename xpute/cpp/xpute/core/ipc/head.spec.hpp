@@ -18,38 +18,32 @@ namespace xpute::head {
 // "XPUT" as four bytes read little-endian: what tells a header from memory nothing wrote.
 inline constexpr std::uint32_t MAGIC = 1414877272u;
 
-// Raised when a word comes to mean something else. 1 was the toc's, a directory of keys.
-inline constexpr std::uint32_t VERSION = 2u;
-
 // Where each of the header's words is, from its start.
 namespace word {
 
 // Where MAGIC is.
 inline constexpr std::uint32_t MAGIC = 0u;
 
-// Where VERSION is.
-inline constexpr std::uint32_t VERSION = 1u;
-
 // Frames the submission ring holds.
-inline constexpr std::uint32_t SQ_CAP = 2u;
+inline constexpr std::uint32_t SQ_CAP = 1u;
 
 // Frames the completion ring holds.
-inline constexpr std::uint32_t CQ_CAP = 3u;
+inline constexpr std::uint32_t CQ_CAP = 2u;
 
 // A ring slot's payload, the same for both rings.
-inline constexpr std::uint32_t SLOT_BYTES = 4u;
+inline constexpr std::uint32_t SLOT_BYTES = 3u;
 
 // Where the submission ring's words begin.
-inline constexpr std::uint32_t SQ_AT = 5u;
+inline constexpr std::uint32_t SQ_AT = 4u;
 
 // Where the completion ring's words begin.
-inline constexpr std::uint32_t CQ_AT = 6u;
+inline constexpr std::uint32_t CQ_AT = 5u;
 
 // Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU.
-inline constexpr std::uint32_t GPU_AT = 7u;
+inline constexpr std::uint32_t GPU_AT = 6u;
 } // namespace word
 
 // Words the header takes.
-inline constexpr std::uint32_t WORDS = 8u;
+inline constexpr std::uint32_t WORDS = 7u;
 
 } // namespace xpute::head

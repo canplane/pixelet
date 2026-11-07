@@ -17,7 +17,7 @@ import koffi from "koffi";
 import { Golden } from "@xpute/kit/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { Command } from "@xpute/runtime/abi/cmd.spec.ts";
+import { Command } from "@xpute/runtime/abi/sys.spec.ts";
 import * as fs from "@xpute/runtime/abi/fs.spec.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { Head } from "@xpute/runtime/ipc/head.ts";

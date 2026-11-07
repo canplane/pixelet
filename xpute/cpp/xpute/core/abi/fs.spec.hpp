@@ -9,6 +9,7 @@
 // tag and command flagged RES on the submission ring, and does the rest in the gap.
 // xpute ships both ends: the core's calls (xpute-core ipc/door.rs, ipc/file.rs) and the
 // runtime's server (@xpute/runtime). A program binds only its roots to what backs them.
+// The runtime tells the core a file changed under it (FS_CHANGED, `export`).
 
 #pragma once
 
@@ -39,18 +40,19 @@ template <> struct xpute::Members<xpute::abi::fs::Major> {
 
 namespace xpute::abi::fs {
 
-// A file's calls.
+// A file's calls, and a file changed.
 enum class FsMinor : std::uint32_t {
-    OPENAT = 0x02,
-    READ = 0x03,
-    WRITE = 0x04,
-    CLOSE = 0x05,
+    OPENAT = 0x01,
+    READ = 0x02,
+    WRITE = 0x03,
+    CLOSE = 0x04,
+    CHANGED = 0x05,
 };
 
 } // namespace xpute::abi::fs
 
 template <> struct xpute::Members<xpute::abi::fs::FsMinor> {
-    static constexpr std::array<xpute::abi::fs::FsMinor, 4> ALL{xpute::abi::fs::FsMinor::OPENAT, xpute::abi::fs::FsMinor::READ, xpute::abi::fs::FsMinor::WRITE, xpute::abi::fs::FsMinor::CLOSE};
+    static constexpr std::array<xpute::abi::fs::FsMinor, 5> ALL{xpute::abi::fs::FsMinor::OPENAT, xpute::abi::fs::FsMinor::READ, xpute::abi::fs::FsMinor::WRITE, xpute::abi::fs::FsMinor::CLOSE, xpute::abi::fs::FsMinor::CHANGED};
 };
 
 namespace xpute::abi::fs {
@@ -58,29 +60,66 @@ namespace xpute::abi::fs {
 // Every command, by the side that sends it.
 enum class Command : std::uint32_t {
 
+    // ---- fs, export ----
+    // The file at `path` below `root` changed under the core, as what backs it says: what the
+    // core read of it is stale, and a read opens it again.
+    FS_CHANGED = 0x0305,
+
     // ---- fs, import ----
     // The file at `path` below `root` opened as `fd`, the frame's tag too. Completed with
     // the file's size, or -errno: ENOENT where there is no such file, ECANCELED where FS_CLOSE
     // came first, ENODEV where the machine has no file device.
-    FS_OPENAT = 0x0302,
+    FS_OPENAT = 0x0301,
     // The opened file's first `len` bytes copied to `at` in the core's memory.
-    FS_READ = 0x0303,
+    FS_READ = 0x0302,
     // The `len` bytes at `at` added to what the file opened for writing holds. The runtime
     // reads them at FS_CLOSE, and the core keeps them unchanged until FS_CLOSE is completed.
-    FS_WRITE = 0x0304,
+    FS_WRITE = 0x0303,
     // The descriptor ended, the frame's tag too. A file opened for writing is replaced by
     // what was written; an open not yet completed is completed first, with ECANCELED. Completed
     // with 0, or -errno where the file could not be replaced.
-    FS_CLOSE = 0x0305,
+    FS_CLOSE = 0x0304,
 };
 
 } // namespace xpute::abi::fs
 
 template <> struct xpute::Members<xpute::abi::fs::Command> {
-    static constexpr std::array<xpute::abi::fs::Command, 4> ALL{xpute::abi::fs::Command::FS_OPENAT, xpute::abi::fs::Command::FS_READ, xpute::abi::fs::Command::FS_WRITE, xpute::abi::fs::Command::FS_CLOSE};
+    static constexpr std::array<xpute::abi::fs::Command, 5> ALL{xpute::abi::fs::Command::FS_CHANGED, xpute::abi::fs::Command::FS_OPENAT, xpute::abi::fs::Command::FS_READ, xpute::abi::fs::Command::FS_WRITE, xpute::abi::fs::Command::FS_CLOSE};
 };
 
 namespace xpute::abi::fs {
+
+// Command::FS_CHANGED's packet.
+struct FsChanged {
+    std::uint32_t root{};
+    // Its path below the root, as the core opened it.
+    std::string_view path{};
+
+    static Result<FsChanged> read(std::span<const std::uint8_t> pkt) noexcept {
+        Result<xtp::TreeReader> t = xtp::TreeReader::make(pkt);
+        if (!t) return t.error();
+        Result<xtp::BranchCursor> f = t->read_branch();
+        if (!f) return f.error();
+        FsChanged out;
+        {
+            Result<xtp::Cursor> c = f->at(0);
+            if (!c) return c.error();
+            auto v = c->get_number();
+            if (!v) return v.error();
+            auto n = integer<std::uint32_t>(*v);
+            if (!n) return n.error();
+            out.root = *n;
+        }
+        {
+            Result<xtp::Cursor> c = f->at(1);
+            if (!c) return c.error();
+            auto v = c->get_str_ref();
+            if (!v) return v.error();
+            out.path = *v;
+        }
+        return out;
+    }
+};
 
 // Command::FS_OPENAT's completion's packet.
 struct FsOpenatReply {
@@ -115,7 +154,7 @@ struct FsOpenat {
     std::string_view path{};
 
     // Its number, and the children it is written as.
-    static constexpr std::uint32_t NUMBER = 770;
+    static constexpr std::uint32_t NUMBER = 769;
     static constexpr std::uint32_t FIELDS = 4;
 
     void write(xtp::PacketWriter &w) const noexcept {
@@ -133,7 +172,7 @@ struct FsRead {
     std::uint32_t len{};
 
     // Its number, and the children it is written as.
-    static constexpr std::uint32_t NUMBER = 771;
+    static constexpr std::uint32_t NUMBER = 770;
     static constexpr std::uint32_t FIELDS = 3;
 
     void write(xtp::PacketWriter &w) const noexcept {
@@ -150,7 +189,7 @@ struct FsWrite {
     std::uint32_t len{};
 
     // Its number, and the children it is written as.
-    static constexpr std::uint32_t NUMBER = 772;
+    static constexpr std::uint32_t NUMBER = 771;
     static constexpr std::uint32_t FIELDS = 3;
 
     void write(xtp::PacketWriter &w) const noexcept {
@@ -165,7 +204,7 @@ struct FsClose {
     std::uint32_t fd{};
 
     // Its number, and the children it is written as.
-    static constexpr std::uint32_t NUMBER = 773;
+    static constexpr std::uint32_t NUMBER = 772;
     static constexpr std::uint32_t FIELDS = 1;
 
     void write(xtp::PacketWriter &w) const noexcept {

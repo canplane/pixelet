@@ -8,7 +8,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { type Config, type Core, mount } from "./runtime.ts";
+import { type Core, mount, QUIET } from "./runtime.ts";
 import * as frame from "./ipc/frame.ts";
 import type { Front } from "./ipc/head.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ipc/ring.ts";
@@ -66,7 +66,8 @@ function core(trap: () => boolean = () => false): Core & { turns: number[] } {
   };
 }
 
-const LAID = { head_at: HEAD_AT, lay: FRONT } satisfies Partial<Config>;
+/** Where the front is, and no GPU asked for. */
+const AT = { ...FRONT, head_at: HEAD_AT, gpu: null };
 
 /** A policy whose moments come when the test says, each a turn with a deadline of 0. */
 function stepped(): SchedulingPolicy & { asked: number; step(): void } {
@@ -91,12 +92,16 @@ function stepped(): SchedulingPolicy & { asked: number; step(): void } {
 test("mount - lays the front before any turn, and hands the program only its own commands", () => {
   const g = core();
   const cmds: number[] = [];
-  const runtime = mount(g, {
-    ...LAID,
-    program: (_tag, cmd) => void cmds.push(cmd),
-    policy: stepped(),
-    submit: () => {},
-  });
+  const runtime = mount(
+    g,
+    AT,
+    {
+      program: (_tag, cmd) => void cmds.push(cmd),
+      policy: stepped(),
+      submit: () => {},
+    },
+    QUIET,
+  );
   assert.deepStrictEqual(g.turns, [], "no turn before the front is laid");
   assert.deepStrictEqual(
     [runtime.head.sq_at, runtime.head.cq_at, runtime.head.gpu_at],
@@ -108,21 +113,17 @@ test("mount - lays the front before any turn, and hands the program only its own
 
 test("mount - a front already laid is kept as it is, its rings' positions with it", () => {
   const g = core();
-  mount(g, { ...LAID, policy: stepped(), submit: () => {} });
+  mount(g, AT, { policy: stepped(), submit: () => {} }, QUIET);
   const sq = new Uint32Array(g.mem, SQ_AT, ring.HEADER_WORDS);
   const tail = sq[ring.TAIL];
   assert.ok(tail > 0, "the attach is waiting in the submission ring");
-  mount(g, { ...LAID, policy: stepped(), submit: () => {} });
+  mount(g, AT, { policy: stepped(), submit: () => {} }, QUIET);
   assert.ok(sq[ring.TAIL] > tail, "laid again, the ring would start over");
 });
 
 test("mount - turns run between resume and pause, and wake asks for one only then", () => {
   const policy = stepped();
-  const runtime = mount(core(), {
-    ...LAID,
-    policy,
-    submit: () => {},
-  });
+  const runtime = mount(core(), AT, { policy, submit: () => {} }, QUIET);
   runtime.wake();
   assert.deepStrictEqual(policy.asked, 0, "paused, so no turn is asked for");
   runtime.resume();
@@ -144,12 +145,9 @@ test("mount - a core that stops runs no more turns and is told once", () => {
     const policy = stepped();
     const runtime = mount(
       core(() => trapping),
-      {
-        ...LAID,
-        policy,
-        submit: () => {},
-        onterminated: () => terminated++,
-      },
+      AT,
+      { policy, submit: () => {} },
+      { ...QUIET, stop: () => terminated++ },
     );
     trapping = true;
     assert.deepStrictEqual(runtime.call(PROGRAM_IMPORT), Errno.ENOTRECOVERABLE);
@@ -171,17 +169,18 @@ test("mount - grants the GPU the core's stream and memory, and runs it as each t
   const gpu = {
     grant: (to: { at: number }) => void granted.push(to.at),
     after_turn: () => void ran++,
+    watch: () => {},
   };
   const ask = {
     power: "high-performance",
     features: { required: [], optional: [] },
   };
-  const runtime = mount(core(), {
-    ...LAID,
-    gpu: { by: gpu, ask },
-    policy: stepped(),
-    submit: () => {},
-  });
+  const runtime = mount(
+    core(),
+    { ...AT, gpu: ask },
+    { gpu, policy: stepped(), submit: () => {} },
+    QUIET,
+  );
   assert.deepStrictEqual([granted, ran], [[STREAM_AT], 0]);
   runtime.call(PROGRAM_IMPORT);
   assert.deepStrictEqual(ran, 1);

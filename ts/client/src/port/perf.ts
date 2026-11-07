@@ -38,7 +38,8 @@ import {
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { control, runtime, kernel } from "@/runtime/kernel.ts";
+import { mem } from "@xpute/runtime";
+import { kernel, perf } from "@/runtime/kernel.ts";
 
 const WORD = 8;
 /** A task's `path` column, its bytes (perf.json `TASK`). */
@@ -61,12 +62,10 @@ export function stop(): void {
   kernel.perf_stop();
 }
 
-const words = (at: u32, n: u32) => new Float64Array(runtime.core.mem, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(runtime.core.mem, at, n);
+const words = (at: u32, n: u32) => new Float64Array(mem, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
-  file === 0
-    ? null
-    : `${td.decode(new Uint8Array(runtime.core.mem, file, bytes))}:${line}`;
+  file === 0 ? null : `${td.decode(new Uint8Array(mem, file, bytes))}:${line}`;
 
 /** The columns that are lists, a word a name. The names are their owners', and
  * shown by the shell. */
@@ -430,13 +429,7 @@ function perf_tasks(last: u32 | null = null): TaskRecord[] {
     return {
       stream: STREAM_NAMES[w[o + TASK.stream]] ?? "?",
       path: td
-        .decode(
-          new Uint8Array(
-            runtime.core.mem,
-            at + (o + TASK.path) * WORD,
-            PATH_BYTES,
-          ),
-        )
+        .decode(new Uint8Array(mem, at + (o + TASK.path) * WORD, PATH_BYTES))
         .replace(/\0+$/, ""),
       priority: w[o + TASK.priority],
       enqueue_ms: w[o + TASK.enqueue_ms],
@@ -493,7 +486,7 @@ export function read<K extends PerfRead>(
   what: K,
   ...args: Parameters<(typeof READERS)[K]>
 ): Promise<ReturnType<(typeof READERS)[K]>> {
-  return control.perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
+  return perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
 }
 
 /** `read`'s answer, read here, beside the kernel's memory. */

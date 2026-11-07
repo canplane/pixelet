@@ -132,8 +132,11 @@ fn open_completion_handed_over() {
             Ok(Some(0))
         }
         Submission::Life(_)
+        | Submission::Turn(_)
         | Submission::GpuReady
+        | Submission::Surface(_)
         | Submission::Closed(_)
+        | Submission::Changed(_)
         | Submission::Program(..) => {
             unreachable!("an open's completion is not the program's frame")
         }
@@ -204,9 +207,12 @@ fn program_command_handed_over() {
             Ok(Some(1))
         }
         Submission::Life(_)
+        | Submission::Turn(_)
         | Submission::GpuReady
+        | Submission::Surface(_)
         | Submission::Opened(_)
-        | Submission::Closed(_) => {
+        | Submission::Closed(_)
+        | Submission::Changed(_) => {
             unreachable!("a command past xpute's majors is the program's")
         }
     });
@@ -257,7 +263,7 @@ fn abort_posts_the_report_after_what_was_published() {
     d.cq().advance();
     let f = d.cq().peek().expect("the report");
     assert_eq!(f.tag, 0);
-    assert_eq!(f.cmd, crate::abi::cmd::Command::SYS_ABORT as u32);
+    assert_eq!(f.cmd, crate::abi::sys::Command::SYS_ABORT as u32);
 }
 
 #[test]

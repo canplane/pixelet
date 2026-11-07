@@ -17,7 +17,7 @@
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
-#include "xpute/core/abi/cmd.spec.hpp"
+#include "xpute/core/abi/sys.spec.hpp"
 #include "xpute/core/abi/handle.hpp"
 #include "xpute/core/call.hpp"
 #include "xpute/core/ipc/door.hpp"
@@ -192,13 +192,16 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.door.rise();
-    s.door.receive(
-        [&s](const FsOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.complete_open(opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
+    // It keeps nothing across its life, reads no file again, and draws nothing:
+    // a surface opened is answered 0, none.
+    s.door.receive([&s](const Submission &sub) {
+        if (const FsOpened *opened = std::get_if<FsOpened>(&sub)) {
+            if (std::optional<std::uint32_t> owner = s.files.complete_open(*opened)) s.door.post(*owner, cmd::OPENED, 0, opened->res);
             return Outcome{};
-        },
-        [](const FsClosed &) {},
-        [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
+        }
+        if (const Program *p = std::get_if<Program>(&sub)) return apply(s, p->cmd, p->pkt);
+        return Outcome{};
+    });
     s.stream.publish();
     return s.door.pending() ? 0.0 : NO_WAKE;
 }

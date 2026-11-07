@@ -1,17 +1,17 @@
 {
   "$doc": [
-    "xpute's own protocol, the runtime's, on majors NOP, SYS and GPU: the core's life as its runtime tells it.",
-    "NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME are the core's",
-    "life as its runtime sees it: a runtime (re)attached, the core about to be frozen, and woken;",
-    "what each means to keep or reset is the core's. GPU_READY is the GPU grant's state:",
-    "the device the machine asked for answered. SYS_ABORT is the core's end, the broken",
-    "invariant it reports as it stops, which the runtime hears as a VMM hears a core's exit.",
-    "Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose",
-    "children are its fields, in order; one with no fields carries no packet. Files are a",
-    "device of their own (fs.json). Majors 0x00 to 0x0F are xpute's (ipc/frame.json); a",
-    "program numbers its own protocols' commands past them."
+    "xpute's own protocol on majors NOP and SYS: the core's life as its runtime tells it, its",
+    "turns, and its end. NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME",
+    "are the core's life as its runtime sees it: a runtime (re)attached, the core about to be",
+    "frozen, and woken; what each means to keep or reset is the core's. SYS_TURN marks a turn",
+    "the runtime's scheduling policy grants, with the wall clock. SYS_ABORT is the core's end, the",
+    "broken invariant it reports as it stops, which the runtime hears as a VMM hears a core's",
+    "exit. Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose",
+    "children are its fields, in order; one with no fields carries no packet. The GPU and the",
+    "files are devices of their own (gpu.json, fs.json). Majors 0x00 to 0x0F are xpute's",
+    "(ipc/frame.json); a program numbers its own protocols' commands past them."
   ],
-  "name": "runtime",
+  "name": "sys",
   "export": [
     {
       "name": "NOP",
@@ -28,7 +28,7 @@
     },
     {
       "name": "SYS_ATTACH",
-      "val": 263,
+      "val": 258,
       "$doc": [
         "A runtime has attached, the first or again after one before it went: the mount sends it",
         "once the front is laid. What the old runtime's requests leave behind is the core's to let go."
@@ -36,7 +36,7 @@
     },
     {
       "name": "SYS_SUSPEND",
-      "val": 264,
+      "val": 259,
       "$doc": [
         "The core is about to be frozen, its turns stopped for as long as its runtime is hidden:",
         "its last sure moment to save. A call, rung at once."
@@ -45,25 +45,32 @@
     },
     {
       "name": "SYS_RESUME",
-      "val": 265,
+      "val": 260,
       "$doc": [
         "The core woken from SYS_SUSPEND. A call, rung at once."
       ],
       "call": true
     },
     {
-      "name": "GPU_READY",
-      "val": 513,
+      "name": "SYS_TURN",
+      "val": 261,
       "$doc": [
-        "The GPU the machine asked for answered, the first time or again after a loss, whose",
-        "sign is in the stream's device block."
+        "A turn the scheduling policy grants, sent before it rings after what the program",
+        "submits for it, as against a turn rung for a command alone: the wall clock, in Unix",
+        "milliseconds. What else the policy says of the turn is the program's to send."
+      ],
+      "pkt": [
+        {
+          "name": "unix_ms",
+          "type": "f64"
+        }
       ]
     }
   ],
   "import": [
     {
       "name": "SYS_ABORT",
-      "val": 262,
+      "val": 257,
       "$doc": [
         "The broken invariant the core reports as it stops (xpute-kit status/bug.rs)."
       ],
@@ -119,48 +126,35 @@
         {
           "name": "SYS",
           "val": 1
-        },
-        {
-          "name": "GPU",
-          "val": 2
         }
       ]
     },
     {
       "name": "SysMinor",
       "$doc": [
-        "The core's life as its runtime tells it, and its end."
+        "The core's life as its runtime tells it, its turns, and its end."
       ],
       "format": "hex2",
       "entries": [
         {
           "name": "ABORT",
-          "val": 6
+          "val": 1
         },
         {
           "name": "ATTACH",
-          "val": 7
+          "val": 2
         },
         {
           "name": "SUSPEND",
-          "val": 8
+          "val": 3
         },
         {
           "name": "RESUME",
-          "val": 9
-        }
-      ]
-    },
-    {
-      "name": "GpuMinor",
-      "$doc": [
-        "The GPU grant's state."
-      ],
-      "format": "hex2",
-      "entries": [
+          "val": 4
+        },
         {
-          "name": "READY",
-          "val": 1
+          "name": "TURN",
+          "val": 5
         }
       ]
     }

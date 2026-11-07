@@ -3,12 +3,15 @@
 /** The kernel as the shell reaches it, beside each major's own commands
  * (input.ts, edit.ts, camera.ts, scene.ts, setting.ts, sensor.ts, surface.ts,
  * perf.ts, snapshot.ts, fs.ts, gpu.ts, sys.ts), and what the client's
- * services (sys/, origin/) show the UI. The shell names no runtime and no
- * service (AGENTS.md). */
+ * services (sys/, origin/) show the UI: the shell reaches the kernel, sys/ and
+ * origin/ through here alone, and the platform's services (service/) itself
+ * (AGENTS.md). */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { NodeValue, NodeView } from "@xpute/kit/wire/xtp/mod.ts";
-import { control } from "@/runtime/kernel.ts";
+import { encode_args } from "@xpute/runtime";
+import { MACHINE } from "@/abi/machine.spec.ts";
+import { ui } from "@/runtime/kernel.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
 export { boot_state, watch_boot } from "@/abi/boot.ts";
@@ -23,7 +26,7 @@ export {
   source_versions,
   watch_source,
 } from "@/sys/fs/source.ts";
-export { asset_url } from "@/origin/route.ts";
+export { asset_url, get, href } from "@/origin/route.ts";
 export { SEARCH_URL } from "@/origin/route.spec.ts";
 export { ASSET_FILES, PACK } from "@/origin/ingest.spec.ts";
 
@@ -31,5 +34,5 @@ export { ASSET_FILES, PACK } from "@/origin/ingest.spec.ts";
  * its packet's fields, sent and rung. */
 export const door = {
   cmd: (cmd: u32, ...args: NodeValue<NodeView>[]): void =>
-    control.cmd(cmd, ...args),
+    ui.send(cmd, encode_args(args, MACHINE.slot_bytes)),
 };

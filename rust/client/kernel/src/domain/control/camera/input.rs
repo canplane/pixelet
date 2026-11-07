@@ -137,7 +137,7 @@ fn tilt_gain() -> f64 {
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
 }
 
-/// The world surface's size in CSS pixels (SURFACE_RESIZE): what a pointer's
+/// The world surface's size in CSS pixels (GPU_SURFACE_RESIZE): what a pointer's
 /// place is read against, and the view each frame is drawn at.
 pub fn camera_view_resize(width: f64, height: f64) {
     input().size = Some((width, height));

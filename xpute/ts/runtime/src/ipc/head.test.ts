@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 
 import { MarshalError } from "@xpute/kit/status/error.ts";
 import { type Front, Head, laid, lay } from "./head.ts";
-import { VERSION, word } from "./head.spec.ts";
 import { Ring } from "./ring.ts";
 
 const FRONT: Front = {
@@ -33,10 +32,7 @@ test("head - what the runtime lays it reads back, and the rings open on it", () 
   assert.deepStrictEqual([sq.cap, sq.slot_bytes, sq.len], [4, 64, 0]);
 });
 
-test("head - a header that is not xpute's, and a version this runtime does not read, are refused", () => {
+test("head - a header that is not xpute's is refused", () => {
   const mem = new ArrayBuffer(2048);
-  assert.throws(() => new Head(mem, 0), MarshalError);
-  lay(mem, 0, FRONT);
-  new Uint32Array(mem)[word.VERSION] = VERSION + 1;
   assert.throws(() => new Head(mem, 0), MarshalError);
 });

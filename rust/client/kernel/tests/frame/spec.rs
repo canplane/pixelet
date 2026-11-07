@@ -98,6 +98,24 @@ impl Protocol {
         }
     }
 
+    /// The protocols at `paths` as one, their commands and records together;
+    /// an enum two of them name is the last's.
+    pub fn load_each(paths: &[&str]) -> Protocol {
+        let mut all = Protocol::load(paths[0]);
+        for path in &paths[1..] {
+            let p = Protocol::load(path);
+            all.commands.extend(p.commands);
+            all.enums.extend(p.enums);
+            all.records.extend(p.records);
+        }
+        all
+    }
+
+    /// The command `name`, if this protocol gives it.
+    pub fn get(&self, name: &str) -> Option<&Command> {
+        self.commands.get(name)
+    }
+
     pub fn command(&self, name: &str) -> &Command {
         self.commands
             .get(name)

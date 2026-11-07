@@ -89,7 +89,7 @@ async function main(): Promise<number> {
       setTimeout(
         () => reject(new Error(`no outcome from Chrome in ${SECONDS} s`)),
         SECONDS * 1000,
-      ).unref(),
+      ),
     );
     const said = await Promise.race([outcome, late]);
     console.log(

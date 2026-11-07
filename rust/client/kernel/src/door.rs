@@ -168,7 +168,7 @@ fn on_runtime_attached(s: &mut State) {
 /// machine and opened where the form has not (`xpute_core::core!` has, on a
 /// page), then the rest of memory.
 fn boot(b: BootInfo) {
-    stop::install(runtime::abort, b.stop_hook);
+    stop::install(runtime::abort, b.form.stop_hook);
     if !machine::booted() {
         machine::boot(&MACHINE);
     }
@@ -207,6 +207,9 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     }
     door().receive(|submission| match submission {
         Submission::Life(l) => life::apply(s, l),
+        Submission::Turn(t) => apply::on_turn(t),
+        Submission::Surface(c) => apply::on_surface(c),
+        Submission::Changed(c) => apply::on_changed(c),
         Submission::GpuReady => {
             gpu_ready();
             Ok(Some(0))

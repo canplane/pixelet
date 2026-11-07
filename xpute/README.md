@@ -57,18 +57,21 @@ and the VMM under it.
   runtime  its VMM          memory, clock and turns, GPU, files
 ```
 
-Physically the UI and the runtime share one JavaScript thread, and natively
-the runtime has Rust pieces beside it: the core's thread, its memory and the
-GPU's run. Both relations ride the same pair of rings, told apart by a
-command's major: the runtime carries the UI's submissions on the SQ and hands
-the core's completions and imports back. The UI meets the runtime directly
-only for the surfaces (a view lent to the GPU) and the lifecycle (boot,
-visibility), through the runtime's TypeScript API.
+Physically the runtime sits where the core's memory is reached. Natively it
+shares the UI's JavaScript thread, with Rust pieces beside it: the core's
+thread, its memory and the GPU's run. On a page the core and the runtime run
+in a worker and the UI on the main thread, joined by a MessagePort. Both
+relations ride the same pair of rings, told apart by a command's major: the
+runtime carries the UI's submissions on the SQ and hands the core's
+completions and imports back. The UI meets the runtime directly only for the
+surfaces (a view lent to the GPU) and the lifecycle (boot, visibility),
+through its link (`Link`), the same on every platform.
 
 ## Two ABIs, one number space
 
 A command is `major << 8 | minor` (`kit` `abi/cmd`), and who defines it decides
-its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F (`spec/abi/`).
+its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F (`spec/abi/`,
+a protocol a device: `sys.json`, `gpu.json`, `fs.json`).
 Its imports are the core's calls to its devices: the file device's calls
 (`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`, `spec/abi/fs.json`) and
 `SYS_ABORT`, the report the core posts as it stops. Its exports are the
@@ -76,7 +79,14 @@ runtime's interrupts:
 
 - `SYS_ATTACH`, a runtime attached, the first time or again;
 - `SYS_SUSPEND` and `SYS_RESUME`, calls around a hidden runtime;
-- `GPU_READY`, the GPU the machine asked for answered.
+- `SYS_TURN`, a turn the scheduling policy grants, as against one rung for a
+  command alone, and the wall clock; what else the policy says of the turn,
+  such as a display's pacing, is the program's to send;
+- `GPU_READY`, the GPU the machine asked for answered;
+- `GPU_SURFACE_OPEN`, `GPU_SURFACE_RESIZE` and `GPU_SURFACE_CLOSE`, a surface
+  the UI lends the GPU, by the handle the first answers, the one `bind` lends
+  a canvas under;
+- `FS_CHANGED`, a file changed under the core, which it reads again.
 
 `NOP` is the rings' own test. xpute ships both ends of the file device.
 
@@ -178,8 +188,8 @@ for, its allocator and xpute's stop hook, exported as
 `xpute_gpu_*` (`rust/gpu/include/xpute_gpu.h`), and on Android the same calls
 under the Kotlin classes `xpute.Core` and `xpute.Gpu`.
 
-On the JavaScript side an app calls `@xpute/runtime`'s `boot(machine, { core?,
-... })` once. The platform is picked by file: `x.ts` is the page's,
+On the JavaScript side an app calls `@xpute/runtime`'s `boot(manifest, ui)` once,
+or `start` (below). The platform is picked by file: `x.ts` is the page's,
 `x.native.ts` the device's, as a native bundler and `tsconfig.native.json`
 (`moduleSuffixes`) resolve them. A page passes its module as `core`; a device
 passes none, since the core is linked in. A native app installs
@@ -190,6 +200,31 @@ what the program decides: what backs the files (`fs`) and the GPU it grants
 (`gpu`, `@xpute/gpu`'s `WebGpu` or `NativeGpu`), each where the machine asks
 for it, what hears its own commands (`program`), its scheduling policy and
 what it submits before each turn.
+
+An app with a UI declares its core once in a **manifest**, as xpute's April
+build did: the machine, and `core`, which makes `boot`'s config where the core
+runs, with what else of the core's memory an import names (`mem_of`); code
+beside the core reads its memory as `mem`. The UI is four things: the imports it takes
+(`cmds`, `SYS_ABORT` among them where it shows the stop) and what it does with
+each (`on`), the GPU's state (`gpu`), the stop (`stop`). `start(manifest, ui,
+worker)` puts the core where the platform runs it and resolves to the UI's
+**link** (`Link`), the same calls on every platform. On a device it boots the
+core beside the UI. On a page it starts `worker`, whose module calls
+`serve(manifest)`; between them a port carries frames, up and down, a reply
+being a frame and an import the UI takes another.
+
+```ts
+// core.ts, read where the core runs and by the UI
+export const manifest = { machine: MACHINE, core: () => ({ core, gpu, program, policy }) };
+
+// core.worker.ts, a page's
+serve(manifest);
+
+// the UI
+const ui = { cmds: [Command.SHOW], on: shown, gpu: showGpu, stop: stopped };
+const link = await start(manifest, ui, () =>
+  new Worker(new URL("./core.worker.ts", import.meta.url), { type: "module" }));
+```
 
 A **C++ core** takes the library in two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with

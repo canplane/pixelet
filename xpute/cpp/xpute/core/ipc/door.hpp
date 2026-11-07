@@ -41,12 +41,14 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
-#include "xpute/core/abi/cmd.spec.hpp"
+#include "xpute/core/abi/gpu.spec.hpp"
+#include "xpute/core/abi/sys.spec.hpp"
 #include "xpute/core/abi/fs.spec.hpp"
 #include "xpute/core/call.hpp"
 #include "frame.hpp"
@@ -69,6 +71,32 @@ struct Outcome {
     Errno err = Errno::ok;
     std::int32_t val = 0;
 };
+
+// The core's life as its runtime tells it (abi/sys.json): what each means to
+// keep or reset is the program's.
+enum class Life { attach, suspend, resume };
+
+// The GPU the machine asked for answered, the first time or again after a
+// loss (GPU_READY).
+struct GpuReady {};
+
+// A surface the UI lends the GPU (abi/gpu.json): opened, answered with its
+// handle, 0 for none; its box resized; let go.
+struct SurfaceOpen {};
+using Surface = std::variant<SurfaceOpen, abi::gpu::GpuSurfaceResize, abi::gpu::GpuSurfaceClose>;
+
+// A command of the program's own: its number and its packet.
+struct Program {
+    std::uint32_t cmd = 0;
+    std::span<const std::uint8_t> pkt;
+};
+
+// What the door hands the program, as xpute-core's `Submission` does: a turn
+// of its life, a turn the scheduling policy grants (SYS_TURN), the GPU
+// answered, a surface lent, an open or a close the runtime completed, a file
+// changed under it (FS_CHANGED), or a command of the program's own. What the
+// program answers a completion is dropped.
+using Submission = std::variant<Life, abi::sys::SysTurn, GpuReady, Surface, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
 
 // How full the rings ran since the stat was last taken (`Door::take_stat`):
 // each figure the most it reached.
@@ -276,7 +304,7 @@ class Door {
         std::string_view path = at.file_name();
         std::string_view tail = path.substr(path.size() > ABORT_PATH_BYTES ? path.size() - ABORT_PATH_BYTES : 0);
         for (std::string_view file : {path, tail, std::string_view{}}) {
-            abi::SysAbort report{
+            abi::sys::SysAbort report{
                 .errnum = static_cast<std::int32_t>(errnum),
                 .line = at.line(),
                 .column = at.column(),
@@ -286,37 +314,36 @@ class Door {
                 .b_high = static_cast<std::uint32_t>(b >> 32),
                 .file = file,
             };
-            Errno e = cq_.push_in_place(0, abi::SysAbort::NUMBER, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+            Errno e = cq_.push_in_place(0, abi::sys::SysAbort::NUMBER, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
                 xtp::PacketWriter w(out);
-                w.branch(abi::SysAbort::FIELDS, [&report](xtp::PacketWriter &b) { report.write(b); });
+                w.branch(abi::sys::SysAbort::FIELDS, [&report](xtp::PacketWriter &b) { report.write(b); });
                 Result<std::uint32_t> n = w.finish();
                 return n ? std::optional(*n) : std::nullopt;
             });
-            if (e != Errno::emsgsize || file.empty()) return check_post(abi::SysAbort::NUMBER, e);
+            if (e != Errno::emsgsize || file.empty()) return check_post(abi::sys::SysAbort::NUMBER, e);
         }
     }
 
     // Applies waiting commands in order while there is room for what one more may
     // leave; replies to ACKREQ and to failures, and to no completion. Answers how
-    // many completions it made. A command under xpute's majors is xpute's own and
-    // applied here: NOP answers its value; an open the runtime completed goes to
-    // `opened`, and a close it completed lets go of the bytes its descriptor's
-    // writes named and goes to `closed`; every command past them goes to
-    // `apply`. A drain runs before any phase's
-    // budget, so the program records what it is handed and returns.
-    template <class Opened, class Closed, class Apply> std::uint32_t receive(Opened &&opened, Closed &&closed, Apply &&apply) const noexcept {
+    // many completions it made. NOP answers its value here; every other command
+    // goes to `handle` as what it means (`Submission`), a close the runtime
+    // completed once the bytes its descriptor's writes named are let go. A drain
+    // runs before any phase's budget, so the program records what it is handed
+    // and returns.
+    template <class Handle> std::uint32_t receive(Handle &&handle) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
             if (f->flags & frame::RES) {
-                complete(*f, opened, closed);
+                complete(*f, handle);
                 sq_.advance();
                 continue;
             }
             Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
-            Outcome a = pkt ? apply_frame(*f, *pkt, apply) : Outcome{.err = pkt.error().errnum};
+            Outcome a = pkt ? apply_frame(*f, *pkt, handle) : Outcome{.err = pkt.error().errnum};
             sq_.advance();
             if (a.err != Errno::ok) {
                 post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
@@ -335,33 +362,47 @@ class Door {
 
     // The runtime's completion of an open or a close, found by its tag, the
     // descriptor (R4). Any other is dropped.
-    template <class Opened, class Closed> void complete(const Frame &f, Opened &opened, Closed &closed) const noexcept {
+    template <class Handle> void complete(const Frame &f, Handle &handle) const noexcept {
         Fd fd = f.tag;
         if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_OPENAT)) {
             std::uint32_t detail = 0;
             if (Result<std::span<const std::uint8_t>> pkt = sq_.pkt(f); pkt && !pkt->empty()) {
                 if (Result<abi::fs::FsOpenatReply> r = abi::fs::FsOpenatReply::read(*pkt)) detail = r->detail;
             }
-            (void)opened(FsOpened{.fd = fd, .res = f.result, .detail = detail});
+            (void)handle(Submission{FsOpened{.fd = fd, .res = f.result, .detail = detail}});
         } else if (f.cmd == static_cast<std::uint32_t>(abi::fs::Command::FS_CLOSE)) {
             std::erase_if(writes_, [fd](const FileWrite &w) { return w.fd == fd; });
-            closed(FsClosed{.fd = fd, .res = f.result});
+            (void)handle(Submission{FsClosed{.fd = fd, .res = f.result}});
         }
     }
 
-    template <class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Apply &apply) noexcept {
-        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return apply(f.cmd, pkt);
-        if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
+    // A packet's reader's answer handed over, or its error answered.
+    template <class T, class Handle, class Wrap> static Outcome read_then(std::span<const std::uint8_t> pkt, Handle &handle, Wrap wrap) noexcept {
+        Result<T> r = T::read(pkt);
+        if (!r) return {.err = r.error().errnum};
+        return handle(Submission{wrap(*r)});
+    }
+
+    template <class Handle> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Handle &handle) noexcept {
+        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return handle(Submission{Program{.cmd = f.cmd, .pkt = pkt}});
+        using S = abi::sys::Command;
+        using G = abi::gpu::Command;
+        const auto is = [&f](auto c) { return f.cmd == static_cast<std::uint32_t>(c); };
+        if (is(S::NOP)) {
             if (pkt.empty()) return {};
-            Result<abi::Nop> nop = abi::Nop::read(pkt);
+            Result<abi::sys::Nop> nop = abi::sys::Nop::read(pkt);
             if (!nop) return {.err = nop.error().errnum};
             return {.val = static_cast<std::int32_t>(nop->val)};
         }
-        // The core's life (SYS_ATTACH, SYS_SUSPEND, SYS_RESUME) and its GPU
-        // grant's answer (GPU_READY): a C++ core keeps nothing across either.
-        if (f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_ATTACH) || f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_SUSPEND) ||
-            f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_RESUME) || f.cmd == static_cast<std::uint32_t>(abi::Command::GPU_READY))
-            return {.val = 0};
+        if (is(S::SYS_ATTACH)) return handle(Submission{Life::attach});
+        if (is(S::SYS_SUSPEND)) return handle(Submission{Life::suspend});
+        if (is(S::SYS_RESUME)) return handle(Submission{Life::resume});
+        if (is(S::SYS_TURN)) return read_then<abi::sys::SysTurn>(pkt, handle, [](auto t) { return t; });
+        if (is(G::GPU_READY)) return handle(Submission{GpuReady{}});
+        if (is(G::GPU_SURFACE_OPEN)) return handle(Submission{Surface{SurfaceOpen{}}});
+        if (is(G::GPU_SURFACE_RESIZE)) return read_then<abi::gpu::GpuSurfaceResize>(pkt, handle, [](auto c) { return Surface{c}; });
+        if (is(G::GPU_SURFACE_CLOSE)) return read_then<abi::gpu::GpuSurfaceClose>(pkt, handle, [](auto c) { return Surface{c}; });
+        if (is(abi::fs::Command::FS_CHANGED)) return read_then<abi::fs::FsChanged>(pkt, handle, [](auto c) { return c; });
         // The core's own report and file calls, which the runtime never sends,
         // and the numbers xpute gives nothing.
         return {.err = Errno::enosys};

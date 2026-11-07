@@ -1,19 +1,14 @@
 // @xpute/runtime/remote.ts
 
 /**
- * A UI in another thread than its core and runtime, as a page's main thread is
- * beside a worker that holds them: the UI's frames cross a MessagePort and
- * nothing else does, since the two share no memory. The UI's end (`connect`)
- * is a `Sender`, so a protocol's generated stubs bind to it as they bind to a
- * runtime beside them; it posts each command's packet as bytes, encoded in
- * its own memory. The runtime's end (`serve`) submits each on the SQ as it
- * came, and posts back a request's reply and every import's frame the program places
- * with the UI, its packet copied before the runtime's head passes it, with
- * what else of the core's memory the program says the frame names.
+ * A UI apart from its core, as a page's main thread is from the worker that
+ * runs it: a MessagePort between them, which carries frames.
  *
- * A call waits on a turn, so a UI across a port makes none: `call` is
- * refused with ENOTSUP. Once the core stops, every request waiting and
- * every one after is answered ENOTRECOVERABLE.
+ * - Up: the UI's frames, a lifecycle call by name, a canvas transferred once.
+ * - Down: frames, a reply to a request or an import the UI takes, with the
+ *   memory it names copied; the GPU's state; the stop; whether the core rose.
+ * - A call waits on a turn, so a UI across a port makes none (ENOTSUP). Once
+ *   the core stops, every request is answered ENOTRECOVERABLE.
  */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -21,178 +16,225 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import {
-  type BranchCursor,
   type PacketRoom,
   PacketWriter,
   TreeReader,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import type { Encode, OnImport } from "./ipc/doorbell.ts";
-import type { Runtime, Sender } from "./runtime.ts";
+import type { Encode } from "./ipc/doorbell.ts";
+import {
+  type Canvas,
+  type GpuState,
+  type Link,
+  type Manifest,
+  boot,
+  type Runtime,
+  type Ui,
+} from "./runtime.ts";
+import type { Grant } from "./sched/policy.ts";
 
-/** A UI's frame: a command, `id` a request's (0 for a send), and its packet,
- * `cnt` children laid as `pkt`. */
-interface FrameMessage {
-  kind: "frame";
-  cmd: u32;
-  id: u32;
-  cnt: u32;
-  pkt: U8Array | null;
-}
+/** The calls a link carries by name. */
+const CALLS = [
+  "wake",
+  "input",
+  "resume",
+  "pause",
+  "visible",
+  "unbind",
+] as const;
 
-/** A request's answer, by its `id`. */
-interface ReplyMessage {
-  kind: "reply";
-  id: u32;
-  result: i32;
-}
+type Call = (typeof CALLS)[number];
 
-/** An import the program placed with the UI: its packet, and the bytes of
- * the core's memory it names, as the program copied them. */
-interface ImportMessage {
-  kind: "import";
-  tag: u32;
-  cmd: u32;
-  pkt: U8Array | null;
-  named: U8Array | null;
-}
+type Up =
+  | { kind: "frame"; cmd: u32; id: u32; cnt: u32; pkt: U8Array | null }
+  | { kind: "call"; name: Call; arg: unknown }
+  | { kind: "bind"; handle: u32; canvas: OffscreenCanvas };
 
-/** The core stopped. */
-interface StopMessage {
-  kind: "stop";
-}
-
-/** What the UI hears of an import's frame placed with it: as `OnImport`, with the
- * bytes of the core's memory the frame names, the UI's to keep. */
-export type OnUiImport = (
-  tag: u32,
-  cmd: u32,
-  f: BranchCursor | null,
-  named: U8Array | null,
-) => void;
-
-/** The UI's end of a port to its runtime. */
-export interface Remote extends Sender {
-  /** What the core raises for the UI is handed to `listener`. */
-  listen(listener: OnUiImport): void;
-  /** Told once, as the core stops. */
-  onterminated: (() => void) | null;
-}
-
-/** The UI's end of `port`; `slot_bytes` is the machine's, the most a packet
- * may take in the SQ. */
-export function connect(port: MessagePort, slot_bytes: u32): Remote {
-  const scratch = new Uint8Array(slot_bytes);
-  const view = new DataView(scratch.buffer);
-  const writer = new PacketWriter();
-  let cnt = 0;
-  const room: PacketRoom = {
-    writer(n: u32): PacketWriter {
-      cnt = n;
-      return writer.begin(scratch, view, 0, scratch.length, n);
-    },
-  };
-  const waiting = new Map<u32, (result: i32) => void>();
-  let next_id: u32 = 0;
-  let stopped = false;
-  let listener: OnUiImport = () => {};
-
-  function post(cmd: u32, id: u32, encode: Encode | null | undefined): void {
-    cnt = 0;
-    const w = encode?.(room) ?? null;
-    let pkt: U8Array | null = null;
-    if (w !== null) {
-      const end = w.finish();
-      if (end < 0) throw new InvariantError(Errno.EMSGSIZE);
-      pkt = scratch.slice(0, end);
+/** `res` a reply's result, null for an import. */
+type Down =
+  | {
+      kind: "frame";
+      tag: u32;
+      cmd: u32;
+      res: i32 | null;
+      pkt: U8Array | null;
+      named: U8Array | null;
     }
-    const frame: FrameMessage = { kind: "frame", cmd, id, cnt, pkt };
-    port.postMessage(frame, pkt ? [pkt.buffer] : []);
+  | { kind: "gpu"; state: GpuState }
+  | { kind: "stop" }
+  | { kind: "rose"; why: string | null };
+
+/** What `start` sends the worker first. */
+export interface Hello {
+  xpute: MessagePort;
+  cmds: readonly u32[];
+}
+
+/** The UI's end of `port`, what comes down handed to `ui`; `rose` settles
+ * once the core is up. */
+export function connect(
+  port: MessagePort,
+  slot_bytes: u32,
+  ui: Ui,
+): { link: Link; rose: Promise<void> } {
+  const buf = new Uint8Array(slot_bytes);
+  const view = new DataView(buf.buffer);
+  const w = new PacketWriter();
+  const room: PacketRoom = {
+    writer: (n) => ((cnt = n), w.begin(buf, view, 0, buf.length, n)),
+  };
+  const waiting = new Map<u32, (res: i32) => void>();
+  const lent = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
+  const rose = Promise.withResolvers<void>();
+  const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
+  let cnt = 0;
+  let next = 0;
+  let stopped = false;
+
+  function frame(cmd: u32, id: u32, encode?: Encode | null): void {
+    cnt = 0;
+    const end = encode?.(room)?.finish() ?? 0;
+    if (end < 0) throw new InvariantError(Errno.EMSGSIZE);
+    const pkt = end > 0 ? buf.slice(0, end) : null;
+    up({ kind: "frame", cmd, id, cnt, pkt }, pkt ? [pkt.buffer] : []);
   }
 
-  const remote: Remote = {
-    send(cmd, encode) {
-      if (!stopped) post(cmd, 0, encode);
-    },
+  function bind(handle: u32, canvas: Canvas): void {
+    if (canvas instanceof OffscreenCanvas) {
+      return up({ kind: "bind", handle, canvas }, [canvas]);
+    }
+    const had = lent.get(canvas);
+    if (had) return up({ kind: "bind", handle, canvas: had });
+    const off = canvas.transferControlToOffscreen();
+    lent.set(canvas, off);
+    up({ kind: "bind", handle, canvas: off }, [off]);
+  }
+
+  const call = (name: Call, arg?: unknown) => up({ kind: "call", name, arg });
+
+  port.onmessage = ({ data: m }: MessageEvent<Down>) => {
+    switch (m.kind) {
+      case "frame":
+        if (m.res !== null) {
+          waiting.get(m.tag)?.(m.res);
+          return void waiting.delete(m.tag);
+        }
+        return ui.on(
+          m.tag,
+          m.cmd,
+          m.pkt && new TreeReader(m.pkt).read_branch(),
+          m.named,
+          m.pkt,
+        );
+      case "gpu":
+        return ui.gpu(m.state);
+      case "stop":
+        stopped = true;
+        waiting.forEach((done) => done(Errno.ENOTRECOVERABLE));
+        waiting.clear();
+        return ui.stop();
+      case "rose":
+        return m.why === null ? rose.resolve() : rose.reject(new Error(m.why));
+    }
+  };
+
+  const link: Link = {
+    send: (cmd, encode) => void (stopped || frame(cmd, 0, encode)),
     request(cmd, encode) {
       if (stopped) return Promise.resolve(Errno.ENOTRECOVERABLE);
-      next_id = (next_id + 1) >>> 0 || 1;
-      const id = next_id;
-      return new Promise((resolve) => {
-        waiting.set(id, resolve);
-        post(cmd, id, encode);
+      const id = (next = (next + 1) >>> 0 || 1);
+      return new Promise((done) => {
+        waiting.set(id, done);
+        frame(cmd, id, encode);
       });
     },
     call(): never {
       throw new InvariantError(Errno.ENOTSUP);
     },
-    listen(l) {
-      listener = l;
-    },
-    onterminated: null,
+    fits: (encode) => (encode(room)?.finish() ?? 0) >= 0,
+    wake: () => call("wake"),
+    input: () => call("input"),
+    resume: () => call("resume"),
+    pause: () => call("pause"),
+    visible: (v) => call("visible", v),
+    bind,
+    unbind: (handle) => call("unbind", handle),
   };
-
-  port.onmessage = ({
-    data,
-  }: MessageEvent<ReplyMessage | ImportMessage | StopMessage>) => {
-    if (data.kind === "reply") {
-      const answer = waiting.get(data.id);
-      waiting.delete(data.id);
-      answer?.(data.result);
-    } else if (data.kind === "import") {
-      const f = data.pkt ? new TreeReader(data.pkt).read_branch() : null;
-      listener(data.tag, data.cmd, f, data.named);
-    } else {
-      stopped = true;
-      for (const answer of waiting.values()) answer(Errno.ENOTRECOVERABLE);
-      waiting.clear();
-      remote.onterminated?.();
-    }
-  };
-  return remote;
+  return { link, rose: rose.promise };
 }
 
-/** What else of the core's memory an import's frame names, copied while it
- * is read; null for none. */
-export type MemoryOf = (cmd: u32, f: BranchCursor | null) => U8Array | null;
-
-/** The runtime's end of `port`: the UI's frames submitted as they came. The
- * returned listener is what the program hands the imports it places with the
- * UI: each is posted, its packet and what `named` copies of it. */
-export function serve(
-  runtime: Runtime,
+/** The worker's end of `port`: its runtime `r`, what the UI takes posted down
+ * through the `Ui` it returns. */
+export function attach(
   port: MessagePort,
-  memory_of: MemoryOf = () => null,
-): OnImport {
-  port.onmessage = ({ data }: MessageEvent<FrameMessage>) => {
-    const { cmd, id, cnt, pkt } = data;
-    const encode: Encode | null = pkt
-      ? (room) => room.writer(cnt).copy(pkt)
-      : null;
-    if (id === 0) return runtime.send(cmd, encode ?? undefined);
-    void runtime.request(cmd, encode).then((result) => {
-      const reply: ReplyMessage = { kind: "reply", id, result };
-      port.postMessage(reply);
-    });
+  cmds: readonly u32[],
+): {
+  ui: Ui;
+  serve(r: Runtime): void;
+} {
+  const down = (m: Down, moved: Transferable[] = []) =>
+    port.postMessage(m, moved);
+  const ui: Ui = {
+    cmds,
+    on(tag, cmd, _f, named, pkt) {
+      const p = pkt?.slice() ?? null;
+      const n = named?.slice() ?? null;
+      const moved = [p, n].flatMap((b) => (b ? [b.buffer] : []));
+      down({ kind: "frame", tag, cmd, res: null, pkt: p, named: n }, moved);
+    },
+    gpu: (state) => down({ kind: "gpu", state }),
+    stop: () => down({ kind: "stop" }),
   };
-  return (tag, cmd, f, pkt) => {
-    const copy = pkt ? pkt.slice() : null;
-    const more = memory_of(cmd, f);
-    const raised: ImportMessage = {
-      kind: "import",
-      tag,
-      cmd,
-      pkt: copy,
-      named: more,
+  function serve(r: Runtime): void {
+    port.onmessage = ({ data: m }: MessageEvent<Up>) => {
+      switch (m.kind) {
+        case "frame": {
+          const { cmd, id, cnt, pkt } = m;
+          const encode =
+            pkt && ((room: PacketRoom) => room.writer(cnt).copy(pkt));
+          if (id === 0) return r.send(cmd, encode ?? undefined);
+          return void r.request(cmd, encode).then((res) =>
+            down({
+              kind: "frame",
+              tag: id,
+              cmd,
+              res,
+              pkt: null,
+              named: null,
+            }),
+          );
+        }
+        case "call":
+          return (r[m.name] as (arg: unknown) => void)(m.arg);
+        case "bind":
+          return r.bind(m.handle, m.canvas);
+      }
     };
-    const moved: ArrayBuffer[] = [];
-    if (copy) moved.push(copy.buffer);
-    if (more) moved.push(more.buffer as ArrayBuffer);
-    port.postMessage(raised, moved);
-  };
+  }
+  return { ui, serve };
 }
 
-/** Tells the UI's end the core stopped. */
-export function close(port: MessagePort): void {
-  const stop: StopMessage = { kind: "stop" };
-  port.postMessage(stop);
+/** A page's worker serving the core of `m`: it takes the port `start` sends,
+ * raises the core, and serves the UI's frames. A message of the worker's own
+ * passes by. */
+export function serve<G extends Grant>(m: Manifest<G>): Promise<Runtime> {
+  return new Promise((done, fail) => {
+    const hello = async ({ data }: MessageEvent) => {
+      const h = data as Partial<Hello> | null;
+      if (!(h?.xpute instanceof MessagePort)) return;
+      removeEventListener("message", hello);
+      const port = h.xpute;
+      const end = attach(port, h.cmds ?? []);
+      try {
+        const r = await boot(m, end.ui);
+        end.serve(r);
+        port.postMessage({ kind: "rose", why: null } satisfies Down);
+        done(r);
+      } catch (err) {
+        const why = String((err as Error)?.message ?? err);
+        port.postMessage({ kind: "rose", why } satisfies Down);
+        fail(err);
+      }
+    };
+    addEventListener("message", hello);
+  });
 }

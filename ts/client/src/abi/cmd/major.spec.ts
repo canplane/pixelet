@@ -6,8 +6,7 @@
 
 export const INPUT = 0x11;
 export const SENSOR = 0x12;
-export const FS = 0x13;
-export const SURFACE = 0x15;
+export const SOURCE = 0x13;
 export const SETTING = 0x16;
 export const SCENE = 0x17;
 export const CAMERA = 0x18;

@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The file device's numbers (abi/fs.json, its protocol, Major FS): a core's files,",
-    "posted as frames on the completion ring for the device's port, which the runtime takes",
+    "posted as frames on the completion ring for the file device, which the runtime takes",
     "once the turn has returned and before the next begins. A frame may name memory the",
     "core holds: the runtime reads or writes it in that gap, or, for FS_WRITE, at FS_CLOSE, and",
     "the core keeps it that long.",

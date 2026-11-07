@@ -11,7 +11,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { MAGIC, VERSION, WORDS, word } from "./head.spec.ts";
+import { MAGIC, WORDS, word } from "./head.spec.ts";
 import * as ring from "./ring.spec.ts";
 
 /** The front a machine declares: the rings' sizes, and where the rings,
@@ -37,7 +37,6 @@ export function laid(mem: ArrayBufferLike, at: u32): boolean {
 export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
   const h = new Uint32Array(mem, at, WORDS);
   h[word.MAGIC] = MAGIC;
-  h[word.VERSION] = VERSION;
   h[word.SQ_CAP] = f.sq_cap;
   h[word.CQ_CAP] = f.cq_cap;
   h[word.SLOT_BYTES] = f.slot_bytes;
@@ -57,8 +56,7 @@ export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
 }
 
 /** Where a laid header says the rings and the GPU stream are. One that is
- * not xpute's is refused (EBADMSG), and so is a version this runtime does not
- * read (EPROTO). */
+ * not xpute's is refused (EBADMSG). */
 export class Head {
   readonly sq_at: u32;
   readonly cq_at: u32;
@@ -67,7 +65,6 @@ export class Head {
   constructor(mem: ArrayBufferLike, at: u32) {
     const h = new Uint32Array(mem, at, WORDS);
     if (h[word.MAGIC] !== MAGIC) throw new MarshalError(Errno.EBADMSG);
-    if (h[word.VERSION] !== VERSION) throw new MarshalError(Errno.EPROTO);
     this.sq_at = h[word.SQ_AT];
     this.cq_at = h[word.CQ_AT];
     this.gpu_at = h[word.GPU_AT];

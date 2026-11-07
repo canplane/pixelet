@@ -7,35 +7,66 @@
     "where to look: the rings' sizes and places, and the GPU stream's. The runtime lays each",
     "ring's own header too (ring.json), its positions at 0."
   ],
-
   "MAGIC": {
     "$val": 1414877272,
     "$type": "u32",
-    "$doc": ["\"XPUT\" as four bytes read little-endian: what tells a header from memory nothing wrote."]
+    "$doc": [
+      "\"XPUT\" as four bytes read little-endian: what tells a header from memory nothing wrote."
+    ]
   },
-
-  "VERSION": {
-    "$val": 2,
-    "$type": "u32",
-    "$doc": ["Raised when a word comes to mean something else. 1 was the toc's, a directory of keys."]
-  },
-
   "word": {
     "$type": "u32",
-    "$doc": ["Where each of the header's words is, from its start."],
-    "MAGIC": { "$val": 0, "$doc": ["Where MAGIC is."] },
-    "VERSION": { "$val": 1, "$doc": ["Where VERSION is."] },
-    "SQ_CAP": { "$val": 2, "$doc": ["Frames the submission ring holds."] },
-    "CQ_CAP": { "$val": 3, "$doc": ["Frames the completion ring holds."] },
-    "SLOT_BYTES": { "$val": 4, "$doc": ["A ring slot's payload, the same for both rings."] },
-    "SQ_AT": { "$val": 5, "$doc": ["Where the submission ring's words begin."] },
-    "CQ_AT": { "$val": 6, "$doc": ["Where the completion ring's words begin."] },
-    "GPU_AT": { "$val": 7, "$doc": ["Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU."] }
+    "$doc": [
+      "Where each of the header's words is, from its start."
+    ],
+    "MAGIC": {
+      "$val": 0,
+      "$doc": [
+        "Where MAGIC is."
+      ]
+    },
+    "SQ_CAP": {
+      "$val": 1,
+      "$doc": [
+        "Frames the submission ring holds."
+      ]
+    },
+    "CQ_CAP": {
+      "$val": 2,
+      "$doc": [
+        "Frames the completion ring holds."
+      ]
+    },
+    "SLOT_BYTES": {
+      "$val": 3,
+      "$doc": [
+        "A ring slot's payload, the same for both rings."
+      ]
+    },
+    "SQ_AT": {
+      "$val": 4,
+      "$doc": [
+        "Where the submission ring's words begin."
+      ]
+    },
+    "CQ_AT": {
+      "$val": 5,
+      "$doc": [
+        "Where the completion ring's words begin."
+      ]
+    },
+    "GPU_AT": {
+      "$val": 6,
+      "$doc": [
+        "Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU."
+      ]
+    }
   },
-
   "WORDS": {
-    "$val": 8,
+    "$val": 7,
     "$type": "u32",
-    "$doc": ["Words the header takes."]
+    "$doc": [
+      "Words the header takes."
+    ]
   }
 }

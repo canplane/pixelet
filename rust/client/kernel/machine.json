@@ -67,7 +67,7 @@
   },
   "rings": {
     "$doc": [
-      "`slot_bytes`: a page, since a FS_MOUNT's or a SCENE_CHAT's packet can come near one.",
+      "`slot_bytes`: a page, since a SOURCE_DECLARE's or a SCENE_CHAT's packet can come near one.",
       "",
       "`sq_cap`: sized to what a turn is sent, not to a burst: a full ring loses nothing,",
       "since the runtime rings with a deadline of 0 until there is room (@xpute/runtime/ipc/doorbell.ts).",

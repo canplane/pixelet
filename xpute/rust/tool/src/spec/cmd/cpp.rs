@@ -9,7 +9,7 @@ use crate::spec::{file, generated, pascal};
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
-        return Err(format!("cmd.json: a C++ core reads no list ({})", f.name));
+        return Err(format!("protocol: a C++ core reads no list ({})", f.name));
     }
     let one = match kind {
         Kind::Number => cpp_number(&f.ty).to_string(),
@@ -17,7 +17,7 @@ fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Bool => "bool".to_string(),
         _ => {
             return Err(format!(
-                "cmd.json: a C++ core reads no {} ({})",
+                "protocol: a C++ core reads no {} ({})",
                 f.ty, f.name
             ))
         }
@@ -93,13 +93,13 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
 
 fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let one = match spec.kind(&f.ty)? {
-        _ if f.list => return Err(format!("cmd.json: a C++ core writes no list ({})", f.name)),
+        _ if f.list => return Err(format!("protocol: a C++ core writes no list ({})", f.name)),
         Kind::Number => cpp_number(&f.ty).to_string(),
         Kind::Str => "std::string_view".to_string(),
         Kind::Bool => "bool".to_string(),
         _ => {
             return Err(format!(
-                "cmd.json: a C++ core writes no {} ({})",
+                "protocol: a C++ core writes no {} ({})",
                 f.ty, f.name
             ))
         }

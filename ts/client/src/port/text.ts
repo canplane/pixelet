@@ -12,11 +12,11 @@ import { td, te } from "@xpute/kit/codec/encoding.ts";
 import type { TextLayout, TextRaster } from "@/abi/cmd.spec.ts";
 import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
 import * as font from "@/service/text.ts";
-import { runtime } from "@/runtime/kernel.ts";
+import { mem } from "@xpute/runtime";
 
 /** The text a call names in the kernel's memory, held until the call returns. */
 function text_of(at: number, len: number): string {
-  return td.decode(new Uint8Array(runtime.core.mem as ArrayBuffer, at, len));
+  return td.decode(new Uint8Array(mem, at, len));
 }
 
 /** What no line starts with: closing marks, and in Japanese the small kana and
@@ -95,7 +95,7 @@ export function text_layout(e: TextLayout): i32 {
   const width = (s: string) => font.width(weight, px, s);
   const ends = line_ends(text, max_width, width).slice(0, lines);
   const out = new DataView(
-    runtime.core.mem as ArrayBuffer,
+    mem,
     at,
     4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
   );
@@ -125,7 +125,7 @@ export function text_raster(e: TextRaster): i32 {
     x,
     width,
     height,
-    new Uint8Array(runtime.core.mem as ArrayBuffer, at, width * height * 4),
+    new Uint8Array(mem, at, width * height * 4),
   );
   return 0;
 }

@@ -8,17 +8,15 @@
  * here the device is opened and the core is told it answered.
  */
 
-import type { Gpu, GpuGrant } from "@xpute/runtime";
+import type { Gpu, GpuGrant, GpuState } from "@xpute/runtime";
 import { XPUTE } from "@xpute/native";
-import type { GpuState } from "./web.ts";
 
 export class NativeGpu implements Gpu {
-  private report: (state: GpuState) => void = () => {};
+  private readonly _reports: ((state: GpuState) => void)[] = [];
   private state: GpuState | null = null;
 
-  /** `report` is told whether there is a GPU, the last word at once. */
   watch(report: (state: GpuState) => void): void {
-    this.report = report;
+    this._reports.push(report);
     if (this.state !== null) report(this.state);
   }
 
@@ -37,6 +35,6 @@ export class NativeGpu implements Gpu {
 
   private tell(state: GpuState): void {
     this.state = state;
-    this.report(state);
+    for (const report of this._reports) report(state);
   }
 }

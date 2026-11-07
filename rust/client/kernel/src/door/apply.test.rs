@@ -14,13 +14,13 @@ fn surface(n: f64) -> Result<u32, Errno> {
         w.f64(Some(n));
         w.finish().expect("the buffer holds one number")
     };
-    abi::SurfaceClose::read(&buf[..len as usize])
+    xpute_core::abi::gpu::GpuSurfaceClose::read(&buf[..len as usize])
         .map(|p| p.surface)
         .map_err(|e| e.errnum)
 }
 
 #[test]
-fn shell_number_checked() {
+fn number_checked() {
     assert_eq!(surface(13.0), Ok(13));
     for n in [f64::NAN, f64::INFINITY, -1.0, 2.5, 1e20] {
         assert_eq!(surface(n), Err(Errno::EINVAL), "{n} is no u32");

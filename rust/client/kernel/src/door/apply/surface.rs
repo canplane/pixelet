@@ -1,16 +1,17 @@
 // pxl-kernel/door/apply/surface.rs
 
-//! SURFACE: a surface's: opened, resized and closed.
+//! A surface the shell lends the GPU (xpute's GPU_SURFACE_OPEN, _RESIZE and
+//! _CLOSE): opened, resized and closed.
 
 use super::{or_refuse, refuse_unless};
 use crate::domain::control::camera::input::camera_view_resize;
-use crate::domain::control::cmd as abi;
 use crate::domain::control::sensor;
 use crate::domain::view::frame::resolution;
 use crate::sys::sched::edge::request_world_tick;
 use crate::turn::world_platform;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
+use xpute_core::abi::gpu::{GpuSurfaceClose, GpuSurfaceResize};
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
@@ -42,7 +43,7 @@ pub(super) fn draw_world(handle: u32) -> bool {
     true
 }
 
-pub(super) fn resize(c: abi::SurfaceResize) -> Outcome {
+pub(super) fn resize(c: GpuSurfaceResize) -> Outcome {
     refuse_unless(c.device_pixel_ratio > 0.0, Errno::EINVAL)?;
     let role = surface::surface(c.surface).map_or(0, |s| s.role);
     let ratio = resolution::surface_ratio(role, [c.width, c.height], c.device_pixel_ratio);
@@ -61,7 +62,7 @@ pub(super) fn resize(c: abi::SurfaceResize) -> Outcome {
     Ok(Some(0))
 }
 
-pub(super) fn close(c: abi::SurfaceClose) -> Outcome {
+pub(super) fn close(c: GpuSurfaceClose) -> Outcome {
     let role = or_refuse(surface::surface(c.surface).map(|s| s.role), Errno::EBADF)?;
     super::super::close_surface(c.surface);
     if role == surface_role::WORLD {

@@ -25,5 +25,12 @@
     }
   },
   "include": ["client", "build", "tool/shader", "vitest.config.ts"],
-  "exclude": ["**/node_modules", "**/dist", "client/ios", "client/android"]
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    "client/ios",
+    "client/android",
+    "**/*.native.ts",
+    "**/*.native.tsx"
+  ]
 }

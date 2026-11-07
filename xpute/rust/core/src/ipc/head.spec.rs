@@ -22,30 +22,24 @@
 /// "XPUT" as four bytes read little-endian: what tells a header from memory nothing wrote.
 pub const MAGIC: u32 = 1414877272;
 
-/// Raised when a word comes to mean something else. 1 was the toc's, a directory of keys.
-pub const VERSION: u32 = 2;
-
 /// Where each of the header's words is, from its start.
 pub mod word {
     /// Where MAGIC is.
     pub const MAGIC: u32 = 0;
-    /// Where VERSION is.
-    pub const VERSION: u32 = 1;
     /// Frames the submission ring holds.
-    pub const SQ_CAP: u32 = 2;
+    pub const SQ_CAP: u32 = 1;
     /// Frames the completion ring holds.
-    pub const CQ_CAP: u32 = 3;
+    pub const CQ_CAP: u32 = 2;
     /// A ring slot's payload, the same for both rings.
-    pub const SLOT_BYTES: u32 = 4;
+    pub const SLOT_BYTES: u32 = 3;
     /// Where the submission ring's words begin.
-    pub const SQ_AT: u32 = 5;
+    pub const SQ_AT: u32 = 4;
     /// Where the completion ring's words begin.
-    pub const CQ_AT: u32 = 6;
+    pub const CQ_AT: u32 = 5;
     /// Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU.
-    pub const GPU_AT: u32 = 7;
+    pub const GPU_AT: u32 = 6;
     pub const KEYS: &[&str] = &[
         "MAGIC",
-        "VERSION",
         "SQ_CAP",
         "CQ_CAP",
         "SLOT_BYTES",
@@ -56,4 +50,4 @@ pub mod word {
 }
 
 /// Words the header takes.
-pub const WORDS: u32 = 8;
+pub const WORDS: u32 = 7;

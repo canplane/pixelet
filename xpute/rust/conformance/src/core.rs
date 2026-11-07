@@ -207,8 +207,13 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     let Core { door, state } = unsafe { &mut *mem.at::<Core>((range + STATE_AT) as usize) };
     door.rise();
     door.receive(|submission| match submission {
-        // It keeps nothing across its life, and draws nothing.
-        Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
+        // It keeps nothing across its life, reads no file again, and draws
+        // nothing: a surface opened is answered 0, none.
+        Submission::Life(_)
+        | Submission::Turn(_)
+        | Submission::GpuReady
+        | Submission::Surface(_)
+        | Submission::Changed(_) => Ok(Some(0)),
         Submission::Opened(opened) => {
             if let Some(owner) = state.files.complete_open(&opened) {
                 door.post(owner, spec::cmd::OPENED, 0, opened.res);

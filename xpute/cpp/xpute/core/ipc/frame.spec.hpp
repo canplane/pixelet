@@ -8,7 +8,7 @@
 // packet, where there is one, lies in the ring's payload slot.
 //
 // Commands share one number space, `major << 8 | minor`: majors 0x00 to 0x0F are
-// xpute's own (abi/cmd.json, abi/fs.json), and every other is the program's to give,
+// xpute's own (abi/sys.json, abi/gpu.json, abi/fs.json), and every other is the program's to give,
 // and so is what its commands mean. A runtime hands a frame to what answers its command's
 // major.
 //

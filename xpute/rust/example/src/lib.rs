@@ -37,10 +37,14 @@ fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
     let door = xpute_core::machine::door();
     door.rise();
     door.receive(|submission| match submission {
-        // It keeps nothing across its life, and draws nothing.
-        Submission::Life(_) | Submission::GpuReady => Ok(Some(0)),
+        // It keeps nothing across its life or its turns, and draws nothing: a
+        // surface opened is answered 0, none.
+        Submission::Life(_)
+        | Submission::Turn(_)
+        | Submission::GpuReady
+        | Submission::Surface(_) => Ok(Some(0)),
         // It opens no file.
-        Submission::Opened(_) | Submission::Closed(_) => Ok(None),
+        Submission::Opened(_) | Submission::Closed(_) | Submission::Changed(_) => Ok(None),
         Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
     });
     if door.pending() {

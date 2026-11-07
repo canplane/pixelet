@@ -28,4 +28,7 @@ export interface SchedulingPolicy<G extends Grant = Grant> {
   grant(now: f64): G;
   /** What the turn took and what its falling edge asked for. */
   observe(turn_ms: f64, grant: G, wake_ms: f64): void;
+  /** An input at `now`, which a policy may make the turns after it
+   * interactive for (frame_pacing.ts). */
+  input?(now: f64): void;
 }

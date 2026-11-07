@@ -88,7 +88,8 @@ struct Record {
 /// A command as its protocol lists it. `call`: the sender waits for the answer
 /// (an `export` the runtime calls, an `import` the runtime answers before it returns).
 /// `ackreq`: an `import` the runtime completes on a later turn, a frame of its tag
-/// flagged RES, its packet `reply`.
+/// flagged RES, its packet `reply`. `mem`: the two fields of an `import`
+/// that name the core's memory, where it is and how long.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -102,6 +103,7 @@ struct Cmd {
     #[serde(default)]
     ackreq: bool,
     reply: Option<Vec<Field>>,
+    mem: Option<[String; 2]>,
 }
 
 /// A protocol: the commands the runtime sends the core (`export`) and those the
@@ -152,6 +154,8 @@ struct Protocol {
     /// ACKREQ and answered later.
     exports: Vec<(String, bool, bool)>,
     imports: Vec<(String, bool)>,
+    /// Each import that names the core's memory, and its two fields.
+    mem: Vec<(String, [String; 2])>,
 }
 
 /// `json`'s protocol, its commands made `Command`'s members, each `export` a
@@ -168,6 +172,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
         name: d.name.clone(),
         exports: Vec::new(),
         imports: Vec::new(),
+        mem: Vec::new(),
     };
     for (dir, cmds) in [("export", d.export), ("import", d.import)] {
         if cmds.is_empty() {
@@ -194,6 +199,20 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             } else {
                 (None, Some(c.pkt.unwrap_or_default()))
             };
+            if let Some(m) = c.mem {
+                let has = |n: &str| {
+                    import
+                        .as_ref()
+                        .is_some_and(|p| p.iter().any(|f| f.name == n))
+                };
+                if !has(&m[0]) || !has(&m[1]) {
+                    return Err(format!(
+                        "{shown}: {}'s mem names no import's fields",
+                        c.name
+                    ));
+                }
+                of.mem.push((c.name.clone(), m));
+            }
             if dir == "export" {
                 of.exports.push((c.name.clone(), c.call, c.ackreq));
             } else {
@@ -255,7 +274,7 @@ impl Spec {
         } else if self.records.iter().any(|r| r.name == ty) {
             Kind::Record
         } else {
-            return Err(format!("cmd.json: no type {ty}"));
+            return Err(format!("protocol: no type {ty}"));
         })
     }
 
@@ -275,7 +294,7 @@ impl Spec {
             .enums
             .iter()
             .find(|e| e.name == "Command")
-            .ok_or("cmd.json has no Command")?;
+            .ok_or("a protocol has no Command")?;
         Ok(members(table).collect())
     }
 }
@@ -295,7 +314,7 @@ fn literal(val: u32, format: &str) -> String {
     }
 }
 
-/// Every command is numbered by a major and a minor that cmd.json names. A
+/// Every command is numbered by a major and a minor that its protocol names. A
 /// table's numbers are each given out once, and no member takes a global's name.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
@@ -374,16 +393,27 @@ struct Target {
     runtime_ts: Option<&'static str>,
 }
 
-const TARGETS: [Target; 2] = [
+const TARGETS: [Target; 3] = [
     Target {
-        json: "spec/abi/cmd.json",
-        ts: "ts/runtime/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/runtime/abi/cmd.spec.ts",
-        rs: "rust/core/src/abi/cmd.spec.rs",
-        rs_logical: "xpute-core/abi/cmd.spec.rs",
+        json: "spec/abi/sys.json",
+        ts: "ts/runtime/src/abi/sys.spec.ts",
+        ts_logical: "@xpute/runtime/abi/sys.spec.ts",
+        rs: "rust/core/src/abi/sys.spec.rs",
+        rs_logical: "xpute-core/abi/sys.spec.rs",
         number: "crate::abi::number",
         import: Some("crate::ipc::door"),
-        cpp: Some(("cpp/xpute/core/abi/cmd.spec.hpp", "xpute::abi")),
+        cpp: Some(("cpp/xpute/core/abi/sys.spec.hpp", "xpute::abi::sys")),
+        runtime_ts: Some("../mod.ts"),
+    },
+    Target {
+        json: "spec/abi/gpu.json",
+        ts: "ts/runtime/src/abi/gpu.spec.ts",
+        ts_logical: "@xpute/runtime/abi/gpu.spec.ts",
+        rs: "rust/core/src/abi/gpu.spec.rs",
+        rs_logical: "xpute-core/abi/gpu.spec.rs",
+        number: "crate::abi::number",
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/gpu.spec.hpp", "xpute::abi::gpu")),
         runtime_ts: Some("../mod.ts"),
     },
     Target {
@@ -489,7 +519,9 @@ fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
         {
             let mut all: Vec<String> = names.split(", ").map(str::to_string).collect();
             for w in ["f64", "i32", "u32", "u8"] {
-                if body_text.contains(&format!(": {w}")) && !all.iter().any(|a| a == w) {
+                if (body_text.contains(&format!(": {w}")) || body_text.contains(&format!("<{w}>")))
+                    && !all.iter().any(|a| a == w)
+                {
                     all.push(w.to_string());
                 }
             }

@@ -43,7 +43,7 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "cmd.json: Rust reads no {} ({})",
+            "protocol: Rust reads no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
@@ -85,7 +85,7 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         None => {
             let x = spec
                 .extern_of(&f.ty)
-                .ok_or(format!("cmd.json: no type {}", f.ty))?;
+                .ok_or(format!("protocol: no type {}", f.ty))?;
             (x.repr.clone(), None)
         }
     };
@@ -120,7 +120,7 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         }
         if kind != Kind::Record {
             return Err(format!(
-                "cmd.json: a list of {} ({}) is not written",
+                "protocol: a list of {} ({}) is not written",
                 f.ty, f.name
             ));
         }

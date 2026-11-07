@@ -3,7 +3,7 @@
 //! The core's end of its rings: submissions applied in order, completions
 //! posted in place. The runtime reads the completion ring dry before it rings
 //! again, so overrunning it is a sizing bug, not a state to wait out. A
-//! command under xpute's majors (abi/cmd.json, abi/fs.json) is applied here
+//! command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json) is applied here
 //! or handed over as what it means; the program is handed every other, and
 //! each open and close the runtime completed.
 //!
@@ -43,8 +43,9 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::abi::cmd::{Command, Nop, SysAbort};
-use crate::abi::fs::{self, FsClose, FsOpenat, FsOpenatReply, FsRead, FsWrite};
+use crate::abi::fs::{self, FsChanged, FsClose, FsOpenat, FsOpenatReply, FsRead, FsWrite};
+use crate::abi::gpu::{self, GpuSurfaceClose, GpuSurfaceResize};
+use crate::abi::sys::{Command, Nop, SysAbort, SysTurn};
 use crate::call::answer_of;
 use crate::ipc::frame;
 use crate::ipc::fs::{Fd, FsClosed, FsOpened};
@@ -90,22 +91,38 @@ impl Reading {
 /// None for an unknown command, which replies ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
 
-/// What the door hands the program: a turn of its life its runtime told it, its
-/// the GPU answered, an open or a close the runtime completed, or a command of
-/// the program's own, its number and its packet. A completion is answered by
-/// nothing, so what the program returns for one is dropped. A drain runs before any phase's
-/// budget, so the program records what it is handed and returns.
+/// What the door hands the program: a turn of its life its runtime told it,
+/// a turn the scheduling policy grants, the GPU answered, a surface
+/// the UI lends it, an open or a close the runtime completed, a file changed
+/// under it, or a command of the program's own, its number and its packet. A
+/// completion is answered by nothing, so what the program returns for one is
+/// dropped. A drain runs before any phase's budget, so the program records
+/// what it is handed and returns.
 pub enum Submission<'a> {
     Life(Life),
+    /// A turn the scheduling policy grants, and the wall clock (SYS_TURN).
+    Turn(SysTurn),
     /// The GPU the machine asked for answered, the first time or again after
     /// a loss (GPU_READY): the GPU's state, not the core's life.
     GpuReady,
+    Surface(Surface),
     Opened(FsOpened),
     Closed(FsClosed),
+    /// A file changed under the core: what it read of it is stale (FS_CHANGED).
+    Changed(FsChanged<'a>),
     Program(u32, Option<&'a [u8]>),
 }
 
-/// The core's life as its runtime tells it (abi/cmd.json): what each means to
+/// A surface the UI lends the GPU (abi/gpu.json): opened, answered with its
+/// handle, 0 for none; its box resized; let go.
+#[derive(Clone, Copy, Debug)]
+pub enum Surface {
+    Open,
+    Resize(GpuSurfaceResize),
+    Close(GpuSurfaceClose),
+}
+
+/// The core's life as its runtime tells it (abi/sys.json): what each means to
 /// keep or reset is the program's, and a program with nothing to do answers
 /// `Ok(None)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -435,10 +452,14 @@ impl Door {
     }
 }
 
-/// xpute's commands applied, NOP answering its value and the core's life
-/// and its GPU's answer handed over, and any other of xpute's numbers
-/// refused; every command past xpute's majors handed to
-/// the program.
+/// A command's packet, which one with fields must carry.
+fn packet(pkt: Option<&[u8]>) -> Result<&[u8], MarshalError> {
+    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
+}
+
+/// xpute's commands applied, NOP answering its value and the rest handed
+/// over as what they mean, and any other of xpute's numbers answered with
+/// nothing; every command past xpute's majors handed to the program.
 fn apply_frame(
     f: &frame::Frame,
     pkt: Option<&[u8]>,
@@ -455,10 +476,25 @@ fn apply_frame(
         Some(Command::SYS_ATTACH) => handle(Submission::Life(Life::Attach)),
         Some(Command::SYS_SUSPEND) => handle(Submission::Life(Life::Suspend)),
         Some(Command::SYS_RESUME) => handle(Submission::Life(Life::Resume)),
-        Some(Command::GPU_READY) => handle(Submission::GpuReady),
-        // The core's own report and file calls, which the runtime never sends,
-        // and the numbers xpute gives nothing.
-        Some(Command::SYS_ABORT) | None => Ok(None),
+        Some(Command::SYS_TURN) => handle(Submission::Turn(SysTurn::read(packet(pkt)?)?)),
+        // The core's own report, which the runtime never sends.
+        Some(Command::SYS_ABORT) => Ok(None),
+        None => match (gpu::Command::of(f.cmd), fs::Command::of(f.cmd)) {
+            (Some(gpu::Command::GPU_READY), _) => handle(Submission::GpuReady),
+            (Some(gpu::Command::GPU_SURFACE_OPEN), _) => handle(Submission::Surface(Surface::Open)),
+            (Some(gpu::Command::GPU_SURFACE_RESIZE), _) => handle(Submission::Surface(
+                Surface::Resize(GpuSurfaceResize::read(packet(pkt)?)?),
+            )),
+            (Some(gpu::Command::GPU_SURFACE_CLOSE), _) => handle(Submission::Surface(
+                Surface::Close(GpuSurfaceClose::read(packet(pkt)?)?),
+            )),
+            (_, Some(fs::Command::FS_CHANGED)) => {
+                handle(Submission::Changed(FsChanged::read(packet(pkt)?)?))
+            }
+            // The core's file calls, which the runtime never sends, and the
+            // numbers xpute gives nothing.
+            _ => Ok(None),
+        },
     }
 }
 

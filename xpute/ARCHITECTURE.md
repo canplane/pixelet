@@ -29,16 +29,18 @@ the UI's events; the runtime is glue, and sits where the core's memory is
 reached. Natively the core has its own thread and the runtime shares the UI's
 JavaScript thread, which shares the core's memory. On a page, whose main
 thread shares no memory with a worker, the core and the runtime run in a
-worker and the UI on the main thread; only the UI's frames cross, over a
-MessagePort (`@xpute/runtime/remote.ts`: the UI's end, `connect`, is what the
-generated stubs send through; the runtime's, `serve`, posts back each import's
-frame placed with the UI, its packet and the memory it names copied before the
-runtime's head passes it), and what is large, the network's, the
+worker and the UI on the main thread, a MessagePort between them
+(`@xpute/runtime/remote.ts`) that carries frames: up, the UI's, a lifecycle
+call by name and a canvas transferred once; down, a reply or an import the UI
+takes, its packet and the memory it names copied before the runtime's head
+passes it, the GPU's state and the stop. What is large, the network's, the
 files' and the GPU's, stays in the worker. Both relations ride the same ring
 pair, told apart by a command's major; the runtime carries the UI's
 submissions on the submission ring without reading them. The UI meets the
 runtime directly only for the surfaces (a view lent to the GPU) and the
-lifecycle (boot, visibility), through the runtime's TypeScript API.
+lifecycle (boot, visibility), through its link (`Link`), which `start`
+gives on every platform: the runtime itself beside it, or `connect`'s across a
+port.
 
 The runtime grants real resources, a real region and a real deadline, and the
 core's library OS builds the program's abstractions over them; nothing is
@@ -105,7 +107,7 @@ keeps the front it has (`laid`). On its first turn the core computes the
 front from its machine and holds what the runtime laid to it
 (`xpute-core/machine.rs` `boot`): where a word differs it stops with
 `ENOEXEC`, the word's place and what it holds. The header names what the runtime
-laid, not where to look: MAGIC and VERSION, the rings' sizes and places, and
+laid, not where to look: MAGIC, the rings' sizes and places, and
 the GPU stream's.
 
 ```text
@@ -115,7 +117,7 @@ one core's memory; the front is the machine's, the rest the core's
    │ a module's stack                │
    ├─────────────────────────────────┤ head_at
    │ header                          │
-   │   MAGIC · VERSION               │
+   │   MAGIC                         │
    │   SQ_CAP · CQ_CAP · SLOT_BYTES  │
    │   SQ_AT ────────────────────────┼──┐
    │   CQ_AT ────────────────────────┼──┼──┐
@@ -177,14 +179,18 @@ own, as an NVMe controller posts an asynchronous event to its completion queue.
 ### Two ABIs, one number space
 
 A command is `major << 8 | minor` (`kit` `abi/cmd`), and who defines it decides
-its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F
-(`spec/abi/cmd.json`, `spec/abi/fs.json`). Its imports are the core's calls to
-its devices: the file device's (`FS_OPENAT`, `FS_READ`, `FS_WRITE`, `FS_CLOSE`)
-and `SYS_ABORT`, the report the core posts as it stops. Its exports are the
-runtime's interrupts: `SYS_ATTACH`, a runtime attached, the first time or again;
-`SYS_SUSPEND` and `SYS_RESUME`, calls around a hidden runtime; `GPU_READY`, the
-GPU the machine asked for answered. `NOP` is the rings' own test. What each life command means to keep or reset is the
-core's.
+its major. xpute's **predefined ABI** takes majors 0x00 to 0x0F, a protocol a
+device (`spec/abi/sys.json`, `spec/abi/gpu.json`, `spec/abi/fs.json`). Its
+imports are the core's calls to its devices: the file device's (`FS_OPENAT`,
+`FS_READ`, `FS_WRITE`, `FS_CLOSE`) and `SYS_ABORT`, the report the core posts as
+it stops. Its exports are the runtime's interrupts: `SYS_ATTACH`, a runtime
+attached, the first time or again; `SYS_SUSPEND` and `SYS_RESUME`, calls around
+a hidden runtime; `SYS_TURN`, a turn the scheduling policy grants, with the wall
+clock; `GPU_READY`, the GPU the machine asked for answered; `GPU_SURFACE_OPEN`,
+`GPU_SURFACE_RESIZE` and `GPU_SURFACE_CLOSE`, a surface the UI lends the GPU, by
+the handle the first answers; and `FS_CHANGED`, a file changed under the core.
+`NOP` is the rings' own test. What each life command means to keep or reset is
+the core's.
 
 The **app's ABI** takes majors from `PROGRAM_MAJOR`, 0x10, in protocol files of
 the app's own, each command an `export` or an `import`, `call` where its sender
@@ -369,7 +375,7 @@ for a turn when it fires. A core that asks for nothing is rung for nothing.
 The program says only whether turns may run (`Runtime.resume`, `pause`, each a
 no-op where it already holds) and asks for one where something the core did
 not hear of changed (`wake`); once the core stops, the scheduler rings it no
-more, and the mount tells the program (its config's `onterminated`). The
+more, and the mount tells the UI (its `stop`). The
 doorbell rings too, with a deadline of 0: to make room in a full SQ, to wait for a
 call's reply and to send a `cmd`.
 
@@ -516,7 +522,7 @@ writes a **stream** (`ipc/stream`): records laid end to end during a turn, and
 published by storing their count, END, with release. A page's runtime runs them,
 all of them, after the turn returns and before it rings again; a native GPU
 runtime runs them as END is stored, rung from the publish itself on the core's
-thread (`BootInfo::publish`). Either loads END with acquire before it reads a
+thread (`Form::publish`). Either loads END with acquire before it reads a
 record, and stores it back to 0 with release only after the last record has
 read what it names (wgpu's buffer and texture writes copy their input before
 they return); the core touches that memory again only once it has loaded END
@@ -586,7 +592,7 @@ FS_OPENAT ────────────────▶  FsServer ──�
 ◀── its RES, later ────────  FsServer ◀── bytes, or errno  one binding a root
 FS_CLOSE ─────────────────▶  FsServer ──── commit ──────▶  Fs
 ◀── its RES ───────────────  FsServer ◀── 0, or errno
-SYS_ABORT ────────────────▶  the mount ─── report ──────▶  onabort
+SYS_ABORT ────────────────▶  the mount ─── report ──────▶  log, and the UI
 ```
 
 The runtime's namespace (`@xpute/runtime/ipc/ns.ts` `Namespace`) is one such `Fs`, its
@@ -675,7 +681,7 @@ behind. The native runtime counts the frames it admitted until the queue's
 `on_submitted_work_done` (`GpuRuntime::admit`); the page's counts each turn whose
 stream took a surface's texture until the queue's `onSubmittedWorkDone`, and
 both tell the count in the device's block (spec/gpu DEVICE). The answer reaches
-the core with its boot (`BootInfo::admit`), which the program hands its
+the core with its boot (`Form::admit_frame`), which the program hands its
 renderer (`Admit`): beside a native core the runtime's own (`GpuRuntime::admit`),
 and in a module the block's count at the program's frame latency
 (`admit::page`). The GPU runtime runs by its config (`Config`): the program's numbers
@@ -730,8 +736,8 @@ Around them:
 
 0. **The front.** The runtime lays the header and both rings' headers before the
    core's first turn, as the machine places them. The core holds them to its
-   machine, and stops with `ENOEXEC` where a word differs; an unknown MAGIC or
-   VERSION is refused.
+   machine, and stops with `ENOEXEC` where a word differs; an unknown MAGIC is
+   refused.
 1. **The core memory.** Every address that crosses is an offset into it.
    Offset 0 names nothing, and nothing that crosses lies there.
 2. **The turn.** The core runs only inside `run`. The deadline is the core's to keep:
@@ -809,9 +815,10 @@ decides what must match.
   together in: it lays the front, binds xpute's majors to their servers, grants
   the GPU, sends `SYS_ATTACH` before anything else and runs the GPU's stream
   as each turn returns. What it gives speaks with the doorbell's verbs, `send`
-  and `call`, each asking the scheduler for a turn after, and `wake`, `resume`,
-  `pause` and `visible`, which tells the core at once (`SYS_SUSPEND`,
-  `SYS_RESUME`). Rust's (`rust/runtime`) reads a core's memory by offset on
+  and `call`, each asking the scheduler for a turn after, `fits`, `wake`,
+  `resume`, `pause` and `visible`, which tells the core at once
+  (`SYS_SUSPEND`, `SYS_RESUME`), and `bind` and `unbind`, a canvas lent to
+  the GPU. Rust's (`rust/runtime`) reads a core's memory by offset on
   every platform (`mem`), and on a unix one runtimes a core linked into the
   runtime's own native process (`native`). There it reserves the memory, and runs
   the core on its own thread, which loops while the core has work, since the

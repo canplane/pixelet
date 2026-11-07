@@ -115,11 +115,9 @@
       "name": "TURN_GRANT",
       "val": 7425,
       "$doc": [
-        "The frame of the turn the doorbell rang: the effects' turn, then the tick's phases in",
-        "what is left before the deadline, the fetches within the credits. The turn leaves",
-        "its imports on the completion ring, drawn by the kernel. It carries the runtime's alone:",
-        "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
-        "world surface's (SURFACE_RESIZE)."
+        "What the runtime's frame pacing grants the turn it rings next, and the network's",
+        "credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the",
+        "frame's budget, whether it follows an input, and the fetches its tick may start."
       ],
       "pkt": [
         {
@@ -142,19 +140,11 @@
         {
           "name": "credits",
           "type": "u32"
-        },
-        {
-          "name": "unix_ms",
-          "type": "f64",
-          "$doc": [
-            "The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and",
-            "the step the tick takes, its change since the last frame."
-          ]
         }
       ]
     },
     {
-      "name": "FS_MOUNT",
+      "name": "SOURCE_DECLARE",
       "val": 4865,
       "$doc": [
         "What the tile source declares of itself, once the client has it: the tile root's",
@@ -191,31 +181,6 @@
         }
       ],
       "call": true
-    },
-    {
-      "name": "FS_TRUNCATED",
-      "val": 4866,
-      "$doc": [
-        "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
-        "own again, what it held set aside by the client: the kernel reads it again, and writes",
-        "a storage file from then on."
-      ],
-      "pkt": [
-        {
-          "name": "root",
-          "type": "u32",
-          "$doc": [
-            "file.json's `root`."
-          ]
-        },
-        {
-          "name": "path",
-          "type": "str",
-          "$doc": [
-            "Its path below the root, as the kernel opened it."
-          ]
-        }
-      ]
     },
     {
       "name": "SENSOR_PERMISSION",
@@ -287,7 +252,7 @@
       "val": 4354,
       "$doc": [
         "A pointer event on the world's canvas, in CSS pixels from the top left of its layout box",
-        "(transforms aside), as the world surface's size is (SURFACE_RESIZE)."
+        "(transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE)."
       ],
       "pkt": [
         {
@@ -400,56 +365,10 @@
       ]
     },
     {
-      "name": "SURFACE_OPEN",
-      "val": 5377,
-      "$doc": [
-        "Answered later with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. It draws nothing until SCENE_DRAW says what."
-      ],
-      "ackreq": true
-    },
-    {
-      "name": "SURFACE_RESIZE",
-      "val": 5378,
-      "$doc": [
-        "The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."
-      ],
-      "pkt": [
-        {
-          "name": "surface",
-          "type": "u32"
-        },
-        {
-          "name": "width",
-          "type": "u32"
-        },
-        {
-          "name": "height",
-          "type": "u32"
-        },
-        {
-          "name": "device_pixel_ratio",
-          "type": "f64"
-        }
-      ]
-    },
-    {
-      "name": "SURFACE_CLOSE",
-      "val": 5379,
-      "$doc": [
-        "The canvas is going: what it drew and held on the device is let go."
-      ],
-      "pkt": [
-        {
-          "name": "surface",
-          "type": "u32"
-        }
-      ]
-    },
-    {
       "name": "SCENE_DRAW",
       "val": 5892,
       "$doc": [
-        "What a surface the shell opened draws, until its SURFACE_CLOSE. The world, with the",
+        "What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the",
         "sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface",
         "replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL",
         "where the character's fields are not all given for a character, any is given for the world, or no character is",
@@ -829,6 +748,10 @@
           "name": "len",
           "type": "u32"
         }
+      ],
+      "mem": [
+        "at",
+        "len"
       ]
     },
     {
@@ -897,12 +820,8 @@
           "val": 18
         },
         {
-          "name": "FS",
+          "name": "SOURCE",
           "val": 19
-        },
-        {
-          "name": "SURFACE",
-          "val": 21
         },
         {
           "name": "SETTING",
@@ -1009,40 +928,15 @@
       ]
     },
     {
-      "name": "FsMinor",
+      "name": "SourceMinor",
       "$doc": [
-        "The kernel's files: a root mounted, a storage file truncated."
+        "What the tile source declares of itself."
       ],
       "format": "hex2",
       "entries": [
         {
-          "name": "MOUNT",
+          "name": "DECLARE",
           "val": 1
-        },
-        {
-          "name": "TRUNCATED",
-          "val": 2
-        }
-      ]
-    },
-    {
-      "name": "SurfaceMinor",
-      "$doc": [
-        "A surface's: opened, resized, closed, and the frame drawn into the surfaces."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "OPEN",
-          "val": 1
-        },
-        {
-          "name": "RESIZE",
-          "val": 2
-        },
-        {
-          "name": "CLOSE",
-          "val": 3
         }
       ]
     },
@@ -1610,7 +1504,7 @@
           "$doc": [
             "The files the kernel refused, not of their format, not decoding, or too large for any",
             "heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The",
-            "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
+            "kernel read none of it and writes nothing over it until FS_CHANGED says it is",
             "empty."
           ]
         },

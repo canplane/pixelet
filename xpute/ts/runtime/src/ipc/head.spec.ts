@@ -15,11 +15,8 @@ import * as word from "./head/word.spec.ts";
 /** "XPUT" as four bytes read little-endian: what tells a header from memory nothing wrote. */
 export const MAGIC: u32 = 1414877272 as number;
 
-/** Raised when a word comes to mean something else. 1 was the toc's, a directory of keys. */
-export const VERSION: u32 = 2 as number;
-
 /** Where each of the header's words is, from its start. */
 export { word };
 
 /** Words the header takes. */
-export const WORDS: u32 = 8 as number;
+export const WORDS: u32 = 7 as number;

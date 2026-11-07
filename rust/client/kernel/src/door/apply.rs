@@ -1,7 +1,9 @@
 // pxl-kernel/door/apply.rs
 
 //! The shell's commands, applied: the kernel's answer to each command the
-//! shell's protocol carries, each major's by its own module beside.
+//! shell's protocol carries, each major's by its own module beside; and
+//! xpute's that the door hands over as what they mean, a surface lent, a turn's
+//! pacing and a file changed (`on_surface`, `on_turn`, `on_changed`).
 
 mod camera;
 mod edit;
@@ -17,7 +19,9 @@ mod turn;
 use super::State;
 use crate::domain::control::cmd::{self as abi, shell};
 use crate::sys::sched::edge;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::abi::fs::FsChanged;
+use xpute_core::abi::sys::SysTurn;
+use xpute_core::ipc::door::{Outcome, Surface};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
@@ -49,6 +53,25 @@ fn ask_turn(s: &mut State) -> Outcome {
     Ok(Some(0))
 }
 
+/// A surface the shell lends the GPU (GPU_SURFACE_OPEN, _RESIZE, _CLOSE).
+pub(super) fn on_surface(c: Surface) -> Outcome {
+    match c {
+        Surface::Open => surface::open(),
+        Surface::Resize(c) => surface::resize(c),
+        Surface::Close(c) => surface::close(c),
+    }
+}
+
+/// A turn the runtime's policy grants, and the clock (SYS_TURN).
+pub(super) fn on_turn(c: SysTurn) -> Outcome {
+    turn::turn(c)
+}
+
+/// A file changed under the kernel (FS_CHANGED).
+pub(super) fn on_changed(c: FsChanged<'_>) -> Outcome {
+    fs::changed(c)
+}
+
 impl shell::Exports for State {
     fn sensor_pos(&mut self, c: abi::SensorPos) -> Outcome {
         sensor::pos(c)
@@ -74,20 +97,8 @@ impl shell::Exports for State {
     fn turn_grant(&mut self, c: abi::TurnGrant) -> Outcome {
         turn::grant(c)
     }
-    fn surface_open(&mut self) -> Outcome {
-        surface::open()
-    }
-    fn surface_resize(&mut self, c: abi::SurfaceResize) -> Outcome {
-        surface::resize(c)
-    }
-    fn surface_close(&mut self, c: abi::SurfaceClose) -> Outcome {
-        surface::close(c)
-    }
-    fn fs_mount(&mut self, c: abi::FsMount<'_>) -> Outcome {
-        fs::mount(c)
-    }
-    fn fs_truncated(&mut self, c: abi::FsTruncated<'_>) -> Outcome {
-        fs::truncated(c)
+    fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
+        fs::declare(c)
     }
     fn input_pointer(&mut self, c: abi::InputPointer) -> Outcome {
         input::pointer(c)

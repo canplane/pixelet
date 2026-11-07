@@ -21,7 +21,7 @@ pub struct Ask {
 }
 
 impl Ask {
-    /// The device the machine's GPU grant asks for: its power and features,
+    /// The device the machine's GPU asks for: its power and features,
     /// with the adapter's own limits and the platform's primary backends.
     pub fn of(gpu: &xpute_core::machine::Gpu) -> Ask {
         Ask {

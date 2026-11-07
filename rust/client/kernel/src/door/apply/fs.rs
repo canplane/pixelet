@@ -1,6 +1,7 @@
 // pxl-kernel/door/apply/fs.rs
 
-//! FS: the kernel's files: a root mounted, a refused file truncated.
+//! The kernel's files: the tile source declared (SOURCE_DECLARE), and a file
+//! changed under it (xpute's FS_CHANGED): a refused one set aside, read again.
 
 use super::{or_refuse, refuse_unless};
 use crate::domain::control::cmd as abi;
@@ -9,10 +10,11 @@ use crate::domain::view::setting::store;
 use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::file_spec::root;
 use crate::sys::io::source;
+use xpute_core::abi::fs::FsChanged;
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
-pub(super) fn mount(c: abi::FsMount<'_>) -> Outcome {
+pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
     refuse_unless(
         source::declare(c.top_zoom, c.format, c.shard.iter()).is_ok(),
         Errno::EINVAL,
@@ -20,7 +22,7 @@ pub(super) fn mount(c: abi::FsMount<'_>) -> Outcome {
     Ok(Some(0))
 }
 
-pub(super) fn truncated(c: abi::FsTruncated<'_>) -> Outcome {
+pub(super) fn changed(c: FsChanged<'_>) -> Outcome {
     match c.root {
         root::STORAGE => {
             let file = or_refuse(

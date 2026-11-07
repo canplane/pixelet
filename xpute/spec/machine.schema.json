@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/canplane/xpute/spec/machine.schema.json",
   "title": "xpute machine",
-  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU its core asks for (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the runtime, and on the core MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/cmd.json, spec/abi/fs.json) are protocol files too.",
+  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU its core asks for (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the runtime, and on the core MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/sys.json, spec/abi/gpu.json, spec/abi/fs.json) are protocol files too.",
   "type": "object",
   "required": ["$doc"],
   "properties": {
@@ -193,7 +193,8 @@
           "description": "Posted with ACKREQ and answered later, never waited for. An `import`, its tag the core's: the runtime completes it on a later turn with a frame of the same tag and command flagged RES on the submission ring, its result and `reply`'s packet. An `export`, its tag the runtime's: the core replies as it applies it, with its result, on the completion ring.",
           "type": "boolean"
         },
-        "reply": { "description": "An `ackreq` import's completion's packet, its fields in order.", "type": "array", "items": { "$ref": "#/$defs/field" } }
+        "reply": { "description": "An `ackreq` import's completion's packet, its fields in order.", "type": "array", "items": { "$ref": "#/$defs/field" } },
+        "mem": { "description": "An import's two fields that name the core's memory, where it is and how long: a runtime hands a UI apart from the core a copy.", "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
       }
     },
     "field": {

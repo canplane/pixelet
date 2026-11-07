@@ -10,11 +10,11 @@ import {
   type PointerPhase as PlacePhase,
 } from "@/service/types.ts";
 import * as sensor from "@/service/sensor.ts";
-import { control, kernel } from "@/runtime/kernel.ts";
+import { kernel, ui } from "@/runtime/kernel.ts";
 
 /** The next turn made interactive, as an input asks. */
 export function interactive(): void {
-  control.input();
+  ui.input();
 }
 
 export function pointer(
@@ -41,17 +41,17 @@ export function keys(x: i32, y: i32): void {
 
 /** The world's view opened: turns run while it is open. */
 export function open(): () => void {
-  control.resume();
+  ui.resume();
   const unfollow = sensor.follow();
   return () => {
     unfollow();
-    control.pause();
+    ui.pause();
   };
 }
 
 /** A turn asked for now, as a moved box needs one. */
 export function frame(): void {
-  control.wake();
+  ui.wake();
 }
 
 /** A place's pointer phase, as the kernel numbers it. */
