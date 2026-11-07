@@ -584,3 +584,8 @@ the beam, 80 k in the samples and 50–80 k in the holes, up to 2 M, and of 1.9 
 list holds at least that many; the cells it hides are not counted. At the reach of 96 units and
 a leaf of 1 unit the read disc is about 29 k columns, the sunward sweep more. That puts a list
 near 100 k cells here, a tenth of the 1 M 11-06 assumed. Its time on the S23 is not measured.
+
+**The stops' room, 2^18 against the deployed build's 2^19, closed.** It differs only in a frame
+of 2^18 to 2^19 holes. Three 4K drives held 3 such frames of 1107; 174 passed 2^19, past either
+room. **The save at a suspend, closed.** A hidden page saves at once (door/life.rs) and an edit
+goes with its turn; what is left is a hide in a turn with no write left, which nothing has shown.
