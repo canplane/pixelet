@@ -532,3 +532,9 @@ So `light_hit`, the largest span of the S23's p95, is the holes' first walk over
 rays. Keeping tiles across a depth step was weighed and dropped: a kept slot's ray would start
 a step from a fresh one's, half the slots end as sky and would owe the strip the step added,
 and the tile would have to carry which plane it was cast under.
+
+**"Fewer rocks at the far zoom" was the clouds.** The drive's shots were taken at different
+zooms. Held at the far end, the same input on both, 4K: main against the deployed build differ
+at rest and a second into a turn in 0.8–0.9% of the pixels, all of them the white lumps, the
+panel's text and the compass. The lumps are the cumulus, the same ones shifted, which drift by
+the wall clock, and the two runs were a minute and a half apart. The ground is alike.
