@@ -16,9 +16,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   p95 1.2×; the bar is 2×. The p95 is the light's. On the Mac's drive, 43% of the light's time is
   the box's depth stepping as the eye moves along the light, which casts every tile read
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
-- **A dark band along the horizon at the farthest zoom.** One-frame black frames fell
-  from 11–18 to 5–9 a drive at 4K, the largest from 44–63% of the canvas to 16–18%;
-  what is left is not explained.
 - **Safari pins its GPU with shadows on.** Since 9e476eca74 every pipeline compiles on
   Safari 27; with shadows on the GPU sat at 100%, before the indirect-scope fix
   (034ddad063) and the rest fixes. Recheck on main.

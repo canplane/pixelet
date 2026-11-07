@@ -538,3 +538,11 @@ zooms. Held at the far end, the same input on both, 4K: main against the deploye
 at rest and a second into a turn in 0.8–0.9% of the pixels, all of them the white lumps, the
 panel's text and the compass. The lumps are the cumulus, the same ones shifted, which drift by
 the wall clock, and the two runs were a minute and a half apart. The ground is alike.
+
+**The dark band along the horizon, not found again.** Its cause was the parked beam rays and
+the holes they left (56e388dc33), and neither exists since a ray ends in its frame. Two 4K
+drives on main, a shot every 75 ms at a quarter of the size, 687 shots, 152 of them at the far
+end: none has a band. Dark under the horizon there is the clouds' underside or the space over
+the limb, in the shots before and after alike. At the earlier count of 5–9 a drive, about one
+frame in three shot, some would have shown. The near end's dark shots are the inside of a
+grass block the camera passes through.
