@@ -1149,12 +1149,13 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             "the leaf clip level holds the brick"
         );
         row[2..].fill(0);
-        brick_columns.push(light::column_of(
+        light::brick_columns(
             bricks_case.origin,
             LEAF_CELL,
-            [q[0] << s, q[1] << s],
-            [(q[0] + 1) << s, (q[1] + 1) << s],
-        ));
+            q,
+            |_| false,
+            |c| brick_columns.push(c),
+        );
     }
     real_world::fold(
         &mut was,
@@ -1164,6 +1165,40 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         &built.pool,
     );
     let before = bufs(&was);
+
+    // A brick over the leaf's handed: a band finer reads it only where the leaf's are not
+    // present.
+    let over_case = Case {
+        name: "a brick over the leaf's handed",
+        ..bricks_case
+    };
+    let row_of = |cell: Zoom, q: [i32; 2]| {
+        ((cell - FIRST_CELL) * ENTRIES) as usize + clipmap::entry(q) as usize
+    };
+    let (coarser, q) = (FIRST_CELL..LEAF_CELL)
+        .rev()
+        .map(|cell| (cell, g.map(|v| v >> (s + LEAF_CELL - cell))))
+        .find(|&(cell, q)| Entry::of(now[row_of(cell, q)]).holds(q))
+        .expect("a clip level over the leaf's holds a brick");
+    eprintln!("the brick over the leaf's at {coarser}, the leaf's at {LEAF_CELL}");
+    let mut was_over = now.clone();
+    was_over[row_of(coarser, q)][2..].fill(0);
+    let mut over_columns = Vec::new();
+    light::brick_columns(
+        over_case.origin,
+        coarser,
+        q,
+        |c| Entry::of(now[row_of(coarser + 1, c)]).holds(c),
+        |c| over_columns.push(c),
+    );
+    real_world::fold(
+        &mut was_over,
+        &built.ground,
+        &built.palette,
+        &built.shards,
+        &built.pool,
+    );
+    let before_over = bufs(&was_over);
 
     // A preview's cut moved: none before, one over what is placed after.
     let (_, leaf_c) = built
@@ -1189,12 +1224,12 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         least: &[],
     };
     let b = overwrite::cut_box(cut.zoom, cut.at);
-    let cut_columns = vec![light::column_of(
+    let cut_columns = vec![light::Column::every_band(light::column_of(
         cut_case.origin,
         LEAF_CELL,
         [b[0], b[1]],
         [b[2], b[3]],
-    )];
+    ))];
 
     let mut failed = Vec::new();
     let changes = [
@@ -1210,6 +1245,19 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             ],
             [[Cut::NONE; 2]; 2],
             brick_columns,
+        ),
+        (
+            &over_case,
+            [&before_over, &after],
+            [
+                World {
+                    clipmap: &was_over,
+                    ..built.world()
+                },
+                built.world(),
+            ],
+            [[Cut::NONE; 2]; 2],
+            over_columns,
         ),
         (
             &cut_case,

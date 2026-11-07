@@ -191,7 +191,7 @@ fn hand_slide_forgets_what_moved() {
 }
 
 /// A world's change: its name, the light's direction, and its columns.
-type Change = (&'static str, [f32; 3], &'static [[f32; 4]]);
+type Change = (&'static str, [f32; 3], &'static [[f32; 4]], [Zoom; 2]);
 
 #[test]
 fn hand_slide_forgets_what_a_world_change_reaches() {
@@ -204,30 +204,41 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     let (mut kept, mut off, mut extra) = (0u32, 0u32, 0u32);
     let corner = [1304, -896];
     // Columns from the eye, in units: a brick's, an edit's a few cells wide, one far off the
-    // box, and the world's whole width.
-    let changes: [Change; 4] = [
+    // box, the world's whole width, and that width read by one band alone.
+    const EVERY: [Zoom; 2] = [0, Zoom::MAX];
+    let changes: [Change; 5] = [
         (
             "a brick under the eye, the light high",
             [0.3, 0.2, -0.93],
             &[[0.0, 0.0, 64.0, 64.0]],
+            EVERY,
         ),
         (
             "two edits, the light low",
             [0.8, 0.1, -0.3],
             &[[-20.0, 5.0, -17.0, 9.0], [30.0, -40.0, 31.0, -39.0]],
+            EVERY,
         ),
         (
             "far off the box",
             [0.3, 0.2, -0.93],
             &[[9000.0, 9000.0, 9064.0, 9064.0]],
+            EVERY,
         ),
         (
             "the world's width",
             [0.3, 0.2, -0.93],
             &[[-1.0e30, 10.0, 1.0e30, 74.0]],
+            EVERY,
+        ),
+        (
+            "the world's width, read by the leaf's band alone",
+            [0.3, 0.2, -0.93],
+            &[[-1.0e30, 10.0, 1.0e30, 74.0]],
+            [LEAF_CELL, LEAF_CELL],
         ),
     ];
-    for (n, (name, dir, columns)) in changes.into_iter().enumerate() {
+    for (n, (name, dir, columns, bands)) in changes.into_iter().enumerate() {
         let l = box_of(dir, 0.0625, 0.75, corner);
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
@@ -236,7 +247,9 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         let at = 4 * light::COLUMNS_AT;
         head[at] = columns.len() as u32;
         for (k, c) in columns.iter().enumerate() {
-            head[at + 4 * (1 + k)..at + 4 * (2 + k)].copy_from_slice(&c.map(f32::to_bits));
+            let w = at + 4 * (1 + 2 * k);
+            head[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
+            head[w + 4..w + 6].copy_from_slice(&bands);
         }
         let have = run_with(&gpu, &p, &l, &list, head);
         let reads = light::reads_at(SIZE);
@@ -245,7 +258,11 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         for j in 0..N {
             for i in 0..N {
                 let word = have[(reads + j * N + i) as usize];
-                if !columns.iter().any(|&c| l.reaches(SIZE, RANGE, [i, j], c)) {
+                let column = |&at: &[f32; 4]| light::Column { at, bands };
+                if !columns
+                    .iter()
+                    .any(|c| l.reaches(SIZE, RANGE, [i, j], column(c)))
+                {
                     case_kept += 1;
                     extra += u32::from(word == 0);
                     continue;

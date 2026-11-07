@@ -25,7 +25,7 @@ use crate::grid;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
 use crate::ray;
-use crate::{axis, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
+use crate::{axis, clipmap, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, UNIT_ZOOM};
 use core::f32::consts::SQRT_2;
 
 /// The light's cast as the eye's words hold it (`eye::LIGHT`), a frame's
@@ -299,9 +299,14 @@ impl Light {
     /// rounding of the rays' starts (`Starts`). The tile's rays, seen from above, sweep the
     /// parallelogram of its texels on the near plane along the light to their reach: a
     /// hexagon of three edges each twice, which the grown column misses where one of five
-    /// axes parts them, X, Y and across each edge.
-    pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], column: [f32; 4]) -> bool {
+    /// axes parts them, X, Y and across each edge. A band outside the column's reads none of
+    /// what moved there (`Column`).
+    pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], column: Column) -> bool {
         let band = self.band(size, range, [tile[0] as i32, tile[1] as i32]);
+        if band < column.bands[0] || band > column.bands[1] {
+            return false;
+        }
+        let column = column.at;
         let grow = libm::ldexpf(1.0, UNIT_ZOOM as i32 - band as i32) + self.width();
         let lo = [column[0] - grow, column[1] - grow];
         let hi = [column[2] + grow, column[3] + grow];
@@ -434,8 +439,83 @@ pub fn column_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f
     [x0, y(lo[1]), x1, y(hi[1])].map(|v| (v * unit) as f32)
 }
 
-/// How many changed columns a cast is handed (`COLUMNS_AT`); a change of more casts the map
-/// whole.
+/// Where the world changed, as the tiles read it (`Light::reaches`): the columns it changed
+/// in (`column_of`) and the bands that read them, the first and the last.
+#[derive(Clone, Copy, Debug)]
+pub struct Column {
+    pub at: [f32; 4],
+    pub bands: [Zoom; 2],
+}
+
+impl Column {
+    /// A change every band reads: what is placed or cut, which a cell of any zoom folds.
+    pub const fn every_band(at: [f32; 4]) -> Column {
+        Column {
+            at,
+            bands: [0, Zoom::MAX],
+        }
+    }
+
+    /// Taken `c` in: it holds both, every column and band of either, as the head's last
+    /// column holds those past its room (`COLUMNS`).
+    pub fn hold(&mut self, c: Column) {
+        self.at = [
+            self.at[0].min(c.at[0]),
+            self.at[1].min(c.at[1]),
+            self.at[2].max(c.at[2]),
+            self.at[3].max(c.at[3]),
+        ];
+        self.bands = [self.bands[0].min(c.bands[0]), self.bands[1].max(c.bands[1])];
+    }
+}
+
+/// The columns brick `q` at `cell` moved, as the tiles read them, each handed to `put`. A band
+/// reads a cell off the finest clip level at or over it holding it present (`clipmap::step`,
+/// `held_to`). So the band at `cell` reads the whole brick, and a band finer reads it only
+/// where no brick at the next zoom is present (`present`): one column for those bands, joining
+/// the bricks not present, or the brick's one where none is. A band coarser reads none of it.
+pub fn brick_columns(
+    origin: [i32; 3],
+    cell: Zoom,
+    q: [i32; 2],
+    present: impl Fn([i32; 2]) -> bool,
+    mut put: impl FnMut(Column),
+) {
+    let s = clipmap::BRICK_SHIFT;
+    let at = |zoom: Zoom, lo: [i32; 2], hi: [i32; 2]| {
+        column_of(origin, zoom, lo.map(|v| v << s), hi.map(|v| v << s))
+    };
+    let first = if cell == clipmap::FIRST_CELL { 0 } else { cell };
+    let (mut lo, mut hi, mut absent) = ([i32::MAX; 2], [i32::MIN; 2], 0);
+    for k in 0..4 {
+        let child = [2 * q[0] + (k & 1), 2 * q[1] + (k >> 1)];
+        if cell >= LEAF_CELL || !present(child) {
+            lo = [lo[0].min(child[0]), lo[1].min(child[1])];
+            hi = [hi[0].max(child[0] + 1), hi[1].max(child[1] + 1)];
+            absent += 1;
+        }
+    }
+    let whole = at(cell, q, [q[0] + 1, q[1] + 1]);
+    if absent == 4 {
+        return put(Column {
+            at: whole,
+            bands: [first, Zoom::MAX],
+        });
+    }
+    put(Column {
+        at: whole,
+        bands: [first, cell],
+    });
+    if absent != 0 {
+        put(Column {
+            at: at(cell + 1, lo, hi),
+            bands: [cell + 1, Zoom::MAX],
+        });
+    }
+}
+
+/// How many changed columns a cast is handed (`COLUMNS_AT`); one past them is taken into the
+/// last (`Column::hold`).
 pub const COLUMNS: usize = 64;
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
@@ -445,7 +525,7 @@ pub const COLUMNS: usize = 64;
 /// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
 /// `STARTS_AT`), then what the host draws that reads the map (`STANDS_AT`), then the list's places for the passes by hand
 /// (`HEAD_CELLS`), then the world's columns that changed (`COLUMNS_AT`).
-pub const HEAD_VEC4S: usize = COLUMNS_AT + 1 + COLUMNS;
+pub const HEAD_VEC4S: usize = COLUMNS_AT + 1 + 2 * COLUMNS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// The cast's number, counted up from one each cast, which a tile it lists to cast is marked
 /// with (`listed_marks_at`) and a tile it claims named by (`reads_at`).
@@ -513,8 +593,8 @@ pub const HEAD_HITS: usize = HEAD_POOL + 1;
 pub const HEAD_RANGE_WAS: usize = HEAD_HITS + 1;
 const HEAD_LAID_VEC4S: usize = 10;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
-/// on (`column_of`, `Light::reaches`): how many, the first word of a vec4, then each a vec4
-/// of four floats, as many as `COLUMNS`.
+/// on (`Column`, `Light::reaches`): how many, the first word of a vec4, then each two vec4s,
+/// its four floats and its first and last band, as many as `COLUMNS`.
 pub const COLUMNS_AT: usize = STANDS_AT + 1 + 2 * STANDS + HEAD_LAID_VEC4S;
 const _: () = assert!(
     HEAD_RANGE_WAS + 1 < HEAD_CELLS + 4 * HEAD_LAID_VEC4S,
@@ -1183,6 +1263,21 @@ pub fn depth<A>(s: &Light, met: &Trace<A>) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// A column taken into another holds both, every column and band of either.
+    #[test]
+    fn a_column_held_holds_both() {
+        let mut a = Column {
+            at: [0.0, 0.0, 1.0, 1.0],
+            bands: [22, 22],
+        };
+        a.hold(Column {
+            at: [-5.0, 2.0, -4.0, 9.0],
+            bands: [20, 21],
+        });
+        assert_eq!(a.at, [-5.0, 0.0, 1.0, 9.0]);
+        assert_eq!(a.bands, [20, 22]);
+    }
+
     extern crate std;
 
     use super::*;

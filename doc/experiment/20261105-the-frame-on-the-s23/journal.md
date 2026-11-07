@@ -466,3 +466,37 @@ asks left ends as a lack. `Counter` keeps the `ray_counts` setting's copy alone.
   drew 840–1004 frames at 20–30 ms; main draws the scene's animation at its own rate, more
   often. The profiler's interval now spans the turns not run.
 - **Open:** fewer rocks at the far zoom in the drive's shots than the deployed build's.
+
+## 11-08, why the light casts again
+
+Main at 497bdf6062. Mac 4K, `pxl.perf.drive(20)` with `ray_counts` on, one fresh page a run,
+each frame's `light_moved` read off the trace; a probe, not kept, split the light's frame
+(`Shadow::generation`) into its key's parts and the world's whole change from its columns. The
+light's spans (`light_beam_hit` to `light_walk`) summed by why the frame cast:
+
+| why | frames | light ms | share |
+|---|---|---|---|
+| the box's depth stepped (the eye along the light) | 302 | 1129 | 43% |
+| bricks and edits, by their columns | 144 | 956 | 37% |
+| the box slid, or the eye's zooms stepped | 53 | 321 | 12% |
+| tiles read anew | 217 | 192 | 7% |
+
+- **Not as first said:** the 11-07 line put the p95 on the epoch with the sun's and the zoom
+  sweep's moves among its causes. The drive holds the sky at 07:00, the box's width is a
+  constant (`EFFECT_REACH`), and a step of the eye's zooms is a slide, not an epoch. Of 288
+  epochs in a second run, 261 were the depth step alone and 27 the depth step with the sun.
+- **A brick's columns read by the bands that read it** (`light::Column`, `brick_columns`): a
+  tile answers at its band, off the finest clip level at or over the band holding the cell
+  present (`clipmap::step`), so a brick at a zoom moves the tiles of its band, and of the bands
+  finer only where the next zoom's bricks are not present; a band coarser reads none of it.
+  Before, every band over the brick's column was cast again. The light's GPU tests hold it
+  (`a_world_change_keeps_the_tiles_it_does_not_reach` with a brick over the leaf's, kept
+  slots' walks alike; `hand_slide_forgets_what_a_world_change_reaches` with a column one band
+  reads). Two runs after against the one before: the columns' light ms 956 to 601 and 847, the
+  frames that cast the map whole 1375 to 833 and 1247 light ms. Run to run differs as much;
+  the gain is not separated from it. A column now carries its bands, the head two vec4s a
+  column. A column past the head's 64 is taken into the last, as the draws' stands are,
+  where it cast the map whole: one branch and one cause of a whole cast fewer.
+- **Open:** the depth step. A slot's word is a share of the box's depth from its near plane,
+  so the box stepped along the light makes every word another depth and every ray another
+  start. Keeping them across a step changes "a texel kept is the same ray"; proposed apart.

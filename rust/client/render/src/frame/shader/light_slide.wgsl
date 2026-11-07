@@ -15,11 +15,15 @@
 // (`light::STOOD_SLIDE`), after the receivers stood, before the propagation.
 
 /// Whether box tile `tile`'s rays, at its band, may meet a cell over the world's column `c`,
-/// `[x0, y0, x1, y1]` units from the eye (`Light::reaches`): the column grown by a cell of the
-/// band and a texel, against the hexagon the tile's texels sweep along the light seen from
-/// above, on X, Y and across each of its three edges.
-fn reaches(tile: vec2<u32>, c: vec4<f32>) -> bool {
+/// `[x0, y0, x1, y1]` units from the eye (`Light::reaches`), where its band is among `bands`,
+/// the first and the last that read the change: the column grown by a cell of the band and a
+/// texel, against the hexagon the tile's texels sweep along the light seen from above, on X, Y
+/// and across each of its three edges.
+fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
   let band = tile_band(vec2<i32>(tile));
+  if (band < bands.x || band > bands.y) {
+    return false;
+  }
   let grow = ldexp(1.0, i32(UNIT_ZOOM) - i32(band)) + eye_f32(LIGHT + LIGHT_WIDTH);
   let lo = c.xy - vec2<f32>(grow);
   let hi = c.zw + vec2<f32>(grow);
@@ -63,7 +67,8 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The head holds `LIGHT_COLUMNS` columns at most (pxl-engine `light::COLUMNS`).
   let columns = min(u32(head[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
   for (var k = 0u; k < columns && !reached; k += 1u) {
-    reached = reaches(id.xy, bitcast<vec4<f32>>(head[LIGHT_COLUMNS_AT + 1u + k]));
+    let at = LIGHT_COLUMNS_AT + 1u + 2u * k;
+    reached = reaches(id.xy, bitcast<vec4<f32>>(head[at]), bitcast<vec2<u32>>(head[at + 1u].xy));
   }
   if (reached) {
     list_put(reads_at() + id.y * tiles + id.x, 0u);

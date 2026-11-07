@@ -8,7 +8,7 @@ use super::sequence;
 use crate::frame::shader::access::Step;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
-use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, screen, LEAF_CELL};
+use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, screen, Zoom, LEAF_CELL};
 use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -245,8 +245,8 @@ pub(super) struct CastBuffers {
     light_slide_owed: u32,
     /// What a tile of the shadow map holds follows, as the light's cast last
     /// read it (`Read`): the light's frame (`Shadow::generation`), whether
-    /// shadows are cast, the eye's zooms, and whether the world under it
-    /// moved; one moving begins an epoch (`light_epoch`). The box follows the eye a tile at a
+    /// shadows are cast, and whether the world under it moved whole; one
+    /// moving begins an epoch (`light_epoch`). The box follows the eye a tile at a
     /// time, and a tile's band is its place in it alone (`Light::band`), so nothing else of the
     /// eye's place moves what a tile holds: where the box slid within the epoch
     /// (`schedule::Light::slid`), the reads move with it, and the tiles it slid onto or into
@@ -269,7 +269,7 @@ pub(super) struct CastBuffers {
     /// The world's columns that changed this frame, units from the eye (pxl-engine
     /// `light::column_of`): the cast sets again only the tiles whose rays may meet them
     /// (`Light::reaches`), where the epoch goes on.
-    light_columns: Vec<[f32; 4]>,
+    light_columns: Vec<light::Column>,
     /// What each frame runs of the eye's rays and the light's, and the state its plans step
     /// (ray/schedule.rs).
     schedule: Schedule,
@@ -1051,7 +1051,7 @@ impl RaysPass {
                 word_bytes(light::HEAD_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            light_columns: Vec::with_capacity(light::COLUMNS + 1),
+            light_columns: Vec::with_capacity(light::COLUMNS),
             schedule: Schedule::new(),
             record_drawn: false,
             light_idle: [0; 3].map(|_| {
@@ -1256,14 +1256,21 @@ impl RaysPass {
         let origin = [0, 1, 2].map(|k| eye[eye::ORIGIN + k] as i32);
         let columns = &mut c.light_columns;
         columns.clear();
-        let leaf = |b: [i32; 4]| light::column_of(origin, LEAF_CELL, [b[0], b[1]], [b[2], b[3]]);
+        let leaf = |b: [i32; 4]| {
+            light::Column::every_band(light::column_of(
+                origin,
+                LEAF_CELL,
+                [b[0], b[1]],
+                [b[2], b[3]],
+            ))
+        };
         for &b in edits {
             hold(&mut c.boxes, &mut c.holding, b);
-            columns.push(leaf(b));
+            put_column(columns, leaf(b));
         }
         cut_boxes(&c.cuts, &cuts, |b| {
             hold(&mut c.boxes, &mut c.holding, b);
-            columns.push(leaf(b));
+            put_column(columns, leaf(b));
         });
         // What the node cache kept is forgotten where the service area
         // or what is placed moved past the boxes; so it is once its frames
@@ -1278,6 +1285,12 @@ impl RaysPass {
         // The eye's clip levels' entries that hold another brick, or whose
         // brick the turn handed: what is over them is asked again.
         let eye_rows = (clipmap::EYE_CLIP_LEVELS * clipmap::ENTRIES) as usize;
+        let rows = &cast.clipmap[..4 * eye_rows];
+        let entry = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]);
+        let present = |cell: Zoom, q: [i32; 2]| {
+            let k = ((cell - clipmap::FIRST_CELL) * clipmap::ENTRIES + clipmap::entry(q)) as usize;
+            entry(&rows[4 * k..4 * k + 4]).holds(q)
+        };
         // Of the clip levels, a walk's hit reads the cells of the bricks
         // they hold present, each at its own place, every other read a
         // bound over them that holds whichever of them are: so they moved
@@ -1289,11 +1302,9 @@ impl RaysPass {
         // coarser one alike.
         let mut present_moved = false;
         if clipmap_moved {
-            let rows = &cast.clipmap[..4 * eye_rows];
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
                 let was = c.entries.get(4 * k..4 * k + 4);
-                let entry = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]);
                 if was.is_none_or(|w| entry(row).moved_from(entry(w))) {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
@@ -1319,20 +1330,17 @@ impl RaysPass {
                     None => (now.1, false),
                 };
                 let cell = clipmap::FIRST_CELL + (k / clipmap::ENTRIES as usize) as u32;
-                let brick = |q: [i32; 2]| {
-                    let s = clipmap::BRICK_SHIFT;
-                    light::column_of(
-                        origin,
-                        cell,
-                        [q[0] << s, q[1] << s],
-                        [(q[0] + 1) << s, (q[1] + 1) << s],
-                    )
+                let mut moved = |q: [i32; 2]| {
+                    let finer = |q: [i32; 2]| present(cell + 1, q);
+                    light::brick_columns(origin, cell, q, finer, |v| {
+                        put_column(&mut c.light_columns, v);
+                    });
                 };
                 if taken {
-                    c.light_columns.push(brick(now.0));
+                    moved(now.0);
                 }
                 if let (true, Some((q, _))) = (gone, was) {
-                    c.light_columns.push(brick(q));
+                    moved(q);
                 }
                 present_moved |= match was {
                     Some((brick, present)) => {
@@ -1362,13 +1370,10 @@ impl RaysPass {
                     f[FILL_CELL as usize],
                     clipmap::brick_of_first([f[FILL_FIRST as usize], f[FILL_FIRST as usize + 1]]),
                 );
-                let s = clipmap::BRICK_SHIFT;
-                c.light_columns.push(light::column_of(
-                    origin,
-                    cell,
-                    [q[0] << s, q[1] << s],
-                    [(q[0] + 1) << s, (q[1] + 1) << s],
-                ));
+                let finer = |q: [i32; 2]| present(cell + 1, q);
+                light::brick_columns(origin, cell, q, finer, |v| {
+                    put_column(&mut c.light_columns, v);
+                });
                 let w = cell.wrapping_sub(clipmap::FIRST_CELL);
                 let k = (w * clipmap::ENTRIES + clipmap::entry(q)) as usize;
                 let row = &cast.clipmap[4 * k..4 * k + 4];
@@ -1416,10 +1421,8 @@ impl RaysPass {
         r.begin();
         r.read(&[light_map.1, u32::from(shadows)]);
         // The world under it moved whole where the node cache forgets it whole, or where no
-        // column or more than a cast is handed says what changed; else only the tiles its
-        // columns reach are cast again.
-        let n = c.light_columns.len();
-        let world_whole = world_moved && (c.forget || n == 0 || n > light::COLUMNS);
+        // column says what changed; else only the tiles its columns reach are cast again.
+        let world_whole = world_moved && (c.forget || c.light_columns.is_empty());
         r.mark(world_whole);
         let content_same = r.end();
         let world_columns = world_moved && !world_whole;
@@ -1560,8 +1563,9 @@ impl RaysPass {
             if due.reached {
                 head[at] = c.light_columns.len() as u32;
                 for (k, col) in c.light_columns.iter().enumerate() {
-                    let w = at + 4 * (1 + k);
-                    head[w..w + 4].copy_from_slice(&col.map(f32::to_bits));
+                    let w = at + 4 * (1 + 2 * k);
+                    head[w..w + 4].copy_from_slice(&col.at.map(f32::to_bits));
+                    head[w + 4..w + 6].copy_from_slice(&col.bands);
                 }
             }
             g.write_buf(c.light_head, 0, bytes(&head));
@@ -2881,4 +2885,15 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
     g.set_pipeline(pass, last.id);
     g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     pass
+}
+
+/// Column `c` put among `columns`, as many as the light's head holds (pxl-engine
+/// `light::COLUMNS`): past them taken into the last, as the host's draws' stands are
+/// (frame/draw.rs `stand`).
+fn put_column(columns: &mut Vec<light::Column>, c: light::Column) {
+    let full = columns.len() == light::COLUMNS;
+    match columns.last_mut() {
+        Some(last) if full => last.hold(c),
+        _ => columns.push(c),
+    }
 }
