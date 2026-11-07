@@ -4,9 +4,9 @@
 //! _CLOSE): opened, resized and closed.
 
 use super::{or_refuse, refuse_unless};
-use crate::domain::control::input::camera_view_resize;
 use crate::domain::control::sensor;
 use crate::domain::scene::resolution;
+use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
@@ -35,7 +35,7 @@ pub(super) fn draw_world(handle: u32) -> bool {
     sensor::sensors_open();
     if s.px_w != 0 {
         s.ratio = resolution::surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
-        camera_view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);
+        view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);
     }
     request_world_tick();
     true
@@ -51,7 +51,7 @@ pub(super) fn resize(c: GpuSurfaceResize) -> Outcome {
     )?;
     // The world's view is its surface's layout box, in CSS pixels.
     if role == surface_role::WORLD {
-        camera_view_resize(
+        view_resize(
             f64::from(c.width) / c.device_pixel_ratio,
             f64::from(c.height) / c.device_pixel_ratio,
         );

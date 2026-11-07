@@ -57,9 +57,6 @@ struct Input {
     did_drag: bool,
     pointer_x: f64,
     pointer_y: f64,
-    /// The view's width and height in CSS pixels, the world surface's layout
-    /// box (`camera_view_resize`); none before it has one.
-    size: Option<(f64, f64)>,
     last_x: f64,
     last_y: f64,
     // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
@@ -107,7 +104,6 @@ fn input() -> &'static mut Input {
         did_drag: false,
         pointer_x: 0.0,
         pointer_y: 0.0,
-        size: None,
         last_x: 0.0,
         last_y: 0.0,
         tap_start_x: 0.0,
@@ -139,21 +135,8 @@ fn tilt_gain() -> f64 {
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
 }
 
-/// The world surface's size in CSS pixels (GPU_SURFACE_RESIZE): what a pointer's
-/// place is read against, and the view each frame is drawn at.
-pub fn camera_view_resize(width: f64, height: f64) {
-    input().size = Some((width, height));
-}
-
-/// The view's size, the canvas's as the shell last sent it; none before it has.
-pub fn camera_view_size() -> Option<(f64, f64)> {
-    input().size
-}
-
 fn update_pointer(s: &mut Input, view_x: f64, view_y: f64) {
-    let Some((width, height)) = s.size else {
-        return;
-    };
+    let [width, height] = size();
     s.pointer_x = (view_x / width) * 2.0 - 1.0;
     s.pointer_y = -(view_y / height) * 2.0 + 1.0;
 }
@@ -200,9 +183,7 @@ fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
         return;
     }
 
-    let Some((width, height)) = s.size else {
-        return;
-    };
+    let [width, height] = size();
     let dx = view_x - width / 2.0;
     let dyc = view_y - height / 2.0;
     // atan2 is unstable near the screen center: drop the anchor and re-anchor later.

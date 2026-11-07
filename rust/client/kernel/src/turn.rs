@@ -350,10 +350,6 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     set_credits(credits);
     text_rise();
     let effects_ms = world_turn();
-    // Before the tick, so every step and the draw see the screen it is drawn on.
-    if let Some((width, height)) = input::camera_view_size() {
-        pose::view_resize(width, height);
-    }
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);

@@ -122,9 +122,10 @@ pub fn km_per_u() -> f64 {
     1.0 / height_u_per_m(y_u) / 1000.0
 }
 
-/// The view `width` × `height` CSS pixels: what its matrices are made of,
-/// made again only where one moved. The pixels it is drawn with are the
-/// drawing's alone: the camera grid is an angle (pxl-spec
+/// The view `width` × `height` CSS pixels, the world surface's layout box
+/// (GPU_SURFACE_RESIZE): what its matrices are made of, made again only where
+/// one moved, and what a pointer's place is read against. The pixels it is
+/// drawn with are the drawing's alone: the camera grid is an angle (pxl-spec
 /// space/camera/grid.rs `CELL`).
 pub fn view_resize(width: f64, height: f64) {
     let v = view();
