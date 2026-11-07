@@ -3,7 +3,8 @@
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, the layers' order, where nothing names
-//! what is above it, across a crate's folders and inside the kernel's heads',
+//! what is above it, across a crate's folders and the client's, and inside
+//! the kernel's heads',
 //! the camera's and the view's, the profiler named by the top alone, no renderer under the
 //! kernel's sys/, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
@@ -55,8 +56,9 @@ const HALF_FLOORED: [&str; 2] = [
 /// One order of dependency over a folder's modules: a module names only
 /// what is at or below it, and neither head the other; a module beside the
 /// order names anything, and only the order's top names it. `root` is where
-/// the folder's files are, `path` what its modules are named by, a `domain::`
-/// step past it passed over; a name past `path` no module holds is the
+/// the folder's files are, `path` what a Rust file names its modules by, a
+/// `domain::` step past it passed over (a TypeScript file names a module by
+/// its file: `imported`); a name past `path` no module holds is the
 /// folder's root's own, which stands at `own`, or, where none, is not read.
 struct Order {
     root: &'static str,
@@ -210,9 +212,34 @@ const CONTENT_ORDER: [(&str, u8); 9] = [
     ("generation", 2),
 ];
 
+/// The client's order (ts/client/src, AGENTS.md): its entry over the shell
+/// and the wiring that opens the runtime, the two heads; under them the port,
+/// the one way to the kernel; the files the kernel opens; the server they
+/// are read from; what each platform gives; and at the bottom the numbers
+/// both read and the build's values.
+const CLIENT: &str = "ts/client/src/";
+const CLIENT_ORDER: [(&str, u8); 12] = [
+    ("app", 6),
+    ("boot", 6),
+    ("page", 6),
+    ("shell", 5),
+    ("runtime", 5),
+    ("port", 4),
+    ("sys", 3),
+    ("origin", 2),
+    ("service", 1),
+    ("abi", 0),
+    ("deploy", 0),
+    ("remote-console", 0),
+];
+const CLIENT_HEADS: [&str; 2] = ["shell", "runtime"];
+
+/// Where TypeScript's aliases are (`paths`), every reader's.
+const TSCONFIG: &str = "ts/tsconfig.json";
+
 /// Every order held. A folder whose root holds only its modules gives its
 /// root's own a level over all of them, so no part reaches back to it.
-const ORDERS: [Order; 7] = [
+const ORDERS: [Order; 8] = [
     Order {
         root: KERNEL,
         path: "crate",
@@ -234,6 +261,14 @@ const ORDERS: [Order; 7] = [
         path: "crate",
         levels: &CONTENT_ORDER,
         heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: CLIENT,
+        path: "",
+        levels: &CLIENT_ORDER,
+        heads: &CLIENT_HEADS,
         beside: &[],
         own: None,
     },
@@ -415,6 +450,73 @@ fn named(text: &str, path: &str) -> Vec<(usize, String)> {
     out
 }
 
+/// Each alias TSCONFIG gives, as the name an import writes and the folder,
+/// from the tree's root, it stands for.
+fn ts_aliases(read: &dyn Fn(&str) -> Option<String>) -> Vec<(String, String)> {
+    let text: String = read(TSCONFIG)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cfg: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    let dir = TSCONFIG.rsplit_once('/').map_or("", |(d, _)| d);
+    cfg["compilerOptions"]["paths"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, to)| {
+            let to = to.get(0)?.as_str()?;
+            Some((
+                name.trim_end_matches('*').to_string(),
+                format!(
+                    "{dir}/{}",
+                    to.trim_start_matches("./").trim_end_matches('*')
+                ),
+            ))
+        })
+        .collect()
+}
+
+/// The files `text`, the TypeScript file `f`, imports, exports from or
+/// starts a worker on, comments left out, each a path from the tree's root
+/// with the line it is named on: an alias (`aliases`) put back as its
+/// folder, a relative name resolved from `f`'s; a package is left out.
+fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, String)> {
+    let blank = |m: &regex::Captures| m[0].replace(|c| c != '\n', " ");
+    let code = Regex::new(r"/\*[\s\S]*?\*/")
+        .expect("a block comment's pattern")
+        .replace_all(text, blank);
+    let code = Regex::new(r"(?m)^\s*//.*$")
+        .expect("a line comment's pattern")
+        .replace_all(&code, blank);
+    let name = Regex::new(r#"(?:\bfrom|\bimport\s*\(?|\bnew\s+URL\s*\()\s*["']([^"']+)["']"#)
+        .expect("an import's pattern");
+    let dir = f.rsplit_once('/').map_or("", |(d, _)| d);
+    name.captures_iter(&code)
+        .filter_map(|c| {
+            let line = code[..c.get(0)?.start()].matches('\n').count() + 1;
+            let path = if c[1].starts_with('.') {
+                format!("{dir}/{}", &c[1])
+            } else {
+                let (alias, to) = aliases.iter().find(|(a, _)| c[1].starts_with(a.as_str()))?;
+                format!("{to}{}", &c[1][alias.len()..])
+            };
+            let mut parts: Vec<&str> = Vec::new();
+            for step in path.split('/') {
+                match step {
+                    "" | "." => {}
+                    ".." => {
+                        parts.pop();
+                    }
+                    step => parts.push(step),
+                }
+            }
+            Some((line, parts.join("/")))
+        })
+        .collect()
+}
+
 /// Where `f` stands in `order` under `root`: its first step past `root`, or
 /// past `domain/` for the kernel's heads and trunk.
 fn standing(f: &str, root: &str) -> String {
@@ -436,11 +538,12 @@ fn standing(f: &str, root: &str) -> String {
 fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order) -> Vec<String> {
     let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
     let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
+    let aliases = ts_aliases(read);
     let mut problems = Vec::new();
     let mut unplaced = std::collections::BTreeSet::new();
     for f in files
         .iter()
-        .filter(|f| f.starts_with(o.root) && f.ends_with(".rs"))
+        .filter(|f| f.starts_with(o.root) && [".rs", ".ts", ".tsx"].iter().any(|e| f.ends_with(e)))
     {
         let me = standing(f, o.root);
         let Some(mine) = level(&me) else {
@@ -449,7 +552,16 @@ fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order
             }
             continue;
         };
-        for (line, them) in named(&read(f).unwrap_or_default(), o.path) {
+        let text = read(f).unwrap_or_default();
+        let names = match f.ends_with(".rs") {
+            true => named(&text, o.path),
+            false => imported(&text, f, &aliases)
+                .into_iter()
+                .filter(|(_, p)| p.starts_with(o.root))
+                .map(|(line, p)| (line, standing(&p, o.root)))
+                .collect(),
+        };
+        for (line, them) in names {
             if them == me {
                 continue;
             }
@@ -689,6 +801,11 @@ fn run() -> Result<Vec<String>, String> {
     for o in &ORDERS {
         problems.extend(out_of_order(&files, &read, o));
     }
+    if ts_aliases(&read).is_empty() {
+        problems.push(format!(
+            "{TSCONFIG}: no alias read (`compilerOptions.paths`), so no import through one is held to the client's order"
+        ));
+    }
     for f in files
         .iter()
         .filter(|f| f.starts_with(SYS) && f.ends_with(".rs"))
@@ -864,6 +981,67 @@ mod spec;"
                 "rust/k/src/domain/f/b.rs:2"
             ],
             "{found:?}"
+        );
+    }
+
+    #[test]
+    fn client_order_refuses_an_import_up() {
+        const LEVELS: [(&str, u8); 5] = [
+            ("app", 3),
+            ("shell", 2),
+            ("runtime", 2),
+            ("port", 1),
+            ("abi", 0),
+        ];
+        let order = Order {
+            root: "ts/c/src/",
+            path: "",
+            levels: &LEVELS,
+            heads: &["shell", "runtime"],
+            beside: &[],
+            own: None,
+        };
+        let files = [
+            "ts/tsconfig.json",
+            "ts/c/src/app.tsx",
+            "ts/c/src/shell/view.tsx",
+            "ts/c/src/runtime/open.ts",
+            "ts/c/src/port/kernel.ts",
+            "ts/c/src/abi/cmd.spec.ts",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "ts/tsconfig.json" => {
+                        "// The aliases.\n{ \"compilerOptions\": { \"paths\": { \"@/*\": [\"./c/src/*\"], \"@pxl/c/*\": [\"./c/src/*\"] } } }"
+                    }
+                    "ts/c/src/app.tsx" => "import { App } from \"@/shell/view.tsx\";\nimport \"./runtime/open.ts\";",
+                    "ts/c/src/shell/view.tsx" => {
+                        "import { k } from \"@/port/kernel.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
+                    }
+                    "ts/c/src/runtime/open.ts" => {
+                        "import {\n  k,\n} from \"@pxl/c/port/kernel.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
+                    }
+                    "ts/c/src/port/kernel.ts" => {
+                        "import type { View } from \"@pxl/c/shell/view.tsx\";\nimport { useState } from \"react\";"
+                    }
+                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../port/kernel.ts\";",
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found: Vec<String> = out_of_order(&files, &read, &order)
+            .iter()
+            .map(|p| p.split(": ").next().unwrap_or("").to_string())
+            .collect();
+        assert_eq!(
+            found,
+            [
+                "ts/c/src/shell/view.tsx:3",
+                "ts/c/src/port/kernel.ts:1",
+                "ts/c/src/abi/cmd.spec.ts:1"
+            ]
         );
     }
 
