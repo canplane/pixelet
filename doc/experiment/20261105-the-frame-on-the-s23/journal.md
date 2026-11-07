@@ -611,3 +611,27 @@ and 0–7% cells. A mask skips the air alone, past what the split's box already 
 about a tenth of the visits; it needs 8 bits where a split's words have 4 left, a coarser box
 for them, and each split's children asked to fill it. The visits are the descent, not the air.
 The eye's rays were not counted; sibling loads and subgroups were not tried.
+
+**The tick after the CPU fill.** The Mac's tick p95 went from 2.1 to 3.2 ms with the bricks
+filled on the CPU; the fill's own stages run past the frame, in the turn's tasks' share. What a
+landing runs in the turn is `clipmap::cut`, which spread the whole tile's palette indices into a
+scratch of 1 MiB to read a few bricks of them. Read a cell at a time where it is cut: the demand
+step's most 5.4 to 3.0 ms, the tick's most 7.5 to 4.5–5.8, the fixed ranges 1 MiB less. The p95
+stayed at 3.2. Folding only the clip levels a change reaches, tried, moved neither and was
+dropped. What holds the p95 is not found. The gate passes.
+
+**The light's list, measured on the CPU and set aside.** Each tile's cells at its band by a
+descent of the query over its texels' sweep: exact in 13 of 14 cases, and 5 to 400 times the
+nodes the tile's 64 walks ask, the ground under the surface listed as deep as the sweep runs
+([the light's list](../../minutes/20261108-the-light-s-list-measured.md)).
+
+**The tick's tail, traced to the tiles landing.** The demand step split for a run, not kept:
+what spikes is the arrivals' pass (`admit_arrived`), 0.2 ms a turn and 3.0 at the most, where
+the deployed build's whole demand step was 0.8 at the most. The pass takes as many tiles as
+the turn's budget leaves, so a burst of landings lands in one turn, and each now cuts its
+bricks' palette indices on the CPU. The cut written a row at a time, its cells' order hoisted
+and one loop for each way a packet holds them: the arrivals' most 3.0 to 1.3–2.1 ms, the tick's
+p95 3.2 to 2.6–3.2 over four runs. The Mac's gate, three rounds against the deployed build
+(e317a3644b): pass, GPU 27.0 / 47.8 to 20.4 / 36.9, tick p95 3.1 to 4.2, the Mac under load.
+The tick's p50 is 0.2 higher too, so what is left is spread over the turn, not one step;
+no turn ran past its budget.
