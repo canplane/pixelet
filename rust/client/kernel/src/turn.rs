@@ -14,7 +14,6 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_core::sched::edge::{notified, Notify};
 
-use crate::domain::control::cmd;
 use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
@@ -22,6 +21,7 @@ use crate::domain::control::navigation::off_center::{off_center, off_center_step
 use crate::domain::control::sensor::device_orientation::{
     orient_watchdog_step, OrientationPlatform,
 };
+use crate::door::cmd;
 use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_rise;
 use pxl_spec::bake::tile::place::PlaceTile;

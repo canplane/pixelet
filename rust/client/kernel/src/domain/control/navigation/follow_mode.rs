@@ -3,16 +3,15 @@
 use pxl_spec::space::coord::q3::Q3;
 use xpute_kit::math::scalar::wrap;
 
+use crate::domain::cmd::SensorStatus;
+use crate::domain::cmd::Tracking;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
-use crate::domain::control::cmd::Tracking;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::device_orientation::{request_orient, OrientationPlatform};
-use crate::domain::control::sensor::reading::{
-    device_location_store, device_orient_store, SensorStatus,
-};
+use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;

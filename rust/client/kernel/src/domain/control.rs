@@ -7,11 +7,6 @@
 //! and where the pivot stands (`support`).
 
 pub mod camera;
-/// The commands and the snapshot the kernel and the shell agree on,
-/// generated from cmd.json. What any core and runtime share is
-/// `xpute_core::abi`'s.
-#[path = "control/cmd.spec.rs"]
-pub mod cmd;
 pub mod edit;
 pub mod input;
 pub mod navigation;

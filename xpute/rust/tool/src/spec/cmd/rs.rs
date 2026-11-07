@@ -3,7 +3,7 @@
 //! The command table as Rust: its enums, each packet's reader and each
 //! import's writer, for a Rust core.
 
-use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
+use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
 
 pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
@@ -230,7 +230,62 @@ fn rs_writer(
     Ok(())
 }
 
-pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
+/// `e` as a Rust enum, each member its number, and `of` reading one.
+fn enum_decl(e: &Enum, out: &mut Vec<String>) {
+    let all: Vec<&Member> = members(e).collect();
+    out.push(String::new());
+    if let Some(doc) = &e.doc {
+        out.extend(rs_doc(doc, "", "///"));
+    }
+    out.push(format!(
+        "#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]",
+        if e.default.is_some() { "Default, " } else { "" }
+    ));
+    out.push("#[repr(u32)]".into());
+    out.push(format!("pub enum {} {{", e.name));
+    for entry in &e.entries {
+        match entry {
+            Entry::Section(s) => {
+                out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
+            }
+            Entry::Member(m) => {
+                if let Some(doc) = &m.doc {
+                    out.extend(rs_doc(doc, "    ", "///"));
+                }
+                if e.default.as_deref() == Some(m.name.as_str()) {
+                    out.push("    #[default]".into());
+                }
+                out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
+            }
+        }
+    }
+    out.extend(["}".to_string(), String::new()]);
+    out.extend([
+        format!("impl {} {{", e.name),
+        format!(
+            "    pub const ALL: [{}; {}] = [{}];",
+            e.name,
+            all.len(),
+            all.iter()
+                .map(|m| format!("{}::{}", e.name, m.name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        String::new(),
+        "    /// The member a number names, or none for a number nobody gave out.".to_string(),
+        format!("    pub fn of(number: u32) -> Option<{}> {{", e.name),
+        format!(
+            "        {}::ALL.into_iter().find(|m| *m as u32 == number)",
+            e.name
+        ),
+        "    }".to_string(),
+        "}".to_string(),
+    ]);
+}
+
+/// The protocol's messages as Rust; the enums `apart` names are written
+/// apart (`emit_apart`) and named from there.
+pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<String, String> {
     let mut out = vec![
         format!("// {}", t.rs_logical),
         "//".into(),
@@ -270,56 +325,14 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         if strs { "Strs, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
-    for e in &spec.enums {
-        let all: Vec<&Member> = members(e).collect();
-        out.push(String::new());
-        if let Some(doc) = &e.doc {
-            out.extend(rs_doc(doc, "", "///"));
-        }
-        out.push(format!(
-            "#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]",
-            if e.default.is_some() { "Default, " } else { "" }
-        ));
-        out.push("#[repr(u32)]".into());
-        out.push(format!("pub enum {} {{", e.name));
-        for entry in &e.entries {
-            match entry {
-                Entry::Section(s) => {
-                    out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
-                }
-                Entry::Member(m) => {
-                    if let Some(doc) = &m.doc {
-                        out.extend(rs_doc(doc, "    ", "///"));
-                    }
-                    if e.default.as_deref() == Some(m.name.as_str()) {
-                        out.push("    #[default]".into());
-                    }
-                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
-                }
-            }
-        }
-        out.extend(["}".to_string(), String::new()]);
-        out.extend([
-            format!("impl {} {{", e.name),
-            format!(
-                "    pub const ALL: [{}; {}] = [{}];",
-                e.name,
-                all.len(),
-                all.iter()
-                    .map(|m| format!("{}::{}", e.name, m.name))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            String::new(),
-            "    /// The member a number names, or none for a number nobody gave out.".to_string(),
-            format!("    pub fn of(number: u32) -> Option<{}> {{", e.name),
-            format!(
-                "        {}::ALL.into_iter().find(|m| *m as u32 == number)",
-                e.name
-            ),
-            "    }".to_string(),
-            "}".to_string(),
-        ]);
+    let names: &[String] = apart.map_or(&[], |a| &a.names);
+    if let Some(a) = apart {
+        let mut sorted = names.to_vec();
+        sorted.sort();
+        out.push(format!("pub use {}::{{{}}};", a.path, sorted.join(", ")));
+    }
+    for e in spec.enums.iter().filter(|e| !names.contains(&e.name)) {
+        enum_decl(e, &mut out);
     }
     for r in &spec.records {
         rs_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
@@ -399,4 +412,37 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         }
     }
     Ok(file(&out))
+}
+
+/// The enums `a` names, as `emit` would write them, in a file of their own
+/// at `at`.
+pub(super) fn emit_apart(spec: &Spec, t: &Target, at: &str, a: &Apart) -> String {
+    let mut out = vec![
+        format!("// {at}"),
+        "//".into(),
+        generated(t.json),
+        "".into(),
+    ];
+    out.extend(rs_doc(
+        &[
+            format!(
+                "The {} protocol's enums a module under its own code reads,",
+                spec.protocol.name
+            ),
+            format!("which its code ({}) names from here.", t.rs),
+        ],
+        "",
+        "//!",
+    ));
+    out.extend(
+        [
+            "",
+            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code, reason = \"generated from the spec\")]",
+        ]
+        .map(String::from),
+    );
+    for e in spec.enums.iter().filter(|e| a.names.contains(&e.name)) {
+        enum_decl(e, &mut out);
+    }
+    file(&out)
 }

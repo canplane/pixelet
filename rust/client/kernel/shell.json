@@ -23,7 +23,19 @@
   ],
   "gen": {
     "ts": "../../../ts/client/src/abi/cmd.spec.ts",
-    "rs": "src/domain/control/cmd.spec.rs"
+    "rs": "src/door/cmd.spec.rs",
+    "enums": {
+      "rs": "src/domain/cmd.spec.rs",
+      "path": "crate::domain::cmd",
+      "names": [
+        "PointerType",
+        "Tracking",
+        "GeolocationErrorCode",
+        "PermissionAnswer",
+        "SensorStatus",
+        "Message"
+      ]
+    }
   },
   "name": "shell",
   "export": [

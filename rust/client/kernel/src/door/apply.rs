@@ -17,7 +17,7 @@ mod surface;
 mod turn;
 
 use super::State;
-use crate::domain::control::cmd::{self as abi, shell};
+use crate::door::cmd::{self as abi, shell};
 use crate::sys::sched::edge;
 use xpute_core::abi::fs::FsChanged;
 use xpute_core::abi::sys::SysTurn;

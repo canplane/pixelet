@@ -51,6 +51,7 @@ the same way. The check-rules tool holds the order (pxl-tool
     │   control/     a head: moves the eye, asks the query          │
     │   smooth.rs    the smoothing both heads share                 │
     │   param.rs     the tuned numbers both heads share             │
+    │   cmd.spec.rs  the shell's enums both heads may read          │
     │   view/        the trunk: the pose, the lens, demand          │
     │   query/       the trunk: the only seam                       │
     │   layer/       the trunk: the base and the object             │
@@ -860,9 +861,9 @@ app defines, two protocols: the shell's, `rust/client/kernel/shell.json`, its
 intents and what the platform's services give, the surfaces, the sensors, the
 data and each turn's grant; and the text device's, `text.json` beside it, the
 platform's text, which the runtime answers beside the core. Both sides' readers,
-writers and bindings are generated from each (`domain/control/cmd.spec.rs`,
-`ts/client/src/abi/cmd.spec.ts`; `sys/io/text.spec.rs`,
-`ts/client/src/abi/text.spec.ts`), each packet an XTP tree, xpute's relocatable
+writers and bindings are generated from each (`door/cmd.spec.rs`, the enums the
+domain reads apart in `domain/cmd.spec.rs`, and `ts/client/src/abi/cmd.spec.ts`;
+`sys/io/text.spec.rs`, `ts/client/src/abi/text.spec.ts`), each packet an XTP tree, xpute's relocatable
 binary tree. The shell's exports are what the shell and the services submit; its
 imports are what the kernel posts unasked, the snapshot, the view's azimuth and
 scale apart from it (`SHELL_VIEW`) and the sensors it starts and stops. The text

@@ -135,6 +135,20 @@ struct Doc {
 pub(crate) struct Gen {
     pub(crate) ts: String,
     pub(crate) rs: String,
+    /// Enums a module under the protocol's own code reads, written apart
+    /// where that module can name them.
+    pub(crate) enums: Option<Apart>,
+}
+
+/// The enums `names` written into `rs`, from the JSON's own directory, which
+/// the Rust module `path` is; the protocol's Rust names them from there. Its
+/// TypeScript keeps them all.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Apart {
+    pub(crate) rs: String,
+    pub(crate) path: String,
+    pub(crate) names: Vec<String>,
 }
 
 struct Spec {
@@ -503,7 +517,24 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
     if let Some(first) = out.first_mut() {
         first.text = splice_ts(&first.text, &imports, &body);
     }
-    out.push(Output::new(t.rs, rs::emit(spec, &t)? + &service::rs(spec)?));
+    let apart = gen.enums.as_ref();
+    if let Some(a) = apart {
+        if let Some(n) = a
+            .names
+            .iter()
+            .find(|n| !spec.enums.iter().any(|e| e.name == **n))
+        {
+            return Err(format!(
+                "{json}: gen.enums names {n}, which it does not declare"
+            ));
+        }
+        let at = beside(json, &a.rs)?;
+        out.push(Output::new(&at, rs::emit_apart(spec, &t, &at, a)));
+    }
+    out.push(Output::new(
+        t.rs,
+        rs::emit(spec, &t, apart)? + &service::rs(spec)?,
+    ));
     Ok(out)
 }
 
@@ -568,7 +599,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             first.text = splice_ts(&first.text, &imports, &body);
         }
         out.extend(ts);
-        out.push(Output::new(t.rs, rs::emit(spec, t)?));
+        out.push(Output::new(t.rs, rs::emit(spec, t, None)?));
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp::emit(spec, t, path, namespace)?));
         }

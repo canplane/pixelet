@@ -5,7 +5,7 @@
 //! the clock (xpute's SYS_TURN).
 
 use super::refuse_unless;
-use crate::domain::control::cmd as abi;
+use crate::door::cmd as abi;
 use crate::sys::sched::clock;
 use crate::turn;
 use crate::turn::TurnGrant;

@@ -3,8 +3,8 @@
 //! The device's GPS and compass readings, and which changes are significant
 //! enough to keep.
 
-use crate::domain::control::cmd::Message;
-pub use crate::domain::control::cmd::{PermissionAnswer, SensorStatus};
+use crate::domain::cmd::Message;
+use crate::domain::cmd::SensorStatus;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 

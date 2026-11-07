@@ -1,4 +1,4 @@
-// rust/client/kernel/src/domain/control/cmd.spec.rs
+// rust/client/kernel/src/door/cmd.spec.rs
 //
 // GENERATED from rust/client/kernel/shell.json
 
@@ -39,6 +39,9 @@
 
 use core::fmt::Display;
 
+pub use crate::domain::cmd::{
+    GeolocationErrorCode, Message, PermissionAnswer, PointerType, SensorStatus, Tracking,
+};
 use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
@@ -319,24 +322,6 @@ impl PointerPhase {
     }
 }
 
-/// What the pointer is, as the browser's `pointerType` says.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PointerType {
-    Mouse = 0,
-    Touch = 1,
-    Pen = 2,
-}
-
-impl PointerType {
-    pub const ALL: [PointerType; 3] = [PointerType::Mouse, PointerType::Touch, PointerType::Pen];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<PointerType> {
-        PointerType::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
@@ -374,53 +359,6 @@ impl SceneContent {
     }
 }
 
-/// What the tracking button did, as the button showed it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Tracking {
-    /// Back to the device.
-    Recenter = 0,
-    /// Follow mode on, where the compass is listened to.
-    Follow = 1,
-    /// Follow mode off, north up again.
-    Unfollow = 2,
-}
-
-impl Tracking {
-    pub const ALL: [Tracking; 3] = [Tracking::Recenter, Tracking::Follow, Tracking::Unfollow];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<Tracking> {
-        Tracking::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// The browser's PositionError codes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum GeolocationErrorCode {
-    Other = 0,
-    PermissionDenied = 1,
-    PositionUnavailable = 2,
-    Timeout = 3,
-}
-
-impl GeolocationErrorCode {
-    pub const ALL: [GeolocationErrorCode; 4] = [
-        GeolocationErrorCode::Other,
-        GeolocationErrorCode::PermissionDenied,
-        GeolocationErrorCode::PositionUnavailable,
-        GeolocationErrorCode::Timeout,
-    ];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<GeolocationErrorCode> {
-        GeolocationErrorCode::ALL
-            .into_iter()
-            .find(|m| *m as u32 == number)
-    }
-}
-
 /// Which of the device's sensors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -435,34 +373,6 @@ impl Sensor {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Sensor> {
         Sensor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// A sensor permission, as the shell's prompt or the browser's change reported it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PermissionAnswer {
-    /// The shell's prompt is up.
-    Asking = 0,
-    Granted = 1,
-    Denied = 2,
-    /// The prompt itself threw.
-    Failed = 3,
-}
-
-impl PermissionAnswer {
-    pub const ALL: [PermissionAnswer; 4] = [
-        PermissionAnswer::Asking,
-        PermissionAnswer::Granted,
-        PermissionAnswer::Denied,
-        PermissionAnswer::Failed,
-    ];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<PermissionAnswer> {
-        PermissionAnswer::ALL
-            .into_iter()
-            .find(|m| *m as u32 == number)
     }
 }
 
@@ -489,83 +399,6 @@ impl GroundStatus {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GroundStatus> {
         GroundStatus::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[repr(u32)]
-pub enum SensorStatus {
-    #[default]
-    Idle = 0,
-    Loading = 1,
-    Ready = 2,
-    Error = 3,
-    Unavailable = 4,
-}
-
-impl SensorStatus {
-    pub const ALL: [SensorStatus; 5] = [
-        SensorStatus::Idle,
-        SensorStatus::Loading,
-        SensorStatus::Ready,
-        SensorStatus::Error,
-        SensorStatus::Unavailable,
-    ];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<SensorStatus> {
-        SensorStatus::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// A message the kernel raises and the shell shows.
-///
-/// The kernel decides which message a state calls for and carries the number.
-/// It never carries the words: a string that exists to be read has no reason
-/// to sit in the kernel's memory, and the shell has the locale files already
-/// (ts/client/src/locale) — the same split `strerror` is on the other side of.
-///
-/// The number is the name here, and a band is what a message is about.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Message {
-    // ---- 0x02 where the device says it is ----
-    GeolocationUnsupported = 0x0203,
-    GeolocationPermissionDenied = 0x0204,
-    GeolocationPositionUnavailable = 0x0205,
-    GeolocationTimeout = 0x0206,
-    GeolocationGenericError = 0x0207,
-
-    // ---- 0x03 which way the device is facing ----
-    OrientationPermissionError = 0x0302,
-    OrientationPermissionDenied = 0x0303,
-    OrientationSignalLost = 0x0304,
-
-    // ---- 0x04 why the server does not answer the world's reads ----
-    /// Reads reach the server and fail; they are tried again.
-    WorldReadFailing = 0x0403,
-    /// Reads failed past every retry; the world is not coming.
-    WorldUnavailable = 0x0404,
-}
-
-impl Message {
-    pub const ALL: [Message; 10] = [
-        Message::GeolocationUnsupported,
-        Message::GeolocationPermissionDenied,
-        Message::GeolocationPositionUnavailable,
-        Message::GeolocationTimeout,
-        Message::GeolocationGenericError,
-        Message::OrientationPermissionError,
-        Message::OrientationPermissionDenied,
-        Message::OrientationSignalLost,
-        Message::WorldReadFailing,
-        Message::WorldUnavailable,
-    ];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<Message> {
-        Message::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 

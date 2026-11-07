@@ -13,10 +13,6 @@ use xpute_kit::wire::xtp::PacketWriter;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::state::camera_state;
-use crate::domain::control::cmd::{
-    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, ShellView, Snapshot,
-};
 use crate::domain::control::edit::write;
 use crate::domain::control::input::{dragging, zooming};
 use crate::domain::control::navigation::follow_mode::following;
@@ -33,6 +29,10 @@ use crate::domain::scene::stage::is_screen_drawn;
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
+use crate::door::cmd::{
+    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
+    PivotState, RefusedFile, ShellView, Snapshot,
+};
 use crate::pointer;
 use crate::sys::io::file::{self, Path, StorageFile};
 use crate::sys::io::file_spec::root;

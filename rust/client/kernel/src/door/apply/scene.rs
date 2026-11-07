@@ -4,10 +4,10 @@
 
 use super::State;
 use super::{ask_turn, or_refuse, refuse_unless};
-use crate::domain::control::cmd as abi;
 use crate::domain::scene::character::preview;
 use crate::domain::scene::marker;
 use crate::domain::view::frame::resolution;
+use crate::door::cmd as abi;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
 use xpute_core::ipc::door::Outcome;

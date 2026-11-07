@@ -8,9 +8,10 @@
 //! retried here; a device's module re-arms its own watch where its platform
 //! ends one (ts/client/src/service/sensor.native.ts).
 
-use crate::domain::control::cmd::GeolocationErrorCode;
-use crate::domain::control::cmd::Message;
-use crate::domain::control::sensor::reading::{device_location_store, SensorState, SensorStatus};
+use crate::domain::cmd::GeolocationErrorCode;
+use crate::domain::cmd::Message;
+use crate::domain::cmd::SensorStatus;
+use crate::domain::control::sensor::reading::{device_location_store, SensorState};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;

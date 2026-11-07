@@ -205,7 +205,9 @@ The generator writes both ends' code from the machine and the protocol files
 protocol its messages (encoders, readers, enums), and its bindings, on the runtime
 a stub per export and a handler per import (`<name>_exports`,
 `<name>_imports`), on the core a function per import and a trait for the
-exports (`Exports`, `apply`).
+exports (`Exports`, `apply`). A protocol's `gen` may write some of its enums
+apart (`enums`), into a Rust file a module under its own code can name, and its
+code names them from there.
 
 ### The packet
 

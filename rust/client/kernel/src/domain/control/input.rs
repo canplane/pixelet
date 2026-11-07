@@ -15,12 +15,12 @@ use crate::domain::control::param::{
     TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION,
 };
 
+use crate::domain::cmd::PointerType;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
 use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
-use crate::domain::control::cmd::PointerType;
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::view::frame::screen::size;

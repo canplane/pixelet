@@ -8,14 +8,20 @@
 //! its runtime's form hands it (`BootInfo`).
 
 mod apply;
+/// The commands and the snapshot the kernel and the shell agree on,
+/// generated from shell.json; the enums the domain reads are written apart
+/// (domain/cmd.spec.rs) and named here from there. What any core and runtime
+/// share is `xpute_core::abi`'s.
+#[path = "door/cmd.spec.rs"]
+pub mod cmd;
 mod executor;
 pub mod layout;
 mod life;
 
-use crate::domain::control::cmd::{self, Sensor, SensorStart, SensorStop, ShellSnapshot};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
+use crate::door::cmd::{Sensor, SensorStart, SensorStop, ShellSnapshot};
 use crate::machine::MACHINE;
 use crate::perf::record::{perf_record, perf_record_turn};
 use crate::perf::spec::Wake;

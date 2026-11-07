@@ -4,9 +4,9 @@
 //! changed under it (xpute's FS_CHANGED): a refused one set aside, read again.
 
 use super::{or_refuse, refuse_unless};
-use crate::domain::control::cmd as abi;
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store;
+use crate::door::cmd as abi;
 use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::file_spec::root;
 use crate::sys::io::source;

@@ -4,11 +4,10 @@
 //! listen, and when silence counts as lost. The listener and iOS's permission
 //! prompt are the shell's; the kernel hears only the answer.
 
-use crate::domain::control::cmd::Message;
+use crate::domain::cmd::Message;
 
-use crate::domain::control::sensor::reading::{
-    device_orient_store, PermissionAnswer, SensorState, SensorStatus,
-};
+use crate::domain::cmd::{PermissionAnswer, SensorStatus};
+use crate::domain::control::sensor::reading::{device_orient_store, SensorState};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
