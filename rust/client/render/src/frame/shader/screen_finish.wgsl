@@ -14,22 +14,11 @@
 @group(0) @binding(1) var world: texture_2d<f32>;
 @group(0) @binding(2) var world_depth: texture_depth_2d;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
 struct FinishOut {
   @location(0) color: vec4f,
   @location(1) picture: vec4f,
   @builtin(frag_depth) depth: f32,
 };
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(vi, ii);
-  return o;
-}
 
 @fragment
 fn fs(v: VertexOut) -> FinishOut {

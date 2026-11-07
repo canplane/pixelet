@@ -228,12 +228,21 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
     lit!["paint", "box"],
     // SHADER_DECOR
-    lit!["place", "instance", "decor_place", "decor"],
+    lit![
+        "place",
+        "instance",
+        "decor_place",
+        "lit_vertex",
+        "lit_skin",
+        "decor"
+    ],
     // SHADER_SKINNED
     lit![
         "place",
         "skinned_draw.slot",
         "skinned_place",
+        "lit_vertex",
+        "lit_skin",
         "skinned_mesh"
     ],
     // SHADER_LOCATION_ZONE
@@ -250,6 +259,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "place",
         "location.slot",
         "location_beacon_place",
+        "lit_vertex",
         "location_beacon"
     ],
     // SHADER_MARKER
@@ -329,7 +339,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_ATLAS
     &["atlas"],
     // SHADER_IMPOSTOR
-    lit!["instance", "impostor_place", "impostor"],
+    lit!["instance", "impostor_place", "lit_vertex", "impostor"],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -353,6 +363,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "px",
         "tile_word",
         "screen_tiles",
+        "tile_quad",
         "screen_ray",
         "screen_shade"
     ],
@@ -557,7 +568,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "queue_ask",
     ],
     // SHADER_AO_APPLY
-    &["tile_word", "screen_tiles", "effect", "ao_view", "ao_apply"],
+    &[
+        "tile_word",
+        "screen_tiles",
+        "tile_quad",
+        "effect",
+        "ao_view",
+        "ao_apply",
+    ],
     // SHADER_SAMPLE_BOX
     &[
         "walk_word",
@@ -669,20 +687,32 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "finish",
         "tile_word",
         "screen_tiles",
+        "tile_quad",
         "screen_finish",
     ],
     // SHADER_SCREEN_RESOLVE
-    &["frame", "tile_word", "screen_tiles", "screen_resolve"],
+    &[
+        "frame",
+        "tile_word",
+        "screen_tiles",
+        "tile_quad",
+        "screen_resolve",
+    ],
     // SHADER_SCREEN_GATE
-    &["tile_word", "screen_tiles", "screen_gate"],
+    &["tile_word", "screen_tiles", "tile_quad", "screen_gate"],
     // SHADER_SCREEN_SHOW
     &["screen_show"],
     // SHADER_SCREEN_PROPAGATE
     &["tile_word", "screen_propagate"],
     // SHADER_SCREEN_WRITE_BACK
-    &["tile_word", "screen_tiles", "screen_write_back"],
+    &[
+        "tile_word",
+        "screen_tiles",
+        "tile_quad",
+        "screen_write_back",
+    ],
     // SHADER_RASTER_GATE
-    &["tile_word", "screen_tiles", "raster_gate"],
+    &["tile_word", "screen_tiles", "tile_quad", "raster_gate"],
     // SHADER_SCREEN_MARK
     &["screen_mark"],
     // SHADER_LIGHT_GATE

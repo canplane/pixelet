@@ -6,17 +6,6 @@
 // sample and the far plane's depth, reversed, so the boxes pass the depth
 // test there alone.
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(vi, ii);
-  return o;
-}
-
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4u {
   return vec4u(0u);

@@ -74,22 +74,10 @@ fn aim(frag: vec2f, size: vec2f) -> vec3f {
 const BEHIND: f32 = 6.103515625e-5;
 const SNAP: f32 = 0.25;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
 struct FragOut {
   @location(0) color: vec4f,
   @builtin(frag_depth) depth: f32,
 };
-
-// The claimed tiles alone, or every one (screen_tiles.wgsl).
-@vertex
-fn vs(@builtin(vertex_index) i: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(i, ii);
-  return o;
-}
 
 // A look's words; past the table, black and no layer.
 fn look(slot: u32) -> vec4u {
