@@ -10,6 +10,9 @@ one measured case fitted at the cost of another.
 
 - Name the contracts and symmetries the change touches first. A measured gain alone doesn't weaken one; changing
   one is a design change, proposed on its own.
+- Whether a part exists is judged by what the frame must produce, from the
+  code: what it removes against what it adds. A measurement does not put a
+  part in or take it out.
 - Find the cause in the code: predict from the structure what it costs and
   why. A costly function is where the time went, not proof its body is wrong.
 - `script/compare-perf.py <base url> <change url> [rounds]`
@@ -23,6 +26,12 @@ one measured case fitted at the cost of another.
   response), and say what wasn't checked.
 - A small change that keeps the contracts and the behaviour is fine; fewer
   copies is not safe by itself.
+- The devices: the S23's Chrome (Tint, Vulkan, a weak mobile GPU) for
+  performance, hot; Safari on the Mac (WebKit's compiler, Metal) for the
+  iPhone. Mac Chrome only shows a page running. Mobile web is the minimum; no
+  polyfill or fallback for what time will fix.
+- Each experiment gets a journal entry under `doc/experiment/`: tried, came
+  of it, how we know, kept or dropped.
 - The CPU↔GPU data contract is generated from `spec/` (`make spec`).
 - In gpu-portable code, index no large const array at run time: the WGSL
   builds it as a local array, filled on every call.

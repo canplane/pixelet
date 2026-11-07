@@ -29,6 +29,14 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `held`, `goes`, `done`), which only the code around it explains (`Stop`, not
   `Held`). A plain word that reads at once (`reach`) is fine. A word in a
   comment is no precedent for a name.
+- Judge a name by what the thing is now: what it holds, does and which boundary
+  it crosses. Where a word came from, or an earlier module that used it, is no
+  reason to keep it.
+- When a name meets one already taken, see whether they share a namespace or a
+  context where both are read, and whether the name already taken is itself the
+  best one.
+- A type alias names a meaning (`pub type Block = (usize, u32)`); add no newtype
+  or guard to enforce it.
 - Mind a loose word where several modules use it for different things.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
   React shell's own names stay whole (`let cfg: Config`).
