@@ -3,7 +3,7 @@
 **2026-11-06** — recorded with the user, in the session that runs the S23 batch
 (eff52c1d). The measurements and the patches, as they happened, are in
 [the journal](../experiment/20261105-the-frame-on-the-s23/journal.md); the batch's
-plan was out/plan.md.
+plan is [beside it](../experiment/20261105-the-frame-on-the-s23/plan.md).
 
 ## What the user decided
 
@@ -24,8 +24,7 @@ improved. In the user's words: a processor whose workload needs no floating poin
 carries no FPU, and the FPU's input/output tests are beside the point.
 
 **Contracts are argued, not tested.** A change is judged on its contract argument:
-who writes, who reads, in what order, and what equals what. Tests carry no purpose.
-They are a last net, run once on the integrated batch. A/B measurement does not decide
+who writes, who reads, in what order, and what equals what. A/B measurement does not decide
 whether a part exists.
 
 **The method:**
@@ -77,6 +76,10 @@ This names two contract changes:
 - The kept record is a state beside the world with its own invalidation. 10-24's second
   condition is reworded by this decision: the record is keyed by the world's nodes,
   forgotten by the node cache's own rule, and holds only what the World Query answered.
+
+"Rays descend as far as each frame lets them" was replaced on 2026-11-07: every ray ends
+in its frame, and what a frame defers is detail, never its answer
+([a ray ends in its frame](./20261107-a-ray-ends-in-its-frame.md)).
 
 **Stability by declaration, not by tests alone.** Agreed with the user after the
 batch's whole-frame defects:
@@ -207,6 +210,6 @@ In progress:
 The lead recommended the light by raster and the eye kept as rays with that lattice.
 The user has not decided.
 
-The full contract and its sizes are in out/cell-raster.md. The model's sun angle
-(1.7°) and the contract's (10–15°) disagree, and the drive's actual time of day
-settles it.
+The full contract and its sizes are in [cell raster](./20261106-cell-raster.md). The
+model's sun angle (1.7°) and the contract's (10–15°) disagree, and the drive's actual
+time of day settles it.

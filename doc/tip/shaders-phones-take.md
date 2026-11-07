@@ -43,18 +43,17 @@ own Vulkan driver. Each is a different compiler with its own faults.
   or a small struct carried through an `if` as exactly such a local. The
   compute passes by hand keep to this: forget's moved mask is read a word at
   a time inside its loop, the missed pixel's ray two functions in place of a
-  nested struct. The render passes still pass structs that hold structs
-  (`Air` holding the light, `Surface` holding `Air`, `Pixel` holding the hit),
-  and `Tiles` crosses `tiles_age` and `tiles_claimed` by value; none of it is
-  checked on the S23.
+  nested struct. No struct holds a struct in a render module either. `Tiles`
+  still crosses `tiles_age` and `tiles_claimed` by value (render build.rs),
+  which no check refuses.
 - **A choice made as the shader runs between two implementations that
   answer in tuples or structs.** The generated `PassObserver` chose the eye
   or the light's map in every method by the pass's head, so every answer came
   through a branch. A pass both observers take is a shader each, built from
-  the same entry and the observer's own part (`beam_hit_cs` and `beam_cs` with
-  beam.eye.wgsl or beam.light.wgsl, `sample_hit_cs` and `sample_cs` with
-  sample.eye.wgsl or sample.light.wgsl, render build.rs): choose when the
-  shader is put together, not inside.
+  the same parts and the observer's own (frame/shader/part.rs `PARTS`: the
+  queue's corners with beam.eye.wgsl or beam.light.wgsl, its samples with
+  sample.eye.wgsl or sample.light.wgsl): choose when the shader is put
+  together, not inside.
 - **A table of vectors read at a place found as it runs.** The raster's
   `const array<vec3f, 72>` of box corners, indexed by its axis and vertex,
   was refused (Tint holds such a table as a local; a `var<private>` copy was
@@ -62,8 +61,9 @@ own Vulkan driver. Each is a different compiler with its own faults.
   back by a function (`raster_corner`, render build.rs), it is taken.
 - **One shader too large.** A query as large as the world's walk asked from
   two places in one entry is written twice by a driver that inlines; split
-  the entry into passes at a clean seam, as `decor` splits at
-  `generation::placement`'s halves (footing, then pose).
+  the entry into passes at a clean seam, as the generated `decor` split at
+  `generation::placement`'s halves (footing, then pose). By hand neither half
+  walks, and `decor_cs` holds both (decor_pose.wgsl).
 
 ## What the build does for the phones
 
@@ -71,9 +71,14 @@ Nothing a shader computes is rewritten. render build.rs strips the comments
 and the indentation, appends the words it writes from pxl-engine, assembles
 each module from its parts (frame/shader/part.rs `PARTS`) and validates it
 with naga as WebGPU takes it, every capability off. The rules above are kept
-in the hand WGSL itself. The 86 modules as assembled are about 1.0 MB, the
-largest (`light_beam`) 57 KB, against 5.5 MB generated. The S23 has not yet
-made the whole set by hand.
+in the hand WGSL itself, and render build.rs `held_to_faults` refuses in every
+assembled module what of them naga's module shows: a struct that holds a
+struct, a struct- or array-typed local, `i32::MIN` and
+`atomicCompareExchangeWeak`. On 2026-11-05 the 86 modules as assembled were
+about 1.0 MB, the largest (`light_beam`) 57 KB, against 5.5 MB generated;
+part.rs `SHADERS` counts 92 now. The S23 has drawn with the shaders by hand
+since 2026-11-05
+([the frame on the S23](../experiment/20261105-the-frame-on-the-s23/journal.md)).
 
 ## What the host and a shader share
 

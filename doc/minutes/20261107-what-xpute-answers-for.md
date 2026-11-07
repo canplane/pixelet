@@ -1,6 +1,7 @@
 # What xpute answers for
 
-**2026-11-07** — decided by the user. Main was at `f6048876bf`.
+**2026-11-07** — decided by the user. Main was at an earlier form of `e212eae0f9`,
+on `c70bfa714c`.
 
 ## What the user decided
 

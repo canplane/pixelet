@@ -1,6 +1,7 @@
 # One number, and what clears entropy
 
-**2026-11-03** — recorded with the user, after the commits from `f59ad6301`.
+**2026-11-03** — recorded with the user, after the commits from `39cb14e87d`. The
+commits are named as `original` keeps them.
 
 ## What the user decided
 
@@ -69,7 +70,10 @@ a driver in TypeScript, as if another guest. The word had spread to what drivers
 a session read it and reasoned from it. So `driver`, `client` or `CPU` now stands where
 it was wrong, and `host.json` holds the hostcalls alone, with the roots and the files in
 `file.json`. Three shaders' comments still say it (`screen_propagate.wgsl`,
-`tile_mark.wgsl`).
+`tile_mark.wgsl`). On 2026-11-04 what answers the kernel became the services
+([xpute is the core's way out of JavaScript](./20261104-kernel-and-shell-as-an-operating-system-means-them.md)),
+and on 2026-11-06 the host became the runtime and a hostcall an import
+([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 
 ## One key, written one way at the edge
 
@@ -111,7 +115,7 @@ what it was, its index too, so no cell moved. The top is `<shard, fold>` (format
 at z8 or coarser has Z 0, or above the world past it, and its box the world's height. The key
 keeps two's complement, so its first Z digit is the tree's flipped; the mock says so.
 
-Measured the same day against `40fa72513`, `pxl.perf.drive(30)` three times a build in turn,
+Measured the same day against `fc13e61c86`, `pxl.perf.drive(30)` three times a build in turn,
 2056×1112 at a device pixel ratio of 2, headless, over Seoul, another session running through
 the third pair: fps 52.4, 51.5, 45.4 before and 51.1, 51.3, 46.2 after; the cast's GPU busy
 p50 / p95 19.0 / 26.7, 19.7 / 27.2, 22.3 / 31.3 before and 18.7 / 28.8, 19.4 / 27.5, 20.0 / 29.6

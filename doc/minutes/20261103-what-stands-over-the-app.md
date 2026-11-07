@@ -1,9 +1,9 @@
 # What stands over the app
 
-**2026-11-03** — recorded with the user. Main was at `8df835046`, which drew
-nothing: its client reads `division` in format 9 and the published data is in 8,
-so the kernel refused the source's declaration (`FS_MOUNT`, `EINVAL`), a warning
-in the console and `Loading area…` for good.
+**2026-11-03** — recorded with the user. Main was at `430a3086b9`, as `original`
+keeps it, which drew nothing: its client reads `division` in format 9 and the
+published data is in 8, so the kernel refused the source's declaration
+(`FS_MOUNT`, `EINVAL`), a warning in the console and `Loading area…` for good.
 
 ## What the user decided
 

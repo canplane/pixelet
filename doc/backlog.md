@@ -10,35 +10,39 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **The page stops on a large canvas.** On a desktop canvas the eye's `beams` buffer
-  passes the storage-binding floor (cast.rs, `ENOTRECOVERABLE`): 32 B a pixel of
-  walked and owed lists and parked states. Being cut to a hole bitmap and parked
-  states sized by the frame's budget, and the render size's ceiling derived from the
-  device's limits so 4K and 8K render and upscale.
-- **The canvas flickers black on the page.** Cause not yet found; the picture is to be
-  overwritten, never cleared, and a frame that changes nothing touches no canvas.
-- **Every resource the 11-06 batch grew, judged by what it must hold** (budgets,
-  bounded sets, one value a pixel only where that is the output), and cut.
+- **Faster than the deployed build, on every axis**
+  ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
+  Mac's gate passes, level on GPU time. The S23 at 550 MHz: GPU p50 3.6× the deployed build's,
+  p95 1.2×; the bar is 2×. The p95 is the light's: an epoch casts every tile it reads in one cast
+  ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-07).
+- **A standing view draws the scene's animation more often than the deployed build.** The pixels
+  are no longer cast again at rest; on the S23, 60 s standing drew 2604 gated frames at 18 ms
+  against the deployed build's 840–1004 at 20–30 ms. What a gated frame costs on the S23, and
+  how often the animation asks for one (4a4441d55b), are to be judged.
+- **The view after the shadows go on rests 18 turns later**, against the frame test's bound of
+  `JITTERS + FRAME_LATENCY`. Suspected from the code, not traced: the light's casts after it,
+  its epoch and then the footprints, each start the screen's gathering again in the tiles they
+  change.
+- **Fewer rocks at the far zoom** in the drive's shots than the deployed build's.
+- **A dark band along the horizon at the farthest zoom.** One-frame black frames fell
+  from 11–18 to 5–9 a drive at 4K, the largest from 44–63% of the canvas to 16–18%;
+  what is left is not explained.
 - **Safari pins its GPU with shadows on.** Since 9e476eca74 every pipeline compiles on
   Safari 27; with shadows on the GPU sat at 100%, before the indirect-scope fix
   (034ddad063) and the rest fixes. Recheck on main.
-
 - **A split's air children skipped (ESVO's child masks).** A split's answer carries its
   eight children's occupancy, kept with it in the node cache; a walk crosses an air child
-  without asking or looking it up, the engine's walk by the same rule. In progress.
-  Then sibling loads (a split's crossed children asked together) and, where the S23 and
-  Safari offer them, subgroups.
+  without asking or looking it up, the engine's walk by the same rule. Then sibling
+  loads (a split's crossed children asked together) and, where the S23 and Safari offer
+  them, subgroups.
 
 ## P1
 
-- **`auto` over the frame's interval too.** It is congestion control already (the
-  user, [20261102-auto-judges-the-pixels-and-the-lattice.md](./minutes/20261102-auto-judges-the-pixels-and-the-lattice.md)),
-  over the resolution and the lattice. The third knob is the rate frames go in at, a
-  divisor of the refresh (`frame_pacing`), against the queue of casts in flight as a
-  signal beside the GPU's busy time. Its name on the screen, "auto resolution", no
-  longer says what it moves. **The lattice knob goes if it earns nothing**, judged
-  by what it removes against the scale alone; then `LATTICE_MAX`, `gpu_lattice` and
-  the judge's G go with it.
+- **`auto`'s rate, judged on the S23.** The rate is its third knob
+  ([a ray ends in its frame](./minutes/20261107-a-ray-ends-in-its-frame.md)); its floor, 30 Hz,
+  is not a measured figure. Its name on the screen, "auto resolution", no longer says what it
+  moves. **The lattice knob goes if it earns nothing**, judged by what it removes against the
+  scale alone; then `LATTICE_MAX`, `gpu_lattice` and the judge's G go with it.
 - **The character preview does not show.** It did about three days before 11-05; a
   comparison with that build finds what lost it.
 

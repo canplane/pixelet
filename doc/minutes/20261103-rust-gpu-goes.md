@@ -1,7 +1,8 @@
 # rust-gpu goes
 
-**2026-11-03** — recorded with the user. The branch was at `05e8ae4a5`, on
-`d25f5b631`, the deployed commit.
+**2026-11-03** — recorded with the user. The branch was one commit past
+`d25f5b631`, the deployed commit; that commit's change is `5e908d68e8` on
+`original`.
 
 ## What the user decided
 
@@ -50,12 +51,15 @@ pyramid's words and no stack past what it needs, measured on the S23 against
 `sample`'s 111 ns a node. This replaces moving the kernel apart in Rust first.
 
 What must agree between CPU and GPU is about 1,900 lines, `world::node` and
-`placement`; the walk need not (`cast::first`). What the rest becomes is open:
+`placement`; the walk need not (`cast::first`). What the rest becomes is open: B or C
+of [the walk on a phone](./20261103-the-walk-on-a-phone-and-who-owns-it.md), every
+shader by hand or a compact tree the CPU builds, or D:
 
 | | Structure | The cost |
 | --- | --- | --- |
-| B | every shader by hand | the world defined twice, in Rust and WGSL, held equal to the bit by tests (the caves' noise) |
-| C | the CPU builds a compact tree and uploads it; the GPU only traverses | the renderer redesigned; WASM's build time and the upload on a phone; an edit's latency |
 | D | no CPU entry: picks off the visibility buffer, edits and decor by readback; the world defined on the GPU alone | a click, the camera's collision and an edit asynchronous, a frame or more late; the sync queries not yet counted |
 
 A shader at a time, not 35 at once, so each step is measured and can be undone.
+
+On 2026-11-05 the user decided every compute pass is WGSL by hand, held to pxl-engine
+word for word ([the shaders by hand](./20261105-the-shaders-by-hand-held-to-the-engine.md)).

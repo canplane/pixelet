@@ -3,8 +3,15 @@
 Whether the page can run the guest, its host and its devices in a worker, the
 shell alone on the main thread, as the device app runs the guest on its own
 thread: what the shell asks the guest and waits for, and what the browsers give
-a worker. Main at c01333000e. A proposal under study; 20260911 (one thread)
-stands until the user decides.
+a worker. Main at c01333000e, whose change main holds now in `9f116e5f34`. A
+proposal under study; 20260911 (one thread) stands until the user decides.
+Chrome 156 and Safari 27.0.1 on the Mac.
+
+Closed: the user decided on 2026-11-06 that the core runs apart from the UI, a
+page's in a worker ([the core apart from the UI](../../minutes/20261106-the-runtime-is-glue.md)),
+and the page's kernel runs in a worker on main since `2651534165`. The S23 and
+the iPhone stay open (below). The client's `services/` is `service/` since that
+commit.
 
 ## What the shell waits for
 
@@ -34,8 +41,7 @@ takes away:
 
 `probe/`: the page hands its canvas to a worker, which draws it with WebGPU on
 its own animation frames, measures and draws the kernel's text as
-`services/text.ts` does, and answers the page's messages (`probe/run.mjs`; data
-`out/worker-probe/`).
+`services/text.ts` does, and answers the page's messages (`probe/run.mjs`).
 
 | | Chrome 156, Mac | Safari 27.0.1, Mac |
 |---|---|---|
@@ -59,7 +65,8 @@ its own animation frames, measures and draws the kernel's text as
 
 ## The page, its kernel in a worker
 
-The worktree's page (`runtime/worker.ts`, `services/runtime.ts`), exported
+The worktree's page (`runtime/worker.ts`, `services/runtime.ts`; on main
+`ts/client/src/runtime/worker.ts` and `service/runtime.ts`), exported
 (`pnpm build:web`) and served (`web.ts serve`): Metro bundles the worker apart
 (`worker-….js`, 199 KB, beside the 6.8 MB page).
 

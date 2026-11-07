@@ -83,11 +83,11 @@ The line runs between the world's state and its drawing:
   the function with its own fusion and order, so two pipelines may decide one
   value apart at an edge. A value several pipelines read and decide at an edge
   is therefore exact: the light ray's start is in integers (light_aim.wgsl
-  `texel_start`, read by light_beam, light, light_miss, light_miss_hit,
-  light_sample_box and sample.light); so is the light's band, which seven
-  passes read: its gap is whole texels summed in integers, times one word the
-  host rounds (`light::band_texels2`, `W_BAND_SCALE`; tests/light.rs
-  `every_pass_bands_a_tile_alike`).
+  `texel_start`, read through `light_ray` by every pipeline built with
+  beam.light.wgsl, and by record_draw.wgsl); so is the light's band, which
+  the light's passes read: its gap is whole texels summed in integers, times
+  one word the host rounds (`light::band_texels2`, `W_BAND_SCALE`;
+  tests/light.rs `every_pass_bands_a_tile_alike`).
 - **What an edit lands on is decided once and shared as cells.** A click or
   an edit resolves to integer cells (Morton, zoom) on the machine where it is
   made, and those cells, not the pointer, go to the others; no machine casts
@@ -116,7 +116,7 @@ plane is a whole number of Q3 steps under 2^24 (pxl-engine support.rs
   budget is the range (how far the coordinates reach; take them local to a
   brick, not the world) plus the precision (the fraction the data really
   holds). Under 24 bits, floats stay exact; under 32, integers; beyond, a
-  64-bit product from 32-bit halves (`mul_hi`, decor.wgsl).
+  64-bit product from 32-bit halves (`mul_hi`, decor_row.wgsl).
 - **No division in a decision.** `a / b < c` is `a < c · b` for `b > 0`:
   multiplication alone, exact. (Integer division is exact in WGSL but slow on
   a GPU: no hardware divide.)
@@ -127,7 +127,7 @@ plane is a whole number of Q3 steps under 2^24 (pxl-engine support.rs
     pipelines (the light ray's start, in fixed point summed in i32);
   - a reciprocal or a root a frame holds constant is rounded once on the host
     and handed over in a word, which the rule multiplies by: fewer divisions,
-    so cheaper (the light's `W_WIDTH` and `W_INVERSE` … `W_WIDTH_INVERSE`, the
+    so cheaper (the light's `W_WIDTH` and `W_INVERSE` … `W_DOWN2_INVERSE`, the
     grid's `GRID_S_INVERSE` and `GRID_SLOPE`).
 - **One source of truth** is the other way out: one side decides and the other
   reads its answer (an upload, or a readback with its latency), as the kernel

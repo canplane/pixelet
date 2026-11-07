@@ -11,8 +11,7 @@ it happened, is in
 
 **pxl-engine is the oracle; the WGSL is held to it word for word.** Every
 compute pass is hand WGSL, assembled from parts (record.rs, part.rs) and
-validated by naga in build.rs; a reference test runs it on the GPU against the
-Rust and compares every word. Where the two disagree, the rule is settled on
+validated by naga in build.rs. Where the two disagree, the rule is settled on
 both sides at once — symmetry: what one side does, the other does the same way.
 
 - **A walk ends at `cast::STEPS_MOST` on both sides** (pxl-engine
@@ -68,8 +67,6 @@ abbreviation such as `INV_SPLIT2` stays.
 
 **History and records.**
 
-- Work is integrated in a worktree of its own, not on a main checkout others
-  edit, and merged when the user says.
 - Commits are split by genre, not squashed into one: the passes by hand, the
   removal, the tests, the shared rules, the layouts, the names, ts, docs. A
   rewrite keeps the tree equal at each step's end and puts the originals on
@@ -82,9 +79,9 @@ abbreviation such as `INV_SPLIT2` stays.
 
 ## What was done
 
-On main, the genre commits from `7341cc537c` to `b3ce4024e4`, the records in
-`f80c1996a9`; before the branch point the nineteen commits rewritten by genre
-(`681bf362a0` … `3dbe469161`). At the tip: CPU 315 tests, pxl-render 62 on the
+On main, the genre commits, now in `4399ef1ce5` to `bd3d48d7bf`, the records in the
+last; before the branch point the nineteen commits rewritten by genre, now in
+`ecee58d6c6` … `e8d41c585c`. At the tip: CPU 315 tests, pxl-render 62 on the
 GPU, vitest 28, xpute 114, the page with no console error. The originals are on
 `original` behind `chore: original/20261105-by-hand`.
 

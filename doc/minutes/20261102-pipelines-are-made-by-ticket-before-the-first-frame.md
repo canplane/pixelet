@@ -1,7 +1,8 @@
 # Pipelines are made by ticket before the first frame
 
-**2026-11-02** — recorded with the user. Main was at `7ac38f652`, the trace
-below taken at `aaa890d0a`; the commit that carries this record lands it.
+**2026-11-02** — recorded with the user. Main was at `315e74e573`, the trace
+below taken at `661d37bf9d`; the commit that carries this record lands it. The
+commits are named as `original` keeps them.
 
 ## What was asked
 
@@ -14,20 +15,20 @@ The user decided this.
 - The first frame with a device made the renderer (`Renderer::new`) and the
   ground's pipelines (`RaysPass::hand`); the first frame that cast made the
   cast's (`RaysPass::make`, `Raster::new`, `Generator::new`), most of the WGSL
-  (4.1 of 4.8 MB at `b964ab5a0`; 2.83 MB in all at `aaa890d0a`), every module
+  (4.1 of 4.8 MB at `9cd5f6ea83`; 2.83 MB in all at `661d37bf9d`), every module
   and pipeline with WebGPU's sync calls.
 - The web GPU host ran each as `createShaderModule` and the sync
   `createComputePipeline`/`createRenderPipeline` (xpute ts/gpu `GpuHost`).
 - The WGSL went into the 4 MiB stream (`stream::BYTES`) inline, outside the
   frame's transaction, where a record that does not fit stops the guest
-  (`ENOSPC`). At `b964ab5a0`, where the first frame with a device also cast,
+  (`ENOSPC`). At `9cd5f6ea83`, where the first frame with a device also cast,
   both sets landed in one turn's stream, 4.8 MB, and the guest stopped:
-  confirmed by reading, never seen. At `aaa890d0a` all of it is 2.83 MB and
+  confirmed by reading, never seen. At `661d37bf9d` all of it is 2.83 MB and
   fits.
 
 ## What holds which thread
 
-Measured on main `aaa890d0a`: Chrome 156, Apple Metal, a fresh profile a run
+Measured on main `661d37bf9d`: Chrome 156, Apple Metal, a fresh profile a run
 (cold caches), one load traced (Chrome's trace, every process) and one under
 the CDP sampling profiler with the Long Animation Frames.
 
@@ -109,7 +110,8 @@ A design that breaks one stops for a redesign; it is not patched.
 - **The bar.** The kernel's snapshot carries `renderer_made`, the share of
   that making done: half the modules by their bytes, half the pipelines made
   (`Pipelines::share`), 1 once the renderer draws. The world's loading toast
-  shows it as a bar while it is short of 1.
+  shows it as a bar while it is short of 1. On 2026-11-03 the user moved the bar
+  to the white screen ([what stands over the app](./20261103-what-stands-over-the-app.md)).
 
 ## Not run
 
@@ -121,12 +123,12 @@ frame takes, and whether the bar advances are open until they run.
 
 ## Rejected
 
-- **628db9a8a, reverted by 96f433342.** Async hidden inside the web GPU
+- **`a470bdfb88`, reverted by `6c6628bac5`.** Async hidden inside the web GPU
   host: a pipeline's handle named at once, and every record after a
   SET_PIPELINE naming one still being made copied out with the bytes of the
   guest's memory it read, then replayed. It breaks "a payload is read where it
   lies", the guest does not know, and the native host differs.
-- **Lazy pipelines, 1ed971037.** Each pipeline made the first time a pass sets
+- **Lazy pipelines.** Each pipeline made the first time a pass sets
   it, mid-frame: it broke the frame's contract, a frame recording what it
   cannot yet use.
 - **The whole core in a worker** (the xpute host, the guest and the GPU host
@@ -134,4 +136,5 @@ frame takes, and whether the bar advances are open until they run.
   and VS Code keep their core and renderer on the main thread; VS Code puts
   only its extension host in a worker. The core stays on the main thread, as
   doc/minutes/archive/20260911-single-thread-core-and-when-to-spawn-a-worker.md
-  has it.
+  has it. Replaced on 2026-11-06: the core runs apart from the UI, on a page in a
+  worker ([the runtime is glue](./20261106-the-runtime-is-glue.md)).

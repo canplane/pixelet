@@ -1,7 +1,8 @@
 # The drawn resolution's `auto`, over the pixels and the camera grid's lattice
 
-**2026-11-02** — recorded with the user. The span split is `3b4eb71cb`, on
-`f73f79c4a`, on `e5c03fe77`; the second knob is built on it.
+**2026-11-02** — recorded with the user. The span split is `8727d4498f`, on
+`07a06b1604`, on `641e855010`; the second knob is built on it. The commits are
+named as `original` keeps them.
 
 ## Against the ray cast
 
@@ -16,7 +17,7 @@ camera grid's angular cells and the light's map, which no drawn resolution
 shrinks, so the controller reads only what the resolution buys back.
 
 - Each GPU span says whether every pass it times runs a drawn pixel at a time
-  (span.json `per_px`, `GpuSpanName::PER_PX`, `f73f79c4a`), and a span with
+  (span.json `per_px`, `GpuSpanName::PER_PX`, `07a06b1604`), and a span with
   passes of both kinds is split: `sraster` into the boxes written over the
   samples (`sample_box`) and drawn into the visibility buffer (`sraster`);
   `mark` into the screen's (`mark`), the light's (`light_mark`) and the
@@ -64,7 +65,9 @@ screen observes the same world; until now it spaced the beam rays as well.
   the budget. Before, a timed step up checked P alone. A knob a step a
   settling window; down, the scale to `SCALE_MIN` first, then the lattice;
   up, the lattice first, then the scale. Without timestamps only the scale
-  moves; `fixed` and `low` lay the cell's own lattice.
+  moves; `fixed` and `low` lay the cell's own lattice. A third knob, the rate
+  turns go in at, was added on 2026-11-07, first down and last up
+  ([a ray ends in its frame](./20261107-a-ray-ends-in-its-frame.md)).
 - A lattice changed casts in full: the eye's grid words change, as a moved
   eye's do (pxl-render gpu/ray/cast.rs `eye_moved`). A read timed at another
   lattice is no sample (`FrameStat::gpu_lattice`); the perf frame's
@@ -75,9 +78,10 @@ screen observes the same world; until now it spaced the beam rays as well.
 
 ## Against the light's band
 
-`b964ab5a0` landed under the stack: the light runs the eye's `beam_cs` and
-`sample_cs`, and a light tile asks the world at its band. Read again against
-it, the knob's premises hold:
+`9cd5f6ea83` landed under the stack: the light runs the eye's `beam_cs` and
+`sample_cs`, and a light tile asks the world at its band
+([a light tile asks at its band](./20261102-a-light-tile-asks-at-its-band.md)). Read
+again against it, the knob's premises hold:
 
 - The light's passes take no word of the camera grid: every lattice method
   of the observer the light's head names is the light map's (pxl-shader
@@ -105,4 +109,5 @@ it, the knob's premises hold:
   holds its ray and its cell; its walk from the coarser cell's start is not
   run against the cell's own on a world.
 - The steps view (the nodes a pixel's walk visited, `SAMPLE_VISITS`) counts
-  the beam ray's visits, which the lattice changes.
+  the beam ray's visits, which the lattice changes. The view was removed on
+  2026-11-06 ([the frame is what it must draw](./20261106-the-frame-is-what-it-must-draw.md)).

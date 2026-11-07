@@ -5,14 +5,22 @@ repository's root (gitignored).
 
 ## A tree on the phone
 
-Each tree is a worktree under `.claude/worktrees/`, its guest built
-(`pnpm build:wasm` in `ts/client`, with the session's cargo target), and served
-by its own Metro as a dev bundle:
+The page is the main checkout's, its guest built (`pnpm build:wasm` in
+`ts/client`, with the session's cargo target), and served by its own Metro as a
+dev bundle, from the repository's root:
 
 ```sh
-cd .claude/worktrees/<tree>/ts/client
+cd ts/client
 EXPO_NO_TYPESCRIPT_SETUP=1 CI=1 ./node_modules/.bin/expo start --web --port <port>
 ```
+
+A comparison's other side is a second tree, served the same way from its own
+`ts/client` on another port.
+
+`s23.mjs` reaches the page's modules by path. Since `2651534165`, main names
+`src/services/share.ts` `src/service/share.ts` and no longer exports
+`perf_frames` from `src/port/perf.ts`, so it does not run against main as it
+stands.
 
 Take a port nothing listens on (`lsof -nP -iTCP:<port> -sTCP:LISTEN`). With
 `PXL_DEV_SOURCE=shelf` the tiles and assets come from the local shelf instead of
@@ -35,7 +43,7 @@ VPORT=8194 LABEL=x SCENES=off,on,drive node s23.mjs
 server is not the tree named:
 
 ```sh
-SCENES=walk,on HOUR=morning ./ab.sh rv 2 8194:<repo>/.claude/worktrees/base 8195:<repo>/.claude/worktrees/change
+SCENES=walk,on HOUR=morning ./ab.sh rv 2 8194:<base tree> 8195:<repo>
 python3 -I show.py light_receivers,light_beam,world base:rv1-8194,rv3-8194 change:rv2-8195,rv4-8195
 ```
 
@@ -61,3 +69,19 @@ VPORT=<port> FAR_S=600 node measure.mjs <label>
 ```
 
 A pin holds the GPU until Safari is force-quit.
+
+## Against the deployed build (11-07)
+
+The `cmp-*` tools take the deployed build, served by Vite from its constant tree
+(`.claude/worktrees/deployed`, e317a3644b with e2b019f1b0 and b6dac91e78) on port 8291, against
+the main checkout's page, served by Metro on 8298, both off the shelf on 3001:
+
+- `cmp-main-up.sh` builds the main checkout's kernel and serves its page and the shelf.
+- `script/compare-perf.py http://localhost:8291/ http://localhost:8298/ <rounds>` is the gate.
+- `cmp-prof.py <dir> <tag> <url>` takes one drive's `pxl.perf.report()` on the Mac.
+- `cmp-rest.py <dir> <tag> <url>` takes 8 s of the drive, then 65 s untouched, and shots.
+- `cmp-hot.mjs <port> <label> <seconds>` takes one drive on the S23's Chrome, the GPU's clock
+  every 5 s, and with `REST=65` the standing window after it; `cmp-s23.sh` runs the pages by
+  turns; `cmp-s23tab.py` tabulates them with their clocks.
+
+Each runs under the GPU lock (`lockf -k <workspace>/.gpu.lock`); their data go under out/cmp/.

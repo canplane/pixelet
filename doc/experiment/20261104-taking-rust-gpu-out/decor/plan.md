@@ -2,6 +2,10 @@
 
 `decor.rs` = rust/client/shader/src/decor.rs.
 
+The shader crate went with rust-gpu. The decor passes landed by hand in `e85332699f`, on main `9e9b30b924`
+([the journal](../journal.md)), now `rust/client/render/src/frame/shader/decor_*.wgsl`,
+footing and pose one pass, `decor_cs` in decor_pose.wgsl.
+
 ## Headline claims
 - The GPU's `Line` holds nothing: `Ground::root` is `UNPLACED` (decor.rs:51), `child` on it stays `UNPLACED` (world.rs:88), so the 33-entry stack `decor_cs` rebuilds (decor.rs:470) is constant.
 - An unedited ask is one `world_cell(UNPLACED, …)`; an edited ask is one `world_root` plus `world_cell`.

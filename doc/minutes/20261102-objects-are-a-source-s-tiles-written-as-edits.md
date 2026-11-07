@@ -1,9 +1,10 @@
 # The objects are a source's tiles, written as edits
 
-**2026-11-02** — recorded with the user. Main was at `3b0b62c2a` when it
-began; the first step is `c03236745` (objects a shard at a time through the
-`OBJECT` root) and `41f658ed7` (their place in the serve order); the second,
-edits up and files down, is being built.
+**2026-11-02** — recorded with the user. Main was at `e42d5dc37f` when it
+began; the first step is `fec96e2857` (objects a shard at a time through the
+`OBJECT` root) and `c911fe7cdc` (their place in the serve order); the second,
+edits up and files down, is being built. The commits are named as `original`
+keeps them.
 
 ## What was asked
 

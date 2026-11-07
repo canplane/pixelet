@@ -3,11 +3,28 @@
 What worked and what did not, as it happens, newest last. One entry a thing: what was
 tried, what came of it, and how we know. S23 figures are one load unless it says.
 
-A commit named here is main's as its history was rewritten by genre on 2026-11-05
+A commit named here was main's as its history was rewritten by genre on 2026-11-05
 (the round's xpute side is in
 [its minutes](../../minutes/20261105-xpute-not-yet-for-other-programs.md)); the
 commits as they were made are on `original`. A state that was never kept is named as
 the work it belonged to.
+
+main has been squashed since, and `git log --all` no longer shows most of these. Each
+change is on main in a squash, and most on `original` as they were made:
+
+| Named here | On `original` | On main |
+| --- | --- | --- |
+| `f9f66682e`, `e8d616ba4` | | `47d238aab4`, `e8d616ba4`'s tree |
+| `355b65140` | | `4cd32d38ef`, the same tree |
+| `d11dc095c0` | `b7ec6dd8df` | `ecee58d6c6`, the same tree |
+| `e85332699f` | `9f7839e040` | `9e9b30b924`, the same tree |
+| `0b978c7e53`, `c0e206a08d`, `2cc580cd88` | `dcb723f058`, `0e1418b9f6`, `28ea81aad3` | `3d9aa5b91e` |
+| `3baa9e9fd5` | `728020efcc` | `3d9aa5b91e`, the same tree |
+| `6b2ba06d84`, `97b46505fb` | `725bc70025`, `6ebe1349fa` | `4399ef1ce5` |
+| `97b95981b8` | | `4399ef1ce5`, the same tree |
+
+`d163e34c5`, `5d7113c02` and `bfd83b127` were the decor work's, not kept; that work is
+`e85332699f`.
 
 ## Worked
 
@@ -170,7 +187,7 @@ the work it belonged to.
 - Didn't: taking the P1 as a defect to fix. It rested on two screenshots with no control, and the first implementer spent its run at noon, not at the reported dawn and S23 cases. How we know: its report, and the two shots' source from the sessions that took them. Check the claim's evidence before briefing a fix.
 - Didn't: `pkill -f build-wasm` from an implementer. It matches every checkout's builds. Stop your own task or match by path; briefs now say so.
 - Worked: on/off/off on the S23 at noon, `e8d616ba4`, no camera move (`pixelet-ec`). The crown's dark blob reads on the ground in the difference, on against off 5.55% of pixels over 8, off against off 0.14%. The same crown had read as no shadow by eye at `6e9a7cb83`: the shadow is soft and the eye misses it. No no-decor control on the phone: the blob's shape and place say it is the tree's.
-- Closed: the P1 "trees cast no shadow" is no defect. Mac at dawn: visibility paint shows streaks running west from the trees on a sunlit slope; on/off 0.785 against a floor of 0.763, no-decor 0.981 on the same patch. At Yeouido and Seoraksan the near ground is already in terrain shadow (visibility 0 with or without decor), so a tree has nothing to darken. Evidence: the `decor` session's scratchpad `tree/`, `ea_vis_s.png`, `p_row.png`, `y_vis.png`.
+- Closed: the P1 "trees cast no shadow" is no defect. Mac at dawn: visibility paint shows streaks running west from the trees on a sunlit slope; on/off 0.785 against a floor of 0.763, no-decor 0.981 on the same patch. At Yeouido and Seoraksan the near ground is already in terrain shadow (visibility 0 with or without decor), so a tree has nothing to darken. Evidence: the `decor` session's visibility shots.
 - Worked: patching WGSL and the frame's words at runtime through wrapped WebGPU calls, several paints on one camera and no source edit. Visibility paint at dawn settled in one shot what screenshots had not.
 - Worked: unprojecting the eye's depth to settle what casts and what cuts, independently of the light: occluder heights match the eye's terrain tops; the wall that cuts the character lies at x = 0 and moves off the column with a 10.8° turn.
 - Didn't: judging shadows by eye. Two sessions and an implementer misread them, in both directions, until per-pixel ratios corrected it.
@@ -262,9 +279,9 @@ the work it belonged to.
 
 - Worked: `fold_cs`, `height_cs`, `bound_cs`, `cell_cs`, `hit_lead_cs`, `hit_faces_cs` by hand against pxl-engine on real_world inputs, 0 differ: fold 16 tables, fill 32 top cases and 112 level cases, cell 214,999 cells, hit 25 cases with 75,564 leads. Live words peak 37 (`bound_cs`). How we know: tests/{fold,fill,cell,hit}.rs, one binary at a time under the lock, at 6b2ba06d84.
 - Worked: floats compared exactly except where Metal fuses a product into a sum. `height` takes ±1 cell only for a top within 4 ulps of a half (214 qualify, 13 move); `cell` and `hit_lead` allow a window or cell over only within 32 and 8 ulps of an edge, and none moved. How we know: each moved top checked against a fused sum in Rust.
-- Worked: a serial sweep with every loop capped (65,536 a dispatch) and a 60 s kill, one mutant a lock hold. 215 mutants over the six modules: no run reached the kill, the caps broke 4. Survivors fold 32, height 4, bound 10, hit_lead 1, cell and hit_faces 0, each given a kind. How we know: the supervisor's runner (`sweep.py` in 572d46ae's scratchpad) and its records beside it.
+- Worked: a serial sweep with every loop capped (65,536 a dispatch) and a 60 s kill, one mutant a lock hold. 215 mutants over the six modules: no run reached the kill, the caps broke 4. Survivors fold 32, height 4, bound 10, hit_lead 1, cell and hit_faces 0, each given a kind. How we know: the supervisor's runner (`sweep.py`) and its records.
 - Worked: survivors as a lead to the test's holes. Three reachable ones closed with a case: `hit_faces`' count guard (an earlier cast's hits past the count would write onto real pixels), `hit_lead`'s workgroup opener (asks one past a multiple of the lanes dispatch one group short), `fold`'s write past the table (Metal drops it; the test now keeps a spare row).
-- Worked: an outside sample of 16 mutants at random from the 215 agreed with the supervisor on all 16 (14 killed; `height` 119 held by the exact dispatch, `fold` 48 equal outright at `ACROSS` 8). How we know: 572d46ae's scratchpad `aud/`.
+- Worked: an outside sample of 16 mutants at random from the 215 agreed with the supervisor on all 16 (14 killed; `height` 119 held by the exact dispatch, `fold` 48 equal outright at `ACROSS` 8).
 - Didn't: main's tests/world.rs since the decor merge. Its "world and walk" module listed clipmap, seed, clip and palette and then `hand`, which held them again, so naga refused the world test before any case ran. Found by the supervisor running world.rs for a shared part; fixed on `small`.
 - Didn't: splitting `world.wgsl` on a branch while two others split it too. Each of two rebases redid the split (decor's clipmap/seed/clip/palette, way's world_rule); one definition a function held by a script over every shader's parts, naga beside it. `small`'s own height code gave way to main's `ground_height`, so tests/fill.rs was run again after the rebase.
 - Didn't: a supervisor's run cut by the stall left uncommitted edits in the worktree, one in `clipmap.rs`, which it was told to leave. Saved to a patch and dropped before the rebase; the run after it was briefed again.

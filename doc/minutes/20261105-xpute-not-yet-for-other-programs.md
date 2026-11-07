@@ -12,8 +12,9 @@ and ended on whether a program outside this tree can take xpute today.
   requests io_uring's way: posted with ACKREQ, tagged with the descriptor,
   each completed once by a frame flagged RES on the submission ring;
   `FS_OPENED` goes. A close completes an open not yet completed with
-  ECANCELED. A write's bytes stay the guest's until its descriptor's close
-  completes, and the host reads them there. ENODEV for an unattached device
+  ECANCELED. A write's bytes are the runtime's until its descriptor's close
+  completes, and the runtime reads them there
+  ([what xpute answers for](./20261107-what-xpute-answers-for.md)). ENODEV for an unattached device
   reaches the guest as that completion.
 - **On native, the guest's own thread decides the next turn**: it runs until
   it has nothing to do and sleeps until its wake time or a kick; the strobe
@@ -44,8 +45,8 @@ and ended on whether a program outside this tree can take xpute today.
   hashes, the old ones going to `original`.
 - **A test another session's commit broke is handed over and not thought
   about here**: `decor::hand_frames_answer_as_the_rust`, broken since
-  `3baa9e9fd5` (originally `98f298bcb9`), is `small`'s; what it was and how
-  it was fixed is in
+  `3d9aa5b91e` (originally `728020efcc` on `original`), is `small`'s; what it
+  was and how it was fixed is in
   [taking rust-gpu out](../experiment/20261104-taking-rust-gpu-out/journal.md).
 - **Frame pacing stays in xpute, whole** (`@xpute/host` `sched/frame_pacing.ts`),
   as the agents advised and the user took. The display's part, the refresh
@@ -89,31 +90,33 @@ Asked by the user; the agents' reading, not a decision.
 
 ## What was done
 
-On `main`, above `3dbe469161` (the point `main` and `small` parted, then
-`77f7bdae0`), in place of `ae66db481` and the work after it, whose originals
-go to `original`:
+On `main`, above the point `main` and `small` parted, in place of the work
+after it, whose originals go to `original` (the point `e2ece951d2`, the work
+from `e3bbb79e87`):
 
-- `d80d66a665` docs: the unikernel model and the documents.
-- `c49e2fdaca` the specs, the generator (`ackreq`, `reply`) and the generated
-  files; the traces complete opens and closes.
-- `460832875c` the guest, Rust and C++: the door's requests and completions,
-  `host_turn` (a task waits on its host without asking a turn, which ends the
-  native busy wait), the C++ reading without `shared_ptr` (the wasm guest
-  imports nothing of WASI), names.
-- `8ce69d46d6` the host: completions in the doorbell and the file server, the
-  native scheduler and its pause, names, the `_` spelling.
-- `f8ea1eb053` the renderer and the GPU: WRITE_BUFFER_AT with no copy, the
-  fence, names.
-- `6129ca3767` the kernel.
-- `46ea53958d` the client's names.
-- `335f846cfe` the seed hook and the naming skill.
+- docs: the unikernel model and the documents.
+- the specs, the generator (`ackreq`, `reply`) and the generated files; the
+  traces complete opens and closes.
+- the guest, Rust and C++: the door's requests and completions, `host_turn` (a
+  task waits on its host without asking a turn, which ends the native busy
+  wait), the C++ reading without `shared_ptr` (the wasm guest imports nothing
+  of WASI), names.
+- the host: completions in the doorbell and the file server, the native
+  scheduler and its pause, names, the `_` spelling.
+- the renderer and the GPU: WRITE_BUFFER_AT with no copy, the fence, names.
+- the kernel.
+- the client's names.
+- the seed hook and the naming skill.
+
+On main these are now in `e8d41c585c` (the docs), `c20671be6f` (the specs to the
+kernel) and `acc9ec8d4a` (the client's names and the seed hook).
 
 `small` was rearranged into nine commits by kind and rebased onto them, and
 `main` moved forward to it, with the user's word. The unpushed commits before
 the parting point were then rearranged by kind as well, the world's, the
-renderer's, the fix and the test kept as they were, xpute's in one
-(`a3f84737cb`) and the client's in one (`3dbe469161`); `main` ends at
-`b3ce4024e4`, its tree the same as before.
+renderer's, the fix and the test kept as they were, xpute's in one and the
+client's in one, both now in `e8d41c585c`; `main` ended with its tree the same as
+before.
 
 ## Open
 

@@ -7,6 +7,10 @@ fresh loads alternated base and change in one sitting, two loads a side unless i
 says; Safari is Safari 27.0.1 on the Mac. From the visit A/B on, a load is timed
 only once the ground's textures have landed (whether they had was a confound before).
 
+Open. From 11-07 the bar is the deployed build (e317a3644b) at the same clock; where the
+frame stands against it is the last section. 11-07's runs took the tools named `cmp-*`
+(`tools/cmp-hot.mjs` for the S23); `tools/s23.mjs` no longer runs on main (tools/README.md).
+
 ## Where it started
 
 - **Main a449637a35 on the S23**, shadows off: fps 35–40 (rust-gpu's 11-03: 5.9), GPU
@@ -398,3 +402,67 @@ Pass times are ms p50 / p95, over the drive's last minute.
     one grey-violet rock), the camera still meets faces against solid.
   - At rest (s-t0246, s-t0261, s-t0276), a grass wall fills the screen.
   - No stale shadow was seen after a turn.
+
+## 11-07, what the frame carried over frames, removed
+
+The bar is the deployed build ([the deployed build is the bar](../../minutes/20261107-the-deployed-build-is-the-bar.md)):
+e317a3644b with e2b019f1b0 and b6dac91e78, so its drive is not pinned, served by Vite; the
+change is main at b034c0bf54 with the working tree, served by Metro. Both dev builds, both off
+the shelf. The Mac's figures are `script/compare-perf.py`'s, base and change by turns; the
+S23's are `pxl.perf.drive(120)` then 65 s untouched, fresh loads by turns, the GPU's clock read
+every 5 s (`tools/cmp-*`; the data under out/cmp/, not kept).
+
+Removed: the visit budget and its caps, the rolled lattice, every ray parked across frames and
+the owed words, bits and pools it took, the readback that woke frames for them, and the light's
+claim budget, places, rings and carried rays. Every ray ends in its run; a ray with no room or
+asks left ends as a lack. `Counter` keeps the `ray_counts` setting's copy alone.
+
+- **The eye's holes, one lane a word, were the cost; a list, a lane a hole.** Found in the code
+  first: a lane took a word of hole bits and walked its up to 32 holes one after another, so
+  holes that lay together kept a 32nd of the lanes busy, about 5× short at 100k holes. A list of
+  holes, as the light's: `miss` p95 29 to 6 ms on the Mac, GPU 27.5/56.8 to 19.3/36.8 ms, casts
+  in 20 s 599 to 872. One run each side, the gate after it. The list takes a word a drawn pixel,
+  so the most drawn falls to about 14.7 Mpx (`DRAWN_AREA`); an 8K canvas is drawn smaller and
+  brought up.
+- **The gate, 3 rounds: pass.** GPU p50 19.60 to 19.46 ms, p95 37.36 to 37.36, the first load's
+  longest frame 878 to 175 ms, tick 1.5/2.2 to 1.5/2.1.
+- **The node cache's keys and states apart from its entries,** dense arrays, the entry 44 B where
+  it was 80 B. A walk's hit reads about as many lines as before (2.5 to 2.4), a miss 4 to 1; a
+  pass over every slot reads 17–43 MB where it read 84 MB, two or three a cast. Expected: under
+  0.5 ms on the Mac at 400 GB/s, 2–5 ms on the S23 at its 67 GB/s peak or below. The gate, 2
+  rounds: GPU p50 19.79 to 18.87, p95 37.22 to 39.19, pass, within the Mac's noise as expected.
+- **Standing, 8 s of the drive then 60 s, Mac:** 3258 frames gated and 342 stood, GPU 6.0/9.4
+  ms, the panel idle; the deployed build 3598 gated, never resting, GPU 9.2/13.1 ms.
+- **A held turn no longer draws the next frame whole where its lists moved nothing.** The kernel's
+  frame test still finds the view resting 18 to 28 turns after it stops, against its bound of
+  `JITTERS + FRAME_LATENCY`; it fails.
+- **The asks a frame takes, 2^21.** At 2^17 a run of the light's holes over a fresh node cache
+  still asked past it after 64 frames, and four GPU tests failed on it.
+- **Not as first said:** the walk's budget atomics cost 0.3–8 ms on the S23 by the count of
+  rounds, not the 10–30 ms a reader estimated; the S23's bandwidth was taken at 25–30 GB/s
+  unchecked, its peak is about 67 GB/s.
+- **The S23, the drive then 65 s untouched,** fresh loads by turns, the GPU's clock as logged:
+
+  | run | clock, MHz | frames drawn a second | GPU p50 / p95 | standing 60 s: frames, GPU p50 |
+  |---|---|---|---|---|
+  | main-1 | 719 | 9.5 | 62.5 / 238.7 | 3554 (951 px, 960 held), 18.0 |
+  | base-1 | 615–680 | 2.5 | 304.4 / 1282.1 | 1004 (969 gated), 20.3 |
+  | base-2 | 550–719, most 550 | 1.5 | 300.2 / 437.6 | 840 (731 gated), 30.0 |
+  | main-2 | 550, two reads 615 | 6.8 | 82.3 / 359.7 | 3289 (1059 px, 1109 held), 23.3 |
+
+  At 550 MHz (main-2 against base-2) the GPU's p50 is 3.6× the deployed build's, its p95 1.2×,
+  frames drawn 4.5×. The 2× bar holds at p50 and not at p95. The p95 is the light's now:
+  `light_hit` 152, `light_sample` 73, `light_walk` 48 ms, together more than the deployed
+  build's light (`light_walk` 174, `light_sample` 64, `light_beam` 34); the eye's `miss` 13
+  against 272. With the claim budget gone, an epoch casts every tile it reads in one cast.
+  Standing, main draws three times the frames the deployed build does, casting the pixels again.
+- **A frame turn the GPU cannot take is not run** (the kernel's `frame_task`), its grant's time
+  added to the next; the renderer's held turn, which drew the next frame whole and so started the
+  jitter's sequence again, is gone. Mac gate, 2 rounds: pass, GPU 20.77/38.99 to 16.78/34.80 ms.
+  Mac, 60 s standing: 1116 frames stood and 2484 gated, none casting the pixels, GPU 5.8/8.9 ms.
+  S23 (main-3, 680–719 MHz, the phone cooled since main-2): the drive's GPU 63.2/249.2 ms, frames
+  drawn 9.1 a second as main-1's; 60 s standing, 2604 frames gated and none casting the pixels
+  again, GPU 18.0 ms, where main-2 cast them 1059 times. The deployed build's standing window
+  drew 840–1004 frames at 20–30 ms; main draws the scene's animation at its own rate, more
+  often. The profiler's interval now spans the turns not run.
+- **Open:** fewer rocks at the far zoom in the drive's shots than the deployed build's.

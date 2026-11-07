@@ -6,9 +6,32 @@ what a lattice of 2 buys, and how many nodes the walks visit against what each
 takes on the S23 and on a Mac. What this means for the shaders is in
 [the walk on a phone, and who owns it](../../minutes/20261103-the-walk-on-a-phone-and-who-owns-it.md).
 
-A commit named below as a state measured, where main does not hold it, is a commit of
-the work in progress that was not kept (11-03 and 11-04); what it changed is in the
-commits main holds since.
+Closed. The walks measured here are rust-gpu's and the hand passes of 11-03 and 11-04.
+rust-gpu went on 2026-11-05 ([taking rust-gpu out](../20261104-taking-rust-gpu-out/README.md)),
+the walks run as the holes' queue since 11-06 (`9f116e5f34`), and a ray ends in its
+frame since 11-07 ([a ray ends in its frame](../../minutes/20261107-a-ray-ends-in-its-frame.md)).
+
+A commit named below that `git log --all` no longer shows was of the work in progress
+of 11-03 and 11-04. The same change is on `original`, rebased, under its own subject;
+main holds the hand walks squashed in `6c196144d4`, `f9f66682e` and `e8d616ba4` in
+`47d238aab4` (`e8d616ba4`'s tree), and `355b65140` in `4cd32d38ef` (the same tree).
+
+| Named here | On `original` |
+| --- | --- |
+| `05e8ae4a5` | `5e908d68e8` |
+| `749560da1` | `a6165918dc` |
+| `94d6e9284` | `e00353e76d` |
+| `e7757099f` | `76b40dff10` |
+| `8ac7315b1` | `8d0f501633` |
+| `2a9b235f3` | `067b76a6d1` |
+| `7bf251816` | `1eef3ee8c6` |
+| `3e7ba241d` | `20fd63c0e5` |
+| `1af780b72` | `3f1fd41f2a` |
+| `2f7d18b37` | `8650432b78` |
+| `981947702` | `e93ecb5a8c` |
+| `b7457102e`, `9029f35dc` | `25d2136ca7` |
+| `430cdc831` | `251dd052ed`, the same tree |
+| `69ff22b9a` | `27d811459a`, the same tree |
 
 ## How
 
@@ -27,6 +50,10 @@ commits main holds since.
 - **Auto**: the S23 alone, the circle for seven windows of 25 s.
 - **Resolution**: `reports/s23-by-resolution.json`, the S23 alone, an earlier run
   of the same circle on the same commit, with the shadows at their default, off.
+
+The shell scripts in `tools/` serve each commit's page from `ts/app/web`, the page's
+tree of the time, in worktrees of their own; the scratchpad and the cargo target they
+name are the session's that ran them (`572d46ae`), both gone.
 
 `reports/` holds each window's whole report. `tools/show4.py` prints them. A span
 is its p95 in ms over the frames a read timed that ran it, as the profiler reports
@@ -231,6 +258,9 @@ start (`reports/s23-step-1a.json`, against `reports/s23-matched.json`):
 - It draws on both, and the S23 makes its pipelines. The picture was not compared.
 - A Mac delta is not given: the two Mac runs were on different displays (a device
   pixel ratio of 2 at 120 Hz, then 1 at 60 Hz), and `beam` moved there too.
+
+The short stack went at `94d6e9284`, once `sample` walked only what the hand pass left
+("What stays in `sample`" below).
 
 ## The real page's answers
 
@@ -571,7 +601,9 @@ Each against its parent in one sitting, by turns (`tools/ab2.sh`, `tools/ab3.sh`
 **A queue**, `3e7ba241d` against `7bf251816`: each left beam's first stop asked once, then
 the hand walk again. It left 115 thousand nodes a cast against 155–166, and took `beam` from
 44–60 to 88–99 and GPU p95 from 108–167 to 175–217. fps 13.0–17.2 against 15.8–23.4.
-Reverted. `ask.gen.wgsl` peaks at 95 live words, so the cliff is not why.
+Reverted. `ask.gen.wgsl` peaks at 95 live words, so the cliff is not why. A queue that
+asks each node once came back on 11-06, the holes' queue (`9f116e5f34`), its rays parked
+within their frame since 11-07 ([a ray ends in its frame](../../minutes/20261107-a-ray-ends-in-its-frame.md)).
 
 **The node that stops a frame.** `7bf251816`, a first stop's distances against its side
 (`reports/left-near-s23.json`). Two frames of 16 left 6,848 beams, every one of the grid's
@@ -698,6 +730,9 @@ A DevTools geolocation override alone can leave the page waiting: stub `navigato
 - So asked finer can turn air into a split. Those nodes sit on a boundary of `zoom_at`, near 96 or 192 u in 33 of 38, at zooms 21–23 in 36.
 - 118 more held air had no slot at the asked zooms when read, not compared.
 
+Since 11-06 the node cache keeps a cell's answer once, whatever zooms it is asked at,
+and a split's at the pair asked (`42d3340754`).
+
 ### The app against the page
 
 The Android app at `e8d616ba4` on the S23, Release, against the page at the same commit, one load each, the same place and motion. The app runs wgpu and naga on Vulkan, with no browser. `tools/app-probe.patch` is what the scratch build changed: the probe, a fixed position, the kernel's and the shell's dev settings, and the surface's alpha below. `reports/app-s23.txt`.
@@ -720,7 +755,7 @@ The Android app at `e8d616ba4` on the S23, Release, against the page at the same
 | Drive, casts a second | 2.5 | 1.7 |
 
 - The app is not faster, so the browser is not what makes the phone slow. The app draws 19% more pixels and its frames were paced at about 25 ms, against the page's 16.6.
-- **The app does not start on this phone without a change.** `xpute/rust/gpu/src/host/surface.rs:147` asks for `Opaque` where the S23's Vulkan surface offers only `Inherit`, and `Surface::configure` stops the kernel, `ENOTRECOVERABLE`.
+- **The app does not start on this phone without a change.** `xpute/rust/gpu/src/host/surface.rs:147` asks for `Opaque` where the S23's Vulkan surface offers only `Inherit`, and `Surface::configure` stops the kernel, `ENOTRECOVERABLE`. Since `432295c304` a surface that offers only `Inherit` configures.
 - The app's picture 3 s after the circle shows the place with no tree in view, where the page has trees at about the same view. Not followed.
 - The world showed at 24 s, the page's at 16 s. The app's was its first run after an install.
 
@@ -798,6 +833,9 @@ with both knobs at their floor, holds 6–8 fps. The windows' views differ, as t
 circle turns, and the later ones ran hot for longer; thermal status stayed 0. Nodes
 were not counted at a lattice of 2.
 
+On this, `auto` took a third knob on 2026-11-07, the rate turns go in at
+([a ray ends in its frame](../../minutes/20261107-a-ray-ends-in-its-frame.md)).
+
 ## The drive
 
 Not one cost. On the S23 two runs gave GPU p50 415.6 and 229.1 ms, with the view
@@ -813,6 +851,10 @@ To the world, cold: about 94 s on plei.me, with one restart of the page near 60 
 that logcat does not explain, and 91 s on the dev build with none. Warm: 15 s.
 Moving on plei.me over `requestAnimationFrame`: 7.5 fps, p50 33.9, p95 550.1 ms, no
 long task (`tools/raf.mjs`).
+
+The 90 s were later found to be the data's format and the harness
+([the journal](../20261104-taking-rust-gpu-out/journal.md), "Did not work"): 19–29 s to
+the world in "A first load, and a moved brick that leaves a split" above.
 
 ## What a run must keep clear of
 
@@ -850,6 +892,9 @@ function of a client or server crate as a root, so the lines are a static bound 
 no run-time count.
 
 ## Not measured
+
+The hand walks and the native app were measured after this list was written: "The hand
+kernel" and "The app against the page" above.
 
 - The whole of the walk under the cliff: `sample_hit` is the samples' hits alone.
 - The real page's other buffers, against what the synthetic did to its table.

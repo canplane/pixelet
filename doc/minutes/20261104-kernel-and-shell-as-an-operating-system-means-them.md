@@ -69,7 +69,8 @@ WebAssembly's context. The user decided:
   of a general runtime is not sought. **host and guest mean what they mean in
   WebAssembly** (wasmtime, wit-bindgen): the guest is the core that runs
   inside, the host what runs it. `xpute-guest` and `@xpute/host` keep their
-  names.
+  names. On 2026-11-06 host and guest were retired for the runtime and the core
+  ([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 - **Convention over invention.** Outside the guest there are three parts:
   - **host**: opens the guest, runs its turns, rings, memory and GPU; xpute's,
     which an app calls once (`boot`);
@@ -109,7 +110,9 @@ WebAssembly's context. The user decided:
   guest completes on CQ, as io_uring's application and kernel do; the guest's
   own requests ride CQ in ublk's way, and their results come back on SQ.
   Renaming the rings rx and tx by the guest's side was weighed and dropped. The
-  host keeps laying the front, the way with less boilerplate.
+  host keeps laying the front, the way with less boilerplate. On 2026-11-06 the
+  user decided the UI writes the SQ itself, not through the runtime
+  ([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 - **The stack reads ui → core → host.** io_uring's SQ → CQ is the ui → core
   relation: the ui submits to the core as an application to its kernel, the
   core completes, and its rarer pre-emptive messages to the ui are upcalls; the
@@ -168,7 +171,9 @@ On 2026-11-05 the user set the model the conventions are taken from:
   refused, and an unattached device's command ENODEV.
 - **The names are kernel, shell and host** in pixelet, and guest and host in
   xpute. core and ui, the documents' aliases for kernel and shell, go. A
-  first reading of the day, Linux in a VM, was replaced by this one.
+  first reading of the day, Linux in a VM, was replaced by this one. Replaced on
+  2026-11-06: xpute's names are the UI, the runtime and the core, and pixelet's
+  the kernel and the shell ([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 
 ## Overturned the same day
 
@@ -220,15 +225,22 @@ them as standing:
   schedule its user. Whether `run(quota) → wake` stays the contract on native,
   and what the turn's boundary implicitly guarantees today (memory handed back,
   order), which a concurrent native would have to make explicit (atomic
-  publish and consume, an explicit release).
+  publish and consume, an explicit release). On 2026-11-05 the guest's own
+  thread came to decide the next turn on native
+  ([xpute not yet for other programs](./20261105-xpute-not-yet-for-other-programs.md)),
+  and on 2026-11-06 a turn came to end by a deadline, not a quota
+  ([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 - **Removing ports** in the code, after the reframing: one ABI table for the
   core with xpute's reserved majors, a frame's tag without a port, the
-  per-protocol ports and `x_out(host, port)` gone.
+  per-protocol ports and `x_out(host, port)` gone. xpute has no ports by
+  2026-11-06 ([the runtime is glue](./20261106-the-runtime-is-glue.md)).
 - **The files**: left to the agents, by whether another app reuses them. Taken:
   xpute's, as predefined ABI and the host's server, since roots, paths and
   handles mean nothing of pixelet's.
 - **The toc**: left to the agents. Taken: it shrinks to a check word, MAGIC and
-  VERSION, the addresses following from the machine on both ends.
+  VERSION, the addresses following from the machine on both ends. On 2026-11-07
+  the user decided the front's header holds no version
+  ([what xpute answers for](./20261107-what-xpute-answers-for.md)).
 - **`AGENTS.md`** still sets kernel and shell as the vocabulary and keeps
   pixelet's words out of `xpute/`; it is rewritten with the documents.
 - **Zero copy's scope**: between the core and its host's memory, not the GPU
@@ -237,7 +249,7 @@ them as standing:
   to be published next, for other programs, the same reason `kit` is kept.
 - xpute's README and ARCHITECTURE, behind all of this.
 
-## What was done (`a3f84737cb`, `3dbe469161`; originally `77f7bdae0`)
+## What was done (now in `e8d41c585c`; originally `e2ece951d2` on `original`)
 
 - **The machine** (`machine.json` in the guest crate, its schema
   `xpute/spec/machine.schema.json`): memory, stack, rings, the GPU's request.

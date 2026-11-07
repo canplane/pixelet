@@ -9,6 +9,13 @@ differences here say anything. Why rust-gpu goes is in
 [rust-gpu goes](../../minutes/20261103-rust-gpu-goes.md). The phone's own costs are in
 [the walk on a phone](../20261103-the-walk-on-a-phone/README.md).
 
+Closed: rust-gpu went whole on 2026-11-05, every pass WGSL by hand, each held to
+pxl-engine ([the minutes](../../minutes/20261105-the-shaders-by-hand-held-to-the-engine.md)).
+How the round went, pass by pass, is [the journal](./journal.md); `decor/` holds the
+decor passes' plan, rulings and records, `supervise/` the sweeps of `world.wgsl` and
+their tools. `f9f66682e` and `e8d616ba4` are on main in `47d238aab4`, `e8d616ba4`'s
+tree.
+
 ## The query on the phone
 
 `world.wgsl` is `world::node` by hand, f9f66682e, read-only, no atomics, no arrays.
@@ -101,5 +108,8 @@ operator or a constant: a test that passes with it does not hold that line.
 - The drive with shadows on casts on few frames now (61 of 707 in 24.8 s), 2.5 casts a
   second against the 2.7 fps of a drive that cast throughout: no gain there yet.
 - Trees' shadows at dawn. At noon they cast, on the Mac with a no-decor control and on
-  the S23 at e8d616ba4 with shadows off, on, off.
-- `world.wgsl` has not read a real world on the S23: no pass uses it yet.
+  the S23 at e8d616ba4 with shadows off, on, off. At dawn on the Mac they cast too
+  ([the journal](./journal.md), "Tree shadow, decor").
+- `world.wgsl` has not read a real world on the S23: no pass uses it yet. Every asking
+  pass reads it since the passes went by hand, on the S23 from 2026-11-05
+  ([the frame on the S23](../20261105-the-frame-on-the-s23/journal.md)).
