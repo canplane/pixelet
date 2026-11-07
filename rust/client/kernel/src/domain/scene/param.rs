@@ -25,10 +25,10 @@ pub const EDGE_WIDTH: f64 = 1.0 / 64.0;
 pub const AO_STRENGTH: f64 = 0.2;
 
 // ---- the drawn resolution ----
-// `auto`'s two knobs, the scale and the camera grid's lattice (pxl-engine
-// `grid::LATTICE_MAX`), share the windows, the band and the budget, `RES_`
-// (resolution.rs), and its steps are `RES_STEPS`; the misses and probes
-// judged where no GPU time is reported are the scale's alone, `SCALE_`.
+// `auto`'s two knobs, the rate and the scale, share the windows, the band and
+// the budget, `RES_` (resolution.rs), and the scale's steps are `RES_STEPS`; the
+// misses and probes judged where no GPU time is reported are the scale's alone,
+// `SCALE_`.
 
 /// The least share of the display's pixels, each way, the world is drawn at.
 pub const RES_MIN: f64 = 0.5;

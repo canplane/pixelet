@@ -95,7 +95,6 @@ struct EyeCase {
     origin: [i32; 3],
     look: [f32; 3],
     tan: [f32; 2],
-    lattice: u32,
     far: f32,
     range: [Zoom; 2],
     cuts: [Cut; 2],
@@ -174,7 +173,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
     let forward = unit(c.look);
     let right = unit(cross(forward, [0.0, 0.0, 1.0]));
     let up = cross(right, forward);
-    let grid = Grid::of(c.tan, c.lattice);
+    let grid = Grid::of(c.tan);
     let mut words = vec![0u32; eye::WORDS];
     for k in 0..3 {
         words[eye::ORIGIN + k] = c.origin[k] as u32;
@@ -485,17 +484,15 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             origin: over([EYE[0] + 90, EYE[1] + 90], 60),
             look: [0.5, 0.4, -0.77],
             tan: [0.3, 0.2],
-            lattice: 1,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
         },
         EyeCase {
-            name: "the eye, lattice 2, over the seam",
+            name: "the eye, over the seam",
             origin: over([EYE[0] + 280, EYE[1] + 90], 40),
             look: [0.8, 0.2, -0.55],
             tan: [0.4, 0.3],
-            lattice: 2,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
@@ -505,7 +502,6 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             origin: over([leaf_c[0] >> 1, leaf_c[1] >> 1], 20),
             look: [0.02, 0.03, -1.0],
             tan: [0.3, 0.4],
-            lattice: 1,
             far: 400.0,
             range: [LEAF_CELL, FINEST],
             cuts: [
@@ -528,7 +524,6 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             ]),
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
-            lattice: 1,
             far: 600.0,
             range: [LEAF_CELL, FINEST],
             cuts: none,
@@ -538,7 +533,6 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             origin: over([EYE[0] + 40, EYE[1] - 60], 30),
             look: [0.7, 0.6, -0.08],
             tan: [0.5, 0.3],
-            lattice: 1,
             far: 500.0,
             range: [8, FINEST],
             cuts: none,
@@ -548,7 +542,6 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             origin: over(hole, 30),
             look: [0.05, 0.03, -1.0],
             tan: [0.4, 0.4],
-            lattice: 1,
             far: 400.0,
             range: [8, FINEST],
             cuts: [
@@ -576,7 +569,6 @@ fn worlds() -> Vec<(Built, Vec<EyeCase>)> {
         origin: q8([150, EYE_ZERO[1] + 90, 2300]),
         look: [-0.3, 0.1, -1.0],
         tan: [0.4, 0.3],
-        lattice: 1,
         far: 4000.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
@@ -591,7 +583,6 @@ fn worlds() -> Vec<(Built, Vec<EyeCase>)> {
         ]),
         look: [0.1, 0.05, -1.0],
         tan: [0.4, 0.4],
-        lattice: 1,
         far: 400.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],

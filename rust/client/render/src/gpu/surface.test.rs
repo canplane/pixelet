@@ -4,7 +4,6 @@ use super::*;
 use crate::frame::shader::floor;
 use crate::gpu::api::word_bytes;
 use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
-use pxl_engine::grid::LATTICE_MAX;
 use pxl_engine::screen::TILE;
 use pxl_engine::{beam, ray};
 use pxl_spec::space::camera::grid::HALF_TAN;
@@ -66,15 +65,9 @@ fn most_drawn_fits_every_buffer() {
         for size in [[long as u32, short as u32], [short as u32, long as u32]] {
             let aspect = size[0] as f32 / size[1] as f32;
             let tan = [HALF_TAN as f32 * aspect, HALF_TAN as f32];
-            for lattice in [1, LATTICE_MAX] {
-                let grid = beam::Grid::of(tan, lattice);
-                let words = grid.walked_at() + ray::holes_words(size);
-                let bytes = u64::from(word_bytes(words as usize));
-                assert!(
-                    floor::fits(bytes, true),
-                    "{size:?} lattice {lattice}: {bytes} bytes"
-                );
-            }
+            let words = beam::Grid::of(tan).walked_at() + ray::holes_words(size);
+            let bytes = u64::from(word_bytes(words as usize));
+            assert!(floor::fits(bytes, true), "{size:?}: {bytes} bytes");
         }
     }
 }

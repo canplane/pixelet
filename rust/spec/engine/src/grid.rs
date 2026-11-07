@@ -45,22 +45,13 @@ pub const SPANS: f32 = 2.0;
 pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 
 /// The view's cell, an angle in radians: the angle every eye's ray is asked
-/// at (`cell_zoom_at`), and the samples' lattice, `param::beam::SAMPLE` a
-/// cell a side, which a pixel takes the nearest stop of. The beam rays and
-/// the cells their starts are found for lie on a lattice of their own, a
-/// power of two of cells a side up to `LATTICE_MAX` (`beam::Grid::of`), the
-/// drawn resolution's second knob (pxl-kernel
-/// domain/scene/resolution.rs): the samples are the very rays at every
-/// lattice, so what each screen observes and draws is the cell's alone. The
-/// cell spaced the beam rays too until the lattice came apart from it
-/// (doc/minutes/20261102-auto-judges-the-pixels-and-the-lattice.md).
+/// at (`cell_zoom_at`), the beam rays' and cells' spacing (`beam::Grid::of`),
+/// and the samples' lattice, `param::beam::SAMPLE` a cell a side, which a pixel
+/// takes the nearest stop of.
 pub const CELL: f32 = 1.0 / CELLS_A_RAD;
-
-/// The coarsest lattice the beam rays and cells are laid on, in `CELL`s a
-/// side, which lays a quarter of the cell's beam rays and cells. A lattice is a power of two of cells, so the
-/// sample's spacing, the lattice's side over its samples a side, is the
-/// very f32 at every one (`beam::Grid::sample`).
-pub const LATTICE_MAX: u32 = 2;
+/// Its reciprocal, which a tangent is scaled by to count cells, the same
+/// constant on the CPU and the GPU.
+pub const CELL_INVERSE: f32 = 1.0 / CELL;
 
 /// One over the split distance squared, `CELLS_A_RAD / SPANS` sides: what a
 /// distance squared is scaled by to read its zoom (`cell_zoom_at`).

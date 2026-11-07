@@ -4,9 +4,9 @@
 //! in the device's depth (`mat4::perspective`).
 
 use pxl_content::generation::GROUPS;
+use pxl_engine::eye;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::ray;
-use pxl_engine::{beam, eye};
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -337,14 +337,11 @@ pub struct FrameStat {
     /// read's, `gpu_busy_ms` the time they ran, those that overlap counted
     /// once, the frame's GPU time where its passes overlap (`Gpu::gpu_busy_ms`),
     /// `gpu_px` the world's pixels the frame it timed drew, what the spans
-    /// were measured over, `gpu_lattice` the camera grid's lattice its eye
-    /// laid (pxl-engine `beam::Grid::lattice`), 0 where it had none, and
-    /// `gpu_frame` that frame's number (`frame` as it was); else they are 0,
+    /// were measured over, and `gpu_frame` that frame's number (`frame` as it was); else they are 0,
     /// as nothing was measured with this frame.
     pub gpu_read: bool,
     pub gpu_busy_ms: f64,
     pub gpu_px: f64,
-    pub gpu_lattice: f64,
     pub gpu_frame: f64,
     /// This frame's number, from 1, a frame the renderer encoded each; 0
     /// where it stood and drew nothing.
@@ -374,16 +371,6 @@ pub struct FrameStat {
 /// resolution can buy back.
 pub fn px_ms(spans: &[f64]) -> f64 {
     GpuSpanName::PER_PX.iter().map(|&s| spans[s as usize]).sum()
-}
-
-/// A frame's GPU time in the spans that run over the camera grid's lattice,
-/// its corners or its cells (span.json `per_cell`, `GpuSpanName::PER_CELL`):
-/// what a coarser lattice can buy back.
-pub fn cell_ms(spans: &[f64]) -> f64 {
-    GpuSpanName::PER_CELL
-        .iter()
-        .map(|&s| spans[s as usize])
-        .sum()
 }
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
@@ -474,10 +461,9 @@ pub struct Renderer {
     /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
     /// timestamps, and no frame is timed.
     query_set: u32,
-    /// The world's pixels, the camera grid's lattice and the number of the
+    /// The world's pixels and the number of the
     /// frame whose spans each read on its way timed (`Gpu::submit_frame`).
     read_px: [f64; api::READS],
-    read_lattice: [f64; api::READS],
     read_frame: [f64; api::READS],
     pipelines: Pipelines,
     frame_buf: u32,
@@ -619,7 +605,6 @@ impl Renderer {
             align: device.align,
             query_set,
             read_px: [0.0; api::READS],
-            read_lattice: [0.0; api::READS],
             read_frame: [0.0; api::READS],
             ghost: pipelines.build_world(g, PIPELINE_GHOST_BOX),
             decor: DecorPass::new(g, &mut pipelines, device.align),
@@ -1093,11 +1078,6 @@ impl Renderer {
         let far = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
-        // The lattice the eye's grid lays (pxl-engine `beam::GRID_LATTICE`),
-        // which a read of this frame was timed on.
-        let lattice = cast
-            .as_ref()
-            .map_or(0.0, |c| f64::from(c.eye[eye::GRID + beam::GRID_LATTICE]));
         self.prepare(
             g,
             world.width,
@@ -1616,21 +1596,19 @@ impl Renderer {
         // timed; this frame's is kept in the read it was asked in.
         let landed = g.gpu_landed().filter(|_| q != 0);
         let gpu_read = landed.is_some();
-        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_lattice, gpu_frame) = match landed {
+        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = match landed {
             Some(r) => (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
                 g.gpu_busy_ms(),
                 self.read_px[r],
-                self.read_lattice[r],
                 self.read_frame[r],
             ),
-            None => ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0, 0.0),
+            None => ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0),
         };
         let frame = DRAWN_FRAMES.get(|| 0.0);
         *frame += 1.0;
         if let Some(r) = asked {
             self.read_px[r] = f64::from(world.width) * f64::from(world.height);
-            self.read_lattice[r] = lattice;
             self.read_frame[r] = *frame;
         }
         let skipped = !frame_commit();
@@ -1675,7 +1653,6 @@ impl Renderer {
         stat.gpu_read = gpu_read;
         stat.gpu_busy_ms = gpu_busy_ms;
         stat.gpu_px = gpu_px;
-        stat.gpu_lattice = gpu_lattice;
         stat.gpu_frame = gpu_frame;
         stat.rays = self.screen.take_counts();
         self.touched = touched;
@@ -1761,7 +1738,6 @@ impl Renderer {
             gpu_read: false,
             gpu_busy_ms: 0.0,
             gpu_px: 0.0,
-            gpu_lattice: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.cnt as f64,

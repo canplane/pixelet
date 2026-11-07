@@ -17,6 +17,7 @@ use gpu::{
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
+use pxl_engine::grid::CELL;
 use pxl_engine::light::{self, Light, Starts};
 use pxl_engine::node_cache;
 use pxl_engine::overwrite::Cut;
@@ -98,7 +99,7 @@ impl Observed {
                     Detail {
                         range: *range,
                         spacing: Spacing {
-                            angle: grid.s,
+                            angle: CELL,
                             across: 0.0,
                         },
                     },
@@ -201,7 +202,6 @@ struct EyeCase {
     origin: [i32; 3],
     look: [f32; 3],
     tan: [f32; 2],
-    lattice: u32,
     far: f32,
     range: [Zoom; 2],
     cuts: [Cut; 2],
@@ -235,7 +235,7 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
         c.origin[1].wrapping_add(moved[1]),
         c.origin[2].wrapping_add(moved[2]),
     ];
-    let grid = Grid::of(c.tan, c.lattice);
+    let grid = Grid::of(c.tan);
     let mut words = vec![0u32; eye::WORDS];
     for k in 0..3 {
         words[eye::ORIGIN + k] = origin[k] as u32;
@@ -804,17 +804,15 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: over([EYE[0] + 90, EYE[1] + 90], 60),
             look: [0.5, 0.4, -0.77],
             tan: [0.3, 0.2],
-            lattice: 1,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
         },
         EyeCase {
-            name: "the eye, lattice 2, over the seam",
+            name: "the eye, over the seam",
             origin: over([EYE[0] + 280, EYE[1] + 90], 40),
             look: [0.8, 0.2, -0.55],
             tan: [0.4, 0.3],
-            lattice: 2,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
@@ -824,7 +822,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: over(at.on_placed, 20),
             look: [0.02, 0.03, -1.0],
             tan: [0.3, 0.4],
-            lattice: 1,
             far: 400.0,
             range: [LEAF_CELL, FINEST],
             cuts: [
@@ -843,7 +840,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
-            lattice: 1,
             far: 600.0,
             range: [LEAF_CELL, FINEST],
             cuts: none,
@@ -853,7 +849,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: q8([at.bore[0], at.bore[1], at.bore[2]]),
             look: [0.6, 0.2, -0.3],
             tan: [0.3, 0.3],
-            lattice: 1,
             far: 300.0,
             range: [LEAF_CELL, FINEST],
             cuts: none,
@@ -863,7 +858,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: q8([1 << 15, 1 << 15, 40]),
             look: [0.3, 0.2, -0.93],
             tan: [0.4, 0.3],
-            lattice: 1,
             far: 800.0,
             range: [8, FINEST],
             cuts: none,
@@ -873,7 +867,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
             origin: over([EYE[0] + 2000, EYE[1] + 2000], 2500),
             look: [0.3, -0.2, -0.9],
             tan: [0.3, 0.25],
-            lattice: 1,
             far: 20000.0,
             range: [4, FINEST],
             cuts: none,
@@ -905,7 +898,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
         origin: over_w([EYE_WEST[0] + 90, EYE_WEST[1] + 90], 60),
         look: [-0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range: [8, FINEST],
         cuts: none,
@@ -928,7 +920,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
         origin: over_w([EYE_WEST[0] - 280, EYE_WEST[1] + 90], 40),
         look: [-0.9, 0.1, -0.3],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range: [8, FINEST],
         cuts: none,
@@ -954,7 +945,6 @@ fn hand_eye_samples_answer_as_cast_walk() {
         origin: over_z([20, EYE_ZERO[1] + 90], 40),
         look: [-0.9, 0.1, -0.3],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range: [8, FINEST],
         cuts: none,
@@ -1003,7 +993,6 @@ fn entry_of_two_writes_answers_nothing() {
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
@@ -1371,7 +1360,7 @@ fn px_aim(obs: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail) {
     let detail = Detail {
         range: *range,
         spacing: Spacing {
-            angle: grid.s,
+            angle: CELL,
             across: 0.0,
         },
     };
@@ -1396,17 +1385,15 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             origin: over([EYE[0] + 90, EYE[1] + 90], 60),
             look: [0.5, 0.4, -0.77],
             tan: [0.3, 0.2],
-            lattice: 1,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
         },
         EyeCase {
-            name: "the eye, lattice 2, over the seam",
+            name: "the eye, over the seam",
             origin: over([EYE[0] + 280, EYE[1] + 90], 40),
             look: [0.8, 0.2, -0.55],
             tan: [0.4, 0.3],
-            lattice: 2,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
@@ -1416,7 +1403,6 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
-            lattice: 1,
             far: 600.0,
             range: [LEAF_CELL, FINEST],
             cuts: none,
@@ -1638,7 +1624,6 @@ fn hand_missed_pixels_at_an_edge_answer_as_cast_walk() {
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),
         look,
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 150.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
@@ -1690,7 +1675,6 @@ fn eye_rays_past_a_frames_stops_answer_as_cast_walk() {
         ]),
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 600.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
@@ -2707,12 +2691,11 @@ fn hand_eye_record_answers_as_raster() {
     let at = spots(&built);
     let none = [Cut::NONE; 2];
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
-    let case = |name, origin, look, tan, lattice, far, range| EyeCase {
+    let case = |name, origin, look, tan, far, range| EyeCase {
         name,
         origin,
         look,
         tan,
-        lattice,
         far,
         range,
         cuts: none,
@@ -2723,16 +2706,14 @@ fn hand_eye_record_answers_as_raster() {
             over([EYE[0] + 90, EYE[1] + 90], 60),
             [0.5, 0.4, -0.77],
             [0.3, 0.2],
-            1,
             2000.0,
             [8, FINEST],
         ),
         case(
-            "the eye, lattice 2, over the seam",
+            "the eye, over the seam",
             over([EYE[0] + 280, EYE[1] + 90], 40),
             [0.8, 0.2, -0.55],
             [0.4, 0.3],
-            2,
             2000.0,
             [8, FINEST],
         ),
@@ -2741,7 +2722,6 @@ fn hand_eye_record_answers_as_raster() {
             q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
             [0.5, -0.3, -0.8],
             [0.3, 0.3],
-            1,
             600.0,
             [LEAF_CELL, FINEST],
         ),
@@ -2750,7 +2730,6 @@ fn hand_eye_record_answers_as_raster() {
             q8([at.bore[0], at.bore[1], at.bore[2]]),
             [0.6, 0.2, -0.3],
             [0.3, 0.3],
-            1,
             300.0,
             [LEAF_CELL, FINEST],
         ),
@@ -2759,7 +2738,6 @@ fn hand_eye_record_answers_as_raster() {
             q8([1 << 15, 1 << 15, 40]),
             [0.3, 0.2, -0.93],
             [0.4, 0.3],
-            1,
             800.0,
             [8, FINEST],
         ),
@@ -2768,7 +2746,6 @@ fn hand_eye_record_answers_as_raster() {
             over([EYE[0] + 2000, EYE[1] + 2000], 2500),
             [0.3, -0.2, -0.9],
             [0.3, 0.25],
-            1,
             20000.0,
             [4, FINEST],
         ),
@@ -2790,7 +2767,6 @@ fn hand_eye_record_answers_as_raster() {
             over(at.on_placed, 20),
             [0.02, 0.03, -1.0],
             [0.3, 0.4],
-            1,
             400.0,
             [LEAF_CELL, FINEST],
         )
@@ -2887,7 +2863,6 @@ fn hand_eye_record_answers_as_raster() {
             origin,
             look,
             [0.5, 0.4],
-            1,
             300.0,
             [LEAF_CELL, FINEST],
         );
@@ -2905,7 +2880,6 @@ fn hand_eye_record_answers_as_raster() {
         ]),
         [-0.9, 0.1, -0.4],
         [0.3, 0.2],
-        1,
         2000.0,
         [8, FINEST],
     );
@@ -2954,7 +2928,6 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         origin,
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
@@ -3227,17 +3200,15 @@ fn hand_beam_rays_answer_as_cast_walk() {
             origin: over([EYE[0] + 90, EYE[1] + 90], 60),
             look: [0.5, 0.4, -0.77],
             tan: [0.3, 0.2],
-            lattice: 1,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
         },
         EyeCase {
-            name: "the eye, lattice 2, over the seam",
+            name: "the eye, over the seam",
             origin: over([EYE[0] + 280, EYE[1] + 90], 40),
             look: [0.8, 0.2, -0.55],
             tan: [0.4, 0.3],
-            lattice: 2,
             far: 2000.0,
             range: [8, FINEST],
             cuts: none,
@@ -3247,7 +3218,6 @@ fn hand_beam_rays_answer_as_cast_walk() {
             origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 12]),
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
-            lattice: 1,
             far: 600.0,
             range: [LEAF_CELL, FINEST],
             cuts: none,
@@ -3269,7 +3239,7 @@ fn hand_beam_rays_answer_as_cast_walk() {
         let detail = Detail {
             range: *range,
             spacing: Spacing {
-                angle: grid.s,
+                angle: CELL,
                 across: 0.0,
             },
         };
@@ -3480,7 +3450,6 @@ fn hand_samples_over_other_zooms_answer_as_cast_walk() {
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
-        lattice: 1,
         far: 2000.0,
         range,
         cuts: [Cut::NONE; 2],

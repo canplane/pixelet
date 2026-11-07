@@ -42,14 +42,13 @@ fn corner_state_at(c: vec2<u32>) -> u32 {
 /// Corner `c`'s ray, at its tangents (`Grid::corner`), its line `beam_line`.
 fn beam_aim(c: vec2<u32>) -> Aim {
   let past = f32(eye_word(GRID + GRID_PAST));
-  let s = eye_f32(GRID + GRID_S);
-  let aim = eye_aim(vec2<f32>(-eye_f32(TAN) + (f32(c.x) - past) * s, eye_f32(TAN + 1u) - (f32(c.y) - past) * s));
+  let aim = eye_aim(vec2<f32>(-eye_f32(TAN) + (f32(c.x) - past) * GRID_CELL, eye_f32(TAN + 1u) - (f32(c.y) - past) * GRID_CELL));
   return beam_ray(aim, beam_line(c), beam_spacing());
 }
 
-/// Its beam's rays the lattice's side apart in angle (`cast::Spacing`, `beam::Grid`'s `s`).
+/// Its beam's rays a cell apart in angle (`cast::Spacing`, `grid::CELL`).
 fn beam_spacing() -> vec2<f32> {
-  return vec2<f32>(0.0, eye_f32(GRID + GRID_S));
+  return vec2<f32>(0.0, GRID_CELL);
 }
 
 /// Every line is held from the eye's one origin: none kept in it.

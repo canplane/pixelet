@@ -70,13 +70,12 @@ static RENDERER: Global<RendererFrame> = Global::new();
 /// `stage_render`), its figures zero where it drew none, and the reads of
 /// earlier frames, landed now.
 pub fn set_renderer_frame(drawn: &Drawn) {
-    let (kind, scale, lattice) = (drawn.kind, drawn.scale, drawn.lattice);
+    let (kind, scale) = (drawn.kind, drawn.scale);
     let Some(stat) = drawn.stat else {
         RENDERER.set(RendererFrame {
             kind,
             gpu: GpuSample {
                 scale,
-                lattice,
                 ..GpuSample::default()
             },
             ..RendererFrame::default()
@@ -91,7 +90,6 @@ pub fn set_renderer_frame(drawn: &Drawn) {
         kind,
         gpu: GpuSample {
             scale,
-            lattice,
             draws,
             triangles,
             frame: stat.frame,

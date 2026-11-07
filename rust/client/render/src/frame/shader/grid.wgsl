@@ -27,6 +27,6 @@ fn px_tan(p: vec2<u32>, size: vec2<u32>) -> vec2<f32> {
 fn grid_cell(t: vec2<f32>) -> vec2<u32> {
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let span = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
-  let at = floor(vec2<f32>(t.x + tan_xy.x, tan_xy.y - t.y) * eye_f32(GRID + GRID_S_INVERSE));
+  let at = floor(vec2<f32>(t.x + tan_xy.x, tan_xy.y - t.y) * GRID_CELL_INVERSE);
   return min(vec2<u32>(max(at, vec2<f32>(0.0))), span - vec2<u32>(1u));
 }

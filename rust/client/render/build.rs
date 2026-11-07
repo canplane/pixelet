@@ -393,7 +393,6 @@ fn walk_word() -> String {
             "LIGHT_SAMPLE_COUNT",
             node_cache::lane_at(count::LIGHT, count::SAMPLE),
         ),
-        ("GRID_S", beam::GRID_S as u32),
         ("GRID_KEEP", beam::GRID_KEEP as u32),
         ("GRID_RADIUS", beam::GRID_RADIUS as u32),
         ("GRID_RADIUS_TAN", beam::GRID_RADIUS_TAN as u32),
@@ -406,11 +405,9 @@ fn walk_word() -> String {
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
         ("GRID_STOP_ASKS_AT", beam::GRID_STOP_ASKS_AT as u32),
-        ("GRID_LATTICE", beam::GRID_LATTICE as u32),
         ("GRID_WALKED_AT", beam::GRID_WALKED_AT as u32),
         ("GRID_CORNER_STATES_AT", beam::GRID_CORNER_STATES_AT as u32),
         ("GRID_HANDS_AT", beam::GRID_HANDS_AT as u32),
-        ("GRID_S_INVERSE", beam::GRID_S_INVERSE as u32),
         ("GRID_SLOPE", beam::GRID_SLOPE as u32),
         ("STARTS_ACROSS", light::STARTS_ACROSS as u32),
         ("STARTS_DOWN", light::STARTS_DOWN as u32),
@@ -568,7 +565,7 @@ fn walk_word() -> String {
     // half the tile's diagonal (`light::TILE_READ_PAD`, light_propagate.wgsl).
     let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst RECORD_VIEW_GROWTH: f32 = {:?};\n",
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst GRID_CELL: f32 = {:?};\nconst GRID_CELL_INVERSE: f32 = {:?};\nconst RECORD_VIEW_GROWTH: f32 = {:?};\n",
         grid::INV_SPLIT2,
         cast::NARROW,
         cast::NARROW_SQUARED,
@@ -580,6 +577,8 @@ fn walk_word() -> String {
         core::f32::consts::FRAC_1_SQRT_2,
         beam::SAMPLE_SPACING,
         beam::SAMPLE_SPACING_INVERSE,
+        grid::CELL,
+        grid::CELL_INVERSE,
         record::VIEW_GROWTH,
     );
     for (name, v) in words {

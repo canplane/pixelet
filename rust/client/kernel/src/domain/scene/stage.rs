@@ -123,14 +123,12 @@ pub fn stage_write() {
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 
-/// What the renderer made of the turn's frame, and the scale and the
-/// lattice the world was drawn at, read before a read can move the next:
-/// the top's to record (perf/report.rs `set_renderer_frame`).
+/// What the renderer made of the turn's frame, and the scale the world was
+/// drawn at, read before a read can move the next: the top's to record (perf/report.rs `set_renderer_frame`).
 pub struct Drawn {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
-    pub lattice: f64,
     /// The interval the drawn resolution's judge asks the turns paced at
     /// (`resolution::load`), none where it asks no change.
     pub interval_ms: Option<f64>,
@@ -231,19 +229,16 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     }
     // An image whose texture the frame took needs its file no more.
     api::take_landed(loader::on_image_landed);
-    // The scale and the lattice the world was drawn at, before a read can
-    // move the next.
-    let (scale, lattice) = (resolution::drawn_scale(), f64::from(resolution::lattice()));
+    // The scale the world was drawn at, before a read can move the next.
+    let scale = resolution::drawn_scale();
     let gpu = out
         .stat
         .as_ref()
         .filter(|stat| stat.gpu_read)
         .map(|stat| GpuMeasure {
             px_ms: renderer::px_ms(&stat.gpu_spans),
-            cell_ms: renderer::cell_ms(&stat.gpu_spans),
             busy_ms: stat.gpu_busy_ms,
             px: stat.gpu_px,
-            lattice: stat.gpu_lattice,
         });
     let interval_ms = resolution::load(pace, gpu);
     if out.stat.is_some() {
@@ -253,7 +248,6 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         kind: out.kind,
         stat: out.stat,
         scale,
-        lattice,
         interval_ms,
     }
 }

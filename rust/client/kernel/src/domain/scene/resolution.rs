@@ -6,25 +6,21 @@
 //! them up to the canvas's, the display's (pxl-render gpu/finish.rs): render
 //! resolution apart from display resolution where a screen outgrows its GPU
 //! (Unreal's screen percentage). `fixed` draws
-//! whole, `low` at `RES_MIN`, `auto`'s floor, each with the camera grid's
-//! beam rays on the cell's own lattice and turns at the display's rate, and
+//! whole, `low` at `RES_MIN`, `auto`'s floor, each with turns at the
+//! display's rate, and
 //! `auto` one of `RES_STEPS` steps between whole and `RES_MIN`, each a like
-//! share of the last, so every move lays the pixels on one of a few grids, a
-//! lattice up to `grid::LATTICE_MAX`, and a rate down to `RATE_MIN_HZ`.
+//! share of the last, so every move lays the pixels on one of a few grids,
+//! and a rate down to `RATE_MIN_HZ`.
 //!
-//! `auto` is a budget controller, as congestion control is, over three
-//! knobs and the one budget: the rate, the interval it asks between turns, a
+//! `auto` is a budget controller, as congestion control is, over two knobs
+//! and the one budget: the rate, the interval it asks between turns, a
 //! refresh a step, which buys back no work a frame but gives every frame's
-//! work, whatever it runs over, more time; the scale, which buys back the
-//! work done a drawn pixel at a time (span.json `per_px`); and the camera
-//! grid's lattice, the beam rays and cells laid `lattice` cells apart
-//! (pxl-engine `beam::Grid::of`, span.json `per_cell`), which buys back
-//! theirs at a quarter at the coarsest, `grid::LATTICE_MAX`. The samples are
-//! the very rays at every lattice, so the lattice changes no pixel drawn; the
-//! samples, the light's passes, on its map's texels, and the finish and the
-//! markers, at the display's pixels, cost what they cost at the scale's or
-//! the lattice's knob. The rate is the runtime's: `TURN_PACE` asks it, each
-//! turn's grant says what it is (`paced_ms`), and the judge keeps no copy.
+//! work, whatever it runs over, more time; and the scale, which buys back the
+//! work done a drawn pixel at a time (span.json `per_px`). The camera grid's
+//! cells, the samples, the light's passes, on its map's texels, and the finish
+//! and the markers, at the display's pixels, cost what they cost at the
+//! scale's knob. The rate is the runtime's: `TURN_PACE` asks it, each turn's
+//! grant says what it is (`paced_ms`), and the judge keeps no copy.
 //!
 //! It judges only frames that move: the gap before the first is how long
 //! the view stood still, so moving starts a fresh window, and the quiet
@@ -34,17 +30,15 @@
 //! than `RES_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
 //! summed against their own budgets. Where the device keeps timestamps a
 //! sample is a GPU read's that landed, which not every frame has, timed at
-//! the pixels and the lattice drawn now: its per-pixel spans' time P
-//! (pxl-render gpu/renderer.rs `px_ms`), its lattice's G (`cell_ms`) and
-//! the rest of the GPU's busy time F; a window none landed in is not
-//! judged. Timed, a window whose load, F + P + G, is over its budget by more
-//! than `RES_BAND` steps down at once, and `RES_UP_WINDOWS` windows in a
-//! row in which the step above, F + P·(its share over this one)² + G·(this
-//! lattice over its)², fits under its budget, this one's by the interval
+//! the pixels drawn now: its per-pixel spans' time P (pxl-render
+//! gpu/renderer.rs `px_ms`) and the rest of the GPU's busy time F; a window
+//! none landed in is not judged. Timed, a window whose load, F + P, is over
+//! its budget by more than `RES_BAND` steps down at once, and
+//! `RES_UP_WINDOWS` windows in a row in which the step above, F + P·(its
+//! share over this one)², fits under its budget, this one's by the interval
 //! there over the interval here, by that much step up, so the knobs do not
 //! swing between two steps. Down, the rate goes first, to `RATE_MIN_HZ`, then
-//! the scale, to `RES_MIN`, then the lattice; up, the lattice first, then the
-//! scale, then the rate. Where it keeps
+//! the scale, to `RES_MIN`; up, the scale first, then the rate. Where it keeps
 //! none the sample is the frame's gap, which never falls below the paced
 //! interval, so room cannot be foreseen and only the scale moves: a window
 //! whose gaps average past `SCALE_MISSED` budgets steps down, and a step up
@@ -54,16 +48,13 @@
 //! steps swinging where a prediction falls a little short, and one that
 //! outlasts them stands and the wait is as it was. A change moves one knob a step: the scale's
 //! rebuilds the targets, so no frame is summed while it waits to be drawn,
-//! the lattice's is laid by the next cast, the frames that stand on the
-//! last keeping its grid (pxl-render gpu/ray/cast.rs `prepare`), and either
-//! asks for the frame that draws it; the rate's holds from the next grant.
+//! and asks for the frame that draws it; the rate's holds from the next grant.
 //! The `RES_SETTLE_WINDOWS` after any are not judged.
 
 use crate::domain::scene::param;
 use crate::domain::view::setting::store::{settings_store, ResMode};
 use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
-use pxl_engine::grid::LATTICE_MAX;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
@@ -108,44 +99,37 @@ fn budget(paced_ms: f64) -> f64 {
 }
 
 /// A frame as a GPU read that landed timed it (pxl-render gpu/renderer.rs
-/// `FrameStat`): its per-pixel spans' time (`px_ms`), its lattice's
-/// (`cell_ms`) and its busy time, in ms, and the world's pixels and the
-/// lattice it was drawn at.
+/// `FrameStat`): its per-pixel spans' time (`px_ms`) and its busy time, in
+/// ms, and the world's pixels it was drawn at.
 #[derive(Clone, Copy)]
 pub struct GpuMeasure {
     pub px_ms: f64,
-    pub cell_ms: f64,
     pub busy_ms: f64,
     pub px: f64,
-    pub lattice: f64,
 }
 
 /// A frame's cost, the judge's sample of it, in ms: the time the scale buys
-/// back, the time the lattice buys back, and the rest, which neither does;
-/// untimed, the gap alone, as the rest.
+/// back and the rest, which it does not; untimed, the gap alone, as the rest.
 #[derive(Clone, Copy, Default)]
 struct Cost {
     px_ms: f64,
-    cell_ms: f64,
     rest_ms: f64,
 }
 
 impl Cost {
     fn add(&mut self, o: Cost) {
         self.px_ms += o.px_ms;
-        self.cell_ms += o.cell_ms;
         self.rest_ms += o.rest_ms;
     }
 }
 
-/// The knobs: the interval between turns, in ms, the scale's step, 0 whole,
-/// and the lattice, 1 the cell's own.
-type Knobs = (f64, i32, u32);
+/// The knobs: the interval between turns, in ms, and the scale's step, 0
+/// whole.
+type Knobs = (f64, i32);
 
-/// The scale's and the lattice's knobs, and the window being judged.
+/// The scale's knob, and the window being judged.
 struct Judge {
     step: i32,
-    lattice: u32,
     /// The window's frames' budgets summed, in ms: its clock.
     window_ms: f64,
     /// The samples, and the budgets of the frames that took them, summed
@@ -167,11 +151,9 @@ struct Judge {
 impl Judge {
     const NEW: Judge = Judge {
         step: 0,
-        lattice: 1,
         window_ms: 0.0,
         cost: Cost {
             px_ms: 0.0,
-            cell_ms: 0.0,
             rest_ms: 0.0,
         },
         budget_ms: 0.0,
@@ -190,28 +172,23 @@ impl Judge {
     }
 
     /// The knobs a step down: timed, the rate's, to `RATE_MIN_HZ`; the
-    /// scale's, to `RES_MIN`; then, timed, the lattice's; none past all.
+    /// scale's, to `RES_MIN`; none past both.
     fn down(&self, pace: &Pace, timed: bool) -> Option<Knobs> {
         if timed && pace.may_slow() {
-            Some((pace.paced_ms + pace.refresh_ms, self.step, self.lattice))
+            Some((pace.paced_ms + pace.refresh_ms, self.step))
         } else if self.step < param::RES_STEPS {
-            Some((pace.paced_ms, self.step + 1, self.lattice))
-        } else if timed && self.lattice < LATTICE_MAX {
-            Some((pace.paced_ms, self.step, self.lattice * 2))
+            Some((pace.paced_ms, self.step + 1))
         } else {
             None
         }
     }
 
-    /// The knobs a step up: the lattice's, then the scale's, then the rate's;
-    /// none at all whole.
+    /// The knobs a step up: the scale's, then the rate's; none at all whole.
     fn up(&self, pace: &Pace) -> Option<Knobs> {
-        if self.lattice > 1 {
-            Some((pace.paced_ms, self.step, self.lattice / 2))
-        } else if self.step > 0 {
-            Some((pace.paced_ms, self.step - 1, self.lattice))
+        if self.step > 0 {
+            Some((pace.paced_ms, self.step - 1))
         } else if pace.slowed() {
-            Some((pace.paced_ms - pace.refresh_ms, self.step, self.lattice))
+            Some((pace.paced_ms - pace.refresh_ms, self.step))
         } else {
             None
         }
@@ -228,21 +205,12 @@ impl Judge {
     }
 
     /// The load `cost` over `budget_ms` of frames paced as `pace` would be at
-    /// the knobs `(paced_ms, step, lattice)`: the rest as it is, the
-    /// per-pixel time by the pixels there over these, the lattice's by its
-    /// corners and cells there over these, the budget by the frame's there
-    /// over here.
-    fn predicted(
-        &self,
-        cost: Cost,
-        budget_ms: f64,
-        pace: &Pace,
-        (paced_ms, step, lattice): Knobs,
-    ) -> f64 {
+    /// the knobs `(paced_ms, step)`: the rest as it is, the per-pixel time by
+    /// the pixels there over these, the budget by the frame's there over here.
+    fn predicted(&self, cost: Cost, budget_ms: f64, pace: &Pace, (paced_ms, step): Knobs) -> f64 {
         let px = libm::pow(share(step) / share(self.step), 2.0);
-        let cell = libm::pow(f64::from(self.lattice) / f64::from(lattice), 2.0);
         let rate = budget(pace.paced_ms) / budget(paced_ms);
-        (cost.rest_ms + cost.px_ms * px + cost.cell_ms * cell) * rate / budget_ms
+        (cost.rest_ms + cost.px_ms * px) * rate / budget_ms
     }
 
     /// Counts one frame's budget to the window, and its sample, where it
@@ -264,7 +232,7 @@ impl Judge {
         if sampled == 0.0 {
             return None;
         }
-        let here = (pace.paced_ms, self.step, self.lattice);
+        let here = (pace.paced_ms, self.step);
         let load = self.predicted(cost, sampled, pace, here);
         if self.since <= param::RES_SETTLE_WINDOWS {
             return None;
@@ -304,7 +272,7 @@ impl Judge {
                 return None;
             }
         };
-        (_, self.step, self.lattice) = to;
+        (_, self.step) = to;
         self.since = 0;
         self.quiet = 0;
         Some(to)
@@ -347,17 +315,6 @@ pub fn drawn_scale() -> f64 {
         })
 }
 
-/// The camera grid's lattice, in cells (`grid::CELL`) a side, its beam rays
-/// and cells are laid on (pxl-engine `beam::Grid::of`): `auto`'s, the
-/// cell's own at any other setting. The eye's words take it as they are
-/// written, so the next cast casts on it.
-pub fn lattice() -> u32 {
-    match settings_store().res {
-        ResMode::auto => state().lattice,
-        ResMode::fixed | ResMode::low => 1,
-    }
-}
-
 /// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
 /// own.
 fn device(dpr: f64) -> f64 {
@@ -392,18 +349,17 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 
 /// A frame was paced: `gpu`, where a GPU read landed with it, is what that
 /// read timed (`GpuMeasure`). A frame drawn at another size than now is not
-/// counted, and a read timed at another size or lattice is no sample; the
-/// world's surface takes the scale the setting and the judge leave, a
-/// lattice changed asks for the frame that casts on it. The interval a rate changed asks of the
+/// counted, and a read timed at another size is no sample; the world's
+/// surface takes the scale the setting and the judge leave. The interval a rate changed asks of the
 /// runtime, 0 for its own under any setting but `auto`.
 pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
     let s = world()?;
     let mut interval_ms = None;
     let k = state();
-    let (started, lattice) = (pace.moving && !k.moving, k.lattice);
+    let started = pace.moving && !k.moving;
     k.moving = pace.moving;
     if settings_store().res != ResMode::auto {
-        (k.step, k.lattice, k.quiet) = (0, 1, 0);
+        (k.step, k.quiet) = (0, 0);
         k.restart();
         interval_ms = pace.slowed().then_some(0.0);
     } else if started {
@@ -412,14 +368,11 @@ pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
         let drawn = f64::from(s.width) * f64::from(s.height);
         let timed = api::device().is_some_and(|d| d.timestamps);
         let cost = if timed {
-            gpu.filter(|t| {
-                t.busy_ms > 0.0 && t.px > 0.0 && t.px == drawn && t.lattice == f64::from(k.lattice)
-            })
-            .map(|t| Cost {
-                px_ms: t.px_ms,
-                cell_ms: t.cell_ms,
-                rest_ms: (t.busy_ms - t.px_ms - t.cell_ms).max(0.0),
-            })
+            gpu.filter(|t| t.busy_ms > 0.0 && t.px > 0.0 && t.px == drawn)
+                .map(|t| Cost {
+                    px_ms: t.px_ms,
+                    rest_ms: (t.busy_ms - t.px_ms).max(0.0),
+                })
         } else {
             Some(Cost {
                 rest_ms: pace.gap_ms,
@@ -432,7 +385,7 @@ pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
             .filter(|&paced_ms| paced_ms != pace.paced_ms);
     }
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
-    if s.ratio != ratio || k.lattice != lattice {
+    if s.ratio != ratio {
         s.ratio = ratio;
         edge::request_world_tick();
     }

@@ -129,9 +129,6 @@ impl GpuSpanName {
         GpuSpanName::mark,
         GpuSpanName::propagate,
     ];
-    /// The members whose `per_cell` is true, in the JSON's order.
-    pub const PER_CELL: [GpuSpanName; 3] =
-        [GpuSpanName::beam_hit, GpuSpanName::beam, GpuSpanName::cell];
 }
 
 pub const LIGHT_MOVED: usize = 5;

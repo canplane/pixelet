@@ -36,7 +36,7 @@ fn sample_cell_word(s: vec2<u32>) -> u32 {
   let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
   let first = vec2<u32>(NEAR_SAMPLES);
   let cell = min(
-    (max(s, first) - first) / (SAMPLE * eye_word(GRID + GRID_LATTICE)),
+    (max(s, first) - first) / SAMPLE,
     span_n - vec2<u32>(1u),
   );
   return cell_start(cell);

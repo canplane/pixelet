@@ -951,7 +951,7 @@ fn run_marks(
     eye_words[eye::RANGE + 1] = range[1];
     eye_words[eye::FAR] = c.far.to_bits();
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
-    let grid = beam::Grid::of(c.tan, 1);
+    let grid = beam::Grid::of(c.tan);
     eye_words[eye::GRID..eye::GRID + beam::GRID_WORDS].copy_from_slice(&grid.words());
     let walked_at = grid.walked_at() as usize;
     let mut beams = vec![0u32; walked_at + ray::holes_words([wd, ht]) as usize];

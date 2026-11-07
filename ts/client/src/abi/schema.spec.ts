@@ -168,10 +168,7 @@ export const SETTING = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * `auto` lays the grid's beam rays and cells on a coarser lattice too
-   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
-   * changes. The markers and the finish stay at the display's. RES_MODES
-   * says each. */
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -366,10 +363,7 @@ export const SETTING_PRODUCTION = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * `auto` lays the grid's beam rays and cells on a coarser lattice too
-   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
-   * changes. The markers and the finish stay at the display's. RES_MODES
-   * says each. */
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",

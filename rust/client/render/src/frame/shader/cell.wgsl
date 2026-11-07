@@ -7,7 +7,7 @@
 // The shadow map's are light_cell.wgsl's.
 //
 // The window is f32 as the Rust's, a ceiling over a square root and a division by what varies
-// from cell to cell, `s` taken by its reciprocal, the host's (`Grid::s_inverse`): where
+// from cell to cell, a cell taken by its reciprocal (`grid::CELL_INVERSE`): where
 // what it takes the ceiling of falls within a few ulps of a whole number, a GPU's rounding
 // may take the next window.
 
@@ -17,15 +17,14 @@
 /// the screen's left and top, less two and halved (`Grid::cell_window`, `Grid::window`): at
 /// its corner farthest from the screen's axis, as the slope grows outward.
 fn cell_window(c: vec2<u32>) -> u32 {
-  let s = eye_f32(GRID + GRID_S);
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let at = max(abs(-tan_xy + vec2<f32>(c) * s), abs(-tan_xy + vec2<f32>(c + 1u) * s));
+  let at = max(abs(-tan_xy + vec2<f32>(c) * GRID_CELL), abs(-tan_xy + vec2<f32>(c + 1u) * GRID_CELL));
   let radius = eye_f32(GRID + GRID_RADIUS);
   let radius_tan = eye_f32(GRID + GRID_RADIUS_TAN);
   let edge = sqrt(at.x * at.x + at.y * at.y);
   let beyond = (edge + radius_tan) / (1.0 - edge * radius_tan);
   let stretch = 1.0 + beyond * beyond;
-  return u32(ceil(FRAC_1_SQRT_2 + radius * stretch * eye_f32(GRID + GRID_S_INVERSE)));
+  return u32(ceil(FRAC_1_SQRT_2 + radius * stretch * GRID_CELL_INVERSE));
 }
 
 @compute @workgroup_size(CELL_SIDE, CELL_SIDE, 1)

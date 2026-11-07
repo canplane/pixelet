@@ -2,19 +2,18 @@
 
 use super::*;
 
-/// A window's sample, each part a share of its budget: per pixel, per
-/// lattice and the rest.
-fn cost(px: f64, cell: f64, rest: f64) -> Cost {
+/// A window's sample, each part a share of its budget: per pixel and the
+/// rest.
+fn cost(px: f64, rest: f64) -> Cost {
     let w = param::RES_WINDOW_MS;
     Cost {
         px_ms: px * w,
-        cell_ms: cell * w,
         rest_ms: rest * w,
     }
 }
 
 /// A frame paced `ms` apart on a display too slow for the rate to step: the
-/// scale and the lattice are what move.
+/// scale is what moves.
 fn paced(ms: f64) -> Pace {
     Pace {
         refresh_ms: 1000.0,
@@ -73,7 +72,7 @@ fn near(a: f64, b: f64) -> bool {
 /// Windows of `load` budgets each, all of it per pixel, judged as one frame
 /// a window.
 fn windows(k: &mut Judge, load: f64, n: u32, timed: bool) -> u32 {
-    windows_of(k, cost(load, 0.0, 0.0), n, timed)
+    windows_of(k, cost(load, 0.0), n, timed)
 }
 
 /// Windows of `s` each, judged as one frame a window: how many changed a
@@ -226,7 +225,7 @@ fn pause_keeps_windows() {
         0
     );
     k.judge(
-        Some(cost(0.3, 0.0, 0.0)),
+        Some(cost(0.3, 0.0)),
         &paced(0.5 * param::RES_WINDOW_MS),
         true,
     );
@@ -253,47 +252,37 @@ fn pause_keeps_windows() {
     assert_eq!((k.step, k.on_trial), (0, true));
 }
 
-/// Timed, a window over its budget steps the scale down to `RES_MIN`
-/// first, then the lattice to `LATTICE_MAX`, a knob a step, each change
-/// followed by its settling windows, and past both holds.
+/// Timed, a window over its budget steps the scale down to `RES_MIN`, each
+/// change followed by its settling windows, and past it holds.
 #[test]
-fn down_scale_then_lattice() {
-    let (over, settle) = (cost(0.6, 0.3, 0.6), param::RES_SETTLE_WINDOWS);
+fn down_scale_to_its_floor() {
+    let (over, settle) = (cost(0.6, 0.9), param::RES_SETTLE_WINDOWS);
     let mut k = Judge::NEW;
     for step in 1..=param::RES_STEPS {
         assert_eq!(windows_of(&mut k, over, 1, true), 1);
-        assert_eq!((k.step, k.lattice), (step, 1));
+        assert_eq!(k.step, step);
         assert_eq!(windows_of(&mut k, over, settle, true), 0, "settling");
     }
-    assert_eq!(windows_of(&mut k, over, 1, true), 1);
-    assert_eq!((k.step, k.lattice), (param::RES_STEPS, LATTICE_MAX));
-    assert_eq!(windows_of(&mut k, over, settle + 10, true), 0, "past both");
+    assert_eq!(windows_of(&mut k, over, settle + 10, true), 0, "past it");
 }
 
-/// Timed, room steps the lattice up first, then the scale, each after
-/// `RES_UP_WINDOWS` windows in which the step above fits.
+/// Timed, room steps the scale up, after `RES_UP_WINDOWS` windows in which
+/// the step above fits.
 #[test]
-fn up_lattice_then_scale() {
+fn up_scale() {
     let mut k = Judge {
         step: 2,
-        lattice: LATTICE_MAX,
         ..Judge::NEW
     };
-    let room = cost(0.1, 0.05, 0.2);
+    let room = cost(0.1, 0.25);
     assert_eq!(windows_of(&mut k, room, param::RES_UP_WINDOWS - 1, true), 0);
     assert_eq!(windows_of(&mut k, room, 1, true), 1);
-    assert_eq!((k.step, k.lattice), (2, 1), "the lattice first");
-    let settle = param::RES_SETTLE_WINDOWS;
-    assert_eq!(
-        windows_of(&mut k, room, settle + param::RES_UP_WINDOWS, true),
-        1
-    );
-    assert_eq!((k.step, k.lattice), (1, 1), "then the scale");
+    assert_eq!(k.step, 1);
 }
 
 /// Timed, the step above is judged by the whole frame it would cost: the
-/// rest as it is, the per-pixel time by its pixels and the lattice's by its
-/// cells, so a step whose per-pixel time alone fits waits.
+/// rest as it is and the per-pixel time by its pixels, so a step whose
+/// per-pixel time alone fits waits.
 #[test]
 fn step_up_judges_total() {
     let mut k = Judge {
@@ -302,44 +291,24 @@ fn step_up_judges_total() {
     };
     // The per-pixel time 0.2 grows to 0.28 a step up, under the budget's
     // 0.9 alone, but over it with the rest's 0.7.
-    assert_eq!(windows_of(&mut k, cost(0.2, 0.0, 0.7), 20, true), 0);
+    assert_eq!(windows_of(&mut k, cost(0.2, 0.7), 20, true), 0);
     assert_eq!(k.step, 1);
-    let mut k = Judge {
-        step: param::RES_STEPS,
-        lattice: LATTICE_MAX,
-        ..Judge::NEW
-    };
-    // The lattice's 0.2 grows fourfold at the cell's: 0.3 + 0.8 is over.
-    assert_eq!(windows_of(&mut k, cost(0.1, 0.2, 0.2), 20, true), 0);
-    assert_eq!(
-        windows_of(&mut k, cost(0.1, 0.1, 0.2), param::RES_UP_WINDOWS, true),
-        1
-    );
-    assert_eq!(k.lattice, 1);
 }
 
 /// What a step would cost: the rest as it is, the per-pixel time by the
-/// pixels there over these, the lattice's by its cells there over these.
+/// pixels there over these.
 #[test]
 fn predicted_by_part() {
     let k = Judge {
         step: param::RES_STEPS,
-        lattice: LATTICE_MAX,
         ..Judge::NEW
     };
-    let (s, w) = (cost(0.2, 0.1, 0.3), param::RES_WINDOW_MS);
+    let (s, w) = (cost(0.2, 0.4), param::RES_WINDOW_MS);
     let p = paced(w);
-    assert!(near(k.predicted(s, w, &p, (w, k.step, k.lattice)), 0.6));
-    assert!(near(k.predicted(s, w, &p, (w, k.step, 1)), 0.3 + 0.2 + 0.4));
+    assert!(near(k.predicted(s, w, &p, (w, k.step)), 0.6));
     let px = 1.0 / (param::RES_MIN * param::RES_MIN);
-    assert!(near(
-        k.predicted(s, w, &p, (w, 0, k.lattice)),
-        0.3 + 0.2 * px + 0.1
-    ));
-    assert!(near(
-        k.predicted(s, w, &p, (2.0 * w, k.step, k.lattice)),
-        0.3
-    ));
+    assert!(near(k.predicted(s, w, &p, (w, 0)), 0.4 + 0.2 * px));
+    assert!(near(k.predicted(s, w, &p, (2.0 * w, k.step)), 0.3));
 }
 
 /// The rate steps within what the display and `RATE_MIN_HZ` leave: a refresh
@@ -385,22 +354,18 @@ fn down_rate_then_scale() {
     assert_eq!(k.step, 1, "then the scale");
 }
 
-/// Timed, room steps the lattice up first, then the scale, and the rate
-/// last, to the display's own, and past that there is no step.
+/// Timed, room steps the scale up first and the rate last, to the display's
+/// own, and past that there is no step.
 #[test]
 fn up_rate_last() {
     let mut k = Judge {
         step: 1,
-        lattice: LATTICE_MAX,
         ..Judge::NEW
     };
     let mut p = on(120.0, 3.0);
     let wait = param::RES_SETTLE_WINDOWS + param::RES_UP_WINDOWS + 1;
     assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
-    assert_eq!((k.step, k.lattice), (1, 1), "the lattice first");
-    assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
-    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
-    assert_eq!(k.step, 0, "then the scale");
+    assert_eq!(k.step, 0, "the scale first");
     assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
     assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
     assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms), "the rate last");
@@ -446,7 +411,6 @@ fn untimed_rate_stays() {
 }
 
 /// Untimed, the scale alone moves: past `RES_MIN` a window over holds,
-/// and the lattice stays the cell's own.
 #[test]
 fn untimed_scale_alone() {
     let (over, settle) = (param::SCALE_MISSED + 0.5, param::RES_SETTLE_WINDOWS);
@@ -456,5 +420,5 @@ fn untimed_scale_alone() {
         assert_eq!(windows(&mut k, over, settle, false), 0);
     }
     assert_eq!(windows(&mut k, over, settle + 10, false), 0);
-    assert_eq!((k.step, k.lattice), (param::RES_STEPS, 1));
+    assert_eq!(k.step, param::RES_STEPS);
 }

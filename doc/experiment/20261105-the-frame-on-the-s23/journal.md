@@ -500,3 +500,20 @@ light's spans (`light_beam_hit` to `light_walk`) summed by why the frame cast:
 - **Open:** the depth step. A slot's word is a share of the box's depth from its near plane,
   so the box stepped along the light makes every word another depth and every ray another
   start. Keeping them across a step changes "a texel kept is the same ray"; proposed apart.
+
+**`auto`'s lattice, removed.** The backlog's condition was that it goes if it earns nothing.
+A coarser lattice moves the descent a beam ray shares onto the samples under it, four to a
+cell or more, so it pays each level on more rays. The S23, 719 MHz both, one 60 s drive each
+at `fixed` with the lattice forced:
+
+| lattice | GPU p50 / p95 | `beam` | `sample` |
+|---|---|---|---|
+| 1 | 57.7 / 205.6 | 8.5 | 7.8 |
+| 2 | 60.3 / 218.4 | 4.2 | 13.8 |
+
+The sign is 11-03's. The 4K Mac went the other way in one run each, 26.3 / 50.9 to
+22.5 / 49.3; the Mac does not reach `auto`'s floor, where the knob moved. The deployed build
+has the knob: it goes as a knob that buys nothing, not as a regression. Gone: `LATTICE_MAX`,
+`Grid::lattice` and `s`, three of the grid's words, the judge's G (`cell_ms`, `per_cell`),
+`gpu_lattice` and the perf frame's `lattice`. `fixed` and `low` drew at lattice 1 before and
+draw the same now; `auto` keeps the rate and the scale.

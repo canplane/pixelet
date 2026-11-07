@@ -107,7 +107,7 @@ mod tests {
     fn eye_sees_view() {
         let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
         let tan = [1.0, 0.5];
-        let slope = beam::Grid::of(tan, 1).slope();
+        let slope = beam::Grid::of(tan).slope();
         let sees = |v: [f32; 3], r: f32| sees(axes, tan, slope, v, r);
         assert!(sees([0.0, 10.0, 0.0], 0.0));
         assert!(sees([9.9, 10.0, 0.0], 0.0));

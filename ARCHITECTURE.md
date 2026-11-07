@@ -270,13 +270,9 @@ same angle wherever it lies (`pxl-spec space/camera/grid.rs`). An angular cell
 is 1/`CELLS_A_RAD` radians on every view (`CELL`), so what is observed at a
 distance is the same on every screen; a display only draws it.
 
-The cell sets what is observed and the samples' lattice, `SAMPLE` a cell a
-side; the beam rays and the cells their starts are found for lie on a lattice
-of their own, one or two cells a side (`pxl-engine grid.rs` `LATTICE_MAX`,
-`beam.rs` `Grid::of`), which the drawn resolution sets (Drawing). A lattice is
-a power of two of cells, so the samples are the very rays on either, and no
-pixel drawn changes with it. Until the lattice came apart, the cell spaced the
-beam rays too.
+The cell sets what is observed, the beam rays and the cells their starts are
+found for, a cell apart (`pxl-engine beam.rs` `Grid::of`), and the samples'
+lattice, `SAMPLE` a cell a side.
 
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
 to two angular cells at its distance (`cell_zoom_at`): each zoom is drawn over a
@@ -510,7 +506,7 @@ Neighboring rays share most of their descent, so the cast walks that part once
 an angular cell and hands the rest to the rasterizer:
 
 ```text
-  one cell of the camera grid's lattice, one or two angular cells a side
+  one angular cell of the camera grid
   ●─────────────●   beam rays at its corners walk the descent its
   │ ·  ·  ·  ·  │   pixels share (beam_cs); the cell starts at the
   │ ·  ·  ·  ·  │   least of them (cell_cs)
@@ -532,32 +528,29 @@ The entries are pxl-render's WGSL (`beam.wgsl`, `sample.wgsl`, `raster.wgsl`,
 `queue_last.wgsl`). Once
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
-times a scale, its beam rays on a lattice, both of which the `resolution`
-setting picks (`domain/scene/resolution.rs`).
+times a scale, which the `resolution` setting picks
+(`domain/scene/resolution.rs`).
 
 The scale buys back only the work done a drawn pixel at a time: the pixels' cast
 and misses, the boxes drawn into the visibility buffer, the world's passes, its
 occlusion, gathering and marks, and the light's tiles marked where the eye's
-rays meet the world. The beam rays and cells run on the camera grid's lattice,
-which the lattice buys back, a quarter of them at twice the cell; the samples,
-their boxes and faces on its angular cells and the rest of the light's passes
-on its map's texels, which neither shrinks; the finish and the markers draw at
-the display's pixels at any scale, their text sharp. Each GPU span says which
-it is (span.json `per_px`, `per_cell`), and a span whose passes are of two
-kinds is split. Neither knob reaches the rest, so a third gives every pass more
-time: the rate, the interval between turns, a refresh a step. `auto` is a budget
-controller, as congestion control is, over all three: the frame's budget is the
+rays meet the world. The beam rays, cells, samples, their boxes and faces run on
+the camera grid's angular cells and the rest of the light's passes on its map's
+texels, which it does not shrink; the finish and the markers draw at the
+display's pixels at any scale, their text sharp. Each GPU span says which it is
+(span.json `per_px`), and a span whose passes are of two kinds is split. The
+scale does not reach the rest, so a second knob gives every pass more time: the
+rate, the interval between turns, a refresh a step. `auto` is a budget
+controller, as congestion control is, over both: the frame's budget is the
 interval turns are paced at, no tighter than 1/60 s; while the frame's GPU time
 runs over it a knob steps down, the rate to 30 Hz first (`RATE_MIN_HZ`), then
-the scale to its least, then the lattice, and a knob steps up, the lattice
-first and the rate last, where the step above, the rest of the GPU's time as it
-is, the per-pixel spans' grown by their pixels and the lattice's by its cells,
-would fit its budget; one step a settling window. The rate is the runtime's: the
-kernel asks it (`TURN_PACE`) and reads it back off each turn's grant. A lattice
-changed draws no other pixel: the next cast lays it, and the frames that stand
-on the last cast's samples keep its grid. Without timestamps it reads the
-frames' gaps, which cannot foresee room, so only the scale moves, and a step up
-is a probe whose failure doubles the wait before the next.
+the scale to its least, and a knob steps up, the scale first and the rate last,
+where the step above, the rest of the GPU's time as it is and the per-pixel
+spans' grown by their pixels, would fit its budget; one step a settling window.
+The rate is the runtime's: the kernel asks it (`TURN_PACE`) and reads it back off
+each turn's grant. Without timestamps it reads the frames' gaps, which cannot
+foresee room, so only the scale moves, and a step up is a probe whose failure
+doubles the wait before the next.
 
 What the rays asked of each node is kept between frames in the **node
 cache** (`pxl-engine node_cache.rs`), a table keyed by the node, and
