@@ -592,6 +592,8 @@ pub const HEAD_HITS: usize = HEAD_POOL + 1;
 /// (`Light::keeps`, pxl-render light_slide.wgsl).
 pub const HEAD_RANGE_WAS: usize = HEAD_HITS + 1;
 const HEAD_LAID_VEC4S: usize = 10;
+/// The words `head_layout` lays.
+const HEAD_LAID: usize = 15 + 2 * LISTS as usize;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`Column`, `Light::reaches`): how many, the first word of a vec4, then each two vec4s,
 /// its four floats and its first and last band, as many as `COLUMNS`.
@@ -601,9 +603,10 @@ const _: () = assert!(
     "the head holds the words it lays"
 );
 
-/// The words of the head the map's side lays: each word and what it holds.
-pub const fn head_layout(size: u32) -> [(usize, u32); 25] {
-    [
+/// The words of the head the map's side lays: each word and what it holds, then each list's
+/// marks and the list.
+pub const fn head_layout(size: u32) -> [(usize, u32); HEAD_LAID] {
+    let own = [
         (HEAD_SIZE, size),
         (HEAD_HOLES, holes_at(size)),
         (HEAD_CELLS, cell(size, [0, 0])),
@@ -619,47 +622,20 @@ pub const fn head_layout(size: u32) -> [(usize, u32); 25] {
         (HEAD_SLIDE, slide_at(size)),
         (HEAD_POOL, list_words(size)),
         (HEAD_HITS, hits_at(size)),
-        (
-            HEAD_MARKS + LISTED_CORNERS as usize,
-            listed_marks_at(size, LISTED_CORNERS),
-        ),
-        (
-            HEAD_MARKS + LISTED_FED as usize,
-            listed_marks_at(size, LISTED_FED),
-        ),
-        (
-            HEAD_MARKS + LISTED_CLAIMED as usize,
-            listed_marks_at(size, LISTED_CLAIMED),
-        ),
-        (
-            HEAD_LISTED + LISTED_CORNERS as usize,
-            listed_at(size, LISTED_CORNERS),
-        ),
-        (
-            HEAD_LISTED + LISTED_FED as usize,
-            listed_at(size, LISTED_FED),
-        ),
-        (
-            HEAD_LISTED + LISTED_CLAIMED as usize,
-            listed_at(size, LISTED_CLAIMED),
-        ),
-        (
-            HEAD_MARKS + LISTED_STOOD as usize,
-            listed_marks_at(size, LISTED_STOOD),
-        ),
-        (
-            HEAD_MARKS + LISTED_READ as usize,
-            listed_marks_at(size, LISTED_READ),
-        ),
-        (
-            HEAD_LISTED + LISTED_STOOD as usize,
-            listed_at(size, LISTED_STOOD),
-        ),
-        (
-            HEAD_LISTED + LISTED_READ as usize,
-            listed_at(size, LISTED_READ),
-        ),
-    ]
+    ];
+    let mut laid = [(0, 0); HEAD_LAID];
+    let mut k = 0;
+    while k < own.len() {
+        laid[k] = own[k];
+        k += 1;
+    }
+    let mut list = 0;
+    while list < LISTS {
+        laid[k] = (HEAD_MARKS + list as usize, listed_marks_at(size, list));
+        laid[k + 1] = (HEAD_LISTED + list as usize, listed_at(size, list));
+        (k, list) = (k + 2, list + 1);
+    }
+    laid
 }
 
 /// Where a texel's ray starts, the same point of the world in every frame
