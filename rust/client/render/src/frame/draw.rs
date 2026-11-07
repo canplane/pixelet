@@ -883,12 +883,46 @@ impl DrawList {
     }
 }
 
-/// A heap block the renderer mirrors, written whole each time and grown to the
-/// next power of two.
+/// A heap block, grown to the next power of two as its holder needs more,
+/// never shrunk, and let go with it.
+#[derive(Default)]
+pub struct Block {
+    at: usize,
+    bytes: u32,
+}
+
+impl Block {
+    /// Its first `bytes`, what it held gone where it grew; none where the heap
+    /// refused, the block then gone.
+    pub fn take(&mut self, bytes: u32) -> Option<&'static mut [u8]> {
+        if bytes > self.bytes {
+            self.free();
+            (self.at, self.bytes) = alloc(bytes.next_power_of_two())?;
+        }
+        // SAFETY: a heap block this holds alone, at least `bytes` long.
+        Some(unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(self.at), bytes as usize) })
+    }
+
+    pub fn free(&mut self) {
+        if self.bytes > 0 {
+            // SAFETY: the block this holds alone.
+            unsafe { free((self.at, self.bytes)) };
+            self.bytes = 0;
+        }
+    }
+}
+
+impl Drop for Block {
+    fn drop(&mut self) {
+        self.free();
+    }
+}
+
+/// A heap block the renderer mirrors, written whole each time, and its
+/// upload's handle, 0 for none.
 #[derive(Default)]
 pub struct MirroredBlock {
-    pub at: usize,
-    pub bytes: u32,
+    block: Block,
     pub handle: u32,
 }
 
@@ -896,36 +930,26 @@ impl MirroredBlock {
     /// False when the heap refused; the block is then gone.
     pub fn write(&mut self, draw: &mut DrawList, data: &[u8]) -> bool {
         let need = (data.len() as u32).max(4);
-        if need > self.bytes {
+        if need > self.block.bytes {
             self.free(draw);
-            let bytes = need.next_power_of_two();
-            let Some((at, bytes)) = alloc(bytes) else {
-                return false;
-            };
-            self.at = at;
-            self.bytes = bytes;
         }
-        // SAFETY: the block is the heap's, `self.bytes` long, and at least
-        // `data` long.
-        unsafe {
-            core::ptr::copy_nonoverlapping(data.as_ptr(), mem::at::<u8>(self.at), data.len());
+        let Some(bytes) = self.block.take(need) else {
+            return false;
         };
+        bytes[..data.len()].copy_from_slice(data);
+        let (at, room) = (self.block.at as u32, self.block.bytes);
         if self.handle == 0 {
-            self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
+            self.handle = draw.upload(at, room, 0, 0);
         } else {
-            draw.rewrite(self.handle, self.at as u32, need);
+            draw.rewrite(self.handle, at, need);
         }
         true
     }
 
     pub fn free(&mut self, draw: &mut DrawList) {
-        if self.bytes > 0 {
-            draw.free(self.handle);
-            // SAFETY: the block this write took and has not given back.
-            unsafe { free((self.at, self.bytes)) };
-            self.bytes = 0;
-            self.handle = 0;
-        }
+        draw.free(self.handle);
+        self.block.free();
+        self.handle = 0;
     }
 }
 

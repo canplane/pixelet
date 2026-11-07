@@ -70,7 +70,7 @@ impl Set {
 
     /// Whether it held a block.
     pub(super) fn free(&mut self, draw: &mut DrawList) -> bool {
-        let held = self.block.bytes > 0;
+        let held = self.block.handle != 0;
         self.block.free(draw);
         self.cnt = 0;
         held

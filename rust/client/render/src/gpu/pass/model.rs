@@ -5,8 +5,10 @@
 
 use xpute_core::global::Global;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
-use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
+use crate::frame::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
@@ -14,7 +16,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::put::{put_f32, put_u32, Scratch};
+use crate::gpu::put::{put_f32, put_u32};
 
 fn frame_group(
     g: &Gpu,
@@ -130,7 +132,7 @@ pub struct DrawUniforms {
     buf: u32,
     cap: u32,
     group: u32,
-    scratch: Scratch,
+    scratch: Block,
 }
 
 #[derive(Clone, Copy)]
@@ -162,7 +164,7 @@ impl DrawUniforms {
             buf: 0,
             cap: 0,
             group: 0,
-            scratch: Scratch::default(),
+            scratch: Block::default(),
         }
     }
 
@@ -194,7 +196,7 @@ impl DrawUniforms {
             self.cap = need;
         }
         let stride = self.stride as usize;
-        let buf = self.scratch.take(cnt * self.stride);
+        let buf = self.scratch.take(cnt * self.stride).or_bug(Errno::ENOMEM);
         for (k, draw) in draws.take(cnt as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
