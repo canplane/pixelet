@@ -31,8 +31,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   backlog is done, and it waits on the CPU fill's renderer work. The counts put a list near
   100 k cells (the journal, 11-08). First `list::light` on the CPU, held to `cast::first`,
   which measures the real list.
-- **The middle distance's look**: where the ground goes flat, and the far zoom's floating
-  boxes, the user's to decide (10-28's floating box, 11-02's one boundary for the effects).
+- **The far zoom's floating boxes**, if they still show as fragments now the rim ends with the
+  effects ([the rim ends with the effects](./minutes/20261108-the-rim-ends-with-the-effects.md)).
 
 ## P2
 
@@ -43,13 +43,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   in the naming skill; then the renames by area, one names commit each.
 - **Lighting run under decor.** A depth-only screen draw with a coverage bit would
   skip it, but the stencil's 8 bits are the gate's.
-- **The character stands half inside a step at load.** At 38.1193, 128.4656 the point lies
-  0.11 of a unit from the wall of the higher cell east of it, which the view from the south
-  sees edge-on at the screen's middle, and a person a unit wide stands through it. A character
-  stands at a point, with no width. Whether it keeps clear of a wall is a look decision.
-- **How strong a shadow is at dawn on flat ground.** A full shadow takes about 21%
-  off at 5° of sun (`SHADOW_BY_UP_TAKEN`, `LIGHT_BY_NORMAL`), and terrain already
-  shades most near ground then. A look decision.
 - **A login screen is to come.** Another kind of `Cover`, over `Starting` or
   `Loading`, so the world is made while it stands —
   [20261103-what-stands-over-the-app.md](./minutes/20261103-what-stands-over-the-app.md).

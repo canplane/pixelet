@@ -565,11 +565,11 @@ and which of the face's edges and corners meet the air or a rising cell. The
 its swatch or image, shaded edges, light, and the air before it.
 
 The effects on a drawn surface, its lines, its corners' and the screen's
-occlusion and the shadows, reach one distance from the eye, where the camera
+occlusion, the shadows and the rim, reach one distance from the eye, where the camera
 grid's cells one zoom coarser than the ground's leaf begin, and fade alike
 before it (`pxl-spec space/layer/lattice.rs` `EFFECT_REACH`,
-`frame/shader/effect.wgsl` `effect_share`). The rim and the air, which read
-only the face's normal and distance, reach as far as the eye draws.
+`frame/shader/effect.wgsl` `effect_share`). The air, which reads only the
+face's distance, reaches as far as the eye draws.
 
 ## The shadow map
 

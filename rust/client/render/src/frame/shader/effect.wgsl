@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/effect.wgsl
 
 // How much of the effects on a drawn surface `d` units from the eye shows: its
-// lines, its corners' and the screen's occlusion and the shadows, all to one
+// lines, its corners' and the screen's occlusion, the shadows and the rim, all to one
 // boundary (pxl-spec space/layer/lattice.rs `EFFECT_REACH`), faded alike
 // before it.
 fn effect_share(d: f32) -> f32 {

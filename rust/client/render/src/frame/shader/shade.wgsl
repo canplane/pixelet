@@ -1,10 +1,11 @@
 // The shading every lit pass shares, so the screen's cells, decor and a character cannot be lit differently.
 
 // How much a face brightens where it turns from the eye, as a share of its own
-// light.
+// light, to the effects' reach (effect.wgsl `effect_share`).
 fn rim(n: vec3f, world_pos: vec3f) -> f32 {
-  let view_dir = normalize(frame_camera_pos() - world_pos);
-  return pow(1.0 - max(dot(n, view_dir), 0.0), LIGHT_RIM_POWER) * frame_rim_intensity();
+  let to_eye = frame_camera_pos() - world_pos;
+  let share = effect_share(length(to_eye));
+  return pow(1.0 - max(dot(n, normalize(to_eye)), 0.0), LIGHT_RIM_POWER) * frame_rim_intensity() * share;
 }
 
 // The shadow and the occlusion are both visibility, each of its own light
