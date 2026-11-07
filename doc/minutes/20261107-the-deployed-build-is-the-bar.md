@@ -71,3 +71,8 @@ packet is kept no longer; the deployed build left that to the GPU. Within the tu
 no turn past it. The user accepts it; holding packets past their turn to move the cut out is
 not taken.
 
+**Closed, 11-08.** Against `e317a3644b`: the Mac's gate passes, its GPU faster; the S23 at
+719 MHz 6.1× at p50, and at p95 1.7–2× on the deployed build's best run of several, 5.7× on
+one pair; the tick's tail accepted. What the S23's p95 has left is the light's walks, which
+its list did not undercut ([the light's list](./20261108-the-light-s-list-measured.md)).
+
