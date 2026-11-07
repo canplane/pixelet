@@ -35,8 +35,7 @@ use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::sys::io::demand::Order;
-use crate::sys::io::demand::{Ask, Phases, Priority};
+use crate::sys::io::demand::{Order, Phases};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
@@ -127,6 +126,37 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
     LAYERS.iter().find(|l| l.stream == stream)
 }
 
+/// Why a tile is asked for, strongest first.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Priority {
+    Floor,
+    /// On a line asked for exactly: the camera's destination's, or the division layer's pivot's.
+    Destination,
+    /// On the line over a miss, so a coarser answer is held wherever the view
+    /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
+    Ancestor,
+    Demand,
+}
+
+/// A tile asked for: why, and its place in the view, which its want is
+/// taken in (sys/io/request.rs `declare`).
+#[derive(Clone, Copy)]
+struct Ask {
+    priority: Priority,
+    order: Order,
+}
+
+impl Ask {
+    /// The stronger reason and the earlier place, taken separately: how a tile
+    /// is asked for says nothing of when the view needs it.
+    fn best(self, other: Ask) -> Ask {
+        Ask {
+            priority: self.priority.min(other.priority),
+            order: self.order.min(other.order),
+        }
+    }
+}
+
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
 #[derive(Clone, Copy, PartialEq)]
@@ -138,7 +168,7 @@ struct Key {
 pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
-    wants: Vec<(u64, Ask)>,
+    wants: Vec<(u64, Order)>,
     /// Each want's order before its place in the view is read, which
     /// `reorder` places it from.
     orders: Vec<Order>,
@@ -368,7 +398,7 @@ impl<L: Observed> Demand<L> {
             if unanswered(p, &mut lines) {
                 let a = asks[&p];
                 self.orders.push(a.order);
-                self.wants.push((p.id(), a));
+                self.wants.push((p.id(), a.order));
             }
         }
         asks.clear();
@@ -399,14 +429,13 @@ impl<L: Observed> Demand<L> {
     fn reorder(&mut self, o: Option<&Observation>) {
         let mut ground = ColumnWalk::default();
         let mut placed = self.placed.iter().peekable();
-        for ((id, a), &base) in self.wants.iter_mut().zip(&self.orders) {
-            a.order = base;
+        for ((id, order), &base) in self.wants.iter_mut().zip(&self.orders) {
+            *order = base;
             while placed.next_if(|(q, _)| q.id() < *id).is_some() {}
             while let Some(&(_, of)) = placed.next_if(|(q, _)| q.id() == *id) {
                 if let Some(o) = o {
-                    a.order =
-                        a.order
-                            .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
+                    *order =
+                        (*order).min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
                 }
             }
         }
@@ -546,10 +575,7 @@ pub fn object_step() {
     repository::want(
         r.into_iter()
             .flat_map(|(o, r)| tiles_within(SHARD_ZOOM, [o.eye[0], o.eye[1]], r)),
-        |shard| Ask {
-            priority: Priority::Demand,
-            order: o.map_or(Order::LAST, |o| Order::of(&o, &shard.region())),
-        },
+        |shard| o.map_or(Order::LAST, |o| observation::order_of(&o, &shard.region())),
     );
 }
 

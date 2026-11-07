@@ -8,10 +8,8 @@
 //! no object is drawn from the tile over it, whose cells there are open water;
 //! at the source's top, it is void.
 
-use crate::domain::layer::earth::Earth;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::upload::Uploads;
-use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -71,7 +69,8 @@ impl Base for TerrainTile {
 
     /// What its clip levels want of it is the GPU's, off the packet: kept only
     /// where a clip level wants one of its bricks, so an ancestor's or another
-    /// zoom's packet no clip level reads takes no place of `most_pending`.
+    /// zoom's packet no clip level reads takes no spare slot
+    /// (sys/io/request.rs `spare_slots`).
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
             TerrainTile::tile_cache()
@@ -83,36 +82,22 @@ impl Base for TerrainTile {
                 uploads().forget(r);
                 fetch::release(Some(block));
             }
-            _ => uploads().keep(record, block, most_pending()),
+            _ => uploads().keep(record, block, request::spare_slots()),
         }
     }
 }
 
-/// The most terrain packets waiting at once: the body slots (`BODY_SLOTS`)
-/// less one for the most credits the runtime has granted and one for every
-/// Earth frame,
-/// so the packets waiting, which only a drawn frame gives back, never take the
-/// slots a read needs to arrive into (sys/io/body.rs). A packet past it is
-/// freed once decoded, and its tile asked again when one could be kept
-/// (`again_room`, domain/layer/terrain/clipmap.rs `step`).
-pub fn most_pending() -> u32 {
-    let credits = request::most_credits().max(1);
-    BODY_SLOTS.saturating_sub(credits + TileCache::<Earth>::SLOTS)
-}
-
-const _: () = assert!(
-    BODY_SLOTS > MAX_CREDITS + TileCache::<Earth>::SLOTS,
-    "the body slots keep a terrain packet beside a body on every credit and the Earth's"
-);
-
-/// How many tiles may be asked again for their packets now: as many as
-/// could still be kept, less those asked again and not yet come, so none
-/// is fetched only to be freed past `most_pending`.
+/// How many tiles may be asked again for their packets now: the spare
+/// slots (sys/io/request.rs `spare_slots`) less the packets kept, which only
+/// a drawn frame gives back, and those asked again and not yet come, so
+/// none is fetched only to be freed. A packet past them is freed once
+/// decoded, and its tile asked again here (domain/layer/terrain/clipmap.rs
+/// `step`).
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
         .asked_again(|p| !request::has_object_failed(Stream::terrain, p.id()));
-    most_pending().saturating_sub(uploads().cnt() + coming)
+    request::spare_slots().saturating_sub(uploads().cnt() + coming)
 }
 
 /// The tiles whose bricks the clip levels want filled, off their packets.

@@ -45,7 +45,7 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, Tr
 use super::store::object;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_written, Write};
-use crate::sys::io::demand::{Ask, Order, Phases, Priority, Stream, TaskPhaseName};
+use crate::sys::io::demand::{Order, Phases, Stream, TaskPhaseName};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch::{body, release};
 use crate::sys::io::file::{self, Path};
@@ -78,7 +78,7 @@ struct State {
     /// The writes the store took since the last batch went up, in order.
     unsent: Vec<Write>,
     /// The files `want` asks for, by id; reused across turns.
-    wants: Vec<(u64, Ask)>,
+    wants: Vec<(u64, Order)>,
     /// How many times what `want` reads of it moved: the top or a shard
     /// read, a file refused or emptied.
     revision: u32,
@@ -169,25 +169,21 @@ pub fn holds(space: &Aabb) -> bool {
 }
 
 /// The shards the view asks for (domain/view/demand.rs `object_step`), no
-/// more than `WANTS`, each wanted with its `ask`: before the top is read,
-/// the top alone; then those it lists not yet read, in place of what was
+/// more than `WANTS`, each wanted in its `order`: before the top is read,
+/// the top alone, first; then those it lists not yet read, in place of what was
 /// wanted before. A file refused is not wanted until the client empties it.
-pub fn want(asked: impl Iterator<Item = Quadrant>, ask: impl Fn(Quadrant) -> Ask) {
+pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> Order) {
     let st = state();
     st.wants.clear();
     if st.top_shards.is_none() {
         if !st.refused_files.contains(&TOP) {
-            let ask = Ask {
-                priority: Priority::Demand,
-                order: Order::FIRST,
-            };
-            st.wants.push((TOP, ask));
+            st.wants.push((TOP, Order::FIRST));
         }
     } else {
         for shard in asked {
             let id = shard.id();
             if !st.is_read(id) && !st.refused_files.contains(&id) {
-                st.wants.push((id, ask(shard)));
+                st.wants.push((id, order(shard)));
             }
         }
         st.wants.sort_unstable_by_key(|&(id, _)| id);

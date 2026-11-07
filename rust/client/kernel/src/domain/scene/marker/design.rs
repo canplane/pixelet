@@ -5,23 +5,61 @@
 //! is painted and nothing of who shows it, so two that paint alike are one:
 //! measured, given its slot and painted once, and shown only once painted
 //! (`ready`). Which text and colors a source paints are its own
-//! (`place.rs`, `pin.rs` and `line.rs`).
+//! (`place.rs`, `pin.rs` and `line.rs`). Its text is the platform's
+//! (sys/io/text.rs), laid out in a marker's font and drawn at the atlas's
+//! scale (`text_raster`).
 
 use std::rc::Rc;
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::domain::scene::marker::atlas::atlas;
-use crate::sys::io::text::{text_lines, text_width};
+use crate::sys::io::text::{text_lines, text_pixels};
 use pxl_render::gpu::atlas::shelf::{Paint, NO_SLOT};
 use pxl_render::gpu::atlas::ATLAS_SCALE;
+use pxl_render::gpu::text::{raster_box, Raster};
 use pxl_render::look::marker::{
-    bubble_size, pill_size, point_size, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
+    bubble_size, pill_size, point_size, Font, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
 };
 use xpute_core::global::Global;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+
+/// `text` in `font` broken into lines no wider than `max_width` (0 for one
+/// line), each with its width; none where it could not be laid out this turn.
+fn lines(font: Font, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
+    text_lines(font.weight, f64::from(font.px), max_width, text)
+}
+
+/// One line of `text`'s width in `font`.
+fn width(font: Font, text: &str) -> Option<f64> {
+    lines(font, 0.0, text).map(|lines| lines.iter().map(|&(_, w)| w).sum())
+}
+
+/// One line of `text` in `font` and `color`, 0xRRGGBBAA, as the atlas paints
+/// it: drawn at its scale into the line's box (`raster_box`). None where it
+/// could not be drawn this turn; a later turn asks again.
+pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
+    let advance = width(font, text)? as f32;
+    let (size, origin) = raster_box(font, advance);
+    let scale = ATLAS_SCALE as f32;
+    let px = text_pixels(
+        font.weight,
+        f64::from(font.px * scale),
+        color,
+        size,
+        f64::from(origin[0]),
+        text,
+    )?;
+    Some(Raster {
+        px,
+        width: size[0],
+        height: size[1],
+        origin,
+        advance: advance * scale,
+    })
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) enum Design {
@@ -115,14 +153,14 @@ pub(super) fn size(design: &Design) -> Option<[f64; 3]> {
         return Some(b.size);
     }
     let laid = |font, wrap, text: &str| -> Option<(f64, Vec<String>)> {
-        let laid = text_lines(font, wrap, text)?;
+        let laid = lines(font, wrap, text)?;
         Some((
             laid.iter().map(|&(_, w)| w).fold(0.0, f64::max),
             laid.iter().map(|&(l, _)| l.trim().to_owned()).collect(),
         ))
     };
     let (size, lines) = match design {
-        Design::Pill { text, .. } => (pill_size(text_width(PILL_FONT, text)?.ceil()), Vec::new()),
+        Design::Pill { text, .. } => (pill_size(width(PILL_FONT, text)?.ceil()), Vec::new()),
         Design::Point {
             name: None, icon, ..
         } => (point_size(*icon, None), Vec::new()),

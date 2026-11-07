@@ -1,17 +1,20 @@
 // pxl-kernel/domain/scene/model/asset.rs
 
-//! A parsed glTF registered as a model, the one way any model enters the
-//! world. A skinned model's joints are its skins' joints; an unskinned one
-//! animates by nodes, every node a joint with identity inverse bind (a pet's
-//! parts walk this way). A still model (no skin, no clip) has its node
-//! transforms baked into the vertices, since the decor pass reads no joint
-//! palette and a wheel would otherwise sit at the model's origin.
+//! A glTF file parsed and registered as a model, the one way any model
+//! enters the world. A skinned model's joints are its skins' joints; an
+//! unskinned one animates by nodes, every node a joint with identity inverse
+//! bind (a pet's parts walk this way). A still model (no skin, no clip) has
+//! its node transforms baked into the vertices, since the decor pass reads no
+//! joint palette and a wheel would otherwise sit at the model's origin.
 //!
-//! A registration runs in its own task, as a parse does (sys/io/loader.rs
-//! `arrival`), and yields between units where the turn's deadline has passed: a
-//! primitive, a run of `STEPS_PER_PAUSE` vertices, the joints, a clip, and
-//! the seal's passes (registry.rs `Model::seal`). The model joins the
-//! registry, and the table here, only once it is whole.
+//! A file's bytes, as the loader read them (sys/io/loader.rs `take_gltf`),
+//! are parsed once, in a task of their own (pxl-render `parse_gltf`), and
+//! the parse is kept for every registration of the file, the bytes gone. A
+//! registration runs in its own task too, and yields between units where
+//! the turn's deadline has passed: a primitive, a run of `STEPS_PER_PAUSE`
+//! vertices, the joints, a clip, and the seal's passes (registry.rs
+//! `Model::seal`). The model joins the registry, and the table here, only
+//! once it is whole.
 
 use core::future::Future;
 use core::ops::Range;
@@ -19,7 +22,7 @@ use std::rc::Rc;
 
 use fnv::FnvHashMap;
 
-use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf, GltfPrimitive};
+use pxl_render::asset::gltf::{parse_gltf, scene_nodes, world_matrices, Gltf, GltfPrimitive};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use xpute_core::global::Global;
@@ -29,12 +32,13 @@ use xpute_core::sched::task;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
-use crate::sys::io::loader::{load_gltf, load_of};
+use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
-use crate::sys::load::REGISTRATIONS;
+use crate::sys::load::{Load, REGISTRATIONS};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, world_edge, TaskPriority};
 use pxl_spec::asset::catalog::Slot;
+use xpute_kit::status::error::MarshalError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {
@@ -57,11 +61,29 @@ type Registration = Option<Result<ModelHandle, Refusal>>;
 /// asked at, its bits.
 static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
+/// None while its task runs, then the file as parsed, or why its bytes do
+/// not parse, for good.
+type Parse = Option<Result<Rc<Gltf>, MarshalError>>;
+
+/// Each file's parse, by its number below the asset root.
+static PARSED: Global<Vec<(u32, Parse)>> = Global::new();
+
+/// The tasks running, the registrations and the parses.
+fn running() -> usize {
+    let registering = REGISTRY
+        .get(Vec::new)
+        .iter()
+        .filter(|(_, _, r)| r.is_none());
+    let parsing = PARSED.get(Vec::new).iter().filter(|(_, p)| p.is_none());
+    registering.count() + parsing.count()
+}
+
 /// The file `slot` names registered `height_u` units tall, or at its own
 /// size when None, once: two slots naming one file reach one. None while it
-/// loads or registers, and while the heap refuses it room: a refusal is a
-/// wait, not a failure, asked again once the heap gives some back. No more
-/// than `REGISTRATIONS` run at once; past them a model waits its turn here.
+/// loads, parses or registers, while the heap refuses it room, and for good
+/// where its bytes do not parse: a refusal is a wait, not a failure, asked again once
+/// the heap gives some back. No more than `REGISTRATIONS` run at once; past
+/// them a model waits its turn here.
 pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let load = load_of(slot)?;
     let file = load.id();
@@ -76,10 +98,11 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
         Some(Some(Err(refused))) if !refused.over() => return None,
         _ => {}
     }
-    let gltf = load_gltf(load)?;
-    if registered.iter().filter(|(_, _, r)| r.is_none()).count() >= REGISTRATIONS {
+    let gltf = gltf_of(load)?;
+    if running() >= REGISTRATIONS {
         return None;
     }
+    let registered = REGISTRY.get(Vec::new);
     match at {
         Some(at) => registered[at].2 = None,
         None => registered.push((file, key, None)),
@@ -90,6 +113,37 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     );
     xpute_kit::ensure!(spawned, ENOSPC, file);
     None
+}
+
+/// `load`'s file as parsed; none while it loads or parses, and for good
+/// where it does not parse. The first to ask once it is read takes its
+/// bytes from the loader into a parse of their own (`parse`).
+fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
+    let file = load.id();
+    match PARSED.get(Vec::new).iter().find(|(a, _)| *a == file) {
+        Some((_, Some(Ok(gltf)))) => return Some(gltf.clone()),
+        Some(_) => return None,
+        None => {}
+    }
+    if running() >= REGISTRATIONS {
+        return None;
+    }
+    let bytes = take_gltf(load)?;
+    PARSED.get(Vec::new).push((file, None));
+    let spawned = task::spawn(parse(file, bytes), TaskPriority::Arrival as u8);
+    xpute_kit::ensure!(spawned, ENOSPC, file);
+    None
+}
+
+/// The file numbered `file` parsed off `bytes`, which go once it is; its
+/// entry left parsing by `gltf_of` and set once it is parsed or refused. A
+/// landing wakes a turn.
+async fn parse(file: u32, bytes: Vec<u8>) {
+    let parsed = parse_gltf(&bytes, &[], || yield_if_spent(world_edge)).await;
+    if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
+        *entry = Some(parsed.map(Rc::new));
+    }
+    request_world_tick();
 }
 
 /// `slot`'s model as `model_of` registered it at `height_u`, asking
@@ -105,19 +159,20 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle
         .and_then(|(_, _, entry)| entry.clone()?.ok())
 }
 
-/// `file`'s model registered at `height_u`, its entry left registering by
-/// `model_of` and set once it is whole or refused; a landing wakes a turn.
+/// The file numbered `file`'s model, `gltf`, registered at `height_u`, its
+/// entry left registering by `model_of` and set once it is whole or
+/// refused. A landing wakes a turn.
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     let entry = register_model(&gltf, height_u, || yield_if_spent(world_edge))
         .await
         .ok_or_else(Refusal::now);
     let key = height_u.map(f64::to_bits);
-    if let Some(row) = REGISTRY
+    if let Some((_, _, at)) = REGISTRY
         .get(Vec::new)
         .iter_mut()
         .find(|(a, h, _)| *a == file && *h == key)
     {
-        row.2 = Some(entry);
+        *at = Some(entry);
     }
     request_world_tick();
 }

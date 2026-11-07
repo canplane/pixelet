@@ -6,9 +6,10 @@
 //! between its bedrock and its ceiling, in shards whose objects are read.
 //! Every walker's walk and every edit
 //! asks these, and nothing else decides them; the camera is no walker and
-//! asks none (query/support.rs `step_slide`).
+//! asks none (query/support.rs `step_slide`). The shell is told whether the
+//! pivot is past the area (`past`).
 
-use pxl_engine::area::{is_wall, walls_in, Area, Shard};
+use pxl_engine::area::{self, is_wall, walls_in, Area, Shard};
 use pxl_engine::wrap_idx;
 use pxl_spec::limit::{bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
@@ -33,6 +34,16 @@ impl World<'_> {
     /// of it.
     pub fn within(&self, at: &Q3) -> bool {
         within_in(&source::ServiceArea, at)
+    }
+
+    /// Whether the leaf tile under `at` is past the service area: the source
+    /// is declared and serves no shard over it (pxl-engine `area::past`).
+    /// What the shell is told of the pivot (shell.rs `outside`); a walk or an
+    /// edit asks `within`, which keeps off the area's edge as well.
+    pub fn past(&self, at: &Q3) -> bool {
+        let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
+        let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).tile().at;
+        area::past(&source::ServiceArea, leaf)
     }
 
     /// Whether `space` may hold an edit: every shard under it read, so a

@@ -12,10 +12,7 @@
 use pxl_engine::area::{self, Area};
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
-use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::lattice::Cells;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
@@ -79,18 +76,6 @@ pub fn top() -> Option<Zoom> {
 /// Whether a served shard is over or under `p`, of a kind held by shards.
 pub fn serves(layer: BaseLayer, p: Quadrant) -> bool {
     !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
-}
-
-/// Whether the ground at `[x, y]`, in units, is past the service area: the
-/// source is declared and serves no shard over its leaf. What the shell is
-/// told of the pivot (shell.rs `outside`); a walk or an edit asks
-/// domain/query/limit.rs `within`, which keeps off the area's edge as well.
-pub fn past_at([x, y]: [f64; 2]) -> bool {
-    let leaf = GROUND
-        .cell_of(LEAF_ZOOM, &world::point(x, y, 0.0))
-        .tile()
-        .at;
-    area::past(&ServiceArea, leaf)
 }
 
 /// The service area as pxl-engine's rules read it: the declared source's

@@ -2,7 +2,8 @@
 
 //! The kernel's request scheduler: what is wanted (`wants`, a run a
 //! stream, replaced whole each turn) and what is out (`attempt`). Ordering, intake and
-//! retry waits are the `Serve` policy's.
+//! retry waits are the `Serve` policy's. What starts, stops and ends is
+//! kept for the turn to take (`take_starts`, `take_stops`, `take_ends`).
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
 //! object drops its want; a body refused room, by the heap or the body
@@ -18,23 +19,18 @@
 
 use core::cmp::Ordering;
 
-use crate::perf::record::perf_record;
-use crate::perf::task::{path_bytes, TaskRow};
-use crate::sys::io::demand::{Ask, Phases, Stream};
+use crate::sys::io::demand::{Order, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
-use crate::sys::io::file::path_of;
 use crate::sys::io::policy::Policy;
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
-use fnv::FnvHashMap;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-use xpute_core::mem::off_of_slice;
 use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use crate::sys::sched::edge;
 
 /// Ordered by `class`, then `distance`, lower first, then `detail`, higher first.
@@ -47,7 +43,7 @@ pub struct Rank {
 
 pub trait Serve {
     /// Asked again every pump: the order is the view's now.
-    fn rank(&self, stream: Stream, id: u64, ask: Ask, enqueue_ms: f64) -> Rank;
+    fn rank(&self, stream: Stream, id: u64, order: Order, enqueue_ms: f64) -> Rank;
 
     fn intake(&self) -> u32;
 
@@ -88,7 +84,7 @@ fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
 #[derive(Clone, Copy, Debug)]
 struct Want {
     id: u64,
-    ask: Ask,
+    order: Order,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
     wait: Wait,
@@ -97,7 +93,7 @@ struct Want {
 impl Want {
     const NONE: Want = Want {
         id: 0,
-        ask: Ask::PLAIN,
+        order: Order::LAST,
         enqueue_ms: 0.0,
         wait: Wait::Ready,
     };
@@ -126,12 +122,12 @@ impl Wait {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Attempt {
-    stream: Stream,
-    id: u64,
-    rank: Rank,
-    enqueue_ms: f64,
-    start_ms: f64,
+pub struct Attempt {
+    pub stream: Stream,
+    pub id: u64,
+    pub rank: Rank,
+    pub enqueue_ms: f64,
+    pub start_ms: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -173,6 +169,8 @@ pub struct RequestScheduler<S> {
     most_credits: u32,
     starts: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
+    /// Each attempt ended, when, as what, and the timings its run reported.
+    ends: Vec<(Attempt, f64, Ended, Option<Phases>)>,
     ready: Vec<(Ready, usize)>,
     /// Why reads fail, since the last that came to an answer.
     failing: Option<Errno>,
@@ -218,6 +216,7 @@ impl<S: Serve> RequestScheduler<S> {
             most_credits: 0,
             starts: Vec::new(),
             stops: Vec::new(),
+            ends: Vec::new(),
             ready: Vec::with_capacity(want_cap),
             failing: None,
             failures: 0,
@@ -269,8 +268,8 @@ impl<S: Serve> RequestScheduler<S> {
     /// Replaces one stream's wants with `wanted`, by id: one walk of
     /// it beside the run held. Re-declaring the same set changes nothing, so
     /// producers say everything every turn. A kept id keeps its enqueue
-    /// time and retry wait; a repeated id is one want, the later ask.
-    pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Ask)], at: f64) {
+    /// time and retry wait; a repeated id is one want, the later order.
+    pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Order)], at: f64) {
         xpute_kit::ensure!(
             wanted.windows(2).all(|p| p[0].0 <= p[1].0),
             ENOTRECOVERABLE,
@@ -279,7 +278,7 @@ impl<S: Serve> RequestScheduler<S> {
         let (first, bound) = (self.first(stream), self.bounds[stream as usize]);
         let run = &self.wants[first..first + self.run_lens[stream as usize]];
         let (mut k, mut n) = (0, 0);
-        for (j, &(id, ask)) in wanted.iter().enumerate() {
+        for (j, &(id, order)) in wanted.iter().enumerate() {
             if wanted.get(j + 1).is_some_and(|w| w.0 == id) {
                 continue;
             }
@@ -287,10 +286,10 @@ impl<S: Serve> RequestScheduler<S> {
                 k += 1;
             }
             let w = match run.get(k) {
-                Some(&w) if w.id == id => Want { ask, ..w },
+                Some(&w) if w.id == id => Want { order, ..w },
                 _ => Want {
                     id,
-                    ask,
+                    order,
                     enqueue_ms: at,
                     wait: Wait::Ready,
                 },
@@ -328,7 +327,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     fn ready_of(&self, stream: Stream, w: &Want) -> Ready {
         Ready {
-            rank: self.serve.rank(stream, w.id, w.ask, w.enqueue_ms),
+            rank: self.serve.rank(stream, w.id, w.order, w.enqueue_ms),
             stream,
             id: w.id,
         }
@@ -409,7 +408,7 @@ impl<S: Serve> RequestScheduler<S> {
     fn stop(&mut self, slot: usize, at: f64) {
         self.stops.push(key_of(slot, self.generation[slot]));
         let a = self.end(slot);
-        record(&a, at, Ended::Aborted, None);
+        self.ends.push((a, at, Ended::Aborted, None));
     }
 
     pub fn take_starts(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
@@ -421,6 +420,12 @@ impl<S: Serve> RequestScheduler<S> {
     pub fn take_stops(&mut self, mut each: impl FnMut(u64)) {
         for key in self.stops.drain(..) {
             each(key);
+        }
+    }
+
+    pub fn take_ends(&mut self, mut each: impl FnMut(&Attempt, f64, Ended, Option<Phases>)) {
+        for (a, at, ended, phases) in self.ends.drain(..) {
+            each(&a, at, ended, phases);
         }
     }
 
@@ -460,7 +465,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
             Ended::Aborted => {}
         }
-        record(&a, at, ended, phases);
+        self.ends.push((a, at, ended, phases));
     }
 
     /// The server answered: whatever held it back is over.
@@ -516,54 +521,6 @@ impl<S: Serve> RequestScheduler<S> {
     }
 }
 
-fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
-    perf_record(|| {
-        let mut row = TaskRow {
-            stream: a.stream as u32 as f64,
-            path: path_bytes(path_of(a.stream, a.id).as_bytes()),
-            priority: a.rank.class as f64 + a.rank.dist,
-            enqueue_ms: a.enqueue_ms,
-            start_ms: a.start_ms,
-            end_ms: at,
-            outcome: ended.outcome() as u32 as f64,
-            ..TaskRow::default()
-        };
-        match ended {
-            Ended::Failed(fail) => {
-                row.fail = f64::from(fail.errnum as i32);
-                row.detail = fail.detail as f64;
-            }
-            Ended::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),
-            Ended::Ok | Ended::Aborted => {}
-        }
-        if let Some(at) = match ended {
-            Ended::Failed(fail) => fail.at,
-            Ended::Ok | Ended::Aborted | Ended::Refused(_) => None,
-        } {
-            row.at_file = off_of_slice(file_in_mem(at.file()).as_bytes()) as f64;
-            row.at_file_bytes = at.file().len() as f64;
-            row.at_line = at.line() as f64;
-        }
-        for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
-            row.phase_ids[k] = name as u32 as f64;
-            row.phase_vals[k] = val;
-            row.phase_cnt = (k + 1) as f64;
-        }
-        row
-    });
-}
-
-static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
-
-/// A location's file name lies outside kernel memory on a device, so rows
-/// name a heap copy; the names are few and kept for good.
-fn file_in_mem(file: &'static str) -> &'static str {
-    FILES
-        .get(FnvHashMap::default)
-        .entry(file.as_ptr().addr())
-        .or_insert_with(|| file.into())
-}
-
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();
 
 /// Opened once the kernel is laid out, with each layer's frames.
@@ -576,7 +533,7 @@ fn sched() -> &'static mut RequestScheduler<Policy> {
     SCHED.get(|| None.or_bug(Errno::ENOTRECOVERABLE))
 }
 
-pub fn declare(stream: Stream, wanted: &[(u64, Ask)]) {
+pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     sched().declare(stream, wanted, now());
 }
 
@@ -584,10 +541,16 @@ pub fn set_credits(credits: u32) {
     sched().set_credits(credits);
 }
 
-/// The most credits the runtime has granted: a body on each may still be out
-/// after a grant of fewer.
-pub fn most_credits() -> u32 {
-    sched().most_credits
+/// The body slots (`BODY_SLOTS`) a terrain packet may wait in past its
+/// decode: less one for each of the most credits the runtime has granted,
+/// one at least, as a body on each may still be out after a grant of fewer,
+/// and one for each Earth tile its stream's bound holds, whose packet waits
+/// for a frame (sys/io/body.rs). A packet kept within them never takes the
+/// slot a read needs to arrive into.
+pub fn spare_slots() -> u32 {
+    let s = sched();
+    let earth = s.bounds[Stream::earth as usize] as u32;
+    BODY_SLOTS.saturating_sub(s.most_credits.max(1) + earth)
 }
 
 pub fn pump() {
@@ -605,6 +568,10 @@ pub fn take_starts(each: impl FnMut(Credit, Stream, u64)) {
 
 pub fn take_stops(each: impl FnMut(u64)) {
     sched().take_stops(each);
+}
+
+pub fn take_ends(each: impl FnMut(&Attempt, f64, Ended, Option<Phases>)) {
+    sched().take_ends(each);
 }
 
 pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {

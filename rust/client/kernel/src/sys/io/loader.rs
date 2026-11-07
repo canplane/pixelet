@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/loader.rs
 
-//! Shared loading of models and images, so each asset is fetched and parsed
-//! at most once. An asset is a want in the request scheduler like a tile, sharing
+//! Shared loading of models and images, so each asset is fetched at most
+//! once. An asset is a want in the request scheduler like a tile, sharing
 //! its credits, and stays wanted until it arrives.
 //!
 //! Which file an asset references is the catalog's, the first file asked
@@ -12,18 +12,17 @@
 //! waits, as a tile's body does, until the heap gives some back (the request
 //! scheduler's `Wait::Room`): its room is taken when the open answers, and
 //! its descriptor closed there with its credit. Bytes that do not parse are
-//! final, since asking again returns the same bytes. An image is its file's
-//! bytes, handed to the renderer under the asset's number, which makes its
-//! texture on whatever device there is (pxl-render `Gpu::image`), and let
-//! go once that texture lands: a device lost reads the file again. io is
-//! transport, and the device the renderer's.
+//! final, since asking again returns the same bytes. A model is its file's
+//! bytes, handed over once to the scene, which parses them and keeps the
+//! parse (`take_gltf`). An image is its file's bytes, handed to the renderer
+//! under the asset's number, which makes its texture on whatever device
+//! there is (pxl-render `Gpu::image`), and let go once that texture lands: a
+//! device lost reads the file again. io is transport: the model the scene's,
+//! and the device the renderer's.
 
-use std::rc::Rc;
-
-use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use xpute_core::sched::edge::{runtime_turn, yield_if_spent};
 
-use crate::sys::io::demand::Ask;
+use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Reading};
 use crate::sys::io::file_spec::{root, CATALOG};
@@ -39,18 +38,18 @@ use xpute_core::global::Global;
 use xpute_core::sched::task;
 
 /// `Arrived` exists because the read's credit is released when the bytes
-/// land (parsing is not I/O and would starve tile reads), but the asset is
-/// not usable yet.
+/// land, and the asset is not usable until its task has taken them in.
 enum Entry {
     Pending,
     /// Its bytes in its arrival's task, being taken in.
     Arrived,
-    /// A parsed model.
-    Model(Rc<Gltf>),
+    /// A model's bytes, until they are taken (`take_gltf`).
+    Gltf(Vec<u8>),
     /// An image's bytes, sized by its header, until its texture lands.
     Image(Vec<u8>),
-    /// Taken in where its reader keeps it, its bytes gone: an image's
-    /// texture on the device there is, the catalog as `catalog` reads it.
+    /// Taken in where its reader keeps it, its bytes gone: a model as the
+    /// scene parsed it, an image's texture on the device there is, the
+    /// catalog as `catalog` reads it.
     Landed,
     Failed,
 }
@@ -62,7 +61,7 @@ struct Loader {
     /// The sphere's, by kind.
     sphere: [Option<Entry>; 3],
     /// Kept so saying the wants every turn allocates nothing.
-    wants: Vec<(u64, Ask)>,
+    wants: Vec<(u64, Order)>,
 }
 
 impl Loader {
@@ -109,10 +108,15 @@ pub fn load_of(slot: Slot) -> Option<Load> {
     catalog().map(|c| Load::File(c.file(slot)))
 }
 
-pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
+/// A model's file's bytes, once read, handed over once: none while it
+/// loads, and once taken.
+pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
     let entry = loader().at(LoadKind::Gltf, load);
     match entry {
-        Some(Entry::Model(g)) => Some(g.clone()),
+        Some(Entry::Gltf(_)) => match entry.replace(Entry::Landed) {
+            Some(Entry::Gltf(file)) => Some(file),
+            _ => None,
+        },
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -149,7 +153,7 @@ pub fn of_id(id: u64) -> Option<(LoadKind, Load)> {
     Load::of(id as u32).map(|load| (kind, load))
 }
 
-pub fn load_wants() -> &'static [(u64, Ask)] {
+pub fn load_wants() -> &'static [(u64, Order)] {
     let l = loader();
     l.wants.clear();
     // By id, as a stream's wants are said: the models, the images,
@@ -162,7 +166,7 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
                 continue;
             }
             if matches!(l.at(kind, load), Some(Entry::Pending)) {
-                l.wants.push((id_of(kind, load), Ask::PLAIN));
+                l.wants.push((id_of(kind, load), Order::LAST));
             }
         }
     }
@@ -232,6 +236,12 @@ fn on_image_arrived(load: Load, file: Vec<u8>) {
     request_world_tick();
 }
 
+/// A model's bytes, read: kept until they are taken.
+fn on_gltf_arrived(load: Load, file: Vec<u8>) {
+    *loader().at(LoadKind::Gltf, load) = Some(Entry::Gltf(file));
+    request_world_tick();
+}
+
 /// The catalog's bytes, read: kept where they read as the compiled slots,
 /// else its failure, final.
 fn on_catalog_arrived(load: Load, file: &[u8]) {
@@ -282,8 +292,8 @@ fn arrive(kind: LoadKind, load: Load, reading: Reading) {
     xpute_kit::ensure!(spawned, ENOSPC, load.id());
 }
 
-/// An asset file arrived, read whole: a model parsed, an image kept until
-/// its texture lands, the catalog read, each once the runtime's head has passed
+/// An asset file arrived, read whole: a model's bytes kept until taken, an
+/// image's until its texture lands, the catalog read, each once the runtime's head has passed
 /// its read.
 async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
     let buf = loop {
@@ -295,16 +305,10 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
     };
     yield_if_spent(world_edge).await;
     match kind {
-        LoadKind::Image => return on_image_arrived(load, buf),
-        LoadKind::Catalog => return on_catalog_arrived(load, &buf),
-        LoadKind::Gltf => {}
+        LoadKind::Gltf => on_gltf_arrived(load, buf),
+        LoadKind::Image => on_image_arrived(load, buf),
+        LoadKind::Catalog => on_catalog_arrived(load, &buf),
     }
-    let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
-        Ok(g) => Entry::Model(Rc::new(g)),
-        Err(_) => Entry::Failed,
-    };
-    *loader().at(LoadKind::Gltf, load) = Some(entry);
-    request_world_tick();
 }
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler

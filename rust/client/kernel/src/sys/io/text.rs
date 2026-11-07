@@ -9,9 +9,6 @@ use std::collections::hash_map::Entry;
 
 use fnv::FnvHashMap;
 
-use pxl_render::gpu::atlas::ATLAS_SCALE;
-use pxl_render::gpu::text::{raster_box, Raster};
-use pxl_render::look::marker::Font;
 use xpute_core::mem::off_of_slice;
 
 use crate::sys::io::runtime;
@@ -46,26 +43,19 @@ pub enum TextCall<'a> {
 }
 
 /// (weight, px bits, max width bits; 0 for one line, text).
-type LayoutKey = (u32, u32, u32, String);
-/// (weight, px bits, color, text).
-type RasterKey = (u32, u32, u32, String);
+type LayoutKey = (u32, u64, u64, String);
+/// (weight, px bits, color, width, height, x bits, text).
+type RasterKey = (u32, u64, u32, u32, u32, u64, String);
 
 struct Answer<T> {
     read: bool,
     at: T,
 }
 
-struct RasterAt {
-    px: Box<[u8]>,
-    size: [u32; 2],
-    origin: [f32; 2],
-    advance: f32,
-}
-
 #[derive(Default)]
 struct Text {
     layouts: FnvHashMap<LayoutKey, Answer<Box<[u32]>>>,
-    rasters: FnvHashMap<RasterKey, Answer<RasterAt>>,
+    rasters: FnvHashMap<RasterKey, Answer<Box<[u8]>>>,
 }
 
 static TEXT: Global<Text> = Global::new();
@@ -92,12 +82,14 @@ fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
     vec![(text_in, text_in.chars().count() as f64 * 7.0)]
 }
 
-/// None where the platform could not lay it out this turn; a later turn asks again.
-pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
+/// `text_in` broken into lines no wider than `max_width` (0 for one line),
+/// each with its width. None where the platform could not lay it out this
+/// turn; a later turn asks again.
+pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
     let key: LayoutKey = (
-        font.weight,
-        font.px.to_bits(),
-        (max_width as f32).to_bits(),
+        weight,
+        px.to_bits(),
+        max_width.to_bits(),
         text_in.to_owned(),
     );
     let answer = match text().layouts.entry(key) {
@@ -108,9 +100,9 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
             let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
                 .into_boxed_slice();
             let call = TextCall::Layout {
-                weight: font.weight,
-                px: f64::from(font.px),
-                max_width: f64::from(max_width as f32),
+                weight,
+                px,
+                max_width,
                 at: off_of_slice(&raw mut *at) as u32,
                 lines,
                 text: text_in,
@@ -147,56 +139,50 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     Some(lines)
 }
 
-pub fn text_width(font: Font, text_in: &str) -> Option<f64> {
-    text_lines(font, 0.0, text_in).map(|lines| lines.iter().map(|&(_, w)| w).sum())
-}
-
-/// The answer's pixels as a raster.
-fn raster_of(a: &RasterAt) -> Raster<'static> {
-    // SAFETY: the answer's pixels stay until the next frame's rise at the
-    // earliest, and a raster is read within the frame it was handed out in.
-    let px = unsafe { core::slice::from_raw_parts(a.px.as_ptr(), a.px.len()) };
-    Raster {
-        px,
-        width: a.size[0],
-        height: a.size[1],
-        origin: a.origin,
-        advance: a.advance,
-    }
-}
-
-/// `color` is 0xRRGGBBAA. None where the platform could not draw it this
+/// One line of `text_in` drawn into `size` pixels from `x`, RGBA, top row
+/// first; `color` is 0xRRGGBBAA. The pixels stay until the next frame's
+/// rise at the earliest. None where the platform could not draw it this
 /// turn; a later turn asks again.
-pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'static>> {
-    let key: RasterKey = (font.weight, font.px.to_bits(), color, text_in.to_owned());
-    if let Some(answer) = text().rasters.get_mut(&key) {
-        answer.read = true;
-        return Some(raster_of(&answer.at));
-    }
-    let advance = text_width(font, text_in)? as f32;
-    let (size, origin) = raster_box(font, advance);
-    let scale = ATLAS_SCALE as f32;
-    let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-    let call = TextCall::Raster {
-        weight: font.weight,
-        px: f64::from(font.px * scale),
+pub fn text_pixels(
+    weight: u32,
+    px: f64,
+    color: u32,
+    size: [u32; 2],
+    x: f64,
+    text_in: &str,
+) -> Option<&'static [u8]> {
+    let key: RasterKey = (
+        weight,
+        px.to_bits(),
         color,
-        at: off_of_slice(&raw mut *px) as u32,
-        width: size[0],
-        height: size[1],
-        x: f64::from(origin[0]),
-        text: text_in,
+        size[0],
+        size[1],
+        x.to_bits(),
+        text_in.to_owned(),
+    );
+    let answer = match text().rasters.entry(key) {
+        Entry::Occupied(o) => o.into_mut(),
+        Entry::Vacant(v) => {
+            let mut at = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
+            let call = TextCall::Raster {
+                weight,
+                px,
+                color,
+                at: off_of_slice(&raw mut *at) as u32,
+                width: size[0],
+                height: size[1],
+                x,
+                text: text_in,
+            };
+            if !matches!(runtime::call(&call), Some(Ok(_))) {
+                return None;
+            }
+            v.insert(Answer { read: false, at })
+        }
     };
-    if !matches!(runtime::call(&call), Some(Ok(_))) {
-        return None;
-    }
-    let at = RasterAt {
-        px,
-        size,
-        origin,
-        advance: advance * scale,
-    };
-    let raster = raster_of(&at);
-    text().rasters.insert(key, Answer { read: true, at });
-    Some(raster)
+    answer.read = true;
+    // SAFETY: an answer's pixels are let go only at the next frame's rise or
+    // at a forget, and a reader reads them within the frame they were handed
+    // out in.
+    Some(unsafe { core::slice::from_raw_parts(answer.at.as_ptr(), answer.at.len()) })
 }

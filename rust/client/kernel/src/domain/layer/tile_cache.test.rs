@@ -5,8 +5,8 @@
 use super::*;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
-fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, Ask> {
-    tiles.iter().map(|&p| (p, Ask::PLAIN)).collect()
+fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, ()> {
+    tiles.iter().map(|&p| (p, ())).collect()
 }
 
 /// `is_shown` and `shown_share` are of the asks and what is held as they

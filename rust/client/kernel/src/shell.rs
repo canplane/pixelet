@@ -26,6 +26,7 @@ use crate::domain::control::sensor::reading::{
 };
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::layer::object::repository;
+use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
@@ -224,9 +225,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
                     lat: g[1],
                 }
             }),
-            outside: shown.pivot.is_some_and(|c| {
-                source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
-            }),
+            outside: shown.pivot.is_some_and(|c| World::now().past(&c)),
         },
         location: LocationState {
             status: shown.location.0.status,

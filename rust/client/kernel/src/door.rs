@@ -19,8 +19,9 @@ use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
 use crate::machine::MACHINE;
-use crate::perf::record::perf_record_turn;
+use crate::perf::record::{perf_record, perf_record_turn};
 use crate::perf::spec::Wake;
+use crate::perf::task::TaskRow;
 use crate::shell;
 use crate::shell::SnapshotMemo;
 use crate::sys::boot;
@@ -248,6 +249,8 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         w if w < 0.0 => Wake::none,
         _ => Wake::timer,
     };
+    // The reads this turn ended, rows of the profiler's.
+    request::take_ends(|a, at, ended, phases| perf_record(|| TaskRow::of(a, at, ended, phases)));
     let fell = now();
     perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
     wake

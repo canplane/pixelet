@@ -8,9 +8,6 @@ use pxl_spec::bake::publication::BaseLayer;
 pub use crate::sys::io::demand_spec::TaskPhaseName;
 use core::cmp::Ordering;
 
-use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::coord::aabb::Aabb;
-
 pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
 
 /// Sub-timings a run reports (e.g. network vs decode), named by the run.
@@ -86,41 +83,6 @@ impl Stream {
     }
 }
 
-/// How strongly a tile is asked for, strongest first: the hold the tile cache keeps it by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Priority {
-    Floor,
-    /// On a line asked for exactly: the camera's destination's, or the division layer's pivot's.
-    Destination,
-    /// On the line over a miss, so a coarser answer is held wherever the view
-    /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
-    Ancestor,
-    Demand,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Ask {
-    pub priority: Priority,
-    pub order: Order,
-}
-
-impl Ask {
-    /// A want with no place in the view, ordered by its stream alone.
-    pub const PLAIN: Ask = Ask {
-        priority: Priority::Demand,
-        order: Order::LAST,
-    };
-
-    /// The stronger reason and the earlier place, taken separately: how a tile
-    /// is held says nothing of when the view needs it.
-    pub fn best(self, other: Ask) -> Ask {
-        Ask {
-            priority: self.priority.min(other.priority),
-            order: self.order.min(other.order),
-        }
-    }
-}
-
 /// Seen before unseen, then nearer first. Every layer's work is taken in
 /// this order, and eviction in reverse.
 #[derive(Clone, Copy, Debug)]
@@ -130,6 +92,7 @@ pub struct Order {
 }
 
 impl Order {
+    /// A want with no place in the view, ordered by its stream alone.
     pub const LAST: Order = Order {
         seen: false,
         near: f64::INFINITY,
@@ -139,14 +102,6 @@ impl Order {
         seen: true,
         near: 0.0,
     };
-
-    pub fn of(o: &Observation, b: &Aabb) -> Order {
-        let m = o.measure(b);
-        Order {
-            seen: m.seen,
-            near: m.near,
-        }
-    }
 }
 
 impl Ord for Order {

@@ -1,14 +1,22 @@
 // pxl-kernel/perf/task.rs
 
 //! A task's row in the profiler's columns: what ran, when, and what it came
-//! to. The work that ran writes it (sys/io/request.rs `record`).
+//! to, made of an attempt the request scheduler ended (`TaskRow::of`), which
+//! the top takes of it (door.rs `run`).
 
 use core::mem::{offset_of, size_of};
 
+use fnv::FnvHashMap;
+use xpute_core::global::Global;
+use xpute_core::mem::off_of_slice;
+use xpute_kit::status::errno::Errno;
+
 use crate::perf::spec::TASK;
 use crate::perf::word::{words, Words};
-use crate::sys::io::demand::PHASES_MAX;
-use crate::sys::io::file::PATH_BYTES;
+use crate::sys::io::demand::{Phases, PHASES_MAX};
+use crate::sys::io::failure::Ended;
+use crate::sys::io::file::{path_of, PATH_BYTES};
+use crate::sys::io::request::Attempt;
 
 /// A path's bytes in whole words.
 const TASK_PATH_BYTES: usize = 3 * 8;
@@ -45,8 +53,58 @@ words!(TaskRow, TASK::WORDS,
 );
 
 /// `path`'s bytes as a row holds them.
-pub fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
+fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
     let mut out = [0; TASK_PATH_BYTES];
     out[..path.len()].copy_from_slice(path);
     out
+}
+
+impl TaskRow {
+    /// The row of `a`, ended at `at` as `ended` says, with the timings its run
+    /// reported.
+    pub fn of(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) -> TaskRow {
+        let mut row = TaskRow {
+            stream: a.stream as u32 as f64,
+            path: path_bytes(path_of(a.stream, a.id).as_bytes()),
+            priority: a.rank.class as f64 + a.rank.dist,
+            enqueue_ms: a.enqueue_ms,
+            start_ms: a.start_ms,
+            end_ms: at,
+            outcome: ended.outcome() as u32 as f64,
+            ..TaskRow::default()
+        };
+        match ended {
+            Ended::Failed(fail) => {
+                row.fail = f64::from(fail.errnum as i32);
+                row.detail = fail.detail as f64;
+            }
+            Ended::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),
+            Ended::Ok | Ended::Aborted => {}
+        }
+        if let Some(at) = match ended {
+            Ended::Failed(fail) => fail.at,
+            Ended::Ok | Ended::Aborted | Ended::Refused(_) => None,
+        } {
+            row.at_file = off_of_slice(file_in_mem(at.file()).as_bytes()) as f64;
+            row.at_file_bytes = at.file().len() as f64;
+            row.at_line = at.line() as f64;
+        }
+        for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
+            row.phase_ids[k] = name as u32 as f64;
+            row.phase_vals[k] = val;
+            row.phase_cnt = (k + 1) as f64;
+        }
+        row
+    }
+}
+
+static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
+
+/// A location's file name lies outside kernel memory on a device, so rows
+/// name a heap copy; the names are few and kept for good.
+fn file_in_mem(file: &'static str) -> &'static str {
+    FILES
+        .get(FnvHashMap::default)
+        .entry(file.as_ptr().addr())
+        .or_insert_with(|| file.into())
 }

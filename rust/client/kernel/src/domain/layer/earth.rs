@@ -20,6 +20,7 @@ use crate::domain::layer::upload::{Uploads, Uptake};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
+use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.
@@ -54,7 +55,7 @@ impl Base for Earth {
     }
 
     /// The texels are kept until the GPU has them: every frame's, whose
-    /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_pending`).
+    /// slots the request scheduler leaves them (sys/io/request.rs `spare_slots`).
     fn keep(record: Option<u32>, block: Block) {
         uploads().keep(record, block, EARTH_SLOTS);
     }
@@ -125,3 +126,8 @@ pub fn earth_window(
 
 /// The frames the GPU keeps a layer for.
 pub const EARTH_SLOTS: u32 = TileCache::<Earth>::SLOTS;
+
+const _: () = assert!(
+    BODY_SLOTS > MAX_CREDITS + EARTH_SLOTS,
+    "the body slots keep a body on every credit and one more beside the Earth's frames"
+);

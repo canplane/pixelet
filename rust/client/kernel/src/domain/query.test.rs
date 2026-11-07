@@ -25,7 +25,6 @@ use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
-use crate::sys::io::demand::Ask;
 use crate::sys::serial;
 use pxl_engine::area::{self, Area};
 use pxl_engine::world::placed_in;
@@ -96,7 +95,7 @@ fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTil
     }
     // Asked for, as the floor asks for what it holds: a tile held but not
     // asked is cache, which answers nothing.
-    let asks: fnv::FnvHashMap<Quadrant, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
+    let asks: fnv::FnvHashMap<Quadrant, ()> = admitted.iter().map(|&q| (q, ())).collect();
     tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
     test::hold(center, &cells);

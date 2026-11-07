@@ -21,7 +21,6 @@ use pxl_spec::space::layer::demand::demand_tiles;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::demand::Ask;
 
 /// Only the eye.
 const OBSERVERS: u32 = 1;
@@ -36,7 +35,7 @@ struct Resident<L> {
 
 struct Entry<L> {
     resident: Option<Resident<L>>,
-    ask: Option<Ask>,
+    asked: bool,
     /// The bucket has no object for it, so the tile over it says its ground.
     answered: bool,
 }
@@ -44,12 +43,12 @@ struct Entry<L> {
 impl<L> Entry<L> {
     const NONE: Entry<L> = Entry {
         resident: None,
-        ask: None,
+        asked: false,
         answered: false,
     };
 
     fn idle(&self) -> bool {
-        self.resident.is_none() && self.ask.is_none()
+        self.resident.is_none() && !self.asked
     }
 
     /// Held in a slot of its own, not as an empty tile.
@@ -239,7 +238,7 @@ impl<L: Base> TileCache<L> {
 
     /// Held and asked for: what a reader may read.
     fn readable(&self, p: Quadrant) -> Option<&Resident<L>> {
-        self.entry(p).filter(|e| e.ask.is_some())?.resident.as_ref()
+        self.entry(p).filter(|e| e.asked)?.resident.as_ref()
     }
 
     /// Held and asked for, and not asked for again: nothing more is fetched for it.
@@ -286,9 +285,7 @@ impl<L: Base> TileCache<L> {
     /// descent pays one lookup a step and never walks back up.
     pub fn step(&self, parent: &Line, child: Quadrant) -> Line {
         let e = self.entry(child);
-        let held = e
-            .filter(|e| e.ask.is_some())
-            .and_then(|e| e.resident.as_ref());
+        let held = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
         // Answered for itself, or its parent holds no child there.
         let said = e.is_some_and(|e| e.answered)
             || parent.children.is_some_and(|o| !o.has_child(child.slot()));
@@ -325,10 +322,11 @@ impl<L: Base> TileCache<L> {
         self.line(p).src
     }
 
-    /// Empty tiles and tiles answered above are kept only while asked:
-    /// they cost no slot, so nothing would ever evict them. Slotted tiles are
-    /// left to normal turnover.
-    pub fn ask(&mut self, asks: &FnvHashMap<Quadrant, Ask>) {
+    /// The tiles asked for now, `asks`'s keys, whatever the asker keeps
+    /// beside each. Empty tiles and tiles answered above are kept only while
+    /// asked: they cost no slot, so nothing would ever evict them. Slotted
+    /// tiles are left to normal turnover.
+    pub fn ask<A>(&mut self, asks: &FnvHashMap<Quadrant, A>) {
         xpute_kit::ensure!(
             asks.len() <= Self::SLOTS as usize,
             ENOTRECOVERABLE,
@@ -336,12 +334,12 @@ impl<L: Base> TileCache<L> {
         );
         self.ask_revision = self.ask_revision.wrapping_add(1);
         for (&p, e) in &mut self.tiles {
-            let was = e.ask.is_some();
-            e.ask = asks.get(&p).copied();
+            let was = e.asked;
+            e.asked = asks.contains_key(&p);
             // A held tile asked for again, or no longer, is read or not: its
             // answer moved as surely as one arriving or going.
-            let read = e.resident.is_some() && was != e.ask.is_some();
-            if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
+            let read = e.resident.is_some() && was != e.asked;
+            if read | (!e.asked && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
                 self.revision = self.revision.wrapping_add(1);
             }
@@ -351,9 +349,7 @@ impl<L: Base> TileCache<L> {
         going.extend(
             self.tiles
                 .iter()
-                .filter(|&(_, e)| {
-                    e.ask.is_none() && e.resident.as_ref().is_some_and(|h| h.slot.is_none())
-                })
+                .filter(|&(_, e)| !e.asked && e.resident.as_ref().is_some_and(|h| h.slot.is_none()))
                 .map(|(&p, _)| p),
         );
         for &p in &going {
@@ -361,13 +357,13 @@ impl<L: Base> TileCache<L> {
         }
         self.going = going;
         self.tiles.retain(|_, e| !e.idle());
-        for (&p, &a) in asks {
-            self.entry_mut(p).ask = Some(a);
+        for &p in asks.keys() {
+            self.entry_mut(p).asked = true;
         }
     }
 
-    pub fn ask_of(&self, p: Quadrant) -> Option<Ask> {
-        self.entry(p)?.ask
+    fn is_asked(&self, p: Quadrant) -> bool {
+        self.entry(p).is_some_and(|e| e.asked)
     }
 
     /// A slot for arriving `p`: its own, a free one, or a victim among slots
@@ -384,12 +380,12 @@ impl<L: Base> TileCache<L> {
         if let Some(free) = self.free.pop() {
             return Some(free);
         }
-        let unasked = self.ask_of(p).is_none();
+        let unasked = !self.is_asked(p);
         let Some(q) = victim(
             &mut self
                 .tiles
                 .iter()
-                .filter(|(_, e)| e.is_slotted() && e.ask.is_none())
+                .filter(|(_, e)| e.is_slotted() && !e.asked)
                 .map(|(&q, _)| q),
         ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
@@ -437,7 +433,7 @@ impl<L: Base> TileCache<L> {
 
     /// Held only while something asks for it.
     pub fn set(&mut self, p: Quadrant, tile: L) {
-        if self.ask_of(p).is_none() {
+        if !self.is_asked(p) {
             return;
         }
         if let Some(record) = self.remove(p) {
@@ -496,14 +492,11 @@ impl<L: Base> TileCache<L> {
     }
 
     fn asked(&self) -> impl Iterator<Item = Quadrant> + '_ {
-        self.tiles
-            .iter()
-            .filter(|(_, e)| e.ask.is_some())
-            .map(|(&p, _)| p)
+        self.tiles.iter().filter(|(_, e)| e.asked).map(|(&p, _)| p)
     }
 
     pub fn answer_above(&mut self, p: Quadrant) {
-        if self.ask_of(p).is_none() {
+        if !self.is_asked(p) {
             return;
         }
         if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
@@ -568,9 +561,7 @@ impl<L: Base> TileCache<L> {
     pub fn asked_again(&self, counts: impl Fn(Quadrant) -> bool) -> u32 {
         self.tiles
             .iter()
-            .filter(|(&p, e)| {
-                e.ask.is_some() && e.resident.as_ref().is_some_and(|h| h.again) && counts(p)
-            })
+            .filter(|(&p, e)| e.asked && e.resident.as_ref().is_some_and(|h| h.again) && counts(p))
             .count() as u32
     }
 

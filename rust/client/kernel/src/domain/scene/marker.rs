@@ -19,3 +19,4 @@ mod set;
 pub use arrangement::{draw, on_moved, step, tap, MarkerHit};
 pub use atlas::atlas;
 pub use chat::append_chat_line;
+pub use design::text_raster;

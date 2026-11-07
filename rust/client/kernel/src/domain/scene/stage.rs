@@ -32,7 +32,6 @@ use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::perf::report::{set_renderer_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
-use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
@@ -203,7 +202,7 @@ pub fn stage_render(pace: Pace) -> Option<f64> {
             stands,
             ray_counts: settings_store().ray_counts,
         }),
-        text: text_raster,
+        text: marker::text_raster,
         atlas: atlas(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,

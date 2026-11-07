@@ -10,6 +10,7 @@ use xpute_core::global::Global;
 use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
@@ -188,5 +189,15 @@ pub fn order_of_tile(
     walked: &mut ColumnWalk,
 ) -> Order {
     let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
-    Order::of(o, &stands.val().flatten().unwrap_or(p.region()))
+    order_of(o, &stands.val().flatten().unwrap_or(p.region()))
+}
+
+/// Where the box `b` stands in the view of `o`: whether it is seen, and how
+/// near (`Order`).
+pub fn order_of(o: &Observation, b: &Aabb) -> Order {
+    let m = o.measure(b);
+    Order {
+        seen: m.seen,
+        near: m.near,
+    }
 }
