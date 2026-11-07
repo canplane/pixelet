@@ -10,7 +10,6 @@ use pxl_spec::space::coord::mat4::Mat4;
 use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
-use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -77,7 +76,8 @@ impl StarPass {
     }
 
     /// Nothing is laid out past the intensity while the stars are faded out.
-    pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
+    /// `density`, the drawn pixels a CSS pixel spans (`Surface::px_per_css`).
+    pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], density: f64) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= DRAWN_ABOVE {
@@ -87,12 +87,7 @@ impl StarPass {
         u[SKY..SKY + ENV_STAR_FRAME_FLOATS]
             .copy_from_slice(&env[ENV_STARS..ENV_STARS + ENV_STAR_FRAME_FLOATS]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
-        let css = stage_lane()[STAGE_AT::VIEWPORT_WIDTH];
-        u[DENSITY] = if css > 0.0 {
-            (width as f64 / css) as f32
-        } else {
-            1.0
-        };
+        u[DENSITY] = density as f32;
     }
 
     /// `words` written, where the frame's read found them moved.

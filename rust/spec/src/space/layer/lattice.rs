@@ -32,7 +32,7 @@ pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 }
 /// Every effect's one reach from the eye: out to where the grid's cells one zoom coarser
 /// than the ground's leaf begin, where the casters are drawn whole and a face's bits read the
-/// leaf's (pxl-kernel domain/scene/stage.rs; pxl-render gpu/shadow.rs `half_width`).
+/// leaf's (pxl-render frame/shader/effect.wgsl `effect_share`, gpu/shadow.rs `half_width`).
 pub const EFFECT_REACH: f64 = split_dist(GROUND.cell() - 1);
 
 const _: () = assert!(

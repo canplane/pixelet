@@ -12,6 +12,7 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
+use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_core::abi::handle::handle_slot;
 use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -26,14 +27,13 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, EYE,
-    JITTER, LIGHT_STEPS, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON,
-    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EYE, JITTER, LIGHT_STEPS,
+    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
+    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
 };
-use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -106,6 +106,30 @@ fn drift_at(frame: &Frame) -> Position {
 }
 
 pub struct FrameInput<'a> {
+    /// The view through the eye's frame, the camera to the device's clip, as
+    /// `mat4::perspective` makes it, and the two multiplied: eye-relative, so
+    /// neither holds an eye translation for a point's to cancel against.
+    pub view: Mat4,
+    pub proj: Mat4,
+    pub view_proj: Mat4,
+    /// The eye, in the world's doubles.
+    pub eye: V3,
+    /// The CSS pixels a unit spans a unit from the eye, as the kernel's screen
+    /// counts them (pxl-kernel domain/view/frame/screen.rs `px_per_unit`):
+    /// what the markers are sized by, as the kernel lays them out.
+    pub px_per_unit: f64,
+    /// How much a crease darkens, a rim brightens and the inside of a cube's
+    /// corners darkens, each none where its setting is off.
+    pub edge_strength: f64,
+    pub rim_intensity: f64,
+    pub corner_ao: f64,
+    /// Whether the screen's occlusion is drawn, whether the faces go without
+    /// their textures, and whether the shadows are on.
+    pub screen_ao: bool,
+    pub low_spec: bool,
+    pub shadows: bool,
+    /// How much of the clouds shows, none to all.
+    pub clouds: f64,
     pub lists: Lists<'a>,
     pub environment: &'a [f32],
     /// 0 while it loads.
@@ -728,13 +752,12 @@ impl Renderer {
         e
     }
 
-    /// What only the shadows hold, made where their setting
-    /// (`STAGE_AT::SHADOWS`) is on and let go where it is off, before the
-    /// frame: the map and the world's depth from the light (`Shadow::made`)
-    /// and the light's cast (`RaysPass::light_made`); and the lit passes'
-    /// groups made again over the map or the blank one where it turned.
-    fn shadows_made(&mut self, g: &Gpu) {
-        let on = stage_lane()[STAGE_AT::SHADOWS] > 0.0;
+    /// What only the shadows hold, made where their setting `on` is
+    /// (`FrameInput::shadows`) and let go where it is off, before the frame:
+    /// the map and the world's depth from the light (`Shadow::made`) and the
+    /// light's cast (`RaysPass::light_made`); and the lit passes' groups made
+    /// again over the map or the blank one where it turned.
+    fn shadows_made(&mut self, g: &Gpu, on: bool) {
         self.screen.light_made(g, on);
         if self.shadow.made(g, on) {
             self.models.release();
@@ -761,40 +784,26 @@ impl Renderer {
         self.screen.set_lit(lit);
     }
 
-    /// `eye_far` how far the eye draws, in units; none without an eye.
-    fn prepare(
-        &mut self,
-        g: &Gpu,
-        width: u32,
-        height: u32,
-        screen: (u32, u32),
-        env: &[f32],
-        eye_far: f32,
-    ) {
-        let s = stage_lane();
-        let (mut m, mut proj) = (mat4::new(), mat4::new());
-        proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
+    /// The frame's words off `input` over the world's surface `world`, made
+    /// at its size; `eye_far` how far the eye draws, in units; none without
+    /// an eye.
+    fn prepare(&mut self, g: &Gpu, world: &Surface, input: &FrameInput, eye_far: f32) {
+        let (width, height, env) = (world.width, world.height, input.environment);
         // The markers measure their size in view space.
         let b = &mut self.marker;
-        put_mat(
-            &mut b.view,
-            0,
-            s[STAGE_AT::MARKER_VIEW..STAGE_AT::MARKER_VIEW + 16]
-                .try_into()
-                .or_bug(Errno::ENOTRECOVERABLE),
-        );
-        put_mat(&mut b.proj, 0, &proj);
-        b.px_per_unit = s[STAGE_AT::PX_PER_UNIT] as f32;
+        put_mat(&mut b.view, 0, &input.view);
+        put_mat(&mut b.proj, 0, &input.proj);
+        b.px_per_unit = input.px_per_unit as f32;
 
         let u = &mut self.frame;
-        m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
+        let m = input.view_proj;
         put_mat(u, VIEW_PROJ, &m);
         self.view_proj = m;
         // Everything is drawn in the eye's frame: a draw's position is
         // taken against the eye's Q3 on the GPU (frame/draw.rs `Position`),
         // the eye held on Q3 steps (pxl-kernel view/frame/pose.rs
         // `view_compose`), so its Q3 is exact.
-        let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
+        let eye_world = input.eye;
         for (k, v) in q3_of(eye_world).into_iter().enumerate() {
             u[EYE + k] = f32::from_bits(v as u32);
         }
@@ -813,32 +822,27 @@ impl Renderer {
         self.clouds.prepare(
             [eye_world[0], eye_world[1]],
             env,
-            s[STAGE_AT::CLOUDS],
+            input.clouds,
             eye_far * env[ENV_AIR + 1],
         );
-        self.stars.prepare(&m, env, width);
+        self.stars.prepare(&m, env, world.px_per_css());
         self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
         }
-        u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
-        u[CELL] = s[STAGE_AT::CELL] as f32;
-        u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;
-        u[EDGE_WIDTH] = s[STAGE_AT::EDGE_WIDTH] as f32;
-        u[RIM_INTENSITY] = s[STAGE_AT::RIM_INTENSITY] as f32;
-        u[CORNER_AO] = s[STAGE_AT::CORNER_AO] as f32;
+        u[EDGE_STRENGTH] = input.edge_strength as f32;
+        u[LOW_SPEC] = if input.low_spec { 1.0 } else { 0.0 };
+        u[RIM_INTENSITY] = input.rim_intensity as f32;
+        u[CORNER_AO] = input.corner_ao as f32;
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
-        u[SCREEN] = screen.0 as f32;
-        u[SCREEN + 1] = screen.1 as f32;
+        u[SCREEN] = world.screen.0 as f32;
+        u[SCREEN + 1] = world.screen.1 as f32;
         u[VIGNETTE] = 1.0;
-        // Every effect's one reach (effect.wgsl `effect_share`).
-        let reach = s[STAGE_AT::EFFECT_REACH];
-        u[EFFECT_REACH] = reach as f32;
-        self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
+        self.screen_ao = input.screen_ao;
         if self.screen_ao {
-            self.ao.prepare(&proj, width, height, reach as f32);
+            self.ao.prepare(&input.proj, width, height);
         }
         // The eye's own place on the map, Mercator's longitude and ordinate
         // (its units over the map's radius in them), and that radius.
@@ -862,14 +866,14 @@ impl Renderer {
         } else {
             None
         };
-        let light = light.filter(|_| self.shadow.on() && reach > 0.0);
+        let light = light.filter(|_| self.shadow.on());
         self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
             // What a receiver reads within, the effects' reach.
-            let half_width = shadow::half_width(reach);
-            let reach_ndc = (reach / half_width) as f32;
+            let half_width = shadow::half_width(EFFECT_REACH);
+            let reach_ndc = (EFFECT_REACH / half_width) as f32;
             self.shadow
                 .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
@@ -1004,13 +1008,13 @@ impl Renderer {
         read.mark(self.pack.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
-        let mut cast = input.cast;
+        let mut cast = input.cast.take();
         // What the frame cannot put off is recorded before what can wait:
         // the cast pass made first, then the bricks' uploads, which take
         // only the room left.
-        self.shadows_made(g);
+        self.shadows_made(g, input.shadows);
         self.screen.hand(g, &mut input.ground);
-        let tiles = input.earth_tiles;
+        let tiles = &mut input.earth_tiles;
         read.mark(
             self.atmosphere
                 .set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload),
@@ -1019,7 +1023,7 @@ impl Renderer {
             self.marker
                 .sync_atlas(g, &self.mips, input.atlas, input.text),
         );
-        let lists = input.lists;
+        let lists = &input.lists;
         // The handles this frame's lists upload, rewrite or free, sorted to
         // be looked up.
         let mut touched = core::mem::take(&mut self.touched);
@@ -1043,7 +1047,7 @@ impl Renderer {
         touched.extend_from_slice(lists.frees);
         touched.sort_unstable();
         touched.dedup();
-        let uploads_moved = take_lists(Some(g), &lists);
+        let uploads_moved = take_lists(Some(g), lists);
         let draws = lists.draws;
         let uniforms = draws.uniforms;
         // The draws' uniforms, in a buffer of room for them: the slots the
@@ -1078,14 +1082,7 @@ impl Renderer {
         let far = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
-        self.prepare(
-            g,
-            world.width,
-            world.height,
-            world.screen,
-            input.environment,
-            far,
-        );
+        self.prepare(g, world, &input, far);
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
@@ -1142,7 +1139,7 @@ impl Renderer {
         // Whether the listed draws are drawn as the last frame drew them, and
         // whether one whose moves draw the frame whole moved (`Seen`).
         let drifted = draws.drifting() && drift_now != drift_bits(&self.frame_was);
-        let beside = beside_changed(&lists, &touched);
+        let beside = beside_changed(lists, &touched);
         let (listed_same, beside_moved) =
             self.seen.frame(lists_moved, uploads_moved, drifted, beside);
         if words_moved || drift_moved {

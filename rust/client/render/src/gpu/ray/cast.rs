@@ -2314,7 +2314,7 @@ impl RaysPass {
     }
 
     /// The light's cast made where `on`, the shadows' setting
-    /// (`STAGE_AT::SHADOWS`), before the frame: its list (`light::list_words`)
+    /// (`FrameInput::shadows`), before the frame: its list (`light::list_words`)
     /// and its raster's buffers and targets (`Raster::light_made`), what
     /// only a map cast needs; ready once they are (`light_ready`), and its
     /// groups made over them as the frame prepares. Let go where not on,

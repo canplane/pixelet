@@ -158,8 +158,8 @@ pub fn drift_step_s() -> f64 {
     lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
-/// How much of the clouds shows, the cumulus and the sheets alike (the stage's
-/// `CLOUDS`), the eye as high as the `environment`'s words say: none where
+/// How much of the clouds shows, the cumulus and the sheets alike
+/// (`FrameInput::clouds`), the eye as high as the `environment`'s words say: none where
 /// the setting is off, all of them up to half of `CLOUD_GONE_KM` and none
 /// from it.
 pub fn clouds_shown(environment: &[f32; ENV_FLOATS]) -> f64 {

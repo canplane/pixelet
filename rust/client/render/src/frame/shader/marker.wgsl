@@ -71,7 +71,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let across = q.x * size_px.x / sprite_w + 0.5;
 
   let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * GRID_CELL * DEPTH_BIAS_CELLS;
   // What hangs under the anchor lies on the level ground through it, where the
   // eye sees it.
   let over = drop + corner.y;

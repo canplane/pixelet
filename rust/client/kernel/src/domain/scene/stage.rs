@@ -1,21 +1,19 @@
 // pxl-kernel/domain/scene/stage.rs
 
-//! The kernel's side of a drawn frame: the stage written from the view and
-//! the settings, and everything the renderer is handed, since it reads
-//! nothing of the kernel on its own.
+//! The kernel's side of a drawn frame: everything the renderer is handed, the
+//! view and the settings among it, since it reads nothing of the kernel on
+//! its own.
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DRAW_WORDS;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
-use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::ray::{Cast, GroundBricks};
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput, FrameStat};
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
-use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_core::global::Global;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
@@ -69,58 +67,12 @@ use pxl_render::gpu::renderer;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
-use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
     "a GPU layer for each frame the earth layer holds"
 );
-
-pub fn stage_write() {
-    let v = view();
-    let settings = settings_store();
-    let s = stage_lane();
-    // The GPU gets the eye's frame, where the draws' points are.
-    let (view_proj, camera) = v.eye_frame();
-    s[STAGE_AT::MARKER_VIEW..STAGE_AT::MARKER_VIEW + 16].copy_from_slice(&camera);
-    s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
-    s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
-    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    s[STAGE_AT::VIEWPORT_WIDTH] = screen::size()[0];
-    // The markers are drawn at the size the kernel lays them out at.
-    s[STAGE_AT::PX_PER_UNIT] = screen::px_per_unit();
-    // The camera grid's cell angle: the footprint a drawn cell covers per
-    // unit of distance, square on.
-    s[STAGE_AT::CELL] = grid::CELL;
-    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade {
-        param::EDGE_STRENGTH
-    } else {
-        0.0
-    };
-    s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen {
-        1.0
-    } else {
-        0.0
-    };
-    // The screen's occlusion takes the corners' too, which it reads softer.
-    s[STAGE_AT::CORNER_AO] = if matches!(settings.ao, AoMode::corner | AoMode::screen) {
-        param::AO_STRENGTH
-    } else {
-        0.0
-    };
-    s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    // In units, so neither the resolution nor a cell's size moves it.
-    s[STAGE_AT::EDGE_WIDTH] = param::EDGE_WIDTH;
-    s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light {
-        param::RIM_INTENSITY
-    } else {
-        0.0
-    };
-    s[STAGE_AT::CLOUDS] = cloud::clouds_shown(environment_words());
-    s[STAGE_AT::EFFECT_REACH] = EFFECT_REACH;
-    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
-}
 
 /// What the renderer made of the turn's frame, and the scale the world was
 /// drawn at, read before a read can move the next: the top's to record (perf/report.rs `set_renderer_frame`).
@@ -137,6 +89,10 @@ pub struct Drawn {
 /// resolution is judged by (domain/scene/resolution.rs `load`), and
 /// `edits` the pointer's preview as the turn hands it, which the rays cut by.
 pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
+    let v = view();
+    let settings = settings_store();
+    // The GPU gets the eye's frame, where the draws' points are.
+    let (view_proj, rot) = v.eye_frame();
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
@@ -179,6 +135,32 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     // Whether what the scene animates stepped.
     let animated = animation::take();
     let out = render_frame(FrameInput {
+        view: rot,
+        proj: v.proj,
+        view_proj,
+        eye: v.at().eye,
+        // The markers are drawn at the size the kernel lays them out at.
+        px_per_unit: screen::px_per_unit(),
+        edge_strength: if settings.edge_shade {
+            param::EDGE_STRENGTH
+        } else {
+            0.0
+        },
+        rim_intensity: if settings.rim_light {
+            param::RIM_INTENSITY
+        } else {
+            0.0
+        },
+        // The screen's occlusion takes the corners' too, which it reads softer.
+        corner_ao: if matches!(settings.ao, AoMode::corner | AoMode::screen) {
+            param::AO_STRENGTH
+        } else {
+            0.0
+        },
+        screen_ao: settings.ao == AoMode::screen,
+        low_spec: !settings.textures,
+        shadows: settings.shadows,
+        clouds: cloud::clouds_shown(environment_words()),
         lists,
         environment: environment_words(),
         decor: &decor,
@@ -204,12 +186,12 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
             overwrites: cast::overwrites(),
             decor: gpu::frame(),
             stands,
-            ray_counts: settings_store().ray_counts,
+            ray_counts: settings.ray_counts,
         }),
         text: marker::text_raster,
         atlas: atlas(),
         // The draws are the profiler's, which records only while its setting is on.
-        counted: settings_store().perf,
+        counted: settings.perf,
         animated,
     });
     if out.redraw {

@@ -359,7 +359,6 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     // tick's tile streams (`demand_tick`), and the assets asked for by either.
     request::declare(Stream::asset, loader::load_wants());
     pump();
-    stage::stage_write();
     let drawn = stage::stage_render(
         Pace {
             refresh_ms,

@@ -11,6 +11,7 @@ use pxl_engine::lattice;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
 use pxl_engine::screen;
+use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use std::path::Path;
 
 #[path = "src/param.rs"]
@@ -563,7 +564,7 @@ fn walk_word() -> String {
     // half the tile's diagonal (`light::TILE_READ_PAD`, light_propagate.wgsl).
     let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst GRID_CELL: f32 = {:?};\nconst GRID_CELL_INVERSE: f32 = {:?};\nconst RECORD_VIEW_GROWTH: f32 = {:?};\n",
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst GRID_CELL_INVERSE: f32 = {:?};\nconst RECORD_VIEW_GROWTH: f32 = {:?};\n",
         grid::INV_SPLIT2,
         cast::NARROW,
         cast::NARROW_SQUARED,
@@ -575,7 +576,6 @@ fn walk_word() -> String {
         core::f32::consts::FRAC_1_SQRT_2,
         beam::SAMPLE_SPACING,
         beam::SAMPLE_SPACING_INVERSE,
-        grid::CELL,
         grid::CELL_INVERSE,
         record::VIEW_GROWTH,
     );
@@ -1003,6 +1003,9 @@ fn words() -> String {
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_engine::HEIGHT_BITS),
+        // The camera grid's cell, the footprint a drawn cell covers a unit of
+        // distance, square on, and every effect's one reach.
+        format!("const GRID_CELL: f32 = {:?};\nconst EFFECT_REACH: f32 = {:?};\n", grid::CELL, EFFECT_REACH as f32),
         // The receiver's taps apart in the shadow map, which the map's read
         // pad is sized by (pxl-engine param.rs `light::SPREAD`, light.rs
         // `READ_PAD`).

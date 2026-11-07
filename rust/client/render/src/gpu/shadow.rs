@@ -2,7 +2,7 @@
 
 //! The light's shadow map: the world's depth from the light each frame,
 //! orthographic about the eye and as wide as every effect reaches (the
-//! kernel's `STAGE_AT::EFFECT_REACH`), so its texel follows the camera grid.
+//! world's `EFFECT_REACH`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
 //! rays are, off samples and the visible voxel (light.wgsl `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
@@ -225,7 +225,7 @@ impl Shadow {
     }
 
     /// The map and the world made where `on`, the shadows' setting
-    /// (`STAGE_AT::SHADOWS`), and let go where not: the first map cast after
+    /// (`FrameInput::shadows`), and let go where not: the first map cast after
     /// they are made casts whole, as the light's cast does (ray/cast.rs
     /// `light_made`). Whether they
     /// were made or let go, so the lit passes' groups are made again over

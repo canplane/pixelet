@@ -4,4 +4,3 @@
 
 pub mod draw;
 pub mod shader;
-pub mod stage;

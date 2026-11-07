@@ -91,9 +91,7 @@ uniform! {
         /// The eye's place on the map, Mercator's longitude and ordinate,
         /// and the map's radius in units.
         MAP: Vec3 = 24,
-        CELL: F32 = 27,
         LOW_SPEC: F32 = 28,
-        EDGE_WIDTH: F32 = 29,
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
         /// The light box from the eye's frame (gpu/shadow.rs `aim`), how
@@ -104,9 +102,6 @@ uniform! {
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
-        /// How far from the eye the effects on a drawn surface reach, in
-        /// units (effect.wgsl `effect_share`).
-        EFFECT_REACH: F32 = 50,
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
         SCREEN: Vec2 = 52,
@@ -249,13 +244,11 @@ pub const STARS_FLOATS: usize = floats(stars::FIELDS);
 
 uniform! {
     /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs): the view's
-    /// projection and its inverse, the half-resolution target's size, and
-    /// the effects' reach, the frame's `EFFECT_REACH`.
+    /// projection and its inverse and the half-resolution target's size.
     ao {
         PROJ: Mat4 = 0,
         INV_PROJ: Mat4 = 16,
         HALF: Vec2 = 32,
-        EFFECT_REACH: F32 = 34,
     }
 }
 pub const AO_FLOATS: usize = floats(ao::FIELDS);

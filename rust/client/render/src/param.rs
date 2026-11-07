@@ -72,13 +72,17 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
 ];
 
 /// The effects on a drawn surface, its lines, its corners' and the screen's
-/// occlusion and the shadows: one reach from the eye (pxl-kernel
-/// domain/scene/stage.rs `STAGE_AT::EFFECT_REACH`), each faded alike before it
+/// occlusion and the shadows: one reach from the eye (pxl-spec
+/// space/layer/lattice.rs `EFFECT_REACH`), each faded alike before it
 /// (frame/shader/effect.wgsl `effect_share`).
 pub mod effect {
     params! {
         /// The share of the reach past which the effects fade to nothing at it.
         FADE_START: f32 = 0.75;
+        /// A crease's line's width in units, a 64th of one, about 3 cm at
+        /// Seoul's latitude: one line alike on cells of every size, thinned
+        /// by perspective alone.
+        EDGE_WIDTH: f32 = 1.0 / 64.0;
     }
 }
 

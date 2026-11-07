@@ -240,14 +240,14 @@ struct Creases {
 // Off the face's own bits (pxl-engine `face`), edge `k` +u, -u, +v, -v
 // and corner `k` across edges `k & 1` and `2 + (k >> 1)`. The line: along
 // each crease, an edge that meets the air or one a cell rises across,
-// `frame_edge_width` units wide whatever the cell's size, so cells of
+// `EFFECT_EDGE_WIDTH` units wide whatever the cell's size, so cells of
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
 // over a cell. Both to the effects' reach, faded alike before it
 // (effect.wgsl `effect_share`).
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
-  let share = effect_share(length(h.at), frame_effect_reach());
+  let share = effect_share(length(h.at));
   if ((frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) || share <= 0.0) {
     return Creases(0.0, 1.0);
   }

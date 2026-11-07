@@ -236,9 +236,7 @@ function windowSection(r: PerfReport): string[] {
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
-    `  stage   ${percentiles(
-      f.stage,
-    )} ms   (the pump, the stage's write and the render)`,
+    `  stage   ${percentiles(f.stage)} ms   (the pump and the render)`,
     `  tasks   ${percentiles(f.tasks)} ms`,
     `  perf ${percentiles(f.perf)} ms   (its own record and the shell's reads)`,
     `  rest    ${percentiles(

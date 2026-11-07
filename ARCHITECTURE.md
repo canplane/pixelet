@@ -567,7 +567,7 @@ its swatch or image, shaded edges, light, and the air before it.
 The effects on a drawn surface, its lines, its corners' and the screen's
 occlusion and the shadows, reach one distance from the eye, where the camera
 grid's cells one zoom coarser than the ground's leaf begin, and fade alike
-before it (`pxl-kernel domain/scene/stage.rs` `STAGE_AT::EFFECT_REACH`,
+before it (`pxl-spec space/layer/lattice.rs` `EFFECT_REACH`,
 `frame/shader/effect.wgsl` `effect_share`). The rim and the air, which read
 only the face's normal and distance, reach as far as the eye draws.
 

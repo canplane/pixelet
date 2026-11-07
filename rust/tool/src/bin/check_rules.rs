@@ -317,8 +317,8 @@ const SYS_REFUSED: &str = r"\bpxl_render\b";
 /// The kernel reads the view's CSS pixels through one module, the screen
 /// (domain/view/frame/screen.rs), and only these name it: the view's own
 /// frame, the camera's gestures, the markers' layout and selection, the
-/// stage's viewport words and the shell. A path is a file, or a folder by
-/// its trailing slash.
+/// stage's pixels a unit and the shell. A path is a file, or a folder by its
+/// trailing slash.
 const SCREEN_USERS: [&str; 7] = [
     "rust/client/kernel/src/domain/view/frame/",
     "rust/client/kernel/src/domain/control/camera/controller.rs",

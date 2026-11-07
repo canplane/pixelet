@@ -82,14 +82,13 @@ fn face_uv(p: vec3f, normal: vec3f) -> vec2f {
 }
 
 // How much a face's edge darkens it `d` units from the edge, where a drawn
-// px spans `px` units that way: a line `frame_edge_width` units wide
+// px spans `px` units that way: a line `EFFECT_EDGE_WIDTH` units wide
 // whatever the cell's size, so perspective alone thins it far off, fading
 // out across it and a px past it, and as faint as the share of a px
 // it covers once it is thinner than one.
 fn line_at(d: f32, px: f32) -> f32 {
-  let w = frame_edge_width();
-  let t = 1.0 - smoothstep(0.0, w + px, d);
-  return t * t * min(w / px, 1.0);
+  let t = 1.0 - smoothstep(0.0, EFFECT_EDGE_WIDTH + px, d);
+  return t * t * min(EFFECT_EDGE_WIDTH / px, 1.0);
 }
 
 fn paint(s: Surface, seen: Air, l: Light) -> vec3f {

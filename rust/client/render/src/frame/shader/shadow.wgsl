@@ -36,7 +36,7 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
     return 0.0;
   }
   // No map drawn, or past the effects' reach: lit, unprojected and untapped.
-  let strength = frame_shadow_strength() * effect_share(length(world_pos), frame_effect_reach());
+  let strength = frame_shadow_strength() * effect_share(length(world_pos));
   if (strength <= 0.0) {
     return 1.0;
   }

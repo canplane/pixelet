@@ -989,7 +989,7 @@ pub const FOOTPRINT_TILES: i32 = 3;
 impl Light {
     /// How far from the eye a surface receives the shadow map, in units, on the map `size`
     /// texels a side: the share `reach_ndc` of the box's half-width, the effects' reach
-    /// (pxl-kernel domain/scene/stage.rs `STAGE_AT::EFFECT_REACH`, effect.wgsl `effect_share`,
+    /// (pxl-spec space/layer/lattice.rs `EFFECT_REACH`, effect.wgsl `effect_share`,
     /// 0 past it), and a texel past it, the normal offset a receiver reads the map at.
     pub fn reach(&self, size: u32) -> f32 {
         let width = self.width();

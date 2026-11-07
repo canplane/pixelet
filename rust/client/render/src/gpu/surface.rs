@@ -111,6 +111,11 @@ impl Surface {
         (self.px_w.max(1), self.px_h.max(1))
     }
 
+    /// The drawn pixels a CSS pixel spans across.
+    pub fn px_per_css(&self) -> f64 {
+        f64::from(self.width) * self.dpr / f64::from(self.px_w.max(1))
+    }
+
     /// The world's pixels: the canvas's at the kernel's share of them
     /// (`ratio` over the display's), which the finish brings up to the
     /// canvas, and no more than every device draws (ray/cast.rs

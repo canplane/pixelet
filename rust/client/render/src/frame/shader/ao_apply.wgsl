@@ -70,6 +70,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
     occ = open_acc / open_cnt;
   }
   // To the effects' reach, faded alike before it (effect.wgsl `effect_share`).
-  let share = effect_share(length(at), ao_effect_reach());
+  let share = effect_share(length(at));
   return vec4f(0.0, 0.0, 0.0, (1.0 - pow(occ, AO_INTENSITY)) * share);
 }

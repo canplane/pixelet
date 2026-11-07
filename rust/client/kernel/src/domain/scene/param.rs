@@ -14,11 +14,8 @@
 /// fifth of a day's light on a face of albedo 0.3.
 pub const RIM_INTENSITY: f64 = 0.5;
 
-/// Edge shading along a cube's creases, convex and concave: its darkening,
-/// and its width in units, a 64th of one, about 3 cm at Seoul's latitude:
-/// one line alike on cells of every size, thinned by perspective alone.
+/// Edge shading along a cube's creases, convex and concave: its darkening.
 pub const EDGE_STRENGTH: f64 = 0.3;
-pub const EDGE_WIDTH: f64 = 1.0 / 64.0;
 
 /// Corner occlusion's darkening at its deepest, written where the setting
 /// asks for it; the shader cannot see a setting.

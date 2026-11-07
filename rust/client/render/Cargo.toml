@@ -25,9 +25,11 @@ xpute-gpu.workspace = true
 [build-dependencies]
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`) and the
 # values every shader may name (`words`); the cloud field's hash
-# (`cloud_hash.wgsl`), pixelet's content.
+# (`cloud_hash.wgsl`), pixelet's content; every effect's reach (`words`), the
+# world's.
 pxl-engine.workspace = true
 pxl-content.workspace = true
+pxl-spec.workspace = true
 # The hash's words (build.rs `world_word`).
 xpute-kit.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
