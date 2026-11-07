@@ -883,28 +883,27 @@ names is the runtime breaking the protocol.
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
 (`ts/client/src/runtime/boot.ts`) starts the kernel with `@xpute/runtime`'s
 `start` where the platform runs it (`runtime/open.ts`, `.native.ts`), as the
-kernel's machine declares it (generated into `abi/machine.spec.ts`), which asks for both
-of xpute's devices, the GPU and the files (`gpu`, `fs`). The config, made where
-the kernel runs (`runtime/start.ts`), holds what backs the files
+kernel's machine declares it (generated into `abi/machine.spec.ts`), which asks
+for both of xpute's devices, the GPU and the files (`gpu`, `fs`). The config,
+made where the kernel runs (`runtime/start.ts`), holds what backs the files
 (`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`shell_imports`),
 what the kernel places with the shell, the frame pacing and each turn's
 submission (`port/surface.ts` `submit_grant`); `port/kernel.ts` keeps the
-runtime's link and the generated stubs bound to it (`kernel`). What else
-differs by platform is a file pair in `ts/client/src/service/`, `<x>.ts` the
-page's beside
-`<x>.native.ts` the device's, which Metro picks by the platform it bundles for
-(`ts/client/metro.config.ts` `ownPlatform`), with the shapes both share in
-`service/types.ts`: the kernel's module or none on a device (`kernel.ts`), the
-GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`, `NativeGpu`), the sensors,
-the visibility, storage, text, the network and the surfaces; the app's own
-native module is bound in `service/pxl-platform.ts`. What answers the kernel's
-files is `ts/client/src/sys/`: their names, versions, kept keys and refusals
-(`sys/fs/`), and its stop report beside. What the app ABI's client end carries
-is `ts/client/src/port/`, a file a major (SHELL's snapshot in `snapshot.ts`,
-`shell.ts` the shell's way in). The server the client reads from, its routes,
-its published tables and whether the device is online, is
-`ts/client/src/origin/`; the numbers both read, generated from `spec/` or, for
-the states the client reports and the shell shows, written beside it
+runtime's link and the generated stubs bound to it (`kernel`). What else differs
+by platform is a file pair in `ts/client/src/service/`, `<x>.ts` the page's
+beside `<x>.native.ts` the device's, which Metro picks by the platform it
+bundles for (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both
+share in `service/types.ts`: the kernel's module or none on a device
+(`kernel.ts`), the GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`,
+`NativeGpu`), the sensors, the visibility, storage, text, the network and the
+surfaces; the app's own native module is bound in `service/pxl-platform.ts`.
+What answers the kernel's files is `ts/client/src/sys/`: their names, versions,
+kept keys and refusals (`sys/fs/`), and its stop report beside. What the app
+ABI's client end carries is `ts/client/src/port/`, a file a major (SHELL's
+snapshot in `snapshot.ts`, `shell.ts` the shell's way in). The server the client
+reads from, its routes, its published tables and whether the device is online,
+is `ts/client/src/origin/`; the numbers both read, generated from `spec/` or,
+for the states the client reports and the shell shows, written beside it
 (`abi/state.ts`), are `ts/client/src/abi/`.
 
 The **shell** (`ts/client/src/shell/`) is React over the kernel's **snapshot**,
