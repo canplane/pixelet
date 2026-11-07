@@ -4,16 +4,13 @@
 
 use xpute_core::sched::edge::Edge;
 
-use crate::sys::load;
 use xpute_core::clock;
 use xpute_core::global::Global;
 use xpute_core::sched::task;
 
-/// The kernel's tasks: the two that run for good (`world_tasks`), one for
-/// each file in flight, a slot's, the catalog's or the sphere's (sys/io/loader.rs
-/// `arrival`), and one for each model registering (domain/scene/model/asset.rs
-/// `registration`); an executor sizes its pool by it.
-pub const TASKS: usize = 2 + load::LOAD_FILES + load::REGISTRATIONS;
+/// The most tasks the world's edge parks at once, a task parking at most
+/// once a turn, with room to spare; the kernel runs no more tasks than it.
+pub const TASKS_MOST: usize = 256;
 
 /// The order the kernel's tasks ask of the executor, which may ignore it.
 #[repr(u8)]
@@ -23,9 +20,9 @@ pub(crate) enum TaskPriority {
     Arrival,
 }
 
-static EDGE: Global<Edge<TASKS>> = Global::new();
+static EDGE: Global<Edge<TASKS_MOST>> = Global::new();
 
-pub fn world_edge() -> &'static mut Edge<TASKS> {
+pub fn world_edge() -> &'static mut Edge<TASKS_MOST> {
     EDGE.get(Edge::new)
 }
 

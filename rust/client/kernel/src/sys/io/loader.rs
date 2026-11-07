@@ -286,8 +286,8 @@ pub fn on_images_lost() {
 /// turn, so k arrivals advance k steps, not one.
 fn arrive(kind: LoadKind, load: Load, reading: Reading) {
     *loader().at(kind, load) = Some(Entry::Arrived);
-    // The pool holds a task for each slot, the catalog and the sphere
-    // (TASKS): a slot is wanted as one kind of one file, and each has one
+    // The pool holds a task for each file in flight (sys/load.rs
+    // `LOAD_FILES`): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
     let spawned = task::spawn(arrival(kind, load, reading), TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, load.id());

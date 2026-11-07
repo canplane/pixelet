@@ -36,10 +36,10 @@ use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
 use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
-use crate::sys::load::{Load, REGISTRATIONS};
+use crate::sys::load::Load;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, world_edge, TaskPriority};
-use pxl_spec::asset::catalog::Slot;
+use pxl_spec::asset::catalog::{Slot, SLOTS};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -47,6 +47,10 @@ use xpute_kit::status::error::MarshalError;
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
 ];
+
+/// The models that can register at once, each in its own task: one a slot,
+/// the most `model_of` starts.
+pub const REGISTRATIONS: usize = SLOTS;
 
 /// None while its task runs, then the model as registered, by its number,
 /// or as the heap refused it room.

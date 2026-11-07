@@ -221,7 +221,7 @@ pub fn boot() {
     world_tasks();
 }
 
-/// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
+/// No more than the executor's pool (door/executor.rs `TASKS`); a refusal means it holds fewer, and aborts.
 fn world_tasks() {
     use crate::sys::sched::edge::TaskPriority::*;
     use xpute_core::sched::task::spawn;

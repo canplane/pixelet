@@ -2,8 +2,8 @@
 
 //! What the kernel loads, and how many: the catalog, the files it names,
 //! each by its number below the asset root, and the Earth's sphere, each as
-//! the catalog, a model or an image. A leaf: io loads them, and the turn's
-//! edge sizes its tasks by them.
+//! the catalog, a model or an image. A leaf: io loads them, a task a file
+//! in flight (`LOAD_FILES`).
 
 use crate::sys::io::file::Path;
 use pxl_spec::asset::catalog::SLOTS;
@@ -56,7 +56,3 @@ impl Load {
 /// The files that can be in flight at once: a slot's each, which is wanted
 /// as one kind, the catalog and the sphere.
 pub const LOAD_FILES: usize = SLOTS + 2;
-
-/// The models that can register at once, each in its own task: one a slot,
-/// the most `model_of` starts (domain/scene/model/asset.rs).
-pub const REGISTRATIONS: usize = SLOTS;
