@@ -1,9 +1,10 @@
 // @pxl/client/shell/drawer/modal.tsx
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
-import type { f64, u8 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   allCubes,
   type AssetId,
@@ -25,6 +26,7 @@ import { chrome, color } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPicker } from "@/shell/drawer/character/picker.tsx";
 import { CubeSwatch, decorGlyph } from "@/shell/catalog/asset/swatch.tsx";
+import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
@@ -77,24 +79,24 @@ function CubeItem({
   );
 }
 
-function DecorItem({
-  kind,
+/** An asset drawn as its glyph: a decor, or a marker. */
+function GlyphItem({
+  id,
+  label,
+  glyph,
   cell,
   onPick,
 }: {
-  kind: u8;
+  id: AssetId;
+  label: string;
+  glyph: GlyphName;
   cell: f64;
-  onPick: (kind: u8) => void;
+  onPick: (id: AssetId) => void;
 }) {
-  const active = useInHand(kind);
+  const active = useInHand(id);
 
   return (
-    <Item
-      label={decorLabel(kind)}
-      active={active}
-      cell={cell}
-      onPress={() => onPick(kind)}
-    >
+    <Item label={label} active={active} cell={cell} onPress={() => onPick(id)}>
       <View
         style={[
           styles.decor,
@@ -102,37 +104,38 @@ function DecorItem({
           active ? [mark.on, styles.decorOn] : mark.off,
         ]}
       >
-        <Glyph
-          glyph={decorGlyph(kind)}
-          size={chrome.glyph}
-          color={LABEL.primary}
-        />
+        <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
       </View>
     </Item>
   );
 }
 
-/** A temporary way in: one marker, its words not kept yet. */
-function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
-  const active = useInHand(MARKER);
-
-  return (
-    <Item label={PIN_LABEL} active={active} cell={cell} onPress={onPick}>
-      <View
-        style={[
-          styles.decor,
-          { width: itemOf(cell), height: itemOf(cell) },
-          active ? [mark.on, styles.decorOn] : mark.off,
-        ]}
-      >
-        <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
-      </View>
-    </Item>
-  );
+/** A tab's sections, each a grid of its items under the section's title. */
+function Sections<S extends string, T>({
+  kind,
+  sections,
+  item,
+}: {
+  kind: "cube" | "decor";
+  sections: Map<S, T[]>;
+  item: (it: T, cell: f64) => ReactNode;
+}) {
+  const { t } = useTranslation();
+  return [...sections].map(([section, items]) => (
+    <Grid
+      key={section}
+      head={
+        <SectionTitle>{t(`drawer.sections.${kind}.${section}`)}</SectionTitle>
+      }
+    >
+      {(cell) => items.map((it) => item(it, cell))}
+    </Grid>
+  ));
 }
 
 const CUBE_TAB = 0;
 const DECOR_TAB = 1;
+/** A temporary way in: one marker, its words not kept yet. */
 const MARKER_TAB = 2;
 const CHARACTER_TAB = 3;
 
@@ -159,57 +162,50 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
         >
           {(tab) => (
             <>
-              {tab === CUBE_TAB &&
-                [...SECTIONS].map(([section, cubes]) => (
-                  <Grid
-                    key={section}
-                    head={
-                      <SectionTitle>
-                        {t(`drawer.sections.cube.${section}`)}
-                      </SectionTitle>
-                    }
-                  >
-                    {(cell) =>
-                      cubes.map((cube) => (
-                        <CubeItem
-                          key={cube}
-                          cube={cube}
-                          cell={cell}
-                          onPick={pick}
-                        />
-                      ))
-                    }
-                  </Grid>
-                ))}
+              {tab === CUBE_TAB && (
+                <Sections
+                  kind="cube"
+                  sections={SECTIONS}
+                  item={(cube, cell) => (
+                    <CubeItem
+                      key={cube}
+                      cube={cube}
+                      cell={cell}
+                      onPick={pick}
+                    />
+                  )}
+                />
+              )}
 
-              {tab === DECOR_TAB &&
-                [...DECOR_SECTIONS].map(([section, kinds]) => (
-                  <Grid
-                    key={section}
-                    head={
-                      <SectionTitle>
-                        {t(`drawer.sections.decor.${section}`)}
-                      </SectionTitle>
-                    }
-                  >
-                    {(cell) =>
-                      kinds.map((kind) => (
-                        <DecorItem
-                          key={kind}
-                          kind={kind}
-                          cell={cell}
-                          onPick={pick}
-                        />
-                      ))
-                    }
-                  </Grid>
-                ))}
+              {tab === DECOR_TAB && (
+                <Sections
+                  kind="decor"
+                  sections={DECOR_SECTIONS}
+                  item={(kind, cell) => (
+                    <GlyphItem
+                      key={kind}
+                      id={kind}
+                      label={decorLabel(kind)}
+                      glyph={decorGlyph(kind)}
+                      cell={cell}
+                      onPick={pick}
+                    />
+                  )}
+                />
+              )}
+
               {tab === MARKER_TAB && (
                 <Grid
                   head={<SectionTitle>{t("drawer.sections.pin")}</SectionTitle>}
                 >
                   {(cell) => (
-                    <MarkerItem cell={cell} onPick={() => pick(MARKER)} />
+                    <GlyphItem
+                      id={MARKER}
+                      label={PIN_LABEL}
+                      glyph="bubble.left"
+                      cell={cell}
+                      onPick={pick}
+                    />
                   )}
                 </Grid>
               )}
