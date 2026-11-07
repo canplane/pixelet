@@ -142,9 +142,9 @@ pub struct FrameInput<'a> {
     /// what it clears to (0xRRGGBB, sRGB).
     pub character_surfaces: &'a [(u32, Draw, Image, u32)],
     /// The texture pack's image; none while it loads.
-    pub pack: fn() -> Option<Image>,
-    pub moon: fn() -> Option<Image>,
-    pub earth: fn() -> Option<Image>,
+    pub pack: Option<Image>,
+    pub moon: Option<Image>,
+    pub earth: Option<Image>,
     pub earth_tiles: EarthTiles<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.

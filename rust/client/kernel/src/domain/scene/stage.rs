@@ -167,9 +167,9 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         decor: &decor,
         skins: &skins[..skin_cnt],
         character_surfaces: &character_surfaces[..surface_cnt],
-        pack: || load_of(pack).and_then(load_image),
-        moon: || load_of(moon::picture).and_then(load_image),
-        earth: || load_image(EARTH),
+        pack: load_of(pack).and_then(load_image),
+        moon: load_of(moon::picture).and_then(load_image),
+        earth: load_image(EARTH),
         earth_tiles: EarthTiles {
             window,
             layers: &layers,
