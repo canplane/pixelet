@@ -12,13 +12,8 @@ import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { FramePacing } from "@xpute/runtime";
 import { type Config, type FrameGrant, type Manifest } from "@xpute/runtime";
-import {
-  Command,
-  read_text_layout,
-  read_text_raster,
-  read_turn_pace,
-  shell_mem,
-} from "@/abi/cmd.spec.ts";
+import { Command, read_turn_pace, shell_mem } from "@/abi/cmd.spec.ts";
+import * as text from "@/abi/text.spec.ts";
 import { MACHINE } from "@/abi/machine.spec.ts";
 import {
   BATCH_FRAMES,
@@ -37,8 +32,8 @@ import { gpu } from "@/service/gpu.ts";
 /** What the kernel asks on this side. */
 function calls(pacing: FramePacing) {
   return new Map<number, (f: BranchCursor) => i32 | void>([
-    [Command.TEXT_LAYOUT, (f) => text_layout(read_text_layout(f))],
-    [Command.TEXT_RASTER, (f) => text_raster(read_text_raster(f))],
+    [text.Command.TEXT_LAYOUT, (f) => text_layout(text.read_text_layout(f))],
+    [text.Command.TEXT_RASTER, (f) => text_raster(text.read_text_raster(f))],
     [Command.TURN_PACE, (f) => pacing.pace(read_turn_pace(f).interval_ms)],
   ]);
 }

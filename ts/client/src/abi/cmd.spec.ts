@@ -45,7 +45,6 @@ import * as CameraMinor from "./cmd/camera_minor.spec.ts";
 import * as PerfMinor from "./cmd/perf_minor.spec.ts";
 import * as EditMinor from "./cmd/edit_minor.spec.ts";
 import * as ShellMinor from "./cmd/shell_minor.spec.ts";
-import * as TextMinor from "./cmd/text_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
 import * as Tool from "./cmd/tool.spec.ts";
@@ -105,10 +104,6 @@ export { EditMinor };
 /** One of ShellMinor's, as its enum was a type. */
 type ShellMinor = (typeof ShellMinor)[keyof typeof ShellMinor];
 export { ShellMinor };
-
-/** One of TextMinor's, as its enum was a type. */
-type TextMinor = (typeof TextMinor)[keyof typeof TextMinor];
-export { TextMinor };
 
 /** One of PointerPhase's, as its enum was a type. */
 type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
@@ -587,62 +582,6 @@ export function read_sensor_stop(b: BranchCursor): SensorStop {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.TEXT_LAYOUT's packet. */
-export interface TextLayout {
-  weight: u32;
-  px: f64;
-  /** 0 for one line. */
-  max_width: f64;
-  at: u32;
-  lines: u32;
-  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
-  text_at: u32;
-  /** Its bytes. */
-  text_len: u32;
-}
-
-export function read_text_layout(b: BranchCursor): TextLayout {
-  return {
-    weight: b.at(0).get<u32>(),
-    px: b.at(1).get<f64>(),
-    max_width: b.at(2).get<f64>(),
-    at: b.at(3).get<u32>(),
-    lines: b.at(4).get<u32>(),
-    text_at: b.at(5).get<u32>(),
-    text_len: b.at(6).get<u32>(),
-  };
-}
-
-/** Command.TEXT_RASTER's packet. */
-export interface TextRaster {
-  weight: u32;
-  px: f64;
-  /** 0xRRGGBBAA. */
-  color: u32;
-  at: u32;
-  width: u32;
-  height: u32;
-  x: f64;
-  /** Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
-  text_at: u32;
-  /** Its bytes. */
-  text_len: u32;
-}
-
-export function read_text_raster(b: BranchCursor): TextRaster {
-  return {
-    weight: b.at(0).get<u32>(),
-    px: b.at(1).get<f64>(),
-    color: b.at(2).get<u32>(),
-    at: b.at(3).get<u32>(),
-    width: b.at(4).get<u32>(),
-    height: b.at(5).get<u32>(),
-    x: b.at(6).get<f64>(),
-    text_at: b.at(7).get<u32>(),
-    text_len: b.at(8).get<u32>(),
-  };
-}
-
 /** Command.SHELL_SNAPSHOT's packet. */
 export interface ShellSnapshot {
   at: u32;
@@ -827,16 +766,6 @@ export interface ShellImports {
   sensor_start(e: SensorStart): void;
   /** Stop watching. */
   sensor_stop(e: SensorStop): void;
-  /** The text in the platform's own family at the weight and size, broken into lines no
-   * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
-   * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-   * (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
-  text_layout(e: TextLayout): i32;
-  /** One line drawn in the platform's own family, starting at x with the middle of its em
-   * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
-   * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
-   * it returns. */
-  text_raster(e: TextRaster): i32;
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
   shell_snapshot(e: ShellSnapshot): void;
@@ -858,10 +787,6 @@ export function shell_imports(h: ShellImports): OnImport {
         return h.sensor_start(read_sensor_start(need(f)));
       case Command.SENSOR_STOP:
         return h.sensor_stop(read_sensor_stop(need(f)));
-      case Command.TEXT_LAYOUT:
-        return h.text_layout(read_text_layout(need(f)));
-      case Command.TEXT_RASTER:
-        return h.text_raster(read_text_raster(need(f)));
       case Command.SHELL_SNAPSHOT:
         return h.shell_snapshot(read_shell_snapshot(need(f)));
       case Command.SHELL_VIEW:

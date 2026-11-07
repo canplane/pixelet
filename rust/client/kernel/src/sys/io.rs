@@ -29,3 +29,6 @@ pub mod runtime;
 pub mod runtime_spec;
 pub mod source;
 pub mod text;
+/// The text device's calls, generated from text.json.
+#[path = "io/text.spec.rs"]
+pub mod text_spec;

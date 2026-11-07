@@ -56,12 +56,11 @@ pub enum Major {
     PERF = 0x19,
     EDIT = 0x1a,
     SHELL = 0x1b,
-    TEXT = 0x1c,
     TURN = 0x1d,
 }
 
 impl Major {
-    pub const ALL: [Major; 11] = [
+    pub const ALL: [Major; 10] = [
         Major::INPUT,
         Major::SENSOR,
         Major::SOURCE,
@@ -71,7 +70,6 @@ impl Major {
         Major::PERF,
         Major::EDIT,
         Major::SHELL,
-        Major::TEXT,
         Major::TURN,
     ];
 
@@ -291,23 +289,6 @@ impl ShellMinor {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ShellMinor> {
         ShellMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// What the kernel asks the platform's text, answered before the call returns.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum TextMinor {
-    LAYOUT = 0x01,
-    RASTER = 0x02,
-}
-
-impl TextMinor {
-    pub const ALL: [TextMinor; 2] = [TextMinor::LAYOUT, TextMinor::RASTER];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<TextMinor> {
-        TextMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -680,16 +661,6 @@ pub enum Command {
     SENSOR_START = 0x1201,
     /// Stop watching.
     SENSOR_STOP = 0x1203,
-    /// The text in the platform's own family at the weight and size, broken into lines no
-    /// wider than the width where it can be; at `at` in the kernel's memory, how many lines,
-    /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-    /// (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
-    TEXT_LAYOUT = 0x1c01,
-    /// One line drawn in the platform's own family, starting at x with the middle of its em
-    /// box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
-    /// RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
-    /// it returns.
-    TEXT_RASTER = 0x1c02,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
     SHELL_SNAPSHOT = 0x1b01,
@@ -703,7 +674,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 35] = [
+    pub const ALL: [Command; 33] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -734,8 +705,6 @@ impl Command {
         Command::PERF_RINGS,
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::TEXT_LAYOUT,
-        Command::TEXT_RASTER,
         Command::SHELL_SNAPSHOT,
         Command::SHELL_VIEW,
         Command::TURN_PACE,
@@ -1451,84 +1420,6 @@ impl xpute_core::ipc::door::Import for SensorStop {
     }
 }
 
-/// Command::TEXT_LAYOUT's packet.
-pub struct TextLayout {
-    pub weight: u32,
-    pub px: f64,
-    /// 0 for one line.
-    pub max_width: f64,
-    pub at: u32,
-    pub lines: u32,
-    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
-    pub text_at: u32,
-    /// Its bytes.
-    pub text_len: u32,
-}
-
-impl TextLayout {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 7;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.weight));
-        w.f64(Some(self.px));
-        w.f64(Some(self.max_width));
-        w.u32(Some(self.at));
-        w.u32(Some(self.lines));
-        w.u32(Some(self.text_at));
-        w.u32(Some(self.text_len));
-    }
-}
-
-impl xpute_core::ipc::door::Import for TextLayout {
-    const NUMBER: u32 = 7169;
-    const FIELDS: u32 = 7;
-    fn write(&self, w: &mut PacketWriter) {
-        TextLayout::write(self, w);
-    }
-}
-
-/// Command::TEXT_RASTER's packet.
-pub struct TextRaster {
-    pub weight: u32,
-    pub px: f64,
-    /// 0xRRGGBBAA.
-    pub color: u32,
-    pub at: u32,
-    pub width: u32,
-    pub height: u32,
-    pub x: f64,
-    /// Where the text's UTF-8 lies in the kernel's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
-    pub text_at: u32,
-    /// Its bytes.
-    pub text_len: u32,
-}
-
-impl TextRaster {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 9;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.weight));
-        w.f64(Some(self.px));
-        w.u32(Some(self.color));
-        w.u32(Some(self.at));
-        w.u32(Some(self.width));
-        w.u32(Some(self.height));
-        w.f64(Some(self.x));
-        w.u32(Some(self.text_at));
-        w.u32(Some(self.text_len));
-    }
-}
-
-impl xpute_core::ipc::door::Import for TextRaster {
-    const NUMBER: u32 = 7170;
-    const FIELDS: u32 = 9;
-    fn write(&self, w: &mut PacketWriter) {
-        TextRaster::write(self, w);
-    }
-}
-
 /// Command::SHELL_SNAPSHOT's packet.
 pub struct ShellSnapshot {
     pub at: u32,
@@ -1617,16 +1508,6 @@ pub mod shell {
     /// Command::SENSOR_STOP, posted for the runtime.
     pub fn sensor_stop(e: &SensorStop) {
         machine::door().send(e);
-    }
-
-    /// Command::TEXT_LAYOUT, answered by the runtime before this returns.
-    pub fn text_layout(e: &TextLayout) -> Result<u32, Errno> {
-        machine::door().call(e)
-    }
-
-    /// Command::TEXT_RASTER, answered by the runtime before this returns.
-    pub fn text_raster(e: &TextRaster) -> Result<u32, Errno> {
-        machine::door().call(e)
     }
 
     /// Command::SHELL_SNAPSHOT, posted for the runtime.

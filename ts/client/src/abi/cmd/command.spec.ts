@@ -94,16 +94,6 @@ export const PERF_RINGS = 0x1904;
 export const SENSOR_START = 0x1201;
 /** Stop watching. */
 export const SENSOR_STOP = 0x1203;
-/** The text in the platform's own family at the weight and size, broken into lines no
- * wider than the width where it can be; at `at` in the kernel's memory, how many lines,
- * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
- * (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
-export const TEXT_LAYOUT = 0x1c01;
-/** One line drawn in the platform's own family, starting at x with the middle of its em
- * box on the middle row, into `width` by `height` pixels at `at` in the kernel's memory,
- * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
- * it returns. */
-export const TEXT_RASTER = 0x1c02;
 /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
  * block the kernel holds, valid until the next snapshot. */
 export const SHELL_SNAPSHOT = 0x1b01;

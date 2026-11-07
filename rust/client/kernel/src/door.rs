@@ -12,9 +12,7 @@ mod executor;
 pub mod layout;
 mod life;
 
-use crate::domain::control::cmd::{
-    self, Sensor, SensorStart, SensorStop, ShellSnapshot, TextLayout, TextRaster,
-};
+use crate::domain::control::cmd::{self, Sensor, SensorStart, SensorStop, ShellSnapshot};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
@@ -32,7 +30,6 @@ use crate::sys::io::request;
 use crate::sys::io::request::Event;
 use crate::sys::io::runtime;
 use crate::sys::io::text;
-use crate::sys::io::text::TextCall;
 use crate::sys::mem::section;
 use crate::sys::sched::edge;
 use crate::turn;
@@ -48,7 +45,6 @@ use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
 use xpute_core::sched::task;
 use xpute_core::stop;
-use xpute_kit::status::errno::Errno;
 
 struct State {
     /// The UI snapshot and view last posted; each is posted only where it moved.
@@ -61,49 +57,6 @@ struct State {
     snapshot_pending: bool,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
     snapshot_due: bool,
-}
-
-/// The kernel's text call, made of the shell's protocol as TEXT_LAYOUT or
-/// TEXT_RASTER and answered before it returns (sys/io/runtime.rs `Runtime`).
-pub(crate) fn text_call(call: &TextCall<'_>) -> Result<u32, Errno> {
-    match *call {
-        TextCall::Layout {
-            weight,
-            px,
-            max_width,
-            at,
-            lines,
-            text,
-        } => cmd::shell::text_layout(&TextLayout {
-            weight,
-            px,
-            max_width,
-            at,
-            lines,
-            text_at: off_of_slice(text.as_bytes()) as u32,
-            text_len: text.len() as u32,
-        }),
-        TextCall::Raster {
-            weight,
-            px,
-            color,
-            at,
-            width,
-            height,
-            x,
-            text,
-        } => cmd::shell::text_raster(&TextRaster {
-            weight,
-            px,
-            color,
-            at,
-            width,
-            height,
-            x,
-            text_at: off_of_slice(text.as_bytes()) as u32,
-            text_len: text.len() as u32,
-        }),
-    }
 }
 
 /// The rings' peaks since the last take, the profiler's (perf/report.rs

@@ -1,15 +1,16 @@
 // @pxl/client/port/text.ts
 
 /**
- * TEXT on the shell's port: the kernel's calls TEXT_LAYOUT and TEXT_RASTER,
- * answered from the platform's text before they return, so what they write
- * in the kernel's memory is in place when the call returns.
+ * TEXT, the text device's protocol (rust/client/kernel/text.json): the
+ * kernel's calls TEXT_LAYOUT and TEXT_RASTER, answered from the platform's text
+ * before they return, so what they write in the kernel's memory is in place
+ * when the call returns.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
 
-import type { TextLayout, TextRaster } from "@/abi/cmd.spec.ts";
+import type { TextLayout, TextRaster } from "@/abi/text.spec.ts";
 import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
 import * as font from "@/service/text.ts";
 import { mem } from "@xpute/runtime";

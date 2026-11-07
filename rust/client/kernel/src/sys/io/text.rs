@@ -1,9 +1,11 @@
 // pxl-kernel/sys/io/text.rs
 
-//! Text laid out and drawn by the platform, called with the shell's commands
-//! (TEXT_LAYOUT, TEXT_RASTER) and answered before the call returns. Each world frame keeps
-//! only the answers the frame before read. A native test has no runtime: a text
-//! is one line of fixed width per character and is never drawn.
+//! Text laid out and drawn by the platform, called of its text device
+//! (text.json TEXT_LAYOUT, TEXT_RASTER) and answered before the call returns,
+//! each answer written at its `at` (runtime.json `LAYOUT_ANSWER`, `LINE`). Each
+//! world frame keeps only the answers the frame before read. A native test has
+//! no runtime: a text is one line of fixed width per character and is never
+//! drawn.
 
 use std::collections::hash_map::Entry;
 
@@ -13,34 +15,9 @@ use xpute_core::mem::off_of_slice;
 
 use crate::sys::io::runtime;
 use crate::sys::io::runtime_spec::{LAYOUT_ANSWER, LINE};
+use crate::sys::io::text_spec::text::{text_layout, text_raster};
+use crate::sys::io::text_spec::{TextLayout, TextRaster};
 use xpute_core::global::Global;
-
-/// What the kernel asks of the platform's text, answered before the call
-/// returns, each written at its `at` (runtime.json `LAYOUT_ANSWER`, `LINE`; the
-/// commands TEXT_LAYOUT and TEXT_RASTER, which the kernel's top makes of it).
-pub enum TextCall<'a> {
-    /// `text` broken into lines no wider than `max_width` (0 for one line),
-    /// `lines` of them at most.
-    Layout {
-        weight: u32,
-        px: f64,
-        max_width: f64,
-        at: u32,
-        lines: u32,
-        text: &'a str,
-    },
-    /// One line of `text` drawn into `width` by `height` pixels from `x`.
-    Raster {
-        weight: u32,
-        px: f64,
-        color: u32,
-        at: u32,
-        width: u32,
-        height: u32,
-        x: f64,
-        text: &'a str,
-    },
-}
 
 /// (weight, px bits, max width bits; 0 for one line, text).
 type LayoutKey = (u32, u64, u64, String);
@@ -95,22 +72,24 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
     let answer = match text().layouts.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
+            if runtime::door().is_none() {
+                return Some(unlaid(text_in));
+            }
             // No more lines than characters, and one for an empty text.
             let lines = text_in.chars().count().max(1) as u32;
             let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
                 .into_boxed_slice();
-            let call = TextCall::Layout {
+            let call = TextLayout {
                 weight,
                 px,
                 max_width,
                 at: off_of_slice(&raw mut *at) as u32,
                 lines,
-                text: text_in,
+                text_at: off_of_slice(text_in.as_bytes()) as u32,
+                text_len: text_in.len() as u32,
             };
-            match runtime::call(&call) {
-                None => return Some(unlaid(text_in)),
-                Some(Err(_)) => return None,
-                Some(Ok(_)) => {}
+            if text_layout(&call).is_err() {
+                return None;
             }
             v.insert(Answer { read: false, at })
         }
@@ -163,8 +142,9 @@ pub fn text_pixels(
     let answer = match text().rasters.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
+            runtime::door()?;
             let mut at = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-            let call = TextCall::Raster {
+            let call = TextRaster {
                 weight,
                 px,
                 color,
@@ -172,9 +152,10 @@ pub fn text_pixels(
                 width: size[0],
                 height: size[1],
                 x,
-                text: text_in,
+                text_at: off_of_slice(text_in.as_bytes()) as u32,
+                text_len: text_in.len() as u32,
             };
-            if !matches!(runtime::call(&call), Some(Ok(_))) {
+            if text_raster(&call).is_err() {
                 return None;
             }
             v.insert(Answer { read: false, at })

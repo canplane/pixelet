@@ -853,16 +853,19 @@ after it returns, so each is done before the next turn begins
 (`sys/io/runtime.rs`), and the runtime raises the kernel's interrupts: its life
 (`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`) and a GPU answered
 (`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`). **The app's ABI** is what the
-app defines, `rust/client/kernel/shell.json`: the shell's intents and what the
-platform's services give, the surfaces, the sensors, the text, the data and each
-turn's grant. Both sides' readers, writers and bindings are generated from it
-(`domain/control/cmd.spec.rs`, `ts/client/src/abi/cmd.spec.ts`), each packet an
-XTP tree, xpute's relocatable binary tree. Its exports are what the shell and
-the services submit; its imports are what the kernel posts unasked, the snapshot,
-the view's azimuth and scale apart from it (`SHELL_VIEW`), the sensors it starts
-and stops, and the text it calls for, a text's lines
-and its pixels (`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
-(`sys/io/text.rs`, `ts/client/src/port/text.ts`): a page's runtime through the
+app defines, two protocols: the shell's, `rust/client/kernel/shell.json`, its
+intents and what the platform's services give, the surfaces, the sensors, the
+data and each turn's grant; and the text device's, `text.json` beside it, the
+platform's text, which the runtime answers beside the core. Both sides' readers,
+writers and bindings are generated from each (`domain/control/cmd.spec.rs`,
+`ts/client/src/abi/cmd.spec.ts`; `sys/io/text.spec.rs`,
+`ts/client/src/abi/text.spec.ts`), each packet an XTP tree, xpute's relocatable
+binary tree. The shell's exports are what the shell and the services submit; its
+imports are what the kernel posts unasked, the snapshot, the view's azimuth and
+scale apart from it (`SHELL_VIEW`) and the sensors it starts and stops. The text
+device's are the calls for a text's lines and its pixels (`TEXT_LAYOUT`,
+`TEXT_RASTER`), answered before the call returns (`sys/io/text.rs`,
+`ts/client/src/runtime/start.ts`, `port/text.ts`): a page's runtime through the
 module's import, a device's on the JavaScript thread that waits on the turn. A
 command's major is the module it is for (`INPUT`, `SENSOR`, `FS`, `SURFACE`,
 `SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `SHELL`, `TEXT`, `TURN`): the door
@@ -921,8 +924,8 @@ visibility), through `@xpute/runtime`'s TypeScript API.
   shell      React over the snapshot         ts/client/src/shell/
   services   the app ABI's client end, what  ts/client/src/service/,
              each platform gives             port/, sys/, origin/
-    │ ▲   the app's ABI, shell.json: commands submitted and completed;
-    ▼ │   imports: the snapshot, a sensor started, the text called for
+    │ ▲   the app's ABI, shell.json and text.json: commands submitted and
+    ▼ │   completed; imports: the snapshot, a sensor started, the text called for
   kernel     decides all, owns no device     pxl-kernel's core!
     │ ▲   xpute's ABI: the files and the report called, opens and closes
     ▼ │   completed; the life and GPU_READY raised

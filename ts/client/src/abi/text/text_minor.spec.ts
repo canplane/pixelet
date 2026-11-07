@@ -1,6 +1,6 @@
-// ts/client/src/abi/cmd/text_minor.spec.ts
+// ts/client/src/abi/text/text_minor.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/kernel/text.json
 
 // What the kernel asks the platform's text, answered before the call returns.
 

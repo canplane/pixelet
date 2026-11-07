@@ -13,5 +13,4 @@ export const CAMERA = 0x18;
 export const PERF = 0x19;
 export const EDIT = 0x1a;
 export const SHELL = 0x1b;
-export const TEXT = 0x1c;
 export const TURN = 0x1d;

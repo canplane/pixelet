@@ -4,7 +4,6 @@
 //! machine.rs): `.fixed`, which ranges it holds, each sized by its owner and
 //! handed to it at boot (`install`), and the heap after them.
 
-use super::text_call;
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
@@ -18,13 +17,12 @@ use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
-use crate::sys::io::runtime;
 use crate::sys::mem::section::{self, map};
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
 use xpute_core::entry::BootInfo;
-use xpute_core::machine::{self, Gpu};
+use xpute_core::machine::Gpu;
 use xpute_core::mem::section::span_of;
 use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
@@ -139,10 +137,6 @@ pub(crate) fn install(b: &BootInfo) {
     // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the
     // renderer's alone.
     unsafe {
-        runtime::set_runtime(runtime::Runtime {
-            door: machine::door(),
-            text: text_call,
-        });
         upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
         api::install(MACHINE.gpu_at(), GPU.bytes);
     }
