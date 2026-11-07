@@ -47,9 +47,10 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   in the naming skill; then the renames by area, one names commit each.
 - **Lighting run under decor.** A depth-only screen draw with a coverage bit would
   skip it, but the stencil's 8 bits are the gate's.
-- **The character stands half inside a step at load.** At 38.1193, 128.4656 its
-  right half is cut at the screen's middle column, by the wall of the higher cell
-  next to it (`p_cut` in the journal's record). Why it stands there is open.
+- **The character stands half inside a step at load.** At 38.1193, 128.4656 the point lies
+  0.11 of a unit from the wall of the higher cell east of it, which the view from the south
+  sees edge-on at the screen's middle, and a person a unit wide stands through it. A character
+  stands at a point, with no width. Whether it keeps clear of a wall is a look decision.
 - **How strong a shadow is at dawn on flat ground.** A full shadow takes about 21%
   off at 5° of sun (`SHADOW_BY_UP_TAKEN`, `LIGHT_BY_NORMAL`), and terrain already
   shades most near ground then. A look decision.
