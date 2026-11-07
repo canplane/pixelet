@@ -1,9 +1,8 @@
 // pxl-render/clip.wgsl
 
 // Where the clip levels hold a node's cells, and what they bound under it at a zoom
-// (pxl-engine clipmap.rs `step`, `bounded`): off their table, `clipmap`, which a pass that
-// asks the world binds read only (clipmap.wgsl) and the fold binds to write (fold.wgsl),
-// and their bricks' levels, `ground`.
+// (pxl-engine clipmap.rs `step`, `bounded`): off their table, `clipmap` (clipmap.wgsl), and
+// their bricks' levels, `ground`.
 
 fn spread(v: u32) -> u32 {
   var s = (v | (v << 8u)) & 0x00ff00ffu;

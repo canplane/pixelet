@@ -1220,10 +1220,9 @@ impl Renderer {
         read.mark(baked);
         let mut ctx = RenderContext::new(g, ahead, &mut stamps);
         let gridded = self.screen.grids(&mut ctx);
-        let folded = self.screen.fold(&mut ctx);
         let (tables, exposed, copied) = self.atmosphere.draw(&mut ctx);
         read.mark(tables);
-        if baked || gridded || folded || tables || exposed || copied {
+        if baked || gridded || tables || exposed || copied {
             g.submit(ahead);
         } else {
             release(ahead);

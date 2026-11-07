@@ -515,8 +515,7 @@ const HEIGHT_GROUP: [u32; 9] = [
 ];
 /// `bound_cs`'s group (bound.wgsl): its level at a dynamic offset
 /// (`SLOT_STRIDE`), the fresh frames, the frames it writes the levels of, and
-/// the handed bricks' scratch it reads the spans in. The cast's and
-/// `fold_cs`'s one group is the cast's, which binds all of theirs.
+/// the handed bricks' scratch it reads the spans in.
 const BOUND_GROUP: [u32; 12] = dynamic(
     [
         0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE,

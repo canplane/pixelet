@@ -1093,7 +1093,7 @@ fn words() -> String {
         format!("const MAX_COMPUTE_WORKGROUPS_PER_DIMENSION: u32 = {MAX_COMPUTE_WORKGROUPS_PER_DIMENSION}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
-        format!("const HEIGHT_SIDE: u32 = {HEIGHT_SIDE}u;\nconst LEVEL_SIDE: u32 = {LEVEL_SIDE}u;\nconst FOLD_LANES: u32 = {FOLD_LANES}u;\nconst CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
+        format!("const HEIGHT_SIDE: u32 = {HEIGHT_SIDE}u;\nconst LEVEL_SIDE: u32 = {LEVEL_SIDE}u;\nconst CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).

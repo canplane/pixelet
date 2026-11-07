@@ -72,161 +72,158 @@ pub const SHADER_WAY: u32 = 32;
 /// `SHADER_GENERATION_THIN`'s and `SHADER_GENERATION`'s dispatches: its one
 /// compute entry.
 pub const SHADER_GENERATION_MARK: u32 = 33;
-/// The eye's clip levels folded over their bricks, pxl-engine's
-/// `clipmap::fold` by hand (fold.wgsl): its one compute entry.
-pub const SHADER_FOLD: u32 = 34;
 /// A light's share of the air's volume, a column of froxels a workgroup
 /// (atmos_froxel.wgsl): its one compute entry.
-pub const SHADER_ATMOS_FROXEL: u32 = 35;
+pub const SHADER_ATMOS_FROXEL: u32 = 34;
 /// Each handed brick's ways as a tree of cells in one pool (pxl-engine
 /// `way::tree`), by hand: a re-filled brick's old child groups given back
 /// (way_free.wgsl), its tree built off the pool's stack (way_tree.wgsl), the
 /// child groups its build gave back pushed after (way_return.wgsl): a compute
 /// entry each.
-pub const SHADER_WAY_FREE: u32 = 36;
-pub const SHADER_WAY_TREE: u32 = 37;
-pub const SHADER_WAY_RETURN: u32 = 38;
+pub const SHADER_WAY_FREE: u32 = 35;
+pub const SHADER_WAY_TREE: u32 = 36;
+pub const SHADER_WAY_RETURN: u32 = 37;
 /// The eye's beam rays' run's walks over the node cache alone (queue_walk.wgsl over
 /// corners.wgsl, beam.eye.wgsl): what they park `SHADER_QUEUE_ASK_CORNERS` asks and
 /// `SHADER_QUEUE_LAST_CORNERS` ends.
-pub const SHADER_QUEUE_CORNERS: u32 = 39;
+pub const SHADER_QUEUE_CORNERS: u32 = 38;
 /// Where each of the camera grid's cells' rays start off its beam rays, by hand
 /// (cell.wgsl): its one compute entry.
-pub const SHADER_CELL: u32 = 40;
+pub const SHADER_CELL: u32 = 39;
 /// The holes' queue's last walk, which asks the world (queue_last.wgsl), and the node cache
 /// forgotten (pxl-engine `node_cache`), by hand (forget.wgsl): compute entries.
-pub const SHADER_QUEUE_LAST: u32 = 41;
-pub const SHADER_FORGET: u32 = 42;
+pub const SHADER_QUEUE_LAST: u32 = 40;
+pub const SHADER_FORGET: u32 = 41;
 /// The eye's samples' run's last walk, which asks the world (queue_last.wgsl over samples.wgsl,
 /// sample.eye.wgsl): a compute entry.
-pub const SHADER_QUEUE_LAST_SAMPLES: u32 = 43;
+pub const SHADER_QUEUE_LAST_SAMPLES: u32 = 42;
 /// The world's depth from the light into its clipmap (pxl-engine `light`):
 /// every slot taking the visible voxel, a workgroup a tile (light.wgsl), a
 /// compute entry; and that depth laid into the map (light_map.wgsl,
 /// gpu/shadow.rs). The nodes the holes' queue's walks were parked at, asked once
 /// a node (queue_ask.wgsl): compute entries.
-pub const SHADER_LIGHT: u32 = 44;
-pub const SHADER_LIGHT_MAP: u32 = 45;
-pub const SHADER_QUEUE_ASK: u32 = 46;
+pub const SHADER_LIGHT: u32 = 43;
+pub const SHADER_LIGHT_MAP: u32 = 44;
+pub const SHADER_QUEUE_ASK: u32 = 45;
 /// The occlusion's half-resolution map brought to the pixel and multiplied
 /// into the world's color, as the tiles' quads (ao_apply.wgsl).
-pub const SHADER_AO_APPLY: u32 = 47;
+pub const SHADER_AO_APPLY: u32 = 46;
 /// The eye's samples' stops into the record of voxels, by hand (pxl-engine `record`;
 /// sample_box.wgsl), two compute entries; and the boxes drawn, the eye's and the light's, the
 /// nearest face a pixel's ray enters kept with its voxel (raster.wgsl), which the cast's
 /// pixels read (`SHADER_CAST`).
-pub const SHADER_SAMPLE_BOX: u32 = 48;
-pub const SHADER_RASTER: u32 = 49;
+pub const SHADER_SAMPLE_BOX: u32 = 47;
+pub const SHADER_RASTER: u32 = 48;
 /// What lies about each face of the record's voxels, asked once a face (pxl-engine
 /// `raster::ARGS_FACES`, `record::R_FACES`), and each missed pixel's hit's, by hand
 /// (face.wgsl): its one compute entry.
-pub const SHADER_FACE: u32 = 50;
+pub const SHADER_FACE: u32 = 49;
 /// The tiles of the light's box its receivers stand on (pxl-engine
 /// `light::LISTED_STOOD`): the pixels the eye walked apart (its voxels' boxes stood by the
 /// record's draw, `SHADER_RECORD_DRAW`), and where the decor and what the kernel draws that
 /// reads the map stand; then those they read (`light::LISTED_READ`,
 /// `light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
 /// light_propagate.wgsl): compute entries.
-pub const SHADER_LIGHT_MARK: u32 = 51;
-pub const SHADER_LIGHT_MARK_DRAWS: u32 = 52;
-pub const SHADER_LIGHT_PROPAGATE: u32 = 53;
+pub const SHADER_LIGHT_MARK: u32 = 50;
+pub const SHADER_LIGHT_MARK_DRAWS: u32 = 51;
+pub const SHADER_LIGHT_PROPAGATE: u32 = 52;
 /// Which candidates of a slot `SHADER_GENERATION_MARK` listed the thinning
 /// retains, a clip level cell a thread, for `SHADER_GENERATION` to generate: its
 /// one compute entry.
-pub const SHADER_GENERATION_THIN: u32 = 54;
+pub const SHADER_GENERATION_THIN: u32 = 53;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
-pub const SHADER_SCREEN_FINISH: u32 = 55;
+pub const SHADER_SCREEN_FINISH: u32 = 54;
 /// The world's color gathered over frames (screen_resolve.wgsl).
-pub const SHADER_SCREEN_RESOLVE: u32 = 56;
+pub const SHADER_SCREEN_RESOLVE: u32 = 55;
 /// The claimed tiles set back to nothing at the far plane, their stencil
 /// raised (screen_gate.wgsl).
-pub const SHADER_SCREEN_GATE: u32 = 57;
+pub const SHADER_SCREEN_GATE: u32 = 56;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (screen_show.wgsl).
-pub const SHADER_SCREEN_SHOW: u32 = 58;
+pub const SHADER_SCREEN_SHOW: u32 = 57;
 /// The light's map's tiles that changed propagated to the screen's
 /// (screen_propagate.wgsl): its one compute entry.
-pub const SHADER_SCREEN_PROPAGATE: u32 = 59;
+pub const SHADER_SCREEN_PROPAGATE: u32 = 58;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (screen_write_back.wgsl).
-pub const SHADER_SCREEN_WRITE_BACK: u32 = 60;
+pub const SHADER_SCREEN_WRITE_BACK: u32 = 59;
 /// The claimed tiles of the samples' raster set back to no sample at the far
 /// plane (raster_gate.wgsl).
-pub const SHADER_RASTER_GATE: u32 = 61;
+pub const SHADER_RASTER_GATE: u32 = 60;
 /// The tiles the frame's one mark covers, or every one, taking its number
 /// (screen_mark.wgsl): its one compute entry.
-pub const SHADER_SCREEN_MARK: u32 = 62;
+pub const SHADER_SCREEN_MARK: u32 = 61;
 /// The world's depth laid in the claimed tiles of the light's map, their
 /// stencil raised (light_gate.wgsl).
-pub const SHADER_LIGHT_GATE: u32 = 63;
+pub const SHADER_LIGHT_GATE: u32 = 62;
 /// Each square of the screen's least and most depth, set in the tiles drawn
 /// (screen_bound.wgsl): its one compute entry.
-pub const SHADER_SCREEN_BOUND: u32 = 64;
+pub const SHADER_SCREEN_BOUND: u32 = 63;
 /// A character where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
-pub const SHADER_SKINNED_MARK: u32 = 65;
+pub const SHADER_SKINNED_MARK: u32 = 64;
 /// The tiles of the light's box the box slid onto, or slid into another
 /// band (pxl-engine `Light::keeps`), by hand (light_slide.wgsl): a compute
 /// entry.
-pub const SHADER_LIGHT_SLIDE: u32 = 66;
+pub const SHADER_LIGHT_SLIDE: u32 = 65;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
-pub const SHADER_DECOR_MARK: u32 = 67;
-pub const SHADER_IMPOSTOR_MARK: u32 = 68;
-pub const SHADER_LOCATION_ZONE_MARK: u32 = 69;
-pub const SHADER_LOCATION_BEACON_MARK: u32 = 70;
+pub const SHADER_DECOR_MARK: u32 = 66;
+pub const SHADER_IMPOSTOR_MARK: u32 = 67;
+pub const SHADER_LOCATION_ZONE_MARK: u32 = 68;
+pub const SHADER_LOCATION_BEACON_MARK: u32 = 69;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 71;
+pub const SHADER_BOX_ARGS: u32 = 70;
 /// The shadow map's beam rays' walks, cells, samples' last walk and samples' stops into the
 /// record: `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and
 /// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl, light_cell.wgsl,
 /// sample.light.wgsl, sample_box.light.wgsl).
-pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 72;
-pub const SHADER_LIGHT_CELL: u32 = 73;
-pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 74;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 75;
+pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 71;
+pub const SHADER_LIGHT_CELL: u32 = 72;
+pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 73;
+pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 74;
 /// The eye's samples' run's walks over the node cache alone (queue_walk.wgsl over
 /// samples.wgsl, sample.eye.wgsl): what they park `SHADER_QUEUE_ASK_SAMPLES` asks and
 /// `SHADER_QUEUE_LAST_SAMPLES` ends.
-pub const SHADER_QUEUE_SAMPLES: u32 = 76;
+pub const SHADER_QUEUE_SAMPLES: u32 = 75;
 /// The holes' queue's walks over the node cache alone (queue_walk.wgsl), the eye's pixels' and
 /// the light's slots': what they park `SHADER_QUEUE_ASK` asks and `SHADER_QUEUE_LAST` ends.
-pub const SHADER_QUEUE: u32 = 77;
+pub const SHADER_QUEUE: u32 = 76;
 /// The eye's beam rays' run's last walk, which asks the world (queue_last.wgsl over
 /// corners.wgsl, beam.eye.wgsl).
-pub const SHADER_QUEUE_LAST_CORNERS: u32 = 78;
+pub const SHADER_QUEUE_LAST_CORNERS: u32 = 77;
 /// `SHADER_QUEUE_SAMPLES` for the light's map.
-pub const SHADER_QUEUE_LIGHT_SAMPLES: u32 = 79;
+pub const SHADER_QUEUE_LIGHT_SAMPLES: u32 = 78;
 /// `SHADER_QUEUE_LAST_CORNERS` for the light's map.
-pub const SHADER_QUEUE_LAST_LIGHT_CORNERS: u32 = 80;
+pub const SHADER_QUEUE_LAST_LIGHT_CORNERS: u32 = 79;
 /// The tiles claimed, listed for `SHADER_CAST`.
-pub const SHADER_CAST_TILES: u32 = 81;
+pub const SHADER_CAST_TILES: u32 = 80;
 /// The box of the screen's claimed tiles, a frame through the gate's (`SHADER_DECOR_GATE`).
-pub const SHADER_CLAIMED_BOX: u32 = 82;
+pub const SHADER_CLAIMED_BOX: u32 = 81;
 /// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
-pub const SHADER_DECOR_GATE: u32 = 83;
+pub const SHADER_DECOR_GATE: u32 = 82;
 /// The node cache's drawable entries over every slot, by hand (record_draw.wgsl): those in view
 /// written as the raster's boxes, each stood on by the light's receivers where the world's are
 /// stood this frame, and those on the light's box as its raster's.
-pub const SHADER_RECORD_DRAW: u32 = 84;
+pub const SHADER_RECORD_DRAW: u32 = 83;
 /// The holes' stops into the node cache's drawable entries, and what lies about each one's face
 /// put at its pixel, by hand (record_stops.wgsl).
-pub const SHADER_RECORD_STOPS: u32 = 85;
+pub const SHADER_RECORD_STOPS: u32 = 84;
 /// `SHADER_RECORD_STOPS` for the light's stops (record_stops.light.wgsl).
-pub const SHADER_LIGHT_RECORD_STOPS: u32 = 86;
+pub const SHADER_LIGHT_RECORD_STOPS: u32 = 85;
 /// The drawn receivers' dispatch opened (light_mark_draws_open.wgsl), a module apart from the
 /// receivers' pass that reads it.
-pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 87;
+pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 86;
 /// The nodes the samples' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
 /// eye's and the light's.
-pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 88;
-pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 89;
+pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 87;
+pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 88;
 /// The nodes the beam rays' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
 /// eye's and the light's.
-pub const SHADER_QUEUE_ASK_CORNERS: u32 = 90;
-pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 91;
-pub const SHADERS: u32 = 92;
+pub const SHADER_QUEUE_ASK_CORNERS: u32 = 89;
+pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 90;
+pub const SHADERS: u32 = 91;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -492,17 +489,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_record",
         "decor_box",
         "decor_mark",
-    ],
-    // SHADER_FOLD
-    &[
-        "walk_word",
-        "world_word",
-        "seed",
-        "clip",
-        "world_rule",
-        "brick",
-        "level",
-        "fold",
     ],
     // SHADER_ATMOS_FROXEL
     &[

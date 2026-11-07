@@ -76,7 +76,7 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
             let b = Levels {
                 cells: upto(planes().cells),
                 records,
-                entries: clipmap().entries.to_vec(),
+                entries: clipmap().table.entries.to_vec(),
                 slots: clipmap().slots.to_vec(),
             };
             built.push(((center, held.to_vec()), b));
@@ -94,7 +94,7 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     });
     mirrored(&b.records);
     CLIPMAP.set(fresh());
-    clipmap().entries.copy_from_slice(&b.entries);
+    clipmap().table.entries.copy_from_slice(&b.entries);
     clipmap().slots.copy_from_slice(&b.slots);
     fold(clipmap());
 }
@@ -137,13 +137,14 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             continue;
         }
         let first = clipmap::origin(cell, cell_at(cell, center));
-        w.entries[(SLOTS + clip_level) as usize] = Entry {
+        w.table.entries[(SLOTS + clip_level) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(clip_level * ENTRIES + s) as usize].brick = entry_brick(cell, first, s);
+            w.table.entries[(clip_level * ENTRIES + s) as usize].brick =
+                entry_brick(cell, first, s);
         }
     }
     assign_slots(w, false);
@@ -269,13 +270,14 @@ fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
             Center::Destination => continue,
         };
         let first = clipmap::origin(cell, cell_at(cell, p));
-        w.entries[(SLOTS + clip_level) as usize] = Entry {
+        w.table.entries[(SLOTS + clip_level) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(clip_level * ENTRIES + s) as usize].brick = entry_brick(cell, first, s);
+            w.table.entries[(clip_level * ENTRIES + s) as usize].brick =
+                entry_brick(cell, first, s);
         }
     }
     assign_slots(w, false);
@@ -308,7 +310,7 @@ fn held_at(w: &Clipmap, cell: Zoom) -> usize {
 
 /// The brick clip level `clip_level` wants in entry `s`.
 fn want(w: &Clipmap, clip_level: u32, s: u32) -> [i32; 2] {
-    w.entries[(clip_level * ENTRIES + s) as usize].brick
+    w.table.entries[(clip_level * ENTRIES + s) as usize].brick
 }
 
 const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
@@ -339,7 +341,7 @@ fn shared_brick_held_once() {
     land_all(w);
     for pivot in EYE_CLIP_LEVELS..EYE_CLIP_LEVELS + 2 {
         for s in 0..ENTRIES {
-            let row = w.entries[(pivot * ENTRIES + s) as usize];
+            let row = w.table.entries[(pivot * ENTRIES + s) as usize];
             assert!(
                 row.holds(row.brick) && row.slot() == (layout(pivot).1 - FIRST_CELL) * ENTRIES + s,
                 "the pivot's rows name the eye's slots"
@@ -367,10 +369,10 @@ fn left_brick_part() {
             CpuClipmap.present(LEAF_CELL, q).1,
             "the pivot's bricks stay present"
         );
-        assert!(w.entries[(pivot * ENTRIES + s) as usize].holds(q));
+        assert!(w.table.entries[(pivot * ENTRIES + s) as usize].holds(q));
     }
     let new: Vec<u32> = (0..ENTRIES)
-        .filter(|&s| !w.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)))
+        .filter(|&s| !w.table.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)))
         .collect();
     assert_eq!(
         new.len(),
@@ -389,7 +391,7 @@ fn left_brick_part() {
     lay(w, leaf(CENTER), leaf(CENTER));
     for s in 0..ENTRIES {
         assert!(
-            w.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)),
+            w.table.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)),
             "not filled again"
         );
     }
@@ -445,7 +447,7 @@ fn landing_shows_everywhere() {
     on_filled(b, 7, Filled::Built(&[0]));
     refold();
     for clip_level in [eye, pivot] {
-        let row = w.entries[(clip_level * ENTRIES) as usize];
+        let row = w.table.entries[(clip_level * ENTRIES) as usize];
         assert!(row.holds(q) && row.slot() == b);
     }
     // Refused while a clip level wants it, then given up with the last.
@@ -506,7 +508,7 @@ fn heap_wait_rehanded() {
     );
     for clip_level in [eye, pivot] {
         assert_eq!(
-            w.entries[(clip_level * ENTRIES) as usize].ticket,
+            w.table.entries[(clip_level * ENTRIES) as usize].ticket,
             0,
             "its rows show it"
         );

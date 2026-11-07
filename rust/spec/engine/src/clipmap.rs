@@ -768,6 +768,10 @@ pub const JOINED_AT: u32 = ORIGIN_AT + CLIP_LEVELS;
 /// The eye's clip levels' entries, as the GPU lays them: clip level `cell −
 /// FIRST_CELL` a run of `JOINED_ENTRIES`.
 pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_CLIP_LEVELS;
+/// The clip levels' buffer in words: its entries, its first bricks and the eye's
+/// clip levels' levels, all of it the kernel's (pxl-kernel
+/// domain/layer/terrain/clipmap.rs `table`).
+pub const TABLE_WORDS: u32 = 4 * JOINED_AT + EYE_JOINED_WORDS;
 
 /// Entry of level `l` (from 1) over a brick, its block `at` in blocks of
 /// that level, among a clip level's: the levels' entries in order, a level's

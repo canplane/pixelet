@@ -319,9 +319,6 @@ const _: () = assert!(
 /// a level's entries one `LEVEL_SIDE` a side (bound.wgsl).
 pub const HEIGHT_SIDE: u32 = 8;
 pub const LEVEL_SIDE: u32 = 8;
-/// The eye's clip levels' entries a workgroup of the fold takes (gpu/ray/cast.rs `fold`,
-/// fold.wgsl).
-pub const FOLD_LANES: u32 = 64;
 /// The cells a side a workgroup of the camera grid's cells' starts takes (gpu/ray/cast.rs,
 /// cell.wgsl).
 pub const CELL_SIDE: u32 = 8;

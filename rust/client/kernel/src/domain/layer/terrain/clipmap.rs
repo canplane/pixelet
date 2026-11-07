@@ -151,21 +151,28 @@ fn of_entry(s: u32) -> impl Iterator<Item = u32> {
     (0..CLIP_LEVELS).map(move |k| k * ENTRIES + s)
 }
 
-struct Clipmap {
-    clip_levels: [ClipLevel; CLIP_LEVELS as usize],
+/// The clip levels' table, rows of four words end to end, as the GPU binds it
+/// (pxl-render clip.wgsl).
+#[repr(C)]
+struct Table {
     /// Every clip level's entries, each its brick and its slot's state, then
     /// each clip level's first brick, a row shaped as an entry's, its brick the
     /// first and present while it is laid out, none while its center is not
-    /// (pxl-engine `clipmap::ORIGIN_AT`): the GPU's table as it is
-    /// (`table`).
+    /// (pxl-engine `clipmap::ORIGIN_AT`).
     entries: [Entry; (SLOTS + CLIP_LEVELS) as usize],
-    /// The bricks the clip levels want, each in one slot (`Slot`).
-    slots: [Slot; SLOTS as usize],
     /// The eye's clip levels' levels over their bricks, folded over the
     /// bricks as they are held here (`fold`), the zero entry, none, before
-    /// any is.
+    /// any is (`clipmap::JOINED_AT`).
     joined: [[u32; clipmap::JOINED_WORDS as usize];
         (EYE_CLIP_LEVELS * clipmap::JOINED_ENTRIES) as usize],
+}
+
+struct Clipmap {
+    clip_levels: [ClipLevel; CLIP_LEVELS as usize],
+    /// What the GPU reads of them, as it is (`table`).
+    table: Table,
+    /// The bricks the clip levels want, each in one slot (`Slot`).
+    slots: [Slot; SLOTS as usize],
     /// The device the entries' bricks were handed to (`device_generation`):
     /// one that went took them all.
     on: u32,
@@ -196,7 +203,7 @@ fn clipmap() -> &'static mut Clipmap {
 
 /// Clip level `clip_level`'s first brick, none while its center is not.
 fn first_of(w: &Clipmap, clip_level: u32) -> Option<[i32; 2]> {
-    let (first, laid) = w.entries[(SLOTS + clip_level) as usize].brick();
+    let (first, laid) = w.table.entries[(SLOTS + clip_level) as usize].brick();
     laid.then_some(first)
 }
 
@@ -206,10 +213,12 @@ fn fresh() -> Clipmap {
         clip_levels: core::array::from_fn(|w| ClipLevel {
             cell: layout(w as u32).1,
         }),
-        entries: [Entry::absent([i32::MIN; 2]); (SLOTS + CLIP_LEVELS) as usize],
+        table: Table {
+            entries: [Entry::absent([i32::MIN; 2]); (SLOTS + CLIP_LEVELS) as usize],
+            joined: [[0; clipmap::JOINED_WORDS as usize];
+                (EYE_CLIP_LEVELS * clipmap::JOINED_ENTRIES) as usize],
+        },
         slots: [Slot::FREE; SLOTS as usize],
-        joined: [[0; clipmap::JOINED_WORDS as usize];
-            (EYE_CLIP_LEVELS * clipmap::JOINED_ENTRIES) as usize],
         on: 0,
         ticket: 0,
         read: 0,
@@ -277,8 +286,8 @@ fn planes() -> &'static mut Planes {
 }
 
 /// The eye's clip levels' levels over their bricks folded again, a level at a
-/// time, as the GPU folds its own (pxl-engine `clipmap::fold`; pxl-render
-/// fold.wgsl `fold_cs`), over the bricks as they are held here. The writers of a brick
+/// time (pxl-engine `clipmap::fold`), over the bricks as they are held here:
+/// the table carries them to the GPU (`table`). The writers of a brick
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
 /// (`on_filled`), folded once after all of them (`refold`): no read of a
@@ -292,7 +301,7 @@ fn fold(w: &mut Clipmap) {
             for b in 0..blocks {
                 let e = clipmap::fold(&Holding(w), FIRST_CELL + clip_level, l, b);
                 let at = clip_level * clipmap::JOINED_ENTRIES + clipmap::joined_idx(l, [0, 0]) + b;
-                w.joined[at as usize] = e;
+                w.table.joined[at as usize] = e;
             }
         }
     }
@@ -358,7 +367,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             core::mem::replace(&mut w.clip_levels[clip_level as usize], ClipLevel { cell }).cell,
             first_of(w, clip_level),
         );
-        w.entries[(SLOTS + clip_level) as usize] = match first {
+        w.table.entries[(SLOTS + clip_level) as usize] = match first {
             Some(f) => Entry {
                 brick: f,
                 present: 1,
@@ -384,7 +393,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             continue;
         };
         for s in 0..ENTRIES {
-            let entry = &mut w.entries[(clip_level * ENTRIES + s) as usize];
+            let entry = &mut w.table.entries[(clip_level * ENTRIES + s) as usize];
             let want = entry_brick(cell, f, s);
             if moved[clip_level as usize] || lost || entry.brick != want {
                 entry.brick = want;
@@ -425,7 +434,11 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             continue;
         }
         for s in 0..ENTRIES {
-            let t = tile_of(cell, w.entries[(clip_level * ENTRIES + s) as usize].brick).0;
+            let t = tile_of(
+                cell,
+                w.table.entries[(clip_level * ENTRIES + s) as usize].brick,
+            )
+            .0;
             if !w.pinned.contains(&t) {
                 w.pinned.push(t);
             }
@@ -464,7 +477,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
         let wants = |clip_level: u32| {
             w.clip_levels[clip_level as usize].cell == held.cell
                 && first_of(w, clip_level).is_some()
-                && w.entries[(clip_level * ENTRIES + s) as usize].brick == held.brick
+                && w.table.entries[(clip_level * ENTRIES + s) as usize].brick == held.brick
         };
         if !(0..CLIP_LEVELS).any(wants) {
             w.slots[b] = Slot::FREE;
@@ -480,7 +493,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
         for s in 0..ENTRIES {
             let (own, q) = (
                 clip_level * ENTRIES + s,
-                w.entries[(clip_level * ENTRIES + s) as usize].brick,
+                w.table.entries[(clip_level * ENTRIES + s) as usize].brick,
             );
             if slot_of(w, cell, q).is_some() {
                 continue;
@@ -512,10 +525,10 @@ fn slot_of(w: &Clipmap, cell: Zoom, q: [i32; 2]) -> Option<u32> {
 /// there (`Entry::present`, the slot plus one), on its way (`Entry::ticket`)
 /// or neither; absent while its clip level is not laid out.
 fn show(w: &mut Clipmap, i: u32) {
-    let (clip_level, brick) = (i / ENTRIES, w.entries[i as usize].brick);
+    let (clip_level, brick) = (i / ENTRIES, w.table.entries[i as usize].brick);
     let held = first_of(w, clip_level)
         .and_then(|_| slot_of(w, w.clip_levels[clip_level as usize].cell, brick));
-    w.entries[i as usize] = match held {
+    w.table.entries[i as usize] = match held {
         Some(b) => Entry {
             brick,
             present: if w.slots[b as usize].present {
@@ -600,7 +613,7 @@ fn due(w: &mut Clipmap) {
         };
         let mut near = List::<(i64, u32), { ENTRIES as usize }>::new();
         for i in clip_level * ENTRIES..(clip_level + 1) * ENTRIES {
-            let q = w.entries[i as usize].brick;
+            let q = w.table.entries[i as usize].brick;
             let Some(b) = slot_of(w, cell, q) else {
                 continue;
             };
@@ -669,20 +682,30 @@ pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     );
     first_of(w, clip_level)?;
     Some(core::array::from_fn(|s| {
-        w.entries[(clip_level * ENTRIES) as usize + s]
+        w.table.entries[(clip_level * ENTRIES) as usize + s]
     }))
 }
 
-/// The clip levels' entries and their first bricks, as the GPU's cast reads
-/// them (pxl-render clip.wgsl `step_to`, `held_of`): a row an entry
-/// (pxl-engine `clipmap::Entry`), then a row a clip level
-/// (`clipmap::ORIGIN_AT`).
+/// The clip levels' table, as the GPU's cast reads it (pxl-render clip.wgsl
+/// `step_to`, `held_of`): a row an entry (pxl-engine `clipmap::Entry`), a row a
+/// clip level (`clipmap::ORIGIN_AT`), then the levels folded over the eye's
+/// bricks (`clipmap::JOINED_AT`).
 pub fn table() -> &'static [i32] {
-    let rows = &clipmap().entries[..];
-    // SAFETY: an entry is four plain words in order (`Entry`), so the entries are
-    // their rows' words.
-    unsafe { core::slice::from_raw_parts(rows.as_ptr().cast::<i32>(), 4 * rows.len()) }
+    let table = &clipmap().table;
+    // SAFETY: the table is rows of four plain words end to end (`Table`), so
+    // it is their words.
+    unsafe {
+        core::slice::from_raw_parts(
+            core::ptr::from_ref(table).cast::<i32>(),
+            size_of::<Table>() / 4,
+        )
+    }
 }
+
+const _: () = assert!(
+    size_of::<Table>() == clipmap::TABLE_WORDS as usize * 4,
+    "the table is the rows the GPU binds"
+);
 
 /// What a tile hands its bricks: its packet and the tile as it is held, its
 /// lines; or a void tile's own
@@ -858,7 +881,7 @@ impl Presence for Holding<'_> {
 
 impl Bricks for Holding<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
+        self.0.table.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
     }
 
     /// The CPU reads a cell's own palette index alone, as laid: its four are it four
@@ -869,7 +892,7 @@ impl Bricks for Holding<'_> {
 
     /// As this side folded it over its bricks (`fold`).
     fn joined(&self, cell: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
-        self.0.joined[((cell - FIRST_CELL) * clipmap::JOINED_ENTRIES + e) as usize]
+        self.0.table.joined[((cell - FIRST_CELL) * clipmap::JOINED_ENTRIES + e) as usize]
     }
 
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {

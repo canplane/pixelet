@@ -20,8 +20,8 @@ use super::{GroundPipelines, RaysPass};
 use crate::frame::draw::Stand;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FOLD, COMPUTE_FORGET,
-    COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_CLAIM, COMPUTE_LIGHT_MARK_DRAWS,
+    binds, COMPUTE, COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FORGET, COMPUTE_LIGHT,
+    COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_CLAIM, COMPUTE_LIGHT_MARK_DRAWS,
     COMPUTE_LIGHT_MARK_DRAWS_OPEN, COMPUTE_LIGHT_MARK_WALKED, COMPUTE_LIGHT_PROPAGATE,
     COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
     COMPUTE_QUEUE_ASK_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
@@ -35,7 +35,7 @@ use crate::frame::shader::record::{
     COMPUTE_QUEUE_SAMPLES_PARKED, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY,
     UNIFORM,
 };
-use crate::frame::shader::word::{CELL_SIDE, FOLD_LANES, ROW_LANES, SQUARE_SIDE};
+use crate::frame::shader::word::{CELL_SIDE, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
@@ -179,12 +179,6 @@ pub(super) struct CastBuffers {
     entries: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
-    /// The eye's clip levels folded over their bricks (`fold_cs`), over its
-    /// group, the clip level buffer's rows past their entry table
-    /// (`clipmap::JOINED_AT`), written where the clip levels' entries moved
-    /// (`refold`). The CPU folds its own over the bricks it holds
-    /// (pxl-kernel domain/layer/terrain/clipmap.rs `fold`).
-    fold_built: Pipeline,
     /// The world's depth from the light, a texel of the shadow map each
     /// (`light_cs`), cast with the eye's rays where the shadows are on.
     light_built: Pipeline,
@@ -282,7 +276,6 @@ pub(super) struct CastBuffers {
     /// Whether the cast draws a receiver past the world's, a character or decor
     /// (`light_mark_draws_cs`).
     light_draws: bool,
-    refold: bool,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
@@ -611,21 +604,14 @@ const _: () = assert!(
         && floor::holds(&[&LIGHT_SLIDE_GROUP]),
     "a light receivers' pass's group binds past WebGPU's floor"
 );
-/// The cast's world's group, over which `cell_cs`, `light_cell_cs`, `fold_cs` and
-/// `forget_cs` run: the eye, the clip levels' table and the bricks' levels the fold reads
-/// and writes, the beam rays' words the cells' starts go into, the node cache, and the
-/// head the passes both observers take read their observer by. The shadow map's passes of
-/// those bind it over the light's buffers (`light_groups`).
-pub(super) const WORLD_GROUP: [u32; 18] = [
+/// The cast's world's group, over which `cell_cs`, `light_cell_cs` and `forget_cs` run:
+/// the eye, the beam rays' words the cells' starts go into, the node cache, and the head
+/// the passes both observers take read their observer by. The shadow map's passes of those
+/// bind it over the light's buffers (`light_groups`).
+pub(super) const WORLD_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE_RW,
-    2,
-    COMPUTE,
-    STORAGE,
     8,
     COMPUTE,
     STORAGE_RW,
@@ -793,12 +779,7 @@ const _: () = assert!(
     binds(&[COMPUTE_CAST], &CAST_GROUP)
         && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
         && binds(
-            &[
-                COMPUTE_CELL,
-                COMPUTE_LIGHT_CELL,
-                COMPUTE_FOLD,
-                COMPUTE_FORGET
-            ],
+            &[COMPUTE_CELL, COMPUTE_LIGHT_CELL, COMPUTE_FORGET],
             &WORLD_GROUP
         )
         && binds(
@@ -939,7 +920,6 @@ impl RaysPass {
             ],
         );
         let light_cells_built = pipelines.build_compute(g, COMPUTE_LIGHT_CELL, group);
-        let fold_built = pipelines.build_compute(g, COMPUTE_FOLD, group);
         let queue_built = pipelines.build_compute(g, COMPUTE_QUEUE, &QUEUE_GROUP);
         let queue_parked_built = pipelines.build_compute(g, COMPUTE_QUEUE_PARKED, &QUEUE_GROUP);
         let queue_ask_built = pipelines.build_compute(g, COMPUTE_QUEUE_ASK, &QUEUE_ASK_GROUP);
@@ -1016,7 +996,6 @@ impl RaysPass {
             entries: Vec::new(),
             forgets: node_cache::FORGETS_NONE,
             cuts: [0; eye::CUTS],
-            fold_built,
             light_built,
             light_mark_walked_built,
             light_mark_draws_built,
@@ -1061,7 +1040,6 @@ impl RaysPass {
                 )
             }),
             light_draws: false,
-            refold: false,
             group: 0,
             bindings: [0; 11],
             eye: buf(
@@ -1069,7 +1047,7 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             clipmap: buf(
-                word_bytes((4 * clipmap::JOINED_AT + clipmap::EYE_JOINED_WORDS) as usize),
+                word_bytes(clipmap::TABLE_WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
             shards: 0,
@@ -1161,13 +1139,12 @@ impl RaysPass {
         let same = r.end() && fresh == 0 && c.group != 0;
         let stands = c.schedule.stands(same);
         xpute_kit::ensure!(
-            cast.clipmap.len() == (4 * clipmap::JOINED_AT) as usize,
+            cast.clipmap.len() == clipmap::TABLE_WORDS as usize,
             ENOTRECOVERABLE,
             cast.clipmap.len()
         );
         if clipmap_moved {
             g.write_buf(c.clipmap, 0, bytes(cast.clipmap));
-            c.refold = true;
         }
         c.size = rays.1;
         let shards_grow = cast.shards.len() > c.shard_room;
@@ -1758,11 +1735,7 @@ impl RaysPass {
         if bindings != c.bindings {
             release(c.group);
             let [eye, clipmap, ground, _, _, _, _, _, beams, node_cache, head] = bindings;
-            c.group = cast_group(
-                g,
-                &c.cells_built,
-                [eye, clipmap, ground, beams, node_cache, head],
-            );
+            c.group = cast_group(g, &c.cells_built, [eye, beams, node_cache, head]);
             for group in c.queue_groups {
                 release(group);
             }
@@ -1954,33 +1927,6 @@ impl RaysPass {
         if let Some(c) = self.cast.as_mut() {
             c.schedule.whole();
         }
-    }
-
-    /// The eye's clip levels folded over their bricks where their entries moved
-    /// (`fold_cs`): ahead of the frame, as the fold outlives it.
-    pub fn fold(&mut self, ctx: &mut RenderContext) -> bool {
-        let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::fill);
-        let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {
-            return false;
-        };
-        let pass = g.compute_pass(encoder, stamp.pass());
-        g.set_bind_group(pass, 0, c.group, &[]);
-        g.set_pipeline(pass, c.fold_built.id);
-        // A level a dispatch, each over the one under it, its level the
-        // dispatch's depth (`fold_cs`).
-        for l in 1..=clipmap::JOINED_LEVELS {
-            let blocks = (clipmap::ACROSS >> l) * (clipmap::ACROSS >> l);
-            g.dispatch(
-                pass,
-                (blocks * clipmap::EYE_CLIP_LEVELS).div_ceil(FOLD_LANES),
-                1,
-                l,
-            );
-        }
-        g.end(pass);
-        c.refold = false;
-        true
     }
 
     /// The cast where the frame casts, the world's depth from the light with
@@ -2557,15 +2503,12 @@ impl RaysPass {
 }
 
 /// The cast's world's group 0 over `bindings` (`WORLD_GROUP`): the eye, the
-/// clip levels' table, the tiles' frames, the beam rays' lines and the cells'
-/// starts, the node cache, and the head: the eye's, or, over the light's
-/// list and head, the shadow map's (`light_groups`).
-fn cast_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 6]) -> u32 {
-    let [eye, clipmap, ground, beams, node_cache, head] = bindings;
+/// beam rays' lines and the cells' starts, the node cache, and the head: the
+/// eye's, or, over the light's list and head, the shadow map's (`light_groups`).
+fn cast_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 4]) -> u32 {
+    let [eye, beams, node_cache, head] = bindings;
     let entries = [
         buf_entry(0, eye),
-        buf_entry(1, clipmap),
-        buf_entry(2, ground),
         buf_entry(8, beams),
         buf_entry(9, node_cache),
         buf_entry(HEAD_BINDING, head),
@@ -2749,7 +2692,7 @@ fn light_groups(
     };
     [
         of(walk),
-        cast_group(g, world, [eye, clipmap, ground, list, node_cache, head]),
+        cast_group(g, world, [eye, list, node_cache, head]),
         g.bind_group(
             boxes_built.layouts[0],
             &[
