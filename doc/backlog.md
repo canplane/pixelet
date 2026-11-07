@@ -12,7 +12,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **Faster than the deployed build, on every axis**
   ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
-  Mac's gate passes, its tick p95 2.1 to 3.2 ms the one axis worse, its cause not found. The S23 at 719 MHz: GPU p50
+  Mac's gate passes. Its tick p95 is about 1 ms over, the bricks' cut on the CPU as tiles land,
+  accepted by the user as the CPU fill's cost. The S23 at 719 MHz: GPU p50
   6.1× the deployed build's, p95 5.7× on one pair, the deployed build's p95 reading 437–1282 ms
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
 
