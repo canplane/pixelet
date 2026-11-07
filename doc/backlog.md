@@ -18,11 +18,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The light by a list and the raster**, decided
-  ([the light is listed](./minutes/20261108-the-light-is-listed.md)). First `list::light` on the
-  CPU, held to `cast::first` texel by texel, which measures the real list; then the GPU's list
-  and raster in place of the light's beam, samples and holes' walk.
-
 ## P2
 
 - **The vocabulary, cleaned.** Agents have left words with several meanings

@@ -619,3 +619,8 @@ scratch of 1 MiB to read a few bricks of them. Read a cell at a time where it is
 step's most 5.4 to 3.0 ms, the tick's most 7.5 to 4.5–5.8, the fixed ranges 1 MiB less. The p95
 stayed at 3.2. Folding only the clip levels a change reaches, tried, moved neither and was
 dropped. What holds the p95 is not found. The gate passes.
+
+**The light's list, measured on the CPU and set aside.** Each tile's cells at its band by a
+descent of the query over its texels' sweep: exact in 13 of 14 cases, and 5 to 400 times the
+nodes the tile's 64 walks ask, the ground under the surface listed as deep as the sweep runs
+([the light's list](../../minutes/20261108-the-light-s-list-measured.md)).
