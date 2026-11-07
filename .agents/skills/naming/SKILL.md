@@ -80,8 +80,10 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   the kernel, its UI the shell. pixelet names its own by pixelet's words and
   xpute's parts by xpute's (`xpute_core`, `Runtime.core`); `kernel.wasm` is
   pixelet's build of its kernel.
-- A file or folder name is singular (`service/`, `remote.ts`), but where a tool
-  fixes the name (cargo's `tests/` and `examples/`).
+- A file, folder or type name is singular (`service/`, `remote.ts`,
+  `component/`), even where its field's habit is plural; only a value that is
+  a collection (`let cmds`), or a name a tool fixes (cargo's `tests/` and
+  `examples/`), is plural.
 - Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
   renderer's and a shader's words.
 - Treat a name between the client and a server as protocol, and a name kept in

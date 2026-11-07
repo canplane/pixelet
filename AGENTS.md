@@ -45,18 +45,9 @@
   what a part must do from the user's decisions, then judge the code against
   that; a comment, a structure or a pattern in it, however often repeated, is
   no reason to keep it.
-- The records under `doc/` recover intent, scope and limits. A record that
-  attributes a decision to the user explicitly makes it an adopted decision;
-  check its scope. A proposal, an attempt or a measurement is no decision,
-  however recent. The user's explicit word now applies within its scope before
-  the documents catch up.
 - Keep an established symmetry by role and contract, not by matching module
   lists. A local gain alone does not weaken one or cross a boundary. A
   contract changed on purpose is named as such, with what keeps or replaces
   the properties it held.
-- Where the code and a stated contract disagree, tell debt, an outdated
-  document and an unfinished transition apart by the records and the history,
-  and copy no unresolved pattern as precedent. Ask only when the doubt changes
-  what the task should do; go on with what it does not touch.
 - A comment is understood on its own, in whole sentences, without reading the
   code under it, and does not say the code again.
