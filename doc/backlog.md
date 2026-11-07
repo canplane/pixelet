@@ -24,9 +24,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **`auto`'s name on the screen**, "auto resolution", no longer says what it moves: the rate
-  is its second knob ([a ray ends in its frame](./minutes/20261107-a-ray-ends-in-its-frame.md)).
-
 ## P2
 
 - **The vocabulary, cleaned.** Agents have left words with several meanings
