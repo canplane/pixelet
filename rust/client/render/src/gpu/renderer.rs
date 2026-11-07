@@ -19,7 +19,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
-use crate::frame::draw::{drifts, q3_of, uniform_of, Draw, Draws, Position};
+use crate::frame::draw::{drifts, uniform_of, Draw, Draws, Position};
 use crate::frame::draw::{
     stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
     PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
@@ -796,10 +796,12 @@ impl Renderer {
     }
 
     /// The frame's words off `input` over the world's surface `world`, made
-    /// at its size; `eye_far` how far the eye draws, in units; none without
-    /// an eye.
-    fn prepare(&mut self, g: &Gpu, world: &Surface, input: &FrameInput, eye_far: f32) {
+    /// at its size, and off `cast`, the eye its rays leave from; none without
+    /// one.
+    fn prepare(&mut self, g: &Gpu, world: &Surface, input: &FrameInput, cast: Option<&Cast>) {
         let (width, height, env) = (world.width, world.height, input.environment);
+        // How far the eye draws, in units, as far as the clouds are drawn.
+        let eye_far = cast.map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
         // The markers measure their size in view space.
         let b = &mut self.marker;
         put_mat(&mut b.view, 0, &input.view);
@@ -812,13 +814,16 @@ impl Renderer {
         self.view_proj = m;
         // Everything is drawn in the eye's frame: a draw's position is
         // taken against the eye's Q3 on the GPU (frame/draw.rs `Position`),
-        // the eye held on Q3 steps (pxl-kernel view/frame/pose.rs
-        // `view_compose`), so its Q3 is exact.
+        // the Q3 the rays leave from (`eye::ORIGIN`), so what is rasterized
+        // stands about the eye the world is drawn from; none without a
+        // cast, which draws no world. The eye is held on Q3 steps (pxl-kernel
+        // view/frame/pose.rs `view_compose`), so its Q3 is exact.
+        let origin = cast.map_or([0.0; 3], |c| {
+            core::array::from_fn(|k| f32::from_bits(c.eye[eye::ORIGIN + k]))
+        });
+        u[EYE..EYE + 3].copy_from_slice(&origin);
+        self.shadow.put_eye(origin);
         let eye_world = input.eye;
-        for (k, v) in q3_of(eye_world).into_iter().enumerate() {
-            u[EYE + k] = f32::from_bits(v as u32);
-        }
-        self.shadow.put_eye([u[EYE], u[EYE + 1], u[EYE + 2]]);
         let back = Position::of([input.drift[0], input.drift[1], 0.0]);
         u[DRIFT_Q] = f32::from_bits(back.q[0] as u32);
         u[DRIFT_Q + 1] = f32::from_bits(back.q[1] as u32);
@@ -1086,11 +1091,7 @@ impl Renderer {
 
         targets(g, world);
         let animated = input.animated;
-        // How far the eye draws, as far as the clouds are drawn.
-        let far = cast
-            .as_ref()
-            .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
-        self.prepare(g, world, &input, far);
+        self.prepare(g, world, &input, cast.as_ref());
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {

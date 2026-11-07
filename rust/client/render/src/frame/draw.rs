@@ -97,7 +97,7 @@ pub struct Position {
 
 /// Units as a position's Q3, X, Y and Z alike: the floor's i64 truncated
 /// to an i32, never an f64's saturating `as i32`.
-pub fn q3_of(v: V3) -> Q3 {
+fn q3_of(v: V3) -> Q3 {
     v.map(|x| from_real(x) as i32)
 }
 
