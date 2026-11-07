@@ -233,7 +233,7 @@ impl Character {
     /// turns back, and asks no frame: the turn is woken for the next step and
     /// draws it, as the location indicator's bob is (`Model::next_step`).
     /// A character surface showing it (`on_surface`) sees it whole before its own eye, its clips
-    /// running a frame a step.
+    /// running a frame a step and a frame asked for its turn (`surface_draw`).
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
@@ -267,7 +267,7 @@ impl Character {
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));
         }
         let mut moves = world_moves || on_surface && moving;
-        let mut asks = moves;
+        let mut asks = moves || on_surface;
         // A clip alone, seen to move, steps where its pose has gone a pixel
         // of the display from the one drawn, or turns back; a fade runs a
         // frame a step.
@@ -393,10 +393,12 @@ impl Character {
     /// Its draw as a character surface's eye draws it, held by no list: where the walk
     /// stands it, or anywhere while it stands nowhere, as the eye stands at
     /// its point; its model a unit tall, as the eye frames it (pxl-render
-    /// gpu/pass/character.rs). None while its model is not uploaded.
+    /// gpu/pass/character.rs), turned by the clock so every side of it shows.
+    /// None while its model is not uploaded.
     pub fn surface_draw(&self, models: &Models) -> Option<Draw> {
         let m = models.get(self.model).filter(|m| m.handle() != 0)?;
-        let (at, rot) = self.transform.map_or(([0.0; 3], 0.0), |t| (t.at, t.rot));
+        let at = self.transform.map_or([0.0; 3], |t| t.at);
+        let rot = (now() / 1000.0 * param::SURFACE_SPIN_RAD_S % core::f64::consts::TAU) as f32;
         Some(scaled_draw(
             PIPELINE_SKINNED,
             m.handle(),

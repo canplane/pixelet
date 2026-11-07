@@ -25,3 +25,7 @@ pub const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 /// How long a clip crosses into the next, in seconds, once one plays.
 pub const CLIP_FADE_S: f32 = 0.2;
+
+/// How fast a character surface turns its character, in radians a second, so
+/// every side of it shows.
+pub const SURFACE_SPIN_RAD_S: f64 = 0.6;
