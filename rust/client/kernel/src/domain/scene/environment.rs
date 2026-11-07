@@ -12,9 +12,9 @@ use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
+use crate::domain::scene::animation;
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::Stepped;
@@ -203,7 +203,7 @@ impl EnvironmentDraw {
         let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
         // The clouds drifting step on their own, waking the turn.
         if drifted && self.started {
-            region::note_animation();
+            animation::note_animation();
         }
         self.time = (clouds - first) / 1000.0;
         let sky_in = if held {

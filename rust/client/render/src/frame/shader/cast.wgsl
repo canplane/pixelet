@@ -25,9 +25,11 @@ fn node_cache_word(k: u32) -> u32 {
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
 /// The walk again's words (list.wgsl `MissArgs`).
 @group(0) @binding(14) var<storage, read_write> args: MissArgs;
-/// The tiles claimed, this pass's dispatch ahead of them (cast_tiles.wgsl).
+/// The tiles claimed, this pass's dispatch ahead of them: cast_tiles.wgsl's `CastTiles`, its
+/// layout read without the atomics a read-only binding cannot hold.
 struct CastTiles {
-  args: array<u32, 3>,
+  count: u32,
+  sides: array<u32, 2>,
   cnt: u32,
   at: array<u32>,
 }

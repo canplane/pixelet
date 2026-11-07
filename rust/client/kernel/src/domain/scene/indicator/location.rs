@@ -16,13 +16,13 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
+use crate::domain::scene::animation;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::param::{
     BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
     ZONE_FOOTPRINT_U,
 };
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
@@ -360,7 +360,7 @@ impl LocationIndicator {
             wake_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
-            region::note_animation();
+            animation::note_animation();
         }
         slides
     }

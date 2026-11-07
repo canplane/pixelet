@@ -38,12 +38,12 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// The device the last frame went to the screen on (`device_generation`).
-static DRAWN: Global<Option<u32>> = Global::new();
+static SCREEN_DEVICE: Global<Option<u32>> = Global::new();
 
 /// Whether the screen holds a frame of the world: one drawn on the device
 /// there is, as a device that went took what it drew.
 pub fn is_screen_drawn() -> bool {
-    *DRAWN.get(|| None) == Some(api::device_generation())
+    *SCREEN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -52,13 +52,13 @@ const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::clipmap;
+use crate::domain::scene::animation;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::cloud;
 use crate::domain::scene::marker;
 use crate::domain::scene::model;
 use crate::domain::scene::param;
-use crate::domain::scene::region;
 use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::resolution;
 use crate::domain::view::frame::resolution::{GpuMeasure, Pace};
@@ -173,7 +173,7 @@ pub fn stage_render(pace: Pace) {
         clipmap::on_filled(b, ticket, filled);
     };
     // Whether what the scene animates stepped.
-    let animated = region::take();
+    let animated = animation::take();
     let out = render_frame(FrameInput {
         lists,
         environment: &scene().environment.out,
@@ -250,7 +250,7 @@ pub fn stage_render(pace: Pace) {
         );
         return;
     };
-    DRAWN.set(Some(api::device_generation()));
+    SCREEN_DEVICE.set(Some(api::device_generation()));
     let [draws, triangles] = stat
         .draws
         .iter()

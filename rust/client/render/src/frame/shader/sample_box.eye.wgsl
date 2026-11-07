@@ -5,7 +5,7 @@
 
 /// Whether sample `s` stopped on `k` whole, coarser than the eye asks it from where the ray
 /// starts (`record::stopped_whole`).
-fn sample_whole(s: vec2<u32>, k: Kept) -> bool {
+fn sample_whole(s: vec2<u32>, k: Node) -> bool {
   return stopped_whole(k, sample_aim(s).origin);
 }
 

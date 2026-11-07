@@ -1176,7 +1176,7 @@ impl RaysPass {
     /// The rays for this frame into the world surface's (`rays`, its view,
     /// and its drawn pixels), and the world's depth from the light into `light`'s
     /// view: the GPU's cast where an eye casts, its eye handed over first;
-    /// its samples' raster through its gate where the frame is `gated`;
+    /// its samples' raster through its gate where the frame is `partial`;
     /// `frame` the renderer's number this frame takes, which its counts are
     /// named by (count.rs `Frame`).
     #[expect(
@@ -1190,7 +1190,7 @@ impl RaysPass {
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
         light_map: (u32, u32, light::Starts),
-        gated: bool,
+        partial: bool,
         frame: f64,
     ) {
         // No cast, no world: no ray cast, none drawn and no decor generated.
@@ -1552,7 +1552,7 @@ impl RaysPass {
         let plan = c.schedule.plan(Reads {
             same,
             jitter: [cast.eye[eye::JITTER], cast.eye[eye::JITTER + 1]],
-            gated,
+            partial,
             shadows,
             light_made: c.light_ready,
             content_same,

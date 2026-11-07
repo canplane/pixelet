@@ -17,7 +17,7 @@ fn hit_origin(r: u32) -> vec3<i32> {
   return eye_origin();
 }
 
-fn hit_whole(k: Kept, r: u32) -> bool {
+fn hit_whole(k: Node, r: u32) -> bool {
   return stopped_whole(k, eye_origin());
 }
 

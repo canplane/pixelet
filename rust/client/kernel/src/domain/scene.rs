@@ -4,6 +4,7 @@
 //! state, listed into the draw list (domain/scene/model.rs `draw_list`).
 
 pub mod actor;
+pub mod animation;
 pub mod cast;
 pub mod character;
 pub mod column;
@@ -15,7 +16,6 @@ pub mod indicator;
 pub mod marker;
 pub mod model;
 pub mod param;
-pub mod region;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;

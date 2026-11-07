@@ -112,7 +112,7 @@ pub struct FrameTurn {
     /// before it, and whether the runtime settled it, as it says with this frame.
     pub interval_ms: f64,
     /// The display's refresh and the interval the runtime paced this frame at
-    /// (turn.rs `RuntimeFrame`).
+    /// (turn.rs `TurnGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub settled: bool,

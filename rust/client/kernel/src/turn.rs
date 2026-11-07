@@ -301,7 +301,7 @@ pub fn world_platform() -> Platform {
 /// world holds still rather than leaping.
 const MAX_STEP_S: f64 = 0.1;
 
-pub struct RuntimeFrame {
+pub struct TurnGrant {
     pub delta: f64,
     /// The display's refresh, and the interval the runtime paces turns at, a
     /// whole number of refreshes: the frame's budget (the pacing the client
@@ -312,16 +312,16 @@ pub struct RuntimeFrame {
     pub credits: u32,
 }
 
-static FRAME: Global<Option<RuntimeFrame>> = Global::new();
+static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
-static DRAWN: Global<bool> = Global::new();
+static WORLD_DRAWN: Global<bool> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-pub fn on_world_frame_asked(runtime: RuntimeFrame) {
-    *FRAME.get(|| None) = Some(runtime);
+pub fn on_world_frame_asked(grant: TurnGrant) {
+    *FRAME.get(|| None) = Some(grant);
     frames().notify();
 }
 
@@ -331,7 +331,7 @@ pub fn world_frame_waiting() -> bool {
 }
 
 pub fn take_world_drawn() -> bool {
-    core::mem::take(DRAWN.get(|| false))
+    core::mem::take(WORLD_DRAWN.get(|| false))
 }
 
 /// One task, because the frame's parts have an order and the executor's
@@ -339,25 +339,25 @@ pub fn take_world_drawn() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
-        let Some(runtime) = FRAME.get(|| None).take() else {
+        let Some(grant) = FRAME.get(|| None).take() else {
             continue;
         };
         let edge = world_edge();
-        let paced_ms = runtime.paced_ms;
-        world_frame(runtime, edge.deadline_ms(), edge.edge_at());
+        let paced_ms = grant.paced_ms;
+        world_frame(grant, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
-        DRAWN.set(true);
+        WORLD_DRAWN.set(true);
     }
 }
 
-fn world_frame(runtime: RuntimeFrame, deadline_ms: f64, edge_at: f64) -> TickReport {
-    let RuntimeFrame {
+fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
+    let TurnGrant {
         delta,
         refresh_ms,
         paced_ms,
         interactive,
         credits,
-    } = runtime;
+    } = grant;
     let t0 = now();
     set_credits(credits);
     text_rise();

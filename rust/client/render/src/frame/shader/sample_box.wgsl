@@ -15,7 +15,7 @@ fn stopped(s: vec2<u32>) -> bool {
 }
 
 /// Sample `s`'s node, its roots world-absolute from where its ray starts.
-fn sample_kept(s: vec2<u32>) -> Kept {
+fn sample_kept(s: vec2<u32>) -> Node {
   return kept_at(sample_word(s) + SAMPLE_NODE, sample_aim(s).origin);
 }
 

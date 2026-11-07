@@ -27,7 +27,7 @@ pub(super) struct Reads {
     /// casts no pixel, runs no queue and owes nothing (schedule.test.rs `rests`).
     pub jitter: [u32; 2],
     /// Whether nothing moved but the listed draws that mark (renderer.rs `partial`).
-    pub gated: bool,
+    pub partial: bool,
     /// Whether shadows are cast, and whether the light's cast is made (cast.rs `light_made`).
     pub shadows: bool,
     pub light_made: bool,
@@ -248,7 +248,7 @@ impl Schedule {
         // stand follows is then the bits' (`walked_whole`): afresh where they hold every walk;
         // else added to those that stand, the light and the box as they were.
         let partial = if casts_px(kind) {
-            r.gated && kind == FrameKind::px
+            r.partial && kind == FrameKind::px
         } else {
             !self.walked_whole
         };
@@ -323,7 +323,7 @@ impl Schedule {
             self.pool = ray::owed_into(from);
             from
         });
-        self.gated = r.gated && kind == FrameKind::px && !ungated;
+        self.gated = r.partial && kind == FrameKind::px && !ungated;
         if casts {
             self.walked_whole = !self.gated;
         }

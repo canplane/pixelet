@@ -16,10 +16,10 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free};
 
+use crate::domain::scene::animation;
 use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::{blend, Models};
-use crate::domain::scene::region;
 use crate::domain::view::lens::{cell_there, Stepped};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
@@ -213,7 +213,7 @@ impl Actor {
             self.clip_time = time;
             (moves, asks) = (stepped, false);
             if stepped {
-                region::note_animation();
+                animation::note_animation();
             }
         } else {
             self.last = 0.0;

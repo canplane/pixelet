@@ -20,7 +20,7 @@ fn record_frame() -> u32 {
 
 /// A node as a walk holds it, its roots world-absolute (pxl-engine `cast::Node`, its roots
 /// added to the origin's).
-struct Kept {
+struct Node {
   zoom: u32,
   corner: vec3<u32>,
   roots: vec3<i32>,
@@ -35,7 +35,7 @@ fn origin_roots(o: vec3<i32>) -> vec3<i32> {
 /// (pxl-engine `cast::Node::of_idx`): its corner off the index's low bits, and on each axis the
 /// root, the origin's or one either side, whose copy of it has its middle nearer the origin
 /// than half a root.
-fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Kept {
+fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
   let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
   let y_start = select(1u << ((zoom - 1u) & 31u), 0u, zoom == 0u);
   let z_start = select(1u << ((zoom - SHARD_ZOOM - 1u) & 31u), 0u, zoom <= SHARD_ZOOM);
@@ -51,11 +51,11 @@ fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Kept {
     select(vec3<i32>(0i), vec3<i32>(-1i), d >= half),
     up,
   );
-  return Kept(zoom, corner, root + origin_roots(o));
+  return Node(zoom, corner, root + origin_roots(o));
 }
 
 /// The node of the entry at word `e` as a walk from the origin `o` holds it.
-fn entry_kept(e: u32, o: vec3<i32>) -> Kept {
+fn entry_kept(e: u32, o: vec3<i32>) -> Node {
   let n = e + W_NODE;
   let c = vec3<i32>(i32(node_cache_word(n + 1u)), i32(node_cache_word(n + 2u)), i32(node_cache_word(n + 3u)));
   return node_of_idx(o, node_cache_word(n), c);
@@ -108,7 +108,7 @@ struct Planes {
   hi: vec3<f32>,
 }
 
-fn kept_planes(k: Kept, o: vec3<i32>) -> Planes {
+fn kept_planes(k: Node, o: vec3<i32>) -> Planes {
   let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
   let roots = k.roots - origin_roots(o);
   return Planes(units(k.corner, og, roots), far_of(k.corner, under(k.zoom), og, roots));
@@ -126,13 +126,13 @@ fn asked_near(p: Planes) -> u32 {
 
 /// Whether the eye's ray from `o` stopped on `k` whole, coarser than it asked there
 /// (`record::stopped_whole`).
-fn stopped_whole(k: Kept, o: vec3<i32>) -> bool {
+fn stopped_whole(k: Node, o: vec3<i32>) -> bool {
   return k.zoom < asked_near(kept_planes(k, o));
 }
 
 /// Whether `k`, `whole` where it stopped whole, is the node the eye's walk from `o` stops on:
 /// it answers a cell and its parent does not (`record::fresh`).
-fn kept_fresh(k: Kept, whole: bool, o: vec3<i32>) -> bool {
+fn kept_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
   if (!whole && k.zoom < asked_near(kept_planes(k, o))) {
     return false;
   }
@@ -140,7 +140,7 @@ fn kept_fresh(k: Kept, whole: bool, o: vec3<i32>) -> bool {
     return true;
   }
   let zoom = k.zoom - 1u;
-  let parent = Kept(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots);
+  let parent = Node(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots);
   return zoom < asked_near(kept_planes(parent, o));
 }
 

@@ -73,9 +73,9 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
 /// lap of the first: each ray the cells it passes at the coarsest zoom it
 /// is answered at, each surface and column surface its cell (`World::reading`).
 #[derive(Default)]
-pub struct Columns(Cell<Option<[[f64; 2]; 2]>>);
+pub struct Footprint(Cell<Option<[[f64; 2]; 2]>>);
 
-impl Columns {
+impl Footprint {
     /// The cells of `zoom` the box from `a` to `b` lies in, read.
     pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         let side = units(zoom);
@@ -148,7 +148,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
                 return *a;
             }
         }
-        let read = Columns::default();
+        let read = Footprint::default();
         let a = ask(world.reading(&read));
         self.0 = read.get().map(|columns| {
             world.read_columns(columns);

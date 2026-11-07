@@ -19,7 +19,7 @@ fn node_cache_word(k: u32) -> u32 {
 /// (pxl-engine `raster::ARGS_INSTANCES`, `raster::ASKED_AT`, `raster::STOP_ASKED_AT`).
 @group(0) @binding(16) var<storage, read_write> args: array<atomic<u32>>;
 
-/// What a ray found where it stopped on a node, the node apart (`Kept`; pxl-engine
+/// What a ray found where it stopped on a node, the node apart (`Node`; pxl-engine
 /// `record`): its answer, whether it lacks, whether the ray stopped on it whole, coarser than
 /// it asked there (`record::stopped_whole`, `record::light_whole`), the face its ray entered
 /// (2·axis, plus one where the ray runs up the axis), and the first word of the beam ray's
@@ -60,9 +60,9 @@ fn eye_origin() -> vec3<i32> {
 
 /// The node at word `k` of the beam rays' words (`beam::NODE_WORDS`), as a walk from `origin`
 /// holds it, its roots world-absolute.
-fn kept_at(k: u32, origin: vec3<i32>) -> Kept {
+fn kept_at(k: u32, origin: vec3<i32>) -> Node {
   let roots = vec3<i32>(i32(beams[k + NODE_ROOTS]), i32(beams[k + NODE_ROOTS + 1u]), i32(beams[k + NODE_ROOTS + 2u]));
-  return Kept(
+  return Node(
     beams[k + NODE_ZOOM],
     vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]),
     roots + origin_roots(origin),
@@ -119,7 +119,7 @@ fn observe(p: Stop, e: u32, asks: Asks) {
 /// number where it draws from now on (`node_cache::W_SEEN`), set whole where the stop found it
 /// so (`RECORD_WHOLE`, the world's, which whichever ray stops on it whole first sets), and its
 /// face set (`observe`). None where no slot keeps its node: its pixel walks again.
-fn observe_stop(k: Kept, p: Stop, asks: Asks) {
+fn observe_stop(k: Node, p: Stop, asks: Asks) {
   let slot = find(k.zoom, idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i)), p.asset, p.lacks);
   if (slot == NO_ENTRY) {
     return;

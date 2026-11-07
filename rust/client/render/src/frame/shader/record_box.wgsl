@@ -6,7 +6,7 @@
 
 /// The entry at word `e`'s box from the origin `o`, the cell its asset keeps inset as it
 /// fills (pxl-engine cast.rs `asset_box`).
-fn entry_box(e: u32, k: Kept, o: vec3<i32>) -> Planes {
+fn entry_box(e: u32, k: Node, o: vec3<i32>) -> Planes {
   let p = kept_planes(k, o);
   let eighths = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
   var lo = p.lo;

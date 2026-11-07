@@ -4,7 +4,7 @@
 // node whole, and where their faces' asks lie, none, as its slots read no face's word.
 
 /// Whether sample `s` stopped on `k` whole, coarser than its band (`record::light_whole`).
-fn sample_whole(s: vec2<u32>, k: Kept) -> bool {
+fn sample_whole(s: vec2<u32>, k: Node) -> bool {
   return k.zoom < sample_band(s);
 }
 

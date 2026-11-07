@@ -28,7 +28,7 @@ fn hit_origin(r: u32) -> vec3<i32> {
   return light_aim(hit_texel(r)).origin;
 }
 
-fn hit_whole(k: Kept, r: u32) -> bool {
+fn hit_whole(k: Node, r: u32) -> bool {
   return k.zoom < hit_band(r);
 }
 

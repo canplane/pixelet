@@ -42,12 +42,12 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
         scale: 1.0,
     };
     clock::set(wall_ms);
-    region::take();
+    animation::take();
     let ticks = (1..=120)
         .map(|k| {
             WALL_MS.store((f64::from(k) * 1000.0 / 60.0).to_bits(), Ordering::Relaxed);
             let asks = actor.tick(&mut draw, &models, &frame, &transform);
-            (asks, region::take())
+            (asks, animation::take())
         })
         .collect();
     clock::set(|| 0.0);

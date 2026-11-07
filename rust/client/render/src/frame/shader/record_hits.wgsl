@@ -9,7 +9,7 @@
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 
 /// Hit `r`'s node, its roots world-absolute from where its ray starts.
-fn hit_kept(r: u32) -> Kept {
+fn hit_kept(r: u32) -> Node {
   return kept_at(hit_at(r) + HIT_NODE, hit_origin(r));
 }
 

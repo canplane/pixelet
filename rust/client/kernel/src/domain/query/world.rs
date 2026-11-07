@@ -9,7 +9,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::space::layer::octant::Octant;
 
-use super::changes::Columns;
+use super::changes::Footprint;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::{Store, Walk};
@@ -36,7 +36,7 @@ pub struct World<'a> {
     pub(super) hide: Option<Octant>,
     pub(super) carve: Option<Octant>,
     /// Where what its queries read is reported, if anywhere.
-    pub(super) reading: Option<&'a Columns>,
+    pub(super) reading: Option<&'a Footprint>,
 }
 
 impl World<'static> {
@@ -93,10 +93,10 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As it is, the columns its queries read reported into `columns`.
-    pub fn reading(self, columns: &'a Columns) -> World<'a> {
+    /// As it is, the columns its queries read reported into `footprint`.
+    pub fn reading(self, footprint: &'a Footprint) -> World<'a> {
         World {
-            reading: Some(columns),
+            reading: Some(footprint),
             ..self
         }
     }
