@@ -25,10 +25,11 @@ fn resumed(aim: Aim, at_cell: u32, line_words: u32, line_origin: u32) -> Start {
 
 /// The ray `aim` at `t`, at or past the start of the cell at word `at_cell`, off that cell's line
 /// (`line_resumed`): where its walk over the node cache left it, or the cell's start; from the
-/// root at 0 where the cell does not resume. `line_words` a line's words, `line_origin` where in
+/// root at 0 where the cell does not resume, or waits (`beam::CELL_WAITS`), whose rays the
+/// queue does not start (queue_walk.wgsl `item_waits`). `line_words` a line's words, `line_origin` where in
 /// a line the origin its nodes are held from lies, `NONE` where every ray starts at one.
 fn resumed_at(aim: Aim, at_cell: u32, t: f32, line_words: u32, line_origin: u32) -> Start {
-  if (beams[at_cell + CELL_RESUMES] == 0u) {
+  if (beams[at_cell + CELL_RESUMES] != 1u) {
     return root_start();
   }
   return line_resumed(aim, beams[at_cell + CELL_CORNER] * line_words, t, line_origin);

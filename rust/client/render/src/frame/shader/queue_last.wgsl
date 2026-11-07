@@ -8,7 +8,8 @@
 // hands it (`next_last`), an item not parked passed. A run counts against the frame's budget
 // where the runs before it left it, up to its kind's caps (`node_cache::VISITED`,
 // `node_cache::caps_at`): a ray the budget does not reach stays parked, as its kind's module
-// leaves it (`unreached`).
+// leaves it (`unreached`), and so does one whose start
+// still waits on its cell's (queue_walk.wgsl `item_waits`), walking nothing.
 
 /// The next number off the node cache's counter at `word` (`node_cache::LAST_TAKEN`), and the
 /// count it holds: the counters a kind's module takes its items by (`next_last`).
@@ -37,6 +38,15 @@ fn may_ask() -> bool {
   return atomicAdd(&node_cache[ASKED], 1u) < atomicLoad(&node_cache[queue_caps() + 1u]);
 }
 
+/// Where an item's last walk goes on from: its parked state, or a fresh start where it was
+/// parked waiting on its cell's start, which is there now.
+fn last_start(item: u32, fresh: bool) -> Start {
+  if (fresh) {
+    return item_start(item, item_aim(item));
+  }
+  return parked_start(item);
+}
+
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_last_cs() {
   var item = NONE;
@@ -58,8 +68,13 @@ fn queue_last_cs() {
       if (!parked(h)) {
         continue;
       }
+      let fresh = waiting(h);
+      if (fresh && item_waits(h)) {
+        unreached(h, 0.0, vec3<u32>(0u), WAITS_ZOOM, vec3<i32>(0), 0u);
+        continue;
+      }
       item = h;
-      let s = parked_start(h);
+      let s = last_start(h, fresh);
       t = s.t;
       corner = s.corner;
       zoom = s.zoom;

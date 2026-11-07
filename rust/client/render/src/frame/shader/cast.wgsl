@@ -6,9 +6,10 @@
 // slot's (visible.wgsl), with what lies about its face, the voxel's. Any other pixel, a hole,
 // takes no walk here: its walked and owed bits are set for the holes' queue (walked.wgsl;
 // queue.wgsl), a workgroup's square of pixels writing its words whole, and its words are what
-// was drawn there until the queue ends its ray: the visible voxel, fresh or stale, at its box's entry, or the
-// zero of a ray that met nothing. So the pixel never waits on its walk, and shows nothing no
-// entry draws.
+// was drawn there until the queue ends its ray: the visible voxel, fresh or stale, at its box's
+// entry; where no entry draws, the words the pixel holds, the last answer it showed, are left
+// as they are, and the zero of a ray that met nothing where it has shown none. So the pixel
+// never waits on its walk, and a ray not ended overwrites nothing.
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 /// The beam rays' words, the holes' bits past the grid's (walked.wgsl).
@@ -104,7 +105,9 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   // Neither: what was drawn, and marked for the holes' queue (queue.wgsl), which reads and
   // writes the node cache.
   add_cnt(on, COUNT_WALKED);
-  write_ray(p, drew);
+  if (any(drew != vec4<u32>(0u))) {
+    write_ray(p, drew);
+  }
   return true;
 }
 

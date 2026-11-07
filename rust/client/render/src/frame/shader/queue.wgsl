@@ -198,6 +198,23 @@ fn item_start(hole: u32, aim: Aim) -> Start {
   return px_start(aim, at, eye_size());
 }
 
+/// Whether a hole's ray waits on its cell's start (queue_walk.wgsl): an eye's pixel or a light's
+/// slot whose cell's window holds a beam ray not ended (cell.wgsl, light_cell.wgsl
+/// `beam::CELL_WAITS`). Its word stays as it was, the picture's or the map's last answer
+/// there, until its ray ends.
+fn item_waits(hole: u32) -> bool {
+  if (light_run()) {
+    return beams[light_cell_at(slot_texel(hole_at(hole)) / LIGHT_BEAM) + CELL_RESUMES] == CELL_WAITS;
+  }
+  return beams[cell_start(grid_cell(px_tan(hole_px(hole), eye_size()))) + CELL_RESUMES] == CELL_WAITS;
+}
+
+/// Whether a hole's ray is parked waiting on its cell's start (`WAITS_ZOOM`): an eye's pixel
+/// taken off its owed bit never is.
+fn waiting(hole: u32) -> bool {
+  return parked(hole) && waits(beams[state_at(hole) + 4u]);
+}
+
 /// A hole's ray parked at its node `corner`, `zoom`, `roots`, `t` along it, `step` steps taken,
 /// at its state (parked.wgsl): a light's at its slot's; an eye's where it lies in the run's pool,
 /// or at the next place there, its pixel with it, where it lies in none, a hole taken off its

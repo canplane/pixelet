@@ -986,6 +986,86 @@ fn hand_eye_samples_answer_as_cast_walk() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
+/// A sample whose cell's window holds a beam ray the budget parked waits on it: the samples'
+/// run parks it before its first step (samples.wgsl `item_waits`, pxl-engine
+/// `beam::HAND_PARKED`) and walks none of it, every other sample answering as it does where no
+/// cell waits; and the next cast's run, the beam ray ended and its parked samples going on
+/// (`node_cache::ROLL_RESUMES`), answers every sample as that whole run does.
+#[test]
+fn eye_samples_wait_on_a_cell_whose_beam_ray_has_not_ended() {
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let c = EyeCase {
+        name: "the eye, over the ground",
+        origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 2000.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let obs = eye_of(&c, [0; 3]);
+    let table_buf = gpu.buffer(&frame_table(), store_of());
+    let words = eye_beams(&gpu, &b, &obs, &table_buf);
+    let table = gpu.read(&table_buf);
+    let Rays::Eye { grid, .. } = &obs.rays else {
+        unreachable!()
+    };
+    // Every third cell held over a beam ray not ended.
+    let waits = |cell: [u32; 2]| (cell[0] + cell[1]).is_multiple_of(3);
+    let mut held = words.clone();
+    for y in 0..grid.span[1] {
+        for x in 0..grid.span[0] {
+            if waits([x, y]) {
+                held[(grid.cell_at([x, y]) + beam::CELL_RESUMES) as usize] = beam::CELL_WAITS;
+            }
+        }
+    }
+    let whole = stopped(&gpu, &b, &obs, &words, None, &table);
+    let first = stopped(&gpu, &b, &obs, &held, None, &table);
+    let mut resumed = table.clone();
+    resumed[node_cache::ROLL_RESUMES as usize] = 1;
+    let next = stopped(&gpu, &b, &obs, &words, Some(&first), &resumed);
+    let (mut waited, mut walked, mut differ) = (0u32, 0u32, Vec::new());
+    for s in obs.taken() {
+        let at = obs.sample_at(s) as usize;
+        let of = |v: &[u32]| v[at..at + beam::SAMPLE_WORDS as usize].to_vec();
+        if waits(grid.sample_cell(s)) {
+            let zoom = first[at + (beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize];
+            let state = first[at + beam::SAMPLE_PARKED_STATE as usize];
+            if zoom != beam::SAMPLE_PARKED || state & 63 != 63 {
+                differ.push(format!("{s:?} did not wait: {:x?}", of(&first)));
+            }
+            waited += 1;
+        } else {
+            if of(&first) != of(&whole) {
+                differ.push(format!("{s:?} answered apart from the whole run"));
+            }
+            walked += 1;
+        }
+        if of(&next) != of(&whole) {
+            differ.push(format!(
+                "{s:?} went on apart from the whole run: {:x?}",
+                of(&next)
+            ));
+        }
+    }
+    eprintln!("{waited} samples waited, {walked} walked");
+    assert!(
+        waited > 100 && walked > 100,
+        "{waited} waited, {walked} walked"
+    );
+    assert!(
+        differ.is_empty(),
+        "{} differ, first {}",
+        differ.len(),
+        differ[0]
+    );
+}
+
 /// A walk that asks reads a slot as another walk may be writing it, its key no order over its
 /// words (pxl-engine node_cache.rs): an entry holding words of two writes answers nothing. Every
 /// entry a first frame kept has one word of its answer changed, its key and its node standing, and
@@ -1517,6 +1597,150 @@ fn hand_missed_pixels_answer_as_cast_walk() {
     }
     met_each(&kinds, &["hit", "past its reach"], &mut failed);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A marked pixel whose cell's window holds a beam ray the budget parked waits on it: the holes'
+/// queue parks its ray before its first step (queue.wgsl `item_waits`) and writes nothing of
+/// it, so the pixel keeps the words it held, the picture it showed; every other pixel answers
+/// as it does where no cell waits, its stop's number, which the order the walks end in gives,
+/// apart.
+#[test]
+fn eye_holes_wait_on_a_cell_whose_beam_ray_has_not_ended() {
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let c = EyeCase {
+        name: "the eye, over the ground",
+        origin: over([EYE[0] + 90, EYE[1] + 90], 60),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 2000.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let s = Screen {
+        name: "every pixel marked and listed",
+        size: [96, 61],
+        jitter: [0.0, 0.0],
+        marked_in: 1,
+    };
+    let obs = eye_of(&c, [0; 3]);
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
+    let table_buf = gpu.buffer(&table0, store_of());
+    let mut words = eye_beams(&gpu, &b, &obs, &table_buf);
+    let table = gpu.read(&table_buf);
+    let Rays::Eye { grid, .. } = &obs.rays else {
+        unreachable!()
+    };
+    let grid = *grid;
+    let [wd, ht] = s.size;
+    let (drawn, texels) = (wd * ht, (wd * ht) as usize);
+    // The eye's holes past the grid's words, every pixel's walked and owed bits set.
+    let walked = grid.walked_at() as usize;
+    words.resize(walked + ray::holes_words(s.size) as usize, 0);
+    let every: Vec<u32> = (0..drawn).collect();
+    set_holes(&mut words[walked..], s.size, &every);
+    let pool = walked + ray::pool_at(s.size, 0) as usize;
+    // Every third cell held over a beam ray not ended.
+    let waits = |cell: [u32; 2]| (cell[0] + cell[1]).is_multiple_of(3);
+    let mut held = words.clone();
+    for y in 0..grid.span[1] {
+        for x in 0..grid.span[0] {
+            if waits([x, y]) {
+                held[(grid.cell_at([x, y]) + beam::CELL_RESUMES) as usize] = beam::CELL_WAITS;
+            }
+        }
+    }
+    let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
+        .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
+        .collect();
+    let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+    let head = gpu.buffer(&vec![0u32; light::HEAD_WORDS], wgpu::BufferUsages::UNIFORM);
+    let run = |beams_words: &[u32]| {
+        let rays = texture(
+            &gpu.device,
+            &gpu.queue,
+            s.size,
+            ray::WORDS,
+            wgpu::TextureUsages::STORAGE_BINDING,
+            &ray_words,
+        );
+        let view = rays.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let beams = gpu.buffer(beams_words, store_of());
+        let table_buf = gpu.buffer(&table, store_of());
+        let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
+        binds.push((3, wgpu::BindingResource::TextureView(&view)));
+        binds.push((11, head.as_entire_binding()));
+        let cnt = (pool + ray::POOL_CNT as usize) as u32;
+        gpu.holes(&binds, &table_buf, true, Some((&beams, cnt)));
+        (
+            read_texture(&gpu.device, &gpu.queue, &rays),
+            gpu.read(&beams),
+        )
+    };
+    let (whole, _) = run(&words);
+    let (out, states) = run(&held);
+    // The pixels whose rays the run left parked waiting in its pool.
+    let parked = states[pool + ray::POOL_CNT as usize].min(ray::PARKED_ROOM);
+    let waiting: BTreeSet<u32> = (0..parked)
+        .filter_map(|k| {
+            let at = pool + (ray::POOL_STATES + k * ray::PARK_WORDS) as usize;
+            let state = states[at + 4];
+            let p = states[at + ray::PARK_PX as usize];
+            (state & ray::PARKED != 0 && state & 63 == 63).then_some((p >> 16) * wd + (p & 0xffff))
+        })
+        .collect();
+    let px = |p: u32| [p % wd, p / wd];
+    // The cell the pixel's ray goes through, and whether a nudge of its tangents takes another,
+    // where the device's rounding may.
+    let cell_of = |p: u32, d: f32| {
+        let t = px_tan(&s, grid.tan, px(p));
+        grid.cell([t[0] + d, t[1] + d])
+    };
+    let (mut waited, mut answered, mut differ) = (0u32, 0u32, Vec::new());
+    for p in 0..drawn {
+        let words_of = |v: &[u32]| {
+            (0..ray::WORDS as usize)
+                .map(|l| v[l * texels + p as usize])
+                .collect::<Vec<_>>()
+        };
+        let kept = words_of(&out) == words_of(&ray_words);
+        let parked_waiting = waiting.contains(&p);
+        let at_edge = cell_of(p, 1e-5) != cell_of(p, -1e-5);
+        if kept && parked_waiting {
+            waited += 1;
+            if !waits(cell_of(p, 0.0)) && !at_edge {
+                differ.push(format!("{:?} waited in a cell that does not", px(p)));
+            }
+        } else if words_of(&out)[..3] == words_of(&whole)[..3] {
+            answered += 1;
+            if waits(cell_of(p, 0.0)) && !at_edge {
+                differ.push(format!("{:?} walked in a cell that waits", px(p)));
+            }
+        } else {
+            differ.push(format!(
+                "{:?} neither waited nor answered as the whole run",
+                px(p)
+            ));
+        }
+    }
+    eprintln!("{waited} pixels waited, {answered} answered");
+    assert!(
+        waited > 100 && answered > 100,
+        "{waited} waited, {answered} answered"
+    );
+    assert!(
+        differ.is_empty(),
+        "{} differ, first {}",
+        differ.len(),
+        differ[0]
+    );
 }
 
 /// Each of the `marked` pixels' words in the rays `out` as `cast::walk` from the root answers

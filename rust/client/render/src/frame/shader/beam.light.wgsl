@@ -62,3 +62,17 @@ fn beam_lay_origin(base: u32, origin: vec3<i32>) {
 fn beam_hand(t: f32) -> f32 {
   return max(t - (LIGHT_MARGIN_PER_WIDTH * beam_spacing().x + LIGHT_MARGIN_STEPS), 0.0);
 }
+
+/// Whether this cast's beam rays go on from the casts before: where an owed tile's parked rays
+/// do (pxl-engine `light::HEAD_CARRIES`), the content, the box and the bands as they were, so a
+/// beam ray names the same ray.
+fn beams_resume() -> bool {
+  return head_word(LIGHT_HEAD_CARRIES) != 0u;
+}
+
+/// Whether a beam ray that ended in a cast before keeps its hand and line: no, as the light's
+/// casts walk only the beam rays of the tiles they claim, so an ended one may be of a cast
+/// before the run this one carries from; it is walked afresh.
+fn beams_kept() -> bool {
+  return false;
+}

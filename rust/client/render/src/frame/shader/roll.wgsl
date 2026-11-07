@@ -4,7 +4,8 @@
 // cast while its grid stands (pxl-engine `beam::ROLLS`, `node_cache::ROLL_K`): where the frame cast
 // its samples, the offset they were cast at is counted where their run left none parked
 // (`node_cache::LATTICE_LEFT`), and the next offset not counted taken; else the next cast's
-// samples go on from where they were parked, at the same offset. In every such frame, the eye
+// samples go on from where they were parked, at the same offset. Every cast is counted, so the
+// next cast's beam rays go on from this one's (`node_cache::ROLL_CASTS`). In every such frame, the eye
 // owes its lattice where an offset is not counted (`count::LATTICE_OWED`). One thread, after the
 // eye's owed pixels were listed off its owed word (gpu/ray/cast.rs `dispatch`).
 
@@ -19,6 +20,7 @@ fn owe() {
 
 @compute @workgroup_size(1)
 fn roll_cs() {
+  atomicAdd(&node_cache[ROLL_CASTS], 1u);
   if (atomicLoad(&node_cache[LATTICE_LEFT]) != 0u) {
     atomicStore(&node_cache[ROLL_RESUMES], 1u);
     owe();

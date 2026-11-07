@@ -25,3 +25,9 @@ fn visits_at() -> u32 {
 fn asked_at() -> u32 {
   return LIGHT_ASKED_COUNT;
 }
+
+/// A beam ray its run leaves parked owes nothing of its own: the slots of its cells wait on it
+/// and owe their tiles (queue.wgsl `unreached`), and the light's next cast of the same epoch
+/// and box goes on with it (beam.light.wgsl `beams_resume`).
+fn corner_owed() {
+}

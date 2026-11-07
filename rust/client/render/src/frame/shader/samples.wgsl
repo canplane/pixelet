@@ -45,6 +45,16 @@ fn parked(item: u32) -> bool {
   return beams[sample_word(sample_of(item)) + SAMPLE_NODE + NODE_ZOOM] == SAMPLE_PARKED;
 }
 
+/// Whether a sample's ray waits on its cell's start (`sample_waits`), and whether it is parked
+/// waiting (`WAITS_ZOOM`).
+fn item_waits(item: u32) -> bool {
+  return sample_waits(sample_of(item));
+}
+
+fn waiting(item: u32) -> bool {
+  return parked(item) && waits(beams[sample_word(sample_of(item)) + SAMPLE_PARKED_STATE]);
+}
+
 /// What a sample's first walk of a run takes: where this cast's samples go on from the cast
 /// before's (`samples_resume`), the state it is parked in, an ended one none; else every sample
 /// afresh. The second walk takes those the first parked.

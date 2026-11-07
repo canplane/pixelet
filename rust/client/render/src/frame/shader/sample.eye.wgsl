@@ -61,6 +61,12 @@ fn sample_line(s: vec2<u32>) -> u32 {
   return beams[sample_cell_word(s) + CELL_CORNER] * LINE_WORDS;
 }
 
+/// Whether its cell's start waits on a beam ray of its window not ended (cell.wgsl
+/// `beam::CELL_WAITS`): the sample waits, parked, until it ends.
+fn sample_waits(s: vec2<u32>) -> bool {
+  return beams[sample_cell_word(s) + CELL_RESUMES] == CELL_WAITS;
+}
+
 /// Off its cell.
 fn sample_start(aim: Aim, s: vec2<u32>) -> Start {
   return resumed(aim, sample_cell_word(s), LINE_WORDS, NONE);

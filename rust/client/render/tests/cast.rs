@@ -893,11 +893,13 @@ fn hand_pixels_answer_as_cast_entry() {
 
         // The Rust, along the device's ray, at each pixel the device drew: a pixel the visible
         // voxel answers, the sky, or a hole the walk is to answer, which holds what the record
-        // drew there until it does, the visible voxel at its box's entry or none.
+        // drew there until it does, the visible voxel at its box's entry, or, where none drew,
+        // the words it held.
         let got = read_texture(&gpu.device, &gpu.queue, &rays);
         let (mut want, mut have) = (Vec::new(), Vec::new());
         let mut drawn_cnt = 0u32;
         let mut edges = 0u64;
+        let mut overwritten = 0u32;
         for (p, at) in probed.iter().enumerate() {
             let words = |w: &[u32]| [0, 1, 2, 3].map(|l| w[l * texels + p]);
             let drawn = words(&got);
@@ -965,6 +967,13 @@ fn hand_pixels_answer_as_cast_entry() {
                 if [[0, 0], [1, 0], [0, 1], [1, 1]].into_iter().all(went_on) {
                     said = [0; 4];
                     kinds.add("sky", true);
+                } else {
+                    // A hole nothing drew keeps the words it held, the last answer it showed,
+                    // until the queue ends its ray: the cast overwrites nothing there.
+                    kinds.add("a hole nothing drew", true);
+                    if drew {
+                        overwritten += 1;
+                    }
                 }
             }
             if drew {
@@ -977,6 +986,10 @@ fn hand_pixels_answer_as_cast_entry() {
             format!("drawn pixel {} word {}", k / 4, k % 4)
         });
         eprintln!("{name}: {drawn_cnt} drawn, {edges} decided at an edge");
+        assert_eq!(
+            overwritten, 0,
+            "{name}: a hole nothing drew had its words overwritten before its ray ended"
+        );
         if !edges_within(edges, u64::from(drawn_cnt)) {
             tally.differ.push((format!("{name}: edges"), edges));
         }
@@ -990,6 +1003,7 @@ fn hand_pixels_answer_as_cast_entry() {
         ("enters its sample, short of its cube", 1),
         ("sky", 100),
         ("enters its sample past the eye's reach", 10),
+        ("a hole nothing drew", 1),
     ]);
     tally.end("pixels");
     assert!(short.is_empty(), "{}", short.join("\n"));

@@ -667,6 +667,18 @@ pub const OPEN_LIGHT_CORNERS_QUEUE: Step = Step::write(
     "open_light_corners_queue",
     head(ray::QUEUE_LIGHT_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
 );
+/// The light's beam rays' parked states set to none where its cast carries no parked ray from
+/// the cast before (pxl-engine `light::HEAD_CARRIES`): a beam ray's state goes on only within a
+/// run of casts each of which carries, its content, box and bands as they were (corners.wgsl
+/// `taken`, beam.light.wgsl `beams_resume`).
+pub const OPEN_LIGHT_CORNER_STATES: Step = Step::write(
+    "open_light_corner_states",
+    at(
+        LIGHT_LIST,
+        light::corner_states_at(SIZE),
+        light::beam_across(SIZE) * light::beam_across(SIZE) * ray::STATE_WORDS,
+    ),
+);
 pub const OPEN_LIGHT_SAMPLES_QUEUE: Step = Step::write(
     "open_light_samples_queue",
     head(ray::QUEUE_LIGHT_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
@@ -866,6 +878,7 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_MISSES,
         OPEN_LIGHT_QUEUE,
         OPEN_LIGHT_CORNERS_QUEUE,
+        OPEN_LIGHT_CORNER_STATES,
         OPEN_LIGHT_SAMPLES_QUEUE,
         OPEN_LIGHT_RASTER_ARGS,
         OPEN_GENERATION_LIST,
@@ -1221,7 +1234,8 @@ pub const FRAME: Frame = Frame {
 /// walks over the node cache list (queue_walk.wgsl); the stood list the record's draw and both
 /// receivers' passes list a tile on (light_stood.wgsl `stood_put`); the node cache's stops'
 /// dispatch the last walk raises; the read list's count the propagation lists a tile by
-/// (light_propagate.wgsl `read_tile`).
+/// (light_propagate.wgsl `read_tile`); the eye's lattice left parked, its beam rays' last walk's
+/// and its samples' (corners_run.eye.wgsl `corner_owed`, samples_run.eye.wgsl `sample_owed`).
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::STOP_ASKED_AT, raster::ARGS_WORDS),
@@ -1234,6 +1248,7 @@ const APPENDS: &[Range] = &[
     at(GATED_LIGHT_ARGS, 0, END),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
     at(NODE_CACHE, node_cache::VISITED, 2),
+    at(NODE_CACHE, node_cache::LATTICE_LEFT, 1),
     head(ray::QUEUE_EYE_HOLES, ray::QUEUE_VISITED, 1),
     head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_VISITED, 1),
     head(ray::QUEUE_EYE_SAMPLES, ray::QUEUE_VISITED, 1),
@@ -1303,7 +1318,8 @@ const KEPT: &[Kept] = &[
         owner: "roll",
         by: &[],
         invalidation: "the eye's rolled lattice: the offset its samples are cast at, the offsets \
-            counted and whether its parked samples go on, stale where the grid is laid anew, \
+            counted, whether its parked samples go on and the casts since the grid was laid, \
+            which its parked beam rays go on past the first of, stale where the grid is laid anew, \
             where the host sets it to none (ray/cast.rs `RaysPass::prepare`, `OPEN_ROLL`)",
     },
     Kept {

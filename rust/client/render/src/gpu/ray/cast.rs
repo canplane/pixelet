@@ -1866,6 +1866,15 @@ impl RaysPass {
                 sequence::OPEN_LIGHT_CORNERS_QUEUE.to_at(),
                 bytes(&ray::QUEUE_EMPTY),
             );
+            // The light's parked beam rays go on only from a cast this one carries from.
+            if !plan.light.is_some_and(|due| due.carries) {
+                let words = light::beam_across(shadow::SIZE).pow(2) * ray::STATE_WORDS;
+                g.write_buf(
+                    c.light_list,
+                    sequence::OPEN_LIGHT_CORNER_STATES.to_at(),
+                    bytes(&vec![0u32; words as usize]),
+                );
+            }
             g.write_buf(
                 c.queues,
                 sequence::OPEN_LIGHT_SAMPLES_QUEUE.to_at(),

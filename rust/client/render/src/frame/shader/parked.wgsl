@@ -10,6 +10,15 @@ const TAKEN_NONE = 0u;
 const TAKEN_FRESH = 1u;
 const TAKEN_PARKED = 2u;
 
+/// The zoom of a ray parked before its first step, its start waiting on its cell's: the cell's
+/// window holds a beam ray not ended (pxl-engine `beam::HAND_PARKED`; cell.wgsl). No node's zoom.
+const WAITS_ZOOM: u32 = 63u;
+
+/// Whether a parked state's word `p` is a ray's that waits on its cell's start (`WAITS_ZOOM`).
+fn waits(p: u32) -> bool {
+  return (p & 63u) == WAITS_ZOOM;
+}
+
 /// The word of a ray parked at node `zoom` with `roots`, `step` steps taken: the zoom over
 /// `ZOOM_BITS`, three bits a root, the steps above, under `PARKED`.
 fn parked_word(zoom: u32, roots: vec3<i32>, step: u32) -> u32 {

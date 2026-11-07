@@ -7,7 +7,10 @@
 // its kind's module hands it (`next_item`), off the queue's words, when its own ray ends or is
 // parked, walks it `QUEUE_STEPS` steps at a
 // time, and holds its state between them, so a lane whose ray ends early walks another while
-// the long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
+// the long ones go on. A ray whose start waits on its cell's, the cell's window holding a beam
+// ray not ended (`item_waits`), is parked as waiting (`WAITS_ZOOM`) and walks nothing, so it
+// takes none of the budget until its cell's start is there; one parked waiting starts afresh
+// once it is. A ray that meets a node no slot keeps is parked in the state its walk
 // left, and the node listed for the asks (queue_ask.wgsl), with what was handed its parent
 // where a slot keeps that; a ray the frame's budget of visits does not reach, up to its run's
 // caps (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of
@@ -100,8 +103,13 @@ fn queue_walk(again: bool) {
       if (how == TAKEN_NONE) {
         continue;
       }
+      let fresh = how == TAKEN_FRESH || waiting(h);
+      if (fresh && item_waits(h)) {
+        park(h, 0.0, vec3<u32>(0u), WAITS_ZOOM, vec3<i32>(0), 0u);
+        continue;
+      }
       item = h;
-      if (how == TAKEN_FRESH) {
+      if (fresh) {
         let s = item_start(h, item_aim(h));
         t = s.t;
         corner = s.corner;

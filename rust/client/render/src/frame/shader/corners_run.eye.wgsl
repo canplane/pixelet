@@ -25,3 +25,10 @@ fn visits_at() -> u32 {
 fn asked_at() -> u32 {
   return EYE_ASKED_COUNT;
 }
+
+/// A beam ray its run leaves parked, which keeps the cast's offset from being counted
+/// (`node_cache::LATTICE_LEFT`; roll.wgsl), so the casts go on and it goes on in the next
+/// (beam.eye.wgsl `beams_resume`).
+fn corner_owed() {
+  atomicAdd(&node_cache[LATTICE_LEFT], 1u);
+}

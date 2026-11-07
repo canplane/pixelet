@@ -696,9 +696,10 @@ pub const TOUCHES: &[Touch] = {
             writes: &[WORK_DONE],
             reads: &[WORK_DONE, CAPS],
         },
-        // The beam rays' runs, the eye's and the light's, as the samples' but that none reads
-        // the rolled lattice (queue_walk.wgsl, queue_ask.wgsl, queue_last.wgsl over
-        // corners.wgsl).
+        // The beam rays' runs, the eye's and the light's, as the samples': the eye's read whether
+        // its parked beam rays go on, the casts since the grid was laid, and its last walk counts
+        // those it leaves parked (corners_run.eye.wgsl `corner_owed`) (queue_walk.wgsl,
+        // queue_ask.wgsl, queue_last.wgsl over corners.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_CORNERS,
             binding: 10,
@@ -751,13 +752,13 @@ pub const TOUCHES: &[Touch] = {
             compute: COMPUTE_QUEUE_CORNERS,
             binding: 9,
             writes: &[],
-            reads: &[VISITS_DONE, CAPS],
+            reads: &[VISITS_DONE, CAPS, ROLL],
         },
         Touch {
             compute: COMPUTE_QUEUE_CORNERS_PARKED,
             binding: 9,
             writes: &[],
-            reads: &[VISITS_DONE, CAPS],
+            reads: &[VISITS_DONE, CAPS, ROLL],
         },
         Touch {
             compute: COMPUTE_QUEUE_LIGHT_CORNERS,
@@ -798,8 +799,8 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_QUEUE_LAST_CORNERS,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[WORK_DONE, LATTICE_LEFT],
+            reads: &[WORK_DONE, CAPS, ROLL, LATTICE_LEFT],
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_LIGHT_CORNERS,

@@ -3,8 +3,8 @@
 // The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), an observer's as its
 // beam.eye.wgsl or beam.light.wgsl lays them: each a ray from the root, its line kept as it
 // goes (walk.wgsl), parked at its state's place (`corner_state_at`; parked.wgsl) with its hand
-// set to `beam::HAND_PARKED` while it has not ended, so the cells whose window holds it start
-// their rays from the root (cell.wgsl, light_cell.wgsl), and its line ending at the parent of
+// set to `beam::HAND_PARKED` while it has not ended, so the cells whose window holds it hold
+// no start (cell.wgsl, light_cell.wgsl), and its line ending at the parent of
 // the node it was left at, whose handed words it holds, so what reads the line off a cell
 // (resume.wgsl, face.wgsl) reads only what was asked; its hand set when it ends.
 
@@ -57,13 +57,27 @@ fn parked(item: u32) -> bool {
   return (beams[corner_state_at(corner_of(item)) + 4u] & PARKED) != 0u;
 }
 
-/// Every beam ray of a run afresh in its first walk: none goes on from a cast before, as the
-/// cells read every hand this cast writes. The second walk takes those the first parked.
+/// Every beam ray of a run afresh in its first walk, but where the cast goes on from the one
+/// before (`beams_resume`): there one a cast before left parked goes on from its state, and one
+/// that ended keeps its hand and line where every beam ray was walked since (`beams_kept`), else
+/// is walked afresh. The second walk takes those the first parked.
 fn taken(item: u32, again: bool) -> u32 {
-  if (again) {
-    return select(TAKEN_NONE, TAKEN_PARKED, parked(item));
+  if (again || beams_resume()) {
+    if (parked(item)) {
+      return TAKEN_PARKED;
+    }
+    return select(TAKEN_FRESH, TAKEN_NONE, again || beams_kept());
   }
   return TAKEN_FRESH;
+}
+
+/// A beam ray starts from the root and never waits.
+fn item_waits(item: u32) -> bool {
+  return false;
+}
+
+fn waiting(item: u32) -> bool {
+  return false;
 }
 
 fn parked_start(item: u32) -> Start {
@@ -79,8 +93,10 @@ fn finish(item: u32, aim: Aim, w: Walked) -> bool {
   return true;
 }
 
-/// A beam ray the frame's budget does not reach: parked, its hand `HAND_PARKED`, which owes
-/// nothing, the rays of its cells walking from the root.
+/// A beam ray the frame's budget does not reach: parked, its hand `HAND_PARKED`, and owed as
+/// its observer owes it (`corner_owed`). The rays of its cells wait on it (queue_walk.wgsl
+/// `item_waits`).
 fn unreached(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) {
   park(item, t, corner, zoom, roots, step);
+  corner_owed();
 }

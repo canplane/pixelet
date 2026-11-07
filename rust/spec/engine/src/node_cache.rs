@@ -124,9 +124,10 @@ pub const LAST_TAKEN: u32 = HITS_CNT + 1;
 /// Set to none by the host each frame a queue runs.
 pub const VISITED: u32 = LAST_TAKEN + 1;
 pub const ASKED: u32 = VISITED + 1;
-/// The eye's samples its lattice's run left parked this frame, the budget not reaching them
-/// (pxl-render samples.wgsl `unreached`), which the cast's close reads (roll.wgsl,
-/// `ROLL_DONE`). Set to none with the frame's work.
+/// The eye's samples and beam rays its lattice's runs left parked this frame, the budget not
+/// reaching them or their cells' starts waiting on a beam ray (pxl-render samples.wgsl,
+/// corners.wgsl `unreached`), which the cast's close reads (roll.wgsl, `ROLL_DONE`). Set to
+/// none with the frame's work.
 pub const LATTICE_LEFT: u32 = ASKED + 1;
 /// Each observer's work its last cast or queue leaves owed, `count::OBSERVERS` words (`owed_at`):
 /// the eye's, its holes its run left owed, an owed bit or a ray parked in the run's pool
@@ -150,15 +151,18 @@ pub const DRAWN: u32 = HEAD_WORDS;
 /// `beam::ROLLS_DONE` once every one is (`ROLL_DONE`); whether the next cast's samples go
 /// on from where the budget parked them rather than afresh (`ROLL_RESUMES`); and that offset,
 /// across and down, f32 bits (`ROLL_AT`), which a sample's ray reads as a word as it read the
-/// host's before, so its tangents round as the CPU's `beam::Grid::sample` rounds them. Written by the
-/// close of the frames the eye casts its samples in alone (pxl-render roll.wgsl `roll_cs`),
-/// which counts the offset where the samples' run left none parked (`LATTICE_LEFT`) and takes
-/// the next.
+/// host's before, so its tangents round as the CPU's `beam::Grid::sample` rounds them; and the
+/// casts since the grid was laid (`ROLL_CASTS`), past the first of which the eye's beam rays
+/// a cast left parked go on rather than start afresh (pxl-render beam.eye.wgsl
+/// `beams_resume`). Written by the close of the frames the eye casts its samples in alone
+/// (pxl-render roll.wgsl `roll_cs`), which counts the offset where the lattice's runs left
+/// none parked (`LATTICE_LEFT`) and takes the next.
 pub const ROLL_K: u32 = DRAWN + 1;
 pub const ROLL_DONE: u32 = ROLL_K + 1;
 pub const ROLL_RESUMES: u32 = ROLL_K + 2;
 pub const ROLL_AT: u32 = ROLL_K + 3;
-pub const ROLL_WORDS: u32 = 5;
+pub const ROLL_CASTS: u32 = ROLL_K + 5;
+pub const ROLL_WORDS: u32 = 6;
 
 /// The first of run kind `run`'s caps (`CAPS_AT`, `count::RUNS`).
 pub const fn caps_at(run: u32) -> u32 {

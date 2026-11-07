@@ -108,12 +108,13 @@ const ROLL_SIDE: u32 = 4;
 ///
 /// An offset counts only once every sample of it has ended. The samples are walked under the
 /// frame's budget, the eye's lattice's share of it (`ray::caps`, `count::EYE_LATTICE`), so a
-/// frame waits for no sample: one the budget does not reach is parked in its own words
-/// (`SAMPLE_PARKED`) and goes on from there in the next cast, at the same offset, before any
-/// other offset is cast (`node_cache::ROLL_K`; pxl-render roll.wgsl). So a view standing after its last change has
-/// every offset counted within `ROLLS` + ⌈W/B⌉ casts, W the samples' work its budget has
-/// not reached and B its share; until then the eye owes its lattice (`count::LATTICE_OWED`),
-/// and the renderer casts while it does.
+/// frame waits for no sample: one the budget does not reach, or whose cell's start waits on a
+/// beam ray the budget parked (`HAND_PARKED`), is parked in its own words (`SAMPLE_PARKED`) and
+/// goes on from there in the next cast, at the same offset, before any other offset is cast
+/// (`node_cache::ROLL_K`; pxl-render roll.wgsl); a parked beam ray goes on in the next cast
+/// too. So a view standing after its last change has every offset counted within `ROLLS` +
+/// ⌈W/B⌉ casts, W the lattice's work its budget has not reached and B its share; until then
+/// the eye owes its lattice (`count::LATTICE_OWED`), and the renderer casts while it does.
 pub const ROLLS: u32 = ROLL_SIDE * ROLL_SIDE;
 
 /// The rolled lattice's counted offsets once every one is, a bit an offset
@@ -480,20 +481,29 @@ pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
 /// A beam ray's hand while it has not ended, the frame's budget having parked it
 /// (pxl-render corners.wgsl): no distance, which a cell whose window holds one reads as its
-/// cone not walked, its rays starting from the root (cell.wgsl, light_cell.wgsl `CELL_RESUMES`).
+/// cone not walked (cell.wgsl, light_cell.wgsl `CELL_RESUMES`, `CELL_WAITS`). The rays of that
+/// cell, its samples and its pixels or slots, the eye's and the light's alike, wait on it,
+/// parked before their first step, taking none of the budget, and its beam ray goes on in the
+/// next cast over the same grid, the eye's, or of the same epoch and box, the light's
+/// (pxl-render queue_walk.wgsl `item_waits`, beam.eye.wgsl, beam.light.wgsl `beams_resume`).
 pub const HAND_PARKED: u32 = f32::INFINITY.to_bits();
 
 /// What a cell hands its rays, in words, every observer's (`light::cell`):
 /// where they start, f32 bits; the corner of the least
 /// start, as an index into the corners row by row, whose line the faces they
-/// stop on are asked off; and whether they resume from that line, 1, or walk
+/// stop on are asked off; and whether they resume from that line, 1, walk
 /// from the world's root, 0, a beam ray of its window having asked other zooms
-/// than they do (pxl-render cell.wgsl, light_cell.wgsl). A screen's cell each, in the beam rays' buffer past the lines
-/// (`Grid::cell_at`), one binding for both.
+/// than they do, or wait, `CELL_WAITS`, a beam ray of its window not ended
+/// (`HAND_PARKED`) (pxl-render cell.wgsl, light_cell.wgsl). A screen's cell each, in the beam
+/// rays' buffer past the lines (`Grid::cell_at`), one binding for both.
 pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
 pub const CELL_RESUMES: u32 = 2;
 pub const CELL_WORDS: u32 = 3;
+/// A cell whose rays wait (`CELL_RESUMES`): its samples and its pixels or slots are parked
+/// before their first step, walking nothing, until a cast its window's beam rays all ended in
+/// gives it a start (pxl-render queue_walk.wgsl `item_waits`).
+pub const CELL_WAITS: u32 = 2;
 
 /// The samples: rays on a lattice `SAMPLE` a cell (`grid::CELL`) a side,
 /// whatever the beam rays' lattice, each resumed from

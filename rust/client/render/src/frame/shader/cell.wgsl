@@ -44,6 +44,6 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   beams[at + CELL_CORNER] = least.y;
   // The eye's cells and corners ask its one detail, alike everywhere (`Detail::alike`), so
   // every cell's rays resume from its corner's line, but where a beam ray of its window has not
-  // ended.
-  beams[at + CELL_RESUMES] = 1u - least.z;
+  // ended: there they wait (`beam::CELL_WAITS`).
+  beams[at + CELL_RESUMES] = select(1u, CELL_WAITS, least.z != 0u);
 }

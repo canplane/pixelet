@@ -270,6 +270,8 @@ fn walk_word() -> String {
         ("ROLL_DONE", node_cache::ROLL_DONE),
         ("ROLL_RESUMES", node_cache::ROLL_RESUMES),
         ("ROLL_AT", node_cache::ROLL_AT),
+        ("ROLL_CASTS", node_cache::ROLL_CASTS),
+        ("CELL_WAITS", beam::CELL_WAITS),
         ("LATTICE_LEFT", node_cache::LATTICE_LEFT),
         ("LATTICE_OWED", count::LATTICE_OWED),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
