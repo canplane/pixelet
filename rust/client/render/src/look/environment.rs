@@ -5,10 +5,10 @@
 //! sky's own, which the shaders read from its tables. Directions are
 //! in the map's axes (X east, Y north, Z up), as is the sky.
 
+use pxl_content::param::night;
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
-use crate::param::night;
 
 /// The sun's direction and a pad (4); the moon's direction and its light
 /// (4); the moon's color and a pad (4), the sun's being white; the stars'

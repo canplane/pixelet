@@ -14,7 +14,8 @@ xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs);
-# the cloud field the sheets lie on (gpu/cloud.rs), pixelet's content.
+# the cloud field the sheets lie on (gpu/cloud.rs) and where night falls
+# (look/environment.rs), pixelet's content.
 pxl-engine.workspace = true
 pxl-content.workspace = true
 
@@ -25,8 +26,8 @@ xpute-gpu.workspace = true
 [build-dependencies]
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`) and the
 # values every shader may name (`words`); the cloud field's hash
-# (`cloud_hash.wgsl`), pixelet's content; every effect's reach (`words`), the
-# world's.
+# (`cloud_hash.wgsl`) and where night falls (`words`), pixelet's content; every
+# effect's reach (`words`), the world's.
 pxl-engine.workspace = true
 pxl-content.workspace = true
 pxl-spec.workspace = true

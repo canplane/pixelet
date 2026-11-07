@@ -9,6 +9,7 @@ pub mod cloud;
 pub mod param;
 
 use pxl_content::cloud::drift;
+use pxl_content::param::night;
 use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
@@ -24,7 +25,6 @@ use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
-use pxl_render::param::night;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
@@ -186,7 +186,7 @@ impl EnvironmentDraw {
     }
 
     /// The sun under the horizon, as drawn: past where night begins to fall
-    /// (pxl-render param.rs `night::FALL`).
+    /// (pxl-content param.rs `night::FALL`).
     pub fn night(&self) -> bool {
         self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }

@@ -3,6 +3,7 @@
 // The shipped WGSL is the shader files with comments and indentation stripped; nothing is renamed.
 
 use naga::front::wgsl;
+use pxl_content::param::night;
 use pxl_engine::answer;
 use pxl_engine::beam::SAMPLE_SIDE;
 use pxl_engine::grid;
@@ -1003,6 +1004,12 @@ fn words() -> String {
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_engine::HEIGHT_BITS),
+        // Where night falls (pxl-content param.rs `night::FALL`).
+        format!(
+            "const NIGHT_FALL: vec2f = vec2f({:?}, {:?});\n",
+            night::FALL[0],
+            night::FALL[1]
+        ),
         // The camera grid's cell, the footprint a drawn cell covers a unit of
         // distance, square on, and every effect's one reach.
         format!("const GRID_CELL: f32 = {:?};\nconst EFFECT_REACH: f32 = {:?};\n", grid::CELL, EFFECT_REACH as f32),

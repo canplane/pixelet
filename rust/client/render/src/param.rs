@@ -60,7 +60,6 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     cloud::cirrus::ALL,
     lens::ALL,
     light::ALL,
-    night::ALL,
     noise::ALL,
     location::zone::ALL,
     location::beacon::ALL,
@@ -229,18 +228,6 @@ pub mod light {
         /// The Earth's picture doubled, picked by eye beside the original;
         /// the cities are not its to scale.
         EARTH_GAIN: f32 = 2.0;
-    }
-}
-
-/// Where night falls.
-pub mod night {
-    params! {
-        /// The sine of the sun's height over which night falls, wherever it
-        /// is shown: the stars over the sky (look/environment.rs), the
-        /// cities' lights over the land (atmos_air.wgsl `city_shown`), and the
-        /// night the kernel tells (pxl-kernel domain/scene/environment.rs
-        /// `night`); whole at the first, none at the second, the horizon.
-        FALL: [f32; 2] = [-0.1, 0.0];
     }
 }
 
