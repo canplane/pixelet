@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/sensor_status.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor.
 

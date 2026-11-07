@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/geolocation_error_code.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // The browser's PositionError codes.
 

@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/sensor.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // Which of the device's sensors.
 

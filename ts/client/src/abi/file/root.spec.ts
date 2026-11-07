@@ -1,6 +1,6 @@
 // @pxl/client/abi/file/root.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json
 
 /** The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice. */
 export const STORAGE = 256 as number;

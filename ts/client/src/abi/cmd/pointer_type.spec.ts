@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/pointer_type.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // What the pointer is, as the browser's `pointerType` says.
 

@@ -4,11 +4,12 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 
 import { root, storage as slots } from "@/abi/file.spec.ts";
 import { follow_refused_files, set_aside_by_root } from "./refusal.ts";
 import {
+  is_kept,
   commit_storage,
   open_storage,
   set_aside,
@@ -79,4 +80,13 @@ test("follow_refused_files - each refused file is set aside and emptied once", a
   assert.deepStrictEqual(s.map.get("pxl:settings"), "");
   follow_refused_files([], tell, set_aside_by_root(s));
   assert.deepStrictEqual(told.length, 1);
+});
+
+test("storage - the keys kept are the core's files and those set aside, no other", () => {
+  assert.deepStrictEqual(
+    ["pxl:settings", "pxl:settings:aside:7-1", "pxl:lang", "pxl:ui"].map(
+      is_kept,
+    ),
+    [true, true, false, false],
+  );
 });

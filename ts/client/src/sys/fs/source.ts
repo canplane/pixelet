@@ -2,14 +2,14 @@
 
 /**
  * The tile source's declaration (the bucket's, which script/publish.py writes,
- * or a dev tile server's), asked until it answers and read once. The kernel is
+ * or a dev tile server's), asked until it answers and read once. The core is
  * handed its own part, the top zoom, the formats and the shards
- * (FS_MOUNT), and observes nothing before; the versions stay here, for the
+ * (SOURCE_DECLARE), and observes nothing before; the versions stay here, for the
  * bakes' objects (tile.ts) and the settings.
  */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { TILE_SOURCE_ROUTE } from "@/origin/route.ts";
+import { get, TILE_SOURCE_ROUTE } from "@/origin/route.ts";
 import { online, when_online } from "@/origin/online.ts";
 import {
   BASE_LAYERS,
@@ -24,11 +24,9 @@ import {
   SOURCE_REFUSED,
   type Source,
 } from "@/abi/state.ts";
-import * as origin from "@/services/origin.ts";
-import { fs_mount } from "@/port/fs.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
- * format, for the kernel; each kind's version, and a shard's own. */
+ * format, for the core; each kind's version, and a shard's own. */
 export interface Declaration {
   top_zoom: number;
   format: Record<BaseLayer, number>;
@@ -37,7 +35,7 @@ export interface Declaration {
 }
 
 /** A version is one segment of a URL, so a tile's name stays under it (pxl-spec
- * bake/source.rs `is_version`, by the same bytes and the same characters). */
+ * bake/source.rs `is_version`, both held to rust/spec/golden/bake/version.tsv). */
 function is_version(s: string): boolean {
   return (
     s.length >= 1 &&
@@ -48,9 +46,9 @@ function is_version(s: string): boolean {
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment, the top zoom and each kind's format are u32s, and the
- * shards are named; none where it is not, and the kernel, never handed it,
+ * shards are named; none where it is not, and the core, never handed it,
  * observes nothing. Which zooms, formats and shard names it follows is the
- * kernel's to refuse (pxl-kernel sys/io/source.rs). */
+ * core's to refuse (pxl-core sys/io/source.rs). */
 export function declaration(text: string): Declaration | null {
   let d: unknown;
   try {
@@ -114,7 +112,7 @@ export function source_state(): Source {
   return state;
 }
 
-/** The declaration handed to the kernel; none until then. */
+/** The declaration handed to the core; none until then. */
 export function source_declaration(): Declaration | null {
   return cur_declaration;
 }
@@ -126,6 +124,30 @@ export function source_versions(): Declaration["version"] | null {
 
 export const watch_source = listeners.watch;
 
+/** Settled: true where the source is declared, false where it is refused. */
+export function settled(): Promise<boolean> {
+  return new Promise((done) => {
+    const look = () => {
+      if (state === SOURCE_DECLARED || state === SOURCE_REFUSED) {
+        done(state === SOURCE_DECLARED);
+        return true;
+      }
+      return false;
+    };
+    if (!look()) watch_source(() => void look());
+  });
+}
+
+/** Where the source stands as the core's worker has it, for a page's UI,
+ * which holds no files. */
+export function mirror_source(
+  next: Source,
+  declaration: Declaration | null,
+): void {
+  cur_declaration = declaration;
+  set(next);
+}
+
 /** The most wait after a refused ask, doubled each time up to the most, and
  * the wait drawn below it (full jitter): clients one outage failed together
  * do not come back together. Offline, nothing is asked until the device
@@ -135,7 +157,7 @@ const ASK_AGAIN_MOST_MS = 60_000;
 
 async function ask_declaration(): Promise<string | null> {
   try {
-    const res = await origin.get(TILE_SOURCE_ROUTE);
+    const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();
@@ -148,8 +170,8 @@ async function ask_declaration(): Promise<string | null> {
   }
 }
 
-/** Hands the kernel its part of the declaration (FS_MOUNT); false where
- * it is more than a command carries or the kernel refuses it, a format this
+/** Hands the core its part of the declaration (SOURCE_DECLARE); false where
+ * it is more than a command carries or the core refuses it, a format this
  * build does not read among what it refuses. */
 export type SendSource = (
   top_zoom: number,
@@ -158,9 +180,7 @@ export type SendSource = (
 ) => boolean;
 
 /** Settled once the source is declared or refused (`source_state`). */
-export async function declare_source(
-  send: SendSource = fs_mount,
-): Promise<void> {
+export async function declare_source(send: SendSource): Promise<void> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
@@ -182,7 +202,7 @@ export async function declare_source(
     return;
   }
   const shards = Object.keys(read.shard);
-  // Before FS_MOUNT: a frame in that call opens a tile under it.
+  // Before SOURCE_DECLARE: a frame in that call opens a tile under it.
   cur_declaration = read;
   if (
     !send(
@@ -192,7 +212,7 @@ export async function declare_source(
     )
   ) {
     console.error(
-      `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
+      `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
     cur_declaration = null;
     set(SOURCE_REFUSED);

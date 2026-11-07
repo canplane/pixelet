@@ -1,12 +1,12 @@
 // ts/client/src/abi/cmd/message.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
-// A message the kernel raises and the shell shows.
+// A message the core raises and the UI shows.
 //
-// The kernel decides which message a state calls for and carries the number.
+// The core decides which message a state calls for and carries the number.
 // It never carries the words: a string that exists to be read has no reason
-// to sit in the kernel's memory, and the shell has the locale files already
+// to sit in the core's memory, and the UI has the locale files already
 // (ts/client/src/locale) — the same split `strerror` is on the other side of.
 //
 // The number is the name here, and a band is what a message is about.

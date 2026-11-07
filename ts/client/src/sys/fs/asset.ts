@@ -1,7 +1,7 @@
 // @pxl/client/sys/fs/asset.ts
 
 /**
- * ASSET's backend: the kernel names a file by its load's id, and this reads
+ * ASSET's backend: the core names a file by its load's id, and this reads
  * what that is. `CATALOG` is the catalog, which the client plugs in from
  * its own bundle and which names every other file; any other id is a row
  * of the ingest's table, counted from 1, read by its hash from the origin.
@@ -10,7 +10,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/sys/fs/catalog.spec.ts";
 import { ASSET_FILES } from "@/origin/ingest.spec.ts";

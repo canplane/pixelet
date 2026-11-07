@@ -5,25 +5,25 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Tool } from "@/abi/cmd.spec.ts";
-import { kernel } from "@/host/kernel.ts";
+import { core } from "@/port/core.ts";
 
-/** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
-export function tool(tool: Tool, val: u32, scale_steps: i32): i32 {
-  return kernel.edit_tool(tool, val, scale_steps);
+/** What the pointer holds, told to the core: 0, or a negative errno it refused with. */
+export function tool(tool: Tool, val: u32, scale_steps: i32): Promise<i32> {
+  return core.edit_tool(tool, val, scale_steps);
 }
 
 /** The waiting marker's text as typed, which it is drawn with: 0, or a negative
- * errno where the kernel refused it whole, the text before staying. */
-export function marker_text(text: string): i32 {
-  return kernel.edit_marker_text(text);
+ * errno where the core refused it whole, the text before staying. */
+export function marker_text(text: string): Promise<i32> {
+  return core.edit_marker_text(text);
 }
 
 /** The waiting marker committed with its text. */
 export function marker_commit(): void {
-  kernel.edit_marker_commit();
+  core.edit_marker_commit();
 }
 
 /** The waiting marker let go. */
 export function marker_cancel(): void {
-  kernel.edit_marker_cancel();
+  core.edit_marker_cancel();
 }

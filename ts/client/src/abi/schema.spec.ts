@@ -1,6 +1,6 @@
 // @pxl/client/abi/schema.spec.ts
 //
-// GENERATED from spec/client/kernel/domain/view/setting/schema.json
+// GENERATED from spec/client/core/domain/view/setting/schema.json
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -10,26 +10,26 @@
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
-// is in the kernel's table in every build and offered only under a
-// development one; the shell's production bundle carries SETTING_PRODUCTION,
+// is in the core's table in every build and offered only under a
+// development one; the UI's production bundle carries SETTING_PRODUCTION,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
-// A setting carries its `number` (the kernel's SettingKey), and a choice's
+// A setting carries its `number` (the core's SettingKey), and a choice's
 // `options` names one of the lists below, which numbers each option. The
 // numbers are what crosses and what storage keeps; the names are the
-// shell's alone, for its rows and the locale. A number is given out once;
+// UI's alone, for its rows and the locale. A number is given out once;
 // the generator refuses one given twice. An `index` is a place in a list
-// kept elsewhere — the person and the pet are by theirs in actor.json — and
+// kept elsewhere — the person and the pet are by theirs in character.json — and
 // crosses as itself.
 
 export const SETTING = {
-  /** Ground color from the art pack (four taps of the layer array per
+  /** Ground color from the art pack (a tap of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
-   * Low because the four taps are all of it: fill rate, which scales with
+   * Low because the tap is all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
    * already holds. */
@@ -55,7 +55,7 @@ export const SETTING = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -97,7 +97,7 @@ export const SETTING = {
     section: "world",
     stored: false,
   },
-  /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck. */
+  /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
     key: 6 as number,
     kind: "toggle",
@@ -154,9 +154,9 @@ export const SETTING = {
   /** The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
    * once more from the sun, or the moon where the sun is down, as the eye's
    * rays are, none where neither is up; beams and samples on
-   * the observed pyramid, the boxes they stop at drawn and a texel's sample
-   * taken, the rest walked (pxl-render light_miss.wgsl), recast only where what it
-   * reads moves; decor and the actors drawn into it depth only, and a 3x3
+   * the node cache, the boxes they stop at drawn and a texel's sample
+   * taken, the rest walked (pxl-render queue.wgsl), recast only where what it
+   * reads moves; decor and the characters drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
   shadows: {
     key: 11 as number,
@@ -168,10 +168,7 @@ export const SETTING = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * `auto` lays the grid's beam rays and cells on a coarser lattice too
-   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
-   * changes. The markers and the finish stay at the display's. RES_MODES
-   * says each. */
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -204,13 +201,6 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -222,13 +212,6 @@ export const SETTING = {
     kind: "index",
     default: 5 as number,
     section: "character",
-  },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
-  ray_steps: {
-    key: 19 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
   },
   /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
@@ -259,11 +242,11 @@ export const SETTING = {
 
 /** SETTING without its `dev` entries: what a production bundle carries in its place. */
 export const SETTING_PRODUCTION = {
-  /** Ground color from the art pack (four taps of the layer array per
+  /** Ground color from the art pack (a tap of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
-   * Low because the four taps are all of it: fill rate, which scales with
+   * Low because the tap is all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
    * already holds. */
@@ -289,7 +272,7 @@ export const SETTING_PRODUCTION = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -366,9 +349,9 @@ export const SETTING_PRODUCTION = {
   /** The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
    * once more from the sun, or the moon where the sun is down, as the eye's
    * rays are, none where neither is up; beams and samples on
-   * the observed pyramid, the boxes they stop at drawn and a texel's sample
-   * taken, the rest walked (pxl-render light_miss.wgsl), recast only where what it
-   * reads moves; decor and the actors drawn into it depth only, and a 3x3
+   * the node cache, the boxes they stop at drawn and a texel's sample
+   * taken, the rest walked (pxl-render queue.wgsl), recast only where what it
+   * reads moves; decor and the characters drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
   shadows: {
     key: 11 as number,
@@ -380,10 +363,7 @@ export const SETTING_PRODUCTION = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * `auto` lays the grid's beam rays and cells on a coarser lattice too
-   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
-   * changes. The markers and the finish stay at the display's. RES_MODES
-   * says each. */
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -416,13 +396,6 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -434,12 +407,5 @@ export const SETTING_PRODUCTION = {
     kind: "index",
     default: 5 as number,
     section: "character",
-  },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
-  ray_steps: {
-    key: 19 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
   },
 } as const;

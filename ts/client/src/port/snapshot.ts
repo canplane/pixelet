@@ -7,10 +7,9 @@ import {
   GroundStatus,
   read_snapshot,
   SensorStatus,
-  type ShellSnapshotEvent,
+  type UiView,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
-import { host } from "@/host/kernel.ts";
 
 const INIT: Snapshot = {
   pivot: {
@@ -23,15 +22,13 @@ const INIT: Snapshot = {
   companion: { person_ready: false, pet_ready: false },
   draft: null,
   orient: { status: SensorStatus.Idle, err: null },
-  azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,
   over_marker: false,
   settings: [],
-  m_per_px: 0,
   division: [],
-  previews: [],
+  character_surfaces: [],
   refused_files: [],
   stall: null,
   renderer_progress: 0,
@@ -41,21 +38,32 @@ const INIT: Snapshot = {
 let snapshot: Snapshot = INIT;
 const listeners = new Listeners();
 
-/** Read whole now: the kernel writes the next one in the same place. */
+/** The core's UI_SNAPSHOT, its bytes where it lies, valid until the
+ * runtime's head passes it: read whole now, as the core writes the next in
+ * the same place. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
   listeners.notify();
-}
-
-/** The kernel's SHELL_SNAPSHOT: too large for a ring frame, so it names where
- * the snapshot lies in the guest's memory, the host's until its head passes
- * the event, and read whole before then. */
-export function snapshot_posted({ at, len }: ShellSnapshotEvent): void {
-  set_snapshot(new Uint8Array(host.guest.mem, at, len));
 }
 
 export const watch_snapshot = listeners.watch;
 
 export function current(): Snapshot {
   return snapshot;
+}
+
+let view: UiView = { azimuth: 0, m_per_px: 0 };
+const view_listeners = new Listeners();
+
+/** The core's UI_VIEW, which a rotation or a zoom posts every frame:
+ * told only to what watches the view, the snapshot's readers left asleep. */
+export function view_posted(e: UiView): void {
+  view = e;
+  view_listeners.notify();
+}
+
+export const watch_view = view_listeners.watch;
+
+export function current_view(): UiView {
+  return view;
 }

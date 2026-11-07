@@ -1,11 +1,11 @@
 // @pxl/client/sys/fs/tile.ts
 
 /**
- * The bakes' backend: a name the kernel opens, a tile's quadkey or the Earth's
+ * The bakes' backend: a name the core opens, a tile's quadkey or the Earth's
  * sphere, made the object the source serves (spec/spec/route.json `object`)
  * under the version the declaration gives it, its finest shard's where one
  * names one. Which version a name is under is the client's to say; the name is
- * the kernel's. tile.fixture.json holds what the kernel once made of them, and
+ * the core's. tile.fixture.json holds what the core once made of them, and
  * tile.test.ts that this makes the same.
  */
 

@@ -1,0 +1,56 @@
+// @pxl/client/ui/component/above-keyboard.native.tsx
+
+import { requireNativeView } from "expo";
+import { type ComponentType, useState } from "react";
+import type { NativeSyntheticEvent, ViewProps } from "react-native";
+
+import {
+  type AboveKeyboardProps,
+  bottomRest,
+} from "@/ui/component/bottom-rest.ts";
+import { layer } from "@/ui/component/theme.ts";
+import { useSafeArea } from "@/service/safe-area.ts";
+
+interface KeyboardDockProps extends ViewProps {
+  clearance: number;
+  rest: number;
+  layoutLift: number;
+  onLift: (event: NativeSyntheticEvent<{ lift: number }>) => void;
+}
+
+const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
+  "PxlPlatform",
+  "KeyboardDock",
+);
+
+/**
+ * A layer standing `inset` above an open keyboard. The native view lifts it
+ * in the keyboard's own animation; once still, the lift is laid out here so
+ * presses hit-test where the layer is.
+ */
+export function AboveKeyboard({
+  inset,
+  lift = 0,
+  children,
+}: AboveKeyboardProps) {
+  const rest = bottomRest(useSafeArea(), inset);
+  const [layoutLift, setLayoutLift] = useState(0);
+  return (
+    <KeyboardDock
+      clearance={inset}
+      rest={rest}
+      layoutLift={layoutLift}
+      onLift={(event) => setLayoutLift(event.nativeEvent.lift)}
+      style={{
+        position: "absolute",
+        left: inset,
+        right: inset,
+        bottom: rest + lift + layoutLift,
+        zIndex: layer.bottom,
+        pointerEvents: "box-none",
+      }}
+    >
+      {children}
+    </KeyboardDock>
+  );
+}

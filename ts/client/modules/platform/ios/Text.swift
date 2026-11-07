@@ -3,17 +3,10 @@
 import CoreText
 import UIKit
 
-// Text in the platform's own family, as the kernel asks for it
-// (ts/client/src/services/text.native.ts): how wide a line runs, and a line
+// Text in the platform's own family, as the core asks for it
+// (ts/client/src/service/text.native.ts): how wide a line runs, and a line
 // drawn. The system font, which falls back through every script and draws color
 // emoji as the app's own text does.
-
-/// The language text is drawn in, which picks a Han character's form.
-private var language: String?
-
-func setTextLanguage(_ tag: String) {
-  language = tag
-}
 
 /// How far a line of `text` runs at a CSS weight and a size, in pixels.
 func textWidth(_ text: String, _ weight: Double, _ px: Double) -> Double {
@@ -34,7 +27,7 @@ func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, 
   // CoreGraphics counts up from the bottom row.
   context.textPosition = CGPoint(x: x, y: Double(height) / 2 - Double(f.ascender + f.descender) / 2)
   CTLineDraw(line(text, weight, px, rgba), context)
-  // CoreGraphics draws premultiplied, and the kernel reads straight alpha: a
+  // CoreGraphics draws premultiplied, and the core reads straight alpha: a
   // page's canvas hands its pixels back straight whatever it drew them as,
   // so straight is what both platforms can give.
   let bytes = out.assumingMemoryBound(to: UInt8.self)
@@ -67,9 +60,6 @@ private func line(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32
   let color = CGColor(
     srgbRed: CGFloat(rgba >> 24) / 255, green: CGFloat((rgba >> 16) & 0xff) / 255, blue: CGFloat((rgba >> 8) & 0xff) / 255,
     alpha: CGFloat(rgba & 0xff) / 255)
-  var attributes: [NSAttributedString.Key: Any] = [.font: font(weight, px), .foregroundColor: color]
-  if let language {
-    attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language
-  }
+  let attributes: [NSAttributedString.Key: Any] = [.font: font(weight, px), .foregroundColor: color]
   return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
 }

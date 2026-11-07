@@ -1,13 +1,14 @@
 // @pxl/client/sys/fs/namespace.ts
 
 /**
- * The kernel's namespace: each root it opens a file under (file.json `root`)
+ * The core's namespace: each root it opens a file under (file.json `root`)
  * bound to what fetches or keeps its bytes, a path below it the file's one
- * name. The boot hands it to `@xpute/host`'s system calls (abi/boot.ts).
+ * name. The boot hands it to `@xpute/runtime`'s system calls
+ * (runtime/start.ts).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { type Binding, Namespace } from "@xpute/host";
+import { type Binding, Namespace } from "@xpute/runtime";
 
 import { root } from "@/abi/file.spec.ts";
 import { BASE_LAYERS } from "@/origin/publication.spec.ts";

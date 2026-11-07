@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/tracking.spec.ts
 //
-// GENERATED from rust/client/kernel/shell.json
+// GENERATED from rust/client/core/ui.json
 
 // What the tracking button did, as the button showed it.
 

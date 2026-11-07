@@ -1,16 +1,25 @@
 // @pxl/client/abi/pacing.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/sched/pacing.json
+// GENERATED from spec/client/core/sys/sched/pacing.json
 //
-// The numbers of the scheduling policy pixelet boots xpute's host with on a page or a
-// device (@xpute/host sched/frame_pacing.ts): turns paced to the display, each given
-// what its frames leave. The client's boot injects them (ts/client/src/abi/boot.ts),
-// and the kernel reads the margin to size its tasks past a full frame
-// (pxl-kernel sys/sched/edge.rs).
+// The numbers of the scheduling policy pixelet boots xpute's runtime with on a page or a
+// device (@xpute/runtime sched/frame_pacing.ts): turns paced to the display, each given
+// what its frames leave. The client's runtime injects them (ts/client/src/runtime/start.ts),
+// and the core reads the margin to size its tasks past a full frame
+// (pxl-core sys/sched/edge.rs).
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** Share of the frame left unspent for the host's own work; a share, so a fast display
+/** The rate turns are paced at where the core asks none slower: the most whole refreshes
+ * of the display that fit one interval at this rate, one at least, so a 120 Hz display
+ * runs a turn every second refresh. */
+export const PACE_HZ: f64 = 60 as number;
+
+/** The slowest rate the core's load asks (pxl-core domain/scene/resolution.rs): past
+ * it the pixels give way, not the motion. */
+export const RATE_MIN_HZ: f64 = 30 as number;
+
+/** Share of the frame left unspent for the runtime's own work; a share, so a fast display
  * does not lose most of its frame to it. */
 export const MARGIN_SHARE: f64 = 0.15 as number;
 

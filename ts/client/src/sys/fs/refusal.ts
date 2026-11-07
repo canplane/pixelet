@@ -1,17 +1,16 @@
 // @pxl/client/sys/fs/refusal.ts
 
 /**
- * The files the kernel refused (the snapshot's `refused_files`): each set aside
+ * The files the core refused (the snapshot's `refused_files`): each set aside
  * once by the backend its root is bound to, a storage file's slot emptied
  * (storage.ts) or a placed objects' file taken from its source
- * (object.ts), and the kernel told it may read it again (FS_TRUNCATED).
+ * (object.ts), and the core told it may read it again (FS_CHANGED).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import { root } from "@/abi/file.spec.ts";
-import { fs_truncated } from "@/port/fs.ts";
 import { OBJECTS } from "@/sys/fs/object.ts";
 import { STORAGE, set_aside, type Storage } from "@/sys/fs/storage.ts";
 
@@ -38,15 +37,15 @@ export function set_aside_by_root(s: Storage): SetAside {
 }
 
 /** The files set aside and not yet seen read again, as `<root>/<path>`, so
- * a snapshot that still names one before the kernel hears it sets nothing
+ * a snapshot that still names one before the core hears it sets nothing
  * aside twice. */
 const emptying = new Set<string>();
 
-/** The snapshot's `refused_files`: each file set aside once, and the kernel told
+/** The snapshot's `refused_files`: each file set aside once, and the core told
  * (`emptied`). */
 export function follow_refused_files(
   files: readonly RefusedFile[],
-  emptied: (f: RefusedFile) => void = fs_truncated,
+  emptied: (f: RefusedFile) => void,
   aside: SetAside = set_aside_by_root(STORAGE),
 ): void {
   const named = new Set(files.map((f) => `${f.root}/${f.path}`));

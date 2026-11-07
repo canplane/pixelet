@@ -8,9 +8,9 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 import { online } from "@/origin/online.ts";
-import * as origin from "@/services/origin.ts";
+import * as origin from "@/origin/route.ts";
 
 /** The object at `url`, whole. */
 export async function get(url: string, signal: AbortSignal): Promise<U8Array> {

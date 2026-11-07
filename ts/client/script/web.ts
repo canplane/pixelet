@@ -5,7 +5,7 @@
  *
  *   web.ts html    public/index.html, the template Expo fills, from
  *                  index.html with the site's URL (`%SITE_URL%`, its links'
- *                  previews, spec/spec/route.json `origins`) and the shell's
+ *                  previews, spec/spec/route.json `origins`) and the UI's
  *                  ground (`%GROUND%`, its first paint) put in and the
  *                  comments, which are the source's, out;
  *   web.ts stamp   dist/build.json, what the deployment says it is, so a
@@ -24,7 +24,7 @@ import process from "node:process";
 
 import { stamp } from "@pxl/build/stamp.ts";
 import { SITE_URL } from "@pxl/client/origin/route.spec.ts";
-import { GROUND } from "@pxl/client/shell/ui/ground.ts";
+import { GROUND } from "@pxl/client/ui/component/ground.ts";
 import { forward, route_target } from "./proxy.ts";
 
 const APP = path.dirname(import.meta.dirname);

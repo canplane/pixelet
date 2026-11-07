@@ -1,22 +1,24 @@
 // @pxl/client/abi/state.ts
 
-/** What the client reports beside the kernel and the shell shows: numbers
- * both read, as a kernel's uapi headers are, so neither reaches into the other. */
+/** What the client reports beside the core and the UI shows: numbers
+ * both read, as a core's uapi headers are, so neither reaches into the other. */
 
-/** Where the client's boot stands: starting, loading (the kernel runs, a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
-export const BOOT_STARTING = 0;
-export const BOOT_LOADING = 1;
-export const BOOT_STARTED = 2;
-export const BOOT_FAILED = 3;
-export const BOOT_TERMINATED = 4;
+/** Where the client's boot stands: opening (the core's module fetched and compiled, before any GPU is asked for), starting (the core runs, while a GPU and the source are asked for), loading (a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
+export const BOOT_OPENING = 0;
+export const BOOT_STARTING = 1;
+export const BOOT_LOADING = 2;
+export const BOOT_STARTED = 3;
+export const BOOT_FAILED = 4;
+export const BOOT_TERMINATED = 5;
 export type Boot =
+  | typeof BOOT_OPENING
   | typeof BOOT_STARTING
   | typeof BOOT_LOADING
   | typeof BOOT_STARTED
   | typeof BOOT_FAILED
   | typeof BOOT_TERMINATED;
 
-/** What the client has of a GPU, which the guest, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
+/** What the client has of a GPU, which the core, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
 export const GPU_ASKING = 0;
 export const GPU_PRESENT = 1;
 export const GPU_WAITING = 2;

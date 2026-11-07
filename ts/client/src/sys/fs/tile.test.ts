@@ -14,7 +14,7 @@ import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
 const DECLARATION = declaration(JSON.stringify(FIXTURE.source))!;
 
-test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the kernel made", () => {
+test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
     const k = kind as BaseLayer;
     const name = object.split("/")[1]!;

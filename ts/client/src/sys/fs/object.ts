@@ -2,7 +2,7 @@
 
 /**
  * OBJECT's backend: the placed objects' source, for now a loopback over the
- * platform's database (services/db.ts). It serves what the kernel reads, a shard's
+ * platform's database (service/db.ts). It serves what the core reads, a shard's
  * file by the shard's quadkey and the top of the tree (file.json
  * `object.TOP`), and takes what it writes, edit batches (`object.EDITS`): it
  * lays each batch's writes over the shards they lie in, keeps them, and
@@ -10,13 +10,13 @@
  * transaction. A shard is kept under a key a shard, named as the shard's tile
  * is, and the top under its own; a shard with none, or a top with no row, has
  * no file. A server answers the same `open` and `commit` in its place
- * (namespace.ts): the kernel cannot tell which. A batch that is not kept is
- * logged: a commit has no answer to the kernel.
+ * (namespace.ts): the core cannot tell which. A batch that is not kept is
+ * logged: a commit has no answer to the core.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/host";
+import { FileError } from "@xpute/runtime";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 import { format, object } from "@/abi/file.spec.ts";
@@ -27,8 +27,8 @@ import {
   type Leaf,
   type TopRow,
 } from "@/sys/fs/object_tree.ts";
-import { type Tx } from "@/services/types.ts";
-import * as db from "@/services/db.ts";
+import { type Tx } from "@/service/types.ts";
+import * as db from "@/service/db.ts";
 
 /** The tree packet a file of `fmt` holds past its format byte; EBADMSG for
  * one of another format. */
@@ -112,7 +112,7 @@ function by_shard(a: TopRow, b: TopRow): number {
   return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
-/** The database as the platform gives it (services/db.ts). */
+/** The database as the platform gives it (service/db.ts). */
 export type Db = { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 
 const DB: Db = db;
@@ -188,7 +188,7 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
 
 /** OBJECT's backend over `db`: a file read whole, ENOENT where none is kept,
  * after every batch committed before it; an edit batch applied in the order
- * written; a file the kernel refused set aside. */
+ * written; a file the core refused set aside. */
 export function object_backend(db: Db = DB): {
   open(path: string): Promise<U8Array>;
   commit(path: string, bytes: U8Array): void;
@@ -209,7 +209,7 @@ export function object_backend(db: Db = DB): {
         console.error("[object] an edit batch was not kept:", err);
       });
     },
-    /** A file the kernel refused set aside and emptied; a shard's rows of
+    /** A file the core refused set aside and emptied; a shard's rows of
      * the top go with it. False, nothing changed, where the database failed. */
     set_aside(path, now_ms) {
       return db

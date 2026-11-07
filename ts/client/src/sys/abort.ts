@@ -1,11 +1,11 @@
 // @pxl/client/sys/abort.ts
 
-/** The kernel's last report, its hostcall SYS_ABORT (pxl-kernel
- * `sys/io/host.rs`), logged whole and kept short as a stop code for the shell's
+/** The core's last report, its import SYS_ABORT (pxl-core
+ * `sys/io/runtime.rs`), logged whole and kept short as a stop code for the UI's
  * panic. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { Abort } from "@xpute/host";
+import type { Abort } from "@xpute/runtime";
 import { BUILD_NUMBER } from "@/deploy.ts";
 
 let code: string | null = null;
@@ -18,7 +18,7 @@ export function stop_code(): string | null {
 
 export const onabort = ({ errnum, file, line, column, a, b }: Abort): void => {
   console.error(
-    `[kernel] stopped: ${strerror(errnum)} at ${file.replace(
+    `[core] stopped: ${strerror(errnum)} at ${file.replace(
       /^\.+/,
       "",
     )}:${line}:${column} (${a}, ${b})`,

@@ -1,0 +1,27 @@
+// @pxl/client/service/storage.ts
+
+/** localStorage; a refusal (sandboxed frame, private-window quota) keeps nothing, never throws. */
+
+export function get(key: string): string | null {
+  try {
+    return globalThis.localStorage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function keys(): string[] {
+  try {
+    return Object.keys(globalThis.localStorage);
+  } catch {
+    return [];
+  }
+}
+
+export function set(key: string, value: string): void {
+  try {
+    globalThis.localStorage?.setItem(key, value);
+  } catch {
+    // Refused: the value lasts the session.
+  }
+}

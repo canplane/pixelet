@@ -1,6 +1,6 @@
 // @pxl/client/abi/file/format.spec.ts
 //
-// GENERATED from spec/client/kernel/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json
 
 export const SETTINGS = 1 as number;
 

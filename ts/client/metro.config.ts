@@ -109,7 +109,7 @@ const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
 
 export default {
   ...base,
-  // The shell's files, xpute's and pnpm's store are all outside this app's
+  // The UI's files, xpute's and pnpm's store are all outside this app's
   // directory; the bundle reads nothing else.
   watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
   resolver: { ...base.resolver, resolveRequest },

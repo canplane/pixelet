@@ -1,11 +1,11 @@
 // @pxl/client/port/perf.ts
 
 /**
- * The kernel's profiler, read in place through views over its memory, so
+ * The core's profiler, read in place through views over its memory, so
  * reading allocates nothing from the heap it measures, and decoded by the
  * layout perf.json gives (perf.spec.ts). The views hold only until
  * the next turn, so each read copies into plain values; what is made of
- * them and how it is shown is the shell's (shell/debug/perf/).
+ * them and how it is shown is the UI's (ui/debug/perf/).
  */
 
 import type { F64Array } from "@xpute/kit/abi/array.ts";
@@ -38,13 +38,14 @@ import {
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { host, kernel } from "@/host/kernel.ts";
+import { mem } from "@xpute/runtime";
+import { core, perf } from "@/port/core.ts";
 
 const WORD = 8;
 /** A task's `path` column, its bytes (perf.json `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
-/** A call's answer, the address of its reply in the kernel's memory; a
+/** A call's answer, the address of its reply in the core's memory; a
  * refusal is -errno, never an address. */
 function reply_at(at: i32): u32 {
   if (at < 0) throw new FaultError(-at as i32);
@@ -53,23 +54,21 @@ function reply_at(at: i32): u32 {
 
 /** A fresh recording window, called at once. */
 export function start(): void {
-  kernel.perf_start();
+  core.perf_start();
 }
 
 /** The window frozen, so what is exported holds still. */
 export function stop(): void {
-  kernel.perf_stop();
+  core.perf_stop();
 }
 
-const words = (at: u32, n: u32) => new Float64Array(host.guest.mem, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(host.guest.mem, at, n);
+const words = (at: u32, n: u32) => new Float64Array(mem, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
-  file === 0
-    ? null
-    : `${td.decode(new Uint8Array(host.guest.mem, file, bytes))}:${line}`;
+  file === 0 ? null : `${td.decode(new Uint8Array(mem, file, bytes))}:${line}`;
 
 /** The columns that are lists, a word a name. The names are their owners', and
- * shown by the shell. */
+ * shown by the UI. */
 export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
@@ -173,7 +172,7 @@ export interface TaskRecord {
   outcome: string;
   fail: u32;
   detail: u32;
-  /** null for the host's failures. */
+  /** null for the runtime's failures. */
   at: string | null;
   phases: [string, f64][];
 }
@@ -197,7 +196,7 @@ export interface Step {
   max_ms: f64;
 }
 
-/** A worst frame the kernel kept, and what changed from the one before it,
+/** A worst frame the core kept, and what changed from the one before it,
  * null where there was none. */
 export interface Worst {
   sample: Frame;
@@ -355,8 +354,8 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 }
 
 /** STAT's words over `window_ms` and NOW's, as PERF_STATS lays them out. */
-function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
-  const r = u32s(reply_at(kernel.perf_stats(window_ms)), STATS.WORDS);
+function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
+  const r = u32s(reply_at(core.perf_stats(window_ms)), STATS.WORDS);
   return {
     stats: words(r[STATS.stats_at], r[STATS.stats_words]),
     now: words(r[STATS.now_at], r[STATS.now_words]),
@@ -364,8 +363,8 @@ function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
 }
 
 /** The summary over the last `window_ms`, or the whole recording at null. */
-export function perf_summary(window_ms: f64 | null): Summary {
-  const { stats: s, now: n } = read(window_ms);
+function perf_summary(window_ms: f64 | null): Summary {
+  const { stats: s, now: n } = stats_of(window_ms);
   const R = NOW.recording_state;
   return {
     recording_state: {
@@ -383,13 +382,13 @@ export function perf_summary(window_ms: f64 | null): Summary {
 
 /** The view alone, NOW's, read over an empty window, which folds no frame or
  * task. */
-export function perf_view(): ViewSection {
-  return section(read(0).now, NOW.view);
+function perf_view(): ViewSection {
+  return section(stats_of(0).now, NOW.view);
 }
 
 /** The rings as they lie, each its address and count, with nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
-  const r = u32s(reply_at(kernel.perf_rings()), RINGS.WORDS);
+  const r = u32s(reply_at(core.perf_rings()), RINGS.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
     const at = RINGS.slots + RING_NAMES.indexOf(name) * RING.WORDS;
     return [r[at + RING.at], r[at + RING.cnt]];
@@ -397,20 +396,20 @@ function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
-export function perf_counts(): RingCounts {
+function perf_counts(): RingCounts {
   const { frames, tasks, worst } = rings();
   return { frames: frames[1], tasks: tasks[1], worst: worst[1] };
 }
 
 /** Every frame the ring holds, oldest first. */
-export function perf_frames(): Frame[] {
+function perf_frames(): Frame[] {
   const [at, cnt] = rings().frames;
   const w = words(at, cnt * FRAME.WORDS);
   return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
 /** The tasks the ring holds, oldest first: its last `last`, or every one at null. */
-export function perf_tasks(last: u32 | null = null): TaskRecord[] {
+function perf_tasks(last: u32 | null = null): TaskRecord[] {
   const [ring, held] = rings().tasks;
   const from = last === null ? 0 : Math.max(0, held - last);
   const at = ring + from * TASK.WORDS * WORD;
@@ -430,13 +429,7 @@ export function perf_tasks(last: u32 | null = null): TaskRecord[] {
     return {
       stream: STREAM_NAMES[w[o + TASK.stream]] ?? "?",
       path: td
-        .decode(
-          new Uint8Array(
-            host.guest.mem,
-            at + (o + TASK.path) * WORD,
-            PATH_BYTES,
-          ),
-        )
+        .decode(new Uint8Array(mem, at + (o + TASK.path) * WORD, PATH_BYTES))
         .replace(/\0+$/, ""),
       priority: w[o + TASK.priority],
       enqueue_ms: w[o + TASK.enqueue_ms],
@@ -455,8 +448,8 @@ export function perf_tasks(last: u32 | null = null): TaskRecord[] {
   });
 }
 
-/** The worst frames the kernel kept since recording began. */
-export function perf_worst(): Worst[] {
+/** The worst frames the core kept since recording began. */
+function perf_worst(): Worst[] {
   const [at, cnt] = rings().worst;
   const w = words(at, cnt * WORST.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
@@ -473,4 +466,30 @@ export function perf_worst(): Worst[] {
             },
     };
   });
+}
+
+/** What the profiler reads where the core's memory is. */
+const READERS = {
+  summary: perf_summary,
+  view: perf_view,
+  counts: perf_counts,
+  frames: perf_frames,
+  tasks: perf_tasks,
+  worst: perf_worst,
+};
+
+export type PerfRead = keyof typeof READERS;
+
+/** A reading, where the core's memory is: beside the UI on a device, in
+ * the core's worker on a page. */
+export function read<K extends PerfRead>(
+  what: K,
+  ...args: Parameters<(typeof READERS)[K]>
+): Promise<ReturnType<(typeof READERS)[K]>> {
+  return perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
+}
+
+/** `read`'s answer, read here, beside the core's memory. */
+export function answer(what: PerfRead, args: unknown[]): unknown {
+  return (READERS[what] as (...a: unknown[]) => unknown)(...args);
 }

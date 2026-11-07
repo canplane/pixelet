@@ -1,22 +1,23 @@
 // @pxl/client/port/text.ts
 
 /**
- * TEXT on the shell's port: the kernel's calls TEXT_LAYOUT and TEXT_RASTER,
- * answered from the platform's text before they return, so what they write
- * in the kernel's memory is in place when the call returns.
+ * TEXT, the text device's protocol (rust/client/core/text.json): the
+ * core's calls TEXT_LAYOUT and TEXT_RASTER, answered from the platform's text
+ * before they return, so what they write in the core's memory is in place
+ * when the call returns.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
 
-import type { TextLayoutEvent, TextRasterEvent } from "@/abi/cmd.spec.ts";
-import { LAYOUT_ANSWER, LINE } from "@/abi/host.spec.ts";
-import * as font from "@/services/text.ts";
-import { host } from "@/host/kernel.ts";
+import type { TextLayout, TextRaster } from "@/abi/text.spec.ts";
+import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
+import * as font from "@/service/text.ts";
+import { mem } from "@xpute/runtime";
 
-/** The text a call names in the kernel's memory, held until the call returns. */
+/** The text a call names in the core's memory, held until the call returns. */
 function text_of(at: number, len: number): string {
-  return td.decode(new Uint8Array(host.guest.mem as ArrayBuffer, at, len));
+  return td.decode(new Uint8Array(mem, at, len));
 }
 
 /** What no line starts with: closing marks, and in Japanese the small kana and
@@ -25,7 +26,7 @@ const NO_LINE_START =
   /[、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)\]}]/;
 
 /** What no line ends with: opening marks. */
-const NO_LINE_END = /[（［｛〔〈《「『【“‘(\[{]/;
+const NO_LINE_END = /[（［｛〔〈《「『【“‘([{]/;
 
 /** The break at `at` moved back past a mark the rules keep with its neighbor,
  * no further than the line's first character. */
@@ -46,7 +47,7 @@ function isSurrogate(unit: number): boolean {
 
 /** Greedy by words; a word too wide alone (Korean, Japanese or Chinese typed
  * without spaces) breaks between characters. A space stays at the next line's
- * head for the kernel to trim. */
+ * head for the core to trim. */
 function line_ends(
   text: string,
   max_width: number,
@@ -89,13 +90,13 @@ function line_ends(
 
 /** TEXT_LAYOUT: the text laid out a line at a time, each line's end and
  * width written at the call's `at`. */
-export function text_layout(e: TextLayoutEvent): i32 {
+export function text_layout(e: TextLayout): i32 {
   const { weight, px, max_width, at, lines, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
   const width = (s: string) => font.width(weight, px, s);
   const ends = line_ends(text, max_width, width).slice(0, lines);
   const out = new DataView(
-    host.guest.mem as ArrayBuffer,
+    mem,
     at,
     4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
   );
@@ -114,7 +115,7 @@ export function text_layout(e: TextLayoutEvent): i32 {
 }
 
 /** TEXT_RASTER: one line's pixels written at the call's `at`. */
-export function text_raster(e: TextRasterEvent): i32 {
+export function text_raster(e: TextRaster): i32 {
   const { weight, px, color, at, width, height, x, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
   font.raster(
@@ -125,7 +126,7 @@ export function text_raster(e: TextRasterEvent): i32 {
     x,
     width,
     height,
-    new Uint8Array(host.guest.mem as ArrayBuffer, at, width * height * 4),
+    new Uint8Array(mem, at, width * height * 4),
   );
   return 0;
 }

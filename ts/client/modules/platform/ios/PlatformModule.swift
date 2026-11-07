@@ -6,8 +6,8 @@ import ExpoUI
 import PxlNative
 import UIKit
 
-/// The device's half of the client's services (ts/client/src/services/, the
-/// .native files), as one module: what the shell asks of the system. The kernel and the view it
+/// The device's half of the client's services (ts/client/src/service/, the
+/// .native files), as one module: what the UI asks of the system. The core and the view it
 /// draws into are xpute's module (@xpute/native). An image's decode runs off
 /// the JavaScript thread.
 public class PlatformModule: Module {
@@ -15,7 +15,7 @@ public class PlatformModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- @expo/ui modifiers the shell names (SheetContent.swift) ----
+    // ---- @expo/ui modifiers the UI names (SheetContent.swift) ----
 
     OnCreate {
       ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
@@ -24,7 +24,7 @@ public class PlatformModule: Module {
       ViewModifierRegistry.unregister(contentScrollsModifier)
     }
 
-    // ---- the transport (services/origin.native.ts) ----
+    // ---- the transport (service/origin.native.ts) ----
 
     /// A body fetched still zstd, decoded off the JavaScript thread on the
     /// module's queue, into the library's bytes, which JavaScript takes
@@ -39,7 +39,7 @@ public class PlatformModule: Module {
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: bytes, count: count), cleanup: { pxl_unpacked_free(bytes, count) })
     }
 
-    // ---- storage (services/storage.native.ts) ----
+    // ---- storage (service/storage.native.ts) ----
     //
     // UserDefaults, the system's store for an app's small values, as a page's
     // localStorage is the browser's.
@@ -52,7 +52,7 @@ public class PlatformModule: Module {
       UserDefaults.standard.set(value, forKey: key)
     }
 
-    // ---- the clipboard (services/share.native.ts) ----
+    // ---- the clipboard (service/share.native.ts) ----
     //
     // The general pasteboard, as a page's navigator.clipboard is the
     // browser's; React Native's JavaScript has none of its own.
@@ -61,11 +61,8 @@ public class PlatformModule: Module {
       UIPasteboard.general.string = text
     }
 
-    // ---- text (services/text.native.ts, Text.swift) ----
+    // ---- text (service/text.native.ts, Text.swift) ----
 
-    Function("textLanguage") { (tag: String) in
-      setTextLanguage(tag)
-    }
 
     Function("textWidth") { (weight: Double, px: Double, text: String) -> Double in
       textWidth(text, weight, px)
@@ -79,7 +76,7 @@ public class PlatformModule: Module {
       textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
     }
 
-    // ---- the compass (services/sensor.native.ts) ----
+    // ---- the compass (service/sensor.native.ts) ----
 
     /// Whether the device has a compass at all, which expo-horizon-location only says
     /// by failing a watch — and a failed watch reads as a compass lost, not
@@ -88,7 +85,7 @@ public class PlatformModule: Module {
       CLLocationManager.headingAvailable()
     }
 
-    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.swift) ----
+    // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
     //
     View(KeyboardDock.self) {
       Events("onLift")
@@ -103,7 +100,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- the segmented control (ts/client/src/shell/ui/segmented.ios.tsx, SegmentedControl.swift) ----
+    // ---- the segmented control (ts/client/src/ui/component/segmented.ios.tsx, SegmentedControl.swift) ----
 
     View(SegmentedControl.self) {
       Events("onPick")
@@ -115,7 +112,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- a see-through backing's blur (ts/client/src/shell/ui/backing.ios.tsx, Blur.swift) ----
+    // ---- a see-through backing's blur (ts/client/src/ui/component/backing.ios.tsx, Blur.swift) ----
 
     View(Blur.self) {}
   }

@@ -38,24 +38,15 @@ importers:
 
   ../xpute/ts/gpu:
     dependencies:
-      '@xpute/host':
-        specifier: workspace:*
-        version: link:../host
       '@xpute/kit':
         specifier: workspace:*
         version: link:../kit
       '@xpute/native':
         specifier: workspace:*
         version: link:../native
-
-  ../xpute/ts/host:
-    dependencies:
-      '@xpute/kit':
+      '@xpute/runtime':
         specifier: workspace:*
-        version: link:../kit
-      '@xpute/native':
-        specifier: workspace:*
-        version: link:../native
+        version: link:../runtime
 
   ../xpute/ts/kit: {}
 
@@ -78,6 +69,15 @@ importers:
         specifier: 0.86.3
         version: 0.86.3(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.2.3)
 
+  ../xpute/ts/runtime:
+    dependencies:
+      '@xpute/kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@xpute/native':
+        specifier: workspace:*
+        version: link:../native
+
   build: {}
 
   client:
@@ -91,15 +91,15 @@ importers:
       '@xpute/gpu':
         specifier: workspace:*
         version: link:../../xpute/ts/gpu
-      '@xpute/host':
-        specifier: workspace:*
-        version: link:../../xpute/ts/host
       '@xpute/kit':
         specifier: workspace:*
         version: link:../../xpute/ts/kit
       '@xpute/native':
         specifier: workspace:*
         version: link:../../xpute/ts/native
+      '@xpute/runtime':
+        specifier: workspace:*
+        version: link:../../xpute/ts/runtime
       expo:
         specifier: 57.0.25
         version: 57.0.25(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.16)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.2.3))(react@19.2.3)(typescript@7.0.2)

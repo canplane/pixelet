@@ -26,7 +26,7 @@
     "@expo/metro-runtime": "57.0.16",
     "@expo/ui": "~57.0.20",
     "@xpute/gpu": "workspace:*",
-    "@xpute/host": "workspace:*",
+    "@xpute/runtime": "workspace:*",
     "@xpute/kit": "workspace:*",
     "@xpute/native": "workspace:*",
     "expo": "57.0.25",
@@ -54,7 +54,7 @@
   "xpute": {
     "core": {
       "workspace": "../../rust",
-      "package": "pxl-kernel",
+      "package": "pxl-core",
       "profile": {
         "debug": "native-watch",
         "release": "native"

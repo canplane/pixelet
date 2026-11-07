@@ -4,8 +4,8 @@ import ExpoModulesCore
 import UIKit
 
 /// The system's blur a see-through backing stands on
-/// (ts/client/src/shell/ui/backing.ios.tsx): the thinnest of the system's
-/// materials, whole from the start, since the shell's fill is laid over it
+/// (ts/client/src/ui/component/backing.ios.tsx): the thinnest of the system's
+/// materials, whole from the start, since the UI's fill is laid over it
 /// and a thicker one, the chrome iOS's own bars are drawn in, hid all that
 /// passed under it. Not expo-blur's view, which
 /// sets its effect in `draw(_:)` to stop an animation part way for its
