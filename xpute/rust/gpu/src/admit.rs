@@ -7,7 +7,7 @@
 //! (`runtime::native::admit_frame` over `GpuRuntime::admit_frame`); a page's runtime tells the
 //! core its count in the device's block (spec DEVICE), and `page` applies it
 //! there. Either reaches the core with its boot (xpute-core
-//! `BootInfo::admit`).
+//! `Form::admit_frame`).
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -38,7 +38,7 @@ pub(crate) fn ask(block: &mut [u32]) {
     BLOCK.set(Some((block.as_mut_ptr(), block.len())));
 }
 
-/// The page's admission (`BootInfo::admit` of a WebAssembly core given the
+/// The page's admission (`Form::admit_frame` of a WebAssembly core given the
 /// GPU, xpute-core `core!`), `LATENCY` its program's frame latency
 /// (`Numbers`): a frame while the block's device is ready and its frames
 /// unfinished admit one; none before the block is asked for or once the

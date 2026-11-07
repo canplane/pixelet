@@ -107,7 +107,7 @@ pub fn poll(core: Core) {
 }
 
 /// The core has just published the stream at `stream_at`, END stored with
-/// release (xpute-core `BootInfo::publish`), on its thread: its records run
+/// release (xpute-core `Form::publish`), on its thread: its records run
 /// on the device once END is loaded with acquire, and its frames shown, then
 /// END stored back to 0 with release after the last record has read what it
 /// names (`GpuRuntime::run`); before a device is open, the stream handed back
@@ -124,7 +124,7 @@ pub fn publish(core: Core, stream_at: u32) {
 }
 
 /// The runtime's admission (`crate::admit`), handed the core with its boot
-/// (xpute-core `BootInfo::admit`): a frame while the runtime admits one
+/// (xpute-core `Form::admit_frame`): a frame while the runtime admits one
 /// (`GpuRuntime::admit_frame`), so taking a surface's texture never blocks the
 /// core's thread, which a caller may be waiting on (xpute-runtime native
 /// `ring`); every frame before the device opens.

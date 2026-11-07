@@ -1,21 +1,15 @@
 // @xpute/runtime/ipc/stream.ts
 
 /**
- * A turn's calls from core to runtime (rust/core/src/ipc/stream.rs),
- * run after the turn returns. Word END of the head is the count of record
- * words past the head, and word HEAD the head's own count of words, so a runtime
- * finds the records from the stream itself; a record is op, n, then n words.
- * The core publishes END with release; the runtime loads it with acquire and,
- * once it has run the records, stores 0 with release, which hands the
- * stream back to the core for its next records.
+ * A turn's calls from core to runtime (rust/core/src/ipc/stream.rs), run after
+ * the turn returns, found from the stream's own words (ipc/stream.json).
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 
-export const END = 0;
-export const HEAD = 1;
+import { END, HEAD } from "./stream.spec.ts";
 
 /** The words are valid only inside `run`, and the stream is the core's
  * again once this returns, a throw from `run` included. */

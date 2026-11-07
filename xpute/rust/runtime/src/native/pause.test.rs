@@ -36,15 +36,17 @@ fn paused_runs_only_the_rung_turn() {
     native::boot(
         &Config {
             mem_bytes: 4 << 20,
-            data_end: 0,
             heap_at: 16 * PAGE_BYTES,
             stack_bytes: 1 << 20,
             thread_name: "pause-core",
-            now: || 0.0,
-            stop_hook: None,
-            admit_frame: None,
-            publish: None,
             ready: || true,
+            form: xpute_runtime::native::Form {
+                data_end: 0,
+                now: || 0.0,
+                stop_hook: None,
+                admit_frame: None,
+                publish: None,
+            },
         },
         turn,
     );

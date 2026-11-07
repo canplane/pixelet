@@ -51,6 +51,9 @@
 //! a native GPU runtime on the core's thread); a page's runtime runs them as the
 //! turn returns.
 
+#[path = "stream.spec.rs"]
+pub mod spec;
+
 use core::cell::Cell;
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -62,7 +65,7 @@ thread_local! {
     static ON_PUBLISH: Cell<Option<fn()>> = const { Cell::new(None) };
 }
 
-/// What `publish` runs once END is stored (`entry::BootInfo::publish`): a
+/// What `publish` runs once END is stored (`entry::Form::publish`): a
 /// device that runs the stream as it is published.
 pub fn on_publish(run: Option<fn()>) {
     ON_PUBLISH.with(|c| c.set(run));
@@ -103,10 +106,10 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub const END: usize = 0;
-    pub const HEAD: usize = 1;
+    pub const END: usize = spec::END as usize;
+    pub const HEAD: usize = spec::HEAD as usize;
     /// The stream's own words, before the user's.
-    pub const OWN_WORDS: usize = 2;
+    pub const OWN_WORDS: usize = spec::OWN_WORDS as usize;
 
     /// The `words` at `at` in `mem`, word-aligned. A new stream has published
     /// nothing, whatever the range held.

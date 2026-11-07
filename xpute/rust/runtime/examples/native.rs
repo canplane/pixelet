@@ -18,15 +18,17 @@ mod program {
     xpute_runtime::native_abi!(
         Config {
             mem_bytes: MEM_BYTES,
-            data_end: 0,
             heap_at: 16 * xpute_core::mem::section::PAGE_BYTES,
             stack_bytes: 1 << 20,
             thread_name: "demo",
-            now: native::now,
-            stop_hook: None,
-            admit_frame: None,
-            publish: None,
             ready: || true,
+            form: xpute_runtime::native::Form {
+                data_end: 0,
+                now: native::now,
+                stop_hook: None,
+                admit_frame: None,
+                publish: None,
+            },
         },
         turn
     );

@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 import { op, STATUS } from "./api.spec.ts";
 import { FEATURE_NAME, LIMIT_NAME } from "./enum.spec.ts";
 import { GpuRuntime } from "./runtime.ts";
+import { OWN_WORDS } from "@xpute/runtime/ipc/stream.spec.ts";
 
-/** The stream at 0, its head the stream's own two words; the block past it. */
-const HEAD = 2;
+/** The stream at 0, its head the stream's own words; the block past it. */
+const HEAD = OWN_WORDS;
 const BLOCK_AT = 256;
 const BLOCK_WORDS = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32) + 4;
 const SURFACE = 1;

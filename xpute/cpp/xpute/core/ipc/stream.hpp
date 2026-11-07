@@ -46,6 +46,7 @@
 
 #pragma once
 
+#include "stream.spec.hpp"
 #include <atomic>
 #include <cstdint>
 #include <optional>
@@ -70,10 +71,10 @@ constexpr std::uint64_t record_bytes(std::uint64_t args, std::optional<std::uint
 
 class Stream {
   public:
-    static constexpr std::uint32_t END = 0;
-    static constexpr std::uint32_t HEAD = 1;
+    static constexpr std::uint32_t END = stream::END;
+    static constexpr std::uint32_t HEAD = stream::HEAD;
     // The stream's own words, before the user's.
-    static constexpr std::uint32_t OWN_WORDS = 2;
+    static constexpr std::uint32_t OWN_WORDS = stream::OWN_WORDS;
 
     Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head = OWN_WORDS) noexcept;
 

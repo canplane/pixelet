@@ -28,27 +28,21 @@ pub use thread::{
     answer, answer_with, kick, kick_deadline, notify_on, pause, resume, ring, turns, Answer,
     Notify, Vcpu,
 };
-pub use xpute_core::entry::{run, BootInfo, Entry};
+pub use xpute_core::entry::{run, BootInfo, Entry, Form};
 pub use xpute_core::machine::Machine;
 pub use xpute_core::stop::PanicHook;
 
 pub struct Config {
     /// Reserved once, never grown.
     pub mem_bytes: u32,
-    /// `BootInfo::data_end`: the library's statics are the process's, so the
-    /// end of the front the program keeps at the memory's bottom, 0 for none.
-    pub data_end: u32,
     /// A whole number of pages; the heap runs to the memory's end.
     pub heap_at: u32,
     pub stack_bytes: usize,
     pub thread_name: &'static str,
-    pub now: fn() -> f64,
-    /// `BootInfo::stop_hook`.
-    pub stop_hook: Option<PanicHook>,
-    /// `BootInfo::admit`.
-    pub admit_frame: Option<fn() -> bool>,
-    /// `BootInfo::publish`.
-    pub publish: Option<fn()>,
+    /// What the core is handed of its form. Its `data_end`: the library's
+    /// statics are the process's, so the end of the front the program keeps at
+    /// the memory's bottom, 0 for none.
+    pub form: Form,
     /// `Vcpu::ready`: whether a turn may begin (`ready`, for a core with
     /// the machine's rings).
     pub ready: fn() -> bool,
@@ -58,7 +52,7 @@ pub struct Config {
 /// thread, each handed the core: `poll` writes what it has completed into
 /// the memory before each turn, and `publish` runs what the core has just
 /// published to it, as the core rings it (`BootInfo::publish`). Its
-/// admission is what the core is handed as `BootInfo::admit`.
+/// admission is what the core is handed as `Form::admit_frame`.
 #[derive(Clone, Copy)]
 pub struct Device {
     pub poll: fn(Core),
@@ -152,13 +146,9 @@ impl Core {
     pub fn boot_info(self, cfg: &Config) -> BootInfo {
         BootInfo {
             given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
-            data_end: cfg.data_end,
-            now: cfg.now,
             call: thread::call,
             heap_stat: alloc::stat,
-            stop_hook: cfg.stop_hook,
-            admit_frame: cfg.admit_frame,
-            publish: cfg.publish,
+            form: cfg.form,
         }
     }
 }
@@ -342,15 +332,17 @@ macro_rules! native_core {
         $crate::native_abi!(
             $crate::native::Config {
                 mem_bytes: $machine.min_mem_bytes(),
-                data_end: $machine.global_base(),
                 heap_at: $machine.heap_at($machine.global_base(), $fixed_bytes),
                 stack_bytes: $machine.thread_stack_bytes as usize,
                 thread_name: "xpute-core",
-                now: $crate::native::now,
-                stop_hook: Some($crate::native::stop_hook),
-                admit_frame: xpute_native_core::DEVICE.admit_frame,
-                publish: Some(xpute_native_core::publish),
                 ready: $crate::native::ready,
+                form: $crate::native::Form {
+                    data_end: $machine.global_base(),
+                    now: $crate::native::now,
+                    stop_hook: Some($crate::native::stop_hook),
+                    admit_frame: xpute_native_core::DEVICE.admit_frame,
+                    publish: Some(xpute_native_core::publish),
+                },
             },
             xpute_native_core::xpute_turn
         );

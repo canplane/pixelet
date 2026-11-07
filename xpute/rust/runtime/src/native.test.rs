@@ -15,15 +15,17 @@ const HEAP_AT: u32 = 16 * PAGE_BYTES;
 fn cfg(heap_at: u32) -> Config {
     Config {
         mem_bytes: MEM_BYTES,
-        data_end: 0,
         heap_at,
         stack_bytes: 1 << 20,
         thread_name: "test-core",
-        now: || 42.0,
-        stop_hook: None,
-        admit_frame: None,
-        publish: None,
         ready: || true,
+        form: xpute_runtime::native::Form {
+            data_end: 0,
+            now: || 42.0,
+            stop_hook: None,
+            admit_frame: None,
+            publish: None,
+        },
     }
 }
 

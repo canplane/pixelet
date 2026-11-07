@@ -231,8 +231,8 @@ pub fn booted() -> bool {
 /// `Numbers`), the machine takes the GPU device, and off WebAssembly it is
 /// xpute-gpu's `native_core!` instead: the GPU's runtime a device beside the
 /// core, polled before each turn and rung as the core publishes its stream
-/// (`BootInfo::publish`), and its admission handed the entry
-/// (`BootInfo::admit`); as a WebAssembly module, its admission is the
+/// (`Form::publish`), and its admission handed the entry
+/// (`Form::admit_frame`); as a WebAssembly module, its admission is the
 /// page's (xpute-gpu `admit::page`) at the numbers' frame latency. The
 /// program's crate then depends on xpute-gpu, with its `runtime` feature for
 /// every target but wasm32.

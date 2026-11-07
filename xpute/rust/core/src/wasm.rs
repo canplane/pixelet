@@ -39,7 +39,7 @@ pub struct Config {
     /// The stack it was linked with (`LinkConfig::stack_bytes`), checked
     /// against `__stack_high` as it boots.
     pub stack_bytes: u32,
-    /// What it is handed as `BootInfo::admit`: the page's admission where it
+    /// What it is handed as `Form::admit_frame`: the page's admission where it
     /// draws (xpute-gpu `admit::page`, `core!` given the GPU), none where
     /// it draws nothing.
     pub admit_frame: Option<fn() -> bool>,
@@ -54,13 +54,15 @@ pub fn boot_info(
     xpute_kit::ensure!(high == cfg.stack_bytes, ENOTRECOVERABLE, high);
     crate::entry::BootInfo {
         given: u32::try_from(given()).unwrap_or(u32::MAX),
-        data_end: data_end(),
-        now,
         call,
         heap_stat,
-        stop_hook: None,
-        admit_frame: cfg.admit_frame,
-        publish: None,
+        form: crate::entry::Form {
+            data_end: data_end(),
+            now,
+            stop_hook: None,
+            admit_frame: cfg.admit_frame,
+            publish: None,
+        },
     }
 }
 

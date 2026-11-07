@@ -19,18 +19,27 @@
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;
 
-/// What every core is handed, whichever form it is built in. Asked for as a
+/// What every core is handed, whichever form it is built in: what its runtime
+/// measures and installs, and what its form says (`Form`). Asked for as a
 /// function (`Entry`).
 #[derive(Clone, Copy)]
 pub struct BootInfo {
     /// The bytes of the core memory, which never grows.
     pub given: u32,
+    pub call: crate::call::Call,
+    pub heap_stat: fn() -> HeapStat,
+    pub form: Form,
+}
+
+/// What a core's form says of it: a module's as its linker and its page give
+/// it (`wasm`), a native library's as its config does (xpute-runtime
+/// `native::Config`).
+#[derive(Clone, Copy)]
+pub struct Form {
     /// Where the core's own ranges may begin: in a module where the linker
     /// stopped; in a native library, the end of its config's front.
     pub data_end: u32,
     pub now: fn() -> f64,
-    pub call: crate::call::Call,
-    pub heap_stat: fn() -> HeapStat,
     /// Where a form whose core shares its process with the runtime says why
     /// the core stopped, and ends its thread (`stop::install`); none where
     /// the runtime outlives the core apart from it (a page).
@@ -57,10 +66,10 @@ pub fn run(deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
     if !crate::call::is_set() {
         let b = boot();
         if !crate::clock::is_set() {
-            crate::clock::set(b.now);
+            crate::clock::set(b.form.now);
         }
         crate::call::set(b.call);
-        crate::ipc::stream::on_publish(b.publish);
+        crate::ipc::stream::on_publish(b.form.publish);
     }
     entry(deadline_ms, boot)
 }

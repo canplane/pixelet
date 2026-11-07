@@ -20,15 +20,17 @@ fn core() -> Core {
         native::boot(
             &Config {
                 mem_bytes: MEM_BYTES,
-                data_end: 0,
                 heap_at: HEAP_AT,
                 stack_bytes: 1 << 20,
                 thread_name: "test-core",
-                now: native::now,
-                stop_hook: None,
-                admit_frame: None,
-                publish: None,
                 ready: || true,
+                form: xpute_runtime::native::Form {
+                    data_end: 0,
+                    now: native::now,
+                    stop_hook: None,
+                    admit_frame: None,
+                    publish: None,
+                },
             },
             |_| -1.0,
         )
