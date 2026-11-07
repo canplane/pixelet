@@ -1,41 +1,41 @@
 // cpp/xpute/core/sched/edge.hpp
 
 // A core's side of the turn: the deadline it keeps, the tasks parked until
-// the next rising edge, and what the falling edge asks for.
+// the next rising edge, and what the falling edge asks for. A task parks at
+// most once a turn, so the edge holds no more wakers than the core has tasks:
+// its lists grow to the most parked at once and keep that room.
 
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <coroutine>
-#include <cstddef>
 #include <limits>
 #include <optional>
 #include <utility>
+#include <vector>
 
-#include "xpute/kit/status/bug.hpp"
 #include "xpute/core/clock.hpp"
 #include "wake.hpp"
 #include "task.hpp"
 
 namespace xpute {
 
-template <std::size_t N> class Edge {
+class Edge {
   public:
     void rise(double deadline_ms) noexcept {
         edge_at_ = now();
         deadline_ms_ = deadline_ms;
         until_ = edge_at_ + deadline_ms;
-        std::size_t n = std::exchange(parked_len_, 0);
-        for (std::size_t i = 0; i < n; i++) parked_[i].wake();
-        n = std::exchange(runtime_parked_len_, 0);
-        for (std::size_t i = 0; i < n; i++) runtime_parked_[i].wake();
+        for (Waker w : parked_) w.wake();
+        parked_.clear();
+        for (Waker w : runtime_parked_) w.wake();
+        runtime_parked_.clear();
     }
 
     // Reading clears it.
     double fall() noexcept {
-        bool resched = std::exchange(resched_, false) || parked_len_ > 0;
+        bool resched = std::exchange(resched_, false) || !parked_.empty();
         double at = std::exchange(wake_at_, std::numeric_limits<double>::infinity());
         if (resched) return 0.0;
         if (std::isfinite(at)) return std::max(at - now(), 0.0);
@@ -56,48 +56,40 @@ template <std::size_t N> class Edge {
     // The earliest asked wins.
     void wake_at(double at) noexcept { wake_at_ = std::min(wake_at_, at); }
 
-    void park(Waker waker) noexcept {
-        ensure(parked_len_ < N, Errno::enospc, N);
-        parked_[parked_len_++] = waker;
-    }
+    void park(Waker waker) noexcept { parked_.push_back(waker); }
 
     // Parked until a turn the runtime begins: `fall` asks for none for it.
-    void park_runtime(Waker waker) noexcept {
-        ensure(runtime_parked_len_ < N, Errno::enospc, N);
-        runtime_parked_[runtime_parked_len_++] = waker;
-    }
+    void park_runtime(Waker waker) noexcept { runtime_parked_.push_back(waker); }
 
   private:
     double edge_at_ = 0;
     double deadline_ms_ = 0;
     // When the tasks yield: the deadline's end, or later (`extend_to`).
     double until_ = 0;
-    std::array<Waker, N> parked_{};
-    std::size_t parked_len_ = 0;
-    std::array<Waker, N> runtime_parked_{};
-    std::size_t runtime_parked_len_ = 0;
+    std::vector<Waker> parked_;
+    std::vector<Waker> runtime_parked_;
     bool resched_ = false;
     double wake_at_ = std::numeric_limits<double>::infinity();
 };
 
-template <std::size_t N> struct ParkAwaiter {
-    Edge<N> &edge;
+struct ParkAwaiter {
+    Edge &edge;
     bool ready;
     bool await_ready() const noexcept { return ready; }
     template <class P> void await_suspend(std::coroutine_handle<P> h) const noexcept { edge.park(waker_of(h)); }
     void await_resume() const noexcept {}
 };
 
-template <std::size_t N> ParkAwaiter<N> yield_if_spent(Edge<N> &edge) noexcept {
-    return ParkAwaiter<N>{edge, !edge.spent()};
+inline ParkAwaiter yield_if_spent(Edge &edge) noexcept {
+    return ParkAwaiter{edge, !edge.spent()};
 }
 
-template <std::size_t N> ParkAwaiter<N> next_turn(Edge<N> &edge) noexcept {
-    return ParkAwaiter<N>{edge, false};
+inline ParkAwaiter next_turn(Edge &edge) noexcept {
+    return ParkAwaiter{edge, false};
 }
 
-template <std::size_t N> struct RuntimeParkAwaiter {
-    Edge<N> &edge;
+struct RuntimeParkAwaiter {
+    Edge &edge;
     bool await_ready() const noexcept { return false; }
     template <class P> void await_suspend(std::coroutine_handle<P> h) const noexcept { edge.park_runtime(waker_of(h)); }
     void await_resume() const noexcept {}
@@ -106,8 +98,8 @@ template <std::size_t N> struct RuntimeParkAwaiter {
 // Parked until the next turn the runtime begins, asking for none: the runtime begins
 // it once it has done what the task waits for, as its read of the completion
 // ring kicks one.
-template <std::size_t N> RuntimeParkAwaiter<N> runtime_turn(Edge<N> &edge) noexcept {
-    return RuntimeParkAwaiter<N>{edge};
+inline RuntimeParkAwaiter runtime_turn(Edge &edge) noexcept {
+    return RuntimeParkAwaiter{edge};
 }
 
 // A wait for something to arrive that asks for no turn meanwhile, so an idle

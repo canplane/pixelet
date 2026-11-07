@@ -8,13 +8,9 @@ use xpute_core::clock;
 use xpute_core::global::Global;
 use xpute_core::sched::task;
 
-/// The most tasks the world's edge parks at once, a task parking at most
-/// once a turn, with room to spare; the kernel runs no more tasks than it.
-pub const TASKS_MOST: usize = 256;
+static EDGE: Global<Edge> = Global::new();
 
-static EDGE: Global<Edge<TASKS_MOST>> = Global::new();
-
-pub fn world_edge() -> &'static mut Edge<TASKS_MOST> {
+pub fn world_edge() -> &'static mut Edge {
     EDGE.get(Edge::new)
 }
 

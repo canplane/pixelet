@@ -8,7 +8,6 @@
 
 use crate::domain::scene::model::asset::REGISTRATIONS;
 use crate::sys::load::LOAD_FILES;
-use crate::sys::sched::edge::TASKS_MOST;
 use embassy_executor::raw::Executor as Raw;
 use xpute_core::global::Global;
 use xpute_core::sched::task::{self, Executor, Priority, Task};
@@ -18,11 +17,6 @@ use xpute_core::sched::task::{self, Executor, Priority, Task};
 /// catalog's or the sphere's (sys/io/loader.rs `arrival`), and one for each
 /// model registering (domain/scene/model/asset.rs `registration`).
 pub(crate) const TASKS: usize = 2 + LOAD_FILES + REGISTRATIONS;
-
-const _: () = assert!(
-    TASKS <= TASKS_MOST,
-    "the world's edge parks fewer tasks than the kernel runs"
-);
 
 struct OneThread;
 

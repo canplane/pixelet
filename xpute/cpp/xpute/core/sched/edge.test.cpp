@@ -44,7 +44,7 @@ class Fifo final : public Executor {
 };
 
 Fifo fifo;
-Edge<2> edge;
+Edge edge;
 Notify notice;
 std::vector<int> seen;
 
@@ -54,7 +54,7 @@ void reset() {
     set_executor(fifo);
     fifo.poll();
     fifo.wakes = 0;
-    edge = Edge<2>();
+    edge = Edge();
     notice = Notify();
     seen.clear();
 }

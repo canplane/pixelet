@@ -33,9 +33,9 @@ fn waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(core::ptr::null(), &VTABLE)) }
 }
 
-static EDGE: Global<Edge<2>> = Global::new();
+static EDGE: Global<Edge> = Global::new();
 
-fn edge() -> &'static mut Edge<2> {
+fn edge() -> &'static mut Edge {
     EDGE.get(Edge::new)
 }
 
