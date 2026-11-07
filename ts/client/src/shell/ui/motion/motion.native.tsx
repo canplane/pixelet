@@ -10,21 +10,13 @@ import { useEffect, useReducer, useRef } from "react";
 import { Animated, Easing, type EasingFunction } from "react-native";
 
 import {
+  CHANNELS,
   type MotionProps,
   type Pose,
   resolve,
   type SpinProps,
 } from "@/shell/ui/motion/pose.ts";
 import { curveAt, type Transition } from "@/shell/ui/motion/transition.ts";
-
-type Channel = keyof Pose;
-const CHANNELS: readonly Channel[] = [
-  "opacity",
-  "translateX",
-  "translateY",
-  "scale",
-  "rotate",
-];
 
 function timing(t: Transition): {
   duration: number;
@@ -51,11 +43,11 @@ export function Motion({
   const target = resolve(to);
   const init = resolve(from ?? to);
 
-  const values = useRef<Record<Channel, Animated.Value> | null>(null);
+  const values = useRef<Record<keyof Pose, Animated.Value> | null>(null);
   if (values.current === null) {
     values.current = Object.fromEntries(
       CHANNELS.map((c) => [c, new Animated.Value(init[c])]),
-    ) as Record<Channel, Animated.Value>;
+    ) as Record<keyof Pose, Animated.Value>;
   }
   const v = values.current;
 
@@ -101,14 +93,7 @@ export function Motion({
       commit();
       settled.current?.();
     });
-  }, [
-    target.opacity,
-    target.translateX,
-    target.translateY,
-    target.scale,
-    target.rotate,
-    replay,
-  ]);
+  }, [...CHANNELS.map((c) => target[c]), replay]);
 
   // Under StrictMode a view put back arrives again from `from`.
   useEffect(

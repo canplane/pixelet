@@ -10,7 +10,11 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import type { SensorListener } from "./types.ts";
+import type {
+  GeolocationSensor,
+  OrientationSensor,
+  SensorListener,
+} from "./types.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** Set once at boot, before any sensor starts. */
@@ -18,26 +22,6 @@ let listener: SensorListener;
 
 export function listen(given: SensorListener): void {
   listener = given;
-}
-
-function geo_has(): boolean {
-  return true;
-}
-
-function orient_has(): boolean {
-  return PLATFORM.headingAvailable();
-}
-
-function orient_gated(): boolean {
-  return false;
-}
-
-function orient_silence(): boolean {
-  return false;
-}
-
-function orient_permit(): Promise<boolean> {
-  return Promise.resolve(true);
 }
 
 let granted: boolean | null = null;
@@ -192,12 +176,17 @@ function orient_stop(): void {
   orientation = null;
 }
 
-export const geo = { has: geo_has(), start: geo_start, stop: geo_stop };
-export const orient = {
-  has: orient_has(),
-  gated: orient_gated(),
-  silence: orient_silence(),
-  permit: orient_permit,
+export const geo: GeolocationSensor = {
+  has: true,
+  start: geo_start,
+  stop: geo_stop,
+};
+export const orient: OrientationSensor = {
+  has: PLATFORM.headingAvailable(),
+  gated: false,
+  silence: false,
+  // The compass is granted with the location, asked as its watch starts.
+  permit: () => Promise.resolve(true),
   start: orient_start,
   stop: orient_stop,
 };

@@ -57,6 +57,27 @@ export interface SensorListener {
   ): void;
 }
 
+/** The place's location, watched between a start and a stop. */
+export interface GeolocationSensor {
+  has: boolean;
+  start(): void;
+  stop(): void;
+}
+
+/** The place's compass, heard between a start and a stop. */
+export interface OrientationSensor {
+  has: boolean;
+  /** Whether a prompt raised inside a gesture gates it, as iOS Safari's does. */
+  gated: boolean;
+  /** Whether silence is how its loss shows: a browser's says nothing when it
+   * stops hearing, and a device's says its failure. */
+  silence: boolean;
+  /** Whether it is granted, asked where a prompt gates it. */
+  permit(): Promise<boolean>;
+  start(): void;
+  stop(): void;
+}
+
 /** A surface the core draws into, by the handle it gave; 0 is none. */
 export interface SurfaceDriver {
   /** The kernel's handle for a new surface, 0 where it has none left. */

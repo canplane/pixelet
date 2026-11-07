@@ -10,6 +10,7 @@ import { useLayoutEffect, useRef } from "react";
 import { View } from "react-native";
 
 import {
+  CHANNELS,
   type MotionProps,
   type Pose,
   resolve,
@@ -25,13 +26,7 @@ function keyframe(p: Required<Pose>): Keyframe {
 }
 
 function same(a: Required<Pose>, b: Required<Pose>): boolean {
-  return (
-    a.opacity === b.opacity &&
-    a.translateX === b.translateX &&
-    a.translateY === b.translateY &&
-    a.scale === b.scale &&
-    a.rotate === b.rotate
-  );
+  return CHANNELS.every((c) => a[c] === b[c]);
 }
 
 function timing(t: Transition): KeyframeAnimationOptions {
@@ -98,14 +93,7 @@ export function Motion({
       },
       () => {},
     );
-  }, [
-    target.opacity,
-    target.translateX,
-    target.translateY,
-    target.scale,
-    target.rotate,
-    replay,
-  ]);
+  }, [...CHANNELS.map((c) => target[c]), replay]);
 
   // Under StrictMode a view put back must arrive again from `from`; kept as
   // it was, it would read its canceled start as the end and play nothing.

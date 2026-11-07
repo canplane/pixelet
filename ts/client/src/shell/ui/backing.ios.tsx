@@ -37,18 +37,19 @@ function effectAt(level: f64, place: Place): Effect {
   return "regular";
 }
 
-export function Backing({
-  fill,
-  material,
-  tint,
-  interactive,
-  place,
-  fade = 1,
-  fadeFrom,
-  transition = SNAP,
-  style,
-  children,
-}: BackingProps) {
+export function Backing(props: BackingProps) {
+  const {
+    fill,
+    material,
+    tint,
+    interactive,
+    place,
+    fade = 1,
+    fadeFrom,
+    transition = SNAP,
+    style,
+    children,
+  } = props;
   const dim = useDim(fade, transition, fadeFrom);
 
   const target = effectAt(dim.level, place);
@@ -89,20 +90,7 @@ export function Backing({
     );
   }
 
-  if (!SYSTEM_BACKING) {
-    return (
-      <Fill
-        fill={fill}
-        place={place}
-        fade={fade}
-        fadeFrom={fadeFrom}
-        transition={transition}
-        style={style}
-      >
-        {children}
-      </Fill>
-    );
-  }
+  if (!SYSTEM_BACKING) return <Fill {...props} />;
 
   const {
     boxShadow: _shadow,

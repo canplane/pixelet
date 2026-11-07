@@ -5,7 +5,11 @@
  * behind a prompt that must be raised inside the gesture.
  */
 
-import type { SensorListener } from "./types.ts";
+import type {
+  GeolocationSensor,
+  OrientationSensor,
+  SensorListener,
+} from "./types.ts";
 
 /** Set once at boot, before any sensor starts. */
 let listener: SensorListener;
@@ -21,10 +25,6 @@ type IosOrientationEventCtor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<"granted" | "denied">;
 };
 
-function geo_has(): boolean {
-  return "geolocation" in navigator;
-}
-
 function orient_has(): boolean {
   return typeof DeviceOrientationEvent !== "undefined";
 }
@@ -35,11 +35,6 @@ function orient_gated(): boolean {
     typeof (DeviceOrientationEvent as IosOrientationEventCtor)
       .requestPermission === "function"
   );
-}
-
-/** No event says the listener stopped hearing, so silence is how a loss shows. */
-function orient_silence(): boolean {
-  return true;
 }
 
 let geo_watch: number | null = null;
@@ -191,11 +186,15 @@ function orient_stop(): void {
   orient_event = null;
 }
 
-export const geo = { has: geo_has(), start: geo_start, stop: geo_stop };
-export const orient = {
+export const geo: GeolocationSensor = {
+  has: "geolocation" in navigator,
+  start: geo_start,
+  stop: geo_stop,
+};
+export const orient: OrientationSensor = {
   has: orient_has(),
   gated: orient_gated(),
-  silence: orient_silence(),
+  silence: true,
   permit: orient_permit,
   start: orient_start,
   stop: orient_stop,

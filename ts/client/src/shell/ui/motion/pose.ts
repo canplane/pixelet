@@ -28,6 +28,15 @@ const REST: Required<Pose> = {
   rotate: 0,
 };
 
+/** Every channel, each moved on its own. */
+export const CHANNELS: readonly (keyof Pose)[] = [
+  "opacity",
+  "translateX",
+  "translateY",
+  "scale",
+  "rotate",
+];
+
 export function resolve(p: Pose): Required<Pose> {
   return { ...REST, ...p };
 }
