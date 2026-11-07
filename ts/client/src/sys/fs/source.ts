@@ -35,7 +35,7 @@ export interface Declaration {
 }
 
 /** A version is one segment of a URL, so a tile's name stays under it (pxl-spec
- * bake/source.rs `is_version`, by the same bytes and the same characters). */
+ * bake/source.rs `is_version`, both held to rust/spec/golden/bake/version.tsv). */
 function is_version(s: string): boolean {
   return (
     s.length >= 1 &&

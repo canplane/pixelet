@@ -15,7 +15,9 @@ pub fn key(name: &str) -> Option<Quadrant> {
     Quadrant::of_key(name).filter(|t| t.zoom <= SHARD_ZOOM)
 }
 
-/// A version is one segment of a URL, so a tile's name stays under it.
+/// A version is one segment of a URL, so a tile's name stays under it. The
+/// client's source holds the same rule (ts/client/src/sys/fs/source.ts), both
+/// to one record (golden/bake/version.tsv).
 pub fn is_version(version: &str) -> bool {
     !version.is_empty()
         && version.len() <= VERSION_BYTES
@@ -29,3 +31,7 @@ pub fn is_version(version: &str) -> bool {
 pub fn is_sharded(layer: BaseLayer) -> bool {
     layer != BaseLayer::earth
 }
+
+#[cfg(test)]
+#[path = "source.test.rs"]
+mod test;
