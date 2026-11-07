@@ -603,3 +603,11 @@ The S23, fixed resolution, 120 s drives by turns, the report's last 60 s:
 At 719 MHz the p50 is 6.1× the deployed build's and the p95 5.7×. The deployed build's p95 has
 read 437.6 to 1282.1 over its runs, on 60–92 timed frames, so 11-07's 1.2× at 550 MHz and this
 5.7× are one pair each; no pair at 550 MHz was taken again.
+
+**A split's air children (ESVO's child masks), measured and dropped.** What a light's ray asks
+on the real-world test data, walked whole from the root on the CPU, 81 rays a case over 14
+cases: 17–50 nodes a ray, of them 73–95% splits, 0–12% air (25% in the case on what is placed)
+and 0–7% cells. A mask skips the air alone, past what the split's box already skips, so at most
+about a tenth of the visits; it needs 8 bits where a split's words have 4 left, a coarser box
+for them, and each split's children asked to fill it. The visits are the descent, not the air.
+The eye's rays were not counted; sibling loads and subgroups were not tried.

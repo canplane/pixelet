@@ -16,11 +16,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   p95 1.2×; the bar is 2×. The p95 is the light's. On the Mac's drive, 43% of the light's time is
   the box's depth stepping as the eye moves along the light, which casts every tile read
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
-- **A split's air children skipped (ESVO's child masks).** A split's answer carries its
-  eight children's occupancy, kept with it in the node cache; a walk crosses an air child
-  without asking or looking it up, the engine's walk by the same rule. Then sibling
-  loads (a split's crossed children asked together) and, where the S23 and Safari offer
-  them, subgroups.
 
 ## P1
 
