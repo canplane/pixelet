@@ -31,7 +31,7 @@ use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
-/// (pxl-kernel domain/view/lens.rs `Lens`) scaled by where it lies on the screen,
+/// (pxl-core domain/view/lens.rs `Lens`) scaled by where it lies on the screen,
 /// as a projection puts it.
 pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f32) -> [f32; 3] {
     let d = [
@@ -83,7 +83,12 @@ impl Detail {
     /// At `d2`, a distance squared. Held by `max` then `min`, not `clamp`,
     /// which aborts where `range` inverts (lib.rs): there, its finest.
     pub fn at(self, d2: f32) -> Zoom {
-        cell_zoom_at(d2).max(self.range[0]).min(self.range[1])
+        self.hold(cell_zoom_at(d2))
+    }
+
+    /// Zoom `z` held to `range`, as `at` holds it.
+    pub fn hold(self, z: Zoom) -> Zoom {
+        z.max(self.range[0]).min(self.range[1])
     }
 
     /// Whether a walk asking it may take what one asking `other` met: the
@@ -278,11 +283,62 @@ impl Node {
                 self.zoom,
                 idx_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
             ),
-            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom) - y_start(self.zoom),
-            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom) - z_start(self.zoom),
+            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom)
+                .wrapping_sub(y_start(self.zoom)),
+            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom)
+                .wrapping_sub(z_start(self.zoom)),
         ]
     }
+
+    /// The node the world names `idx` at `zoom`, as a walk from the origin `o` holds it
+    /// (`idx`'s inverse): its corner off the index's low bits, and on each axis the root,
+    /// the origin's or one either side, whose copy of the node has its middle nearer the
+    /// origin than half a root, which is the walk's wherever the node lies within `REACH` of
+    /// the origin at zoom 1 or finer (pxl-render record.wgsl `node_of_idx`).
+    pub fn of_idx(o: [i32; 3], zoom: Zoom, idx: [i32; 3]) -> Node {
+        let og = grid_of(o);
+        let start = [0, y_start(zoom), z_start(zoom)];
+        let low = if zoom >= FINEST_ZOOM {
+            u32::MAX
+        } else {
+            (1u32 << zoom) - 1
+        };
+        let u = under(zoom);
+        let axis = |a: usize| {
+            let n = (idx[a] as u32).wrapping_add(start[a] as u32) & low;
+            let corner = if zoom == 0 {
+                0
+            } else {
+                n << (FINEST_ZOOM - zoom.min(FINEST_ZOOM))
+            };
+            // Its middle on the finest grid of its root, and the origin's of the origin's.
+            let mid = corner + (u >> 1);
+            let root = if mid >= og[a] {
+                -i32::from(mid - og[a] >= 1 << 31)
+            } else {
+                i32::from(og[a] - mid > 1 << 31)
+            };
+            (corner, root)
+        };
+        let (x, y, z) = (axis(0), axis(1), axis(2));
+        Node {
+            corner: [x.0, y.0, z.0],
+            zoom,
+            roots: [x.1, y.1, z.1],
+        }
+    }
 }
+
+/// How far from its origin, in units, the eye's rays reach at most: a quarter of a root,
+/// which every draw distance stays within (pxl-spec layer/lattice.rs). Within it a node
+/// of zoom 1 or finer lies nearer than half the world's X to its origin on one side
+/// alone (`Node::of_idx`), and every node coarser than `FINEST_ZOOM` is one the node
+/// cache keeps (`node_cache::keeps`).
+pub const REACH: u32 = 1 << (UNIT_ZOOM - 2);
+const _: () = assert!(
+    2 * REACH <= 1 << (UNIT_ZOOM - 1),
+    "a node of zoom 1 within reach has one copy within half the world's X of its origin"
+);
 
 /// Y's Q3 steps from the world's south edge to 0, and Z's from its floor.
 pub const Y_START: u32 = 1 << 31;
@@ -303,7 +359,7 @@ pub fn grid_of(o: [i32; 3]) -> [u32; 3] {
 /// The root holding the origin `o` on each axis: its place on the grid over
 /// the root's side, 2^32, floored, so 0 or −1: X either side of the seam, Y always
 /// 0, Z 0 from the world's floor up.
-fn roots_of(o: [i32; 3]) -> [i32; 3] {
+pub fn roots_of(o: [i32; 3]) -> [i32; 3] {
     [o[0] >> 31, 0, o[2].wrapping_add(Z_START as i32) >> 31]
 }
 
@@ -471,7 +527,7 @@ pub fn fill_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f3
 /// floor of its node `n` on its grid from the origin `o`, and the share of
 /// the node's side its top lies over that floor — its cube's top where its
 /// word `asset` keeps it whole, else its fill box's. What a walker and decor
-/// stand on (pxl-kernel domain/query/ray.rs `hit`, `support::column_surface`).
+/// stand on (pxl-core domain/query/ray.rs `hit`, `support::column_surface`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
     (n.idx(o)[2], fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
 }
@@ -611,18 +667,15 @@ pub enum End {
     Lacks,
 }
 
-/// What the walk met: how it ended, where it stopped when it did, and how
-/// many nodes it asked the world about (`Query::node`), the one count of a
-/// ray's steps the CPU and a GPU both report.
+/// What the walk met: how it ended, and where it stopped when it did.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Trace<A> {
     pub ends: End,
     pub hit: Hit<A>,
-    pub visits: u32,
 }
 
-/// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and each by
-/// hand (pxl-render beam_walk.wgsl, ask.wgsl, walk.wgsl) end there, gone to their reach. A
+/// The most steps a walk takes, a node it looks at a step: the engine's (`walk`) and the one
+/// by hand (pxl-render walk.wgsl), over either node module, end there, gone to their reach. A
 /// float gone wrong ends there, on a phone where a walk that does not end loses the device.
 /// Far more than a ray takes.
 pub const STEPS_MOST: u32 = 4096;
@@ -659,6 +712,13 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// and stops on the same cell.
 fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
+}
+
+/// The zooms every ray from the origin `o` asks the node `n` at (`ask_zooms`), as the walk
+/// asks them: far, then near.
+pub fn node_zooms(o: [i32; 3], n: &Node, detail: Detail) -> [Zoom; 2] {
+    let (lo, hi) = bounds(n, grid_of(o));
+    ask_zooms(detail, node_dist_sq(lo, hi))
 }
 
 /// A vector's length squared.
@@ -801,11 +861,10 @@ pub fn walk_at_most<Q: Query>(
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
-    // over it (`stack`, its own from `low` down, `over`'s above), and its
-    // visits.
+    // over it (`stack`, its own from `low` down, `over`'s above).
     let (mut n, mut at, mut t) = from;
     let mut stack = [at; DEPTH];
-    let (mut low, mut visits) = (n.zoom, 0);
+    let mut low = n.zoom;
     let mut step = 0;
     while step < steps {
         step += 1;
@@ -822,7 +881,6 @@ pub fn walk_at_most<Q: Query>(
         if t1 > t0 {
             let dist_sq = node_dist_sq(lo, hi);
             let i = q.node(&mut at, n.zoom, n.idx(o), ask_zooms(detail, dist_sq), t0);
-            visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
                 && lo[1] <= 0.0
@@ -954,7 +1012,7 @@ pub fn walk_at_most<Q: Query>(
                     at,
                     asset: i.asset,
                 };
-                let met = Trace { ends, hit, visits };
+                let met = Trace { ends, hit };
                 leave(keep, &met, &mut stack, low, over);
                 return met;
             }
@@ -1002,7 +1060,6 @@ pub fn walk_at_most<Q: Query>(
                 let met = Trace {
                     ends: End::Miss,
                     hit,
-                    visits,
                 };
                 leave(keep, &met, &mut stack, low, over);
                 return met;
@@ -1075,7 +1132,6 @@ pub fn walk_at_most<Q: Query>(
     let met = Trace {
         ends: End::Miss,
         hit,
-        visits,
     };
     leave(keep, &met, &mut stack, low, over);
     met
@@ -1102,8 +1158,40 @@ fn leave<A: Copy, K: Keep<A>>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use xpute_kit::math::rng::mix64;
+
+    /// A point on the finest grid in its root, and that root (`point_at`).
+    type Point = ([u32; 3], [i32; 3]);
+
+    /// The `i`th of a spread of origins in the world, about X's seam and its edges, its
+    /// floor and its top among them, and a point on a ray from it within `REACH`; none
+    /// where the direction drawn is too short to give a ray.
+    pub(crate) fn reached(i: u64) -> Option<([i32; 3], Point)> {
+        // The world's height in Q3 steps, from its floor.
+        let height = 1i64 << (HEIGHT_BITS + FRAC_W);
+        let h = mix64(i);
+        let x = [0, i32::MAX, i32::MIN, (h >> 7) as i32][(h & 3) as usize]
+            .wrapping_add((h >> 9) as i32 >> 12);
+        let y = [i32::MAX, i32::MIN, (h >> 21) as i32][(h >> 3) as usize % 3]
+            .wrapping_sub((h >> 40) as i32 >> 14);
+        let z = match (h >> 5) % 3 {
+            0 => -(Z_START as i32),
+            1 => (height - i64::from(Z_START) - 1) as i32,
+            _ => ((h >> 24) as i64 % height - i64::from(Z_START)) as i32,
+        };
+        let o = [x, y, z];
+        let g = mix64(i ^ 0xA5A5);
+        let d = [g, g >> 21, g >> 42].map(|v| (v & 0x1f_ffff) as f32 / 1_048_576.0 - 1.0);
+        let len = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        if len < 1e-3 {
+            return None;
+        }
+        let ray = Ray::new(d.map(|v| v / len), REACH as f32);
+        let t = (g >> 50) as f32 / (1u64 << 14) as f32 * (REACH - 1) as f32;
+        Some((o, point_at(o, &ray, t)))
+    }
 
     /// A node held from one origin is the same world node held from
     /// another a little off, across a root's edge and X's seam alike.
@@ -1135,11 +1223,29 @@ mod tests {
             }
         }
     }
+
+    /// The world's name of a node within `REACH` of an origin in the world names it again
+    /// as the walk from that origin holds it, at every zoom from 1 to the finest, about X's
+    /// seam and the world's edges alike.
+    #[test]
+    fn idx_names_its_node_within_reach() {
+        let mut checked = 0;
+        for (o, p) in (0..20_000u64).filter_map(reached) {
+            for zoom in 1..=FINEST_ZOOM {
+                let n = Node {
+                    corner: p.0.map(|c| c & !under(zoom)),
+                    zoom,
+                    roots: p.1,
+                };
+                assert_eq!(Node::of_idx(o, zoom, n.idx(o)), n, "{o:?} {p:?} {zoom}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 500_000);
+    }
     use crate::answer;
-    use crate::answer::BoxWords;
     use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::content::Sample;
-    use crate::grid;
     use crate::overwrite::AIR;
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of
@@ -1222,112 +1328,6 @@ mod tests {
         // Whole, the cube's face.
         let met = along(EIGHTHS, 0.5, 0.5);
         assert!((met.hit.t - 5.0).abs() < 1e-5, "{}", met.hit.t);
-    }
-
-    /// Every split's content in the box `0` names, air at the leaves.
-    struct BoxQuery(BoxWords);
-
-    impl Query for BoxQuery {
-        type At = ();
-        fn root(&mut self, _: [i32; 3]) {}
-        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(
-            &mut self,
-            _: &mut (),
-            zoom: Zoom,
-            _: [i32; 3],
-            _: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            if zoom < UNIT_ZOOM {
-                In {
-                    kind: Kind::Split,
-                    asset: self.0,
-                }
-            } else {
-                In {
-                    kind: Kind::Cell,
-                    asset: [AIR, 0],
-                }
-            }
-        }
-    }
-
-    /// A ray passes a split whole where it misses the split's box on any
-    /// axis, and enters it where it meets it.
-    #[test]
-    fn ray_passes_missed_split() {
-        use crate::answer::box_word;
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(5.0), steps(-0.4), steps(0.6)];
-        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
-        let detail = Detail {
-            range: [UNIT_ZOOM, UNIT_ZOOM],
-            spacing: Spacing {
-                angle: grid::CELL,
-                across: 0.0,
-            },
-        };
-        let walk = |b: BoxWords| first(&mut BoxQuery(b), o, &ray, detail, Until::Opaque);
-        // The origin lies in the root's lower half on every axis.
-        for missed in [
-            box_word([512, 0, 0], [1024; 3]),
-            box_word([0, 512, 0], [1024; 3]),
-            box_word([0, 0, 512], [1024; 3]),
-        ] {
-            let met = walk(missed);
-            assert_eq!(
-                (met.ends, met.visits),
-                (End::Miss, 1),
-                "{:?}",
-                box_of(missed)
-            );
-        }
-        assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
-        // An edge that is not a half: the origin, the world's floor at the
-        // root's, lies in the root's third step along z, so a box from its fourth
-        // misses and one to it meets.
-        assert_eq!(walk(box_word([0, 0, 3], [1024; 3])).visits, 1);
-        assert!(walk(box_word([0; 3], [1024, 1024, 3])).visits > 1);
-        // A beam ray meets a box it clears by less than `2√2` of its width,
-        // and passes one it clears by more: the root's next step along z starts
-        // 2^14 units over the floor of the origin's.
-        let beam = |width: f32| {
-            let detail = Detail {
-                spacing: Spacing {
-                    angle: 0.0,
-                    across: width,
-                },
-                ..detail
-            };
-            first(
-                &mut BoxQuery(box_word([0, 0, 3], [1024; 3])),
-                o,
-                &ray,
-                detail,
-                Until::Beam,
-            )
-        };
-        assert_eq!(beam(1.0).visits, 1);
-        assert!(beam(1.0e4).visits > 1);
-        // Nothing is passed for being thin: a slab one step thick about the
-        // origin, 2^14 units, is entered by a ray whose beam's spacing is far
-        // wider, which no walk but a beam's reads.
-        let wide = Detail {
-            spacing: Spacing {
-                angle: 0.0,
-                across: 1.0e5,
-            },
-            ..detail
-        };
-        let met = first(
-            &mut BoxQuery(box_word([0, 0, 2], [1024, 1024, 3])),
-            o,
-            &ray,
-            wide,
-            Until::Opaque,
-        );
-        assert!(met.visits > 1);
     }
 
     /// A range that inverts, its least over its most, as the eye's may

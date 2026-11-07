@@ -27,9 +27,9 @@ pub const MARKER_TEXT_CHARS: u32 = 40;
 /// The coarsest camera grid cell a scene marker of these shows at: z19, 32 of them across
 /// a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at
 /// (layers/poi/poi.yaml). What someone puts up, by the cells of the brick
-/// it is read from (pxl-kernel domain/scene/marker/pin.rs); a chat line's
+/// it is read from (pxl-core domain/scene/marker/pin.rs); a chat line's
 /// bubble, which no brick holds, by the cell where its speaker stands,
-/// which its speaker judges (pxl-kernel
+/// which its speaker judges (pxl-core
 /// domain/scene/character/companion.rs `line_hangs`).
 pub const MARKER_SHOWN_FROM: u8 = 19;
 
@@ -37,5 +37,5 @@ pub const MARKER_SHOWN_FROM: u8 = 19;
 /// cells, as a place's icon does. A cell shows one pin: where more than
 /// one stands in it, they are one, their count on a pin's pill in its
 /// colors turned over, at the cell's middle over what is drawn there
-/// (pxl-kernel domain/scene/marker/pin.rs).
+/// (pxl-core domain/scene/marker/pin.rs).
 pub const MARKER_SCALE_STEPS: i8 = -1;

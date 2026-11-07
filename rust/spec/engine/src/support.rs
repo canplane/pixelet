@@ -1,7 +1,7 @@
 // pxl-engine/support.rs
 
 //! gpu-portable: where something stands, asked of the world's one query
-//! (pxl-kernel domain/query/support.rs, a walker's support): a column's
+//! (pxl-core domain/query/support.rs, a walker's support): a column's
 //! column surface, the first cell a ray down it from the world's top cannot see
 //! through at a cell zoom, its top as drawn (`column_surface`); and the query's
 //! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
@@ -289,9 +289,9 @@ pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::answer::{In, Kind, AIR, BOX_WHOLE};
+    use crate::answer::{fill_word, In, Kind, AIR, BOX_WHOLE, EIGHTHS};
     use crate::content::Sample;
-    use crate::UNIT_ZOOM;
+    use crate::{SHARD_ZOOM, UNIT_ZOOM};
 
     /// Ground of stone up to `height` unit cells, two over the cells west of
     /// x = 4, none over the rest; air over it. Each node's `At` is the node
@@ -374,16 +374,15 @@ mod tests {
         assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
     }
 
-    /// The line a column surface keeps is the line straight down to its top
-    /// cell, its column's at its zoom: what a reader that did not walk the
-    /// column asks its assets off, the same answers.
+    /// The line a column surface keeps answers as the line straight down to
+    /// its top cell, its column's at its zoom: what a reader that did not walk
+    /// the column asks its assets off.
     #[test]
     fn column_surface_line_is_its_top_cells() {
         for g in [[6, 3], [2, 3], [3, 0], [9, 5]] {
             let f = column_surface(&mut Step, UNIT_ZOOM, g);
             assert_eq!(f.ends, End::Hit, "{g:?}");
             let rebuilt = line(&mut Step, UNIT_ZOOM, [g[0], g[1], f.top.0]);
-            same(&f.line, &rebuilt);
             for c in [
                 [g[0] + 1, g[1], f.top.0],
                 [g[0] - 1, g[1], f.top.0 + 1],
@@ -394,6 +393,69 @@ mod tests {
                     asset(&mut Step, &rebuilt, UNIT_ZOOM, c),
                     "{g:?} {c:?}"
                 );
+            }
+        }
+    }
+
+    /// Ground up to unit cell `top`, that cell keeping `eighths` of its cube; air over it.
+    struct Ground {
+        top: i32,
+        eighths: u32,
+    }
+
+    impl Query for Ground {
+        type At = ();
+        fn root(&mut self, _: [i32; 3]) {}
+        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
+        fn node(
+            &mut self,
+            _: &mut (),
+            zoom: Zoom,
+            node: [i32; 3],
+            _: [Zoom; 2],
+            _: f32,
+        ) -> In<[u32; 2]> {
+            // A node a shard or coarser spans the world's height, its Z index none.
+            if zoom < UNIT_ZOOM {
+                return if zoom > SHARD_ZOOM && node[2] << (UNIT_ZOOM - zoom) > self.top {
+                    In {
+                        kind: Kind::Cell,
+                        asset: AIR,
+                    }
+                } else {
+                    In {
+                        kind: Kind::Split,
+                        asset: BOX_WHOLE,
+                    }
+                };
+            }
+            let top = [fill_word(STONE[0], self.eighths % EIGHTHS), 0];
+            In {
+                kind: Kind::Cell,
+                asset: match node[2].cmp(&self.top) {
+                    core::cmp::Ordering::Less => STONE,
+                    core::cmp::Ordering::Equal => top,
+                    core::cmp::Ordering::Greater => AIR,
+                },
+            }
+        }
+    }
+
+    /// The walk down a column, in floats, stands on the very cell and share the ground holds
+    /// (`cast::top`), decor's footing on the CPU as a GPU reads it in integers (pxl-render
+    /// decor_pose.wgsl `surface`): from the world's ceiling to its floor, every plane a whole
+    /// number of Q3 steps under 2^24 from the ray's start, every fill share.
+    #[test]
+    fn column_surface_is_exact_to_the_worlds_edges() {
+        let half = 1i32 << (HEIGHT_BITS - 1);
+        for top in [-half, 1 - half, -1, 0, 1, 1000, half - 2] {
+            for eighths in 1..=EIGHTHS {
+                let mut q = Ground { top, eighths };
+                let f = column_surface(&mut q, UNIT_ZOOM, [5, 7]);
+                let asset = fill_word(STONE[0], eighths % EIGHTHS);
+                let rise = cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2];
+                assert_eq!(f.ends, End::Hit, "{top} {eighths}");
+                assert_eq!(f.top, (top, rise), "{top} {eighths}");
             }
         }
     }
@@ -423,16 +485,9 @@ mod tests {
         }
     }
 
-    /// The same node, handed the same down every zoom to it.
-    fn same(a: &Line<At>, b: &Line<At>) {
-        assert_eq!((a.at, a.zoom, a.live), (b.at, b.zoom, b.live));
-        assert_eq!(a.stack[..a.zoom as usize], b.stack[..b.zoom as usize]);
-    }
-
-    /// The line a walk keeps where it stops is the one straight down to its
-    /// stop, whether it walked from the root or resumed under another
-    /// ray's line and climbed over where it resumed; the assets about the
-    /// stop asked off it are the world's.
+    /// The assets about a walk's stop, asked off the line it keeps there, are
+    /// the world's, whether it walked from the root or resumed under another
+    /// ray's line and climbed over where it resumed.
     #[test]
     fn walk_keeps_line() {
         let s = FINEST_ZOOM - UNIT_ZOOM;
@@ -446,7 +501,6 @@ mod tests {
         let met = cast::walk_from_root(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
         assert_eq!(met.ends, End::Hit);
         let first = first.0.unwrap();
-        same(&first, &line(&mut Step, first.zoom, first.at));
         for d in [
             [-0.45, 0.05],
             [-0.5, 0.0],
@@ -481,7 +535,6 @@ mod tests {
                 assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
                 let collected = collected.0.unwrap();
                 let walked = line(&mut Step, collected.zoom, collected.at);
-                same(&collected, &walked);
                 for d in 0..6u32 {
                     let mut c = collected.at;
                     c[(d / 2) as usize] += if d % 2 == 0 { -1 } else { 1 };

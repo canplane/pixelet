@@ -1,7 +1,7 @@
 // pxl-spec/bake/way.rs
 
 //! A way covers the cells along its line by pxl-engine way.rs's rule
-//! (`covers`, `half_width`), on the ground and on a deck alike. An approach's palette index is laid into a leaf's cells (`lay`), so every zoom
+//! (`on_way`, `reach2`), on the ground and on a deck alike. An approach's palette index is laid into a leaf's cells (`lay`), so every zoom
 //! folds it as the ground's; its embankment or cutting stays a line.
 
 use fnv::FnvHashMap;
@@ -19,8 +19,8 @@ use crate::space::layer::lattice::TILE_CELLS;
 pub fn lay(sep: &Separation, frame: Frame, palette_indices: &mut [GroundId]) {
     let n = i64::from(TILE_CELLS);
     // per cell: the highest top over it, and its kind
-    let mut laid: FnvHashMap<usize, (f32, u8)> = FnvHashMap::default();
-    sep.crossing_grid(frame, [0.0, 0.0], 1.0, [n, n], |x, y, _, o| {
+    let mut laid: FnvHashMap<usize, (i32, u8)> = FnvHashMap::default();
+    sep.crossing_grid(frame, [0, 0], [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
         if o.form != u32::from(Form::Approach.byte())
             || palette_indices[col] == sentinel::unknown
@@ -28,7 +28,7 @@ pub fn lay(sep: &Separation, frame: Frame, palette_indices: &mut [GroundId]) {
         {
             return;
         }
-        let e = laid.entry(col).or_insert((f32::MIN, o.kind as u8));
+        let e = laid.entry(col).or_insert((i32::MIN, o.kind as u8));
         if o.top > e.0 {
             *e = (o.top, o.kind as u8);
         }

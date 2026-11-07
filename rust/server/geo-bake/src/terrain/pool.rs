@@ -3,7 +3,7 @@
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
 //! (pxl-engine `way::tree::POOL_CHILD_GROUPS`): a fact of the set, not of a
 //! tile, as a window is a fixed grid of bricks about the eye laid at any
-//! brick, across tiles. Each brick's tree is built as a GPU builds it
+//! brick, across tiles. Each brick's tree is built as a client builds it
 //! (pxl-spec `terrain::fill_fit`), once, as its tile is made, and what it
 //! takes is the tile's fit (`line`, pyramid.rs `FITS`); each window's
 //! most is the most any placement of it holds, a sliding sum over its
@@ -69,10 +69,7 @@ pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, S
         .iter()
         .map(|(&cell, bricks)| (cell, most(bricks)))
         .collect();
-    let needs = terrain::pool_needs(
-        |cell| worst.get(&cell).map_or(0, |w| w.1),
-        all.peak_group_cnt,
-    );
+    let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1));
     if needs <= u64::from(POOL_CHILD_GROUPS) {
         all.tiles.sort_unstable_by_key(|(p, _)| *p);
         return Ok(all.tiles);

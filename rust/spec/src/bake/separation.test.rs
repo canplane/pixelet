@@ -28,7 +28,7 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
 fn diagonal_line_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
     let mut covered = fnv::FnvHashSet::default();
-    d.crossing_grid(NOWHERE, [0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
+    d.crossing_grid(NOWHERE, [0, 0], [40, 40], |x, y, _, _| {
         covered.insert((x, y));
     });
     for k in 0..39 {
@@ -62,7 +62,7 @@ fn line_kept_by_width() {
 #[test]
 fn form_from_surface() {
     use crate::asset::cube::ground as t;
-    let over = |form: Form, top: f32| Crossing {
+    let over = |form: Form, top: i32| Crossing {
         low: top,
         top,
         kind: u32::from(t::primary),
@@ -80,39 +80,36 @@ fn form_from_surface() {
     // Two cells a meter: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
     assert_eq!(
-        on(over(Form::Bridge, 30.0), 10, cpm),
+        on(over(Form::Bridge, 30), 10, cpm),
         at(Occupy::Over, [26, 30])
     );
     assert_eq!(
-        on(over(Form::Tunnel, 10.0), 40, cpm),
+        on(over(Form::Tunnel, 10), 40, cpm),
         at(Occupy::Under, [10, 13])
     );
     // a way on the ground moves the ground: filled up to it, cut down to it
     assert_eq!(
-        on(over(Form::Approach, 14.0), 10, cpm),
+        on(over(Form::Approach, 14), 10, cpm),
         at(Occupy::Over, [10, 14])
     );
     assert_eq!(
-        on(over(Form::Approach, 20.0), 10, cpm),
+        on(over(Form::Approach, 20), 10, cpm),
         at(Occupy::Over, [10, 20])
     );
     assert_eq!(
-        on(over(Form::Approach, 10.0), 14, cpm),
+        on(over(Form::Approach, 10), 14, cpm),
         at(Occupy::Under, [10, 14])
     );
-    assert_eq!(
-        on(over(Form::Approach, 10.0), 10, cpm),
-        at(Occupy::Grade, no)
-    );
+    assert_eq!(on(over(Form::Approach, 10), 10, cpm), at(Occupy::Grade, no));
     // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
     let steep = Crossing {
-        low: 22.0,
-        ..over(Form::Bridge, 30.0)
+        low: 22,
+        ..over(Form::Bridge, 30)
     };
     assert_eq!(on(steep, 10, cpm), at(Occupy::Over, [18, 30]));
     let steep = Crossing {
-        low: 10.0,
-        ..over(Form::Tunnel, 18.0)
+        low: 10,
+        ..over(Form::Tunnel, 18)
     };
     assert_eq!(on(steep, 40, cpm), at(Occupy::Under, [10, 21]));
 }

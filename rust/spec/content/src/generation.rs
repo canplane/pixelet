@@ -13,6 +13,7 @@ use pxl_engine::overwrite;
 use pxl_engine::seed::node_seed;
 use pxl_engine::value;
 use pxl_engine::world::{placed_in, PlacedCursor};
+use pxl_engine::WORKGROUPS_MOST;
 use pxl_engine::{wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, UNIT_ZOOM, ZOOM_BITS};
 use xpute_kit::math::rng::SplitMix32;
 
@@ -67,6 +68,10 @@ pub const RECORD_WORDS: u32 = 5;
 /// The eye's clip levels' bricks, an entry each: what the GPU generates decor
 /// in, entry `s` the brick the clip levels' table holds at `s`.
 pub const EYE_ENTRIES: u32 = EYE_CLIP_LEVELS * ENTRIES;
+const _: () = assert!(
+    EYE_ENTRIES * DECORS.len() as u32 <= WORKGROUPS_MOST,
+    "every entry's pairs listed, a workgroup deep each, fit one dispatch (decor_mark.wgsl)"
+);
 
 /// A record no decor stands at: its candidate is deleted by the thinning or
 /// generates nothing where it is, so it is drawn as nothing (`drawn::NONE`
@@ -143,7 +148,7 @@ pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
 /// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its clip level's zoom and every coarser one (`asks`'s vote).
-pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::FILL_CAP;
+pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::FRAME_BRICKS;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// finest clip level zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
@@ -152,7 +157,9 @@ const _: () = assert!(FIRST_CELL > EVERY);
 
 /// What `decor_mark_cs` reads and lists and `decor_thin_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
-/// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
+/// entry-decor pairs listed, within the list's room (`THIN_ARGS`,
+/// `GENERATE_ARGS`), then the pairs it counted as it listed them
+/// (`THIN_CNT`, `GENERATE_CNT`); whether
 /// every entry generates whole, decor having been off (`LIST_EVERY`), how
 /// many boxes (`LIST_BOXES`), how many pairs generate again in part
 /// (`LIST_PARTS`), a pad; the boxes, `BOX_WORDS` each; then the list, an
@@ -162,7 +169,9 @@ const _: () = assert!(FIRST_CELL > EVERY);
 /// `decor_cs` alone generates, its records where a box reaches them
 /// (`reaches`).
 pub const THIN_ARGS: u32 = 0;
+pub const THIN_CNT: u32 = 3;
 pub const GENERATE_ARGS: u32 = 4;
+pub const GENERATE_CNT: u32 = 7;
 pub const LIST_EVERY: u32 = 8;
 pub const LIST_BOXES: u32 = 9;
 pub const LIST_PARTS: u32 = 10;
@@ -318,14 +327,14 @@ pub mod drawn {
     /// The strip an impostor's instance is drawn by, its corners.
     pub const IMPOSTOR_CORNERS: u32 = 4;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, every
-    /// device's dynamic offset alignment), its index list's first slot at
-    /// `UNIFORM_IDX` within it: the columns' base, to which the args pass adds
-    /// the region's first slot once the regions are laid out.
+    /// device's dynamic offset alignment), its index list's first slot within
+    /// it (pxl-render word.rs `instance::IDX`): the columns' base, to which
+    /// the args pass adds the region's first slot once the regions are laid
+    /// out.
     pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
     const OFF_BYTES: u32 = 256;
-    pub const UNIFORM_IDX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
     /// the impostor's floors, each an angle about the eye in radians, the
     /// anchor the columns' positions are about (unit cells, X wrapping), the
@@ -659,7 +668,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// stands at or finer, so it stands where one the ground generates of its
 /// size would. A generated one is asked at the zoom held where it stands
 /// (`held_at`), as a ray there draws. Each clip level generates what stands
-/// as itself at it (pxl-kernel domain/scene/decor/gpu.rs `shown`,
+/// as itself at it (pxl-core domain/scene/decor/gpu.rs `shown`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
     if placed {
@@ -721,10 +730,6 @@ pub const CLAIM_EXTENT: [i32; 3] = {
     let (mut wide, mut tall, mut k) = (1, 1, 0);
     while k < DECORS.len() {
         let d = &DECORS[k];
-        assert!(
-            d.scale_steps == 0,
-            "decor is generated and claimed in unit cells"
-        );
         wide = if d.widest() > wide { d.widest() } else { wide };
         let mut v = 0;
         while v < d.variants as usize {
@@ -742,7 +747,7 @@ pub const CLAIM_EXTENT: [i32; 3] = {
 
 /// The tallest decor and the widest, in unit cells: as high over what it
 /// stands on as anything generated reaches, and as far across (pxl-engine
-/// light.rs `Light::up`, `Light::ring`).
+/// light.rs `Light::box_tiles`; pxl-render decor_ball.wgsl, light_propagate.wgsl `up`).
 pub const TALLEST: i32 = CLAIM_EXTENT[2] + 1;
 pub const WIDEST: i32 = CLAIM_EXTENT[0] + 1;
 

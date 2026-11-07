@@ -1,6 +1,6 @@
 // pxl-spec/bake.rs
 
-//! Baked tile formats shared by the bake and the kernel.
+//! Baked tile formats shared by the bake and the core.
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;

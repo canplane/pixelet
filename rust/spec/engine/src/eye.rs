@@ -1,18 +1,17 @@
 // pxl-engine/eye.rs
 
-//! gpu-portable: the eye a cast is from, as the words the kernel writes
-//! (pxl-kernel domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
+//! gpu-portable: the eye a cast is from, as the words the core writes
+//! (pxl-core domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
 //! reader takes (pxl-render eye_bind.wgsl, gpu/ray/cast.rs and
 //! gpu/generator.rs, the screen pass). Each is a word's place among them, one
 //! layout written here alone.
 
-/// The eye's position in Q3 steps, X, Y and Z.
 use crate::beam;
 use crate::overwrite::Cut;
 
+/// The eye's position in Q3 steps, X, Y and Z, then a word no reader reads, so the next
+/// starts a vec4.
 pub const ORIGIN: usize = 0;
-/// Whether each ray reports the nodes its descent asked, not what it met.
-pub const STEPS: usize = 3;
 /// The unit forward, X, Y and Z, then how far every ray goes (`FAR`), f32 bits.
 pub const FORWARD: usize = 4;
 pub const FAR: usize = 7;
@@ -41,22 +40,22 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// (`light::REACH_NDC`) and a texel's width (`light::W_WIDTH`); then the
 /// reciprocals the light's rules multiply by, each rounded once by the
 /// renderer: the rays' direction's and the reach's, a vec4, and the squares
-/// of the steps across and down and the width's (`light::W_INVERSE` to
-/// `light::W_WIDTH_INVERSE`). All zero where no shadow is cast. The renderer
+/// of the steps across and down (`light::W_INVERSE` to `light::W_DOWN2_INVERSE`); then the
+/// width squared over the split distance squared (`light::W_BAND_SCALE`). All zero where no shadow is cast. The renderer
 /// writes them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the
-/// kernel leaves them zero.
+/// core leaves them zero.
 pub const LIGHT: usize = HIDE + CUT_WORDS;
-pub const LIGHT_WORDS: usize = 28;
+pub const LIGHT_WORDS: usize = 27;
 /// Where each pixel's ray goes through it this frame, its offset from the
-/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
-/// words unused, as the eye is laid out in fours. The renderer's to write;
-/// the kernel leaves it zero.
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits, at the first four past the
+/// light's words, as the eye is laid out in fours; then two words unused, as it is. The
+/// renderer's to write; the core leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
-pub const JITTER: usize = LIGHT + LIGHT_WORDS;
+pub const JITTER: usize = (LIGHT + LIGHT_WORDS).next_multiple_of(4);
 pub(crate) const JITTER_WORDS: usize = 4;
 /// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
-/// `words`), worked out once off the tangents above where the kernel
+/// `words`), worked out once off the tangents above where the core
 /// writes them: every thread of the cast and the renderer's dispatches and
 /// buffer read it here. Past the words a cast is from, those before
 /// `LIGHT`: the frames that stand on a cast's samples keep its grid, and
@@ -66,7 +65,7 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// Every word, the grid last.
 pub const WORDS: usize = GRID + GRID_WORDS;
 const _: () = assert!(
-    STEPS == ORIGIN + 3
+    FORWARD == ORIGIN + 4
         && FAR == FORWARD + 3
         && UP == RIGHT + 4
         && TAN == UP + 4
@@ -76,6 +75,7 @@ const _: () = assert!(
         && LIGHT.is_multiple_of(4)
         && JITTER.is_multiple_of(4)
         && GRID.is_multiple_of(4)
+        && WORDS.is_multiple_of(4)
 );
 
 /// Whether a ball `radius` units wide about `v`, units from the eye, lies
@@ -107,7 +107,7 @@ mod tests {
     fn eye_sees_view() {
         let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
         let tan = [1.0, 0.5];
-        let slope = beam::Grid::of(tan, 1).slope();
+        let slope = beam::Grid::of(tan).slope();
         let sees = |v: [f32; 3], r: f32| sees(axes, tan, slope, v, r);
         assert!(sees([0.0, 10.0, 0.0], 0.0));
         assert!(sees([9.9, 10.0, 0.0], 0.0));

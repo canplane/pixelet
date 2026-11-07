@@ -20,40 +20,16 @@ fn largest_beam_fits_binding() {
     // 33,554,432 words a storage binding holds on every device
     // (pxl-render floor.rs).
     let up = 0.5;
-    let words = Grid::of([up * 4112.0 / 2338.0, up], 1).size();
+    let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
     assert!(words <= 33_554_432, "{words} words");
 }
 
-/// The views the lattice is tried at: the screen's tangents across and up.
+/// The views the grid is tried at: the screen's tangents across and up.
 const VIEWS: [[f32; 2]; 3] = [
     [0.5 * 16.0 / 9.0, 0.5],
     [0.613, 0.5],
     [0.5, 0.5 * 19.5 / 9.0],
 ];
-
-/// The samples are the very rays at every lattice, as many, and each on
-/// the screen resumes from the coarser cell that holds the one it
-/// resumed from at the lattice of one cell.
-#[test]
-fn samples_same_every_lattice() {
-    for tan in VIEWS {
-        let one = Grid::of(tan, 1);
-        let g = Grid::of(tan, LATTICE_MAX);
-        assert_eq!((g.lattice, g.samples), (LATTICE_MAX, one.samples));
-        assert!((0..2).all(|k| g.span[k] * LATTICE_MAX >= one.span[k]));
-        for j in 0..g.samples[1] {
-            for i in 0..g.samples[0] {
-                let (a, b) = (one.sample([i, j]), g.sample([i, j]));
-                assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
-                let on = |v: u32, k: usize| v >= NEAR && v - NEAR < one.span[k] * SAMPLE;
-                if on(i, 0) && on(j, 1) {
-                    let c = one.sample_cell([i, j]).map(|v| v / LATTICE_MAX);
-                    assert_eq!(g.sample_cell([i, j]), c);
-                }
-            }
-        }
-    }
-}
 
 /// What a stand-in node is handed: itself, its zoom and its world's index,
 /// so a walk resumed off a line is checked to hand each node its own.
@@ -192,7 +168,7 @@ impl Query for Stand {
     }
 }
 
-/// A beam ray's line as the shader leaves it (pxl-render beam_walk.wgsl,
+/// A beam ray's line as the shader leaves it (pxl-render walk.wgsl,
 /// resume.wgsl): the node it stopped at and what was handed each
 /// node from the root to it.
 #[derive(Clone, Copy)]
@@ -227,7 +203,7 @@ const FAR: f32 = 300.0;
 
 /// The eye looking north, `DOWN` below the horizon, at the screen's
 /// tangents `tan`: its origin, its axes and the zooms it asks, as the
-/// kernel writes its words (pxl-kernel domain/view/lens.rs `gpu_cast`).
+/// core writes its words (pxl-core domain/view/lens.rs `gpu_cast`).
 struct View {
     origin: [i32; 3],
     axes: [[f32; 3]; 3],
@@ -246,13 +222,13 @@ impl View {
         }
     }
 
-    /// The eye's zooms, its beam rays `g`'s lattice apart (pxl-render
+    /// The eye's zooms, its beam rays a cell apart (pxl-render
     /// walk_node.wgsl `eye_aim`).
-    fn detail(&self, g: &Grid) -> Detail {
+    fn detail(&self) -> Detail {
         Detail {
             range: self.range,
             spacing: Spacing {
-                angle: g.s,
+                angle: CELL,
                 across: 0.0,
             },
         }
@@ -314,7 +290,7 @@ impl Stop {
     }
 }
 
-/// A sample's stop at a lattice, and how it started: its cell, that
+/// A sample's stop, and how it started: its cell, that
 /// cell's start, and whether it resumed off a node of the line, not a
 /// root.
 #[derive(Clone, Copy)]
@@ -325,17 +301,17 @@ struct Cast {
     resumed: bool,
 }
 
-/// The view cast as the shader casts it at `lattice` (pxl-render beam.wgsl,
-/// cell.wgsl, sample.wgsl over sample_eye.wgsl): every
+/// The view cast as the shader casts it (pxl-render corners.wgsl,
+/// cell.wgsl, samples.wgsl over sample.eye.wgsl): every
 /// corner's beam ray to where it stops and how far it hands on; each
 /// cell's start, the least of its window's, that corner's line, and
 /// whether it resumes, every beam ray of the window asking as its rays
 /// ask; and every sample walked to its stop from its cell's start off that
 /// line (pxl-render resume.wgsl), or from the world's root
 /// where it resumes not. The samples row by row, `samples[0]` a row.
-fn cast_at(view: &View, lattice: u32) -> Vec<Cast> {
-    let g = Grid::of(view.tan, lattice);
-    let detail = view.detail(&g);
+fn cast_view(view: &View) -> Vec<Cast> {
+    let g = Grid::of(view.tan);
+    let detail = view.detail();
     let o = view.origin;
     let [across, down] = g.corners;
     let corners = each((across * down) as usize, |k| {
@@ -409,17 +385,15 @@ fn cast_at(view: &View, lattice: u32) -> Vec<Cast> {
     })
 }
 
-/// A sample's hit on a world is the same at every lattice, and the same
-/// as its ray walked from the eye with nothing resumed: each cell's start,
-/// the least of its window's beam rays' handed on, lies short of
-/// everything any ray of the cell meets, at the lattice of one cell and at
-/// `LATTICE_MAX`.
+/// A sample's hit on a world is that of its ray walked from the eye with
+/// nothing resumed: each cell's start, the least of its window's beam rays'
+/// handed on, lies short of everything any ray of the cell meets.
 #[test]
-fn sample_hit_same_every_lattice() {
+fn sample_hit_is_the_walks_from_the_eye() {
     for tan in VIEWS {
         let view = View::of(tan);
-        let g = Grid::of(tan, 1);
-        let detail = view.detail(&g);
+        let g = Grid::of(tan);
+        let detail = view.detail();
         let [n, m] = g.samples;
         let fresh = each((n * m) as usize, |k| {
             let ray = view.ray(g.sample([k as u32 % n, k as u32 / n]));
@@ -431,42 +405,29 @@ fn sample_hit_same_every_lattice() {
                 Until::Opaque,
             ))
         });
-        let (one, two) = (cast_at(&view, 1), cast_at(&view, LATTICE_MAX));
-        let (mut met, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
+        let cast = cast_view(&view);
+        let (mut met, mut misses) = ([0; EIGHTHS as usize + 1], 0);
         for (k, f) in fresh.iter().enumerate() {
             let s = [k as u32 % n, k as u32 / n];
-            let (a, b) = (&one[k], &two[k]);
+            let a = &cast[k];
             assert!(
-                a.stop == *f && b.stop == *f,
-                "{tan:?} sample {s:?}: fresh {f:?}; at 1, cell {:?} from {} resumed {}: {:?}; \
-                 at {LATTICE_MAX}, cell {:?} from {} resumed {}: {:?}",
+                a.stop == *f,
+                "{tan:?} sample {s:?}: fresh {f:?}; cell {:?} from {} resumed {}: {:?}",
                 a.cell,
                 a.t,
                 a.resumed,
                 a.stop,
-                b.cell,
-                b.t,
-                b.resumed,
-                b.stop,
             );
             if f.ends == End::Hit {
                 met[fill_eighths(f.asset[0]) as usize] += 1;
             }
             misses += u32::from(f.ends == End::Miss);
-            resumed[0] += u32::from(a.resumed);
-            resumed[1] += u32::from(b.resumed);
         }
         // The ground and the whole things, the pole and the far block are
-        // met, and something gone on past; the samples resume off their
-        // lines at both lattices.
+        // met, and something gone on past.
         assert!(
             [EIGHTHS, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
             "{tan:?}: {met:?} by the eighths met, {misses} gone on"
-        );
-        assert!(
-            resumed.iter().all(|&r| r > n * m / 2),
-            "{tan:?}: {resumed:?} of {}",
-            n * m
         );
     }
 }

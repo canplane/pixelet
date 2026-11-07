@@ -1,8 +1,8 @@
-// pxl-spec/asset/actor.spec.rs
+// pxl-spec/asset/character.spec.rs
 //
-// GENERATED from spec/spec/asset/actor.json
+// GENERATED from spec/spec/asset/character.json
 //
-// The actor kind (id.json): a person or a pet, a model with clips, the
+// The character kind (id.json): a person or a pet, a model with clips, the
 // characters a player can be. Each group's models by their path under
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
@@ -62,7 +62,7 @@ pub mod groups {
             crate::asset::catalog::Slot(56),
         ];
         pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(57);
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;
@@ -100,7 +100,7 @@ pub mod groups {
             crate::asset::catalog::Slot(81),
         ];
         pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(82);
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;

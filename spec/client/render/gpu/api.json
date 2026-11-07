@@ -7,23 +7,23 @@
   "surface_role": {
     "$type": "u32",
     "$doc": [
-      "What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or",
-      "nothing yet, as a canvas opens before the shell says what it draws."
+      "What a canvas the UI hands over shows (gpu/surface.rs): the world, a character alone, or",
+      "nothing yet, as a canvas opens before the UI says what it draws."
     ],
     "WORLD": 0,
-    "PREVIEW": 1,
+    "CHARACTER": 1,
     "NONE": 2
   },
   "stream": {
     "$type": "u32",
     "$doc": [
       "The one place the renderer's calls cross (gpu/api.rs): a stream",
-      "(xpute-guest ipc/stream.rs) in the kernel's machine's GPU socket, which the",
-      "kernel writes its calls into during a turn and the host runs once the turn",
-      "has returned. Its size is the socket's (rust/client/kernel/machine.json `gpu`).",
+      "(xpute-core ipc/stream.rs) in the core's machine's GPU socket, which the",
+      "core writes its calls into during a turn and the runtime runs once the turn",
+      "has returned. Its size is the socket's (rust/client/core/machine.json `gpu`).",
       "",
-      "Its head, past the stream's own words, is what the host writes for the",
-      "kernel: the device's block (xpute DEVICE) and the timed spans' reads, three",
+      "Its head, past the stream's own words, is what the runtime writes for the",
+      "core: the device's block (xpute DEVICE) and the timed spans' reads, three",
       "of them (gpu/api.rs `READS`), each its word, then each span's begin and end",
       "ticks. gpu/api.rs lays them out, and the stream says the head's length itself."
     ],
@@ -50,15 +50,15 @@
   "device": {
     "$type": "u32",
     "$doc": [
-      "What a device's GPU host runs the renderer's stream by (xpute-gpu host",
-      "`Config`), which the kernel hands it (pxl-kernel lib.rs `GPU`, xpute-gpu",
+      "What a device's GPU runtime runs the renderer's stream by (xpute-gpu runtime",
+      "`Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu",
       "`Numbers`); a page's browser paces its frames and stages its writes itself."
     ],
     "FRAME_LATENCY": {
       "$val": 2,
       "$doc": [
         "The frames drawn and not yet finished on the GPU at once: a turn draws only",
-        "while fewer are (xpute-gpu host `GpuHost::admit`), and a surface queues as",
+        "while fewer are (xpute-gpu runtime `GpuRuntime::admit`), and a surface queues as",
         "many. Two, as wgpu configures a surface by default",
         "(`Surface::get_default_config`): one frame's lag behind the input, with the",
         "GPU kept busy while the next is drawn."
@@ -67,7 +67,7 @@
     "UPLOAD_CHUNK_BYTES": {
       "$val": 1048576,
       "$doc": [
-        "The chunk the host stages buffer writes in, each mapped once and reused: a",
+        "The chunk the runtime stages buffer writes in, each mapped once and reused: a",
         "mesh, the largest write a frame makes, is about a MiB, and a larger write",
         "takes a chunk of its own."
       ]

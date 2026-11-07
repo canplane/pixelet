@@ -19,6 +19,15 @@ pub mod cloud {
     pub const CUMULUS_KM: f64 = 1.5;
 }
 
+pub mod night {
+    /// The sine of the sun's height over which night falls, wherever it is
+    /// shown: the stars over the sky (pxl-render look/environment.rs), the
+    /// cities' lights over the land (atmos_air.wgsl `city_shown`), and the
+    /// night the core tells (pxl-core domain/scene/environment.rs
+    /// `night`); whole at the first, none at the second, the horizon.
+    pub const FALL: [f32; 2] = [-0.1, 0.0];
+}
+
 pub mod cave {
     /// The tunnels every root cube (256 units) holds, by class: one 256
     /// across, four 128, sixteen 64, sixty-four 32 and a hundred and sixty

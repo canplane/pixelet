@@ -444,25 +444,51 @@ fn side_mid(side: u32) -> [i32; 3] {
 /// Whether block `b` of a pipe cell whose hash is `h` is hollow: among its
 /// piece's `blocks` nearest its line (`key`, the lower block first where two
 /// tie).
+#[cfg(test)]
 fn block_hollow(h: u32, p: &Piece, b: u32) -> bool {
+    hollow_from(h, p, [b, 0, 0], 0) == 1
+}
+
+/// How many of a pipe cell's blocks `side` a side from block `lo`, `side`
+/// 1 or 2 (`t` 0 or 1), are hollow (`block_hollow`), the cell's hash `h`: each
+/// block's key read once, every block of the cell's ranked against them all
+/// at once, and done once each is ranked past the piece's blocks.
+fn hollow_from(h: u32, p: &Piece, lo: [u32; 3], t: u32) -> u32 {
+    let n = 1u32 << (3 * t);
     if p.blocks >= CELL_BLOCKS {
-        return true;
+        return n;
     }
     let a = side_mid(p.from);
     let z = side_mid(p.to);
     let ab = [z[0] - a[0], z[1] - a[1], z[2] - a[2]];
     let l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
-    let mine = key(a, ab, l, h, b);
-    let mut before = 0;
+    let side = 1u32 << t;
+    let mut ids = [0u32; 8];
+    let mut mine = [0i32; 8];
+    let mut i = 0;
+    while i < n {
+        let at = [i & (side - 1), (i >> t) & (side - 1), i >> (2 * t)];
+        ids[i as usize] = (lo[0] + at[0]) | (lo[1] + at[1]) << 2 | (lo[2] + at[2]) << 4;
+        mine[i as usize] = key(a, ab, l, h, ids[i as usize]);
+        i += 1;
+    }
+    let mut before = [0u32; 8];
+    let mut past = 0;
     let mut o = 0;
-    while o < CELL_BLOCKS && before < p.blocks {
+    while o < CELL_BLOCKS && past < n {
         let k = key(a, ab, l, h, o);
-        if k < mine || k == mine && o < b {
-            before += 1;
+        let mut i = 0;
+        while i < n {
+            let m = mine[i as usize];
+            if before[i as usize] < p.blocks && (k < m || k == m && o < ids[i as usize]) {
+                before[i as usize] += 1;
+                past += (before[i as usize] == p.blocks) as u32;
+            }
+            i += 1;
         }
         o += 1;
     }
-    before < p.blocks
+    n - past
 }
 
 /// The blocks of the caves in the node.
@@ -485,32 +511,16 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
     if p.blocks == 0 {
         return 0;
     }
-    // The node's blocks: below the block zoom one, else 2 or 4 a side.
-    let (side, lo) = if zoom >= BLOCK {
+    // The node's blocks, `1 << t` a side: below the block zoom one, else 2.
+    let (t, lo) = if zoom >= BLOCK {
         let t = zoom - BLOCK;
-        (1, [(c[0] >> t) & 3, (c[1] >> t) & 3, (c[2] >> t) & 3])
+        (0, [(c[0] >> t) & 3, (c[1] >> t) & 3, (c[2] >> t) & 3])
     } else {
         let t = BLOCK - zoom;
-        let n = 1 << t;
-        (n, [(c[0] << t) & 3, (c[1] << t) & 3, (c[2] << t) & 3])
+        (t, [(c[0] << t) & 3, (c[1] << t) & 3, (c[2] << t) & 3])
     };
     let h = node_seed(BLOCKS, (PIPE, cell));
-    let mut n = 0;
-    let mut z = 0;
-    while z < side {
-        let mut y = 0;
-        while y < side {
-            let mut x = 0;
-            while x < side {
-                let b = (lo[0] + x) as u32 | ((lo[1] + y) as u32) << 2 | ((lo[2] + z) as u32) << 4;
-                n += block_hollow(h, &p, b) as u32;
-                x += 1;
-            }
-            y += 1;
-        }
-        z += 1;
-    }
-    n
+    hollow_from(h, &p, lo.map(|v| v as u32), t)
 }
 
 /// The share of the cube `c` at `zoom` the caves take, in `answer::FULL`'s

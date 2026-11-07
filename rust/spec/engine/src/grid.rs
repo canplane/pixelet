@@ -16,6 +16,16 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 /// angle, so what is observed is the display's pixels' to draw.
 pub const CELLS_A_RAD: f32 = 96.0;
 
+/// The tangent of half the vertical field of view, the view's (pxl-core
+/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
+/// distance, a field of 53.13 degrees (pxl-spec space/camera/grid.rs `fov`).
+pub const HALF_TAN: f32 = 0.5;
+
+/// The widest view drawn, its width over its height: an ultrawide display's
+/// 21:9. What is sized by the view's cells (`node_cache::ENTRIES`) holds them
+/// at this aspect or narrower.
+pub const ASPECT_MOST: f32 = 21.0 / 9.0;
+
 /// How many times finer than the view's a grid the bands and clip levels are
 /// sized for (`CLIP_CELLS_A_RAD`, `clipmap::RADIUS`): a clip level holds its
 /// zoom's cells out to `CLIP_MARGIN` times where the view stops drawing them.
@@ -35,22 +45,13 @@ pub const SPANS: f32 = 2.0;
 pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 
 /// The view's cell, an angle in radians: the angle every eye's ray is asked
-/// at (`cell_zoom_at`), and the samples' lattice, `param::beam::SAMPLE` a
-/// cell a side, which a pixel takes the nearest stop of. The beam rays and
-/// the cells their starts are found for lie on a lattice of their own, a
-/// power of two of cells a side up to `LATTICE_MAX` (`beam::Grid::of`), the
-/// drawn resolution's second knob (pxl-kernel
-/// domain/view/frame/resolution.rs): the samples are the very rays at every
-/// lattice, so what each screen observes and draws is the cell's alone. The
-/// cell spaced the beam rays too until the lattice came apart from it
-/// (doc/minutes/20261102-auto-judges-the-pixels-and-the-lattice.md).
+/// at (`cell_zoom_at`), the beam rays' and cells' spacing (`beam::Grid::of`),
+/// and the samples' lattice, `param::beam::SAMPLE` a cell a side, which a pixel
+/// takes the nearest stop of.
 pub const CELL: f32 = 1.0 / CELLS_A_RAD;
-
-/// The coarsest lattice the beam rays and cells are laid on, in `CELL`s a
-/// side, which lays a quarter of the cell's beam rays and cells. A lattice is a power of two of cells, so the
-/// sample's spacing, the lattice's side over its samples a side, is the
-/// very f32 at every one (`beam::Grid::sample`).
-pub const LATTICE_MAX: u32 = 2;
+/// Its reciprocal, which a tangent is scaled by to count cells, the same
+/// constant on the CPU and the GPU.
+pub const CELL_INVERSE: f32 = 1.0 / CELL;
 
 /// One over the split distance squared, `CELLS_A_RAD / SPANS` sides: what a
 /// distance squared is scaled by to read its zoom (`cell_zoom_at`).
@@ -73,7 +74,13 @@ pub const INV_SPLIT2: f32 = 1.0 / ((CELLS_A_RAD / SPANS) * (CELLS_A_RAD / SPANS)
 /// scales to `4^k` exactly and begins its zoom (pxl-spec
 /// space/camera/grid.test.rs `zoom_cell_dist`).
 pub fn cell_zoom_at(r2: f32) -> Zoom {
-    let x2 = r2 * INV_SPLIT2;
+    cell_zoom_in_splits(r2 * INV_SPLIT2)
+}
+
+/// The camera grid's cell zoom at `x2`, a distance squared in split
+/// distances squared (`cell_zoom_at`), for a rule that scales it by a word of
+/// its own (pxl-engine light.rs `Light::band`).
+pub fn cell_zoom_in_splits(x2: f32) -> Zoom {
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }

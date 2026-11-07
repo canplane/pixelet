@@ -1,19 +1,20 @@
 // pxl-tool/spec/setting.rs
 
 //! The settings, each by the number schema.json gives it, and a choice's
-//! options by theirs; a number is given out once in its table. The kernel's
-//! table carries the numbers and no names, which are the shell's, for its
-//! rows and the locale. The shell gets a separate production table without
+//! options by theirs; a number is given out once in its table. The core's
+//! table carries the numbers and no names, which are the UI's, for its
+//! rows and the locale. The UI gets a separate production table without
 //! the `dev` settings so the bundler drops them.
-//! A setting whose `stored` is false the kernel's store neither keeps nor reads.
+//! A setting whose `stored` is false the core's store neither keeps nor reads.
 
-use super::data::ts_literal;
+use xpute_tool::spec::data::ts_literal;
+
 use super::{
     casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node,
     Output,
 };
 
-const JSON: &str = "spec/client/kernel/domain/view/setting/schema.json";
+const JSON: &str = "spec/client/core/domain/view/setting/schema.json";
 
 struct Setting<'a> {
     key: &'a str,
@@ -140,7 +141,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
 
     let mut rs = vec![
-        "// pxl-kernel/domain/view/setting/schema.spec.rs".to_string(),
+        "// pxl-core/domain/view/setting/schema.spec.rs".to_string(),
         "//".into(),
         format!("// GENERATED from {JSON}"),
         "//".into(),
@@ -516,7 +517,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         format!(
             "export const SETTING = {} as const;",
-            ts_literal(&table(&|_| true)?, "f64", "")?
+            ts_literal(&table(&|_| true)?, "f64", "", &[])?
         ),
     ]);
     ts.extend([
@@ -525,13 +526,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .into(),
         format!(
             "export const SETTING_PRODUCTION = {} as const;",
-            ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
+            ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "", &[])?
         ),
     ]);
 
     Ok(vec![
         Output::new(
-            "rust/client/kernel/src/domain/view/setting/schema.spec.rs",
+            "rust/client/core/src/domain/view/setting/schema.spec.rs",
             file(&rs),
         ),
         Output::new("ts/client/src/abi/schema.spec.ts", file(&ts)),

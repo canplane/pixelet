@@ -3,10 +3,12 @@
 //! The catalog: every file reference the asset specs make, a slot each,
 //! numbered in the kinds' order (id.json `KIND`). First the cube kind's pack,
 //! then each decor variant's model and skin, then each `file` leaf of
-//! actor.json and of sky.json in its document order. The Rust names each
+//! character.json and of sky.json in its document order. The Rust names each
 //! slot; the catalog fills them with the file each names, by its number below
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
-//! layout). The host serves it, as hex in TypeScript.
+//! layout). The runtime serves it, as hex in TypeScript.
+
+use xpute_tool::spec::data::Run;
 
 use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};
@@ -17,11 +19,11 @@ pub(crate) const FILE: &str = "file";
 
 pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
 pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json";
-const ACTOR_JSON: &str = "spec/spec/asset/actor.json";
+const CHARACTER_JSON: &str = "spec/spec/asset/character.json";
 const SKY_JSON: &str = "spec/spec/asset/sky.json";
 
 /// Every slot's path, each spec's run of them in the kinds' order.
-fn runs() -> Result<Vec<(&'static str, Vec<String>)>, String> {
+fn paths() -> Result<Vec<(&'static str, Vec<String>)>, String> {
     let pack = read(CUBE_JSON)?
         .get("pack")
         .map(Node::value)
@@ -49,7 +51,7 @@ fn runs() -> Result<Vec<(&'static str, Vec<String>)>, String> {
         }
     }
     let mut out = vec![(CUBE_JSON, vec![pack]), (DECOR_JSON, decor)];
-    for json in [ACTOR_JSON, SKY_JSON] {
+    for json in [CHARACTER_JSON, SKY_JSON] {
         let mut paths = Vec::new();
         leaves(&read(json)?, None, &mut paths);
         out.push((json, paths));
@@ -69,21 +71,30 @@ fn leaves(n: &Node, ty: Option<&str>, out: &mut Vec<String>) {
     }
 }
 
-/// The first slot of `json`'s references, and how many it makes.
-pub(crate) fn run_of(json: &str) -> Result<(u16, u16), String> {
+/// Each spec's run: its first slot, and how many it makes.
+pub(crate) fn runs() -> Result<Vec<Run<'static>>, String> {
     let mut first = 0;
-    for (j, paths) in runs()? {
-        let n = u16::try_from(paths.len()).map_err(|e| e.to_string())?;
-        if j == json {
-            return Ok((first, n));
-        }
-        first += n;
-    }
-    Ok((first, 0))
+    paths()?
+        .into_iter()
+        .map(|(json, paths)| {
+            let n = u16::try_from(paths.len()).map_err(|e| e.to_string())?;
+            first += n;
+            Ok((json, first - n, n))
+        })
+        .collect()
+}
+
+/// `json`'s run.
+pub(crate) fn run_of(json: &str) -> Result<(u16, u16), String> {
+    runs()?
+        .into_iter()
+        .find(|(j, ..)| *j == json)
+        .map(|(_, first, cnt)| (first, cnt))
+        .ok_or(format!("{json}: no run of the catalog's"))
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let slots: Vec<String> = runs()?.into_iter().flat_map(|(_, p)| p).collect();
+    let slots: Vec<String> = paths()?.into_iter().flat_map(|(_, p)| p).collect();
     let files = files()?;
     let mut bytes = (slots.len() as u32).to_le_bytes().to_vec();
     let mut extents = Vec::with_capacity(slots.len() * 24);
@@ -101,8 +112,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "//",
         "// GENERATED from the asset specs and ingest.json",
         "//",
-        "// The catalog the host plugs in, served below the asset root at `CATALOG`",
-        "// (ts/client/src/sys/fs/asset.ts): the file each of the kernel's slots names and its",
+        "// The catalog the runtime plugs in, served below the asset root at `CATALOG`",
+        "// (ts/client/src/sys/fs/asset.ts): the file each of the core's slots names and its",
         "// extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.",
         "",
     ]

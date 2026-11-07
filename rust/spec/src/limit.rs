@@ -10,7 +10,7 @@
 //! bedrock up to its own face, a cell of the leaves as any is, so the wall's
 //! outer face stands on the area's edge at every zoom (pxl-engine
 //! area.rs `laid`). A walker keeps off the wall's columns and an edit off
-//! them, by the rule the wall is laid by (pxl-kernel domain/query/limit.rs
+//! them, by the rule the wall is laid by (pxl-core domain/query/limit.rs
 //! `within`, `editable`).
 
 pub use pxl_content::strata::{bedrock, ceiling};

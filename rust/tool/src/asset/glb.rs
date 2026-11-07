@@ -5,27 +5,7 @@
 
 use serde::Deserialize;
 
-/// Column-major, as glTF writes it. Kept local rather than pxl-spec's: the
-/// ingest writes part of pxl-spec and must build when that output is broken.
-type Mat4 = [f64; 16];
-
-const IDENTITY: Mat4 = [
-    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-];
-
-fn mul(a: &Mat4, b: &Mat4) -> Mat4 {
-    let mut out = [0.0; 16];
-    for c in 0..4 {
-        for r in 0..4 {
-            out[c * 4 + r] = (0..4).map(|k| a[k * 4 + r] * b[c * 4 + k]).sum();
-        }
-    }
-    out
-}
-
-fn apply(m: &Mat4, p: [f64; 3]) -> [f64; 3] {
-    [0, 1, 2].map(|r| m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r])
-}
+use crate::mat4::{self, Mat4};
 
 #[derive(Deserialize)]
 struct Gltf {
@@ -53,7 +33,7 @@ struct Node {
     #[serde(default)]
     children: Vec<usize>,
     mesh: Option<usize>,
-    matrix: Option<Vec<f64>>,
+    matrix: Option<Mat4>,
     translation: Option<[f64; 3]>,
     rotation: Option<[f64; 4]>,
     scale: Option<[f64; 3]>,
@@ -98,33 +78,14 @@ fn json_chunk(bytes: &[u8]) -> Result<&[u8], String> {
 }
 
 fn local(node: &Node) -> Mat4 {
-    if let Some(m) = &node.matrix {
-        let mut out = [0.0; 16];
-        for (i, v) in m.iter().take(16).enumerate() {
-            out[i] = *v;
-        }
-        return out;
+    if let Some(m) = node.matrix {
+        return m;
     }
     let t = node.translation.unwrap_or([0.0; 3]);
-    let [x, y, z, w] = node.rotation.unwrap_or([0.0, 0.0, 0.0, 1.0]);
+    let q = node.rotation.unwrap_or([0.0, 0.0, 0.0, 1.0]);
     let s = node.scale.unwrap_or([1.0; 3]);
-    let (xx, yy, zz) = (x * x, y * y, z * z);
-    let (xy, xz, yz) = (x * y, x * z, y * z);
-    let (wx, wy, wz) = (w * x, w * y, w * z);
-    let mut m = [0.0; 16];
-    m[0] = (1.0 - 2.0 * (yy + zz)) * s[0];
-    m[1] = (2.0 * (xy + wz)) * s[0];
-    m[2] = (2.0 * (xz - wy)) * s[0];
-    m[4] = (2.0 * (xy - wz)) * s[1];
-    m[5] = (1.0 - 2.0 * (xx + zz)) * s[1];
-    m[6] = (2.0 * (yz + wx)) * s[1];
-    m[8] = (2.0 * (xz + wy)) * s[2];
-    m[9] = (2.0 * (yz - wx)) * s[2];
-    m[10] = (1.0 - 2.0 * (xx + yy)) * s[2];
-    m[12] = t[0];
-    m[13] = t[1];
-    m[14] = t[2];
-    m[15] = 1.0;
+    let mut m = mat4::new();
+    mat4::compose_trs(&mut m, &t, &q, &s);
     m
 }
 
@@ -156,7 +117,8 @@ fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Bounds, depth: usi
     let Some(node) = gltf.nodes.get(idx) else {
         return;
     };
-    let world = mul(parent, &local(node));
+    let mut world = mat4::new();
+    mat4::mul(&mut world, parent, &local(node));
 
     if let Some(mesh) = node.mesh.and_then(|m| gltf.meshes.get(m)) {
         for primitive in &mesh.primitives {
@@ -180,7 +142,8 @@ fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Bounds, depth: usi
                     if corner & 2 != 0 { max[1] } else { min[1] },
                     if corner & 4 != 0 { max[2] } else { min[2] },
                 ];
-                bounds.add(&apply(&world, p));
+                let mut at = [0.0; 3];
+                bounds.add(mat4::transform_point(&mut at, &world, p[0], p[1], p[2]));
             }
         }
     }
@@ -204,7 +167,7 @@ pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
         .flat_map(|s| s.nodes.iter().copied())
         .collect();
     for r in roots {
-        visit(&gltf, r, &IDENTITY, &mut bounds, 0);
+        visit(&gltf, r, &mat4::new(), &mut bounds, 0);
     }
 
     if bounds.lo[0] > bounds.hi[0] {

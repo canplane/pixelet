@@ -12,15 +12,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use sha2::{Digest, Sha256};
+use xpute_tool::fmt::format_text;
 
 use pxl_tool::asset::table::{Pack, Row};
 use pxl_tool::asset::{glb, pack, symbol, table};
-use pxl_tool::fmt::format_text;
 use pxl_tool::root;
 use pxl_tool::spec;
 use pxl_tool::spec::asset;
 
-/// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
+/// Mirrored by the Worker's `KEY_RE` and the UI's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
 
 fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
@@ -205,11 +205,11 @@ fn run() -> Result<(), String> {
         &symbol::render_rs(&symbols),
     )?;
     write_formatted(
-        &root.join("ts/client/src/shell/search/place-symbol.ts"),
+        &root.join("ts/client/src/ui/search/place-symbol.ts"),
         &symbol::render_ts(&symbols),
     )?;
 
-    // What the code is generated from: the host's table, the pack's layout
+    // What the code is generated from: the runtime's table, the pack's layout
     // and the catalog.
     write_formatted(
         &root.join("spec/spec/asset/ingest.json"),

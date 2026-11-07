@@ -5,7 +5,7 @@
 //! and how far its decor reaches, which the light's box reads. A world type
 //! carries its content as an associated type of the trait it implements
 //! where those rules are asked (`ground::Resident`); a function that reads
-//! no world takes it as a type parameter (`light::Light::up`). The values a
+//! no world takes it as a type parameter. The values a
 //! content's palette takes are the engine's value space (`value`).
 
 #[cfg(test)]
@@ -31,24 +31,13 @@ pub trait Content {
     /// the lowest a cube may reach there.
     fn bedrock(face: i32) -> i32;
 
-    /// The highest a cube may reach over a face at `face` leaf cells, in
-    /// leaf cells.
-    fn ceiling(face: i32) -> i32;
-
     /// Cell `z` past the service area: the Earth's ground there.
     fn earth(z: i32) -> u32;
-
-    /// The tallest decor and the widest, in unit cells: as high over what it
-    /// stands on as anything it generates reaches, and as far across
-    /// (`light::Light::up`, `Light::ring`).
-    const TALLEST: i32;
-    const WIDEST: i32;
 }
 
 /// A content for the engine's own tests, no content's: no caves, a column
 /// its face's entry all the way down, a bedrock 64 under it or sea level,
-/// room 128 over it, past the area bedrock under sea level, and decor three
-/// units tall and two wide.
+/// and past the area bedrock under sea level.
 #[cfg(test)]
 pub(crate) struct Sample;
 
@@ -73,9 +62,6 @@ impl Content for Sample {
     fn bedrock(face: i32) -> i32 {
         face.min(crate::SEA_LEVEL) - 64
     }
-    fn ceiling(face: i32) -> i32 {
-        face.max(crate::SEA_LEVEL) + 128
-    }
     fn earth(z: i32) -> u32 {
         if z < crate::SEA_LEVEL {
             UNKNOWN
@@ -83,6 +69,4 @@ impl Content for Sample {
             VOID
         }
     }
-    const TALLEST: i32 = 3;
-    const WIDEST: i32 = 2;
 }

@@ -9,7 +9,7 @@ path = "src/lib.rs"
 doctest = false
 
 [features]
-# The shapes both servers answer with, as serde types. The kernel compiles
+# The shapes both servers answer with, as serde types. The core compiles
 # this crate to wasm and reads a page through xpute's own codec, so it takes
 # neither serde nor the weight of it.
 serde = ["dep:serde"]

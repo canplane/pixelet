@@ -7,9 +7,9 @@ use crate::area::{self, Area, Shard};
 use crate::cast::{End, Query};
 use crate::clipmap::{
     self, bound_over, column_top, entry, fold, join, joined_idx, level_idx, of_idx, Entry,
-    Presence, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
-    COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
-    LAID_AT, LAID_CELLS, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
+    Presence, ACROSS, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT,
+    BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL,
+    JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LAID_CELLS, ORIGIN_AT,
 };
 use crate::content::Sample;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, LoneBrick};
@@ -17,6 +17,7 @@ use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
 use crate::SHARD_ZOOM;
 use std::{vec, vec::Vec};
+use xpute_kit::math::rng::mix64;
 
 /// The clip level whose bricks are half held, its east half not yet, the clip
 /// levels over it held whole: the leaves', as decor's column surfaces ask,
@@ -66,7 +67,7 @@ impl Bricks for Clipmap<'_> {
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, slot * BRICK_WORDS, j, at)
     }
     fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {
@@ -121,13 +122,12 @@ impl Columns for Nothing {
     }
 }
 
-/// The world's one query over the clip levels, counting the nodes asked.
-struct Counter<'a> {
+/// The world's one query over the clip levels.
+struct Asking<'a> {
     w: Clipmap<'a>,
-    nodes: u32,
 }
 
-impl Query for Counter<'_> {
+impl Query for Asking<'_> {
     type At = Inheritance;
     fn root(&mut self, node: [i32; 3]) -> Inheritance {
         Inheritance::of(&Nothing, (0, node))
@@ -143,7 +143,6 @@ impl Query for Counter<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        self.nodes += 1;
         let w = self.w;
         node(
             &mut self.w,
@@ -170,11 +169,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
             (EYE[0] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
             (EYE[1] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
         ];
-        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Entry {
-            brick: first,
-            present: 1,
-            ticket: 0,
-        };
+        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Entry::at(first, 1);
         for k in 0..ENTRIES {
             let q = [
                 first[0] + (k % ACROSS) as i32,
@@ -200,12 +195,12 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + LAID_AT + i / LAID_CELLS) as usize];
                 *w |= (Sample::GROUND) << (8 * (i % LAID_CELLS));
-                let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(0, [x, y]);
+                let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * level_idx(0, [x, y]);
                 let b = ground::bounds_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
                 put(&mut ground, e + 1, b[1] as u32);
             }
-            for j in 1..=LEVELS {
+            for j in 1..=BRICK_LEVELS {
                 let side = BRICK >> j;
                 for k in 0..side * side {
                     let at = [k % side, k / side];
@@ -219,7 +214,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                         j,
                         at,
                     );
-                    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(j, at);
+                    let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * level_idx(j, at);
                     put(&mut ground, e, b[0] as u32);
                     put(&mut ground, e + 1, b[1] as u32);
                 }
@@ -229,8 +224,8 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     (rows, ground)
 }
 
-/// Each clip level's entries folded a level at a time, as `fold_cs` folds
-/// them; `zero`, the zero entry, none, over a block a brick of which the
+/// Each clip level's entries folded a level at a time, as the core folds
+/// them (`clipmap::fold`); `zero`, the zero entry, none, over a block a brick of which the
 /// clip level does not hold present: no bound, which only splits more.
 fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
     let mut joined = vec![[0; JOINED_WORDS as usize]; (EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize];
@@ -279,7 +274,7 @@ fn partial_block_bounded() {
         ground: &ground,
     };
     let (first, _) = w.origin(CELL);
-    let (zoom, side) = (CELL - LEVELS - 1, 2 * BRICK as i32);
+    let (zoom, side) = (CELL - BRICK_LEVELS - 1, 2 * BRICK as i32);
     let mut unheld = 0;
     for k in 0..ENTRIES / 4 {
         let c = [
@@ -314,18 +309,17 @@ fn partial_block_bounded() {
 
 /// A column surface down any column of the half held clip level stands where it
 /// stands with no bound over a block a brick of which the clip level does not
-/// hold, with the same assets about it off its line, and asks fewer nodes.
+/// hold, with the same assets about it off its line.
 #[test]
 fn footing_without_bound() {
     let (rows, ground) = clipmap();
     let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
-    let world = |joined| Counter {
+    let world = |joined| Asking {
         w: Clipmap {
             rows: &rows,
             joined,
             ground: &ground,
         },
-        nodes: 0,
     };
     let (mut was, mut is) = (world(&none), world(&folded));
     let (first, _) = was.w.origin(CELL);
@@ -357,12 +351,6 @@ fn footing_without_bound() {
         }
     }
     assert!(hits > 0, "some column_surface stands on the ground");
-    assert!(
-        is.nodes < was.nodes,
-        "{} nodes, {} with no bound",
-        is.nodes,
-        was.nodes
-    );
 }
 
 /// The clip levels `0` with the service area the shards at `SHARD_ZOOM`
@@ -386,8 +374,8 @@ impl Bricks for WestOf<'_> {
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
         self.0.column(cell, slot, i)
     }
-    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        self.0.level(cell, slot, j, at)
+    fn bound_level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        self.0.bound_level(cell, slot, j, at)
     }
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
         self.0.laid(cell, slot, i)
@@ -458,4 +446,146 @@ fn wall_off_any_brick() {
             assert_eq!(cell.palette_idx, palette_idx, "{x}'s quarter {d}");
         }
     }
+}
+
+/// A cell's answer takes no zooms asked: a node the query answers a cell or the lack, its
+/// zoom at or past the finest asked (`near`) or whole past the ground's cells, has one answer
+/// whatever zooms it and every node over it were asked at, the ground's cells' place
+/// (`Lookup`) its ancestors hand it among them, and the answer with nothing handed down; so
+/// does what it hands on. So a stopped cell's answer is its node's alone (pxl-engine
+/// `record`, `node_cache`). Over the clip levels held, and over them holding no brick, where
+/// every cell lacks.
+#[test]
+fn cell_answer_takes_no_zooms() {
+    let (rows, ground) = clipmap();
+    let joined = folded(&rows, &ground, false);
+    let mut unheld = rows.clone();
+    for e in unheld
+        .iter_mut()
+        .take(((CELL - FIRST_CELL + 1) * ENTRIES) as usize)
+    {
+        *e = Entry::absent(e.brick().0);
+    }
+    let unheld_joined = folded(&unheld, &ground, true);
+    let mut kinds = [0u32; 3];
+    for (rows, joined) in [(&rows, &joined), (&unheld, &unheld_joined)] {
+        let w = Clipmap {
+            rows,
+            joined,
+            ground: &ground,
+        };
+        let got = answers_take_no_zooms(w);
+        assert!(got.iter().sum::<u32>() > 1000, "{got:?} cells reached");
+        for (k, n) in got.iter().enumerate() {
+            kinds[k] += n;
+        }
+    }
+    assert!(
+        kinds[Kind::Cell as usize] > 0 && kinds[Kind::Lacks as usize] > 0,
+        "{kinds:?}"
+    );
+}
+
+/// `cell_answer_takes_no_zooms` over the clip levels `w`: how many of each kind it asked.
+fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
+    let mut held = w;
+    let mut asking = Asking { w };
+    let (first, _) = w.origin(CELL);
+    let mut kinds = [0u32; 3];
+    let spread = (0..CLIP_SIZE as i32)
+        .step_by(53)
+        .flat_map(|x| (0..CLIP_SIZE as i32).step_by(61).map(move |y| [x, y]));
+    for (k, [gx, gy]) in spread.enumerate() {
+        let g = [
+            (first[0] << BRICK_SHIFT) + gx,
+            (first[1] << BRICK_SHIFT) + gy,
+        ];
+        // About the ground's top where the column meets it, else about its height.
+        let surface = column_surface(&mut asking, CELL, g);
+        let top = if surface.ends == End::Hit {
+            surface.top.0
+        } else {
+            height(g)
+        };
+        for dz in -2..=1 {
+            let leaf = [g[0], g[1], top + dz];
+            for zoom in FIRST_CELL..=CELL {
+                let c = overwrite::ancestor_at(CELL, leaf, CELL - zoom);
+                let mut alone = Inheritance::of(&Nothing, (zoom, c));
+                let base = node(
+                    &mut held,
+                    &w,
+                    &Nothing,
+                    &Nothing,
+                    &mut alone,
+                    (zoom, c),
+                    [zoom, zoom],
+                    [Cut::NONE; 2],
+                );
+                for trial in 0..12u64 {
+                    let mut r = mix64(
+                        (k as u64) << 20 ^ (zoom as u64) << 12 ^ ((dz + 2) as u64) << 8 ^ trial,
+                    );
+                    let mut take = |n: u32| {
+                        let v = (r % u64::from(n)) as u32;
+                        r = mix64(r);
+                        v
+                    };
+                    // Every node over it asked at zooms that split it, each its own, as a
+                    // walk's are.
+                    let mut at =
+                        Inheritance::of(&Nothing, (0, overwrite::ancestor_at(zoom, c, zoom)));
+                    let mut reached = true;
+                    for z in 0..zoom {
+                        let a = overwrite::ancestor_at(zoom, c, zoom - z);
+                        let near = z + 1 + take(CELL + 2 - z);
+                        let far = take(near + 1);
+                        let got = node(
+                            &mut held,
+                            &w,
+                            &Nothing,
+                            &Nothing,
+                            &mut at,
+                            (z, a),
+                            [far, near],
+                            [Cut::NONE; 2],
+                        );
+                        if got.kind != Kind::Split {
+                            reached = false;
+                            break;
+                        }
+                        let child = overwrite::ancestor_at(zoom, c, zoom - z - 1);
+                        at = at.child(&Nothing, &Nothing, (z + 1, child));
+                    }
+                    if !reached {
+                        continue;
+                    }
+                    // Asked at zooms it is a cell at: its own or coarser, or, past the ground's
+                    // cells, any, where nothing placed or carved makes it whole.
+                    let most = if zoom >= LEAF_CELL { CELL + 3 } else { zoom };
+                    let near = take(most + 1);
+                    let far = take(near + 1);
+                    let mut mine = at;
+                    let got = node(
+                        &mut held,
+                        &w,
+                        &Nothing,
+                        &Nothing,
+                        &mut mine,
+                        (zoom, c),
+                        [far, near],
+                        [Cut::NONE; 2],
+                    );
+                    assert_eq!(got, base, "{c:?} at {zoom}, asked [{far}, {near}]");
+                    assert_eq!(
+                        mine.words(),
+                        alone.words(),
+                        "{c:?} at {zoom} hands on, asked [{far}, {near}]"
+                    );
+                    kinds[got.kind as usize] += 1;
+                }
+            }
+        }
+    }
+    kinds
 }

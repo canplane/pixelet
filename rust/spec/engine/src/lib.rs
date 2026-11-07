@@ -30,12 +30,12 @@ pub mod grid;
 pub mod ground;
 pub mod lattice;
 pub mod light;
+pub mod node_cache;
 pub mod overwrite;
 pub mod param;
-pub mod pyramid;
 pub mod raster;
 pub mod ray;
-pub mod screen;
+pub mod record;
 pub mod seed;
 pub mod support;
 pub mod value;
@@ -82,6 +82,18 @@ pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W;
 /// The world's height in units, as bits: Z spans 2^16 of them about sea
 /// level (pxl-spec space/coord/world.rs `EXTENT`).
 pub const HEIGHT_BITS: u32 = 16;
+
+/// The most workgroups a dispatch takes on an axis: WebGPU's
+/// `maxComputeWorkgroupsPerDimension` at its default, which the page's
+/// device keeps, as it asks for no limits; a native device's adapter allows
+/// at least as many. Each count a pass writes for an indirect dispatch is
+/// held under it by the room it lists into.
+pub const WORKGROUPS_MOST: u32 = 65_535;
+
+/// The words a storage buffer's view is bound at a multiple of: WebGPU's
+/// `minStorageBufferOffsetAlignment` at its default, 256 bytes, the most any
+/// device asks.
+pub const STORAGE_ALIGN_WORDS: u32 = 256 / 4;
 
 /// The coarsest cube: a tile here is as wide as the world is tall, so the
 /// pyramid is alike on every axis from here finer, and 3D begins. A tile of

@@ -2,15 +2,15 @@
 
 //! The content library: every asset the specs declare (`spec/spec/asset/`),
 //! each a definition of a kind — the cubes and their colors, the decors, the
-//! marker, the actors, the sky — numbered by its id, its kind over its shape
+//! marker, the characters, the sky — numbered by its id, its kind over its shape
 //! (`id`), and each file a definition references a slot, which the catalog
 //! the client plugs in fills (`catalog`). The texture pack is the cube kind's:
 //! which of its tiles a cube wears on each face (`ingest`). A cube with no
 //! image still draws as its catalog color.
 
-#[path = "asset/actor.spec.rs"]
-pub mod actor;
 pub mod catalog;
+#[path = "asset/character.spec.rs"]
+pub mod character;
 #[path = "asset/color.spec.rs"]
 pub mod color;
 pub mod cube;
@@ -29,7 +29,7 @@ pub mod symbol;
 pub use id::AssetId;
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::zoom::units;
+use crate::space::coord::zoom::{units, UNIT_ZOOM};
 use catalog::Catalog;
 use ingest::{CubeFace, PACK};
 use pxl_content::decor::DECORS;
@@ -78,7 +78,7 @@ impl decor::Decor {
     /// How far any variant's box reaches from its min corner however it
     /// turns, in units.
     pub fn box_extent(&self) -> f64 {
-        let cell = units(self.row.cell_zoom());
+        let cell = units(UNIT_ZOOM);
         let extent = |size: &[u32; 3]| {
             let [x, y, z] = size.map(|n| f64::from(n) * cell);
             let across = x.max(y);
@@ -91,7 +91,7 @@ impl decor::Decor {
     fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
         self.row
             .cells(variant, turn)
-            .map(|n| f64::from(n) * units(self.row.cell_zoom()))
+            .map(|n| f64::from(n) * units(UNIT_ZOOM))
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in

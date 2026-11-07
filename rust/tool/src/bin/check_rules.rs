@@ -3,7 +3,10 @@
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, the layers' order, where nothing names
-//! what is above it, the layers read by the query alone, the screen's pixels read
+//! what is above it, across a crate's folders and the client's, and inside
+//! the core's heads', pxl-render's,
+//! the camera's and the view's, the profiler named by the top alone, no renderer under the
+//! core's sys/, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
@@ -15,11 +18,11 @@ use pxl_tool::root;
 use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
-/// a pointer only through `xpute_guest::mem::at` or `Memory::at`.
+/// a pointer only through `xpute_core::mem::at` or `Memory::at`.
 const OFF_CRATES: [&str; 4] = [
-    "xpute/rust/guest/src/",
-    "xpute/rust/host/src/",
-    "rust/client/kernel/src/",
+    "xpute/rust/core/src/",
+    "xpute/rust/runtime/src/",
+    "rust/client/core/src/",
     "rust/client/render/src/",
 ];
 
@@ -39,7 +42,7 @@ const ROUNDING_VARIANT_FILES: [&str; 4] = [
 const NOT_EVEN: [&str; 4] = [
     r"\bMath\.round\(",
     r"\bstd::round\b",
-    // A number's text rounds its last place half up: `fixed` (ts/client shell/fixed.ts) rounds it half to even.
+    // A number's text rounds its last place half up: `fixed` (ts/client ui/fixed.ts) rounds it half to even.
     r"\.toFixed\(",
     r"\.toPrecision\(",
 ];
@@ -50,27 +53,114 @@ const HALF_FLOORED: [&str; 2] = [
     r"\([^()]*\+\s*0\.5\s*\)\.floor\(\)",
 ];
 
-/// The kernel's order (ARCHITECTURE.md, "The kernel is one order of
+/// One order of dependency over a folder's modules: a module names only
+/// what is at or below it, and neither head the other; a module beside the
+/// order names anything, and only the order's top names it. `root` is where
+/// the folder's files are, `path` what a Rust file names its modules by, a
+/// `domain::` step past it passed over (a TypeScript file names a module by
+/// its file: `imported`); a name past `path` no module holds is the
+/// folder's root's own, which stands at `own`, or, where none, is not read.
+struct Order {
+    root: &'static str,
+    path: &'static str,
+    levels: &'static [(&'static str, u8)],
+    heads: &'static [&'static str],
+    beside: &'static [&'static str],
+    own: Option<u8>,
+}
+
+/// The core's order (ARCHITECTURE.md, "The core is one order of
 /// dependency"): a module names only what is at or below it, and neither
-/// head the other. The top wires everything; the profiler stands beside,
-/// reading anything, and is in no step of it.
-const KERNEL: &str = "rust/client/kernel/src/";
-const KERNEL_ORDER: [(&str, u8); 12] = [
-    ("turn", 6),
-    ("door", 6),
-    ("shell", 6),
-    ("pointer", 6),
-    ("scene", 5),
-    ("control", 5),
-    ("smooth", 4),
-    ("param", 4),
-    ("view", 3),
-    ("query", 2),
-    ("layer", 1),
-    ("sys", 0),
+/// head the other. The top wires everything, the UI's protocol among it;
+/// the protocol's enums the domain reads, and an edit not yet made, which
+/// the top hands from control to the scene, stand where both heads may name
+/// them. The machine it asks of its runtime and the device transport's
+/// decoder, which the device's app calls, are the bottom, naming none of the
+/// core. The profiler, reading anything, stands beside it, in no step of
+/// it, and only the top, which records into it, names it.
+const CORE: &str = "rust/client/core/src/";
+const CORE_ORDER: [(&str, u8); 16] = [
+    ("turn", 7),
+    ("door", 7),
+    ("ui", 7),
+    ("pointer", 7),
+    ("scene", 6),
+    ("control", 6),
+    ("smooth", 5),
+    ("param", 5),
+    ("cmd", 5),
+    ("preview", 5),
+    ("view", 4),
+    ("query", 3),
+    ("layer", 2),
+    ("sys", 1),
+    ("machine", 0),
+    ("unpack", 0),
 ];
-const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
-const KERNEL_BESIDE: [&str; 1] = ["perf"];
+const CORE_HEADS: [&str; 2] = ["scene", "control"];
+const CORE_BESIDE: [&str; 1] = ["perf"];
+
+/// Control's own order (domain/control.rs): the pointer's edits and its
+/// gestures, then navigation, the camera, and under them the sensors and
+/// where the pivot stands.
+const CONTROL_ORDER: [(&str, u8); 7] = [
+    ("edit", 4),
+    ("input", 4),
+    ("navigation", 3),
+    ("camera", 2),
+    ("sensor", 1),
+    ("support", 1),
+    ("param", 0),
+];
+
+/// The camera's own order (domain/control/camera.rs): the camera itself,
+/// the folder's root, under everything, beside a gesture's anchor; what the
+/// controls ask over them; the orbit and the first-person camera, and the
+/// tests' fixture that places them; and over them which controller moves it.
+const CAMERA_ORDER: [(&str, u8); 6] = [
+    ("controller", 3),
+    ("orbit", 2),
+    ("first_person", 2),
+    ("fixture", 2),
+    ("state", 1),
+    ("gesture", 0),
+];
+
+/// The view's own order (domain/view.rs): demand and the lens over the
+/// observation, over the ground under a point and the frame, over the
+/// settings.
+const VIEW_ORDER: [(&str, u8); 7] = [
+    ("demand", 3),
+    ("lens", 3),
+    ("observation", 2),
+    ("above_ground", 1),
+    ("frame", 1),
+    ("setting", 0),
+    ("param", 0),
+];
+
+/// The scene's own order (domain/scene.rs): the stage, the frame's top, over
+/// the root, which sequences the parts that draw (`SCENE_OWN`), over the
+/// markers, the characters and the indicators, over what they draw with,
+/// each part keeping its own state.
+const SCENE_ORDER: [(&str, u8); 15] = [
+    ("stage", 7),
+    ("marker", 5),
+    ("character", 4),
+    ("indicator", 4),
+    ("environment", 3),
+    ("gizmo", 3),
+    ("decor", 2),
+    ("model", 1),
+    ("animation", 0),
+    ("cast", 0),
+    ("column", 0),
+    ("frame", 0),
+    ("param", 0),
+    ("resolution", 0),
+    ("transform", 0),
+];
+const SCENE_OWN: u8 = 6;
 
 /// pxl-engine's order: what every part speaks, the layers' storage and
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
@@ -95,13 +185,13 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("world", 2),
     ("cast", 2),
     ("support", 2),
-    ("pyramid", 2),
+    ("node_cache", 2),
     ("beam", 3),
     ("eye", 3),
     ("raster", 3),
+    ("record", 3),
     ("ray", 3),
     ("light", 3),
-    ("screen", 3),
     ("face", 3),
 ];
 
@@ -121,24 +211,246 @@ const CONTENT_ORDER: [(&str, u8); 9] = [
     ("generation", 2),
 ];
 
-/// What the world shows is decided in angles, the camera grid's cell; a
-/// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
-/// The kernel reads the view's CSS pixels through one module, the screen
-/// (domain/view/frame/screen.rs), and only these name it: the view's own
-/// frame, the camera's gestures, the markers' layout and selection, the
-/// stage's viewport words and the shell. A path is a file, or a folder by
-/// its trailing slash.
-const SCREEN_USERS: [&str; 7] = [
-    "rust/client/kernel/src/domain/view/frame/",
-    "rust/client/kernel/src/domain/control/camera/controller.rs",
-    "rust/client/kernel/src/domain/control/camera/input.rs",
-    "rust/client/kernel/src/domain/scene/marker/arrangement.rs",
-    "rust/client/kernel/src/domain/scene/marker/selection.rs",
-    "rust/client/kernel/src/domain/scene/stage.rs",
-    "rust/client/kernel/src/shell.rs",
+/// pxl-render's order: what names no device, the look, the parameters and the words of the
+/// protocol, under a frame's data, which the hover ghost's mesh and the paints stand on, and
+/// the device on top of all of it.
+const RENDER: &str = "rust/client/render/src/";
+const RENDER_ORDER: [(&str, u8); 8] = [
+    ("param", 0),
+    ("look", 0),
+    ("api", 0),
+    ("api_spec", 0),
+    ("asset", 0),
+    ("frame", 1),
+    ("mesh", 2),
+    ("gpu", 3),
 ];
 
-/// The lines of `text`, a kernel source, comments left out, that reach the
+/// A frame's own order (frame.rs): its shaders and the atlas's shelves, neither naming the
+/// other.
+const FRAME_ORDER: [(&str, u8); 2] = [("shader", 0), ("shelf", 0)];
+
+/// The shaders' own order (frame/shader.rs): the words, the parts and WebGPU's floor, under the
+/// pipeline records, under the compute groups and what a pass does with them, under the
+/// frame's calls.
+const SHADER_ORDER: [(&str, u8); 7] = [
+    ("floor", 0),
+    ("part", 0),
+    ("word", 0),
+    ("record", 1),
+    ("access", 2),
+    ("group", 2),
+    ("sequence", 3),
+];
+
+/// The device's own order (gpu.rs): what speaks no WebGPU, under the calls themselves, under
+/// the draw lists, the pipelines and the surfaces, under what the passes make with them, over
+/// which the world's rays stand, then the shadow map and the passes over them, the renderer
+/// on top.
+const GPU_ORDER: [(&str, u8); 28] = [
+    ("put", 0),
+    ("span", 0),
+    ("span_spec", 0),
+    ("split", 0),
+    ("text", 0),
+    ("api", 1),
+    ("draw", 2),
+    ("pipeline", 2),
+    ("read", 2),
+    ("surface", 2),
+    ("ao", 3),
+    ("atlas", 3),
+    ("mip", 3),
+    ("tiles", 3),
+    ("upload", 3),
+    ("finish", 4),
+    ("generator", 4),
+    ("image_map", 4),
+    ("pack", 4),
+    ("propagate", 4),
+    ("resolve", 4),
+    ("atmosphere", 5),
+    ("ray", 5),
+    ("cloud", 6),
+    ("shadow", 6),
+    ("star", 6),
+    ("pass", 7),
+    ("renderer", 8),
+];
+const GPU_OWN: u8 = 9;
+
+/// The passes' own order (gpu/pass.rs): what the model passes share, under the marks and the
+/// passes that stand alone, under those that mark, under what draws through them.
+const PASS_ORDER: [(&str, u8); 9] = [
+    ("model", 0),
+    ("debug", 1),
+    ("mark", 1),
+    ("marker", 1),
+    ("decor", 2),
+    ("location", 2),
+    ("skinned_mesh", 2),
+    ("character", 3),
+    ("impostor", 3),
+];
+
+/// The client's order (ts/client/src, AGENTS.md): its entry over the UI
+/// and the wiring that opens the runtime, the two heads; under them the port,
+/// the one way to the core; the files the core opens; the server they
+/// are read from; what each platform gives; and at the bottom the numbers
+/// both read and the build's values.
+const CLIENT: &str = "ts/client/src/";
+const CLIENT_ORDER: [(&str, u8); 12] = [
+    ("app", 6),
+    ("boot", 6),
+    ("page", 6),
+    ("ui", 5),
+    ("runtime", 5),
+    ("port", 4),
+    ("sys", 3),
+    ("origin", 2),
+    ("service", 1),
+    ("abi", 0),
+    ("deploy", 0),
+    ("remote-console", 0),
+];
+const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
+
+/// Where TypeScript's aliases are (`paths`), every reader's.
+const TSCONFIG: &str = "ts/tsconfig.json";
+
+/// Every order held. A folder whose root holds only its modules gives its
+/// root's own a level over all of them, so no part reaches back to it.
+const ORDERS: [Order; 13] = [
+    Order {
+        root: CORE,
+        path: "crate",
+        levels: &CORE_ORDER,
+        heads: &CORE_HEADS,
+        beside: &CORE_BESIDE,
+        own: None,
+    },
+    Order {
+        root: ENGINE,
+        path: "crate",
+        levels: &ENGINE_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: CONTENT,
+        path: "crate",
+        levels: &CONTENT_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: CLIENT,
+        path: "",
+        levels: &CLIENT_ORDER,
+        heads: &CLIENT_HEADS,
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: "rust/client/core/src/domain/control/",
+        path: "crate::domain::control",
+        levels: &CONTROL_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(5),
+    },
+    Order {
+        root: "rust/client/core/src/domain/control/camera/",
+        path: "crate::domain::control::camera",
+        levels: &CAMERA_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(0),
+    },
+    Order {
+        root: "rust/client/core/src/domain/view/",
+        path: "crate::domain::view",
+        levels: &VIEW_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(4),
+    },
+    Order {
+        root: "rust/client/core/src/domain/scene/",
+        path: "crate::domain::scene",
+        levels: &SCENE_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(SCENE_OWN),
+    },
+    Order {
+        root: RENDER,
+        path: "crate",
+        levels: &RENDER_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: "rust/client/render/src/frame/",
+        path: "crate::frame",
+        levels: &FRAME_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(1),
+    },
+    Order {
+        root: "rust/client/render/src/frame/shader/",
+        path: "crate::frame::shader",
+        levels: &SHADER_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(4),
+    },
+    Order {
+        root: "rust/client/render/src/gpu/",
+        path: "crate::gpu",
+        levels: &GPU_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(GPU_OWN),
+    },
+    Order {
+        root: "rust/client/render/src/gpu/pass/",
+        path: "crate::gpu::pass",
+        levels: &PASS_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(4),
+    },
+];
+
+/// The core's sys/ stands below everything that draws: it names no
+/// renderer (`pxl_render`), and, beside its order, no profiler
+/// (`CORE_BESIDE`).
+const SYS: &str = "rust/client/core/src/sys/";
+const SYS_REFUSED: &str = r"\bpxl_render\b";
+
+/// What the world shows is decided in angles, the camera grid's cell; a
+/// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
+/// The core reads the view's CSS pixels through one module, the screen
+/// (domain/view/frame/screen.rs), and only these name it: the view's own
+/// frame, the camera's gestures, the markers' layout and selection, the
+/// stage's pixels a unit and the UI. A path is a file, or a folder by its
+/// trailing slash.
+const SCREEN_USERS: [&str; 7] = [
+    "rust/client/core/src/domain/view/frame/",
+    "rust/client/core/src/domain/control/camera/controller.rs",
+    "rust/client/core/src/domain/control/input.rs",
+    "rust/client/core/src/domain/scene/marker/arrangement.rs",
+    "rust/client/core/src/domain/scene/marker/selection.rs",
+    "rust/client/core/src/domain/scene/stage.rs",
+    "rust/client/core/src/ui.rs",
+];
+
+/// The lines of `text`, a core source, comments left out, that reach the
 /// screen: a path through it (`screen::`), a group naming it (`frame::{…
 /// screen …}`, over as many lines as it runs), a glob or an alias of the
 /// frame that would reach it unnamed, or a re-export of it, which would lend
@@ -165,21 +477,21 @@ fn screen_reached(text: &str) -> Vec<usize> {
 /// only seam"): the layers' reads, the form both answer (`Query`), the
 /// terrain's and the store's past it (`TerrainQuery`, `ObjectQuery`), the clip
 /// levels as the CPU reads them (`CpuClipmap`) and the ways' pool, are named
-/// in the kernel by the layers and the query alone, and the query lends none
+/// in the core by the layers and the query alone, and the query lends none
 /// of them on. A path is a file, or a folder by its trailing slash.
 const LAYERS: [&str; 2] = [
-    "rust/client/kernel/src/domain/layer.rs",
-    "rust/client/kernel/src/domain/layer/",
+    "rust/client/core/src/domain/layer.rs",
+    "rust/client/core/src/domain/layer/",
 ];
 const LAYER_READERS: [&str; 3] = [
-    "rust/client/kernel/src/domain/query.rs",
-    "rust/client/kernel/src/domain/query/",
-    "rust/client/kernel/src/domain/query.test.rs",
+    "rust/client/core/src/domain/query.rs",
+    "rust/client/core/src/domain/query/",
+    "rust/client/core/src/domain/query.test.rs",
 ];
 const LAYER_READS: &str =
     r"\b(?:Query|TerrainQuery|ObjectQuery|CpuClipmap)\b|\bclipmap::(?:\{[^}]*\bpool\b|pool\b)";
 
-/// The lines of `text`, a kernel source, comments left out, that name a
+/// The lines of `text`, a core source, comments left out, that name a
 /// layer's read (`LAYER_READS`), or glob a module that would bring one in
 /// unnamed: where `lent`, only a re-export of one past the query.
 fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
@@ -203,34 +515,39 @@ fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
     lines
 }
 
-/// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
+/// xpute's words are runtime, core and their contract (AGENTS.md): pixelet's
 /// appear nowhere under it.
 const XPUTE: &str = "xpute/";
-const PIXELET_WORDS: &str = r"(?i)\b(pixelet|kernel|shell)\b";
+const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
-/// The modules `text` names through `crate::`, a `domain::` step passed
-/// over (the kernel's heads and trunk live under it), a group's every
-/// first name among them, each with the line it is named on.
-fn crate_modules(text: &str) -> Vec<(usize, String)> {
+/// The modules `text` names past `path`, a `domain::` step past it passed
+/// over (the core's heads and trunk live under it), a group's every first
+/// name among them, each with the line it is named on; `path` itself, named
+/// whole, is its root, an empty name.
+fn named(text: &str, path: &str) -> Vec<(usize, String)> {
     let code: String = text
         .lines()
         .map(|l| l.split("//").next().unwrap_or(""))
         .collect::<Vec<_>>()
         .join("\n");
-    let ident = |s: &str| -> String {
-        s.chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect()
-    };
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let ident = |s: &str| -> String { s.chars().take_while(|&c| word(c)).collect() };
     let mut out = Vec::new();
     let mut at = 0;
-    while let Some(k) = code[at..].find("crate::") {
+    while let Some(k) = code[at..].find(path) {
         let start = at + k;
-        let mut rest = &code[start + "crate::".len()..];
-        if let Some(r) = rest.strip_prefix("domain::") {
-            rest = r;
+        at = start + path.len();
+        let rest = &code[at..];
+        // A longer name that holds `path`, as `pub(crate)` holds none.
+        if rest.starts_with(word) || code[..start].ends_with(word) {
+            continue;
         }
         let line = code[..start].matches('\n').count() + 1;
+        let Some(rest) = rest.strip_prefix("::") else {
+            out.push((line, String::new()));
+            continue;
+        };
+        let rest = rest.strip_prefix("domain::").unwrap_or(rest);
         if let Some(group) = rest.strip_prefix('{') {
             // A group: the first name of each item at its own depth.
             let (mut depth, mut item_start) = (0, true);
@@ -240,7 +557,7 @@ fn crate_modules(text: &str) -> Vec<(usize, String)> {
                     '}' if depth == 0 => break,
                     '}' => depth -= 1,
                     ',' if depth == 0 => item_start = true,
-                    c if item_start && (c.is_alphanumeric() || c == '_') => {
+                    c if item_start && word(c) => {
                         out.push((line, ident(&group[i..])));
                         item_start = false;
                     }
@@ -250,13 +567,79 @@ fn crate_modules(text: &str) -> Vec<(usize, String)> {
         } else {
             out.push((line, ident(rest)));
         }
-        at = start + "crate::".len();
     }
     out
 }
 
+/// Each alias TSCONFIG gives, as the name an import writes and the folder,
+/// from the tree's root, it stands for.
+fn ts_aliases(read: &dyn Fn(&str) -> Option<String>) -> Vec<(String, String)> {
+    let text: String = read(TSCONFIG)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cfg: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    let dir = TSCONFIG.rsplit_once('/').map_or("", |(d, _)| d);
+    cfg["compilerOptions"]["paths"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, to)| {
+            let to = to.get(0)?.as_str()?;
+            Some((
+                name.trim_end_matches('*').to_string(),
+                format!(
+                    "{dir}/{}",
+                    to.trim_start_matches("./").trim_end_matches('*')
+                ),
+            ))
+        })
+        .collect()
+}
+
+/// The files `text`, the TypeScript file `f`, imports, exports from or
+/// starts a worker on, comments left out, each a path from the tree's root
+/// with the line it is named on: an alias (`aliases`) put back as its
+/// folder, a relative name resolved from `f`'s; a package is left out.
+fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, String)> {
+    let blank = |m: &regex::Captures| m[0].replace(|c| c != '\n', " ");
+    let code = Regex::new(r"/\*[\s\S]*?\*/")
+        .expect("a block comment's pattern")
+        .replace_all(text, blank);
+    let code = Regex::new(r"(?m)^\s*//.*$")
+        .expect("a line comment's pattern")
+        .replace_all(&code, blank);
+    let name = Regex::new(r#"(?:\bfrom|\bimport\s*\(?|\bnew\s+URL\s*\()\s*["']([^"']+)["']"#)
+        .expect("an import's pattern");
+    let dir = f.rsplit_once('/').map_or("", |(d, _)| d);
+    name.captures_iter(&code)
+        .filter_map(|c| {
+            let line = code[..c.get(0)?.start()].matches('\n').count() + 1;
+            let path = if c[1].starts_with('.') {
+                format!("{dir}/{}", &c[1])
+            } else {
+                let (alias, to) = aliases.iter().find(|(a, _)| c[1].starts_with(a.as_str()))?;
+                format!("{to}{}", &c[1][alias.len()..])
+            };
+            let mut parts: Vec<&str> = Vec::new();
+            for step in path.split('/') {
+                match step {
+                    "" | "." => {}
+                    ".." => {
+                        parts.pop();
+                    }
+                    step => parts.push(step),
+                }
+            }
+            Some((line, parts.join("/")))
+        })
+        .collect()
+}
+
 /// Where `f` stands in `order` under `root`: its first step past `root`, or
-/// past `domain/` for the kernel's heads and trunk.
+/// past `domain/` for the core's heads and trunk.
 fn standing(f: &str, root: &str) -> String {
     let rest = &f[root.len()..];
     let rest = rest.strip_prefix("domain/").unwrap_or(rest);
@@ -269,48 +652,82 @@ fn standing(f: &str, root: &str) -> String {
         .to_string()
 }
 
-/// Every name in `root`'s files of a module above the file's own in
-/// `order`, or of one head by another; and every module `order` does not
-/// place, but the crate's root and those that stand `beside` it, so a new
-/// one is placed before it is checked.
-fn out_of_order(
-    files: &[&str],
-    read: &dyn Fn(&str) -> Option<String>,
-    root: &str,
-    order: &[(&str, u8)],
-    heads: &[&str],
-    beside: &[&str],
-) -> Vec<String> {
-    let level = |m: &str| order.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
+/// Every name in `o`'s files of a module above the file's own, or of one
+/// head by another, or of one beside the order off its top; and every module
+/// the order does not place, but the crate's root and those that stand
+/// beside it, so a new one is placed before it is checked.
+fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order) -> Vec<String> {
+    let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
+    let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
+    let aliases = ts_aliases(read);
     let mut problems = Vec::new();
     let mut unplaced = std::collections::BTreeSet::new();
     for f in files
         .iter()
-        .filter(|f| f.starts_with(root) && f.ends_with(".rs"))
+        .filter(|f| f.starts_with(o.root) && [".rs", ".ts", ".tsx"].iter().any(|e| f.ends_with(e)))
     {
-        let me = standing(f, root);
+        let me = standing(f, o.root);
         let Some(mine) = level(&me) else {
-            if !["lib", "domain"].contains(&me.as_str()) && !beside.contains(&me.as_str()) {
+            if !["lib", "domain"].contains(&me.as_str()) && !o.beside.contains(&me.as_str()) {
                 unplaced.insert(me);
             }
             continue;
         };
-        for (line, them) in crate_modules(&read(f).unwrap_or_default()) {
-            let Some(theirs) = level(&them) else { continue };
-            let head = heads.contains(&me.as_str()) && heads.contains(&them.as_str());
-            if them != me && (theirs > mine || head) {
+        let text = read(f).unwrap_or_default();
+        let names = match f.ends_with(".rs") {
+            true => named(&text, o.path),
+            false => imported(&text, f, &aliases)
+                .into_iter()
+                .filter(|(_, p)| p.starts_with(o.root))
+                .map(|(line, p)| (line, standing(&p, o.root)))
+                .collect(),
+        };
+        for (line, them) in names {
+            if them == me {
+                continue;
+            }
+            if o.beside.contains(&them.as_str()) {
+                if mine < top {
+                    problems.push(format!(
+                        "{f}:{line}: `{me}` names `{them}`, which stands beside the order and only its top names"
+                    ));
+                }
+                continue;
+            }
+            let Some(theirs) = level(&them).or(o.own) else {
+                continue;
+            };
+            let head = o.heads.contains(&me.as_str()) && o.heads.contains(&them.as_str());
+            if theirs > mine || head {
+                let them = if level(&them).is_some() {
+                    format!("`{them}`")
+                } else {
+                    format!("its folder's root (`{}`)", o.path)
+                };
                 problems.push(format!(
-                    "{f}:{line}: `{me}` names `{them}`, above it or the other head, in the layers' order"
+                    "{f}:{line}: `{me}` names {them}, above it or the other head, in the layers' order"
                 ));
             }
         }
     }
     for me in unplaced {
         problems.push(format!(
-            "{root}{me}: `{me}` has no place in the layers' order; give it one (check_rules.rs)"
+            "{}{me}: `{me}` has no place in the layers' order; give it one (check_rules.rs)",
+            o.root
         ));
     }
     problems
+}
+
+/// The lines of `text`, a sys/ source, comments left out, that name what
+/// sys/ stands below (`SYS_REFUSED`).
+fn sys_refused(text: &str) -> Vec<usize> {
+    let refused = Regex::new(SYS_REFUSED).expect("sys's refused pattern");
+    text.lines()
+        .enumerate()
+        .filter(|(_, l)| refused.is_match(l.split("//").next().unwrap_or("")))
+        .map(|(n, _)| n + 1)
+        .collect()
 }
 
 /// The tree's files, a path a line from `root`: git's, tracked and not
@@ -502,27 +919,26 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(out_of_order(
-        &files,
-        &read,
-        KERNEL,
-        &KERNEL_ORDER,
-        &KERNEL_HEADS,
-        &KERNEL_BESIDE,
-    ));
-    problems.extend(out_of_order(&files, &read, ENGINE, &ENGINE_ORDER, &[], &[]));
-    problems.extend(out_of_order(
-        &files,
-        &read,
-        CONTENT,
-        &CONTENT_ORDER,
-        &[],
-        &[],
-    ));
+    for o in &ORDERS {
+        problems.extend(out_of_order(&files, &read, o));
+    }
+    if ts_aliases(&read).is_empty() {
+        problems.push(format!(
+            "{TSCONFIG}: no alias read (`compilerOptions.paths`), so no import through one is held to the client's order"
+        ));
+    }
+    for f in files
+        .iter()
+        .filter(|f| f.starts_with(SYS) && f.ends_with(".rs"))
+    {
+        for line in sys_refused(&read(f).unwrap_or_default()) {
+            problems.push(format!(
+                "{f}:{line}: names the renderer under sys/, which stands below everything that draws (check_rules.rs `SYS_REFUSED`)"
+            ));
+        }
+    }
     for f in files.iter().filter(|f| {
-        f.starts_with(KERNEL)
-            && f.ends_with(".rs")
-            && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
+        f.starts_with(CORE) && f.ends_with(".rs") && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
     }) {
         for line in screen_reached(&read(f).unwrap_or_default()) {
             problems.push(format!(
@@ -532,7 +948,7 @@ fn run() -> Result<Vec<String>, String> {
     }
     for f in files
         .iter()
-        .filter(|f| f.starts_with(KERNEL) && f.ends_with(".rs"))
+        .filter(|f| f.starts_with(CORE) && f.ends_with(".rs"))
     {
         if LAYERS.iter().any(|l| f.starts_with(l)) {
             continue;
@@ -552,8 +968,7 @@ fn run() -> Result<Vec<String>, String> {
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
-            // Make's `$(shell …)` is the build tool's, not pixelet's shell.
-            if pixelet.is_match(&line.replace("$(shell", "")) {
+            if pixelet.is_match(line) {
                 problems.push(format!(
                     "{f}:{}: names pixelet's word under xpute: {}",
                     n + 1,
@@ -570,7 +985,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the query as the one seam, the screen's pixels and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the profiler beside it, sys/ under the renderer, the query as the one seam, the screen's pixels and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -617,6 +1032,187 @@ mod spec;"
         let found = unlinked(&files, &read);
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].starts_with("rust/a/src/stray.rs:"));
+    }
+
+    #[test]
+    fn order_refuses_up_beside_and_root() {
+        const LEVELS: [(&str, u8); 4] = [("top", 2), ("mid", 1), ("f", 1), ("low", 0)];
+        let crate_order = Order {
+            root: "rust/k/src/",
+            path: "crate",
+            levels: &LEVELS,
+            heads: &[],
+            beside: &["perf"],
+            own: None,
+        };
+        const PARTS: [(&str, u8); 2] = [("a", 1), ("b", 0)];
+        let folder = Order {
+            root: "rust/k/src/domain/f/",
+            path: "crate::domain::f",
+            levels: &PARTS,
+            heads: &[],
+            beside: &[],
+            own: Some(2),
+        };
+        let files = [
+            "rust/k/src/top.rs",
+            "rust/k/src/mid.rs",
+            "rust/k/src/low.rs",
+            "rust/k/src/perf.rs",
+            "rust/k/src/domain/f/a.rs",
+            "rust/k/src/domain/f/b.rs",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "rust/k/src/top.rs" => "use crate::perf::x;\nuse crate::low;",
+                    "rust/k/src/mid.rs" => "pub(crate) fn f() {}\nuse crate::perf::y;",
+                    "rust/k/src/low.rs" => "use crate::{mid::z, low};",
+                    "rust/k/src/perf.rs" => "use crate::top;",
+                    "rust/k/src/domain/f/a.rs" => "use crate::domain::f::{b::x, sequence};",
+                    "rust/k/src/domain/f/b.rs" => {
+                        "use crate::domain::f::sequence;\nuse crate::domain::f;\nuse crate::domain::fx;"
+                    }
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found = out_of_order(&files, &read, &crate_order);
+        let at = |found: &[String]| -> Vec<String> {
+            found
+                .iter()
+                .map(|p| p.split(": ").next().unwrap_or("").to_string())
+                .collect()
+        };
+        assert_eq!(
+            at(&found),
+            ["rust/k/src/mid.rs:2", "rust/k/src/low.rs:1"],
+            "{found:?}"
+        );
+        let found = out_of_order(&files, &read, &folder);
+        assert_eq!(
+            at(&found),
+            [
+                "rust/k/src/domain/f/a.rs:1",
+                "rust/k/src/domain/f/b.rs:1",
+                "rust/k/src/domain/f/b.rs:2"
+            ],
+            "{found:?}"
+        );
+    }
+
+    /// Each of pxl-render's orders refuses a name up it, as `ORDERS` holds them: the shaders'
+    /// words naming the records, the calls naming the draw lists, a frame's data naming the
+    /// device, the shared model pass naming one over it; and no order refuses the name down.
+    #[test]
+    fn render_orders_refuse_an_edge_up() {
+        let up = [
+            (
+                "frame/shader/word.rs",
+                "use crate::frame::shader::record::x;",
+                "crate::frame::shader",
+            ),
+            ("gpu/api.rs", "use crate::gpu::draw::x;", "crate::gpu"),
+            (
+                "frame/shader/record.rs",
+                "use crate::gpu::draw::x;",
+                "crate",
+            ),
+            (
+                "gpu/pass/model.rs",
+                "use crate::gpu::pass::decor::x;",
+                "crate::gpu::pass",
+            ),
+        ];
+        for (file, text, path) in up {
+            let o = ORDERS
+                .iter()
+                .find(|o| o.path == path && o.root.starts_with(RENDER))
+                .expect("the order");
+            let f = format!("{RENDER}{file}");
+            let files = [f.as_str()];
+            let found = out_of_order(&files, &|_| Some(text.to_string()), o);
+            assert_eq!(found.len(), 1, "{file}: {found:?}");
+            assert!(found[0].starts_with(&format!("{f}:1:")), "{found:?}");
+        }
+        let down = ORDERS
+            .iter()
+            .find(|o| o.path == "crate::gpu")
+            .expect("the device's order");
+        let f = format!("{RENDER}gpu/renderer.rs");
+        let names = "use crate::gpu::draw::x;";
+        let found = out_of_order(&[f.as_str()], &|_| Some(names.to_string()), down);
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn client_order_refuses_an_import_up() {
+        const LEVELS: [(&str, u8); 5] = [
+            ("app", 3),
+            ("ui", 2),
+            ("runtime", 2),
+            ("port", 1),
+            ("abi", 0),
+        ];
+        let order = Order {
+            root: "ts/c/src/",
+            path: "",
+            levels: &LEVELS,
+            heads: &["ui", "runtime"],
+            beside: &[],
+            own: None,
+        };
+        let files = [
+            "ts/tsconfig.json",
+            "ts/c/src/app.tsx",
+            "ts/c/src/ui/view.tsx",
+            "ts/c/src/runtime/open.ts",
+            "ts/c/src/port/core.ts",
+            "ts/c/src/abi/cmd.spec.ts",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "ts/tsconfig.json" => {
+                        "// The aliases.\n{ \"compilerOptions\": { \"paths\": { \"@/*\": [\"./c/src/*\"], \"@pxl/c/*\": [\"./c/src/*\"] } } }"
+                    }
+                    "ts/c/src/app.tsx" => "import { App } from \"@/ui/view.tsx\";\nimport \"./runtime/open.ts\";",
+                    "ts/c/src/ui/view.tsx" => {
+                        "import { k } from \"@/port/core.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
+                    }
+                    "ts/c/src/runtime/open.ts" => {
+                        "import {\n  k,\n} from \"@pxl/c/port/core.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
+                    }
+                    "ts/c/src/port/core.ts" => {
+                        "import type { View } from \"@pxl/c/ui/view.tsx\";\nimport { useState } from \"react\";"
+                    }
+                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../port/core.ts\";",
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found: Vec<String> = out_of_order(&files, &read, &order)
+            .iter()
+            .map(|p| p.split(": ").next().unwrap_or("").to_string())
+            .collect();
+        assert_eq!(
+            found,
+            [
+                "ts/c/src/ui/view.tsx:3",
+                "ts/c/src/port/core.ts:1",
+                "ts/c/src/abi/cmd.spec.ts:1"
+            ]
+        );
+    }
+
+    #[test]
+    fn sys_refuses_renderer() {
+        assert_eq!(
+            sys_refused("use pxl_spec::x;\nuse pxl_render::gpu::text::Raster;\n// pxl_render"),
+            vec![2]
+        );
     }
 
     #[test]

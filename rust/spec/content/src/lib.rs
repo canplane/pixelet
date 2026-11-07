@@ -6,7 +6,7 @@
 //! caves (`cave`), its strata (`strata`) and its decor's bounds; its palette
 //! (`cube`, `decor`), laid into the engine's value space; the decor the
 //! ground holds and how it is generated (`scatter`, `generation`); and the
-//! clouds' field (`cloud`). pxl-spec, the kernel and the renderer name
+//! clouds' field (`cloud`). pxl-spec, the core and the renderer name
 //! `Pixelet` where they hand the engine its content.
 
 #![no_std]
@@ -40,14 +40,9 @@ impl Content for Pixelet {
     fn bedrock(face: i32) -> i32 {
         strata::bedrock(face)
     }
-    fn ceiling(face: i32) -> i32 {
-        strata::ceiling(face)
-    }
     fn earth(z: i32) -> u32 {
         strata::earth(z)
     }
-    const TALLEST: i32 = generation::TALLEST;
-    const WIDEST: i32 = generation::WIDEST;
 }
 
 // Pixelet's palette laid into the engine's value space (pxl-engine

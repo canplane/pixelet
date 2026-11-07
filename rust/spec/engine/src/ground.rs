@@ -9,10 +9,9 @@
 //! A palette index and a height are stored as a byte and an i16 and read into a word
 //! here, since WGSL has no narrower integer.
 //!
-//! Heights are f32 here, as WGSL has them. WGSL's f32 is not strictly IEEE (a
-//! division's last place, a contraction into a fused multiply-add), so a
-//! height a CPU and a GPU compute from this one source can differ in the
-//! last bit where it falls on an eighth of a cell.
+//! A cell's height off the samples (`height`) is exact, in integers, so the
+//! CPU and a GPU draw it alike whatever they fuse or reorder
+//! (doc/tip/cpu-and-gpu-agree.md).
 
 use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
@@ -21,7 +20,6 @@ use crate::answer::{
 use crate::area::{Area, Shard};
 use crate::clipmap::Lookup;
 use crate::content::Content;
-use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
 use crate::overwrite::z_start;
 use crate::value;
@@ -48,18 +46,48 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_idx`): the
-/// one producer of a cell's height, which a GPU runs once a cell of a held
-/// tile (`height_cs`), and the CPU reads back.
+/// one producer of a cell's height, which the core's fill and the bake run
+/// alike (fill.rs `columns`). Catmull-Rom over the
+/// 4 × 4 samples about the center, rounded half to even and held to their
+/// range, so a bound over the surface is the samples' own.
+///
+/// Exact, its bits counted: a sample is an `i16`; a center lies an odd
+/// count of `CELL_STEPS`ths of a sample past one (`window`), where each
+/// weight is an integer over `1 << WEIGHT_BITS` (`catmull_rom`), under
+/// 2^16 in size. A sample times a weight is under 2^31; a row's sum, its
+/// weights' sizes summing under 1.23 · 2^16, under 2^31.3; a row times a
+/// weight and the four summed, under 2^47.6, in an `i64`: its high word is
+/// the height's floor, its low word the fraction rounded. Once a column as
+/// a brick is filled: 16 products of 32 bits and 4 of 64.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
-    bicubic(ele, x as f32 + CELL_CENTER, y as f32 + CELL_CENTER)
+    let (x0, mx) = window(x);
+    let (y0, my) = window(y);
+    let (wx, wy) = (catmull_rom(mx), catmull_rom(my));
+    let (mut sum, mut lo, mut hi) = (0i64, i32::MAX, i32::MIN);
+    let mut j = 0;
+    while j < 4 {
+        let py = clamp_idx(y0 + j);
+        let mut row = 0i64;
+        let mut i = 0;
+        while i < 4 {
+            let v = ele(ele_idx(clamp_idx(x0 + i), py));
+            lo = lo.min(v);
+            hi = hi.max(v);
+            row += i64::from(v * wx[i as usize]);
+            i += 1;
+        }
+        sum += row * i64::from(wy[j as usize]);
+        j += 1;
+    }
+    let one = 1i64 << (2 * WEIGHT_BITS);
+    let (floor, frac) = (sum >> (2 * WEIGHT_BITS), sum & (one - 1));
+    let up = 2 * frac > one || 2 * frac == one && floor & 1 == 1;
+    ((floor + i64::from(up)) as i32).clamp(lo, hi)
 }
-
-/// A tile's padded samples as a GPU holds them, 2 a word.
-pub(crate) const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
 /// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
-/// lowest and past the highest (`clipmap::LEVEL_WORDS`, `fill::level`).
+/// lowest and past the highest (`clipmap::BOUND_WORDS`, `fill::level`).
 pub type Bounds = [[i32; 2]; 2];
 
 /// Bounds as their two bound words.
@@ -105,16 +133,21 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(palette_indices(w), cell)
 }
 
-/// Quadrant cells an elevation sample spans.
-pub const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
+/// Steps of half a cell an elevation sample spans: a cell's center lies on
+/// a half cell.
+pub const CELL_STEPS: i32 = 2 * (TILE_CELLS / TILE_ELE_SPAN) as i32;
 
-/// The first of the four samples the surface reads along an axis about a
-/// texel coordinate, and how far past the second the coordinate falls; a
-/// cell's center is its index plus a half.
-pub fn window(t: f32) -> (i32, f32) {
-    let s = t / CELL_STEP + ELE_PAD as f32 - 0.5;
-    let f = libm::floorf(s);
-    (f as i32 - 1, s - f)
+/// The bits of a weight's fraction (`catmull_rom`): its denominator is
+/// `2 · CELL_STEPS³`.
+pub const WEIGHT_BITS: u32 = 1 + 3 * CELL_STEPS.trailing_zeros();
+
+/// The first of the four samples the surface reads along an axis about
+/// cell `g`'s center, and how far past the second the center falls, in
+/// `CELL_STEPS`ths of a sample, odd: the center `g + ½` lies at
+/// `(g + ½) / (CELL_STEPS / 2) + ELE_PAD − ½` samples.
+pub fn window(g: i32) -> (i32, i32) {
+    let s = 2 * g + 1 + CELL_STEPS * ELE_PAD as i32 - CELL_STEPS / 2;
+    ((s >> CELL_STEPS.trailing_zeros()) - 1, s & (CELL_STEPS - 1))
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
@@ -122,42 +155,29 @@ pub fn clamp_idx(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
 
-/// Catmull-Rom's four weights at `t` past the second sample.
-pub fn catmull_rom(t: f32) -> [f32; 4] {
-    let (t2, t3) = (t * t, t * t * t);
+/// Catmull-Rom's four weights at `m / CELL_STEPS` past the second sample,
+/// each times `1 << WEIGHT_BITS`, an integer: `−½t³ + t² − ½t`,
+/// `1½t³ − 2½t² + 1`, `−1½t³ + 2t² + ½t` and `½t³ − ½t²` over the
+/// denominator.
+pub fn catmull_rom(m: i32) -> [i32; 4] {
+    let n = CELL_STEPS;
     [
-        -0.5 * t3 + t2 - 0.5 * t,
-        1.5 * t3 - 2.5 * t2 + 1.0,
-        -1.5 * t3 + 2.0 * t2 + 0.5 * t,
-        0.5 * t3 - 0.5 * t2,
+        -m * (n - m) * (n - m),
+        3 * m * m * m - 5 * n * m * m + 2 * n * n * n,
+        -3 * m * m * m + 4 * n * m * m + n * n * m,
+        m * m * (m - n),
     ]
 }
 
-/// The drawn surface: Catmull-Rom over the 4 × 4 padded samples about a
-/// texel point, in cells, held to the samples' range, so a bound over the
-/// surface is the samples' own.
-pub fn bicubic(ele: impl Fn(usize) -> i32, tx: f32, ty: f32) -> i32 {
-    let (x0, fx) = window(tx);
-    let (y0, fy) = window(ty);
-    let (wx, wy) = (catmull_rom(fx), catmull_rom(fy));
-    let (mut out, mut lo, mut hi) = (0.0f32, i32::MAX, i32::MIN);
-    let mut j = 0;
-    while j < 4 {
-        let py = clamp_idx(y0 + j);
-        let mut row = 0.0f32;
-        let mut i = 0;
-        while i < 4 {
-            let v = ele(ele_idx(clamp_idx(x0 + i), py));
-            lo = lo.min(v);
-            hi = hi.max(v);
-            row += v as f32 * wx[i as usize];
-            i += 1;
-        }
-        out += row * wy[j as usize];
-        j += 1;
-    }
-    libm::rintf(out.clamp(lo as f32, hi as f32)) as i32
-}
+const _: () = assert!(
+    (CELL_STEPS as u32).is_power_of_two()
+        && 2 * CELL_STEPS * CELL_STEPS * CELL_STEPS == 1 << WEIGHT_BITS,
+    "a weight's denominator is a power of two"
+);
+const _: () = assert!(
+    2 * WEIGHT_BITS == u32::BITS,
+    "a height's sum's high word is its floor"
+);
 
 /// The value filling more than half of a 2×2 (or 2×2×2) group, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
@@ -227,18 +247,13 @@ pub fn leaf_cells(cell: Zoom) -> i32 {
 }
 
 /// The face of a top of `top` cells of `cell`, in leaf cells, as the grid
-/// draws it: past the leaves a leaf height shifted, under them the mean as
-/// its cells round it.
+/// draws it: past the leaves the leaf cell the top's cell lies in, rounded
+/// down, under sea level as over it, as a cell's index is; under them the
+/// mean as its cells round it (pxl-render world_rule.wgsl `face_height`).
 pub fn face_height(cell: Zoom, top: i32) -> i32 {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
-        // Divided by 2^d toward zero, as the grid draws a face under sea
-        // level.
-        if top < 0 {
-            -(-top >> d)
-        } else {
-            top >> d
-        }
+        top >> d
     } else {
         top << -d
     }
@@ -445,7 +460,7 @@ pub fn node<H: Resident>(
         let column = held.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
         // the cell is air where they take it all.
-        let ground = column.asset::<H::Content>(zoom, c[2], || false);
+        let ground = column.asset::<H::Content>(zoom, c[2]);
         let cave = if ground != VOID && column.opens::<H::Content>(zoom, c[2]) {
             H::Content::hollow((zoom, c))
         } else {
@@ -538,20 +553,15 @@ impl Cell {
         }
     }
 
-    /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
-    /// it (`opens`) and `hollow` says one does, asked only there: the
-    /// ground's palette index, its fold's majority at a coarser cell, as what is
-    /// placed is its fold's, `void` for air; by `C`'s strata
-    /// (`Content::by_depth`).
-    pub fn asset<C: Content>(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
+    /// The asset in cell `z` of the column at `cell`, before the caves take
+    /// their share (`opens`, `Content::hollow`): the ground's palette index,
+    /// its fold's majority at a coarser cell, as what is placed is its
+    /// fold's, `void` for air; by `C`'s strata (`Content::by_depth`).
+    pub fn asset<C: Content>(&self, cell: Zoom, z: i32) -> u32 {
         if !self.is_grounded() {
             return VOID;
         }
-        let g = C::by_depth(cell, self.palette_idx, self.top, z);
-        if g == VOID || self.opens::<C>(cell, z) && hollow() {
-            return VOID;
-        }
-        g
+        C::by_depth(cell, self.palette_idx, self.top, z)
     }
 }
 
@@ -673,5 +683,19 @@ mod tests {
         assert_eq!(top(LEAF_CELL - 6, 8.0), (1, FULL / 8));
         // At the leaves, every cell whole.
         assert_eq!(top(LEAF_CELL, 5.0), (5, FULL));
+    }
+
+    /// A face past the leaves is the leaf cell its top's cell lies in,
+    /// rounded down under sea level as over it; under the leaves, the cells
+    /// scaled.
+    #[test]
+    fn face_height_floors() {
+        let cell = LEAF_CELL + 2;
+        assert_eq!(face_height(cell, 8), 2);
+        assert_eq!(face_height(cell, 9), 2);
+        assert_eq!(face_height(cell, -8), -2);
+        assert_eq!(face_height(cell, -9), -3);
+        assert_eq!(face_height(cell, -1), -1);
+        assert_eq!(face_height(LEAF_CELL - 3, -5), -40);
     }
 }

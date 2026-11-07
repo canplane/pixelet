@@ -6,8 +6,14 @@ pub mod asset;
 #[path = "../../spec/src/directory.rs"]
 pub mod directory;
 pub mod fetch;
-pub mod fmt;
+/// pxl-spec's, compiled here as `directory` is: a model is measured by the
+/// transforms the client places it by.
+#[path = "../../spec/src/space/coord/mat4.rs"]
+pub mod mat4;
 pub mod spec;
+/// What `mat4` is written in, pxl-spec's the same way.
+#[path = "../../spec/src/space/coord/v3.rs"]
+pub mod v3;
 
 use std::path::{Path, PathBuf};
 
