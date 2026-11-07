@@ -6,15 +6,15 @@
 
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::domain::control::camera::controller::facing_domain;
-use crate::domain::control::camera::controller::{camera, eye_world, pivot, set_eye_world};
 use crate::domain::control::camera::state::camera_state;
+use crate::domain::control::camera::{camera, eye_world, facing_domain, set_eye_world};
 use crate::domain::control::param::{
     CAM_DAMP, FIRST_PERSON_EYE_EPS, FIRST_PERSON_FACING_EPS, ROT_DAMP,
 };
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
+use crate::domain::view::frame::coord::world_to_canonical;
 use xpute_core::global::Global;
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
@@ -26,7 +26,7 @@ fn to() -> &'static mut Option<Q3> {
 
 /// First person, where the eye goes to is where the pivot goes to.
 pub(crate) fn pivot_to() -> Option<Q3> {
-    to().or_else(pivot)
+    to().or_else(|| eye_world().map(|e| world_to_canonical(&e)))
 }
 
 pub(crate) fn put(at: Q3, snap: bool) {

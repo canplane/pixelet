@@ -19,11 +19,9 @@ use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{self, V3};
 
-use crate::domain::control::camera::controller::{
-    camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
-};
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
+use crate::domain::control::camera::{camera, facing_dir, facing_domain, set_eye_world};
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
@@ -35,6 +33,7 @@ use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
+use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use collision::{allowed_view, climb_polar};
 use xpute_core::global::Global;
@@ -59,6 +58,17 @@ pub fn orbit() -> &'static mut OrbitState {
 
 pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
     facing_dir(polar, azimuth).map(|v| -v * dist)
+}
+
+/// The point `dist` ahead of the eye the orbit turns about; none before the
+/// camera stands anywhere.
+pub fn pivot_world() -> Option<V3> {
+    let c = camera();
+    let e = c.eye?;
+    Some(v3::sub(
+        &e,
+        &orbit_eye_off(orbit().dist, c.polar, c.azimuth),
+    ))
 }
 
 /// Gated by terrain where the controls are written, so turning back moves at
@@ -111,7 +121,9 @@ pub fn zoom_to(dist: f64) -> f64 {
 }
 
 pub(crate) fn pivot_to() -> Option<Q3> {
-    orbit().to.or_else(pivot)
+    orbit()
+        .to
+        .or_else(|| pivot_world().map(|p| world_to_canonical(&p)))
 }
 
 pub(crate) fn put(at: Q3, snap: bool) {

@@ -1,9 +1,9 @@
 // pxl-kernel/domain/control/camera/controller.rs
 
-//! The camera (an eye and its facing) and which controller moves it. The orbit
-//! turns about a point `dist` ahead of the eye, the first-person camera about the eye
-//! itself; the pivot is that point, derived and never kept. A tracker
-//! overrides either while it holds the pose, since a tracked turn can roll.
+//! Which controller moves the camera (camera.rs), and the pivot it turns
+//! about: the orbit's, a point `dist` ahead of the eye, and the first-person
+//! camera's, the eye itself; derived and never kept. A tracker overrides
+//! either while it holds the pose, since a tracked turn can roll.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
@@ -13,7 +13,8 @@ use crate::domain::control::camera::first_person;
 use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
-use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
+use crate::domain::control::camera::{camera, eye_world, facing_rot};
+use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::{is_unknown, pan_to, unknown_z};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::domain::view::frame::pose::ObserverPose;
@@ -22,66 +23,6 @@ use crate::domain::view::setting::store::{settings_store, CameraMode};
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use xpute_core::global::Global;
-use xpute_kit::math::scalar::wrap;
-
-// A facing in spherical coordinates about the world's Z, θ = polar and
-// φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward
-// east, wrapped. At either pole φ still names the direction the facing returns
-// along. The orbit adds r = dist. There is no roll control.
-pub fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
-    (
-        polar.clamp(0.0, core::f64::consts::PI),
-        wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI),
-    )
-}
-
-pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
-    let (st, ct) = (libm::sin(polar), libm::cos(polar));
-    let (sp, cp) = (libm::sin(azimuth), libm::cos(azimuth));
-    [st * sp, st * cp, -ct]
-}
-
-/// Straight down at polar 0 with the azimuth up the screen; at the poles the
-/// azimuth only turns the screen about the facing.
-pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
-    let mut about_z = mat4::new();
-    mat4::rot_z(&mut about_z, azimuth);
-    let (s, c) = (libm::sin(polar), libm::cos(polar));
-    let mut about_x = mat4::new();
-    (about_x[5], about_x[6], about_x[9], about_x[10]) = (c, -s, s, c);
-    let mut rot: Mat4 = mat4::new();
-    mat4::mul(&mut rot, &about_x, &about_z);
-    rot
-}
-
-/// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
-/// held in it would walk the pivot as the orbit re-derives the eye each
-/// frame.
-pub struct Camera {
-    pub eye: Option<V3>,
-    /// Heading about Z, and the angle down from vertical.
-    pub azimuth: f64,
-    pub polar: f64,
-}
-
-static CAMERA: Global<Camera> = Global::new();
-
-pub fn camera() -> &'static mut Camera {
-    // Where the controls start, so nothing eases at the first frame.
-    CAMERA.get(|| Camera {
-        eye: None,
-        azimuth: DEFAULT_AZIMUTH,
-        polar: DEFAULT_POLAR,
-    })
-}
-
-pub fn eye_world() -> Option<V3> {
-    camera().eye
-}
-
-pub fn set_eye_world(at: &V3) {
-    camera().eye = Some(*at);
-}
 
 /// Zero first person or tracked.
 pub fn dist() -> f64 {
@@ -91,24 +32,12 @@ pub fn dist() -> f64 {
     }
 }
 
-/// The drawn azimuth, radians from north toward east.
-pub fn azimuth() -> f64 {
-    camera().azimuth
-}
-
-/// Radians from straight down.
-pub fn polar() -> f64 {
-    camera().polar
-}
-
 pub fn pivot_world() -> Option<V3> {
-    camera().eye?;
-    if active() == Active::Tracked {
-        return Some(pose()?.eye);
+    match active() {
+        Active::Orbit => orbit::pivot_world(),
+        Active::FirstPerson => eye_world(),
+        Active::Tracked => Some(pose()?.eye),
     }
-    let (e, c) = (eye_world()?, camera());
-    let (d, r) = (facing_dir(c.polar, c.azimuth), dist());
-    Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
 pub fn pivot() -> Option<Q3> {

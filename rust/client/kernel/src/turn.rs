@@ -27,6 +27,7 @@ use crate::sys::io::text::text_rise;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
+use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::write;
 use crate::domain::control::input;
@@ -89,12 +90,12 @@ fn companion_camera() -> Option<Camera> {
     }
     // Where the camera is going, not where its easing has got to.
     let goal = controller::pivot_to().or_else(controller::pivot)?;
-    let eye = coord::world_to_canonical(&controller::eye_world()?);
+    let eye = coord::world_to_canonical(&camera::eye_world()?);
     let at = coord::to_world(&goal);
     Some(Camera {
         pivot: [at[0], at[1]],
         floor: companion::pivot_floor(goal, |w| support::floor_at(w, &goal)),
-        azimuth: controller::azimuth(),
+        azimuth: camera::azimuth(),
         dragging: input::dragging(),
         steered: input::steering(),
         following: follow_mode::following(),
@@ -160,7 +161,7 @@ fn scene_tick(ctx: &mut TickContext) {
     visible_step(
         ctx,
         controller::pivot(),
-        third_person.then(controller::azimuth),
+        third_person.then(camera::azimuth),
         &write::pending().edits,
         write::draft(),
     );

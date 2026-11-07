@@ -245,7 +245,7 @@ pointed at (`pxl-kernel domain/control/edit.rs` `Pick`).
 ## The camera
 
 One **camera** looks, and every controller moves it
-(`domain/control/camera/controller.rs` `Camera`). It is an **eye** and the
+(`domain/control/camera.rs` `Camera`). It is an **eye** and the
 direction it faces, the camera's **facing**, in spherical coordinates about the
 world's Z: θ the polar angle from straight down, φ the azimuth from north toward
 east. Nothing else keeps a copy.
@@ -253,7 +253,7 @@ east. Nothing else keeps a copy.
 The first-person camera turns about its eye; the orbit turns about a point a distance
 ahead of the eye along the facing. The point a camera turns about is the
 **pivot**, the eye itself in the first-person camera, derived and never kept
-(`controller.rs` `pivot`). The character stands there, and a change from one
+(`camera/controller.rs` `pivot`). The character stands there, and a change from one
 camera to the other moves the camera about the pivot, never the pivot. Code past
 the controllers reads the eye, the facing and the pivot.
 

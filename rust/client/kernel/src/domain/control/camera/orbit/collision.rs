@@ -31,8 +31,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_core::global::Global;
 use xpute_kit::math::scalar::wrap;
 
-use crate::domain::control::camera::controller;
-use crate::domain::control::camera::orbit::orbit_eye_off;
+use crate::domain::control::camera::orbit::{orbit_eye_off, pivot_world};
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
@@ -55,7 +54,7 @@ pub struct ViewPose {
 
 fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
-        pivot: controller::pivot_world()?,
+        pivot: pivot_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,

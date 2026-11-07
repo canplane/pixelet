@@ -4,6 +4,7 @@
 //! STAT, and what holds as it reads into its NOW, each read in place by the
 //! panel and the report. Sections go only through `put`.
 
+use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
 use crate::domain::query;
 use crate::domain::query::HitKind;
@@ -300,7 +301,7 @@ fn view() -> ViewSection {
     let place = edit::hover().coord.filter(|_| asset.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let eye = controller::eye_world().map(|e| coord::world_to_canonical(&e));
+    let eye = camera::eye_world().map(|e| coord::world_to_canonical(&e));
     let [eye_x, eye_y, eye_z] = eye.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let pivot = controller::pivot();
     let [pivot_x, pivot_y, pivot_z] = pivot.map_or([f64::NAN; 3], |p| q3::unpack(&p));
@@ -312,8 +313,8 @@ fn view() -> ViewSection {
         eye_y,
         eye_z,
         dist: controller::dist(),
-        polar: controller::polar(),
-        azimuth: controller::azimuth(),
+        polar: camera::polar(),
+        azimuth: camera::azimuth(),
         pivot_x,
         pivot_y,
         pivot_z,

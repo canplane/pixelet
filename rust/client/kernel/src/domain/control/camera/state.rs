@@ -2,7 +2,7 @@
 
 use xpute_kit::math::scalar::clamp;
 
-use crate::domain::control::camera::controller::facing_domain;
+use crate::domain::control::camera::facing_domain;
 use crate::domain::control::param::{
     DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST,
 };
@@ -21,7 +21,7 @@ fn norm_polar(polar: f64) -> f64 {
     facing_domain(polar, 0.0).0
 }
 
-/// What the controls ask; the drawn camera (controller.rs `Camera`) eases toward it.
+/// What the controls ask; the drawn camera (camera.rs `Camera`) eases toward it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Intent {
     pub dist: f64,
