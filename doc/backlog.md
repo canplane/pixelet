@@ -23,6 +23,12 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   Safari 27; with shadows on the GPU sat at 100%, before the indirect-scope fix
   (034ddad063) and the rest fixes. Recheck on main.
 
+- **A split's air children skipped (ESVO's child masks).** A split's answer carries its
+  eight children's occupancy, kept with it in the node cache; a walk crosses an air child
+  without asking or looking it up, the engine's walk by the same rule. In progress.
+  Then sibling loads (a split's crossed children asked together) and, where the S23 and
+  Safari offer them, subgroups.
+
 ## P1
 
 - **`auto` over the frame's interval too.** It is congestion control already (the
@@ -57,11 +63,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## Parked, with the reason on file
 
-- **Inside a ray: sibling loads, ESVO's child masks, subgroups.** The queue walks
-  every ray of the eye and the light (holes, samples, beam rays) with lanes refilled,
-  rays parked and nodes asked once (11-06). What is left of the wavefront line is a
-  ray's own parallelism; whether subgroups are offered on the S23 and on Safari is
-  unchecked.
 - **A query over what is drawn, for an agent to read.** An agent debugging the
   view guesses a pixel's cause from its color in a screenshot. The profiler's
   half is answered: the console's `pxl.profiler.report()` gives its window as
