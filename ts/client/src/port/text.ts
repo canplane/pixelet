@@ -26,7 +26,7 @@ const NO_LINE_START =
   /[、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)\]}]/;
 
 /** What no line ends with: opening marks. */
-const NO_LINE_END = /[（［｛〔〈《「『【“‘(\[{]/;
+const NO_LINE_END = /[（［｛〔〈《「『【“‘([{]/;
 
 /** The break at `at` moved back past a mark the rules keep with its neighbor,
  * no further than the line's first character. */

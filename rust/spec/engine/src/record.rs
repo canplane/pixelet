@@ -117,6 +117,7 @@ use crate::cast::{self, Detail, Node, Spacing};
 use crate::grid;
 use crate::light::{Light, BEAM, TILE};
 use crate::node_cache::{self, ENTRIES};
+use crate::ray::QUEUE_RECORDS_ROOM;
 
 use crate::{Zoom, WORKGROUPS_MOST};
 
@@ -152,7 +153,7 @@ pub const CELL_FRAMES: u32 = 2;
 pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
 
 /// The nodes the asks keep: a frame's, for the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * crate::ray::QUEUE_RECORDS_ROOM;
+pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECORDS_ROOM;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`), the vertical field's
 /// (`grid::HALF_TAN`) across `grid::CELLS_A_RAD`, as `beam::Grid::of` lays them at the cell.

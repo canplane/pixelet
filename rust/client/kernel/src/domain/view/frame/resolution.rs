@@ -397,7 +397,7 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 /// lattice changed asks for the frame that casts on it. The interval a rate changed asks of the
 /// runtime, 0 for its own under any setting but `auto`.
 pub fn load(pace: Pace, gpu: Option<GpuMeasure>) -> Option<f64> {
-    let Some(s) = world() else { return None };
+    let s = world()?;
     let mut interval_ms = None;
     let k = state();
     let (started, lattice) = (pace.moving && !k.moving, k.lattice);
