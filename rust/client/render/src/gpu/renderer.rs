@@ -21,9 +21,8 @@ use xpute_kit::status::errno::Errno;
 use crate::api_spec::surface_role;
 use crate::frame::draw::{drifts, uniform_of, Draw, Draws, Position};
 use crate::frame::draw::{
-    stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
-    PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
-    PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
+    DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
@@ -45,7 +44,7 @@ use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
-use crate::gpu::generator::{Gate, IndirectDraw};
+use crate::gpu::generator::Gate;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
@@ -53,7 +52,7 @@ use crate::gpu::pass::character::CharacterPass;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
-use crate::gpu::pass::location::{LocationPass, BEACON_VERTICES};
+use crate::gpu::pass::location::LocationPass;
 use crate::gpu::pass::mark::{MarkInput, UploadCopies};
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
@@ -73,7 +72,7 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::tiles::{self, Mark, Tiles};
-use crate::gpu::upload::{uploads, Uploads};
+use crate::gpu::upload::uploads;
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
 use crate::param::cloud;
@@ -981,19 +980,6 @@ impl Renderer {
         self.last_frame_uploads.forget();
     }
 
-    /// The world image's opaque models: the decor generated over the world. The
-    /// impostors are the lit pass's alone.
-    fn draw_opaque(
-        &mut self,
-        pass: &mut TrackedRenderPass,
-        generated: Option<IndirectDraw>,
-        b: &mut Uploads,
-        stage: Stage,
-    ) {
-        self.decor
-            .draw_generated(pass, generated, b, stage, self.models.frame);
-    }
-
     /// A frame in two stages, each standing while what it reads stands:
     /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
     /// everything the world and its light make off those rays, then over it
@@ -1492,7 +1478,9 @@ impl Renderer {
             pass.draw(6, across * down, 0, 0);
         }
         // The world that stands while the eye does: what the occlusion reads.
-        self.draw_opaque(&mut pass, generated, b, Stage::Lit);
+        // The impostors are the lit pass's alone.
+        self.decor
+            .draw_generated(&mut pass, generated, b, Stage::Lit, self.models.frame);
         self.screen.draw(&mut pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
         self.impostor
@@ -1710,22 +1698,14 @@ impl Renderer {
     fn stat(&self, draws: &Draws, counted: bool, gpu: Option<GpuRead>) -> FrameStat {
         let b = uploads();
         let mut stats: DrawStats = [[0.0; 2]; DRAW_PIPELINES.len()];
-        for d in draws.all().filter(|_| counted) {
-            let tris = match d[4] {
-                PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
-                PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
-                PIPELINE_IMPOSTOR => 2 * d[2],
-                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
-                PIPELINE_LOCATION_ZONE => BOX_VERTICES / 3 * d[1],
-                PIPELINE_LOCATION_BEACON => BEACON_VERTICES / 3,
-                PIPELINE_MARKER => 2 * d[1],
-                // Two a segment, and the faces'.
-                PIPELINE_DEBUG => d[1] + d[2] / 3,
-                _ => 0,
-            };
-            let c = &mut stats[stats_slot(d[4])];
-            c[0] += 1.0;
-            c[1] += tris as f64;
+        if counted {
+            draws.count(PIPELINE_GHOST_BOX, &mut stats, |d| d[1] * BOX_VERTICES / 3);
+            self.decor.count(draws, b, &mut stats);
+            self.impostor.count(draws, &mut stats);
+            self.skinned_mesh.count(draws, b, &mut stats);
+            self.location.count(draws, &mut stats);
+            self.marker.count(draws, &mut stats);
+            self.debug.count(draws, &mut stats);
         }
         FrameStat {
             gpu,

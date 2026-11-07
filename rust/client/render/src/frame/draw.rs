@@ -186,7 +186,7 @@ pub const DRAW_PIPELINES: [u32; 9] = [
 pub type DrawStats = [[f64; 2]; DRAW_PIPELINES.len()];
 
 /// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
-pub fn stats_slot(pipeline: u32) -> usize {
+fn stats_slot(pipeline: u32) -> usize {
     use xpute_kit::status::bug::OrBug;
     DRAW_PIPELINES
         .iter()
@@ -443,8 +443,19 @@ impl<'a> Draws<'a> {
             .iter()
     }
 
-    pub fn all(&self) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + 'a {
-        self.records.iter().flatten()
+    /// `pipeline`'s draws counted into `stats`, each as many triangles as
+    /// `triangles` says.
+    pub fn count(
+        &self,
+        pipeline: u32,
+        stats: &mut DrawStats,
+        triangles: impl Fn(&[u32; DRAW_WORDS]) -> u32,
+    ) {
+        let c = &mut stats[stats_slot(pipeline)];
+        for d in self.of(pipeline) {
+            c[0] += 1.0;
+            c[1] += f64::from(triangles(d));
+        }
     }
 
     /// The draw at `slot`; none where none is.

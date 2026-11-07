@@ -7,7 +7,7 @@
 use crate::frame::draw::{
     uniform_of, DRAW_WORDS, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
 };
-use crate::frame::draw::{Draw, Draws};
+use crate::frame::draw::{Draw, DrawStats, Draws};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
@@ -20,7 +20,7 @@ use crate::look::color::linear_rgb;
 use crate::param::location::beacon;
 
 /// The octahedron's: three for each of its eight faces.
-pub const BEACON_VERTICES: u32 = 24;
+const BEACON_VERTICES: u32 = 24;
 
 fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
     let faces: [[[f32; 3]; 3]; 6] = [
@@ -200,6 +200,13 @@ impl LocationPass {
         self.zone_marks.reads(zones(draws), out);
         self.beacon_marks
             .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
+    }
+
+    /// Its draws into `stats`, a box a zone's instance and the beacon's
+    /// vertices each.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_LOCATION_ZONE, stats, |d| BOX_VERTICES / 3 * d[1]);
+        draws.count(PIPELINE_LOCATION_BEACON, stats, |_| BEACON_VERTICES / 3);
     }
 
     /// Each draw's uniform in a slot of its own, written once before the

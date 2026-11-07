@@ -6,7 +6,7 @@
 //! draw changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its palette the upload it reads.
 
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
+use crate::frame::draw::{DrawStats, Draws, DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
 
 use crate::frame::draw::Draw;
@@ -101,6 +101,13 @@ impl SkinnedPass {
         out: &mut Vec<u32>,
     ) {
         self.marks.reads(draws, out);
+    }
+
+    /// Its draws into `stats`, its model's triangles each, 0 while it loads.
+    pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
+        draws.count(PIPELINE_SKINNED, stats, |d| {
+            uploads.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
+        });
     }
 
     pub fn set_skins(&mut self, skins: &[(u32, Image)]) {

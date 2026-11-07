@@ -1,7 +1,10 @@
 // pxl-render/gpu/renderer.test.rs
 
 use super::*;
-use crate::frame::draw::{drifted, test_lists, Draw, DrawId, DrawList, Stand};
+use crate::frame::draw::{
+    drifted, test_lists, Draw, DrawId, DrawList, Stand, PIPELINE_DEBUG, PIPELINE_LOCATION_BEACON,
+    PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
+};
 use crate::frame::shader::record::{reads_shadow_map, SHADERS};
 use crate::gpu::pass::mark::{marked, Shown, UploadOf};
 

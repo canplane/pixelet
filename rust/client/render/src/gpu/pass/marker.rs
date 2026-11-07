@@ -10,7 +10,7 @@ use crate::frame::draw::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::draw::Draws;
+use crate::frame::draw::{DrawStats, Draws};
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
@@ -394,6 +394,11 @@ impl MarkerPass {
                 before += d[1];
             },
         );
+    }
+
+    /// Its draws into `stats`, a quad a marker.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_MARKER, stats, |d| 2 * d[1]);
     }
 
     pub fn draw(

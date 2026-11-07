@@ -6,7 +6,7 @@
 //! tiles it covers where it was and where it is (gpu/pass/mark.rs), its
 //! instances the upload it reads.
 
-use crate::frame::draw::{uniform_of, Draw};
+use crate::frame::draw::{uniform_of, Draw, DrawStats, Draws};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -165,6 +165,11 @@ impl ImpostorPass {
         out: &mut Vec<u32>,
     ) {
         self.marks.reads(draws, out);
+    }
+
+    /// Its draws into `stats`, a quad an instance.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_IMPOSTOR, stats, |d| 2 * d[2]);
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {

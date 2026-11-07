@@ -2,8 +2,8 @@
 
 //! The dev gizmos, over the finished world in passes of their own.
 
-use crate::frame::draw::Draws;
 use crate::frame::draw::{uniform_of, PIPELINE_DEBUG};
+use crate::frame::draw::{DrawStats, Draws};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
@@ -51,6 +51,11 @@ impl DebugPass {
                 buf[..32].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0, u[8], u[9], u[10], 0.0]));
             },
         );
+    }
+
+    /// Its draws into `stats`, two triangles a segment, and the faces'.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_DEBUG, stats, |d| d[1] + d[2] / 3);
     }
 
     /// `depth` is the world's, which nothing reads after this in the frame;

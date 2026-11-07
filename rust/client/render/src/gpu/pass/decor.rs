@@ -7,7 +7,7 @@
 //! (gpu/pass/mark.rs), its instances the upload it reads.
 
 use crate::frame::draw::uniform_of;
-use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
+use crate::frame::draw::{DrawStats, PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 
@@ -167,11 +167,18 @@ impl DecorPass {
     }
 
     /// 0 while it loads.
-    pub fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
+    fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
         self.groups
             .get(group as usize)
             .and_then(|&(mesh, _)| uploads.get(mesh))
             .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
+    }
+
+    /// Its draws into `stats`, its group's model's triangles an instance.
+    pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
+        for pipeline in [PIPELINE_DECOR, PIPELINE_GHOST_DECOR] {
+            draws.count(pipeline, stats, |d| self.triangles_of(d[1], uploads) * d[2]);
+        }
     }
 
     /// Every skin and upload group the draws will bind is made here, so drawing
