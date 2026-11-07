@@ -14,12 +14,27 @@ use crate::domain::control::sensor::device_orientation::{
     orient_close, request_orient, OrientationPlatform,
 };
 use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open};
+use xpute_core::global::Global;
+
+/// Which sensors the place has.
+#[derive(Clone, Copy, Default)]
+pub struct Platform {
+    pub geolocation: bool,
+    pub orient: OrientationPlatform,
+}
+
+static PLATFORM: Global<Platform> = Global::new();
+
+/// As the shell says once the kernel is attached; no sensor before it has.
+pub fn platform() -> &'static mut Platform {
+    PLATFORM.get(Platform::default)
+}
 
 /// The world's surface opened: the location where the platform has one, the
 /// heading where it gives one.
-pub fn sensors_open(geolocation: bool, orient: OrientationPlatform) {
-    geolocation_open(geolocation);
-    request_orient(orient);
+pub fn sensors_open() {
+    geolocation_open();
+    request_orient();
 }
 
 pub fn sensors_close() {

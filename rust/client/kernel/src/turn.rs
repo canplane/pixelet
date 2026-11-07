@@ -18,9 +18,7 @@ use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
-use crate::domain::control::sensor::device_orientation::{
-    orient_watchdog_step, OrientationPlatform,
-};
+use crate::domain::control::sensor::device_orientation::orient_watchdog_step;
 use crate::door::cmd;
 use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_rise;
@@ -75,12 +73,6 @@ use xpute_core::global::Global;
 use xpute_core::sched::tick::TickReport;
 
 use crate::sys::sched::phase_spec::Phase;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Platform {
-    pub geolocation: bool,
-    pub orient: OrientationPlatform,
-}
 
 /// The camera as the companion's walk reads it; none while the eye is the
 /// pivot, when the person is the one looking.
@@ -256,7 +248,6 @@ macro_rules! effect {
 /// Returns how long it took.
 pub fn world_turn() -> f64 {
     let at = now();
-    let platform = world_platform();
     let mut times = perf_recording().then_some([0.0; spec::EFFECT_NAMES]);
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
@@ -266,7 +257,7 @@ pub fn world_turn() -> f64 {
     });
     effect!(times, navigation, off_center_step());
     effect!(times, bootstrap, map_bootstrap_step());
-    effect!(times, orient, orient_watchdog_step(platform.orient));
+    effect!(times, orient, orient_watchdog_step());
     effect!(times, follow, follow_mode_step());
     effect!(times, dst, {
         // What the walker found under an unknown Z, let go where it moved.
@@ -280,23 +271,6 @@ pub fn world_turn() -> f64 {
     effect!(times, settings, store::settings_keep_step());
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times.unwrap_or_default();
     now() - at
-}
-
-static PLATFORM: Global<Option<Platform>> = Global::new();
-
-pub fn set_world_platform(platform: Platform) {
-    *PLATFORM.get(|| None) = Some(platform);
-}
-
-pub fn world_platform() -> Platform {
-    PLATFORM.get(|| None).unwrap_or(Platform {
-        geolocation: false,
-        orient: OrientationPlatform {
-            supported: false,
-            needs_permission: false,
-            silence_is_loss: false,
-        },
-    })
 }
 
 /// Longest gap still stepped as motion; past it (a hidden tab, a stall) the

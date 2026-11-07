@@ -8,7 +8,6 @@ use crate::domain::control::input::camera_view_resize;
 use crate::domain::control::sensor;
 use crate::domain::scene::resolution;
 use crate::sys::sched::edge::request_world_tick;
-use crate::turn::world_platform;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
 use xpute_core::abi::gpu::{GpuSurfaceClose, GpuSurfaceResize};
@@ -33,8 +32,7 @@ pub(super) fn draw_world(handle: u32) -> bool {
         return false;
     };
     s.role = surface_role::WORLD;
-    let platform = world_platform();
-    sensor::sensors_open(platform.geolocation, platform.orient);
+    sensor::sensors_open();
     if s.px_w != 0 {
         s.ratio = resolution::surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
         camera_view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);

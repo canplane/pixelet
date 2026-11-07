@@ -10,7 +10,7 @@ use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::sensor::device_orientation::{request_orient, OrientationPlatform};
+use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
@@ -134,7 +134,7 @@ pub fn follow_mode_step() {
 
 /// The shell decides which of the three from the state it drew the button
 /// in, so the press means what the user saw.
-pub fn tracking_action(tracking: Tracking, orient: OrientationPlatform) {
+pub fn tracking_action(tracking: Tracking) {
     match tracking {
         Tracking::Recenter => {
             // On the floor nearest the fix's altitude, or the surface where it has
@@ -147,7 +147,7 @@ pub fn tracking_action(tracking: Tracking, orient: OrientationPlatform) {
         Tracking::Follow => {
             // The heading is asked for, and the view turns with it once it comes;
             // where there is none, following is where one is alone.
-            request_orient(orient);
+            request_orient();
             set_following(true);
         }
         Tracking::Unfollow => {

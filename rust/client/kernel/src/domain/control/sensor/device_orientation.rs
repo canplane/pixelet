@@ -7,6 +7,7 @@
 use crate::domain::cmd::Message;
 
 use crate::domain::cmd::{PermissionAnswer, SensorStatus};
+use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{device_orient_store, SensorState};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
@@ -24,7 +25,7 @@ pub enum OrientationCommand {
     Remove,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default)]
 pub struct OrientationPlatform {
     pub supported: bool,
     /// iOS 13+: requestPermission must run inside a user gesture.
@@ -74,16 +75,16 @@ pub fn orient_event(
 
 /// True when tracking or asked for. Behind a permission only the shell's
 /// prompt can start it.
-pub fn request_orient(platform: OrientationPlatform) -> bool {
+pub fn request_orient() -> bool {
     let store = device_orient_store();
     if store.is_tracking_orient {
         return true;
     }
-    if !platform.supported || store.state.status == SensorStatus::Unavailable {
+    if !platform().orient.supported || store.state.status == SensorStatus::Unavailable {
         store.state = SensorState::of(SensorStatus::Unavailable);
         return false;
     }
-    if platform.needs_permission {
+    if platform().orient.needs_permission {
         return false;
     }
     store.state = SensorState::of(SensorStatus::Loading);
@@ -96,7 +97,7 @@ pub fn request_orient(platform: OrientationPlatform) -> bool {
 
 /// Without a prompt gate, a grant came from outside the app (device
 /// settings) and starts the listener here.
-pub fn orient_permission(answer: PermissionAnswer, platform: OrientationPlatform) {
+pub fn orient_permission(answer: PermissionAnswer) {
     let store = device_orient_store();
     match answer {
         PermissionAnswer::Asking => {
@@ -104,12 +105,12 @@ pub fn orient_permission(answer: PermissionAnswer, platform: OrientationPlatform
                 store.state = SensorState::of(SensorStatus::Loading);
             }
         }
-        PermissionAnswer::Granted if platform.needs_permission => {
+        PermissionAnswer::Granted if platform().orient.needs_permission => {
             orient().last_event_at = now();
             store.set_is_tracking_orient(true);
         }
         PermissionAnswer::Granted => {
-            request_orient(platform);
+            request_orient();
         }
         PermissionAnswer::Denied => {
             store.set_is_tracking_orient(false);
@@ -147,8 +148,8 @@ pub fn orient_visible() {
 /// moves that deadline, so a talking sensor is never polled. A heading is
 /// asked for when the sensors open and again when the user follows
 /// (navigation/follow_mode.rs `tracking_action`).
-pub fn orient_watchdog_step(platform: OrientationPlatform) {
-    if !platform.silence_is_loss || !device_orient_store().is_tracking_orient {
+pub fn orient_watchdog_step() {
+    if !platform().orient.silence_is_loss || !device_orient_store().is_tracking_orient {
         return;
     }
     let o = orient();

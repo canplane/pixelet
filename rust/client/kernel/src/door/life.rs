@@ -9,7 +9,6 @@ use crate::domain::control::sensor::geolocation;
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store::settings_open;
 use crate::sys::sched::edge;
-use crate::turn::world_platform;
 use xpute_core::ipc::door::{Life, Outcome};
 
 pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
@@ -28,11 +27,11 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
         // The last sure moment to save: the objects written, and the
         // position no longer watched while nothing shows it.
         Life::Suspend => {
-            geolocation::geolocation_visibility(false, world_platform().geolocation);
+            geolocation::geolocation_visibility(false);
             repository::save();
         }
         Life::Resume => {
-            geolocation::geolocation_visibility(true, world_platform().geolocation);
+            geolocation::geolocation_visibility(true);
             device_orientation::orient_visible();
         }
     }

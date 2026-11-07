@@ -11,6 +11,7 @@
 use crate::domain::cmd::GeolocationErrorCode;
 use crate::domain::cmd::Message;
 use crate::domain::cmd::SensorStatus;
+use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{device_location_store, SensorState};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
@@ -42,12 +43,12 @@ fn geolocation() -> &'static mut Geolocation {
 
 /// A watch runs while the store tracks the location
 /// (`DeviceLocationStore::is_tracking_location`).
-pub fn start_watching(supported: bool) {
+pub fn start_watching() {
     let store = device_location_store();
     if store.is_tracking_location {
         return;
     }
-    if !supported {
+    if !platform().geolocation {
         store.state = SensorState::failed(Message::GeolocationUnsupported);
         return;
     }
@@ -64,9 +65,9 @@ pub fn stop_watching() {
     }
 }
 
-pub fn geolocation_open(supported: bool) {
+pub fn geolocation_open() {
     geolocation().open = true;
-    start_watching(supported);
+    start_watching();
 }
 
 pub fn geolocation_close() {
@@ -75,18 +76,18 @@ pub fn geolocation_close() {
     device_location_store().state = SensorState::of(SensorStatus::Idle);
 }
 
-pub fn geolocation_visibility(visible: bool, supported: bool) {
+pub fn geolocation_visibility(visible: bool) {
     if !visible {
         stop_watching();
     } else if geolocation().open {
-        start_watching(supported);
+        start_watching();
     }
 }
 
 /// A grant from outside the app recovers; otherwise a denial stuck until reload.
-pub fn on_geolocation_permission_granted(supported: bool) {
+pub fn on_geolocation_permission_granted() {
     if !device_location_store().is_tracking_location {
-        start_watching(supported);
+        start_watching();
     }
 }
 
