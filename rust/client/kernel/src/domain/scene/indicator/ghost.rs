@@ -7,12 +7,11 @@
 //! is decided here: a box's color and texture, and the box that stands in for
 //! a decor until it can be drawn as itself.
 
-use pxl_render::frame::draw::{
-    DrawId, DrawList, MirroredBlock, Position, Stand, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-};
 use pxl_render::frame::shader::record::BOX_WORDS;
+use pxl_render::frame::shader::record::{PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, Stand};
 use pxl_render::look::color::indicator;
 use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
@@ -193,7 +192,7 @@ impl GhostDraw {
     }
 
     /// On Q3, a box's on whole units, a decor's where its stored Q3 is: on any lap of X,
-    /// drawn the short way round from the eye (pxl-render frame/draw.rs `Position`).
+    /// drawn the short way round from the eye (pxl-render gpu/draw.rs `Position`).
     pub fn draw(&self, draw: &mut DrawList) {
         let Some(shape) = self.shape else { return };
         match shape {

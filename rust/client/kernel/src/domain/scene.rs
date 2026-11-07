@@ -20,7 +20,7 @@ pub mod resolution;
 pub mod stage;
 pub mod transform;
 
-use pxl_render::frame::draw::DrawList;
+use pxl_render::gpu::draw::DrawList;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
 use crate::domain::scene::character::surface::character_surface_shows;

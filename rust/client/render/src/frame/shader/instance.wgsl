@@ -9,7 +9,7 @@
 
 // A cloud's draw holds its place on the cloud field's map, which it is drawn
 // moved back from by how far the wind has carried the field, Q3 from Q3 first,
-// so the difference keeps every step (frame/draw.rs `Position`).
+// so the difference keeps every step (gpu/draw.rs `Position`).
 fn draw_translation() -> vec3f {
   let drifts = instance_drifts() != 0.0;
   let back_q = select(vec2i(0), bitcast<vec2i>(frame_drift_q()), drifts);

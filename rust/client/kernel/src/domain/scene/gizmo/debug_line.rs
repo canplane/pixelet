@@ -4,9 +4,10 @@
 //! the gizmo lines behind it and draws nothing, so the gizmos occlude one
 //! another and nothing else. A module built without the gizmos holds none.
 
-use pxl_render::frame::draw::{DrawId, DrawList, MirroredBlock, Position, PIPELINE_DEBUG};
 use pxl_render::frame::shader::record;
+use pxl_render::frame::shader::record::PIPELINE_DEBUG;
 use pxl_render::gpu::api::bytes;
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position};
 use pxl_spec::space::coord::v3::V3;
 
 /// Position relative to the set's origin (3), and linear color and its

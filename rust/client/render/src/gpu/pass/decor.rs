@@ -6,22 +6,22 @@
 //! changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its instances the upload it reads.
 
-use crate::frame::draw::uniform_of;
-use crate::frame::draw::{DrawStats, PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
+use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
+use crate::gpu::draw::uniform_of;
+use crate::gpu::draw::DrawStats;
 
-use crate::frame::draw::{Draw, Draws};
+use crate::frame::shader::sequence;
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
+use crate::gpu::draw::{Draw, Draws};
 use crate::gpu::generator::IndirectDraw;
-use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
-    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
+    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms, Extent,
     ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::ray::sequence;
 use crate::gpu::upload::Uploads;
 use pxl_content::generation;
 

@@ -7,7 +7,7 @@
 /// the stream, a pipeline record's codes, a surface's role. Data naming
 /// nothing here, so a leaf under both what describes a frame (`frame`) and
 /// the device that draws it (`gpu`), which each speak it.
-#[path = "gpu/api.spec.rs"]
+#[path = "api.spec.rs"]
 pub mod api_spec;
 pub mod asset;
 pub mod frame;

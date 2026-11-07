@@ -6,9 +6,9 @@
 use xpute_core::global::Global;
 use xpute_core::mem;
 
-use crate::frame::draw;
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};
+use crate::gpu::draw;
 
 const EMPTY: u32 = 0;
 
@@ -51,7 +51,7 @@ fn mem(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const UPLOAD_COLUMNS: usize = 7;
 
-/// The table's columns for `live` uploads, then the draw list's (frame/draw.rs `lists_bytes`).
+/// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
     (UPLOAD_COLUMNS * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
 }

@@ -6,8 +6,9 @@
 //! draw changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its palette the upload it reads.
 
-use crate::frame::draw::{DrawStats, Draws, DRAW_WORDS, PIPELINE_SKINNED};
+use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
+use crate::gpu::draw::{DrawStats, Draws, DRAW_WORDS};
 
 use crate::gpu::api::{buf_entry, release, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass};
 use crate::gpu::pass::mark::{put_whole, Marks};

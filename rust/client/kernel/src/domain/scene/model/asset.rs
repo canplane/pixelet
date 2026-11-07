@@ -25,7 +25,7 @@ use std::rc::Rc;
 use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{parse_gltf, scene_nodes, world_matrices, Gltf, GltfPrimitive};
-use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
+use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use xpute_core::global::Global;
 use xpute_core::mem;

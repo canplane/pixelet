@@ -25,7 +25,7 @@ use pxl_engine::param;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, raster, ray, record, value, Zoom, FRAC_W, LEAF_CELL};
 use pxl_render::frame::shader::record::{src, SHADER_CELL, SHADER_LIGHT_CELL};
-use pxl_render::gpu::shadow;
+use pxl_render::frame::shader::word::SHADOW_SIZE;
 
 use real_world::{q8, store_of, truth, Asking, Built, World, WorldBufs, FINEST};
 
@@ -1105,7 +1105,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             range: [8, FINEST],
             corner: [1304, -896],
             cuts: none,
-            size: shadow::SIZE,
+            size: SHADOW_SIZE,
             listed: Some(23),
         },
         LightCase {
@@ -2228,7 +2228,7 @@ fn record_case(
     // The light's head saying no receiver stands this frame, over its list, args and stood
     // list: the draw stands none, so none of them is written (tests/light.rs holds what it
     // stands where they do).
-    let size = shadow::SIZE;
+    let size = SHADOW_SIZE;
     let mut light_head = vec![0u32; light::HEAD_WORDS];
     for (k, v) in light::head_layout(size) {
         light_head[k] = v;
@@ -3007,7 +3007,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         let args = gpu.buffer(&laid_args, store_of());
         let rec_buf = gpu.buffer(&rec, store_of());
         let boxes = gpu.buffer(&vec![UNWRITTEN; record::EYE_DRAWS as usize], store_of());
-        let size = shadow::SIZE;
+        let size = SHADOW_SIZE;
         let mut light_head = vec![0u32; light::HEAD_WORDS];
         for (k, v) in light::head_layout(size) {
             light_head[k] = v;
@@ -3087,7 +3087,7 @@ fn hand_light_record_answers_as_raster() {
             name: "the light, its tiles listed, the shipped map's size",
             side: 0.5,
             corner: [1304, -896],
-            size: shadow::SIZE,
+            size: SHADOW_SIZE,
             listed: Some(23),
             ..about
         },

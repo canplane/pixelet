@@ -28,13 +28,14 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
 use crate::frame::shader::word::screen::{CLAIMED_FOR, JITTERS};
+use crate::gpu::api::WORLD_COLOR;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
     RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::{Surface, WORLD_COLOR};
+use crate::gpu::surface::Surface;
 use crate::gpu::tiles::{Tiles, SIDE};
 
 /// The least share a frame takes where what the frames before left is

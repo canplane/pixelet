@@ -18,8 +18,8 @@ use pxl_render::frame::shader::record::{
 };
 use pxl_render::frame::shader::word::frame::EYE;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
+use pxl_render::frame::shader::word::SHADOW_SIZE;
 use pxl_render::frame::shader::word::{instance, screen};
-use pxl_render::gpu::shadow;
 
 const CAP: u32 = 4096;
 
@@ -38,7 +38,7 @@ const SCREEN: Target = Target {
 };
 
 const LIGHT: Target = Target {
-    size: [shadow::SIZE; 2],
+    size: [SHADOW_SIZE; 2],
     side: light::TILE,
     claimed: [100, 90, 140, 131],
 };

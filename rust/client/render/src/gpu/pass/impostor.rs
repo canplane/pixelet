@@ -6,11 +6,13 @@
 //! tiles it covers where it was and where it is (gpu/pass/mark.rs), its
 //! instances the upload it reads.
 
-use crate::frame::draw::{uniform_of, Draw, DrawStats, Draws};
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
+use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
+use crate::gpu::draw::DRAW_WORDS;
+use crate::gpu::draw::{uniform_of, Draw, DrawStats, Draws};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shader::sequence;
 use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
@@ -20,10 +22,9 @@ use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
-    draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
+    draw_model, draw_models, put_instances, DrawUniforms, Extent, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::ray::sequence;
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
@@ -32,9 +33,6 @@ use crate::gpu::upload::Uploads;
 /// size.
 const IMPOSTOR_SIZE: u32 = 128;
 const FIT_BYTES: u32 = 16;
-
-/// glTF's across, up and deep.
-pub type Extent = [f32; 3];
 
 type BakeKey = (u32, Option<u32>, Extent);
 

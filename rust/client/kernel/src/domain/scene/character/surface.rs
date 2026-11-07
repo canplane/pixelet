@@ -8,8 +8,8 @@
 use crate::domain::scene::character::companion::companion_surface_draw;
 use crate::domain::scene::character::Group;
 use crate::sys::sched::edge::request_world_tick;
-use pxl_render::frame::draw::Draw;
 use pxl_render::gpu::api::Image;
+use pxl_render::gpu::draw::Draw;
 use xpute_core::global::Global;
 
 /// Each: its surface, the group of the companion's character it shows, and

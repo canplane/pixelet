@@ -4,11 +4,11 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generator.rs): what each reads, made once, and their dispatches.
 
-use super::sequence;
 use crate::frame::shader::access::Step;
+use crate::frame::shader::sequence;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
-use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, Zoom, LEAF_CELL, WORKGROUPS_MOST};
+use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, Zoom, LEAF_CELL};
 use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -17,10 +17,16 @@ use super::count::{self, Counter, Counts, RayCounts};
 use super::raster::Raster;
 use super::schedule::{Reads, Schedule};
 use super::RaysPass;
-use crate::frame::draw::Stand;
 use crate::frame::shader::floor;
+use crate::frame::shader::group::{
+    CAST_GROUP, CAST_TILES_GROUP, DRAWS_BINDING, HEAD_BINDING, LATTICE_ASK_GROUP,
+    LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_GROUP, LIGHT_LATTICE_LAST_GROUP,
+    LIGHT_LATTICE_WALK_GROUP, LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_GROUP,
+    LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP, LIGHT_SLIDE_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP,
+    QUEUE_LAST_GROUP, WORLD_GROUP,
+};
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FORGET, COMPUTE_LIGHT,
+    COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FORGET, COMPUTE_LIGHT,
     COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_CLAIM, COMPUTE_LIGHT_MARK_DRAWS,
     COMPUTE_LIGHT_MARK_DRAWS_OPEN, COMPUTE_LIGHT_MARK_WALKED, COMPUTE_LIGHT_PROPAGATE,
     COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
@@ -32,22 +38,23 @@ use crate::frame::shader::record::{
     COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS,
     COMPUTE_QUEUE_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_LIGHT_SAMPLES,
     COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED, COMPUTE_QUEUE_SAMPLES,
-    COMPUTE_QUEUE_SAMPLES_PARKED, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY,
-    UNIFORM,
+    COMPUTE_QUEUE_SAMPLES_PARKED,
 };
+use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
     write_buffer_bytes, Entry, Gpu, RenderContext,
 };
+use crate::gpu::draw::Stand;
 use crate::gpu::generator::{
     cut_boxes, hold, DecorFrame, Gate, Generation, Generator, IndirectDraw,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
-use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
+use crate::gpu::surface::DRAWN_MOST;
 use crate::gpu::tiles::Tiles;
 
 /// The GPU's cast this frame (frame/shader/cast.wgsl `cast_cs`), a ray
@@ -72,7 +79,7 @@ pub struct Cast<'a> {
     /// The decor the GPU generates and draws over the same world (gpu/generator.rs).
     pub decor: DecorFrame<'a>,
     /// The box each drawn thing that reads the shadow map stands within, in the world's Q3, as
-    /// its draw is recorded (frame/draw.rs `Lists::stands`): receivers of the map as decor is
+    /// its draw is recorded (gpu/draw.rs `Lists::stands`): receivers of the map as decor is
     /// (pxl-engine `light::STANDS_AT`), taken against the eye's `ORIGIN` as the head is written.
     pub stands: &'a [Stand],
     /// Whether what the eye's cast and the sun's walked and took is counted
@@ -341,94 +348,6 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
     true
 }
 
-/// The binding of a pass's head (pxl-engine `light::HEAD_SIZE`): the light's
-/// map's, or the eye's, which names none.
-pub(super) const HEAD_BINDING: u32 = 11;
-
-/// The lattice's runs' walks over the node cache alone (queue_walk.wgsl over samples.wgsl or
-/// corners.wgsl): the eye, the beam's words, the node cache and the queue's words.
-pub(super) const LATTICE_WALK_GROUP: [u32; 12] = [
-    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
-];
-/// `LATTICE_WALK_GROUP` with the light's head, for the light's map.
-pub(super) const LIGHT_LATTICE_WALK_GROUP: [u32; 15] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE,
-    10,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-
-/// The light's slots' (`light_cs`): the list, the node cache it reads the visible voxel's
-/// entry off, the map it writes, the head, the visibility it reads and the missed slots'
-/// dispatch.
-pub(super) const LIGHT_GROUP: [u32; 21] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE,
-    10,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    15,
-    COMPUTE,
-    TEXTURE_UINT_ARRAY,
-    17,
-    COMPUTE,
-    STORAGE_RW,
-];
-const _: () = assert!(
-    floor::holds(&[&LIGHT_GROUP]),
-    "the light's slots' group binds past WebGPU's floor"
-);
-/// `cast_cs`'s (cast.wgsl): the eye, the rays, the beam's words, the node cache it lists the
-/// marked pixels in and reads the visible voxel's entry off, the visibility buffer, the walk
-/// again's words and the claimed tiles' list (`px_group`).
-pub(super) const CAST_GROUP: [u32; 21] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    13,
-    COMPUTE,
-    TEXTURE_UINT_ARRAY,
-    14,
-    COMPUTE,
-    STORAGE_RW,
-    30,
-    COMPUTE,
-    STORAGE,
-];
-/// `cast_tiles_cs`'s (cast_tiles.wgsl): the list, the tiles' words and uniform.
-pub(super) const CAST_TILES_GROUP: [u32; 9] = [
-    0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
-];
 const CAST_WORKGROUP: [u32; 3] = [ray::CAST_SIDE, ray::CAST_SIDE, 1];
 /// A tile's workgroups of `cast_cs`, across and down.
 const TILE_CASTS: u32 = screen::TILE / ray::CAST_SIDE;
@@ -436,27 +355,6 @@ const _: () = assert!(
     screen::TILE.is_multiple_of(ray::CAST_SIDE),
     "a tile is a whole number of the cast's workgroups"
 );
-/// The most pixels the world is drawn at each way, the floor's texture side: every size the
-/// render size's rule allows (`drawn_fits`) lies within it, and the screen's claimed tiles, a
-/// word a tile (`CAST_TILES_START`), fit the floor there.
-pub const DRAWN_MOST: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
-
-/// The most pixels the world is drawn at in all: the eye's holes (`ray::holes_words`), a word and a
-/// bit a pixel, within 27/64 of the floor's binding, the camera grid's words beside them in the
-/// beam rays' buffer at the widest field.
-pub const DRAWN_AREA: u32 =
-    ((floor::MAX_STORAGE_BUFFER_BINDING_SIZE * 27 / 256) as u32 - ray::POOL_WORDS - 1) / 33 * 32;
-
-/// Whether the world drawn at `size` pixels is one every device draws (gpu/surface.rs
-/// `render_px`): no side past `DRAWN_MOST`, no more than `DRAWN_AREA` in all, and its screen tiles,
-/// a workgroup each across the pixels' cast's dispatch (`cast_cs`, `sequence::PX`), within the
-/// floor's workgroups a side.
-pub const fn drawn_fits(size: [u32; 2]) -> bool {
-    size[0] <= DRAWN_MOST[0]
-        && size[1] <= DRAWN_MOST[1]
-        && size[0].div_ceil(screen::TILE) * size[1].div_ceil(screen::TILE) <= WORKGROUPS_MOST
-        && size[0] * size[1] <= DRAWN_AREA
-}
 const _: () = assert!(
     floor::fits(
         word_bytes(
@@ -482,367 +380,6 @@ struct StandOn {
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// The light's cast's groups (`light_groups`).
 const LIGHT_GROUPS: usize = 17;
-/// The light's receivers' passes' groups: the eye, the head and the list; the stood list's
-/// args and the light's args, whose marks they swap (light_stood.wgsl); and the rays the eye's
-/// pixels met the world by and its beam rays' words, its walked pixels listed past the grid's
-/// (light_mark.wgsl), or the decor placed
-/// (light_mark_draws.wgsl); or the passes' args alone (light_propagate.wgsl).
-pub(super) const LIGHT_MARK_GROUP: [u32; 21] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-    21,
-    COMPUTE,
-    STORAGE_RW,
-    22,
-    COMPUTE,
-    STORAGE_RW,
-    23,
-    COMPUTE,
-    STORAGE,
-];
-pub(super) const LIGHT_MARK_DRAWS_GROUP: [u32; 24] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-    18,
-    COMPUTE,
-    STORAGE,
-    19,
-    COMPUTE,
-    STORAGE,
-    20,
-    COMPUTE,
-    STORAGE,
-    21,
-    COMPUTE,
-    STORAGE_RW,
-    22,
-    COMPUTE,
-    STORAGE_RW,
-];
-/// The drawn receivers' dispatch opened (light_mark_draws_open.wgsl): their pass's group and
-/// the dispatch it reads its count from.
-pub(super) const LIGHT_MARK_DRAWS_OPEN_GROUP: [u32; 27] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-    18,
-    COMPUTE,
-    STORAGE,
-    19,
-    COMPUTE,
-    STORAGE,
-    20,
-    COMPUTE,
-    STORAGE,
-    21,
-    COMPUTE,
-    STORAGE_RW,
-    22,
-    COMPUTE,
-    STORAGE_RW,
-    DRAWS_BINDING,
-    COMPUTE,
-    STORAGE_RW,
-];
-pub(super) const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-    21,
-    COMPUTE,
-    STORAGE_RW,
-];
-/// The binding of the drawn receivers' dispatch (light_mark_draws_open.wgsl), written by the pass
-/// before the one that reads its count from it.
-pub(super) const DRAWS_BINDING: u32 = 24;
-/// `light_slide_cs`'s (light_slide.wgsl): the eye, the head and the list.
-pub(super) const LIGHT_SLIDE_GROUP: [u32; 9] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-];
-const _: () = assert!(
-    floor::holds(&[&LIGHT_MARK_GROUP])
-        && floor::holds(&[&LIGHT_MARK_DRAWS_GROUP])
-        && floor::holds(&[&LIGHT_PROPAGATE_GROUP])
-        && floor::holds(&[&LIGHT_SLIDE_GROUP]),
-    "a light receivers' pass's group binds past WebGPU's floor"
-);
-/// The cast's world's group, over which `cell_cs`, `light_cell_cs` and `forget_cs` run:
-/// the eye, the beam rays' words the cells' starts go into, the node cache, and the head
-/// the passes both observers take read their observer by. The shadow map's passes of those
-/// bind it over the light's buffers (`light_groups`).
-pub(super) const WORLD_GROUP: [u32; 12] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-/// The holes' queue's walks over the node cache alone (queue_walk.wgsl), either observer's:
-/// the eye, the rays or the map they write, the observer's list, the node cache they read,
-/// the queue's words and the observer's head.
-pub(super) const QUEUE_GROUP: [u32; 18] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE,
-    10,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-/// Its asks (queue_ask.wgsl): the eye, the world's buffers, the node cache they write, the
-/// queue's words and the observer's head.
-pub(super) const QUEUE_ASK_GROUP: [u32; 30] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE,
-    2,
-    COMPUTE,
-    STORAGE,
-    4,
-    COMPUTE,
-    STORAGE,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
-    COMPUTE,
-    STORAGE,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    10,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-/// Its last walk (queue_last.wgsl): the eye, the world's buffers, the rays or the map, the
-/// observer's list, the node cache it writes and the observer's head.
-pub(super) const QUEUE_LAST_GROUP: [u32; 33] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE,
-    2,
-    COMPUTE,
-    STORAGE,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    4,
-    COMPUTE,
-    STORAGE,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
-    COMPUTE,
-    STORAGE,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-/// The lattice's asks (queue_ask.wgsl over samples_run.eye.wgsl or samples_run.light.wgsl):
-/// `QUEUE_ASK_GROUP` but the head, which no lattice's run reads there.
-pub(super) const LATTICE_ASK_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE,
-    STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 10, COMPUTE,
-    STORAGE_RW,
-];
-/// The eye's lattice's last walk (queue_last.wgsl over samples.wgsl): the eye, the world's
-/// buffers, the beam's words and the node cache it writes.
-pub(super) const LATTICE_LAST_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE,
-    STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE_RW, 9, COMPUTE,
-    STORAGE_RW,
-];
-/// `LATTICE_LAST_GROUP` with the light's head, for the light's map.
-pub(super) const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE,
-    2,
-    COMPUTE,
-    STORAGE,
-    4,
-    COMPUTE,
-    STORAGE,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
-    COMPUTE,
-    STORAGE,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-const _: () = assert!(
-    floor::holds(&[&WORLD_GROUP])
-        && floor::holds(&[&QUEUE_GROUP])
-        && floor::holds(&[&LATTICE_ASK_GROUP])
-        && floor::holds(&[&LIGHT_LATTICE_LAST_GROUP])
-        && floor::holds(&[&QUEUE_ASK_GROUP])
-        && floor::holds(&[&QUEUE_LAST_GROUP]),
-    "the cast's world's group or the holes' queue's binds past WebGPU's floor"
-);
-
-// Each compute group against what the shaders built over it read, as their declarations take
-// it (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_CAST], &CAST_GROUP)
-        && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
-        && binds(
-            &[COMPUTE_CELL, COMPUTE_LIGHT_CELL, COMPUTE_FORGET],
-            &WORLD_GROUP
-        )
-        && binds(
-            &[
-                COMPUTE_QUEUE_SAMPLES,
-                COMPUTE_QUEUE_SAMPLES_PARKED,
-                COMPUTE_QUEUE_CORNERS,
-                COMPUTE_QUEUE_CORNERS_PARKED
-            ],
-            &LATTICE_WALK_GROUP
-        )
-        && binds(
-            &[
-                COMPUTE_QUEUE_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-                COMPUTE_QUEUE_LIGHT_CORNERS,
-                COMPUTE_QUEUE_LIGHT_CORNERS_PARKED
-            ],
-            &LIGHT_LATTICE_WALK_GROUP
-        )
-        && binds(
-            &[
-                COMPUTE_QUEUE_ASK_SAMPLES,
-                COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_CORNERS,
-                COMPUTE_QUEUE_ASK_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED
-            ],
-            &LATTICE_ASK_GROUP
-        )
-        && binds(
-            &[COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LAST_CORNERS],
-            &LATTICE_LAST_GROUP
-        )
-        && binds(
-            &[
-                COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_LAST_LIGHT_CORNERS
-            ],
-            &LIGHT_LATTICE_LAST_GROUP
-        )
-        && binds(&[COMPUTE_QUEUE, COMPUTE_QUEUE_PARKED], &QUEUE_GROUP)
-        && binds(
-            &[COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED],
-            &QUEUE_ASK_GROUP
-        )
-        && binds(&[COMPUTE_QUEUE_LAST], &QUEUE_LAST_GROUP)
-        && binds(&[COMPUTE_LIGHT], &LIGHT_GROUP)
-        && binds(&[COMPUTE_LIGHT_MARK_WALKED], &LIGHT_MARK_GROUP)
-        && binds(&[COMPUTE_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
-        && binds(
-            &[COMPUTE_LIGHT_MARK_DRAWS_OPEN],
-            &LIGHT_MARK_DRAWS_OPEN_GROUP
-        )
-        && binds(
-            &[COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_CLAIM],
-            &LIGHT_PROPAGATE_GROUP
-        )
-        && binds(&[COMPUTE_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
-    "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
-);
 
 impl RaysPass {
     /// The cast pass's pipelines and buffers, made once with the renderer,
@@ -1018,7 +555,7 @@ impl RaysPass {
             light_slide_owed: 0,
             light_content: Read::default(),
             light_reads_was: buf(
-                word_bytes((light::tiles(shadow::SIZE) * light::tiles(shadow::SIZE)) as usize),
+                word_bytes((light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE)) as usize),
                 buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
             ),
             light_receivers: Read::default(),
@@ -1385,7 +922,7 @@ impl RaysPass {
             let origin: [i32; 3] = core::array::from_fn(|k| cast.eye[eye::ORIGIN + k] as i32);
             for s in cast.stands.iter().take(light::STANDS) {
                 let [lo, hi] = s.from_eye(origin);
-                if let Some(tiles) = lit.box_tiles(shadow::SIZE, lo, hi, stands) {
+                if let Some(tiles) = lit.box_tiles(SHADOW_SIZE, lo, hi, stands) {
                     c.light_stands.push(StandOn {
                         bounds: [lo, hi],
                         tiles,
@@ -1453,7 +990,7 @@ impl RaysPass {
             head[light::HEAD_CAST] = c.light_number;
             head[light::HEAD_EPOCH] = c.light_epoch;
             head[light::HEAD_COUNTED] = u32::from(ray_counts);
-            for (k, v) in light::head_layout(shadow::SIZE) {
+            for (k, v) in light::head_layout(SHADOW_SIZE) {
                 head[k] = v;
             }
             head[light::HEAD_CORNER_WAS] = due.corner_was[0] as u32;
@@ -1546,7 +1083,7 @@ impl RaysPass {
                 );
             }
             c.raster
-                .light_prepare(g, &cast.eye, shadow::SIZE, &light_map.2);
+                .light_prepare(g, &cast.eye, SHADOW_SIZE, &light_map.2);
         }
         // No receiver stands where the light casts none: the head's flag the record's draw reads
         // every frame (`light::HEAD_STANDS_WORLD`).
@@ -1680,7 +1217,7 @@ impl RaysPass {
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [kind == FrameKind::cast, light_casts],
-            rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
+            rays: [c.size[0] * c.size[1], SHADOW_SIZE * SHADOW_SIZE],
         };
         c.counter.begin(g, ray_counts, c.node_cache, frame);
         let bindings = [
@@ -2095,7 +1632,7 @@ impl RaysPass {
             // slide's pass then sets to none where the box slid onto it or
             // into another band (`light_slide_cs`).
             if due.slid {
-                let n = light::tiles(shadow::SIZE) as i32;
+                let n = light::tiles(SHADOW_SIZE) as i32;
                 let t = light::TILE as i32;
                 let dx = (due.corner[0] - due.corner_was[0]) / t;
                 let dy = (due.corner[1] - due.corner_was[1]) / t;
@@ -2200,7 +1737,7 @@ impl RaysPass {
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
             g.set_pipeline(pass, c.light_claim_built.id);
-            let n = light::tiles(shadow::SIZE);
+            let n = light::tiles(SHADOW_SIZE);
             g.dispatch(pass, (n * n).div_ceil(light::LISTED_LANES), 1, 1);
             g.end(pass);
             // The claimed lists' counts where the passes that take them read them.
@@ -2292,7 +1829,7 @@ impl RaysPass {
                         hits: &sequence::LIGHT_HITS,
                         pool: (
                             c.light_list,
-                            light::list_words(shadow::SIZE) + ray::POOL_CNT,
+                            light::list_words(SHADOW_SIZE) + ray::POOL_CNT,
                             &sequence::LIGHT_POOL_CNT,
                         ),
                     }),
@@ -2339,7 +1876,7 @@ impl RaysPass {
                             | buffer_usage::COPY_SRC,
                     );
                 }
-                c.light_ready = c.raster.light_made(g, shadow::SIZE);
+                c.light_ready = c.raster.light_made(g, SHADOW_SIZE);
             }
         } else if c.light_list != 0 || c.light_ready {
             for group in c.light_groups {
@@ -2518,7 +2055,7 @@ fn light_stood(owes: bool) -> [u32; light::STOOD_WORDS as usize] {
     let mut w = [0; light::STOOD_WORDS as usize];
     let list = light::STOOD_LIST as usize;
     w[list..list + ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
-    let n = light::tiles(shadow::SIZE).div_ceil(SQUARE_SIDE);
+    let n = light::tiles(SHADOW_SIZE).div_ceil(SQUARE_SIDE);
     let slide = light::STOOD_SLIDE as usize;
     w[slide..slide + 3].copy_from_slice(&[0, if owes { n } else { 0 }, 1]);
     w
@@ -2527,7 +2064,7 @@ fn light_stood(owes: bool) -> [u32; light::STOOD_WORDS as usize] {
 /// The light's args (`light::args_words`).
 fn light_args_buf(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes(light::args_words(shadow::SIZE) as usize),
+        word_bytes(light::args_words(SHADOW_SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2539,7 +2076,7 @@ fn light_args_buf(g: &Gpu) -> u32 {
 /// and the rest of `light::list_words`, then its pool and its stops (`light::buffer_words`).
 fn light_list(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes(light::buffer_words(shadow::SIZE) as usize),
+        word_bytes(light::buffer_words(SHADOW_SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2796,7 +2333,7 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
 
 /// Column `c` put among `columns`, as many as the light's head holds (pxl-engine
 /// `light::COLUMNS`): past them taken into the last, as the host's draws' stands are
-/// (frame/draw.rs `stand`).
+/// (gpu/draw.rs `stand`).
 fn put_column(columns: &mut Vec<light::Column>, c: light::Column) {
     let full = columns.len() == light::COLUMNS;
     match columns.last_mut() {

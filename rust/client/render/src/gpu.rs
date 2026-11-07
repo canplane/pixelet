@@ -7,6 +7,7 @@ pub mod api;
 pub mod atlas;
 pub mod atmosphere;
 pub mod cloud;
+pub mod draw;
 pub mod finish;
 pub mod generator;
 pub mod image_map;

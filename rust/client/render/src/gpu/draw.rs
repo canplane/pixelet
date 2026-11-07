@@ -1,4 +1,4 @@
-// pxl-render/frame/draw.rs
+// pxl-render/gpu/draw.rs
 
 //! Draw lists the kernel fills and the renderer executes without deciding.
 //! A free cancels its block's pending upload and rewrites: the block may be
@@ -7,7 +7,11 @@
 
 use core::cell::Cell;
 
-use crate::frame::shader::record::reads_shadow_map;
+use crate::frame::shader::record::{
+    reads_shadow_map, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
+    PIPELINE_SKINNED,
+};
 use crate::frame::shader::word::{draw, ghost_box, instance, location, skinned, DRAW_FLOATS};
 use crate::gpu::api::in_flight;
 use pxl_content::generation::{TALLEST, WIDEST};
@@ -145,28 +149,8 @@ impl Position {
     }
 }
 
-/// Box draw: (upload handle, box count, first box, uniform, pipeline).
-/// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
-/// uniform carries the group's first column word, stride and index-list start.
-pub const PIPELINE_DECOR: u32 = 0;
-/// Half transparent, at the depth of the faces it lies on, which stand
-/// behind it (screen_ray.wgsl `behind`).
-pub const PIPELINE_GHOST_BOX: u32 = 1;
-pub const PIPELINE_GHOST_DECOR: u32 = 2;
 /// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex columns.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
-/// (model handle, joint palette handle, model id, uniform, pipeline).
-pub const PIPELINE_SKINNED: u32 = 3;
-/// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
-/// (0, 0, 0, uniform, pipeline).
-pub const PIPELINE_LOCATION_ZONE: u32 = 4;
-pub const PIPELINE_LOCATION_BEACON: u32 = 5;
-/// (upload handle, count, 0, uniform, pipeline).
-pub const PIPELINE_MARKER: u32 = 6;
-/// Line segments: handle, line vertex count, face vertex count.
-pub const PIPELINE_DEBUG: u32 = 7;
-/// Decor drawn as impostors where a variant is too small on screen for its model.
-pub const PIPELINE_IMPOSTOR: u32 = 8;
 
 /// Every pipeline a draw record names, in the order a frame's draw stats count
 /// them (gpu/renderer.rs `FrameStat::draws`): what the list draws is these.

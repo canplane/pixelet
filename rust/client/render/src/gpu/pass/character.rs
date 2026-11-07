@@ -5,12 +5,11 @@
 //! shadow, a blank map bound and no strength to read it by. Its draw is
 //! handed to it whole, held by none of the world's lists, so what the
 //! world's eye sees of the character moves nothing here: its uniform at
-//! slot 0 of a buffer of its own (frame/draw.rs `scaled_draw`).
+//! slot 0 of a buffer of its own (gpu/draw.rs `scaled_draw`).
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::frame::draw::{Draw, Position};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, DRIFT_Q, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
@@ -20,6 +19,7 @@ use crate::gpu::api::{
     TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::draw::{Draw, Position};
 use crate::gpu::finish::Finish;
 use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
 use crate::gpu::pass::skinned_mesh::SkinnedPass;

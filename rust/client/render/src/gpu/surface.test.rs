@@ -1,10 +1,8 @@
 // pxl-render/gpu/surface.test.rs
 
 use super::*;
-use crate::frame::shader::floor;
 use crate::gpu::api::word_bytes;
-use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
-use pxl_engine::{beam, ray};
+use pxl_engine::beam;
 use pxl_spec::space::camera::grid::HALF_TAN;
 
 fn world(px: [u32; 2], dpr: f64, ratio: f64) -> Surface {

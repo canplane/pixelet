@@ -11,13 +11,13 @@ use pxl_content::generation::{TALLEST, WIDEST};
 use pxl_engine::light::{self, Light};
 use pxl_engine::{eye, param, ray, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE};
+use pxl_render::frame::shader::word::SHADOW_SIZE;
 use pxl_render::frame::shader::word::SQUARE_SIDE;
-use pxl_render::gpu::shadow;
 
 use gpu::{mix, Gpu, LightBox, Tally};
 
 /// The shipped map's side, and its tiles a side.
-const SIZE: u32 = shadow::SIZE;
+const SIZE: u32 = SHADOW_SIZE;
 const N: u32 = light::tiles(SIZE);
 /// The eye's zooms, which every band is held to.
 const RANGE: [Zoom; 2] = [8, LEAF_CELL + 3];

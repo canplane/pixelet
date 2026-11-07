@@ -8,6 +8,11 @@
 
 use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};
 
+/// Device pixels an atlas draws per logical pixel: the symbols' masks', laid
+/// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
+/// finer than it shows a marker drawn up from it.
+pub const ATLAS_SCALE: f64 = SYMBOL_RATIO as f64;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Font {
     pub weight: u32,

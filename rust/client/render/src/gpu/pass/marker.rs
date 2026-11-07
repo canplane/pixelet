@@ -6,24 +6,25 @@
 //! read-only (marker.wgsl). The atlas is premultiplied so its mips
 //! filter without a dark fringe.
 
-use crate::frame::draw::PIPELINE_MARKER;
+use crate::frame::shader::record::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::draw::{DrawStats, Draws};
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
+use crate::frame::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
     Format, Gpu, Layout, Load, RenderContext,
 };
-use crate::gpu::atlas::shelf::{Atlas, Paint, SlotSet};
-use crate::gpu::atlas::{AtlasPainter, DisplayList, ATLAS_SCALE};
+use crate::gpu::atlas::{AtlasPainter, DisplayList};
+use crate::gpu::draw::{DrawStats, Draws};
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::Uploads;
+use crate::look::marker::ATLAS_SCALE;
 use crate::look::marker::{
     bubble_box_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
     DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP,

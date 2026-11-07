@@ -1,4 +1,4 @@
-// pxl-render/gpu/atlas/shelf.rs
+// pxl-render/frame/shelf.rs
 
 //! Where each marker's bitmap lies in the atlas, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth

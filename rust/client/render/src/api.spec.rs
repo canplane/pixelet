@@ -1,4 +1,4 @@
-// pxl-render/gpu/api.spec.rs
+// pxl-render/api.spec.rs
 //
 // GENERATED from spec/client/render/gpu/api.json
 //

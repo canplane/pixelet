@@ -6,18 +6,18 @@
 //! this frame's, its vertices as its depth pass lays them, each fragment
 //! setting its tile's word: the pixels it covered then and covers now,
 //! each frame at its own jitter. A draw changed where the turn changed it
-//! (frame/draw.rs `Change`), as it was and as it is; or where the upload it
+//! (gpu/draw.rs `Change`), as it was and as it is; or where the upload it
 //! reads moved (`touched`, the handles this frame's lists upload, rewrite or
 //! free); or, one that drifts with the wind, where the wind's drift moved,
 //! each drawn at its own frame's drift. What the last frame drew is kept for
 //! that: each upload the draws read, copied after the frame read it where the
 //! lists moved it since (`UploadCopies`).
 
-use crate::frame::draw::{drifted, drifts, Change, Draw, Draws, Position, DRAW_WORDS};
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
 };
+use crate::gpu::draw::{drifted, drifts, Change, Draw, Draws, Position, DRAW_WORDS};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
@@ -47,7 +47,7 @@ pub(crate) fn put_whole(buf: &mut [u8], (_, u): &Draw) {
     buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
 }
 
-/// A draw as a frame draws it, at the wind's drift `drift` (frame/draw.rs
+/// A draw as a frame draws it, at the wind's drift `drift` (gpu/draw.rs
 /// `drifted`), so its mark reads no frame's.
 fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
     drifted(&mut u, drift);

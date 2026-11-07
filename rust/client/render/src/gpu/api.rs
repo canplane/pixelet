@@ -39,9 +39,8 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 pub use xpute_gpu::spec::RESULT;
 
 use crate::api_spec::{record, stream};
-use crate::frame::shader::floor::BIND_GROUPS;
+use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
-use crate::gpu::pipeline::LANES;
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::split::Splits;
 
@@ -180,7 +179,7 @@ impl<'a> RenderContext<'a> {
 pub struct DrawState {
     pipeline: Id,
     groups: [Id; BIND_GROUPS],
-    lanes: [(Id, u32, u32); LANES],
+    lanes: [(Id, u32, u32); VERTEX_BUFFERS],
     idx: (Id, u32, u32),
 }
 
@@ -304,6 +303,12 @@ impl<'a> TrackedRenderPass<'a> {
 /// and the light's map's: a 32-bit float, and a stencil, which marks the
 /// tiles a frame draws again, so a pass skips the rest (`Stencil`).
 pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
+
+/// The world's color as its passes leave it, toned and linear, blended
+/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
+/// once (gpu/finish.rs): a float, so the finish's dither falls between
+/// levels the canvas has and none the color had.
+pub const WORLD_COLOR: Format = Format::rgba16float;
 
 /// The most color targets a pipeline draws into: the finish's two, the
 /// canvas and the picture the world's surface keeps (gpu/finish.rs).
@@ -1053,7 +1058,6 @@ pub fn frame_commit() -> bool {
     committed
 }
 
-use crate::frame::shader::floor;
 use pxl_spec::asset;
 /// The bytes a write of `bytes` takes of the stream, as its writer measures
 /// it: what a caller sums over the writes it makes together and asks `room`.
@@ -1827,7 +1831,7 @@ impl Gpu {
     #[track_caller]
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         let s = self.s();
-        // A render pass that declares what it draws draws nothing else (gpu/ray/sequence.rs
+        // A render pass that declares what it draws draws nothing else (frame/shader/sequence.rs
         // `Step::in_pass`): another pipeline is refused at the call's line, naming its record
         // and the pass.
         if let Some(record) = s.splits.undeclared(pass, pipeline) {
@@ -1838,7 +1842,7 @@ impl Gpu {
     }
 
     /// Render pass `pass` held to draw `pipelines` alone, by their records' numbers, as the
-    /// frame's declarations name them (gpu/ray/sequence.rs `Step::in_pass`).
+    /// frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
     pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
         self.s().splits.declared(pass, pipelines);
     }

@@ -4,13 +4,12 @@
 //! Each, its draw changed, marks the screen's tiles it covers where it was and
 //! where it is (gpu/pass/mark.rs), the zone its boxes the upload it reads.
 
-use crate::frame::draw::{
-    uniform_of, DRAW_WORDS, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
-};
-use crate::frame::draw::{DrawStats, Draws};
+use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::{location, BOX_VERTICES};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
+use crate::gpu::draw::{uniform_of, DRAW_WORDS};
+use crate::gpu::draw::{DrawStats, Draws};
 use crate::gpu::pass::mark::{put_whole, Marks};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};

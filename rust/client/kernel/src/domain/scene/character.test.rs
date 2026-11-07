@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::*;
 use crate::domain::scene::model::registry::test::swaying;
 use crate::sys;
-use pxl_render::frame::draw::{lists_bytes, set_lists};
+use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::clock;
 
 /// The wall clock the ticks read, in milliseconds, as its bits.

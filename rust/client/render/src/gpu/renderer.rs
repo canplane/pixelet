@@ -19,30 +19,33 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
-use crate::frame::draw::{drifts, uniform_of, Draw, Draws, Position};
-use crate::frame::draw::{
-    DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
-    PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
+use crate::frame::shader::record::{
+    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED,
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
+use crate::frame::shader::sequence;
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EYE, JITTER, LIGHT_STEPS,
     LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
+use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
 };
+use crate::frame::shelf::Atlas;
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, stream_free, texture_usage, view_entry, word_bytes, Device,
     Entry, Format, Gpu, Group, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
+    WORLD_COLOR,
 };
-use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
+use crate::gpu::draw::{drifts, uniform_of, Draw, Draws, Position};
+use crate::gpu::draw::{DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, REWRITE_WORDS, UPLOAD_WORDS};
 use crate::gpu::finish::Finish;
 use crate::gpu::generator::Gate;
 use crate::gpu::image_map::ImageMap;
@@ -51,25 +54,22 @@ use crate::gpu::pack::Pack;
 use crate::gpu::pass::character::CharacterPass;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
-use crate::gpu::pass::impostor::{Extent, ImpostorPass};
+use crate::gpu::pass::impostor::ImpostorPass;
 use crate::gpu::pass::location::LocationPass;
 use crate::gpu::pass::mark::{MarkInput, UploadCopies};
 use crate::gpu::pass::marker::MarkerPass;
-use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, on_skins_lost, Extent, FrameGroups, Stage};
 use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::{put_mat, put_steps};
-use crate::gpu::ray::sequence;
 use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
 use crate::gpu::read::{Read, Written};
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
-use crate::gpu::surface::{
-    on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES, WORLD_COLOR,
-};
+use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::gpu::tiles::{self, Mark, Tiles};
 use crate::gpu::upload::uploads;
@@ -137,7 +137,7 @@ pub struct FrameInput<'a> {
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
     /// Each character surface: its handle, its character's draw as its eye
-    /// draws it, held by no list (frame/draw.rs `scaled_draw`), the skin, and
+    /// draws it, held by no list (gpu/draw.rs `scaled_draw`), the skin, and
     /// what it clears to (0xRRGGBB, sRGB).
     pub character_surfaces: &'a [(u32, Draw, Image, u32)],
     /// The texture pack's image; none while it loads.
@@ -812,7 +812,7 @@ impl Renderer {
         put_mat(u, VIEW_PROJ, &m);
         self.view_proj = m;
         // Everything is drawn in the eye's frame: a draw's position is
-        // taken against the eye's Q3 on the GPU (frame/draw.rs `Position`),
+        // taken against the eye's Q3 on the GPU (gpu/draw.rs `Position`),
         // the Q3 the rays leave from (`eye::ORIGIN`), so what is rasterized
         // stands about the eye the world is drawn from; none without a
         // cast, which draws no world. The eye is held on Q3 steps (pxl-kernel
@@ -1290,7 +1290,7 @@ impl Renderer {
         // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
         let cast = self.screen.kind() != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts();
-        self.light_tiles.size(g, [shadow::SIZE; 2]);
+        self.light_tiles.size(g, [SHADOW_SIZE; 2]);
         self.light_tiles.mark(g, (map_gated, false, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
@@ -1303,7 +1303,7 @@ impl Renderer {
             let spread = propagate::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
             self.propagate
-                .prepare(g, &self.view_proj, light, spread, shadow::SIZE);
+                .prepare(g, &self.view_proj, light, spread, SHADOW_SIZE);
         }
         // The tiles marked by what moved where only the listed draws that
         // mark did, however much of the screen they and the tiles still
@@ -1542,7 +1542,7 @@ impl Renderer {
         let squares = self.resolve.tiles.squares();
         // The frame's words the listed draws were drawn with, kept for the
         // next's marks where they were; the draws as they were are the next
-        // turn's changes' (frame/draw.rs `Change`).
+        // turn's changes' (gpu/draw.rs `Change`).
         self.frame_was = self.frame;
         self.last_frame_uploads
             .keep(g, ctx.encoder, &read_uploads, &touched, b);

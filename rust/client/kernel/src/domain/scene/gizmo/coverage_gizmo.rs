@@ -13,7 +13,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_engine::area;
 use pxl_engine::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use pxl_engine::LEAF_CELL;
-use pxl_render::frame::draw::DrawList;
+use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;

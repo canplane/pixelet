@@ -74,7 +74,7 @@ macro_rules! uniform {
 }
 
 uniform! {
-    /// What every draw's uniform holds whatever draws it (frame/draw.rs
+    /// What every draw's uniform holds whatever draws it (gpu/draw.rs
     /// `Position`, debug.wgsl), a table of its own for each kind that reads
     /// more past it: its position's Q3 and remainder, and 1 where it drifts
     /// with the wind, a cloud's, else 0 (`DrawList::draw_instances`).
@@ -172,7 +172,7 @@ uniform! {
         /// over its length squared, the box orthographic (shadow.wgsl
         /// `light_slope`).
         LIGHT_STEPS: Mat3 = 56,
-        /// The eye's Q3 (frame/draw.rs `Position`), which every draw's
+        /// The eye's Q3 (gpu/draw.rs `Position`), which every draw's
         /// position is taken against (frame.wgsl `from_eye`); `VIEW_PROJ`
         /// holds the eye at its origin.
         EYE: Vec3i = 68,
@@ -414,6 +414,9 @@ pub const TRANSMITTANCE_SIZE: (u32, u32) = (256, 64);
 pub const MULTISCATTER_SIZE: (u32, u32) = (32, 32);
 pub const SKY_VIEW_SIZE: (u32, u32) = (192, 108);
 pub const IRRADIANCE_SIZE: (u32, u32) = (64, 16);
+
+/// The light's shadow map's side in texels (gpu/shadow.rs).
+pub const SHADOW_SIZE: u32 = 2048;
 
 /// The decor's draw groups (gpu/pass/decor.rs), each an impostor's fit
 /// (impostor.wgsl `fits`).

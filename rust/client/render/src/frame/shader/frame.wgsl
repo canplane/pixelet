@@ -3,7 +3,7 @@
 @group(0) @binding(0) var<uniform> frame_words: array<vec4f, FRAME_VEC4S>;
 
 // A record's position, its Q3 `q` and its remainder `r`, in units from the
-// eye (frame/draw.rs `Position`): the i32 difference first, which wraps, so X
+// eye (gpu/draw.rs `Position`): the i32 difference first, which wraps, so X
 // is taken the short way round.
 fn from_eye(q: vec3i, r: vec3f) -> vec3f {
   return vec3f(q - frame_eye()) * Q3_STEP + r;

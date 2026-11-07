@@ -1,4 +1,4 @@
-// pxl-render/frame/draw.test.rs
+// pxl-render/gpu/draw.test.rs
 
 use super::*;
 use crate::frame::shader::record::PIPELINES;

@@ -5,7 +5,7 @@
 //! draw list sits here, beside its lowest reader: a model's mesh is uploaded
 //! through it, and the scene lists into it.
 
-use pxl_render::frame::draw::DrawList;
+use pxl_render::gpu::draw::DrawList;
 use xpute_core::global::Global;
 
 use crate::domain::scene::model::registry::Models;

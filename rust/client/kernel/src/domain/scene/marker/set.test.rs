@@ -2,15 +2,15 @@
 
 use super::*;
 use crate::sys;
-use pxl_render::frame::draw::{lists_bytes, set_lists};
-use pxl_render::gpu::atlas::shelf::Paint;
+use pxl_render::frame::shelf::Paint;
+use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::mem::heap::alloc;
 
 /// A marker's instance holds its stand's Q3 bit for bit, X across the i32's
 /// seam and words whose bits read as a NaN among them, and nothing of the
 /// eye: the same markers lay the same words, and the set draws the same
 /// record, wherever the eye is, so an eye that moves rewrites no instance
-/// and changes no draw (pxl-render frame/draw.rs `Change`).
+/// and changes no draw (pxl-render gpu/draw.rs `Change`).
 #[test]
 fn a_marker_is_where_it_stands() {
     let _g = sys::serial();

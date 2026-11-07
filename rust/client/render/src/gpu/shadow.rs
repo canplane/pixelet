@@ -18,7 +18,7 @@
 //! they set alone (gpu/tiles.rs), through a gate of its own
 //! (light_gate.wgsl), as the world's pass is.
 
-use crate::gpu::ray::sequence;
+use crate::frame::shader::sequence;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
@@ -32,7 +32,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
 use crate::frame::shader::word::frame::{DRIFT_Q, EYE, VIEW_PROJ};
-use crate::frame::shader::word::FRAME_FLOATS;
+use crate::frame::shader::word::{FRAME_FLOATS, SHADOW_SIZE};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
     word_bytes, Entry, Format, Gpu, Group, Load, RenderContext, Stencil, TrackedRenderPass,
@@ -44,9 +44,6 @@ use crate::gpu::ray::LightReads;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
 use crate::param::shadow::DEPTH_STEP;
-
-/// The map's side in texels.
-pub const SIZE: u32 = 2048;
 
 /// The box's half width about its target for the effects' `reach`: up to a power of two, so
 /// the snap grid and the texel move only in steps (gpu/renderer.rs).
@@ -72,15 +69,15 @@ const _: () = assert!(
     "every node the light's cast meets is one the node cache keeps and the record names again from its box (pxl-engine cast::REACH)"
 );
 const _: () = assert!(
-    SIZE as i32 <= ANCHOR,
+    SHADOW_SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
 const _: () = {
     let most = WORKGROUPS_MOST;
     let per = light::LIST_ACROSS * light::LISTED_LANES;
-    let corners = light::beam_across(SIZE) * light::beam_across(SIZE);
+    let corners = light::beam_across(SHADOW_SIZE) * light::beam_across(SHADOW_SIZE);
     assert!(
-        (SIZE * SIZE).div_ceil(per) <= most && corners.div_ceil(per) <= most,
+        (SHADOW_SIZE * SHADOW_SIZE).div_ceil(per) <= most && corners.div_ceil(per) <= most,
         "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists"
     );
 };
@@ -242,16 +239,16 @@ impl Shadow {
             }
             None => {
                 let map = g.texture(
-                    SIZE,
-                    SIZE,
+                    SHADOW_SIZE,
+                    SHADOW_SIZE,
                     1,
                     GATED_DEPTH,
                     1,
                     texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
                 );
                 let world = g.texture(
-                    SIZE,
-                    SIZE,
+                    SHADOW_SIZE,
+                    SHADOW_SIZE,
                     1,
                     Format::r32uint,
                     1,
@@ -348,7 +345,7 @@ impl Shadow {
     /// is a point that stays put in the world as the eye moves, in the eye's
     /// frame.
     pub fn aim(&mut self, sun_dir: &[f32], target: V3, half_width: f64, reach_ndc: f32, fixed: V3) {
-        self.texel = half_width * 2.0 / f64::from(SIZE);
+        self.texel = half_width * 2.0 / f64::from(SHADOW_SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the light goes; turned on every frame, the grid below snaps another
         // way each time and a wall's shadow flickers.
@@ -410,7 +407,7 @@ impl Shadow {
         };
         self.light_words = Light::of(
             [column(0), column(1), column(2), column(3)],
-            SIZE,
+            SHADOW_SIZE,
             corner,
             reach_ndc,
         )
@@ -435,7 +432,7 @@ impl Shadow {
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
         let q3 = f64::from(1u32 << pxl_engine::FRAC_W);
-        let texel = 2.0 / f64::from(SIZE);
+        let texel = 2.0 / f64::from(SHADOW_SIZE);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {
             let w = [
@@ -536,9 +533,9 @@ impl Shadow {
             self.light_words[light::CORNER[0]],
             self.light_words[light::CORNER[1]],
             epoch,
-            light::reads_at(SIZE),
-            light::listed_at(SIZE, light::LISTED_READ),
-            light::slide_at(SIZE) + light::READS_FROM,
+            light::reads_at(SHADOW_SIZE),
+            light::listed_at(SHADOW_SIZE, light::LISTED_READ),
+            light::slide_at(SHADOW_SIZE) + light::READS_FROM,
             0,
             0,
         ];

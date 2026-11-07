@@ -13,7 +13,7 @@ pub struct Frame {
     pub anchor: V3,
     /// The eye, in the world's doubles: what is listed is decided from it;
     /// a draw's position and the box it stands within hold none of it
-    /// (pxl-render frame/draw.rs `Position`, `Stand`).
+    /// (pxl-render gpu/draw.rs `Position`, `Stand`).
     pub eye: V3,
     /// About the anchor.
     pub frustum: Frustum,

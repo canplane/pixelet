@@ -1,4 +1,4 @@
-// pxl-render/gpu/ray/sequence.rs
+// pxl-render/frame/shader/sequence.rs
 
 //! The frame's calls over the buffers that hold indirect counts, in the order the host encodes
 //! them (gpu/renderer.rs `frame`: the light's tiles' marks, then `RaysPass::dispatch`, then the
@@ -8,28 +8,17 @@
 //! them in this order (sequence.test.rs). The hazards over them are refused as the crate is
 //! built (frame/shader/access.rs `check`), each the frame holds today named in `KNOWN`.
 
-use super::cast::{
-    CAST_GROUP, CAST_TILES_GROUP, DRAWS_BINDING, LATTICE_ASK_GROUP, LATTICE_LAST_GROUP,
-    LATTICE_WALK_GROUP, LIGHT_GROUP, LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP,
-    LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP,
-    LIGHT_SLIDE_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, WORLD_GROUP,
-};
-use super::raster::{
-    FACE_GROUP, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP,
-    STOPS_GROUP,
-};
-use crate::frame::draw::{
-    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_SKINNED,
-};
 use crate::frame::shader::access::{
     check, light_marks, Bind, Bound, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END,
     LIST, NO_RANGE, STATE,
 };
+use crate::frame::shader::group::*;
 use crate::frame::shader::record::*;
-use crate::gpu::generator::{ARGS_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP};
-use crate::gpu::shadow::SIZE;
-use crate::gpu::tiles::BOX_ARGS_GROUP;
+use crate::frame::shader::record::{
+    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_SKINNED,
+};
+use crate::frame::shader::word::SHADOW_SIZE;
 use pxl_content::generation;
 use pxl_engine::{light, node_cache, raster, ray};
 
@@ -620,7 +609,11 @@ pub const OPEN_LIGHT_STOOD: Step = Step::write(
 /// (`light::kept_at`).
 pub const OPEN_STOOD_PROPAGATED: Step = Step::write(
     "open_stood_propagated",
-    at(LIGHT_LIST, light::kept_at(SIZE) + light::STOOD_CNT, 1),
+    at(
+        LIGHT_LIST,
+        light::kept_at(SHADOW_SIZE) + light::STOOD_CNT,
+        1,
+    ),
 );
 pub const OPEN_LIGHT_MISSES: Step = Step::write(
     "open_light_misses",
@@ -649,7 +642,7 @@ pub const OPEN_GENERATION_LIST: Step = Step::write(
 pub const STOOD_BACK: Step = Step::copy(
     "stood_back",
     IN_EYE,
-    at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
+    at(LIGHT_LIST, light::kept_at(SHADOW_SIZE), light::STOOD_KEPT),
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
 );
 /// The read list's count the casts since the world's receivers were stood afresh left, copied
@@ -657,7 +650,11 @@ pub const STOOD_BACK: Step = Step::copy(
 pub const READ_COUNT_BACK: Step = Step::copy(
     "read_count_back",
     IN_LIGHT,
-    at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
+    at(
+        LIGHT_LIST,
+        light::kept_at(SHADOW_SIZE) + light::KEPT_READ,
+        1,
+    ),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
 );
 /// The eye's holes' count where the queue reads it, as the light's is (`LIGHT_HOLES_CNT`).
@@ -685,43 +682,63 @@ pub const STOOD_KEEP: Step = Step::copy(
     "stood_keep",
     IN_LIGHT,
     at(LIGHT_STOOD, light::STOOD_LIST, light::STOOD_KEPT),
-    at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
+    at(LIGHT_LIST, light::kept_at(SHADOW_SIZE), light::STOOD_KEPT),
 );
 pub const READ_COUNT_KEEP: Step = Step::copy(
     "read_count_keep",
     IN_LIGHT,
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
-    at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
+    at(
+        LIGHT_LIST,
+        light::kept_at(SHADOW_SIZE) + light::KEPT_READ,
+        1,
+    ),
 );
 pub const STOOD_COUNT: Step = Step::copy(
     "stood_count",
     IN_LIGHT,
     at(LIGHT_STOOD, light::STOOD_CNT, 1),
-    at(LIGHT_LIST, light::listed_at(SIZE, light::LISTED_STOOD), 1),
+    at(
+        LIGHT_LIST,
+        light::listed_at(SHADOW_SIZE, light::LISTED_STOOD),
+        1,
+    ),
 );
 pub const CORNERS_COUNT: Step = Step::copy(
     "corners_count",
     IN_LIGHT,
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_CORNERS, 1),
-    at(LIGHT_LIST, light::listed_at(SIZE, light::LISTED_CORNERS), 1),
+    at(
+        LIGHT_LIST,
+        light::listed_at(SHADOW_SIZE, light::LISTED_CORNERS),
+        1,
+    ),
 );
 pub const FED_COUNT: Step = Step::copy(
     "fed_count",
     IN_LIGHT,
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_FED, 1),
-    at(LIGHT_LIST, light::listed_at(SIZE, light::LISTED_FED), 1),
+    at(
+        LIGHT_LIST,
+        light::listed_at(SHADOW_SIZE, light::LISTED_FED),
+        1,
+    ),
 );
 pub const CLAIMED_COUNT: Step = Step::copy(
     "claimed_count",
     IN_LIGHT,
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_CLAIMED, 1),
-    at(LIGHT_LIST, light::listed_at(SIZE, light::LISTED_CLAIMED), 1),
+    at(
+        LIGHT_LIST,
+        light::listed_at(SHADOW_SIZE, light::LISTED_CLAIMED),
+        1,
+    ),
 );
 pub const LIGHT_HOLES_CNT: Step = Step::copy(
     "light_holes_cnt",
     IN_LIGHT,
     at(LIGHT_MISSES, ray::MISS_ARGS_CNT, 1),
-    at(LIGHT_LIST, light::holes_at(SIZE), 1),
+    at(LIGHT_LIST, light::holes_at(SHADOW_SIZE), 1),
 );
 
 /// The host's writes past the opens above: the raster's draw args set to none where the
@@ -754,8 +771,8 @@ pub const LIGHT_READS_OUT: Step = Step::copy(
     IN_LIGHT,
     at(
         LIGHT_LIST,
-        light::reads_at(SIZE),
-        light::tiles(SIZE) * light::tiles(SIZE),
+        light::reads_at(SHADOW_SIZE),
+        light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE),
     ),
     NO_RANGE,
 );
@@ -765,8 +782,8 @@ pub const LIGHT_READS_IN: Step = Step::copy(
     NO_RANGE,
     at(
         LIGHT_LIST,
-        light::reads_at(SIZE),
-        light::tiles(SIZE) * light::tiles(SIZE),
+        light::reads_at(SHADOW_SIZE),
+        light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE),
     ),
 );
 
@@ -1196,8 +1213,8 @@ const KEPT: &[Kept] = &[
     Kept {
         range: at(
             LIGHT_LIST,
-            light::reads_at(SIZE),
-            light::tiles(SIZE) * light::tiles(SIZE),
+            light::reads_at(SHADOW_SIZE),
+            light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE),
         ),
         owner: "light_reads_in",
         by: &[],
@@ -1229,7 +1246,7 @@ const KEPT: &[Kept] = &[
     marks_kept(light::LISTED_FED, "light_claim"),
     marks_kept(light::LISTED_CLAIMED, "light_claim"),
     Kept {
-        range: at(LIGHT_LIST, light::kept_at(SIZE), light::STOOD_KEPT),
+        range: at(LIGHT_LIST, light::kept_at(SHADOW_SIZE), light::STOOD_KEPT),
         owner: "stood_keep",
         by: &[],
         invalidation: "the stood list's args the casts since the world's receivers were stood \
@@ -1238,7 +1255,11 @@ const KEPT: &[Kept] = &[
             back in (ray/cast.rs `RaysPass::prepare`, `dispatch`)",
     },
     Kept {
-        range: at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
+        range: at(
+            LIGHT_LIST,
+            light::kept_at(SHADOW_SIZE) + light::KEPT_READ,
+            1,
+        ),
         owner: "read_count_keep",
         by: &[],
         invalidation: "the read list's count the casts since the world's receivers were stood \

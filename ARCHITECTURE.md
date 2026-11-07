@@ -260,7 +260,7 @@ the controllers reads the eye, the facing and the pivot.
 The **pose** is the eye and the turn from the world's axes to the camera's
 (`domain/view/frame/pose.rs`). The world stays in its own axes, in doubles; what
 turns is the observer. Every draw uploads its point less the eye, subtracted in
-doubles before it is narrowed (`pxl-render frame/draw.rs` `translation`).
+doubles before it is narrowed (`pxl-render gpu/draw.rs` `translation`).
 
 ## The camera grid
 
@@ -635,7 +635,7 @@ outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 
 ## The frame
 
-Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged
+Each turn ends with a **draw list** (`pxl-render gpu/draw.rs`): entries tagged
 by the pipeline that draws them, each with its mesh and uniform, for what the
 kernel decides to draw beside the world — the cumulus clouds, the characters,
 the location indicator that shows where the device is, an edit's ghost box, the
@@ -774,7 +774,7 @@ planes read where a ray meets them (`frame/shader/cloud.wgsl` `sheet`).
 ## Markers and the atlas
 
 Markers are one instanced quad over one texture packed shelf by shelf, the
-**atlas** (`pxl-render gpu/atlas/shelf.rs`, `frame/shader/marker.wgsl`). A
+**atlas** (`pxl-render frame/shelf.rs`, `frame/shader/marker.wgsl`). A
 **sprite**, a design as the atlas holds it, is found by what it paints, never
 by who shows it, so equal designs share one place on the atlas
 (`domain/scene/marker/design.rs` `Design`). It is drawn on the GPU only when

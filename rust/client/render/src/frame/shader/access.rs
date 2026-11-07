@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/access.rs
 
 //! What each compute pass does with each buffer it binds, and the hazards the build refuses
-//! over the frame's calls in the order the host encodes them (gpu/ray/sequence.rs `FRAME`).
+//! over the frame's calls in the order the host encodes them (frame/shader/sequence.rs `FRAME`).
 //!
 //! A pass's access to a binding (read, write, atomic) is its shader's, read off it by build.rs
 //! (record.rs `ACCESS`). A buffer's role is what the host does with it (`ARGS`, `LIST`,
@@ -34,7 +34,7 @@
 //! no longer holds is refused as well.
 
 use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STAGES, STORAGE_RW};
-use crate::gpu::shadow::SIZE;
+use crate::frame::shader::word::SHADOW_SIZE;
 use pxl_engine::{light, node_cache, raster, ray};
 
 /// A pass's access to a binding, as its shader uses it: read, written, and through atomics.
@@ -324,8 +324,8 @@ pub struct Known {
 /// tile, the number of the cast that last listed it.
 pub const fn light_marks(which: u32) -> [u32; 2] {
     [
-        light::ARGS_WORDS + light::listed_marks_at(SIZE, which),
-        light::listed_room(SIZE, which),
+        light::ARGS_WORDS + light::listed_marks_at(SHADOW_SIZE, which),
+        light::listed_room(SHADOW_SIZE, which),
     ]
 }
 

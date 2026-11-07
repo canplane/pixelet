@@ -11,7 +11,7 @@
 // meets the view (`eye::sees`); a host's box stands, as every receiver's does (`box_tiles`), and
 // a decor within the reach by that box stands on its footprint (`Light::corner_tiles`), the
 // propagation's way up holding what it lifts over it (light_propagate.wgsl `up`). The host's
-// are those frame/draw.rs `DrawList` records, no more than `light::STANDS`. Run after decor is
+// are those gpu/draw.rs `DrawList` records, no more than `light::STANDS`. Run after decor is
 // placed and the world's receivers stood, before the propagation.
 
 /// The decor compacted this frame as its draws read it (decor_compact.wgsl

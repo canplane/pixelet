@@ -5,13 +5,13 @@ use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
 use crate::sys;
-use pxl_render::frame::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
+use pxl_render::gpu::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
 use pxl_spec::space::coord::mat4;
 use xpute_core::mem::heap::alloc;
 
 /// A turn whose eye moved and whose world did not sets the same draws with
 /// the same uniforms and the same stands, so it changes none of them
-/// (pxl-render frame/draw.rs `Change`) and the light's receivers read the same:
+/// (pxl-render gpu/draw.rs `Change`) and the light's receivers read the same:
 /// the ghost's box, which reads the shadow map and so stands, and the gizmos'
 /// lines, on Q3 and finer, the eye near them and across X's seam from them.
 #[test]

@@ -1,4 +1,4 @@
-// pxl-render/gpu/ray/sequence.test.rs
+// pxl-render/frame/shader/sequence.test.rs
 
 use super::*;
 use crate::frame::shader::access::{
@@ -7,14 +7,17 @@ use crate::frame::shader::access::{
 
 /// The sources whose calls take their offsets from a step here.
 const SOURCES: [(&str, &str); 8] = [
-    ("ray/cast.rs", include_str!("cast.rs")),
-    ("ray/count.rs", include_str!("count.rs")),
-    ("ray/raster.rs", include_str!("raster.rs")),
-    ("generator.rs", include_str!("../generator.rs")),
-    ("shadow.rs", include_str!("../shadow.rs")),
-    ("pass/decor.rs", include_str!("../pass/decor.rs")),
-    ("pass/impostor.rs", include_str!("../pass/impostor.rs")),
-    ("renderer.rs", include_str!("../renderer.rs")),
+    ("ray/cast.rs", include_str!("../../gpu/ray/cast.rs")),
+    ("ray/count.rs", include_str!("../../gpu/ray/count.rs")),
+    ("ray/raster.rs", include_str!("../../gpu/ray/raster.rs")),
+    ("generator.rs", include_str!("../../gpu/generator.rs")),
+    ("shadow.rs", include_str!("../../gpu/shadow.rs")),
+    ("pass/decor.rs", include_str!("../../gpu/pass/decor.rs")),
+    (
+        "pass/impostor.rs",
+        include_str!("../../gpu/pass/impostor.rs"),
+    ),
+    ("renderer.rs", include_str!("../../gpu/renderer.rs")),
 ];
 
 /// Every render pass a draw of the frame's runs in declared where the host begins it: each

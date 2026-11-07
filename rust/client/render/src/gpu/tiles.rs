@@ -18,7 +18,8 @@
 //! (`box_args`). A target drawn through its gate numbers its stencil here
 //! (`gate`).
 
-use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::group::{BOX_ARGS_GROUP, CLAIMED_BOX_GROUP, SCREEN_MARK_GROUP};
+
 use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
 /// The screen's tiles' pixels a side (word.rs `screen::TILE`).
 pub use crate::frame::shader::word::screen::TILE as SIDE;
@@ -61,33 +62,8 @@ pub fn mark_of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32, margin: f32)
     })
 }
 
-/// What the marks' pass binds (screen_mark.wgsl): its mark and head, and
-/// the tiles' words.
-const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
-
-/// What the box's args' pass binds (box_args.wgsl): the marks' box, the
-/// args and the tiles' words.
-pub(crate) const BOX_ARGS_GROUP: [u32; 9] = [
-    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
-];
-
-/// What the claimed tiles' box's pass binds (claimed_box.wgsl): the box, the tiles' words
-/// and uniform.
-const CLAIMED_BOX_GROUP: [u32; 9] = [
-    0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
-];
-
 /// The claimed tiles' box before its pass: none, its first past its last.
 const NO_CLAIMED_BOX: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
-
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_BOX_ARGS], &BOX_ARGS_GROUP)
-        && binds(&[COMPUTE_SCREEN_MARK], &MARK_GROUP)
-        && binds(&[COMPUTE_CLAIMED_BOX], &CLAIMED_BOX_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
 
 /// The numbers a frame through the gate writes into its claimed tiles'
 /// stencil, 1 on, the stencil's eight bits but 0, which a frame drawn whole
@@ -184,7 +160,7 @@ impl Tiles {
             size: [0; 2],
             now: 0,
             asked_at: 0,
-            mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &MARK_GROUP),
+            mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &SCREEN_MARK_GROUP),
             mark_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,

@@ -3,7 +3,7 @@
 // The beacon's draw read off the list's uniforms at its slot, which its draw
 // names as its first instance (gpu/pass/location.rs `draw_beacon`), in place
 // of its own uniform (location.wgsl): the list's buffer bound once a pass, a
-// slot `DRAW_VEC4S` words apart, as frame/draw.rs `DrawList::draw_beacon`
+// slot `DRAW_VEC4S` words apart, as gpu/draw.rs `DrawList::draw_beacon`
 // lays it: its position's Q3, its spin, its opacity, whether it is night,
 // and its position's remainder.
 @group(1) @binding(0) var<storage, read> draws: array<vec4f>;

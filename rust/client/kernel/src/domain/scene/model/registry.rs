@@ -10,7 +10,7 @@ use core::future::Future;
 use core::ops::Range;
 
 use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
-use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
+use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_core::mem;
 use xpute_core::mem::heap::alloc;
 

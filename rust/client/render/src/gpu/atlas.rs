@@ -4,23 +4,20 @@
 //! copied into its rectangle. Display lists are in logical pixels, drawn at the
 //! atlas's scale.
 
-pub mod shelf;
-
 use crate::frame::shader::record::PIPELINE_ATLAS;
 use crate::frame::shader::word::{
     ATLAS_FILL, ATLAS_HALO, ATLAS_STROKE, ATLAS_TEXT, ATLAS_TRIANGLE,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shelf::PAD;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
     view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
-use crate::gpu::atlas::shelf::PAD;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::text::{Raster, TextOf};
-use crate::look::marker::{Font, Halo};
-use pxl_spec::asset::symbol;
+use crate::look::marker::{Font, Halo, ATLAS_SCALE};
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
 
@@ -34,11 +31,6 @@ struct Line {
     at: [f32; 2],
     halo: Option<Halo>,
 }
-
-/// Device pixels an atlas draws per logical pixel: the symbols' masks', laid
-/// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
-/// finer than it shows a marker drawn up from it.
-pub const ATLAS_SCALE: f64 = symbol::SYMBOL_RATIO as f64;
 
 #[derive(Default)]
 pub struct DisplayList {

@@ -690,7 +690,7 @@ pub const STARTS_FRACS: usize = 7;
 pub const STARTS_VEC4S: usize = 11;
 
 /// What the host draws that reads the shadow map, receivers as decor is (pxl-render
-/// frame/draw.rs `DrawList`, light_mark_draws.wgsl), past the starts: how many, the first word
+/// gpu/draw.rs `DrawList`, light_mark_draws.wgsl), past the starts: how many, the first word
 /// of a vec4, then each the box it stands within, units from the eye, its lowest corner then
 /// its highest, a vec4 each, as many as `STANDS`; the host takes the boxes past them into the
 /// last, so none stands on nothing.
@@ -987,7 +987,7 @@ impl Light {
     /// eye's draw writes for a voxel in view (`cast::asset_box`; pxl-render
     /// record_draw.wgsl `record_draw_cs`, which stands it as it writes it), which every pixel
     /// that took that voxel hit on (visible.wgsl `visible_cell`); a walked pixel's hit, a box of one point (light_mark.wgsl); and the box
-    /// a host's draw stands within (frame/draw.rs `Stand`, light_mark_draws.wgsl). A placed
+    /// a host's draw stands within (gpu/draw.rs `Stand`, light_mark_draws.wgsl). A placed
     /// decor asks the reach of the box its ball stands in and stands on its footprint alone
     /// (`corner_tiles`).
     pub fn box_tiles(

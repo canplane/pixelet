@@ -13,18 +13,20 @@
 //! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
 //! is generated.
 
-use crate::gpu::ray::sequence;
+use crate::frame::shader::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
 use pxl_engine::{clipmap, eye, overwrite, Zoom};
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::frame::draw::PIPELINE_DECOR;
-use crate::frame::shader::floor;
+use crate::frame::shader::group::{
+    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP,
+};
+use crate::frame::shader::record::PIPELINE_DECOR;
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS, COMPUTE_GENERATION,
-    COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT,
-    COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN, STORAGE, STORAGE_RW, UNIFORM,
+    COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS,
+    COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK,
+    COMPUTE_GENERATION_THIN,
 };
 use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
@@ -49,7 +51,7 @@ pub struct DecorFrame<'a> {
     /// them again.
     pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
     /// The anchor the lanes are about, the unit the eye stands in, as a
-    /// draw's Q3 (frame/draw.rs `Position`): where the decor's instances are
+    /// draw's Q3 (gpu/draw.rs `Position`): where the decor's instances are
     /// drawn, against the frame's eye (word.rs `frame::EYE`).
     pub anchor: Q3,
     /// What overwrites wrote since the last frame, `overwrite::EDITS` boxes
@@ -78,68 +80,6 @@ pub struct Generation<'a> {
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
-
-/// `decor_cs`'s group (decor_pose.wgsl): the world's, at world.wgsl's numbers, its eye, the
-/// records, the rows and the list.
-pub const GENERATE_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
-    STORAGE, 7, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE,
-    STORAGE,
-];
-/// `decor_mark_cs`'s (decor_mark.wgsl).
-pub const MARK_GROUP: [u32; 12] = [
-    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 11, COMPUTE, STORAGE_RW, 12, COMPUTE, STORAGE,
-];
-/// `decor_thin_cs`'s (decor_thin.wgsl).
-pub const THIN_GROUP: [u32; 9] = [
-    9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE, STORAGE,
-];
-/// `decor_cnt_cs`'s (decor_cnt.wgsl).
-pub const CNT_GROUP: [u32; 15] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 13, COMPUTE, STORAGE, 14,
-    COMPUTE, STORAGE_RW,
-];
-/// `decor_compact_cs`'s (decor_compact.wgsl).
-pub const COMPACT_GROUP: [u32; 18] = [
-    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE, 13, COMPUTE, STORAGE, 14,
-    COMPUTE, STORAGE_RW, 15, COMPUTE, STORAGE_RW,
-];
-/// `decor_args_cs`'s (decor_args.wgsl).
-pub const ARGS_GROUP: [u32; 15] = [
-    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
-    15, COMPUTE, STORAGE_RW,
-];
-/// `decor_gate_cs`'s and `decor_gate_args_cs`'s (decor_gate.wgsl): the frame's words, the
-/// regions' uniforms and args, the instances, the gated list and args, the claimed tiles' box,
-/// the regions' counts and first slots, and the tiles' uniform.
-pub const GATE_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE,
-    STORAGE_RW, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 31, COMPUTE,
-    UNIFORM,
-];
-
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS], &GATE_GROUP)
-        && binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
-        && binds(&[COMPUTE_GENERATION_THIN], &THIN_GROUP)
-        && binds(&[COMPUTE_GENERATION], &GENERATE_GROUP)
-        && binds(&[COMPUTE_GENERATION_CNT], &CNT_GROUP)
-        && binds(&[COMPUTE_GENERATION_ARGS], &ARGS_GROUP)
-        && binds(&[COMPUTE_GENERATION_COMPACT], &COMPACT_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
-const _: () = assert!(
-    floor::holds(&[&GENERATE_GROUP])
-        && floor::holds(&[&MARK_GROUP])
-        && floor::holds(&[&THIN_GROUP])
-        && floor::holds(&[&CNT_GROUP])
-        && floor::holds(&[&COMPACT_GROUP])
-        && floor::holds(&[&ARGS_GROUP])
-        && floor::holds(&[&GATE_GROUP]),
-    "a decor pass's group binds past WebGPU's floor"
-);
 
 pub struct Generator {
     mark: Pipeline,

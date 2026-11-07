@@ -3,8 +3,9 @@
 //! Markers drawn flat to the camera, as one set of instances, each where
 //! it stands.
 
-use pxl_render::frame::draw::{DrawId, DrawList, MirroredBlock, Position, PIPELINE_MARKER};
+use pxl_render::frame::shader::record::PIPELINE_MARKER;
 use pxl_render::gpu::api::bytes;
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position};
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::domain::scene::marker::atlas::atlas;
@@ -21,7 +22,7 @@ pub(super) const INSTANCE_WORDS: usize = word::MARKER_INSTANCE_WORDS as usize;
 /// the width of the region it keeps, as tall as it and centered on it: a
 /// marker is one thing, hidden whole where a nearer one's region is in front
 /// of its anchor (marker.wgsl). Its stand is on Q3 and is taken against the
-/// eye's on the GPU, as a draw's is (pxl-render frame/draw.rs `Position`),
+/// eye's on the GPU, as a draw's is (pxl-render gpu/draw.rs `Position`),
 /// so nothing here reads the eye.
 pub(super) fn instance(
     stands: Q3,

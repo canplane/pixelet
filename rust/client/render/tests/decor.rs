@@ -561,7 +561,7 @@ fn pipeline(
 /// (gpu/generator.rs), not one read off the module.
 fn hand_pipeline(device: &wgpu::Device, kind: u32) -> wgpu::ComputePipeline {
     use pxl_render::api_spec::record::{STORAGE, STORAGE_RW, UNIFORM};
-    use pxl_render::gpu::generator::{
+    use pxl_render::frame::shader::group::{
         ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP,
     };
     let (group, entry): (&[u32], &str) = match kind {

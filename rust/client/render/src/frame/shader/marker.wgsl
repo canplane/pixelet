@@ -47,7 +47,7 @@ struct Placement {
 // Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
 fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let k = ii * MARKER_INSTANCE_WORDS;
-  // On Q3, as the draws are (frame/draw.rs `Position`): taken against the
+  // On Q3, as the draws are (gpu/draw.rs `Position`): taken against the
   // eye's, the short way round X.
   let stands = vec3i(bitcast<i32>(instances[k]), bitcast<i32>(instances[k + 1u]), bitcast<i32>(instances[k + 2u]));
   let anchor = from_eye(stands, vec3f(0.0));

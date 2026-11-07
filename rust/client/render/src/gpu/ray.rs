@@ -11,7 +11,6 @@ mod count;
 mod ground;
 mod raster;
 mod schedule;
-pub(crate) mod sequence;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
@@ -21,7 +20,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
-pub use cast::{drawn_fits, Cast, LightReads, Overwrites, DRAWN_AREA, DRAWN_MOST};
+pub use cast::{Cast, LightReads, Overwrites};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 use ground::GroundBuffers;
 pub use ground::{BrickWrite, GroundBricks, TerrainUpload, TerrainWrite};

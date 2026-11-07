@@ -16,10 +16,9 @@ use fnv::FnvHashMap;
 use pxl_content::cloud::{cloud_draw, holds_cloud};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
-use pxl_render::frame::draw::{
-    DrawId, DrawList, Position, Stand, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-};
+use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
+use pxl_render::gpu::draw::{DrawId, DrawList, Position, Stand};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -318,7 +317,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
 }
 
 /// The patch `key`'s corner on the field's map, on Q3, as its draws hold it:
-/// the renderer moves it back by the wind's drift (pxl-render frame/draw.rs
+/// the renderer moves it back by the wind's drift (pxl-render gpu/draw.rs
 /// `DrawList::draw_instances`).
 fn patch_place(key: [i64; 2]) -> Position {
     Position::of([key[0] as f64 * PATCH, key[1] as f64 * PATCH, 0.0])

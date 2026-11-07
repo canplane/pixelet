@@ -8,13 +8,14 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::frame::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
+use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, sampler_entry, view_entry,
     word_bytes, Entry, Gpu, Image, Layout, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_u32;
 
@@ -221,6 +222,9 @@ impl DrawUniforms {
 /// A draw's uniform, a slot of `DrawUniforms` each: what every model pass
 /// writes and its shader reads (frame/shader/word.rs `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
+
+/// glTF's across, up and deep.
+pub type Extent = [f32; 3];
 
 /// A decor draw's uniform as instance.wgsl reads it, for the model tier and
 /// the impostors both: the list's words, `layer` its atlas layer, none for

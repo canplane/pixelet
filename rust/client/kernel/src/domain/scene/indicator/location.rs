@@ -3,10 +3,9 @@
 //! The device's location indicator: a zone of cells about the fix, each on the
 //! ground under it, and a beacon above that eases, spins and bobs.
 
-use pxl_render::frame::draw::{
-    DrawId, DrawList, MirroredBlock, Position, Stand, PIPELINE_LOCATION_ZONE,
-};
+use pxl_render::frame::shader::record::PIPELINE_LOCATION_ZONE;
 use pxl_render::gpu::api::bytes;
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, Stand};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -408,7 +407,7 @@ impl LocationIndicator {
             rest + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB,
         ]);
         // It reads the sun's map, so it stands within the box its whole bob sweeps, which
-        // holds still while it bobs (pxl-render frame/draw.rs `Stand`).
+        // holds still while it bobs (pxl-render gpu/draw.rs `Stand`).
         let r = f64::from(beacon::RADIUS);
         let bob = BEACON_BOB + r;
         let stand = Stand::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);

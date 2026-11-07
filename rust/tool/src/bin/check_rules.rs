@@ -4,7 +4,7 @@
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, the layers' order, where nothing names
 //! what is above it, across a crate's folders and the client's, and inside
-//! the kernel's heads',
+//! the kernel's heads', pxl-render's,
 //! the camera's and the view's, the profiler named by the top alone, no renderer under the
 //! kernel's sys/, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
@@ -211,6 +211,88 @@ const CONTENT_ORDER: [(&str, u8); 9] = [
     ("generation", 2),
 ];
 
+/// pxl-render's order: what names no device, the look, the parameters and the words of the
+/// protocol, under a frame's data, which the hover ghost's mesh and the paints stand on, and
+/// the device on top of all of it.
+const RENDER: &str = "rust/client/render/src/";
+const RENDER_ORDER: [(&str, u8); 8] = [
+    ("param", 0),
+    ("look", 0),
+    ("api", 0),
+    ("api_spec", 0),
+    ("asset", 0),
+    ("frame", 1),
+    ("mesh", 2),
+    ("gpu", 3),
+];
+
+/// A frame's own order (frame.rs): its shaders and the atlas's shelves, neither naming the
+/// other.
+const FRAME_ORDER: [(&str, u8); 2] = [("shader", 0), ("shelf", 0)];
+
+/// The shaders' own order (frame/shader.rs): the words, the parts and WebGPU's floor, under the
+/// pipeline records, under the compute groups and what a pass does with them, under the
+/// frame's calls.
+const SHADER_ORDER: [(&str, u8); 7] = [
+    ("floor", 0),
+    ("part", 0),
+    ("word", 0),
+    ("record", 1),
+    ("access", 2),
+    ("group", 2),
+    ("sequence", 3),
+];
+
+/// The device's own order (gpu.rs): what speaks no WebGPU, under the calls themselves, under
+/// the draw lists, the pipelines and the surfaces, under what the passes make with them, over
+/// which the world's rays stand, then the shadow map and the passes over them, the renderer
+/// on top.
+const GPU_ORDER: [(&str, u8); 28] = [
+    ("put", 0),
+    ("span", 0),
+    ("span_spec", 0),
+    ("split", 0),
+    ("text", 0),
+    ("api", 1),
+    ("draw", 2),
+    ("pipeline", 2),
+    ("read", 2),
+    ("surface", 2),
+    ("ao", 3),
+    ("atlas", 3),
+    ("mip", 3),
+    ("tiles", 3),
+    ("upload", 3),
+    ("finish", 4),
+    ("generator", 4),
+    ("image_map", 4),
+    ("pack", 4),
+    ("propagate", 4),
+    ("resolve", 4),
+    ("atmosphere", 5),
+    ("ray", 5),
+    ("cloud", 6),
+    ("shadow", 6),
+    ("star", 6),
+    ("pass", 7),
+    ("renderer", 8),
+];
+const GPU_OWN: u8 = 9;
+
+/// The passes' own order (gpu/pass.rs): what the model passes share, under the marks and the
+/// passes that stand alone, under those that mark, under what draws through them.
+const PASS_ORDER: [(&str, u8); 9] = [
+    ("model", 0),
+    ("debug", 1),
+    ("mark", 1),
+    ("marker", 1),
+    ("decor", 2),
+    ("location", 2),
+    ("skinned_mesh", 2),
+    ("character", 3),
+    ("impostor", 3),
+];
+
 /// The client's order (ts/client/src, AGENTS.md): its entry over the shell
 /// and the wiring that opens the runtime, the two heads; under them the port,
 /// the one way to the kernel; the files the kernel opens; the server they
@@ -238,7 +320,7 @@ const TSCONFIG: &str = "ts/tsconfig.json";
 
 /// Every order held. A folder whose root holds only its modules gives its
 /// root's own a level over all of them, so no part reaches back to it.
-const ORDERS: [Order; 8] = [
+const ORDERS: [Order; 13] = [
     Order {
         root: KERNEL,
         path: "crate",
@@ -302,6 +384,46 @@ const ORDERS: [Order; 8] = [
         heads: &[],
         beside: &[],
         own: Some(SCENE_OWN),
+    },
+    Order {
+        root: RENDER,
+        path: "crate",
+        levels: &RENDER_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: "rust/client/render/src/frame/",
+        path: "crate::frame",
+        levels: &FRAME_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(1),
+    },
+    Order {
+        root: "rust/client/render/src/frame/shader/",
+        path: "crate::frame::shader",
+        levels: &SHADER_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(4),
+    },
+    Order {
+        root: "rust/client/render/src/gpu/",
+        path: "crate::gpu",
+        levels: &GPU_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(GPU_OWN),
+    },
+    Order {
+        root: "rust/client/render/src/gpu/pass/",
+        path: "crate::gpu::pass",
+        levels: &PASS_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(4),
     },
 ];
 
@@ -981,6 +1103,50 @@ mod spec;"
             ],
             "{found:?}"
         );
+    }
+
+    /// Each of pxl-render's orders refuses a name up it, as `ORDERS` holds them: the shaders'
+    /// words naming the records, the calls naming the draw lists, a frame's data naming the
+    /// device, the shared model pass naming one over it; and no order refuses the name down.
+    #[test]
+    fn render_orders_refuse_an_edge_up() {
+        let up = [
+            (
+                "frame/shader/word.rs",
+                "use crate::frame::shader::record::x;",
+                "crate::frame::shader",
+            ),
+            ("gpu/api.rs", "use crate::gpu::draw::x;", "crate::gpu"),
+            (
+                "frame/shader/record.rs",
+                "use crate::gpu::draw::x;",
+                "crate",
+            ),
+            (
+                "gpu/pass/model.rs",
+                "use crate::gpu::pass::decor::x;",
+                "crate::gpu::pass",
+            ),
+        ];
+        for (file, text, path) in up {
+            let o = ORDERS
+                .iter()
+                .find(|o| o.path == path && o.root.starts_with(RENDER))
+                .expect("the order");
+            let f = format!("{RENDER}{file}");
+            let files = [f.as_str()];
+            let found = out_of_order(&files, &|_| Some(text.to_string()), o);
+            assert_eq!(found.len(), 1, "{file}: {found:?}");
+            assert!(found[0].starts_with(&format!("{f}:1:")), "{found:?}");
+        }
+        let down = ORDERS
+            .iter()
+            .find(|o| o.path == "crate::gpu")
+            .expect("the device's order");
+        let f = format!("{RENDER}gpu/renderer.rs");
+        let names = "use crate::gpu::draw::x;";
+        let found = out_of_order(&[f.as_str()], &|_| Some(names.to_string()), down);
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test]

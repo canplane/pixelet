@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::view::lens;
 use crate::sys;
 use pxl_content::cloud::drift;
-use pxl_render::frame::draw::{lists_bytes, set_lists};
+use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::mem::heap::alloc;
 
 /// The drift's step as it was written before the view held the seen step:

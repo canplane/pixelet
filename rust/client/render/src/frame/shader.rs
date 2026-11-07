@@ -5,6 +5,8 @@
 
 pub mod access;
 pub mod floor;
+pub mod group;
 pub mod part;
 pub mod record;
+pub mod sequence;
 pub mod word;

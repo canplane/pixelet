@@ -11,26 +11,25 @@
 //! pipeline asked for once the renderer draws is one found made, or a bug.
 
 use crate::api_spec::stream;
+use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
     compute, pipeline as record_of, src, COMPUTES, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH};
-use crate::gpu::surface::WORLD_COLOR;
-
-pub const GROUPS: usize = 4;
-pub const LANES: usize = 8;
+use crate::gpu::api::{
+    room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH, WORLD_COLOR,
+};
 
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
     pub id: u32,
-    pub layouts: [Layout; GROUPS],
-    pub strides: [u32; LANES],
+    pub layouts: [Layout; BIND_GROUPS],
+    pub strides: [u32; VERTEX_BUFFERS],
     pub lanes: usize,
 }
 
 /// The most distinct group layouts there are: every render pipeline's groups,
 /// and a compute pipeline's one.
-const LAYOUTS: usize = PIPELINES as usize * GROUPS + COMPUTES as usize;
+const LAYOUTS: usize = PIPELINES as usize * BIND_GROUPS + COMPUTES as usize;
 /// Every pipeline the renderer makes, render and compute, each held to it
 /// as it is made.
 const PIPELINE_CAP: usize = 118;

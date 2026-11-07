@@ -12,8 +12,8 @@ use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
 use pxl_engine::overwrite;
 use pxl_engine::LEAF_CELL;
-use pxl_render::frame::draw::Position;
 use pxl_render::gpu::api;
+use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
@@ -102,7 +102,7 @@ struct Frame {
     edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     /// The unit the eye stands in, the lanes' anchor, as a draw's Q3
-    /// (pxl-render frame/draw.rs `Position`).
+    /// (pxl-render gpu/draw.rs `Position`).
     anchor: Q3,
     /// What the drawing words were last made of, by value.
     seen: Option<Key>,

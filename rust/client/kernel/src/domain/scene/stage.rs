@@ -6,9 +6,9 @@
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
-use pxl_render::frame::draw::DRAW_WORDS;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
+use pxl_render::gpu::draw::DRAW_WORDS;
 use pxl_render::gpu::ray::{Cast, GroundBricks};
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput, FrameStat};
 use pxl_render::gpu::span_spec::FrameKind;

@@ -2,12 +2,13 @@
 
 //! The dev gizmos, over the finished world in passes of their own.
 
-use crate::frame::draw::{uniform_of, PIPELINE_DEBUG};
-use crate::frame::draw::{DrawStats, Draws};
+use crate::frame::shader::record::PIPELINE_DEBUG;
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
+use crate::gpu::draw::uniform_of;
+use crate::gpu::draw::{DrawStats, Draws};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;

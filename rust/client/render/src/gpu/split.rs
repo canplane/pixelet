@@ -46,7 +46,7 @@ pub struct Open {
     /// as a render pass is one usage scope whole.
     drawn_groups: Vec<Id>,
     drawn_args: Vec<Id>,
-    /// A render pass's declared pipelines, by their records' numbers (gpu/ray/sequence.rs
+    /// A render pass's declared pipelines, by their records' numbers (frame/shader/sequence.rs
     /// `Step::in_pass`); none where the pass declares none.
     declared: &'static [u32],
 }

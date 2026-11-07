@@ -18,10 +18,9 @@ pub mod companion;
 pub mod param;
 pub mod surface;
 
-use pxl_render::frame::draw::{
-    scaled_draw, Draw, DrawId, DrawList, Position, Stand, PIPELINE_SKINNED,
-};
+use pxl_render::frame::shader::record::PIPELINE_SKINNED;
 use pxl_render::gpu::api::{word_bytes, Image};
+use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, Stand};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::character::groups::{person, pet};
 pub use pxl_spec::asset::character::Group;

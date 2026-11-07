@@ -174,7 +174,28 @@ pub const WORLD_ASKED: &str = include_str!(concat!(
     "/shader/assembled/world_asked.wgsl"
 ));
 
-/// Pipelines past draw.rs's, which a frame runs on its own.
+/// Each render pipeline by its number: the draw records' first (gpu/draw.rs
+/// `DRAW_PIPELINES`), then those a frame runs on its own.
+/// Box draw: (upload handle, box count, first box, uniform, pipeline).
+/// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
+/// uniform carries the group's first column word, stride and index-list start.
+pub const PIPELINE_DECOR: u32 = 0;
+/// Half transparent, at the depth of the faces it lies on, which stand
+/// behind it (screen_ray.wgsl `behind`).
+pub const PIPELINE_GHOST_BOX: u32 = 1;
+pub const PIPELINE_GHOST_DECOR: u32 = 2;
+/// (model handle, joint palette handle, model id, uniform, pipeline).
+pub const PIPELINE_SKINNED: u32 = 3;
+/// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
+/// (0, 0, 0, uniform, pipeline).
+pub const PIPELINE_LOCATION_ZONE: u32 = 4;
+pub const PIPELINE_LOCATION_BEACON: u32 = 5;
+/// (upload handle, count, 0, uniform, pipeline).
+pub const PIPELINE_MARKER: u32 = 6;
+/// Line segments: handle, line vertex count, face vertex count.
+pub const PIPELINE_DEBUG: u32 = 7;
+/// Decor drawn as impostors where a variant is too small on screen for its model.
+pub const PIPELINE_IMPOSTOR: u32 = 8;
 pub const PIPELINE_SKY: u32 = 9;
 pub const PIPELINE_MIP: u32 = 10;
 /// The occlusion's half-resolution map laid over the world's color in the
@@ -281,10 +302,6 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
     true
 }
 
-use crate::frame::draw::{
-    PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
-};
 use crate::frame::shader::floor;
 use pxl_engine::param::light;
 
@@ -1152,7 +1169,7 @@ pub const fn lays_out_writable(id: u32) -> bool {
 
 /// Whether render pipeline `id`'s shader reads the light's shadow map: whether its parts hold
 /// shadow.wgsl's (`PARTS`), its record's first word its shader. Whatever is drawn by one is a
-/// receiver of the map, and stands (frame/draw.rs `DrawList`).
+/// receiver of the map, and stands (gpu/draw.rs `DrawList`).
 pub fn reads_shadow_map(id: u32) -> bool {
     PARTS[pipeline(id)[0] as usize].contains(&"shadow")
 }

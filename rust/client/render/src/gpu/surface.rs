@@ -9,10 +9,9 @@ use xpute_core::global::Global;
 use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;
+use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
-use crate::gpu::api::Format;
-use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
-use pxl_engine::WORKGROUPS_MOST;
+use pxl_engine::{ray, WORKGROUPS_MOST};
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
@@ -21,11 +20,26 @@ pub const SURFACES: usize = 9;
 /// otherwise be a new depth and color target.
 pub const SETTLE_TURNS: u32 = 4;
 
-/// The world's color as its passes leave it, toned and linear, blended
-/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
-/// once (gpu/finish.rs): a float, so the finish's dither falls between
-/// levels the canvas has and none the color had.
-pub const WORLD_COLOR: Format = Format::rgba16float;
+/// The most pixels the world is drawn at each way, the floor's texture side: every size the
+/// render size's rule allows (`drawn_fits`) lies within it, and the screen's claimed tiles, a
+/// word a tile (ray/cast.rs `CAST_TILES_START`), fit the floor there.
+pub const DRAWN_MOST: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
+
+/// The most pixels the world is drawn at in all: the eye's holes (`ray::holes_words`), a word and a
+/// bit a pixel, within 27/64 of the floor's binding, the camera grid's words beside them in the
+/// beam rays' buffer at the widest field.
+pub const DRAWN_AREA: u32 =
+    ((floor::MAX_STORAGE_BUFFER_BINDING_SIZE * 27 / 256) as u32 - ray::POOL_WORDS - 1) / 33 * 32;
+
+/// Whether the world drawn at `size` pixels is one every device draws (`render_px`): no side past `DRAWN_MOST`, no more than `DRAWN_AREA` in all, and its screen tiles,
+/// a workgroup each across the pixels' cast's dispatch (cast.wgsl `cast_cs`), within the
+/// floor's workgroups a side.
+pub const fn drawn_fits(size: [u32; 2]) -> bool {
+    size[0] <= DRAWN_MOST[0]
+        && size[1] <= DRAWN_MOST[1]
+        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUPS_MOST
+        && size[0] * size[1] <= DRAWN_AREA
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct Surface {
@@ -53,7 +67,7 @@ pub struct Surface {
     pub depth: u32,
     pub depth_view: u32,
     pub depth_only_view: u32,
-    /// The color its passes draw into (`WORLD_COLOR`), made with the depth,
+    /// The color its passes draw into (gpu/api.rs `WORLD_COLOR`), made with the depth,
     /// which the world's gathers over frames (`history`) and the finish
     /// encodes onto the canvas.
     pub color: u32,
@@ -118,8 +132,8 @@ impl Surface {
 
     /// The world's pixels: the canvas's at the kernel's share of them
     /// (`ratio` over the display's), which the finish brings up to the
-    /// canvas, and no more than every device draws (ray/cast.rs
-    /// `drawn_fits`), the canvas's shape kept: its share brought down until
+    /// canvas, and no more than every device draws
+    /// (`drawn_fits`), the canvas's shape kept: its share brought down until
     /// they fit.
     pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);

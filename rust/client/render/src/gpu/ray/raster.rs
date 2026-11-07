@@ -17,15 +17,17 @@
 //! each frame its samples are cast, and kept where only the pixels are
 //! cast again over them.
 
-use super::sequence;
+use crate::frame::shader::sequence;
 use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
-use crate::frame::shader::floor;
+use crate::frame::shader::group::{
+    FACE_GROUP, HEAD_BINDING, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP,
+    SAMPLE_BOX_GROUP, STOPS_GROUP,
+};
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DRAW, COMPUTE_LIGHT_RECORD_STOPS,
-    COMPUTE_LIGHT_SAMPLE_BOX, COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_STOPS,
-    COMPUTE_SAMPLE_BOX, PIPELINE_RASTER, PIPELINE_RASTER_GATE, STORAGE, STORAGE_RW,
-    STORAGE_TEXTURE_RW, UNIFORM,
+    COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DRAW, COMPUTE_LIGHT_RECORD_STOPS, COMPUTE_LIGHT_SAMPLE_BOX,
+    COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_STOPS, COMPUTE_SAMPLE_BOX,
+    PIPELINE_RASTER, PIPELINE_RASTER_GATE,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
@@ -35,111 +37,6 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_engine::param::raster::GROWTH;
-
-/// An observer's samples' stops (sample_box.wgsl): the eye, the samples' words, the node
-/// cache whose drawable entries they set, and the faces' asks' args.
-pub(super) const SAMPLE_BOX_GROUP: [u32; 12] = [
-    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE_RW, 16, COMPUTE, STORAGE_RW,
-];
-/// The node cache over every slot, its drawable entries drawn (record_draw.wgsl): the eye,
-/// the node cache, the boxes, the raster's args, and the light's buffers its receivers stand
-/// the eye's boxes by.
-pub(super) const RECORD_GROUP: [u32; 24] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    14,
-    COMPUTE,
-    STORAGE_RW,
-    16,
-    COMPUTE,
-    STORAGE_RW,
-    super::cast::HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    12,
-    COMPUTE,
-    STORAGE_RW,
-    21,
-    COMPUTE,
-    STORAGE_RW,
-    22,
-    COMPUTE,
-    STORAGE_RW,
-];
-/// The holes' stops (record_stops.wgsl): the eye, the rays, the stops among the beam rays'
-/// words, the node cache their count lies in and whose drawable entries they set, and the
-/// faces' asks' args; not the stops' dispatch, which is copied out of the node cache so that
-/// no pass reads its count from a buffer it binds writable (`Raster::stops`).
-pub(super) const STOPS_GROUP: [u32; 15] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    16,
-    COMPUTE,
-    STORAGE_RW,
-];
-/// The light's holes' stops (record_stops.wgsl over record_stops.light.wgsl): `STOPS_GROUP`,
-/// its map at 3 and its list at 8, and the light's head its slots' rays are aimed by.
-pub(super) const LIGHT_STOPS_GROUP: [u32; 18] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    super::cast::HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    16,
-    COMPUTE,
-    STORAGE_RW,
-];
-/// The light's samples' stops (sample_box.wgsl over sample.light.wgsl): the eye, the samples'
-/// words, the node cache, the light's head and its raster's args.
-pub(super) const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    super::cast::HEAD_BINDING,
-    COMPUTE,
-    UNIFORM,
-    16,
-    COMPUTE,
-    STORAGE_RW,
-];
-const _: () = assert!(
-    floor::holds(&[&SAMPLE_BOX_GROUP])
-        && floor::holds(&[&LIGHT_SAMPLE_BOX_GROUP])
-        && floor::holds(&[&RECORD_GROUP])
-        && floor::holds(&[&STOPS_GROUP])
-        && floor::holds(&[&LIGHT_STOPS_GROUP]),
-    "the boxes' writing's group binds past WebGPU's floor"
-);
 
 /// The raster's pipelines, made with the cast's; its args, the stops' dispatch and the eye's
 /// draws, a word a box, room for `record::EYE_DRAWS`, made with them; the raster's view, a uniform; its targets
@@ -219,34 +116,6 @@ pub(super) struct LightRaster {
     /// Its holes' stops' group (`LIGHT_STOPS_GROUP`), made again with the drawing's.
     stops_group: u32,
 }
-
-/// `face_cs`'s (face.wgsl): the eye, the world's query's buffers but the palette, which it
-/// reads none of, the beam's words it asks off and leaves a hit's faces in, the node cache it
-/// leaves a drawable entry's faces in, and the args it is bound to.
-pub(super) const FACE_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
-    STORAGE, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE_RW, 16, COMPUTE,
-    STORAGE,
-];
-
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
-        && binds(&[COMPUTE_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
-        && binds(&[COMPUTE_FACE], &FACE_GROUP)
-        && binds(
-            &[COMPUTE_RECORD_DRAW, COMPUTE_LIGHT_RECORD_DRAW],
-            &RECORD_GROUP
-        )
-        && binds(&[COMPUTE_RECORD_STOPS, COMPUTE_RECORD_FACES], &STOPS_GROUP)
-        && binds(&[COMPUTE_LIGHT_RECORD_STOPS], &LIGHT_STOPS_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
-const _: () = assert!(
-    floor::holds(&[&FACE_GROUP]),
-    "the faces' group binds past WebGPU's floor"
-);
 
 impl Raster {
     /// Its pipelines and its args and uniform, made where the cast's are
@@ -490,7 +359,7 @@ impl Raster {
                 buf_entry(9, node_cache),
                 buf_entry(14, self.draws),
                 buf_entry(16, self.args),
-                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(HEAD_BINDING, head),
                 buf_entry(12, list),
                 buf_entry(21, args),
                 buf_entry(22, stood),
@@ -771,7 +640,7 @@ impl Raster {
                 buf_entry(9, node_cache),
                 buf_entry(14, s.draws),
                 buf_entry(16, s.args),
-                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(HEAD_BINDING, head),
                 buf_entry(12, list),
                 buf_entry(21, args),
                 buf_entry(22, stood),
@@ -785,7 +654,7 @@ impl Raster {
                 view_entry(3, map),
                 buf_entry(8, list),
                 buf_entry(9, node_cache),
-                buf_entry(super::cast::HEAD_BINDING, head),
+                buf_entry(HEAD_BINDING, head),
                 buf_entry(16, s.args),
             ],
         );
