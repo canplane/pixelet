@@ -24,7 +24,6 @@ use crate::domain::control::camera::controller::{
 };
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
-use crate::domain::control::navigation::support::resolve_to;
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
@@ -33,6 +32,7 @@ use crate::domain::control::param::{
     ORBIT_POLAR_EPS,
 };
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
+use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};

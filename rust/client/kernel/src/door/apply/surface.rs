@@ -4,7 +4,7 @@
 //! _CLOSE): opened, resized and closed.
 
 use super::{or_refuse, refuse_unless};
-use crate::domain::control::camera::input::camera_view_resize;
+use crate::domain::control::input::camera_view_resize;
 use crate::domain::control::sensor;
 use crate::domain::view::frame::resolution;
 use crate::sys::sched::edge::request_world_tick;

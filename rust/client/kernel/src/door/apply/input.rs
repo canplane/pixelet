@@ -5,13 +5,12 @@
 use super::State;
 use super::{ask_turn, refuse_unless};
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::input::camera_keys;
-use crate::domain::control::camera::input::camera_pointer_down;
-use crate::domain::control::camera::input::camera_pointer_move;
-use crate::domain::control::camera::input::camera_pointer_out;
-use crate::domain::control::camera::input::camera_pointer_up;
-use crate::domain::control::camera::input::camera_wheel;
 use crate::domain::control::cmd as abi;
+use crate::domain::control::edit::{clear_hover, clear_hover_coord};
+use crate::domain::control::input::{
+    camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up,
+    camera_wheel, pinching,
+};
 use crate::pointer::tap;
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
@@ -27,10 +26,17 @@ pub(super) fn pointer(c: abi::InputPointer) -> Outcome {
                 tap(x, y);
             }
         }
-        abi::PointerPhase::Out => camera_pointer_out(),
+        abi::PointerPhase::Out => {
+            camera_pointer_out();
+            clear_hover();
+        }
         abi::PointerPhase::Cancel => {
             camera_pointer_up(c.pointer_type, c.id);
         }
+    }
+    // A pinch points at nothing to place.
+    if pinching() {
+        clear_hover_coord();
     }
     Ok(Some(0))
 }

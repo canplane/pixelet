@@ -12,6 +12,7 @@ use xpute_core::mem::heap::HeapStat;
 use xpute_core::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
+use crate::domain::scene::stage::Drawn;
 use crate::door;
 use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
@@ -65,21 +66,54 @@ impl Default for RendererFrame {
 
 static RENDERER: Global<RendererFrame> = Global::new();
 
-/// The renderer's answer for this turn's frame, its figures zero where it
-/// drew none, and the reads of earlier frames, landed now.
-pub fn set_renderer_frame(
-    kind: FrameKind,
-    gpu: GpuSample,
-    device: DeviceSample,
-    gpu_read: Option<GpuRead>,
-    rays: Option<RayRead>,
-) {
+/// The renderer's answer for this turn's frame (domain/scene/stage.rs
+/// `stage_render`), its figures zero where it drew none, and the reads of
+/// earlier frames, landed now.
+pub fn set_renderer_frame(drawn: &Drawn) {
+    let (kind, scale, lattice) = (drawn.kind, drawn.scale, drawn.lattice);
+    let Some(stat) = drawn.stat else {
+        RENDERER.set(RendererFrame {
+            kind,
+            gpu: GpuSample {
+                scale,
+                lattice,
+                ..GpuSample::default()
+            },
+            ..RendererFrame::default()
+        });
+        return;
+    };
+    let [draws, triangles] = stat
+        .draws
+        .iter()
+        .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
     RENDERER.set(RendererFrame {
         kind,
-        gpu,
-        device,
-        gpu_read,
-        rays,
+        gpu: GpuSample {
+            scale,
+            lattice,
+            draws,
+            triangles,
+            frame: stat.frame,
+            light_moved: stat.light_moved,
+            decor_boxes: stat.decor_boxes,
+            ..GpuSample::default()
+        },
+        device: DeviceSample {
+            uploads: stat.uploads,
+            uploads_bytes: stat.upload_bytes,
+            pack_bytes: stat.pack_bytes,
+        },
+        gpu_read: stat.gpu_read.then_some(GpuRead {
+            frame: stat.gpu_frame,
+            spans: stat.gpu_spans,
+            busy_ms: stat.gpu_busy_ms,
+            px: stat.gpu_px,
+        }),
+        rays: stat.rays.map(|r| RayRead {
+            frame: r.frame,
+            rays: RaySample::of(r.counts),
+        }),
     });
 }
 

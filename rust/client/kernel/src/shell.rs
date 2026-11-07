@@ -12,13 +12,13 @@ use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
-use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
     PivotState, RefusedFile, ShellView, Snapshot,
 };
 use crate::domain::control::edit::write;
+use crate::domain::control::input::{dragging, zooming};
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
@@ -30,8 +30,8 @@ use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
+use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
 use crate::sys::io::file::{self, Path, StorageFile};
@@ -117,7 +117,7 @@ fn snapshot_inputs() -> SnapshotInputs {
     // Shown once a frame went to the screen over a view whose tiles all
     // show, if coarser: a finer tile asked for as the eye moves is not
     // the area loading, and would flash its toast each time.
-    let status = match (observation::eye(), is_screen_drawn()) {
+    let status = match (pose::eye(), is_screen_drawn()) {
         (None, _) => GroundStatus::Idle,
         (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
         _ => GroundStatus::Loading,
@@ -132,7 +132,7 @@ fn snapshot_inputs() -> SnapshotInputs {
         orient: device_orient_store().state,
         is_follow_mode: following(),
         camera_busy: dragging(),
-        zooming: controller::zooming(),
+        zooming: zooming(),
         over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOTS];

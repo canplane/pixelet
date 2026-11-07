@@ -10,27 +10,25 @@ use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::ray::{Cast, Filled, GroundBricks};
-use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput, FrameStat};
+use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_core::global::Global;
-
-use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
+use crate::domain::scene::environment::environment_words;
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::perf::report::{set_renderer_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
 use crate::sys::mem::section;
@@ -51,6 +49,7 @@ const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::clipmap;
+use crate::domain::scene;
 use crate::domain::scene::animation;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::gpu;
@@ -119,14 +118,27 @@ pub fn stage_write() {
     } else {
         0.0
     };
-    s[STAGE_AT::CLOUDS] = cloud::clouds_shown();
+    s[STAGE_AT::CLOUDS] = cloud::clouds_shown(environment_words());
     s[STAGE_AT::EFFECT_REACH] = EFFECT_REACH;
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 
+/// What the renderer made of the turn's frame, and the scale and the
+/// lattice the world was drawn at, read before a read can move the next:
+/// the top's to record (perf/report.rs `set_renderer_frame`).
+pub struct Drawn {
+    pub kind: FrameKind,
+    pub stat: Option<FrameStat>,
+    pub scale: f64,
+    pub lattice: f64,
+    /// The interval the drawn resolution's judge asks the turns paced at
+    /// (`resolution::load`), none where it asks no change.
+    pub interval_ms: Option<f64>,
+}
+
 /// `pace` is the frame as the turn paced it, which the world's drawn
 /// resolution is judged by (domain/view/frame/resolution.rs `load`).
-pub fn stage_render(pace: Pace) -> Option<f64> {
+pub fn stage_render(pace: Pace) -> Drawn {
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
@@ -174,7 +186,7 @@ pub fn stage_render(pace: Pace) -> Option<f64> {
     let animated = animation::take();
     let out = render_frame(FrameInput {
         lists,
-        environment: &scene().environment.out,
+        environment: environment_words(),
         decor: &decor,
         skins: &skins[..skin_cnt],
         previews: &previews[..preview_cnt],
@@ -233,54 +245,16 @@ pub fn stage_render(pace: Pace) -> Option<f64> {
             lattice: stat.gpu_lattice,
         });
     let interval_ms = resolution::load(pace, gpu);
-    let Some(stat) = out.stat else {
-        set_renderer_frame(
-            out.kind,
-            GpuSample {
-                scale,
-                lattice,
-                ..GpuSample::default()
-            },
-            DeviceSample::default(),
-            None,
-            None,
-        );
-        return interval_ms;
-    };
-    SCREEN_DEVICE.set(Some(api::device_generation()));
-    let [draws, triangles] = stat
-        .draws
-        .iter()
-        .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
-    set_renderer_frame(
-        out.kind,
-        GpuSample {
-            scale,
-            lattice,
-            draws,
-            triangles,
-            frame: stat.frame,
-            light_moved: stat.light_moved,
-            decor_boxes: stat.decor_boxes,
-            ..GpuSample::default()
-        },
-        DeviceSample {
-            uploads: stat.uploads,
-            uploads_bytes: stat.upload_bytes,
-            pack_bytes: stat.pack_bytes,
-        },
-        stat.gpu_read.then_some(GpuRead {
-            frame: stat.gpu_frame,
-            spans: stat.gpu_spans,
-            busy_ms: stat.gpu_busy_ms,
-            px: stat.gpu_px,
-        }),
-        stat.rays.map(|r| RayRead {
-            frame: r.frame,
-            rays: RaySample::of(r.counts),
-        }),
-    );
-    interval_ms
+    if out.stat.is_some() {
+        SCREEN_DEVICE.set(Some(api::device_generation()));
+    }
+    Drawn {
+        kind: out.kind,
+        stat: out.stat,
+        scale,
+        lattice,
+        interval_ms,
+    }
 }
 
 /// The scene's turn, `pivot` and `heading` the camera's as the turn hands
@@ -305,10 +279,9 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);
     let draw = section::map().is_some_and(|_| {
-        let (scene, list) = (scene(), draw_list());
-        let models = model::models();
-        let animating = scene.tick(list, models, &frame);
-        scene.draw(list, models);
+        let (list, models) = (draw_list(), model::models());
+        let animating = scene::animate(list, models, &frame);
+        scene::draw(list, models);
         animating
     });
     {
@@ -321,7 +294,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
                 .is_some_and(|e| e.asset().decor().is_some())
         });
         gpu::step(frame.eye, hide, edits.scattered_cell);
-        cloud::step(draw_list(), &frame, &ctx.pass);
+        cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
     }
     marker::step(ctx, &frame);
     marker::draw(draw_list());

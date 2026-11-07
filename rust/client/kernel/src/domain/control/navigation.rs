@@ -6,4 +6,3 @@ pub mod bootstrap;
 pub mod destination;
 pub mod follow_mode;
 pub mod off_center;
-pub mod support;

@@ -15,7 +15,6 @@ use pxl_spec::space::coord::v3;
 use crate::domain::scene::animation;
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::Stepped;
 use crate::domain::view::observation;
@@ -26,13 +25,37 @@ use crate::sys::sched::edge::wake_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use pxl_render::param::night;
 use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
 /// nothing else asks for a frame while the view is still, so the clock asks
 /// for one when its next step falls (`EnvironmentDraw::observe`).
 pub fn environment_step() {
-    let next_ms = scene().environment.observe(wall_now());
+    let next_ms = environment().observe(wall_now());
     wake_at(now() + next_ms);
+}
+
+static ENVIRONMENT: Global<EnvironmentDraw> = Global::new();
+
+fn environment() -> &'static mut EnvironmentDraw {
+    ENVIRONMENT.get(EnvironmentDraw::default)
+}
+
+/// The sky's transitions advanced (`EnvironmentDraw::tick`); whether one is
+/// in flight.
+pub fn environment_animate(frame: &Frame) -> bool {
+    environment().tick(frame)
+}
+
+/// The sun under the horizon, as drawn (`EnvironmentDraw::night`).
+pub fn night() -> bool {
+    environment().night()
+}
+
+/// The environment's words as the last frame wrote them, which the renderer
+/// draws the sky and the light by (pxl-render look/environment.rs).
+pub fn environment_words() -> &'static [f32; ENV_FLOATS] {
+    &environment().out
 }
 
 /// The cosine of the sun's and the moon's zenith angles at `days`, seen from
@@ -100,7 +123,7 @@ pub struct EnvironmentDraw {
     sky_at: Stepped,
     clouds_at: Stepped,
     first_ms: Option<f64>,
-    pub out: [f32; ENV_FLOATS],
+    out: [f32; ENV_FLOATS],
 }
 
 impl Default for EnvironmentDraw {

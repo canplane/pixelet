@@ -25,6 +25,7 @@ use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::view::setting::store::settings_store;
+use xpute_core::global::Global;
 
 pub const GHOST_OPACITY: f32 = 0.5;
 
@@ -54,6 +55,23 @@ pub struct GhostDraw {
     at: V3,
     /// Its draw, a box's or a decor's.
     id: DrawId,
+}
+
+static GHOST: Global<GhostDraw> = Global::new();
+
+/// The ghost as drawn.
+fn shown() -> &'static mut GhostDraw {
+    GHOST.get(GhostDraw::default)
+}
+
+/// What the tool shows (`GhostDraw::set`); whether what is drawn changed.
+pub fn ghost_set(draw: &mut DrawList, ghost: &Ghost) -> bool {
+    shown().set(draw, ghost)
+}
+
+/// The ghost into the frame's list (`GhostDraw::draw`).
+pub fn ghost_draw(draw: &mut DrawList) {
+    shown().draw(draw);
 }
 
 /// Where a decor instance's base stands, its turn and its scale.

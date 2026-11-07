@@ -1,4 +1,4 @@
-// pxl-kernel/domain/control/navigation/support.test.rs
+// pxl-kernel/domain/control/support.test.rs
 
 use super::*;
 use crate::domain::layer::object::store::{Store, AIR};

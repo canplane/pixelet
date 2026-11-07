@@ -22,15 +22,14 @@ use crate::domain::control::edit::pick::{
 };
 use crate::domain::control::edit::write::{place_air, remove};
 use crate::domain::control::navigation::destination;
-use crate::domain::control::navigation::support::stand;
+use crate::domain::control::support::stand;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::query;
 use crate::domain::query::HitKind::Decor;
 use crate::domain::query::HitKind::Object;
 use crate::domain::query::{Hit, World};
-use crate::domain::view::frame::pose::ray_of;
-use crate::domain::view::observation;
+use crate::domain::view::frame::pose::{eye, ray_of};
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, Zoom};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_core::global::Global;
@@ -202,7 +201,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
     let hit = ray_pick(origin, dir)?;
-    let ray_zoom = observation::eye().map(|eye| {
+    let ray_zoom = eye().map(|eye| {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
         query::by_dist().at(v3::dot(&v, &v) as f32)
     });

@@ -9,10 +9,10 @@ use pxl_spec::space::coord::q3::Q3;
 use crate::domain::control::camera::controller::facing_domain;
 use crate::domain::control::camera::controller::{camera, eye_world, pivot, set_eye_world};
 use crate::domain::control::camera::state::camera_state;
-use crate::domain::control::navigation::support::resolve_to;
 use crate::domain::control::param::{
     CAM_DAMP, FIRST_PERSON_EYE_EPS, FIRST_PERSON_FACING_EPS, ROT_DAMP,
 };
+use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use xpute_core::global::Global;

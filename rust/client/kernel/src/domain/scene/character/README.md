@@ -19,7 +19,7 @@ holder:
   canvas (`preview.rs`, `PREVIEWS_MAX`).
 
 Where an actor stands is the kernel's, never the shell's. Its clips advance in
-the scene's own tick (`../../scene.rs`).
+the scene's own tick (`../../scene.rs` `animate`).
 
 The person's chat line is not an actor. It is a marker the person holds, over
 its head, which the person says shows (`companion.rs` `line_hangs`), laid out

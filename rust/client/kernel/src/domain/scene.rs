@@ -1,7 +1,8 @@
 // pxl-kernel/domain/scene.rs
 
-//! What a frame draws beside the screen's rays: each drawn layer's own
-//! state, listed into the draw list (domain/scene/model.rs `draw_list`).
+//! What a frame draws beside the screen's rays: each drawn layer keeps its
+//! own state and lists itself into the draw list (domain/scene/model.rs
+//! `draw_list`), in the order here.
 
 pub mod actor;
 pub mod animation;
@@ -19,52 +20,33 @@ pub mod param;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;
-use xpute_core::global::Global;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
 use crate::domain::scene::character::preview::{preview_animate, preview_draw};
-use crate::domain::scene::environment::EnvironmentDraw;
+use crate::domain::scene::environment::environment_animate;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::gizmo::debug_line::DebugLines;
-use crate::domain::scene::indicator::ghost::GhostDraw;
-use crate::domain::scene::indicator::location::LocationIndicator;
+use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_draw;
+use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_draw;
+use crate::domain::scene::indicator::ghost::ghost_draw;
+use crate::domain::scene::indicator::location::{location_animate, location_draw};
 use crate::domain::scene::model::registry::Models;
 
-/// The scene's state, one for the module's life.
-static SCENE: Global<Scene> = Global::new();
-
-pub fn scene() -> &'static mut Scene {
-    SCENE.get(Scene::default)
+/// Advances what animates; whether anything did.
+pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+    companion_animate(list, models, frame)
+        | preview_animate(list, models, frame)
+        | location_animate(frame)
+        | environment_animate(frame)
 }
 
-#[derive(Default)]
-pub struct Scene {
-    pub ghost: GhostDraw,
-    pub location: LocationIndicator,
-    pub environment: EnvironmentDraw,
-    pub debug: DebugLines,
-    /// The coverage gizmo's (domain/scene/gizmo/coverage_gizmo.rs).
-    pub coverage: DebugLines,
-}
-
-impl Scene {
-    /// Advances what animates; whether anything did.
-    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-        companion_animate(draw, models, frame)
-            | preview_animate(draw, models, frame)
-            | self.location.tick(frame)
-            | self.environment.tick(frame)
-    }
-
-    /// Sets the scene's own layers' draws into the turn's list.
-    pub fn draw(&mut self, draw: &mut DrawList, models: &Models) {
-        self.ghost.draw(draw);
-        companion_draw(draw, models);
-        preview_draw(draw, models);
-        self.location.draw(draw);
-        self.debug.draw(draw);
-        self.coverage.draw(draw);
-    }
+/// Sets the scene's own layers' draws into the turn's list.
+pub fn draw(list: &mut DrawList, models: &Models) {
+    ghost_draw(list);
+    companion_draw(list, models);
+    preview_draw(list, models);
+    location_draw(list);
+    frame_gizmo_draw(list);
+    coverage_gizmo_draw(list);
 }
 
 #[cfg(test)]

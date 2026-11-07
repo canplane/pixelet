@@ -1,12 +1,11 @@
 // pxl-kernel/domain/view/above_ground.rs
 
-//! Where the ground under a point stands: the eye's height over it.
+//! Where the ground under a point stands: a point's height over it.
 
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
 use crate::domain::query::World;
-use crate::domain::view::observation::eye;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 /// From the point's own height, so a cave's floor counts in a cave; the
@@ -23,8 +22,4 @@ fn ground_under(at: V3) -> f64 {
 /// What the origin grain is measured from.
 pub fn height_at(at: V3) -> f64 {
     (at[2] - ground_under(at)).max(0.0)
-}
-
-pub fn eye_height() -> f64 {
-    eye().map_or(0.0, height_at)
 }

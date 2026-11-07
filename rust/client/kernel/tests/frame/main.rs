@@ -182,7 +182,7 @@ impl Run {
                 V::Num(shell.member("PointerType", "Mouse").into()),
             ),
             ("id", V::Num(1.0)),
-            // The secondary button rotates (domain/control/camera/input.rs).
+            // The secondary button rotates (domain/control/input.rs).
             ("button", V::Num(2.0)),
             ("x", V::Num(x)),
             ("y", V::Num(y)),

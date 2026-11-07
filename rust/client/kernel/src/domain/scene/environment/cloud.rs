@@ -20,7 +20,7 @@ use pxl_render::frame::draw::{
     DrawId, DrawList, Position, Stand, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
 };
 use pxl_render::frame::shader::word::DECOR_GROUPS;
-use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
+use pxl_render::look::environment::{ENV_AIR, ENV_FLOATS, ENV_SKY};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -38,11 +38,9 @@ use crate::domain::scene::environment::param::{
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::scene::scene;
-use crate::domain::view::frame::pose::km_per_u;
+use crate::domain::view::frame::pose::{eye, km_per_u};
 use crate::domain::view::lens;
 use crate::domain::view::observation;
-use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
@@ -161,20 +159,21 @@ pub fn drift_step_s() -> f64 {
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
-/// `CLOUDS`): none where the setting is off, all of them up to half of
-/// `CLOUD_GONE_KM` and none from it.
-pub fn clouds_shown() -> f64 {
+/// `CLOUDS`), the eye as high as the `environment`'s words say: none where
+/// the setting is off, all of them up to half of `CLOUD_GONE_KM` and none
+/// from it.
+pub fn clouds_shown(environment: &[f32; ENV_FLOATS]) -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let alt_km = f64::from(scene().environment.out[ENV_AIR]);
+    let alt_km = f64::from(environment[ENV_AIR]);
     let t = ((alt_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
 
 /// Takes the models as they arrive, keeps the patches the eye can see a cloud
-/// of, and lists them.
-pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
+/// of, and lists them, carried as far as the `environment`'s clock says.
+pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass, environment: &[f32; ENV_FLOATS]) {
     let c = clouds();
     c.seen = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
@@ -183,13 +182,12 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let Some(eye) = eye() else { return };
-    let env = &scene().environment.out;
     // None, nothing is built or drawn, and what is held waits.
-    let opacity = clouds_shown() as f32;
+    let opacity = clouds_shown(environment) as f32;
     if opacity <= 0.0 {
         return;
     }
-    let off = drift(f64::from(env[ENV_SKY + 1]));
+    let off = drift(f64::from(environment[ENV_SKY + 1]));
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no

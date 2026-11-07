@@ -15,7 +15,7 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::follow_mode;
-use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
+use crate::domain::control::support::{exact, is_unknown, nearest, unknown_z};
 use crate::sys::sched::edge;
 use xpute_core::global::Global;
 

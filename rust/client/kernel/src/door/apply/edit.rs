@@ -3,11 +3,11 @@
 //! EDIT: the edit's: the tool and what it takes, and the marker it left waiting.
 
 use super::or_refuse;
-use crate::domain::control::camera::input::camera_rehover;
 use crate::domain::control::cmd as abi;
 use crate::domain::control::edit::set_tool;
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::Tool;
+use crate::domain::control::input::camera_rehover;
 use crate::domain::layer::object::asset::Asset;
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;

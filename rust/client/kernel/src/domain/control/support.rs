@@ -1,4 +1,4 @@
-// pxl-kernel/domain/control/navigation/support.rs
+// pxl-kernel/domain/control/support.rs
 
 //! The pivot standing on the ground, and where every camera's pan
 //! puts it. The pivot's Z is half a cell over the floor the character

@@ -32,7 +32,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
-use crate::domain::view::frame::coord;
+use crate::domain::view::frame::{coord, pose};
 use crate::domain::view::observation;
 use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -201,7 +201,7 @@ const SPACING_PX: f64 = 193.0;
 
 pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let p = ARRANGEMENT.get(Arrangement::default);
-    if observation::eye().is_none() {
+    if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
             ctx.invalidate();
         }

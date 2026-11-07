@@ -13,6 +13,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_engine::area;
 use pxl_engine::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use pxl_engine::LEAF_CELL;
+use pxl_render::frame::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
@@ -28,9 +29,9 @@ use xpute_core::global::Global;
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
+use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::mem::section;
@@ -124,9 +125,16 @@ struct Coverage {
     vertices: (Vec<f32>, usize),
     /// Those laid this step, kept so their buffer is reused.
     next: (Vec<f32>, usize),
+    /// The lines it is drawn in.
+    lines: DebugLines,
 }
 
 static COVERAGE: Global<Coverage> = Global::new();
+
+/// Its lines into the frame's list.
+pub fn coverage_gizmo_draw(draw: &mut DrawList) {
+    COVERAGE.get(Coverage::default).lines.draw(draw);
+}
 
 /// Laid each step, and handed on only where its lines or where they are
 /// laid about moved: a brick landing moves its mark, and the ground under
@@ -134,12 +142,12 @@ static COVERAGE: Global<Coverage> = Global::new();
 /// and the origin they are drawn about are the same turn's.
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
-    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
+    let Some(draw) = section::map().map(|_| draw_list()) else {
         return;
     };
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::top()) else {
         if c.drawn.take().is_some() {
-            scene.coverage.set(draw, [0.0; 3], &[], 0);
+            c.lines.set(draw, [0.0; 3], &[], 0);
             request_world_tick();
         }
         return;
@@ -169,7 +177,7 @@ pub fn coverage_gizmo_step(show: bool) {
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
     if c.drawn != Some(about) || c.next != c.vertices {
-        scene.coverage.set(draw, about, &c.next.0, c.next.1);
+        c.lines.set(draw, about, &c.next.0, c.next.1);
         c.drawn = Some(about);
         core::mem::swap(&mut c.next, &mut c.vertices);
         request_world_tick();

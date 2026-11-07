@@ -1,7 +1,8 @@
 // pxl-kernel/domain/view/observation.rs
 
-//! The kernel's side of an observation: the eye, what it looks at, and what
-//! is known of what a box of the world holds.
+//! The kernel's side of an observation: what the eye looks at as the turn
+//! composed the view (domain/view/frame/pose.rs), and what is known of what
+//! a box of the world holds.
 
 use crate::sys::io::demand::Order;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
@@ -11,7 +12,6 @@ use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
@@ -22,15 +22,11 @@ use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
 use crate::domain::query::changes;
 use crate::domain::query::{ColumnWalk, World};
-use crate::domain::view::above_ground::eye_height;
-use crate::domain::view::frame::pose::view;
+use crate::domain::view::above_ground::height_at;
+use crate::domain::view::frame::pose::{eye, view};
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::Zoom;
-
-pub fn eye() -> Option<V3> {
-    Some(view().pose?.eye)
-}
 
 /// How far from the eye the layers are demanded and the clip levels hold: as
 /// far as the source's top is, past where it is drawn by the clip levels'
@@ -46,49 +42,44 @@ pub fn eye_draw_dist() -> Option<f64> {
     source::top().map(|top| draw_dist(GROUND, top))
 }
 
-/// The turn's observation, made by its first reader after the view is
-/// composed where it moved (`turn`, `forget`): the eye and its ground's
-/// floor asked once where they moved, however many read it.
+/// The observation as its last reader made it: the eye, its frustum and its
+/// reach as the view and the source stood, and the ground's floor under the
+/// eye, asked once however many read it.
 static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
-/// The turn's view moved: the next reader makes the observation again.
-pub fn forget() {
-    *OBSERVATION.get(|| None) = None;
-}
-
-/// A turn begins, the pose `moved` or not: the observation stands where it
-/// did not, the reach is what it was, and no change touched the ground under
-/// the eye, whose height over it it holds (`changes::within`, asked each
-/// frame turn, so each change is seen once); else it is made again.
-pub fn turn(moved: bool) {
-    let stands = !moved
-        && match *OBSERVATION.get(|| None) {
-            Some(Some(o)) => {
-                Some(o.demand_dist) == eye_demand_dist()
-                    && !changes::within([[o.eye[0], o.eye[1]]; 2], &[])
-            }
-            Some(None) => eye().is_none() || eye_demand_dist().is_none(),
-            None => false,
-        };
-    if !stands {
-        forget();
+/// A frame turn begins: the observation stands where no change touched the
+/// ground under the eye, whose height over it it holds (`changes::within`,
+/// asked each frame turn, so each change is seen once); else it is made
+/// again.
+pub fn turn() {
+    let made = OBSERVATION.get(|| None);
+    if made.is_some_and(|o| o.is_some_and(|o| changes::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
+        *made = None;
     }
 }
 
-/// Out to `eye_demand_dist`. None before the camera stands anywhere or the source
-/// declares its top.
+/// Out to `eye_demand_dist`, made again where the eye, its frustum or its
+/// reach is not what it was made of. None before the camera stands anywhere
+/// or the source declares its top.
 pub fn observation() -> Option<Observation> {
-    *OBSERVATION.get(|| None).get_or_insert_with(|| {
-        let eye = eye()?;
-        let demand_dist = eye_demand_dist()?;
-        let height = eye_height();
-        Some(Observation {
+    let (eye, frustum, demand_dist) = (eye(), view().frustum, eye_demand_dist());
+    let made = OBSERVATION.get(|| None);
+    let stands = match *made {
+        Some(Some(o)) => {
+            Some(o.eye) == eye && o.frustum == Some(frustum) && Some(o.demand_dist) == demand_dist
+        }
+        Some(None) => eye.is_none() || demand_dist.is_none(),
+        None => false,
+    };
+    if !stands {
+        *made = Some(eye.zip(demand_dist).map(|(eye, demand_dist)| Observation {
             eye,
-            frustum: Some(view().frustum),
+            frustum: Some(frustum),
             demand_dist,
-            ground: eye[2] - height,
-        })
-    })
+            ground: eye[2] - height_at(eye),
+        }));
+    }
+    made.flatten()
 }
 
 /// The eye's clip levels' bricks (pxl-engine clipmap.rs), the ground about

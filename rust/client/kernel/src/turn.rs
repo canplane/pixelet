@@ -14,8 +14,8 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_core::sched::edge::{notified, Notify};
 
-use crate::domain::control::camera::input::{camera_input_step, rehover_at};
 use crate::domain::control::cmd;
+use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
@@ -28,11 +28,11 @@ use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::input;
 use crate::domain::control::edit::write;
+use crate::domain::control::input;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
-use crate::domain::control::navigation::support;
+use crate::domain::control::support;
 use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::preview;
@@ -45,10 +45,10 @@ use crate::domain::scene::character::preview::preview_step;
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
+use crate::domain::scene::indicator::ghost::ghost_set;
 use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::scene;
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::visible_step;
 use crate::domain::view::demand;
@@ -59,7 +59,7 @@ use crate::domain::view::frame::resolution::Pace;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store;
 use crate::perf::record::perf_recording;
-use crate::perf::report::{perf_frame, FrameTurn};
+use crate::perf::report::{perf_frame, set_renderer_frame, FrameTurn};
 use crate::perf::window::perf_follow;
 use crate::pointer;
 use crate::sys::io::demand::Stream;
@@ -117,7 +117,7 @@ fn edit_tick(_: &mut TickContext) {
 /// The tool's ghost of that edit, drawn by the scene.
 fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::edit::ghost::ghost;
-    if section::map().is_some_and(|_| scene().ghost.set(draw_list(), &ghost())) {
+    if section::map().is_some_and(|_| ghost_set(draw_list(), &ghost())) {
         request_world_tick();
     }
 }
@@ -133,7 +133,7 @@ fn demand_tick(ctx: &mut TickContext) {
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = clipmap::step(
         [
-            observation::eye().map(|e| [e[0], e[1]]),
+            pose::eye().map(|e| [e[0], e[1]]),
             controller::pivot().map(at),
             destination::pending().map(at),
         ],
@@ -170,13 +170,15 @@ fn camera_input_tick(_: &mut TickContext) {
     camera_input_step();
 }
 
-/// The camera's last writer, then the view composed where it stands: after
-/// every writer of the pose (the door's events, the turn's effects, the
+/// The camera's last writer, then the view composed where it stands and the
+/// observation let go where the ground under the eye moved: after every
+/// writer of the pose (the door's events, the turn's effects, the
 /// controllers), before the phases that observe it. The pointer is picked
 /// again from there, so what it is over follows a view moved under it.
 fn camera_tick(ctx: &mut TickContext) {
     controller::camera_step(ctx);
     let moved = pose::view_compose(controller::pose());
+    observation::turn();
     if let Some([x, y]) = rehover_at(moved) {
         pointer::hover(x, y);
     }
@@ -388,13 +390,14 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     request::declare(Stream::asset, loader::load_wants());
     pump();
     stage::stage_write();
-    let interval_ms = stage::stage_render(Pace {
+    let drawn = stage::stage_render(Pace {
         refresh_ms,
         paced_ms,
         gap_ms: delta * 1000.0,
         moving: interactive,
     });
-    if let Some(interval_ms) = interval_ms {
+    set_renderer_frame(&drawn);
+    if let Some(interval_ms) = drawn.interval_ms {
         cmd::shell::turn_pace(&cmd::TurnPace { interval_ms });
     }
     let done = now();

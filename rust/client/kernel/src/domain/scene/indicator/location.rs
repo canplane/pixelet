@@ -17,13 +17,13 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::scene::animation;
+use crate::domain::scene::environment;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::param::{
     BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
     ZONE_FOOTPRINT_U,
 };
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::scene;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
@@ -33,6 +33,7 @@ use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
 use xpute_core::clock::now;
+use xpute_core::global::Global;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.
@@ -93,12 +94,27 @@ struct Key {
     pos: V3,
 }
 
+static LOCATION: Global<LocationIndicator> = Global::new();
+
+fn location() -> &'static mut LocationIndicator {
+    LOCATION.get(LocationIndicator::default)
+}
+
 pub fn location_step(device_coord: Option<Q3>) {
-    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
+    let Some(draw) = section::map().map(|_| draw_list()) else {
         return;
     };
-    let night = scene.environment.night();
-    scene.location.step(draw, device_coord, night);
+    location().step(draw, device_coord, environment::night());
+}
+
+/// The beacon advanced (`LocationIndicator::tick`); whether it wants frames.
+pub fn location_animate(frame: &Frame) -> bool {
+    location().tick(frame)
+}
+
+/// The zone and the beacon into the frame's list.
+pub fn location_draw(draw: &mut DrawList) {
+    location().draw(draw);
 }
 
 /// The zone's instances about `center_pos` into `instances`, ZONE_INSTANCE_FLOATS

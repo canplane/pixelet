@@ -10,12 +10,11 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::domain::control::camera::first_person;
-use crate::domain::control::camera::input;
 use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
-use crate::domain::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
+use crate::domain::control::support::{is_unknown, pan_to, unknown_z};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -276,10 +275,6 @@ pub fn come_in_to_default() {
     if camera_state().intent.dist > default {
         reset_dist();
     }
-}
-
-pub fn zooming() -> bool {
-    active() == Active::Orbit && (input::pinching() || orbit::zoom_settling())
 }
 
 /// `delta_y` in CSS pixels. First person has no zoom.

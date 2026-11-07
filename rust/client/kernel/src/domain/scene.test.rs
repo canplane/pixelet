@@ -1,11 +1,11 @@
 // pxl-kernel/domain/scene.test.rs
 
-use super::*;
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
-use crate::domain::scene::model::models;
+use crate::domain::scene::gizmo::debug_line::DebugLines;
+use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
 use crate::sys;
-use pxl_render::frame::draw::{lists_bytes, set_lists, DRAW_PIPELINES};
+use pxl_render::frame::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
 use pxl_spec::space::coord::mat4;
 use xpute_core::mem::heap::alloc;
 
@@ -22,8 +22,12 @@ fn an_eye_moved_changes_no_draw() {
     // SAFETY: a block of the heap's, the lists' alone for the test's run.
     unsafe { set_lists(at, LIVE) };
     let mut list = DrawList::default();
-    let mut s = Scene::default();
-    s.ghost.set(
+    let (mut ghost, mut debug, mut coverage) = (
+        GhostDraw::default(),
+        DebugLines::default(),
+        DebugLines::default(),
+    );
+    ghost.set(
         &mut list,
         &Ghost::Box(GhostBox {
             at: [8_388_607.5, -1234.25, 17.0],
@@ -33,14 +37,18 @@ fn an_eye_moved_changes_no_draw() {
         }),
     );
     let lines = [0.0f32; 14];
-    s.debug.set(
+    debug.set(
         &mut list,
         [-8_388_607.996, 4.0e6 + 1.0 / 3.0, -3.0],
         &lines,
         14,
     );
-    s.coverage.set(&mut list, [12.0, -7.0, 2.0], &lines, 14);
-    let models = models();
+    coverage.set(&mut list, [12.0, -7.0, 2.0], &lines, 14);
+    let draw = |list: &mut DrawList| {
+        ghost.draw(list);
+        debug.draw(list);
+        coverage.draw(list);
+    };
     let pose = |eye| {
         Some(ObserverPose {
             eye,
@@ -49,7 +57,7 @@ fn an_eye_moved_changes_no_draw() {
     };
     let held = view().pose;
     view_compose(pose([8_388_600.0, -1200.0, 40.0]));
-    s.draw(&mut list, models);
+    draw(&mut list);
     let was = list.take();
     assert_eq!(
         DRAW_PIPELINES
@@ -62,7 +70,7 @@ fn an_eye_moved_changes_no_draw() {
     let stands = was.stands.to_vec();
     assert_eq!(stands.len(), 1, "the box stands");
     view_compose(pose([-8_388_600.0 + 0.5, 3.9e6, -2000.25]));
-    s.draw(&mut list, models);
+    draw(&mut list);
     let now = list.take();
     view_compose(held);
     assert!(now.changes.is_empty() && !now.reordered, "no draw changed");

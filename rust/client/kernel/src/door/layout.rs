@@ -50,8 +50,9 @@ pub(crate) enum Fixed {
 /// None is let go.
 const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
 
-/// The ghost's, the location indicator's zone, the two debug line sets' (the gizmo's and the
-/// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
+/// The ghost's, the location indicator's zone, the two debug line sets' (the
+/// frame gizmo's and the coverage gizmo's, domain/scene/gizmo/) and the
+/// markers'.
 const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's

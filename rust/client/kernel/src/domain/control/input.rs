@@ -1,8 +1,10 @@
-// pxl-kernel/domain/control/camera/input.rs
+// pxl-kernel/domain/control/input.rs
 
-//! The pointer's gestures: pan, rotate, pinch/twist/tilt and wheel; what the
-//! pointer is over, its hover and its tap, is pxl-kernel pointer.rs's. Store
-//! writes are coalesced to once a frame (`camera_input_step`).
+//! The pointer's gestures and the movement keys: pan, rotate,
+//! pinch/twist/tilt and wheel, what each asks of the camera, and a pan's by
+//! hand, which ends a destination and the following; what the pointer is
+//! over, its hover and its tap, is pxl-kernel pointer.rs's. Store writes are
+//! coalesced to once a frame (`camera_input_step`).
 //! What the pointer holds comes with each event; when it changes under a
 //! still pointer, the shell resends the move to re-resolve hover.
 
@@ -16,9 +18,9 @@ use crate::domain::control::param::{
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
+use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::cmd::PointerType;
-use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::view::frame::screen::size;
@@ -237,7 +239,6 @@ fn begin_pinch(s: &mut Input) {
     s.pinch_twist = None;
     s.drag_mode = DragMode::Pinch;
     s.did_drag = true;
-    clear_hover_coord();
 }
 
 fn update_pinch(s: &mut Input) {
@@ -434,7 +435,6 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
 
 pub fn camera_pointer_out() {
     input().hovering = false;
-    clear_hover();
 }
 
 /// What the pointer holds changed: a hovering pointer picks again where it stands.
@@ -509,6 +509,11 @@ pub fn rehover_at(moved: bool) -> Option<[f64; 2]> {
 
 pub fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
+}
+
+/// The orbit's distance is moving: pinched, or settling after a wheel or a pinch.
+pub fn zooming() -> bool {
+    active() == Active::Orbit && (pinching() || orbit::zoom_settling())
 }
 
 /// A pointer holds the camera: a pan, a rotate or a pinch is under way.

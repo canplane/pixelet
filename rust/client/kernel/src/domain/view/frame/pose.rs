@@ -12,7 +12,6 @@ use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
-use crate::domain::view::observation;
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_spec::procedural::height_u_per_m;
@@ -86,6 +85,12 @@ pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
 
+/// Where the eye stands as the turn composed the view; none before the
+/// camera stands anywhere.
+pub fn eye() -> Option<V3> {
+    Some(view().pose?.eye)
+}
+
 /// The sea under the eye: what is drawn about it in f32 is held to a unit
 /// near the eye.
 pub fn sea_under_eye() -> V3 {
@@ -128,16 +133,11 @@ pub fn view_resize(width: f64, height: f64) {
         return;
     }
     (v.width, v.height) = (width, height);
-    observation::forget();
     compose();
 }
 
 /// Takes the pose the controllers hold and composes the matrices from it,
-/// where it moved. A turn's observation is the eye's as it stands where the
-/// turn composes the view, after the camera's last writer
-/// (`observation::observation`), which is what it was where neither the
-/// pose nor the ground under the eye moved (`observation::turn`), and is
-/// made again where either did.
+/// where it moved.
 ///
 /// The eye is held on the steps the cast's rays leave from (pxl-spec
 /// `world::origin`), so the world the rays draw and what is rasterized on
@@ -149,7 +149,6 @@ pub fn view_compose(pose: Option<ObserverPose>) -> bool {
         ..p
     });
     let moved = view().pose != pose;
-    observation::turn(moved);
     if moved {
         view().pose = pose;
         compose();

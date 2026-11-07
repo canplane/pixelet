@@ -11,12 +11,13 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;
+use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::scene;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
+use pxl_render::frame::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_core::global::Global;
@@ -102,14 +103,41 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     s.point(tip(up), linear_rgb(frame::up::rgb));
 }
 
-/// What is drawn, whether it is, and the next sketch, kept so a step allocates nothing.
-static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
+struct Gizmo {
+    /// What is drawn, and whether it is.
+    drawn: Sketch,
+    shown: bool,
+    /// The next sketch, kept so a step allocates nothing.
+    next: Sketch,
+    /// The lines it is drawn in.
+    lines: DebugLines,
+}
 
-fn set_lines(at: V3, lines: &[f32]) {
-    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
+static GIZMO: Global<Gizmo> = Global::new();
+
+fn gizmo() -> &'static mut Gizmo {
+    let empty = || Sketch {
+        about: [0.0; 3],
+        lines: Vec::new(),
+    };
+    GIZMO.get(|| Gizmo {
+        drawn: empty(),
+        shown: false,
+        next: empty(),
+        lines: DebugLines::default(),
+    })
+}
+
+fn set_lines(lines: &mut DebugLines, at: V3, vertices: &[f32]) {
+    let Some(draw) = section::map().map(|_| draw_list()) else {
         return;
     };
-    scene.debug.set(draw, at, lines, lines.len());
+    lines.set(draw, at, vertices, vertices.len());
+}
+
+/// Its lines into the frame's list.
+pub fn frame_gizmo_draw(draw: &mut DrawList) {
+    gizmo().lines.draw(draw);
 }
 
 /// `heading` is the camera's azimuth third person, none first person.
@@ -118,23 +146,19 @@ fn set_lines(at: V3, lines: &[f32]) {
 /// Before the frame's list begins (domain/scene/stage.rs), so its lines and the
 /// origin they are drawn about are the same turn's.
 pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
-    let empty = || Sketch {
-        about: [0.0; 3],
-        lines: Vec::new(),
-    };
-    let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
+    let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {
-        if core::mem::take(shown) {
-            set_lines([0.0; 3], &[]);
+        if core::mem::take(&mut g.shown) {
+            set_lines(&mut g.lines, [0.0; 3], &[]);
         }
         return;
     };
-    sketch(next, &at, heading);
-    if *shown && drawn == next {
+    sketch(&mut g.next, &at, heading);
+    if g.shown && g.drawn == g.next {
         return;
     }
-    set_lines(next.about, &next.lines);
-    core::mem::swap(drawn, next);
-    *shown = true;
+    set_lines(&mut g.lines, g.next.about, &g.next.lines);
+    core::mem::swap(&mut g.drawn, &mut g.next);
+    g.shown = true;
     request_world_tick();
 }
