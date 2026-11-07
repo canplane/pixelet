@@ -12,9 +12,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **Faster than the deployed build, on every axis**
   ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
-  Mac's gate passes, level on GPU time. The S23 at 550 MHz: GPU p50 3.6× the deployed build's,
-  p95 1.2×; the bar is 2×. The p95 is the light's. On the Mac's drive, 43% of the light's time is
-  the box's depth stepping as the eye moves along the light, which casts every tile read
+  Mac's gate passes, its tick p95 2.20 to 3.00 ms the one axis worse. The S23 at 719 MHz: GPU p50
+  6.1× the deployed build's, p95 5.7× on one pair, the deployed build's p95 reading 437–1282 ms
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
 
 ## P1
@@ -22,10 +21,9 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 - **The light by a list and the raster.** Each tile's voxels at its band listed through the
   query and drawn from the sun, in place of the light's rays and its holes' walk: 11-06's open
   question ([the frame is what it must draw](./minutes/20261106-the-frame-is-what-it-must-draw.md),
-  [cell raster](./minutes/20261106-cell-raster.md)). The user holds it until the rest of the
-  backlog is done, and it waits on the CPU fill's renderer work. The counts put a list near
-  100 k cells (the journal, 11-08). First `list::light` on the CPU, held to `cast::first`,
-  which measures the real list.
+  [cell raster](./minutes/20261106-cell-raster.md)). The counts put a list near 100 k cells (the
+  journal, 11-08). First `list::light` on the CPU, held to `cast::first`, which measures the
+  real list.
 - **A bright teal wedge beside the character at load.** At 38.1193, 128.4656, by its right arm,
   since it stands clear of the wall. Read as the location zone on the step's wall, unchecked.
 
@@ -36,8 +34,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   happened. In order: every domain noun listed with what it names (read-only, by
   area), a glossary decided with the user, conventional names first and cited, put
   in the naming skill; then the renames by area, one names commit each.
-- **Lighting run under decor.** A depth-only screen draw with a coverage bit would
-  skip it, but the stencil's 8 bits are the gate's.
 - **A login screen is to come.** Another kind of `Cover`, over `Starting` or
   `Loading`, so the world is made while it stands —
   [20261103-what-stands-over-the-app.md](./minutes/20261103-what-stands-over-the-app.md).
@@ -46,12 +42,12 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the
   view guesses a pixel's cause from its color in a screenshot. The profiler's
-  half is answered: the console's `pxl.profiler.report()` gives its window as
-  text (`ts/client/src/shell/debug/console.ts`). What a screen point draws is
+  half is answered: the console's `pxl.perf.report()` gives its window as
+  text (`ts/client/src/ui/debug/console.ts`). What a screen point draws is
   not: the block its ray met, with its face, zoom and distance, and where that
   block was read from, asked of the running page and answered as text. The
   answer is the GPU's, the ray's words read back (`pxl-engine ray.rs`), since
-  the CPU's `first_hit` (`pxl-kernel domain/query/ray.rs`) can disagree where
+  the CPU's `first_hit` (`pxl-core domain/query/ray.rs`) can disagree where
   the samples miss a thin face
   ([20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md)).
   Not urgent: no debugging under way needs it.
