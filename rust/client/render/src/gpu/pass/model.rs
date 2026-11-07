@@ -9,14 +9,14 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::frame::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::frame::shader::word::DRAW_FLOATS;
+use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
-    Entry, Gpu, Image, Layout, TrackedRenderPass,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, sampler_entry, view_entry,
+    word_bytes, Entry, Gpu, Image, Layout, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::put::{put_f32, put_u32};
+use crate::gpu::put::put_u32;
 
 fn frame_group(
     g: &Gpu,
@@ -222,24 +222,12 @@ impl DrawUniforms {
 /// writes and its shader reads (frame/shader/word.rs `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 
-/// A decor draw's uniform as instance.wgsl's `Draw` reads it, for the
-/// model tier and the impostors both: its position's Q3, first lane word,
-/// stride, opacity, `third`, index list's first word, its position's
-/// remainder, and whether it drifts with the wind (frame/draw.rs `drifts`).
-/// `third` is decor's padding or the impostor's atlas layer.
-pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
-    put_f32(buf, 0, u[0]);
-    put_f32(buf, 4, u[1]);
-    put_f32(buf, 8, u[2]);
-    put_u32(buf, 12, u[3] as u32);
-    put_u32(buf, 16, u[5] as u32);
-    put_f32(buf, 20, u[4]);
-    put_u32(buf, 24, third);
-    put_u32(buf, 28, u[6] as u32);
-    put_f32(buf, 32, u[8]);
-    put_f32(buf, 36, u[9]);
-    put_f32(buf, 40, u[10]);
-    put_f32(buf, 44, u[7]);
+/// A decor draw's uniform as instance.wgsl reads it, for the model tier and
+/// the impostors both: the list's words, `layer` its atlas layer, none for
+/// decor.
+pub fn put_instances(buf: &mut [u8], u: &[f32], layer: u32) {
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
+    put_u32(buf, 4 * instance::LAYER, layer);
 }
 
 pub struct ModelDraw {

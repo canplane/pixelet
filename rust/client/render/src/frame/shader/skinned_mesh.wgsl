@@ -26,7 +26,7 @@ fn vs(v: VertexIn) -> VertexOut {
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
   o.uv = v.uv;
-  o.normal = place_up(n, draw_rot());
+  o.normal = place_up(n, skinned_rot());
   o.world_pos = world;
   let seen = seen_from_eye(world);
   o.transmittance = seen.transmittance;
@@ -35,7 +35,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.sun = l.sun;
   o.other = l.other;
   o.fill = l.fill;
-  o.opacity = draw_opacity();
+  o.opacity = skinned_opacity();
   return o;
 }
 

@@ -8,7 +8,7 @@
 use core::cell::Cell;
 
 use crate::frame::shader::record::reads_shadow_map;
-use crate::frame::shader::word::DRAW_FLOATS;
+use crate::frame::shader::word::{draw, ghost_box, instance, location, skinned, DRAW_FLOATS};
 use crate::gpu::api::in_flight;
 use pxl_content::generation::{TALLEST, WIDEST};
 use pxl_engine::light;
@@ -33,7 +33,7 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
 /// Whether a draw's uniform says it drifts with the wind
 /// (`DrawList::draw_instances`).
 pub fn drifts(u: &[f32]) -> bool {
-    u[7] != 0.0
+    u[draw::DRIFTS] != 0.0
 }
 
 /// A draw's uniform `u` with the wind's drift `drift` taken into its position,
@@ -43,10 +43,11 @@ pub fn drifts(u: &[f32]) -> bool {
 pub fn drifted(u: &mut [f32], drift: Position) {
     if drifts(u) {
         for k in 0..2 {
-            u[k] = f32::from_bits((u[k].to_bits() as i32).wrapping_sub(drift.q[k]) as u32);
-            u[8 + k] -= drift.r[k];
+            let q = draw::Q + k;
+            u[q] = f32::from_bits((u[q].to_bits() as i32).wrapping_sub(drift.q[k]) as u32);
+            u[draw::R + k] -= drift.r[k];
         }
-        u[7] = 0.0;
+        u[draw::DRIFTS] = 0.0;
     }
 }
 
@@ -133,8 +134,8 @@ impl Position {
     /// A draw's, from its uniform (`uniform_of`).
     pub fn in_uniform(u: &[f32]) -> Position {
         Position {
-            q: [0, 1, 2].map(|k| u[k].to_bits() as i32),
-            r: [u[8], u[9], u[10]],
+            q: [0, 1, 2].map(|k| u[draw::Q + k].to_bits() as i32),
+            r: [0, 1, 2].map(|k| u[draw::R + k]),
         }
     }
 
@@ -154,11 +155,10 @@ pub const PIPELINE_GHOST_BOX: u32 = 1;
 pub const PIPELINE_GHOST_DECOR: u32 = 2;
 /// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex columns.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
-/// (model handle, joint palette handle, model id, uniform, pipeline); uniform
-/// float 4 is the turn about Z.
+/// (model handle, joint palette handle, model id, uniform, pipeline).
 pub const PIPELINE_SKINNED: u32 = 3;
 /// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
-/// (0, 0, 0, uniform, pipeline), its uniform as `DrawList::draw_beacon` lays it.
+/// (0, 0, 0, uniform, pipeline).
 pub const PIPELINE_LOCATION_ZONE: u32 = 4;
 pub const PIPELINE_LOCATION_BEACON: u32 = 5;
 /// (upload handle, count, 0, uniform, pipeline).
@@ -241,13 +241,16 @@ pub struct DrawId(Cell<Option<(u32, u32)>>);
 /// A draw as the list holds it: its record and its uniform.
 pub type Draw = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
 
-/// A draw's uniform: `at`'s Q3, the five words its pipeline reads past it,
-/// and `at`'s remainder (`Position`).
-fn uniform(at: Position, words: [f32; 5]) -> [f32; DRAW_FLOATS] {
-    let [q0, q1, q2] = at.q_words();
-    let [r0, r1, r2] = at.r;
-    let [w3, w4, w5, w6, w7] = words;
-    [q0, q1, q2, w3, w4, w5, w6, w7, r0, r1, r2, 0.0]
+/// A draw's uniform: `at`'s Q3 and remainder (`Position`), and each word its
+/// kind's table in word.rs names.
+fn uniform(at: Position, words: &[(usize, f32)]) -> [f32; DRAW_FLOATS] {
+    let mut u = [0.0; DRAW_FLOATS];
+    u[draw::Q..draw::Q + 3].copy_from_slice(&at.q_words());
+    u[draw::R..draw::R + 3].copy_from_slice(&at.r);
+    for &(k, v) in words {
+        u[k] = v;
+    }
+    u
 }
 
 /// The draw `DrawList::draw_scaled` lists, held by no list: its uniform at
@@ -262,12 +265,16 @@ pub fn scaled_draw(
     a: u32,
     b: u32,
     at: Position,
-    fourth: f32,
+    rot: f32,
     opacity: f32,
     scale: f32,
 ) -> Draw {
-    let words = [fourth, opacity, scale, 0.0, 0.0];
-    ([handle, a, b, 0, pipeline], uniform(at, words))
+    let words = [
+        (skinned::ROT, rot),
+        (skinned::OPACITY, opacity),
+        (skinned::SCALE, scale),
+    ];
+    ([handle, a, b, 0, pipeline], uniform(at, &words))
 }
 
 /// A draw the turn changed: its slot, and what it was as the turn before
@@ -706,22 +713,22 @@ impl DrawList {
         }
     }
 
-    /// A draw set: `at`'s Q3, the five words its pipeline reads past it, and
-    /// `at`'s remainder (`Position`) its uniform, and where it stands.
+    /// A draw set: its uniform at `at` with `words` (`uniform`), and where it
+    /// stands.
     fn put(
         &mut self,
         id: &DrawId,
         pipeline: u32,
         record: [u32; 3],
         at: Position,
-        words: [f32; 5],
+        words: &[(usize, f32)],
         stand: Option<Stand>,
     ) {
         self.stand(pipeline, stand);
         self.set(id, pipeline, record, uniform(at, words));
     }
 
-    /// A character's draw: a draw_as whose sixth uniform float is the model's scale.
+    /// A character's draw (`scaled_draw`).
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -734,16 +741,17 @@ impl DrawList {
         a: u32,
         b: u32,
         at: Position,
-        fourth: f32,
+        rot: f32,
         opacity: f32,
         scale: f32,
         stand: Option<Stand>,
     ) {
-        let (d, u) = scaled_draw(pipeline, handle, a, b, at, fourth, opacity, scale);
+        let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, opacity, scale);
         self.stand(pipeline, stand);
         self.set(id, pipeline, [d[0], d[1], d[2]], u);
     }
 
+    /// A draw whose shader reads no word of its uniform past its position.
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -756,27 +764,26 @@ impl DrawList {
         a: u32,
         b: u32,
         at: Position,
-        fourth: f32,
-        opacity: f32,
         stand: Option<Stand>,
     ) {
-        let words = [fourth, opacity, 0.0, 0.0, 0.0];
-        self.put(id, pipeline, [handle, a, b], at, words, stand);
+        self.put(id, pipeline, [handle, a, b], at, &[], stand);
     }
 
     /// The location indicator's beacon at `at`, spun `spin` about Z, its
-    /// look the night's where `night`: what its vertices read off its slot
-    /// (location.slot.wgsl), its position, its spin, its opacity and the
-    /// night in its uniform's first six words.
+    /// look the night's where `night` (location.slot.wgsl).
     pub fn draw_beacon(&mut self, id: &DrawId, at: Position, spin: f32, night: bool, stand: Stand) {
         let night = if night { 1.0 } else { 0.0 };
-        let words = [spin, 1.0, night, 0.0, 0.0];
-        self.put(id, PIPELINE_LOCATION_BEACON, [0; 3], at, words, Some(stand));
+        let words = [(location::SPIN, spin), (location::NIGHT, night)];
+        self.put(
+            id,
+            PIPELINE_LOCATION_BEACON,
+            [0; 3],
+            at,
+            &words,
+            Some(stand),
+        );
     }
 
-    /// The eighth float pads the record's first two vec4s, and the twelfth
-    /// its remainder's: whole vec4s are the one layout a storage array
-    /// cannot read two ways.
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -794,19 +801,16 @@ impl DrawList {
         z_step: f32,
         stand: Option<Stand>,
     ) {
-        let words = [0.0, opacity, unit, z_step, 0.0];
-        self.put(
-            id,
-            pipeline,
-            [handle, vertex_cnt, idx_cnt],
-            at,
-            words,
-            stand,
-        );
+        let words = [
+            (ghost_box::OPACITY, opacity),
+            (ghost_box::UNIT, unit),
+            (ghost_box::Z_STEP, z_step),
+        ];
+        let record = [handle, vertex_cnt, idx_cnt];
+        self.put(id, pipeline, record, at, &words, stand);
     }
 
-    /// Words are exact in an f32 up to 2^24. One that `drifts` is a cloud's:
-    /// `at` its place on the cloud field's map, which the wind carries, and
+    /// One that `drifts` is a cloud's: `at` its place on the cloud field's map, which the wind carries, and
     /// it is drawn moved back by how far the wind has carried the field
     /// (word.rs `frame::DRIFT_Q`, instance.wgsl `draw_translation`), so it
     /// stands still in the list while the wind blows.
@@ -828,9 +832,14 @@ impl DrawList {
         stand: Option<Stand>,
     ) {
         let [off, stride, idx] = columns;
-        let drift = if drifts { 1.0 } else { 0.0 };
-        let words = [off as f32, opacity, stride as f32, idx as f32, drift];
-        self.put(id, pipeline, [handle, group, cnt], at, words, stand);
+        let words = [
+            (instance::OFF, f32::from_bits(off)),
+            (instance::STRIDE, f32::from_bits(stride)),
+            (instance::OPACITY, opacity),
+            (instance::IDX, f32::from_bits(idx)),
+            (instance::DRIFTS, if drifts { 1.0 } else { 0.0 }),
+        ];
+        self.put(id, pipeline, [handle, group, cnt], at, &words, stand);
     }
 
     /// Uploads, rewrites and frees start fresh, on the lists' other side; the

@@ -817,7 +817,7 @@ fn decor_word() -> String {
         ("ARGS_WORDS", drawn::ARGS_WORDS),
         ("IMPOSTOR_CORNERS", drawn::IMPOSTOR_CORNERS),
         ("UNIFORM_WORDS", drawn::UNIFORM_WORDS),
-        ("UNIFORM_IDX", drawn::UNIFORM_IDX),
+        ("UNIFORM_IDX", word::instance::IDX as u32),
         ("TALLEST", g::TALLEST as u32),
         ("WIDEST", g::WIDEST as u32),
     ];
@@ -1036,9 +1036,16 @@ fn accessors(text: &str) -> String {
     let mut out = String::new();
     for (uniform, fields) in UNIFORMS {
         let words = format!("{uniform}_words");
-        if !text.contains(&format!("var<uniform> {words}:")) {
-            continue;
-        }
+        // A uniform's own words, or, where it is read off a list, its `_word`.
+        let row_of: fn(&str, &str, usize) -> String =
+            if text.contains(&format!("var<uniform> {words}:")) {
+                |words, _, row| format!("{words}[{row}]")
+            } else if text.contains(&format!("fn {uniform}_word(")) {
+                |_, uniform, row| format!("{uniform}_word({row}u)")
+            } else {
+                continue;
+            };
+        let at = |row: usize| row_of(&words, uniform, row);
         let mut taken = vec![false; floats(fields)];
         for f in fields {
             let (row, col, n) = (f.at / 4, f.at % 4, f.kind.floats());
@@ -1047,15 +1054,16 @@ fn accessors(text: &str) -> String {
                 *t = true;
             }
             let lanes = &"xyzw"[col..(col + n).min(4)];
-            let column = |k: usize| format!("{words}[{}].xyz", row + k);
-            let vec4 = |k: usize| format!("{words}[{}]", row + k);
+            let column = |k: usize| format!("{}.xyz", at(row + k));
+            let vec4 = |k: usize| at(row + k);
+            let lanes = format!("{}.{lanes}", at(row));
             let (ty, read) = match f.kind {
-                Kind::F32 => ("f32", format!("{words}[{row}].{lanes}")),
-                Kind::U32 => ("u32", format!("bitcast<u32>({words}[{row}].{lanes})")),
-                Kind::Vec2 => ("vec2f", format!("{words}[{row}].{lanes}")),
-                Kind::Vec2u => ("vec2u", format!("bitcast<vec2u>({words}[{row}].{lanes})")),
-                Kind::Vec3 => ("vec3f", format!("{words}[{row}].{lanes}")),
-                Kind::Vec3i => ("vec3i", format!("bitcast<vec3i>({words}[{row}].{lanes})")),
+                Kind::F32 => ("f32", lanes),
+                Kind::U32 => ("u32", format!("bitcast<u32>({lanes})")),
+                Kind::Vec2 => ("vec2f", lanes),
+                Kind::Vec2u => ("vec2u", format!("bitcast<vec2u>({lanes})")),
+                Kind::Vec3 => ("vec3f", lanes),
+                Kind::Vec3i => ("vec3i", format!("bitcast<vec3i>({lanes})")),
                 Kind::Vec4i => ("vec4i", format!("bitcast<vec4i>({})", vec4(0))),
                 Kind::Vec4u => ("vec4u", format!("bitcast<vec4u>({})", vec4(0))),
                 Kind::Mat3 => (

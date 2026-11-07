@@ -4,25 +4,10 @@
 // Y-up to Z-up, the heading, and placement; what the lit pass (skinned_mesh.wgsl),
 // the depth from the light and the mark (tile_mark.wgsl) all lay alike.
 
-struct Draw {
-  // The position's Q3 and its remainder (frame/draw.rs `Position`).
-  q: vec3i,
-  rot: f32,
-  opacity: f32,
-  scale: f32,
-  _p0: f32,
-  _p1: f32,
-  r: vec3f,
-  _p2: f32,
-};
-
-// Read field by field from vec4 words (`draw_word`, skinned_slot.wgsl or
-// skinned_mark_draw.wgsl), never as a struct: a struct here lost Safari's
-// WebGPU its GPU process.
-fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_word(0u).xyz), draw_word(2u).xyz); }
-fn draw_rot() -> f32 { return draw_word(0u).w; }
-fn draw_opacity() -> f32 { return draw_word(1u).x; }
-fn draw_scale() -> f32 { return draw_word(1u).y; }
+// Read field by field from vec4 words (word.rs `skinned`, skinned_draw.slot.wgsl or
+// skinned_draw.mark.wgsl), never as a struct: a struct here lost Safari's WebGPU
+// its GPU process.
+fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 
 // The palette is read as vec4 columns: a Galaxy S23's Vulkan misread
 // `array<mat4x4f>` in storage.
@@ -48,8 +33,8 @@ fn skin_of(v: VertexIn) -> mat4x4f {
 
 // One function, so the depth pass places a vertex where the lit pass does.
 fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
-  let p = (m * vec4f(v.pos, 1.0)).xyz * draw_scale();
-  return place_up(p, draw_rot()) + draw_translation();
+  let p = (m * vec4f(v.pos, 1.0)).xyz * skinned_scale();
+  return place_up(p, skinned_rot()) + draw_translation();
 }
 
 @vertex

@@ -13,8 +13,6 @@ var<private> draw_slot: u32;
 // The draw a vertex is of: the one its instance names.
 fn draw_at(instance: u32) { draw_slot = instance; }
 
-fn draw_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
+fn location_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
 
-fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_word(0u).xyz), draw_word(2u).xyz); }
-fn draw_fourth() -> f32 { return draw_word(0u).w; }
-fn draw_night() -> f32 { return draw_word(1u).y; }
+fn draw_translation() -> vec3f { return from_eye(location_q(), location_r()); }

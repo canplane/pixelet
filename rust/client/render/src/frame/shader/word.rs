@@ -5,11 +5,6 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
-/// A draw's uniform (frame/draw.rs `Position`): its position's Q3 in its
-/// first three words, what its pipeline reads past them in the next five,
-/// and its position's remainder in the third vec4.
-pub const DRAW_FLOATS: usize = 12;
-
 /// What a uniform's field is to the shader that reads it off the vec4s.
 #[derive(Clone, Copy)]
 pub enum Kind {
@@ -64,9 +59,10 @@ pub const fn floats(fields: &[Field]) -> usize {
 
 /// A uniform's fields, each a float offset the CPU writes at, and `FIELDS`,
 /// which build.rs writes each one's accessor from into the part that binds
-/// the uniform's words (`<uniform>_words`): the one statement of its layout.
+/// the uniform's words (`<uniform>_words`) or reads them off a list
+/// (`<uniform>_word`): the one statement of its layout.
 macro_rules! uniform {
-    ($(#[$doc:meta])* $uniform:ident { $($(#[$field_doc:meta])* $name:ident: $kind:ident = $at:literal,)* }) => {
+    ($(#[$doc:meta])* $uniform:ident { $($(#[$field_doc:meta])* $name:ident: $kind:ident = $at:expr,)* }) => {
         $(#[$doc])*
         pub mod $uniform {
             use super::{Field, Kind};
@@ -75,6 +71,72 @@ macro_rules! uniform {
             pub const FIELDS: &[Field] = &[$(Field { name: stringify!($name), at: $name, kind: Kind::$kind }),*];
         }
     };
+}
+
+uniform! {
+    /// What every draw's uniform holds whatever draws it (frame/draw.rs
+    /// `Position`, debug.wgsl), a table of its own for each kind that reads
+    /// more past it: its position's Q3 and remainder, and 1 where it drifts
+    /// with the wind, a cloud's, else 0 (`DrawList::draw_instances`).
+    draw {
+        Q: Vec3i = 0,
+        R: Vec3 = 8,
+        DRIFTS: F32 = 11,
+    }
+}
+pub const DRAW_FLOATS: usize = floats(draw::FIELDS);
+
+uniform! {
+    /// A decor draw's, the model tier's and the impostors' (instance.wgsl):
+    /// where its lanes lie, its opacity, the impostor's atlas layer and its
+    /// index list's first word.
+    instance {
+        Q: Vec3i = super::draw::Q,
+        OFF: U32 = 3,
+        STRIDE: U32 = 4,
+        OPACITY: F32 = 5,
+        LAYER: U32 = 6,
+        IDX: U32 = 7,
+        R: Vec3 = super::draw::R,
+        DRIFTS: F32 = super::draw::DRIFTS,
+    }
+}
+
+uniform! {
+    /// A character's (skinned_place.wgsl): its turn about Z, its opacity and
+    /// its scale.
+    skinned {
+        Q: Vec3i = super::draw::Q,
+        ROT: F32 = 3,
+        OPACITY: F32 = 4,
+        SCALE: F32 = 5,
+        R: Vec3 = super::draw::R,
+    }
+}
+
+uniform! {
+    /// The location indicator's (location.wgsl, location.slot.wgsl): the
+    /// beacon's spin about Z and whether it looks the night's, the zone's
+    /// color (gpu/pass/location.rs).
+    location {
+        Q: Vec3i = super::draw::Q,
+        SPIN: F32 = 3,
+        COLOR: Vec3 = 4,
+        NIGHT: F32 = 7,
+        R: Vec3 = super::draw::R,
+    }
+}
+
+uniform! {
+    /// The hover ghost's boxes' (box.wgsl): their opacity, a box's cell in
+    /// units and its height step.
+    ghost_box {
+        Q: Vec3i = super::draw::Q,
+        OPACITY: F32 = 4,
+        UNIT: F32 = 5,
+        Z_STEP: F32 = 6,
+        R: Vec3 = super::draw::R,
+    }
 }
 
 uniform! {
@@ -373,7 +435,12 @@ pub const BOX_XY_STEPS: u32 = 256;
 pub const BOX_VERTICES: u32 = 36;
 
 /// The uniforms whose fields are stated here.
-pub const UNIFORMS: [(&str, &[Field]); 7] = [
+pub const UNIFORMS: [(&str, &[Field]); 12] = [
+    (draw::NAME, draw::FIELDS),
+    (instance::NAME, instance::FIELDS),
+    (skinned::NAME, skinned::FIELDS),
+    (location::NAME, location::FIELDS),
+    (ghost_box::NAME, ghost_box::FIELDS),
     (frame::NAME, frame::FIELDS),
     (sky::NAME, sky::FIELDS),
     (atmos::NAME, atmos::FIELDS),

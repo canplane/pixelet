@@ -26,7 +26,7 @@ use crate::frame::shader::record::{
     COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT,
     COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN, STORAGE, STORAGE_RW, UNIFORM,
 };
-use crate::frame::shader::word::DRAW_FLOATS;
+use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu, Layout,
     RenderContext,
@@ -479,24 +479,13 @@ impl Generator {
         // pass adds its first slot: a model's group drawn about the anchor,
         // on Q3 and so with no remainder, an impostor's its group's layer too.
         let mut uniforms = [0u32; (drawn::UNIFORM_WORDS * drawn::REGIONS) as usize];
-        let [x, y, z] = f.anchor.map(|v| v as u32);
         for r in 0..drawn::REGIONS {
-            let u = (r * drawn::UNIFORM_WORDS) as usize;
-            let layer = if r % 2 == 1 { r / 2 } else { 0 };
-            uniforms[u..u + DRAW_FLOATS].copy_from_slice(&[
-                x,
-                y,
-                z,
-                0,
-                self.cap,
-                1.0f32.to_bits(),
-                layer,
-                drawn::COLUMNS * self.cap,
-                0,
-                0,
-                0,
-                0,
-            ]);
+            let u = &mut uniforms[(r * drawn::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
+            u[instance::Q..instance::Q + 3].copy_from_slice(&f.anchor.map(|v| v as u32));
+            u[instance::STRIDE] = self.cap;
+            u[instance::OPACITY] = 1.0f32.to_bits();
+            u[instance::LAYER] = if r % 2 == 1 { r / 2 } else { 0 };
+            u[instance::IDX] = drawn::COLUMNS * self.cap;
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }

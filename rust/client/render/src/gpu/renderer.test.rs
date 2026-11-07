@@ -6,6 +6,7 @@ use crate::frame::draw::{
     PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
 };
 use crate::frame::shader::record::{reads_shadow_map, SHADERS};
+use crate::frame::shader::word::{draw, ghost_box, instance};
 use crate::gpu::pass::mark::{marked, Shown, UploadOf};
 
 /// The only test here that installs the calls' state; the lists' tests read
@@ -104,9 +105,16 @@ fn rebuilt(t: &Turn) -> Rebuilt {
         let drifts = if s.cloud { 1.0 } else { 0.0 };
         r.records
             .push([w0, w1, w2, r.uniforms.len() as u32, s.pipeline]);
-        r.uniforms.push([
-            q[0], q[1], q[2], 0.0, s.opacity, 0.0, 0.0, drifts, p.r[0], p.r[1], p.r[2], 0.0,
-        ]);
+        let opacity = match s.pipeline {
+            PIPELINE_DECOR | PIPELINE_GHOST_DECOR | PIPELINE_IMPOSTOR => instance::OPACITY,
+            _ => ghost_box::OPACITY,
+        };
+        let mut u = [0.0; DRAW_FLOATS];
+        u[draw::Q..draw::Q + 3].copy_from_slice(&q);
+        u[draw::R..draw::R + 3].copy_from_slice(&p.r);
+        u[draw::DRIFTS] = drifts;
+        u[opacity] = s.opacity;
+        r.uniforms.push(u);
     }
     r
 }
@@ -275,8 +283,8 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR | PIPELINE_IMPOSTOR => list.draw_instances(
                     &ids[s.id], s.pipeline, w0, w1, w2, [0; 3], at, s.opacity, s.cloud, stand,
                 ),
-                _ => list.draw_as(
-                    &ids[s.id], s.pipeline, w0, w1, w2, at, 0.0, s.opacity, stand,
+                _ => list.draw_in(
+                    &ids[s.id], s.pipeline, w0, w1, w2, at, s.opacity, 0.0, 0.0, stand,
                 ),
             }
         }
@@ -336,9 +344,9 @@ fn a_cloud_draws_no_frame_whole() {
     let mut u = [0.0f32; DRAW_FLOATS];
     for p in BESIDE {
         let d = [1, 0, 1, 0, p];
-        u[7] = 1.0;
+        u[draw::DRIFTS] = 1.0;
         assert!(!beside(&d, &u), "{p}");
-        u[7] = 0.0;
+        u[draw::DRIFTS] = 0.0;
         assert!(beside(&d, &u), "{p}");
     }
     assert!(!beside(&[1, 0, 1, 0, PIPELINE_SKINNED], &u));

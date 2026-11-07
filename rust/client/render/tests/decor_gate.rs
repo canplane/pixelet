@@ -17,8 +17,8 @@ use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS,
 };
 use pxl_render::frame::shader::word::frame::EYE;
-use pxl_render::frame::shader::word::screen;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
+use pxl_render::frame::shader::word::{instance, screen};
 use pxl_render::gpu::shadow;
 
 const CAP: u32 = 4096;
@@ -215,7 +215,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         let u = r * drawn::UNIFORM_WORDS as usize;
         uniforms[u..u + 3].copy_from_slice(&anchor_q.map(|v| v as u32));
         uniforms[u + 4] = CAP;
-        uniforms[u + drawn::UNIFORM_IDX as usize] = columns * CAP + first;
+        uniforms[u + instance::IDX] = columns * CAP + first;
         let a = r * drawn::ARGS_WORDS as usize;
         args[a..a + 5].copy_from_slice(&[36, n, 7, 3, 0]);
         first += n;

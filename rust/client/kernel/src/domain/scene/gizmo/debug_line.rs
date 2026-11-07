@@ -53,8 +53,6 @@ impl DebugLines {
             self.line_cnt,
             self.face_cnt,
             t,
-            0.0,
-            1.0,
             None,
         );
     }

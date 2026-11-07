@@ -6,18 +6,11 @@
 
 const WIDTH_PX: f32 = 3.0;
 
-struct Draw {
-  // The set's position's Q3 and its remainder (frame/draw.rs `Position`).
-  q: vec3i,
-  _p0: f32,
-  r: vec3f,
-  _p1: f32,
-};
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
+@group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
-fn draw_translation() -> vec3f { return from_eye(bitcast<vec3i>(draw_words[0].xyz), draw_words[1].xyz); }
+fn draw_translation() -> vec3f { return from_eye(draw_q(), draw_r()); }
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

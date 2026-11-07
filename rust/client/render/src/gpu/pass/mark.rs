@@ -16,7 +16,7 @@
 use crate::frame::draw::{drifted, drifts, Change, Draw, Draws, Position, DRAW_WORDS};
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
+    buf_entry, buffer_usage, bytes, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
 };
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -40,6 +40,11 @@ pub struct MarkInput<'a> {
     pub changes: &'a [Change],
     pub touched: &'a [u32],
     pub drift: [Position; 2],
+}
+
+/// A mark's uniform: the draw's, as its lit pass reads it.
+pub(crate) fn put_whole(buf: &mut [u8], (_, u): &Draw) {
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
 }
 
 /// A draw as a frame draws it, at the wind's drift `drift` (frame/draw.rs

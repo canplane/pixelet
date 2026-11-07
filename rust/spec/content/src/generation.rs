@@ -327,14 +327,14 @@ pub mod drawn {
     /// The strip an impostor's instance is drawn by, its corners.
     pub const IMPOSTOR_CORNERS: u32 = 4;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, every
-    /// device's dynamic offset alignment), its index list's first slot at
-    /// `UNIFORM_IDX` within it: the columns' base, to which the args pass adds
-    /// the region's first slot once the regions are laid out.
+    /// device's dynamic offset alignment), its index list's first slot within
+    /// it (pxl-render word.rs `instance::IDX`): the columns' base, to which
+    /// the args pass adds the region's first slot once the regions are laid
+    /// out.
     pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
     const OFF_BYTES: u32 = 256;
-    pub const UNIFORM_IDX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
     /// the impostor's floors, each an angle about the eye in radians, the
     /// anchor the columns' positions are about (unit cells, X wrapping), the

@@ -37,11 +37,11 @@ fn vs(v: VertexIn) -> VertexOut {
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  let texel = textureSample(impostors, impostor_sampler, i.uv, draw_layer());
+  let texel = textureSample(impostors, impostor_sampler, i.uv, instance_layer());
   if (texel.a < 0.5) {
     discard;
   }
   let n = normalize(i.normal);
   let color = shade(texel.rgb, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Air(i.transmittance, i.scattered), Light(i.sun, i.other, i.fill));
-  return vec4f(tone(color), draw_opacity());
+  return vec4f(tone(color), instance_opacity());
 }

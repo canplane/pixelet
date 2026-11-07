@@ -18,10 +18,10 @@ struct VertexOut {
 fn vs(@location(0) pos: vec3f, @location(1) normal: vec3f, @builtin(instance_index) instance: u32) -> VertexOut {
   draw_at(instance);
   var o: VertexOut;
-  o.night = draw_night();
+  o.night = location_night();
   let world = beacon_world(pos);
   o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
-  o.normal = spin_z(normal, draw_fourth());
+  o.normal = spin_z(normal, location_spin());
   o.world_pos = world;
   let seen = seen_from_eye(world);
   o.transmittance = seen.transmittance;

@@ -7,13 +7,14 @@
 use crate::frame::draw::{
     uniform_of, DRAW_WORDS, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
 };
-use crate::frame::draw::{Draw, DrawStats, Draws};
+use crate::frame::draw::{DrawStats, Draws};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
-use crate::frame::shader::word::BOX_VERTICES;
+use crate::frame::shader::word::{location, BOX_VERTICES};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
-use crate::gpu::pass::mark::Marks;
+use crate::gpu::pass::mark::{put_whole, Marks};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::put::put_f32;
 use crate::gpu::upload::{buf_size, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
@@ -99,14 +100,6 @@ pub struct LocationPass {
     pub beacon_marks: Marks,
 }
 
-/// A mark's uniform: the draw's position and turn, where the lit pass reads
-/// them (location.wgsl `Draw`).
-fn put_mark(buf: &mut [u8], (_, u): &Draw) {
-    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
-        u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0, u[8], u[9], u[10], 0.0,
-    ]));
-}
-
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
     let id = g.buf(buf_size(data.len() as u32), usage | buffer_usage::COPY_DST);
     g.write_buf(id, 0, data);
@@ -143,14 +136,14 @@ impl LocationPass {
                 pipelines,
                 (PIPELINE_LOCATION_ZONE_MARK, PIPELINE_LOCATION_ZONE),
                 align,
-                (|d| d[0], put_mark, |d| d[1] > 0),
+                (|d| d[0], put_whole, |d| d[1] > 0),
             ),
             beacon_marks: Marks::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_BEACON),
                 align,
-                (|_| 0, put_mark, |_| true),
+                (|_| 0, put_whole, |_| true),
             ),
         }
     }
@@ -200,10 +193,10 @@ impl LocationPass {
     ) {
         let c = self.color;
         let put = |buf: &mut [u8], d: &[u32; DRAW_WORDS]| {
-            let u = uniform_of(uniforms, d);
-            buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[
-                u[0], u[1], u[2], u[3], c[0], c[1], c[2], 0.0, u[8], u[9], u[10], 0.0,
-            ]));
+            buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
+            for (k, v) in c.into_iter().enumerate() {
+                put_f32(buf, 4 * (location::COLOR + k), v);
+            }
         };
         let zones = zones(draws);
         self.zone_uniforms.write(

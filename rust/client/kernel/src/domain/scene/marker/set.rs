@@ -85,8 +85,6 @@ impl Set {
                 self.cnt,
                 0,
                 Position::NONE,
-                0.0,
-                1.0,
                 None,
             );
         }

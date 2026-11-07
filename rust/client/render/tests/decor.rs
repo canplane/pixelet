@@ -27,7 +27,7 @@ use pxl_render::frame::shader::record::{
     SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
     SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN,
 };
-use pxl_render::frame::shader::word::ROW_LANES;
+use pxl_render::frame::shader::word::{instance, ROW_LANES};
 use wgpu::util::DeviceExt;
 
 use real_world::{mix, Built, World};
@@ -2251,7 +2251,7 @@ fn draws_differ(
         if regions[r] != counts[r] {
             out.push(format!("region {r}'s count {}", regions[r]));
         }
-        let idx = r * u + drawn::UNIFORM_IDX as usize;
+        let idx = r * u + instance::IDX;
         if uniforms[idx] != fresh[idx] + firsts[r] {
             out.push(format!(
                 "region {r}'s uniform's columns at {}",
@@ -2260,7 +2260,7 @@ fn draws_differ(
         }
         let rest = |w: &[u32]| {
             let mut w = w[r * u..(r + 1) * u].to_vec();
-            w[drawn::UNIFORM_IDX as usize] = 0;
+            w[instance::IDX] = 0;
             w
         };
         if rest(uniforms) != rest(fresh) {
@@ -2317,7 +2317,7 @@ fn hand_args_draws_its_regions() {
         let base = drawn::COLUMNS * 2048;
         for r in 0..regions_n {
             uniforms[r * u] = 1.5f32.to_bits();
-            uniforms[r * u + drawn::UNIFORM_IDX as usize] = base;
+            uniforms[r * u + instance::IDX] = base;
         }
         let args0 = vec![0xdead_beefu32; drawn::ARGS_WORDS as usize * regions_n];
         let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));

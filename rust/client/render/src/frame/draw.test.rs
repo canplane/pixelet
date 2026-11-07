@@ -163,7 +163,7 @@ fn a_draw_set_as_it_was_is_no_change() {
     let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
     let box_at = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
     let turn = |d: &mut DrawList, stand: Stand, debug_at: Option<f64>| {
-        d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, 0.0, 1.0, None);
+        d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, None);
         d.draw_in(
             &ghost,
             PIPELINE_GHOST_BOX,
@@ -177,17 +177,7 @@ fn a_draw_set_as_it_was_is_no_change() {
             Some(stand),
         );
         if let Some(x) = debug_at {
-            d.draw_as(
-                &debug,
-                PIPELINE_DEBUG,
-                5,
-                1,
-                0,
-                Position::of([x; 3]),
-                0.0,
-                1.0,
-                None,
-            );
+            d.draw_as(&debug, PIPELINE_DEBUG, 5, 1, 0, Position::of([x; 3]), None);
         }
     };
     turn(&mut d, box_at, None);
@@ -247,8 +237,6 @@ fn draws_keep_the_order_they_are_set_in() {
                 0,
                 0,
                 Position::NONE,
-                0.0,
-                1.0,
                 None,
             );
         }
@@ -279,17 +267,7 @@ fn a_draw_set_twice_is_refused() {
     let mut d = DrawList::default();
     let id = DrawId::default();
     for _ in 0..2 {
-        d.draw_as(
-            &id,
-            PIPELINE_MARKER,
-            1,
-            0,
-            0,
-            Position::NONE,
-            0.0,
-            1.0,
-            None,
-        );
+        d.draw_as(&id, PIPELINE_MARKER, 1, 0, 0, Position::NONE, None);
     }
 }
 
@@ -330,22 +308,10 @@ fn every_lit_draw_stands_its_box() {
             0,
             0,
             Position::of([v; 3]),
-            0.0,
-            1.0,
             Some(Stand::of([v; 3], [v + 1.0; 3])),
         );
     }
-    d.draw_as(
-        &ids[n],
-        PIPELINE_MARKER,
-        0,
-        0,
-        0,
-        Position::NONE,
-        0.0,
-        1.0,
-        None,
-    );
+    d.draw_as(&ids[n], PIPELINE_MARKER, 0, 0, 0, Position::NONE, None);
     assert_eq!(d.stands.len(), light::STANDS);
     let last = d.stands[light::STANDS - 1];
     assert_eq!(last, Stand([[unit(light::STANDS - 1); 3], [unit(n); 3]]));
@@ -383,11 +349,11 @@ fn a_drifted_cloud_stands_where_the_drift_leaves_it() {
         ];
         let p = Position::of(at);
         let mut u = [0.0f32; DRAW_FLOATS];
-        u[..3].copy_from_slice(&p.q_words());
-        u[8..11].copy_from_slice(&p.r);
-        u[7] = 1.0;
+        u[draw::Q..draw::Q + 3].copy_from_slice(&p.q_words());
+        u[draw::R..draw::R + 3].copy_from_slice(&p.r);
+        u[draw::DRIFTS] = 1.0;
         drifted(&mut u, Position::of(off));
-        assert_eq!(u[7], 0.0);
+        assert_eq!(u[draw::DRIFTS], 0.0);
         let got = Position::in_uniform(&u).from_eye(q3_of(eye));
         let want = Position::of([at[0] - off[0], at[1] - off[1], 0.0]).from_eye(q3_of(eye));
         for k in 0..2 {
@@ -399,11 +365,11 @@ fn a_drifted_cloud_stands_where_the_drift_leaves_it() {
         }
     }
     let mut u = [1.0f32; DRAW_FLOATS];
-    u[7] = 0.0;
+    u[draw::DRIFTS] = 0.0;
     drifted(&mut u, Position::of([3.0, 4.0, 0.0]));
     assert_eq!(u, {
         let mut w = [1.0f32; DRAW_FLOATS];
-        w[7] = 0.0;
+        w[draw::DRIFTS] = 0.0;
         w
     });
 }
@@ -461,8 +427,6 @@ fn a_lit_draw_without_its_box_is_refused() {
         0,
         0,
         Position::NONE,
-        0.0,
-        1.0,
         None,
     );
 }

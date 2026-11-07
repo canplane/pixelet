@@ -397,8 +397,6 @@ impl LocationIndicator {
                 cnt,
                 0,
                 Position::of(p.center),
-                0.0,
-                1.0,
                 None,
             );
         }

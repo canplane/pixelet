@@ -8,7 +8,7 @@ use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
-use crate::gpu::pass::model::DrawUniforms;
+use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::Uploads;
@@ -33,7 +33,7 @@ impl DebugPass {
             pipeline,
             faces,
             frame_group,
-            uniforms: DrawUniforms::new(32, align),
+            uniforms: DrawUniforms::new(DRAW_BYTES, align),
         }
     }
 
@@ -46,9 +46,7 @@ impl DebugPass {
             sets,
             moved,
             |buf, d| {
-                let u = uniform_of(uniforms, d);
-                // Its position's Q3 and its remainder (debug.wgsl `Draw`).
-                buf[..32].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0, u[8], u[9], u[10], 0.0]));
+                buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
             },
         );
     }

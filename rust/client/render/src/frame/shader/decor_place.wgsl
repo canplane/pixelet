@@ -18,7 +18,7 @@ struct Placement {
 };
 
 fn placed(v: VertexIn) -> Placement {
-  let i = order[draw_idx() + v.i];
+  let i = order[instance_idx() + v.i];
   let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
   let spin = lane(3u, i);
   let scale = lane(4u, i);
