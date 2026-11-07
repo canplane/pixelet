@@ -53,7 +53,7 @@ const KEYS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** Whether `key` holds a storage file or one set aside: what a page hands its
- * kernel's worker of its storage (service/runtime.ts). */
+ * kernel's worker of its storage (runtime/open.ts). */
 export function is_kept(key: string): boolean {
   for (const k of KEYS.values()) {
     if (key === k || key.startsWith(`${k}:aside:`)) return true;

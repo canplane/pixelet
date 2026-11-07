@@ -2,7 +2,7 @@
 
 /**
  * A page's kernel and runtime, in a worker of their own so a turn holds none
- * of the shell's events (service/runtime.ts starts it). The kernel is served
+ * of the shell's events (open.ts starts it). The kernel is served
  * on xpute's port once the page has told what a worker cannot read; the source
  * is declared here and mirrored to the shell; the refused files are followed
  * here, where the files are; the profiler is read here.

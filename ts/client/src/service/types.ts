@@ -58,16 +58,6 @@ export interface SensorListener {
 }
 
 /** A surface the core draws into, by the handle it gave; 0 is none. */
-/** What the client's boot hears as the runtime opens (abi/boot.ts). */
-export interface OnOpen {
-  /** The runtime started, and the kernel's commands reach it. */
-  started(): void;
-  /** A snapshot came. */
-  snapshot(): void;
-  /** The kernel stopped. */
-  terminated(): void;
-}
-
 export interface SurfaceDriver {
   /** The kernel's handle for a new surface, 0 where it has none left. */
   open(): Promise<u32>;

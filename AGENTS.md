@@ -16,8 +16,9 @@
 - The app is one Expo app, `ts/client` (`@pxl/client`), for iOS, Android and the
   page; the page is bundled by Metro. What differs by platform is a file pair
   in `ts/client/src/service/`: `<x>.ts` the page's, `<x>.native.ts` the
-  device's, the shapes both share in `service/types.ts`. A piece of the shell
-  the platforms draw differently is a file and its override beside it
+  device's, the shapes both share in `service/types.ts`; the pair that opens
+  the runtime is in `runtime/`. A piece of the shell the platforms draw
+  differently is a file and its override beside it
   (`ts/client/src/shell/ui/README.md`).
 - The runtime gives no app number a meaning. What answers the kernel's files goes
   in `ts/client/src/sys/`: their names, versions, kept keys and refusals in

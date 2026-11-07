@@ -1,8 +1,8 @@
-// @pxl/client/service/runtime.native.ts
+// @pxl/client/runtime/open.native.ts
 
 /**
  * A device's kernel, beside the shell: the runtime on the shell's thread is
- * the shell's link (service/runtime.ts is a page's).
+ * the shell's link (open.ts is a page's).
  */
 
 import { start } from "@xpute/runtime";
@@ -11,11 +11,10 @@ import { declare_source, settled } from "@/sys/fs/source.ts";
 import { set_online } from "@/origin/online.ts";
 import { manifest, perf_here } from "@/runtime/start.ts";
 import { set_kernel } from "@/port/kernel.ts";
-import { started, ui } from "@/runtime/open.ts";
+import { type OnOpen, started, ui } from "@/runtime/ui.ts";
 import { gpu_present } from "@/port/gpu.ts";
 import * as device from "@/service/device.ts";
 import * as online from "@/service/online.ts";
-import type { OnOpen } from "@/service/types.ts";
 
 /** Settled once a GPU has answered and the source is declared, true where
  * it was. */

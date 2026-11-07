@@ -2,8 +2,8 @@
 
 /**
  * Boots the client, bottom up, on its platform's services (service/): the
- * runtime opened where its platform places it (service/runtime.ts, a page's
- * in the kernel's worker; service/runtime.native.ts, a device's beside the
+ * runtime opened where its platform places it (runtime/open.ts, a page's
+ * in the kernel's worker; runtime/open.native.ts, a device's beside the
  * shell), the kernel's commands bound to it, then where the boot stands as the
  * runtime starts, the GPU answers, the world's source is declared and the
  * kernel's snapshots come. The shell is no part of it: it reads where the
@@ -25,7 +25,7 @@ import {
   type Boot,
 } from "@/abi/state.ts";
 import * as snapshot from "@/port/snapshot.ts";
-import { open } from "@/service/runtime.ts";
+import { open } from "@/runtime/open.ts";
 
 let called = false;
 let state: Boot = BOOT_OPENING;
