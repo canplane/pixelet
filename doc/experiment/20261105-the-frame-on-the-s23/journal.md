@@ -569,3 +569,18 @@ against the same at `fixed`:
 frames can hold and a lower floor would slow the median for nothing. Half the pixels each way
 buy 12% of the GPU's p50 and 5% of its p95: the frame is the light's and the cells', which the
 scale does not reach.
+
+**The light's box room, tried and dropped.** `record::LIGHT_CELLS_MOST`, 4096, is the claim
+budget's size, gone on 11-07; `LIGHT_DRAWS` is 65,536 boxes off it, and past them a slot walks.
+On the Mac's drive 11 of 71 casts over ground reached it, and those walked 220–290 k slots
+against the usual 170 k. Room for every tile, one S23 drive at 719 MHz: GPU p95 205.6 to 220.7,
+`light_hit` 79.8 to 82.6. No gain; not kept. The stale number stands, with the node cache's
+sizing that reads it.
+
+**What the light's list would hold, from the counts of those casts.** The 71 casts over ground
+drew 30–38 k boxes at the median, 65,536 at the room. They asked the world 110–290 k nodes in
+the beam, 80 k in the samples and 50–80 k in the holes, up to 2 M, and of 1.9 M slots took 790–
+840 k off the raster, walked 146 k and left 890 k as sky. The boxes are what the sun sees, so a
+list holds at least that many; the cells it hides are not counted. At the reach of 96 units and
+a leaf of 1 unit the read disc is about 29 k columns, the sunward sweep more. That puts a list
+near 100 k cells here, a tenth of the 1 M 11-06 assumed. Its time on the S23 is not measured.
