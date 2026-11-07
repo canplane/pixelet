@@ -17,9 +17,10 @@
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
 //!
 //! Everything else ties, after the view. Rank orders what starts; nothing
-//! running is stopped for it.
+//! running is stopped for it. Which class a stream's wants take is its row's
+//! (sys/io/demand.rs `Stream::row`); how the classes rank is here.
 
-use crate::sys::io::demand::{Order, Stream};
+use crate::sys::io::demand::{Class, Order, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::loader::of_id;
 use crate::sys::io::param;
@@ -55,50 +56,29 @@ impl Policy {
     }
 }
 
-fn tile(layer: Stream, id: u64, order: Order) -> Rank {
-    if order == Order::LAST {
-        return Rank {
-            class: ASIDE,
-            dist: 0.0,
-            detail: 0,
-        };
-    }
-    let unseen = !order.seen as u8;
-    // A zoom fits the rank's byte. The objects' ids are the top's, no tile's,
-    // and shards' all at `SHARD_ZOOM`, which no zoom orders.
-    let zoom = || Quadrant::of_id(id).zoom as u8;
-    let (class, detail) = match layer {
-        Stream::terrain => (TERRAIN + unseen * GROUND_SHELL, zoom()),
-        Stream::object => (OBJECT + unseen * GROUND_SHELL, 0),
-        Stream::earth => (PICTURE + unseen, zoom()),
-        _ => (PLACE + unseen, zoom()),
-    };
-    Rank {
-        class,
-        dist: order.near,
-        detail,
-    }
-}
-
 impl Serve for Policy {
     fn rank(&self, stream: Stream, id: u64, order: Order, _enqueue_ms: f64) -> Rank {
-        match stream {
-            Stream::terrain | Stream::object | Stream::place | Stream::earth => {
-                tile(stream, id, order)
-            }
-            Stream::asset => Rank {
-                class: match of_id(id) {
-                    Some((LoadKind::Image, _)) => PICTURE,
-                    _ => ASSET,
-                },
-                dist: 0.0,
-                detail: 0,
+        let unseen = !order.seen as u8;
+        // A zoom fits the rank's byte. The objects' ids are the top's, no
+        // tile's, and shards' all at `SHARD_ZOOM`, which no zoom orders.
+        let zoom = || Quadrant::of_id(id).zoom as u8;
+        let (class, dist, detail) = match stream.row().class {
+            Class::File => match of_id(id) {
+                Some((LoadKind::Image, _)) => (PICTURE, 0.0, 0),
+                _ => (ASSET, 0.0, 0),
             },
-            Stream::division => Rank {
-                class: ASIDE,
-                dist: 0.0,
-                detail: 0,
-            },
+            Class::Aside => (ASIDE, 0.0, 0),
+            // A want with no place in the view.
+            _ if order == Order::LAST => (ASIDE, 0.0, 0),
+            Class::Ground => (TERRAIN + unseen * GROUND_SHELL, order.near, zoom()),
+            Class::OnGround => (OBJECT + unseen * GROUND_SHELL, order.near, 0),
+            Class::Picture => (PICTURE + unseen, order.near, zoom()),
+            Class::Place => (PLACE + unseen, order.near, zoom()),
+        };
+        Rank {
+            class,
+            dist,
+            detail,
         }
     }
 

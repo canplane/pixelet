@@ -13,7 +13,6 @@ use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::machine::MACHINE;
 use crate::perf::record;
-use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
 use crate::sys::mem::section::{self, map};
@@ -80,7 +79,7 @@ const _: () = MACHINE.check(FIXED_BYTES);
 /// it, a power of two; none for a kind whose bodies take slots.
 const fn body_block(stream: Stream) -> u64 {
     match stream.max_body() {
-        Some(_) if body::is_slotted(stream) => 0,
+        Some(_) if stream.row().slotted => 0,
         Some(max) => max.next_power_of_two() as u64,
         None => 0,
     }

@@ -23,7 +23,7 @@ use xpute_core::ipc::fs::{Fd, FsOpened};
 use xpute_kit::status::bug::OrBug;
 
 use crate::machine::MACHINE;
-use crate::sys::io::demand::Stream;
+use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::fetch;
 use crate::sys::io::file_spec::{format, object, root, storage};
 use crate::sys::io::loader;
@@ -374,9 +374,9 @@ impl fmt::Display for Path {
 
 /// The path `stream`'s want `id` opens: a load's, or a tile's or a shard's.
 pub fn path_of(stream: Stream, id: u64) -> Path {
-    match stream {
-        Stream::asset => loader::of_id(id).map_or(Path::EMPTY, |(_, load)| load.path()),
-        _ => Path::of_quadrant(id),
+    match stream.row().source {
+        Source::Load => loader::of_id(id).map_or(Path::EMPTY, |(_, load)| load.path()),
+        Source::Bake(_) | Source::Objects => Path::of_quadrant(id),
     }
 }
 

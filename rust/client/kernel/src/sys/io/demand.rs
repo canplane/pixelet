@@ -47,34 +47,85 @@ pub use crate::sys::io::demand_spec::StreamName as Stream;
 use crate::sys::io::file_spec::root;
 use pxl_spec::bake::tile;
 
+/// What a stream's wants are: a file of the catalog's, by its id, which the
+/// loader opens below ASSET (sys/io/loader.rs); a bake's tile, by its
+/// quadrant, below its kind's root; or a shard's objects or their top, which
+/// no bake makes, below OBJECT.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    Load,
+    Bake(BaseLayer),
+    Objects,
+}
+
+/// Where a stream's wants stand in the order a view builds up, which the
+/// serve policy ranks (sys/io/policy.rs).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Class {
+    /// The ground's shells, seen then unseen, the finer first.
+    Ground,
+    /// What stands on the ground, a shell's after the shell's ground.
+    OnGround,
+    /// With the pictures, seen then unseen, the finer first.
+    Picture,
+    /// After the models, seen then unseen, the finer first.
+    Place,
+    /// A file of the catalog's: a picture's with the pictures, a model's
+    /// after them.
+    File,
+    /// After everything, as it comes.
+    Aside,
+}
+
+/// A stream as everything that reads one reads it.
+#[derive(Clone, Copy)]
+pub struct Row {
+    pub source: Source,
+    /// Whether its bodies take one of the body slots (sys/io/body.rs).
+    pub slotted: bool,
+    pub class: Class,
+}
+
 impl Stream {
-    /// An asset belongs to no bake and is asked for by its own command; a
-    /// shard's objects are the object layer's, which no bake makes.
-    pub const fn bake(self) -> Option<BaseLayer> {
-        match self {
-            Stream::terrain => Some(BaseLayer::terrain),
-            Stream::place => Some(BaseLayer::place),
-            Stream::earth => Some(BaseLayer::earth),
-            Stream::division => Some(BaseLayer::division),
-            Stream::asset | Stream::object => None,
+    /// Its row: the one table of what each stream is.
+    pub const fn row(self) -> Row {
+        let (source, slotted, class) = match self {
+            Stream::terrain => (Source::Bake(BaseLayer::terrain), true, Class::Ground),
+            Stream::place => (Source::Bake(BaseLayer::place), false, Class::Place),
+            Stream::division => (Source::Bake(BaseLayer::division), false, Class::Aside),
+            Stream::asset => (Source::Load, false, Class::File),
+            Stream::earth => (Source::Bake(BaseLayer::earth), true, Class::Picture),
+            Stream::object => (Source::Objects, false, Class::OnGround),
+        };
+        Row {
+            source,
+            slotted,
+            class,
         }
     }
 
-    /// The root a want's file is opened below (file.json `root`), its
-    /// id the path: a bake's, by its kind, or the objects' OBJECT. None
-    /// for an asset, which the loader opens below ASSET (sys/io/loader.rs).
+    /// The bake whose tiles it carries.
+    pub const fn bake(self) -> Option<BaseLayer> {
+        match self.row().source {
+            Source::Bake(layer) => Some(layer),
+            Source::Load | Source::Objects => None,
+        }
+    }
+
+    /// The root a want's file is opened below (file.json `root`), its id
+    /// the path; none for a load, which the loader opens.
     pub const fn root(self) -> Option<u32> {
-        match (self, self.bake()) {
-            (Stream::object, _) => Some(root::OBJECT),
-            (_, Some(layer)) => Some(layer as u32),
-            (_, None) => None,
+        match self.row().source {
+            Source::Bake(layer) => Some(layer as u32),
+            Source::Objects => Some(root::OBJECT),
+            Source::Load => None,
         }
     }
 
     /// The most bytes a body of its takes, its kind's packet at its longest
     /// (pxl-spec `bake::tile::max_pkt_bytes`): one past it is refused
-    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for an
-    /// asset or a shard's objects, which the heap alone bounds.
+    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for a
+    /// load or a shard's objects, which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
             Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),

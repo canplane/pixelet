@@ -122,7 +122,7 @@ fn slot_peak() {
 #[test]
 fn slot_cheaper_than_block() {
     assert_eq!(SLOTS, 7, "at today's packets, as sys/io/body.rs says");
-    for stream in SLOT_STREAMS {
+    for stream in Stream::ALL.into_iter().filter(|s| s.row().slotted) {
         assert!(
             SLOT_BYTES >= longest(stream)
                 && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two()

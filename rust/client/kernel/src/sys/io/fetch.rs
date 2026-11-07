@@ -18,7 +18,7 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::body;
-use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
+use crate::sys::io::demand::{Phases, Source, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Path};
 use crate::sys::io::param::MAX_CREDITS;
@@ -220,7 +220,7 @@ fn on_fetch_arrived(
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
         Receipt::Absent | Receipt::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
-            xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
+            xpute_kit::ensure!(stream.row().source != Source::Load, ENOTRECOVERABLE);
             ANSWERS.get(List::new).push(Response {
                 key,
                 stream,

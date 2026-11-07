@@ -17,7 +17,7 @@ use xpute_core::global::Global;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::demand::Stream;
+use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Response};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
@@ -108,7 +108,8 @@ const fn layer<L: Observed>() -> Layer {
 }
 
 /// Every layer read a tile at a time, the object layer's tile its shard
-/// (domain/layer/object/repository.rs): the one place a stream names its layer.
+/// (domain/layer/object/repository.rs): the one place a stream names its
+/// layer, one for each stream its row says is fetched, none for a load.
 const LAYERS: [Layer; 5] = [
     layer::<TerrainTile>(),
     layer::<PlaceTile>(),
@@ -120,6 +121,27 @@ const LAYERS: [Layer; 5] = [
         on_arrival: repository::on_arrived,
     },
 ];
+
+const _: () = {
+    let mut s = 0;
+    while s < Stream::ALL.len() {
+        let stream = Stream::ALL[s];
+        let mut held = 0;
+        let mut k = 0;
+        while k < LAYERS.len() {
+            if LAYERS[k].stream as u8 == stream as u8 {
+                held += 1;
+            }
+            k += 1;
+        }
+        let fetched = !matches!(stream.row().source, Source::Load);
+        assert!(
+            held == fetched as u32,
+            "a fetched stream is one layer's, and a load none's"
+        );
+        s += 1;
+    }
+};
 
 /// The layer whose tiles `stream` carries; none for an asset's.
 pub fn of_stream(stream: Stream) -> Option<&'static Layer> {

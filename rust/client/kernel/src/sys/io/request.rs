@@ -20,7 +20,7 @@
 use core::cmp::Ordering;
 use std::collections::VecDeque;
 
-use crate::sys::io::demand::{Order, Phases, Stream};
+use crate::sys::io::demand::{Order, Phases, Source, Stream};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::policy::Policy;
 use crate::sys::io::room::Refusal;
@@ -73,11 +73,9 @@ pub enum Fault {
 pub type Bounds = [usize; Stream::ALL.len()];
 
 fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
-    Stream::ALL.map(|c| match c {
-        Stream::asset => LOAD_FILES,
-        Stream::terrain | Stream::place | Stream::earth | Stream::division | Stream::object => {
-            frames(c) as usize
-        }
+    Stream::ALL.map(|c| match c.row().source {
+        Source::Load => LOAD_FILES,
+        Source::Bake(_) | Source::Objects => frames(c) as usize,
     })
 }
 

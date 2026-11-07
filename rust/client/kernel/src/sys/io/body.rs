@@ -55,13 +55,11 @@ use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
 use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge;
 
-/// The kinds whose bodies take a slot.
-const SLOT_STREAMS: [Stream; 2] = [Stream::terrain, Stream::earth];
-
+/// A slotted stream's longest packet; 0 for one whose bodies take no slot.
 const fn longest(stream: Stream) -> u32 {
     match stream.max_body() {
-        Some(max) => max,
-        None => 0,
+        Some(max) if stream.row().slotted => max,
+        _ => 0,
     }
 }
 
@@ -69,9 +67,9 @@ const fn longest(stream: Stream) -> u32 {
 const SLOT_BYTES: u32 = {
     let mut most = 0;
     let mut k = 0;
-    while k < SLOT_STREAMS.len() {
-        if longest(SLOT_STREAMS[k]) > most {
-            most = longest(SLOT_STREAMS[k]);
+    while k < Stream::ALL.len() {
+        if longest(Stream::ALL[k]) > most {
+            most = longest(Stream::ALL[k]);
         }
         k += 1;
     }
@@ -97,25 +95,15 @@ const _: () = {
         "a run holds two slots or more, a bit each"
     );
     let mut k = 0;
-    while k < SLOT_STREAMS.len() {
+    while k < Stream::ALL.len() {
         assert!(
-            BODY_RUN_BYTES / SLOTS < longest(SLOT_STREAMS[k]).next_power_of_two(),
+            !Stream::ALL[k].row().slotted
+                || BODY_RUN_BYTES / SLOTS < longest(Stream::ALL[k]).next_power_of_two(),
             "a slot with its share of the run costs less than the buddy's block for it"
         );
         k += 1;
     }
 };
-
-pub const fn is_slotted(stream: Stream) -> bool {
-    let mut k = 0;
-    while k < SLOT_STREAMS.len() {
-        if SLOT_STREAMS[k] as u8 == stream as u8 {
-            return true;
-        }
-        k += 1;
-    }
-    false
-}
 
 /// The heap `slots` slots out at once take at worst: the runs that hold them.
 pub const fn slots_bytes(slots: u32) -> u64 {
@@ -152,7 +140,7 @@ fn slot_table() -> &'static mut Slots {
 /// heap had no room for it or for a run of slots, each refusal waiting on
 /// what refused it.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
-    if !stream.is_some_and(is_slotted) || n > SLOT_BYTES {
+    if !stream.is_some_and(|s| s.row().slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refusal::now);
     }
     let s = slot_table();
