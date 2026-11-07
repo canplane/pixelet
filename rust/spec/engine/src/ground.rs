@@ -46,8 +46,8 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_idx`): the
-/// one producer of a cell's height, which a GPU runs once a cell of a held
-/// tile (`height_cs`), the CPU and the bake alike. Catmull-Rom over the
+/// one producer of a cell's height, which the kernel's fill and the bake run
+/// alike (fill.rs `columns`). Catmull-Rom over the
 /// 4 × 4 samples about the center, rounded half to even and held to their
 /// range, so a bound over the surface is the samples' own.
 ///
@@ -58,8 +58,7 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 /// weights' sizes summing under 1.23 · 2^16, under 2^31.3; a row times a
 /// weight and the four summed, under 2^47.6, in an `i64`: its high word is
 /// the height's floor, its low word the fraction rounded. Once a column as
-/// a brick lands: 16 products of 32 bits and 4 of 64, which a GPU makes of
-/// 32-bit halves (pxl-render i64.wgsl).
+/// a brick is filled: 16 products of 32 bits and 4 of 64.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     let (x0, mx) = window(x);
     let (y0, my) = window(y);
@@ -85,9 +84,6 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     let up = 2 * frac > one || 2 * frac == one && floor & 1 == 1;
     ((floor + i64::from(up)) as i32).clamp(lo, hi)
 }
-
-/// A tile's padded samples as a GPU holds them, 2 a word.
-pub(crate) const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
 /// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
@@ -180,7 +176,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     2 * WEIGHT_BITS == u32::BITS,
-    "a height's sum's high word is its floor (pxl-render ground_height.wgsl)"
+    "a height's sum's high word is its floor"
 );
 
 /// The value filling more than half of a 2×2 (or 2×2×2) group, `v[dx + 2·dy +

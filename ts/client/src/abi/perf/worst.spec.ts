@@ -4,12 +4,12 @@
 
 export const sample = 0 as number;
 
-export const has_prev = 103 as number;
+export const has_prev = 102 as number;
 
-export const uploads_delta = 104 as number;
+export const uploads_delta = 103 as number;
 
-export const uploads_delta_bytes = 105 as number;
+export const uploads_delta_bytes = 104 as number;
 
-export const heap_used_delta_bytes = 106 as number;
+export const heap_used_delta_bytes = 105 as number;
 
-export const WORDS = 107 as number;
+export const WORDS = 106 as number;

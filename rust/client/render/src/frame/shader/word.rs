@@ -314,11 +314,6 @@ const _: () = assert!(
     "a screen tile is whole squares of the depth's bound"
 );
 
-/// The workgroups of a handed brick's fill by hand (gpu/ray/ground.rs `grids`): a
-/// column a thread, the columns' tops a square `HEIGHT_SIDE` a side (height.wgsl),
-/// a level's entries one `LEVEL_SIDE` a side (bound.wgsl).
-pub const HEIGHT_SIDE: u32 = 8;
-pub const LEVEL_SIDE: u32 = 8;
 /// The cells a side a workgroup of the camera grid's cells' starts takes (gpu/ray/cast.rs,
 /// cell.wgsl).
 pub const CELL_SIDE: u32 = 8;

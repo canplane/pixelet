@@ -657,19 +657,19 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A brick that lands after the clip levels were folded without it is read
-/// with what it holds once the landings are folded, as the stage folds them
-/// (domain/layer/terrain/clipmap.rs `refold`): a spike
+/// A brick handed after the clip levels were folded without it is read
+/// with what it holds once a frame has handed it, which folds them
+/// (domain/layer/terrain/clipmap.rs `upload`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
 /// brick, is met where a walker's ray down it met it while the brick was
 /// held from the start, and no cell of the brick stands outside the bound
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::{on_filled, refold, test::unland, CpuClipmap};
+    use crate::domain::layer::terrain::clipmap::test::{hand, unland};
+    use crate::domain::layer::terrain::clipmap::CpuClipmap;
     use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_LEVELS, CLIP_SIZE};
     use pxl_engine::LEAF_CELL;
-    use pxl_render::gpu::ray::Filled;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -712,10 +712,8 @@ fn late_brick_spike() {
             .point[2]
     };
     let held = met(&World::new(&tile_cache, &store));
-    let (b, ticket) = unland(LEAF_CELL, spike);
-    // As the stage lands a read-back: each landing, then one fold.
-    on_filled(b, ticket, Filled::Built(&[0]));
-    refold();
+    unland(LEAF_CELL, spike);
+    hand();
     assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
     let q = cells::brick_of(spike).0;
     let mut outside = 0;

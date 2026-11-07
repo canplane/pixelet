@@ -16,7 +16,7 @@
 use crate::gpu::ray::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
-use pxl_engine::{clipmap, eye, overwrite};
+use pxl_engine::{clipmap, eye, overwrite, Zoom};
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::frame::draw::PIPELINE_DECOR;
@@ -72,8 +72,8 @@ pub struct DecorFrame<'a> {
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame (pxl-engine `clipmap::FILL_WORDS`).
-    pub fresh: &'a [[u32; clipmap::FILL_WORDS as usize]],
+    /// The bricks handed this frame, each its cells' zoom and the brick.
+    pub fresh: &'a [(Zoom, [i32; 2])],
     /// The eye as the cast's (pxl-engine `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
@@ -388,14 +388,10 @@ impl Generator {
             // The boxes held, at every zoom, then each brick handed, at
             // its clip level's and coarser.
             let mut boxes = [0u32; (generation::BOX_CAP * generation::BOX_WORDS) as usize];
-            let fresh = generation.fresh.iter().map(|f| {
-                let cell = f[clipmap::FILL_CELL as usize];
-                let q = clipmap::brick_of_first([
-                    f[clipmap::FILL_FIRST as usize],
-                    f[clipmap::FILL_FIRST as usize + 1],
-                ]);
-                (generation::brick_box(cell, q), cell)
-            });
+            let fresh = generation
+                .fresh
+                .iter()
+                .map(|&(cell, q)| (generation::brick_box(cell, q), cell));
             let pending_boxes = self.pending_boxes[..self.marked]
                 .iter()
                 .map(|&b| (b, generation::EVERY));

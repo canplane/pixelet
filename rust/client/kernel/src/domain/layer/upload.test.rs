@@ -7,74 +7,54 @@ fn block() -> Block {
     alloc(64).unwrap()
 }
 
+/// Whether slot `slot`'s packet is still to be sent.
+fn waits(k: &Uploads, slot: usize) -> bool {
+    matches!(k.slots[slot], Upload::Waiting(_))
+}
+
 #[test]
 fn keeps_at_most() {
     let mut k = Uploads::new(4);
     for slot in 0..3 {
         k.keep(Some(slot), block(), 2);
     }
-    assert_eq!(k.cnt(), 2);
+    assert_eq!(k.waiting, 2);
     assert!(
-        k.waiting(0) && k.waiting(1) && !k.waiting(2),
+        waits(&k, 0) && waits(&k, 1) && !waits(&k, 2),
         "the third is past the bound"
     );
     assert_eq!(k.sent_on(2), None);
     k.keep(Some(0), block(), 2);
-    assert_eq!(k.cnt(), 2, "a slot's packet replaced is still one");
-    k.send(
-        7,
-        &mut |slot, _| {
-            if slot == 0 {
-                Uptake::Taken
-            } else {
-                Uptake::Part
-            }
-        },
-        &|_| true,
-    );
+    assert_eq!(k.waiting, 2, "a slot's packet replaced is still one");
+    k.send(7, &mut |slot, _| {
+        if slot == 0 {
+            Uptake::Taken
+        } else {
+            Uptake::Full
+        }
+    });
     assert_eq!(
-        (k.cnt(), k.sent_on(0)),
+        (k.waiting, k.sent_on(0)),
         (1, Some(7)),
-        "taken whole: freed, and sent"
+        "taken: freed, and sent"
     );
     k.keep(Some(3), block(), 2);
-    assert_eq!(k.cnt(), 2, "room again once one is taken");
-    k.send(7, &mut |_, _| Uptake::Taken, &|_| true);
-    assert_eq!(k.cnt(), 0);
+    assert_eq!(k.waiting, 2, "room again once one is taken");
+    k.send(7, &mut |_, _| Uptake::Taken);
+    assert_eq!(k.waiting, 0);
 }
 
 #[test]
-fn full_stream_frees_unwanted() {
+fn full_stream_offers_no_more() {
     let mut k = Uploads::new(4);
     for slot in 0..4 {
         k.keep(Some(slot), block(), 4);
     }
     let mut offered = Vec::new();
-    k.send(
-        3,
-        &mut |slot, _| {
-            offered.push(slot);
-            Uptake::Full
-        },
-        &|slot| slot == 2,
-    );
+    k.send(3, &mut |slot, _| {
+        offered.push(slot);
+        Uptake::Full
+    });
     assert_eq!(offered, [0], "nothing offered past the stream's end");
-    assert!(
-        k.waiting(0) && k.waiting(2),
-        "the one offered and the one still wanted are kept"
-    );
-    assert!(
-        !k.waiting(1) && !k.waiting(3) && k.sent_on(1).is_none(),
-        "the rest freed, and not sent"
-    );
-    assert_eq!(k.cnt(), 2);
-}
-
-#[test]
-fn forgotten_slot_empty() {
-    let mut k = Uploads::new(2);
-    k.keep(Some(0), block(), 2);
-    k.forget(0);
-    k.forget(1);
-    assert!(!k.waiting(0) && k.cnt() == 0);
+    assert_eq!(k.waiting, 4, "each kept for a later turn");
 }

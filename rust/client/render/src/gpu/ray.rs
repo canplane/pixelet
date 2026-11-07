@@ -23,11 +23,8 @@ use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 pub use cast::{drawn_fits, Cast, LightReads, Overwrites, DRAWN_AREA, DRAWN_MOST};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
-pub use ground::{
-    BrickFill, CellsBack, Filled, GroundBricks, OnFilled, TerrainUpload, TerrainWrite,
-    RECORD_ROOMS_BYTES,
-};
-use ground::{GroundBuffers, GroundPipelines};
+use ground::GroundBuffers;
+pub use ground::{BrickWrite, GroundBricks, TerrainUpload, TerrainWrite};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
 /// samples that stand: the rays, their depth and where they met the world
@@ -53,9 +50,7 @@ pub struct RaysPass {
     /// until the renderer hands them.
     lit: Vec<Entry>,
     looks: u32,
-    /// The ground's passes, made with the cast's (`make`); its buffers,
-    /// made the first turn it is handed a brick (`hand`).
-    ground_built: Option<GroundPipelines>,
+    /// The ground's buffers, made the first turn it is handed a brick (`hand`).
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
 }
@@ -77,7 +72,6 @@ impl RaysPass {
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
-            ground_built: None,
             ground: None,
             cast: None,
         }

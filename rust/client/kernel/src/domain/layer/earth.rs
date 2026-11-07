@@ -90,7 +90,6 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
             Err(_) | Ok(true) => Uptake::Taken,
             Ok(false) => Uptake::Full,
         },
-        &|_| true,
     );
 }
 

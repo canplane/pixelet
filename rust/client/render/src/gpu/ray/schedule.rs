@@ -14,8 +14,8 @@ use crate::gpu::span_spec::{FrameKind, LightMoved};
 pub(super) struct Reads {
     /// Whether the cast's input reads as the last frame's did (cast.rs `prepare`): the eye's
     /// words but the light's, the jitter's and the grid's, the clip levels' table, the shards,
-    /// the overwrites' room and revision and the surface, byte for byte; no brick handed fresh;
-    /// and the cast's group made.
+    /// the overwrites' room and revision and the surface, byte for byte; and the cast's group
+    /// made.
     pub same: bool,
     /// Where each pixel's ray goes through it (pxl-engine `eye::JITTER`): the world's
     /// sequence, which moves only while a change that is not the scene's animation's settles

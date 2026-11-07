@@ -1,22 +1,16 @@
 // pxl-kernel/domain/scene/cast.rs
 
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/ray/cast.rs
-//! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
-//! clip levels as a table of the bricks each holds, and each brick the
-//! clip levels want handed to the GPU once, off its tile's packet
-//! (domain/layer/terrain/clipmap.rs `fill`).
+//! `Cast`): the eye as the rays leave it, a ray a drawn pixel, and the eye's
+//! clip levels as a table of the bricks each holds, each brick handed to the
+//! GPU once it is filled (domain/layer/terrain/clipmap.rs `upload`).
 
 use pxl_engine::eye;
-use pxl_render::gpu::ray::{Overwrites, TerrainWrite};
-use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_render::gpu::ray::Overwrites;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::store::object;
-use crate::domain::layer::terrain::clipmap::{self, TileContent};
-use crate::domain::layer::terrain::tile::uploads;
-use crate::domain::layer::upload::Uptake;
-use crate::domain::layer::Base as _;
 use crate::domain::preview::RenderEdits;
 use crate::domain::view::lens;
 use crate::sys::io::source;
@@ -83,35 +77,5 @@ pub fn overwrites() -> Overwrites<'static> {
         revision: l.revision,
         since: l.since,
         written_groups: l.written_groups,
-    }
-}
-
-/// Each brick the clip levels want to `write`, while it takes them: off the
-/// packets waiting for them, and off each void tile, held with none.
-pub fn upload(write: &mut TerrainWrite<'_>) {
-    let terrain = TerrainTile::tile_cache();
-    let wanted = |slot| {
-        terrain
-            .in_slot(slot)
-            .is_some_and(|t| terrain.get(t).is_some() && clipmap::is_tile_wanted(t))
-    };
-    uploads().send(
-        api::device_generation(),
-        &mut |slot, pkt| {
-            let Some(t) = terrain.in_slot(slot) else {
-                return Uptake::Taken;
-            };
-            let Some(held) = terrain.get(t) else {
-                return Uptake::Taken;
-            };
-            clipmap::fill(t, TileContent::Packet(pkt, held), write)
-        },
-        &wanted,
-    );
-    // The due bricks' void tiles, not every tile held.
-    for p in clipmap::voids() {
-        if clipmap::fill(p, TileContent::Void, write) == Uptake::Full {
-            return;
-        }
     }
 }

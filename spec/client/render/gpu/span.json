@@ -15,7 +15,6 @@
     { "name": "marker", "per_px": false },
     { "name": "debug", "per_px": false },
     { "name": "character", "per_px": false },
-    { "name": "fill", "per_px": false },
     { "name": "cast", "per_px": false },
     { "name": "beam_hit", "per_px": false },
     { "name": "beam", "per_px": false },

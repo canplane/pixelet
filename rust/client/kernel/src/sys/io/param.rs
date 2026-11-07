@@ -30,17 +30,14 @@ pub const WRITES_A_TURN: u32 = 8;
 // ---- bodies ----
 
 /// The most terrain and Earth bodies out at once, in slots of the heap's
-/// runs (sys/io/body.rs): those on a credit until their decode, and the packets
-/// kept past it, a terrain tile's while a clip level wants one of its bricks
-/// still absent (domain/layer/terrain/clipmap.rs `fill`), the Earth's until its
-/// texels are taken. Sized to a moving eye, not to the worst.
+/// runs (sys/io/body.rs): those on a credit until their decode, and the Earth's
+/// past it, until its texels are taken. Sized to a moving eye, not to the worst.
 ///
 /// Each frame grants six credits at most (the place's, the client's
 /// `bracket.origin.credits`: six on a page and on iOS, five on Android), and
 /// the Earth keeps four frames at most. A clip level is a tile's cells a side
-/// (pxl-engine `clipmap::CLIP_SIZE`), so it wants four tiles at most, and
-/// the fill hands `FILL_CAP` bricks a frame, about a row of one clip level's: an
-/// eye that moves keeps the tiles of the few clip levels refilling at once,
+/// (pxl-engine `clipmap::CLIP_SIZE`), so it wants four tiles at most: an
+/// eye that moves asks the tiles of the few clip levels refilling at once,
 /// four clip levels' four. 6 + 4 + 16 is 26, and 28 is four whole runs of
 /// seven, since a run's slots past the cap would be borrowed and idle. A
 /// jump or a zoom that empties every clip level wants all their tiles,

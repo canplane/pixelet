@@ -6,7 +6,7 @@
 
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
-use crate::domain::layer::terrain::mirror;
+use crate::domain::layer::terrain::pool;
 use crate::domain::scene::character;
 use crate::domain::scene::character::Group;
 use crate::domain::scene::decor::asset;
@@ -17,7 +17,6 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
 use crate::sys::mem::section::{self, map};
 use pxl_render::gpu::api;
-use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
 use xpute_core::entry::BootInfo;
 use xpute_core::machine::Gpu;
@@ -88,11 +87,9 @@ const fn body_block(stream: Stream) -> u64 {
 /// The heap's bounded flows at their worst: terrain's and the Earth's
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
-/// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-engine way/tree.rs `POOL_CHILD_GROUPS`),
-/// the renderer's rooms for the bricks' records, every read's at a
-/// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
-/// the profiler's lanes while its setting is on (perf/record.rs), each
+/// longest other kind, each freed as it is decoded; the ways' pool
+/// at its most (domain/layer/terrain/pool.rs, pxl-engine way/tree.rs `POOL_CHILD_GROUPS`),
+/// and the profiler's lanes while its setting is on (perf/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap
 /// is workspace, which asks first.
@@ -107,8 +104,10 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = mirror::MIRROR_BYTES + ray::RECORD_ROOMS_BYTES;
-    slots_bytes(param::BODY_SLOTS) + param::MAX_CREDITS as u64 * longest + ways + record::PERF_BYTES
+    slots_bytes(param::BODY_SLOTS)
+        + param::MAX_CREDITS as u64 * longest
+        + pool::POOL_BYTES
+        + record::PERF_BYTES
 };
 
 const _: () = assert!(

@@ -19,7 +19,7 @@ use crate::grid;
 use crate::ground;
 use crate::ground::Bounds;
 use crate::ground::Cell;
-use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
+use crate::ground::{UNKNOWN, VOID};
 use crate::lattice;
 use crate::lattice::{GROUND, TILE_CELLS};
 use crate::way;
@@ -57,75 +57,14 @@ pub const CLIP_LEVELS: u32 = EYE_CLIP_LEVELS + 3;
 /// The slots every clip level's bricks are held in, `CLIP_LEVELS` an entry,
 /// slot `k × ENTRIES + s` entry `s`'s `k`-th (pxl-kernel
 /// domain/layer/terrain/clipmap.rs `Slot`): no more bricks want an entry than
-/// there are clip levels, so the most the GPU holds, and so the most of their
-/// cells read back at once, where no two clip levels at a zoom overlap. A brick
-/// two of them want takes one.
+/// there are clip levels, so the most held at once, where no two clip levels
+/// at a zoom overlap. A brick two of them want takes one.
 pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
-/// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
-/// (the `fill` span): its passes whatever it is handed, and each brick more.
-pub(crate) const FILL_MS: f32 = 2.0;
-pub(crate) const FILL_BRICK_MS: f32 = 0.22;
-/// The share of a frame the fill may take.
-pub(crate) const FILL_SHARE_MS: f32 = 4.0;
-/// The bricks a frame hands the fill at most, nearest first (pxl-kernel
-/// domain/layer/terrain/clipmap.rs `due`): its share less its passes, over a brick.
-pub const FILL_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
-
-/// A brick handed to the GPU's fill, in words: its slot, where it lies in its
-/// tile (`place_word`, in bricks), its cells' zoom, its clip level's as the
-/// clip level holds it (pxl-kernel domain/layer/terrain/clipmap.rs
-/// `ClipLevel::cell`; a destination's moves with its line), never derived from the
-/// index; its first cell at that zoom as the world names it, X wrapped there,
-/// then Y, two words; and what is known of the service area at it
-/// (`area::Shard`, its word), which the ways' fill asks the wall by
-/// (`area::is_wall`).
-pub const FILL_BRICK: u32 = 0;
-pub const FILL_PLACE: u32 = FILL_BRICK + 1;
-pub const FILL_CELL: u32 = FILL_PLACE + 1;
-pub const FILL_FIRST: u32 = FILL_CELL + 1;
-pub const FILL_SHARD: u32 = FILL_FIRST + 2;
-pub const FILL_WORDS: u32 = FILL_SHARD + 1;
-
-/// A brick fill's words (`FILL_WORDS`), `place` its `place_word`.
-pub const fn fill_words(
-    brick: u32,
-    place: u32,
-    cell: Zoom,
-    first: [i32; 2],
-    shard: Shard,
-) -> [u32; FILL_WORDS as usize] {
-    let mut w = [0; FILL_WORDS as usize];
-    (
-        w[FILL_BRICK as usize],
-        w[FILL_PLACE as usize],
-        w[FILL_CELL as usize],
-    ) = (brick, place, cell);
-    (
-        w[FILL_FIRST as usize],
-        w[FILL_FIRST as usize + 1],
-        w[FILL_SHARD as usize],
-    ) = (first[0] as u32, first[1] as u32, shard.word());
-    w
-}
-
-/// Where a brick lies in its tile, in bricks, as one word: X low, Y high.
-pub const fn place_word([x, y]: [u32; 2]) -> u32 {
-    x | y << 16
-}
-
-/// `place_word`'s place.
-pub(crate) const fn place_of(w: u32) -> [u32; 2] {
-    [w & 0xffff, w >> 16]
-}
-
-/// The brick a brick fill's first cell (`FILL_FIRST`) lies in, at its
-/// cells' zoom: what a reader of the handed records finds its entry by.
-pub const fn brick_of_first(first: [u32; 2]) -> [i32; 2] {
-    [
-        first[0] as i32 >> BRICK_SHIFT,
-        first[1] as i32 >> BRICK_SHIFT,
-    ]
-}
+/// The bricks a frame hands the GPU at most, the kernel's fill having filled
+/// them (pxl-kernel domain/layer/terrain/clipmap.rs `upload`): each is a box of
+/// decor's generation (pxl-content `generation::BOX_CAP`), and what is past
+/// them is handed by the frames after.
+pub const FRAME_BRICKS: u32 = 9;
 
 /// How far from its center a clip level holds every cell, in its own cells: a
 /// zoom's band ends `CELLS_A_RAD` of its cells from the eye, and the
@@ -215,8 +154,8 @@ pub const BOUND_ENTRY_WORDS: u32 = 2;
 pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_level_at(BRICK_LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
-/// `1 << WAYS_SHIFT` cells: a brick lays its lines by them (`LINES_AT`),
-/// which its fill keeps its columns' spans off.
+/// `1 << WAYS_SHIFT` cells: a brick lays its lines by them
+/// (`LINES_ENTRIES_AT`), which its fill keeps its columns' spans off.
 pub const WAYS_ACROSS: u32 = 32;
 pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
 pub const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
@@ -239,14 +178,11 @@ pub const LINES_ENTRIES_AT: u32 = way::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_BRICK_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGMENT_WORDS as u32;
 
-/// A handed brick's scratch, the GPU's own for the frame it is filled
-/// (`FILL_CAP` of them, each `way::tree::scratch_words` of the cells its
-/// tree holds, `way::tree::SCRATCH_WORDS` at the renderer's cap): its
-/// columns' spans, the brick's and the ring of columns about it, which a
-/// column's cells read beside its own (`SPANS_AT`, pxl-engine fill.rs
-/// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
-/// bound and its ways' tree are made off the spans (fill.rs `level`,
-/// `way::tree::leaf`), and they go with the frame.
+/// A brick's scratch while it is filled: its columns' spans, the brick's and
+/// the ring of columns about it, which a column's cells read beside its own
+/// (pxl-engine fill.rs `spans`). Its levels' ways' bound and its ways' tree
+/// are made off them (fill.rs `level`, `way::tree::leaf`), and they go with
+/// its fill.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
@@ -259,7 +195,7 @@ pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
-pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
+pub const SPANS_WORDS: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A brick's columns, a word a cell, row by row: a cell's ground's top in
 /// leaf cells, an `i16`, low (`column_top`).
@@ -284,10 +220,10 @@ pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
     (w >> (8 * (i % LAID_CELLS))) & 0xff
 }
 
-/// A brick's words on a GPU, what outlives its fill, its lanes in order:
-/// its columns, its levels, its cells as laid and its ways' tree's root. The
-/// clip levels' bricks are one storage buffer bound whole, under WebGPU's
-/// floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
+/// A brick's words, what outlives its fill, the CPU's and a GPU's alike, its
+/// lanes in order: its columns, its levels, its cells as laid and its ways'
+/// tree's root. The clip levels' bricks are one storage buffer bound whole on
+/// a GPU, under WebGPU's floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const LAID_AT: u32 = BOUNDS_AT + BOUND_WORDS;
@@ -296,24 +232,6 @@ pub const LAID_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// handed out, where it has none.
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
-/// What comes back of a brick: all of it, so the CPU reads a column as the
-/// GPU does.
-pub const BACK_WORDS: u32 = BRICK_WORDS;
-
-/// A brick handed to the fill as a frame's fresh list holds it, a record
-/// each, `FILL_CAP` at most: its words (`fill_words`), then what only its fill
-/// reads, gone with the frame — its four palette indices a cell, its tile's padded
-/// samples, two a word, and its lines.
-pub const PALETTE_AT: u32 = FILL_WORDS;
-pub const ELE_AT: u32 = PALETTE_AT + BRICK_CELLS;
-pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
-pub const HANDED_WORDS: u32 = LINES_AT + LINES_WORDS;
-
-/// Where the `k`-th brick a frame hands begins in its fresh list.
-pub const fn handed_at(k: u32) -> u32 {
-    k * HANDED_WORDS
-}
-
 /// Which bricks the clip levels hold present, all `step` reads: the clip
 /// levels' table alone.
 pub trait Presence {
@@ -355,10 +273,10 @@ pub trait Bricks: Presence {
 
 /// One brick as its fill reads it, for the ways' one rule
 /// (`way::Columns`): its cells' zoom, where it lies in its tile (in
-/// bricks), its first cell as the world names it and what is known of the
-/// area at it (`FILL_FIRST`, `FILL_SHARD`), which its columns are asked
-/// the wall by (`area::is_wall`), word `k` of its lines (`LINES_AT`), cell
-/// `i`'s own palette index as `heights` laid it (`LAID_WORDS`), and
+/// bricks), its first cell as the world names it, X wrapped there, and what
+/// is known of the area at it (`area::Shard`), which its columns are asked
+/// the wall by (`area::is_wall`), word `k` of its lines (`LINES_ENTRIES_AT`), cell
+/// `i`'s own palette index as `columns` laid it (`LAID_WORDS`), and
 /// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
@@ -693,36 +611,36 @@ pub const JOINED_WORDS: u32 = 4;
 /// A row of the clip levels' table, as the kernel writes it (pxl-kernel
 /// domain/layer/terrain/clipmap.rs `table`) and the GPU reads it (pxl-render
 /// clip.wgsl), an `IVec4` of its buffer: the brick an entry's clip level wants
-/// there; where its cells are present, the slot holding them plus one
+/// there; and where its cells are present, the slot holding them plus one
 /// (`slot`), which another clip level at its zoom may have filled, 0 while
-/// they are not; and the fill they are on their way from, 0 where none is.
-/// Neither: wanted, its tile not yet handed it.
+/// they are not. Its fourth word is the row's, holding nothing.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Entry {
     pub brick: [i32; 2],
     pub present: i32,
-    pub ticket: u32,
+    row: i32,
 }
 
 const _: () = assert!(size_of::<Entry>() == 16, "an entry is a row of four words");
 
 impl Entry {
     pub const fn absent(brick: [i32; 2]) -> Entry {
+        Entry::at(brick, 0)
+    }
+
+    /// Its brick, and its slot plus one where it is present (`slot`).
+    pub const fn at(brick: [i32; 2], present: i32) -> Entry {
         Entry {
             brick,
-            present: 0,
-            ticket: 0,
+            present,
+            row: 0,
         }
     }
 
     /// The row the buffer's four words hold.
-    pub fn of([x, y, z, w]: [i32; 4]) -> Entry {
-        Entry {
-            brick: [x, y],
-            present: z,
-            ticket: w as u32,
-        }
+    pub fn of([x, y, z, _]: [i32; 4]) -> Entry {
+        Entry::at([x, y], z)
     }
 
     /// Its brick, and whether present (`Bricks::brick`).
@@ -742,7 +660,7 @@ impl Entry {
 
     /// Whether a query, or what one handed on, reads it other than as `was`: another brick
     /// or slot. A brick wanted absent is read as well, its cells off a coarser clip level
-    /// where its block's bound is folded (`fold`); a fill's ticket is no query's.
+    /// where its block's bound is folded (`fold`).
     pub fn moved_from(&self, was: Entry) -> bool {
         self.brick[0] != was.brick[0]
             || self.brick[1] != was.brick[1]
@@ -1011,25 +929,21 @@ mod tests {
 
     #[test]
     fn moved_from_reads_what_a_query_reads() {
-        let at = |b: [i32; 2], present: i32, ticket: u32| Entry {
-            brick: b,
-            present,
-            ticket,
-        };
-        // Present: another brick or slot moved it, a ticket did not.
-        assert!(at([1, 2], 3, 0).moved_from(at([1, 5], 3, 0)));
-        assert!(at([1, 2], 3, 0).moved_from(at([4, 2], 3, 0)));
-        assert!(at([1, 2], 3, 0).moved_from(at([1, 2], 4, 0)));
-        assert!(!at([1, 2], 3, 7).moved_from(at([1, 2], 3, 0)));
+        let at = Entry::at;
+        // Present: another brick or slot moved it.
+        assert!(at([1, 2], 3).moved_from(at([1, 5], 3)));
+        assert!(at([1, 2], 3).moved_from(at([4, 2], 3)));
+        assert!(at([1, 2], 3).moved_from(at([1, 2], 4)));
+        assert!(!at([1, 2], 3).moved_from(at([1, 2], 3)));
         // Present on one side alone.
-        assert!(at([1, 2], 3, 0).moved_from(at([1, 2], 0, 0)));
-        assert!(at([1, 2], 0, 0).moved_from(at([1, 2], 3, 0)));
-        // Neither present: another brick moved it, a ticket did not.
-        assert!(at([1, 2], 0, 0).moved_from(at([8, 9], 0, 5)));
-        assert!(!at([1, 2], 0, 0).moved_from(at([1, 2], 0, 5)));
+        assert!(at([1, 2], 3).moved_from(at([1, 2], 0)));
+        assert!(at([1, 2], 0).moved_from(at([1, 2], 3)));
+        // Neither present: another brick moved it.
+        assert!(at([1, 2], 0).moved_from(at([8, 9], 0)));
+        assert!(!at([1, 2], 0).moved_from(at([1, 2], 0)));
         // Held present on one side at least, or a brick wanted absent for another.
-        assert!(at([1, 2], 3, 0).held_moved_from(at([8, 9], 0, 0)));
-        assert!(at([1, 2], 0, 0).held_moved_from(at([8, 9], 3, 0)));
-        assert!(!at([1, 2], 0, 0).held_moved_from(at([8, 9], 0, 0)));
+        assert!(at([1, 2], 3).held_moved_from(at([8, 9], 0)));
+        assert!(at([1, 2], 0).held_moved_from(at([8, 9], 3)));
+        assert!(!at([1, 2], 0).held_moved_from(at([8, 9], 0)));
     }
 }

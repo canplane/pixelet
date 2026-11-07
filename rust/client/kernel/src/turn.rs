@@ -333,6 +333,7 @@ async fn frame_task() {
         let paced_ms = grant.paced_ms;
         world_frame(grant, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
+        clipmap::fill_share();
         WORLD_DRAWN.set(true);
     }
 }

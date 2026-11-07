@@ -82,12 +82,13 @@ fn formats_round_trip() {
     );
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
-    let resident = decode_into(&terrain, room()).unwrap();
+    let resident = decode_into(&terrain, room(), vec![0; ELE_COLUMN].leak()).unwrap();
     let held = Separation {
         coarsest: Default::default(),
         ..tile.separation.clone()
     };
     assert_eq!(resident.separation, held, "its lines");
+    assert_eq!(resident.ele, tile.ele, "its samples");
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
@@ -127,7 +128,7 @@ fn non_tile_pkt_refused() {
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());
     let room = room();
-    assert!(decode_into(&small, room).is_err());
+    assert!(decode_into(&small, room, vec![0; ELE_COLUMN].leak()).is_err());
 }
 
 /// Every valid occupancy byte round-trips.

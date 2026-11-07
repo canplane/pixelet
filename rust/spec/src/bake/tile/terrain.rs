@@ -72,13 +72,13 @@ pub struct Ground {
 /// A tile: one column a fact the client cannot make. What it draws by rule —
 /// a slab, a bore, a pier — is not here. The bake holds what goes on the
 /// wire; a client what it reads of a tile as a whole, its lines. Its cells
-/// a client holds in its clip levels, drawn by a GPU off the samples, and its
-/// ways there off the lines (pxl-engine `clipmap`).
+/// a client holds in its clip levels, filled off the samples, and its ways
+/// there off the lines (pxl-engine `clipmap`, `fill`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
     pub ground: Ground, // a class a cell: the source rasterized, or its fold; a client's void tile's alone
     pub separation: Separation, // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>, // the bake's: padded samples, a leaf's source or the fold's; a client hands them to a GPU off the packet
+    pub ele: Cow<'static, [i16]>, // padded samples, a leaf's source or the fold's; a client's in its room
     pub occupancy: Occupancy,     // which children are tiles: none is asked for that is not
 }
 
@@ -107,7 +107,7 @@ pub fn ways_fit(separation: &Separation, brick: u32) -> Result<(), ([u32; 2], us
 }
 
 /// The lines of the clip level's brick at `place` (in bricks) of `tile`, as
-/// the GPU asks them (pxl-engine clipmap.rs `LINES_*`), into `out`, a
+/// its fill asks them (pxl-engine clipmap.rs `LINES_*`), into `out`, a
 /// brick's `LINES_WORDS`: the tile's header, each bin's entries, and the
 /// segments a bin reaches, each once, in their lines' order — the reach
 /// `ways_fit` counts, so none holds more than `WAYS_BRICK_SEGMENTS`. The
@@ -222,8 +222,8 @@ fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 
 /// The clip level's brick at `place` (in bricks) of `tile` as its fill reads
 /// it, its lines `lines` (`brick_lines`): its palette indices four a cell as a client
-/// hands them (`gpu_cells`) and its heights off the tile's samples `ele` as
-/// `height_cs` draws them (`ground::height`), its ring's too.
+/// cuts them (`palette_cells`) and its heights off the tile's samples `ele`
+/// (`ground::height`), its ring's too.
 fn laid<'a>(
     tile: Quadrant,
     ground: &'a Ground,
@@ -252,59 +252,35 @@ fn laid<'a>(
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile` handed into
-/// `record` as a client hands it to a GPU's fill (pxl-engine clipmap.rs
-/// `HANDED_WORDS`): its palette indices four a cell (`gpu_cells`), its tile's padded
-/// samples, and its lines (`brick_lines`, with `scratch`); the rest zero.
-fn record(
-    tile: Quadrant,
-    held: &TerrainTile,
-    place: [u32; 2],
-    scratch: &mut [(u32, u32)],
-    record: &mut [u32],
-) {
-    use pxl_engine::clipmap::{BRICK_CELLS, ELE_AT, LINES_AT, LINES_WORDS, PALETTE_AT};
-    record.fill(0);
-    for i in 0..BRICK_CELLS {
-        let at = brick_cell(place, i);
-        record[(PALETTE_AT + i) as usize] = ground::word(
-            four_palette_indices(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
-                .map(u32::from),
-        );
-    }
-    for (k, pair) in held.ele.chunks(2).enumerate() {
-        record[ELE_AT as usize + k] =
-            u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
-    }
-    brick_lines(
-        tile,
-        &held.separation,
-        place,
-        scratch,
-        &mut record[LINES_AT as usize..(LINES_AT + LINES_WORDS) as usize],
-    );
-}
-
-/// The clip level's brick at `place` (in bricks) of `tile`, handed into
-/// `handed` (`record`) and filled into `column`, its spans into `spans`, its
-/// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-engine
-/// `fill::brick`): the most spans a column makes.
+/// The clip level's brick at `place` (in bricks) of `tile` filled into
+/// `column`, its lines into `lines` (`brick_lines`, with `scratch`) and its
+/// spans into `spans` (`clipmap::SPANS_WORDS`), as a client fills it
+/// (pxl-engine `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
     tile: Quadrant,
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
-    [handed, column, spans]: [&mut [u32]; 3],
+    [lines, column, spans]: [&mut [u32]; 3],
 ) -> u32 {
-    record(tile, held, place, scratch, handed);
+    let n = brick_lines(tile, &held.separation, place, scratch, lines);
     let cell = GROUND.cell_zoom(tile.zoom);
-    fill::brick(
-        handed,
-        column,
-        spans,
-        place,
+    let site = fill::Site {
         cell,
-        first_cell(tile, cell, place),
-    )
+        place,
+        first: first_cell(tile, cell, place),
+        shard: Shard::INSIDE,
+        ele: &held.ele,
+        lines: &lines[..n],
+    };
+    let four = |i: u32| {
+        let at = brick_cell(place, i);
+        ground::word(
+            four_palette_indices(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
+                .map(u32::from),
+        )
+    };
+    fill::brick(column, spans, four, &site)
 }
 
 /// The first cell at `cell`, its cells' zoom, of the clip level's brick at
@@ -318,16 +294,12 @@ pub fn first_cell(tile: Quadrant, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
 /// The child groups the clip levels' trees take wherever the eye is, of the
 /// pool (pxl-engine `way::tree::POOL_CHILD_GROUPS`): each eye's clip level's
 /// most at its cells (`worst`, the most any placement of it holds), the others'
-/// each the most of any, and the bricks handed a frame each the most a brick
-/// takes before its fold gives child groups back (`taken`). A brick without
-/// ways takes none.
-pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
-    use pxl_engine::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL};
+/// each the most of any. A brick without ways takes none.
+pub fn pool_needs(worst: impl Fn(Zoom) -> u64) -> u64 {
+    use pxl_engine::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL};
     let cells = FIRST_CELL..FIRST_CELL + EYE_CLIP_LEVELS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
-    cells.map(worst).sum::<u64>()
-        + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
-        + u64::from(FILL_CAP) * taken
+    cells.map(worst).sum::<u64>() + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
@@ -435,17 +407,17 @@ pub fn fill_fit(
     held: &TerrainTile,
     mut each: impl FnMut(u32, &FilledBrick<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
-    use pxl_engine::clipmap::{BRICK, BRICK_WORDS, HANDED_WORDS};
-    use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES, SCRATCH_WORDS};
+    use pxl_engine::clipmap::{BRICK, BRICK_WORDS, LINES_WORDS, SPANS_WORDS};
+    use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
     let mut fit = Fit::default();
     if held.separation.is_empty() {
         return Ok(fit);
     }
     let mut scratch = vec![(0, 0); WAYS_BRICK_SEGMENTS];
-    let (mut fresh, mut column, mut span_scratch) = (
-        vec![0; HANDED_WORDS as usize],
+    let (mut lines, mut column, mut span_scratch) = (
+        vec![0; LINES_WORDS as usize],
         vec![0; BRICK_WORDS as usize],
-        vec![0; SCRATCH_WORDS as usize],
+        vec![0; SPANS_WORDS as usize],
     );
     // A brick's room: the most a build takes, past the child group none holds.
     let mut pool = vec![0; 16 * (BRICK_CHILD_GROUPS as usize + 1)];
@@ -457,12 +429,12 @@ pub fn fill_fit(
             held,
             place,
             &mut scratch,
-            [&mut fresh, &mut column, &mut span_scratch],
+            [&mut lines, &mut column, &mut span_scratch],
         );
         if spans > way::SPANS as u32 {
             return Err((place, Unfit::Spans(spans)));
         }
-        let cell = fill::cell_of(&fresh, 0);
+        let cell = GROUND.cell_zoom(tile.zoom);
         // Asked before the build, which refuses past either alike.
         let (_, nodes) = fill::root_span(&column, 0, cell);
         if nodes > ROOT_NODES {
@@ -604,37 +576,44 @@ fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
     })
 }
 
-/// What a GPU is handed off a packet: its palette indices, four a cell, a column of
-/// one palette index a cell expanded into `room`, each its own four; and its padded
-/// samples.
-pub fn gpu_cells<'a>(
+/// A packet's palette indices, four a cell, a column of one palette index a cell
+/// expanded into `room`, each its own four: what a client's clip levels cut
+/// their bricks' from.
+pub fn palette_cells<'a>(
     pkt: &'a [u8],
     room: &'a mut [GroundId],
-) -> Result<(&'a [GroundId], &'a [i16]), MarshalError> {
-    let Columns { ele, ground, .. } = read_tile(pkt)?;
+) -> Result<&'a [GroundId], MarshalError> {
+    let Columns { ground, .. } = read_tile(pkt)?;
     if ground.len() == PALETTE_COLUMN {
-        return Ok((ground, ele));
+        return Ok(ground);
     }
     for (c, q) in room[..PALETTE_COLUMN].chunks_mut(4).enumerate() {
         q.copy_from_slice(&four_palette_indices(ground, c));
     }
-    Ok((&room[..PALETTE_COLUMN], ele))
+    Ok(&room[..PALETTE_COLUMN])
 }
 
 /// Decode a tile straight into its resident room in `.fixed.terrain`: its
-/// lines; its cells go to its clip levels (`gpu_cells`).
-pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, MarshalError> {
+/// lines and, into `ele`, its padded samples; its cells go to its clip levels
+/// (`palette_cells`).
+pub fn decode_into(
+    pkt: &[u8],
+    room: separation::Room,
+    ele: &'static mut [i16],
+) -> Result<TerrainTile, MarshalError> {
     let Columns {
+        ele: samples,
         occupancy,
         separation,
         ..
     } = read_tile(pkt)?;
+    ele.copy_from_slice(samples);
     Ok(TerrainTile {
         ground: Ground {
             cells: Cow::Borrowed(&[]),
         },
         separation: separation.into_room(room),
-        ele: Cow::Borrowed(&[]),
+        ele: Cow::Borrowed(ele),
         occupancy,
     })
 }

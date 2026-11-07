@@ -1,17 +1,16 @@
 // pxl-kernel/domain/layer/terrain/tile.rs
 
 //! Terrain as a layer of the pyramid; a tile's record is a room in
-//! `.fixed.terrain` for what is read of it whole, its lines, decoded into
-//! straight from the packet. Its cells are its clip levels'
-//! (domain/layer/terrain/clipmap.rs), filled off the packet, which is kept only
-//! until the GPU has what they want of it (`uploads`). A tile the bake left as
+//! `.fixed.terrain` for what is read of it whole, its lines and its samples,
+//! decoded into straight from the packet. Its cells are its clip levels'
+//! (domain/layer/terrain/clipmap.rs), which cut what they want of them off
+//! the packet in the turn it lands, and it goes. A tile the bake left as
 //! no object is drawn from the tile over it, whose cells there are open water;
 //! at the source's top, it is void.
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::upload::Uploads;
 use pxl_spec::bake::separation;
-use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
+use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile, ELE_COLUMN};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::mem;
@@ -23,7 +22,7 @@ use crate::sys::io::failure::Failure;
 
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::layer::terrain::fixed::RANGE;
-use crate::domain::layer::terrain::fixed::{separation_column, SEPARATION_COLUMNS};
+use crate::domain::layer::terrain::fixed::{ele_off, separation_column, SEPARATION_COLUMNS};
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
@@ -31,6 +30,7 @@ use crate::sys::io::request;
 use pxl_spec::bake::tile::Occupancy;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
+use xpute_core::mem::range::arr;
 
 static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
@@ -62,56 +62,36 @@ impl Base for TerrainTile {
     ) -> Result<TerrainTile, Failure> {
         let t0 = now();
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let terrain = decode_into(pkt, unsafe { room_of(record) })?;
+        let terrain = decode_into(pkt, unsafe { room_of(record) }, unsafe { ele_of(record) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
     }
 
-    /// What its clip levels want of it is the GPU's, off the packet: kept only
-    /// where a clip level wants one of its bricks, so an ancestor's or another
-    /// zoom's packet no clip level reads takes no spare slot
-    /// (sys/io/request.rs `spare_slots`).
+    /// What its clip levels want of it cut off the packet, which goes: none is
+    /// kept past its turn.
     fn keep(record: Option<u32>, block: Block) {
-        let wanted = |r: &u32| {
-            TerrainTile::tile_cache()
-                .in_slot(*r)
-                .is_some_and(clipmap::is_tile_wanted)
-        };
-        match record {
-            Some(r) if !wanted(&r) => {
-                uploads().forget(r);
-                fetch::release(Some(block));
-            }
-            _ => uploads().keep(record, block, request::spare_slots()),
+        if let Some(t) = record.and_then(|r| TerrainTile::tile_cache().in_slot(r)) {
+            clipmap::cut(t, fetch::body(block));
         }
+        fetch::release(Some(block));
     }
 }
 
 /// How many tiles may be asked again for their packets now: the spare
-/// slots (sys/io/request.rs `spare_slots`) less the packets kept, which only
-/// a drawn frame gives back, and those asked again and not yet come, so
-/// none is fetched only to be freed. A packet past them is freed once
-/// decoded, and its tile asked again here (domain/layer/terrain/clipmap.rs
-/// `step`).
+/// slots (sys/io/request.rs `spare_slots`) less those asked again and not yet
+/// come (domain/layer/terrain/clipmap.rs `step`).
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
         .asked_again(|p| !request::has_object_failed(Stream::terrain, p.id()));
-    request::spare_slots().saturating_sub(uploads().cnt() + coming)
+    request::spare_slots().saturating_sub(coming)
 }
 
-/// The tiles whose bricks the clip levels want filled, off their packets.
-static UPLOADS: Global<Uploads> = Global::new();
-
-pub fn uploads() -> &'static mut Uploads {
-    UPLOADS.get(|| Uploads::new(TileCache::<TerrainTile>::SLOTS))
-}
-
-/// Whether `tile`'s packet is kept, its bricks still to be handed.
-pub fn pending_for(tile: Quadrant) -> bool {
-    TerrainTile::tile_cache()
-        .slot(tile)
-        .is_some_and(|f| uploads().waiting(f))
+/// # Safety
+/// As `room_of`'s.
+unsafe fn ele_of(record: u32) -> &'static mut [i16] {
+    // SAFETY: as this function's, and the plane is plain numbers.
+    unsafe { arr(RANGE.get(), ele_off(record), ELE_COLUMN) }
 }
 
 /// # Safety

@@ -1,5 +1,4 @@
-//! The device every test of a pass by hand runs it on (tests/fill.rs and the
-//! rest): its buffers and textures, a module taken as the renderer assembles it or from a file
+//! The device every test of a pass by hand runs it on: its buffers and textures, a module taken as the renderer assembles it or from a file
 //! a mutant sweep names, and a wait for the device that gives up, as a shader by hand may loop
 //! on; and what the tests share besides: the light's beam as the cast runs it, the kinds of
 //! case each met, a light's box as a host lays it, a hash and a few vectors.

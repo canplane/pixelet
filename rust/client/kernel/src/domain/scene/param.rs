@@ -79,9 +79,8 @@ pub const CHARACTER_LONG_SIDE_MAX: f64 = 256.0;
 /// The ways' pool on the GPU at first, 1 MiB, 16 Ki child groups: a brick with
 /// no ways holds none, and one with ways a child group from its own nodes along
 /// z down (pxl-engine `way::tree`), so the ways of a sparse view. It doubles
-/// each time a build runs out (pxl-render gpu/ray/ground.rs
-/// `GroundBuffers::grow`), the brick that ran out filled again a turn later, so
-/// a dense view reaches 64 MiB in six.
+/// as the kernel's pool passes it (pxl-render gpu/ray/ground.rs
+/// `GroundBuffers::grow`), so a dense view reaches 64 MiB in six.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
 const _: () = {
     use pxl_engine::way::tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};
@@ -89,34 +88,5 @@ const _: () = {
         WAYS_POOL_FIRST_BYTES <= POOL_CHILD_GROUPS * CHILD_GROUP_WORDS * 4
             && WAYS_POOL_FIRST_BYTES >= 2 * CHILD_GROUP_WORDS * 4,
         "the pool's first is no more than its most, nor less than a child group past child group 0"
-    );
-};
-
-/// A brick's ways' records' room in each of its reads at first, 16 KiB,
-/// 240 child groups': a brick with no ways reads its count alone, 4 B. Every
-/// read's room doubles past a brick's records that outgrew it, that brick
-/// filled again (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), up to
-/// a brick's most, `way::tree::RECORDS_BYTES`: the GPU's read buffers and
-/// their rooms on the heap together, each pxl-render gpu/ray/ground.rs
-/// `READS` of them.
-pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
-
-/// The handed bricks' scratch at first, 4 MiB, 1390 child groups a brick:
-/// its columns' spans, 3.14 MiB for the nine, are a brick's most whatever
-/// it holds, and the rest a tree of 1390 child groups, more than a read's first
-/// room holds records of (240). Each brick's tree room doubles each time a
-/// build outgrows it, its spans fixed, the brick filled again a turn
-/// later, so the scratch goes 4.00, 4.86, 6.58, 10.01, 16.88 and 18.01 MiB,
-/// a brick at the bake's bound reaching its most in five. The pool's known
-/// gap holds for each growth (pxl-render gpu/ray/ground.rs
-/// `GroundBuffers::grow`).
-pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 4 << 20;
-const _: () = {
-    use pxl_engine::{clipmap::FILL_CAP, way::tree};
-    let least = FILL_CAP * tree::scratch_words(1) * 4;
-    assert!(
-        WAYS_SCRATCH_FIRST_BYTES <= FILL_CAP * tree::SCRATCH_WORDS * 4
-            && WAYS_SCRATCH_FIRST_BYTES >= least,
-        "the scratch's first is no more than a brick's most, nor less than a child group a brick"
     );
 };

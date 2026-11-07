@@ -47,16 +47,22 @@ fn four_of(v: u32) -> u32 {
 const PLACED = 0u;
 const WAYS = 1u;
 
+/// Word `slot`'s child pointer in the ways' pool, the child groups whole, a child group's
+/// eight child pointers then its eight data words (pxl-engine way/tree.rs `first_child_at`).
+fn first_child_at(slot: u32) -> u32 {
+  return 2u * slot - slot % 8u;
+}
+
 fn first_child(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
-    return pool[slot];
+    return pool[first_child_at(slot)];
   }
   return overwrites[slot];
 }
 
 fn tree_data(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
-    return pool[arrayLength(&pool) / 2u + slot];
+    return pool[first_child_at(slot) + 8u];
   }
   return overwrites[arrayLength(&overwrites) / 2u + slot];
 }

@@ -169,11 +169,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
             (EYE[0] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
             (EYE[1] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
         ];
-        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Entry {
-            brick: first,
-            present: 1,
-            ticket: 0,
-        };
+        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Entry::at(first, 1);
         for k in 0..ENTRIES {
             let q = [
                 first[0] + (k % ACROSS) as i32,
@@ -228,8 +224,8 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     (rows, ground)
 }
 
-/// Each clip level's entries folded a level at a time, as `fold_cs` folds
-/// them; `zero`, the zero entry, none, over a block a brick of which the
+/// Each clip level's entries folded a level at a time, as the kernel folds
+/// them (`clipmap::fold`); `zero`, the zero entry, none, over a block a brick of which the
 /// clip level does not hold present: no bound, which only splits more.
 fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
     let mut joined = vec![[0; JOINED_WORDS as usize]; (EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize];

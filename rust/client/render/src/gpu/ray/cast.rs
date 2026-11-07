@@ -7,7 +7,7 @@
 use super::sequence;
 use crate::frame::shader::access::Step;
 use pxl_content::generation::{self, GROUPS};
-use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
+use pxl_engine::clipmap;
 use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, screen, Zoom, LEAF_CELL};
 use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
@@ -16,7 +16,7 @@ use xpute_kit::status::errno::Errno;
 use super::count::{self, Counter, Counts, RayCounts};
 use super::raster::Raster;
 use super::schedule::{Reads, Schedule};
-use super::{GroundPipelines, RaysPass};
+use super::RaysPass;
 use crate::frame::draw::Stand;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -846,15 +846,13 @@ const _: () = assert!(
 );
 
 impl RaysPass {
-    /// The cast pass's pipelines and buffers, and the ground's pipelines
-    /// (`GroundPipelines`), made once with the renderer, before its first
-    /// frame (gpu/pipeline.rs): no frame names a pipeline until every one
-    /// is made.
+    /// The cast pass's pipelines and buffers, made once with the renderer,
+    /// before its first frame (gpu/pipeline.rs): no frame names a pipeline
+    /// until every one is made.
     pub fn make(&mut self, g: &Gpu, pipelines: &mut Pipelines) {
         if self.cast.is_some() {
             return;
         }
-        self.ground_built = Some(GroundPipelines::new(g, pipelines));
         // One group for every kernel over the cast's world but the pixels'.
         let group = &WORLD_GROUP;
         let pipeline = pipelines.build_compute(g, COMPUTE_CAST, &CAST_GROUP);
@@ -1134,9 +1132,7 @@ impl RaysPass {
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
-        // And the ground's bricks, written this frame or not.
-        let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        let same = r.end() && fresh == 0 && c.group != 0;
+        let same = r.end() && c.group != 0;
         let stands = c.schedule.stands(same);
         xpute_kit::ensure!(
             cast.clipmap.len() == clipmap::TABLE_WORDS as usize,
@@ -1259,8 +1255,8 @@ impl RaysPass {
             || c.frame >= node_cache::FRAMES;
         let cuts_moved = cuts != c.cuts;
         c.cuts = cuts;
-        // The eye's clip levels' entries that hold another brick, or whose
-        // brick the turn handed: what is over them is asked again.
+        // The eye's clip levels' entries that hold another brick, or hold it
+        // present or no longer: what is over them is asked again.
         let eye_rows = (clipmap::EYE_CLIP_LEVELS * clipmap::ENTRIES) as usize;
         let rows = &cast.clipmap[..4 * eye_rows];
         let entry = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]);
@@ -1330,37 +1326,9 @@ impl RaysPass {
             c.entries.extend_from_slice(rows);
         }
         // What the world's query reads moved: the bricks the clip levels
-        // hold present, the bricks the turn handed (their cells, palette
-        // indices and ways), the service area, what is placed, a preview's
-        // cuts.
-        let world_moved = present_moved
-            || fresh != 0
-            || shards_moved
-            || shards_grow
-            || overwrites_moved
-            || cuts_moved;
-        // A brick handed moves the eye's entry that wants it, whichever
-        // clip level's slot it is filled into.
-        if let Some(gb) = self.ground.as_ref() {
-            for f in &gb.handed[..fresh as usize] {
-                let (cell, q) = (
-                    f[FILL_CELL as usize],
-                    clipmap::brick_of_first([f[FILL_FIRST as usize], f[FILL_FIRST as usize + 1]]),
-                );
-                let finer = |q: [i32; 2]| present(cell + 1, q);
-                light::brick_columns(origin, cell, q, finer, |v| {
-                    put_column(&mut c.light_columns, v);
-                });
-                let w = cell.wrapping_sub(clipmap::FIRST_CELL);
-                let k = (w * clipmap::ENTRIES + clipmap::entry(q)) as usize;
-                let row = &cast.clipmap[4 * k..4 * k + 4];
-                if w < clipmap::EYE_CLIP_LEVELS && [row[0], row[1]] == q {
-                    c.moved[k / 32] |= 1 << (k % 32);
-                    let level = &mut c.moved_bricks[w as usize];
-                    *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
-                }
-            }
-        }
+        // hold present, the service area, what is placed, a preview's cuts.
+        let world_moved =
+            present_moved || shards_moved || shards_grow || overwrites_moved || cuts_moved;
         // Decor generated first: where it stands is what the light's cast reads
         // of it, and its buffers what the light's groups bind.
         let world = [c.eye, c.clipmap, ground, c.shards, c.overwrites, pool];
@@ -1369,10 +1337,7 @@ impl RaysPass {
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
-            fresh: self
-                .ground
-                .as_ref()
-                .map_or(&[][..], |gb| &gb.handed[..fresh as usize]),
+            fresh: self.ground.as_ref().map_or(&[][..], |gb| &gb.handed[..]),
             eye: &cast.eye,
         };
         c.generator

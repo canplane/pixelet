@@ -14,9 +14,8 @@ use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
     self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL, HANDED_WORDS, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT,
-    LAID_CELLS, LINES_AT, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, ORIGIN_AT, PALETTE_AT, ROOT_AT,
-    TREE_AT,
+    EYE_CLIP_LEVELS, FIRST_CELL, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT, LAID_CELLS,
+    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
@@ -246,17 +245,28 @@ impl Resident for World<'_> {
 /// A way's middle a descent is sent to: its cells' zoom, its line, and where in leaf cells.
 pub type Point = (Zoom, u32, [i32; 3]);
 
-/// A brick's record as a frame hands it: its four palette indices a cell, its tile's
-/// samples, its lines. Its ways' middles are added to `ways`.
+/// What a brick is filled off: its four palette indices a cell, its tile's samples, its
+/// lines (pxl-engine `fill::Site`).
+pub struct Handed {
+    pub four: Vec<u32>,
+    pub ele: Vec<i16>,
+    pub lines: Vec<u32>,
+}
+
+/// A brick as the kernel fills it. Its ways' middles are added to `ways`.
 pub fn handed(
     eye: [i32; 2],
-    fresh: &mut [u32],
     cell: Zoom,
     q: [i32; 2],
     lined: bool,
     ways: &mut Vec<Point>,
-) {
-    fresh.fill(0);
+) -> Handed {
+    let span = (ground::ELE_PADDED_SPAN * ground::ELE_PADDED_SPAN) as usize;
+    let mut handed = Handed {
+        four: vec![0; BRICK_CELLS as usize],
+        ele: vec![0; span],
+        lines: vec![0; LINES_WORDS as usize],
+    };
     let s = LEAF_CELL - cell;
     for i in 0..BRICK_CELLS {
         let [x, y] = clip::of_idx(i);
@@ -287,7 +297,7 @@ pub fn handed(
         } else {
             [ground::UNKNOWN; 4]
         };
-        fresh[(PALETTE_AT + i) as usize] = ground::word(four);
+        handed.four[i as usize] = ground::word(four);
     }
     // The tile's samples, each about a padded place on the tile's cells.
     let tile = [q[0] >> 3, q[1] >> 3];
@@ -300,8 +310,7 @@ pub fn handed(
                 ((f + (v as i32 - ground::ELE_PAD as i32) * step + step / 2) as i64) << s
             };
             let e = elevation(eye, cell, at(sx, first[0]) as i32, at(sy, first[1]) as i32);
-            let k = ground::ele_idx(sx, sy) as u32;
-            fresh[(clip::ELE_AT + k / 2) as usize] |= (e as i16 as u16 as u32) << (16 * (k % 2));
+            handed.ele[ground::ele_idx(sx, sy)] = e as i16;
         }
     }
     // The tile's lines, every one in every bin of the brick: a bridge, a bore and an
@@ -312,10 +321,9 @@ pub fn handed(
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
     };
-    fresh[LINES_AT as usize..(LINES_AT + way::HEADER_WORDS) as usize]
-        .copy_from_slice(&way::header(per_m, &stations));
+    handed.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
     if !lined {
-        return;
+        return handed;
     }
     let mut segments = Vec::new();
     for line in 0..5u32 {
@@ -364,15 +372,16 @@ pub fn handed(
     }
     let n = segments.len() as u32;
     for b in 0..clip::WAYS_BINS {
-        fresh[(LINES_AT + way::HEADER_WORDS + b) as usize] = n << 16;
+        handed.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
     }
     for e in 0..n {
-        fresh[(LINES_AT + LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
+        handed.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
     }
     for (k, w) in segments.iter().enumerate() {
-        let at = (LINES_AT + LINES_SEGMENTS_AT) as usize + k * way::SEGMENT_WORDS;
-        fresh[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
+        let at = LINES_SEGMENTS_AT as usize + k * way::SEGMENT_WORDS;
+        handed.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
     }
+    handed
 }
 
 /// What is placed as the store lays it: a slot's child pointer, then its data; the
@@ -562,10 +571,9 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let mut palette_words: Vec<u32> = Vec::new();
     let mut pool = vec![0u32; 1 << 23];
     let mut next_group = 1u32;
-    let (mut fresh, mut lane, mut scratch) = (
-        vec![0u32; HANDED_WORDS as usize],
+    let (mut lane, mut scratch) = (
         vec![0u32; BRICK_WORDS as usize],
-        vec![0u32; TREE_AT as usize],
+        vec![0u32; SPANS_WORDS as usize],
     );
     let mut way_points = Vec::new();
     let (mut held_bricks, mut absent_bricks, mut way_bricks) = (0u32, 0u32, 0u32);
@@ -586,13 +594,18 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 continue;
             }
             let lined = !(h >> 8).is_multiple_of(3);
-            handed(eye, &mut fresh, cell, q, lined, &mut way_points);
+            let brick = handed(eye, cell, q, lined, &mut way_points);
             lane.fill(0);
-            let place = [(q[0] & 7) as u32, (q[1] & 7) as u32];
-            let first_cell = [wrap_idx(cell, q[0] << BRICK_SHIFT), q[1] << BRICK_SHIFT];
-            let palette_at = PALETTE_AT as usize;
-            palette_words.extend_from_slice(&fresh[palette_at..palette_at + BRICK_CELLS as usize]);
-            fill::brick(&mut fresh, &mut lane, &mut scratch, place, cell, first_cell);
+            palette_words.extend_from_slice(&brick.four);
+            let site = fill::Site {
+                cell,
+                place: [(q[0] & 7) as u32, (q[1] & 7) as u32],
+                first: [wrap_idx(cell, q[0] << BRICK_SHIFT), q[1] << BRICK_SHIFT],
+                shard: Shard::INSIDE,
+                ele: &brick.ele,
+                lines: &brick.lines,
+            };
+            fill::brick(&mut lane, &mut scratch, |i| brick.four[i as usize], &site);
             let [taken, _, root] = fill::tree(&lane, &scratch, cell, &mut pool, next_group);
             if taken != u32::MAX {
                 next_group += taken;

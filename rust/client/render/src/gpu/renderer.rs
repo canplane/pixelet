@@ -1219,26 +1219,22 @@ impl Renderer {
         let baked = self.impostor.bake(g, ahead, &self.decor, b);
         read.mark(baked);
         let mut ctx = RenderContext::new(g, ahead, &mut stamps);
-        let gridded = self.screen.grids(&mut ctx);
         let (tables, exposed, copied) = self.atmosphere.draw(&mut ctx);
         read.mark(tables);
-        if baked || gridded || tables || exposed || copied {
+        if baked || tables || exposed || copied {
             g.submit(ahead);
         } else {
             release(ahead);
         }
         self.atmosphere.read_back(g);
-        self.screen.read_back(g, &mut input.ground);
         if clouds_moved {
             self.clouds.write(g);
         }
         // The world as it stood: all the frame draws from read as last time
         // but its lists and its jitter, over rays cast again at most at
         // their pixels.
-        let stands = read.end()
-            && self.screen.kind() != FrameKind::cast
-            && !self.screen.generates()
-            && !gridded;
+        let stands =
+            read.end() && self.screen.kind() != FrameKind::cast && !self.screen.generates();
         let decided = Decided::of(Reads {
             partial,
             stands,

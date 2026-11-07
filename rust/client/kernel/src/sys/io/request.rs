@@ -537,12 +537,10 @@ pub fn set_credits(credits: u32) {
     sched().set_credits(credits);
 }
 
-/// The body slots (`BODY_SLOTS`) a terrain packet may wait in past its
-/// decode: less one for each of the most credits the runtime has granted,
-/// one at least, as a body on each may still be out after a grant of fewer,
-/// and one for each Earth tile its stream's bound holds, whose packet waits
-/// for a frame (sys/io/body.rs). A packet kept within them never takes the
-/// slot a read needs to arrive into.
+/// The body slots (`BODY_SLOTS`) a tile asked again may come in: less one for
+/// each of the most credits the runtime has granted, one at least, as a body
+/// on each may still be out after a grant of fewer, and one for each Earth tile
+/// its stream's bound holds, whose packet waits for a frame (sys/io/body.rs).
 pub fn spare_slots() -> u32 {
     let s = sched();
     let earth = s.bounds[Stream::earth as usize] as u32;

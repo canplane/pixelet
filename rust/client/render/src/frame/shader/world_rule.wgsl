@@ -2,8 +2,7 @@
 
 // The world's rules that read no buffer, by hand: a value's kind, the service area's wall,
 // a brick's cell order, a bound word, the bounds an entry holds and a column's top in
-// cells. What the world's query (world.wgsl), the ways' fill (way.wgsl, way_tree.wgsl) and
-// the ground's levels (bound.wgsl) read.
+// cells. What the world's query (world.wgsl) reads.
 
 // ---- value.rs, answer.rs ----
 

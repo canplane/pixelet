@@ -109,10 +109,6 @@ pub fn reach2(width: u32) -> i64 {
 }
 
 /// `base + num / den` rounded half to even, `den > 0`: exact, in integers.
-/// Its twin on the GPU (pxl-render way.wgsl `nearest`) starts from a float's
-/// estimate of the quotient and corrects it by up to four each way, so it
-/// agrees only while the quotient's magnitude stays under 2^20: every caller
-/// counts its quotient beside its bits (`surface`, `pier_covers`).
 pub fn nearest(num: i64, den: i64, base: i32) -> i32 {
     let (q, r) = (num.div_euclid(den), num.rem_euclid(den));
     let z = i64::from(base) + q;
@@ -478,10 +474,9 @@ pub fn on_way(
 /// What segment `s` is over the column about `at`, a cell a side, in eighths
 /// of a cell, `NONE` unless its way covers `at` (`on_way`): the surface it
 /// runs through across the column, and whether the column holds the section
-/// of a pier at a station of it. Once a column and segment as a brick lands:
-/// some ten 64-bit products, and a quotient for each of the two surfaces and
-/// the station (`nearest`), which a GPU estimates in floats and corrects by a
-/// 64-bit product; a GPU makes each of 32-bit halves (pxl-render i64.wgsl).
+/// of a pier at a station of it. Once a column and segment as a brick is
+/// filled: some ten 64-bit products, and a quotient for each of the two
+/// surfaces and the station (`nearest`).
 pub fn crossing(s: &Segment, at: [i32; 2], st: &Stations) -> Crossing {
     let ends = [s.first == 1, s.last == 1];
     let ([n, len2], on) = on_way([s.a, s.b], s.width, ends, at);
@@ -868,8 +863,8 @@ fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
 
 /// The `k`-th of a cell and the six about it, from its own: the row under
 /// it, the column before it, the cell under it, the cell over it, the column
-/// after it, the row over it — the order of the grid's cells (pxl-render
-/// way_tree.wgsl `near`, whose leaves read it).
+/// after it, the row over it — the order of the grid's cells, which a tree's
+/// leaves read.
 fn near(k: u32) -> [i32; 3] {
     // Its axis, y, x then z, and its side.
     let (i, s) = if k < 4 {

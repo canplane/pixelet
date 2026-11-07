@@ -4,8 +4,8 @@
 //! (domain/layer/terrain/clipmap.rs) at the cells of the tile its cells fold from,
 //! off the finest clip level holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
-//! A column's ways are its brick's tree the GPU built, its child groups read
-//! back into the pool's mirror (domain/layer/terrain/clipmap.rs `pool`).
+//! A column's ways are its brick's tree, its child groups in the ways' pool
+//! (domain/layer/terrain/clipmap.rs `pool`).
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{self as cells, Lookup};

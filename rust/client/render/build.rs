@@ -66,9 +66,7 @@ fn main() {
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
     std::fs::write(out.join("side.wgsl"), side_word()).expect("a box's side");
     std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
-    std::fs::write(out.join("way_word.wgsl"), way_word()).expect("the ways' words");
     std::fs::write(out.join("decor_word.wgsl"), decor_word()).expect("decor's words");
-    std::fs::write(out.join("fill_word.wgsl"), fill_word()).expect("the fill's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -739,82 +737,6 @@ fn world_word() -> String {
     )
 }
 
-/// What the ways' fill by hand reads (way.wgsl, way_tree.wgsl and the free stack's passes),
-/// from pxl-engine, whose layouts and rules they are; what the world's words hold
-/// already, theirs.
-fn way_word() -> String {
-    use pxl_engine::clipmap as clip;
-    use pxl_engine::param::way as param;
-    use pxl_engine::way::{self, tree};
-    use pxl_engine::{fill, value};
-    let words: &[(&str, u32)] = &[
-        ("HANDED_WORDS", clip::HANDED_WORDS),
-        ("FILL_BRICK", clip::FILL_BRICK),
-        ("FILL_PLACE", clip::FILL_PLACE),
-        ("FILL_CELL", clip::FILL_CELL),
-        ("FILL_FIRST", clip::FILL_FIRST),
-        ("FILL_SHARD", clip::FILL_SHARD),
-        ("FILL_CAP", clip::FILL_CAP),
-        ("ELE_AT", clip::ELE_AT),
-        ("ELE_PAD", ground::ELE_PAD),
-        ("ELE_PADDED_SPAN", ground::ELE_PADDED_SPAN),
-        ("CELL_STEPS", ground::CELL_STEPS as u32),
-        ("LINES_AT", clip::LINES_AT),
-        ("LINES_ENTRIES_AT", clip::LINES_ENTRIES_AT),
-        ("LINES_SEGMENTS_AT", clip::LINES_SEGMENTS_AT),
-        ("WAYS_SHIFT", clip::WAYS_SHIFT),
-        ("WAYS_BINS_ACROSS", clip::WAYS_BINS_ACROSS),
-        ("HEADER_WORDS", way::HEADER_WORDS),
-        ("HEADER_PER_M", way::HEADER_PER_M as u32),
-        ("HEADER_STEP", way::HEADER_STEP as u32),
-        ("HEADER_PHASE", way::HEADER_PHASE as u32),
-        ("HEADER_LEAF", way::HEADER_LEAF as u32),
-        ("SEGMENT_WORDS", way::SEGMENT_WORDS as u32),
-        ("SEGMENT_DIR", way::SEGMENT_DIR as u32),
-        ("DIR_BITS", way::DIR_BITS),
-        ("POINT_SCALE", way::POINT_SCALE as u32),
-        ("BRIDGE", way::BRIDGE),
-        ("TUNNEL", way::TUNNEL),
-        ("WAY_NOTHING", way::NOTHING),
-        ("WAY_AIR", way::AIR),
-        ("AIR_OF", way::AIR_OF),
-        ("VALUE_PIER", value::PIER),
-        ("TRANSPORTS_FIRST", value::TRANSPORTS[0]),
-        ("TRANSPORTS_LAST", value::TRANSPORTS[1]),
-        ("SPANS", way::SPANS as u32),
-        ("SPANS_AT", clip::SPANS_AT),
-        ("SPANS_ACROSS", clip::SPANS_ACROSS),
-        ("SPANS_COLUMNS", clip::SPANS_COLUMNS),
-        ("SPANS_COLUMN_WORDS", clip::SPANS_COLUMN_WORDS),
-        ("SPANS_CNT", fill::SPANS_CNT),
-        ("SPANS_PAST", fill::SPANS_PAST),
-        ("SPANS_LANES", fill::SPANS_LANES),
-        ("FREED_AT", tree::FREED_AT),
-        ("RECORD_WORDS", tree::RECORD_WORDS),
-        ("BRICK_CHILD_GROUPS", tree::BRICK_CHILD_GROUPS),
-        ("TREE_NONE", tree::NONE),
-        ("TREE_CRAMPED", tree::CRAMPED),
-        ("TREE_STARVED", tree::STARVED),
-        ("REL_MASK", tree::REL_MASK),
-        ("Z_SHIFT", tree::Z_SHIFT),
-        ("TAKEN_CNT", tree::TAKEN_CNT),
-        ("WAY_LANES", tree::LANES),
-    ];
-    let floats: &[(&str, f32)] = &[
-        ("DECK_THICKNESS_M", param::DECK_THICKNESS_M),
-        ("PIER_MIN_RISE_M", param::PIER_MIN_RISE_M),
-        ("LOWER_DECK_GAP_M", way::LOWER_DECK_GAP_M),
-    ];
-    let mut out = String::new();
-    for (name, v) in words {
-        out += &format!("const {name}: u32 = {v}u;\n");
-    }
-    for (name, v) in floats {
-        out += &format!("const {name}: f32 = {v:?};\n");
-    }
-    out
-}
-
 /// What decor's passes by hand read past the world's words, from pxl-content, whose layouts
 /// they are: the records, the list, a row of the catalog, and what each decor's row
 /// determines, by decor (`Decor::cap`, `scatter::root`, `generation::first_record`).
@@ -976,23 +898,6 @@ fn decor_word() -> String {
     )
 }
 
-/// What a handed brick's tops read by hand past the ways' words (height.wgsl), from
-/// pxl-engine, whose layouts they are: where its cells' palette words lie in its record,
-/// and a word's four palette indices.
-fn fill_word() -> String {
-    use pxl_engine::clipmap as clip;
-    let mut out = format!("const PALETTE_AT: u32 = {}u;\n", clip::PALETTE_AT);
-    // A cell's word's four palette indices, `dx + 2·dy` (ground.rs `palette_indices`).
-    let b = ground::PALETTE_BITS;
-    let m = (1u32 << b) - 1;
-    out += &format!(
-        "fn palette_four(w: u32) -> vec4<u32> {{ return vec4<u32>(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
-        2 * b,
-        3 * b
-    );
-    out
-}
-
 /// The tiles' uniform as every pass reads it (pxl-engine
 /// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
 /// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
@@ -1093,7 +998,7 @@ fn words() -> String {
         format!("const MAX_COMPUTE_WORKGROUPS_PER_DIMENSION: u32 = {MAX_COMPUTE_WORKGROUPS_PER_DIMENSION}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
-        format!("const HEIGHT_SIDE: u32 = {HEIGHT_SIDE}u;\nconst LEVEL_SIDE: u32 = {LEVEL_SIDE}u;\nconst CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
+        format!("const CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-engine).

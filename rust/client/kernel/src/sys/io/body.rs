@@ -17,12 +17,11 @@
 //!
 //! The slots never stop the reads, drawn or not. A body on a credit needs
 //! no other to be decoded (domain/view/demand.rs `admit_arrived`, one a pass at
-//! least), and is then freed or kept. Uploads packets are given back only by
-//! a drawn frame (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`),
-//! so they are bounded apart from it: the Earth's by its frames, terrain's
-//! by the slots less one for the most credits granted and every Earth
-//! frame (sys/io/request.rs `spare_slots`), a packet past it, or one no
-//! window wants a brick of, freed once decoded. The kept thus leave a
+//! least), and is then freed or kept. A terrain packet is freed once decoded,
+//! its clip levels having cut what they want of it
+//! (domain/layer/terrain/clipmap.rs `cut`). An Earth packet is given back only by
+//! a drawn frame (domain/layer/earth.rs `earth_upload`), so it is bounded
+//! apart from it, by its frames. The kept thus leave a
 //! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.
 //!
@@ -34,17 +33,9 @@
 //! back in a run held. Either way the next slot given back asks a turn, in
 //! which the want is asked again.
 //!
-//! In a drawn frame a terrain packet is given back once no window wants
-//! one of its bricks absent (domain/layer/terrain/clipmap.rs `fill`): each frame
-//! hands `FILL_CAP` bricks only of tiles kept or void (`due`), a brick
-//! handed is wanted no more, and a packet whose tile left or that no
-//! window wants is given back on that upload too, the stream full or not
-//! (domain/layer/kept.rs `send`). Tiles whose packets were freed are asked again
-//! on the step after a packet is given back, no more of them than could
-//! still be kept less those already asked and not yet come
-//! (domain/layer/terrain/tile.rs `again_room`), so a tile is rarely fetched only
-//! to be freed: a first arrival a window wants is kept outside that
-//! reckoning, and may take the place a tile asked again was counted on.
+//! A brick that enters asks its tile again on the next step, no more of them
+//! than the slots spare less those already asked and not yet come
+//! (domain/layer/terrain/tile.rs `again_room`).
 
 use xpute_core::global::Global;
 use xpute_core::mem::heap::{alloc, free, Block};

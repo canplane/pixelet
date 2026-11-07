@@ -10,7 +10,7 @@ use pxl_render::frame::draw::DRAW_WORDS;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::ray::{Cast, Filled, GroundBricks};
+use pxl_render::gpu::ray::{Cast, GroundBricks};
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput, FrameStat};
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACES;
@@ -63,7 +63,6 @@ use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
-use pxl_engine::clipmap::FILL_CAP;
 use pxl_engine::way::tree;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
@@ -176,12 +175,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = observation::observation();
     let eye = o.as_ref().and_then(|o| cast::eye(o, edits));
-    let mut terrain_upload = cast::upload;
-    let landed = core::cell::Cell::new(false);
-    let mut on_filled = |b: u32, ticket: u32, filled: Filled<'_>| {
-        landed.set(true);
-        clipmap::on_filled(b, ticket, filled);
-    };
+    let mut terrain_upload = clipmap::upload;
     // Whether what the scene animates stepped.
     let animated = animation::take();
     let out = render_frame(FrameInput {
@@ -200,10 +194,8 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         },
         ground: GroundBricks {
             upload: &mut terrain_upload,
-            on_filled: &mut on_filled,
-            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
-            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
-            records: param::WAYS_RECORDS_FIRST_BYTES,
+            pool: clipmap::pool_room()
+                .max(param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS)),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
@@ -220,11 +212,6 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         counted: settings_store().perf,
         animated,
     });
-    // What landed, folded once after all of it, before anything reads a
-    // bound again (domain/layer/terrain/clipmap.rs `refold`).
-    if landed.get() {
-        clipmap::refold();
-    }
     if out.redraw {
         request_world_tick();
     }

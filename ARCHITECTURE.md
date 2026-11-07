@@ -133,8 +133,8 @@ its children are tiles (`pxl-spec bake/tile.rs` `Occupancy`), so it is read as
 soon as it lands. A ground cell is one byte, a **palette index** into
 OpenStreetMap Carto's palette, numbered in the order Carto paints and drawn as
 land, water, transport or a structure (`spec/spec/asset/cube.json`); void and
-the unknown past the shards baked give no surface. Heights are worked out on the
-GPU from the elevation and read back, never sent (`pxl-engine ground.rs`
+the unknown past the shards baked give no surface. Heights are worked out from
+the elevation as a brick is filled, never sent (`pxl-engine ground.rs`
 `height`).
 
 **Objects** are placed, not baked: one sparse tree, each leaf an asset's id at
@@ -398,7 +398,7 @@ in its own **tile cache** (`domain/layer/tile_cache.rs`):
   every tile demanded shows, exact or coarser (`TileCache::is_shown`).
 - Nothing is prefetched: a view converges to exact on its misses alone.
 
-The GPU holds the ground's cells in a **clipmap** (Tanner, Migdal and Jones
+The kernel holds the ground's cells in a **clipmap** (Tanner, Migdal and Jones
 1998): a **clipmap level** a zoom about a center, addressed modulo its size. A
 ray observes a zoom's cells only within a fixed reach of the eye
 (`pxl-engine clipmap.rs` `RADIUS`), so a clipmap level about a center holds
@@ -410,10 +410,10 @@ traveling to one, at the leaves (`domain/layer/terrain/clipmap.rs`):
   of the level its place names, so the level follows its center a brick at a
   time and no held cell moves. A brick at a zoom is held once however many
   clipmap levels want it, and kept while any does.
-- A brick is filled on the GPU as its tile lands (`pxl-render
-gpu/ray/ground.rs` `grids`): its cells, a min-max mipmap over them, its
-  **levels**, and its ways as a tree in one pool every brick shares
-  (pxl-engine `way::tree`). All three are read back into the kernel, so the
+- A brick is filled on the CPU as its tile lands
+  (`domain/layer/terrain/clipmap.rs` `fill_share`): its cells, a min-max mipmap
+  over them, its **levels**, and its ways as a tree in one pool every brick
+  shares (pxl-engine `way::tree`). All three are uploaded to the GPU, so the
   CPU's query and the GPU's cast meet the same bridge or tunnel.
 - A brick whose tree the pool cannot hold at its cap stays absent while a
   clipmap level wants it. Where a brick is not present, a reader reads the
@@ -653,8 +653,7 @@ whether it wants another turn. Its passes are modules by what they draw
 (`gpu/ray/`, `gpu/pass/`):
 
 ```text
-ahead       impostor atlases, fresh bricks filled, the atmosphere's
-            tables, the air's volume
+ahead       impostor atlases, the atmosphere's tables, the air's volume
 cast        the screen's rays; decor generated; the shadow map
 world pass  generated decor → rays at their depth → generated impostors,
             each toned into the world's color, linear → the occlusion's
@@ -706,8 +705,7 @@ read back.
 The shaders are WGSL by hand, assembled from parts (`frame/shader/part.rs`);
 the layouts and numbers they read are generated from pxl-engine by the
 renderer's build. The compute entries over the world (the cast and its
-node cache, the light's, the fill's, the ways' and decor's) are each held word
-for word to pxl-engine's Rust by a test over a real world's buffers
+node cache, the light's and decor's) are each held word for word to pxl-engine's Rust by a test over a real world's buffers
 (`rust/client/render/tests/`). Every walk, the engine's and each by hand,
 ends at `cast::STEPS_MOST` steps (`pxl-engine cast.rs` `walk_at_most`). What
 a rule both sides decide divides by, or takes the square root of, the frame
@@ -1170,7 +1168,7 @@ tile.
 The elevation is sampled at the leaf's resolution, as heights in leaf cells at
 the tile's scale, with a **pad** of samples past each edge for the interpolant
 (`elevation.rs` `Raster::tile_grid`; pxl-engine ground.rs `ELE_PAD`). The
-separation's footing is the height the GPU draws the cell it lies in, off those
+separation's footing is the height the cell it lies in is drawn at, off those
 samples (`pxl-engine ground.rs` `height`), so a bridge's end meets the ground
 drawn. The tile is written as XTP in the form the client reads
 (`pxl-spec bake/tile/terrain.rs` `encode`). Place and division leaves are baked
