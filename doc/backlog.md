@@ -24,10 +24,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **`auto`'s rate, judged on the S23.** The rate is its second knob
-  ([a ray ends in its frame](./minutes/20261107-a-ray-ends-in-its-frame.md)); its floor, 30 Hz,
-  is not a measured figure. Its name on the screen, "auto resolution", no longer says what it
-  moves.
+- **`auto`'s name on the screen**, "auto resolution", no longer says what it moves: the rate
+  is its second knob ([a ray ends in its frame](./minutes/20261107-a-ray-ends-in-its-frame.md)).
 
 ## P2
 

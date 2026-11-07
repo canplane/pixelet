@@ -556,3 +556,16 @@ Safari, so that it drew is read from the load's end and the utilization moving b
 
 **The character preview shows.** The scene's work found it culled by the world's eye under the
 sea (8671645700). Seen in Chrome: the drawer's Character tab draws the person and the pet.
+
+**`auto`'s rate on the S23, judged: the floor stands.** One 60 s drive under `auto`, 719 MHz,
+against the same at `fixed`:
+
+| | rate, scale | frames a second | interval p50 / p95 | missed | GPU p50 / p95 |
+|---|---|---|---|---|---|
+| `fixed` | 59.9 Hz, 1.00 | 10.8 | 48 / 282 | 87% | 57.7 / 205.6 |
+| `auto` | 29.9 Hz, 0.50 | 11.2 | 35 / 267 | 45% | 50.7 / 195.4 |
+
+`auto` runs to both floors. The median frame meets the 33 ms interval, so 30 Hz is what the
+frames can hold and a lower floor would slow the median for nothing. Half the pixels each way
+buy 12% of the GPU's p50 and 5% of its p95: the frame is the light's and the cells', which the
+scale does not reach.
