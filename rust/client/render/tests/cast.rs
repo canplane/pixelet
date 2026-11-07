@@ -29,20 +29,19 @@ use gpu::{
     array_view, at_edge, cross, edges_within, entry_held, entry_node, mix, read_texture, slack,
     texture, ulps, unit, Gpu, Kinds, Tally,
 };
-use pxl_engine::answer::{self, In, Kind};
+use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
-use pxl_engine::cast::{self, Node, Query, Ray};
+use pxl_engine::cast::{self, Node, Ray};
 use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
-use pxl_engine::way::tree;
-use pxl_engine::world::{self, Inheritance};
+use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, face, node_cache, raster, ray, record, screen, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
-use real_world::{q8, Built, World, WorldBufs, FINEST};
+use real_world::{q8, Asking, Built, WorldBufs, FINEST};
 
 /// East of X = 0 by the seam, and by X = 0, where X's roots part.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
@@ -306,46 +305,6 @@ fn face_binds<'a>(
             }),
         ),
     ]
-}
-
-/// The world's one query with nothing kept: what `face_cs` asks the world.
-struct Asking<'a> {
-    w: World<'a>,
-    cuts: [Cut; 2],
-}
-
-impl Query for Asking<'_> {
-    type At = Inheritance;
-
-    fn root(&mut self, node: [i32; 3]) -> Inheritance {
-        Inheritance::of(&self.w, (0, node))
-    }
-
-    fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
-    }
-
-    fn node(
-        &mut self,
-        n: &mut Inheritance,
-        zoom: Zoom,
-        c: [i32; 3],
-        zooms: [Zoom; 2],
-        _: f32,
-    ) -> In<[u32; 2]> {
-        let pool = tree::Read(self.w.pool);
-        let mut held = self.w;
-        world::node(
-            &mut held,
-            &self.w,
-            &self.w,
-            &pool,
-            n,
-            (zoom, c),
-            zooms,
-            self.cuts,
-        )
-    }
 }
 
 /// Each drawable entry's slot of the node cache's words `table` (pxl-engine `record`), by its
