@@ -517,3 +517,18 @@ has the knob: it goes as a knob that buys nothing, not as a regression. Gone: `L
 `Grid::lattice` and `s`, three of the grid's words, the judge's G (`cell_ms`, `per_cell`),
 `gpu_lattice` and the perf frame's `lattice`. `fixed` and `low` drew at lattice 1 before and
 draw the same now; `auto` keeps the rate and the scale.
+
+**A standing view, judged: no change.** 60 s standing on the S23, main drew 2605 frames, the
+deployed build 840. The asks are not what differs: since 4a4441d55b, which the deployed build
+has not, an actor's clip steps where its pose moves a device pixel, where the deployed build's
+stepped at the clip's fastest point throughout. A gated frame asks no frame after it
+(`Resolve::asks`), and costs less than the deployed build's, GPU p50 18.0 against 30.0 ms,
+`world` p95 10.1 against 13.2, `mark` 6.0 against 7.1. The deployed build drew fewer because
+each took longer. Fewer frames would take a cap on the animation's rate, a knob; none is added.
+
+**What a whole cast walks.** On the Mac's drive a cast of the 1.9 M slots the receivers read
+took 8% through the holes' walk (150–170 k), 42–45% off the samples' raster and 46–51% as sky.
+So `light_hit`, the largest span of the S23's p95, is the holes' first walk over about 150 k
+rays. Keeping tiles across a depth step was weighed and dropped: a kept slot's ray would start
+a step from a fresh one's, half the slots end as sky and would owe the strip the step added,
+and the tile would have to carry which plane it was cast under.
