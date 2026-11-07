@@ -2,11 +2,16 @@
 
 //! How each marker's design is laid out, in logical pixels: its fonts, its
 //! sizes and its colors, and where its anchor stands down from its top. The
-//! pass paints by them (`gpu/pass/marker.rs`), and the kernel sizes a
-//! marker's sprite by them before it is painted (pxl-kernel
+//! pass paints by them (`gpu/pass/marker.rs`), and the core sizes a
+//! marker's sprite by them before it is painted (pxl-core
 //! domain/scene/marker/design.rs).
 
 use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};
+
+/// Device pixels an atlas draws per logical pixel: the symbols' masks', laid
+/// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
+/// finer than it shows a marker drawn up from it.
+pub const ATLAS_SCALE: f64 = SYMBOL_RATIO as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Font {

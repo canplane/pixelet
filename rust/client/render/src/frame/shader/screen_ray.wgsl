@@ -12,8 +12,8 @@
 // same bits.
 
 // The rays, a layer a word: what a ray met (val, face, zoom), how far it
-// went (f32 bits), the four palette indices the ground's cell is drawn by or, in the
-// steps view, the nodes its descent asked, and its face's edges and corners
+// went (f32 bits), the four palette indices the ground's cell is drawn by, and its face's
+// edges and corners
 // (`RAY_FACES`). A cell is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each val's swatch and layer, then the color it reads as from afar, in
@@ -22,7 +22,7 @@
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays left (pxl-engine `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
-// their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
+// their low bits; its reach;
 // the axes and tangents each ray's direction is formed of; and where each
 // px's ray goes through it (`EYE_JITTER`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
@@ -74,22 +74,10 @@ fn aim(frag: vec2f, size: vec2f) -> vec3f {
 const BEHIND: f32 = 6.103515625e-5;
 const SNAP: f32 = 0.25;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
 struct FragOut {
   @location(0) color: vec4f,
   @builtin(frag_depth) depth: f32,
 };
-
-// The claimed tiles alone, or every one (screen_tiles.wgsl).
-@vertex
-fn vs(@builtin(vertex_index) i: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(i, ii);
-  return o;
-}
 
 // A look's words; past the table, black and no layer.
 fn look(slot: u32) -> vec4u {
@@ -111,26 +99,33 @@ fn far(l: vec4u) -> vec3f {
 
 struct Appearance {
   rgb: vec3f,
-  layers: vec4f,
+  layer: f32,
 };
 
 // What the cell a px's ray met is drawn as, by its val, whichever
-// source holds it: at the ground's cell or finer, its swatch and its layer
-// in all four taps; coarser, one color as it reads from afar, the ground's
-// the mean of the four palette indices its cell folds where its face's own is among
-// them.
+// source holds it: at the ground's cell or finer, its swatch and its layer;
+// coarser, one color as it reads from afar, the ground's the mean of the four
+// palette indices its cell folds where its face's own is among them.
 fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
   if (ray_zoom(c.x) >= GROUND_CELL) {
-    return Appearance(swatch(l), vec4f(f32(l.y >> 16u)));
+    return Appearance(swatch(l), f32(l.y >> 16u));
   }
   let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
-    let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
-    return Appearance(sum * 0.25, vec4f(NO_LAYER));
+    // The face's own look read once, its index's among the four.
+    var sum = vec3f(0.0);
+    for (var k = 0u; k < 4u; k++) {
+      if (fold[k] == val) {
+        sum += far(l);
+      } else {
+        sum += far(look(fold[k]));
+      }
+    }
+    return Appearance(sum * 0.25, NO_LAYER);
   }
-  return Appearance(far(l), vec4f(NO_LAYER));
+  return Appearance(far(l), NO_LAYER);
 }
 
 // Along `axis`, how far the eye is past the start of the cell of side
@@ -233,14 +228,14 @@ struct Creases {
 // Off the face's own bits (pxl-engine `face`), edge `k` +u, -u, +v, -v
 // and corner `k` across edges `k & 1` and `2 + (k >> 1)`. The line: along
 // each crease, an edge that meets the air or one a cell rises across,
-// `frame_edge_width` units wide whatever the cell's size, so cells of
+// `EFFECT_EDGE_WIDTH` units wide whatever the cell's size, so cells of
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
 // over a cell. Both to the effects' reach, faded alike before it
 // (effect.wgsl `effect_share`).
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
-  let share = effect_share(length(h.at), frame_effect_reach());
+  let share = effect_share(length(h.at));
   if ((frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) || share <= 0.0) {
     return Creases(0.0, 1.0);
   }
@@ -278,8 +273,8 @@ fn box_uv(h: Hit) -> vec2f {
 
 // This px's ray, through its middle, as the cast formed it, and what it
 // met: its aim, once, for the ray and for the face's step across a px;
-// the ray's words; and the face it stopped on, as the lit pass reads it
-// (screen_shade.wgsl).
+// the ray's words. The face it stopped on is `hit_of`'s, which the lit pass
+// asks of the ray's first two words (screen_shade.wgsl).
 struct Pixel {
   a: vec3f,
   size: vec2f,
@@ -288,7 +283,6 @@ struct Pixel {
   faces: u32,
   // A ray that met nothing leaves its first word zero: no hit is void.
   met: bool,
-  h: Hit,
 };
 
 fn px_ray(clip: vec2f) -> Pixel {
@@ -298,5 +292,5 @@ fn px_ray(clip: vec2f) -> Pixel {
   let at = vec2i(clip);
   let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
   let faces = textureLoad(rays, at, RAY_FACES, 0).x;
-  return Pixel(a, size, d, c, faces, c.x != 0u, hit_of(c.xy, d));
+  return Pixel(a, size, d, c, faces, c.x != 0u);
 }

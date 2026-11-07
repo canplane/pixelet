@@ -2,6 +2,13 @@
 // frame/shader/word.rs `frame`'s, which build.rs writes here.
 @group(0) @binding(0) var<uniform> frame_words: array<vec4f, FRAME_VEC4S>;
 
+// A record's position, its Q3 `q` and its remainder `r`, in units from the
+// eye (gpu/draw.rs `Position`): the i32 difference first, which wraps, so X
+// is taken the short way round.
+fn from_eye(q: vec3i, r: vec3f) -> vec3f {
+  return vec3f(q - frame_eye()) * Q3_STEP + r;
+}
+
 // Up at the eye, the world's z: the air's center lies straight under it.
 fn frame_up() -> vec3f { return vec3f(0.0, 0.0, 1.0); }
 

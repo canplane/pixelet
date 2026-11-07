@@ -1,15 +1,17 @@
 // pxl-render/gpu/surface.rs
 
-//! The canvases the kernel draws into, each at its display's device pixels,
+//! The canvases the core draws into, each at its display's device pixels,
 //! the world inside it at its own (`render_px`). The page scales whatever
 //! buffer exists into the layout box, so a stale one still shows whole.
 
-use xpute_guest::abi::handle::{handle_slot, Table as Handles};
-use xpute_guest::global::Global;
+use xpute_core::abi::handle::{handle_slot, Table as Handles};
+use xpute_core::global::Global;
 use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;
-use crate::gpu::api::Format;
+use crate::frame::shader::floor;
+use crate::frame::shader::word::screen::TILE;
+use pxl_engine::{ray, WORKGROUPS_MOST};
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
@@ -18,11 +20,26 @@ pub const SURFACES: usize = 9;
 /// otherwise be a new depth and color target.
 pub const SETTLE_TURNS: u32 = 4;
 
-/// The world's color as its passes leave it, toned and linear, blended
-/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
-/// once (gpu/finish.rs): a float, so the finish's dither falls between
-/// levels the canvas has and none the color had.
-pub const WORLD_COLOR: Format = Format::rgba16float;
+/// The most pixels the world is drawn at each way, the floor's texture side: every size the
+/// render size's rule allows (`drawn_fits`) lies within it, and the screen's claimed tiles, a
+/// word a tile (ray/cast.rs `CAST_TILES_START`), fit the floor there.
+pub const DRAWN_MOST: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
+
+/// The most pixels the world is drawn at in all: the eye's holes (`ray::holes_words`), a word and a
+/// bit a pixel, within 27/64 of the floor's binding, the camera grid's words beside them in the
+/// beam rays' buffer at the widest field.
+pub const DRAWN_AREA: u32 =
+    ((floor::MAX_STORAGE_BUFFER_BINDING_SIZE * 27 / 256) as u32 - ray::POOL_WORDS - 1) / 33 * 32;
+
+/// Whether the world drawn at `size` pixels is one every device draws (`render_px`): no side past `DRAWN_MOST`, no more than `DRAWN_AREA` in all, and its screen tiles,
+/// a workgroup each across the pixels' cast's dispatch (cast.wgsl `cast_cs`), within the
+/// floor's workgroups a side.
+pub const fn drawn_fits(size: [u32; 2]) -> bool {
+    size[0] <= DRAWN_MOST[0]
+        && size[1] <= DRAWN_MOST[1]
+        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUPS_MOST
+        && size[0] * size[1] <= DRAWN_AREA
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct Surface {
@@ -32,8 +49,8 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
-    /// domain/view/frame/resolution.rs): the display's, or under load a share of
+    /// The device pixels per CSS pixel the core has it drawn at (pxl-core
+    /// domain/scene/resolution.rs): the display's, or under load a share of
     /// them, the finish bringing them up to the canvas's (`render_px`).
     pub ratio: f64,
     pub configured: bool,
@@ -50,7 +67,7 @@ pub struct Surface {
     pub depth: u32,
     pub depth_view: u32,
     pub depth_only_view: u32,
-    /// The color its passes draw into (`WORLD_COLOR`), made with the depth,
+    /// The color its passes draw into (gpu/api.rs `WORLD_COLOR`), made with the depth,
     /// which the world's gathers over frames (`history`) and the finish
     /// encodes onto the canvas.
     pub color: u32,
@@ -72,9 +89,10 @@ pub struct Surface {
     pub history: [u32; 2],
     pub history_view: [u32; 2],
     /// The finished picture at the canvas's size, the canvas's format, made
-    /// with the screen's depth: a gated frame finishes again only its
-    /// claimed tiles in it, and every frame shows it whole on the canvas, whose
-    /// texture is a new one each frame (gpu/finish.rs): the world's alone.
+    /// with the screen's depth: every frame finishes into it in the pass that
+    /// finishes the canvas, a gated frame only its claimed tiles, once it
+    /// has shown it whole on the canvas, whose texture is a new one each
+    /// frame (gpu/finish.rs): the world's alone.
     pub picture: u32,
     pub picture_view: u32,
 }
@@ -107,14 +125,33 @@ impl Surface {
         (self.px_w.max(1), self.px_h.max(1))
     }
 
-    /// The world's pixels: the canvas's at the kernel's share of them
+    /// The drawn pixels a CSS pixel spans across.
+    pub fn px_per_css(&self) -> f64 {
+        f64::from(self.width) * self.dpr / f64::from(self.px_w.max(1))
+    }
+
+    /// The world's pixels: the canvas's at the core's share of them
     /// (`ratio` over the display's), which the finish brings up to the
-    /// canvas.
+    /// canvas, and no more than every device draws
+    /// (`drawn_fits`), the canvas's shape kept: its share brought down until
+    /// they fit.
     pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let k = self.ratio / dpr;
-        (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)
+        let most = f64::from(DRAWN_MOST[0].min(DRAWN_MOST[1]));
+        let mut k = (self.ratio / dpr).min(most / w.max(h));
+        loop {
+            let size = [w, h].map(|v| round(v * k).clamp(1.0, most) as u32);
+            if drawn_fits(size) {
+                return (size[0], size[1]);
+            }
+            // The pixels or the tiles past their most: the share a side brought down by the root
+            // of the tighter, and a step more, so each turn takes some off.
+            let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(TILE)));
+            let limit = f64::from(WORKGROUPS_MOST) / (tiles[0] * tiles[1]);
+            let area = f64::from(DRAWN_AREA) / (f64::from(size[0]) * f64::from(size[1]));
+            k *= libm::sqrt(limit.min(area)) * (1.0 - 1.0 / most);
+        }
     }
 }
 
@@ -194,3 +231,7 @@ pub fn on_surfaces_lost() {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "surface.test.rs"]
+mod test;

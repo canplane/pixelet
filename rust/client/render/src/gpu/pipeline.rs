@@ -11,46 +11,44 @@
 //! pipeline asked for once the renderer draws is one found made, or a bug.
 
 use crate::api_spec::stream;
+use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
-    compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
+    compute, pipeline as record_of, src, COMPUTES, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH};
-use crate::gpu::surface::WORLD_COLOR;
-
-pub const GROUPS: usize = 4;
-pub const LANES: usize = 8;
+use crate::gpu::api::{
+    room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH, WORLD_COLOR,
+};
 
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
     pub id: u32,
-    pub layouts: [Layout; GROUPS],
-    pub strides: [u32; LANES],
+    pub layouts: [Layout; BIND_GROUPS],
+    pub strides: [u32; VERTEX_BUFFERS],
     pub lanes: usize,
 }
 
-/// The most distinct group layouts there are: every pipeline's groups, and
-/// a compute shader's one.
-const LAYOUTS: usize = PIPELINES as usize * GROUPS + SHADERS as usize;
+/// The most distinct group layouts there are: every render pipeline's groups,
+/// and a compute pipeline's one.
+const LAYOUTS: usize = PIPELINES as usize * BIND_GROUPS + COMPUTES as usize;
 /// Every pipeline the renderer makes, render and compute, each held to it
 /// as it is made.
-const PIPELINE_CAP: usize = 96;
+const PIPELINE_CAP: usize = 118;
 
 pub struct Pipelines {
     modules: [u32; SHADERS as usize],
-    /// The shaders whose module is made, the first `modules_made` by kind,
-    /// and their sources' bytes.
+    /// The shaders whose module is made, the first `modules_made` by kind.
     modules_made: u32,
-    module_bytes: usize,
     layouts: [(u64, Layout); LAYOUTS],
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
     /// Each pipeline's fence, by its place in `pipelines`, where the
-    /// host stores `TICKET` once it is made: boxed, so it stays where the
+    /// runtime stores `TICKET` once it is made: boxed, so it stays where the
     /// records named it. Let go with the renderer, on a lost device alone,
-    /// whose host writes nothing more.
+    /// whose runtime writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
-    /// The first `made_cnt` pipelines are made.
+    /// How many of the pipelines are made, in whatever order WebGPU made
+    /// them, as `made` last counted.
     made_cnt: usize,
 }
 
@@ -68,17 +66,11 @@ fn fold(key: u64, word: u32) -> u64 {
     (key ^ word as u64).wrapping_mul(0x100000001b3)
 }
 
-/// Every shader's sources' bytes, which the modules' half of `share` counts.
-fn all_module_bytes() -> usize {
-    (0..SHADERS).map(|kind| src(kind).len()).sum()
-}
-
 impl Pipelines {
     pub fn new() -> Self {
         Pipelines {
             modules: [0; SHADERS as usize],
             modules_made: 0,
-            module_bytes: 0,
             layouts: [(0, Layout::default()); LAYOUTS],
             layout_len: 0,
             pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
@@ -103,7 +95,6 @@ impl Pipelines {
             }
             self.modules[self.modules_made as usize] = g.shader(code);
             self.modules_made += 1;
-            self.module_bytes += code.len();
             turn_bytes = Some(turn_bytes.unwrap_or(0) + code.len());
         }
         self.modules_made == SHADERS
@@ -155,7 +146,14 @@ impl Pipelines {
 
     /// Pipeline `id` drawing into `format`, depth32 its depth.
     pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Pipeline {
-        self.build_onto(g, id, format, (Format::depth32float, Stencil::Unused))
+        self.build_targets(g, id, format, 1)
+    }
+
+    /// Pipeline `id` drawing into `targets` colors of `format`, each the
+    /// fragment's output at its own location, depth32 its depth.
+    pub fn build_targets(&mut self, g: &Gpu, id: u32, format: Format, targets: usize) -> Pipeline {
+        let depth = (Format::depth32float, Stencil::Unused);
+        self.build_onto(g, id, (format, targets), depth)
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
@@ -174,19 +172,22 @@ impl Pipelines {
     /// (`GATED_DEPTH`), as `stencil` asks: into the depth alone where
     /// `format` is depth32's (`build`).
     pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
-        self.build_onto(g, id, format, (GATED_DEPTH, stencil))
+        self.build_onto(g, id, (format, 1), (GATED_DEPTH, stencil))
     }
 
     fn build_onto(
         &mut self,
         g: &Gpu,
         id: u32,
-        format: Format,
+        (format, targets): (Format, usize),
         (depth, stencil): (Format, Stencil),
     ) -> Pipeline {
         let key = fold(
             fold(
-                fold(fold(0xcbf29ce484222325, id), format as u32),
+                fold(
+                    fold(fold(0xcbf29ce484222325, id), format as u32),
+                    targets as u32,
+                ),
                 depth as u32,
             ),
             stencil as u32,
@@ -216,31 +217,31 @@ impl Pipelines {
             words,
             &b.layouts[..groups],
             module,
-            format,
+            (format, targets),
             (depth, stencil),
             (word, ticket),
         );
+        g.recorded(b.id, id);
         self.keep(place, key, b)
     }
 
-    /// A compute pipeline over shader `kind`'s one compute entry and `group`,
-    /// group 0's (binding, stages, kind) words: kept by both, as a render
-    /// pipeline by its record and targets, so owners asking the same share it.
-    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &'static [u32]) -> Pipeline {
+    /// Compute pipeline `id` (record.rs `compute`) over `group`, group 0's
+    /// (binding, stages, kind) words: kept by both, as a render pipeline by
+    /// its record and targets, so owners asking the same share it.
+    pub fn build_compute(&mut self, g: &Gpu, id: u32, group: &'static [u32]) -> Pipeline {
         // Past every render pipeline's key's first word, a record's number.
         let key = group
             .iter()
-            .fold(fold(0xcbf29ce484222325, PIPELINES + kind), |k, &w| {
-                fold(k, w)
-            });
+            .fold(fold(0xcbf29ce484222325, PIPELINES + id), |k, &w| fold(k, w));
         if let Some(b) = self.existing(key) {
             return b;
         }
-        let module = self.module(kind);
+        let (shader, entry) = compute(id);
+        let module = self.module(shader);
         let mut b = Pipeline::default();
         b.layouts[0] = self.layout(g, group);
         let (place, word, ticket) = self.next();
-        b.id = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1], (word, ticket));
+        b.id = g.compute_pipeline(module, entry, &b.layouts[..1], (word, ticket));
         self.keep(place, key, b)
     }
 
@@ -250,25 +251,26 @@ impl Pipelines {
         self.made_cnt == self.pipeline_len && self.pipeline_len != 0
     }
 
-    /// The pipelines whose word says they are made since this last ran,
-    /// counted; whether all are (`is_made`).
+    /// The pipelines whose word says they are made, counted; whether all
+    /// are (`is_made`).
     pub fn made(&mut self) -> bool {
-        while self.made_cnt < self.pipeline_len && signaled(&self.words[self.made_cnt], TICKET) {
-            self.made_cnt += 1;
-        }
+        self.made_cnt = self.words[..self.pipeline_len]
+            .iter()
+            .filter(|w| signaled(w, TICKET))
+            .count();
         self.is_made()
     }
 
     /// How much of what the renderer makes before it draws is made, 0 to 1:
-    /// the modules by their sources' bytes, the first half; the pipelines
-    /// made of those asked for, the second, none before they are asked.
+    /// the pipelines made of those asked for, 0 before any is asked.
     pub fn share(&self) -> f64 {
-        let modules = self.module_bytes as f64 / all_module_bytes().max(1) as f64;
-        let pipelines = if self.pipeline_len == 0 {
-            0.0
-        } else {
-            self.made_cnt as f64 / self.pipeline_len as f64
-        };
-        (modules + pipelines) / 2.0
+        if self.pipeline_len == 0 {
+            return 0.0;
+        }
+        self.made_cnt as f64 / self.pipeline_len as f64
     }
 }
+
+#[cfg(test)]
+#[path = "pipeline.test.rs"]
+mod test;

@@ -3,7 +3,7 @@
 //! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
 //! world's pass against its depth, both reading the cloud field (`pxl-content cloud.rs`) as a tile baked once
 //! per device.
-//! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
+//! The cumulus is drawn as decor is (`pxl-core domain/scene/environment/cloud.rs`).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -17,8 +17,7 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::look::environment::ENV_SKY;
-use pxl_content::cloud::{drift, LATTICE_CNT};
+use pxl_content::cloud::LATTICE_CNT;
 use pxl_content::param::cloud::LATTICE_SHAMT;
 use pxl_engine::UNIT_ZOOM;
 use pxl_spec::space::coord::world::EXTENT;
@@ -127,14 +126,15 @@ impl CloudPass {
         mips.release();
     }
 
-    /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
-    /// place on the map in the world's doubles; `draw_dist_km` how far it
-    /// draws: past it no sheet is drawn. The field moves with the wind,
-    /// so its words are the clouds' own.
-    pub fn prepare(&mut self, over: [f64; 2], env: &[f32], shown: f64, draw_dist_km: f32) {
+    /// `shown`, how much of the clouds the core shows; `over`, the eye's
+    /// place on the map in the world's doubles; `drift`, how far the wind has
+    /// carried the field; `draw_dist_km` how far it draws: past it no sheet
+    /// is drawn. The field moves with the wind, so its words are the clouds'
+    /// own.
+    pub fn prepare(&mut self, over: [f64; 2], drift: [f64; 2], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[DRAW_DIST] = draw_dist_km;
-        field(&mut self.words, over, env);
+        field(&mut self.words, over, drift);
     }
 
     /// `words` written, where the frame's read found them moved.
@@ -163,9 +163,8 @@ impl CloudPass {
 /// the world is `LATTICE_CNT` units around, so a lap of X is a whole number
 /// of them and the unit wraps with it. And where the wind has carried the
 /// field by now.
-fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
+fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], drift: [f64; 2]) {
     let side = (1u32 << LATTICE_SHAMT) as f64;
-    let drift = drift(f64::from(env[ENV_SKY + 1]));
     for k in 0..2 {
         let u = eye[k] / side;
         words[BASE + k] =

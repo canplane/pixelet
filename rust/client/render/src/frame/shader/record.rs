@@ -8,55 +8,160 @@
 
 pub use crate::frame::shader::part::*;
 
-/// A compute shader's one entry point, as its source names it.
-pub fn compute_entry(kind: u32) -> &'static str {
-    match kind {
-        SHADER_CAST => "cast_cs",
-        SHADER_FOLD => "fold_cs",
-        SHADER_ATMOS_FROXEL => "froxel_cs",
-        SHADER_ATMOS_EXPOSURE => "exposure_cs",
-        SHADER_SCREEN_PROPAGATE => "screen_propagate_cs",
-        SHADER_SCREEN_BOUND => "screen_bound_cs",
-        SHADER_SCREEN_MARK => "screen_mark_cs",
-        SHADER_BOUND => "bound_cs",
-        SHADER_HEIGHT => "height_cs",
-        SHADER_GENERATION_MARK => "decor_mark_cs",
-        SHADER_GENERATION_THIN => "decor_thin_cs",
-        SHADER_LIGHT_BEAM => "light_beam_cs",
-        SHADER_LIGHT_CELL => "light_cell_cs",
-        SHADER_LIGHT_SAMPLE => "sample_cs",
-        SHADER_LIGHT_SAMPLE_BOX => "light_sample_box_cs",
-        SHADER_SAMPLE_HIT => "sample_hit_cs",
-        SHADER_MISS_HIT => "miss_hit_cs",
-        SHADER_BEAM_HIT => "beam_hit_cs",
-        SHADER_LIGHT_MISS_HIT => "light_miss_hit_cs",
-        SHADER_LIGHT_SAMPLE_HIT => "sample_hit_cs",
-        SHADER_GENERATION => "decor_cs",
-        SHADER_GENERATION_CNT => "decor_cnt_cs",
-        SHADER_GENERATION_ARGS => "decor_args_cs",
-        SHADER_GENERATION_COMPACT => "decor_compact_cs",
-        SHADER_WAY => "way_cs",
-        SHADER_WAY_FREE => "way_free_cs",
-        SHADER_WAY_TREE => "way_tree_cs",
-        SHADER_WAY_RETURN => "way_return_cs",
-        SHADER_BEAM => "beam_cs",
-        SHADER_CELL => "cell_cs",
-        SHADER_MISS => "miss_cs",
-        SHADER_FORGET => "forget_cs",
-        SHADER_SAMPLE => "sample_cs",
-        SHADER_LIGHT => "light_cs",
-        SHADER_LIGHT_MISS => "light_miss_cs",
-        SHADER_SAMPLE_BOX => "sample_box_cs",
-        SHADER_MISS_LIST => "miss_list_cs",
-        SHADER_FACE => "face_cs",
-        SHADER_LIGHT_MARK => "light_mark_cs",
-        SHADER_LIGHT_MARK_DRAWS => "light_mark_draws_cs",
-        SHADER_LIGHT_PROPAGATE => "light_propagate_cs",
-        SHADER_LIGHT_SLIDE => "light_slide_cs",
-        SHADER_HIT_LEAD => "hit_lead_cs",
-        SHADER_HIT_FACES => "hit_faces_cs",
-        SHADER_BOX_ARGS => "box_args_cs",
-        _ => xpute_kit::bug!(EINVAL, kind),
+/// Each compute pipeline the renderer makes, by its number (`compute`).
+pub const COMPUTE_ATMOS_EXPOSURE: u32 = 0;
+pub const COMPUTE_CAST: u32 = 1;
+pub const COMPUTE_GENERATION: u32 = 2;
+pub const COMPUTE_GENERATION_CNT: u32 = 3;
+pub const COMPUTE_GENERATION_ARGS: u32 = 4;
+pub const COMPUTE_GENERATION_COMPACT: u32 = 5;
+pub const COMPUTE_GENERATION_MARK: u32 = 6;
+pub const COMPUTE_ATMOS_FROXEL: u32 = 7;
+/// The eye's beam rays' run's first walk over the node cache alone (`SHADER_QUEUE_CORNERS`).
+pub const COMPUTE_QUEUE_CORNERS: u32 = 8;
+pub const COMPUTE_CELL: u32 = 9;
+/// The drawn receivers' workgroups, a thread (`SHADER_LIGHT_MARK_DRAWS`).
+pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 10;
+/// The holes' queue (pxl-engine `ray::QUEUE_LANES`): the asks of the nodes its first and its
+/// second walk over the node cache were parked at, its last walk, which asks the world, and
+/// those two walks.
+pub const COMPUTE_QUEUE_ASK: u32 = 11;
+pub const COMPUTE_FORGET: u32 = 12;
+/// The eye's samples' run's last walk (`SHADER_QUEUE_LAST_SAMPLES`).
+pub const COMPUTE_QUEUE_LAST_SAMPLES: u32 = 13;
+pub const COMPUTE_LIGHT: u32 = 14;
+pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 15;
+pub const COMPUTE_SAMPLE_BOX: u32 = 16;
+pub const COMPUTE_FACE: u32 = 17;
+/// The pixels the eye's cast walked apart, stood on off their walked bits (pxl-engine
+/// `ray::hole_bit`; light_mark.wgsl).
+pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 18;
+pub const COMPUTE_LIGHT_MARK_DRAWS: u32 = 19;
+pub const COMPUTE_LIGHT_PROPAGATE: u32 = 20;
+pub const COMPUTE_GENERATION_THIN: u32 = 21;
+pub const COMPUTE_SCREEN_PROPAGATE: u32 = 22;
+pub const COMPUTE_SCREEN_MARK: u32 = 23;
+pub const COMPUTE_SCREEN_BOUND: u32 = 24;
+pub const COMPUTE_LIGHT_SLIDE: u32 = 25;
+pub const COMPUTE_QUEUE_LAST: u32 = 26;
+/// What lies about each hole's stop's face put at its pixel off the record
+/// (`SHADER_RECORD_STOPS`).
+pub const COMPUTE_RECORD_FACES: u32 = 27;
+pub const COMPUTE_BOX_ARGS: u32 = 28;
+pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 29;
+pub const COMPUTE_LIGHT_CELL: u32 = 30;
+pub const COMPUTE_QUEUE_LAST_LIGHT_SAMPLES: u32 = 31;
+pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 32;
+/// The eye's samples' run's first walk over the node cache alone (`SHADER_QUEUE_SAMPLES`).
+pub const COMPUTE_QUEUE_SAMPLES: u32 = 33;
+pub const COMPUTE_QUEUE: u32 = 34;
+pub const COMPUTE_QUEUE_LAST_CORNERS: u32 = 35;
+pub const COMPUTE_QUEUE_PARKED: u32 = 36;
+pub const COMPUTE_QUEUE_LIGHT_SAMPLES: u32 = 37;
+pub const COMPUTE_QUEUE_LAST_LIGHT_CORNERS: u32 = 38;
+pub const COMPUTE_CAST_TILES: u32 = 39;
+pub const COMPUTE_CLAIMED_BOX: u32 = 40;
+pub const COMPUTE_DECOR_GATE_ARGS: u32 = 41;
+pub const COMPUTE_DECOR_GATE: u32 = 42;
+/// The node cache's drawable entries drawn as the raster's boxes (record_draw.wgsl).
+pub const COMPUTE_RECORD_DRAW: u32 = 43;
+/// The missed pixels' hits into the node cache's drawable entries (record_stops.wgsl).
+pub const COMPUTE_RECORD_STOPS: u32 = 44;
+/// The node cache's drawable entries drawn as the light's raster's boxes (record_draw.wgsl).
+pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 45;
+/// The light's holes' stops into the node cache's drawable entries (record_stops.wgsl over
+/// record_stops.light.wgsl).
+pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 46;
+/// Each tile the light's cast lists read, claimed where its epoch has not cast it
+/// (light_propagate.wgsl `light_claim_cs`).
+pub const COMPUTE_LIGHT_CLAIM: u32 = 47;
+/// The samples' runs' second walks over the node cache alone and their asks, the eye's and the
+/// light's (`SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE_ASK_SAMPLES`).
+pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 48;
+pub const COMPUTE_QUEUE_ASK_SAMPLES: u32 = 49;
+pub const COMPUTE_QUEUE_ASK_SAMPLES_PARKED: u32 = 50;
+pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 51;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES: u32 = 52;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED: u32 = 53;
+/// The beam rays' runs' second walks over the node cache alone and their asks, the eye's and
+/// the light's (`SHADER_QUEUE_CORNERS`, `SHADER_QUEUE_ASK_CORNERS`).
+pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 54;
+pub const COMPUTE_QUEUE_ASK_CORNERS: u32 = 55;
+pub const COMPUTE_QUEUE_ASK_CORNERS_PARKED: u32 = 56;
+pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 57;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS: u32 = 58;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED: u32 = 59;
+pub const COMPUTES: u32 = 60;
+
+/// Compute pipeline `id`'s shader and the entry point it runs, as the
+/// source names it.
+pub const fn compute(id: u32) -> (u32, &'static str) {
+    match id {
+        COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
+        COMPUTE_CAST => (SHADER_CAST, "cast_cs"),
+        COMPUTE_CAST_TILES => (SHADER_CAST_TILES, "cast_tiles_cs"),
+        COMPUTE_CLAIMED_BOX => (SHADER_CLAIMED_BOX, "claimed_box_cs"),
+        COMPUTE_DECOR_GATE_ARGS => (SHADER_DECOR_GATE, "decor_gate_args_cs"),
+        COMPUTE_DECOR_GATE => (SHADER_DECOR_GATE, "decor_gate_cs"),
+        COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),
+        COMPUTE_GENERATION_CNT => (SHADER_GENERATION_CNT, "decor_cnt_cs"),
+        COMPUTE_GENERATION_ARGS => (SHADER_GENERATION_ARGS, "decor_args_cs"),
+        COMPUTE_GENERATION_COMPACT => (SHADER_GENERATION_COMPACT, "decor_compact_cs"),
+        COMPUTE_GENERATION_MARK => (SHADER_GENERATION_MARK, "decor_mark_cs"),
+        COMPUTE_ATMOS_FROXEL => (SHADER_ATMOS_FROXEL, "froxel_cs"),
+        COMPUTE_QUEUE_CORNERS => (SHADER_QUEUE_CORNERS, "queue_cs"),
+        COMPUTE_QUEUE_CORNERS_PARKED => (SHADER_QUEUE_CORNERS, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_CORNERS => (SHADER_QUEUE_ASK_CORNERS, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_CORNERS_PARKED => (SHADER_QUEUE_ASK_CORNERS, "queue_ask_parked_cs"),
+        COMPUTE_CELL => (SHADER_CELL, "cell_cs"),
+        COMPUTE_QUEUE_ASK => (SHADER_QUEUE_ASK, "queue_ask_cs"),
+        COMPUTE_FORGET => (SHADER_FORGET, "forget_cs"),
+        COMPUTE_QUEUE_LAST_SAMPLES => (SHADER_QUEUE_LAST_SAMPLES, "queue_last_cs"),
+        COMPUTE_LIGHT => (SHADER_LIGHT, "light_cs"),
+        COMPUTE_QUEUE_ASK_PARKED => (SHADER_QUEUE_ASK, "queue_ask_parked_cs"),
+        COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
+        COMPUTE_FACE => (SHADER_FACE, "face_cs"),
+        COMPUTE_LIGHT_MARK_WALKED => (SHADER_LIGHT_MARK, "light_mark_walked_cs"),
+        COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
+        COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS_OPEN, "light_mark_draws_open_cs"),
+        COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
+        COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_PROPAGATE, "light_claim_cs"),
+        COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
+        COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
+        COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
+        COMPUTE_SCREEN_BOUND => (SHADER_SCREEN_BOUND, "screen_bound_cs"),
+        COMPUTE_LIGHT_SLIDE => (SHADER_LIGHT_SLIDE, "light_slide_cs"),
+        COMPUTE_QUEUE_LAST => (SHADER_QUEUE_LAST, "queue_last_cs"),
+        COMPUTE_RECORD_FACES => (SHADER_RECORD_STOPS, "record_faces_cs"),
+        COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
+        COMPUTE_QUEUE_LIGHT_CORNERS => (SHADER_QUEUE_LIGHT_CORNERS, "queue_cs"),
+        COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (SHADER_QUEUE_LIGHT_CORNERS, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_CORNERS => (SHADER_QUEUE_ASK_LIGHT_CORNERS, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED => {
+            (SHADER_QUEUE_ASK_LIGHT_CORNERS, "queue_ask_parked_cs")
+        }
+        COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
+        COMPUTE_QUEUE_LAST_LIGHT_SAMPLES => (SHADER_QUEUE_LAST_LIGHT_SAMPLES, "queue_last_cs"),
+        COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "sample_box_cs"),
+        COMPUTE_QUEUE_SAMPLES => (SHADER_QUEUE_SAMPLES, "queue_cs"),
+        COMPUTE_QUEUE_SAMPLES_PARKED => (SHADER_QUEUE_SAMPLES, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_SAMPLES => (SHADER_QUEUE_ASK_SAMPLES, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_SAMPLES_PARKED => (SHADER_QUEUE_ASK_SAMPLES, "queue_ask_parked_cs"),
+        COMPUTE_QUEUE => (SHADER_QUEUE, "queue_cs"),
+        COMPUTE_QUEUE_LAST_CORNERS => (SHADER_QUEUE_LAST_CORNERS, "queue_last_cs"),
+        COMPUTE_QUEUE_PARKED => (SHADER_QUEUE, "queue_parked_cs"),
+        COMPUTE_QUEUE_LIGHT_SAMPLES => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_cs"),
+        COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_parked_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_SAMPLES => (SHADER_QUEUE_ASK_LIGHT_SAMPLES, "queue_ask_cs"),
+        COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED => {
+            (SHADER_QUEUE_ASK_LIGHT_SAMPLES, "queue_ask_parked_cs")
+        }
+        COMPUTE_QUEUE_LAST_LIGHT_CORNERS => (SHADER_QUEUE_LAST_LIGHT_CORNERS, "queue_last_cs"),
+        COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
+        COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
+        COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),
+        COMPUTE_LIGHT_RECORD_STOPS => (SHADER_LIGHT_RECORD_STOPS, "record_stops_cs"),
+        _ => panic!("a compute pipeline number with no shader"),
     }
 }
 
@@ -69,70 +174,91 @@ pub const WORLD_ASKED: &str = include_str!(concat!(
     "/shader/assembled/world_asked.wgsl"
 ));
 
-/// Pipelines past draw.rs's, which a frame runs on its own.
-pub const PIPELINE_SKY: u32 = 10;
-pub const PIPELINE_MIP: u32 = 11;
+/// Each render pipeline by its number: the draw records' first (gpu/draw.rs
+/// `DRAW_PIPELINES`), then those a frame runs on its own.
+/// Box draw: (upload handle, box count, first box, uniform, pipeline).
+/// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
+/// uniform carries the group's first column word, stride and index-list start.
+pub const PIPELINE_DECOR: u32 = 0;
+/// Half transparent, at the depth of the faces it lies on, which stand
+/// behind it (screen_ray.wgsl `behind`).
+pub const PIPELINE_GHOST_BOX: u32 = 1;
+pub const PIPELINE_GHOST_DECOR: u32 = 2;
+/// (model handle, joint palette handle, model id, uniform, pipeline).
+pub const PIPELINE_SKINNED: u32 = 3;
+/// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
+/// (0, 0, 0, uniform, pipeline).
+pub const PIPELINE_LOCATION_ZONE: u32 = 4;
+pub const PIPELINE_LOCATION_BEACON: u32 = 5;
+/// (upload handle, count, 0, uniform, pipeline).
+pub const PIPELINE_MARKER: u32 = 6;
+/// Line segments: handle, line vertex count, face vertex count.
+pub const PIPELINE_DEBUG: u32 = 7;
+/// Decor drawn as impostors where a variant is too small on screen for its model.
+pub const PIPELINE_IMPOSTOR: u32 = 8;
+pub const PIPELINE_SKY: u32 = 9;
+pub const PIPELINE_MIP: u32 = 10;
 /// The occlusion's half-resolution map laid over the world's color in the
 /// claimed tiles (gpu/ao.rs `apply`).
-pub const PIPELINE_AO_APPLY: u32 = 12;
-pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
-pub const PIPELINE_AO_SAMPLE: u32 = 14;
-pub const PIPELINE_AO_BLUR: u32 = 15;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 16;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 17;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 18;
-pub const PIPELINE_STAR: u32 = 19;
-pub const PIPELINE_CLOUD: u32 = 20;
-pub const PIPELINE_CLOUD_FIELD: u32 = 21;
-pub const PIPELINE_ATLAS: u32 = 22;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 23;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
+pub const PIPELINE_AO_APPLY: u32 = 11;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 12;
+pub const PIPELINE_AO_SAMPLE: u32 = 13;
+pub const PIPELINE_AO_BLUR: u32 = 14;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 15;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 16;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 17;
+pub const PIPELINE_STAR: u32 = 18;
+pub const PIPELINE_CLOUD: u32 = 19;
+pub const PIPELINE_CLOUD_FIELD: u32 = 20;
+pub const PIPELINE_ATLAS: u32 = 21;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 22;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 23;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
-pub const PIPELINE_MARKER_REGION: u32 = 25;
+pub const PIPELINE_MARKER_REGION: u32 = 24;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 26;
+pub const PIPELINE_DEBUG_FACE: u32 = 25;
 /// The eye's rays, opaque at their depth (pxl-engine ray.rs).
-pub const PIPELINE_SCREEN_RAY: u32 = 27;
-/// Decor's and the actors' depth from the light, and the world's laid in
+pub const PIPELINE_SCREEN_RAY: u32 = 26;
+/// Decor's and the characters' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
-pub const PIPELINE_DECOR_DEPTH: u32 = 28;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 29;
-pub const PIPELINE_LIGHT_MAP: u32 = 30;
+pub const PIPELINE_DECOR_DEPTH: u32 = 27;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 28;
+pub const PIPELINE_LIGHT_MAP: u32 = 29;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER: u32 = 31;
+pub const PIPELINE_RASTER: u32 = 30;
 /// The world's color onto the canvas, encoded once, and its depth carried to
 /// the canvas's size (gpu/finish.rs).
-pub const PIPELINE_SCREEN_FINISH: u32 = 32;
+pub const PIPELINE_SCREEN_FINISH: u32 = 31;
 /// The world's color gathered over frames (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_RESOLVE: u32 = 33;
+pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
 /// The gate a frame not drawn whole is drawn through: the claimed tiles
 /// cleared, their stencil raised (gpu/renderer.rs `frame`).
-pub const PIPELINE_SCREEN_GATE: u32 = 34;
+pub const PIPELINE_SCREEN_GATE: u32 = 33;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
-pub const PIPELINE_SCREEN_SHOW: u32 = 35;
+pub const PIPELINE_SCREEN_SHOW: u32 = 34;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 36;
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
 /// The gate the samples' raster is drawn through in a frame not drawn whole:
 /// the claimed tiles cleared to the far plane, the rest left at the nearest
 /// (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER_GATE: u32 = 37;
+pub const PIPELINE_RASTER_GATE: u32 = 36;
 /// The gate the light's map is drawn through where only the listed
 /// casters that changed moved: the world's depth laid in the claimed tiles,
 /// their stencil raised (gpu/shadow.rs).
-pub const PIPELINE_LIGHT_GATE: u32 = 38;
-/// An actor drawn where it was and where it is, its fragments setting their
+pub const PIPELINE_LIGHT_GATE: u32 = 37;
+/// A character drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MARK: u32 = 39;
+pub const PIPELINE_SKINNED_MARK: u32 = 38;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
-pub const PIPELINE_DECOR_MARK: u32 = 40;
-pub const PIPELINE_IMPOSTOR_MARK: u32 = 41;
-pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 42;
-pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 43;
-pub const PIPELINES: u32 = 44;
+pub const PIPELINE_DECOR_MARK: u32 = 39;
+pub const PIPELINE_IMPOSTOR_MARK: u32 = 40;
+pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 41;
+pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 42;
+pub const PIPELINES: u32 = 43;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -176,11 +302,6 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
     true
 }
 
-use crate::frame::draw::{
-    PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
-    PIPELINE_SKINNED,
-};
 use crate::frame::shader::floor;
 use pxl_engine::param::light;
 
@@ -425,19 +546,33 @@ const BOX_GROUP: [[u32; 2]; 13] = and(
 /// one owner makes binds in every pipeline that names them (gpu/generator.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
-const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
+/// An upload's words, and the list a draw reads its instances in order by, the words
+/// themselves but in a frame through the gate (instance.wgsl `order`).
+const UPLOAD: [[u32; 2]; 2] = [[0, STORAGE], [1, STORAGE]];
 /// An upload's group as every pipeline binding one lays it out, which the
 /// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
-pub const UPLOAD_LAYOUT: [u32; 3] = [
+pub const UPLOAD_LAYOUT: [u32; 6] = [
     UPLOAD[0][0],
     stages_reading(&UPLOAD, UPLOAD[0][0]),
     UPLOAD[0][1],
+    UPLOAD[1][0],
+    stages_reading(&UPLOAD, UPLOAD[1][0]),
+    UPLOAD[1][1],
 ];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
+/// The list's uniforms by slot, read only, which a character's draw and the
+/// beacon's read at the slot their first instance names (skinned_draw.slot.wgsl,
+/// location.slot.wgsl): one group a pass (gpu/pass/skinned_mesh.rs
+/// `SkinnedPass::set_draws`, gpu/pass/location.rs `LocationPass::set_draws`).
+const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
+/// A character's, lit and its depth from the light, as a model's but its draw
+/// read off the list's uniforms (`DRAWS`).
+const SKINNED_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAWS, &SKIN, &UPLOAD];
+const SKINNED_DEPTH_GROUPS: [Group; 4] = [FRAME, &DRAWS, &SKIN, &UPLOAD];
 /// A draw's mark (tile_mark.wgsl): the eye's frame or the light's, the
 /// tiles' words, their uniform and the box of the tiles the frame's marks
 /// cover in group 0; the rest as its depth reads them.
@@ -517,7 +652,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_SKINNED => Descriptor::new(
             lit(SHADER_SKINNED, CULL_BACK),
             &SKINNED_BUFFERS,
-            &MODEL_GROUPS,
+            &SKINNED_GROUPS,
         ),
         PIPELINE_LOCATION_ZONE => Descriptor::new(
             blended(SHADER_LOCATION_ZONE, CULL_NONE),
@@ -527,7 +662,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_LOCATION_BEACON => Descriptor::new(
             lit(SHADER_LOCATION_BEACON, CULL_BACK),
             &LOCATION_BEACON_BUFFERS,
-            &[&LIT_FRAME, &DRAW],
+            &[&LIT_FRAME, &DRAWS],
         ),
         PIPELINE_MARKER => Descriptor::new(
             Head {
@@ -571,15 +706,6 @@ const fn desc_of(id: u32) -> Descriptor {
             &DEBUG_FACE_BUFFERS,
             &[FRAME, &DRAW],
         ),
-        // Over everything, against no depth.
-        PIPELINE_CAMERA_GRID => Descriptor::new(
-            Head {
-                depth_compare: ALWAYS,
-                ..blended(SHADER_CAMERA_GRID, CULL_NONE)
-            },
-            &[],
-            &[&[[0, UNIFORM], [19, UNIFORM]]],
-        ),
         PIPELINE_SCREEN_RAY => Descriptor::new(
             Head {
                 depth_write: true,
@@ -611,9 +737,11 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_BUFFERS, &DEPTH_GROUPS)
         }
-        PIPELINE_SKINNED_DEPTH => {
-            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_BUFFERS, &DEPTH_GROUPS)
-        }
+        PIPELINE_SKINNED_DEPTH => Descriptor::new(
+            depth_only(SHADER_SKINNED),
+            &SKINNED_BUFFERS,
+            &SKINNED_DEPTH_GROUPS,
+        ),
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
         PIPELINE_SKINNED_MARK => {
@@ -645,10 +773,10 @@ const fn desc_of(id: u32) -> Descriptor {
             &LOCATION_BEACON_BUFFERS,
             &[MARK_FRAME, &DRAW],
         ),
-        // Every texel of the box the world's cast holds, whatever lies
-        // there, over the whole map: its clipmap's words and the box's
-        // corner, before the casters drawn over it, into the depth alone
-        // (gpu/api.rs `pipeline`), its fragment the depth.
+        // The texels of the box the world's cast holds in the tiles a receiver reads, a quad a
+        // tile listed read: its clipmap's words, the box's corner, the tiles' reads and the
+        // list of those read, before the casters drawn over it, into the depth alone (gpu/api.rs
+        // `pipeline`), its fragment the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
             Head {
                 fragment: true,
@@ -658,7 +786,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..depth_only(SHADER_LIGHT_MAP)
             },
             &[],
-            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM]]],
+            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM], [2, STORAGE]]],
         ),
         // The same in the map's claimed tiles alone, a quad a tile of the
         // marks' box, raising their stencil (gpu/api.rs `Stencil::Gate`).
@@ -674,13 +802,14 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[
                 [0, TEXTURE_UINT_ARRAY],
                 [1, UNIFORM],
+                [2, STORAGE],
                 [30, STORAGE],
                 [31, UNIFORM],
                 [33, STORAGE],
             ]],
         ),
         // Every box's faces turned to the eye, the nearest a pixel's ray
-        // enters kept, reversed: its sample's number into a target of its
+        // enters kept, reversed: its voxel's number into a target of its
         // own (gpu/ray/raster.rs). The vertex stage draws only the faces
         // turned to the eye, so none is culled by its winding.
         PIPELINE_RASTER => Descriptor::new(
@@ -691,7 +820,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..blended(SHADER_RASTER, CULL_NONE)
             },
             &[],
-            &[&[[0, UNIFORM], [1, STORAGE]]],
+            &[&[[1, UNIFORM], [2, STORAGE], [9, STORAGE]]],
         ),
         // Only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(
@@ -1019,6 +1148,30 @@ static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
 pub fn pipeline(id: u32) -> &'static [u32] {
     let (words, n) = &TABLE[id as usize];
     &words[..*n]
+}
+
+/// Whether render pipeline `id`'s groups lay out a buffer as writable storage.
+pub const fn lays_out_writable(id: u32) -> bool {
+    let groups = desc_of(id).groups;
+    let mut g = 0;
+    while g < groups.len() {
+        let mut e = 0;
+        while e < groups[g].len() {
+            if groups[g][e][1] == STORAGE_RW {
+                return true;
+            }
+            e += 1;
+        }
+        g += 1;
+    }
+    false
+}
+
+/// Whether render pipeline `id`'s shader reads the light's shadow map: whether its parts hold
+/// shadow.wgsl's (`PARTS`), its record's first word its shader. Whatever is drawn by one is a
+/// receiver of the map, and stands (gpu/draw.rs `DrawList`).
+pub fn reads_shadow_map(id: u32) -> bool {
+    PARTS[pipeline(id)[0] as usize].contains(&"shadow")
 }
 
 /// Whether pipeline `id`'s layout binds within what every WebGPU device

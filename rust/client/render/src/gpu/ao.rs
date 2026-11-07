@@ -17,7 +17,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
-    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Layout, Load, RenderContext,
+    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Group, Layout, Load, RenderContext,
     TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -51,6 +51,8 @@ pub struct ScreenAo {
     ping_view: [u32; 2],
     /// Downsample, sample, denoise ping[0]->ping[1], denoise back.
     groups: [u32; 4],
+    /// The apply's, over the map and the screen's tiles (`set_apply_group`).
+    apply_group: Group,
 }
 
 impl ScreenAo {
@@ -101,12 +103,11 @@ impl ScreenAo {
             ping: [0; 2],
             ping_view: [0; 2],
             groups: [0; 4],
+            apply_group: Group::default(),
         }
     }
 
-    /// `reach` the reach of every effect, which the occlusion
-    /// takes to as the others do (effect.wgsl `effect_share`).
-    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32, reach: f32) {
+    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -114,7 +115,6 @@ impl ScreenAo {
         put_mat(u, ao::INV_PROJ, &inv);
         u[ao::HALF] = (width / AO_DOWNSCALE) as f32;
         u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
-        u[ao::EFFECT_REACH] = reach;
     }
 
     /// The words its passes read, as `prepare` wrote them.
@@ -244,13 +244,12 @@ impl ScreenAo {
         }
     }
 
-    /// The map brought to each pixel and multiplied into the world's color,
-    /// a draw of the world's pass `pass` once the static opaque draws laid
-    /// it, in the tiles `tiles` (their words and uniform) claim of `count`, a
-    /// quad each (ao_apply.wgsl): every drawn frame, as the world's color is
-    /// drawn again there, whether or not the map was found again.
-    pub fn apply(&self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
-        let group = g.bind_group(
+    /// The apply's group over its images and the tiles `tiles` (their words
+    /// and uniform), before the frame's commands, its images made
+    /// (`ensure`).
+    pub fn set_apply_group(&mut self, g: &Gpu, tiles: (u32, u32)) {
+        self.apply_group.set(
+            g,
             self.apply.layouts[0],
             &[
                 view_entry(1, self.half_view),
@@ -260,9 +259,17 @@ impl ScreenAo {
                 buf_entry(31, tiles.1),
             ],
         );
+    }
+
+    /// The map brought to each pixel and multiplied into the world's color,
+    /// a draw of the world's pass `pass` once the static opaque draws laid
+    /// it, in the tiles its group binds (`set_apply_group`) claim of
+    /// `count`, a quad each (ao_apply.wgsl): every drawn frame, as the
+    /// world's color is drawn again there, whether or not the map was found
+    /// again.
+    pub fn apply(&self, pass: &mut TrackedRenderPass, count: u32) {
         pass.set_pipeline(self.apply.id);
-        pass.set_bind_group(0, group, &[]);
+        pass.set_bind_group(0, self.apply_group.id(), &[]);
         pass.draw(6, count, 0, 0);
-        release(group);
     }
 }

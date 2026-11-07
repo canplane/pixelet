@@ -23,12 +23,9 @@ fn medium_at(h: f32) -> Medium {
   let r = exp(-h / atmos_rayleigh_scale_height());
   let m = exp(-h / atmos_mie_scale_height());
   let o = max(0.0, 1.0 - abs(h - atmos_ozone_center()) / atmos_ozone_half_width());
-  var out: Medium;
-  out.rayleigh = atmos_rayleigh_scattering() * r;
-  out.mie = vec3f(atmos_mie_scattering() * m);
-  out.scattering = out.rayleigh + out.mie;
-  out.extinction = out.rayleigh + vec3f(atmos_mie_extinction() * m) + atmos_ozone_absorption() * o;
-  return out;
+  let rayleigh = atmos_rayleigh_scattering() * r;
+  let mie = vec3f(atmos_mie_scattering() * m);
+  return Medium(rayleigh, mie, rayleigh + mie, rayleigh + vec3f(atmos_mie_extinction() * m) + atmos_ozone_absorption() * o);
 }
 
 fn rayleigh_phase(c: f32) -> f32 {
@@ -171,7 +168,7 @@ fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   let bottom = atmos_bottom_radius();
   let top = atmos_top_radius();
   let r = min(r_in, top);
-  let h = sqrt(top * top - bottom * bottom);
+  let h = atmos_horizon_to_top();
   let rho = sqrt(max(r * r - bottom * bottom, 0.0));
   let d = to_top(r, mu);
   let d_min = top - r;
@@ -186,7 +183,7 @@ fn transmittance_r_mu(uv: vec2f) -> vec2f {
   let top = atmos_top_radius();
   let x_mu = unit_of(uv.x, TRANSMITTANCE_SIZE.x);
   let x_r = unit_of(uv.y, TRANSMITTANCE_SIZE.y);
-  let h = sqrt(top * top - bottom * bottom);
+  let h = atmos_horizon_to_top();
   let rho = h * x_r;
   let r = sqrt(rho * rho + bottom * bottom);
   let d_min = top - r;

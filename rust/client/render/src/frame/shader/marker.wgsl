@@ -15,11 +15,17 @@ const DEPTH_BIAS_U: f32 = 1.0;
 const DEPTH_BIAS_CELLS: f32 = 1.5;
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process. view, proj, translation and px_per_unit, then the
-// number before the set's first marker.
+// Safari's WebGPU its GPU process. view, proj, px_per_unit, then the number before the
+// set's first marker.
 @group(1) @binding(0) var<uniform> marker_words: array<vec4f, MARKER_VEC4S>;
 
-@group(2) @binding(0) var<storage, read> instances: array<f32>;
+// Each marker's words: its stand's Q3, then its floats (word.rs `MARKER_INSTANCE_WORDS`).
+@group(2) @binding(0) var<storage, read> instances: array<u32>;
+
+// Word `w` of instance `k`'s, a float.
+fn instance_f32(k: u32, w: u32) -> f32 {
+  return bitcast<f32>(instances[k + w]);
+}
 
 // A marker's number, never 0, which is no region.
 fn marker_number(ii: u32) -> u32 {
@@ -40,11 +46,14 @@ struct Placement {
 
 // Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
 fn placed(vi: u32, ii: u32, region: bool) -> Placement {
-  let k = ii * MARKER_INSTANCE_FLOATS;
-  let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + marker_translation();
-  let sprite_w = instances[k + 3u];
-  let size_px = vec2f(select(sprite_w, instances[k + 10u], region), instances[k + 4u]);
-  let frac = instances[k + 9u];
+  let k = ii * MARKER_INSTANCE_WORDS;
+  // On Q3, as the draws are (gpu/draw.rs `Position`): taken against the
+  // eye's, the short way round X.
+  let stands = vec3i(bitcast<i32>(instances[k]), bitcast<i32>(instances[k + 1u]), bitcast<i32>(instances[k + 2u]));
+  let anchor = from_eye(stands, vec3f(0.0));
+  let sprite_w = instance_f32(k, 3u);
+  let size_px = vec2f(select(sprite_w, instance_f32(k, 10u), region), instance_f32(k, 4u));
+  let frac = instance_f32(k, 9u);
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
@@ -58,14 +67,11 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   // the subpixel it falls on.
   let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_per_unit()));
 
-  var p: Placement;
-  p.clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
-  p.across = q.x * size_px.x / sprite_w + 0.5;
-  p.q = q;
-  p.anchor_view = anchor_view;
+  let clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
+  let across = q.x * size_px.x / sprite_w + 0.5;
 
   let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  p.push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * GRID_CELL * DEPTH_BIAS_CELLS;
   // What hangs under the anchor lies on the level ground through it, where the
   // eye sees it.
   let over = drop + corner.y;
@@ -76,9 +82,8 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   if (over < 0.0 && abs(toward) > 1e-6 && t > 0.0 && t < 1.0) {
     twin = shown * t;
   }
-  let upright = marker_proj() * vec4f(twin + vec3f(0.0, 0.0, p.push), 1.0);
-  p.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
-  return p;
+  let upright = marker_proj() * vec4f(twin + vec3f(0.0, 0.0, push), 1.0);
+  return Placement(clip, clamp(upright.z / upright.w, 0.0, 1.0), across, q, anchor_view, push);
 }
 
 // The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.

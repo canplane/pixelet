@@ -6,15 +6,11 @@
 
 const WIDTH_PX: f32 = 3.0;
 
-struct Draw {
-  translation: vec3f,
-  _p: f32,
-};
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(1) @binding(0) var<uniform> draw_words: array<vec4f, 1>;
+@group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
-fn draw_translation() -> vec3f { return draw_words[0].xyz; }
+fn draw_translation() -> vec3f { return from_eye(draw_q(), draw_r()); }
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

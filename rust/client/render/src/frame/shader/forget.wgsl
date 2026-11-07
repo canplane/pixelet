@@ -1,21 +1,23 @@
 // pxl-render/forget.wgsl
 
-// What the observed pyramid kept forgotten, a thread a slot, where what the world's
-// query reads changed (pxl-engine pyramid.rs `FORGETS`): every slot's key, or the key of
+// What the node cache kept forgotten, a thread a slot, where what the world's
+// query reads changed (pxl-engine node_cache.rs `FORGETS`): every slot's key, or the key of
 // each slot over a brick that moved (`forgets`), over a box of what is placed or cut that
 // changed (`over_box`), or handed a slot of a child group of what is placed that was
-// written (`reads_written`).
+// written (`reads_written`); and, of a slot that draws (pxl-engine `record`) and is kept, what
+// draws it, its faces and their words, where a node beside it across a face is forgotten so
+// (`changed_beside`), as what lies about a face reads the cells beside it.
 
-@group(0) @binding(9) var<storage, read_write> pyramid: array<u32>;
+@group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 
 /// A clip level's moved words, its entries a bit each, a row of `ACROSS` bits after
-/// another (`pyramid::LEVEL_WORDS`).
+/// another (`node_cache::LEVEL_WORDS`).
 const LEVEL_WORDS: u32 = CLIP_ENTRIES / 32u;
 const ROWS_A_WORD: u32 = 32u / ACROSS;
 
 /// Word `k` of the entries of a clip level that hold the bricks from `q0` to `q1`, X then Y,
 /// a bit each as its moved words lay them: every one where they span the level's side either
-/// way, as the clip level wraps (`pyramid::entries_of`).
+/// way, as the clip level wraps.
 fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   let n = q1 - q0 + vec2<i32>(1);
   if (n.x >= i32(ACROSS) || n.y >= i32(ACROSS)) {
@@ -36,10 +38,20 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   return word;
 }
 
-/// Whether the node of `zoom` at column `c` reads a brick that moved, the moved
-/// entries' words at `MOVED_AT` (`pyramid::forgets`).
-fn forgets(zoom: u32, c: vec2<i32>) -> bool {
-  for (var w = 0u; w < EYE_CLIP_LEVELS; w += 1u) {
+/// Whether the node of `zoom` at column `c`, its answer read of the clip levels up to `finest`,
+/// reads a brick that moved. A query reads a clip level no finer than it asked (clip.wgsl
+/// `step_to`, `held_to`). A node no wider than a brick's levels reads the bricks held present
+/// alone (`step_to`): one in the box of the clip level's bricks that moved held
+/// (`MOVED_BRICKS_AT`), whose entry is among the moved entries' words at `MOVED_AT`. A wider
+/// node reads the clip level's fold (`held_of`), which bounds every brick wanted, held or
+/// not: any moved entry under it. A node coarser than `TOP_ZOOM` reads no brick, its ground a
+/// split whatever the clip levels hold (world_split.wgsl `ground_split`, world.wgsl
+/// `ground_cell`).
+fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
+  if (zoom < TOP_ZOOM) {
+    return false;
+  }
+  for (var w = 0u; w < EYE_CLIP_LEVELS && FIRST_CELL + w <= max(finest, FIRST_CELL); w += 1u) {
     let cell = FIRST_CELL + w;
     // The node's cells at the clip level's zoom, first and last, then its bricks.
     var lo: vec2<i32>;
@@ -55,9 +67,15 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
     }
     let q0 = lo >> vec2<u32>(BRICK_SHIFT);
     let q1 = hi >> vec2<u32>(BRICK_SHIFT);
-    let at = PYRAMID_MOVED_AT + w * LEVEL_WORDS;
+    let b = NODE_CACHE_MOVED_BRICKS_AT + 4u * w;
+    let first = vec2<i32>(i32(node_cache[b]), i32(node_cache[b + 1u]));
+    let last = vec2<i32>(i32(node_cache[b + 2u]), i32(node_cache[b + 3u]));
+    if (cell <= zoom + BRICK_LEVELS && (any(q1 < first) || any(q0 > last))) {
+      continue;
+    }
+    let at = NODE_CACHE_MOVED_AT + w * LEVEL_WORDS;
     for (var k = 0u; k < LEVEL_WORDS; k += 1u) {
-      if ((pyramid[at + k] & entries_word(q0, q1, k)) != 0u) {
+      if ((node_cache[at + k] & entries_word(q0, q1, k)) != 0u) {
         return true;
       }
     }
@@ -66,7 +84,7 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
 }
 
 /// Whether the node of `zoom` at column `c` stands over the box `b` of leaf cells
-/// `[x0, y0, x1, y1)`, X round the world (`pyramid::over_box`, `overwrite::cut_box`).
+/// `[x0, y0, x1, y1)`, X round the world (`overwrite::cut_box`).
 fn over_box(zoom: u32, c: vec2<i32>, b: vec4<i32>) -> bool {
   var n: vec4<i32>;
   if (zoom <= LEAF_CELL) {
@@ -91,14 +109,15 @@ fn over_box(zoom: u32, c: vec2<i32>, b: vec4<i32>) -> bool {
 }
 
 /// Whether what was handed a node of what is placed, its slot word `placed`, answers
-/// from a slot of the child group written whose first slot is `first`
-/// (`pyramid::reads_written`).
+/// from a slot of the child group written whose first slot is `first`.
 fn reads_written(placed: u32, first: u32) -> bool {
   return placed != SLOT_NOTHING && (placed >> SLOT_SHIFT) - first < CHILDREN;
 }
 
-/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
-/// and is no empty slot (`pyramid::forgotten_split`).
+/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked, so the
+/// walk that asks asks again, and is no empty slot, so the walk over the node cache still goes
+/// through it (cached.wgsl), taking none of what it read of the brick: every moved brick lies
+/// under the root and the chain over it, and left, they would stop every ray of the frame.
 fn forgotten_split(key: u32) -> u32 {
   let zooms = (1u << ZOOM_BITS) - 1u;
   return (key & ((1u << TAG_BITS) - 1u)) | (zooms << TAG_BITS) | (zooms << (TAG_BITS + ZOOM_BITS));
@@ -109,42 +128,82 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
-  let w = ENTRIES_AT + id.x * ENTRY_WORDS;
-  if (pyramid[PYRAMID_FORGETS] == FORGETS_ALL) {
-    pyramid[w + W_KEY] = 0u;
+  let held = key_at(id.x);
+  if (node_cache[NODE_CACHE_FORGETS] == FORGETS_ALL) {
+    node_cache[held] = 0u;
     return;
   }
-  let key = pyramid[w + W_KEY];
+  let key = node_cache[held];
   if (key == 0u) {
     return;
   }
-  let zoom = pyramid[w + W_NODE];
-  let c = vec2<i32>(i32(pyramid[w + W_NODE + 1u]), i32(pyramid[w + W_NODE + 2u]));
-  if (forgets(zoom, c)) {
-    let split = (pyramid[w + W_KIND] & KIND_MASK) == KIND_SPLIT;
-    pyramid[w + W_KEY] = select(0u, forgotten_split(key), split);
+  let w = entry_at(id.x);
+  let zoom = node_cache[w + W_NODE];
+  let c = vec2<i32>(i32(node_cache[w + W_NODE + 1u]), i32(node_cache[w + W_NODE + 2u]));
+  // A key's near zoom, none where a cell is kept by its node alone (`node_cache::key_zooms`).
+  if (forgets(zoom, max(zoom, key >> (TAG_BITS + ZOOM_BITS)), c)) {
+    let split = (node_cache[w + W_KIND] & KIND_MASK) == KIND_SPLIT;
+    node_cache[held] = select(0u, forgotten_split(key), split);
     return;
   }
   // Or handed a slot of a child group of what is placed that was written.
-  let placed = pyramid[w + W_PLACED];
-  for (var f = 0u; f < pyramid[PYRAMID_WRITTEN_AT]; f += 1u) {
-    if (reads_written(placed, pyramid[PYRAMID_WRITTEN_AT + 1u + f])) {
-      pyramid[w + W_KEY] = 0u;
+  // The head holds `NODE_CACHE_WRITTEN_CAP` written child groups and `NODE_CACHE_BOXES` boxes
+  // at most (pxl-engine node_cache.rs).
+  let placed = node_cache[w + W_PLACED];
+  let written = min(node_cache[NODE_CACHE_WRITTEN_AT], NODE_CACHE_WRITTEN_CAP);
+  for (var f = 0u; f < written; f += 1u) {
+    if (reads_written(placed, node_cache[NODE_CACHE_WRITTEN_AT + 1u + f])) {
+      node_cache[held] = 0u;
       return;
     }
   }
   // Or over a box of what is placed or cut that changed.
-  for (var b = 0u; b < pyramid[PYRAMID_BOXES_AT]; b += 1u) {
-    let at = PYRAMID_BOXES_AT + 1u + 4u * b;
+  let boxes = min(node_cache[NODE_CACHE_BOXES_AT], NODE_CACHE_BOXES);
+  for (var b = 0u; b < boxes; b += 1u) {
+    let at = NODE_CACHE_BOXES_AT + 1u + 4u * b;
     let changed = vec4<i32>(
-      i32(pyramid[at]),
-      i32(pyramid[at + 1u]),
-      i32(pyramid[at + 2u]),
-      i32(pyramid[at + 3u]),
+      i32(node_cache[at]),
+      i32(node_cache[at + 1u]),
+      i32(node_cache[at + 2u]),
+      i32(node_cache[at + 3u]),
     );
     if (over_box(zoom, c, changed)) {
-      pyramid[w + W_KEY] = 0u;
+      node_cache[held] = 0u;
       return;
     }
   }
+  let state = node_cache[state_at(id.x)];
+  if ((state & (RECORD_FACES | RECORD_ASKED)) != 0u && changed_beside(zoom, c)) {
+    node_cache[state_at(id.x)] = state & ~(RECORD_FACES | RECORD_ASKED);
+    for (var face = 0u; face < 6u; face += 1u) {
+      node_cache[face_at(id.x, face)] = 0u;
+    }
+  }
+}
+
+/// Whether the rule forgets a node of `zoom` beside the one at column `c` across a face or an
+/// edge, over a brick that moved or a box that changed (`forgets`, `over_box`).
+fn changed_beside(zoom: u32, c: vec2<i32>) -> bool {
+  let boxes = min(node_cache[NODE_CACHE_BOXES_AT], NODE_CACHE_BOXES);
+  for (var dy = -1i; dy <= 1i; dy += 1i) {
+    for (var dx = -1i; dx <= 1i; dx += 1i) {
+      let at = vec2<i32>(wrap_idx(zoom, c.x + dx), c.y + dy);
+      if (forgets(zoom, zoom, at)) {
+        return true;
+      }
+      for (var b = 0u; b < boxes; b += 1u) {
+        let w = NODE_CACHE_BOXES_AT + 1u + 4u * b;
+        let changed = vec4<i32>(
+          i32(node_cache[w]),
+          i32(node_cache[w + 1u]),
+          i32(node_cache[w + 2u]),
+          i32(node_cache[w + 3u]),
+        );
+        if (over_box(zoom, at, changed)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }

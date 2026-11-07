@@ -1,4 +1,4 @@
-// The thin cloud layers over the cumulus (pxl-kernel domain/scene/environment/cloud.rs): altocumulus'
+// The thin cloud layers over the cumulus (pxl-core domain/scene/environment/cloud.rs): altocumulus'
 // small heaps at 4 to 5 km and cirrus' veil at 6 to 12, each one plane at its
 // height over the eye, out to the clouds' reach, laid over the opaque world.
 // They write no depth and the world's decides what stands before them, so a
@@ -70,7 +70,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOu
   let h = select(cirrus, alto, k == 0u);
   let dist = clouds_draw_dist();
   let half = sqrt(max(dist * dist - h * h, 0.0)) / atmos_km_per_u();
-  var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   var o: CloudOut;
   o.world = frame_camera_pos() + vec3f(corners[v] * half, 0.0) + frame_up() * (h / atmos_km_per_u());
   o.clip = jittered(frame_view_proj() * vec4f(o.world, 1.0));
@@ -91,10 +91,10 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
     discard;
   }
   // The air before it and the lights on it, as every painter reads them
-  // (atmos_air.wgsl `seen_from_eye`); lit as the cumulus' faces are, the
+  // (atmos_air.wgsl `seen_from_eye`, atmos_view.wgsl `light_of`); lit as the cumulus' faces are, the
   // face turned to the eye, so the layers are one white.
   let seen = seen_from_eye(v.world);
   let up = up_at(v.world);
-  let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, seen.light);
+  let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, light_of(v.world));
   return vec4f(tone(lit * seen.transmittance + seen.scattered), alpha);
 }

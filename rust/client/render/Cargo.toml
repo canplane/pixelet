@@ -10,27 +10,27 @@ doctest = false
 
 [dependencies]
 libm.workspace = true
-xpute-guest.workspace = true
+xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs);
-# the cloud field the sheets lie on (gpu/cloud.rs), pixelet's content.
+# the cloud field the sheets lie on (gpu/cloud.rs) and where night falls
+# (look/environment.rs), pixelet's content.
 pxl-engine.workspace = true
 pxl-content.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
-# the page's host and the device app's run alike.
+# the page's runtime and the device app's run alike.
 xpute-gpu.workspace = true
 
 [build-dependencies]
-# The light a color decodes to, the same bits on every machine (build.rs
-# `debug_looks`), as the crate's own is (clippy.toml).
-libm.workspace = true
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`) and the
 # values every shader may name (`words`); the cloud field's hash
-# (`cloud_hash.wgsl`), pixelet's content.
+# (`cloud_hash.wgsl`) and where night falls (`words`), pixelet's content; every
+# effect's reach (`words`), the world's.
 pxl-engine.workspace = true
 pxl-content.workspace = true
+pxl-spec.workspace = true
 # The hash's words (build.rs `world_word`).
 xpute-kit.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
@@ -40,9 +40,11 @@ naga = { version = "30", features = ["wgsl-in"] }
 # The moon's shipped map read back, so its mean holds `MOON_MAP_MEAN`
 # (frame/shader/word.test.rs).
 image = { version = "0.25", default-features = false, features = ["png"] }
-# The walks by hand run on a device against `cast::walk` (tests/walk.rs).
+# The passes by hand run on a device against pxl-engine (tests/).
 wgpu = { version = "30", default-features = false, features = ["wgsl", "metal", "vulkan", "naga-ir"] }
 pollster = "1"
+# The worlds the frame schedule reaches, kept as they are explored (gpu/ray/schedule.test.rs).
+fnv.workspace = true
 
 [lints]
 workspace = true

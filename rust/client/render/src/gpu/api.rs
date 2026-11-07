@@ -1,16 +1,21 @@
 // pxl-render/gpu/api.rs
 
 //! The WebGPU calls the renderer makes, written through xpute's encoder
-//! (xpute-gpu encode) into one stream in the kernel's memory, which the host
+//! (xpute-gpu encode) into one stream in the core's memory, which the runtime
 //! runs after the turn: the page's on WebGPU, the device app's on wgpu
-//! (xpute-gpu host), the same records either way. What is pixelet's stays
+//! (xpute-gpu runtime), the same records either way. What is pixelet's stays
 //! here: the pipeline records expanded into descriptors, a pass's shape and
 //! the spans' timing.
 //!
-//! The stream's head holds what the host writes for the kernel: the device's
+//! The stream's head holds what the runtime writes for the core: the device's
 //! block (limits, features, timestamp period, preferred surface format,
 //! status) and the spans' times.
 
+use xpute_core::abi::handle::handle_slot;
+use xpute_core::global::Global;
+use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::mem;
+use xpute_gpu::device;
 pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
@@ -21,14 +26,10 @@ use xpute_gpu::enums::{
     VertexStepMode, FEATURE_NAME, LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
-use xpute_guest::abi::handle::handle_slot;
-use xpute_guest::global::Global;
-use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// A fence or the device's STATUS as the host last stored it.
+/// A fence or the device's STATUS as the runtime last stored it.
 pub use xpute_gpu::encode::load_acquire;
 /// Whether a completion's fence holds the ticket it was asked with
 /// (xpute spec RESULT).
@@ -38,10 +39,12 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 pub use xpute_gpu::spec::RESULT;
 
 use crate::api_spec::{record, stream};
-use crate::frame::shader::floor::BIND_GROUPS;
-use crate::frame::shader::record::VERTEX_ENTRY;
-use crate::gpu::pipeline::LANES;
+use crate::frame::shader::access::{self, END};
+use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
+use crate::frame::shader::group::BUFFERS;
+use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
+use crate::gpu::split::Splits;
 
 pub mod buffer_usage {
     pub use xpute_gpu::spec::BUFFER_USAGE::{
@@ -72,18 +75,12 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 /// taker's (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// The device's block (xpute DEVICE): a word a limit, the features a bit
-/// each, the timestamp period, the preferred surface format, the status.
-const FEAT_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
-const PERIOD_AT: usize = LIMIT_NAME.len() + FEAT_WORDS;
-const DEVICE_WORDS: usize = PERIOD_AT + 3;
-
 /// The head's words past the stream's own: the device's block, then the
 /// spans' reads, `READS` of them, each its fence and result, then the
 /// begin and end ticks of the frame it timed, two words a tick (`read_at`). The stream says the
-/// head's length itself, so the host reads none of this.
+/// head's length itself, so the runtime reads none of this.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
-const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
+const READS_AT: usize = DEVICE_AT + device::WORDS;
 /// The spans' reads on their way at once, each its own mapped buffer: a
 /// frame's read lands a frame or two after it, so with three none waits on
 /// the one before it to be taken.
@@ -184,7 +181,7 @@ impl<'a> RenderContext<'a> {
 pub struct DrawState {
     pipeline: Id,
     groups: [Id; BIND_GROUPS],
-    lanes: [(Id, u32, u32); LANES],
+    lanes: [(Id, u32, u32); VERTEX_BUFFERS],
     idx: (Id, u32, u32),
 }
 
@@ -309,6 +306,16 @@ impl<'a> TrackedRenderPass<'a> {
 /// tiles a frame draws again, so a pass skips the rest (`Stencil`).
 pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
 
+/// The world's color as its passes leave it, toned and linear, blended
+/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
+/// once (gpu/finish.rs): a float, so the finish's dither falls between
+/// levels the canvas has and none the color had.
+pub const WORLD_COLOR: Format = Format::rgba16float;
+
+/// The most color targets a pipeline draws into: the finish's two, the
+/// canvas and the picture the world's surface keeps (gpu/finish.rs).
+pub const TARGETS: usize = 2;
+
 /// What a pipeline does with the stencil beside its depth (`GATED_DEPTH`),
 /// which holds in each tile the number of the gated frame that last claimed
 /// it, as a light tile's word names the cast that read it: nothing; passes
@@ -333,11 +340,13 @@ pub enum Load {
 }
 
 /// A pass's targets: color cleared to transparent, or to what `color_clear`
-/// gives, or loaded, depth cleared to `depth_clear`, loaded or read only, and
+/// gives, or loaded, and a second color started as the first
+/// (`second_color`), depth cleared to `depth_clear`, loaded or read only, and
 /// its stencil, where it has one, cleared to 0 or loaded (`load_stencil`); 0
 /// for one absent.
 pub struct PassDesc {
     color: Id,
+    second: Id,
     color_load: Load,
     color_clear: [f32; 4],
     depth: Id,
@@ -364,6 +373,15 @@ impl PassDesc {
             ..self
         }
     }
+
+    /// `view` its second color target, at location 1, started as its first:
+    /// a pipeline of two targets draws into it (`Pipelines::build_targets`).
+    pub fn second_color(self, view: Id) -> PassDesc {
+        PassDesc {
+            second: view,
+            ..self
+        }
+    }
 }
 
 pub fn pass_desc(
@@ -376,6 +394,7 @@ pub fn pass_desc(
 ) -> PassDesc {
     PassDesc {
         color,
+        second: 0,
         color_load,
         color_clear: [0.0; 4],
         depth,
@@ -403,6 +422,21 @@ impl Layout {
             .0
             .iter()
             .any(|w| w[0] == binding)
+    }
+
+    /// The buffers of `entries` bound as writable storage, each at its binding.
+    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + 'e {
+        let words = self.group.as_chunks::<3>().0;
+        entries.iter().filter_map(move |e| match e.resource {
+            encode::Resource::Buffer { buffer, .. }
+                if words
+                    .iter()
+                    .any(|w| w[0] == e.binding && w[2] == record::STORAGE_RW) =>
+            {
+                Some((e.binding, buffer))
+            }
+            _ => None,
+        })
     }
 
     /// `entries` the group's bindings each once, each a resource its kind takes (a buffer for
@@ -482,6 +516,77 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
     }
 }
 
+/// Whether two entries bind one resource at one binding: a resource's handle
+/// is generational (xpute_core abi/handle.rs), so one let go and made again
+/// is another handle, never the one it had.
+fn same_entry(a: &Entry, b: &Entry) -> bool {
+    use encode::Resource::{Buffer, Sampler, View};
+    a.binding == b.binding
+        && match (a.resource, b.resource) {
+            (
+                Buffer {
+                    buffer: x,
+                    offset: o,
+                    size: n,
+                },
+                Buffer {
+                    buffer: y,
+                    offset: p,
+                    size: m,
+                },
+            ) => x == y && o == p && n == m,
+            (Sampler(x), Sampler(y)) | (View(x), View(y)) => x == y,
+            _ => false,
+        }
+}
+
+/// A bind group kept across frames over the resources its entries name, and
+/// made again over another where one of them is made again (`same_entry`):
+/// its owner sets it before the frame's commands (`frame_begin`), each frame
+/// it draws, as a frame lets go in it each object it makes; and lets it go
+/// with itself. The group it replaces names a resource already let go,
+/// destroyed by the runtime, and is let go then.
+#[derive(Default)]
+pub struct Group {
+    layout: Id,
+    entries: Vec<Entry>,
+    id: Id,
+}
+
+impl Group {
+    /// The group over `layout` and `entries`, the one kept where it was made
+    /// over both, else one made now in its place.
+    #[track_caller]
+    pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> Id {
+        let kept = self.id != 0
+            && self.layout == layout.id
+            && self.entries.len() == entries.len()
+            && self
+                .entries
+                .iter()
+                .zip(entries)
+                .all(|(a, b)| same_entry(a, b));
+        if !kept {
+            release(self.id);
+            self.id = g.bind_group(layout, entries);
+            self.layout = layout.id;
+            self.entries.clear();
+            self.entries.extend_from_slice(entries);
+        }
+        self.id
+    }
+
+    /// The group as last set; 0 before.
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
+    pub fn release(&mut self) {
+        release(self.id);
+        *self = Group::default();
+    }
+}
+
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
     // SAFETY: plain numbers read as their bytes, for as long as the lane is borrowed.
     unsafe { core::slice::from_raw_parts(lane.as_ptr().cast::<u8>(), size_of_val(lane)) }
@@ -496,7 +601,7 @@ struct State {
     /// At the range's end, past the stream: never built or moved, as all-zero
     /// bytes are an encoder that has made nothing (xpute-gpu encode).
     encoder: &'static mut Encoder<OBJECTS>,
-    /// Where the stream's words begin in the kernel's memory.
+    /// Where the stream's words begin in the core's memory.
     at: u32,
     /// Inside a frame's transaction, where a record that does not fit drops
     /// the frame rather than being a bug.
@@ -510,7 +615,7 @@ struct State {
     /// reads are taken in as they were asked; and their times from the last
     /// read in, in ms.
     stamps: Option<(Id, Id, [Id; READS])>,
-    stamps_written: [u32; READS],
+    stamps_written: [u64; READS],
     stamps_out: [u32; READS],
     stamps_asked_cnt: u32,
     /// The read this frame asked: its mapping's ticket is written as it is
@@ -534,20 +639,22 @@ struct State {
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
-    /// The objects let go while the host held the stream, destroyed once it
+    /// The objects let go while the runtime held the stream, destroyed once it
     /// hands it back (`writable`).
     frees: Vec<Id>,
-    /// A device answered while the host held the stream: its block is asked
+    /// A device answered while the runtime held the stream: its block is asked
     /// once it hands it back.
     device_pending: bool,
-    /// The device's block said LOST when last read: the host alone writes
+    /// The device's block said LOST when last read: the runtime alone writes
     /// the block, so a loss is taken once by this, not by clearing it.
     lost: bool,
     /// The ranges each WRITE_BUFFER_AT names, address and bytes: those
-    /// recorded since the last publish, and those of the hand-off the host
+    /// recorded since the last publish, and those of the hand-off the runtime
     /// holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
+    /// Where each encoder is cut into command buffers (gpu/split.rs).
+    splits: Splits,
 }
 
 /// An image file copied into its texture: the file's bytes kept until the
@@ -557,6 +664,8 @@ struct Arriving {
     image: u32,
     texture: Id,
     fence: Box<[u32; 2]>,
+    /// Whether its landing was told (`images_landed`).
+    told: bool,
 }
 
 const IMAGE_TICKET: u32 = 1;
@@ -573,14 +682,14 @@ fn state() -> &'static mut State {
 
 fn head(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
-    // SAFETY: a word of the stream's head, the kernel's and the host's alone.
+    // SAFETY: a word of the stream's head, the core's and the runtime's alone.
     unsafe { &mut *mem::at::<u32>(at) }
 }
 
-/// Read `r`'s fence and result, the host's to write.
+/// Read `r`'s fence and result, the runtime's to write.
 fn read_fence(r: usize) -> &'static [u32; 2] {
     let at = state().at as usize + read_at(r) * WORD;
-    // SAFETY: two words of the stream's head, which the kernel only reads.
+    // SAFETY: two words of the stream's head, which the core only reads.
     unsafe { &*mem::at::<[u32; 2]>(at) }
 }
 
@@ -612,9 +721,9 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     at
 }
 
-/// The calls' state over a stream in a region of its own, apart from the kernel's memory, its
+/// The calls' state over a stream in a region of its own, apart from the core's memory, its
 /// encoder beside it, and `device` as though its block were in: what a test makes the renderer
-/// on, no host running the stream.
+/// on, no runtime running the stream.
 #[cfg(test)]
 pub(crate) fn install_apart(device: Device) {
     const WORDS: usize = 1 << 25;
@@ -667,24 +776,25 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
+            splits: Splits::default(),
         }
     }
 }
 
-/// Where the stream lies in the kernel's memory, once installed: what a host
+/// Where the stream lies in the core's memory, once installed: what a runtime
 /// runs after each turn.
 pub fn stream_at() -> Option<u32> {
     STATE.get(|| None).as_ref().map(|s| s.at)
 }
 
 /// The renderer's calls, once the device has told what it is, on a turn
-/// the stream is the kernel's to write (`stream_free`).
+/// the stream is the core's to write (`stream_free`).
 pub fn gpu() -> Option<&'static Gpu> {
     device().filter(|_| stream_free()).map(|_| &GPU)
 }
 
-/// Whether the host has handed the stream back since the kernel last
-/// published it (xpute_guest ipc/stream.rs R3): until then the kernel
+/// Whether the runtime has handed the stream back since the core last
+/// published it (xpute_core ipc/stream.rs R3): until then the core
 /// records nothing, and a frame is held.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
@@ -711,13 +821,13 @@ fn writable(s: &mut State) -> bool {
     true
 }
 
-/// The device as its block says, once the host has written it: asked for on
+/// The device as its block says, once the runtime has written it: asked for on
 /// the first call after a device answers (`on_device_answered`).
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none()
         && s.device_out
-        && load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::READY
+        && load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::READY
     {
         let word = |k: usize| *head(DEVICE_AT + k);
         let limit = |name: &str| {
@@ -733,10 +843,10 @@ pub fn device() -> Option<Device> {
                 .iter()
                 .position(|n| *n == name)
                 .or_bug(Errno::ENOENT);
-            word(LIMIT_NAME.len() + k / 32) >> (k % 32) & 1 != 0
+            word(device::FEATURES_AT + k / 32) >> (k % 32) & 1 != 0
         };
         let canvas = *Format::ALL
-            .get(word(PERIOD_AT + 1) as usize)
+            .get(word(device::FORMAT_AT) as usize)
             .or_bug(Errno::EINVAL);
         let align = limit("minUniformBufferOffsetAlignment");
         xpute_kit::ensure!(
@@ -748,14 +858,14 @@ pub fn device() -> Option<Device> {
             align,
             timestamps: feat("timestamp-query"),
             canvas,
-            period_ns: f32::from_bits(word(PERIOD_AT)),
+            period_ns: f32::from_bits(word(device::PERIOD_AT)),
         });
     }
     s.device
 }
 
 /// A device answered: its block is asked for, once the stream is the
-/// kernel's to write, and read once the host has written it.
+/// core's to write, and read once the runtime has written it.
 pub fn on_device_answered() {
     let s = state();
     if writable(s) {
@@ -767,20 +877,20 @@ pub fn on_device_answered() {
 
 fn ask_device(s: &mut State) {
     let at = s.at as usize + DEVICE_AT * WORD;
-    // SAFETY: the head's block, the host's to write.
-    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE_WORDS) };
+    // SAFETY: the head's block, the runtime's to write.
+    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), device::WORDS) };
     call::device(&mut s.stream, block);
     s.device_out = true;
 }
 
-/// Whether the device went since this was last asked, as its host says in
+/// Whether the device went since this was last asked, as its runtime says in
 /// the device's block (xpute STATUS.LOST); taken once, the block left as
-/// the host wrote it.
+/// the runtime wrote it.
 pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
     };
-    let lost = load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::LOST;
+    let lost = load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
@@ -813,7 +923,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     let mut ran = [(0u64, 0u64); SPANS];
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        if written & 1 << k != 0 && e >= b {
+        if written & 1u64 << k != 0 && e >= b {
             *r = (b, e);
         }
     }
@@ -879,7 +989,7 @@ pub fn on_device_lost() {
     }
 }
 
-/// The turn's records handed to the host, and with them the ranges they
+/// The turn's records handed to the runtime, and with them the ranges they
 /// name (`in_flight`).
 pub fn gpu_publish() {
     if let Some(s) = STATE.get(|| None).as_mut() {
@@ -891,9 +1001,9 @@ pub fn gpu_publish() {
     }
 }
 
-/// Whether the host holds memory of `vals`: a WRITE_BUFFER_AT names it, of
-/// the records not yet published or of the hand-off the host has not given
-/// back (xpute_guest ipc/stream.rs R3). Their writer leaves them as they
+/// Whether the runtime holds memory of `vals`: a WRITE_BUFFER_AT names it, of
+/// the records not yet published or of the hand-off the runtime has not given
+/// back (xpute_core ipc/stream.rs R3). Their writer leaves them as they
 /// are, and where they are, until neither does.
 pub fn in_flight<T>(vals: &[T]) -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
@@ -916,13 +1026,16 @@ pub fn take_landed(mut landed: impl FnMut(u32)) {
     }
 }
 
-/// Whether an image handed to the device has yet to land (`Gpu::image`):
-/// another turn is wanted to take it.
-pub fn images_landing() -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| {
-        s.images
-            .iter()
-            .any(|a| !signaled(&a.fence[0], IMAGE_TICKET))
+/// Whether an image handed to the device landed since this last ran
+/// (`Gpu::image`): its fence's store woke the turn, and a frame is wanted
+/// to take it.
+pub fn images_landed() -> bool {
+    STATE.get(|| None).as_mut().is_some_and(|s| {
+        s.images.iter_mut().fold(false, |any, a| {
+            let landed = !a.told && signaled(&a.fence[0], IMAGE_TICKET);
+            a.told |= landed;
+            any | landed
+        })
     })
 }
 
@@ -947,7 +1060,6 @@ pub fn frame_commit() -> bool {
     committed
 }
 
-use crate::frame::shader::floor;
 use pxl_spec::asset;
 /// The bytes a write of `bytes` takes of the stream, as its writer measures
 /// it: what a caller sums over the writes it makes together and asks `room`.
@@ -981,10 +1093,11 @@ fn handle_of(id: Option<Id>) -> Id {
     }
 }
 
-/// Lets an object go: the host destroys it, and its handle is free. 0 is nothing.
+/// Lets an object go: the runtime destroys it, and its handle is free. 0 is nothing.
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
+            s.splits.let_go(id);
             if writable(s) {
                 s.encoder.destroy(&mut s.stream, id);
             } else {
@@ -994,7 +1107,8 @@ pub fn release(id: Id) {
     }
 }
 
-fn vertex_format(code: u32) -> VertexFormat {
+/// A record's vertex format code as WebGPU's.
+pub fn vertex_format(code: u32) -> VertexFormat {
     match code {
         record::F32X2 => VertexFormat::float32x2,
         record::F32X3 => VertexFormat::float32x3,
@@ -1116,6 +1230,7 @@ impl Gpu {
     /// A buffer of `size` bytes, one every device makes and, as storage,
     /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
     /// structure let through, not a device to fall short on.
+    #[track_caller]
     pub fn buf(&self, size: u32, usage: u32) -> Id {
         xpute_kit::ensure!(
             floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
@@ -1123,14 +1238,19 @@ impl Gpu {
             size
         );
         let s = self.s();
-        handle_of(s.encoder.buffer(
+        let buf = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size,
                 usage,
                 mapped_at_creation: false,
             },
-        ))
+        ));
+        let at = core::panic::Location::caller();
+        s.splits
+            .made(buf, usage & buffer_usage::INDIRECT != 0, at.line());
+        self.label(buf, "buffer", core::panic::Location::caller());
+        buf
     }
 
     pub fn texture(
@@ -1294,17 +1414,18 @@ impl Gpu {
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `format` and `depth`, `stencil` the
-    /// stencil beside it: into the depth alone where `format` is depth32's,
-    /// its fragment writing no color (the shadow map, gpu/shadow.rs). Made by
-    /// WebGPU's async call: the host stores `ticket` at the fence once it
-    /// is made, and nothing names it before (gpu/pipeline.rs `Pipelines::made`).
+    /// group layouts, drawing into `targets` colors of `format`, at locations
+    /// from 0, and `depth`, `stencil` the stencil beside it: into the depth
+    /// alone where `format` is depth32's, its fragment writing no color (the
+    /// shadow map, gpu/shadow.rs). Made by WebGPU's async call: the runtime
+    /// stores `ticket` at the fence once it is made, and nothing names it
+    /// before (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
         layouts: &[Layout],
         module: Id,
-        format: Format,
+        (format, targets): (Format, usize),
         (depth, stencil): (Format, Stencil),
         (fence, ticket): (&u32, u32),
     ) -> Id {
@@ -1344,16 +1465,18 @@ impl Gpu {
             })
             .collect();
         let layout = self.pipeline_layout(layouts);
-        let blend = match words[8] {
+        let blend = || match words[8] {
             record::ALPHA => Some(ALPHA_BLEND),
             record::ADD => Some(ADD_BLEND),
             _ => None,
         };
-        let targets = [encode::ColorTargetState {
-            format,
-            blend,
-            write_mask: COLOR_WRITE::ALL,
-        }];
+        let colors: [encode::ColorTargetState; TARGETS] =
+            core::array::from_fn(|_| encode::ColorTargetState {
+                format,
+                blend: blend(),
+                write_mask: COLOR_WRITE::ALL,
+            });
+        xpute_kit::ensure!(targets <= TARGETS, EINVAL, targets);
         let compare = match words[5] {
             record::GREATER => CompareFunction::greater,
             record::GREATER_EQUAL => CompareFunction::greater_equal,
@@ -1401,11 +1524,11 @@ impl Gpu {
                 multisample: encode::MULTISAMPLE_NONE,
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
-                    entry: "fs",
+                    entry: FRAGMENT_ENTRY,
                     targets: if format == Format::depth32float {
                         &[]
                     } else {
-                        &targets
+                        &colors[..targets]
                     },
                 }),
             },
@@ -1447,7 +1570,48 @@ impl Gpu {
     pub fn bind_group(&self, layout: Layout, entries: &[Entry]) -> Id {
         layout.holds(entries);
         let s = self.s();
-        handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries))
+        let group = handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries));
+        s.splits.grouped(group, layout.writable(entries));
+        group
+    }
+
+    /// The bind group over `layout` that `table` says (frame/shader/group.rs): each binding it
+    /// names on the frame's buffer `buf` gives, and those of `rest` the layout binds past
+    /// them. `rest` binds no buffer of the frame's, which only the table names; `buf` answers
+    /// 0 for one its caller does not hold.
+    #[track_caller]
+    pub fn frame_group(
+        &self,
+        layout: Layout,
+        table: &access::Group,
+        buf: impl Fn(u32) -> Id,
+        rest: &[Entry],
+    ) -> Id {
+        let named = |binding: u32| table.binds.iter().any(|b| b.binding == binding);
+        let mut entries: Vec<Entry> = table
+            .binds
+            .iter()
+            .map(|b| match (b.at, b.words) {
+                (0, END) => buf_entry(b.binding, buf(b.buf)),
+                _ => buf_range_entry(
+                    b.binding,
+                    buf(b.buf),
+                    word_bytes(b.at as usize),
+                    word_bytes(b.words as usize),
+                ),
+            })
+            .collect();
+        for e in rest
+            .iter()
+            .filter(|e| layout.binds(e.binding) && !named(e.binding))
+        {
+            if let encode::Resource::Buffer { buffer, .. } = e.resource {
+                let shared = (0..BUFFERS.len() as u32).any(|k| buf(k) == buffer);
+                xpute_kit::ensure!(buffer == 0 || !shared, ENOTRECOVERABLE, e.binding, buffer);
+            }
+            entries.push(*e);
+        }
+        self.bind_group(layout, &entries)
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
@@ -1461,9 +1625,9 @@ impl Gpu {
         call::write_buffer(&mut self.s().stream, id, off, bytes);
     }
 
-    /// `bytes` read where they lie when the host runs the turn, one record
-    /// however large: the host's from the turn's publish until it hands the
-    /// stream back (xpute_guest ipc/stream.rs R3), their owner asking `in_flight`
+    /// `bytes` read where they lie when the runtime runs the turn, one record
+    /// however large: the runtime's from the turn's publish until it hands the
+    /// stream back (xpute_core ipc/stream.rs R3), their owner asking `in_flight`
     /// before it writes them again.
     pub fn upload_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         let s = self.s();
@@ -1495,10 +1659,10 @@ impl Gpu {
     /// once, on this device, for the one that takes it. None while it
     /// lands, the first ask handing it to the device; none for good for a
     /// file whose size no header gives (pxl-spec `asset::image_size`),
-    /// which the kernel does not hand, for one the host could not decode,
+    /// which the core does not hand, for one the runtime could not decode,
     /// and for the empty file of one already taken on this device.
     /// The file's bytes are its asker's until it is taken (`take_landed`);
-    /// the host copies them out as it runs the turn.
+    /// the runtime copies them out as it runs the turn.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let s = self.s();
         if let Some(k) = s.images.iter().position(|a| a.image == image) {
@@ -1521,13 +1685,94 @@ impl Gpu {
             image,
             texture,
             fence,
+            told: false,
         });
         None
     }
 
+    /// `id` named in the device's messages by the source line that made it,
+    /// `kind` before it: the buffer, encoder or pass a validation error names.
+    fn label(&self, id: Id, kind: &str, at: &core::panic::Location) {
+        let mut name = Label::default();
+        let file = at.file().rsplit('/').next().unwrap_or(at.file());
+        let _ = core::fmt::write(&mut name, format_args!("{kind} {file}:{}", at.line()));
+        let s = self.s();
+        call::label(&mut s.stream, id, name.text());
+    }
+
+    /// An encoder, cut into command buffers as its passes read args
+    /// (gpu/split.rs) and submitted as them.
+    #[track_caller]
     pub fn encoder(&self) -> Id {
         let s = self.s();
-        handle_of(s.encoder.encoder(&mut s.stream))
+        let encoder = handle_of(s.encoder.encoder(&mut s.stream));
+        s.splits.begun(encoder);
+        self.label(encoder, "encoder", core::panic::Location::caller());
+        encoder
+    }
+
+    /// `encoder` recorded into a new command buffer from here (gpu/split.rs).
+    #[track_caller]
+    fn split(&self, encoder: Id) {
+        let s = self.s();
+        let next = handle_of(s.encoder.encoder(&mut s.stream));
+        s.splits.split(encoder, next);
+        self.label(next, "encoder split", core::panic::Location::caller());
+    }
+
+    /// The pass an indirect call on `pass` reading `buf` is recorded in: a
+    /// compute pass is ended and begun again in a new command buffer where
+    /// `buf` was written in its own (`Splits::cuts`), its pipeline and
+    /// groups set again and its span's end moved to it; a render pass began
+    /// apart (`Splits::draws_apart`), so its own draws alone could have
+    /// written it, a bug.
+    #[track_caller]
+    fn indirect(&self, pass: Id, buf: Id) -> Id {
+        let s = self.s();
+        // A call reads its count from a buffer it does not write: one bound writable in a
+        // group set for it, or, in a render pass, in any group set in the pass, is refused at
+        // the call's line, naming the group (its index, or a render pass's group's handle) and
+        // the binding, then the line that made the buffer and the buffer, each pair a word's
+        // halves.
+        if let Some((idx, binding)) = s.splits.binds_writable(pass, buf) {
+            xpute_kit::bug!(
+                ENOTRECOVERABLE,
+                u64::from(idx) << 32 | u64::from(binding),
+                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+            );
+        }
+        if !s.splits.cuts(pass, buf) {
+            return s.splits.pass_at(pass);
+        }
+        let (encoder, compute) = s.splits.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
+        xpute_kit::ensure!(compute, ENOTRECOVERABLE, pass, buf);
+        let o = s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE);
+        let (was, end, pipeline) = (o.at, o.end, o.pipeline);
+        let groups = o.groups.clone();
+        s.encoder.end(&mut s.stream, was);
+        self.split(encoder);
+        let s = self.s();
+        let stamp = end.map(|(query_set, end)| encode::TimestampWrites {
+            query_set,
+            begin: None,
+            end: Some(end),
+        });
+        let at = handle_of(
+            s.encoder
+                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+        );
+        self.label(at, "compute indirect", core::panic::Location::caller());
+        let s = self.s();
+        if pipeline != 0 {
+            call::set_pipeline(&mut s.stream, at, pipeline);
+        }
+        for (idx, (group, offsets)) in groups.iter().enumerate() {
+            if *group != 0 {
+                call::set_bind_group(&mut s.stream, at, idx as u32, *group, offsets);
+            }
+        }
+        s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE).at = at;
+        at
     }
 
     /// `size` texels of `src` into `dst`, as WebGPU's `copyTextureToTexture`.
@@ -1538,17 +1783,30 @@ impl Gpu {
         dst: &encode::TexelCopyTexture,
         size: [u32; 3],
     ) {
-        call::copy_texture_to_texture(&mut self.s().stream, encoder, src, dst, size);
+        let s = self.s();
+        let encoder = s.splits.at(encoder);
+        call::copy_texture_to_texture(&mut s.stream, encoder, src, dst, size);
     }
 
+    #[track_caller]
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
-        let colors = [encode::ColorAttachment {
-            view: d.color,
+        let named = encoder;
+        if self.s().splits.draws_apart(named) {
+            self.split(named);
+        }
+        let encoder = self.s().splits.at(named);
+        let colors = [d.color, d.second].map(|view| encode::ColorAttachment {
+            view,
             resolve: None,
             load: load_op(d.color_load),
             store: StoreOp::store,
             clear: d.color_clear,
-        }];
+        });
+        let targets = match (d.color, d.second) {
+            (0, _) => 0,
+            (_, 0) => 1,
+            _ => 2,
+        };
         let depth_stencil = (d.depth != 0).then(|| encode::DepthStencilAttachment {
             view: d.depth,
             depth_load: load_op(d.depth_load),
@@ -1561,11 +1819,11 @@ impl Gpu {
             stencil_read_only: false,
         });
         let s = self.s();
-        handle_of(s.encoder.render_pass(
+        let pass = handle_of(s.encoder.render_pass(
             &mut s.stream,
             encoder,
             &encode::RenderPassDescriptor {
-                colors: if d.color != 0 { &colors } else { &[] },
+                colors: &colors[..targets],
                 depth_stencil,
                 timestamps: d.stamp.as_ref().map(|t| encode::TimestampWrites {
                     query_set: t.query_set,
@@ -1574,27 +1832,65 @@ impl Gpu {
                 }),
                 occlusion: None,
             },
-        ))
+        ));
+        s.splits.opened(pass, named, false, None);
+        self.label(pass, "render", core::panic::Location::caller());
+        pass
     }
 
     /// Timed in `stamp`'s span where the frame is timed.
+    #[track_caller]
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        handle_of(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
+        let end = stamp.as_ref().and_then(|t| Some((t.query_set, t.end?)));
+        let pass = handle_of(
+            s.encoder
+                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+        );
+        s.splits.opened(pass, encoder, true, end);
+        self.label(pass, "compute", core::panic::Location::caller());
+        pass
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
-        call::dispatch(&mut self.s().stream, pass, [x, y, z]);
+        let s = self.s();
+        call::dispatch(&mut s.stream, s.splits.pass_at(pass), [x, y, z]);
+        s.splits.ran(pass);
     }
 
     /// Workgroups as `buffer` holds them from `offset`, across, up and deep:
-    /// a count only the GPU knows.
+    /// a count only the GPU knows, written in a command buffer before this
+    /// one (gpu/split.rs).
+    #[track_caller]
     pub fn dispatch_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::dispatch_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::dispatch_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
-        call::set_pipeline(&mut self.s().stream, pass, pipeline);
+        let s = self.s();
+        // A render pass that declares what it draws draws nothing else (frame/shader/sequence.rs
+        // `Step::in_pass`): another pipeline is refused at the call's line, naming its record
+        // and the pass.
+        if let Some(record) = s.splits.undeclared(pass, pipeline) {
+            xpute_kit::bug!(ENOTRECOVERABLE, u64::from(record), u64::from(pass));
+        }
+        call::set_pipeline(&mut s.stream, s.splits.pass_at(pass), pipeline);
+        s.splits.piped(pass, pipeline);
+    }
+
+    /// Render pass `pass` held to draw `pipelines` alone, by their records' numbers, as the
+    /// frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
+    pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
+        self.s().splits.declared(pass, pipelines);
+    }
+
+    /// Render pipeline `pipeline` made of record `record`, which a declared pass is held to.
+    pub fn recorded(&self, pipeline: Id, record: u32) {
+        self.s().splits.recorded(pipeline, record);
     }
 
     /// What the pass draws held to `[x, y, width, height]` of its targets.
@@ -1602,8 +1898,21 @@ impl Gpu {
         call::set_scissor(&mut self.s().stream, pass, rect);
     }
 
+    #[track_caller]
     pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
-        call::set_bind_group(&mut self.s().stream, pass, idx, group, offsets);
+        let s = self.s();
+        // A render pass is one usage scope whole: a group binding writable what one of its
+        // indirect draws read its count from is refused, as the draw would be after it
+        // (`indirect`), named alike.
+        if let Some((buf, binding)) = s.splits.binds_read(pass, group) {
+            xpute_kit::bug!(
+                ENOTRECOVERABLE,
+                u64::from(group) << 32 | u64::from(binding),
+                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+            );
+        }
+        call::set_bind_group(&mut s.stream, s.splits.pass_at(pass), idx, group, offsets);
+        s.splits.bound(pass, idx, group, offsets);
     }
 
     /// A size of 0 is the rest of the buffer.
@@ -1638,14 +1947,16 @@ impl Gpu {
         first_vertex: u32,
         first_instance: u32,
     ) {
+        let s = self.s();
         call::draw(
-            &mut self.s().stream,
+            &mut s.stream,
             pass,
             vertices,
             instances,
             first_vertex,
             first_instance,
         );
+        s.splits.ran(pass);
     }
 
     pub fn draw_indexed(
@@ -1656,8 +1967,9 @@ impl Gpu {
         first_idx: u32,
         first_instance: u32,
     ) {
+        let s = self.s();
         call::draw_indexed(
-            &mut self.s().stream,
+            &mut s.stream,
             pass,
             indices,
             instances,
@@ -1665,52 +1977,72 @@ impl Gpu {
             0,
             first_instance,
         );
+        s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn draw_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::draw_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::draw_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
+    #[track_caller]
     pub fn draw_indexed_indirect(&self, pass: Id, buf: Id, off: u32) {
-        call::draw_indexed_indirect(&mut self.s().stream, pass, buf, off);
+        let at = self.indirect(pass, buf);
+        let s = self.s();
+        call::draw_indexed_indirect(&mut s.stream, at, buf, off);
+        s.splits.ran(pass);
     }
 
     /// Ends the pass and lets its handle go.
     pub fn end(&self, pass: Id) {
         let s = self.s();
-        s.encoder.end(&mut s.stream, pass);
+        s.encoder.end(&mut s.stream, s.splits.pass_at(pass));
+        s.splits.closed(pass);
     }
 
-    /// Submits the encoder and lets its handle go.
+    /// Submits the encoder's command buffers, each alone and in order, and
+    /// lets their handles go.
     pub fn submit(&self, encoder: Id) {
         let s = self.s();
-        s.encoder.submit(&mut s.stream, &[encoder]);
+        for e in s.splits.submitted(encoder) {
+            s.encoder.submit(&mut s.stream, &[e]);
+        }
     }
 
-    /// The frame's encoder, its spans resolved, copied out and mapped back
+    /// The frame's encoder, its command buffers submitted each alone and in
+    /// order, the last with its spans resolved, copied out and mapped back
     /// through a read none is out on, where it wrote any, submitted. The
     /// read asked first of those out is taken in first, where it landed, and
     /// may be asked again: its ticket is the order it was asked in, which
     /// its fence holds once it lands. Which read this frame's spans are
     /// on their way back in.
-    pub fn submit_frame(&self, encoder: Id, written: u32) -> Option<usize> {
+    pub fn submit_frame(&self, encoder: Id, written: u64) -> Option<usize> {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
+        let buffers = s.splits.submitted(encoder);
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
-            s.encoder.submit(&mut s.stream, &[encoder]);
+            for e in buffers {
+                s.encoder.submit(&mut s.stream, &[e]);
+            }
             return None;
         };
         let bytes = 2 * SPANS as u32 * 8;
-        call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
-        call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped[r], 0), bytes);
-        s.encoder.submit(&mut s.stream, &[encoder]);
+        let last = *buffers.last().or_bug(Errno::ENOTRECOVERABLE);
+        call::resolve_query_set(&mut s.stream, last, set, 0, 2 * SPANS as u32, resolve, 0);
+        call::copy_buffer_to_buffer(&mut s.stream, last, (resolve, 0), (mapped[r], 0), bytes);
+        for e in buffers {
+            s.encoder.submit(&mut s.stream, &[e]);
+        }
         s.stamps_written[r] = written;
         s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
         s.stamps_out[r] = s.stamps_asked_cnt;
         let at = s.at as usize + read_at(r) * WORD;
         // SAFETY: the head's read: its fence, its result and its ticks,
-        // the host's to write.
+        // the runtime's to write.
         let (fence, ticks) = unsafe {
             (
                 &*mem::at::<[u32; 2]>(at),
@@ -1797,13 +2129,28 @@ impl Gpu {
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
+    /// `size` bytes of buffer `id` from `at` set to zero, in the encoder's order.
+    pub fn clear_buf(&self, encoder: Id, id: Id, at: u32, size: u32) {
+        let s = self.s();
+        call::clear_buffer(&mut s.stream, s.splits.at(encoder), id, at, Some(size));
+        s.splits.copied(encoder, id);
+    }
+
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
-        call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
+        let s = self.s();
+        call::copy_buffer_to_buffer(
+            &mut s.stream,
+            s.splits.at(encoder),
+            (from, at),
+            (to, to_at),
+            size,
+        );
+        s.splits.copied(encoder, to);
     }
 
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied
     /// into on an encoder submitted before, mapped back from `offset` into
-    /// the kernel's memory at `address`; `fence`, the mapping's own fence
+    /// the core's memory at `address`; `fence`, the mapping's own fence
     /// and result, holds `ticket` once they are in or refused, a turn or
     /// more later, and only then may `id` be mapped again (xpute MAP_ASYNC).
     pub fn map_read(
@@ -1815,7 +2162,7 @@ impl Gpu {
         fence: &[u32; 2],
         ticket: u32,
     ) {
-        // SAFETY: the kernel's own range, which it asked to be written and
+        // SAFETY: the core's own range, which it asked to be written and
         // does not read while the mapping is out.
         let into = unsafe {
             core::slice::from_raw_parts_mut(mem::at::<u8>(addr as usize), length as usize)
@@ -1827,3 +2174,36 @@ impl Gpu {
 #[cfg(test)]
 #[path = "api.test.rs"]
 mod test;
+
+/// A label's text, cut at its room.
+struct Label {
+    bytes: [u8; 64],
+    len: usize,
+}
+
+impl Default for Label {
+    fn default() -> Self {
+        Label {
+            bytes: [0; 64],
+            len: 0,
+        }
+    }
+}
+
+impl Label {
+    fn text(&self) -> &str {
+        core::str::from_utf8(&self.bytes[..self.len]).unwrap_or("")
+    }
+}
+
+impl core::fmt::Write for Label {
+    fn write_str(&mut self, text: &str) -> core::fmt::Result {
+        let mut take = text.len().min(self.bytes.len() - self.len);
+        while !text.is_char_boundary(take) {
+            take -= 1;
+        }
+        self.bytes[self.len..self.len + take].copy_from_slice(&text.as_bytes()[..take]);
+        self.len += take;
+        Ok(())
+    }
+}

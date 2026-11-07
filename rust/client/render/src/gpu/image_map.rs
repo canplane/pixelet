@@ -45,11 +45,11 @@ impl ImageMap {
     }
 
     /// Whether the image came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
-        let Some(face) = image().and_then(|(image, file)| g.image(image, file)) else {
+        let Some(face) = image.and_then(|(image, file)| g.image(image, file)) else {
             return false;
         };
         let encoder = g.encoder();

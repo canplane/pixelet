@@ -3,8 +3,7 @@
 //! Text is laid out and drawn by the platform, which owns the fonts, fallback
 //! and color glyphs and shapes a line whole; the renderer gets pixels.
 
-use crate::gpu::atlas::ATLAS_SCALE;
-use crate::look::marker::Font;
+use crate::look::marker::{Font, ATLAS_SCALE};
 
 /// RGBA, top row first, not premultiplied; `origin` is the line's start at its
 /// em box's middle.

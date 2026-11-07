@@ -55,7 +55,7 @@ fn measure_light(r: f32, dir: vec3f, mu: f32, k: u32, radiance: vec3f) {
   let disc = abs(levels(disc_light(r, mu + h, e1)) - levels(disc_light(r, mu, e0))) * sun;
   let up = frame_up();
   let land_r = land_radius();
-  let land = abs(levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, raised), raised) * e1) - levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, now), now) * e0));
+  let land = abs(levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, raised, true), raised) * e1) - levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, now, true), now) * e0));
   if (h > 0.0) {
     atomicMax(&slopes[LIGHT_SLOPES * k], bitcast<u32>(max(most(max(max(abs(lit1 - lit0), disc), land)), 1.0) / h));
     atomicMax(&slopes[LIGHT_SLOPES * k + 2u], bitcast<u32>(h));

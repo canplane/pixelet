@@ -43,8 +43,12 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
   let s = LEAF_CELL - zoom;
   if (r.b.z < r.b.w) {
     let floor = -(1i << (HEIGHT_BITS - 1u - s));
-    let end = select(floor, r.b.z >> s, col.palette_idx == VALUE_VOID);
-    return Surface(SURFACE_WALK, max((r.b.w - 1i) >> s, col.top - 1i), 0u, end);
+    let z = max((r.b.w - 1i) >> s, col.top - 1i);
+    // A column at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall, from its floor up, so a walk
+    // from a cell in it reaches its floor within that many: one longer starts outside the
+    // world, and is cut there, as a walk past its end is.
+    let end = max(select(floor, r.b.z >> s, col.palette_idx == VALUE_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
+    return Surface(SURFACE_WALK, z, 0u, end);
   }
   if (col.palette_idx == VALUE_VOID) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
@@ -53,28 +57,42 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
 }
 
 /// `generation::overlaps_placed` of the box from `at`, `size` a side: a placed decor's box
-/// meets it, each placed unit leaf near enough asked in turn. A node of `PLACED_FIRST`
-/// holding nothing holds no leaf.
+/// meets it, each placed unit leaf near enough asked in turn, found by one descent of the
+/// branches that meet the box from each node of `PLACED_FIRST` (`world::placed_in`), each child
+/// stepped once from its parent: the three levels to `UNIT_ZOOM` (build.rs holds them three).
+/// A node of `PLACED_FIRST` holding nothing holds no leaf.
 fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
   let lo = at - CLAIM_EXTENT;
   let hi = at + size - 1i;
   let t = vec3<u32>(UNIT_ZOOM - PLACED_FIRST);
   let first = lo >> t;
   let last = hi >> t;
-  for (var nz = first.z; nz <= last.z; nz += 1i) {
-    for (var ny = first.y; ny <= last.y; ny += 1i) {
-      for (var nx = first.x; nx <= last.x; nx += 1i) {
+  // The box spans `hi - lo + 1` cells, so `((hi - lo) >> t) + 2` nodes at most, however near
+  // the integers' ends it lies.
+  let nodes = ((hi - lo) >> t) + 1i;
+  for (var nz = first.z; nz <= last.z && nz - first.z <= nodes.z; nz += 1i) {
+    for (var ny = first.y; ny <= last.y && ny - first.y <= nodes.y; ny += 1i) {
+      for (var nx = first.x; nx <= last.x && nx - first.x <= nodes.x; nx += 1i) {
         let node = vec3<i32>(nx, ny, nz);
         let slot = world_root(PLACED_FIRST, node).x;
-        if (slot == SLOT_NOTHING) {
+        if (!is_folded(slot)) {
           continue;
         }
-        let start = max(lo, node << t);
-        let stop = min(hi, ((node + 1i) << t) - 1i);
-        for (var z = start.z; z <= stop.z; z += 1i) {
-          for (var y = start.y; y <= stop.y; y += 1i) {
-            for (var x = start.x; x <= stop.x; x += 1i) {
-              if (leaf_overlaps(slot, vec3<i32>(x, y, z), at, size)) {
+        for (var o1 = 0u; o1 < 8u; o1 += 1u) {
+          let c1 = child_at(node, o1);
+          let s1 = placed_child(slot, PLACED_FIRST + 1u, c1, lo, hi);
+          if (!is_folded(s1)) {
+            continue;
+          }
+          for (var o2 = 0u; o2 < 8u; o2 += 1u) {
+            let c2 = child_at(c1, o2);
+            let s2 = placed_child(s1, PLACED_FIRST + 2u, c2, lo, hi);
+            if (!is_folded(s2)) {
+              continue;
+            }
+            for (var o3 = 0u; o3 < 8u; o3 += 1u) {
+              let c = child_at(c2, o3);
+              if (leaf_overlaps(placed_child(s2, UNIT_ZOOM, c, lo, hi), c, at, size)) {
                 return true;
               }
             }
@@ -86,15 +104,24 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
   return false;
 }
 
-/// Whether the unit cell `c` under the node whose slot is `slot` holds a placed decor whose
-/// box, posed as placed (`placed_pose`), meets the box from `at`.
-fn leaf_overlaps(slot: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
-  var s = slot;
-  var q = PLACED_FIRST;
-  while (q < UNIT_ZOOM && is_folded(s)) {
-    q += 1u;
-    s = tree_child(PLACED, s, q, c >> vec3<u32>(UNIT_ZOOM - q));
+/// Child `o` of the node at `p`, its bits X, Y, Z (`overwrite::child`'s order).
+fn child_at(p: vec3<i32>, o: u32) -> vec3<i32> {
+  return 2i * p + vec3<i32>(vec3<u32>(o & 1u, (o >> 1u) & 1u, (o >> 2u) & 1u));
+}
+
+/// The slot of node `c` at `zoom` under the folded slot `parent` where the node meets the
+/// cells from `lo` to `hi`, else none.
+fn placed_child(parent: u32, zoom: u32, c: vec3<i32>, lo: vec3<i32>, hi: vec3<i32>) -> u32 {
+  let t = vec3<u32>(UNIT_ZOOM - zoom);
+  if (any(c < (lo >> t)) || any(c > (hi >> t))) {
+    return SLOT_NOTHING;
   }
+  return tree_child(PLACED, parent, zoom, c);
+}
+
+/// Whether unit cell `c`, whose slot is `s`, holds a placed decor whose box, posed as placed
+/// (`placed_pose`), meets the box from `at`.
+fn leaf_overlaps(s: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
   if (s == SLOT_NOTHING || is_folded(s) || (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
     return false;
   }
@@ -128,12 +155,13 @@ const STAGE_POSE = 3u;
 /// reaches is asked.
 @compute @workgroup_size(LANES)
 fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let whole = list[THIN_ARGS + 2u];
+  // The pairs generated whole, of the pairs the list holds (`generation::LIST_WORDS`).
+  let whole = in_room(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
   let part = id.z >= whole;
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= min(records[cnt_at(brick, j)], decor_cap(j))) {
+  if (id.x >= in_room(records[cnt_at(brick, j)], decor_cap(j))) {
     return;
   }
   let r = entry_word(brick, j, id.x);
@@ -243,7 +271,8 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let v = world_cell(vec4<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide).asset.x;
     if (stage == STAGE_WALK) {
       if (fills(v)) {
-        eighths = fill_eighths(v);
+        // The eighths of its cube the cell keeps, 0 for all eight, which `sink_share` reads as eight.
+        eighths = v >> FILL_SHIFT;
         stage = STAGE_MET;
       } else {
         z -= 1i;
@@ -286,10 +315,4 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   } else {
     records[r] = record_word(j, variant, turn, cell);
   }
-}
-
-/// `answer::fill_eighths`.
-fn fill_eighths(asset: u32) -> u32 {
-  let k = (asset >> FILL_SHIFT) & (EIGHTHS - 1u);
-  return select(k, EIGHTHS, k == 0u);
 }

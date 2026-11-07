@@ -18,13 +18,11 @@ struct Placement {
 };
 
 fn placed(v: VertexIn) -> Placement {
-  let i = instances[draw_idx() + v.i];
+  let i = order[instance_idx() + v.i];
   let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
-  var p: Placement;
-  p.spin = lane(3u, i);
+  let spin = lane(3u, i);
   let scale = lane(4u, i);
-  p.world = place_up(v.pos * scale, p.spin) + at + draw_translation();
-  return p;
+  return Placement(place_up(v.pos * scale, spin) + at + draw_translation(), spin);
 }
 
 @vertex

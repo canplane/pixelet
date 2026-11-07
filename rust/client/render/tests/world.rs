@@ -1,8 +1,11 @@
 //! The world's one query by hand (frame/shader/world.wgsl) answers word for word as
 //! `world::node` does: real world buffers made here on the CPU, as the fill and the
 //! store lay them, nodes asked along whole descents of the Rust, each step asked again
-//! of the hand query on a device, and every word compared, what the node hands down
-//! included. Skipped where no adapter answers.
+//! of the hand query on a device, and each node's answer compared, its kind and its asset.
+//! Before that, on the CPU, each node of a descent is asked again with nothing handed it
+//! (`Inheritance::of`), and answers as it did off what its parent handed it: the world's
+//! answer is the node's, whichever way a walk came to it. The device's part is skipped
+//! where no adapter answers.
 
 mod real_world;
 
@@ -26,11 +29,9 @@ use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
 const ASKED_WORDS: usize = 20;
 const TOLD_WORDS: usize = 8;
 const OP_NODE: u32 = 0;
-const OP_ROOT: u32 = 1;
-const OP_CHILD: u32 = 2;
 const OP_HOLLOW: u32 = 3;
 
-/// The asks made so far and what the Rust told of each.
+/// The asks made so far and what the Rust answered of each.
 #[derive(Default)]
 struct Asks {
     asked: Vec<u32>,
@@ -38,7 +39,6 @@ struct Asks {
 }
 
 impl Asks {
-    #[expect(clippy::too_many_arguments, reason = "an ask's words, each its own")]
     fn push(
         &mut self,
         (op, zoom, c): (u32, Zoom, [i32; 3]),
@@ -47,7 +47,6 @@ impl Asks {
         cuts: [Cut; 2],
         kind: u32,
         asset: [u32; 2],
-        after: [u32; 4],
     ) {
         let word = |cut: Cut| {
             [
@@ -65,8 +64,7 @@ impl Asks {
         self.asked.extend(word(cuts[1]));
         self.asked.push(0);
         self.told.extend([kind, asset[0], asset[1]]);
-        self.told.extend(after);
-        self.told.push(0);
+        self.told.extend([0; TOLD_WORDS - 3]);
     }
 }
 
@@ -104,30 +102,13 @@ fn descend(
     let pool = tree::Read(w.pool);
     let root = idx(start);
     let mut at = Inheritance::of(&w, (start, root));
-    asks.push(
-        (OP_ROOT, start, root),
-        [0, 0],
-        [0; 4],
-        [Cut::NONE; 2],
-        0,
-        [0, 0],
-        at.words(),
-    );
     tally.add("root", true);
+    // Whether a node over it was handed another descent's place.
+    let mut foreign = false;
     for z in start..=stop {
         let c = idx(z);
         if z > start {
-            let before = at.words();
             at = at.child(&w, &pool, (z, c));
-            asks.push(
-                (OP_CHILD, z, c),
-                [0, 0],
-                before,
-                [Cut::NONE; 2],
-                0,
-                [0, 0],
-                at.words(),
-            );
             tally.add("child", true);
             tally.add("child, ways' cursor held", at.ways.holds());
             if moving {
@@ -143,15 +124,30 @@ fn descend(
             }
         }
         let zooms = [far, near];
-        // Some handed where another descent's cells were held, as a pyramid's kept word may
+        // Some handed where another descent's cells were held, as a node cache's kept word may
         // name a brick since gone.
         if moving && *seen != Lookup::NONE && draw.next().is_multiple_of(16) {
             at.ground = *seen;
+            foreign = true;
             tally.add("handed another descent's place", true);
         }
         let before = at;
         let mut held = w;
         let got = world::node(&mut held, &w, &w, &pool, &mut at, (z, c), zooms, cuts);
+        // Handed what its parent was alone: another descent's place is no state of its own.
+        if z > start && !foreign {
+            let mut top = Inheritance::of(&w, (z, c));
+            let mut held = w;
+            let again = world::node(&mut held, &w, &w, &pool, &mut top, (z, c), zooms, cuts);
+            tally.add("asked again from the top", true);
+            if again != got {
+                tally.add(OTHERWISE, true);
+                eprintln!(
+                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, handed {:x?}",
+                    before.words()
+                );
+            }
+        }
         asks.push(
             (OP_NODE, z, c),
             zooms,
@@ -159,12 +155,15 @@ fn descend(
             cuts,
             got.kind as u32,
             got.asset,
-            at.words(),
         );
         *seen = at.ground;
         tell(w, before, (z, c), zooms, cuts, got, at, tally);
     }
 }
+
+/// A node of a descent that answered otherwise asked from the top than off what its parent
+/// handed it (`descend`).
+const OTHERWISE: &str = "answered otherwise from the top";
 
 /// Which kinds of answer one fell among.
 #[expect(clippy::too_many_arguments, reason = "an answer and what it was asked")]
@@ -184,18 +183,18 @@ fn tell(
     // What was asked of the clip levels against what a node over it found.
     let asked = clip::held_to(if z >= zooms[1] { z } else { zooms[1] });
     let above = before.ground;
-    if above != Lookup::NONE && asked <= z + clip::LEVELS {
+    if above != Lookup::NONE && asked <= z + clip::BRICK_LEVELS {
         t.add("asked coarser than above's cell", asked < above.cell());
         t.add("asked coarser than above's clip", asked < above.from());
         t.add("asked finer by 2 or more", asked >= above.cell() + 2);
     }
-    if asked > z + clip::LEVELS && !UNLAID.contains(&asked) {
+    if asked > z + clip::BRICK_LEVELS && !UNLAID.contains(&asked) {
         let up = asked - z;
         let g = [
             wrap_idx(asked, c[0] << up) >> BRICK_SHIFT,
             (c[1] << up) >> BRICK_SHIFT,
         ];
-        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::LEVELS));
+        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_LEVELS));
         let d = [
             wrap_idx(clip::bricks_zoom(asked), g[0] - first[0]),
             g[1] - first[1],
@@ -207,7 +206,7 @@ fn tell(
     }
     t.add(
         "asked of a level not laid",
-        asked > z + clip::LEVELS && UNLAID.contains(&asked),
+        asked > z + clip::BRICK_LEVELS && UNLAID.contains(&asked),
     );
     if (pxl_engine::TOP_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;
@@ -404,18 +403,6 @@ fn taken(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderModule
 
 #[test]
 fn hand_world_answers_as_the_rust() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
-        eprintln!("no adapter: skipped");
-        return;
-    };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-
     let built = real_world::build(EYE);
     let w = built.world();
     let (clipmap, ground_words, palette_words, shards, overwrites, pool) = (
@@ -787,7 +774,6 @@ fn hand_world_answers_as_the_rust() {
             [Cut::NONE; 2],
             0,
             [share, 0],
-            [0; 4],
         );
     }
     tally.0.insert("a share of cave, asked apart", hollows);
@@ -818,7 +804,6 @@ fn hand_world_answers_as_the_rust() {
                 [Cut::NONE; 2],
                 0,
                 [cave::hollow((z, at)), 0],
-                [0; 4],
             );
         }
     }
@@ -831,6 +816,23 @@ fn hand_world_answers_as_the_rust() {
     for (name, n) in &tally.0 {
         eprintln!("  {n:>8}  {name}");
     }
+    assert_eq!(
+        tally.0.get(OTHERWISE).copied().unwrap_or(0),
+        0,
+        "a node answers as it does from the top off what its parent handed it"
+    );
+
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter: the hand query skipped");
+        return;
+    };
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_limits: adapter.limits(),
+        ..Default::default()
+    }))
+    .unwrap();
 
     // Asked again of the hand query, a chunk at a time.
     use wgpu::util::DeviceExt as _;
@@ -853,13 +855,6 @@ fn hand_world_answers_as_the_rust() {
         buffer(overwrites, store),
         buffer(pool, store),
     );
-    let words = [
-        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
-        include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
-    ]
-    .join("\n");
-    let words = words.as_str();
-    let hand = include_str!(concat!(env!("OUT_DIR"), "/shader/world.wgsl"));
     let source = WORLD_ASKED;
     let module = taken(&device, "world", source);
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -870,32 +865,6 @@ fn hand_world_answers_as_the_rust() {
         compilation_options: Default::default(),
         cache: None,
     });
-    // It lies beside the walk's, as an entry will read both.
-    taken(
-        &device,
-        "world and walk",
-        &[
-            words,
-            include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/eye_bind.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/grid.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/walk_node.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/side.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/resume.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/walk.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/clipmap.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/clip.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/palette.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/world_rule.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/brick.wgsl")),
-            include_str!(concat!(env!("OUT_DIR"), "/shader/level.wgsl")),
-            hand,
-            include_str!(concat!(env!("OUT_DIR"), "/shader/world_split.wgsl")),
-        ]
-        .join("\n"),
-    );
-
     const CHUNK: usize = 1 << 14;
     let (mut same, mut differ, mut first) = (0u64, 0u64, None);
     let mut differ_by_op = [0u32; 4];
@@ -936,7 +905,8 @@ fn hand_world_answers_as_the_rust() {
         queue.submit([e.finish()]);
         let got = read(&device, &queue, &told_buf);
         for (k, (want, have)) in t.chunks(TOLD_WORDS).zip(got.chunks(TOLD_WORDS)).enumerate() {
-            if want == have {
+            // The answer alone: what a node hands its children is the query's own.
+            if want[..3] == have[..3] {
                 same += 1;
             } else {
                 differ += 1;
@@ -946,7 +916,10 @@ fn hand_world_answers_as_the_rust() {
             }
         }
     }
-    eprintln!("{same} answered alike, {differ} differ, by op (node, root, child, hollow): {differ_by_op:?}");
+    eprintln!(
+        "{same} answered alike, {differ} differ, of nodes {}, of hollows {}",
+        differ_by_op[OP_NODE as usize], differ_by_op[OP_HOLLOW as usize]
+    );
     if let Some((k, ask, want, have)) = &first {
         eprintln!("first differing, ask {k}:\n  asked {ask:?}\n  rust  {want:?}\n  hand  {have:?}");
     }

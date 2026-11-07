@@ -6,11 +6,13 @@
 //! tiles it covers where it was and where it is (gpu/pass/mark.rs), its
 //! instances the upload it reads.
 
-use crate::frame::draw::uniform_of;
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
+use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
+use crate::gpu::draw::DRAW_WORDS;
+use crate::gpu::draw::{uniform_of, Draw, DrawStats, Draws};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shader::sequence;
 use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
@@ -18,9 +20,9 @@ use crate::gpu::api::{
 };
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
-use crate::gpu::pass::mark::{self, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
-    draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
+    draw_model, draw_models, put_instances, DrawUniforms, Extent, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
@@ -31,9 +33,6 @@ use crate::gpu::upload::Uploads;
 /// size.
 const IMPOSTOR_SIZE: u32 = 128;
 const FIT_BYTES: u32 = 16;
-
-/// glTF's across, up and deep.
-pub type Extent = [f32; 3];
 
 type BakeKey = (u32, Option<u32>, Extent);
 
@@ -50,12 +49,12 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; DECOR_GROUPS],
     baked: [Option<BakeKey>; DECOR_GROUPS],
     wanted: [Option<BakeKey>; DECOR_GROUPS],
-    marks: Marks,
+    pub marks: Marks,
 }
 
 /// A mark's uniform, as the draw's (`put_instances`), its atlas layer its
 /// group's.
-fn put_mark(buf: &mut [u8], (d, u): &mark::Draw) {
+fn put_mark(buf: &mut [u8], (d, u): &Draw) {
     put_instances(buf, u, d[1]);
 }
 
@@ -123,29 +122,14 @@ impl ImpostorPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_IMPOSTOR_MARK,
+                (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
         }
     }
 
-    /// The marks this frame of the listed draws (gpu/pass/mark.rs
-    /// `Marks::prepare`). Whether any.
-    pub fn prepare_marks<'a>(
-        &mut self,
-        g: &Gpu,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-        touched: &[u32],
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> bool {
-        self.marks
-            .prepare(g, draws, uniforms, touched, uploads, last_frame_uploads)
-    }
-
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`); a
     /// group whose layer is not drawn yet is not.
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
@@ -168,14 +152,9 @@ impl ImpostorPass {
         self.marks.reads(draws, out);
     }
 
-    /// What this frame listed of `draws` kept for the next's marks where it
-    /// was.
-    pub fn keep<'a>(
-        &mut self,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uniforms: &[f32],
-    ) {
-        self.marks.keep(draws, uniforms);
+    /// Its draws into `stats`, a quad an instance.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_IMPOSTOR, stats, |d| 2 * d[2]);
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
@@ -295,6 +274,11 @@ impl ImpostorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
+        let step = if d.gate.is_none() {
+            &sequence::IMPOSTOR_LIT
+        } else {
+            &sequence::IMPOSTOR_LIT_GATED
+        };
         pass.set_pipeline(self.draw.id);
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(2, self.group, &[]);
@@ -304,7 +288,7 @@ impl ImpostorPass {
                 continue;
             }
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
-            pass.draw_indirect(d.args, d.args_at(2 * group + 1));
+            pass.draw_indirect(d.args, step.off(d.args_at(2 * group + 1)));
         }
     }
 }

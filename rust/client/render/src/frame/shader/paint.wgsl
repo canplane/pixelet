@@ -3,7 +3,7 @@
 // What a cell's face is painted, wherever it is drawn from: the ghost's
 // boxes (box.wgsl) and the screen's rays (screen_ray.wgsl) both fill a
 // `Surface` and call `paint`, so the two cannot paint one face differently.
-// Its swatch or its layers' four taps, darkened by its own edges as much as its
+// Its swatch or its layer's tap, darkened by its own edges as much as its
 // caller says, lit by `shade`: a cell is painted from its own words.
 
 @group(0) @binding(4) var layers: texture_2d_array<f32>;
@@ -28,14 +28,15 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
   return select(high, low, c <= vec3f(0.04045));
 }
 
-// A face as it is painted: its swatch and four layer taps, its normal, how
+// A face as it is painted: its swatch and its layer, its normal, how
 // much its own edges darken it there (0 to 1), where it is in the world, its
 // texture coordinate with that coordinate's screen gradients, how open it is
 // to the sky there (the screen's ambient occlusion, and its corners' where its
-// caller knows them), and the air between it and the eye.
+// caller knows them). The air between it and the eye and the lights there are
+// `paint`'s own arguments.
 struct Surface {
   rgb: vec3f,
-  layers: vec4f,
+  layer: f32,
   normal: vec3f,
   edge: f32,
   world_pos: vec3f,
@@ -43,7 +44,6 @@ struct Surface {
   ddx: vec2f,
   ddy: vec2f,
   ao: f32,
-  seen: Air,
 };
 
 // A cell's face wears its own image for that face, at any depth: a cell
@@ -82,28 +82,24 @@ fn face_uv(p: vec3f, normal: vec3f) -> vec2f {
 }
 
 // How much a face's edge darkens it `d` units from the edge, where a drawn
-// px spans `px` units that way: a line `frame_edge_width` units wide
+// px spans `px` units that way: a line `EFFECT_EDGE_WIDTH` units wide
 // whatever the cell's size, so perspective alone thins it far off, fading
 // out across it and a px past it, and as faint as the share of a px
 // it covers once it is thinner than one.
 fn line_at(d: f32, px: f32) -> f32 {
-  let w = frame_edge_width();
-  let t = 1.0 - smoothstep(0.0, w + px, d);
-  return t * t * min(w / px, 1.0);
+  let t = 1.0 - smoothstep(0.0, EFFECT_EDGE_WIDTH + px, d);
+  return t * t * min(EFFECT_EDGE_WIDTH / px, 1.0);
 }
 
-fn paint(s: Surface) -> vec3f {
+fn paint(s: Surface, seen: Air, l: Light) -> vec3f {
   // Only leaf cells carry layers; the taps are skipped.
-  let textured = s.layers.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
+  let textured = s.layer < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
   if (textured) {
     let image = face_image(s.normal);
-    albedo = (sample_tap(s.layers.x, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.layers.y, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.layers.z, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.layers.w, image, s.box_uv, s.ddx, s.ddy, s.rgb)) * 0.25;
+    albedo = sample_tap(s.layer, image, s.box_uv, s.ddx, s.ddy, s.rgb);
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
   let n = normalize(s.normal);
-  return shade(base, n, s.world_pos, shadow_visibility(s.world_pos, n), s.ao, s.seen);
+  return shade(base, n, s.world_pos, shadow_visibility(s.world_pos, n), s.ao, seen, l);
 }

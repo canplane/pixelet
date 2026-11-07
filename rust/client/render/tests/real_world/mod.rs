@@ -1,25 +1,29 @@
 //! A real world's buffers made on the CPU, as the fill and the store lay them, for what is
 //! tested over the world's one query by hand (tests/world.rs, tests/light_miss.rs): its clip
-//! levels and their bricks, the service area's index, what is placed and the ways' pool.
+//! levels and their bricks, the service area's index, what is placed and the ways' pool; the
+//! query a walk on the CPU asks of them (`Asking`), and the same buffers on the device
+//! (`WorldBufs`).
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
 use pxl_content::cube::ground as palette;
 use pxl_content::decor::DECORS;
 use pxl_content::Pixelet;
+use pxl_engine::answer::In;
 use pxl_engine::area::{self, Area, Shard};
+use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
     self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL, HANDED_WORDS, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT,
-    LAID_CELLS, LINES_AT, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, ORIGIN_AT, PALETTE_AT, ROOT_AT,
-    TREE_AT,
+    EYE_CLIP_LEVELS, FIRST_CELL, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT, LAID_CELLS,
+    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
 use pxl_engine::overwrite::{self, Columns, BRANCH};
 use pxl_engine::way::{self, tree, Segment, Stations};
-use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL, SHARD_ZOOM};
+use pxl_engine::world::{self, Inheritance};
+use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL, SHARD_ZOOM};
 
 /// `x` a leaf cell's, as the world names it.
 pub fn wrap(x: i32) -> i32 {
@@ -211,7 +215,7 @@ impl Bricks for World<'_> {
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         fill::column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+    fn bound_level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         fill::level_of(self.ground, slot * BRICK_WORDS, j, at)
     }
     fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {
@@ -241,17 +245,28 @@ impl Resident for World<'_> {
 /// A way's middle a descent is sent to: its cells' zoom, its line, and where in leaf cells.
 pub type Point = (Zoom, u32, [i32; 3]);
 
-/// A brick's record as a frame hands it: its four palette indices a cell, its tile's
-/// samples, its lines. Its ways' middles are added to `ways`.
+/// What a brick is filled off: its four palette indices a cell, its tile's samples, its
+/// lines (pxl-engine `fill::Site`).
+pub struct Handed {
+    pub four: Vec<u32>,
+    pub ele: Vec<i16>,
+    pub lines: Vec<u32>,
+}
+
+/// A brick as the core fills it. Its ways' middles are added to `ways`.
 pub fn handed(
     eye: [i32; 2],
-    fresh: &mut [u32],
     cell: Zoom,
     q: [i32; 2],
     lined: bool,
     ways: &mut Vec<Point>,
-) {
-    fresh.fill(0);
+) -> Handed {
+    let span = (ground::ELE_PADDED_SPAN * ground::ELE_PADDED_SPAN) as usize;
+    let mut handed = Handed {
+        four: vec![0; BRICK_CELLS as usize],
+        ele: vec![0; span],
+        lines: vec![0; LINES_WORDS as usize],
+    };
     let s = LEAF_CELL - cell;
     for i in 0..BRICK_CELLS {
         let [x, y] = clip::of_idx(i);
@@ -282,7 +297,7 @@ pub fn handed(
         } else {
             [ground::UNKNOWN; 4]
         };
-        fresh[(PALETTE_AT + i) as usize] = ground::word(four);
+        handed.four[i as usize] = ground::word(four);
     }
     // The tile's samples, each about a padded place on the tile's cells.
     let tile = [q[0] >> 3, q[1] >> 3];
@@ -295,26 +310,20 @@ pub fn handed(
                 ((f + (v as i32 - ground::ELE_PAD as i32) * step + step / 2) as i64) << s
             };
             let e = elevation(eye, cell, at(sx, first[0]) as i32, at(sy, first[1]) as i32);
-            let k = ground::ele_idx(sx, sy) as u32;
-            fresh[(clip::ELE_AT + k / 2) as usize] |= (e as i16 as u16 as u32) << (16 * (k % 2));
+            handed.ele[ground::ele_idx(sx, sy)] = e as i16;
         }
     }
     // The tile's lines, every one in every bin of the brick: a bridge, a bore and an
     // approach, each two segments that continue.
-    let leaf_side = (1u32 << s) as f32;
     let per_m = 1.0f32;
     let stations = Stations {
-        step: [
-            way::INTERVAL_M[0] * per_m / leaf_side,
-            way::INTERVAL_M[1] * per_m / leaf_side,
-        ],
-        phase: [[0.0; 2], [3.0, 5.0]],
-        leaf: leaf_side,
+        step: way::INTERVAL_M.map(|m| pxl_engine::cells_of_m(m, per_m)),
+        phase: [[0; 2], [3 << s, 5 << s]],
+        leaf: 1 << s,
     };
-    fresh[LINES_AT as usize..(LINES_AT + way::HEADER_WORDS) as usize]
-        .copy_from_slice(&way::header(per_m, &stations));
+    handed.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
     if !lined {
-        return;
+        return handed;
     }
     let mut segments = Vec::new();
     for line in 0..5u32 {
@@ -363,15 +372,16 @@ pub fn handed(
     }
     let n = segments.len() as u32;
     for b in 0..clip::WAYS_BINS {
-        fresh[(LINES_AT + way::HEADER_WORDS + b) as usize] = n << 16;
+        handed.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
     }
     for e in 0..n {
-        fresh[(LINES_AT + LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
+        handed.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
     }
     for (k, w) in segments.iter().enumerate() {
-        let at = (LINES_AT + LINES_SEGMENTS_AT) as usize + k * way::SEGMENT_WORDS;
-        fresh[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
+        let at = LINES_SEGMENTS_AT as usize + k * way::SEGMENT_WORDS;
+        handed.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
     }
+    handed
 }
 
 /// What is placed as the store lays it: a slot's child pointer, then its data; the
@@ -561,10 +571,9 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let mut palette_words: Vec<u32> = Vec::new();
     let mut pool = vec![0u32; 1 << 23];
     let mut next_group = 1u32;
-    let (mut fresh, mut lane, mut scratch) = (
-        vec![0u32; HANDED_WORDS as usize],
+    let (mut lane, mut scratch) = (
         vec![0u32; BRICK_WORDS as usize],
-        vec![0u32; TREE_AT as usize],
+        vec![0u32; SPANS_WORDS as usize],
     );
     let mut way_points = Vec::new();
     let (mut held_bricks, mut absent_bricks, mut way_bricks) = (0u32, 0u32, 0u32);
@@ -585,13 +594,18 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 continue;
             }
             let lined = !(h >> 8).is_multiple_of(3);
-            handed(eye, &mut fresh, cell, q, lined, &mut way_points);
+            let brick = handed(eye, cell, q, lined, &mut way_points);
             lane.fill(0);
-            let place = [(q[0] & 7) as u32, (q[1] & 7) as u32];
-            let first_cell = [wrap_idx(cell, q[0] << BRICK_SHIFT), q[1] << BRICK_SHIFT];
-            let palette_at = PALETTE_AT as usize;
-            palette_words.extend_from_slice(&fresh[palette_at..palette_at + BRICK_CELLS as usize]);
-            fill::brick(&mut fresh, &mut lane, &mut scratch, place, cell, first_cell);
+            palette_words.extend_from_slice(&brick.four);
+            let site = fill::Site {
+                cell,
+                place: [(q[0] & 7) as u32, (q[1] & 7) as u32],
+                first: [wrap_idx(cell, q[0] << BRICK_SHIFT), q[1] << BRICK_SHIFT],
+                shard: Shard::INSIDE,
+                ele: &brick.ele,
+                lines: &brick.lines,
+            };
+            fill::brick(&mut lane, &mut scratch, |i| brick.four[i as usize], &site);
             let [taken, _, root] = fill::tree(&lane, &scratch, cell, &mut pool, next_group);
             if taken != u32::MAX {
                 next_group += taken;
@@ -856,4 +870,84 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         unheld,
         draw,
     }
+}
+
+/// The world's one query asked of every node a walk visits, nothing kept: what a walk answers
+/// whatever the node cache holds.
+pub struct Asking<'a> {
+    pub w: World<'a>,
+    pub cuts: [overwrite::Cut; 2],
+}
+
+impl Query for Asking<'_> {
+    type At = Inheritance;
+
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
+        Inheritance::of(&self.w, (0, node))
+    }
+
+    fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
+        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
+    }
+
+    fn node(
+        &mut self,
+        n: &mut Inheritance,
+        zoom: Zoom,
+        c: [i32; 3],
+        zooms: [Zoom; 2],
+        _: f32,
+    ) -> In<[u32; 2]> {
+        let pool = tree::Read(self.w.pool);
+        let mut held = self.w;
+        world::node(
+            &mut held,
+            &self.w,
+            &self.w,
+            &pool,
+            n,
+            (zoom, c),
+            zooms,
+            self.cuts,
+        )
+    }
+}
+
+/// What the world answers of a node with nothing handed down, what it hands on included:
+/// what a stackless walk asks.
+pub fn truth(
+    w: World,
+    cuts: [overwrite::Cut; 2],
+    zoom: Zoom,
+    c: [i32; 3],
+    zooms: [Zoom; 2],
+) -> (In<[u32; 2]>, [u32; 4]) {
+    let pool = tree::Read(w.pool);
+    let mut held = w;
+    let mut at = Inheritance::of(&w, (zoom, c));
+    let a = world::node(&mut held, &w, &w, &pool, &mut at, (zoom, c), zooms, cuts);
+    (a, at.words())
+}
+
+/// A position `units` off, its fraction off every edge of a step.
+pub fn q8(units: [i32; 3]) -> [i32; 3] {
+    [
+        units[0].wrapping_shl(FRAC_W) | 5,
+        units[1].wrapping_shl(FRAC_W) | 77,
+        units[2].wrapping_shl(FRAC_W) | 13,
+    ]
+}
+
+/// The world's buffers on the device.
+pub struct WorldBufs {
+    pub clip: wgpu::Buffer,
+    pub ground: wgpu::Buffer,
+    pub palette: wgpu::Buffer,
+    pub shards: wgpu::Buffer,
+    pub placed: wgpu::Buffer,
+    pub pool: wgpu::Buffer,
+}
+
+pub fn store_of() -> wgpu::BufferUsages {
+    wgpu::BufferUsages::STORAGE
 }

@@ -8,8 +8,8 @@
 //! frame that counted it (`Frame`), by the renderer's number of that frame
 //! (`RayCounts`), as a GPU read is.
 
-use pxl_engine::{count, pyramid, raster, ray};
-use xpute_guest::mem::off_of;
+use pxl_engine::{count, node_cache, raster, ray};
+use xpute_core::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
@@ -49,30 +49,31 @@ pub(super) struct Frame {
 }
 
 /// Where the passes counted, an observer's each: the walks' in the observed
-/// pyramid's head (`pyramid`), the pixels' or slots' in their walk again's
+/// node cache's head (`node_cache`), the pixels' or slots' in their walk again's
 /// args (`args`), the boxes in the raster's draw (`boxes`).
 pub(super) struct Counts {
-    pub pyramid: u32,
+    pub node_cache: u32,
     pub args: [u32; count::OBSERVERS as usize],
     pub boxes: [u32; count::OBSERVERS as usize],
 }
 
-/// The array and its readback; whether this frame counts (`on`), what
-/// the CPU knew of the frame copied (`copied_frame`), and the counts that
-/// landed, until taken (`take`).
+/// The array and its readback, one copy out at a time, from the frame that encodes it (`copied`)
+/// to the mapping the next frame asks (`mapped`) and its landing; whether this frame counts
+/// (`on`), what the CPU knew of the frame copied (`copied_frame`), and the counts that landed,
+/// until taken (`take`).
 pub(super) struct Counter {
     counts: u32,
     read: u32,
     on: bool,
     frame: Frame,
     copied_frame: Frame,
-    read_counts: Box<[u32; WORDS]>,
-    /// The mapping's fence and result, the host's, and the ticket it
-    /// was last asked with, the kernel's: one mapping out at a time.
-    mapping: Box<[u32; 2]>,
-    ticket: u32,
     copied: bool,
     mapped: bool,
+    read_counts: Box<[u32; WORDS]>,
+    /// The mapping's fence and result, the runtime's, and the ticket it
+    /// was last asked with, the core's: one mapping out at a time.
+    mapping: Box<[u32; 2]>,
+    ticket: u32,
     ray_counts: Option<RayCounts>,
 }
 
@@ -91,47 +92,52 @@ impl Counter {
             on: false,
             frame: Frame::default(),
             copied_frame: Frame::default(),
+            copied: false,
+            mapped: false,
             read_counts: Box::new([0; WORDS]),
             mapping: Box::new([0; 2]),
             ticket: 0,
-            copied: false,
-            mapped: false,
             ray_counts: None,
         }
     }
 
     /// This frame's counting where `on` and an observer casts (`frame`):
-    /// the walks told to count in the pyramid's head (`pyramid`) and their
+    /// the walks told to count in the node cache's head (`node_cache`) and their
     /// counts cleared there, after the head is written, and the array
     /// cleared.
     /// The head is left as it is where neither this frame nor the one
     /// before counts.
-    pub(super) fn begin(&mut self, g: &Gpu, on: bool, pyramid: u32, frame: Frame) {
+    pub(super) fn begin(&mut self, g: &Gpu, on: bool, node_cache: u32, frame: Frame) {
         let was = self.on;
         self.on = on && frame.casts.contains(&true);
+        self.frame = frame;
         if !self.on && !was {
             return;
         }
+        // Each observer's walks and pixels count where it casts, a bit each: an eye's pixels
+        // cast again in a frame that casts the light alone count nothing.
         let mut head = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
-        head[0] = u32::from(self.on);
+        for (o, &cast) in frame.casts.iter().enumerate() {
+            head[0] |= u32::from(self.on && cast) << o;
+        }
         g.write_buf(
-            pyramid,
-            word_bytes(pyramid::COUNT_ON as usize),
+            node_cache,
+            word_bytes(node_cache::COUNT_ON as usize),
             bytes(&head),
         );
         if !self.on {
             return;
         }
-        self.frame = frame;
         g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
-    /// The counts gathered into the array and copied where none are out,
-    /// after the frame's dispatches: each observer's that cast.
+    /// After the frame's dispatches: the counts of each observer that cast gathered into the
+    /// array and copied, where this frame counts and none are out.
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
         if !self.on || self.copied || self.mapped {
             return;
         }
+        self.copied = true;
         for o in 0..count::OBSERVERS {
             let k = o as usize;
             if !self.frame.casts[k] {
@@ -140,8 +146,8 @@ impl Counter {
             // Each run where it was counted, into its lanes.
             for (buf, word, lane, words) in [
                 (
-                    from.pyramid,
-                    pyramid::lane_at(o, count::BEAM),
+                    from.node_cache,
+                    node_cache::lane_at(o, count::BEAM),
                     count::BEAM,
                     count::WALKS,
                 ),
@@ -164,38 +170,38 @@ impl Counter {
             }
         }
         g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
-        (self.copied, self.copied_frame) = (true, self.frame);
+        self.copied_frame = self.frame;
     }
 
     /// The counts copied last frame mapped back, and those that landed
     /// kept with what the CPU knew of their frame, until taken: after the
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
-        let landed = signaled(&self.mapping[0], self.ticket);
-        if self.mapped && landed && self.mapping[1] != RESULT::OK {
+        let signaled = signaled(&self.mapping[0], self.ticket);
+        if self.mapped && signaled {
             self.mapped = false;
-        }
-        if self.mapped && landed {
-            let (l, f) = (&self.read_counts, self.copied_frame);
-            let mut counts = [0.0; RAY_COUNTS];
-            for o in 0..count::OBSERVERS {
-                if !f.casts[o as usize] {
-                    continue;
+            if self.mapping[1] == RESULT::OK {
+                let (l, f) = (&self.read_counts, self.copied_frame);
+                let mut counts = [0.0; RAY_COUNTS];
+                for o in 0..count::OBSERVERS {
+                    if !f.casts[o as usize] {
+                        continue;
+                    }
+                    counts[count_at(o, CAST)] = 1.0;
+                    counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
+                    for lane in 0..count::LANES {
+                        let c = f64::from(l[count::at(o, lane) as usize]);
+                        counts[count_at(o, LANES_AT + lane as usize)] = c;
+                    }
                 }
-                counts[count_at(o, CAST)] = 1.0;
-                counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
-                for lane in 0..count::LANES {
-                    let c = f64::from(l[count::at(o, lane) as usize]);
-                    counts[count_at(o, LANES_AT + lane as usize)] = c;
-                }
+                self.ray_counts = Some(RayCounts {
+                    frame: f.number,
+                    counts,
+                });
             }
-            self.ray_counts = Some(RayCounts {
-                frame: f.number,
-                counts,
-            });
-            self.mapped = false;
         }
-        if self.copied && landed {
+        if self.copied && !self.mapped && signaled {
+            (self.copied, self.mapped) = (false, true);
             let addr = off_of(self.read_counts.as_ptr()) as u32;
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
@@ -206,7 +212,6 @@ impl Counter {
                 &self.mapping,
                 self.ticket,
             );
-            (self.copied, self.mapped) = (false, true);
         }
     }
 

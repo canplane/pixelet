@@ -13,7 +13,7 @@
 //! sequence; where it changed this frame, what the frames before left is
 //! moved to where this frame's eye sees it and held within what this
 //! frame's pixels about it hold. A tile is claimed, drawn again, until it
-//! has run through the sequence (pxl-engine `screen::CLAIMED_FOR`,
+//! has run through the sequence (word.rs `screen::CLAIMED_FOR`,
 //! screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
@@ -27,15 +27,16 @@ use pxl_spec::space::coord::world;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
+use crate::frame::shader::word::screen::{CLAIMED_FOR, JITTERS};
+use crate::gpu::api::WORLD_COLOR;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
+    buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
     RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::{Surface, WORLD_COLOR};
+use crate::gpu::surface::Surface;
 use crate::gpu::tiles::{Tiles, SIDE};
-use pxl_engine::screen::{CLAIMED_FOR, JITTERS};
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge
@@ -51,6 +52,11 @@ pub struct Resolve {
     uniform: u32,
     /// The write-back.
     back: Pipeline,
+    /// Their groups (`set_groups`), each of the surface's histories': the
+    /// resolve's reading it as the last frame's, the write-back's reading it
+    /// as this frame's.
+    groups: [Group; 2],
+    back_groups: [Group; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -88,6 +94,8 @@ impl Resolve {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
+            groups: [Group::default(), Group::default()],
+            back_groups: [Group::default(), Group::default()],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
@@ -106,24 +114,59 @@ impl Resolve {
     }
 
     /// This frame's jitter, in drawn pixels, X right and Y down: the
-    /// sequence's next, or where it holds once it ran through with nothing
-    /// else moving: the last frame anything else moved in and the
-    /// `JITTERS - 1` after it, each at its own place of the sequence.
+    /// sequence's next while a change that is not the scene's animation's
+    /// settles (`asks`), or where it holds: once it ran through, the last
+    /// frame such a change came in and the `JITTERS - 1` after it, each at its
+    /// own place of the sequence; and in a frame drawn for anything else, as an
+    /// animation's step.
     pub fn jitter(&mut self) -> [f32; 2] {
-        if self.gathering() {
+        if self.asks() {
             let k = self.phase + 1;
             self.jitter = [halton(k, 2) - 0.5, halton(k, 3) - 0.5];
         }
         self.jitter
     }
 
+    /// Its groups over `s`, the frame words in `frame` and the tiles' words
+    /// and uniform, before the frame's commands, the tiles of `s`'s size
+    /// (`Tiles::size`).
+    pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface) {
+        let (words, uniform) = self.tiles.this_frame();
+        for k in 0..2 {
+            self.groups[k].set(
+                g,
+                self.pipeline.layouts[0],
+                &[
+                    buf_entry(0, frame),
+                    view_entry(1, s.color_view),
+                    view_entry(2, s.depth_only_view),
+                    view_entry(3, s.history_view[k]),
+                    sampler_entry(4, self.sampler),
+                    buf_entry(5, self.uniform),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                ],
+            );
+            self.back_groups[k].set(
+                g,
+                self.back.layouts[0],
+                &[
+                    view_entry(1, s.history_view[k]),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                ],
+            );
+        }
+    }
+
     /// The frame's world color, `s`'s, blended into what the frames before
     /// left, into the history its turn writes, each tile by its age
     /// (`age`). Where the frame is drawn through the gate (`gated`), only the
     /// claimed tiles, written back into the last history, which stays the
-    /// one read. Passes of their own, by the frame words in `frame`, their
-    /// time counted in the span `resolve`; the history the finish encodes.
-    pub fn draw(&mut self, ctx: &mut RenderContext, frame: u32, s: &Surface, gated: bool) -> u32 {
+    /// one read. Passes of their own over the groups set for `s`
+    /// (`set_groups`), their time counted in the span `resolve`; the history
+    /// the finish encodes.
+    pub fn draw(&mut self, ctx: &mut RenderContext, s: &Surface, gated: bool) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
@@ -144,20 +187,6 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let (words, uniform) = self.tiles.this_frame();
-        let group = g.bind_group(
-            self.pipeline.layouts[0],
-            &[
-                buf_entry(0, frame),
-                view_entry(1, s.color_view),
-                view_entry(2, s.depth_only_view),
-                view_entry(3, s.history_view[was]),
-                sampler_entry(4, self.sampler),
-                buf_entry(5, self.uniform),
-                buf_entry(30, words),
-                buf_entry(31, uniform),
-            ],
-        );
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
         let load = if gated { Load::Load } else { Load::Clear };
@@ -166,21 +195,12 @@ impl Resolve {
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
         g.set_pipeline(pass, self.pipeline.id);
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.groups[was].id(), &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        release(group);
         if !gated {
             return s.history_view[k];
         }
-        let group = g.bind_group(
-            self.back.layouts[0],
-            &[
-                view_entry(1, s.history_view[k]),
-                buf_entry(30, words),
-                buf_entry(31, uniform),
-            ],
-        );
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -193,10 +213,9 @@ impl Resolve {
             ),
         );
         g.set_pipeline(pass, self.back.id);
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.back_groups[k].id(), &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        release(group);
         s.history_view[was]
     }
 
@@ -220,22 +239,28 @@ impl Resolve {
 
     /// The frame was drawn: its history is the next's to read, unless it was
     /// drawn through the gate (`gated`), written back into the last; its
-    /// view the last, and the jitter moves on unless it holds.
+    /// view the last, and the jitter moves on where the frame took a place of
+    /// the sequence (`asks`, as `jitter` read it).
     pub fn on_drawn(&mut self, gated: bool) {
         if !gated {
             self.turn = 1 - self.turn;
         }
         self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;
-        if self.gathering() {
+        if self.asks() {
             self.phase = (self.phase + 1) % JITTERS;
         }
     }
 
-    /// Whether the jitter has places of its sequence left to cover in a
-    /// tile since it last changed, as far as the CPU knows (`Tiles::claiming`).
-    pub fn gathering(&self) -> bool {
-        self.tiles.claiming()
+    /// Whether the frames left of the jitter's sequence are asked for, and the jitter takes
+    /// the sequence's next place in each: gathering since a change that is not the scene's
+    /// animation alone (`Tiles::asking`). The jitter is the world's sequence, and moving it
+    /// casts every pixel again (gpu/ray/schedule.rs `FrameKind::px`), so an animation's step
+    /// holds it: the tiles it marks are drawn through the gate with the jitter as it stands,
+    /// its own antialiasing converging no further while only it moves, and no pixel is cast
+    /// for it.
+    pub fn asks(&self) -> bool {
+        self.tiles.asking()
     }
 }
 

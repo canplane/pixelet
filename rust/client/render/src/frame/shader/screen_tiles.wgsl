@@ -6,11 +6,11 @@
 // returning at once. A tile is claimed where it changed
 // this frame or has not yet run through the jitter's sequence since, or every
 // one where the frame is drawn whole. The frames the sequence covers a pixel
-// in, `TILE_JITTERS`, are constant.wgsl's (pxl-engine `screen::JITTERS`).
+// in, `TILE_JITTERS`, are constant.wgsl's (word.rs `screen::JITTERS`).
 
 // The uniform `Tiles` and the rule a tile's word is read by, `tiles_age` and
 // `tiles_claimed`, are tile_word.wgsl's, which build.rs writes from
-// pxl-engine `screen`: `count` the tiles across and down, the frames a
+// word.rs `screen`: `count` the tiles across and down, the frames a
 // tile stays claimed once it changed (`claimed_for`, all of them where every
 // one is drawn), and this frame's number; `size` the target's pixels across
 // and down, how far, in them, a quad is grown each way past its tile, and a

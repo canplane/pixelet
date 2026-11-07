@@ -7,7 +7,6 @@
 @group(0) @binding(9) var<storage, read> records: array<u32>;
 @group(0) @binding(13) var<storage, read> drawing: array<u32>;
 @group(0) @binding(14) var<storage, read_write> regions: array<atomic<u32>>;
-@group(0) @binding(15) var<storage, read_write> instances: array<u32>;
 
 /// The corner of the record at word `i` on `axis` about the anchor, in unit cells, X the short
 /// way round the world (`wrap_idx`).
@@ -24,7 +23,7 @@ fn compact_one(i: u32) {
     return;
   }
   let slot = atomicAdd(&regions[REGIONS + region], 1u);
-  let cap = arrayLength(&instances) / (DRAWN_COLUMNS + 1u);
+  let cap = instance_cap();
   if (slot >= cap) {
     return;
   }

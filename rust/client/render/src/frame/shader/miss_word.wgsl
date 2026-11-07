@@ -1,8 +1,7 @@
 // pxl-render/miss_word.wgsl
 
-// A missed pixel's ray and the words its walk leaves there, as the walk over the observed
-// pyramid alone (miss_hit.wgsl) and the walk that writes it (miss.wgsl) take and leave them
-// (grid.wgsl, hit.wgsl).
+// A missed pixel's ray and the words its walk leaves there, as the holes' queue takes and
+// leaves them (queue.wgsl; grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
@@ -18,6 +17,11 @@ fn px_start(aim: Aim, id: vec2<u32>, size: vec2<u32>) -> Start {
   return resumed(aim, cell_start(grid_cell(px_tan(id, size))), LINE_WORDS, NONE);
 }
 
+/// `px_start` at `t`, where its walk over the node cache left it (resume.wgsl `resumed_at`).
+fn px_start_at(aim: Aim, id: vec2<u32>, size: vec2<u32>, t: f32) -> Start {
+  return resumed_at(aim, cell_start(grid_cell(px_tan(id, size))), t, LINE_WORDS, NONE);
+}
+
 /// The face the ray aimed `aim` entered where walk `w` stopped: twice its axis, one more
 /// where the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`'s face).
 fn face_of(aim: Aim, w: Walked) -> u32 {
@@ -30,8 +34,10 @@ fn hit_fill(w: Walked) -> u32 {
   return (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
 }
 
-/// Walk `w`'s hit at pixel `id`, entered through `face`, put as hit `r` for what lies about
-/// that face to be asked once a hit (`keep_hit`, `beam::HIT_WORDS`).
+/// Walk `w`'s stop at pixel `id`, entered through `face` (`beam::HIT_LACKS` set where it
+/// lacks), put as stop `r` the record takes (`keep_hit`, `beam::HIT_WORDS`, record_stops.wgsl):
+/// its node, the asset it stopped at, and the line its pixel's cell's rays resumed from, which
+/// that face's word is asked off.
 fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
@@ -43,20 +49,28 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   beams[k + HIT_NODE + NODE_ROOTS + 2u] = u32(w.roots.z);
   beams[k + HIT_FACE] = face;
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
+  beams[k + HIT_ASSET] = w.asset.x;
+  beams[k + HIT_ASSET + 1u] = w.asset.y;
+  // The line its pixel's cell's rays resumed from, the eye's; the light asks no face's word
+  // off a line (record_stops.light.wgsl `hit_asks`).
+  var line = NONE;
+  if (!light_run()) {
+    let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
+    line = beams[cell_start(cell) + CELL_CORNER] * LINE_WORDS;
+  }
+  beams[k + HIT_LINE] = line;
 }
 
-/// The ray's words where walk `w` ended, the nodes it and its beam ray visited `visits`,
-/// entered through `face`, `faces` what lies about that face (`word`): where it met nothing,
-/// the first two zero.
-fn ray_word(w: Walked, visits: u32, face: u32, faces: u32) -> vec4<u32> {
+/// The ray's words where walk `w` ended, entered through `face`, `faces` what lies about that
+/// face (`word`): where it met nothing, every word zero.
+fn ray_word(w: Walked, face: u32, faces: u32) -> vec4<u32> {
   if (w.ends != 1u) {
-    return vec4<u32>(0u, 0u, visits, 0u);
+    return vec4<u32>(0u);
   }
-  let steps = eye_word(ORIGIN + 3u) != 0u;
   return vec4<u32>(
     (w.asset.x & VAL_MASK) | (face << RAY_FACE_SHIFT) | (w.zoom << RAY_ZOOM_SHIFT) | (hit_fill(w) << RAY_FILL_SHIFT),
     bitcast<u32>(w.t),
-    select(w.asset.y, visits, steps),
+    w.asset.y,
     faces,
   );
 }

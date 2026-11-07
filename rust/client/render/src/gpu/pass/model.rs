@@ -1,20 +1,23 @@
 // pxl-render/gpu/pass/model.rs
 
-//! What the model passes (decor, impostors, actors) share: group 0, per-draw
+//! What the model passes (decor, impostors, characters) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
+use xpute_core::global::Global;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
-use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
-use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::frame::shader::word::DRAW_FLOATS;
+use crate::frame::shader::record::PIPELINE_SKINNED;
+use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
-    Entry, Gpu, Image, Layout, TrackedRenderPass,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, sampler_entry, view_entry,
+    word_bytes, Entry, Gpu, Image, Layout, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::put::{put_f32, put_u32, Scratch};
+use crate::gpu::put::put_u32;
 
 fn frame_group(
     g: &Gpu,
@@ -130,7 +133,7 @@ pub struct DrawUniforms {
     buf: u32,
     cap: u32,
     group: u32,
-    scratch: Scratch,
+    scratch: Block,
 }
 
 #[derive(Clone, Copy)]
@@ -162,7 +165,7 @@ impl DrawUniforms {
             buf: 0,
             cap: 0,
             group: 0,
-            scratch: Scratch::default(),
+            scratch: Block::default(),
         }
     }
 
@@ -194,7 +197,7 @@ impl DrawUniforms {
             self.cap = need;
         }
         let stride = self.stride as usize;
-        let buf = self.scratch.take(cnt * self.stride);
+        let buf = self.scratch.take(cnt * self.stride).or_bug(Errno::ENOMEM);
         for (k, draw) in draws.take(cnt as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
@@ -220,19 +223,15 @@ impl DrawUniforms {
 /// writes and its shader reads (frame/shader/word.rs `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 
-/// A decor draw's uniform as instance.wgsl's `Draw` reads it, for the
-/// model tier and the impostors both: translation, first lane word,
-/// stride, opacity, `third`, index list's first word. `third` is decor's
-/// padding or the impostor's atlas layer.
-pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
-    put_f32(buf, 0, u[0]);
-    put_f32(buf, 4, u[1]);
-    put_f32(buf, 8, u[2]);
-    put_u32(buf, 12, u[3] as u32);
-    put_u32(buf, 16, u[5] as u32);
-    put_f32(buf, 20, u[4]);
-    put_u32(buf, 24, third);
-    put_u32(buf, 28, u[6] as u32);
+/// glTF's across, up and deep.
+pub type Extent = [f32; 3];
+
+/// A decor draw's uniform as instance.wgsl reads it, for the model tier and
+/// the impostors both: the list's words, `layer` its atlas layer, none for
+/// decor.
+pub fn put_instances(buf: &mut [u8], u: &[f32], layer: u32) {
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
+    put_u32(buf, 4 * instance::LAYER, layer);
 }
 
 pub struct ModelDraw {

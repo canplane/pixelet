@@ -126,11 +126,11 @@ impl Pack {
     }
 
     /// Whether the pack came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
-        let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else {
+        let Some(texture) = pack.and_then(|(image, file)| g.image(image, file)) else {
             return false;
         };
         let (tiles, table) = layout();

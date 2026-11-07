@@ -42,5 +42,5 @@ fn halve(n: u32, room_0: u32, room_1: u32, w: u32) -> u32 {
   if (part < least) {
     return least;
   }
-  return min(part, min(n, room_0));
+  return min(part, room_0);
 }

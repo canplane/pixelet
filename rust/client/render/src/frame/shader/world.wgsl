@@ -16,13 +16,6 @@
 @group(0) @binding(6) var<storage, read> overwrites: array<u32>;
 @group(0) @binding(7) var<storage, read> pool: array<u32>;
 
-/// What is in a node (`world::node`) and what it hands its children.
-struct Answer {
-  kind: u32,
-  asset: vec2<u32>,
-  handed: vec4<u32>,
-}
-
 // ---- value.rs, answer.rs ----
 
 fn fills(asset: u32) -> bool {
@@ -54,16 +47,22 @@ fn four_of(v: u32) -> u32 {
 const PLACED = 0u;
 const WAYS = 1u;
 
+/// Word `slot`'s child pointer in the ways' pool, the child groups whole, a child group's
+/// eight child pointers then its eight data words (pxl-engine way/tree.rs `first_child_at`).
+fn first_child_at(slot: u32) -> u32 {
+  return 2u * slot - slot % 8u;
+}
+
 fn first_child(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
-    return pool[slot];
+    return pool[first_child_at(slot)];
   }
   return overwrites[slot];
 }
 
 fn tree_data(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
-    return pool[arrayLength(&pool) / 2u + slot];
+    return pool[first_child_at(slot) + 8u];
   }
   return overwrites[arrayLength(&overwrites) / 2u + slot];
 }
@@ -145,10 +144,10 @@ fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32
   return select(VALUE_VOID, v, voxel(v));
 }
 
-/// `overwrite::fill_share` of what is placed; a way's at any cell asked is whole.
-fn fill_share(s: u32) -> u32 {
+/// `overwrite::fill_share` of the node holding slot `s` of `tree`, what is placed or the ways.
+fn fill_share(tree: u32, s: u32) -> u32 {
   if (is_folded(s)) {
-    return tree_data(PLACED, s >> SLOT_SHIFT) >> 16u;
+    return tree_data(tree, s >> SLOT_SHIFT) >> 16u;
   }
   return FULL;
 }
@@ -608,23 +607,37 @@ fn cave_key(a: vec3<i32>, ab: vec3<i32>, l: i32, h: u32, b: u32) -> i32 {
   return d + i32(n % CAVE_NUDGE) * one;
 }
 
-/// `cave::block_hollow`.
-fn block_hollow(h: u32, blocks: u32, side_in: u32, side_out: u32, b: u32) -> bool {
+/// `cave::hollow_from`: how many of a pipe cell's blocks `1 << t` a side from block `lo` are
+/// hollow, each block's key read once and the node's ranked against them all at once, a
+/// lane a block, four to a vector; a lane past the node's blocks starts ranked past.
+fn hollow_from(h: u32, blocks: u32, side_in: u32, side_out: u32, lo: vec3<u32>, t: u32) -> u32 {
+  let n = 1u << (3u * t);
   if (blocks >= CELL_BLOCKS) {
-    return true;
+    return n;
   }
   let a = side_mid(side_in);
   let ab = side_mid(side_out) - a;
   let l = dot(ab, ab);
-  let mine = cave_key(a, ab, l, h, b);
-  var before = 0u;
-  for (var o = 0u; o < CELL_BLOCKS && before < blocks; o += 1u) {
-    let k = cave_key(a, ab, l, h, o);
-    if (k < mine || (k == mine && o < b)) {
-      before += 1u;
-    }
+  // Lanes 0 to 3 the lower layer's x then y, 4 to 7 the upper's.
+  let ids0 = vec4<u32>(lo.x | (lo.y << 2u) | (lo.z << 4u)) + vec4<u32>(0u, 1u, 4u, 5u) * t;
+  let ids1 = ids0 + vec4<u32>(16u * t);
+  let k0 = cave_key(a, ab, l, h, ids0.x);
+  var m0 = vec4<i32>(k0);
+  var m1 = vec4<i32>(k0);
+  if (t != 0u) {
+    m0 = vec4<i32>(k0, cave_key(a, ab, l, h, ids0.y), cave_key(a, ab, l, h, ids0.z), cave_key(a, ab, l, h, ids0.w));
+    m1 = vec4<i32>(cave_key(a, ab, l, h, ids1.x), cave_key(a, ab, l, h, ids1.y), cave_key(a, ab, l, h, ids1.z), cave_key(a, ab, l, h, ids1.w));
   }
-  return before < blocks;
+  let most = vec4<u32>(blocks);
+  var b0 = select(most, vec4<u32>(0u), vec4<u32>(0u, 1u, 2u, 3u) < vec4<u32>(n));
+  var b1 = select(most, vec4<u32>(0u), vec4<bool>(n > 4u));
+  for (var o = 0u; o < CELL_BLOCKS && !(all(b0 >= most) && all(b1 >= most)); o += 1u) {
+    let k = vec4<i32>(cave_key(a, ab, l, h, o));
+    let ov = vec4<u32>(o);
+    b0 += select(vec4<u32>(0u), vec4<u32>(1u), (b0 < most) & ((k < m0) | ((k == m0) & (ov < ids0))));
+    b1 += select(vec4<u32>(0u), vec4<u32>(1u), (b1 < most) & ((k < m1) | ((k == m1) & (ov < ids1))));
+  }
+  return dot(select(vec4<u32>(0u), vec4<u32>(1u), b0 < most) + select(vec4<u32>(0u), vec4<u32>(1u), b1 < most), vec4<u32>(1u));
 }
 
 /// `cave::blocks`.
@@ -642,18 +655,10 @@ fn cave_blocks(zoom: u32, c: vec3<i32>) -> u32 {
   let h = node_seed(CAVE_TAG_BLOCKS, CAVE_PIPE, c >> vec3<u32>(zoom - CAVE_PIPE));
   if (zoom >= CAVE_BLOCK) {
     let lo = vec3<u32>(c >> vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(3u);
-    return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y << 2u) | (lo.z << 4u)));
+    return hollow_from(h, p.blocks, p.side_in, p.side_out, lo, 0u);
   }
   let t = CAVE_BLOCK - zoom;
-  let side = 1u << t;
-  let lo = vec3<u32>(c << vec3<u32>(t)) & vec3<u32>(3u);
-  var n = 0u;
-  for (var b = 0u; b < side * side * side; b += 1u) {
-    let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u * t));
-    let sum = lo + at;
-    n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 2u) | (sum.z << 4u)));
-  }
-  return n;
+  return hollow_from(h, p.blocks, p.side_in, p.side_out, vec3<u32>(c << vec3<u32>(t)) & vec3<u32>(3u), t);
 }
 
 /// `cave::hollow`: the share of the cube `c` at `zoom` the caves take.
@@ -689,12 +694,15 @@ fn world_root(zoom: u32, c: vec3<i32>) -> vec4<u32> {
 }
 
 /// The ways' cursor of a node whose ground's cells were found at `place`: its parent's
-/// where that names the same brick, found from that brick's root where it names another.
+/// where that names the same brick, found from that brick's root where it names another or
+/// where the node is the first the tree's nodes are the world's at, nothing coarser
+/// (pxl-engine world.rs `WAYS_FROM`).
 fn ways_at(place: u32, before: u32, trail: u32, zoom: u32, c: vec3<i32>) -> u32 {
-  if (((place ^ before) & LOOKUP_AT) == 0u) {
+  let enters = zoom == SHARD_ZOOM + 1u && lookup_here(place);
+  if (((place ^ before) & LOOKUP_AT) == 0u && !enters) {
     return trail;
   }
-  if (!lookup_here(place)) {
+  if (!lookup_here(place) || zoom <= SHARD_ZOOM) {
     return SLOT_NOTHING;
   }
   return way_cursor(ground[brick_at(lookup_slot(place)) + ROOT_AT], lookup_from(place), zoom, c);
@@ -708,7 +716,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   var over_fill = FULL;
   if (!cut_holds(carve, zoom, c)) {
     over = tree_val(PLACED, put, hide, zoom, c);
-    over_fill = fill_share(put);
+    over_fill = fill_share(PLACED, put);
   }
   var over_four = 0u;
   if (over != VALUE_VOID) {
@@ -741,8 +749,8 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   if (g.kind == KIND_CELL && lookup_here(g.place)) {
     let way = tree_val(WAYS, trail, NO_CUT, zoom, c);
     if (way != VALUE_VOID) {
-      let got = cover(fill, way, FULL);
-      if (got.theirs || !fills(val)) {
+      let got = cover(fill, way, fill_share(WAYS, trail));
+      if (got.theirs) {
         val = way;
         four = four_of(way);
       }
@@ -751,7 +759,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   }
   if (over != VALUE_VOID) {
     let got = cover(fill, over, over_fill);
-    if (got.theirs || !fills(val)) {
+    if (got.theirs) {
       val = PLACED_ASSET | over;
       four = over_four;
     }

@@ -20,20 +20,18 @@ struct Placement {
 };
 
 fn placed(v: VertexIn) -> Placement {
-  let i = instances[draw_idx() + v.i];
+  let i = order[instance_idx() + v.i];
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);
-  let fit = fits[draw_layer()];
-  var p: Placement;
-  p.corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
+  let fit = fits[instance_layer()];
+  let corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
   let up = vec3f(0.0, 0.0, 1.0);
   let to_eye = frame_camera_pos() - base;
   let flat = vec3f(to_eye.xy, 0.0);
-  p.facing = select(vec3f(0.0, -1.0, 0.0), normalize(flat), dot(flat, flat) > 1e-8);
-  let side = cross(up, p.facing);
-  let local = side * (fit.x + p.corner.x * fit.z) * scale + up * (fit.y + p.corner.y * fit.z) * scale;
-  p.world = base + local;
-  return p;
+  let facing = select(vec3f(0.0, -1.0, 0.0), normalize(flat), dot(flat, flat) > 1e-8);
+  let side = cross(up, facing);
+  let local = side * (fit.x + corner.x * fit.z) * scale + up * (fit.y + corner.y * fit.z) * scale;
+  return Placement(base + local, facing, corner);
 }
 
 @vertex

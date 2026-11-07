@@ -4,7 +4,7 @@
 // (location_beacon.wgsl) and the mark (tile_mark.wgsl) lay alike.
 
 fn beacon_world(pos: vec3f) -> vec3f {
-  return spin_z(pos, draw_fourth()) + draw_translation();
+  return spin_z(pos, location_spin()) + draw_translation();
 }
 
 @vertex

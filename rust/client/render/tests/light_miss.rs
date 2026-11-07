@@ -1,28 +1,30 @@
-//! `light_miss_cs` by hand (frame/shader/light_miss.wgsl) answers as `cast::walk` writing the
-//! observed pyramid (tests/keeping `Writing`): over the real world of tests/real_world, each slot's word as
-//! `light::word(light::depth(..))` of its walk, and what it leaves in the observed pyramid
-//! as `Writing` leaves it (`Keeping` here, its rule over the same words), kept for the walk
-//! to find next frame. The walk's from the root, as `light_miss_hit_cs`'s is: a walk resumed
-//! from its cell's start is not asked of it. Skipped where no adapter answers.
+//! The holes' queue over the light's slots (frame/shader/queue.wgsl, queue_walk.wgsl,
+//! queue_ask.wgsl, queue_last.wgsl) answers as `cast::walk`: over the real world of
+//! tests/real_world, each listed slot's word as `light::word(light::depth(..))` of its walk, and
+//! no other slot written, over an empty node cache; the next frame, over the node cache the first
+//! left, each slot's word as the world's again; and where bricks changed between the frames, the
+//! next frame's after the app's forgetting (`forget_cs`) as the changed world's.
+//! Every walk starts off its cell's line, the cells laid as the cast lays them each frame
+//! (beam.light.wgsl, light_cell.wgsl). Skipped where no adapter answers.
 
-mod keeping;
+mod gpu;
 mod real_world;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
-use keeping::*;
+use gpu::{array_view, read_texture, texture, Gpu};
 
-use pxl_engine::answer::{self, In, Kind};
-use pxl_engine::cast::{self, Detail, End, Ray, Spacing, Until};
+use pxl_engine::answer;
+use pxl_engine::cast::{self, Detail, End, Ray, Until};
+use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL};
 use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::node_cache::{self, MOVED_WORDS};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::pyramid::{self, BUCKET};
-use pxl_engine::{count, eye, ray, value, Zoom, FRAC_W, LEAF_CELL};
-use pxl_render::frame::shader::record::{
-    src, SHADER_FORGET, SHADER_LIGHT_MISS, SHADER_LIGHT_MISS_HIT,
-};
+use pxl_engine::{beam, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
+use pxl_render::frame::shader::word::ROW_LANES;
 
-use real_world::{Built, World, FINEST, NOTCH};
+use real_world::{q8, store_of, truth, Asking, Built, World, WorldBufs, FINEST, NOTCH};
 
 /// Where the eye is, a leaf cell: east of X = 0, by the seam on the far side, a few cells over
 /// the service area's south edge.
@@ -31,6 +33,8 @@ const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const EYE_WEST: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 /// By X = 0, where X's roots part.
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
+/// On X's seam, where the world goes round.
+const EYE_SEAM: [i32; 2] = [(1 << 23) - 8, (40 << 16) + 30];
 
 const SIZE: u32 = 256;
 /// A word a GPU's rounding may move, as tests/walk.rs takes it: its depth's product fused into
@@ -41,8 +45,6 @@ const FRAME: u32 = 9;
 /// Slots told of a case that differs, its table a copy each; those past some times as many
 /// are read as they are, a wrong shader differing nearly everywhere.
 const TELLS: u32 = 4;
-/// Rays that visit a node for it to be no grazing's.
-const SURE: u32 = 9;
 
 /// A light box and where its rays start, as a host lays them for the eye (light.rs `Starts`).
 fn box_of(c: &Case) -> (Light, Starts) {
@@ -118,11 +120,7 @@ struct Case {
     range: [Zoom; 2],
     corner: [i32; 2],
     cuts: [Cut; 2],
-    /// Whether the eye's rays walked this frame first, as a frame's do, keeping what they
-    /// asked at the eye's zooms.
-    eye_first: bool,
-    /// Least of each kind of thing this seeded case meets, a third of what it met: which walk
-    /// reads what another keeps moves some.
+    /// Least of each kind of thing this seeded case meets.
     least: &'static [(&'static str, u32)],
 }
 
@@ -181,20 +179,16 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [1300, -900],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 10057),
                 ("hit", 19850),
                 ("hit, a way's", 1161),
                 ("hit, placed", 13329),
                 ("hit, short of its cube", 364),
-                ("kept, filled", 14301),
-                ("next frame, ended by the table", 17942),
                 ("slots", 19850),
             ],
         },
         Case {
-            name: "about the eye, after the eye's own walk",
+            name: "about the eye, slanting",
             origin: over([EYE[0] + 90, EYE[1] + 90], 40),
             dir: [0.3, 0.2, -0.93],
             side: 1.0,
@@ -203,15 +197,11 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [1300, -900],
             cuts: none,
-            eye_first: true,
             least: &[
-                ("found again", 10059),
                 ("hit", 19850),
                 ("hit, a way's", 1161),
                 ("hit, placed", 13329),
                 ("hit, short of its cube", 364),
-                ("kept, filled", 14299),
-                ("next frame, ended by the table", 17812),
                 ("slots", 19850),
             ],
         },
@@ -225,14 +215,11 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [77, 5],
             cuts: none,
-            eye_first: false,
             least: &[
                 ("hit", 19850),
                 ("hit, a way's", 1033),
                 ("hit, short of its cube", 7909),
                 ("hit, the wall's", 2894),
-                ("kept, filled", 1729),
-                ("next frame, ended by the table", 2431),
                 ("slots", 19850),
             ],
         },
@@ -255,14 +242,10 @@ fn cases(b: &Built) -> Vec<Case> {
                     at: leaf_c,
                 },
             ],
-            eye_first: false,
             least: &[
-                ("found again", 776),
                 ("hit", 19850),
                 ("hit, a way's", 9),
                 ("hit, placed", 4970),
-                ("kept, filled", 2416),
-                ("next frame, ended by the table", 16183),
                 ("slots", 19850),
             ],
         },
@@ -276,14 +259,10 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [LEAF_CELL, FINEST],
             corner: [-16, 32],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 6207),
                 ("hit", 18559),
                 ("hit, a way's", 210),
                 ("hit, placed", 13302),
-                ("kept, filled", 9107),
-                ("next frame, ended by the table", 18481),
                 ("past its reach", 1290),
                 ("slots", 19850),
             ],
@@ -298,14 +277,10 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [LEAF_CELL - 2, FINEST],
             corner: [0, 0],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 5695),
                 ("hit", 18988),
                 ("hit, placed", 9572),
                 ("hit, the wall's", 2567),
-                ("kept, filled", 11123),
-                ("next frame, ended by the table", 18166),
                 ("past its reach", 861),
                 ("slots", 19850),
             ],
@@ -320,7 +295,6 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [3, -7],
             cuts: none,
-            eye_first: false,
             least: &[
                 ("hit", 19850),
                 ("hit, short of its cube", 9110),
@@ -338,14 +312,7 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [128, 128],
             cuts: none,
-            eye_first: false,
-            least: &[
-                ("hit", 5380),
-                ("kept, filled", 934),
-                ("next frame, ended by the table", 4971),
-                ("past its reach", 14469),
-                ("slots", 19850),
-            ],
+            least: &[("hit", 5380), ("past its reach", 14469), ("slots", 19850)],
         },
         Case {
             // On the planes between its cells, X and Y a whole unit, which holds a ray to the
@@ -362,15 +329,11 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [16, 0],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 10800),
                 ("hit", 15437),
                 ("hit, a way's", 260),
                 ("hit, placed", 11960),
                 ("hit, short of its cube", 316),
-                ("kept, filled", 13301),
-                ("next frame, ended by the table", 18544),
                 ("past its reach", 4412),
                 ("slots", 19850),
             ],
@@ -385,14 +348,10 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [LEAF_CELL - 2, FINEST],
             corner: [8, 8],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 2089),
                 ("hit", 19457),
                 ("hit, a way's", 129),
                 ("hit, placed", 4101),
-                ("kept, filled", 10077),
-                ("next frame, ended by the table", 17970),
                 ("past its reach", 392),
                 ("slots", 19850),
             ],
@@ -410,16 +369,12 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [0, 0],
             cuts: none,
-            eye_first: false,
             least: &[
-                ("found again", 11555),
                 ("hit", 19612),
                 ("hit, a way's", 675),
                 ("hit, placed", 9507),
                 ("hit, short of its cube", 343),
                 ("hit, the wall's", 187),
-                ("kept, filled", 18869),
-                ("next frame, ended by the table", 17561),
                 ("past its reach", 237),
                 ("slots", 19850),
             ],
@@ -434,12 +389,7 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [0, 0],
             cuts: none,
-            eye_first: false,
-            least: &[
-                ("lacks", 19850),
-                ("next frame, ended by the table", 9470),
-                ("slots", 19850),
-            ],
+            least: &[("lacks", 19850), ("slots", 19850)],
         },
         Case {
             name: "down past the roots",
@@ -451,7 +401,6 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [0, 0],
             cuts: none,
-            eye_first: false,
             least: &[
                 ("ended in another root", 19850),
                 ("past its reach", 19850),
@@ -468,10 +417,8 @@ fn cases(b: &Built) -> Vec<Case> {
             range: [8, FINEST],
             corner: [8, 8],
             cuts: none,
-            eye_first: false,
             least: &[
                 ("ended in another root", 16610),
-                ("next frame, ended by the table", 3240),
                 ("past its reach", 19850),
                 ("slots", 19850),
             ],
@@ -480,19 +427,11 @@ fn cases(b: &Built) -> Vec<Case> {
 }
 
 #[test]
-fn hand_light_miss_answers_as_light_miss_cs() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+fn hand_light_holes_answer_as_cast_walk() {
+    let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    let gpu = Gpu { device, queue };
 
     let built = real_world::build(EYE);
     let w = built.world();
@@ -507,12 +446,10 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         placed: gpu.buffer(&built.overwrites, store),
         pool: gpu.buffer(&built.pool, store),
     };
-    let miss = gpu.pipeline(src(SHADER_LIGHT_MISS), "light_miss_cs");
-    let hit = gpu.pipeline(src(SHADER_LIGHT_MISS_HIT), "light_miss_hit_cs");
 
     let mut failed = Vec::new();
     for case in cases(&built) {
-        run_case(&gpu, &bound, &miss, &hit, w, &case, &mut failed);
+        run_case(&gpu, &bound, w, &case, None, &mut failed);
     }
     // West of X = 0, every node's X negative as the world names it: kept, found and read.
     let west = real_world::build(EYE_WEST);
@@ -543,24 +480,9 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         range: [8, FINEST],
         corner: [1300, -900],
         cuts: [Cut::NONE; 2],
-        eye_first: false,
-        least: &[
-            ("hit", 19850),
-            ("kept", 26000),
-            ("kept, filled", 13000),
-            ("next frame, ended by the table", 16000),
-            ("slots", 19850),
-        ],
+        least: &[("hit", 19850), ("slots", 19850)],
     };
-    run_case(
-        &gpu,
-        &bound_west,
-        &miss,
-        &hit,
-        west.world(),
-        &case,
-        &mut failed,
-    );
+    run_case(&gpu, &bound_west, west.world(), &case, None, &mut failed);
     // Over X = 0, where X's roots part: rays end in the next root.
     let zero = real_world::build(EYE_ZERO);
     let bound_zero = WorldBufs {
@@ -593,37 +515,82 @@ fn hand_light_miss_answers_as_light_miss_cs() {
         range: [8, FINEST],
         corner: [1300, -900],
         cuts: [Cut::NONE; 2],
-        eye_first: false,
         least: &[("ended in another root", 1467), ("slots", 19850)],
     };
-    run_case(
-        &gpu,
-        &bound_zero,
-        &miss,
-        &hit,
-        zero.world(),
-        &case,
-        &mut failed,
-    );
+    run_case(&gpu, &bound_zero, zero.world(), &case, None, &mut failed);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// The first `cnt` of the list counted; the rest past it, and some struck, walked by none.
-const NOT_COUNTED: u32 = 30;
-const STRUCK_EVERY: u32 = 11;
+/// The slots listed: all but the last few and one in so many, the rest walked by none.
+const NOT_LISTED: u32 = 30;
+const SKIPPED_EVERY: u32 = 11;
+/// The cast the head names, its epoch begun with it: every tile read.
+const CAST: u32 = 7;
+
+/// The beam's lines and each cell's start laid in `list` as the cast lays them (beam.light.wgsl,
+/// light_cell.wgsl), every tile read, its beam over a table of its own.
+fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+    let tiles = light::tiles(SIZE) as usize;
+    let reads = light::reads_at(SIZE) as usize;
+    list[reads..reads + tiles * tiles].fill(CAST);
+    let mut table = vec![0u32; node_cache::WORDS as usize];
+    table[node_cache::FRAME as usize] = FRAME;
+    let table = gpu.buffer(&table, store_of());
+    let buf = gpu.buffer(list, store_of());
+    let side = beam::SAMPLE_SIDE;
+    gpu.light_beam(
+        &[
+            (0, eye.as_entire_binding()),
+            (1, b.clip.as_entire_binding()),
+            (2, b.ground.as_entire_binding()),
+            (4, b.palette.as_entire_binding()),
+            (5, b.shards.as_entire_binding()),
+            (6, b.placed.as_entire_binding()),
+            (7, b.pool.as_entire_binding()),
+            (8, buf.as_entire_binding()),
+            (9, table.as_entire_binding()),
+            (11, head.as_entire_binding()),
+        ],
+        &buf,
+        &table,
+        SIZE,
+    );
+    let cells = light::cells_across(SIZE);
+    gpu.dispatch(
+        &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
+        &[
+            (0, eye.as_entire_binding()),
+            (8, buf.as_entire_binding()),
+            (11, head.as_entire_binding()),
+        ],
+        [cells.div_ceil(side), cells.div_ceil(side), 1],
+    );
+    // The beam's lines and hands and the cells' starts, all before the samples.
+    let laid = light::holes_at(SIZE) as usize;
+    list[..laid].copy_from_slice(&gpu.read(&buf)[..laid]);
+}
+
+/// The world the next frame casts over, its bricks changed since the first, as the app hands
+/// it: its buffers, what the moved entries' words say (gpu/ray/cast.rs), and the pass that
+/// forgets by them.
+struct Edited<'a> {
+    b: &'a WorldBufs,
+    w: World<'a>,
+    moved: [u32; MOVED_WORDS as usize],
+    moved_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
+    forget: &'a wgpu::ComputePipeline,
+}
 
 fn run_case(
     gpu: &Gpu,
     b: &WorldBufs,
-    miss: &wgpu::ComputePipeline,
-    hit: &wgpu::ComputePipeline,
     w: World,
     case: &Case,
+    edited: Option<&Edited>,
     failed: &mut Vec<String>,
 ) {
     let name = case.name;
     let (s, starts) = box_of(case);
-    let tag = pyramid::tag(FRAME, pyramid::LIGHT_MISSED_PASS);
 
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&s.words());
@@ -636,124 +603,40 @@ fn run_case(
         eye_words[at + 3] = cut.zoom;
     }
     let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = 7;
-    head[light::HEAD_SIZE] = SIZE;
-    head[light::HEAD_MISSES] = light::misses_cnt(SIZE);
+    head[light::HEAD_CAST] = CAST;
+    head[light::HEAD_EPOCH] = CAST;
+    for (k, v) in light::head_layout(SIZE) {
+        head[k] = v;
+    }
     head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
     let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
 
-    // The list, as the map's list lays it: the slots in turn, the box's rows wrapped.
+    // The slots listed, the box's rows wrapped, in the holes' list the queue takes.
     let n = SIZE * SIZE;
-    let cnt = n - NOT_COUNTED;
-    let at = light::misses_at(SIZE) as usize;
-    let mut list = vec![0u32; at + n as usize];
-    list[light::misses_cnt(SIZE) as usize] = cnt;
-    let mut walked = vec![false; n as usize];
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let k = y * SIZE + x;
-            list[at + k as usize] = if k.is_multiple_of(STRUCK_EVERY) {
-                light::MISS_STRUCK
-            } else {
-                x | y << 16
-            };
-            walked[k as usize] = !k.is_multiple_of(STRUCK_EVERY) && k < cnt;
-        }
-    }
+    let walked: Vec<bool> = (0..n)
+        .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
+        .collect();
+    let slots: Vec<u32> = (0..n)
+        .filter(|&k| walked[k as usize])
+        .map(|k| (k % SIZE) | ((k / SIZE) << 16))
+        .collect();
+    let mut list = listed(&slots);
 
-    // What the walks meet, on a table of nothing: the nodes the traps are laid on.
-    let mut empty = vec![0u32; pyramid::WORDS as usize];
-    let mut met = BTreeMap::new();
-    {
-        let mut q = Keeping {
-            w,
-            cuts: case.cuts,
-            table: &mut empty,
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: Some(&mut met),
-        };
-        for k in 0..n {
-            if walked[k as usize] {
-                let (o, r, d) = slot_ray(case, &s, &starts, [k % SIZE, k / SIZE]);
-                cast::first(&mut q, o, &r, d, Until::Opaque);
-            }
-        }
-    }
-    drop(empty);
-    let mut table0 = vec![0u32; pyramid::WORDS as usize];
-    table0[pyramid::FRAME as usize] = FRAME;
-    table0[pyramid::COUNT_ON as usize] = 1;
-    if case.eye_first {
-        let mut q = Keeping {
-            w,
-            cuts: case.cuts,
-            table: &mut table0,
-            tag: pyramid::tag(FRAME, pyramid::MISSED_PASS),
-            asks: Asks::default(),
-            writes: true,
-            met: None,
-        };
-        let detail = Detail {
-            range: case.range,
-            spacing: Spacing {
-                angle: 0.002,
-                across: 0.0,
-            },
-        };
-        for j in 0..96 {
-            for i in 0..96 {
-                let tan = |v: i32| (v as f32 - 47.5) * 0.015;
-                let d = cast::through(
-                    [0.0, 0.0, -1.0],
-                    [1.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0],
-                    tan(i),
-                    tan(j),
-                );
-                let r = Ray::new(d, 2000.0);
-                cast::first(&mut q, case.origin, &r, detail, Until::Opaque);
-            }
-        }
-    }
-    let traps = lay_traps(
-        &mut table0,
-        w,
-        case.cuts,
-        &met,
-        [
-            pyramid::tag(FRAME - 1, pyramid::LIGHT_SAMPLES_PASS),
-            pyramid::tag(FRAME, pyramid::LIGHT_SAMPLES_PASS),
-            tag,
-        ],
-    );
-
-    // The reference: a slot at a time, over that table.
-    let mut table_ref = table0.clone();
-    let mut met_ref = BTreeMap::new();
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
+    // The reference: a slot at a time, every node asked of the world.
     let mut want = vec![u32::MAX; n as usize];
     let mut kinds: BTreeMap<&'static str, u32> = BTreeMap::new();
-    let mut most_visits = 0u32;
-    let asks = {
-        let mut q = Keeping {
-            w,
-            cuts: case.cuts,
-            table: &mut table_ref,
-            tag,
-            asks: Asks::default(),
-            writes: true,
-            met: Some(&mut met_ref),
-        };
+    {
+        let mut q = Asking { w, cuts: case.cuts };
         for k in 0..n {
             if !walked[k as usize] {
                 continue;
             }
             let (o, r, d) = slot_ray(case, &s, &starts, [k % SIZE, k / SIZE]);
             let t = cast::first(&mut q, o, &r, d, Until::Opaque);
-            most_visits = most_visits.max(t.visits);
             want[k as usize] = light::word(light::depth(&s, &t));
             let mut add = |name, yes: bool| *kinds.entry(name).or_default() += u32::from(yes);
             add("slots", true);
@@ -774,36 +657,25 @@ fn run_case(
             add("hit, on x", hits && t.hit.axis == 0);
             add("hit, on y", hits && t.hit.axis == 1);
         }
-        q.asks
-    };
+    }
 
-    // The hand pass, over the same table.
-    let map = gpu.map(SIZE);
-    let view = map.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    });
+    // Each cell's start, off the beam the cast walks first, which every slot's walk resumes from.
+    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+
+    // The queue, over the same table.
+    let map = map_of(gpu);
+    let view = array_view(&map);
     let table_buf = gpu.buffer(&table0, store_of());
     let list_buf = gpu.buffer(&list, store_of());
-    let rows = n.div_ceil(ray::MISS_LANES * ray::MISS_ACROSS);
-    gpu.dispatch(
-        miss,
-        &miss_binds(b, [&eye_buf, &head_buf, &table_buf, &list_buf], &view),
-        [ray::MISS_ACROSS, rows],
+    holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        &view,
+        &walked,
     );
-    let got = gpu.read_map(&map);
+    let got = read_texture(&gpu.device, &gpu.queue, &map);
     let table_hand = gpu.read(&table_buf);
-    // A slot left claimed: the dispatch did not run to its end, and its words are no answer.
-    let claimed_before = left_claimed(&table0).len();
-    let claimed = left_claimed(&table_hand);
-    if claimed.len() > claimed_before {
-        failed.push(format!(
-            "{name}: the pass did not run to its end: {} slots left claimed, first {:?}",
-            claimed.len() - claimed_before,
-            claimed.first()
-        ));
-        return;
-    }
 
     // Each slot's word, as `hand_light_walk_answers_as_cast_walk` takes it.
     let (mut same, mut axis_over, mut differ) = (0u32, 0u32, 0u32);
@@ -826,327 +698,86 @@ fn run_case(
             differ += 1;
             first_differ.get_or_insert((k, got[k], want[k]));
             if differ <= TELLS {
-                tell_slot(
-                    w,
-                    case,
-                    &s,
-                    &starts,
-                    k as u32,
-                    [got[k], want[k]],
-                    [&table0, &table_hand],
-                );
+                tell_slot(w, case, &s, &starts, k as u32, [got[k], want[k]]);
             }
         }
     }
 
-    // What it left, each slot it wrote: in its node's bucket, at this pass's tag, what the
-    // world answers word for word, and what `Writing` wrote where that wrote it.
-    let entry = |t: &[u32], e: u32| {
-        let w = pyramid::entry_at(e) as usize;
-        t[w..w + pyramid::ENTRY_WORDS as usize].to_vec()
-    };
-    let by_node = |t: &[u32], before: &[u32]| {
-        let mut m = BTreeMap::new();
-        for e in 0..pyramid::ENTRIES {
-            let v = entry(t, e);
-            if v != entry(before, e) {
-                let k = pyramid::W_NODE as usize;
-                let z = v[k];
-                let c = [v[k + 1] as i32, v[k + 2] as i32, v[k + 3] as i32];
-                m.insert((z, c, v[pyramid::W_KEY as usize]), (e, v));
-            }
-        }
-        m
-    };
-    let (hand_kept, ref_kept) = (by_node(&table_hand, &table0), by_node(&table_ref, &table0));
-    let mut bad_entry = 0u32;
-    let mut first_bad = None;
-    let mut handed_other = 0u32;
-    let mut only_hand = 0u32;
-    let mut filled_kept = 0u32;
-    for ((zoom, c, key), (e, v)) in &hand_kept {
-        let (zoom, c, key) = (*zoom, *c, *key);
-        let first = pyramid::entry_of(zoom, c);
-        let [far, near] = key_zooms(key);
-        let (a, words) = truth(w, case.cuts, zoom, c, [far, near]);
-        let k = pyramid::W_INHERITANCE as usize;
-        let at = pyramid::W_ASSET as usize;
-        let ok = pyramid::keeps(zoom, c)
-            && (*e >= first && *e < first + BUCKET)
-            && pyramid::tag_of(key) == tag
-            && far == near
-            && v[pyramid::W_KIND as usize]
-                == pyramid::stamped(a.kind, key, a.asset, words, zoom, c)
-            && v[at..at + 2] == a.asset
-            && v[k..k + 4] == words;
-        if !ok {
-            bad_entry += 1;
-            first_bad.get_or_insert((zoom, c, key, v.clone(), a.kind as u32, a.asset, words));
-        }
-        filled_kept += u32::from(a.kind == Kind::Cell && !answer::transparent(a.asset[0]));
-        match ref_kept.get(&(zoom, c, key)) {
-            Some((_, r)) => {
-                // What is placed and its shard are one whatever was handed; where its
-                // ground's cells were held and the ways' cursor are found again from
-                // nothing, where the Rust carries down its parents'.
-                let same_answer = v[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-                    == r[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-                    && v[at..at + 2] == r[at..at + 2]
-                    && v[k..k + 2] == r[k..k + 2];
-                if !same_answer {
-                    bad_entry += 1;
-                    first_bad.get_or_insert((
-                        zoom,
-                        c,
-                        key,
-                        v.clone(),
-                        r[1],
-                        [r[2], r[3]],
-                        [r[4], r[5], r[6], r[7]],
-                    ));
-                }
-                handed_other += u32::from(v[k + 2..k + 4] != r[k + 2..k + 4]);
-            }
-            None => only_hand += 1,
-        }
-    }
-    let only_ref = ref_kept
-        .keys()
-        .filter(|k| !hand_kept.contains_key(*k))
-        .count() as u32;
-
-    // A node few rays visit, a ray grazing its edge may visit or not as a GPU rounds. A
-    // bucket one other node at one band is asked in leaves no order to its walks, so holds
-    // word for word what `Writing` left, but for what is found again.
-    let mut asked_in: BTreeMap<u32, u32> = BTreeMap::new();
-    for &(z, c, _) in met_ref.keys() {
-        if pyramid::keeps(z, c) {
-            *asked_in.entry(pyramid::entry_of(z, c)).or_default() += 1;
-        }
-    }
-    let by_hand: BTreeSet<_> = hand_kept
-        .keys()
-        .map(|k| (k.0, k.1, key_zooms(k.2)))
-        .collect();
-    let grazed = |k: &(Zoom, [i32; 3], [Zoom; 2])| met_ref.get(k).copied().unwrap_or(0) < SURE;
-    let mut alone: BTreeSet<u32> = asked_in
-        .iter()
-        .filter(|(_, n)| **n == 1)
-        .map(|(f, _)| *f)
-        .collect();
-    for k in met_ref.keys().chain(by_hand.iter()) {
-        if grazed(k) && pyramid::keeps(k.0, k.1) {
-            alone.remove(&pyramid::entry_of(k.0, k.1));
-        }
-    }
-    let (mut alone_differ, mut twice) = (0u32, 0u32);
-    let mut first_alone = None;
-    for &first in &alone {
-        let of = |t: &[u32]| {
-            let mut slots: Vec<_> = (first..first + BUCKET)
-                .map(|e| {
-                    let mut v = entry(t, e);
-                    let k = pyramid::W_INHERITANCE as usize;
-                    v[k + 2..k + 4].fill(0);
-                    v[pyramid::W_KIND as usize] &= pyramid::KIND_MASK;
-                    v
-                })
-                .filter(|v| v[pyramid::W_KEY as usize] != 0)
-                .collect();
-            slots.sort();
-            let all = slots.len();
-            slots.dedup();
-            (slots, all)
-        };
-        let ((h, all), (r, _)) = (of(&table_hand), of(&table_ref));
-        twice += (all - h.len()) as u32;
-        if h != r {
-            alone_differ += 1;
-            first_alone.get_or_insert((first, h, r));
-        }
-    }
-    // What the Rust alone kept, a grazing's only.
-    let only_ref_most = ref_kept
-        .keys()
-        .filter(|k| !hand_kept.contains_key(*k))
-        .map(|k| {
-            met_ref
-                .get(&(k.0, k.1, key_zooms(k.2)))
-                .copied()
-                .unwrap_or(0)
-        })
-        .max()
-        .unwrap_or(0);
-
-    // The slots laid, as the Rust's rule leaves each.
-    let mut trap_cnt: BTreeMap<Trap, (u32, u32, u32)> = BTreeMap::new();
-    for l in &traps {
-        if !alone.contains(&l.first) || !met_ref.contains_key(&(l.zoom, l.c, l.zooms)) {
-            continue;
-        }
-        let e = trap_cnt.entry(l.trap).or_default();
-        e.0 += 1;
-        e.1 += u32::from(trap_holds(&table_ref, &table0, l, tag));
-        e.2 += u32::from(trap_holds(&table_hand, &table0, l, tag));
-    }
-
-    // What it found again where the Rust carried down: only what a cell placed whole hands
-    // on, its parent's, which names nothing of it, as it hands nothing on.
-    let mut found_otherwise = 0u32;
-    let k = pyramid::W_INHERITANCE as usize;
-    for (key, (_, v)) in &hand_kept {
-        let Some((_, r)) = ref_kept.get(key) else {
-            continue;
-        };
-        let placed = v[pyramid::W_KIND as usize] & pyramid::KIND_MASK
-            == pyramid::kind_word(Kind::Cell)
-            && answer::is_placed(v[pyramid::W_ASSET as usize]);
-        found_otherwise += u32::from(v[k + 2..k + 4] != r[k + 2..k + 4] && !placed);
-    }
-
-    // Its count of what it asked.
-    let lane = pyramid::lane_at(count::LIGHT, count::MISS) as usize;
-    let tallied = u64::from(table_hand[lane]);
-    let asked_lane = pyramid::lane_at(count::LIGHT, count::ASKED) as usize;
-    let asked = u64::from(table_hand[asked_lane]);
-
-    // The next frame: the walk over the table alone first, then this pass for what it left.
+    // The next frame: the queue again, over the table the first left.
     let mut next = table_hand.clone();
-    next[pyramid::FRAME as usize] = FRAME + 1;
-    next[lane] = 0;
-    next[asked_lane] = 0;
-    strike_traps(&mut next, &traps, tag);
+    next[node_cache::FRAME as usize] = FRAME + 1;
+    if let Some(e) = edited {
+        next[node_cache::FORGETS as usize] = node_cache::FORGETS_MOVED;
+        let m = node_cache::MOVED_AT as usize;
+        next[m..m + MOVED_WORDS as usize].copy_from_slice(&e.moved);
+        for (k, b) in e.moved_bricks.iter().enumerate() {
+            let at = node_cache::MOVED_BRICKS_AT as usize + 4 * k;
+            next[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
+        }
+    }
     let next_buf = gpu.buffer(&next, store_of());
-    let list2 = gpu.buffer(&list, store_of());
-    let left = gpu.buffer(&[ray::MISS_ACROSS, 0, 1, 0], store_of());
-    let map2 = gpu.map(SIZE);
-    let view2 = map2.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    });
-    gpu.dispatch(
-        hit,
-        &[
-            (0, eye_buf.as_entire_binding()),
-            (8, list2.as_entire_binding()),
-            (9, next_buf.as_entire_binding()),
-            (10, wgpu::BindingResource::TextureView(&view2)),
-            (11, head_buf.as_entire_binding()),
-            (13, left.as_entire_binding()),
-        ],
-        [ray::MISS_ACROSS, rows],
-    );
-    let after = gpu.read(&list2);
-    let mut still = vec![false; n as usize];
-    let mut struck = 0u32;
-    for k in 0..n as usize {
-        if walked[k] {
-            if after[at + k] == light::MISS_STRUCK {
-                struck += 1;
-            } else {
-                still[k] = true;
+    if let Some(e) = edited {
+        gpu.dispatch(
+            e.forget,
+            &[(9, next_buf.as_entire_binding())],
+            [node_cache::ENTRIES.div_ceil(ROW_LANES), 1, 1],
+        );
+    }
+    // What the next frame must answer: the changed world's, where it changed.
+    let mut changed = 0u32;
+    if let Some(e) = edited {
+        let mut q = Asking {
+            w: e.w,
+            cuts: case.cuts,
+        };
+        for k in 0..n {
+            if walked[k as usize] {
+                let (o, r, d) = slot_ray(case, &s, &starts, [k % SIZE, k / SIZE]);
+                let t = cast::first(&mut q, o, &r, d, Until::Opaque);
+                let now = light::word(light::depth(&s, &t));
+                changed += u32::from(now.abs_diff(want[k as usize]) > WITHIN);
+                want[k as usize] = now;
             }
         }
     }
-    let slots_left = still.iter().filter(|v| **v).count() as u32;
-    // Its reference, off the table the hand pass left.
-    let mut table_next = next.clone();
-    let mut q = Keeping {
-        w,
-        cuts: case.cuts,
-        table: &mut table_next,
-        tag: pyramid::tag(FRAME + 1, pyramid::LIGHT_MISSED_PASS),
-        asks: Asks::default(),
-        writes: true,
-        met: None,
-    };
-    let mut want2 = vec![0u32; n as usize];
-    for k in 0..n {
-        if still[k as usize] {
-            let (o, r, d) = slot_ray(case, &s, &starts, [k % SIZE, k / SIZE]);
-            let t = cast::first(&mut q, o, &r, d, Until::Opaque);
-            want2[k as usize] = light::word(light::depth(&s, &t));
-        }
-    }
-    let asks_next = q.asks;
-    let args = gpu.read(&left);
-    gpu.dispatch(
-        miss,
-        &miss_binds(b, [&eye_buf, &head_buf, &next_buf, &list2], &view2),
-        [args[0], args[1]],
+    let b = edited.map_or(b, |e| e.b);
+    let w = edited.map_or(w, |e| e.w);
+    let mut list = listed(&slots);
+    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+    let list2 = gpu.buffer(&list, store_of());
+    let map2 = map_of(gpu);
+    let view2 = array_view(&map2);
+    holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &next_buf, &list2],
+        &view2,
+        &walked,
     );
-    let got2 = gpu.read_map(&map2);
-    let table_after = gpu.read(&next_buf);
-    if left_claimed(&table_after).len() > left_claimed(&next).len() {
-        failed.push(format!(
-            "{name}: the next frame's pass did not run to its end"
-        ));
-        return;
-    }
+    let got2 = read_texture(&gpu.device, &gpu.queue, &map2);
+    // Each slot's word the next frame, ended by the table or walked again: the world's again.
     let mut next_differ = 0u32;
     let mut next_axis_over = 0u32;
     let mut first_next = None;
     for k in 0..n as usize {
-        if still[k] && got2[k].abs_diff(want2[k]) > WITHIN {
-            if an_axis_over(&s, got2[k], want2[k]) {
+        if walked[k] && got2[k].abs_diff(want[k]) > WITHIN {
+            if an_axis_over(&s, got2[k], want[k]) {
                 next_axis_over += 1;
             } else {
                 next_differ += 1;
-                first_next.get_or_insert((k, got2[k], want2[k]));
+                first_next.get_or_insert((k, got2[k], want[k]));
                 if next_differ <= TELLS {
-                    tell_slot(
-                        w,
-                        case,
-                        &s,
-                        &starts,
-                        k as u32,
-                        [got2[k], want2[k]],
-                        [&next, &table_after],
-                    );
+                    tell_slot(w, case, &s, &starts, k as u32, [got2[k], want[k]]);
                 }
             }
         }
     }
-    let rewritten = (0..pyramid::ENTRIES)
-        .filter(|&e| entry(&table_after, e) != entry(&next, e))
-        .count() as u64;
 
     eprintln!(
         "{name}: {same} alike, {axis_over} an axis over, {differ} differ of {} ; {kinds:?}",
         kinds["slots"]
     );
-    let line = |name: &str, a: &Asks| {
-        eprintln!(
-            "  {name}: asks {} of {} visits: {} past the roots, {} absent, {} at other zooms, {} its own; {} off a slot",
-            a.of_world(), a.visits, a.past_roots, a.absent, a.other_zooms, a.own_pass, a.kept
-        );
-    };
-    line("asks", &asks);
-    eprintln!(
-        "  tally: {tallied} visits, {asked} asked, by hand; most visits of a ray {most_visits}"
-    );
-    eprintln!(
-        "  kept: hand {} ref {}, {bad_entry} bad, {only_hand} the hand's alone, {only_ref} the Rust's alone, {handed_other} found again where the Rust carried, {found_otherwise} of them no cell placed whole, {filled_kept} filled",
-        hand_kept.len(), ref_kept.len()
-    );
-    eprintln!("  buckets of one ask: {}, {alone_differ} differ, {twice} slots a node's twice; the Rust's alone visited by {only_ref_most} rays at most; traps (laid, Rust's, hand's): {trap_cnt:?}", alone.len());
-    eprintln!(
-        "  next frame: {struck} ended by the table, {slots_left} left, {next_axis_over} an axis over, {next_differ} differ, {rewritten} slots written; tally {} asked",
-        table_after[asked_lane]
-    );
-    line("next frame", &asks_next);
-
-    for (what, n) in [
-        ("off a slot", asks.kept),
-        ("next frame, ended by the table", u64::from(struck)),
-        ("next frame, left", u64::from(slots_left)),
-        ("next frame, off a slot", asks_next.kept),
-        ("kept", hand_kept.len() as u64),
-        ("kept, filled", u64::from(filled_kept)),
-        ("found again", u64::from(handed_other)),
-    ] {
-        kinds.insert(what, n as u32);
-    }
+    eprintln!("  next frame: {next_axis_over} an axis over, {next_differ} differ");
     let mut fail = |what: String| failed.push(format!("{name}: {what}"));
     if differ != 0 {
         fail(format!("{differ} slots differ, first {first_differ:?}"));
@@ -1154,46 +785,17 @@ fn run_case(
     if axis_over > 256 {
         fail(format!("too many an axis over: {axis_over}"));
     }
-    if bad_entry != 0 {
-        fail(format!("{bad_entry} kept wrong, first {first_bad:?}"));
-    }
-    if alone_differ != 0 {
-        fail(format!(
-            "{alone_differ} buckets differ from Writing's, first {first_alone:?}"
-        ));
-    }
-    if found_otherwise != 0 {
-        fail(format!(
-            "{found_otherwise} found again where the Rust's hand it on"
-        ));
-    }
     if next_differ != 0 {
         fail(format!(
             "{next_differ} differ the next frame, first slot, got, wanted {first_next:?}"
         ));
     }
-    for (t, (n, r, h)) in &trap_cnt {
-        if r != n || h != n {
-            fail(format!(
-                "{t:?}: of {n} laid, the Rust's {r}, the hand's {h}"
-            ));
-        }
+    if edited.is_some() && changed < 1000 {
+        fail(format!("too few slots the edit changes to say: {changed}"));
     }
-    let visits = asks.visits;
-    if tallied.abs_diff(visits) * 1000 > visits {
-        fail(format!("tally {tallied} against {visits} visits"));
-    }
-    // Walks at once ask what one before would have kept: about what one after another asks.
-    let of_world = asks.of_world();
-    if asked > visits || asked * 3 < of_world * 2 {
+    if next_axis_over > 256 {
         fail(format!(
-            "{asked} asked against {of_world} of {visits} visits"
-        ));
-    }
-    // A ray down a column of no ground falls to its reach, as far as `t_max` is from it.
-    if most_visits > cast::STEPS_MOST / 4 {
-        fail(format!(
-            "a ray of {most_visits} visits near the walk's bound"
+            "too many an axis over the next frame: {next_axis_over}"
         ));
     }
     for (what, n) in case.least {
@@ -1215,103 +817,509 @@ fn an_axis_over(s: &Light, got: u32, want: u32) -> bool {
     })
 }
 
-/// A slot that differs said where it can be read: its words, the node its reference walk
-/// stopped on, and that node's bucket before the walks and after.
-fn tell_slot(
-    w: World,
-    case: &Case,
-    s: &Light,
-    starts: &Starts,
-    k: u32,
-    [got, want]: [u32; 2],
-    [before, after]: [&[u32]; 2],
-) {
+/// A slot that differs said where it can be read: its words and where its walk stops.
+fn tell_slot(w: World, case: &Case, s: &Light, starts: &Starts, k: u32, [got, want]: [u32; 2]) {
     let (o, r, d) = slot_ray(case, s, starts, [k % SIZE, k / SIZE]);
-    let mut q = Keeping {
-        w,
-        cuts: case.cuts,
-        table: &mut before.to_vec(),
-        tag: pyramid::tag(FRAME + 2, pyramid::LIGHT_MISSED_PASS),
-        asks: Asks::default(),
-        writes: true,
-        met: None,
-    };
+    let mut q = Asking { w, cuts: case.cuts };
     let t = cast::first(&mut q, o, &r, d, Until::Opaque);
     let (z, c) = (t.hit.node.zoom, t.hit.node.idx(o));
-    let bucket = |table: &[u32]| {
-        let first = pyramid::entry_at(pyramid::entry_of(z, c)) as usize;
-        table[first..first + (BUCKET * pyramid::ENTRY_WORDS) as usize].to_vec()
-    };
     eprintln!(
-        "DIFFERS {} slot {k} got {got} want {want} band {:?}: its walk stops {:?} z{z} {c:?} t {} axis {} asset {:#x}; before {:?}; after {:?}",
-        case.name, d.range, t.ends, t.hit.t, t.hit.axis, t.hit.asset[0], bucket(before), bucket(after)
+        "DIFFERS {} slot {k} got {got} want {want} band {:?}: its walk stops {:?} z{z} {c:?} t {} axis {} asset {:#x}",
+        case.name, d.range, t.ends, t.hit.t, t.hit.axis, t.hit.asset[0]
     );
 }
 
-/// `light_miss_cs`'s group, over the eye, the head, the table and the list.
-fn miss_binds<'a>(
-    b: &'a WorldBufs,
-    [eye, head, table, list]: [&'a wgpu::Buffer; 4],
-    view: &'a wgpu::TextureView,
-) -> Vec<(u32, wgpu::BindingResource<'a>)> {
-    vec![
+/// The map the passes write a word a texel of, `SIZE` a side, laid with zeros.
+fn map_of(gpu: &Gpu) -> wgpu::Texture {
+    let words = vec![0; (SIZE * SIZE) as usize];
+    texture(
+        &gpu.device,
+        &gpu.queue,
+        [SIZE, SIZE],
+        1,
+        wgpu::TextureUsages::STORAGE_BINDING,
+        &words,
+    )
+}
+
+/// The light's list with `slots` listed in its holes' list (`light::holes_at`), its pool and
+/// its stops past them (`light::buffer_words`).
+fn listed(slots: &[u32]) -> Vec<u32> {
+    let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
+    let at = light::holes_at(SIZE) as usize;
+    list[at] = slots.len() as u32;
+    list[at + 1..at + 1 + slots.len()].copy_from_slice(slots);
+    list
+}
+
+/// The holes' run over the slots the list holds (`Gpu::holes`), over the eye, the head, the table
+/// and the list, writing the map `view`: its stops kept in the list each naming a slot `walked`,
+/// one a slot at most (queue.wgsl `finish`, `light::hits_at`).
+fn holes(
+    gpu: &Gpu,
+    b: &WorldBufs,
+    [eye, head, table, list]: [&wgpu::Buffer; 4],
+    view: &wgpu::TextureView,
+    walked: &[bool],
+) {
+    let binds = [
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
+        (3, wgpu::BindingResource::TextureView(view)),
         (4, b.palette.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
+        (8, list.as_entire_binding()),
         (9, table.as_entire_binding()),
-        (10, wgpu::BindingResource::TextureView(view)),
         (11, head.as_entire_binding()),
-        (12, list.as_entire_binding()),
-    ]
+    ];
+    let pool = light::list_words(SIZE) + ray::POOL_CNT;
+    gpu.holes(&binds, table, (list, pool));
+    let stops = gpu.read(table)[node_cache::HITS_CNT as usize].min(ray::STOPS_A_FRAME);
+    let words = gpu.read(list);
+    let at = light::hits_at(SIZE) as usize;
+    let mut kept = std::collections::BTreeSet::new();
+    let mut strays = 0u32;
+    for r in 0..stops as usize {
+        let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
+        let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
+        if k >= walked.len() || !walked[k] || !kept.insert(k) {
+            strays += 1;
+        }
+    }
+    assert_eq!(strays, 0, "stops of slots not walked, or twice, of {stops}");
 }
 
-/// `forget_cs` over stamped slots: a split under a moved brick left forgotten, read as a split
-/// through its stamp, and all else cleared.
+/// The node cache never answers the world as it was: a frame's walks keep what a world whose
+/// leaf clip level lacks its bricks answers, every brick of that level is then handed, and the
+/// next frame, after the app forgets by the entries that moved, answers as the world that holds
+/// them.
 #[test]
-fn forget_reads_a_stamped_kind() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+fn an_edited_brick_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE,
+        LEAF_CELL,
+        [90, 90],
+        "about the eye, its leaf bricks handed between the frames",
+    );
+}
+
+/// `an_edited_brick_is_never_answered_as_it_was` at a clip level coarser than the leaves'.
+#[test]
+fn an_edited_coarse_brick_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE,
+        LEAF_CELL - 1,
+        [90, 90],
+        "about the eye, a coarser level's bricks handed between the frames",
+    );
+}
+
+/// `an_edited_brick_is_never_answered_as_it_was` on X's seam, where the world goes round, the
+/// leaf clip level's bricks lying either side of it.
+#[test]
+fn an_edited_brick_over_the_seam_is_never_answered_as_it_was() {
+    handed_between_frames(
+        EYE_SEAM,
+        LEAF_CELL,
+        [4, 90],
+        "on the seam, the leaf bricks either side of it handed between the frames",
+    );
+}
+
+/// A frame's walks about `by` leaf cells from `eye` over a world whose clip level at `cell`
+/// lacks its bricks, every brick of that level then handed, and the next frame's, after the app
+/// forgets by the entries that moved, answering as the world that holds them.
+fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static str) {
+    let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
-    let gpu = Gpu { device, queue };
-    let mut table = vec![0u32; pyramid::WORDS as usize];
-    table[pyramid::FORGETS as usize] = pyramid::FORGETS_MOVED;
-    table[pyramid::MOVED_AT as usize..(pyramid::MOVED_AT + pyramid::MOVED_WORDS) as usize]
-        .fill(u32::MAX);
-    let key = pyramid::key(pyramid::tag(3, pyramid::BEAM_PASS), [20, 20]);
-    let (zoom, c) = (18, [5, 7, 9]);
-    let split = In {
-        kind: Kind::Split,
-        asset: [11, 13],
+    let built = real_world::build(eye);
+    // Before: the clip level's entries wanted and not yet filled, folded again.
+    let mut was = built.clipmap.clone();
+    let level = ((cell - FIRST_CELL) * ENTRIES) as usize;
+    let rows = level..level + ENTRIES as usize;
+    if eye == EYE_SEAM {
+        let x = |west: bool| {
+            was[rows.clone()]
+                .iter()
+                .any(|r| (r[0] < 0) == west && r[2] != 0)
+        };
+        assert!(
+            x(true) && x(false),
+            "the level's bricks held lie on one side of the seam"
+        );
+    }
+    for row in &mut was[rows] {
+        row[2..].fill(0);
+    }
+    real_world::fold(
+        &mut was,
+        &built.ground,
+        &built.palette,
+        &built.shards,
+        &built.pool,
+    );
+    let now = &built.clipmap;
+    // The host's rule (gpu/ray/cast.rs): an eye's entry moved where its brick did.
+    let mut moved = [0u32; MOVED_WORDS as usize];
+    let mut moved_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
+    for k in 0..(clipmap::EYE_CLIP_LEVELS * ENTRIES) as usize {
+        if Entry::of(now[k]).moved_from(Entry::of(was[k])) {
+            moved[k / 32] |= 1 << (k % 32);
+        }
+        if Entry::of(now[k]).held_moved_from(Entry::of(was[k])) {
+            for q in [Entry::of(now[k]).brick, Entry::of(was[k]).brick] {
+                if q != [i32::MIN; 2] {
+                    let level = &mut moved_bricks[k / ENTRIES as usize];
+                    *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
+                }
+            }
+        }
+    }
+    assert!(moved.iter().any(|&m| m != 0), "no entry moved");
+
+    let store = wgpu::BufferUsages::STORAGE;
+    let bufs = |rows: &[[i32; 4]]| WorldBufs {
+        clip: gpu.buffer(
+            &rows
+                .iter()
+                .flatten()
+                .map(|&v| v as u32)
+                .collect::<Vec<u32>>(),
+            store,
+        ),
+        ground: gpu.buffer(&built.ground, store),
+        palette: gpu.buffer(&built.palette, store),
+        shards: gpu.buffer(
+            &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
+            store,
+        ),
+        placed: gpu.buffer(&built.overwrites, store),
+        pool: gpu.buffer(&built.pool, store),
     };
-    let cell = In {
-        kind: Kind::Cell,
-        asset: [15, 0],
-    };
-    put_entry(&mut table, 40, zoom, c, key, &split, [1, 2, 3, 4]);
-    put_entry(&mut table, 44, zoom, c, key, &cell, [1, 2, 3, 4]);
-    let buf = gpu.buffer(&table, store_of());
+    let (before, after) = (bufs(&was), bufs(now));
     let forget = gpu.pipeline(src(SHADER_FORGET), "forget_cs");
-    gpu.dispatch(
-        &forget,
-        &[(9, buf.as_entire_binding())],
-        [pyramid::ENTRIES / 64, 1],
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let case = Case {
+        name,
+        origin: over([eye[0] + by[0], eye[1] + by[1]], 40),
+        dir: [0.3, 0.2, -0.93],
+        side: 1.0,
+        back: 60.0,
+        t_max: 400.0,
+        range: [8, FINEST],
+        corner: [1300, -900],
+        cuts: [Cut::NONE; 2],
+        least: &[("hit", 19850), ("slots", 19850)],
+    };
+    let edited = Edited {
+        b: &after,
+        w: built.world(),
+        moved,
+        moved_bricks,
+        forget: &forget,
+    };
+    let mut failed = Vec::new();
+    run_case(
+        &gpu,
+        &before,
+        World {
+            clipmap: &was,
+            ..built.world()
+        },
+        &case,
+        Some(&edited),
+        &mut failed,
     );
-    let out = gpu.read(&buf);
-    assert_eq!(
-        out[pyramid::entry_at(40) as usize],
-        pyramid::forgotten_split(key)
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// Each slot's word in a map cast fresh over the world `b`, the eye's cuts `cuts`, every tile
+/// read (`run_case`'s first frame): the slots listed, and the map's words.
+fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool>, Vec<u32>) {
+    let (s, starts) = box_of(case);
+    let mut eye_words = vec![0u32; eye::WORDS];
+    eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&s.words());
+    eye_words[eye::RANGE] = case.range[0];
+    eye_words[eye::RANGE + 1] = case.range[1];
+    for (at, cut) in [(eye::CARVE, cuts[0]), (eye::HIDE, cuts[1])] {
+        eye_words[at] = cut.at[0] as u32;
+        eye_words[at + 1] = cut.at[1] as u32;
+        eye_words[at + 2] = cut.at[2] as u32;
+        eye_words[at + 3] = cut.zoom;
+    }
+    let mut head = vec![0u32; light::HEAD_WORDS];
+    head[light::HEAD_CAST] = CAST;
+    head[light::HEAD_EPOCH] = CAST;
+    for (k, v) in light::head_layout(SIZE) {
+        head[k] = v;
+    }
+    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+        .copy_from_slice(&starts.words());
+    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let n = SIZE * SIZE;
+    let walked: Vec<bool> = (0..n)
+        .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
+        .collect();
+    let slots: Vec<u32> = (0..n)
+        .filter(|&k| walked[k as usize])
+        .map(|k| (k % SIZE) | ((k / SIZE) << 16))
+        .collect();
+    let mut list = listed(&slots);
+    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+    let mut table = vec![0u32; node_cache::WORDS as usize];
+    table[node_cache::FRAME as usize] = FRAME;
+    let map = map_of(gpu);
+    let view = array_view(&map);
+    let table_buf = gpu.buffer(&table, store_of());
+    let list_buf = gpu.buffer(&list, store_of());
+    holes(
+        gpu,
+        b,
+        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        &view,
+        &walked,
     );
-    assert_eq!(out[pyramid::entry_at(44) as usize], 0);
+    (walked, read_texture(&gpu.device, &gpu.queue, &map))
+}
+
+/// A world's change keeps the tiles it does not reach (pxl-engine `Light::reaches`): over the
+/// real world, where bricks of the leaf clip level were handed and where a preview's cut
+/// moved, each slot of a tile no changed column reaches holds in a map cast fresh after the
+/// change what one cast fresh before it holds, the GPU's word and the engine's walk alike;
+/// and the change moves slots of the tiles it reaches.
+#[test]
+fn a_world_change_keeps_the_tiles_it_does_not_reach() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let built = real_world::build(EYE);
+    let store = wgpu::BufferUsages::STORAGE;
+    let bufs = |rows: &[[i32; 4]]| WorldBufs {
+        clip: gpu.buffer(
+            &rows
+                .iter()
+                .flatten()
+                .map(|&v| v as u32)
+                .collect::<Vec<u32>>(),
+            store,
+        ),
+        ground: gpu.buffer(&built.ground, store),
+        palette: gpu.buffer(&built.palette, store),
+        shards: gpu.buffer(
+            &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
+            store,
+        ),
+        placed: gpu.buffer(&built.overwrites, store),
+        pool: gpu.buffer(&built.pool, store),
+    };
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let now = &built.clipmap;
+    let after = bufs(now);
+
+    // Bricks handed: the leaf clip level's bricks under part of the box, wanted and not yet
+    // filled before, folded again; their columns as the host takes them (gpu/ray/cast.rs).
+    let g = [EYE[0] + 90, EYE[1] + 90];
+    let bricks_case = Case {
+        name: "bricks of the leaf clip level handed",
+        origin: over(g, 40),
+        dir: [0.3, 0.2, -0.93],
+        side: 1.0,
+        back: 60.0,
+        t_max: 400.0,
+        range: [8, FINEST],
+        corner: [1300, -900],
+        cuts: [Cut::NONE; 2],
+        least: &[],
+    };
+    let leaf = ((LEAF_CELL - FIRST_CELL) * ENTRIES) as usize;
+    let s = clipmap::BRICK_SHIFT;
+    let mut was = now.clone();
+    let mut brick_columns = Vec::new();
+    for q in [[g[0] >> s, g[1] >> s], [(g[0] >> s) + 2, g[1] >> s]] {
+        let row = &mut was[leaf + clipmap::entry(q) as usize];
+        assert!(
+            Entry::of(*row).holds(q),
+            "the leaf clip level holds the brick"
+        );
+        row[2..].fill(0);
+        light::brick_columns(
+            bricks_case.origin,
+            LEAF_CELL,
+            q,
+            |_| false,
+            |c| brick_columns.push(c),
+        );
+    }
+    real_world::fold(
+        &mut was,
+        &built.ground,
+        &built.palette,
+        &built.shards,
+        &built.pool,
+    );
+    let before = bufs(&was);
+
+    // A brick over the leaf's handed: a band finer reads it only where the leaf's are not
+    // present.
+    let over_case = Case {
+        name: "a brick over the leaf's handed",
+        ..bricks_case
+    };
+    let row_of = |cell: Zoom, q: [i32; 2]| {
+        ((cell - FIRST_CELL) * ENTRIES) as usize + clipmap::entry(q) as usize
+    };
+    let (coarser, q) = (FIRST_CELL..LEAF_CELL)
+        .rev()
+        .map(|cell| (cell, g.map(|v| v >> (s + LEAF_CELL - cell))))
+        .find(|&(cell, q)| Entry::of(now[row_of(cell, q)]).holds(q))
+        .expect("a clip level over the leaf's holds a brick");
+    eprintln!("the brick over the leaf's at {coarser}, the leaf's at {LEAF_CELL}");
+    let mut was_over = now.clone();
+    was_over[row_of(coarser, q)][2..].fill(0);
+    let mut over_columns = Vec::new();
+    light::brick_columns(
+        over_case.origin,
+        coarser,
+        q,
+        |c| Entry::of(now[row_of(coarser + 1, c)]).holds(c),
+        |c| over_columns.push(c),
+    );
+    real_world::fold(
+        &mut was_over,
+        &built.ground,
+        &built.palette,
+        &built.shards,
+        &built.pool,
+    );
+    let before_over = bufs(&was_over);
+
+    // A preview's cut moved: none before, one over what is placed after.
+    let (_, leaf_c) = built
+        .placed
+        .iter()
+        .copied()
+        .find(|p| p.0 == 25)
+        .expect("something placed finer than a cell");
+    let cut = Cut {
+        zoom: 20,
+        at: [leaf_c[0] >> 5, leaf_c[1] >> 5, leaf_c[2] >> 5],
+    };
+    let cut_case = Case {
+        name: "a preview's cut moved",
+        origin: over([leaf_c[0] >> 1, leaf_c[1] >> 1], 30),
+        dir: [0.1, 0.25, -0.96],
+        side: 0.25,
+        back: 10.0,
+        t_max: 120.0,
+        range: [LEAF_CELL, FINEST],
+        corner: [8, 16],
+        cuts: [Cut::NONE; 2],
+        least: &[],
+    };
+    let b = overwrite::cut_box(cut.zoom, cut.at);
+    let cut_columns = vec![light::Column::every_band(light::column_of(
+        cut_case.origin,
+        LEAF_CELL,
+        [b[0], b[1]],
+        [b[2], b[3]],
+    ))];
+
+    let mut failed = Vec::new();
+    let changes = [
+        (
+            &bricks_case,
+            [&before, &after],
+            [
+                World {
+                    clipmap: &was,
+                    ..built.world()
+                },
+                built.world(),
+            ],
+            [[Cut::NONE; 2]; 2],
+            brick_columns,
+        ),
+        (
+            &over_case,
+            [&before_over, &after],
+            [
+                World {
+                    clipmap: &was_over,
+                    ..built.world()
+                },
+                built.world(),
+            ],
+            [[Cut::NONE; 2]; 2],
+            over_columns,
+        ),
+        (
+            &cut_case,
+            [&after, &after],
+            [built.world(), built.world()],
+            [[Cut::NONE; 2], [cut, Cut::NONE]],
+            cut_columns,
+        ),
+    ];
+    for (case, [b0, b1], [w0, w1], [c0, c1], columns) in changes {
+        let (s, starts) = box_of(case);
+        let (walked, got0) = fresh_map(&gpu, b0, case, c0);
+        let (_, got1) = fresh_map(&gpu, b1, case, c1);
+        let (mut q0, mut q1) = (Asking { w: w0, cuts: c0 }, Asking { w: w1, cuts: c1 });
+        let (mut kept, mut reached, mut moved, mut differ, mut walks_differ) =
+            (0u32, 0u32, 0u32, 0u32, 0u32);
+        for k in 0..(SIZE * SIZE) as usize {
+            if !walked[k] {
+                continue;
+            }
+            let slot = [k as u32 % SIZE, k as u32 / SIZE];
+            let p = s.texel(SIZE, slot);
+            let tile = [p[0] / light::TILE, p[1] / light::TILE];
+            let (o, r, d) = slot_ray(case, &s, &starts, slot);
+            let want0 = light::word(light::depth(
+                &s,
+                &cast::first(&mut q0, o, &r, d, Until::Opaque),
+            ));
+            let want1 = light::word(light::depth(
+                &s,
+                &cast::first(&mut q1, o, &r, d, Until::Opaque),
+            ));
+            if columns
+                .iter()
+                .any(|&c| s.reaches(SIZE, case.range, tile, c))
+            {
+                reached += 1;
+                moved += u32::from(want0 != want1);
+                continue;
+            }
+            kept += 1;
+            walks_differ += u32::from(want0 != want1);
+            if got0[k].abs_diff(got1[k]) > WITHIN && !an_axis_over(&s, got0[k], got1[k]) {
+                differ += 1;
+            }
+        }
+        eprintln!(
+            "{}: {kept} slots kept, {reached} reached, {moved} of them moved; kept but moved: {walks_differ} walked, {differ} cast",
+            case.name
+        );
+        if walks_differ != 0 || differ != 0 {
+            failed.push(format!(
+                "{}: slots of tiles kept moved, {walks_differ} by the engine's walk, {differ} by the GPU's",
+                case.name
+            ));
+        }
+        if kept < 1000 || moved < 100 {
+            failed.push(format!(
+                "{}: too few to say: {kept} kept, {moved} moved",
+                case.name
+            ));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

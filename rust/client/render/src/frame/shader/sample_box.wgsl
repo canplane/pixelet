@@ -1,46 +1,55 @@
 // pxl-render/sample_box.wgsl
 
-// Each sample of the camera grid, a thread each, written as a box for the raster's draw
-// (boxes.wgsl, the eye as sample_eye.wgsl takes it), the one across and up before it each
-// sampled; and what lies about its face asked once a box (`ask`), as its pixels draw the
-// face (pxl-engine `raster`). The shadow map's is light_sample_box.wgsl,
-// which asks none.
+// An observer's samples as stops into what draws the node cache's entries (record_put.wgsl
+// `observe_stop`; pxl-engine record.rs), the eye's and the light's alike, each as its
+// sample.eye.wgsl or sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl
+// take it, a thread a sample: every stopped sample finds its node's entry, which the walk that
+// stopped it kept, and sets the face it entered across, asking that face's word the first time
+// where its observer reads one (`sample_asks`).
 
-/// What lies about the face sample `s` entered, whose box is at `place` among the
-/// boxes: told at once where it needs no asking, a lack none, left in its words
-/// (`beam::SAMPLE_FACES`) where its pixels read it; else its ask at `place`
-/// (`Grid::ask_at`), off the line its cell's rays resumed from, for the faces' pass,
-/// its faces to be left there (pxl-engine `beam::ASK_WORDS`).
-fn ask_face(s: vec2<u32>, place: u32) {
-  let k = sample_word(s);
-  let a = eye_word(GRID + GRID_ASKS_AT) + place * ASK_WORDS;
-  let lacks = beams[k + SAMPLE_LACKS] != 0u;
-  let fill = (beams[k + SAMPLE_ASSET] >> FILL_SHIFT) & (EIGHTHS - 1u);
-  if (lacks || fill != 0u) {
-    beams[k + SAMPLE_FACES] = select(FACE_BOX, 0u, lacks);
-    beams[a + ASK_TO] = ASK_NONE;
-    return;
-  }
-  // The face its ray enters across its axis: 2·axis, plus one where the ray runs up
-  // it (miss_word.wgsl `face_of`).
+/// Whether sample `s` stopped on a node: not gone on to its reach, and not parked
+/// (`beam::SAMPLE_PARKED`).
+fn stopped(s: vec2<u32>) -> bool {
+  let zoom = beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM];
+  return zoom != SAMPLE_NONE && zoom != SAMPLE_PARKED;
+}
+
+/// Sample `s`'s node, its roots world-absolute from where its ray starts.
+fn sample_kept(s: vec2<u32>) -> Node {
+  return kept_at(sample_word(s) + SAMPLE_NODE, sample_aim(s).origin);
+}
+
+/// Sample `s`'s stop: its answer, the face it entered across, and the line its cell's rays
+/// resumed from (`record_put.wgsl` `Stop`).
+fn sample_stop(s: vec2<u32>) -> Stop {
+  let w = sample_word(s);
+  let axis = beams[w + SAMPLE_AXIS];
   let dir = sample_aim(s).dir;
-  let axis = beams[k + SAMPLE_AXIS];
   let along = select(select(dir.z, dir.y, axis == 1u), dir.x, axis == 0u);
-  beams[a + ASK_NODE] = k + SAMPLE_NODE;
-  beams[a + ASK_FACE] = 2u * axis + select(0u, 1u, along > 0.0);
-  beams[a + ASK_LINE] = beams[sample_cell_word(s) + CELL_CORNER] * LINE_WORDS;
-  beams[a + ASK_TO] = k + SAMPLE_FACES;
+  return Stop(
+    vec2<u32>(beams[w + SAMPLE_ASSET], beams[w + SAMPLE_ASSET + 1u]),
+    beams[w + SAMPLE_LACKS] != 0u,
+    sample_whole(s, sample_kept(s)),
+    2u * axis + select(0u, 1u, along > 0.0),
+    sample_line(s),
+  );
+}
+
+/// The sample the thread at `id` takes, where the lattice holds it and it stopped.
+fn stopped_item(id: vec2<u32>) -> vec2<u32> {
+  let n = sample_lattice();
+  let s = sample_item(id);
+  if (s.x >= n.x || s.y >= n.y || !stopped(s)) {
+    return vec2<u32>(NO_ENTRY);
+  }
+  return s;
 }
 
 @compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
 fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-  let place = sample_box(id.xy, origin, true, vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)));
-  if (place != NO_BOX) {
-    ask_face(sample_item(id.xy), place);
-    // The faces' pass's workgroups raised to hold it, by the box that opens one.
-    if (place % RASTER_FACES_LANES == 0u) {
-      args_most(RASTER_ARGS_FACES, place / RASTER_FACES_LANES + 1u);
-    }
+  let s = stopped_item(id.xy);
+  if (s.x == NO_ENTRY) {
+    return;
   }
+  observe_stop(sample_kept(s), sample_stop(s), sample_asks());
 }

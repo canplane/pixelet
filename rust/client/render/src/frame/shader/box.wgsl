@@ -1,15 +1,15 @@
 // The ghost's boxes: each unfolded into a cube's six faces, every edge of
 // it its own silhouette.
 
-// Two vec4s, not a vec3f followed by scalars: that layout inside a storage
-// array is read differently by two backends, everything past the first member sliding.
-struct Draw {
-  place: vec4f,
-  // Opacity, the box's cell in units, the height step, padding.
-  measure: vec4f,
-};
+// The draws' uniforms by slot (word.rs `ghost_box`), read as whole vec4s: a vec3f
+// followed by scalars inside a storage array is read differently by two backends,
+// everything past the first member sliding.
+@group(0) @binding(3) var<storage, read> draws: array<vec4f>;
 
-@group(0) @binding(3) var<storage, read> draws: array<Draw>;
+var<private> draw_slot: u32;
+
+fn ghost_box_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
+
 struct BoxWords {
   @location(0) first: vec4<u32>,
   @location(1) layer: u32,
@@ -30,15 +30,9 @@ fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
 }
 
-fn box_of(words: BoxWords, d: Draw) -> Box {
-  let step = d.measure.y / XY_STEPS;
-  var b: Box;
-  b.z = box_pair(words.first[2], d.measure.z);
-  b.min_xy = box_pair(words.first[0], step);
-  b.size_xy = box_pair(words.first[1], step);
-  b.rgb = words.first[3];
-  b.layer = words.layer;
-  return b;
+fn box_of(words: BoxWords) -> Box {
+  let step = ghost_box_unit() / XY_STEPS;
+  return Box(box_pair(words.first[0], step), box_pair(words.first[1], step), box_pair(words.first[2], ghost_box_z_step()), words.first[3], words.layer);
 }
 
 // Wound counter-clockwise from outside, in paint.wgsl's FACE_NORMAL order.
@@ -69,13 +63,6 @@ struct VertexOut {
   @location(12) @interpolate(flat) other: vec3f,
 };
 
-// The draw record's index rides on vertex_index (first vertex = record index
-// times the cube); the first box is the draw's first instance.
-@vertex
-fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
-  return box_vertex(v, words);
-}
-
 struct Corner {
   face: u32,
   local: vec3f,
@@ -84,20 +71,21 @@ struct Corner {
 };
 
 fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
-  var c: Corner;
-  c.face = k / 6u;
-  c.local = FACE_CORNER[c.face * 4u + FACE_TRIANGLES[k % 6u]];
-  c.size = vec3f(b.size_xy, b.z.y);
-  let pos = vec3f(b.min_xy, b.z.x) + c.size * 0.5 + c.local * c.size;
-  c.world = pos + place;
-  return c;
+  let face = k / 6u;
+  let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
+  let size = vec3f(b.size_xy, b.z.y);
+  let pos = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
+  return Corner(face, local, size, pos + place);
 }
 
 
-fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
-  let d = draws[v / BOX_VERTICES];
-  let b = box_of(words, d);
-  let c = box_corner(v % BOX_VERTICES, b, d.place.xyz);
+// The draw record's index rides on vertex_index (first vertex = record index
+// times the cube); the first box is the draw's first instance.
+@vertex
+fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
+  draw_slot = v / BOX_VERTICES;
+  let b = box_of(words);
+  let c = box_corner(v % BOX_VERTICES, b, from_eye(ghost_box_q(), ghost_box_r()));
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;
@@ -108,14 +96,15 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   o.local_pos = local;
   o.box_scale = size;
   o.normal = normal;
-  o.opacity = d.measure.x;
+  o.opacity = ghost_box_opacity();
   o.world_pos = c.world;
   let seen = seen_from_eye(c.world);
   o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
-  o.sun = seen.light.sun;
-  o.other = seen.light.other;
-  o.fill = seen.light.fill;
+  let l = light_of(c.world);
+  o.sun = l.sun;
+  o.other = l.other;
+  o.fill = l.fill;
   // Real-size tile UV, one repeat a unit, read from where the face stands and
   // not from its box: a leaf cut into several boxes still wears one tile. The
   // mesh's corner and floor stand on whole units (ghost.rs `on_whole_units`), so its own
@@ -150,7 +139,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let px = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   let s = Surface(
     i.rgb,
-    vec4f(i.layer),
+    i.layer,
     i.normal,
     outline(i.local_pos, i.box_scale, px, i.normal),
     i.world_pos,
@@ -158,7 +147,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     dpdx(i.box_uv),
     dpdy(i.box_uv),
     1.0,
-    Air(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)),
   );
-  return vec4f(tone(paint(s)), i.opacity);
+  return vec4f(tone(paint(s, Air(i.transmittance, i.scattered), Light(i.sun, i.other, i.fill))), i.opacity);
 }

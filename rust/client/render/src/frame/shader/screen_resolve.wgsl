@@ -34,18 +34,6 @@ struct Resolve {
 // left may lie from their mean.
 const RESOLVE_SPREAD: f32 = 1.0;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
-// The claimed tiles alone (screen_tiles.wgsl).
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(vi, ii);
-  return o;
-}
-
 fn resolve_ycocg(c: vec4f) -> vec4f {
   return vec4f(
     0.25 * c.r + 0.5 * c.g + 0.25 * c.b,

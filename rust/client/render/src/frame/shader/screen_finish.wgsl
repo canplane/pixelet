@@ -7,26 +7,18 @@
 // carried up with it, the nearest of what a canvas pixel covers, which what
 // is drawn over the world is tested against. Where the two sizes are one,
 // each is the world's own texel. The claimed tiles alone, at the canvas's
-// pixels (screen_tiles.wgsl), into the picture the surface keeps.
+// pixels (screen_tiles.wgsl), onto the canvas and, at location 1, into the
+// picture the world's surface keeps, one color both (gpu/finish.rs); a
+// pipeline of the canvas alone leaves the second unwritten.
 
 @group(0) @binding(1) var world: texture_2d<f32>;
 @group(0) @binding(2) var world_depth: texture_depth_2d;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
 struct FinishOut {
   @location(0) color: vec4f,
+  @location(1) picture: vec4f,
   @builtin(frag_depth) depth: f32,
 };
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(vi, ii);
-  return o;
-}
 
 @fragment
 fn fs(v: VertexOut) -> FinishOut {
@@ -54,6 +46,7 @@ fn fs(v: VertexOut) -> FinishOut {
   }
   var o: FinishOut;
   o.color = vec4f(finish(c.rgb, v.clip.xy), 1.0);
+  o.picture = o.color;
   o.depth = d;
   return o;
 }

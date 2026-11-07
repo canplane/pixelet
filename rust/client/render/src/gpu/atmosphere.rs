@@ -21,20 +21,21 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    binds, COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
-    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE,
-    SHADER_ATMOS_FROXEL, STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
+    binds, COMPUTE, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
+    PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER,
+    STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_guest::mem::off_of;
+use xpute_core::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
-    GROUND_ALBEDO, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
-    MOON_COLOR, MOON_DIR, MOON_LAID, MOON_LIGHT, MOON_REACHES, NIGHT_SKY, NIGHT_STOPS,
-    OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING,
-    SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR, SUN_LAID, SUN_REACHES, TOP_RADIUS,
+    GROUND_ALBEDO, HORIZON_TO_TOP, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
+    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LAID, MOON_LIGHT, MOON_REACHES, NIGHT_SKY,
+    NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT,
+    RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR, SUN_LAID, SUN_REACHES,
+    TOP_RADIUS,
 };
 use crate::frame::shader::word::{
     AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS, GROUND_SLOPES, IRRADIANCE_SIZE, LIGHT_SLOPES,
@@ -115,8 +116,8 @@ const EXPOSURE_GROUP: [u32; 24] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[SHADER_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
-        && binds(&[SHADER_ATMOS_FROXEL], &FROXEL_GROUP),
+    binds(&[COMPUTE_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
+        && binds(&[COMPUTE_ATMOS_FROXEL], &FROXEL_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -294,8 +295,8 @@ pub struct Atmosphere {
     pending: u32,
     flying: u32,
     /// The words as they land, and their fence and result: on the heap,
-    /// as the host writes them and a native build's statics are outside its
-    /// memory; the ticket the mapping was last asked with, the kernel's, and
+    /// as the runtime writes them and a native build's statics are outside its
+    /// memory; the ticket the mapping was last asked with, the core's, and
     /// whether one is out or landed and not yet taken.
     landed_words: Box<[u32; SLOPES]>,
     mapping: Box<[u32; 2]>,
@@ -348,6 +349,13 @@ impl Atmosphere {
         for (at, v) in [
             (BOTTOM_RADIUS, model::BOTTOM_RADIUS_KM),
             (TOP_RADIUS, model::TOP_RADIUS_KM),
+            (
+                HORIZON_TO_TOP,
+                libm::sqrt(
+                    model::TOP_RADIUS_KM * model::TOP_RADIUS_KM
+                        - model::BOTTOM_RADIUS_KM * model::BOTTOM_RADIUS_KM,
+                ),
+            ),
             (RAYLEIGH_SCALE_HEIGHT, model::RAYLEIGH_SCALE_HEIGHT_KM),
             (MIE_SCATTERING, model::MIE_SCATTERING),
             (MIE_EXTINCTION, model::MIE_EXTINCTION),
@@ -416,7 +424,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            exposure: pipelines.build_compute(g, SHADER_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
+            exposure: pipelines.build_compute(g, COMPUTE_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
             groups: [0; TABLES],
             baked: false,
             lights: [0.0f32, 1.0].map(|which| {
@@ -466,7 +474,7 @@ impl Atmosphere {
                 (texture, view)
             },
             volume,
-            froxel: pipelines.build_compute(g, SHADER_ATMOS_FROXEL, &FROXEL_GROUP),
+            froxel: pipelines.build_compute(g, COMPUTE_ATMOS_FROXEL, &FROXEL_GROUP),
             froxel_groups: [0; 2],
         };
         // Every table's group is the air's entries its layout binds, and its own.
@@ -619,7 +627,7 @@ impl Atmosphere {
             .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALT_KM] = env[ENV_AIR + 3];
+        self.words[LAND_ALT_KM] = env[ENV_AIR + 2];
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
@@ -771,6 +779,13 @@ impl Atmosphere {
             );
             self.mapped = true;
         }
+    }
+
+    /// Whether measures landed for a frame to take (`take_slopes`): a
+    /// mapping refused asks none, what it carried copied again with the next
+    /// frame drawn.
+    pub fn landed(&self) -> bool {
+        self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == RESULT::OK
     }
 
     /// Landed measures become their steps, each the quantity over which what

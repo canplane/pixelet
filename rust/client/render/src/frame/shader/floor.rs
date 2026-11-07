@@ -7,13 +7,16 @@
 //! device counts them at a pipeline layout: per stage, over every group, of
 //! what each group's layout makes visible to it.
 
-use crate::frame::shader::record::{
-    COMPUTE, DEPTH, FRAGMENT, SAMPLER, SAMPLER_COMPARISON, STORAGE, STORAGE_RW, STORAGE_TEXTURE_2D,
+use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
+
+use crate::api_spec::record::{
+    DEPTH, SAMPLER, SAMPLER_COMPARISON, STORAGE, STORAGE_RW, STORAGE_TEXTURE_2D,
     STORAGE_TEXTURE_3D, STORAGE_TEXTURE_RW, TEXTURE, TEXTURE_3D, TEXTURE_ARRAY, TEXTURE_UINT_ARRAY,
-    TEXTURE_UNFILTERED, UNIFORM, UNIFORM_DYNAMIC, VERTEX,
+    TEXTURE_UNFILTERED, UNIFORM, UNIFORM_DYNAMIC,
 };
 
 pub const BIND_GROUPS: usize = 4;
+pub const VERTEX_BUFFERS: usize = 8;
 pub const BINDINGS_PER_BIND_GROUP: u32 = 1000;
 pub const STORAGE_BUFFERS_PER_STAGE: u32 = 8;
 pub const UNIFORM_BUFFERS_PER_STAGE: u32 = 12;
@@ -23,6 +26,7 @@ pub const SAMPLERS_PER_STAGE: u32 = 16;
 pub const DYNAMIC_UNIFORM_BUFFERS_PER_LAYOUT: u32 = 8;
 pub const MAX_STORAGE_BUFFER_BINDING_SIZE: u64 = 134_217_728;
 pub const MAX_BUFFER_SIZE: u64 = 268_435_456;
+pub const MAX_TEXTURE_DIMENSION_2D: u32 = 8192;
 pub const MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP: u32 = 256;
 
 /// Whether a buffer of `bytes` is one every device makes, and, where

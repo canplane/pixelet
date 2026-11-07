@@ -7,6 +7,7 @@ pub mod api;
 pub mod atlas;
 pub mod atmosphere;
 pub mod cloud;
+pub mod draw;
 pub mod finish;
 pub mod generator;
 pub mod image_map;
@@ -23,6 +24,7 @@ pub mod resolve;
 pub mod shadow;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
+pub mod split;
 pub mod star;
 pub mod surface;
 pub mod text;

@@ -2,8 +2,7 @@
 
 // The world's rules that read no buffer, by hand: a value's kind, the service area's wall,
 // a brick's cell order, a bound word, the bounds an entry holds and a column's top in
-// cells. What the world's query (world.wgsl), the ways' fill (way.wgsl, way_tree.wgsl) and
-// the ground's levels (bound.wgsl, fold.wgsl) read.
+// cells. What the world's query (world.wgsl) reads.
 
 // ---- value.rs, answer.rs ----
 
@@ -91,6 +90,8 @@ fn top_of(cell: u32, h: i32) -> Top {
   return Top(cells + 1i, part);
 }
 
+/// `ground::face_height`: past the leaves the leaf cell top `t`'s cell lies in, rounded down
+/// under sea level as over it; under them the cells scaled.
 fn face_height(cell: u32, t: i32) -> i32 {
   if (cell >= LEAF_CELL) {
     return t >> (cell - LEAF_CELL);

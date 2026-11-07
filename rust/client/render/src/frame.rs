@@ -1,7 +1,7 @@
 // pxl-render/frame.rs
 
-//! A frame: the uniforms, draw lists and shaders the kernel's decisions become.
+//! A frame's data, naming no device: its uniforms, pipeline records and shaders, the
+//! calls it makes, and where each marker's bitmap lies.
 
-pub mod draw;
 pub mod shader;
-pub mod stage;
+pub mod shelf;

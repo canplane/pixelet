@@ -6,21 +6,23 @@
 //! changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its instances the upload it reads.
 
-use crate::frame::draw::uniform_of;
-use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
+use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
+use crate::gpu::draw::uniform_of;
+use crate::gpu::draw::DrawStats;
 
+use crate::frame::shader::sequence;
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
+use crate::gpu::draw::{Draw, Draws};
 use crate::gpu::generator::IndirectDraw;
-use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::mark::{self, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
-    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
+    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms, Extent,
     ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::{Draws, Uploads};
+use crate::gpu::upload::Uploads;
 use pxl_content::generation;
 
 const _: () = assert!(
@@ -36,12 +38,12 @@ pub struct DecorPass {
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
     /// The marks of the listed draws, opaque, which cast, and blended.
-    marks: Marks,
-    ghost_marks: Marks,
+    pub marks: Marks,
+    pub ghost_marks: Marks,
 }
 
 /// A mark's uniform, as the draw's (`put_instances`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
+fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     put_instances(buf, u, 0);
 }
 
@@ -61,44 +63,21 @@ impl DecorPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_DECOR_MARK,
+                (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
             ghost_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_DECOR_MARK,
+                (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
                 align,
-                (|d| d[0], put_mark),
+                (|d| d[0], put_mark, |_| true),
             ),
         }
     }
 
-    /// The marks this frame of the listed draws (gpu/pass/mark.rs
-    /// `Marks::prepare`), opaque and blended: whether any, and whether any
-    /// of the opaque, which cast.
-    pub fn prepare_marks(
-        &mut self,
-        g: &Gpu,
-        draws: &Draws,
-        uniforms: &[f32],
-        touched: &[u32],
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> (bool, bool) {
-        let opaque = draws.of(PIPELINE_DECOR);
-        let casts = self
-            .marks
-            .prepare(g, opaque, uniforms, touched, uploads, last_frame_uploads);
-        let ghost = draws.of(PIPELINE_GHOST_DECOR);
-        let blended =
-            self.ghost_marks
-                .prepare(g, ghost, uniforms, touched, uploads, last_frame_uploads);
-        (casts || blended, casts)
-    }
-
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`): the
     /// opaque's alone where `casters`, as the light's map draws them, else
     /// the blended's too.
@@ -131,13 +110,6 @@ impl DecorPass {
     pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
         self.marks.reads(draws.of(PIPELINE_DECOR), out);
         self.ghost_marks.reads(draws.of(PIPELINE_GHOST_DECOR), out);
-    }
-
-    /// What this frame listed kept for the next's marks where it was.
-    pub fn keep(&mut self, draws: &Draws, uniforms: &[f32]) {
-        self.marks.keep(draws.of(PIPELINE_DECOR), uniforms);
-        self.ghost_marks
-            .keep(draws.of(PIPELINE_GHOST_DECOR), uniforms);
     }
 
     pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {
@@ -176,11 +148,18 @@ impl DecorPass {
     }
 
     /// 0 while it loads.
-    pub fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
+    fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
         self.groups
             .get(group as usize)
             .and_then(|&(mesh, _)| uploads.get(mesh))
             .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
+    }
+
+    /// Its draws into `stats`, its group's model's triangles an instance.
+    pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
+        for pipeline in [PIPELINE_DECOR, PIPELINE_GHOST_DECOR] {
+            draws.count(pipeline, stats, |d| self.triangles_of(d[1], uploads) * d[2]);
+        }
     }
 
     /// Every skin and upload group the draws will bind is made here, so drawing
@@ -299,6 +278,12 @@ impl DecorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
+        let step = match (stage, d.gate) {
+            (Stage::Depth, None) => &sequence::DECOR_MAP,
+            (Stage::Depth, Some(_)) => &sequence::DECOR_MAP_GATED,
+            (Stage::Lit, None) => &sequence::DECOR_LIT,
+            (Stage::Lit, Some(_)) => &sequence::DECOR_LIT_GATED,
+        };
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
@@ -309,7 +294,7 @@ impl DecorPass {
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
             pass.set_bind_group(2, skin, &[]);
             bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
-            pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
+            pass.draw_indexed_indirect(d.args, step.off(d.args_at(2 * group)));
         }
     }
 }

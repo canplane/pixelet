@@ -1,54 +1,40 @@
 // pxl-render/gpu/pass/debug.rs
 
-//! The dev gizmos, over the finished world in passes of their own, and the
-//! camera grid over all of it, off the frame's cell and the sky's ray.
+//! The dev gizmos, over the finished world in passes of their own.
 
-use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
+use crate::frame::shader::record::PIPELINE_DEBUG;
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
-use crate::gpu::pass::model::DrawUniforms;
+use crate::gpu::draw::uniform_of;
+use crate::gpu::draw::{DrawStats, Draws};
+use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::upload::{Draws, Uploads};
+use crate::gpu::upload::Uploads;
 
 /// Their faces go into the canvas's depth, cleared once what is drawn over
 /// the world is done with it, and their lines are drawn against those faces alone, so a gizmo
 /// hides gizmos and nothing of the world hides one. Each set takes its own
-/// translation, a draw's uniform a set.
+/// position, a draw's uniform a set.
 pub struct DebugPass {
     pipeline: Pipeline,
     faces: Pipeline,
     frame_group: u32,
     uniforms: DrawUniforms,
-    grid: Pipeline,
-    grid_group: u32,
 }
 
 impl DebugPass {
-    pub fn new(
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        frame_buf: u32,
-        sky_buf: u32,
-        align: u32,
-    ) -> DebugPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> DebugPass {
         let pipeline = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
-        let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
-        let grid_group = g.bind_group(
-            grid.layouts[0],
-            &[buf_entry(0, frame_buf), buf_entry(19, sky_buf)],
-        );
         DebugPass {
             pipeline,
             faces,
             frame_group,
-            uniforms: DrawUniforms::new(16, align),
-            grid,
-            grid_group,
+            uniforms: DrawUniforms::new(DRAW_BYTES, align),
         }
     }
 
@@ -61,10 +47,14 @@ impl DebugPass {
             sets,
             moved,
             |buf, d| {
-                let u = uniform_of(uniforms, d);
-                buf[..16].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0]));
+                buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
             },
         );
+    }
+
+    /// Its draws into `stats`, two triangles a segment, and the faces'.
+    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+        draws.count(PIPELINE_DEBUG, stats, |d| d[1] + d[2] / 3);
     }
 
     /// `depth` is the world's, which nothing reads after this in the frame;
@@ -80,12 +70,11 @@ impl DebugPass {
     ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::debug);
-        let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
         let held = self
             .uniforms
             .slots()
             .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
-        if held.is_none() && !grid {
+        if held.is_none() {
             return false;
         }
         let slots = held.as_ref();
@@ -145,11 +134,6 @@ impl DebugPass {
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }
-        }
-        if grid {
-            g.set_pipeline(pass, self.grid.id);
-            g.set_bind_group(pass, 0, self.grid_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
         }
         g.end(pass);
         true

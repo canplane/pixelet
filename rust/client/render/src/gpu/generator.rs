@@ -13,23 +13,33 @@
 //! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
 //! is generated.
 
+use crate::frame::shader::access;
+use crate::frame::shader::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
-use pxl_engine::{clipmap, eye, overwrite};
+use pxl_engine::{clipmap, eye, overwrite, Zoom};
+use pxl_spec::space::coord::q3::Q3;
 
-use crate::frame::draw::PIPELINE_DECOR;
-use crate::frame::shader::floor;
-use crate::frame::shader::record::{
-    binds, COMPUTE, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
-    SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN, STORAGE, STORAGE_RW,
-    UNIFORM,
+use crate::frame::shader::group::{
+    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GATED_LIGHT_ARGS, GATED_SCREEN_ARGS, GATE_GROUP,
+    GATE_LIGHT_BINDS, GATE_SCREEN_BINDS, GENERATE_GROUP, GENERATION_ARGS, GENERATION_ARGS_OF_BINDS,
+    GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP,
+    THIN_GROUP,
 };
-use crate::frame::shader::word::DRAW_FLOATS;
+use crate::frame::shader::record::PIPELINE_DECOR;
+use crate::frame::shader::record::{
+    COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS,
+    COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK,
+    COMPUTE_GENERATION_THIN,
+};
+use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu, Layout,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Entry, Gpu, Layout,
+    RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
+use crate::gpu::tiles::Tiles;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
@@ -44,9 +54,10 @@ pub struct DecorFrame<'a> {
     /// they lie, their writer asking `held` (gpu/api.rs) before it writes
     /// them again.
     pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
-    /// The anchor the lanes are about, less the frame's eye: where the decor's
-    /// instances are drawn.
-    pub translation: [f32; 3],
+    /// The anchor the lanes are about, the unit the eye stands in, as a
+    /// draw's Q3 (gpu/draw.rs `Position`): where the decor's instances are
+    /// drawn, against the frame's eye (word.rs `frame::EYE`).
+    pub anchor: Q3,
     /// What overwrites wrote since the last frame, `overwrite::EDITS` boxes
     /// of leaf cells at most (pxl-content `generation::meets`): the slots
     /// whose decor they reach generate again.
@@ -67,63 +78,12 @@ pub struct DecorFrame<'a> {
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame (pxl-engine `clipmap::FILL_WORDS`).
-    pub fresh: &'a [[u32; clipmap::FILL_WORDS as usize]],
+    /// The bricks handed this frame, each its cells' zoom and the brick.
+    pub fresh: &'a [(Zoom, [i32; 2])],
     /// The eye as the cast's (pxl-engine `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
-
-/// `decor_cs`'s group (decor_pose.wgsl): the world's, at world.wgsl's numbers, its eye, the
-/// records, the rows and the list.
-pub const GENERATE_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,
-    STORAGE, 7, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE,
-    STORAGE,
-];
-/// `decor_mark_cs`'s (decor_mark.wgsl).
-pub const MARK_GROUP: [u32; 12] = [
-    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 11, COMPUTE, STORAGE_RW, 12, COMPUTE, STORAGE,
-];
-/// `decor_thin_cs`'s (decor_thin.wgsl).
-pub const THIN_GROUP: [u32; 9] = [
-    9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE, STORAGE,
-];
-/// `decor_cnt_cs`'s (decor_cnt.wgsl).
-pub const CNT_GROUP: [u32; 15] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 13, COMPUTE, STORAGE, 14,
-    COMPUTE, STORAGE_RW,
-];
-/// `decor_compact_cs`'s (decor_compact.wgsl).
-pub const COMPACT_GROUP: [u32; 18] = [
-    1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE, 13, COMPUTE, STORAGE, 14,
-    COMPUTE, STORAGE_RW, 15, COMPUTE, STORAGE_RW,
-];
-/// `decor_args_cs`'s (decor_args.wgsl).
-pub const ARGS_GROUP: [u32; 12] = [
-    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
-];
-
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[SHADER_GENERATION_MARK], &MARK_GROUP)
-        && binds(&[SHADER_GENERATION_THIN], &THIN_GROUP)
-        && binds(&[SHADER_GENERATION], &GENERATE_GROUP)
-        && binds(&[SHADER_GENERATION_CNT], &CNT_GROUP)
-        && binds(&[SHADER_GENERATION_ARGS], &ARGS_GROUP)
-        && binds(&[SHADER_GENERATION_COMPACT], &COMPACT_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
-const _: () = assert!(
-    floor::holds(&[&GENERATE_GROUP])
-        && floor::holds(&[&MARK_GROUP])
-        && floor::holds(&[&THIN_GROUP])
-        && floor::holds(&[&CNT_GROUP])
-        && floor::holds(&[&COMPACT_GROUP])
-        && floor::holds(&[&ARGS_GROUP]),
-    "a decor pass's group binds past WebGPU's floor"
-);
 
 pub struct Generator {
     mark: Pipeline,
@@ -155,13 +115,18 @@ pub struct Generator {
     draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
+    /// What a frame through a gate draws in their place (`gate`), each gate's its own
+    /// (`Gate`), and the passes that make it.
+    gated: [Gated; 2],
+    gate_args: Pipeline,
+    gate: Pipeline,
     cap: u32,
     /// The placed decor's records, as last handed.
     placed_cnt: u32,
     /// The world its groups bind: grouped again exactly when it is another.
     bindings: World,
     on: bool,
-    /// The kinds' zooms as last written, a constant of the table the kernel
+    /// The kinds' zooms as last written, a constant of the table the core
     /// hands once; the clip levels' table, the cuts and the placed decor as
     /// last handed; and whether this frame marks slots to generate.
     zooms_read: Read,
@@ -213,12 +178,12 @@ impl Generator {
             storage | buffer_usage::UNIFORM,
         );
         Generator {
-            mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &MARK_GROUP),
-            thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &THIN_GROUP),
-            generate: pipelines.build_compute(g, SHADER_GENERATION, &GENERATE_GROUP),
-            cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &CNT_GROUP),
-            args_pipeline: pipelines.build_compute(g, SHADER_GENERATION_ARGS, &ARGS_GROUP),
-            compact: pipelines.build_compute(g, SHADER_GENERATION_COMPACT, &COMPACT_GROUP),
+            mark: pipelines.build_compute(g, COMPUTE_GENERATION_MARK, &MARK_GROUP),
+            thin: pipelines.build_compute(g, COMPUTE_GENERATION_THIN, &THIN_GROUP),
+            generate: pipelines.build_compute(g, COMPUTE_GENERATION, &GENERATE_GROUP),
+            cnt: pipelines.build_compute(g, COMPUTE_GENERATION_CNT, &CNT_GROUP),
+            args_pipeline: pipelines.build_compute(g, COMPUTE_GENERATION_ARGS, &ARGS_GROUP),
+            compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT, &COMPACT_GROUP),
             groups: [0; 6],
             list: buf(
                 word_bytes(generation::LIST_WORDS as usize),
@@ -242,6 +207,16 @@ impl Generator {
                 &[buf_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
             ),
             instances_group: 0,
+            gated: [Gate::Screen, Gate::Light].map(|_| Gated {
+                list: 0,
+                args: buf(
+                    word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
+                    storage | buffer_usage::INDIRECT,
+                ),
+                group: 0,
+            }),
+            gate_args: pipelines.build_compute(g, COMPUTE_DECOR_GATE_ARGS, &GATE_GROUP),
+            gate: pipelines.build_compute(g, COMPUTE_DECOR_GATE, &GATE_GROUP),
             cap: 0,
             placed_cnt: 0,
             bindings: [0; 6],
@@ -301,8 +276,22 @@ impl Generator {
             release(records);
             release(instances);
             release(self.instances_group);
-            self.instances_group =
-                g.bind_group(self.draw_layouts[1], &[buf_entry(0, self.instances)]);
+            self.instances_group = g.bind_group(
+                self.draw_layouts[1],
+                &[buf_entry(0, self.instances), buf_entry(1, self.instances)],
+            );
+            for gated in &mut self.gated {
+                release(gated.group);
+                release(gated.list);
+                gated.list = g.buf(
+                    word_bytes(((drawn::COLUMNS + 1) * need) as usize),
+                    buffer_usage::STORAGE,
+                );
+                gated.group = g.bind_group(
+                    self.draw_layouts[1],
+                    &[buf_entry(0, self.instances), buf_entry(1, gated.list)],
+                );
+            }
             self.cap = need;
             self.placed.forget();
         }
@@ -343,14 +332,10 @@ impl Generator {
             // The boxes held, at every zoom, then each brick handed, at
             // its clip level's and coarser.
             let mut boxes = [0u32; (generation::BOX_CAP * generation::BOX_WORDS) as usize];
-            let fresh = generation.fresh.iter().map(|f| {
-                let cell = f[clipmap::FILL_CELL as usize];
-                let q = clipmap::brick_of_first([
-                    f[clipmap::FILL_FIRST as usize],
-                    f[clipmap::FILL_FIRST as usize + 1],
-                ]);
-                (generation::brick_box(cell, q), cell)
-            });
+            let fresh = generation
+                .fresh
+                .iter()
+                .map(|&(cell, q)| (generation::brick_box(cell, q), cell));
             let pending_boxes = self.pending_boxes[..self.marked]
                 .iter()
                 .map(|&b| (b, generation::EVERY));
@@ -384,10 +369,14 @@ impl Generator {
             put(generation::LIST_EVERY, u32::from(self.stale));
             put(generation::LIST_BOXES, n as u32);
             put(generation::LIST_PARTS, 0);
-            g.write_buf(self.list, 0, bytes(&head));
             g.write_buf(
                 self.list,
-                generation::BOXES_AT * 4,
+                sequence::OPEN_GENERATION_LIST.to_at(),
+                bytes(&head),
+            );
+            g.write_buf(
+                self.list,
+                sequence::OPEN_GENERATION_BOXES.to_at(),
                 bytes(&boxes[..n * generation::BOX_WORDS as usize]),
             );
         }
@@ -421,7 +410,7 @@ impl Generator {
         ]);
         c.read(f.drawing);
         c.read(meshes);
-        c.read(&f.translation);
+        c.read(&f.anchor);
         c.mark(self.marking || placed_moved || regroup);
         self.counting = !c.end();
         if !self.counting {
@@ -432,54 +421,66 @@ impl Generator {
         g.write_buf(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
         // Each region's uniform, its index the lanes' base until the args
         // pass adds its first slot: a model's group drawn about the anchor,
-        // an impostor's its group's layer too.
+        // on Q3 and so with no remainder, an impostor's its group's layer too.
         let mut uniforms = [0u32; (drawn::UNIFORM_WORDS * drawn::REGIONS) as usize];
-        let [x, y, z] = f.translation;
         for r in 0..drawn::REGIONS {
-            let u = (r * drawn::UNIFORM_WORDS) as usize;
-            let layer = if r % 2 == 1 { r / 2 } else { 0 };
-            uniforms[u..u + DRAW_FLOATS].copy_from_slice(&[
-                x.to_bits(),
-                y.to_bits(),
-                z.to_bits(),
-                0,
-                self.cap,
-                1.0f32.to_bits(),
-                layer,
-                drawn::COLUMNS * self.cap,
-            ]);
+            let u = &mut uniforms[(r * drawn::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
+            u[instance::Q..instance::Q + 3].copy_from_slice(&f.anchor.map(|v| v as u32));
+            u[instance::STRIDE] = self.cap;
+            u[instance::OPACITY] = 1.0f32.to_bits();
+            u[instance::LAYER] = if r % 2 == 1 { r / 2 } else { 0 };
+            u[instance::IDX] = drawn::COLUMNS * self.cap;
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
 
+    /// The frame's buffer `buf` (frame/shader/group.rs `BUFFERS`) the generator holds, 0 for
+    /// another's.
+    fn buf_of(&self, buf: u32) -> u32 {
+        match buf {
+            GENERATION_LIST => self.list,
+            GENERATION_ARGS => self.args,
+            GATED_SCREEN_ARGS => self.gated[Gate::Screen as usize].args,
+            GATED_LIGHT_ARGS => self.gated[Gate::Light as usize].args,
+            _ => 0,
+        }
+    }
+
     fn regroup(&mut self, g: &Gpu, world: World) {
+        let entries = |ids: &[(u32, u32)]| -> Vec<Entry> {
+            ids.iter()
+                .map(|&(binding, b)| buf_entry(binding, b))
+                .collect()
+        };
         let group = |pipeline: &Pipeline, ids: &[(u32, u32)]| {
-            let mut entries = [buf_entry(0, 0); 9];
-            for (k, &(binding, b)) in ids.iter().enumerate() {
-                entries[k] = buf_entry(binding, b);
-            }
-            g.bind_group(pipeline.layouts[0], &entries[..ids.len()])
+            g.bind_group(pipeline.layouts[0], &entries(ids))
+        };
+        let framed = |pipeline: &Pipeline, table: &access::Group, ids: &[(u32, u32)]| {
+            g.frame_group(
+                pipeline.layouts[0],
+                table,
+                |b| self.buf_of(b),
+                &entries(ids),
+            )
         };
         for id in self.groups {
             release(id);
         }
         let [eye, clipmap, ground, shards, overwrites, pool] = world;
-        self.groups = [
-            group(
+        let groups = [
+            framed(
                 &self.mark,
-                &[
-                    (1, clipmap),
-                    (9, self.records),
-                    (11, self.list),
-                    (12, self.zooms),
-                ],
+                &GENERATION_MARK_BINDS,
+                &[(1, clipmap), (9, self.records), (12, self.zooms)],
             ),
-            group(
+            framed(
                 &self.thin,
-                &[(9, self.records), (10, self.rows), (11, self.list)],
+                &GENERATION_THIN_BINDS,
+                &[(9, self.records), (10, self.rows)],
             ),
-            group(
+            framed(
                 &self.generate,
+                &GENERATION_BINDS,
                 &[
                     (0, eye),
                     (1, clipmap),
@@ -489,7 +490,6 @@ impl Generator {
                     (7, pool),
                     (9, self.records),
                     (10, self.rows),
-                    (11, self.list),
                 ],
             ),
             group(
@@ -502,13 +502,14 @@ impl Generator {
                     (14, self.regions),
                 ],
             ),
-            group(
+            framed(
                 &self.args_pipeline,
+                &GENERATION_ARGS_OF_BINDS,
                 &[
                     (0, self.meshes),
                     (1, self.regions),
-                    (2, self.args),
                     (3, self.uniforms),
+                    (15, self.instances),
                 ],
             ),
             group(
@@ -523,6 +524,7 @@ impl Generator {
                 ],
             ),
         ];
+        self.groups = groups;
     }
 
     /// No decor this frame: none generated, none drawn, and the next generates
@@ -587,13 +589,13 @@ impl Generator {
                 1,
             );
             let listed = [
-                (&self.thin, self.groups[1], generation::THIN_ARGS),
-                (&self.generate, self.groups[2], generation::GENERATE_ARGS),
+                (&self.thin, self.groups[1], &sequence::THIN),
+                (&self.generate, self.groups[2], &sequence::GENERATE),
             ];
-            for (pipeline, group, args) in listed {
+            for (pipeline, group, step) in listed {
                 g.set_pipeline(pass, pipeline.id);
                 g.set_bind_group(pass, 0, group, &[]);
-                g.dispatch_indirect(pass, self.list, args * 4);
+                g.dispatch_indirect(pass, self.list, step.at());
             }
         }
         if !self.counting {
@@ -644,8 +646,66 @@ impl Generator {
             instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
+            gated: self.gated.map(|gated| (gated.group, gated.args)),
+            gate: None,
         })
     }
+
+    /// The instances a frame draws through `gate`, those whose ball meets the box of the
+    /// claimed tiles of `tiles` (claimed_box.wgsl, decor_gate.wgsl) as the frame's words
+    /// `frame` see it, once the tiles' marks are made: timed with the marks.
+    pub fn gate(&self, ctx: &mut RenderContext, gate: Gate, frame: u32, tiles: &Tiles) {
+        if !(self.on && self.instances != 0) {
+            return;
+        }
+        let claimed_box = tiles.dispatch_claimed_box(ctx);
+        let gated = &self.gated[gate as usize];
+        let g = ctx.g;
+        let table = match gate {
+            Gate::Screen => &GATE_SCREEN_BINDS,
+            Gate::Light => &GATE_LIGHT_BINDS,
+        };
+        let group = g.frame_group(
+            self.gate.layouts[0],
+            table,
+            |b| self.buf_of(b),
+            &[
+                buf_entry(0, frame),
+                buf_entry(1, self.uniforms),
+                buf_entry(3, self.instances),
+                buf_entry(4, gated.list),
+                buf_entry(6, claimed_box),
+                buf_entry(7, self.regions),
+                buf_entry(31, tiles.this_frame().1),
+            ],
+        );
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(tiles.span()).pass());
+        g.set_bind_group(pass, 0, group, &[]);
+        g.set_pipeline(pass, self.gate_args.id);
+        g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
+        g.set_pipeline(pass, self.gate.id);
+        g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
+        g.end(pass);
+        release(group);
+    }
+}
+
+/// The gate a frame draws decor through (`Generator::gate`): the screen's claimed tiles, or
+/// the light map's. Both are drawn in one frame, so each keeps its own list.
+#[derive(Clone, Copy)]
+pub enum Gate {
+    Screen,
+    Light,
+}
+
+/// What a frame draws through a gate in place of the instances: the instances that meet its
+/// claimed tiles, listed at each region's place, the regions' args with them, and the draws'
+/// group over that list.
+#[derive(Clone, Copy)]
+struct Gated {
+    list: u32,
+    args: u32,
+    group: u32,
 }
 
 /// The decor compacted as a reader beside the draws reads it
@@ -666,9 +726,25 @@ pub struct IndirectDraw {
     pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
+    /// The group and the args a frame draws by through each gate (`Generator::gate`).
+    pub gated: [(u32, u32); 2],
+    /// The gate it is drawn through, none where it is drawn whole.
+    pub gate: Option<Gate>,
 }
 
 impl IndirectDraw {
+    /// The draw a frame makes through `gate`: its list and args in place of the instances'
+    /// own (`Generator::gate`).
+    pub fn through_gate(self, gate: Gate) -> IndirectDraw {
+        let (instances_group, args) = self.gated[gate as usize];
+        IndirectDraw {
+            instances_group,
+            args,
+            gate: Some(gate),
+            ..self
+        }
+    }
+
     /// Where region `region`'s indirect args lie, in bytes.
     pub fn args_at(&self, region: u32) -> u32 {
         drawn::ARGS_WORDS * 4 * region
@@ -681,7 +757,7 @@ impl IndirectDraw {
 }
 
 /// Box `b` held among the `holding` boxes of `pending_boxes`, past the room joined
-/// into the last: what decor's generation (`Generator`) and the observed pyramid's
+/// into the last: what decor's generation (`Generator`) and the node cache's
 /// forgetting (ray/cast.rs) are asked over.
 pub(crate) fn hold(pending_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
     if *holding < pending_boxes.len() {

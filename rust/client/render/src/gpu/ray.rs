@@ -10,6 +10,7 @@ mod cast;
 mod count;
 mod ground;
 mod raster;
+mod schedule;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
@@ -19,13 +20,10 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
-pub use cast::{Cast, Overwrites};
+pub use cast::{Cast, LightReads, Overwrites};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
-pub use ground::{
-    BrickFill, CellsBack, GroundBricks, OnResident, Resident, TerrainUpload, TerrainWrite,
-    RECORD_ROOMS_BYTES,
-};
-use ground::{GroundBuffers, GroundPipelines};
+use ground::GroundBuffers;
+pub use ground::{BrickWrite, GroundBricks, TerrainUpload, TerrainWrite};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
 /// samples that stand: the rays, their depth and where they met the world
@@ -51,16 +49,9 @@ pub struct RaysPass {
     /// until the renderer hands them.
     lit: Vec<Entry>,
     looks: u32,
-    /// The ground's passes, made with the cast's (`make`); its buffers,
-    /// made the first turn it is handed a brick (`hand`).
-    ground_built: Option<GroundPipelines>,
+    /// The ground's buffers, made the first turn it is handed a brick (`hand`).
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
-    /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the rays standing (`standing`), the pixels cast
-    /// again over the samples that stand (`px`), or a cast run
-    /// (`cast`).
-    pub kind: FrameKind,
 }
 
 impl RaysPass {
@@ -80,23 +71,23 @@ impl RaysPass {
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
-            ground_built: None,
             ground: None,
             cast: None,
-            kind: FrameKind::plain,
         }
     }
 
     /// Whether this frame casts the pixels' rays (`casts_px`).
     pub fn casts_px(&self) -> bool {
-        casts_px(self.kind)
+        casts_px(self.kind())
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
-    /// made again: the group is made again over them when next drawn.
+    /// made again or let go: the group over the last is let go with it, and
+    /// made again over them when the cast next prepares (`regroup`).
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        self.bindings = [0; 4];
+        release(self.group);
+        (self.group, self.bindings) = (0, [0; 4]);
     }
 
     /// The tiles this frame casts and draws, `cnt` of them, handed before
@@ -127,7 +118,7 @@ impl RaysPass {
     }
 
     pub fn draw(&self, pass: &mut TrackedRenderPass) {
-        if self.kind == FrameKind::plain || self.group == 0 {
+        if self.kind() == FrameKind::plain || self.group == 0 {
             return;
         }
         pass.set_pipeline(self.pipeline.id);

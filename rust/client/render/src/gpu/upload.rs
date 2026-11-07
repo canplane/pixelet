@@ -1,67 +1,14 @@
 // pxl-render/gpu/upload.rs
 
-//! The draw list's uploads on the device by the list's handle, and its
-//! records by pipeline, as the renderer and its passes read them.
+//! The draw list's uploads on the device by the list's handle, as the
+//! renderer and its passes read them.
 
-use xpute_guest::global::Global;
-use xpute_guest::mem;
+use xpute_core::global::Global;
+use xpute_core::mem;
 
-use crate::frame::draw;
-use crate::frame::draw::DRAW_WORDS;
-use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
+use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};
-
-/// Records sorted by pipeline with a stable counting sort, so a pass walks
-/// only its own records.
-pub struct Draws<'a> {
-    pub(crate) records: &'a [[u32; DRAW_WORDS]],
-    order: &'a [u32],
-    starts: [u32; PIPELINES as usize + 1],
-}
-
-impl<'a> Draws<'a> {
-    pub(crate) fn sort(records: &'a [[u32; DRAW_WORDS]], order: &'a mut Vec<u32>) -> Draws<'a> {
-        let mut starts = [0u32; PIPELINES as usize + 1];
-        for d in records {
-            if let Some(n) = starts.get_mut(d[4] as usize + 1) {
-                *n += 1;
-            }
-        }
-        for p in 0..PIPELINES as usize {
-            starts[p + 1] += starts[p];
-        }
-        order.clear();
-        order.resize(starts[PIPELINES as usize] as usize, 0);
-        let mut next = starts;
-        for (i, d) in records.iter().enumerate() {
-            if let Some(at) = next.get_mut(d[4] as usize).filter(|_| d[4] < PIPELINES) {
-                order[*at as usize] = i as u32;
-                *at += 1;
-            }
-        }
-        Draws {
-            records,
-            order,
-            starts,
-        }
-    }
-
-    pub fn of(
-        &self,
-        pipeline: u32,
-    ) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
-        let p = (pipeline as usize).min(PIPELINES as usize);
-        let end = if p < PIPELINES as usize {
-            self.starts[p + 1]
-        } else {
-            self.starts[p]
-        };
-        let records = self.records;
-        self.order[self.starts[p] as usize..end as usize]
-            .iter()
-            .map(move |&i| &records[i as usize])
-    }
-}
+use crate::gpu::draw;
 
 const EMPTY: u32 = 0;
 
@@ -82,7 +29,7 @@ pub struct Uploads {
     idx_cnt: &'static mut [u32],
     buf: &'static mut [u32],
     group: &'static mut [u32],
-    /// The most the owners can hold live (kernel door/layout.rs `MAX_LIVE_UPLOADS`).
+    /// The most the owners can hold live (pxl-core door/layout.rs `MAX_LIVE_UPLOADS`).
     live: u32,
     pub(crate) cnt: u32,
     pub(crate) bytes: u64,
@@ -104,7 +51,7 @@ fn mem(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const UPLOAD_COLUMNS: usize = 7;
 
-/// The table's columns for `live` uploads, then the draw list's (frame/draw.rs `lists_bytes`).
+/// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
     (UPLOAD_COLUMNS * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
 }
@@ -133,7 +80,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         layout: None,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { draw::set_lists(at + (UPLOAD_COLUMNS * slots * 4) as u32, live) };
+    unsafe { draw::set_lists(at as usize + UPLOAD_COLUMNS * slots * 4, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
@@ -300,7 +247,10 @@ impl Uploads {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
             let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
-            let id = g.bind_group(layout, &[buf_entry(0, self.buf[i])]);
+            let id = g.bind_group(
+                layout,
+                &[buf_entry(0, self.buf[i]), buf_entry(1, self.buf[i])],
+            );
             self.group[i] = id;
         }
         Some(self.group[i])

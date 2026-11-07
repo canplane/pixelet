@@ -7,7 +7,16 @@
 // mark wrote off the clipmap's row this frame; the row is not read again, so a head that names
 // another brick lays that brick's candidates. What it reads is the decor's hash alone.
 
-@group(0) @binding(9) var<storage, read_write> records: array<atomic<u32>>;
+/// Decor's records (pxl-content `generation::SLOTS_AT`): the entries' heads atomic, each
+/// decor's count among them, which this pass's threads add to; then the records plain. A
+/// record's words are written by the one thread whose add to its decor's count took it, and
+/// read by the passes after.
+struct Records {
+  heads: array<atomic<u32>, SLOTS_AT>,
+  words: array<u32>,
+}
+
+@group(0) @binding(9) var<storage, read_write> records: Records;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
 @compute @workgroup_size(LANES)
@@ -17,7 +26,7 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let j = pair_decor(pair);
   let cell = FIRST_CELL + brick / CLIP_ENTRIES;
   let head = brick * HEAD_WORDS;
-  let q = vec2<i32>(i32(atomicLoad(&records[head])), i32(atomicLoad(&records[head + 1u])));
+  let q = vec2<i32>(i32(atomicLoad(&records.heads[head])), i32(atomicLoad(&records.heads[head + 1u])));
   let s = LEAF_CELL - cell;
   let corner = (q << vec2<u32>(BRICK_SHIFT + s))
     + vec2<i32>(i32(id.x % BRICK), i32(id.x / BRICK)) * (1i << s);
@@ -32,11 +41,11 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let draws = candidate_draws(j, leaf);
     if (stands_at(j, variant_of(j, draws.y), cell) && retained(j, leaf, draws.x, draws.y)) {
-      let k = atomicAdd(&records[cnt_at(brick, j)], 1u);
+      let k = atomicAdd(&records.heads[cnt_at(brick, j)], 1u);
       if (k < decor_cap(j)) {
-        let r = entry_word(brick, j, k);
-        atomicStore(&records[r + 1u], u32(leaf.x));
-        atomicStore(&records[r + 2u], u32(leaf.y));
+        let r = entry_word(brick, j, k) - SLOTS_AT;
+        records.words[r + 1u] = u32(leaf.x);
+        records.words[r + 2u] = u32(leaf.y);
       }
     }
   }

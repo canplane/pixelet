@@ -13,17 +13,6 @@
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blurred: texture_2d<f32>;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-};
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  var o: VertexOut;
-  o.clip = tile_clip(vi, ii);
-  return o;
-}
-
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
   let fp = vec2i(v.clip.xy);
@@ -70,6 +59,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
     occ = open_acc / open_cnt;
   }
   // To the effects' reach, faded alike before it (effect.wgsl `effect_share`).
-  let share = effect_share(length(at), ao_effect_reach());
+  let share = effect_share(length(at));
   return vec4f(0.0, 0.0, 0.0, (1.0 - pow(occ, AO_INTENSITY)) * share);
 }

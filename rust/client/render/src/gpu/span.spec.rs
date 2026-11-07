@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const GPU_SPAN_NAMES: usize = 32;
+pub const GPU_SPAN_NAMES: usize = 38;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -30,34 +30,40 @@ pub enum GpuSpanName {
     finish = 6,
     marker = 7,
     debug = 8,
-    preview = 9,
-    fill = 10,
-    cast = 11,
+    character = 9,
+    cast = 10,
+    beam_hit = 11,
     beam = 12,
-    sample_hit = 13,
-    sample = 14,
-    sample_box = 15,
-    sraster = 16,
-    px = 17,
-    miss = 18,
-    light_receivers = 19,
-    light_beam = 20,
-    light_sample = 21,
-    light_raster = 22,
-    light_slot = 23,
-    light_hit = 24,
-    light_walk = 25,
-    generate = 26,
-    shadow = 27,
-    face = 28,
-    mark = 29,
-    light_mark = 30,
-    propagate = 31,
+    cell = 13,
+    sample_hit = 14,
+    sample = 15,
+    sample_box = 16,
+    sraster = 17,
+    px = 18,
+    miss = 19,
+    light_receivers = 20,
+    light_draws = 21,
+    light_slide = 22,
+    light_propagate = 23,
+    light_claim = 24,
+    light_beam_hit = 25,
+    light_beam = 26,
+    light_sample = 27,
+    light_raster = 28,
+    light_slot = 29,
+    light_hit = 30,
+    light_walk = 31,
+    generate = 32,
+    shadow = 33,
+    face = 34,
+    mark = 35,
+    light_mark = 36,
+    propagate = 37,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 32] = [
+    pub const ALL: [GpuSpanName; 38] = [
         GpuSpanName::air,
         GpuSpanName::exposure,
         GpuSpanName::ao,
@@ -67,10 +73,11 @@ impl GpuSpanName {
         GpuSpanName::finish,
         GpuSpanName::marker,
         GpuSpanName::debug,
-        GpuSpanName::preview,
-        GpuSpanName::fill,
+        GpuSpanName::character,
         GpuSpanName::cast,
+        GpuSpanName::beam_hit,
         GpuSpanName::beam,
+        GpuSpanName::cell,
         GpuSpanName::sample_hit,
         GpuSpanName::sample,
         GpuSpanName::sample_box,
@@ -78,6 +85,11 @@ impl GpuSpanName {
         GpuSpanName::px,
         GpuSpanName::miss,
         GpuSpanName::light_receivers,
+        GpuSpanName::light_draws,
+        GpuSpanName::light_slide,
+        GpuSpanName::light_propagate,
+        GpuSpanName::light_claim,
+        GpuSpanName::light_beam_hit,
         GpuSpanName::light_beam,
         GpuSpanName::light_sample,
         GpuSpanName::light_raster,
@@ -115,11 +127,9 @@ impl GpuSpanName {
         GpuSpanName::mark,
         GpuSpanName::propagate,
     ];
-    /// The members whose `per_cell` is true, in the JSON's order.
-    pub const PER_CELL: [GpuSpanName; 1] = [GpuSpanName::beam];
 }
 
-pub const LIGHT_MOVED: usize = 4;
+pub const LIGHT_MOVED: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LightMoved {
@@ -127,15 +137,17 @@ pub enum LightMoved {
     slide = 1,
     receivers = 2,
     footprint = 3,
+    world = 4,
 }
 
 impl LightMoved {
     /// Every member, in the JSON's own order.
-    pub const ALL: [LightMoved; 4] = [
+    pub const ALL: [LightMoved; 5] = [
         LightMoved::content,
         LightMoved::slide,
         LightMoved::receivers,
         LightMoved::footprint,
+        LightMoved::world,
     ];
 
     /// The member a number names, or none for a number the set does not

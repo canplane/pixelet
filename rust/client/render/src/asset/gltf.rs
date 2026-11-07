@@ -569,7 +569,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         if node.get("matrix").is_some() {
             local = floats(node.get("matrix"), local);
         } else {
-            compose_trs(&mut local, &translation, &rot, &scale);
+            mat4::compose_trs(&mut local, &translation, &rot, &scale);
         }
         nodes.push(GltfNode {
             parent: parents[i],
@@ -730,46 +730,6 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         return Err(MarshalError::new(Errno::EFBIG));
     }
     Ok(gltf)
-}
-
-/// T × R × S, column-major, from a translation, a unit quaternion and a scale.
-pub fn compose_trs<'a>(
-    out: &'a mut Mat4,
-    t: &[f64; 3],
-    q: &[f64; 4],
-    s: &[f64; 3],
-) -> &'a mut Mat4 {
-    let [x, y, z, w] = *q;
-    let (xx, yy, zz, xy, xz, yz, wx, wy, wz) = (
-        x * x,
-        y * y,
-        z * z,
-        x * y,
-        x * z,
-        y * z,
-        w * x,
-        w * y,
-        w * z,
-    );
-    *out = [
-        (1.0 - 2.0 * (yy + zz)) * s[0],
-        2.0 * (xy + wz) * s[0],
-        2.0 * (xz - wy) * s[0],
-        0.0,
-        2.0 * (xy - wz) * s[1],
-        (1.0 - 2.0 * (xx + zz)) * s[1],
-        2.0 * (yz + wx) * s[1],
-        0.0,
-        2.0 * (xz + wy) * s[2],
-        2.0 * (yz - wx) * s[2],
-        (1.0 - 2.0 * (xx + yy)) * s[2],
-        0.0,
-        t[0],
-        t[1],
-        t[2],
-        1.0,
-    ];
-    out
 }
 
 /// Every node's world matrix at rest; identity for a node off the scene.

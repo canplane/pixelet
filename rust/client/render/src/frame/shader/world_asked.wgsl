@@ -17,29 +17,34 @@ fn world_asked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let zoom = asked[a + 1u];
   let c = vec3<i32>(i32(asked[a + 2u]), i32(asked[a + 3u]), i32(asked[a + 4u]));
   let at = vec4<u32>(asked[a + 7u], asked[a + 8u], asked[a + 9u], asked[a + 10u]);
-  var r = Answer(0u, vec2<u32>(0u), vec4<u32>(0u));
+  var kind = 0u;
+  var asset = vec2<u32>(0u);
+  var handed = vec4<u32>(0u);
   switch op {
     case 0u: {
       let carve = vec4<i32>(i32(asked[a + 11u]), i32(asked[a + 12u]), i32(asked[a + 13u]), i32(asked[a + 14u]));
       let hide = vec4<i32>(i32(asked[a + 15u]), i32(asked[a + 16u]), i32(asked[a + 17u]), i32(asked[a + 18u]));
-      r = world_node(at, zoom, c, asked[a + 5u], asked[a + 6u], carve, hide);
+      let r = world_node(at, zoom, c, asked[a + 5u], asked[a + 6u], carve, hide);
+      kind = r.kind;
+      asset = r.asset;
+      handed = r.handed;
     }
     case 1u: {
-      r.handed = world_root(zoom, c);
+      handed = world_root(zoom, c);
     }
     case 2u: {
-      r.handed = world_child(at, zoom, c);
+      handed = world_child(at, zoom, c);
     }
     default: {
-      r.asset.x = hollow(zoom, c);
+      asset.x = hollow(zoom, c);
     }
   }
   let t = id.x * 8u;
-  told[t] = r.kind;
-  told[t + 1u] = r.asset.x;
-  told[t + 2u] = r.asset.y;
-  told[t + 3u] = r.handed.x;
-  told[t + 4u] = r.handed.y;
-  told[t + 5u] = r.handed.z;
-  told[t + 6u] = r.handed.w;
+  told[t] = kind;
+  told[t + 1u] = asset.x;
+  told[t + 2u] = asset.y;
+  told[t + 3u] = handed.x;
+  told[t + 4u] = handed.y;
+  told[t + 5u] = handed.z;
+  told[t + 6u] = handed.w;
 }

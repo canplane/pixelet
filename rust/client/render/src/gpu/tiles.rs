@@ -1,7 +1,7 @@
 // pxl-render/gpu/tiles.rs
 
 //! Tiles a frame not drawn whole draws again by, the screen's and the light's
-//! map's alike (pxl-engine `screen`): `side` pixels a side, each a word, the
+//! map's alike (word.rs `screen`): `side` pixels a side, each a word, the
 //! number of the frame it last changed in (`changed_at`), the GPU's, as a
 //! light tile's word names the cast that read it. The CPU hands each frame
 //! at most one mark (`mark_of`), the clouds' sheets on the screen, and a pass
@@ -18,17 +18,19 @@
 //! (`box_args`). A target drawn through its gate numbers its stencil here
 //! (`gate`).
 
-use pxl_engine::screen::{self, TILES_WORDS};
+use crate::frame::shader::group::{
+    BOX_ARGS_GROUP, CLAIMED_BOX_GROUP, LIGHT_BOX_ARGS, LIGHT_BOX_BINDS, SCREEN_MARK_GROUP,
+};
 
-use crate::frame::shader::part::{SHADER_BOX_ARGS, SHADER_SCREEN_MARK};
-use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
+/// The screen's tiles' pixels a side (word.rs `screen::TILE`).
+pub use crate::frame::shader::word::screen::TILE as SIDE;
+use crate::frame::shader::word::screen::{self, TILES_WORDS};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
+    buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-/// The screen's tiles' pixels a side (pxl-engine `screen::TILE`).
-pub use pxl_engine::screen::TILE as SIDE;
 
 /// The pixels a mark is grown by each way on the screen: the resolve's
 /// pixels beside it and a face's growth (pxl-engine param.rs
@@ -62,20 +64,8 @@ pub fn mark_of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32, margin: f32)
     })
 }
 
-/// What the marks' pass binds (screen_mark.wgsl): its mark and head, and
-/// the tiles' words.
-const MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
-
-/// What the box's args' pass binds (box_args.wgsl): the marks' box and the
-/// args.
-const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
-
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
-const _: () = assert!(
-    binds(&[SHADER_BOX_ARGS], &BOX_ARGS_GROUP) && binds(&[SHADER_SCREEN_MARK], &MARK_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
+/// The claimed tiles' box before its pass: none, its first past its last.
+const NO_CLAIMED_BOX: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
 
 /// The numbers a frame through the gate writes into its claimed tiles'
 /// stencil, 1 on, the stencil's eight bits but 0, which a frame drawn whole
@@ -95,17 +85,22 @@ pub struct Tiles {
     /// (`mark`).
     uniform: u32,
     /// Each tile's word, a row after another, the GPU's; the target's
-    /// pixels across and down; this frame's number, and that of the last
-    /// frame a mark was handed in, every tile where it was drawn whole.
+    /// pixels across and down; this frame's number.
     changed_at: u32,
     size: [u32; 2],
     now: u32,
-    marked_at: u32,
+    /// The last frame a mark was handed or drawn in that asks the frames of its claim: one
+    /// not made by what the scene animates alone, every tile where it was drawn whole
+    /// (`asking`).
+    asked_at: u32,
     /// The marks' pass; its uniform, the mark's tiles and its head; and the
     /// tiles this frame's mark sets, 0 where it sets none.
     mark: Pipeline,
     mark_uniform: u32,
     mark_cnt: u32,
+    /// The marks' pass's group over its uniform and the words, set with the
+    /// words (`size`).
+    mark_group: Group,
     /// The tiles the frame's marks cover, from the first to past the last,
     /// four words the GPU's: the one handed, widened by the draws that mark
     /// (tile_mark.wgsl), which bind it whatever reads it.
@@ -118,6 +113,10 @@ pub struct Tiles {
     /// The number the last frame through the gate wrote into the claimed
     /// tiles' stencil, 0 where the target was drawn whole (`gate`).
     gate_number: u32,
+    /// The box of the tiles claimed, from the first across and down to the last, four words
+    /// the GPU's, and the pass that sets it (`dispatch_claimed_box`).
+    claimed_box: u32,
+    claimed_box_pass: Pipeline,
 }
 
 impl Tiles {
@@ -134,15 +133,21 @@ impl Tiles {
             word_bytes(4),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
+        let uniform = g.buf(
+            word_bytes(TILES_WORDS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
         let box_args = (claimed_for == 1).then(|| {
             let args = g.buf(
                 word_bytes(4),
                 buffer_usage::STORAGE | buffer_usage::INDIRECT,
             );
-            let pass = pipelines.build_compute(g, SHADER_BOX_ARGS, &BOX_ARGS_GROUP);
-            let group = g.bind_group(
+            let pass = pipelines.build_compute(g, COMPUTE_BOX_ARGS, &BOX_ARGS_GROUP);
+            let group = g.frame_group(
                 pass.layouts[0],
-                &[buf_entry(0, marks_box), buf_entry(1, args)],
+                &LIGHT_BOX_BINDS,
+                |b| if b == LIGHT_BOX_ARGS { args } else { 0 },
+                &[buf_entry(0, marks_box), buf_entry(2, uniform)],
             );
             (args, pass, group)
         });
@@ -150,33 +155,38 @@ impl Tiles {
             side,
             claimed_for,
             span,
-            uniform: g.buf(
-                word_bytes(TILES_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
+            uniform,
             changed_at: 0,
             size: [0; 2],
             now: 0,
-            marked_at: 0,
-            mark: pipelines.build_compute(g, SHADER_SCREEN_MARK, &MARK_GROUP),
+            asked_at: 0,
+            mark: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &SCREEN_MARK_GROUP),
             mark_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             mark_cnt: 0,
+            mark_group: Group::default(),
             marks_box,
             box_args,
             gate_number: 0,
+            claimed_box: g.buf(
+                word_bytes(4),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            ),
+            claimed_box_pass: pipelines.build_compute(g, COMPUTE_CLAIMED_BOX, &CLAIMED_BOX_GROUP),
         }
     }
 
-    pub fn release(self) {
+    pub fn release(mut self) {
+        self.mark_group.release();
         let (args, group) = self.box_args.map_or((0, 0), |(a, _, g)| (a, g));
         for id in [
             self.uniform,
             self.changed_at,
             self.mark_uniform,
             self.marks_box,
+            self.claimed_box,
             args,
             group,
         ] {
@@ -195,18 +205,30 @@ impl Tiles {
         let [across, down] = self.squares();
         release(self.changed_at);
         self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
+        let entries = [
+            buf_entry(0, self.mark_uniform),
+            buf_entry(1, self.changed_at),
+        ];
+        self.mark_group.set(g, self.mark.layouts[0], &entries);
     }
 
     /// The mark this frame hands, the frame numbered anew: where it is
     /// drawn through the gate (`gated`), the tiles `mark` covers
     /// (`mark_of`); else none where nothing it draws moved (`quiet`), one of
-    /// every tile where anything did. The tiles the frame draws: the claimed alone where it is gated,
+    /// every tile where anything did. A mark through the gate in a turn the
+    /// scene's animation stepped (`animated`) is that animation's, and asks no
+    /// frame of its claim (`asking`). The tiles the frame draws: the claimed alone where it is gated,
     /// else every one. Set on the GPU, before anything reads them, by
     /// `dispatch_marks`; but a whole frame's stamp where a tile is claimed
     /// the frame it changed alone (`claimed_for` 1, the map's): that frame
     /// claims every tile by its uniform, and a later one through the gate
     /// only those set in it, so no frame reads the stamp.
-    pub fn mark(&mut self, g: &Gpu, (gated, quiet): (bool, bool), mark: Option<Mark>) {
+    pub fn mark(
+        &mut self,
+        g: &Gpu,
+        (gated, quiet, animated): (bool, bool, bool),
+        mark: Option<Mark>,
+    ) {
         let squares = self.squares();
         self.now = self.now.wrapping_add(1);
         let whole = !gated && !quiet;
@@ -223,8 +245,8 @@ impl Tiles {
                 })
                 .filter(|t| t[2] > t[0] && t[3] > t[1])
         };
-        if tiles.is_some() {
-            self.marked_at = self.now;
+        if tiles.is_some() && !(gated && animated) {
+            self.asked_at = self.now;
         }
         let stamped = tiles.filter(|_| gated || self.claimed_for > 1);
         self.mark_cnt = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
@@ -252,19 +274,39 @@ impl Tiles {
             return;
         }
         let g = ctx.g;
-        let group = g.bind_group(
-            self.mark.layouts[0],
-            &[
-                buf_entry(0, self.mark_uniform),
-                buf_entry(1, self.changed_at),
-            ],
-        );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
-        g.set_bind_group(pass, 0, group, &[]);
+        g.set_bind_group(pass, 0, self.mark_group.id(), &[]);
         g.set_pipeline(pass, self.mark.id);
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
+    }
+
+    /// The box of the tiles this frame claims, once its marks are made, set by a thread a tile
+    /// (claimed_box.wgsl): four words the GPU's, timed with the marks.
+    pub fn dispatch_claimed_box(&self, ctx: &mut RenderContext) -> u32 {
+        let g = ctx.g;
+        g.write_buf(self.claimed_box, 0, bytes(&NO_CLAIMED_BOX));
+        let group = g.bind_group(
+            self.claimed_box_pass.layouts[0],
+            &[
+                buf_entry(0, self.claimed_box),
+                buf_entry(30, self.changed_at),
+                buf_entry(31, self.uniform),
+            ],
+        );
+        let [across, down] = self.squares();
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
+        g.set_bind_group(pass, 0, group, &[]);
+        g.set_pipeline(pass, self.claimed_box_pass.id);
+        g.dispatch(pass, (across * down).div_ceil(64), 1, 1);
+        g.end(pass);
         release(group);
+        self.claimed_box
+    }
+
+    /// The span the marks' passes are timed in, and what reads the marks beside them.
+    pub fn span(&self) -> GpuSpanName {
+        self.span
     }
 
     /// The words and the uniform as this frame draws them, the claimed alone
@@ -338,7 +380,7 @@ impl Tiles {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words (pxl-engine `screen::TILES_WORDS`) for the
+    /// The uniform's words (word.rs `screen::TILES_WORDS`) for the
     /// target, a quad grown by `grow` of its pixels, in this frame, a tile
     /// claimed for `claimed_for` frames once changed,
     /// and a tile's side, as build.rs's `Tiles` reads them (tile_word.wgsl).
@@ -359,12 +401,15 @@ impl Tiles {
         self.claimed_for
     }
 
-    /// Whether a tile changed so lately it has frames left of its claim but
-    /// this one: a mark was handed, or drawn (`marked_in`), so lately its
-    /// tile is claimed under a claim a frame shorter (`screen::claimed`).
-    pub fn claiming(&self) -> bool {
-        let age = screen::age(self.now, self.marked_at);
-        screen::claimed(age, self.claimed_for.saturating_sub(1))
+    /// Whether a tile changed, by a mark that asks the frames of its claim, so lately it has
+    /// frames left of its claim but this one: handed or drawn (`marked_in`), so lately its
+    /// tile is claimed under a claim a frame shorter (`screen::claimed`). A tile changed by
+    /// what the scene animates alone asks none.
+    pub fn asking(&self) -> bool {
+        screen::claimed(
+            screen::age(self.now, self.asked_at),
+            self.claimed_for.saturating_sub(1),
+        )
     }
 
     /// This frame's number.
@@ -375,10 +420,11 @@ impl Tiles {
     /// A mark a pass beside set in the frame numbered `at`, the draws that
     /// changed drawn and the propagation their frame's (gpu/pass/mark.rs,
     /// gpu/propagate.rs): the tiles gather from it as from one handed, where it
-    /// is later than the last.
-    pub fn marked_in(&mut self, at: u32) {
-        if screen::age(self.now, at) < screen::age(self.now, self.marked_at) {
-            self.marked_at = at;
+    /// is later than the last, and ask its frames unless the scene's animation
+    /// made it (`animated`).
+    pub fn marked_in(&mut self, at: u32, animated: bool) {
+        if !animated && screen::age(self.now, at) < screen::age(self.now, self.asked_at) {
+            self.asked_at = at;
         }
     }
 }
