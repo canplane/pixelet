@@ -28,7 +28,7 @@ const INIT: Snapshot = {
   over_marker: false,
   settings: [],
   division: [],
-  previews: [],
+  character_surfaces: [],
   refused_files: [],
   stall: null,
   renderer_progress: 0,

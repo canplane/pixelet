@@ -249,7 +249,7 @@ pub fn remove(at: Octant) {
 /// shows it, and what it removes the turn hands to what is drawn to leave
 /// out (`edits`).
 #[derive(Clone, Copy, Default)]
-pub struct Pending {
+pub struct Preview {
     pub object: Option<Entry>,
     /// The cube the edit fills or takes.
     pub zoom: Zoom,
@@ -264,14 +264,14 @@ pub struct Pending {
     pub edits: RenderEdits,
 }
 
-static PENDING: Global<Pending> = Global::new();
+static PREVIEW: Global<Preview> = Global::new();
 
-pub fn pending() -> Pending {
-    *PENDING.get(Pending::default)
+pub fn preview() -> Preview {
+    *PREVIEW.get(Preview::default)
 }
 
 /// Whether what the edit leaves out of what is drawn changed.
-pub fn pending_step() -> bool {
+pub fn preview_step() -> bool {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
@@ -290,7 +290,7 @@ pub fn pending_step() -> bool {
     let (blocked, blocked_key) = match (&hovered, asset) {
         (Some(h), Some((asset, _))) => {
             let blocked_key = Some((asset, zoom, *h, world.revision()));
-            let was = *PENDING.get(Pending::default);
+            let was = *PREVIEW.get(Preview::default);
             let same = was.blocked_key == blocked_key
                 && !changes::within(placement_reads(asset, zoom, h), &[]);
             (
@@ -320,8 +320,8 @@ pub fn pending_step() -> bool {
             .and_then(|s| s.generated_in()),
     };
     let was = core::mem::replace(
-        PENDING.get(Pending::default),
-        Pending {
+        PREVIEW.get(Preview::default),
+        Preview {
             object,
             zoom,
             digging,

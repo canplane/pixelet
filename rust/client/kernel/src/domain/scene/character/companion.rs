@@ -491,18 +491,18 @@ pub fn companion_ready() -> [bool; 2] {
 }
 
 /// Each of its characters advanced; whether one a view can see moved
-/// (`Character::tick`), a preview showing the person, the pet or both
-/// (`previewed`, by their group's number).
+/// (`Character::tick`), a surface showing the person, the pet or both
+/// (`on_surface`, by their group's number).
 pub fn companion_animate(
     draw: &mut DrawList,
     models: &Models,
     frame: &Frame,
-    previewed: [bool; 2],
+    on_surface: [bool; 2],
 ) -> bool {
     let mut moved = false;
-    for (c, previewed) in companion().characters.iter_mut().zip(previewed) {
+    for (c, on_surface) in companion().characters.iter_mut().zip(on_surface) {
         if let Some(c) = c {
-            moved |= c.tick(draw, models, frame, previewed);
+            moved |= c.tick(draw, models, frame, on_surface);
         }
     }
     moved
@@ -515,9 +515,9 @@ pub fn companion_draw(draw: &mut DrawList, models: &Models) {
     }
 }
 
-/// Its character of `group` as a preview draws it, and its skin, the image
+/// Its character of `group` as a character surface draws it, and its skin, the image
 /// as the loader has it now; none while either is not in.
-pub fn companion_preview(group: Group) -> Option<(Draw, Image)> {
+pub fn companion_surface_draw(group: Group) -> Option<(Draw, Image)> {
     let c = companion().characters[group as usize].as_ref()?;
-    Some((c.preview_draw(models())?, c.skin()?))
+    Some((c.surface_draw(models())?, c.skin()?))
 }

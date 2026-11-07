@@ -83,7 +83,7 @@ fn split_by_floor() {
 
 /// On Q3, a record's position from the eye is today's translation's, bit
 /// for bit: near the eye, out to the draw distance, at negative
-/// coordinates, a preview's 100,000 units under the eye, and across X's
+/// coordinates, 100,000 units under the eye, and across X's
 /// seam, where today's needs the copy nearest the eye.
 #[test]
 fn on_q3_as_translated() {

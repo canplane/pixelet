@@ -1,4 +1,4 @@
-// pxl-render/gpu/pass/preview.test.rs
+// pxl-render/gpu/pass/character.test.rs
 
 use super::*;
 
@@ -15,7 +15,7 @@ fn a_clear_encodes_back_to_the_shells_bytes() {
     // level, a byte stays itself but at the dither's very ends.
     for v in 0..=255u32 {
         let [r, g, b, a] = clear_of(v << 16 | v << 8 | v);
-        assert_eq!(a, 1.0, "a preview shows nothing through");
+        assert_eq!(a, 1.0, "a character surface shows nothing through");
         for c in [r, g, b] {
             assert!((levels(c) - v as f32).abs() < 0.1, "{v} came back {c}");
         }

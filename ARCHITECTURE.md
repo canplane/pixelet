@@ -641,14 +641,14 @@ kernel decides to draw beside the world — the cumulus clouds, the characters,
 the location indicator that shows where the device is, an edit's ghost box, the
 markers and the debug lines. A character's draw also records where it stands
 (`DrawList::stand`), for the shadow map. The rays and the generated decor are
-not in it, nor a preview's character: a preview of the character picker draws
-the companion's person or pet by an eye of its own, its draw handed to it
-apart from the list, so what the world's eye sees of the character moves
-nothing there (`gpu/pass/preview.rs`).
+not in it, nor what a character surface draws: the character picker's canvas
+shows the companion's person or pet by an eye of its own, its draw handed to
+it apart from the list, so what the world's eye sees of the character moves
+nothing there (`gpu/pass/character.rs`).
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
 (`gpu/renderer.rs` `render_frame`), which draws every open surface, the world
-and the character picker's previews, and reports what the frame cost and
+and the character surfaces, and reports what the frame cost and
 whether it wants another turn. Its passes are modules by what they draw
 (`gpu/ray/`, `gpu/pass/`):
 
@@ -667,7 +667,7 @@ occlusion   N8AO found at half resolution off the depth the world pass laid
             and begins again; held where not, the pass drawn as one
             (`gpu/ao.rs`)
 finish      the world's color encoded onto the canvas once
-over        markers → debug lines → previews
+over        markers → debug lines → character surfaces
 ```
 
 The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one

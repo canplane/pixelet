@@ -49,7 +49,7 @@ export const groups = {
       38 as number,
     ],
     skin: 26 as number,
-    /** The catch-up/preview move's clip, by its index in the pack's animations —
+    /** The catch-up move's clip, by its index in the pack's animations —
      * every file of a pack lists them in one order, and Kenney doesn't name this
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,
@@ -112,7 +112,7 @@ export const groups = {
       25 as number,
     ],
     skin: 7 as number,
-    /** The catch-up/preview move's clip, by its index in the pack's animations —
+    /** The catch-up move's clip, by its index in the pack's animations —
      * every file of a pack lists them in one order, and Kenney doesn't name this
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,

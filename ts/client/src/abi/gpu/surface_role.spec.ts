@@ -4,6 +4,6 @@
 
 export const WORLD = 0 as number;
 
-export const PREVIEW = 1 as number;
+export const CHARACTER = 1 as number;
 
 export const NONE = 2 as number;

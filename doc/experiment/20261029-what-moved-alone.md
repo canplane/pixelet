@@ -191,7 +191,7 @@ moves while only the casters do, so the light's side needs no more.
 
 A first try kept, per tile of the light's map, the screen pixels its
 receivers stood on, taken by atomic maxima in the mark and read back. The
-drawn receivers' boxes in it were the tallest decor's sphere, which an
+drawn receivers' boxes in it were the tallest decor's sphere, which a
 character standing in its own shadow's tiles carried into every region; near the
 eye that covered most of the screen and every frame was drawn whole (3113
 of 3411 frames at noon, the region's share past 0.9). It was taken out.

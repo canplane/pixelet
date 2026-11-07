@@ -186,8 +186,8 @@ export interface Snapshot {
   /** The division the pivot is in and every one above it, broad to narrow; empty
    * where the pivot is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
-  /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
-  previews: u32[];
+  /** The surfaces a character is drawn on: its model and skin have arrived. The shell shows one loading until its surface is here. */
+  character_surfaces: u32[];
   /** The files the kernel refused, not of their format, not decoding, or too large for any
    * heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
    * kernel read none of it and writes nothing over it until FS_CHANGED says it is
@@ -214,7 +214,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     over_marker: b.at(8).get<boolean>(),
     settings: Array.from(b.at(9).get<U32Array>()),
     division: list(b.at_branch(10), read_division_part),
-    previews: Array.from(b.at(11).get<U32Array>()),
+    character_surfaces: Array.from(b.at(11).get<U32Array>()),
     refused_files: list(b.at_branch(12), read_refused_file),
     stall: b.at(13).get<Message | null>(),
     renderer_progress: b.at(14).get<f64>(),

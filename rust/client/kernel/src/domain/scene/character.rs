@@ -11,12 +11,12 @@
 //! decor's tiers do, by how much of a camera cell it spans, posed as it
 //! plays down to the model's edge, its pose held below it down to the
 //! impostor's, and nothing below that, as decor smaller than that is none
-//! (`decor::gpu`), and nothing while the eye is the pivot; a preview's
-//! whole, before its own eye (`preview.rs`).
+//! (`decor::gpu`), and nothing while the eye is the pivot; a character
+//! surface's whole, before its own eye (`surface.rs`).
 
 pub mod companion;
 pub mod param;
-pub mod preview;
+pub mod surface;
 
 use pxl_render::frame::draw::{
     scaled_draw, Draw, DrawId, DrawList, Position, Stand, PIPELINE_SKINNED,
@@ -47,7 +47,7 @@ use crate::sys::sched::edge::wake_at;
 pub const CHARACTERS: usize = person::models.len() + pet::models.len();
 
 /// A character's model, registered once at its own height, which a
-/// preview's transform scales.
+/// character surface's draw scales to a unit tall.
 pub const MODELS_MAX: usize = CHARACTERS;
 
 /// The row `number` of `group`: its model, its skin, its height in units and
@@ -232,14 +232,14 @@ impl Character {
     /// display from where it was drawn, or at the next key where its motion
     /// turns back, and asks no frame: the turn is woken for the next step and
     /// draws it, as the location indicator's bob is (`Model::next_step`).
-    /// A preview showing it (`previewed`) sees it whole before its own eye, its clips
+    /// A character surface showing it (`on_surface`) sees it whole before its own eye, its clips
     /// running a frame a step.
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
         models: &Models,
         frame: &Frame,
-        previewed: bool,
+        on_surface: bool,
     ) -> bool {
         let mut dt = frame.delta_s as f32;
         let Some(m) = models.get(self.model) else {
@@ -266,13 +266,13 @@ impl Character {
                 && (self.previous.is_some()
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));
         }
-        let mut moves = world_moves || previewed && moving;
+        let mut moves = world_moves || on_surface && moving;
         let mut asks = moves;
         // A clip alone, seen to move, steps where its pose has gone a pixel
         // of the display from the one drawn, or turns back; a fade runs a
         // frame a step.
         if let Some((p, d)) = playing
-            .filter(|_| world_moves && !previewed && self.previous.is_none())
+            .filter(|_| world_moves && !on_surface && self.previous.is_none())
             .and_then(|p| Some((p, f64::from(length(&p)?))))
         {
             let far = (dist / frame.px_per_unit / f64::from(scale)) as f32;
@@ -311,7 +311,7 @@ impl Character {
             }
         };
         // Seen, its clip holds where its motion is too small to see.
-        let seen = seen || previewed;
+        let seen = seen || on_surface;
         let runs = moves || !seen;
         if runs {
             if let Some(p) = self.cur.as_mut() {
@@ -390,11 +390,11 @@ impl Character {
         );
     }
 
-    /// Its draw as a preview's eye draws it, held by no list: where the walk
+    /// Its draw as a character surface's eye draws it, held by no list: where the walk
     /// stands it, or anywhere while it stands nowhere, as the eye stands at
     /// its point; its model a unit tall, as the eye frames it (pxl-render
-    /// gpu/pass/preview.rs). None while its model is not uploaded.
-    pub fn preview_draw(&self, models: &Models) -> Option<Draw> {
+    /// gpu/pass/character.rs). None while its model is not uploaded.
+    pub fn surface_draw(&self, models: &Models) -> Option<Draw> {
         let m = models.get(self.model).filter(|m| m.handle() != 0)?;
         let (at, rot) = self.transform.map_or(([0.0; 3], 0.0), |t| (t.at, t.rot));
         Some(scaled_draw(

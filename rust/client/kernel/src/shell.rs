@@ -24,7 +24,7 @@ use crate::domain::layer::division::{each_division, naming};
 use crate::domain::layer::object::repository;
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
-use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
+use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::stage::is_screen_drawn;
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -39,6 +39,7 @@ use crate::sys::io::file_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::renderer::renderer_progress;
+use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
@@ -91,7 +92,7 @@ pub struct SnapshotInputs {
     division: Option<(Quadrant, u32)>,
     /// The zoom the view names its divisions to (`named_to`).
     named_to: Option<Zoom>,
-    previews: ([u32; PREVIEWS_MAX], usize),
+    character_surfaces: ([u32; SURFACES], usize),
     stall: Option<Message>,
     declared: bool,
     /// The refused files by root and path, the first `.1` of them.
@@ -109,10 +110,14 @@ fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
     let division = pivot.and_then(|at| naming(&at));
-    let mut previews = ([0u32; PREVIEWS_MAX], 0);
-    for (slot, (surface, ..)) in previews.0.iter_mut().zip(preview_rows()) {
+    let mut character_surfaces = ([0u32; SURFACES], 0);
+    for (slot, (surface, ..)) in character_surfaces
+        .0
+        .iter_mut()
+        .zip(character_surface_rows())
+    {
         *slot = surface;
-        previews.1 += 1;
+        character_surfaces.1 += 1;
     }
     // Shown once a frame went to the screen over a view whose tiles all
     // show, if coarser: a finer tile asked for as the eye moves is not
@@ -143,7 +148,7 @@ fn snapshot_inputs() -> SnapshotInputs {
         }),
         division,
         named_to: named_to(units_per_px_at(dist())),
-        previews,
+        character_surfaces,
         stall: stall(),
         declared: source::top().is_some(),
         refused_files: {
@@ -247,7 +252,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         over_marker: shown.over_marker,
         settings: shown.settings.as_ref().map_or(&[], |s| s),
         division: &|each| division_parts(shown.division, shown.named_to, each),
-        previews: &shown.previews.0[..shown.previews.1],
+        character_surfaces: &shown.character_surfaces.0[..shown.character_surfaces.1],
         refused_files: &|each| {
             for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {
                 each(&RefusedFile { root: *root, path });

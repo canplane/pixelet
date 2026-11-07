@@ -16,7 +16,7 @@ export const GPU_SPAN_NAMES = [
   "finish",
   "marker",
   "debug",
-  "preview",
+  "character",
   "fill",
   "cast",
   "beam_hit",

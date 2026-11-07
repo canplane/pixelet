@@ -101,7 +101,7 @@ export interface WorldSurfaceProps {
   overMarker: boolean;
 }
 
-export interface PreviewSurfaceProps {
+export interface CharacterSurfaceProps {
   surface: SurfaceDriver;
   onOpen: (surface: u32) => () => void;
   openKey: string;

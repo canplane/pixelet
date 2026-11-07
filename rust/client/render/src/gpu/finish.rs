@@ -23,7 +23,7 @@ use crate::gpu::surface::Surface;
 use crate::gpu::tiles::{Tiles, SIDE};
 
 pub struct Finish {
-    /// Onto the canvas alone, a preview's; and onto the canvas and the
+    /// Onto the canvas alone, a character surface's; and onto the canvas and the
     /// picture, the world's.
     pipeline: Pipeline,
     kept: Pipeline,
@@ -35,7 +35,7 @@ pub struct Finish {
     /// The picture at the canvas's size shown on the canvas.
     show: Pipeline,
     /// Its groups (`set_groups`): the finish's of each color it encodes, a
-    /// world's history each or a preview's color, and the show's.
+    /// world's history each or a character surface's color, and the show's.
     groups: [Group; 2],
     show_group: Group,
 }
@@ -121,7 +121,7 @@ impl Finish {
             .map(|(t, _)| t);
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(span);
-        // The group of the history `color` is, a world's; a preview's one
+        // The group of the history `color` is, a world's; a character surface's one
         // color has the first.
         let group = self.groups[usize::from(kept && color == s.history_view[1])].id();
         // A tile's quad grown by a canvas pixel each way, in the world's

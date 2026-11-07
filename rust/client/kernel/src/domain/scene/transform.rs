@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/transform.rs
 
-//! Where an instance stands in its frame, which its holder decides: an
-//! character its figure or its preview stands, the decor the ghost shows.
+//! Where an instance stands in its frame, which what holds it decides: a
+//! character where its walk stands it, the decor the ghost shows.
 
 use pxl_spec::space::coord::v3::V3;
 

@@ -16,11 +16,11 @@
     reason = "generated from the spec"
 )]
 
-/// What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, a character alone, or
 /// nothing yet, as a canvas opens before the shell says what it draws.
 pub mod surface_role {
     pub const WORLD: u32 = 0;
-    pub const PREVIEW: u32 = 1;
+    pub const CHARACTER: u32 = 1;
     pub const NONE: u32 = 2;
 }
 

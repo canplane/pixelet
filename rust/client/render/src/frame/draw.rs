@@ -61,7 +61,7 @@ pub fn drifted(u: &mut [f32], drift: Position) {
 ///   narrowed from the i64 with `as i32`, a truncation mod 2^32, and
 ///   `r = v - q / 256`, so `r` lies in [0, 1/256) on negative coordinates
 ///   too. The position passes no clamp of the world's (pxl-spec `world::at`,
-///   `world::origin`): a preview stands 100,000 units under the eye.
+///   `world::origin`): it holds a point 100,000 units under the eye.
 /// - X goes round: the wrapping difference is the short way round, the
 ///   round 2^32 Q3, so a record on any lap draws where its copy nearest the
 ///   eye does.
@@ -251,7 +251,7 @@ fn uniform(at: Position, words: [f32; 5]) -> [f32; DRAW_FLOATS] {
 }
 
 /// The draw `DrawList::draw_scaled` lists, held by no list: its uniform at
-/// slot 0, as a reader that binds it alone reads it (gpu/pass/preview.rs).
+/// slot 0, as a reader that binds it alone reads it (gpu/pass/character.rs).
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"

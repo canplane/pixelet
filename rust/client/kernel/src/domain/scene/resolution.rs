@@ -335,13 +335,13 @@ fn world() -> Option<&'static mut Surface> {
 }
 
 /// The ratio a surface is drawn at: the display's; the world's scaled as the
-/// setting says; a preview's within its thumbnail.
+/// setting says; a character surface's within its thumbnail.
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {
         surface_role::WORLD => device * scale(),
-        surface_role::PREVIEW => {
-            device.min(param::PREVIEW_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1)))
+        surface_role::CHARACTER => {
+            device.min(param::CHARACTER_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1)))
         }
         _ => device,
     }

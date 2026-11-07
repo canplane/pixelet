@@ -55,6 +55,10 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   a design's `words` as `text`, a marker tap's `Went` as `MarkerHit`.
   `interaction` as `interact` was asked about and not taken: a module is named
   by a noun.
+
+  > Since 2026-11-08, the user: the surface's role `PREVIEW` was not theirs
+  > ("surface role도 내가 승인한거 아냐"). It is `CHARACTER`, as a world surface's
+  > is `WORLD`; preview is the edit's.
 - **Gone**: `WORLD_VIEW`, since the world surface's open and close say the same;
   `INPUT_RECT`, since the view's size is the world surface's (`SURFACE_RESIZE`)
   and a pointer is placed from the canvas's top left.

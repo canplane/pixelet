@@ -20,7 +20,7 @@ use xpute_core::global::Global;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
-use crate::domain::scene::character::preview::preview_rows;
+use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::environment::environment_words;
@@ -164,11 +164,12 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut previews = [(0u32, ([0; DRAW_WORDS], [0.0; DRAW_FLOATS]), none, 0u32); SURFACES];
-    let mut preview_cnt = 0;
-    for (slot, row) in previews.iter_mut().zip(preview_rows()) {
+    let mut character_surfaces =
+        [(0u32, ([0; DRAW_WORDS], [0.0; DRAW_FLOATS]), none, 0u32); SURFACES];
+    let mut surface_cnt = 0;
+    for (slot, row) in character_surfaces.iter_mut().zip(character_surface_rows()) {
         *slot = row;
-        preview_cnt += 1;
+        surface_cnt += 1;
     }
     let on = api::device_generation();
     let (window, layers) = earth_window(Earth::demand().floor(), on);
@@ -188,7 +189,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         environment: environment_words(),
         decor: &decor,
         skins: &skins[..skin_cnt],
-        previews: &previews[..preview_cnt],
+        character_surfaces: &character_surfaces[..surface_cnt],
         pack: || load_of(pack).and_then(load_image),
         moon: || load_of(moon::picture).and_then(load_image),
         earth: || load_image(EARTH),

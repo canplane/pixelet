@@ -217,10 +217,7 @@ function windowSection(r: PerfReport): string[] {
       last.refresh_ms,
     )} ms   paced ${n1(last.paced_ms)} ms   rate ${n1(
       1000 / last.paced_ms,
-    )} Hz   scale ${fixed(
-      last.scale,
-      2,
-    )}   turns ${f.turns}`,
+    )} Hz   scale ${fixed(last.scale, 2)}   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${percentiles(f.interval)} ms   missed ${f.missed} (${pct(
       f.missed,

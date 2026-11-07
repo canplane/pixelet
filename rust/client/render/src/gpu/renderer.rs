@@ -49,6 +49,7 @@ use crate::gpu::generator::{Gate, IndirectDraw};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
+use crate::gpu::pass::character::CharacterPass;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
@@ -56,7 +57,6 @@ use crate::gpu::pass::location::{LocationPass, BEACON_VERTICES};
 use crate::gpu::pass::mark::{MarkInput, UploadCopies};
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
-use crate::gpu::pass::preview::Preview;
 use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
@@ -111,10 +111,10 @@ pub struct FrameInput<'a> {
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
-    /// Each preview: its surface, its character's draw as the preview's eye
+    /// Each character surface: its handle, its character's draw as its eye
     /// draws it, held by no list (frame/draw.rs `scaled_draw`), the skin, and
     /// what it clears to (0xRRGGBB, sRGB).
-    pub previews: &'a [(u32, Draw, Image, u32)],
+    pub character_surfaces: &'a [(u32, Draw, Image, u32)],
     /// The texture pack's image; none while it loads.
     pub pack: fn() -> Option<Image>,
     pub moon: fn() -> Option<Image>,
@@ -323,8 +323,8 @@ pub struct EarthTiles<'a> {
 }
 
 pub struct FrameOutput {
-    /// What the frame turn made: decided where each preview is (no device or
-    /// surface, not admitted, dropped from the stream, and the cast's kind).
+    /// What the frame turn made, which of its cases: no device or surface,
+    /// not admitted, dropped from the stream, or the cast's kind.
     pub kind: FrameKind,
     /// A surface waits on a size to settle, so another turn is wanted.
     pub redraw: bool,
@@ -450,8 +450,8 @@ pub fn on_surface_closed(s: Surface) {
     }
     let slot = handle_slot(s.handle) as usize;
     if let Some(r) = RENDERER.get(|| None).as_mut() {
-        if let Some(preview) = r.previews[slot].take() {
-            preview.release();
+        if let Some(pass) = r.character_passes[slot].take() {
+            pass.release();
         }
     }
 }
@@ -506,7 +506,7 @@ pub struct Renderer {
     /// The frame's whole input as the last frame drew it (stage 2): the
     /// frame's words but the jitter, the sky's and the stars' words, the
     /// air's, the surface's textures, the draws and the uploads they read,
-    /// the markers' atlas, the clouds' words and the previews, and what came or
+    /// the markers' atlas, the clouds' words and the character surfaces, and what came or
     /// was drawn again without words.
     frame_read: Read,
     /// The jitter and the drift in the frame's words as the GPU holds them
@@ -547,7 +547,7 @@ pub struct Renderer {
     /// static opaque draws lay. The frame is drawn again for more than
     /// these, and the occlusion found again only where they moved.
     ao_read: Read,
-    previews: [Option<Preview>; SURFACES],
+    character_passes: [Option<CharacterPass>; SURFACES],
     /// Whether the device holds the draws' uniforms as the lists left them
     /// (`draws_buf`).
     uniforms_written: Written,
@@ -657,7 +657,7 @@ impl Renderer {
             mips,
             pack,
             moon,
-            previews: [const { None }; SURFACES],
+            character_passes: [const { None }; SURFACES],
             uniforms_written: Written::default(),
             touched: Vec::new(),
             read_uploads: Vec::new(),
@@ -1070,7 +1070,7 @@ impl Renderer {
         // What the passes made of the draws stands where the turn changed none,
         // drew none in another order, and the device holds their uniforms.
         let lists_moved = uniforms_moved || !lists.changes.is_empty() || lists.reordered;
-        read.read(input.previews);
+        read.read(input.character_surfaces);
 
         targets(g, world);
         let animated = input.animated;
@@ -1208,7 +1208,7 @@ impl Renderer {
         // decor turned off generates nothing and casts no ray again, yet the
         // frame stands without it.
         read.read(&[u32::from(self.screen.generated().is_some())]);
-        self.prepare_previews(g, input.previews);
+        self.prepare_character_surfaces(g, input.character_surfaces);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [TimestampWrites; GPU_SPAN_NAMES] =
@@ -1580,9 +1580,9 @@ impl Renderer {
         self.debug_drew =
             self.debug
                 .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
-        self.draw_previews(
+        self.draw_character_surfaces(
             &mut ctx,
-            Self::previews(input.previews),
+            Self::character_surfaces(input.character_surfaces),
             uploads_moved || tables || exposed,
         );
         let written = stamps
@@ -1615,8 +1615,8 @@ impl Renderer {
         if skipped {
             REDRAW.set(true);
             self.screen.on_dropped();
-            for preview in self.previews.iter_mut().flatten() {
-                preview.read.forget();
+            for pass in self.character_passes.iter_mut().flatten() {
+                pass.read.forget();
             }
             read.forget();
             self.seen.dropped();
@@ -1660,24 +1660,24 @@ impl Renderer {
         (kind, stat)
     }
 
-    /// The previews drawn this frame: each on a surface still a preview.
-    fn previews(
-        previews: &[(u32, Draw, Image, u32)],
+    /// The character surfaces drawn this frame: each still one.
+    fn character_surfaces(
+        surfaces: &[(u32, Draw, Image, u32)],
     ) -> impl Iterator<Item = &(u32, Draw, Image, u32)> {
-        previews
+        surfaces
             .iter()
-            .filter(|p| surface(p.0).is_some_and(|s| s.role == surface_role::PREVIEW))
+            .filter(|p| surface(p.0).is_some_and(|s| s.role == surface_role::CHARACTER))
     }
 
-    /// Each preview's targets, passes and skin, made here so drawing makes nothing
+    /// Each character surface's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_previews(&mut self, g: &Gpu, previews: &[(u32, Draw, Image, u32)]) {
-        for &(id, (record, _), image, _) in Self::previews(previews) {
+    fn prepare_character_surfaces(&mut self, g: &Gpu, surfaces: &[(u32, Draw, Image, u32)]) {
+        for &(id, (record, _), image, _) in Self::character_surfaces(surfaces) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
-            if self.previews[slot].is_none() {
-                self.previews[slot] = Some(Preview::new(
+            if self.character_passes[slot].is_none() {
+                self.character_passes[slot] = Some(CharacterPass::new(
                     g,
                     &mut self.pipelines,
                     &self.shadow,
@@ -1685,29 +1685,30 @@ impl Renderer {
                     self.align,
                 ));
             }
-            let preview = self.previews[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-            preview.skinned_mesh.set_skins(&[(record[2], image)]);
-            preview
-                .skinned_mesh
+            let pass = self.character_passes[slot]
+                .as_mut()
+                .or_bug(Errno::ENOTRECOVERABLE);
+            pass.skinned_mesh.set_skins(&[(record[2], image)]);
+            pass.skinned_mesh
                 .prepare(g, core::iter::once(&record), uploads());
-            preview.set_groups(g, s);
+            pass.set_groups(g, s);
         }
     }
 
-    /// Each preview whose picture's makings moved, `moved` what moved without
+    /// Each character surface whose picture's makings moved, `moved` what moved without
     /// words: the models' uploads, the air's tables or its exposure.
-    fn draw_previews<'p>(
+    fn draw_character_surfaces<'p>(
         &mut self,
         ctx: &mut RenderContext,
-        previews: impl Iterator<Item = &'p (u32, Draw, Image, u32)>,
+        surfaces: impl Iterator<Item = &'p (u32, Draw, Image, u32)>,
         moved: bool,
     ) {
-        for (id, draw, image, bg) in previews {
+        for (id, draw, image, bg) in surfaces {
             let Some(s) = surface(*id) else { continue };
-            let Some(preview) = self.previews[handle_slot(*id) as usize].as_mut() else {
+            let Some(pass) = self.character_passes[handle_slot(*id) as usize].as_mut() else {
                 continue;
             };
-            preview.draw(ctx, s, self.frame, draw, *image, *bg, moved);
+            pass.draw(ctx, s, self.frame, draw, *image, *bg, moved);
         }
     }
 

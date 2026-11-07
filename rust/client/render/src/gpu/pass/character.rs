@@ -1,6 +1,6 @@
-// pxl-render/gpu/pass/preview.rs
+// pxl-render/gpu/pass/character.rs
 
-//! A character picker's preview: the scene's character in a frame of its
+//! A character surface: the companion's character in a frame of its
 //! own, over the flat color the shell asks for, drawn at one sample with no
 //! shadow, a blank map bound and no strength to read it by. Its draw is
 //! handed to it whole, held by none of the world's lists, so what the
@@ -32,7 +32,7 @@ use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 use crate::look::color::linear_rgb;
 
-pub struct Preview {
+pub struct CharacterPass {
     frame_buf: u32,
     /// Its draw's uniform, the one slot its skinned pass binds.
     draw_buf: u32,
@@ -45,11 +45,11 @@ pub struct Preview {
     pub(crate) read: Read,
 }
 
-const PREVIEW_EYE: V3 = [0.0, -2.2, 0.9];
-const PREVIEW_TARGET: V3 = [0.0, 0.0, 0.55];
-const PREVIEW_FOV_DEG: f64 = 35.0;
-/// The preview's near plane: a room of its own, a model a unit tall in it.
-const PREVIEW_NEAR: f64 = 0.1;
+const CHARACTER_EYE: V3 = [0.0, -2.2, 0.9];
+const CHARACTER_TARGET: V3 = [0.0, 0.0, 0.55];
+const CHARACTER_FOV_DEG: f64 = 35.0;
+/// The character surface's near plane: a room of its own, a model a unit tall in it.
+const CHARACTER_NEAR: f64 = 0.1;
 
 /// What the world's color is cleared to for `bg` (0xRRGGBB, sRGB): linear, as
 /// the finish encodes it back, and whole.
@@ -58,14 +58,14 @@ fn clear_of(bg: u32) -> [f32; 4] {
     [r, g, b, 1.0]
 }
 
-impl Preview {
+impl CharacterPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
         shadow: &Shadow,
         air: [Entry; AIR_ENTRIES],
         align: u32,
-    ) -> Preview {
+    ) -> CharacterPass {
         let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -77,7 +77,7 @@ impl Preview {
         let layout = frame_layout(g, pipelines);
         let mut skinned_mesh = SkinnedPass::new(g, pipelines, align);
         skinned_mesh.set_draws(g, draw_buf);
-        Preview {
+        CharacterPass {
             frame_buf,
             draw_buf,
             frames: FrameGroups::new(g, layout, frame_buf, shadow.blank_entries(1), air),
@@ -119,7 +119,7 @@ impl Preview {
         moved: bool,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::preview);
+        let stamp = ctx.stamp(GpuSpanName::character);
         // Its eye stands at the character's Q3, so the character is its
         // remainder from it.
         let at = Position::in_uniform(uniform);
@@ -137,18 +137,18 @@ impl Preview {
         );
         mat4::perspective(
             &mut proj,
-            PREVIEW_FOV_DEG.to_radians(),
+            CHARACTER_FOV_DEG.to_radians(),
             s.width as f64 / s.height as f64,
-            PREVIEW_NEAR,
+            CHARACTER_NEAR,
         );
-        mat4::look_at(&mut view, PREVIEW_EYE, PREVIEW_TARGET, [0.0, 0.0, 1.0]);
+        mat4::look_at(&mut view, CHARACTER_EYE, CHARACTER_TARGET, [0.0, 0.0, 1.0]);
         mat4::translation(&mut t, -character[0], -character[1], -character[2]);
         mat4::mul(&mut n, &proj, &view);
         mat4::mul(&mut m, &n, &t);
         put_mat(u, VIEW_PROJ, &m);
-        u[CAMERA_POS] = (PREVIEW_EYE[0] + character[0]) as f32;
-        u[CAMERA_POS + 1] = (PREVIEW_EYE[1] + character[1]) as f32;
-        u[CAMERA_POS + 2] = (PREVIEW_EYE[2] + character[2]) as f32;
+        u[CAMERA_POS] = (CHARACTER_EYE[0] + character[0]) as f32;
+        u[CAMERA_POS + 1] = (CHARACTER_EYE[1] + character[1]) as f32;
+        u[CAMERA_POS + 2] = (CHARACTER_EYE[2] + character[2]) as f32;
         u[VIEWPORT] = s.width as f32;
         u[VIEWPORT + 1] = s.height as f32;
         u[SCREEN] = s.screen.0 as f32;
@@ -196,11 +196,11 @@ impl Preview {
         // Encoded onto its canvas at its own frame's words, no vignette.
         let view_id = g.cur(s.handle);
         self.finish
-            .draw(ctx, GpuSpanName::preview, s, s.color_view, view_id, None);
+            .draw(ctx, GpuSpanName::character, s, s.color_view, view_id, None);
         release(view_id);
     }
 }
 
 #[cfg(test)]
-#[path = "preview.test.rs"]
+#[path = "character.test.rs"]
 mod test;

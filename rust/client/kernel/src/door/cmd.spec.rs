@@ -569,8 +569,8 @@ pub struct Snapshot<'a> {
     /// The division the pivot is in and every one above it, broad to narrow; empty
     /// where the pivot is in none or the tile it is read out of has not arrived.
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
-    /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
-    pub previews: &'a [u32],
+    /// The surfaces a character is drawn on: its model and skin have arrived. The shell shows one loading until its surface is here.
+    pub character_surfaces: &'a [u32],
     /// The files the kernel refused, not of their format, not decoding, or too large for any
     /// heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
     /// kernel read none of it and writes nothing over it until FS_CHANGED says it is
@@ -606,7 +606,7 @@ impl Snapshot<'_> {
                 w.branch(DivisionPart::FIELDS, |w| item.write(w));
             });
         });
-        w.u32_array(Some(self.previews));
+        w.u32_array(Some(self.character_surfaces));
         let mut n = 0;
         (self.refused_files)(&mut |_| n += 1);
         w.branch(n, |w| {

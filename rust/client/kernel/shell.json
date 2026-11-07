@@ -1391,11 +1391,11 @@
           ]
         },
         {
-          "name": "previews",
+          "name": "character_surfaces",
           "type": "u32",
           "list": true,
           "$doc": [
-            "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
+            "The surfaces a character is drawn on: its model and skin have arrived. The shell shows one loading until its surface is here."
           ]
         },
         {

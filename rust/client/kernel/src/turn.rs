@@ -99,7 +99,7 @@ fn companion_camera() -> Option<Camera> {
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
     // A new preview moves the world as drawn where it was and where it is.
-    if write::pending_step() {
+    if write::preview_step() {
         request_world_tick();
     }
 }
@@ -154,7 +154,7 @@ fn scene_tick(ctx: &mut TickContext) {
         ctx,
         controller::pivot(),
         third_person.then(camera::azimuth),
-        &write::pending().edits,
+        &write::preview().edits,
         write::draft(),
     );
 }
@@ -366,7 +366,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
             gap_ms: delta * 1000.0,
             moving: interactive,
         },
-        &write::pending().edits,
+        &write::preview().edits,
     );
     set_renderer_frame(&drawn);
     if let Some(interval_ms) = drawn.interval_ms {

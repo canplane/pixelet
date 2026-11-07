@@ -9,7 +9,7 @@
 import * as surface_role from "./gpu/surface_role.spec.ts";
 import * as stream from "./gpu/stream.spec.ts";
 
-/** What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or
+/** What a canvas the shell hands over shows (gpu/surface.rs): the world, a character alone, or
  * nothing yet, as a canvas opens before the shell says what it draws. */
 export { surface_role };
 

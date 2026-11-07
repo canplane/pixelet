@@ -7,11 +7,11 @@
   "surface_role": {
     "$type": "u32",
     "$doc": [
-      "What a canvas the shell hands over shows (gpu/surface.rs): the world, one thing previewed alone, or",
+      "What a canvas the shell hands over shows (gpu/surface.rs): the world, a character alone, or",
       "nothing yet, as a canvas opens before the shell says what it draws."
     ],
     "WORLD": 0,
-    "PREVIEW": 1,
+    "CHARACTER": 1,
     "NONE": 2
   },
   "stream": {

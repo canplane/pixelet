@@ -13,7 +13,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
-use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
+use crate::domain::control::edit::write::{middle, preview, restores_scattered, Preview};
 use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::{Ghost, GhostBox};
@@ -31,13 +31,13 @@ pub fn ghost() -> Ghost {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
-    let Pending {
+    let Preview {
         object: hovered_object,
         zoom: preview_zoom,
         digging: digging_terrain,
         blocked,
         ..
-    } = pending();
+    } = preview();
 
     let use_object_style = ui != Tool::Pointer || hovered_object.is_some();
     let box_zoom = if use_object_style {

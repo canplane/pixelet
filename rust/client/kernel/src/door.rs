@@ -19,7 +19,7 @@ pub mod layout;
 mod life;
 
 use crate::domain::control::sensor;
-use crate::domain::scene::character::preview;
+use crate::domain::scene::character::surface::character_surface_close;
 use crate::domain::view::demand;
 use crate::door::cmd::{Sensor, SensorStart, SensorStop, ShellSnapshot};
 use crate::machine::MACHINE;
@@ -94,12 +94,12 @@ fn state() -> &'static mut State {
     })
 }
 
-/// A case lives on its surface, so it goes with it.
+/// A surface's character goes with it.
 fn close_surface(handle: u32) {
     if let Some(closed) = surface::surface_close(handle) {
         renderer::on_surface_closed(closed);
     }
-    preview::preview_close(handle);
+    character_surface_close(handle);
 }
 
 /// The GPU answered, the first time or again after a loss: the kernel asks

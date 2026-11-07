@@ -23,7 +23,7 @@ pub mod transform;
 use pxl_render::frame::draw::DrawList;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
-use crate::domain::scene::character::preview::preview_shows;
+use crate::domain::scene::character::surface::character_surface_shows;
 use crate::domain::scene::environment::environment_animate;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_draw;
@@ -34,7 +34,7 @@ use crate::domain::scene::model::registry::Models;
 
 /// Advances what animates; whether anything did.
 pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-    companion_animate(list, models, frame, preview_shows())
+    companion_animate(list, models, frame, character_surface_shows())
         | location_animate(frame)
         | environment_animate(frame)
 }

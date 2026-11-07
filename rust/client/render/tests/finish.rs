@@ -1,5 +1,5 @@
 //! The finish as the renderer draws it (gpu/finish.rs): its module as assembled, onto the
-//! canvas alone, a preview's, and onto the canvas and the picture in one pass, the world's;
+//! canvas alone, a character surface's, and onto the canvas and the picture in one pass, the world's;
 //! and a frame not drawn whole, the picture shown first, then its claimed tiles finished again.
 
 mod gpu;
@@ -331,7 +331,7 @@ fn read(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
 }
 
 #[test]
-fn the_world_s_canvas_and_picture_are_the_preview_s_one_canvas() {
+fn the_world_s_canvas_and_picture_are_the_character_surface_s_one_canvas() {
     // A canvas's row is read whole, as a copy takes rows of 256 bytes.
     const _: () = assert!((CANVAS[0] * 4).is_multiple_of(256));
     let Some(gpu) = Gpu::new() else {

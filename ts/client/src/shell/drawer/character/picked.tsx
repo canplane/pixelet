@@ -1,6 +1,6 @@
-// @pxl/client/shell/drawer/character/preview.tsx
+// @pxl/client/shell/drawer/character/picked.tsx
 
-/** The character picker's preview: the kernel draws the character spinning in place. */
+/** The character picked, on its surface: the kernel draws the companion's character as it is. */
 
 import { useState } from "react";
 import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
@@ -11,22 +11,24 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { surface_driver } from "@/port/surface.ts";
 import type { Character } from "./character.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { Preview } from "@/service/surface.tsx";
+import { CharacterSurface } from "@/service/surface.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import * as scene from "@/port/scene.ts";
 
-const PREVIEW = surface_driver();
+const SURFACE = surface_driver();
 const BACKDROP = parseInt(color.backdrop.slice(1), 16);
 
-interface CharacterPreviewProps {
+interface PickedCharacterProps {
   character: Character;
   style?: StyleProp<ViewStyle>;
 }
 
-export function CharacterPreview(props: CharacterPreviewProps) {
+export function PickedCharacter(props: PickedCharacterProps) {
   const { character, style } = props;
   const [surface, setSurface] = useState<u32>(0);
-  const drawn = useKernel((s) => surface !== 0 && s.previews.includes(surface));
+  const drawn = useKernel(
+    (s) => surface !== 0 && s.character_surfaces.includes(surface),
+  );
 
   return (
     <View style={style}>
@@ -34,8 +36,8 @@ export function CharacterPreview(props: CharacterPreviewProps) {
         // Hidden until drawn: the canvas still holds the last character's frame.
       }
       <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
-        <Preview
-          surface={PREVIEW}
+        <CharacterSurface
+          surface={SURFACE}
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
             setSurface(surface);

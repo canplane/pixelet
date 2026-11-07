@@ -2858,14 +2858,7 @@ fn hand_eye_record_answers_as_raster() {
             [0.1, 0.05, 1.0],
         ),
     ] {
-        let c = case(
-            name,
-            origin,
-            look,
-            [0.5, 0.4],
-            300.0,
-            [LEAF_CELL, FINEST],
-        );
+        let c = case(name, origin, look, [0.5, 0.4], 300.0, [LEAF_CELL, FINEST]);
         run(&b, &c, false, &mut kinds);
     }
     // Over X = 0, where its roots part: boxes in the next root.

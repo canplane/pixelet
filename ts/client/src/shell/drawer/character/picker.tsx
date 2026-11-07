@@ -12,7 +12,7 @@ import {
   weight,
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import { CharacterPreview } from "./preview.tsx";
+import { PickedCharacter } from "./picked.tsx";
 import { SETTING } from "@/shell/setting/schema.ts";
 import {
   type Character,
@@ -33,7 +33,7 @@ import * as setting from "@/port/setting.ts";
 
 // The chip one sees is 32; a press lands on 44, a box laid out around it.
 const CHIP_HEIGHT = 32;
-const PREVIEW = 96;
+const SURFACE_SIZE = 96;
 const CHIP_GAP_X = 8;
 const CHIP_GAP_Y = 2 * touchOutset(CHIP_HEIGHT);
 const CHIP_TARGET = {
@@ -83,7 +83,7 @@ function Chip({
   );
 }
 
-/** A preview of the one picked beside the chips that pick it. */
+/** The one picked, drawn beside the chips that pick it. */
 function PickerCard({
   label,
   selected,
@@ -97,7 +97,7 @@ function PickerCard({
     <View style={styles.picker}>
       <SectionTitle>{label}</SectionTitle>
       <View style={styles.pickerRow}>
-        <CharacterPreview character={selected} style={styles.preview} />
+        <PickedCharacter character={selected} style={styles.surface} />
         <View style={styles.chipColumn}>{children}</View>
       </View>
     </View>
@@ -111,7 +111,7 @@ interface PersonPickerProps {
   onSelect: (character: Character) => void;
 }
 
-/** The preview tracks the equipped character; browsing genders changes nothing until a character is picked. */
+/** It shows the equipped character; browsing genders changes nothing until a character is picked. */
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
@@ -203,9 +203,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: PANEL_EDGE,
   },
-  preview: {
-    width: PREVIEW,
-    height: PREVIEW,
+  surface: {
+    width: SURFACE_SIZE,
+    height: SURFACE_SIZE,
     flexShrink: 0,
     borderRadius: 12,
     overflow: "hidden",

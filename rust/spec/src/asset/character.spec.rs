@@ -62,7 +62,7 @@ pub mod groups {
             crate::asset::catalog::Slot(56),
         ];
         pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(57);
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;
@@ -100,7 +100,7 @@ pub mod groups {
             crate::asset::catalog::Slot(81),
         ];
         pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(82);
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;

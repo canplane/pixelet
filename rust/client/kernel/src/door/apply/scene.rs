@@ -4,7 +4,7 @@
 
 use super::State;
 use super::{ask_turn, or_refuse, refuse_unless};
-use crate::domain::scene::character::preview;
+use crate::domain::scene::character::surface::character_surface_open;
 use crate::domain::scene::marker;
 use crate::domain::scene::resolution;
 use crate::door::cmd as abi;
@@ -46,12 +46,12 @@ pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
                 return Err(MarshalError::new(Errno::EINVAL));
             };
             refuse_unless(
-                role == surface_role::NONE || role == surface_role::PREVIEW,
+                role == surface_role::NONE || role == surface_role::CHARACTER,
                 Errno::EBUSY,
             )?;
-            preview::preview_open(c.surface, group, bg);
+            character_surface_open(c.surface, group, bg);
             if let Some(drawn) = surface::surface(c.surface) {
-                drawn.role = surface_role::PREVIEW;
+                drawn.role = surface_role::CHARACTER;
                 if drawn.px_w != 0 {
                     drawn.ratio =
                         resolution::surface_ratio(drawn.role, [drawn.px_w, drawn.px_h], drawn.dpr);
