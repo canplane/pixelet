@@ -17,6 +17,7 @@ import {
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/ui/component/backing.tsx";
 import { SNAP } from "@/ui/component/motion/transition.ts";
+import { pillStyles } from "./pill-style.ts";
 import type { PillProps } from "./pill.tsx";
 import { touchOutset } from "@/ui/component/touch.ts";
 
@@ -64,7 +65,7 @@ export function Pill({
     <View
       {...touch}
       style={[
-        touch ? styles.target : styles.at,
+        touch ? pillStyles.target : pillStyles.box,
         {
           left: x - outset,
           top: -outset,
@@ -98,7 +99,7 @@ export function Pill({
               onContentWidth &&
               ((e) => onContentWidth(e.nativeEvent.layout.width))
             }
-            style={[styles.content, { height }]}
+            style={[pillStyles.content, { height }]}
           >
             {children}
           </View>
@@ -109,16 +110,6 @@ export function Pill({
 }
 
 const styles = StyleSheet.create({
-  at: { position: "absolute", pointerEvents: "box-none" },
-  target: { position: "absolute" },
   glass: { flex: 1 },
   clip: { overflow: "hidden", pointerEvents: "box-none" },
-  content: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    pointerEvents: "box-none",
-  },
 });

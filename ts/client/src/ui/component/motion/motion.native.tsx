@@ -15,6 +15,7 @@ import {
   type Pose,
   resolve,
   type SpinProps,
+  useReplay,
 } from "@/ui/component/motion/pose.ts";
 import { curveAt, type Transition } from "@/ui/component/motion/transition.ts";
 
@@ -54,13 +55,12 @@ export function Motion({
   const [, commit] = useReducer((n: number) => n + 1, 0);
 
   const stood = useRef<Required<Pose> | null>(null);
-  const replayed = useRef(replay);
+  const replays = useReplay(replay);
   const settled = useRef(onSettled);
   settled.current = onSettled;
 
   useEffect(() => {
-    const replaying = replay !== null && replay !== replayed.current;
-    replayed.current = replay;
+    const replaying = replays();
 
     let start: Required<Pose> = stood.current ?? init;
     if ((replaying || stood.current === null) && from) {

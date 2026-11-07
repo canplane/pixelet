@@ -23,6 +23,7 @@ import { GPU_STATE, set_gpu } from "@/port/gpu.ts";
 import { SENSOR_LISTENER, sensor_start, sensor_stop } from "@/port/sensor.ts";
 import * as snapshot from "@/port/snapshot.ts";
 import * as sensor from "@/service/sensor.ts";
+import { listen } from "@/service/sensor-listener.ts";
 import * as visibility from "@/service/visibility.ts";
 
 /** What the client's boot hears as the runtime opens (boot.ts). */
@@ -68,7 +69,7 @@ export function ui(
 /** The core started: the UI's sensors and visibility told it. */
 export function started(on: OnOpen): void {
   on.started();
-  sensor.listen(SENSOR_LISTENER);
+  listen(SENSOR_LISTENER);
   visibility.watch((visible) => link.visible(visible));
   const { geo, orient } = sensor;
   core.sensor_platform(geo.has, orient.has, orient.gated, orient.silence);

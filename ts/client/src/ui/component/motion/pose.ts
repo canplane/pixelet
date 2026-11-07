@@ -5,7 +5,7 @@
  * reflows and iOS WebKit has nothing to ghost.
  */
 
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -41,16 +41,28 @@ export function resolve(p: Pose): Required<Pose> {
   return { ...REST, ...p };
 }
 
+type Replay = string | number | null;
+
 export interface MotionProps {
   to: Pose;
   from?: Pose;
   /** A new non-null value starts it over from `from`. */
-  replay?: string | number | null;
+  replay?: Replay;
   transition: Transition;
   onSettled?: () => void;
   style?: StyleProp<ViewStyle>;
   onLayout?: (e: LayoutChangeEvent) => void;
   children?: ReactNode;
+}
+
+/** Whether this run of a Motion's effect is a replay, asked once a run. */
+export function useReplay(replay: Replay): () => boolean {
+  const replayed = useRef(replay);
+  return () => {
+    const replaying = replay !== null && replay !== replayed.current;
+    replayed.current = replay;
+    return replaying;
+  };
 }
 
 export interface SpinProps {

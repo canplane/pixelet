@@ -26,6 +26,7 @@ import { Motion } from "@/ui/component/motion/motion.tsx";
 import { SNAP, type Transition } from "@/ui/component/motion/transition.ts";
 import { useDim } from "@/ui/component/motion/dim.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
+import { pillStyles } from "./pill-style.ts";
 
 export interface PillProps {
   x: f64;
@@ -116,7 +117,7 @@ export function Pill({
             collapsable={false}
             {...touch}
             style={[
-              touch ? styles.target : styles.box,
+              touch ? pillStyles.target : pillStyles.box,
               {
                 left: -outset,
                 top: -outset,
@@ -127,7 +128,10 @@ export function Pill({
           >
             <View
               collapsable={false}
-              style={[styles.box, { left: outset, top: outset, width, height }]}
+              style={[
+                pillStyles.box,
+                { left: outset, top: outset, width, height },
+              ]}
             >
               {shadow && (
                 <>
@@ -199,7 +203,7 @@ export function Pill({
                     onContentWidth &&
                     ((e) => onContentWidth(e.nativeEvent.layout.width))
                   }
-                  style={[styles.content, { height }]}
+                  style={[pillStyles.content, { height }]}
                 >
                   {children}
                 </Motion>
@@ -226,9 +230,6 @@ const styles = StyleSheet.create({
     top: SHADOW_ROOM,
     pointerEvents: "box-none",
   },
-  // From the sheet: an inline `box-none` is drawn as a `none` the content inherits.
-  box: { position: "absolute", pointerEvents: "box-none" },
-  target: { position: "absolute" },
   clip: { position: "absolute", overflow: "hidden", pointerEvents: "none" },
   circle: { position: "absolute", left: 0, top: 0, pointerEvents: "none" },
   fill: { flex: 1 },
@@ -237,14 +238,6 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     overflow: "hidden",
-    pointerEvents: "box-none",
-  },
-  content: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    flexDirection: "row",
-    alignItems: "center",
     pointerEvents: "box-none",
   },
 });

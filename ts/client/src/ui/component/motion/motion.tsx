@@ -15,6 +15,7 @@ import {
   type Pose,
   resolve,
   type SpinProps,
+  useReplay,
 } from "@/ui/component/motion/pose.ts";
 import type { Transition } from "@/ui/component/motion/transition.ts";
 
@@ -51,7 +52,7 @@ export function Motion({
   const node = useRef<View | null>(null);
   const running = useRef<Animation | null>(null);
   const stood = useRef<Required<Pose> | null>(null);
-  const replayed = useRef(replay);
+  const replays = useReplay(replay);
   const settled = useRef(onSettled);
   settled.current = onSettled;
 
@@ -61,8 +62,7 @@ export function Motion({
     const el = node.current as unknown as HTMLElement | null;
     if (!el) return;
 
-    const replaying = replay !== null && replay !== replayed.current;
-    replayed.current = replay;
+    const replaying = replays();
 
     let start: Keyframe | null;
     if (stood.current === null || replaying) {

@@ -34,6 +34,16 @@ export interface Viewport {
   dpr: f64;
 }
 
+/** A position fix, by the names the page's API and a device's both give it. */
+export interface Fix {
+  longitude: f64;
+  latitude: f64;
+  altitude: f64 | null;
+  altitudeAccuracy: f64 | null;
+  accuracy: f64 | null;
+  heading: f64 | null;
+}
+
 /** What the sensors hear, in the platform's words: handed in once, at boot. */
 export interface SensorListener {
   position(

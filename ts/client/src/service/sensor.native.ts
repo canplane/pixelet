@@ -10,19 +10,9 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import type {
-  GeolocationSensor,
-  OrientationSensor,
-  SensorListener,
-} from "./types.ts";
+import { geo_fix, listener } from "./sensor-listener.ts";
+import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 import { PLATFORM } from "./pxl-platform.ts";
-
-/** Set once at boot, before any sensor starts. */
-let listener: SensorListener;
-
-export function listen(given: SensorListener): void {
-  listener = given;
-}
 
 let granted: boolean | null = null;
 
@@ -44,11 +34,6 @@ export function follow(): () => void {
     if (state === "active") recheck();
   });
   return () => back.remove();
-}
-
-/** CoreLocation says "no course" and "no accuracy" as a negative, the page's API as null. */
-function null_if_negative(v: number | null): number | null {
-  return v !== null && v >= 0 ? v : null;
 }
 
 function recheck(): void {
@@ -103,24 +88,7 @@ function geo_start(): void {
         timeInterval: 1000,
         distanceInterval: 0,
       },
-      (pos) => {
-        const {
-          latitude,
-          longitude,
-          altitude,
-          altitudeAccuracy,
-          accuracy,
-          heading,
-        } = pos.coords;
-        // An altitude with no accuracy is none measured.
-        listener.position(
-          longitude,
-          latitude,
-          null_if_negative(altitudeAccuracy) === null ? null : altitude,
-          null_if_negative(accuracy),
-          null_if_negative(heading),
-        );
-      },
+      (pos) => geo_fix(pos.coords),
       // Android's watch never ends on its own (expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request);
       // iOS rides out locationUnknown as CoreLocation keeps trying, and ends

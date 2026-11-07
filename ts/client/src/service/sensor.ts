@@ -5,18 +5,8 @@
  * behind a prompt that must be raised inside the gesture.
  */
 
-import type {
-  GeolocationSensor,
-  OrientationSensor,
-  SensorListener,
-} from "./types.ts";
-
-/** Set once at boot, before any sensor starts. */
-let listener: SensorListener;
-
-export function listen(given: SensorListener): void {
-  listener = given;
-}
+import { geo_fix, listener } from "./sensor-listener.ts";
+import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
@@ -65,24 +55,7 @@ function geo_stop(): void {
 function geo_start(): void {
   if (geo_watch !== null || !("geolocation" in navigator)) return;
   geo_watch = navigator.geolocation.watchPosition(
-    (pos) => {
-      const {
-        latitude,
-        longitude,
-        altitude,
-        altitudeAccuracy,
-        accuracy,
-        heading,
-      } = pos.coords;
-      // An altitude with no accuracy is none measured: a desktop's location gives 0.
-      listener.position(
-        longitude,
-        latitude,
-        altitudeAccuracy === null ? null : altitude,
-        accuracy,
-        heading,
-      );
-    },
+    (pos) => geo_fix(pos.coords),
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
