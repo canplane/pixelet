@@ -1,19 +1,42 @@
 {
   "$doc": [
-    "The file device, on major FS: a guest's files, opened below a root the host bound, as",
+    "The file device, on major FS: a core's files, opened below a root the runtime bound, as",
     "POSIX's `openat` and io_uring's submission and completion name them (ipc/fs.json).",
-    "The guest posts its calls (`import`), FS_OPENAT and FS_CLOSE with ACKREQ, tagged with",
-    "the descriptor; the host completes each of those on a later turn, a frame of the same",
+    "The core posts its calls (`import`), FS_OPENAT and FS_CLOSE with ACKREQ, tagged with",
+    "the descriptor; the runtime completes each of those on a later turn, a frame of the same",
     "tag and command flagged RES on the submission ring, and does the rest in the gap.",
-    "xpute ships both ends: the guest's calls (xpute-guest ipc/door.rs, ipc/file.rs) and the",
-    "host's server (@xpute/host). A program binds only its roots to what backs them."
+    "xpute ships both ends: the core's calls (xpute-core ipc/door.rs, ipc/file.rs) and the",
+    "runtime's server (@xpute/runtime). A program binds only its roots to what backs them.",
+    "The runtime tells the core a file changed under it (FS_CHANGED, `export`)."
   ],
   "name": "fs",
-  "export": [],
+  "export": [
+    {
+      "name": "FS_CHANGED",
+      "val": 773,
+      "$doc": [
+        "The file at `path` below `root` changed under the core, as what backs it says: what the",
+        "core read of it is stale, and a read opens it again."
+      ],
+      "pkt": [
+        {
+          "name": "root",
+          "type": "u32"
+        },
+        {
+          "name": "path",
+          "type": "str",
+          "$doc": [
+            "Its path below the root, as the core opened it."
+          ]
+        }
+      ]
+    }
+  ],
   "import": [
     {
       "name": "FS_OPENAT",
-      "val": 770,
+      "val": 769,
       "$doc": [
         "The file at `path` below `root` opened as `fd`, the frame's tag too. Completed with",
         "the file's size, or -errno: ENOENT where there is no such file, ECANCELED where FS_CLOSE",
@@ -46,16 +69,16 @@
           "name": "detail",
           "type": "u32",
           "$doc": [
-            "Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."
+            "Whatever number the runtime refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."
           ]
         }
       ]
     },
     {
       "name": "FS_READ",
-      "val": 771,
+      "val": 770,
       "$doc": [
-        "The opened file's first `len` bytes copied to `at` in the guest's memory."
+        "The opened file's first `len` bytes copied to `at` in the core's memory."
       ],
       "pkt": [
         {
@@ -74,10 +97,10 @@
     },
     {
       "name": "FS_WRITE",
-      "val": 772,
+      "val": 771,
       "$doc": [
-        "The `len` bytes at `at` added to what the file opened for writing holds. The host",
-        "reads them at FS_CLOSE, and the guest keeps them unchanged until FS_CLOSE is completed."
+        "The `len` bytes at `at` added to what the file opened for writing holds. The runtime",
+        "reads them at FS_CLOSE, and the core keeps them unchanged until FS_CLOSE is completed."
       ],
       "pkt": [
         {
@@ -96,7 +119,7 @@
     },
     {
       "name": "FS_CLOSE",
-      "val": 773,
+      "val": 772,
       "$doc": [
         "The descriptor ended, the frame's tag too. A file opened for writing is replaced by",
         "what was written; an open not yet completed is completed first, with ECANCELED. Completed",
@@ -129,24 +152,28 @@
     {
       "name": "FsMinor",
       "$doc": [
-        "A file's calls."
+        "A file's calls, and a file changed."
       ],
       "format": "hex2",
       "entries": [
         {
           "name": "OPENAT",
-          "val": 2
+          "val": 1
         },
         {
           "name": "READ",
-          "val": 3
+          "val": 2
         },
         {
           "name": "WRITE",
-          "val": 4
+          "val": 3
         },
         {
           "name": "CLOSE",
+          "val": 4
+        },
+        {
+          "name": "CHANGED",
           "val": 5
         }
       ]

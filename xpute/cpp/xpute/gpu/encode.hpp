@@ -1,6 +1,6 @@
 // cpp/xpute/gpu/encode.hpp
 
-// A guest's GPU calls written as a stream's records (ipc/stream), in the
+// A core's GPU calls written as a stream's records (ipc/stream), in the
 // words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
 // them. Objects are handles from one table; a record that does not fit an
 // open transaction is not written, and an object it would have made is
@@ -19,15 +19,15 @@
 #include <utility>
 #include <variant>
 
-#include "xpute/guest/abi/handle.hpp"
-#include "xpute/guest/ipc/stream.hpp"
+#include "xpute/core/abi/handle.hpp"
+#include "xpute/core/ipc/stream.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "api.spec.hpp"
 #include "enum.spec.hpp"
 
 namespace xpute::gpu {
 
-// An object the guest made: a handle of the table its encoder holds.
+// An object the core made: a handle of the table its encoder holds.
 using Id = std::uint32_t;
 
 struct BufferDescriptor {
@@ -492,8 +492,8 @@ template <std::size_t N> class Gpu {
         return make(stream, op::RENDER_PIPELINE, [&](auto &s) { detail::render_pipeline_words(s, d); });
     }
 
-    // As render_pipeline, made where the host can without holding its thread:
-    // the host stores `ticket` at the fence `fence` once it is made (spec
+    // As render_pipeline, made where the runtime can without holding its thread:
+    // the runtime stores `ticket` at the fence `fence` once it is made (spec
     // RESULT), and no record names it before.
     std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
         std::uint32_t at = stream.mem().off_of(&fence);
@@ -565,7 +565,7 @@ template <std::size_t N> class Gpu {
     }
 
     // False where the transaction did not fit: the stream is as at `begin`,
-    // and every handle taken since is free again, as the host never saw it.
+    // and every handle taken since is free again, as the runtime never saw it.
     bool commit(Stream &stream) noexcept {
         bool fit = stream.commit();
         if (!fit) handles_.rollback([this](Id, std::uint8_t op) { forget(op); });
@@ -573,7 +573,7 @@ template <std::size_t N> class Gpu {
     }
 
     // Ends a pass. Its handle is free whether or not the record was written:
-    // one dropped with its transaction left nothing on the host.
+    // one dropped with its transaction left nothing on the runtime.
     bool end(Stream &stream, Id pass) noexcept {
         bool sent = detail::emit(stream, op::END, [&](auto &s) { s.word(pass); });
         release(pass);
@@ -645,7 +645,7 @@ bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<con
 // What `write_buffer` takes of a stream's room (Stream::fits), so a caller
 // writing several asks once.
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
-// The bytes read where they lie in the guest's memory when the host runs the
+// The bytes read where they lie in the core's memory when the runtime runs the
 // stream, no copy made (ipc/stream.hpp R3).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout`: bytes per row, rows per image.
@@ -653,7 +653,7 @@ bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std
 // As write_buffer_bytes: the words are the same whatever the place, layout and size.
 std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
+// An encoded image (PNG, JPEG, WebP) where it lies in the core's memory,
 // decoded into `to`; `fence` its fence and result (spec RESULT), `ticket`
 // landing there once it is in or refused.
 bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
@@ -681,17 +681,17 @@ bool draw_indexed_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t off
 bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) noexcept;
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
 // `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted before)
-// read into the guest's memory at `into`; `fence` its fence and result
+// read into the core's memory at `into`; `fence` its fence and result
 // (spec RESULT), `ticket` landing there once the bytes are there and the
 // buffer is unmapped, or the mapping refused.
 bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
 // `ticket` at the fence `fence` once what was submitted before is done
 // (spec RESULT).
 bool queue_done(Stream &stream, const std::uint32_t &fence, std::uint32_t ticket) noexcept;
-// `format` none for the format the host's surface prefers.
+// `format` none for the format the runtime's surface prefers.
 bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureFormat> format, std::uint32_t usage, CanvasAlphaMode alpha) noexcept;
 bool resize(Stream &stream, std::uint32_t surface, std::array<std::uint32_t, 2> size) noexcept;
-// Where the host writes the device's limits, features and status.
+// Where the runtime writes the device's limits, features and status.
 bool device(Stream &stream, std::span<std::uint32_t> into) noexcept;
 
 } // namespace call

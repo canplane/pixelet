@@ -76,8 +76,8 @@ enum class Errno : std::int32_t {
     etoomanyrefs = -109, // Too many references
     etimedout = -110, // Connection timed out
     econnrefused = -111, // Connection refused
-    ehostdown = -112, // Host is down
-    ehostunreach = -113, // No route to host
+    ehostdown = -112, // Runtime is down
+    ehostunreach = -113, // No route to runtime
     ealready = -114, // Operation already in progress
     einprogress = -115, // Operation now in progress
 

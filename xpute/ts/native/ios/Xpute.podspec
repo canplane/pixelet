@@ -1,6 +1,6 @@
 # @xpute/native/ios/Xpute.podspec
 #
-# xpute's module on an iPhone (*.swift), and the guest linked with it: the
+# xpute's module on an iPhone (*.swift), and the core linked with it: the
 # app's core crate, as the app's package.json `xpute.core` names it, built by
 # script/build-core.py for the configuration and the SDK the app is built as,
 # into a directory each has of its own, which the app links from. Swift
@@ -20,7 +20,7 @@ include = '"$(PODS_CONFIGURATION_BUILD_DIR)/Xpute/include"'
 Pod::Spec.new do |s|
   s.name = 'Xpute'
   s.version = '0.0.0'
-  s.summary = "xpute's native module, and the guest linked with it."
+  s.summary = "xpute's native module, and the core linked with it."
   s.homepage = 'https://github.com/canplane/xpute'
   s.license = { type: 'UNLICENSED' }
   s.author = 'xpute'

@@ -1,20 +1,20 @@
-# The file device's traces: what its host's end owes a guest (abi/fs.json, ipc/fs.json,
+# The file device's traces: what its runtime's end owes a core (abi/fs.json, ipc/fs.json,
 # ARCHITECTURE.md's files), apart from the boundary's rules C0 to C7 — the boundary
-# carries the calls, and this is what they mean. Run against the host's end
-# (ts/host/src/ipc/fs.test.ts): a step writes a record as a guest's turn would, `turn`
-# runs them as the host does after a turn, and what reaches the guest is held to the trace.
+# carries the calls, and this is what they mean. Run against the runtime's end
+# (ts/runtime/src/ipc/fs.test.ts): a step writes a record as a core's turn would, `turn`
+# runs them as the runtime does after a turn, and what reaches the core is held to the trace.
 #
-#   file R P B        the host's file P below root R: its bytes in hex, ENOENT, or `later` —
+#   file R P B        the runtime's file P below root R: its bytes in hex, ENOENT, or `later` —
 #                     answered only when a `deliver` says, as a transport answers
-#   openat FD R F P   a guest's OPENAT: FD as the guest issued it (slot and generation), F rd or wr,
+#   openat FD R F P   a core's OPENAT: FD as the core issued it (slot and generation), F rd or wr,
 #                     P the path, `""` for an empty one
 #   read FD N / write FD TEXT / close FD
-#   turn              the host runs the turn's records
+#   turn              the runtime runs the turn's records
 #   deliver R P B     the transport answers what `later` held, with B as `file` takes it
-#   expect opened FD RES   the next completion the guest is sent, of an open: a size, or an errno by name
+#   expect opened FD RES   the next completion the core is sent, of an open: a size, or an errno by name
 #   expect closed FD RES   the next, of a close: 0, or an errno by name
-#   expect quiet      no completion the guest has not been held to
-#   expect read HEX   what the last read put in the guest's memory
+#   expect quiet      no completion the core has not been held to
+#   expect read HEX   what the last read put in the core's memory
 #   expect commit R P TEXT   what a close made the file
 #
 # An open's completion comes on a later turn, however much later: `later` is how a trace says the
@@ -46,7 +46,7 @@ read.step.8	expect closed 0x10001 0
 read.step.9	expect quiet
 
 # Opened to write and closed in one turn: an open to write is completed at once, and the close
-# commits what was written, read where the guest keeps it.
+# commits what was written, read where the core keeps it.
 write.step.0	openat 0x10001 7 wr a
 write.step.1	write 0x10001 ab
 write.step.2	write 0x10001 c
@@ -78,7 +78,7 @@ close.opening.step.5	expect closed 0x10001 0
 close.opening.step.6	deliver 7 a 61
 close.opening.step.7	expect quiet
 
-# A close of a descriptor the host does not hold is completed with EBADF.
+# A close of a descriptor the runtime does not hold is completed with EBADF.
 close.unknown.step.0	close 0x10001
 close.unknown.step.1	turn
 close.unknown.step.2	expect closed 0x10001 EBADF
@@ -103,7 +103,7 @@ stale.reuse.step.12	expect opened 0x20001 2
 stale.reuse.step.13	expect quiet
 
 # A root is the whole of what it grants: a path walks down from it a name at a time, and a name
-# that is empty, `.` or `..` — an absolute path's first among them — is refused before any host sees it.
+# that is empty, `.` or `..` — an absolute path's first among them — is refused before any runtime sees it.
 root.walk.step.0	file 7 a/b 61
 root.walk.step.1	openat 0x10001 7 rd a/b
 root.walk.step.2	openat 0x10002 7 rd ../b

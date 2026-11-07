@@ -84,7 +84,7 @@ struct Slot {
     std::uint32_t mark = 0;
 };
 
-// A test is a host's program, so its arena may take the system's memory.
+// A test is a runtime's program, so its arena may take the system's memory.
 using SlotArena = Arena<Slot, std::allocator<Slot>>;
 
 SlotArena arena(std::uint32_t init_cap, std::uint32_t max_cap) {

@@ -1,0 +1,230 @@
+// @xpute/runtime/ipc/ring.ts
+
+/** A ring of frames, laid out by spec/ipc/ring.json. Each end writes one of
+ * the positions, the producer TAIL and the consumer HEAD: it reads its own as
+ * it stands, stores it with release after the frames it covers, and loads the
+ * other's with acquire before them (atomic.ts), so a core on another thread
+ * reads what they say. */
+
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
+import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import { HDR_SZ, WORD_SZ } from "@xpute/kit/wire/xtp/spec.ts";
+
+import { load_acquire, store_release } from "./atomic";
+import * as frame from "./frame.ts";
+import {
+  CAP,
+  HEAD,
+  HEADER_WORDS,
+  SLOT_BASE,
+  SLOT_BYTES,
+  TAIL,
+} from "./ring.spec.ts";
+
+export function ring_bytes(cap: u32): u32 {
+  return (HEADER_WORDS + cap * frame.WORDS) * 4;
+}
+
+export function slots_bytes(cap: u32, slot_bytes: u32): u32 {
+  return cap * slot_bytes;
+}
+
+/** Payloads are padded to XTP's word (`WORD_SZ`). */
+function padded(bytes: u32): u32 {
+  return Math.ceil(bytes / WORD_SZ) * WORD_SZ;
+}
+
+/** A power of two, so a position masks to its slot. */
+function is_pow2(n: u32): boolean {
+  return n !== 0 && (n & (n - 1)) === 0;
+}
+
+/** A packet's header plus the payload its second word names. */
+function pkt_bytes(u8: U8Array, at: u32): u32 {
+  const word = at + WORD_SZ;
+  const payload =
+    u8[word] |
+    (u8[word + 1] << 8) |
+    (u8[word + 2] << 16) |
+    (u8[word + 3] << 24);
+  return padded(HDR_SZ + (payload >>> 0));
+}
+
+export class Ring {
+  /** Where the ring's words begin in the memory. */
+  readonly at: u32;
+  readonly words: Uint32Array;
+  readonly cap: u32;
+  readonly slot_bytes: u32;
+  private readonly mask: u32;
+  private readonly slots: U8Array;
+  private readonly slot_view: DataView;
+  private readonly slot_base: u32;
+
+  constructor(mem: ArrayBufferLike, at: u32) {
+    const head = new Uint32Array(mem, at, HEADER_WORDS);
+    const cap = head[CAP];
+    if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
+    this.at = at;
+    this.cap = cap;
+    this.slot_bytes = head[SLOT_BYTES];
+    this.slot_base = head[SLOT_BASE];
+    this.mask = cap - 1;
+    this.words = new Uint32Array(mem, at, ring_bytes(cap) / 4);
+    // Never a SharedArrayBuffer here, and the tree reader takes an ArrayBuffer view.
+    this.slots = new Uint8Array(
+      mem as ArrayBuffer,
+      this.slot_base,
+      slots_bytes(cap, this.slot_bytes),
+    );
+    this.slot_view = new DataView(
+      mem as ArrayBuffer,
+      this.slot_base,
+      slots_bytes(cap, this.slot_bytes),
+    );
+  }
+
+  static init(
+    mem: ArrayBufferLike,
+    at: u32,
+    cap: u32,
+    slot_base: u32,
+    slot_bytes: u32,
+  ): Ring {
+    if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
+    if (!is_pow2(slot_bytes) || slot_bytes % WORD_SZ !== 0) {
+      throw new InvariantError(Errno.EINVAL);
+    }
+    new Uint8Array(mem as ArrayBuffer, at, ring_bytes(cap)).fill(0);
+    const head = new Uint32Array(mem, at, HEADER_WORDS);
+    head[CAP] = cap;
+    head[SLOT_BYTES] = slot_bytes;
+    head[SLOT_BASE] = slot_base;
+    return new Ring(mem, at);
+  }
+
+  get head(): u32 {
+    return load_acquire(this.words, HEAD);
+  }
+
+  get tail(): u32 {
+    return load_acquire(this.words, TAIL);
+  }
+
+  /** The frames not yet taken, as their producer counts them. */
+  get len(): u32 {
+    return (this.words[TAIL] - this.head) >>> 0;
+  }
+
+  entry_at(pos: u32): u32 {
+    return HEADER_WORDS + ((pos & this.mask) >>> 0) * frame.WORDS;
+  }
+
+  private slot_at(pos: u32): u32 {
+    return ((pos & this.mask) >>> 0) * this.slot_bytes;
+  }
+
+  /** Begins `w` over the tail's slot, a packet of `cnt` children written
+   * in place; false, beginning nothing, when the ring is full. */
+  write(w: PacketWriter, cnt: u32): boolean {
+    if (this.len >= this.cap) return false;
+    w.begin(
+      this.slots,
+      this.slot_view,
+      this.slot_at(this.words[TAIL]),
+      this.slot_bytes,
+      cnt,
+    );
+    return true;
+  }
+
+  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet a writer wrote
+   * in the tail's slot (`write`) exceeds it: refused, never split. */
+  push(
+    tag: u32,
+    cmd: u32,
+    flags: u32 = 0,
+    pkt: PacketWriter | null = null,
+    result: i32 = 0,
+  ): i32 {
+    if (this.len >= this.cap) return Errno.EAGAIN;
+    const w = this.words;
+    const tail = w[TAIL];
+    let pkt_at = 0;
+    if (pkt !== null) {
+      const start = this.slot_at(tail);
+      if (pkt.start !== start) {
+        throw new InvariantError(Errno.ENOTRECOVERABLE);
+      }
+      if (pkt.finish() < 0) return Errno.EMSGSIZE;
+      pkt_at = this.slot_base + start;
+    }
+    const at = this.entry_at(tail);
+    w[at + frame.TAG] = tag;
+    w[at + frame.CMD] = frame.cmd_word(cmd, flags);
+    w[at + frame.RESULT] = result >>> 0;
+    w[at + frame.PKT] = pkt_at;
+    store_release(w, TAIL, (tail + 1) >>> 0);
+    return Errno.OK;
+  }
+
+  /** The entry whose words begin at `offset` in the memory, as `peek` gives
+   * one; EBADMSG where no entry begins there. */
+  entry_of(offset: u32): u32 {
+    const word = (offset - this.at) / 4;
+    if (
+      !Number.isInteger(word) ||
+      word < HEADER_WORDS ||
+      (word - HEADER_WORDS) % frame.WORDS !== 0 ||
+      word >= this.words.length
+    )
+      throw new MarshalError(Errno.EBADMSG);
+    return word;
+  }
+
+  /** -1 when empty. */
+  peek(): number {
+    const head = this.words[HEAD];
+    return this.tail === head ? -1 : this.entry_at(head);
+  }
+
+  tag(at: u32): u32 {
+    return this.words[at + frame.TAG];
+  }
+
+  cmd(at: u32): u32 {
+    return frame.cmd_of(this.words[at + frame.CMD]);
+  }
+
+  flags(at: u32): u32 {
+    return frame.flags_of(this.words[at + frame.CMD]);
+  }
+
+  result(at: u32): i32 {
+    return this.words[at + frame.RESULT] | 0;
+  }
+
+  /** A view valid until `advance`; EBADMSG when it names bytes outside a slot. */
+  pkt(at: u32): U8Array | null {
+    const pkt_at = this.words[at + frame.PKT];
+    if (pkt_at === 0) return null;
+    const off = pkt_at - this.slot_base;
+    if (
+      off < 0 ||
+      off % this.slot_bytes !== 0 ||
+      off + HDR_SZ > this.slots.byteLength
+    )
+      throw new MarshalError(Errno.EBADMSG);
+    const len = pkt_bytes(this.slots, off);
+    if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
+    return this.slots.subarray(off, off + len);
+  }
+
+  /** Past the entry `peek` gave. */
+  advance(): void {
+    store_release(this.words, HEAD, (this.words[HEAD] + 1) >>> 0);
+  }
+}

@@ -5,12 +5,12 @@ import CXpute
 import QuartzCore
 import UIKit
 
-/// A view backed by a Metal layer, which a guest's surface draws into. The
-/// view owns its layer, so it binds the guest's surface to it itself: the
+/// A view backed by a Metal layer, which a core's surface draws into. The
+/// view owns its layer, so it binds the core's surface to it itself: the
 /// surface the app names (`surface`), while the view is in a window, and
 /// never past the moment it lets the layer go. A view reaches its window
 /// after it is mounted and laid out, so it says when it is bound (`onAttach`)
-/// and when it is not (`onDetach`). The guest sizes the surface and draws
+/// and when it is not (`onDetach`). The core sizes the surface and draws
 /// every frame inside a turn, so nothing here draws.
 class SurfaceView: ExpoView {
   override class var layerClass: AnyClass { CAMetalLayer.self }
@@ -18,7 +18,7 @@ class SurfaceView: ExpoView {
   let onAttach = EventDispatcher()
   let onDetach = EventDispatcher()
 
-  /// The guest's surface the app wants shown here; 0 for none.
+  /// The core's surface the app wants shown here; 0 for none.
   var surface: UInt32 = 0 {
     didSet { rebind() }
   }

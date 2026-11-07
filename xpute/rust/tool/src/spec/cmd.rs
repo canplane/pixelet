@@ -1,9 +1,9 @@
 // xpute-tool/spec/cmd.rs
 
 //! A protocol over xpute's rings, xpute's own or a program's: its commands,
-//! as a WIT world names them from the guest's side, `export` what the guest
-//! implements and the host calls and `import` what the host implements and
-//! the guest calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
+//! as a WIT world names them from the core's side, `export` what the core
+//! implements and the runtime calls and `import` what the runtime implements and
+//! the core calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
 //! cmd/cpp.rs; cmd/service.rs writes each end's binding over xpute's ends.
 
 mod cpp;
@@ -41,8 +41,8 @@ struct Member {
     #[serde(skip)]
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
-    event: Option<Vec<Field>>,
-    /// An `import`'s completion's packet, which the host writes and the guest reads.
+    import: Option<Vec<Field>>,
+    /// An `import`'s completion's packet, which the runtime writes and the core reads.
     #[serde(skip)]
     reply: Option<Vec<Field>>,
 }
@@ -86,9 +86,10 @@ struct Record {
 }
 
 /// A command as its protocol lists it. `call`: the sender waits for the answer
-/// (an `export` the host calls, an `import` the host answers before it returns).
-/// `ackreq`: an `import` the host completes on a later turn, a frame of its tag
-/// flagged RES, its packet `reply`.
+/// (an `export` the runtime calls, an `import` the runtime answers before it returns).
+/// `ackreq`: an `import` the runtime completes on a later turn, a frame of its tag
+/// flagged RES, its packet `reply`. `mem`: the two fields of an `import`
+/// that name the core's memory, where it is and how long.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -102,11 +103,12 @@ struct Cmd {
     #[serde(default)]
     ackreq: bool,
     reply: Option<Vec<Field>>,
+    mem: Option<[String; 2]>,
 }
 
-/// A protocol: the commands the host sends the guest (`export`) and those the
-/// guest posts to the host (`import`). `name` is the program's, for the generated
-/// code's names only. The bus reads none of it; a host routes a frame by its
+/// A protocol: the commands the runtime sends the core (`export`) and those the
+/// core posts to the runtime (`import`). `name` is the program's, for the generated
+/// code's names only. The bus reads none of it; a runtime routes a frame by its
 /// command's major.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -133,6 +135,20 @@ struct Doc {
 pub(crate) struct Gen {
     pub(crate) ts: String,
     pub(crate) rs: String,
+    /// Enums a module under the protocol's own code reads, written apart
+    /// where that module can name them.
+    pub(crate) enums: Option<Apart>,
+}
+
+/// The enums `names` written into `rs`, from the JSON's own directory, which
+/// the Rust module `path` is; the protocol's Rust names them from there. Its
+/// TypeScript keeps them all.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Apart {
+    pub(crate) rs: String,
+    pub(crate) path: String,
+    pub(crate) names: Vec<String>,
 }
 
 struct Spec {
@@ -148,12 +164,16 @@ struct Spec {
 /// A protocol as the emitters read it.
 struct Protocol {
     name: String,
-    exports: Vec<(String, bool)>,
+    /// Each export's name, whether it is a call, and whether it is posted with
+    /// ACKREQ and answered later.
+    exports: Vec<(String, bool, bool)>,
     imports: Vec<(String, bool)>,
+    /// Each import that names the core's memory, and its two fields.
+    mem: Vec<(String, [String; 2])>,
 }
 
 /// `json`'s protocol, its commands made `Command`'s members, each `export` a
-/// packet the guest reads and each `import` one it writes.
+/// packet the core reads and each `import` one it writes.
 fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
     let d: Doc = read_as(json)?;
     if d.enums.iter().any(|e| e.name == "Command") {
@@ -166,6 +186,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
         name: d.name.clone(),
         exports: Vec::new(),
         imports: Vec::new(),
+        mem: Vec::new(),
     };
     for (dir, cmds) in [("export", d.export), ("import", d.import)] {
         if cmds.is_empty() {
@@ -175,22 +196,39 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             section: format!("{}, {dir}", d.name),
         }));
         for c in cmds {
-            if (c.ackreq || c.reply.is_some()) && (dir == "export" || c.call) {
+            if c.ackreq && c.call {
+                return Err(format!("{shown}: {} is answered later, so no call", c.name));
+            }
+            if c.reply.is_some() && dir == "export" {
                 return Err(format!(
-                    "{shown}: {} is completed later, so an import and no call",
+                    "{shown}: {} is an export, answered by its result alone",
                     c.name
                 ));
             }
             if c.reply.is_some() && !c.ackreq {
                 return Err(format!("{shown}: {} has a reply and no ackreq", c.name));
             }
-            let (pkt, event) = if dir == "export" {
+            let (pkt, import) = if dir == "export" {
                 (c.pkt, None)
             } else {
                 (None, Some(c.pkt.unwrap_or_default()))
             };
+            if let Some(m) = c.mem {
+                let has = |n: &str| {
+                    import
+                        .as_ref()
+                        .is_some_and(|p| p.iter().any(|f| f.name == n))
+                };
+                if !has(&m[0]) || !has(&m[1]) {
+                    return Err(format!(
+                        "{shown}: {}'s mem names no import's fields",
+                        c.name
+                    ));
+                }
+                of.mem.push((c.name.clone(), m));
+            }
             if dir == "export" {
-                of.exports.push((c.name.clone(), c.call));
+                of.exports.push((c.name.clone(), c.call, c.ackreq));
             } else {
                 of.imports.push((c.name.clone(), c.call));
             }
@@ -199,7 +237,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 val: c.val,
                 doc: c.doc,
                 pkt,
-                event,
+                import,
                 reply: c.reply,
             }));
         }
@@ -250,7 +288,7 @@ impl Spec {
         } else if self.records.iter().any(|r| r.name == ty) {
             Kind::Record
         } else {
-            return Err(format!("cmd.json: no type {ty}"));
+            return Err(format!("protocol: no type {ty}"));
         })
     }
 
@@ -270,7 +308,7 @@ impl Spec {
             .enums
             .iter()
             .find(|e| e.name == "Command")
-            .ok_or("cmd.json has no Command")?;
+            .ok_or("a protocol has no Command")?;
         Ok(members(table).collect())
     }
 }
@@ -290,7 +328,7 @@ fn literal(val: u32, format: &str) -> String {
     }
 }
 
-/// Every command is numbered by a major and a minor that cmd.json names. A
+/// Every command is numbered by a major and a minor that its protocol names. A
 /// table's numbers are each given out once, and no member takes a global's name.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
@@ -360,37 +398,48 @@ struct Target {
     rs_logical: &'static str,
     /// Where the number checks a packet's reader calls are.
     number: &'static str,
-    /// For a guest that raises the table's events: the module whose `Event`
-    /// each implements (`xpute_guest::ipc::door`).
-    event: Option<&'static str>,
+    /// For a core that raises the table's imports: the module whose `Import`
+    /// each implements (`xpute_core::ipc::door`).
+    import: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
-    /// For xpute's own protocols, where the host's TypeScript binding takes
-    /// the host's types from inside its own package.
-    host_ts: Option<&'static str>,
+    /// For xpute's own protocols, where the runtime's TypeScript binding takes
+    /// the runtime's types from inside its own package.
+    runtime_ts: Option<&'static str>,
 }
 
-const TARGETS: [Target; 2] = [
+const TARGETS: [Target; 3] = [
     Target {
-        json: "spec/abi/cmd.json",
-        ts: "ts/host/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/host/abi/cmd.spec.ts",
-        rs: "rust/guest/src/abi/cmd.spec.rs",
-        rs_logical: "xpute-guest/abi/cmd.spec.rs",
+        json: "spec/abi/sys.json",
+        ts: "ts/runtime/src/abi/sys.spec.ts",
+        ts_logical: "@xpute/runtime/abi/sys.spec.ts",
+        rs: "rust/core/src/abi/sys.spec.rs",
+        rs_logical: "xpute-core/abi/sys.spec.rs",
         number: "crate::abi::number",
-        event: Some("crate::ipc::door"),
-        cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-        host_ts: Some("../mod.ts"),
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/sys.spec.hpp", "xpute::abi::sys")),
+        runtime_ts: Some("../mod.ts"),
+    },
+    Target {
+        json: "spec/abi/gpu.json",
+        ts: "ts/runtime/src/abi/gpu.spec.ts",
+        ts_logical: "@xpute/runtime/abi/gpu.spec.ts",
+        rs: "rust/core/src/abi/gpu.spec.rs",
+        rs_logical: "xpute-core/abi/gpu.spec.rs",
+        number: "crate::abi::number",
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/gpu.spec.hpp", "xpute::abi::gpu")),
+        runtime_ts: Some("../mod.ts"),
     },
     Target {
         json: "spec/abi/fs.json",
-        ts: "ts/host/src/abi/fs.spec.ts",
-        ts_logical: "@xpute/host/abi/fs.spec.ts",
-        rs: "rust/guest/src/abi/fs.spec.rs",
-        rs_logical: "xpute-guest/abi/fs.spec.rs",
+        ts: "ts/runtime/src/abi/fs.spec.ts",
+        ts_logical: "@xpute/runtime/abi/fs.spec.ts",
+        rs: "rust/core/src/abi/fs.spec.rs",
+        rs_logical: "xpute-core/abi/fs.spec.rs",
         number: "crate::abi::number",
-        event: Some("crate::ipc::door"),
-        cpp: Some(("cpp/xpute/guest/abi/fs.spec.hpp", "xpute::abi::fs")),
-        host_ts: Some("../mod.ts"),
+        import: Some("crate::ipc::door"),
+        cpp: Some(("cpp/xpute/core/abi/fs.spec.hpp", "xpute::abi::fs")),
+        runtime_ts: Some("../mod.ts"),
     },
 ];
 
@@ -458,17 +507,34 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
         ts_logical: ts_at,
         rs: rs_at,
         rs_logical: rs_at,
-        number: "xpute_guest::abi::number",
-        event: Some("xpute_guest::ipc::door"),
+        number: "xpute_core::abi::number",
+        import: Some("xpute_core::ipc::door"),
         cpp: None,
-        host_ts: None,
+        runtime_ts: None,
     };
     let mut out = ts::emit(spec, &t)?;
-    let (imports, body) = service::ts(spec, "@xpute/host")?;
+    let (imports, body) = service::ts(spec, "@xpute/runtime")?;
     if let Some(first) = out.first_mut() {
         first.text = splice_ts(&first.text, &imports, &body);
     }
-    out.push(Output::new(t.rs, rs::emit(spec, &t)? + &service::rs(spec)?));
+    let apart = gen.enums.as_ref();
+    if let Some(a) = apart {
+        if let Some(n) = a
+            .names
+            .iter()
+            .find(|n| !spec.enums.iter().any(|e| e.name == **n))
+        {
+            return Err(format!(
+                "{json}: gen.enums names {n}, which it does not declare"
+            ));
+        }
+        let at = beside(json, &a.rs)?;
+        out.push(Output::new(&at, rs::emit_apart(spec, &t, &at, a)));
+    }
+    out.push(Output::new(
+        t.rs,
+        rs::emit(spec, &t, apart)? + &service::rs(spec)?,
+    ));
     Ok(out)
 }
 
@@ -484,7 +550,9 @@ fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
         {
             let mut all: Vec<String> = names.split(", ").map(str::to_string).collect();
             for w in ["f64", "i32", "u32", "u8"] {
-                if body_text.contains(&format!(": {w}")) && !all.iter().any(|a| a == w) {
+                if (body_text.contains(&format!(": {w}")) || body_text.contains(&format!("<{w}>")))
+                    && !all.iter().any(|a| a == w)
+                {
                     all.push(w.to_string());
                 }
             }
@@ -526,12 +594,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     check_once(&read)?;
     for (spec, t) in &specs {
         let mut ts = ts::emit(spec, t)?;
-        if let (Some(host), Some(first)) = (t.host_ts, ts.first_mut()) {
-            let (imports, body) = service::ts(spec, host)?;
+        if let (Some(runtime), Some(first)) = (t.runtime_ts, ts.first_mut()) {
+            let (imports, body) = service::ts(spec, runtime)?;
             first.text = splice_ts(&first.text, &imports, &body);
         }
         out.extend(ts);
-        out.push(Output::new(t.rs, rs::emit(spec, t)?));
+        out.push(Output::new(t.rs, rs::emit(spec, t, None)?));
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp::emit(spec, t, path, namespace)?));
         }

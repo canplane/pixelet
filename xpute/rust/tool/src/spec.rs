@@ -37,7 +37,29 @@ impl Output {
     }
 }
 
+/// The packages' version, said once in rust/Cargo.toml's workspace: each
+/// TypeScript package's `package.json` must say the same.
+fn check_versions() -> Result<(), String> {
+    let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
+    let toml = read("rust/Cargo.toml")?;
+    let version = toml
+        .split("[workspace.package]")
+        .nth(1)
+        .and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("version = ")))
+        .map(|v| v.trim_matches('"').to_string())
+        .ok_or("rust/Cargo.toml: no workspace version")?;
+    for p in ["kit", "runtime", "gpu", "native"].map(|n| format!("ts/{n}/package.json")) {
+        let json: serde_json::Value =
+            serde_json::from_str(&read(&p)?).map_err(|e| format!("{p}: {e}"))?;
+        if json["version"].as_str() != Some(version.as_str()) {
+            return Err(format!("{p}: version is not rust/Cargo.toml's {version}"));
+        }
+    }
+    Ok(())
+}
+
 pub fn outputs() -> Result<Vec<Output>, String> {
+    check_versions()?;
     let mut out = cmd::outputs()?;
     // The example's machine and protocol, kept beside xpute's own code.
     out.extend(machine::outputs(&root(), "rust/example/machine.json")?);
@@ -54,9 +76,19 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 /// deletes every one nothing writes any more, or, not `write`, fails where
 /// one is either.
 pub fn generate(write: bool) -> Result<(), String> {
-    let outputs = outputs()?;
-    let orphans = orphans(&outputs)?;
-    let root = root();
+    generate_at(&root(), outputs()?, &[], write)
+}
+
+/// `generate` for a program's outputs, each path from `root`. A file under
+/// one of `others`, a tree whose files another generator writes, is not
+/// this one's to delete.
+pub fn generate_at(
+    root: &Path,
+    outputs: Vec<Output>,
+    others: &[&str],
+    write: bool,
+) -> Result<(), String> {
+    let orphans = orphans(root, &outputs, others)?;
     for o in &orphans {
         if write {
             std::fs::remove_file(root.join(o)).map_err(|e| format!("{o}: {e}"))?;
@@ -65,7 +97,7 @@ pub fn generate(write: bool) -> Result<(), String> {
             eprintln!("spec: {o} says it is generated, but nothing writes it — run `make spec`");
         }
     }
-    let applied = apply(outputs, write);
+    let applied = apply_at(root, outputs, write);
     if write || orphans.is_empty() {
         return applied;
     }
@@ -79,13 +111,12 @@ pub fn generate(write: bool) -> Result<(), String> {
 /// its comment's mark (`generated`).
 const MARK: &str = "GENERATED from ";
 
-/// The tracked files under the root that carry `MARK` and that no output
-/// writes.
-fn orphans(outputs: &[Output]) -> Result<Vec<String>, String> {
-    let root = root();
+/// The tracked files under `root`, outside `others`, that carry `MARK` and
+/// that no output writes.
+fn orphans(root: &Path, outputs: &[Output], others: &[&str]) -> Result<Vec<String>, String> {
     let listed = Command::new("git")
         .args(["ls-files", "-z"])
-        .current_dir(&root)
+        .current_dir(root)
         .output()
         .map_err(|e| format!("git ls-files: {e}"))?;
     if !listed.status.success() {
@@ -96,6 +127,7 @@ fn orphans(outputs: &[Output]) -> Result<Vec<String>, String> {
     Ok(listed
         .split('\0')
         .filter(|p| !p.is_empty() && !written.contains(p))
+        .filter(|p| !others.iter().any(|o| p.starts_with(o)))
         .filter(|p| marked(&root.join(p)))
         .map(str::to_string)
         .collect())
@@ -112,13 +144,8 @@ fn marked(path: &Path) -> bool {
             .any(|l| l.trim_start_matches(['/', '#', '*', ' ']).starts_with(MARK))
 }
 
-/// Writes every output that differs from the file on disk, or, not `write`,
-/// fails where one does.
-pub fn apply(outputs: Vec<Output>, write: bool) -> Result<(), String> {
-    apply_at(&root(), outputs, write)
-}
-
-/// `apply`, each output's path from `root`.
+/// Writes every output that differs from the file on disk, each path from
+/// `root`, or, not `write`, fails where one does.
 pub fn apply_at(root: &Path, outputs: Vec<Output>, write: bool) -> Result<(), String> {
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs
@@ -307,6 +334,20 @@ pub fn read(path: &str) -> Result<Node, String> {
 pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
+}
+
+/// A `#RRGGBB` color as one number, `0xRRGGBB`.
+pub fn rgb(hex: &str) -> Result<u32, String> {
+    let digits = hex
+        .strip_prefix('#')
+        .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
+    digits
+        .and_then(|d| u32::from_str_radix(d, 16).ok())
+        .ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
+}
+
+pub fn rgb_literal(hex: &str) -> Result<String, String> {
+    Ok(format!("0x{:06x}", rgb(hex)?))
 }
 
 pub fn js_num(n: f64) -> String {

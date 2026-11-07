@@ -1,24 +1,18 @@
 // @xpute/gpu/web.ts
 
 /**
- * A page's GPU, granted to a guest (@xpute/host `Gpu`): the device asked for
- * as the guest's machine asks, asked again after a loss or a refusal while the
- * page is shown; the guest's stream run on it by the host (host.ts) as each
- * turn returns; the guest told when a device answers; and the canvases the
- * program binds by the guest's handle. A wasm module reaches WebGPU no other
+ * A page's GPU, granted to a core (@xpute/runtime `Gpu`): the device asked for
+ * as the core's machine asks, asked again after a loss or a refusal while the
+ * page is shown; the core's stream run on it by the runtime (runtime.ts) as each
+ * turn returns; the core told when a device answers; and the canvases the
+ * program binds by the core's handle. A wasm module reaches WebGPU no other
  * way.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Gpu, GpuGrant } from "@xpute/host";
-import { each_record } from "@xpute/host/ipc/stream.ts";
-import { GpuHost } from "./host.ts";
-
-/** Whether there is a GPU: one, none yet while it asks again, none it will
- * ask for again, none again after one it drew with, no WebGPU here, or none
- * outside a secure context. */
-export type GpuState =
-  "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure";
+import type { Canvas, Gpu, GpuGrant, GpuState } from "@xpute/runtime";
+import { each_record } from "@xpute/runtime/ipc/stream.ts";
+import { GpuRuntime } from "./runtime.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an
@@ -29,27 +23,21 @@ const RETRY_MS = 1000;
 const TRIES = 10;
 
 export class WebGpu implements Gpu {
-  private host: GpuHost | null = null;
+  private runtime: GpuRuntime | null = null;
   private granted: GpuGrant | null = null;
-  /** What the program is told of the GPU, and the last it was told. */
-  private report: (state: GpuState) => void = () => {};
+  /** Who is told of the GPU, and the last they were told. */
+  private readonly _reports: ((state: GpuState) => void)[] = [];
   private state: GpuState | null = null;
   /** So an outage is logged once at start and once at end. */
   private tries = 0;
   /** A device answered once: giving up after it is losing the GPU, not lacking one. */
   private had = false;
-  /** A canvas transfers once: an effect mounted again is handed the same one. */
-  private readonly offscreens = new WeakMap<
-    HTMLCanvasElement,
-    OffscreenCanvas
-  >();
   /** In the order they were bound, so a device acquired again binds each
    * slot's newest last. */
-  private readonly canvases = new Map<u32, OffscreenCanvas>();
+  private readonly canvases = new Map<u32, Canvas>();
 
-  /** `report` is told whether there is a GPU, the last word at once. */
   watch(report: (state: GpuState) => void): void {
-    this.report = report;
+    this._reports.push(report);
     if (this.state !== null) report(this.state);
   }
 
@@ -65,32 +53,29 @@ export class WebGpu implements Gpu {
   }
 
   /** With no device the records are dropped, the stream handed back unrun:
-   * the guest remakes everything on the next one. */
+   * the core remakes everything on the next one. */
   after_turn(): void {
     if (!this.granted) return;
-    if (this.host) this.host.run(this.granted.at);
+    if (this.runtime) this.runtime.run(this.granted.at);
     else each_record(this.granted.mem, this.granted.at, () => {});
   }
 
-  bind(handle: u32, canvas: HTMLCanvasElement): void {
-    let offscreen = this.offscreens.get(canvas);
-    if (!offscreen) {
-      offscreen = canvas.transferControlToOffscreen();
-      this.offscreens.set(canvas, offscreen);
-    }
+  /** A canvas drawn where it is: a page's own, or the one a page transferred
+   * to the worker its runtime runs in. */
+  bind(handle: u32, canvas: Canvas): void {
     this.canvases.delete(handle);
-    this.canvases.set(handle, offscreen);
-    this.host?.bind(handle, offscreen.getContext("webgpu")!);
+    this.canvases.set(handle, canvas);
+    this.runtime?.bind(handle, canvas.getContext("webgpu")!);
   }
 
   unbind(handle: u32): void {
     this.canvases.delete(handle);
-    this.host?.unbind(handle);
+    this.runtime?.unbind(handle);
   }
 
   private tell(state: GpuState): void {
     this.state = state;
-    this.report(state);
+    for (const report of this._reports) report(state);
   }
 
   private request(): void {
@@ -131,22 +116,17 @@ export class WebGpu implements Gpu {
     );
   }
 
-  /** A hidden page draws nothing, so it waits to be shown. */
+  /** A hidden page draws nothing, so an ask waits to be shown and spends no
+   * try; a worker has no document, so the core's runtime says. */
   private retry(): void {
-    if (document.visibilityState === "visible") {
-      setTimeout(() => this.request(), RETRY_MS);
-      return;
-    }
-    const shown = () => {
-      if (document.visibilityState !== "visible") return;
-      document.removeEventListener("visibilitychange", shown);
-      this.request();
-    };
-    document.addEventListener("visibilitychange", shown);
+    setTimeout(
+      () => (this.granted!.shown() ? this.request() : this.retry()),
+      RETRY_MS,
+    );
   }
 
-  /** False where no adapter answered. What the device is, the guest reads
-   * from the block its first call asks the host for. */
+  /** False where no adapter answered. What the device is, the core reads
+   * from the block its first call asks the runtime for. */
   private async acquire(): Promise<boolean> {
     const adapter = await navigator.gpu.requestAdapter({
       powerPreference: this.granted!.ask.power as GPUPowerPreference,
@@ -164,17 +144,17 @@ export class WebGpu implements Gpu {
         ),
       ],
     });
-    const h = new GpuHost(
+    const h = new GpuRuntime(
       d,
       () => this.granted!.mem,
       () => this.granted?.wake(),
     );
     d.lost.then((info) => {
       // Nothing here destroys the device, so a loss is always the browser's;
-      // the guest hears of it from the host, and asking again is the socket's.
+      // the core hears of it from the runtime, and asking again is the socket's.
       console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
-      if (this.host !== h) return;
-      this.host = null;
+      if (this.runtime !== h) return;
+      this.runtime = null;
       this.tell("waiting");
       this.retry();
     });
@@ -182,7 +162,7 @@ export class WebGpu implements Gpu {
     this.canvases.forEach((canvas, handle) =>
       h.bind(handle, canvas.getContext("webgpu")!),
     );
-    this.host = h;
+    this.runtime = h;
     return true;
   }
 }

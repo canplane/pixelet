@@ -34,7 +34,7 @@ struct At {
     std::uint32_t readback;
 
     std::span<const std::uint8_t> input_bytes() const { return {mem.at(input), input_len}; }
-    // The fence and the result after it (spec RESULT), the host's.
+    // The fence and the result after it (spec RESULT), the runtime's.
     const std::array<std::uint32_t, 2> &done() const { return *reinterpret_cast<const std::array<std::uint32_t, 2> *>(mem.at(done_at)); }
     // Reads `n` bytes of `buffer` back to the record's place, as WebGPU reads
     // back: copied into a buffer made to be mapped, then mapped.
@@ -390,7 +390,7 @@ XPUTE_TEST(gpu_programs_match_record) {
             std::vector<std::uint8_t> got(mem.at(0), mem.at(0) + n);
             std::string key = name + ".turn." + std::to_string(turn);
             XPUTE_CHECK_EQ(got == g.bytes(key), true, key.c_str());
-            // Read as a host runs it, and handed back.
+            // Read as a runtime runs it, and handed back.
             mem.set_word(0, 0);
             turn++;
         });

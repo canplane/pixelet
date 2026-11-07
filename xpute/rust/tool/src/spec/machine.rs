@@ -1,9 +1,9 @@
 // xpute-tool/spec/machine.rs
 
 //! A program's machine (spec/machine.schema.json): the sockets xpute gives
-//! its guest — the memory, the stack, the rings and the GPU socket — written
+//! its core — the memory, the stack, the rings and the GPU device — written
 //! as `MACHINE` for both ends where its `gen` says: the front's places among
-//! it, which the host lays and the guest holds its header to. Nothing a
+//! it, which the runtime lays and the core holds its header to. Nothing a
 //! protocol carries is in it.
 
 use std::path::Path;
@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use super::{beside, file, generated, read_as, Output};
 
-/// The page every range of the front begins on (xpute-guest mem/section.rs
+/// The page every range of the front begins on (xpute-core mem/section.rs
 /// `PAGE_BYTES`).
 const PAGE_BYTES: u32 = 4096;
 
@@ -25,7 +25,7 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-/// A ring's words (xpute-guest ipc/ring.rs `ring_bytes`).
+/// A ring's words (xpute-core ipc/ring.rs `ring_bytes`).
 const fn ring_bytes(cap: u32) -> u32 {
     (RING_HEADER_WORDS + cap * FRAME_WORDS) * 4
 }
@@ -117,7 +117,7 @@ struct Fs {
     _doc: Vec<String>,
 }
 
-/// The front's places, as xpute-guest machine.rs computes them: the
+/// The front's places, as xpute-core machine.rs computes them: the
 /// header's page past the stack, the rings, their slots, and the GPU stream
 /// past them, 0 without a GPU.
 impl Machine {
@@ -192,13 +192,13 @@ fn machine_rs(m: &Machine, json: &str, shown: &str) -> String {
         "//".into(),
         generated(json),
         String::new(),
-        "//! The machine its JSON declares (xpute-guest machine.rs), which a build".into(),
+        "//! The machine its JSON declares (xpute-core machine.rs), which a build".into(),
         "//! script includes too as it links the module.".into(),
         String::new(),
         if m.gpu.is_some() {
-            "use xpute_guest::machine::{Gpu, Machine};".into()
+            "use xpute_core::machine::{Gpu, Machine};".into()
         } else {
-            "use xpute_guest::machine::Machine;".into()
+            "use xpute_core::machine::Machine;".into()
         },
         String::new(),
         "pub const MACHINE: Machine = Machine {".into(),
@@ -215,7 +215,7 @@ fn machine_rs(m: &Machine, json: &str, shown: &str) -> String {
         format!("    gpu: {gpu},"),
         "};".into(),
         String::new(),
-        "// The host's MACHINE places the front's parts at these same numbers.".into(),
+        "// The runtime's MACHINE places the front's parts at these same numbers.".into(),
     ];
     for (name, at) in m.places() {
         lines.push(format!("const _: () = assert!(MACHINE.{name}() == {at});"));
@@ -240,10 +240,10 @@ fn machine_ts(m: &Machine, json: &str, shown: &str) -> String {
         "//".into(),
         generated(json),
         String::new(),
-        "/** The machine its JSON declares: the sizes a host may give, what a".into(),
+        "/** The machine its JSON declares: the sizes a runtime may give, what a".into(),
         " * reservation is counted in, the rings' sizes, where the front's header,".into(),
         " * the rings, their slots and the GPU stream lie (0 without a GPU), which".into(),
-        " * the host lays before the first turn, whether it asks for the file".into(),
+        " * the runtime lays before the first turn, whether it asks for the file".into(),
         " * device, and the GPU it asks for. */".into(),
         "export const MACHINE = {".into(),
         format!("  mem_bytes: [{}],", sizes.join(", ")),

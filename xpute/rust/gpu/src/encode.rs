@@ -1,6 +1,6 @@
 // xpute-gpu/encode.rs
 
-//! A guest's GPU calls written as a stream's records (`ipc/stream`), in the
+//! A core's GPU calls written as a stream's records (`ipc/stream`), in the
 //! words spec/gpu/api.json gives each op. Objects are handles from one table;
 //! a record that does not fit an open transaction is not written, and an
 //! object it would have made is handed back.
@@ -11,9 +11,9 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem::off_of_slice;
+use xpute_core::abi::handle::Table;
+use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::mem::off_of_slice;
 
 use crate::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
@@ -24,20 +24,20 @@ use crate::enums::{
 };
 use crate::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
 
-/// An object the guest made: a handle of the table its encoder holds.
+/// An object the core made: a handle of the table its encoder holds.
 pub type Id = u32;
 
-/// A word a record named for the host to answer (a fence, a device
-/// block's STATUS), loaded with acquire: what the host wrote before it is
+/// A word a record named for the runtime to answer (a fence, a device
+/// block's STATUS), loaded with acquire: what the runtime wrote before it is
 /// seen (ipc/stream.rs R4).
 pub fn load_acquire(word: &u32) -> u32 {
-    // SAFETY: a live, aligned word, which the host stores into only
+    // SAFETY: a live, aligned word, which the runtime stores into only
     // atomically; nothing here writes through it.
     unsafe { AtomicU32::from_ptr(core::ptr::from_ref(word).cast_mut()) }.load(Ordering::Acquire)
 }
 
 /// Whether the request asked with `ticket` on the fence `fence` is
-/// answered (spec RESULT): the host stored that ticket there.
+/// answered (spec RESULT): the runtime stored that ticket there.
 pub fn signaled(fence: &u32, ticket: u32) -> bool {
     load_acquire(fence) == ticket
 }
@@ -737,8 +737,8 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// As `render_pipeline`, made where the host can without holding its
-    /// thread: the host stores `ticket` at the fence `fence` once it is
+    /// As `render_pipeline`, made where the runtime can without holding its
+    /// thread: the runtime stores `ticket` at the fence `fence` once it is
     /// made (spec RESULT), and no record names it before.
     pub fn render_pipeline_async(
         &mut self,
@@ -872,7 +872,7 @@ impl<const N: usize> Gpu<N> {
     }
 
     /// False where the transaction did not fit: the stream is as at `begin`,
-    /// and every handle taken since is free again, as the host never saw it.
+    /// and every handle taken since is free again, as the runtime never saw it.
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
@@ -883,7 +883,7 @@ impl<const N: usize> Gpu<N> {
     }
 
     /// Ends a pass. Its handle is free whether or not the record was written:
-    /// one dropped with its transaction left nothing on the host.
+    /// one dropped with its transaction left nothing on the runtime.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
         let sent = emit(stream, op::END, &|s| s.word(pass));
         self.release(pass);
@@ -944,7 +944,7 @@ pub mod call {
         record_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
-    /// The bytes read where they lie in the guest's memory when the host
+    /// The bytes read where they lie in the core's memory when the runtime
     /// runs the stream, no copy made (ipc/stream.rs R3).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         words(
@@ -1009,7 +1009,7 @@ pub mod call {
         })
     }
 
-    /// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
+    /// An encoded image (PNG, JPEG, WebP) where it lies in the core's memory,
     /// decoded into `to`; `fence` its fence and result (spec RESULT),
     /// `ticket` landing there once it is in or refused.
     pub fn copy_external_image(
@@ -1274,8 +1274,17 @@ pub mod call {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
+    /// `id`, any object, encoder or pass made before, named `label` in the
+    /// device's messages.
+    pub fn label(stream: &mut Stream, id: Id, label: &str) -> bool {
+        emit(stream, op::LABEL, &|s| {
+            s.word(id);
+            s.bytes(label.as_bytes());
+        })
+    }
+
     /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
-    /// before) read into the guest's memory at `into`; `fence` its fence
+    /// before) read into the core's memory at `into`; `fence` its fence
     /// and result (spec RESULT), `ticket` landing there once the bytes are
     /// there and the buffer is unmapped, or the mapping refused.
     pub fn map_async(
@@ -1310,7 +1319,7 @@ pub mod call {
         )
     }
 
-    /// `format` None for the format the host's surface prefers.
+    /// `format` None for the format the runtime's surface prefers.
     pub fn configure(
         stream: &mut Stream,
         surface: u32,
@@ -1334,13 +1343,19 @@ pub mod call {
         words(stream, op::RESIZE, &[surface, size[0], size[1]])
     }
 
-    /// Where the host writes the device's limits, features and status.
+    /// Where the runtime writes the device's limits, features, frames
+    /// unfinished and status, which the page's admission reads
+    /// (`admit::page`).
     pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
-        words(
+        let asked = words(
             stream,
             op::DEVICE,
             &[off_of_slice(into) as u32, into.len() as u32],
-        )
+        );
+        if asked {
+            crate::admit::ask(into);
+        }
+        asked
     }
 }
 

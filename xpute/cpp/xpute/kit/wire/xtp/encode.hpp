@@ -81,11 +81,11 @@ class PacketWriter {
     // Writing a different number of children than `count` is a bug.
     template <class F> PacketWriter &branch(std::uint32_t cnt, F &&fill) noexcept {
         std::optional<std::uint32_t> at = branch_open(cnt);
-        Frame outer = frame_;
-        frame_ = Frame{.base = at.value_or(0), .cnt = cnt, .written = 0, .root = false};
+        Table outer = table_;
+        table_ = Table{.base = at.value_or(0), .cnt = cnt, .written = 0, .root = false};
         fill(*this);
-        ensure(frame_.written == frame_.cnt, Errno::enotrecoverable, frame_.cnt, frame_.written);
-        frame_ = outer;
+        ensure(table_.written == table_.cnt, Errno::enotrecoverable, table_.cnt, table_.written);
+        table_ = outer;
         return entry(branch_close(at), type_of(SpecialType::branch));
     }
 
@@ -99,7 +99,7 @@ class PacketWriter {
 
   private:
     // The root is a branch of one whose entry is the header.
-    struct Frame {
+    struct Table {
         std::uint32_t base;
         std::uint32_t cnt;
         std::uint32_t written;
@@ -134,7 +134,7 @@ class PacketWriter {
     std::optional<std::uint32_t> branch_close(std::optional<std::uint32_t> at) noexcept;
 
     std::span<std::uint8_t> buf_;
-    Frame frame_{.base = 0, .cnt = 1, .written = 0, .root = true};
+    Table table_{.base = 0, .cnt = 1, .written = 0, .root = true};
     NodeType root_type_ = type_of(SpecialType::nil);
     std::uint32_t lim_ = HDR_SZ;
     // The first reason only.

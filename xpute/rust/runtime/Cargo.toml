@@ -1,0 +1,49 @@
+[package]
+name = "xpute-runtime"
+description = "xpute's runtime end in Rust: a core's memory by offset, and a core linked into the runtime's own native process"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-core.workspace = true
+xpute-kit.workspace = true
+
+# The core memory a native runtime reserves, mapped from the system
+# (src/native/reserve.rs). `native` is unix's alone.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# What an Android app reaches a native core through (src/jni.rs), and the
+# log a stop is told to (src/native/say.rs): the NDK's own headers, JNI and
+# the log, as bindings and nothing over them.
+[target.'cfg(target_os = "android")'.dependencies]
+jni-sys = "0.3"
+ndk-sys = "0.6"
+
+# Each its own process, since a process boots one core and sets one base
+# (xpute_core::mem): the boot and the core's thread, and the
+# allocator installed as a test binary's own.
+[[test]]
+name = "native"
+path = "src/native.test.rs"
+
+[[test]]
+name = "native-alloc"
+path = "src/native/alloc.test.rs"
+
+[[test]]
+name = "native-pause"
+path = "src/native/pause.test.rs"
+
+[lints.clippy]
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+borrow_as_ptr = "warn"
+ref_as_ptr = "warn"

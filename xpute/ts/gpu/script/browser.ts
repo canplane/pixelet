@@ -1,4 +1,4 @@
-// Runs ts/gpu/src/host.test.ts where the web host runs: in Chrome, on its
+// Runs ts/gpu/src/runtime.test.ts where the web runtime runs: in Chrome, on its
 // WebGPU. The test is bundled for the browser and served at its own path
 // beside the tree's spec/, Chrome is started headless on the page, and the
 // page posts its outcome back. No Chrome, or no WebGPU in it, fails.
@@ -16,8 +16,8 @@ import { build } from "vite";
 
 /** xpute's root, three up: the spec it serves, and ts/target/, which it bundles into. */
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const TEST = "ts/gpu/src/host.test.ts";
-const BUNDLE = join(ROOT, "ts/target/browser/host.test.js");
+const TEST = "ts/gpu/src/runtime.test.ts";
+const BUNDLE = join(ROOT, "ts/target/browser/runtime.test.js");
 const CHROME =
   process.env.CHROME ??
   (process.platform === "darwin"
@@ -89,7 +89,7 @@ async function main(): Promise<number> {
       setTimeout(
         () => reject(new Error(`no outcome from Chrome in ${SECONDS} s`)),
         SECONDS * 1000,
-      ).unref(),
+      ),
     );
     const said = await Promise.race([outcome, late]);
     console.log(

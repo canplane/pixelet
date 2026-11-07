@@ -288,12 +288,12 @@
     {
       "name": "EHOSTDOWN",
       "val": -112,
-      "doc": "Host is down"
+      "doc": "Runtime is down"
     },
     {
       "name": "EHOSTUNREACH",
       "val": -113,
-      "doc": "No route to host"
+      "doc": "No route to runtime"
     },
     {
       "name": "EALREADY",

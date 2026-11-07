@@ -72,8 +72,8 @@ export const ESHUTDOWN = -108; // Cannot send after transport endpoint shutdown
 export const ETOOMANYREFS = -109; // Too many references
 export const ETIMEDOUT = -110; // Connection timed out
 export const ECONNREFUSED = -111; // Connection refused
-export const EHOSTDOWN = -112; // Host is down
-export const EHOSTUNREACH = -113; // No route to host
+export const EHOSTDOWN = -112; // Runtime is down
+export const EHOSTUNREACH = -113; // No route to runtime
 export const EALREADY = -114; // Operation already in progress
 export const EINPROGRESS = -115; // Operation now in progress
 
@@ -154,8 +154,8 @@ const STRERROR: Record<number, string> = {
   [-109]: "ETOOMANYREFS: Too many references",
   [-110]: "ETIMEDOUT: Connection timed out",
   [-111]: "ECONNREFUSED: Connection refused",
-  [-112]: "EHOSTDOWN: Host is down",
-  [-113]: "EHOSTUNREACH: No route to host",
+  [-112]: "EHOSTDOWN: Runtime is down",
+  [-113]: "EHOSTUNREACH: No route to runtime",
   [-114]: "EALREADY: Operation already in progress",
   [-115]: "EINPROGRESS: Operation now in progress",
   [-125]: "ECANCELED: Operation canceled",

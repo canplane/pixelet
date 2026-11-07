@@ -1,9 +1,9 @@
 // xpute-tool/spec/cmd/rs.rs
 
 //! The command table as Rust: its enums, each packet's reader and each
-//! event's writer, for a Rust guest.
+//! import's writer, for a Rust core.
 
-use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
+use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
 
 pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
@@ -43,7 +43,7 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "cmd.json: Rust reads no {} ({})",
+            "protocol: Rust reads no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
@@ -85,7 +85,7 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         None => {
             let x = spec
                 .extern_of(&f.ty)
-                .ok_or(format!("cmd.json: no type {}", f.ty))?;
+                .ok_or(format!("protocol: no type {}", f.ty))?;
             (x.repr.clone(), None)
         }
     };
@@ -120,7 +120,7 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         }
         if kind != Kind::Record {
             return Err(format!(
-                "cmd.json: a list of {} ({}) is not written",
+                "protocol: a list of {} ({}) is not written",
                 f.ty, f.name
             ));
         }
@@ -230,7 +230,62 @@ fn rs_writer(
     Ok(())
 }
 
-pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
+/// `e` as a Rust enum, each member its number, and `of` reading one.
+fn enum_decl(e: &Enum, out: &mut Vec<String>) {
+    let all: Vec<&Member> = members(e).collect();
+    out.push(String::new());
+    if let Some(doc) = &e.doc {
+        out.extend(rs_doc(doc, "", "///"));
+    }
+    out.push(format!(
+        "#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]",
+        if e.default.is_some() { "Default, " } else { "" }
+    ));
+    out.push("#[repr(u32)]".into());
+    out.push(format!("pub enum {} {{", e.name));
+    for entry in &e.entries {
+        match entry {
+            Entry::Section(s) => {
+                out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
+            }
+            Entry::Member(m) => {
+                if let Some(doc) = &m.doc {
+                    out.extend(rs_doc(doc, "    ", "///"));
+                }
+                if e.default.as_deref() == Some(m.name.as_str()) {
+                    out.push("    #[default]".into());
+                }
+                out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
+            }
+        }
+    }
+    out.extend(["}".to_string(), String::new()]);
+    out.extend([
+        format!("impl {} {{", e.name),
+        format!(
+            "    pub const ALL: [{}; {}] = [{}];",
+            e.name,
+            all.len(),
+            all.iter()
+                .map(|m| format!("{}::{}", e.name, m.name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        String::new(),
+        "    /// The member a number names, or none for a number nobody gave out.".to_string(),
+        format!("    pub fn of(number: u32) -> Option<{}> {{", e.name),
+        format!(
+            "        {}::ALL.into_iter().find(|m| *m as u32 == number)",
+            e.name
+        ),
+        "    }".to_string(),
+        "}".to_string(),
+    ]);
+}
+
+/// The protocol's messages as Rust; the enums `apart` names are written
+/// apart (`emit_apart`) and named from there.
+pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<String, String> {
     let mut out = vec![
         format!("// {}", t.rs_logical),
         "//".into(),
@@ -243,7 +298,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "",
             "// A list a record carries is a function handing out its items, whose",
             "// type is long to spell and is spelled once, here, for each. A table",
-            "// with no event or no enum read off the wire leaves a writer or a",
+            "// with no import or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
             "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
@@ -257,63 +312,27 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.pkt.iter().chain(c.event.iter()).chain(c.reply.iter()).flatten())
+        .flat_map(|c| {
+            c.pkt
+                .iter()
+                .chain(c.import.iter())
+                .chain(c.reply.iter())
+                .flatten()
+        })
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
         if strs { "Strs, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
-    for e in &spec.enums {
-        let all: Vec<&Member> = members(e).collect();
-        out.push(String::new());
-        if let Some(doc) = &e.doc {
-            out.extend(rs_doc(doc, "", "///"));
-        }
-        out.push(format!(
-            "#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]",
-            if e.default.is_some() { "Default, " } else { "" }
-        ));
-        out.push("#[repr(u32)]".into());
-        out.push(format!("pub enum {} {{", e.name));
-        for entry in &e.entries {
-            match entry {
-                Entry::Section(s) => {
-                    out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
-                }
-                Entry::Member(m) => {
-                    if let Some(doc) = &m.doc {
-                        out.extend(rs_doc(doc, "    ", "///"));
-                    }
-                    if e.default.as_deref() == Some(m.name.as_str()) {
-                        out.push("    #[default]".into());
-                    }
-                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
-                }
-            }
-        }
-        out.extend(["}".to_string(), String::new()]);
-        out.extend([
-            format!("impl {} {{", e.name),
-            format!(
-                "    pub const ALL: [{}; {}] = [{}];",
-                e.name,
-                all.len(),
-                all.iter()
-                    .map(|m| format!("{}::{}", e.name, m.name))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            String::new(),
-            "    /// The member a number names, or none for a number nobody gave out.".to_string(),
-            format!("    pub fn of(number: u32) -> Option<{}> {{", e.name),
-            format!(
-                "        {}::ALL.into_iter().find(|m| *m as u32 == number)",
-                e.name
-            ),
-            "    }".to_string(),
-            "}".to_string(),
-        ]);
+    let names: &[String] = apart.map_or(&[], |a| &a.names);
+    if let Some(a) = apart {
+        let mut sorted = names.to_vec();
+        sorted.sort();
+        out.push(format!("pub use {}::{{{}}};", a.path, sorted.join(", ")));
+    }
+    for e in spec.enums.iter().filter(|e| !names.contains(&e.name)) {
+        enum_decl(e, &mut out);
     }
     for r in &spec.records {
         rs_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
@@ -322,7 +341,11 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         let pascal_name = pascal(&c.name);
         let pkts = [
             (c.pkt.as_ref(), pascal_name.clone(), "packet"),
-            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{pascal_name}Reply"), "completion's packet"),
+            (
+                c.reply.as_ref().filter(|r| !r.is_empty()),
+                format!("{pascal_name}Reply"),
+                "completion's packet",
+            ),
         ];
         for (pkt, name, what) in pkts {
             let Some(pkt) = pkt else {
@@ -366,18 +389,22 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ]);
         }
         let name = pascal_name;
-        if let Some(event) = &c.event {
-            let doc = [format!("Command::{}'s event.", c.name)];
-            rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;
-            if let Some(door) = t.event {
-                let lt = if rs_borrows(spec, event)? { "<'_>" } else { "" };
+        if let Some(import) = &c.import {
+            let doc = [format!("Command::{}'s packet.", c.name)];
+            rs_writer(spec, &mut out, &name, Some(&doc), import)?;
+            if let Some(door) = t.import {
+                let lt = if rs_borrows(spec, import)? {
+                    "<'_>"
+                } else {
+                    ""
+                };
                 out.extend([
                     String::new(),
-                    format!("impl {door}::Event for {name}Event{lt} {{"),
+                    format!("impl {door}::Import for {name}{lt} {{"),
                     format!("    const NUMBER: u32 = {};", c.val),
-                    format!("    const FIELDS: u32 = {};", event.len()),
+                    format!("    const FIELDS: u32 = {};", import.len()),
                     "    fn write(&self, w: &mut PacketWriter) {".to_string(),
-                    format!("        {name}Event::write(self, w);"),
+                    format!("        {name}::write(self, w);"),
                     "    }".to_string(),
                     "}".to_string(),
                 ]);
@@ -385,4 +412,37 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         }
     }
     Ok(file(&out))
+}
+
+/// The enums `a` names, as `emit` would write them, in a file of their own
+/// at `at`.
+pub(super) fn emit_apart(spec: &Spec, t: &Target, at: &str, a: &Apart) -> String {
+    let mut out = vec![
+        format!("// {at}"),
+        "//".into(),
+        generated(t.json),
+        "".into(),
+    ];
+    out.extend(rs_doc(
+        &[
+            format!(
+                "The {} protocol's enums a module under its own code reads,",
+                spec.protocol.name
+            ),
+            format!("which its code ({}) names from here.", t.rs),
+        ],
+        "",
+        "//!",
+    ));
+    out.extend(
+        [
+            "",
+            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code, reason = \"generated from the spec\")]",
+        ]
+        .map(String::from),
+    );
+    for e in spec.enums.iter().filter(|e| a.names.contains(&e.name)) {
+        enum_decl(e, &mut out);
+    }
+    file(&out)
 }

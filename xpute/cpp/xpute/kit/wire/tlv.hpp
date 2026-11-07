@@ -38,7 +38,7 @@ enum class Tag : std::uint8_t {
     bytes = 0x20,
 };
 
-// Invalid UTF-8 decodes to U+FFFD, as the host decodes it.
+// Invalid UTF-8 decodes to U+FFFD, as the runtime decodes it.
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;

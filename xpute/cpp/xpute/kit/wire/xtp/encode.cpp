@@ -35,10 +35,10 @@ std::optional<std::uint32_t> PacketWriter::reserve(std::uint32_t unit, std::uint
 }
 
 PacketWriter &PacketWriter::entry(std::optional<std::uint32_t> at, NodeType type) noexcept {
-    ensure(frame_.written < frame_.cnt, Errno::enospc, frame_.cnt);
-    if (frame_.root) root_type_ = type;
-    else if (!err_) set_word(buf_, frame_.base + WORD_SZ + frame_.written * WORD_SZ, at ? *at - frame_.base : 0, type);
-    frame_.written++;
+    ensure(table_.written < table_.cnt, Errno::enospc, table_.cnt);
+    if (table_.root) root_type_ = type;
+    else if (!err_) set_word(buf_, table_.base + WORD_SZ + table_.written * WORD_SZ, at ? *at - table_.base : 0, type);
+    table_.written++;
     return *this;
 }
 
@@ -161,7 +161,7 @@ PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> pkt) noexcept {
 }
 
 Result<std::uint32_t> PacketWriter::finish() noexcept {
-    ensure(frame_.root && frame_.written == frame_.cnt, Errno::enotrecoverable, frame_.cnt, frame_.written);
+    ensure(table_.root && table_.written == table_.cnt, Errno::enotrecoverable, table_.cnt, table_.written);
     if (err_) return *err_;
     std::uint64_t end = word_up(lim_);
     if (end > buf_.size()) return marshal_error(Errno::eoverflow);

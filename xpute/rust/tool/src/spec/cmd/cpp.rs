@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/cpp.rs
 
-//! The command table as a C++ guest's header: its enums and each packet's
-//! reader, and each event's struct and writer; a C++ guest writes no record.
+//! The command table as a C++ core's header: its enums and each packet's
+//! reader, and each import's struct and writer; a C++ core writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
@@ -9,7 +9,7 @@ use crate::spec::{file, generated, pascal};
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
-        return Err(format!("cmd.json: a C++ guest reads no list ({})", f.name));
+        return Err(format!("protocol: a C++ core reads no list ({})", f.name));
     }
     let one = match kind {
         Kind::Number => cpp_number(&f.ty).to_string(),
@@ -17,7 +17,7 @@ fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Bool => "bool".to_string(),
         _ => {
             return Err(format!(
-                "cmd.json: a C++ guest reads no {} ({})",
+                "protocol: a C++ core reads no {} ({})",
                 f.ty, f.name
             ))
         }
@@ -38,7 +38,7 @@ fn cpp_number(ty: &str) -> &'static str {
     }
 }
 
-/// A number is checked as the Rust guest's is (`abi/number.rs`), never cast into its type.
+/// A number is checked as the Rust core's is (`abi/number.rs`), never cast into its type.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
     let read = |call: String| {
         vec![
@@ -93,13 +93,13 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
 
 fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let one = match spec.kind(&f.ty)? {
-        _ if f.list => return Err(format!("cmd.json: a C++ guest writes no list ({})", f.name)),
+        _ if f.list => return Err(format!("protocol: a C++ core writes no list ({})", f.name)),
         Kind::Number => cpp_number(&f.ty).to_string(),
         Kind::Str => "std::string_view".to_string(),
         Kind::Bool => "bool".to_string(),
         _ => {
             return Err(format!(
-                "cmd.json: a C++ guest writes no {} ({})",
+                "protocol: a C++ core writes no {} ({})",
                 f.ty, f.name
             ))
         }
@@ -121,9 +121,9 @@ fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
     Ok(format!("w.{method}({});", f.name))
 }
 
-/// An event, a frame the guest posts: its number, the children it is written
-/// as, and its writer (cpp/xpute/guest/ipc/door.hpp `Event`).
-fn cpp_event(
+/// An import, a frame the core posts: its number, the children it is written
+/// as, and its writer (cpp/xpute/core/ipc/door.hpp `Import`).
+fn cpp_import(
     spec: &Spec,
     out: &mut Vec<String>,
     c: &Member,
@@ -131,8 +131,8 @@ fn cpp_event(
 ) -> Result<(), String> {
     out.extend([
         String::new(),
-        format!("// Command::{}'s event.", c.name),
-        format!("struct {}Event {{", pascal(&c.name)),
+        format!("// Command::{}'s packet.", c.name),
+        format!("struct {} {{", pascal(&c.name)),
     ]);
     for f in fields {
         if let Some(doc) = &f.doc {
@@ -234,13 +234,17 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
         ]);
     }
     if !spec.records.is_empty() {
-        return Err(format!("{}: a C++ guest writes no record", t.json));
+        return Err(format!("{}: a C++ core writes no record", t.json));
     }
     for c in spec.commands()? {
         let pascal_name = pascal(&c.name);
         let pkts = [
             (c.pkt.as_ref(), pascal_name.clone(), "packet"),
-            (c.reply.as_ref().filter(|r| !r.is_empty()), format!("{pascal_name}Reply"), "completion's packet"),
+            (
+                c.reply.as_ref().filter(|r| !r.is_empty()),
+                format!("{pascal_name}Reply"),
+                "completion's packet",
+            ),
         ];
         for (pkt, name, what) in pkts {
             let Some(pkt) = pkt else {
@@ -281,8 +285,8 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 "};".to_string(),
             ]);
         }
-        if let Some(event) = &c.event {
-            cpp_event(spec, &mut out, c, event)?;
+        if let Some(import) = &c.import {
+            cpp_import(spec, &mut out, c, import)?;
         }
     }
     out.extend([String::new(), format!("}} // namespace {namespace}")]);

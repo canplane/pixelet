@@ -1,0 +1,111 @@
+{
+  "$doc": [
+    "The GPU device's protocol, on major GPU: its state and the surfaces a UI lends it. The",
+    "calls a core makes to the GPU are records of its stream (gpu/api.json), not commands.",
+    "GPU_READY tells the core the device the machine asked for answered. A surface is a",
+    "canvas or a view the UI hands over and the core alone draws from then on, by the handle",
+    "GPU_SURFACE_OPEN answers, the handle the UI binds the canvas under (@xpute/runtime",
+    "`Link.bind`) and the stream's CONFIGURE and CURRENT name. What it shows is the program's."
+  ],
+  "name": "gpu",
+  "export": [
+    {
+      "name": "GPU_READY",
+      "val": 513,
+      "$doc": [
+        "The GPU the machine asked for answered, the first time or again after a loss, whose",
+        "sign is in the stream's device block."
+      ]
+    },
+    {
+      "name": "GPU_SURFACE_OPEN",
+      "val": 514,
+      "$doc": [
+        "Answered with the surface's handle, 0 where the core opens none."
+      ],
+      "ackreq": true
+    },
+    {
+      "name": "GPU_SURFACE_RESIZE",
+      "val": 515,
+      "$doc": [
+        "The surface's layout box in device pixels, transforms aside, and the device pixel ratio;",
+        "the buffer it is drawn into is the core's."
+      ],
+      "pkt": [
+        {
+          "name": "surface",
+          "type": "u32"
+        },
+        {
+          "name": "width",
+          "type": "u32"
+        },
+        {
+          "name": "height",
+          "type": "u32"
+        },
+        {
+          "name": "device_pixel_ratio",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "GPU_SURFACE_CLOSE",
+      "val": 516,
+      "$doc": [
+        "The surface is going: what it drew and held on the device is let go."
+      ],
+      "pkt": [
+        {
+          "name": "surface",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "import": [],
+  "extern": [],
+  "enums": [
+    {
+      "name": "Major",
+      "$doc": [
+        "What a command is about."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "GPU",
+          "val": 2
+        }
+      ]
+    },
+    {
+      "name": "GpuMinor",
+      "$doc": [
+        "The GPU's state and its surfaces."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "READY",
+          "val": 1
+        },
+        {
+          "name": "SURFACE_OPEN",
+          "val": 2
+        },
+        {
+          "name": "SURFACE_RESIZE",
+          "val": 3
+        },
+        {
+          "name": "SURFACE_CLOSE",
+          "val": 4
+        }
+      ]
+    }
+  ],
+  "records": []
+}

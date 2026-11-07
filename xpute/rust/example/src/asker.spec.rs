@@ -2,11 +2,11 @@
 //
 // GENERATED from rust/example/asker.json
 
-//! The example's one protocol: the host sends SUM, and the guest calls ASK as it adds.
+//! The example's one protocol: the runtime sends SUM, and the core calls ASK as it adds.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
-// with no event or no enum read off the wire leaves a writer or a
+// with no import or no enum read off the wire leaves a writer or a
 // number's check unused.
 #![allow(
     non_camel_case_types,
@@ -20,7 +20,7 @@
 
 use core::fmt::Display;
 
-use xpute_guest::abi::number::{finite, integer, unknown};
+use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
@@ -33,7 +33,7 @@ pub enum Command {
     SUM = 0x1001,
 
     // ---- asker, import ----
-    /// A number the host answers, which the guest adds.
+    /// A number the runtime answers, which the core adds.
     ASK = 0x1002,
 }
 
@@ -63,37 +63,37 @@ impl Sum {
     }
 }
 
-/// Command::ASK's event.
-pub struct AskEvent {}
+/// Command::ASK's packet.
+pub struct Ask {}
 
-impl AskEvent {
+impl Ask {
     /// The children it is written as.
     pub const FIELDS: u32 = 0;
 
     pub fn write(&self, _: &mut PacketWriter) {}
 }
 
-impl xpute_guest::ipc::door::Event for AskEvent {
+impl xpute_core::ipc::door::Import for Ask {
     const NUMBER: u32 = 4098;
     const FIELDS: u32 = 0;
     fn write(&self, w: &mut PacketWriter) {
-        AskEvent::write(self, w);
+        Ask::write(self, w);
     }
 }
 
-/// The asker protocol's guest end: what it posts to the host and what it hears from it.
+/// The asker protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod asker {
     use super::*;
-    use xpute_guest::ipc::door::Outcome;
-    use xpute_guest::machine;
+    use xpute_core::ipc::door::Outcome;
+    use xpute_core::machine;
     use xpute_kit::status::errno::Errno;
 
-    /// Command::ASK, answered by the host before this returns.
+    /// Command::ASK, answered by the runtime before this returns.
     pub fn ask() -> Result<u32, Errno> {
-        machine::door().call(&AskEvent {})
+        machine::door().call(&Ask {})
     }
 
-    /// What the program does with each command the host sends.
+    /// What the program does with each command the runtime sends.
     pub trait Exports {
         fn sum(&mut self, c: Sum) -> Outcome;
     }

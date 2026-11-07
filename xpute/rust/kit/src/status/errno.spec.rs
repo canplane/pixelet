@@ -69,8 +69,8 @@ pub enum Errno {
     ETOOMANYREFS = -109, // Too many references
     ETIMEDOUT = -110,    // Connection timed out
     ECONNREFUSED = -111, // Connection refused
-    EHOSTDOWN = -112,    // Host is down
-    EHOSTUNREACH = -113, // No route to host
+    EHOSTDOWN = -112,    // Runtime is down
+    EHOSTUNREACH = -113, // No route to runtime
     EALREADY = -114,     // Operation already in progress
     EINPROGRESS = -115,  // Operation now in progress
 

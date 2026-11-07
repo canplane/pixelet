@@ -1,6 +1,6 @@
 // @xpute/kit/codec/json.test.ts
 
-/** golden/codec/json.tsv as `JSON.parse` judges it; the guests' readers are held to the same record. */
+/** golden/codec/json.tsv as `JSON.parse` judges it; the cores' readers are held to the same record. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -12,7 +12,7 @@ const utf8 = (hex: string): string =>
     Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16)),
   );
 
-test("the host's JSON.parse takes what the record says is JSON", async () => {
+test("the runtime's JSON.parse takes what the record says is JSON", async () => {
   const v = await Golden.load("golden/codec/json.tsv");
   for (let k = 0; v.has(`grammar.${k}.text`); k++) {
     let got = "json";
@@ -25,7 +25,7 @@ test("the host's JSON.parse takes what the record says is JSON", async () => {
   }
 });
 
-test("the host's JSON.parse reads a number past the doubles as an infinity or a zero", async () => {
+test("the runtime's JSON.parse reads a number past the doubles as an infinity or a zero", async () => {
   const v = await Golden.load("golden/codec/json.tsv");
   for (let k = 0; v.has(`number.${k}.text`); k++) {
     const bits = new BigUint64Array(

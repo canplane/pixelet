@@ -3,7 +3,7 @@
 // GENERATED from rust/example/asker.json
 
 /**
- * The example's one protocol: the host sends SUM, and the guest calls ASK as it adds.
+ * The example's one protocol: the runtime sends SUM, and the core calls ASK as it adds.
  */
 
 import type {
@@ -14,7 +14,7 @@ import type {
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Command from "./asker/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import type { Host, OnEvent } from "@xpute/host";
+import type { Sender, OnImport } from "@xpute/runtime";
 
 /** One of Command's, as its enum was a type. */
 type Command = (typeof Command)[keyof typeof Command];
@@ -25,35 +25,36 @@ export function encode_sum(to: PacketRoom, a: u32, b: u32): PacketWriter {
   return to.writer(2).u32(a).u32(b);
 }
 
-/** Command.ASK's event. */
-export interface AskEvent {}
+/** Command.ASK's packet. */
+export interface Ask {}
 
-export function read_ask(_b: BranchCursor): AskEvent {
+export function read_ask(_b: BranchCursor): Ask {
   return {};
 }
 
-/** What the host sends on the asker protocol, bound to `host`: each
- * command rung, or called and answered before it returns. */
-export function asker_exports(host: Host) {
+/** What the runtime sends on the asker protocol, bound to `runtime`: each
+ * command sent, requested and answered later, or called and answered before
+ * it returns. */
+export function asker_exports(runtime: Sender) {
   return {
     sum: (a: u32, b: u32): i32 =>
-      host.call(Command.SUM, (r) => encode_sum(r, a, b)),
+      runtime.call(Command.SUM, (r) => encode_sum(r, a, b)),
   };
 }
 
 /** The asker protocol's stubs, bound. */
 export type AskerExports = ReturnType<typeof asker_exports>;
 
-/** What the program does with each command the guest posts on the asker protocol; a
+/** What the program does with each command the core posts on the asker protocol; a
  * call's answer is its return. */
 export interface AskerImports {
-  /** A number the host answers, which the guest adds. */
+  /** A number the runtime answers, which the core adds. */
   ask(): i32;
 }
 
-/** `h` as the handler a host routes the asker protocol's commands to, each one read and
+/** `h` as the handler a runtime routes the asker protocol's commands to, each one read and
  * handed to its member; ENOSYS for one the protocol does not carry. */
-export function asker_imports(h: AskerImports): OnEvent {
+export function asker_imports(h: AskerImports): OnImport {
   return (_tag, cmd, _f) => {
     switch (cmd) {
       case Command.ASK:

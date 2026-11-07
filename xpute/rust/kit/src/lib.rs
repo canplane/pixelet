@@ -1,7 +1,7 @@
 // xpute-kit/lib.rs
 
 //! The generic kit, `@xpute/kit`'s counterpart: no domain knowledge.
-//! `xpute-guest` depends on it, never the reverse. Without its `std`
+//! `xpute-core` depends on it, never the reverse. Without its `std`
 //! feature it is `no_std` and holds `math::rng` alone.
 
 #![cfg_attr(not(feature = "std"), no_std)]

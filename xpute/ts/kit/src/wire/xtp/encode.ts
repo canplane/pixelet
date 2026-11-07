@@ -195,7 +195,7 @@ export interface PacketRoom {
 
 /** The table a writer's entries go in: a branch's, or the root's, a branch of
  * one whose entry is the header. */
-interface Frame {
+interface Table {
   base: u32;
   cnt: u32;
   written: u32;
@@ -218,7 +218,7 @@ export class PacketWriter {
   /** Where the packet begins in `bytes`, and the bytes it may take. */
   start: u32 = 0;
   private cap: u32 = 0;
-  private frame: Frame = { base: 0, cnt: 1, written: 0, root: true };
+  private table: Table = { base: 0, cnt: 1, written: 0, root: true };
   private root_type: NodeType = SpecialType.NIL;
   /** The packet's end so far, from `start`. */
   private lim: u32 = HDR_SZ;
@@ -232,7 +232,7 @@ export class PacketWriter {
     this.view = view;
     this.start = start;
     this.cap = Math.min(cap, MAX_PKT_SZ);
-    this.frame = { base: 0, cnt: 1, written: 0, root: true };
+    this.table = { base: 0, cnt: 1, written: 0, root: true };
     this.root_type = SpecialType.NIL;
     this.lim = HDR_SZ;
     this.err = null;
@@ -246,7 +246,7 @@ export class PacketWriter {
     this.root(bytes, view, start, cap);
     const at = this.branch_open(cnt);
     this.root_type = SpecialType.BRANCH;
-    this.frame = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
+    this.table = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
     return this;
   }
 
@@ -267,7 +267,7 @@ export class PacketWriter {
   }
 
   private entry(at: number, type: NodeType): this {
-    const f = this.frame;
+    const f = this.table;
     if (f.written >= f.cnt) throw new InvariantError(Errno.ENOSPC);
     if (f.root) this.root_type = type;
     else if (this.err === null) {
@@ -487,17 +487,33 @@ export class PacketWriter {
     return at;
   }
 
+  /** The root branch's children as another writer wrote them: `pkt` is that
+   * packet whole, begun with the same count, and as nothing in a packet says
+   * where it lies, its bytes are this packet's. Only right after `begin`. */
+  copy(pkt: U8Array): this {
+    const f = this.table;
+    if (f.root || f.written !== 0) throw new InvariantError(Errno.EINVAL);
+    f.written = f.cnt;
+    if (pkt.length > this.cap) {
+      this.spoil(Errno.EOVERFLOW);
+      return this;
+    }
+    this.bytes.set(pkt, this.start);
+    this.lim = pkt.length;
+    return this;
+  }
+
   /** Writing a different number of children than `cnt` throws. */
   branch(cnt: u32, fill: (w: this) => void): this {
     const at = this.branch_open(cnt);
     // A branch that did not fit still counts its children, against a base nothing is written at.
-    const outer = this.frame;
-    this.frame = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
+    const outer = this.table;
+    this.table = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
     fill(this);
-    if (this.frame.written !== this.frame.cnt) {
+    if (this.table.written !== this.table.cnt) {
       throw new InvariantError(Errno.ENOTRECOVERABLE);
     }
-    this.frame = outer;
+    this.table = outer;
     return this.entry(this.branch_close(at), SpecialType.BRANCH);
   }
 
@@ -541,7 +557,7 @@ export class PacketWriter {
 
   /** The length, header included and to the word; throws why it was refused. */
   finish_or_throw(): u32 {
-    const f = this.frame;
+    const f = this.table;
     if (f.written !== f.cnt) throw new InvariantError(Errno.ENOTRECOVERABLE);
     // The root branch `begin` opened, closed as `branch` closes one.
     if (!f.root) this.branch_close(f.base);

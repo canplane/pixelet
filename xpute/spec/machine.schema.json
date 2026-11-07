@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/canplane/xpute/spec/machine.schema.json",
   "title": "xpute machine",
-  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU its guest asks for (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the host, and on the guest MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/cmd.json, spec/abi/fs.json) are protocol files too.",
+  "description": "A program's machine, or one of its protocols: the memory, stack, rings and GPU its core asks for (machine.json), or the commands one protocol carries (a protocol file). xpute-gen writes from them both ends' code: MACHINE, a stub per `export` command and a handler per `import` command on the runtime, and on the core MACHINE, a function per `import` command and a trait for the `export` commands. xpute's own protocols (spec/abi/sys.json, spec/abi/gpu.json, spec/abi/fs.json) are protocol files too.",
   "type": "object",
   "required": ["$doc"],
   "properties": {
     "$doc": { "$ref": "#/$defs/doc" },
     "gen": {
-      "description": "Where a file's code goes, each from this file's directory: its TypeScript (a protocol's enums in a folder named as it is, beside it) and its Rust (a machine's constants, which the guest's build script also includes as it links).",
+      "description": "Where a file's code goes, each from this file's directory: its TypeScript (a protocol's enums in a folder named as it is, beside it) and its Rust (a machine's constants, which the core's build script also includes as it links).",
       "type": "object",
       "required": ["ts", "rs"],
       "additionalProperties": false,
@@ -18,21 +18,21 @@
       }
     },
     "mem": {
-      "description": "The memory the host gives the guest, which never grows.",
+      "description": "The memory the runtime gives the core, which never grows.",
       "type": "object",
       "required": ["bytes", "region_bytes", "min_heap_bytes"],
       "additionalProperties": false,
       "properties": {
         "$doc": { "$ref": "#/$defs/doc" },
         "bytes": {
-          "description": "The sizes a host may give, any one of them, each a whole number of regions. The program picks one; the module is linked against the smallest.",
+          "description": "The sizes a runtime may give, any one of them, each a whole number of regions. The program picks one; the module is linked against the smallest.",
           "type": "array",
           "items": { "type": "integer", "minimum": 1 },
           "minItems": 1
         },
         "region_bytes": { "description": "What a reservation is counted in.", "type": "integer", "minimum": 1 },
         "min_heap_bytes": {
-          "description": "The heap the smallest size must leave past the front, the linker's data and the program's fixed ranges, checked as the guest compiles.",
+          "description": "The heap the smallest size must leave past the front, the linker's data and the program's fixed ranges, checked as the core compiles.",
           "type": "integer",
           "minimum": 0
         }
@@ -45,7 +45,7 @@
       "properties": {
         "$doc": { "$ref": "#/$defs/doc" },
         "module_bytes": { "description": "A module's stack, first in the memory.", "type": "integer", "minimum": 1 },
-        "thread_bytes": { "description": "A native guest's thread's stack, outside the memory.", "type": "integer", "minimum": 1 }
+        "thread_bytes": { "description": "A native core's thread's stack, outside the memory.", "type": "integer", "minimum": 1 }
       }
     },
     "rings": {
@@ -61,14 +61,14 @@
           "type": "integer"
         },
         "turn_posts": {
-          "description": "What one turn posts besides its replies: its events, its hostcalls, and a call's slot.",
+          "description": "What one turn posts besides its replies: its imports and a call's slot.",
           "type": "integer",
           "minimum": 0
         }
       }
     },
     "fs": {
-      "description": "The file device the guest asks for (spec/abi/fs.json), which the host attaches and backs with the program's storage. Absent, none, and a file command is refused ENODEV.",
+      "description": "The file device the core asks for (spec/abi/fs.json), which the runtime attaches and backs with the program's storage. Absent, none, and a file command is refused ENODEV.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -76,7 +76,7 @@
       }
     },
     "gpu": {
-      "description": "The GPU the guest asks for: a stream past the rings the guest writes its GPU calls into and the host runs after each turn (xpute-gpu), which says its own head (xpute-guest ipc/stream.rs). Absent, none.",
+      "description": "The GPU the core asks for: a stream past the rings the core writes its GPU calls into and the runtime runs after each turn (xpute-gpu), which says its own head (xpute-core ipc/stream.rs). Absent, none.",
       "type": "object",
       "required": ["bytes", "power", "features"],
       "additionalProperties": false,
@@ -96,8 +96,8 @@
       }
     },
     "name": { "description": "A protocol's word for itself, for the generated names only.", "type": "string" },
-    "export": { "description": "What the guest implements and the host calls: what the host sends the guest.", "type": "array", "items": { "$ref": "#/$defs/command" } },
-    "import": { "description": "What the host implements and the guest calls: what the guest posts to the host.", "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "export": { "description": "What the core implements and the runtime calls: what the runtime sends the core.", "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "import": { "description": "What the runtime implements and the core calls: what the core posts to the runtime.", "type": "array", "items": { "$ref": "#/$defs/command" } },
     "extern": {
       "description": "Types the program's Rust names, read and written as a number.",
       "type": "array",
@@ -186,14 +186,15 @@
         "$doc": { "$ref": "#/$defs/doc" },
         "pkt": { "description": "Its packet's fields, in order; none, no packet.", "type": "array", "items": { "$ref": "#/$defs/field" } },
         "call": {
-          "description": "The sender waits for the answer: an `export` the host calls, an `import` the host answers before the guest goes on.",
+          "description": "The sender waits for the answer: an `export` the runtime calls, an `import` the runtime answers before the core goes on.",
           "type": "boolean"
         },
         "ackreq": {
-          "description": "An `import` posted with ACKREQ, its tag the guest's: the host completes it on a later turn with a frame of the same tag and command flagged RES on the submission ring, its result and `reply`'s packet.",
+          "description": "Posted with ACKREQ and answered later, never waited for. An `import`, its tag the core's: the runtime completes it on a later turn with a frame of the same tag and command flagged RES on the submission ring, its result and `reply`'s packet. An `export`, its tag the runtime's: the core replies as it applies it, with its result, on the completion ring.",
           "type": "boolean"
         },
-        "reply": { "description": "An `ackreq` import's completion's packet, its fields in order.", "type": "array", "items": { "$ref": "#/$defs/field" } }
+        "reply": { "description": "An `ackreq` import's completion's packet, its fields in order.", "type": "array", "items": { "$ref": "#/$defs/field" } },
+        "mem": { "description": "An import's two fields that name the core's memory, where it is and how long: a runtime hands a UI apart from the core a copy.", "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
       }
     },
     "field": {

@@ -1,11 +1,11 @@
-# The front header's traces (ARCHITECTURE.md, the contract's rule 0). Every trace's host reads a guest's
-# front header (spec/ipc/head.json) before anything else and refuses one whose MAGIC or VERSION is not
-# xpute's; what is here is what it must then find. No offset is written here: the guest's boot answers
-# where the header is, under the layout its seed draws (guest.json LAYOUTS), and where its words point
-# is the guest's own.
+# The front header's traces (ARCHITECTURE.md, the contract's rule 0). Every trace's runtime reads a core's
+# front header (spec/ipc/head.json) before anything else and refuses one whose MAGIC is not
+# xpute's; what is here is what it must then find. No offset is written here: the core's boot answers
+# where the header is, under the layout its seed draws (core.json LAYOUTS), and where its words point
+# is the core's own.
 scenarios	C0.boot
 #
-# The words that say the rings' sizes, each the fixture's number of the same name (guest.json), which
+# The words that say the rings' sizes, each the fixture's number of the same name (core.json), which
 # the ring at SQ_AT or CQ_AT says again in its own header.
 C0.boot.head.sizes	SQ_CAP CQ_CAP SLOT_BYTES
 # The words that say where a part lies, none of them 0: the two rings and the stream.
