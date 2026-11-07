@@ -277,7 +277,6 @@ impl EnvironmentDraw {
             self.anchor = live;
             self.aim();
         }
-        let [lon, lat] = self.anchor;
         let [sun, moon] = self.aimed;
         if !self.started {
             (self.sun, self.moon) = (sun, moon);
@@ -306,8 +305,6 @@ impl EnvironmentDraw {
             alt_km: self.alt_km,
             ground_km: ground * km_per_u,
             km_per_u,
-            lat: lat.to_radians(),
-            lon: lon.to_radians(),
             star_frame: self.star_frame,
         };
         write_environment(&mut self.out, &light);

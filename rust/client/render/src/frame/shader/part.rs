@@ -10,8 +10,7 @@
 //! compute pipeline by its number (record.rs `compute`).
 
 /// A shader's vertex entry points, a pipeline naming one by its index (record.rs `Head`), so
-/// build.rs reads which of them reads each binding. The shell holds the same list against
-/// the same numbers.
+/// build.rs reads which of them reads each binding.
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
 /// A shader's fragment entry point, which a pipeline with a fragment stage runs (record.rs
 /// `Head`).

@@ -627,7 +627,7 @@ impl Atmosphere {
             .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALT_KM] = env[ENV_AIR + 3];
+        self.words[LAND_ALT_KM] = env[ENV_AIR + 2];
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
