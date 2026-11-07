@@ -3,7 +3,7 @@
 //! The kernel's request scheduler: what is wanted (`wants`, a run a
 //! stream, replaced whole each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's. What starts, stops and ends is
-//! kept for the turn to take (`take_starts`, `take_stops`, `take_ends`).
+//! kept, in order, for the turn to take (`take_event`).
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
 //! object drops its want; a body refused room, by the heap or the body
@@ -18,6 +18,7 @@
 //! when nobody wants it any more.
 
 use core::cmp::Ordering;
+use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
@@ -130,6 +131,16 @@ pub struct Attempt {
     pub start_ms: f64,
 }
 
+/// What became of an attempt, kept for the turn to take (`take_event`).
+pub enum Event {
+    /// Started on its credit, for its reader to open.
+    Start(Credit, Stream, u64),
+    /// Stopped, nobody wanting it: its key, for its reader to close.
+    Stop(u64),
+    /// Ended, when, as what, and the timings its run reported.
+    End(Attempt, f64, Ended, Option<Phases>),
+}
+
 #[derive(Clone, Copy)]
 struct Ready {
     rank: Rank,
@@ -167,10 +178,8 @@ pub struct RequestScheduler<S> {
     credits: u32,
     /// The most credits ever granted.
     most_credits: u32,
-    starts: Vec<(u64, Stream, u64)>,
-    stops: Vec<u64>,
-    /// Each attempt ended, when, as what, and the timings its run reported.
-    ends: Vec<(Attempt, f64, Ended, Option<Phases>)>,
+    /// Oldest first.
+    events: VecDeque<Event>,
     ready: Vec<(Ready, usize)>,
     /// Why reads fail, since the last that came to an answer.
     failing: Option<Errno>,
@@ -214,9 +223,7 @@ impl<S: Serve> RequestScheduler<S> {
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
             most_credits: 0,
-            starts: Vec::new(),
-            stops: Vec::new(),
-            ends: Vec::new(),
+            events: VecDeque::new(),
             ready: Vec::with_capacity(want_cap),
             failing: None,
             failures: 0,
@@ -393,8 +400,9 @@ impl<S: Serve> RequestScheduler<S> {
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
-        self.starts
-            .push((key_of(slot, self.generation[slot]), stream, w.id));
+        let key = key_of(slot, self.generation[slot]);
+        self.events
+            .push_back(Event::Start(Credit { key }, stream, w.id));
     }
 
     /// Ends the slot's attempt; its key is spent, so whatever the runtime still
@@ -406,27 +414,16 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     fn stop(&mut self, slot: usize, at: f64) {
-        self.stops.push(key_of(slot, self.generation[slot]));
+        let key = key_of(slot, self.generation[slot]);
+        self.events.push_back(Event::Stop(key));
         let a = self.end(slot);
-        self.ends.push((a, at, Ended::Aborted, None));
+        self.events
+            .push_back(Event::End(a, at, Ended::Aborted, None));
     }
 
-    pub fn take_starts(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
-        for (key, stream, id) in self.starts.drain(..) {
-            each(Credit { key }, stream, id);
-        }
-    }
-
-    pub fn take_stops(&mut self, mut each: impl FnMut(u64)) {
-        for key in self.stops.drain(..) {
-            each(key);
-        }
-    }
-
-    pub fn take_ends(&mut self, mut each: impl FnMut(&Attempt, f64, Ended, Option<Phases>)) {
-        for (a, at, ended, phases) in self.ends.drain(..) {
-            each(&a, at, ended, phases);
-        }
+    /// The oldest event not yet taken.
+    pub fn take_event(&mut self) -> Option<Event> {
+        self.events.pop_front()
     }
 
     /// Whether `stream`'s want of `id` waits on its object, which
@@ -465,7 +462,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
             Ended::Aborted => {}
         }
-        self.ends.push((a, at, ended, phases));
+        self.events.push_back(Event::End(a, at, ended, phases));
     }
 
     /// The server answered: whatever held it back is over.
@@ -516,8 +513,9 @@ impl<S: Serve> RequestScheduler<S> {
         self.run_lens = [0; Stream::ALL.len()];
         self.on_answered();
         self.given_up = false;
-        self.starts.clear();
-        self.stops.clear();
+        // Its starts and stops were for the runtime gone; its ends stay the
+        // profiler's.
+        self.events.retain(|e| matches!(e, Event::End(..)));
     }
 }
 
@@ -562,16 +560,10 @@ pub fn pump() {
     }
 }
 
-pub fn take_starts(each: impl FnMut(Credit, Stream, u64)) {
-    sched().take_starts(each);
-}
-
-pub fn take_stops(each: impl FnMut(u64)) {
-    sched().take_stops(each);
-}
-
-pub fn take_ends(each: impl FnMut(&Attempt, f64, Ended, Option<Phases>)) {
-    sched().take_ends(each);
+/// One at a time, the scheduler let go between: a stop's reader settles
+/// here.
+pub fn take_event() -> Option<Event> {
+    sched().take_event()
 }
 
 pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {

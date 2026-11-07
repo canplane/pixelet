@@ -1,33 +1,27 @@
 // pxl-kernel/sys/io/dispatch.rs
 
-//! What the request scheduler started and stopped this turn, handed to the
-//! reader each is for: an asset's to `loader`, every other's, a tile's, a
-//! shard's objects or their top, to `fetch`.
-
-use xpute_kit::collection::list::List;
+//! What the request scheduler started and stopped (request.rs `Event`),
+//! handed to the reader each is for: an asset's to `loader`, every other's, a
+//! tile's, a shard's objects or their top, to `fetch`.
 
 use crate::sys::io::demand::Stream;
-use crate::sys::io::param::MAX_CREDITS;
-use crate::sys::io::request::{take_starts, take_stops};
+use crate::sys::io::request::Credit;
 use crate::sys::io::{fetch, loader};
 
-pub fn run() {
-    // The key is an opaque handle to the shell.
-    take_starts(|credit, stream, id| match stream {
+/// The key is an opaque handle to the shell.
+pub fn start(credit: Credit, stream: Stream, id: u64) {
+    match stream {
         Stream::asset => {
             if let Some((_, load)) = loader::of_id(id) {
                 loader::open_asset(credit, load);
             }
         }
         _ => fetch::start(credit, stream, id),
-    });
-    // Collected first: stopping a read settles it, which must not happen inside
-    // the request scheduler's own walk.
-    let mut stops = List::<u64, { MAX_CREDITS as usize }>::new();
-    take_stops(|key| stops.push(key));
-    for key in stops {
-        if !fetch::cancel(key) {
-            loader::cancel_asset(key);
-        }
+    }
+}
+
+pub fn stop(key: u64) {
+    if !fetch::cancel(key) {
+        loader::cancel_asset(key);
     }
 }

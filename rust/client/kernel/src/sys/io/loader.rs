@@ -43,10 +43,10 @@ enum Entry {
     Pending,
     /// Its bytes in its arrival's task, being taken in.
     Arrived,
-    /// A model's bytes, until they are taken (`take_gltf`).
-    Gltf(Vec<u8>),
-    /// An image's bytes, sized by its header, until its texture lands.
-    Image(Vec<u8>),
+    /// Its file's bytes, until its reader takes them in, as its kind's
+    /// table says: a model's until the scene takes them (`take_gltf`), an
+    /// image's, sized by its header, until its texture lands.
+    Bytes(Vec<u8>),
     /// Taken in where its reader keeps it, its bytes gone: a model as the
     /// scene parsed it, an image's texture on the device there is, the
     /// catalog as `catalog` reads it.
@@ -113,8 +113,8 @@ pub fn load_of(slot: Slot) -> Option<Load> {
 pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
     let entry = loader().at(LoadKind::Gltf, load);
     match entry {
-        Some(Entry::Gltf(_)) => match entry.replace(Entry::Landed) {
-            Some(Entry::Gltf(file)) => Some(file),
+        Some(Entry::Bytes(_)) => match entry.replace(Entry::Landed) {
+            Some(Entry::Bytes(file)) => Some(file),
             _ => None,
         },
         Some(_) => None,
@@ -131,7 +131,7 @@ pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
 pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     let entry = loader().at(LoadKind::Image, load);
     match entry {
-        Some(Entry::Image(file)) => Some((load.id(), file.as_slice())),
+        Some(Entry::Bytes(file)) => Some((load.id(), file.as_slice())),
         Some(Entry::Landed) => Some((load.id(), &[])),
         Some(_) => None,
         None => {
@@ -173,7 +173,8 @@ pub fn load_wants() -> &'static [(u64, Order)] {
     &l.wants
 }
 
-/// The credit ends when the runtime reports; parsing afterwards does not hold it.
+/// The credit ends when the runtime reports; taking the bytes in afterwards
+/// does not hold it.
 fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, id)| of_id(id));
     settle(key, ended, None);
@@ -228,7 +229,7 @@ pub fn on_opened(fd: u32, key: u64, opened: Opened) {
 /// own failure, so it is final.
 fn on_image_arrived(load: Load, file: Vec<u8>) {
     *loader().at(LoadKind::Image, load) = Some(if asset::image_size(&file).is_some() {
-        Entry::Image(file)
+        Entry::Bytes(file)
     } else {
         Entry::Failed
     });
@@ -238,7 +239,7 @@ fn on_image_arrived(load: Load, file: Vec<u8>) {
 
 /// A model's bytes, read: kept until they are taken.
 fn on_gltf_arrived(load: Load, file: Vec<u8>) {
-    *loader().at(LoadKind::Gltf, load) = Some(Entry::Gltf(file));
+    *loader().at(LoadKind::Gltf, load) = Some(Entry::Bytes(file));
     request_world_tick();
 }
 
@@ -260,7 +261,7 @@ fn on_catalog_arrived(load: Load, file: &[u8]) {
 pub fn on_image_landed(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
-    if matches!(entry, Some(Entry::Image(_))) {
+    if matches!(entry, Some(Entry::Bytes(_))) {
         *entry = Some(Entry::Landed);
     }
 }
@@ -280,7 +281,7 @@ pub fn on_images_lost() {
 }
 
 /// A file's bytes, taken in by its own task: no arrival waits on another's
-/// parse or landing. Where the turn's deadline has passed before the tasks run, as
+/// landing. Where the turn's deadline has passed before the tasks run, as
 /// it is while the frame outweighs its share, each task advances a step a
 /// turn, so k arrivals advance k steps, not one.
 fn arrive(kind: LoadKind, load: Load, reading: Reading) {

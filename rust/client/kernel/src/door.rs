@@ -29,6 +29,7 @@ use crate::sys::io::dispatch;
 use crate::sys::io::file;
 use crate::sys::io::loader;
 use crate::sys::io::request;
+use crate::sys::io::request::Event;
 use crate::sys::io::runtime;
 use crate::sys::io::text;
 use crate::sys::io::text::TextCall;
@@ -233,7 +234,17 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     let due = core::mem::take(&mut s.snapshot_due);
     if take_world_drawn() || due || core::mem::take(&mut s.snapshot_pending) {
         post_shell(s);
-        dispatch::run();
+    }
+    // What the request scheduler started, stopped and ended, in order: a
+    // start or a stop handed to its reader, an end a row of the profiler's.
+    while let Some(event) = request::take_event() {
+        match event {
+            Event::Start(credit, stream, id) => dispatch::start(credit, stream, id),
+            Event::Stop(key) => dispatch::stop(key),
+            Event::End(a, at, ended, phases) => {
+                perf_record(|| TaskRow::of(&a, at, ended, phases));
+            }
+        }
     }
     api::gpu_publish();
     let fall = edge::world_fall();
@@ -249,8 +260,6 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         w if w < 0.0 => Wake::none,
         _ => Wake::timer,
     };
-    // The reads this turn ended, rows of the profiler's.
-    request::take_ends(|a, at, ended, phases| perf_record(|| TaskRow::of(a, at, ended, phases)));
     let fell = now();
     perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
     wake
