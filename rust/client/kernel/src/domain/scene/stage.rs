@@ -297,6 +297,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         eye: e,
         frustum: v.frustum.about(anchor),
         camera: v3::sub(&e, &anchor),
+        px_per_unit: screen::px_per_unit() * resolution::dpr(),
         delta_s: ctx.delta,
     };
 

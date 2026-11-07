@@ -312,6 +312,15 @@ fn device(dpr: f64) -> f64 {
     dpr
 }
 
+/// Device pixels per CSS pixel of the display the world is shown on, its
+/// surface's; one before it has one.
+pub fn dpr() -> f64 {
+    world()
+        .map(|s| s.dpr)
+        .filter(|&dpr| dpr > 0.0)
+        .map_or(1.0, device)
+}
+
 fn world() -> Option<&'static mut Surface> {
     surfaces().find(|s| s.role == surface_role::WORLD)
 }

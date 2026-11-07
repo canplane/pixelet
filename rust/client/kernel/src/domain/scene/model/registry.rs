@@ -45,9 +45,14 @@ struct Clip {
     /// The farthest any point of the mesh moves over it, unscaled; set when
     /// the model is sealed (`Model::moved`).
     motion: f32,
-    /// The fastest, unscaled, in units a second, along its keys' chords; set
-    /// with it.
-    speed: f32,
+    /// Every channel's key times, its start and its end, in order; set with
+    /// it.
+    keys: Vec<f32>,
+    /// How far any point of the mesh may have gone from the clip's start by
+    /// each of `keys`, unscaled, along the keys' chords; set with it.
+    reach: Vec<f32>,
+    /// The keys where some joint's motion turns back; set with it.
+    turns: Vec<f32>,
     /// How far any vertex lies from the origin as its first key skins it,
     /// unscaled; set with it.
     radius: f32,
@@ -310,7 +315,9 @@ impl Model {
             duration,
             channels: Vec::new(),
             motion: 0.0,
-            speed: 0.0,
+            keys: Vec::new(),
+            reach: Vec::new(),
+            turns: Vec::new(),
             radius: 0.0,
         });
         (self.clips.len() - 1) as u32
@@ -378,7 +385,9 @@ impl Model {
         }
         for c in 0..self.clips.len() {
             pause().await;
-            (self.clips[c].motion, self.clips[c].speed) = self.moved(c, &pause).await;
+            let (motion, keys, reach, turns) = self.moved(c, &pause).await;
+            let clip = &mut self.clips[c];
+            (clip.motion, clip.keys, clip.reach, clip.turns) = (motion, keys, reach, turns);
             let first = self.clips[c]
                 .channels
                 .iter()
@@ -441,16 +450,22 @@ impl Model {
             if from > 0 {
                 pause().await;
             }
-            far = far.max(self.radius_of(&palette, from..cnt.min(from + STEPS_PER_PAUSE)));
+            far = self
+                .skin(&palette, from..cnt.min(from + STEPS_PER_PAUSE))
+                .map(|q| (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt())
+                .fold(far, f32::max);
         }
         far
     }
 
-    /// How far any of `vertices` lies from the origin as `palette`, a mat4 a
-    /// joint, skins it, unscaled (`radius_at`).
-    fn radius_of(&self, palette: &[f32], vertices: Range<usize>) -> f32 {
+    /// Where `palette`, a mat4 a joint, skins each of `vertices`, unscaled.
+    fn skin<'a>(
+        &'a self,
+        palette: &'a [f32],
+        vertices: Range<usize>,
+    ) -> impl Iterator<Item = [f32; 3]> + 'a {
         let count = self.vertex_cnt as usize;
-        let column = |k: usize| k * count;
+        let column = move |k: usize| k * count;
         // SAFETY: the model's block, written (`seal`): its vertex columns first.
         let w = unsafe {
             core::slice::from_raw_parts(
@@ -458,8 +473,7 @@ impl Model {
                 count * MODEL_VERTEX_WORDS as usize,
             )
         };
-        let mut far = 0.0f32;
-        for v in vertices {
+        vertices.map(move |v| {
             let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
             let mut q = [0.0f32; 3];
             for k in 0..4 {
@@ -475,30 +489,72 @@ impl Model {
                     q[r] += weight * (m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
                 }
             }
-            far = far.max((q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt());
-        }
-        far
+            q
+        })
     }
 
-    /// The fastest any point of its mesh moves over a clip from one key to
-    /// the next, unscaled, in units a second: along the keys' chords, so a
-    /// point turning between them moves somewhat faster.
-    pub fn speed(&self, clip: u32) -> f32 {
-        self.clips.get(clip as usize).map_or(0.0, |c| c.speed)
+    /// The clip's time after `time` by which any point of its mesh may have
+    /// gone `far` units, unscaled, from where it stood at `time`, and no
+    /// later than the next key where a joint's motion turns back or the
+    /// clip's end, where its clock wraps. Between two keys a point goes at
+    /// the pace of their chord, so one that turns between them goes as far
+    /// as its arc is longer than the chord, past `far`. Infinite where the
+    /// clip is none.
+    pub fn next_step(&self, clip: u32, time: f32, far: f32) -> f32 {
+        let Some(c) = self.clips.get(clip as usize) else {
+            return f32::INFINITY;
+        };
+        let (keys, reach) = (&c.keys, &c.reach);
+        let turn = c.turns[c.turns.partition_point(|&t| t <= time)..]
+            .first()
+            .map_or(c.duration, |&t| t.min(c.duration));
+        // The chord's pace between keys `k` and `k + 1`: how far a point
+        // goes over the share `w` of their time.
+        let along = |k: usize, w: f32| reach[k] + (reach[k + 1] - reach[k]) * w;
+        let k = keys
+            .partition_point(|&t| t <= time)
+            .clamp(1, keys.len().max(2) - 1)
+            - 1;
+        let Some(&next) = keys.get(k + 1) else {
+            return turn;
+        };
+        let span = next - keys[k];
+        let at = along(
+            k,
+            if span > 0.0 {
+                (time - keys[k]) / span
+            } else {
+                0.0
+            },
+        );
+        let to = at + far;
+        let j = reach.partition_point(|&r| r < to);
+        let gone = match j {
+            0 => time,
+            j if j >= reach.len() => f32::INFINITY,
+            j => {
+                let w = (to - reach[j - 1]) / (reach[j] - reach[j - 1]);
+                keys[j - 1] + (keys[j] - keys[j - 1]) * w
+            }
+        };
+        gone.max(time).min(turn)
     }
 
-    /// A clip's motion and speed, off its own pose and palette at each of
-    /// its keys: a vertex is its joints' palettes blended, so it moves no
-    /// farther than the farthest joint's palette moves a point within the
-    /// radius — its translation's change and its linear part's (Frobenius)
-    /// times the radius. Twice the farthest from the first key bounds any
-    /// two; the farthest from one key to the next over the time between
-    /// them is its speed, along their chords.
+    /// A clip's motion, keys, reach and turns, off its own pose and palette
+    /// at each of its keys: a vertex is its joints' palettes blended, so it
+    /// moves no farther than the farthest joint's palette moves a point
+    /// within the radius — its translation's change and its linear part's
+    /// (Frobenius) times the radius. Twice the farthest from the first key
+    /// bounds any two. Its reach is every vertex skinned at each key, the
+    /// farthest any goes from one key to the next summed key by key, along
+    /// their chords. A joint's motion turns back at a key where its
+    /// palette's change into the key and out of it point apart, its linear
+    /// part weighed at the radius.
     async fn moved<P: Future<Output = ()>>(
         &self,
         clip: usize,
         pause: &impl Fn() -> P,
-    ) -> (f32, f32) {
+    ) -> (f32, Vec<f32>, Vec<f32>, Vec<f32>) {
         let c = &self.clips[clip];
         let mut times: Vec<f32> = c
             .channels
@@ -532,23 +588,61 @@ impl Model {
                 })
                 .fold(0.0f32, f32::max)
         };
-        let (mut far, mut fast) = (0.0f32, 0.0f32);
-        // A key poses every joint.
-        let keys_per_pause = (STEPS_PER_PAUSE / n.max(1)).max(1);
+        // Whether a joint's change from one key and its change into the next
+        // point apart.
+        let r2 = self.radius * self.radius;
+        let turns_back = |into: &[f32], out: &[f32]| {
+            into.as_chunks::<16>()
+                .0
+                .iter()
+                .zip(out.as_chunks::<16>().0)
+                .any(|(a, b)| {
+                    let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10]
+                        .iter()
+                        .map(|&i| a[i] * b[i])
+                        .sum::<f32>();
+                    let moved = a[12] * b[12] + a[13] * b[13] + a[14] * b[14];
+                    moved + linear * r2 < 0.0
+                })
+        };
+        let mut far = 0.0f32;
+        let mut reach = vec![0.0f32; times.len()];
+        let mut turns = Vec::new();
+        let (mut into, mut out) = (vec![0.0f32; n * 16], vec![0.0f32; n * 16]);
+        let cnt = self.vertex_cnt as usize;
+        let mut drawn: Vec<[f32; 3]> = Vec::with_capacity(cnt);
+        for from in (0..cnt).step_by(STEPS_PER_PAUSE) {
+            pause().await;
+            drawn.extend(self.skin(&first, from..cnt.min(from + STEPS_PER_PAUSE)));
+        }
         for k in 1..times.len() {
-            if k % keys_per_pause == 0 {
-                pause().await;
-            }
+            pause().await;
             self.pose(Some((clip as u32, times[k])), &mut local);
             self.palette(&local, &mut global, &mut palette);
             far = far.max(apart(&palette, &first));
-            let dt = times[k] - times[k - 1];
-            if dt > 0.0 {
-                fast = fast.max(apart(&palette, &last) / dt);
+            let mut gone = 0.0f32;
+            for from in (0..cnt).step_by(STEPS_PER_PAUSE) {
+                if from > 0 {
+                    pause().await;
+                }
+                let run = from..cnt.min(from + STEPS_PER_PAUSE);
+                for (was, q) in drawn[run.clone()].iter_mut().zip(self.skin(&palette, run)) {
+                    let d = [0, 1, 2].map(|i| q[i] - was[i]);
+                    gone = gone.max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt());
+                    *was = q;
+                }
             }
+            reach[k] = reach[k - 1] + gone;
+            for (o, (p, l)) in out.iter_mut().zip(palette.iter().zip(&last)) {
+                *o = p - l;
+            }
+            if k > 1 && turns_back(&into, &out) {
+                turns.push(times[k - 1]);
+            }
+            core::mem::swap(&mut into, &mut out);
             core::mem::swap(&mut last, &mut palette);
         }
-        (2.0 * far, fast)
+        (2.0 * far, times, reach, turns)
     }
 
     /// The joints' local transforms at a clip's time, or at rest.
@@ -583,3 +677,7 @@ impl Model {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "registry.test.rs"]
+pub(crate) mod test;

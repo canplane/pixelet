@@ -18,6 +18,10 @@ pub struct Frame {
     /// About the anchor.
     pub frustum: Frustum,
     pub camera: V3,
+    /// The display's own pixels a unit spans a unit from the eye, at the
+    /// view's middle: what a motion there is worth on the screen. Zero
+    /// where there is no display.
+    pub px_per_unit: f64,
     pub delta_s: f64,
 }
 

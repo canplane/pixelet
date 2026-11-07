@@ -20,7 +20,7 @@ use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
-use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
+use crate::domain::view::lens::{cell_there, Stepped};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 
@@ -62,7 +62,7 @@ pub struct Actor {
     /// taken as one step.
     run: f64,
     last: f64,
-    /// Its clip's clock as drawn: `run` stepped a seen step at a time
+    /// Its clip's clock as drawn: `run` stepped a pixel's motion at a time
     /// (`lens::Stepped`), and the reading its clip last took (`clip_time`).
     clock: Stepped,
     clip_time: f64,
@@ -147,8 +147,10 @@ impl Actor {
     /// next. So a frame is asked only for what can be seen to change. A clip
     /// moving it less than a cell holds its time and its pose until the eye
     /// comes close enough to see it move. One moving it a cell or more steps
-    /// a seen step of its fastest point at a time and asks no frame: the
-    /// turn is woken for the next step and draws it, as the location indicator's bob is.
+    /// where any point of it may have gone a pixel of the display from where
+    /// it was drawn, or at the next key where its motion turns back, and
+    /// asks no frame: the turn is woken for the next step and draws it, as
+    /// the location indicator's bob is (`Model::next_step`).
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
@@ -180,10 +182,21 @@ impl Actor {
                 || playing
                     .is_some_and(|p| f64::from(m.motion(p.clip) * transform.scale) >= cell_there));
         let mut asks = moves;
-        // A clip alone, seen to move, steps a seen step at a time; a fade
-        // runs a frame a step.
-        if let Some(p) = playing.filter(|_| moves && self.previous.is_none()) {
-            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * transform.scale));
+        // A clip alone, seen to move, steps where its pose has gone a pixel
+        // of the display from the one drawn, or turns back; a fade runs a
+        // frame a step.
+        if let Some((p, d)) = playing
+            .filter(|_| moves && self.previous.is_none())
+            .and_then(|p| Some((p, f64::from(length(&p)?))))
+        {
+            let far = (dist / frame.px_per_unit / f64::from(transform.scale)) as f32;
+            let (start, shown) = (f64::from(p.time), self.clip_time);
+            // The clip's time at a reading `at` of `run`, and the reading it
+            // next steps at from there.
+            let step = |at: f64| {
+                let t = (start + at - shown).rem_euclid(d) as f32;
+                at + f64::from(m.next_step(p.clip, t, far) - t)
+            };
             let wall = now();
             let since = if self.last > 0.0 {
                 (wall - self.last) / 1000.0
@@ -191,8 +204,8 @@ impl Actor {
                 frame.delta_s
             };
             self.last = wall;
-            self.run += since.clamp(0.0, step.max(frame.delta_s));
-            let (time, next, stepped) = self.clock.at(self.run, |at| at + step);
+            self.run += since.clamp(0.0, (step(self.run) - self.run).max(frame.delta_s));
+            let (time, next, stepped) = self.clock.at(self.run, step);
             if next.is_finite() {
                 wake_at(wall + (next - self.run) * 1000.0);
             }
@@ -289,3 +302,7 @@ impl Actor {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "actor.test.rs"]
+mod test;
