@@ -101,3 +101,23 @@ fn idle_asks_nothing_between_steps() {
         "far, it stepped {stepped} of 120 ticks, its clip {most} steps over two loops at most"
     );
 }
+
+#[test]
+fn a_body_is_drawn_clear_of_the_wall_beside_it() {
+    use crate::domain::scene::character::companion::clear_of_walls;
+    let step_east = |[x, _]: [f64; 2]| x >= 10.0;
+    assert_eq!(clear_of_walls([9.5, 3.5], 0.25, 1.0, step_east), [9.5, 3.5]);
+    assert_eq!(
+        clear_of_walls([9.9, 3.5], 0.25, 1.0, step_east),
+        [9.75, 3.5]
+    );
+    assert_eq!(
+        clear_of_walls([9.99, 3.5], 0.25, 1.0, step_east),
+        [9.75, 3.5]
+    );
+    let step_south = |[_, y]: [f64; 2]| y < 3.0;
+    assert_eq!(
+        clear_of_walls([5.5, 3.1], 0.25, 1.0, step_south),
+        [5.5, 3.25]
+    );
+}

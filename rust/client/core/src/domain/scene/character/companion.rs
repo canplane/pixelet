@@ -8,7 +8,7 @@
 //! and it holds at screen center. Neither is anchored to the other: the pet
 //! walks to its own place beside the person's. While the eye is the pivot
 //! neither is placed, and each is placed again at its target once the eye
-//! leaves it.
+//! leaves it. Each is drawn clear of the wall beside it (`clear_of_walls`).
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::param;
@@ -16,7 +16,7 @@ use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::character::param::{
-    CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
+    BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
 };
 use crate::domain::scene::character::{Character, Group};
@@ -35,7 +35,7 @@ use pxl_spec::asset::character::IDLE_CLIP;
 use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::clock;
@@ -186,7 +186,7 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
             *slot = Character::of(group, number);
         }
         if let Some(c) = slot {
-            c.walk.floor.forget_touched();
+            c.walk.drawn.forget_touched();
         }
     }
     let [person, pet] = &mut s.characters;
@@ -246,7 +246,8 @@ impl Character {
         if self.transform.is_none() {
             self.walk = Walk::new(target);
         }
-        let (at, rot, walking) = self.walk.step(ctx, target, arrive_z, camera);
+        let half = BODY_SHARE * self.height_u();
+        let (at, rot, walking) = self.walk.step(ctx, target, arrive_z, half, camera);
         // Its model as registered, the character's height tall.
         self.transform = Some(Transform {
             at,
@@ -257,6 +258,10 @@ impl Character {
         self.play(models(), clip, CLIP_FADE_S);
     }
 }
+
+/// Where a walk is drawn, kept by where it stands, its floor there and the
+/// zoom the eye draws it at.
+type Drawn = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
 
 /// A character's walk: where it is, its heading, its plan and the floor it
 /// stands on.
@@ -271,9 +276,8 @@ pub struct Walk {
     init_facing_done: bool,
     follow_walk_until: f64,
     stands_z: Option<f64>,
-    /// The floor it is drawn on (`drawn_floor`), of where it stands, its
-    /// floor there and the zoom the eye draws it at.
-    floor: Memo<([f64; 2], f64, Zoom), f64>,
+    /// Where it is drawn and on what floor (`drawn_at`).
+    drawn: Drawn,
 }
 
 impl Walk {
@@ -289,12 +293,13 @@ impl Walk {
             init_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
-            floor: Memo::NONE,
+            drawn: Memo::NONE,
         }
     }
 
-    /// Toward `target`, standing at `arrive_z` there: where it stands, its
-    /// turn about Z and whether it walks. `follows`: the target is followed
+    /// Toward `target`, standing at `arrive_z` there: where it is drawn, a
+    /// body `half` wide each way, its turn about Z and whether it walks.
+    /// `follows`: the target is followed
     /// as it moves, by a fix or by the keys, rather than walked to once it
     /// settles; a steered one faces its way.
     fn step(
@@ -302,6 +307,7 @@ impl Walk {
         ctx: &TickContext,
         target: [f64; 2],
         arrive_z: f64,
+        half: f64,
         camera: &Camera,
     ) -> ([f64; 3], f32, bool) {
         let (follows, steered) = (camera.following || camera.steered, camera.steered);
@@ -409,11 +415,7 @@ impl Walk {
         self.at = at;
         let stands = *stands;
         (
-            [
-                at[0],
-                at[1],
-                drawn_floor(&mut self.floor, at, stands, camera),
-            ],
+            drawn_at(&mut self.drawn, at, stands, half, camera),
             self.heading as f32,
             is_walking,
         )
@@ -435,29 +437,53 @@ fn walk_to(
     Some(([at[0], at[1]], under(at[2])))
 }
 
-/// The floor `stands` as the eye's rays draw it under `at`: the world asked
-/// at the zoom the camera grid takes there from the eye, kept in
-/// `asked` while none of it moves. A coarser answer is taken where that zoom
-/// is not held, as a ray draws the ground it has.
-fn drawn_floor(
-    asked: &mut Memo<([f64; 2], f64, Zoom), f64>,
-    at: [f64; 2],
-    stands: f64,
-    camera: &Camera,
-) -> f64 {
+/// Where a body `half` wide each way is drawn for `at`, and the floor `stands`
+/// as the eye's rays draw it there: the world asked at the zoom the camera grid
+/// takes there from the eye, kept in `asked` while none of it moves. A coarser
+/// answer is taken where that zoom is not held, as a ray draws the ground it
+/// has.
+fn drawn_at(asked: &mut Drawn, at: [f64; 2], stands: f64, half: f64, camera: &Camera) -> [f64; 3] {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&camera.eye);
     let r2 = (0..3)
         .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
         .sum();
     let zoom = GROUND.z_at(r2);
-    asked.of(World::now(), (at, stands, zoom), |world| {
-        world
-            .floor_under(&world_to_canonical(&center), zoom)
-            .val()
-            .flatten()
-            .unwrap_or(stands)
-    })
+    let ([x, y], floor) = asked.of(World::now(), (at, stands, zoom), |world| {
+        let floor_at = |[x, y]: [f64; 2]| {
+            world
+                .floor_under(&world_to_canonical(&[x, y, center[2]]), zoom)
+                .val()
+                .flatten()
+        };
+        let floor = floor_at(at).unwrap_or(stands);
+        let rises = |p| floor_at(p).is_some_and(|top| top > floor);
+        (clear_of_walls(at, half, units(zoom), rises), floor)
+    });
+    [x, y, floor]
+}
+
+/// `at` moved off each wall a body `half` wide each way would stand in, the
+/// cells `cell` wide: a wall is the near side of a cell that `rises` over the
+/// floor, so what stands beside a step is drawn beside it, not through it.
+pub(crate) fn clear_of_walls(
+    at: [f64; 2],
+    half: f64,
+    cell: f64,
+    rises: impl Fn([f64; 2]) -> bool,
+) -> [f64; 2] {
+    let mut clear = at;
+    for k in 0..2 {
+        for side in [-1.0, 1.0] {
+            let mut edge = at;
+            edge[k] += side * half;
+            if rises(edge) {
+                let near = libm::floor(edge[k] / cell) + if side < 0.0 { 1.0 } else { 0.0 };
+                clear[k] = near * cell - side * half;
+            }
+        }
+    }
+    clear
 }
 
 /// Where the person's line hangs, over its head, while the person shows it,

@@ -6,6 +6,10 @@
 /// Arbitrary, so the pet does not share the person's footprint.
 pub const PET_OFF: [f64; 2] = [-0.6, -0.6];
 
+/// A body's half width, its arms out, as a share of its height: how far from
+/// a wall it is drawn.
+pub const BODY_SHARE: f64 = 0.4;
+
 /// A fixed duration, not a fixed speed (domain/scene/character/companion.rs
 /// `WalkPlan`).
 pub const CATCHUP_DURATION_S: f64 = 0.6;
