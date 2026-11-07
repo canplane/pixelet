@@ -18,7 +18,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
-use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
@@ -51,7 +51,7 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; DECOR_GROUPS],
     baked: [Option<BakeKey>; DECOR_GROUPS],
     wanted: [Option<BakeKey>; DECOR_GROUPS],
-    marks: Marks,
+    pub marks: Marks,
 }
 
 /// A mark's uniform, as the draw's (`put_instances`), its atlas layer its
@@ -124,27 +124,14 @@ impl ImpostorPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_IMPOSTOR_MARK,
+                (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
                 align,
                 (|d| d[0], put_mark, |_| true),
             ),
         }
     }
 
-    /// The marks this frame of the listed draws (gpu/pass/mark.rs
-    /// `Marks::prepare`). Whether any.
-    pub fn prepare_marks(
-        &mut self,
-        g: &Gpu,
-        m: &MarkInput,
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> bool {
-        self.marks
-            .prepare(g, &[PIPELINE_IMPOSTOR], m, uploads, last_frame_uploads)
-    }
-
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`); a
     /// group whose layer is not drawn yet is not.
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {

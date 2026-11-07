@@ -11,7 +11,7 @@ use crate::frame::draw::{Draw, DrawStats, Draws};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
-use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{buf_size, Uploads};
@@ -95,8 +95,8 @@ pub struct LocationPass {
     oct_normal: u32,
     /// The UI's action color, in linear light.
     color: [f32; 3],
-    zone_marks: Marks,
-    beacon_marks: Marks,
+    pub zone_marks: Marks,
+    pub beacon_marks: Marks,
 }
 
 /// A mark's uniform: the draw's position and turn, where the lit pass reads
@@ -141,43 +141,21 @@ impl LocationPass {
             zone_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_LOCATION_ZONE_MARK,
+                (PIPELINE_LOCATION_ZONE_MARK, PIPELINE_LOCATION_ZONE),
                 align,
                 (|d| d[0], put_mark, |d| d[1] > 0),
             ),
             beacon_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_LOCATION_BEACON_MARK,
+                (PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_BEACON),
                 align,
                 (|_| 0, put_mark, |_| true),
             ),
         }
     }
 
-    /// The marks this frame of the zones and the beacons (gpu/pass/mark.rs
-    /// `Marks::prepare`). Whether any.
-    pub fn prepare_marks(
-        &mut self,
-        g: &Gpu,
-        m: &MarkInput,
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> bool {
-        let zones =
-            self.zone_marks
-                .prepare(g, &[PIPELINE_LOCATION_ZONE], m, uploads, last_frame_uploads);
-        let beacon = self.beacon_marks.prepare(
-            g,
-            &[PIPELINE_LOCATION_BEACON],
-            m,
-            uploads,
-            last_frame_uploads,
-        );
-        zones || beacon
-    }
-
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`).
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
         self.zone_marks.draw(pass, frames, |pass, d, upload| {

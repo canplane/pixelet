@@ -49,18 +49,18 @@ fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
     (d, u)
 }
 
-/// Each draw of `pipelines` a frame marks (`Marks::prepare`) handed to
+/// Each draw of `pipeline` a frame marks (`Marks::prepare`) handed to
 /// `take`, as it is drawn, at its frame's drift, with whether it is as it is
 /// (true) or as it was: each the turn changed, the one or both it has; and
 /// each whose upload moved, or that drifts where the drift moved, both. A
 /// draw reads the upload `read` names, and only one `shown` marks.
 pub(crate) fn marked(
-    pipelines: &[u32],
+    pipeline: u32,
     (read, shown): (UploadOf, Shown),
     m: &MarkInput,
     mut take: impl FnMut(Draw, bool),
 ) {
-    let mine = |d: &Draw| pipelines.contains(&d.0[4]) && shown(&d.0);
+    let mine = |d: &Draw| d.0[4] == pipeline && shown(&d.0);
     for c in m.changes {
         if let Some(d) = m.draws.now(c.slot).filter(mine) {
             take(drawn_at(d, m.drift[0]), true);
@@ -74,27 +74,27 @@ pub(crate) fn marked(
         return;
     }
     let moved = |d: &[u32; DRAW_WORDS]| read(d) != 0 && m.touched.binary_search(&read(d)).is_ok();
-    for &p in pipelines {
-        for d in m.draws.of(p) {
-            if !shown(d) || m.draws.changed(d[3]) {
-                continue;
-            }
-            let Some(d) = m.draws.now(d[3]) else { continue };
-            if moved(&d.0) || (drift_moved && drifts(&d.1)) {
-                take(drawn_at(d, m.drift[0]), true);
-                take(drawn_at(d, m.drift[1]), false);
-            }
+    for d in m.draws.of(pipeline) {
+        if !shown(d) || m.draws.changed(d[3]) {
+            continue;
+        }
+        let Some(d) = m.draws.now(d[3]) else { continue };
+        if moved(&d.0) || (drift_moved && drifts(&d.1)) {
+            take(drawn_at(d, m.drift[0]), true);
+            take(drawn_at(d, m.drift[1]), false);
         }
     }
 }
 
-/// One pass's marks: its pipeline, the upload a draw reads (`read`, 0 for
-/// none), a mark's uniform as the pipeline reads it (`put`) and whether a
-/// draw is drawn (`shown`), the marks' uniforms, and this frame's marks, each
+/// One pipeline's marks: the pipeline they are drawn by and the draws' it
+/// marks (`marks`), the upload a draw reads (`read`, 0 for none), a mark's
+/// uniform as the pipeline reads it (`put`) and whether a draw is drawn
+/// (`shown`), the marks' uniforms, and this frame's marks, each
 /// its record and the group of the upload it reads, as it is or as it was (0
 /// where it reads none), those as they are first, `now_cnt` of them.
 pub struct Marks {
     pipeline: Pipeline,
+    marks_of: u32,
     read: UploadOf,
     put: PutMark,
     shown: Shown,
@@ -104,18 +104,20 @@ pub struct Marks {
 }
 
 impl Marks {
-    /// Marks drawn by pipeline `id` into a target whose depth is attached
-    /// read only, each draw reading the upload `read` names, each mark's
-    /// uniform written by `put`, a draw `shown` alone marking.
+    /// The marks of pipeline `marks_of`'s draws, drawn by pipeline `id` into
+    /// a target whose depth is attached read only, each draw reading the
+    /// upload `read` names, each mark's uniform written by `put`, a draw
+    /// `shown` alone marking.
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        id: u32,
+        (id, marks_of): (u32, u32),
         align: u32,
         (read, put, shown): (UploadOf, PutMark, Shown),
     ) -> Marks {
         Marks {
             pipeline: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
+            marks_of,
             read,
             put,
             shown,
@@ -131,15 +133,13 @@ impl Marks {
         self.pipeline.layouts[0]
     }
 
-    /// The marks this frame of the draws of `pipelines`: each the turn
-    /// changed, where it is, its upload as it is, and where it was, its
-    /// upload as the last frame drew it (`last_frame_uploads`); and each
-    /// whose upload moved, or that drifts where the drift moved, both.
-    /// Whether any.
+    /// The marks this frame of the pipeline's draws: each the turn changed,
+    /// where it is, its upload as it is, and where it was, its upload as the
+    /// last frame drew it (`last_frame_uploads`); and each whose upload
+    /// moved, or that drifts where the drift moved, both. Whether any.
     pub fn prepare(
         &mut self,
         g: &Gpu,
-        pipelines: &[u32],
         m: &MarkInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
@@ -147,7 +147,7 @@ impl Marks {
         let (read, put, shown) = (self.read, self.put, self.shown);
         let mut now: Vec<(Draw, u32)> = Vec::new();
         let mut was: Vec<(Draw, u32)> = Vec::new();
-        marked(pipelines, (read, shown), m, |d, is| {
+        marked(self.marks_of, (read, shown), m, |d, is| {
             let group = match read(&d.0) {
                 0 => Some(0),
                 h if is => uploads.group(g, h),

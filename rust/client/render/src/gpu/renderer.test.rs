@@ -315,7 +315,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         };
         let mut kept: Vec<Mark> = Vec::new();
         for (pipeline, read, shown) in passes() {
-            marked(&[pipeline], (read, shown), &m, |d, is| {
+            marked(pipeline, (read, shown), &m, |d, is| {
                 kept.push(mark_of(&d, is));
             });
         }

@@ -1100,7 +1100,7 @@ impl Renderer {
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
         // Where the sheets the wind carries are seen, where it moved them:
         // the screen's tiles they mark, as the draws that changed mark
-        // theirs drawn (`prepare_marks`).
+        // theirs drawn (`Marks::prepare`).
         let clouds_moved = {
             let r = &mut self.clouds_read;
             r.begin();
@@ -1263,13 +1263,15 @@ impl Renderer {
                 touched: &touched,
                 drift: [drift_at(&self.frame), drift_at(&self.frame_was)],
             };
-            let characters = self.skinned_mesh.prepare_marks(g, &m, b, k);
-            let (decor, decor_casts) = self.decor.prepare_marks(g, &m, b, k);
-            let impostors = self.impostor.prepare_marks(g, &m, b, k);
-            let location = self.location.prepare_marks(g, &m, b, k);
+            let characters = self.skinned_mesh.marks.prepare(g, &m, b, k);
+            let decor = self.decor.marks.prepare(g, &m, b, k);
+            let ghosts = self.decor.ghost_marks.prepare(g, &m, b, k);
+            let impostors = self.impostor.marks.prepare(g, &m, b, k);
+            let zones = self.location.zone_marks.prepare(g, &m, b, k);
+            let beacons = self.location.beacon_marks.prepare(g, &m, b, k);
             (
-                characters || decor || impostors || location,
-                characters || decor_casts,
+                characters || decor || ghosts || impostors || zones || beacons,
+                characters || decor,
             )
         } else {
             (false, false)

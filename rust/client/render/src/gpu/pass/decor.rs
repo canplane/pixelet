@@ -15,7 +15,7 @@ use crate::frame::draw::{Draw, Draws};
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{
     bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
     ModelDraw, Stage, DRAW_BYTES,
@@ -38,8 +38,8 @@ pub struct DecorPass {
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
     /// The marks of the listed draws, opaque, which cast, and blended.
-    marks: Marks,
-    ghost_marks: Marks,
+    pub marks: Marks,
+    pub ghost_marks: Marks,
 }
 
 /// A mark's uniform, as the draw's (`put_instances`).
@@ -63,40 +63,21 @@ impl DecorPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_DECOR_MARK,
+                (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
                 (|d| d[0], put_mark, |_| true),
             ),
             ghost_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_DECOR_MARK,
+                (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
                 align,
                 (|d| d[0], put_mark, |_| true),
             ),
         }
     }
 
-    /// The marks this frame of the listed draws (gpu/pass/mark.rs
-    /// `Marks::prepare`), opaque and blended: whether any, and whether any
-    /// of the opaque, which cast.
-    pub fn prepare_marks(
-        &mut self,
-        g: &Gpu,
-        m: &MarkInput,
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> (bool, bool) {
-        let casts = self
-            .marks
-            .prepare(g, &[PIPELINE_DECOR], m, uploads, last_frame_uploads);
-        let blended =
-            self.ghost_marks
-                .prepare(g, &[PIPELINE_GHOST_DECOR], m, uploads, last_frame_uploads);
-        (casts || blended, casts)
-    }
-
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`): the
     /// opaque's alone where `casters`, as the light's map draws them, else
     /// the blended's too.

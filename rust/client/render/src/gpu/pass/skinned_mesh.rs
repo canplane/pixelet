@@ -13,7 +13,7 @@ use crate::frame::draw::Draw;
 use crate::gpu::api::{
     buf_entry, bytes, release, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass,
 };
-use crate::gpu::pass::mark::{MarkInput, Marks, UploadCopies};
+use crate::gpu::pass::mark::Marks;
 use crate::gpu::pass::model::{bind_mesh, draw_model, skin_group, skin_made, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
@@ -27,7 +27,7 @@ pub struct SkinnedPass {
     draws_buf: u32,
     /// Each model's skin image, as the frame hands them.
     skins: Vec<(u32, Image)>,
-    marks: Marks,
+    pub marks: Marks,
 }
 
 /// A mark's uniform: the draw's, as the lit pass reads it (skinned_place.wgsl
@@ -52,24 +52,11 @@ impl SkinnedPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_SKINNED_MARK,
+                (PIPELINE_SKINNED_MARK, PIPELINE_SKINNED),
                 align,
                 (|d| d[1], put_mark, |_| true),
             ),
         }
-    }
-
-    /// The marks this frame of `draws` (gpu/pass/mark.rs `Marks::prepare`),
-    /// each reading its palette. Whether any.
-    pub fn prepare_marks(
-        &mut self,
-        g: &Gpu,
-        m: &MarkInput,
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
-    ) -> bool {
-        self.marks
-            .prepare(g, &[PIPELINE_SKINNED], m, uploads, last_frame_uploads)
     }
 
     /// Group 0's layout of the marks (tile_mark.wgsl).
@@ -77,7 +64,7 @@ impl SkinnedPass {
         self.marks.layout()
     }
 
-    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// This frame's marks drawn into `pass`, `frames` their group
     /// 0 as they are and as they were: the eye's or the light's frame and its
     /// tiles' (tile_mark.wgsl, `Marks::draw`).
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2], uploads: &Uploads) {
