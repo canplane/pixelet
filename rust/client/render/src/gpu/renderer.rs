@@ -75,9 +75,8 @@ use crate::gpu::text::TextOf;
 use crate::gpu::tiles::{self, Mark, Tiles};
 use crate::gpu::upload::{uploads, Uploads};
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SKY, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
 use crate::param::cloud;
-use pxl_content::cloud::drift;
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -128,8 +127,11 @@ pub struct FrameInput<'a> {
     pub screen_ao: bool,
     pub low_spec: bool,
     pub shadows: bool,
-    /// How much of the clouds shows, none to all.
+    /// How much of the clouds shows, none to all, and how far the wind has
+    /// carried them, X and Y in units (pxl-content cloud.rs `drift`), as the
+    /// kernel lays them by.
     pub clouds: f64,
+    pub drift: [f64; 2],
     pub lists: Lists<'a>,
     pub environment: &'a [f32],
     /// 0 while it loads.
@@ -808,10 +810,7 @@ impl Renderer {
             u[EYE + k] = f32::from_bits(v as u32);
         }
         self.shadow.put_eye([u[EYE], u[EYE + 1], u[EYE + 2]]);
-        // How far the wind has carried the clouds, as the kernel lays them
-        // by (pxl-kernel domain/scene/environment/cloud.rs `step`).
-        let off = drift(f64::from(env[ENV_SKY + 1]));
-        let back = Position::of([off[0], off[1], 0.0]);
+        let back = Position::of([input.drift[0], input.drift[1], 0.0]);
         u[DRIFT_Q] = f32::from_bits(back.q[0] as u32);
         u[DRIFT_Q + 1] = f32::from_bits(back.q[1] as u32);
         u[DRIFT_R..DRIFT_R + 2].copy_from_slice(&back.r[..2]);
@@ -821,7 +820,7 @@ impl Renderer {
         put_ray(&mut self.sky, sky::RAY, &m);
         self.clouds.prepare(
             [eye_world[0], eye_world[1]],
-            env,
+            input.drift,
             input.clouds,
             eye_far * env[ENV_AIR + 1],
         );

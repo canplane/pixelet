@@ -21,7 +21,7 @@ use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
-use crate::domain::scene::environment::environment_words;
+use crate::domain::scene::environment::{environment_drift, environment_words};
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
@@ -160,7 +160,8 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         screen_ao: settings.ao == AoMode::screen,
         low_spec: !settings.textures,
         shadows: settings.shadows,
-        clouds: cloud::clouds_shown(environment_words()),
+        clouds: cloud::clouds_shown(),
+        drift: environment_drift(),
         lists,
         environment: environment_words(),
         decor: &decor,
@@ -255,7 +256,7 @@ pub fn visible_step(
     let animating = scene::animate(list, models, &frame);
     scene::draw(list, models);
     gpu::step(frame.eye, edits);
-    cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
+    cloud::step(draw_list(), &frame, &ctx.pass);
     marker::step(ctx, &frame, draft);
     marker::draw(draw_list());
     if animating {

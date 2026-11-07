@@ -8,6 +8,7 @@ pub mod celestial;
 pub mod cloud;
 pub mod param;
 
+use pxl_content::cloud::drift;
 use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
@@ -56,6 +57,16 @@ pub fn night() -> bool {
 /// draws the sky and the light by (pxl-render look/environment.rs).
 pub fn environment_words() -> &'static [f32; ENV_FLOATS] {
     &environment().out
+}
+
+/// How far the wind has carried the clouds (`EnvironmentDraw::drift`).
+pub fn environment_drift() -> [f64; 2] {
+    environment().drift
+}
+
+/// The eye's height over the sea (`EnvironmentDraw::alt_km`).
+pub fn environment_alt_km() -> f64 {
+    environment().alt_km
 }
 
 /// The cosine of the sun's and the moon's zenith angles at `days`, seen from
@@ -114,10 +125,13 @@ pub struct EnvironmentDraw {
     from: [[f64; 3]; 2],
     progress: f64,
     stars: f64,
-    /// Seconds of wall time since the first observation, the clouds' clock,
-    /// held between their steps (`observe`): the epoch would not survive the
-    /// shader's f32.
-    time: f64,
+    /// How far the wind has carried the clouds, X and Y in units, by their
+    /// clock, the wall time since the first observation, held between their
+    /// steps (`observe`).
+    drift: [f64; 2],
+    /// The eye's height over the sea, in km, as the last frame saw it
+    /// (`tick`).
+    alt_km: f64,
     /// Where the sky's hour and the clouds' wall clock last stepped, in
     /// Unix ms.
     sky_at: Stepped,
@@ -139,7 +153,8 @@ impl Default for EnvironmentDraw {
             from: [[0.0; 3]; 2],
             progress: 1.0,
             stars: 0.0,
-            time: 0.0,
+            drift: [0.0; 2],
+            alt_km: 0.0,
             sky_at: Stepped::default(),
             clouds_at: Stepped::default(),
             first_ms: None,
@@ -228,7 +243,7 @@ impl EnvironmentDraw {
         if drifted && self.started {
             animation::note_animation();
         }
-        self.time = (clouds - first) / 1000.0;
+        self.drift = drift((clouds - first) / 1000.0);
         let sky_in = if held {
             f64::INFINITY
         } else {
@@ -281,15 +296,14 @@ impl EnvironmentDraw {
         self.stars = (self.stars + frame.delta_s * SKY_EASE_RATE).min(1.0);
         // Height over the sea under the eye, which the camera stands over.
         let km_per_u = km_per_u();
-        let over = frame.camera[2];
+        self.alt_km = frame.camera[2] * km_per_u;
         // The ground under the eye, as the turn observed it.
         let ground = observation::observation().map_or(0.0, |o| o.ground);
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
-            time: self.time,
-            alt_km: over * km_per_u,
+            alt_km: self.alt_km,
             ground_km: ground * km_per_u,
             km_per_u,
             lat: lat.to_radians(),
