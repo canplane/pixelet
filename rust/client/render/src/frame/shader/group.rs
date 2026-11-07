@@ -1,12 +1,14 @@
 // pxl-render/frame/shader/group.rs
 
-//! Each compute pipeline's group 0 as its layout's (binding, stages, kind) words: what the
-//! frame's calls bind (sequence.rs) and the host makes its pipelines over (gpu/ray/cast.rs,
-//! gpu/ray/raster.rs, gpu/generator.rs, gpu/tiles.rs), each held to what its shaders read and
-//! to WebGPU's floor as the crate is built.
+//! Each compute pipeline's group 0 as its layout's (binding, stages, kind) words, held to what
+//! its shaders read and to WebGPU's floor as the crate is built; the buffers the frame's calls
+//! share; and each group the frame sets, by the buffers it binds, which the host makes it from
+//! (gpu/api.rs `Gpu::frame_group`) and the frame's calls are checked by (sequence.rs).
 
+use crate::frame::shader::access::{Bind, Buffer, Group, ARGS, END, LIST, STATE};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::*;
+use pxl_engine::{raster, ray};
 
 /// The binding of a pass's head (pxl-engine `light::HEAD_SIZE`): the light's
 /// map's, or the eye's, which names none.
@@ -709,3 +711,323 @@ const _: () = assert!(
         && binds(&[COMPUTE_CLAIMED_BOX], &CLAIMED_BOX_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
+
+/// The buffers, by their place in `BUFFERS`.
+pub const MARKS: u32 = 0;
+pub const NODE_CACHE: u32 = 1;
+pub const QUEUES: u32 = 2;
+pub const CAST_TILES: u32 = 3;
+pub const RASTER_ARGS: u32 = 4;
+pub const RASTER_STOPS: u32 = 5;
+pub const LIGHT_ARGS: u32 = 6;
+pub const LIGHT_LIST: u32 = 7;
+pub const LIGHT_STOOD: u32 = 8;
+pub const LIGHT_DRAWS: u32 = 9;
+pub const LIGHT_MISSES: u32 = 10;
+pub const LIGHT_RASTER_ARGS: u32 = 11;
+pub const LIGHT_RASTER_STOPS: u32 = 12;
+pub const LIGHT_BOX_ARGS: u32 = 13;
+pub const GENERATION_LIST: u32 = 14;
+pub const GENERATION_ARGS: u32 = 15;
+pub const GATED_SCREEN_ARGS: u32 = 16;
+pub const GATED_LIGHT_ARGS: u32 = 17;
+pub const BEAMS: u32 = 18;
+
+/// Each buffer, as the host names its field, and its role.
+pub const BUFFERS: &[Buffer] = &[
+    buffer("marks", ARGS),
+    buffer("node_cache", STATE),
+    buffer("queues", STATE),
+    buffer("cast_tiles", ARGS),
+    buffer("raster.args", ARGS),
+    buffer("raster.stops", ARGS),
+    buffer("light_args", ARGS),
+    buffer("light_list", LIST),
+    buffer("light_stood", ARGS),
+    buffer("light_draws_dispatch", ARGS),
+    buffer("light_misses", ARGS),
+    buffer("raster.light.args", ARGS),
+    buffer("raster.light.stops", ARGS),
+    buffer("light_tiles.box_args", ARGS),
+    buffer("generator.list", ARGS),
+    buffer("generator.args", ARGS),
+    buffer("generator.gated[Screen].args", ARGS),
+    buffer("generator.gated[Light].args", ARGS),
+    buffer("beams", LIST),
+];
+
+pub const fn buffer(name: &'static str, role: u32) -> Buffer {
+    Buffer { name, role }
+}
+
+/// A run's queue's view, binding 10 from its head to the queues' end (pxl-engine `ray::queue_at`).
+const fn queue_bind(queue: u32) -> Bind {
+    Bind {
+        binding: 10,
+        buf: QUEUES,
+        at: ray::queue_at(queue),
+        words: ray::QUEUE_WORDS - ray::queue_at(queue),
+    }
+}
+
+/// The faces' asks at `at` of the raster's args, which the faces' pass reads.
+const fn args_bind(at: u32) -> Bind {
+    Bind {
+        binding: 16,
+        buf: RASTER_ARGS,
+        at,
+        words: raster::ARGS_WORDS,
+    }
+}
+
+/// Binding `binding` of the whole of buffer `buf`.
+pub const fn bind(binding: u32, buf: u32) -> Bind {
+    Bind {
+        binding,
+        buf,
+        at: 0,
+        words: END,
+    }
+}
+
+// The groups the host makes (gpu/api.rs `Gpu::frame_group`): each binding of one of the frame's
+// buffers, as what it binds is made and the frame's calls are checked by the one table.
+pub const CORNERS_WALK_BINDS: Group = Group {
+    layout: &LATTICE_WALK_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_EYE_CORNERS),
+    ],
+};
+pub const CORNERS_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_CORNERS)],
+};
+pub const SAMPLES_WALK_BINDS: Group = Group {
+    layout: &LATTICE_WALK_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_EYE_SAMPLES),
+    ],
+};
+pub const SAMPLES_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_SAMPLES)],
+};
+pub const LATTICE_LAST_BINDS: Group = Group {
+    layout: &LATTICE_LAST_GROUP,
+    binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
+};
+pub const WORLD_BINDS: Group = Group {
+    layout: &WORLD_GROUP,
+    binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
+};
+pub const SAMPLE_BOX_BINDS: Group = Group {
+    layout: &SAMPLE_BOX_GROUP,
+    binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
+};
+pub const RECORD_BINDS: Group = Group {
+    layout: &RECORD_GROUP,
+    binds: &[
+        bind(12, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        bind(16, RASTER_ARGS),
+        bind(21, LIGHT_ARGS),
+        bind(22, LIGHT_STOOD),
+    ],
+};
+pub const FACES_BINDS: Group = Group {
+    layout: &FACE_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        args_bind(raster::ASKED_AT),
+    ],
+};
+pub const STOP_FACES_OF_BINDS: Group = Group {
+    layout: &FACE_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        args_bind(raster::STOP_ASKED_AT),
+    ],
+};
+pub const CAST_TILES_OF_BINDS: Group = Group {
+    layout: &CAST_TILES_GROUP,
+    binds: &[bind(0, CAST_TILES)],
+};
+pub const PIXELS_BINDS: Group = Group {
+    layout: &CAST_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        bind(14, MARKS),
+        bind(30, CAST_TILES),
+    ],
+};
+pub const LIGHT_WORLD_BINDS: Group = Group {
+    layout: &WORLD_GROUP,
+    binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
+};
+pub const WALK_BINDS: Group = Group {
+    layout: &QUEUE_GROUP,
+    binds: &[
+        bind(8, BEAMS),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_EYE_HOLES),
+    ],
+};
+pub const WALK_ASK_BINDS: Group = Group {
+    layout: &QUEUE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
+};
+pub const LAST_BINDS: Group = Group {
+    layout: &QUEUE_LAST_GROUP,
+    binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
+};
+pub const STOPS_OF_BINDS: Group = Group {
+    layout: &STOPS_GROUP,
+    binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
+};
+pub const GENERATION_MARK_BINDS: Group = Group {
+    layout: &MARK_GROUP,
+    binds: &[bind(11, GENERATION_LIST)],
+};
+pub const GENERATION_THIN_BINDS: Group = Group {
+    layout: &THIN_GROUP,
+    binds: &[bind(11, GENERATION_LIST)],
+};
+pub const GENERATION_BINDS: Group = Group {
+    layout: &GENERATE_GROUP,
+    binds: &[bind(11, GENERATION_LIST)],
+};
+pub const GENERATION_ARGS_OF_BINDS: Group = Group {
+    layout: &ARGS_GROUP,
+    binds: &[bind(2, GENERATION_ARGS)],
+};
+pub const GATE_SCREEN_BINDS: Group = Group {
+    layout: &GATE_GROUP,
+    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_SCREEN_ARGS)],
+};
+pub const GATE_LIGHT_BINDS: Group = Group {
+    layout: &GATE_GROUP,
+    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_LIGHT_ARGS)],
+};
+pub const LIGHT_BOX_BINDS: Group = Group {
+    layout: &BOX_ARGS_GROUP,
+    binds: &[bind(1, LIGHT_BOX_ARGS)],
+};
+pub const LIGHT_RECORD_BINDS: Group = Group {
+    layout: &RECORD_GROUP,
+    binds: &[
+        bind(12, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        bind(16, LIGHT_RASTER_ARGS),
+        bind(21, LIGHT_ARGS),
+        bind(22, LIGHT_STOOD),
+    ],
+};
+pub const LIGHT_MARK_BINDS: Group = Group {
+    layout: &LIGHT_MARK_GROUP,
+    binds: &[
+        bind(12, LIGHT_LIST),
+        bind(21, LIGHT_ARGS),
+        bind(22, LIGHT_STOOD),
+        bind(23, BEAMS),
+    ],
+};
+pub const LIGHT_MARK_DRAWS_OPEN_BINDS: Group = Group {
+    layout: &LIGHT_MARK_DRAWS_OPEN_GROUP,
+    binds: &[
+        bind(12, LIGHT_LIST),
+        bind(21, LIGHT_ARGS),
+        bind(22, LIGHT_STOOD),
+        bind(DRAWS_BINDING, LIGHT_DRAWS),
+    ],
+};
+pub const LIGHT_MARK_DRAWS_BINDS: Group = Group {
+    layout: &LIGHT_MARK_DRAWS_GROUP,
+    binds: &[
+        bind(12, LIGHT_LIST),
+        bind(21, LIGHT_ARGS),
+        bind(22, LIGHT_STOOD),
+    ],
+};
+pub const LIGHT_SLIDE_BINDS: Group = Group {
+    layout: &LIGHT_SLIDE_GROUP,
+    binds: &[bind(12, LIGHT_LIST)],
+};
+pub const LIGHT_PROPAGATE_BINDS: Group = Group {
+    layout: &LIGHT_PROPAGATE_GROUP,
+    binds: &[bind(12, LIGHT_LIST), bind(21, LIGHT_ARGS)],
+};
+pub const LIGHT_CORNERS_WALK_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_WALK_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_LIGHT_CORNERS),
+    ],
+};
+pub const LIGHT_CORNERS_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_CORNERS)],
+};
+pub const LIGHT_SAMPLES_WALK_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_WALK_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_LIGHT_SAMPLES),
+    ],
+};
+pub const LIGHT_SAMPLES_ASK_BINDS: Group = Group {
+    layout: &LATTICE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_SAMPLES)],
+};
+pub const LIGHT_LATTICE_LAST_BINDS: Group = Group {
+    layout: &LIGHT_LATTICE_LAST_GROUP,
+    binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
+};
+pub const LIGHT_SAMPLE_BOX_BINDS: Group = Group {
+    layout: &LIGHT_SAMPLE_BOX_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        bind(16, LIGHT_RASTER_ARGS),
+    ],
+};
+pub const LIGHT_SLOTS_BINDS: Group = Group {
+    layout: &LIGHT_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        bind(17, LIGHT_MISSES),
+    ],
+};
+pub const LIGHT_WALK_BINDS: Group = Group {
+    layout: &QUEUE_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        queue_bind(ray::QUEUE_LIGHT_HOLES),
+    ],
+};
+pub const LIGHT_WALK_ASK_BINDS: Group = Group {
+    layout: &QUEUE_ASK_GROUP,
+    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
+};
+pub const LIGHT_LAST_BINDS: Group = Group {
+    layout: &QUEUE_LAST_GROUP,
+    binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
+};
+pub const LIGHT_STOPS_BINDS: Group = Group {
+    layout: &LIGHT_STOPS_GROUP,
+    binds: &[
+        bind(8, LIGHT_LIST),
+        bind(9, NODE_CACHE),
+        bind(16, LIGHT_RASTER_ARGS),
+    ],
+};

@@ -39,7 +39,9 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 pub use xpute_gpu::spec::RESULT;
 
 use crate::api_spec::{record, stream};
+use crate::frame::shader::access::{self, END};
 use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
+use crate::frame::shader::group::BUFFERS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::split::Splits;
@@ -1571,6 +1573,45 @@ impl Gpu {
         let group = handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries));
         s.splits.grouped(group, layout.writable(entries));
         group
+    }
+
+    /// The bind group over `layout` that `table` says (frame/shader/group.rs): each binding it
+    /// names on the frame's buffer `buf` gives, and those of `rest` the layout binds past
+    /// them. `rest` binds no buffer of the frame's, which only the table names; `buf` answers
+    /// 0 for one its caller does not hold.
+    #[track_caller]
+    pub fn frame_group(
+        &self,
+        layout: Layout,
+        table: &access::Group,
+        buf: impl Fn(u32) -> Id,
+        rest: &[Entry],
+    ) -> Id {
+        let named = |binding: u32| table.binds.iter().any(|b| b.binding == binding);
+        let mut entries: Vec<Entry> = table
+            .binds
+            .iter()
+            .map(|b| match (b.at, b.words) {
+                (0, END) => buf_entry(b.binding, buf(b.buf)),
+                _ => buf_range_entry(
+                    b.binding,
+                    buf(b.buf),
+                    word_bytes(b.at as usize),
+                    word_bytes(b.words as usize),
+                ),
+            })
+            .collect();
+        for e in rest
+            .iter()
+            .filter(|e| layout.binds(e.binding) && !named(e.binding))
+        {
+            if let encode::Resource::Buffer { buffer, .. } = e.resource {
+                let shared = (0..BUFFERS.len() as u32).any(|k| buf(k) == buffer);
+                xpute_kit::ensure!(buffer == 0 || !shared, ENOTRECOVERABLE, e.binding, buffer);
+            }
+            entries.push(*e);
+        }
+        self.bind_group(layout, &entries)
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.

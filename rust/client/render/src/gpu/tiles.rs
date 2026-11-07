@@ -18,7 +18,9 @@
 //! (`box_args`). A target drawn through its gate numbers its stencil here
 //! (`gate`).
 
-use crate::frame::shader::group::{BOX_ARGS_GROUP, CLAIMED_BOX_GROUP, SCREEN_MARK_GROUP};
+use crate::frame::shader::group::{
+    BOX_ARGS_GROUP, CLAIMED_BOX_GROUP, LIGHT_BOX_ARGS, LIGHT_BOX_BINDS, SCREEN_MARK_GROUP,
+};
 
 use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
 /// The screen's tiles' pixels a side (word.rs `screen::TILE`).
@@ -141,13 +143,11 @@ impl Tiles {
                 buffer_usage::STORAGE | buffer_usage::INDIRECT,
             );
             let pass = pipelines.build_compute(g, COMPUTE_BOX_ARGS, &BOX_ARGS_GROUP);
-            let group = g.bind_group(
+            let group = g.frame_group(
                 pass.layouts[0],
-                &[
-                    buf_entry(0, marks_box),
-                    buf_entry(1, args),
-                    buf_entry(2, uniform),
-                ],
+                &LIGHT_BOX_BINDS,
+                |b| if b == LIGHT_BOX_ARGS { args } else { 0 },
+                &[buf_entry(0, marks_box), buf_entry(2, uniform)],
             );
             (args, pass, group)
         });

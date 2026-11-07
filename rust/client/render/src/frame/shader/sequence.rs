@@ -9,8 +9,7 @@
 //! built (frame/shader/access.rs `check`), each the frame holds today named in `KNOWN`.
 
 use crate::frame::shader::access::{
-    check, light_marks, Bind, Bound, Buffer, Frame, Group, Kept, Known, Range, Step, ARGS, END,
-    LIST, NO_RANGE, STATE,
+    check, light_marks, Bound, Frame, Kept, Known, Range, Step, END, NO_RANGE,
 };
 use crate::frame::shader::group::*;
 use crate::frame::shader::record::*;
@@ -22,76 +21,13 @@ use crate::frame::shader::word::SHADOW_SIZE;
 use pxl_content::generation;
 use pxl_engine::{light, node_cache, raster, ray};
 
-/// The buffers, by their place in `BUFFERS`.
-const MARKS: u32 = 0;
-const NODE_CACHE: u32 = 1;
-const QUEUES: u32 = 2;
-const CAST_TILES: u32 = 3;
-const RASTER_ARGS: u32 = 4;
-const RASTER_STOPS: u32 = 5;
-const LIGHT_ARGS: u32 = 6;
-const LIGHT_LIST: u32 = 7;
-const LIGHT_STOOD: u32 = 8;
-const LIGHT_DRAWS: u32 = 9;
-const LIGHT_MISSES: u32 = 10;
-const LIGHT_RASTER_ARGS: u32 = 11;
-const LIGHT_RASTER_STOPS: u32 = 12;
-const LIGHT_BOX_ARGS: u32 = 13;
-const GENERATION_LIST: u32 = 14;
-const GENERATION_ARGS: u32 = 15;
-const GATED_SCREEN_ARGS: u32 = 16;
-const GATED_LIGHT_ARGS: u32 = 17;
-
-/// Each buffer, as the host names its field, and its role.
-const BUFFERS: &[Buffer] = &[
-    buffer("marks", ARGS),
-    buffer("node_cache", STATE),
-    buffer("queues", STATE),
-    buffer("cast_tiles", ARGS),
-    buffer("raster.args", ARGS),
-    buffer("raster.stops", ARGS),
-    buffer("light_args", ARGS),
-    buffer("light_list", LIST),
-    buffer("light_stood", ARGS),
-    buffer("light_draws_dispatch", ARGS),
-    buffer("light_misses", ARGS),
-    buffer("raster.light.args", ARGS),
-    buffer("raster.light.stops", ARGS),
-    buffer("light_tiles.box_args", ARGS),
-    buffer("generator.list", ARGS),
-    buffer("generator.args", ARGS),
-    buffer("generator.gated[Screen].args", ARGS),
-    buffer("generator.gated[Light].args", ARGS),
-];
-
-const fn buffer(name: &'static str, role: u32) -> Buffer {
-    Buffer { name, role }
-}
-
 const fn at(buf: u32, at: u32, words: u32) -> Range {
     Range { buf, at, words }
-}
-
-/// A run's queue's view, binding 10 from its head (pxl-engine `ray::queue_at`).
-const fn queue_bind(queue: u32) -> Bind {
-    Bind {
-        binding: 10,
-        buf: QUEUES,
-        at: ray::queue_at(queue),
-    }
 }
 
 /// Words `word` to `word + words` of queue `queue`'s head.
 const fn head(queue: u32, word: u32, words: u32) -> Range {
     at(QUEUES, ray::queue_at(queue) + word, words)
-}
-
-const fn bind(binding: u32, buf: u32) -> Bind {
-    Bind {
-        binding,
-        buf,
-        at: 0,
-    }
 }
 
 /// The stages, by their place in `STAGES`; the host's writes the first (access.rs
@@ -119,194 +55,6 @@ const STAGES: &[&str] = &[
     "the decor through the light's gate",
     "the world's lit pass",
 ];
-
-// The groups as the host makes them (ray/cast.rs `RaysPass::prepare`, `light_groups`,
-// `queue_groups`; ray/raster.rs `Raster::prepare`, `record_group`, `light_record_group`;
-// gpu/generator.rs `regroup`; gpu/tiles.rs `Tiles::new`): each binding to a buffer here.
-const CORNERS_WALK_BINDS: Group = Group {
-    layout: &LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_CORNERS)],
-};
-const CORNERS_ASK_BINDS: Group = Group {
-    layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_CORNERS)],
-};
-const SAMPLES_WALK_BINDS: Group = Group {
-    layout: &LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_SAMPLES)],
-};
-const SAMPLES_ASK_BINDS: Group = Group {
-    layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_SAMPLES)],
-};
-const LATTICE_LAST_BINDS: Group = Group {
-    layout: &LATTICE_LAST_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const WORLD_BINDS: Group = Group {
-    layout: &WORLD_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const SAMPLE_BOX_BINDS: Group = Group {
-    layout: &SAMPLE_BOX_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
-};
-const RECORD_BINDS: Group = Group {
-    layout: &RECORD_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        bind(16, RASTER_ARGS),
-        bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
-    ],
-};
-const FACES_BINDS: Group = Group {
-    layout: &FACE_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        Bind {
-            binding: 16,
-            buf: RASTER_ARGS,
-            at: raster::ASKED_AT,
-        },
-    ],
-};
-const STOP_FACES_OF_BINDS: Group = Group {
-    layout: &FACE_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        Bind {
-            binding: 16,
-            buf: RASTER_ARGS,
-            at: raster::STOP_ASKED_AT,
-        },
-    ],
-};
-const CAST_TILES_OF_BINDS: Group = Group {
-    layout: &CAST_TILES_GROUP,
-    binds: &[bind(0, CAST_TILES)],
-};
-const PIXELS_BINDS: Group = Group {
-    layout: &CAST_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(14, MARKS), bind(30, CAST_TILES)],
-};
-const WALK_BINDS: Group = Group {
-    layout: &QUEUE_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
-};
-const WALK_ASK_BINDS: Group = Group {
-    layout: &QUEUE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
-};
-const LAST_BINDS: Group = Group {
-    layout: &QUEUE_LAST_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const STOPS_OF_BINDS: Group = Group {
-    layout: &STOPS_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
-};
-const GENERATION_MARK_BINDS: Group = Group {
-    layout: &MARK_GROUP,
-    binds: &[bind(11, GENERATION_LIST)],
-};
-const GENERATION_THIN_BINDS: Group = Group {
-    layout: &THIN_GROUP,
-    binds: &[bind(11, GENERATION_LIST)],
-};
-const GENERATION_BINDS: Group = Group {
-    layout: &GENERATE_GROUP,
-    binds: &[bind(11, GENERATION_LIST)],
-};
-const GENERATION_ARGS_OF_BINDS: Group = Group {
-    layout: &ARGS_GROUP,
-    binds: &[bind(2, GENERATION_ARGS)],
-};
-const GATE_SCREEN_BINDS: Group = Group {
-    layout: &GATE_GROUP,
-    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_SCREEN_ARGS)],
-};
-const GATE_LIGHT_BINDS: Group = Group {
-    layout: &GATE_GROUP,
-    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_LIGHT_ARGS)],
-};
-const LIGHT_BOX_BINDS: Group = Group {
-    layout: &BOX_ARGS_GROUP,
-    binds: &[bind(1, LIGHT_BOX_ARGS)],
-};
-const LIGHT_RECORD_BINDS: Group = Group {
-    layout: &RECORD_GROUP,
-    binds: &[
-        bind(9, NODE_CACHE),
-        bind(16, LIGHT_RASTER_ARGS),
-        bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
-    ],
-};
-const LIGHT_MARK_BINDS: Group = Group {
-    layout: &LIGHT_MARK_GROUP,
-    binds: &[bind(21, LIGHT_ARGS), bind(22, LIGHT_STOOD)],
-};
-const LIGHT_MARK_DRAWS_OPEN_BINDS: Group = Group {
-    layout: &LIGHT_MARK_DRAWS_OPEN_GROUP,
-    binds: &[
-        bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
-        bind(DRAWS_BINDING, LIGHT_DRAWS),
-    ],
-};
-const LIGHT_MARK_DRAWS_BINDS: Group = Group {
-    layout: &LIGHT_MARK_DRAWS_GROUP,
-    binds: &[bind(21, LIGHT_ARGS), bind(22, LIGHT_STOOD)],
-};
-const LIGHT_SLIDE_BINDS: Group = Group {
-    layout: &LIGHT_SLIDE_GROUP,
-    binds: &[],
-};
-const LIGHT_PROPAGATE_BINDS: Group = Group {
-    layout: &LIGHT_PROPAGATE_GROUP,
-    binds: &[bind(21, LIGHT_ARGS)],
-};
-const LIGHT_CORNERS_WALK_BINDS: Group = Group {
-    layout: &LIGHT_LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_CORNERS)],
-};
-const LIGHT_CORNERS_ASK_BINDS: Group = Group {
-    layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_CORNERS)],
-};
-const LIGHT_SAMPLES_WALK_BINDS: Group = Group {
-    layout: &LIGHT_LATTICE_WALK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_SAMPLES)],
-};
-const LIGHT_SAMPLES_ASK_BINDS: Group = Group {
-    layout: &LATTICE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_SAMPLES)],
-};
-const LIGHT_LATTICE_LAST_BINDS: Group = Group {
-    layout: &LIGHT_LATTICE_LAST_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const LIGHT_SAMPLE_BOX_BINDS: Group = Group {
-    layout: &LIGHT_SAMPLE_BOX_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(16, LIGHT_RASTER_ARGS)],
-};
-const LIGHT_SLOTS_BINDS: Group = Group {
-    layout: &LIGHT_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(17, LIGHT_MISSES)],
-};
-const LIGHT_WALK_BINDS: Group = Group {
-    layout: &QUEUE_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
-};
-const LIGHT_WALK_ASK_BINDS: Group = Group {
-    layout: &QUEUE_ASK_GROUP,
-    binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
-};
-const LIGHT_STOPS_BINDS: Group = Group {
-    layout: &LIGHT_STOPS_GROUP,
-    binds: &[bind(9, NODE_CACHE), bind(16, LIGHT_RASTER_ARGS)],
-};
 
 // Each step a host's call names, in the order the frame encodes them.
 
@@ -434,7 +182,7 @@ pub const LIGHT_CELLS: Step = Step::dispatch_off(
     "light_cells",
     IN_LIGHT,
     COMPUTE_LIGHT_CELL,
-    &[&WORLD_BINDS],
+    &[&LIGHT_WORLD_BINDS],
     (LIGHT_ARGS, light::ARGS_CELLS),
 );
 pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
@@ -1126,7 +874,7 @@ pub const FRAME: Frame = Frame {
             "light_queue_last",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_LAST,
-            &[&LAST_BINDS],
+            &[&LIGHT_LAST_BINDS],
         ),
         LIGHT_STOPS_DISPATCH,
         LIGHT_STOPS,

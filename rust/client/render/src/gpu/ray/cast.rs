@@ -4,7 +4,7 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generator.rs): what each reads, made once, and their dispatches.
 
-use crate::frame::shader::access::Step;
+use crate::frame::shader::access::{Group, Step};
 use crate::frame::shader::sequence;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
@@ -19,11 +19,18 @@ use super::schedule::{Reads, Schedule};
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::group::{
-    CAST_GROUP, CAST_TILES_GROUP, DRAWS_BINDING, HEAD_BINDING, LATTICE_ASK_GROUP,
-    LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_GROUP, LIGHT_LATTICE_LAST_GROUP,
-    LIGHT_LATTICE_WALK_GROUP, LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_GROUP,
-    LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP, LIGHT_SLIDE_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP,
-    QUEUE_LAST_GROUP, WORLD_GROUP,
+    BEAMS, CAST_GROUP, CAST_TILES, CAST_TILES_GROUP, CAST_TILES_OF_BINDS, CORNERS_ASK_BINDS,
+    CORNERS_WALK_BINDS, HEAD_BINDING, LAST_BINDS, LATTICE_ASK_GROUP, LATTICE_LAST_BINDS,
+    LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_ARGS, LIGHT_CORNERS_ASK_BINDS,
+    LIGHT_CORNERS_WALK_BINDS, LIGHT_DRAWS, LIGHT_GROUP, LIGHT_LAST_BINDS, LIGHT_LATTICE_LAST_BINDS,
+    LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP, LIGHT_LIST, LIGHT_MARK_BINDS,
+    LIGHT_MARK_DRAWS_BINDS, LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_BINDS,
+    LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_MISSES, LIGHT_PROPAGATE_BINDS,
+    LIGHT_PROPAGATE_GROUP, LIGHT_RASTER_ARGS, LIGHT_SAMPLES_ASK_BINDS, LIGHT_SAMPLES_WALK_BINDS,
+    LIGHT_SAMPLE_BOX_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLIDE_GROUP, LIGHT_SLOTS_BINDS, LIGHT_STOOD,
+    LIGHT_WALK_ASK_BINDS, LIGHT_WALK_BINDS, LIGHT_WORLD_BINDS, MARKS, NODE_CACHE, PIXELS_BINDS,
+    QUEUES, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, SAMPLES_ASK_BINDS, SAMPLES_WALK_BINDS,
+    WALK_ASK_BINDS, WALK_BINDS, WORLD_BINDS, WORLD_GROUP,
 };
 use crate::frame::shader::record::{
     COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FORGET, COMPUTE_LIGHT,
@@ -44,8 +51,8 @@ use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
-    write_buffer_bytes, Entry, Gpu, RenderContext,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
+    RenderContext,
 };
 use crate::gpu::draw::Stand;
 use crate::gpu::generator::{
@@ -380,6 +387,27 @@ struct StandOn {
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// The light's cast's groups (`light_groups`).
 const LIGHT_GROUPS: usize = 17;
+
+impl CastBuffers {
+    /// The frame's buffer `buf` (frame/shader/group.rs `BUFFERS`) the cast holds, 0 for
+    /// another's.
+    fn buf_of(&self, buf: u32) -> u32 {
+        match buf {
+            MARKS => self.marks,
+            NODE_CACHE => self.node_cache,
+            QUEUES => self.queues,
+            CAST_TILES => self.cast_tiles,
+            BEAMS => self.beams,
+            LIGHT_ARGS => self.light_args,
+            LIGHT_LIST => self.light_list,
+            LIGHT_STOOD => self.light_stood,
+            LIGHT_DRAWS => self.light_draws_dispatch,
+            LIGHT_MISSES => self.light_misses,
+            LIGHT_RASTER_ARGS => self.raster.light.args,
+            _ => 0,
+        }
+    }
+}
 
 impl RaysPass {
     /// The cast pass's pipelines and buffers, made once with the renderer,
@@ -1235,8 +1263,10 @@ impl RaysPass {
         ];
         if bindings != c.bindings {
             release(c.group);
-            let [eye, clipmap, ground, _, _, _, _, _, beams, node_cache, head] = bindings;
-            c.group = cast_group(g, &c.cells_built, [eye, beams, node_cache, head]);
+            let [eye, clipmap, ground, _, _, _, _, _, _, _, head] = bindings;
+            let buf = |b| c.buf_of(b);
+            let observer = [buf_entry(0, eye), buf_entry(HEAD_BINDING, head)];
+            let group = g.frame_group(c.cells_built.layouts[0], &WORLD_BINDS, buf, &observer);
             for group in c.queue_groups {
                 release(group);
             }
@@ -1249,35 +1279,40 @@ impl RaysPass {
                 c.overwrites,
                 pool,
             ];
-            c.queue_groups = queue_groups(
+            let run = (world, bindings[3], head);
+            let queue_groups_of = queue_groups(
                 g,
                 [&c.queue_built, &c.queue_ask_built, &c.queue_last_built],
-                world,
-                [bindings[3], beams, node_cache, c.queues, head],
-                ray::QUEUE_EYE_HOLES,
+                [&WALK_BINDS, &WALK_ASK_BINDS, &LAST_BINDS],
+                buf,
+                run,
             );
             for group in c.samples_groups {
                 release(group);
             }
             let [walk, ask, _, _, last] = &c.samples_built;
-            c.samples_groups = queue_groups(
+            let samples_groups = queue_groups(
                 g,
                 [walk, ask, last],
-                world,
-                [bindings[3], beams, node_cache, c.queues, head],
-                ray::QUEUE_EYE_SAMPLES,
+                [&SAMPLES_WALK_BINDS, &SAMPLES_ASK_BINDS, &LATTICE_LAST_BINDS],
+                buf,
+                run,
             );
             for group in c.corners_groups {
                 release(group);
             }
             let [walk, ask, _, _, last] = &c.corners_built;
-            c.corners_groups = queue_groups(
+            let corners_groups = queue_groups(
                 g,
                 [walk, ask, last],
-                world,
-                [bindings[3], beams, node_cache, c.queues, head],
-                ray::QUEUE_EYE_CORNERS,
+                [&CORNERS_WALK_BINDS, &CORNERS_ASK_BINDS, &LATTICE_LAST_BINDS],
+                buf,
+                run,
             );
+            c.group = group;
+            c.queue_groups = queue_groups_of;
+            c.samples_groups = samples_groups;
+            c.corners_groups = corners_groups;
             c.bindings = bindings;
         }
         if casts {
@@ -1318,15 +1353,18 @@ impl RaysPass {
                     word_bytes(CAST_TILES_START.len() + (across * down) as usize),
                     buffer_usage::STORAGE | buffer_usage::INDIRECT | buffer_usage::COPY_DST,
                 );
-                c.cast_tiles_group = g.bind_group(
-                    c.cast_tiles_built.layouts[0],
-                    &[
-                        buf_entry(0, c.cast_tiles),
-                        buf_entry(30, changed_at),
-                        buf_entry(31, uniform),
-                    ],
-                );
-                c.px_group = px_group(g, &c.pipeline, px_bound, [c.marks, c.cast_tiles]);
+                let buf = |b| c.buf_of(b);
+                let tiles = [buf_entry(30, changed_at), buf_entry(31, uniform)];
+                let layout = c.cast_tiles_built.layouts[0];
+                let cast_tiles_group = g.frame_group(layout, &CAST_TILES_OF_BINDS, buf, &tiles);
+                // No world: a pixel walks nothing of its own (`cast_cs`).
+                let pixels = [
+                    buf_entry(0, c.eye),
+                    view_entry(3, rays.0),
+                    view_entry(13, c.raster.visibility_array),
+                ];
+                let px_group = g.frame_group(c.pipeline.layouts[0], &PIXELS_BINDS, buf, &pixels);
+                (c.cast_tiles_group, c.px_group) = (cast_tiles_group, px_group);
                 c.px_bound = px_bound;
             }
         }
@@ -1376,19 +1414,9 @@ impl RaysPass {
                     &c.light_samples_built[4],
                     &c.light_corners_built[4],
                 ],
+                |b| c.buf_of(b),
                 light_bound,
-                [
-                    c.node_cache,
-                    c.light_head,
-                    c.light_list,
-                    c.raster.light.visibility_array,
-                    c.raster.light.args,
-                    c.light_misses,
-                    c.light_args,
-                    c.queues,
-                    c.light_stood,
-                    c.light_draws_dispatch,
-                ],
+                [c.light_head, c.raster.light.visibility_array],
             );
             c.light_bound = light_bound;
         }
@@ -2003,39 +2031,6 @@ impl RaysPass {
     }
 }
 
-/// The cast's world's group 0 over `bindings` (`WORLD_GROUP`): the eye, the
-/// beam rays' lines and the cells' starts, the node cache, and the head: the
-/// eye's, or, over the light's list and head, the shadow map's (`light_groups`).
-fn cast_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 4]) -> u32 {
-    let [eye, beams, node_cache, head] = bindings;
-    let entries = [
-        buf_entry(0, eye),
-        buf_entry(8, beams),
-        buf_entry(9, node_cache),
-        buf_entry(HEAD_BINDING, head),
-    ];
-    g.bind_group(pipeline.layouts[0], &entries)
-}
-
-/// The pixels' group 0 over `bindings`: the eye, the rays, the beam's words, the marked
-/// listed past the grid's (pxl-engine `beam::Grid::walked_at`), the node cache, the visibility
-/// buffer, a one-layer array, the words the marked are counted in (`marks`), the voxels' boxes
-/// and the claimed tiles' list.
-/// No world: a pixel walks nothing of its own (`cast_cs`).
-fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], [marks, list]: [u32; 2]) -> u32 {
-    let [eye, rays, beams, node_cache, visibility, ..] = bindings;
-    let entries = [
-        buf_entry(0, eye),
-        view_entry(3, rays),
-        buf_entry(8, beams),
-        buf_entry(9, node_cache),
-        view_entry(13, visibility),
-        buf_entry(14, marks),
-        buf_entry(30, list),
-    ];
-    g.bind_group(pipeline.layouts[0], &entries)
-}
-
 /// The workgroups of the passes that cast the light's tiles as a cast starts: none, a list's
 /// row across and no row; and the lay's tiles' vertices and no instance
 /// (`light::ARGS_WORDS`).
@@ -2084,23 +2079,17 @@ fn light_list(g: &Gpu) -> u32 {
     )
 }
 
-/// The light's cast's groups 0, over `bindings`: the eye, the clip level, the
-/// tiles' frames, the bricks' palette indices, the service area's index, the
-/// overwrites and the ways' pool, the cast's alone; the node cache,
-/// which the light's walks read and write as the eye's do; the clipmap; its
-/// head, the beam's lines, the samples and the misses (`list`),
-/// the raster's boxes, visibility buffer and args, the misses' dispatch and
-/// the casting passes' workgroups (`light::ARGS_WORDS`), which the
-/// propagation writes, and the stood list's args (`light::STOOD_WORDS`), which the marks
-/// write; the eye's rays, its beam rays' words and the node cache, which the mark reads, and
-/// the decor's drawing words, regions and instances, which the drawn mark reads. The slots',
-/// its world's (the beam, the cells' starts and the samples, the eye's
-/// passes, over `WORLD_GROUP`, its list where the eye's beam rays' buffer
-/// lies and its head where the eye's), its boxes' (the eye's raster's
-/// pass), the misses' walk's, the two marks', the propagation's, the
-/// slide's, the misses' and the samples' walks over the node cache alone, the beam rays'
-/// walks over the node cache alone and their asks, the misses' asks, the drawn receivers'
-/// opening, the samples' asks and last walk, and the beam rays' last walk.
+/// The light's cast's groups 0, each the group its table says (frame/shader/group.rs) over
+/// `buf`, the frame's buffers, and `bindings`, what else they bind: the eye, the clip level,
+/// the tiles' frames, the bricks' palette indices, the service area's index, the overwrites
+/// and the ways' pool, the cast's alone; the light's map; the eye's rays, which the mark
+/// reads; the decor's drawing words, regions and instances, which the drawn mark reads; and
+/// its head and the raster's visibility buffer. The slots', its world's (the eye's passes over
+/// `WORLD_GROUP`, its list where the eye's beam rays' buffer lies and its head where the
+/// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two marks', the
+/// propagation's, the slide's, the misses' and the samples' walks over the node cache alone,
+/// the beam rays' walks over the node cache alone and their asks, the misses' asks, the drawn
+/// receivers' opening, the samples' asks and last walk, and the beam rays' last walk.
 fn light_groups(
     g: &Gpu,
     [
@@ -2122,37 +2111,22 @@ fn light_groups(
         samples_last,
         corners_last,
     ]: [&Pipeline; LIGHT_GROUPS],
+    buf: impl Fn(u32) -> u32 + Copy,
     bindings: [u32; 13],
-    [node_cache, head, list, visibility, args, misses, light_args, queues, stood, draws]: [u32; 10],
+    [head, visibility]: [u32; 2],
 ) -> [u32; LIGHT_GROUPS] {
-    let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances, beams] =
+    let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances, _] =
         bindings;
-    let entries = [
+    let rest = [
         buf_entry(0, eye),
-        buf_entry(1, clipmap),
-        buf_entry(2, ground),
         view_entry(3, rays),
-        buf_entry(4, palette_indices),
-        buf_entry(5, shards),
-        buf_entry(6, overwrites),
-        buf_entry(7, pool),
-        buf_entry(8, list),
-        buf_entry(9, node_cache),
         view_entry(10, light),
         buf_entry(HEAD_BINDING, head),
-        buf_entry(12, list),
         view_entry(15, visibility),
-        buf_entry(16, args),
-        buf_entry(17, misses),
         buf_entry(18, drawing),
         buf_entry(19, regions),
         buf_entry(20, instances),
-        buf_entry(21, light_args),
-        buf_entry(22, stood),
-        buf_entry(23, beams),
-        buf_entry(DRAWS_BINDING, draws),
     ];
-    // Each group takes the entries its layout binds.
     let worlds = [
         eye,
         clipmap,
@@ -2162,81 +2136,72 @@ fn light_groups(
         overwrites,
         pool,
     ];
+    let run = (worlds, light, head);
     let [queue_walk, ask, last] = queue_groups(
         g,
         [queue_walk, queue_ask, queue_last],
-        worlds,
-        [light, list, node_cache, queues, head],
-        ray::QUEUE_LIGHT_HOLES,
+        [&LIGHT_WALK_BINDS, &LIGHT_WALK_ASK_BINDS, &LIGHT_LAST_BINDS],
+        buf,
+        run,
     );
     let [samples_walk, samples_ask, samples_last] = queue_groups(
         g,
         [samples_walk, samples_ask, samples_last],
-        worlds,
-        [light, list, node_cache, queues, head],
-        ray::QUEUE_LIGHT_SAMPLES,
+        [
+            &LIGHT_SAMPLES_WALK_BINDS,
+            &LIGHT_SAMPLES_ASK_BINDS,
+            &LIGHT_LATTICE_LAST_BINDS,
+        ],
+        buf,
+        run,
     );
     let [corners_walk, corners_ask, corners_last] = queue_groups(
         g,
         [corners_walk, corners_ask, corners_last],
-        worlds,
-        [light, list, node_cache, queues, head],
-        ray::QUEUE_LIGHT_CORNERS,
+        [
+            &LIGHT_CORNERS_WALK_BINDS,
+            &LIGHT_CORNERS_ASK_BINDS,
+            &LIGHT_LATTICE_LAST_BINDS,
+        ],
+        buf,
+        run,
     );
-    let of = |p: &Pipeline| {
-        let layout = p.layouts[0];
-        let e: Vec<Entry> = entries
-            .into_iter()
-            .filter(|e| layout.binds(e.binding))
-            .collect();
-        g.bind_group(layout, &e)
-    };
+    let of = |p: &Pipeline, table: &Group| g.frame_group(p.layouts[0], table, buf, &rest);
     [
-        of(walk),
-        cast_group(g, world, [eye, list, node_cache, head]),
-        g.bind_group(
-            boxes_built.layouts[0],
-            &[
-                buf_entry(0, eye),
-                buf_entry(8, list),
-                buf_entry(9, node_cache),
-                buf_entry(HEAD_BINDING, head),
-                buf_entry(16, args),
-            ],
-        ),
+        of(walk, &LIGHT_SLOTS_BINDS),
+        of(world, &LIGHT_WORLD_BINDS),
+        of(boxes_built, &LIGHT_SAMPLE_BOX_BINDS),
         last,
-        of(mark),
-        of(mark_draws),
-        of(propagate),
-        of(slide),
+        of(mark, &LIGHT_MARK_BINDS),
+        of(mark_draws, &LIGHT_MARK_DRAWS_BINDS),
+        of(propagate, &LIGHT_PROPAGATE_BINDS),
+        of(slide, &LIGHT_SLIDE_BINDS),
         queue_walk,
         samples_walk,
         corners_walk,
         corners_ask,
         ask,
-        of(mark_draws_open),
+        of(mark_draws_open, &LIGHT_MARK_DRAWS_OPEN_BINDS),
         samples_ask,
         samples_last,
         corners_last,
     ]
 }
 
-/// A run's groups 0, of either observer and any kind: its walks over the node cache alone,
-/// its asks and its last walk, over `world`, the eye and the world's buffers the asks read (the
-/// clip level, the tiles' frames, the bricks' palette indices, the service area's index, the
-/// overwrites and the ways' pool), and the run's: the rays or the map its holes write, its
-/// observer's list, the node cache, the queues' words from the run's `queue`'s head
-/// (`ray::queue_at`) and its observer's head; each group the entries its pipeline's layout
-/// binds.
+/// A run's groups 0, of either observer and any kind: its walks over the node cache alone, its
+/// asks and its last walk, each the group its table says over `buf`, the frame's buffers, and
+/// `world`, the eye and the world's buffers the asks read (the clip level, the tiles' frames,
+/// the bricks' palette indices, the service area's index, the overwrites and the ways' pool),
+/// the rays or the map its holes write, and its observer's head.
 fn queue_groups(
     g: &Gpu,
     pipelines: [&Pipeline; 3],
-    world: [u32; 7],
-    [out, list, node_cache, queues, head]: [u32; 5],
-    queue: u32,
+    tables: [&Group; 3],
+    buf: impl Fn(u32) -> u32 + Copy,
+    (world, out, head): ([u32; 7], u32, u32),
 ) -> [u32; 3] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool] = world;
-    let entries = [
+    let rest = [
         buf_entry(0, eye),
         buf_entry(1, clipmap),
         buf_entry(2, ground),
@@ -2245,24 +2210,9 @@ fn queue_groups(
         buf_entry(5, shards),
         buf_entry(6, overwrites),
         buf_entry(7, pool),
-        buf_entry(8, list),
-        buf_entry(9, node_cache),
-        buf_range_entry(
-            10,
-            queues,
-            word_bytes(ray::queue_at(queue) as usize),
-            word_bytes((ray::QUEUE_WORDS - ray::queue_at(queue)) as usize),
-        ),
         buf_entry(HEAD_BINDING, head),
     ];
-    pipelines.map(|p| {
-        let layout = p.layouts[0];
-        let e: Vec<Entry> = entries
-            .into_iter()
-            .filter(|e| layout.binds(e.binding))
-            .collect();
-        g.bind_group(layout, &e)
-    })
+    core::array::from_fn(|k| g.frame_group(pipelines[k].layouts[0], tables[k], buf, &rest))
 }
 
 /// A run as its passes take it (pxl-engine `ray::QUEUE_LANES`): the pipelines of its first

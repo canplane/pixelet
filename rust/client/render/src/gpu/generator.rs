@@ -13,6 +13,7 @@
 //! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
 //! is generated.
 
+use crate::frame::shader::access;
 use crate::frame::shader::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
@@ -20,7 +21,10 @@ use pxl_engine::{clipmap, eye, overwrite, Zoom};
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::frame::shader::group::{
-    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP,
+    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GATED_LIGHT_ARGS, GATED_SCREEN_ARGS, GATE_GROUP,
+    GATE_LIGHT_BINDS, GATE_SCREEN_BINDS, GENERATE_GROUP, GENERATION_ARGS, GENERATION_ARGS_OF_BINDS,
+    GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP,
+    THIN_GROUP,
 };
 use crate::frame::shader::record::PIPELINE_DECOR;
 use crate::frame::shader::record::{
@@ -30,7 +34,7 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu, Layout,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Entry, Gpu, Layout,
     RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -430,34 +434,53 @@ impl Generator {
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
 
+    /// The frame's buffer `buf` (frame/shader/group.rs `BUFFERS`) the generator holds, 0 for
+    /// another's.
+    fn buf_of(&self, buf: u32) -> u32 {
+        match buf {
+            GENERATION_LIST => self.list,
+            GENERATION_ARGS => self.args,
+            GATED_SCREEN_ARGS => self.gated[Gate::Screen as usize].args,
+            GATED_LIGHT_ARGS => self.gated[Gate::Light as usize].args,
+            _ => 0,
+        }
+    }
+
     fn regroup(&mut self, g: &Gpu, world: World) {
+        let entries = |ids: &[(u32, u32)]| -> Vec<Entry> {
+            ids.iter()
+                .map(|&(binding, b)| buf_entry(binding, b))
+                .collect()
+        };
         let group = |pipeline: &Pipeline, ids: &[(u32, u32)]| {
-            let mut entries = [buf_entry(0, 0); 9];
-            for (k, &(binding, b)) in ids.iter().enumerate() {
-                entries[k] = buf_entry(binding, b);
-            }
-            g.bind_group(pipeline.layouts[0], &entries[..ids.len()])
+            g.bind_group(pipeline.layouts[0], &entries(ids))
+        };
+        let framed = |pipeline: &Pipeline, table: &access::Group, ids: &[(u32, u32)]| {
+            g.frame_group(
+                pipeline.layouts[0],
+                table,
+                |b| self.buf_of(b),
+                &entries(ids),
+            )
         };
         for id in self.groups {
             release(id);
         }
         let [eye, clipmap, ground, shards, overwrites, pool] = world;
-        self.groups = [
-            group(
+        let groups = [
+            framed(
                 &self.mark,
-                &[
-                    (1, clipmap),
-                    (9, self.records),
-                    (11, self.list),
-                    (12, self.zooms),
-                ],
+                &GENERATION_MARK_BINDS,
+                &[(1, clipmap), (9, self.records), (12, self.zooms)],
             ),
-            group(
+            framed(
                 &self.thin,
-                &[(9, self.records), (10, self.rows), (11, self.list)],
+                &GENERATION_THIN_BINDS,
+                &[(9, self.records), (10, self.rows)],
             ),
-            group(
+            framed(
                 &self.generate,
+                &GENERATION_BINDS,
                 &[
                     (0, eye),
                     (1, clipmap),
@@ -467,7 +490,6 @@ impl Generator {
                     (7, pool),
                     (9, self.records),
                     (10, self.rows),
-                    (11, self.list),
                 ],
             ),
             group(
@@ -480,12 +502,12 @@ impl Generator {
                     (14, self.regions),
                 ],
             ),
-            group(
+            framed(
                 &self.args_pipeline,
+                &GENERATION_ARGS_OF_BINDS,
                 &[
                     (0, self.meshes),
                     (1, self.regions),
-                    (2, self.args),
                     (3, self.uniforms),
                     (15, self.instances),
                 ],
@@ -502,6 +524,7 @@ impl Generator {
                 ],
             ),
         ];
+        self.groups = groups;
     }
 
     /// No decor this frame: none generated, none drawn, and the next generates
@@ -638,15 +661,19 @@ impl Generator {
         let claimed_box = tiles.dispatch_claimed_box(ctx);
         let gated = &self.gated[gate as usize];
         let g = ctx.g;
-        let group = g.bind_group(
+        let table = match gate {
+            Gate::Screen => &GATE_SCREEN_BINDS,
+            Gate::Light => &GATE_LIGHT_BINDS,
+        };
+        let group = g.frame_group(
             self.gate.layouts[0],
+            table,
+            |b| self.buf_of(b),
             &[
                 buf_entry(0, frame),
                 buf_entry(1, self.uniforms),
-                buf_entry(2, self.args),
                 buf_entry(3, self.instances),
                 buf_entry(4, gated.list),
-                buf_entry(5, gated.args),
                 buf_entry(6, claimed_box),
                 buf_entry(7, self.regions),
                 buf_entry(31, tiles.this_frame().1),

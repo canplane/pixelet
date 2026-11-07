@@ -87,16 +87,17 @@ pub const NO_RANGE: Range = Range {
     words: 0,
 };
 
-/// A group's binding viewing buffer `buf` from its word `at`.
+/// A group's binding viewing `words` of buffer `buf` from its word `at`, `END` to its end.
 #[derive(Clone, Copy)]
 pub struct Bind {
     pub binding: u32,
     pub buf: u32,
     pub at: u32,
+    pub words: u32,
 }
 
 /// A group as the host makes it: its layout's (binding, stages, kind) words and the frame's
-/// buffers its bindings view; a binding to none of them is not named.
+/// buffers its bindings view; a binding to none of them is the host's alone to name.
 #[derive(Clone, Copy)]
 pub struct Group {
     pub layout: &'static [u32],

@@ -17,12 +17,15 @@
 //! each frame its samples are cast, and kept where only the pixels are
 //! cast again over them.
 
+use crate::frame::shader::access::Group;
 use crate::frame::shader::sequence;
 use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
 use crate::frame::shader::group::{
-    FACE_GROUP, HEAD_BINDING, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP,
-    SAMPLE_BOX_GROUP, STOPS_GROUP,
+    BEAMS, FACES_BINDS, FACE_GROUP, HEAD_BINDING, LIGHT_ARGS, LIGHT_LIST, LIGHT_RASTER_ARGS,
+    LIGHT_RECORD_BINDS, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOOD, LIGHT_STOPS_BINDS, LIGHT_STOPS_GROUP,
+    NODE_CACHE, RASTER_ARGS, RECORD_BINDS, RECORD_GROUP, SAMPLE_BOX_BINDS, SAMPLE_BOX_GROUP,
+    STOPS_GROUP, STOPS_OF_BINDS, STOP_FACES_OF_BINDS,
 };
 use crate::frame::shader::record::{
     COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DRAW, COMPUTE_LIGHT_RECORD_STOPS, COMPUTE_LIGHT_SAMPLE_BOX,
@@ -31,8 +34,8 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, texture_usage, view_entry,
-    word_bytes, Format, Gpu, Load, RenderContext,
+    buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, view_entry, word_bytes,
+    Format, Gpu, Load, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -283,33 +286,33 @@ impl Raster {
             for group in self.groups {
                 release(group);
             }
+            let buf = |b| match b {
+                BEAMS => beams,
+                NODE_CACHE => node_cache,
+                RASTER_ARGS => self.args,
+                _ => 0,
+            };
             // The faces' pass over the drawable entries' asks, the samples' or the holes' stops',
             // its args the raster's: one pass, bound to either's args.
-            let faces = |args: u32, at: u32| {
-                g.bind_group(
-                    self.faces_built.layouts[0],
-                    &[
-                        buf_entry(0, eye),
-                        buf_entry(1, clipmap),
-                        buf_entry(2, ground),
-                        buf_entry(5, shards),
-                        buf_entry(6, overwrites),
-                        buf_entry(7, pool),
-                        buf_entry(8, beams),
-                        buf_entry(9, node_cache),
-                        buf_range_entry(16, args, at, word_bytes(raster::ARGS_WORDS as usize)),
-                    ],
-                )
+            let faces = |table: &Group| {
+                let world = [
+                    buf_entry(0, eye),
+                    buf_entry(1, clipmap),
+                    buf_entry(2, ground),
+                    buf_entry(5, shards),
+                    buf_entry(6, overwrites),
+                    buf_entry(7, pool),
+                ];
+                g.frame_group(self.faces_built.layouts[0], table, buf, &world)
             };
+            let eye_only = [buf_entry(0, eye)];
+            let stops = [buf_entry(0, eye), view_entry(3, rays)];
             self.groups = [
-                g.bind_group(
+                g.frame_group(
                     self.boxes_built.layouts[0],
-                    &[
-                        buf_entry(0, eye),
-                        buf_entry(8, beams),
-                        buf_entry(9, node_cache),
-                        buf_entry(16, self.args),
-                    ],
+                    &SAMPLE_BOX_BINDS,
+                    buf,
+                    &eye_only,
                 ),
                 g.bind_group(
                     self.draw_built.layouts[0],
@@ -319,20 +322,11 @@ impl Raster {
                         buf_entry(9, node_cache),
                     ],
                 ),
-                faces(self.args, word_bytes(raster::ASKED_AT as usize)),
+                faces(&FACES_BINDS),
                 // Made over the light's buffers too (`record_group`).
                 0,
-                faces(self.args, word_bytes(raster::STOP_ASKED_AT as usize)),
-                g.bind_group(
-                    self.stops_built.layouts[0],
-                    &[
-                        buf_entry(0, eye),
-                        view_entry(3, rays),
-                        buf_entry(8, beams),
-                        buf_entry(9, node_cache),
-                        buf_entry(16, self.args),
-                    ],
-                ),
+                faces(&STOP_FACES_OF_BINDS),
+                g.frame_group(self.stops_built.layouts[0], &STOPS_OF_BINDS, buf, &stops),
             ];
             self.bindings = bindings;
             self.record_bound = [0; 6];
@@ -352,19 +346,21 @@ impl Raster {
             return;
         }
         release(self.groups[3]);
-        self.groups[3] = g.bind_group(
-            self.record_draw_built.layouts[0],
-            &[
-                buf_entry(0, eye),
-                buf_entry(9, node_cache),
-                buf_entry(14, self.draws),
-                buf_entry(16, self.args),
-                buf_entry(HEAD_BINDING, head),
-                buf_entry(12, list),
-                buf_entry(21, args),
-                buf_entry(22, stood),
-            ],
-        );
+        let buf = |b| match b {
+            NODE_CACHE => node_cache,
+            RASTER_ARGS => self.args,
+            LIGHT_LIST => list,
+            LIGHT_ARGS => args,
+            LIGHT_STOOD => stood,
+            _ => 0,
+        };
+        let rest = [
+            buf_entry(0, eye),
+            buf_entry(14, self.draws),
+            buf_entry(HEAD_BINDING, head),
+        ];
+        self.groups[3] =
+            g.frame_group(self.record_draw_built.layouts[0], &RECORD_BINDS, buf, &rest);
         self.record_bound = bound;
     }
 
@@ -632,31 +628,38 @@ impl Raster {
                 buf_entry(9, node_cache),
             ],
         );
+        let light_args = s.args;
+        let buf = |b| match b {
+            NODE_CACHE => node_cache,
+            LIGHT_RASTER_ARGS => light_args,
+            LIGHT_LIST => list,
+            LIGHT_ARGS => args,
+            LIGHT_STOOD => stood,
+            _ => 0,
+        };
         release(s.record_group);
-        s.record_group = g.bind_group(
+        let rest = [
+            buf_entry(0, eye),
+            buf_entry(14, s.draws),
+            buf_entry(HEAD_BINDING, head),
+        ];
+        s.record_group = g.frame_group(
             self.light_record_draw_built.layouts[0],
-            &[
-                buf_entry(0, eye),
-                buf_entry(9, node_cache),
-                buf_entry(14, s.draws),
-                buf_entry(16, s.args),
-                buf_entry(HEAD_BINDING, head),
-                buf_entry(12, list),
-                buf_entry(21, args),
-                buf_entry(22, stood),
-            ],
+            &LIGHT_RECORD_BINDS,
+            buf,
+            &rest,
         );
         release(s.stops_group);
-        s.stops_group = g.bind_group(
+        let rest = [
+            buf_entry(0, eye),
+            view_entry(3, map),
+            buf_entry(HEAD_BINDING, head),
+        ];
+        s.stops_group = g.frame_group(
             self.light_stops_built.layouts[0],
-            &[
-                buf_entry(0, eye),
-                view_entry(3, map),
-                buf_entry(8, list),
-                buf_entry(9, node_cache),
-                buf_entry(HEAD_BINDING, head),
-                buf_entry(16, s.args),
-            ],
+            &LIGHT_STOPS_BINDS,
+            buf,
+            &rest,
         );
         s.record_bound = bound;
     }
