@@ -611,3 +611,11 @@ and 0–7% cells. A mask skips the air alone, past what the split's box already 
 about a tenth of the visits; it needs 8 bits where a split's words have 4 left, a coarser box
 for them, and each split's children asked to fill it. The visits are the descent, not the air.
 The eye's rays were not counted; sibling loads and subgroups were not tried.
+
+**The tick after the CPU fill.** The Mac's tick p95 went from 2.1 to 3.2 ms with the bricks
+filled on the CPU; the fill's own stages run past the frame, in the turn's tasks' share. What a
+landing runs in the turn is `clipmap::cut`, which spread the whole tile's palette indices into a
+scratch of 1 MiB to read a few bricks of them. Read a cell at a time where it is cut: the demand
+step's most 5.4 to 3.0 ms, the tick's most 7.5 to 4.5–5.8, the fixed ranges 1 MiB less. The p95
+stayed at 3.2. Folding only the clip levels a change reaches, tried, moved neither and was
+dropped. What holds the p95 is not found. The gate passes.

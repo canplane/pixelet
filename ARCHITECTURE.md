@@ -555,7 +555,11 @@ doubles the wait before the next.
 What the rays asked of each node is kept between frames in the **node
 cache** (`pxl-engine node_cache.rs`), a table keyed by the node, and
 forgotten only where what a node read changed (pxl-render `forget.wgsl`
-`forget_cs`).
+`forget_cs`). Its entries a ray stopped on are the **record**: the raster
+draws every one in view each frame, whatever that frame's rays reached
+(`pxl-engine record.rs`, pxl-render `record_draw.wgsl`), so a voxel found
+once is drawn until what it read changes. It holds the query's answers alone,
+keyed by the node.
 
 A ray leaves four words (`pxl-engine ray.rs`): the asset it met, with its
 face, zoom and fill eighths; how far; the palette indices a coarse cell folds;

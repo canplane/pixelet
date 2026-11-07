@@ -12,20 +12,16 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **Faster than the deployed build, on every axis**
   ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
-  Mac's gate passes, its tick p95 2.20 to 3.00 ms the one axis worse. The S23 at 719 MHz: GPU p50
+  Mac's gate passes, its tick p95 2.1 to 3.2 ms the one axis worse, its cause not found. The S23 at 719 MHz: GPU p50
   6.1× the deployed build's, p95 5.7× on one pair, the deployed build's p95 reading 437–1282 ms
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
 
 ## P1
 
-- **The light by a list and the raster.** Each tile's voxels at its band listed through the
-  query and drawn from the sun, in place of the light's rays and its holes' walk: 11-06's open
-  question ([the frame is what it must draw](./minutes/20261106-the-frame-is-what-it-must-draw.md),
-  [cell raster](./minutes/20261106-cell-raster.md)). The counts put a list near 100 k cells (the
-  journal, 11-08). First `list::light` on the CPU, held to `cast::first`, which measures the
-  real list.
-- **A bright teal wedge beside the character at load.** At 38.1193, 128.4656, by its right arm,
-  since it stands clear of the wall. Read as the location zone on the step's wall, unchecked.
+- **The light by a list and the raster**, decided
+  ([the light is listed](./minutes/20261108-the-light-is-listed.md)). First `list::light` on the
+  CPU, held to `cast::first` texel by texel, which measures the real list; then the GPU's list
+  and raster in place of the light's beam, samples and holes' walk.
 
 ## P2
 
