@@ -15,7 +15,6 @@ use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;
-use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
@@ -128,13 +127,6 @@ fn gizmo() -> &'static mut Gizmo {
     })
 }
 
-fn set_lines(lines: &mut DebugLines, at: V3, vertices: &[f32]) {
-    let Some(draw) = section::map().map(|_| draw_list()) else {
-        return;
-    };
-    lines.set(draw, at, vertices, vertices.len());
-}
-
 /// Its lines into the frame's list.
 pub fn frame_gizmo_draw(draw: &mut DrawList) {
     gizmo().lines.draw(draw);
@@ -149,7 +141,7 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(&mut g.shown) {
-            set_lines(&mut g.lines, [0.0; 3], &[]);
+            g.lines.set(draw_list(), [0.0; 3], &[], 0);
         }
         return;
     };
@@ -157,7 +149,8 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     if g.shown && g.drawn == g.next {
         return;
     }
-    set_lines(&mut g.lines, g.next.about, &g.next.lines);
+    g.lines
+        .set(draw_list(), g.next.about, &g.next.lines, g.next.lines.len());
     core::mem::swap(&mut g.drawn, &mut g.next);
     g.shown = true;
     request_world_tick();

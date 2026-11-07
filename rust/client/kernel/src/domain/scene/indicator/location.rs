@@ -28,7 +28,6 @@ use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
-use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
@@ -101,10 +100,7 @@ fn location() -> &'static mut LocationIndicator {
 }
 
 pub fn location_step(device_coord: Option<Q3>) {
-    let Some(draw) = section::map().map(|_| draw_list()) else {
-        return;
-    };
-    location().step(draw, device_coord, environment::night());
+    location().step(draw_list(), device_coord, environment::night());
 }
 
 /// The beacon advanced (`LocationIndicator::tick`); whether it wants frames.

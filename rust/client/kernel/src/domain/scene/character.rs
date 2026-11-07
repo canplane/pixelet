@@ -42,7 +42,6 @@ use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::view::lens::{cell_there, Stepped};
 use crate::sys::io::loader::{load_image, load_of};
-use crate::sys::mem::section;
 use crate::sys::sched::edge::wake_at;
 
 pub const CHARACTERS: usize = person::models.len() + pet::models.len();
@@ -114,14 +113,14 @@ pub struct Character {
 impl Character {
     /// The row `number` of `group` once its model, registered at its height,
     /// and its skin have landed, both asked for each time; none meanwhile,
-    /// past the group's rows, under a native test, or where the heap refuses.
+    /// past the group's rows, or where the heap refuses.
     pub fn of(group: Group, number: u8) -> Option<Character> {
         let (slot, skin, height_u, _) = row(group, number)?;
         let (model, skin) = (
             model_of(slot, Some(height_u)),
             load_of(skin).and_then(load_image),
         );
-        let (model, _, _) = (model?, skin?, section::map()?);
+        let (model, _) = (model?, skin?);
         Character::new(draw_list(), models(), model, group, number)
     }
 

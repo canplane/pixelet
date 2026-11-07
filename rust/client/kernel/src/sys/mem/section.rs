@@ -46,7 +46,7 @@ pub fn set_map(map: Map) {
     MAP.set(Some(map));
 }
 
-/// None under a native test, which has no sections.
+/// None before boot lays the memory out.
 pub fn map() -> Option<Map> {
     *MAP.get(|| None)
 }

@@ -9,7 +9,6 @@ pub mod spec;
 
 use crate::domain::layer::Base as _;
 use crate::sys::boot;
-use crate::sys::mem::section;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_core::sched::edge::{notified, Notify};
@@ -108,7 +107,7 @@ fn edit_tick(_: &mut TickContext) {
 /// The tool's ghost of that edit, drawn by the scene.
 fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::edit::ghost::ghost;
-    if section::map().is_some_and(|_| ghost_set(draw_list(), &ghost())) {
+    if ghost_set(draw_list(), &ghost()) {
         request_world_tick();
     }
 }

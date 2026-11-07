@@ -34,7 +34,6 @@ use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// What an edge marks, in the spec's order (`gizmo_spec::coverage`), which is
@@ -142,9 +141,7 @@ pub fn coverage_gizmo_draw(draw: &mut DrawList) {
 /// and the origin they are drawn about are the same turn's.
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
-    let Some(draw) = section::map().map(|_| draw_list()) else {
-        return;
-    };
+    let draw = draw_list();
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::top()) else {
         if c.drawn.take().is_some() {
             c.lines.set(draw, [0.0; 3], &[], 0);

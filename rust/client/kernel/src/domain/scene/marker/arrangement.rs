@@ -21,7 +21,6 @@ use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
 use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::gpu::atlas::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
@@ -457,9 +456,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
-        if section::map().is_some() {
-            p.set.write(model::draw_list(), &instances);
-        }
+        p.set.write(model::draw_list(), &instances);
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);

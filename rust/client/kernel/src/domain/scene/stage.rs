@@ -32,7 +32,6 @@ use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
-use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// The device the last frame went to the screen on (`device_generation`).
@@ -288,17 +287,14 @@ pub fn visible_step(
     let show = settings_store().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);
-    let draw = section::map().is_some_and(|_| {
-        let (list, models) = (draw_list(), model::models());
-        let animating = scene::animate(list, models, &frame);
-        scene::draw(list, models);
-        animating
-    });
+    let (list, models) = (draw_list(), model::models());
+    let animating = scene::animate(list, models, &frame);
+    scene::draw(list, models);
     gpu::step(frame.eye, edits);
     cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
     marker::step(ctx, &frame, draft);
     marker::draw(draw_list());
-    if draw {
+    if animating {
         ctx.invalidate();
     }
 }

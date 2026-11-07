@@ -37,7 +37,6 @@ use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
 use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
-use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, world_edge, TaskPriority};
 use pxl_spec::asset::catalog::{Slot, SLOTS};
 use xpute_kit::status::bug::OrBug;
@@ -310,7 +309,6 @@ async fn register_model<P: Future<Output = ()>>(
         return None;
     }
 
-    section::map()?;
     let mut m = Model::new(vertex_cnt, idx_cnt, joint_cnt)?;
     let n = (vertex_cnt * MODEL_VERTEX_WORDS + idx_cnt) as usize;
     // SAFETY: the model's block, `n` words, ours alone: no number names the
