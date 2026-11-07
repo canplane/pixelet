@@ -22,7 +22,9 @@ import { set_online } from "@/origin/online.ts";
 import { config, perf_here } from "@/runtime/start.ts";
 import { set_kernel } from "@/port/kernel.ts";
 import type { Page, ToKernel, ToShell } from "@/runtime/page.ts";
+import { fs_changed } from "@/port/fs.ts";
 import { answer, type PerfRead } from "@/port/perf.ts";
+import { source_declare } from "@/port/source.ts";
 import * as online from "@/service/online.ts";
 
 const tell = (m: ToShell) => postMessage(m);
@@ -33,7 +35,7 @@ onmessage = ({ data: m }: MessageEvent<ToKernel>) => {
     case "page":
       return page.resolve(m);
     case "refused":
-      return follow_refused_files(m.files);
+      return follow_refused_files(m.files, fs_changed);
     case "perf":
       return tell({
         kind: "perf",
@@ -70,7 +72,7 @@ function up(link: Link): void {
       declaration: source_declaration(),
     }),
   );
-  void declare_source();
+  void declare_source(source_declare);
 }
 
 void serve({

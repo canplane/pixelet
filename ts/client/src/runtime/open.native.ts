@@ -12,7 +12,9 @@ import { set_online } from "@/origin/online.ts";
 import { manifest, perf_here } from "@/runtime/start.ts";
 import { set_kernel } from "@/port/kernel.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
+import { fs_changed } from "@/port/fs.ts";
 import { gpu_present } from "@/port/gpu.ts";
+import { source_declare } from "@/port/source.ts";
 import * as device from "@/service/device.ts";
 import * as online from "@/service/online.ts";
 
@@ -20,12 +22,15 @@ import * as online from "@/service/online.ts";
  * it was. */
 export async function open(on: OnOpen): Promise<boolean> {
   set_kernel(
-    await start(manifest(device.handheld), ui(on, follow_refused_files)),
+    await start(
+      manifest(device.handheld),
+      ui(on, (files) => follow_refused_files(files, fs_changed)),
+    ),
     perf_here,
   );
   started(on);
   online.watch(set_online);
-  void declare_source();
+  void declare_source(source_declare);
   await gpu_present();
   return settled();
 }

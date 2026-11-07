@@ -25,7 +25,6 @@ import {
   type Source,
 } from "@/abi/state.ts";
 import * as origin from "@/service/origin.ts";
-import { source_declare } from "@/port/source.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
  * format, for the kernel; each kind's version, and a shard's own. */
@@ -182,9 +181,7 @@ export type SendSource = (
 ) => boolean;
 
 /** Settled once the source is declared or refused (`source_state`). */
-export async function declare_source(
-  send: SendSource = source_declare,
-): Promise<void> {
+export async function declare_source(send: SendSource): Promise<void> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {

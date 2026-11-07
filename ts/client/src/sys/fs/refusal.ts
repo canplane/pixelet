@@ -11,7 +11,6 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import { root } from "@/abi/file.spec.ts";
-import { fs_changed } from "@/port/fs.ts";
 import { OBJECTS } from "@/sys/fs/object.ts";
 import { STORAGE, set_aside, type Storage } from "@/sys/fs/storage.ts";
 
@@ -46,7 +45,7 @@ const emptying = new Set<string>();
  * (`emptied`). */
 export function follow_refused_files(
   files: readonly RefusedFile[],
-  emptied: (f: RefusedFile) => void = fs_changed,
+  emptied: (f: RefusedFile) => void,
   aside: SetAside = set_aside_by_root(STORAGE),
 ): void {
   const named = new Set(files.map((f) => `${f.root}/${f.path}`));
