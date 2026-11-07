@@ -27,6 +27,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
+use crate::domain::control::camera::controller::Active;
 use crate::domain::control::edit::write;
 use crate::domain::control::input;
 use crate::domain::control::navigation::destination;
@@ -77,7 +78,7 @@ use crate::sys::sched::phase_spec::Phase;
 /// The camera as the companion's walk reads it; none while the eye is the
 /// pivot, when the person is the one looking.
 fn companion_camera() -> Option<Camera> {
-    if controller::dist() == 0.0 {
+    if controller::active() != Active::Orbit {
         return None;
     }
     // Where the camera is going, not where its easing has got to.
@@ -149,7 +150,7 @@ fn demand_tick(ctx: &mut TickContext) {
 /// third person, its heading, which the world gizmo is drawn about; the
 /// edit's preview, which decor leaves out; and the marker's draft.
 fn scene_tick(ctx: &mut TickContext) {
-    let third_person = controller::dist() != 0.0;
+    let third_person = controller::active() == Active::Orbit;
     visible_step(
         ctx,
         controller::pivot(),
