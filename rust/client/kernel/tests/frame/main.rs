@@ -233,7 +233,7 @@ fn frames() {
         clock_ms: NOON_MS,
         frames: 0,
     };
-    // The boot as abi/boot.ts orders it: the runtime's attach, what the platform is, the GPU.
+    // The boot as runtime/boot.ts orders it: the runtime's attach, what the platform is, the GPU.
     run.runtime.send("SYS_ATTACH", &[]);
     run.runtime.send(
         "SENSOR_PLATFORM",
