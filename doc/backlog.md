@@ -24,6 +24,20 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The light by a list and the raster.** Each tile's voxels at its band listed through the
+  query and drawn from the sun, in place of the light's rays and its holes' walk: 11-06's open
+  question ([the frame is what it must draw](./minutes/20261106-the-frame-is-what-it-must-draw.md),
+  [cell raster](./minutes/20261106-cell-raster.md)). The user holds it until the rest of the
+  backlog is done, and it waits on the CPU fill's renderer work. The counts put a list near
+  100 k cells (the journal, 11-08). First `list::light` on the CPU, held to `cast::first`,
+  which measures the real list.
+- **The stops' room is 2^18, the deployed build's 2^19.** In a frame of 2^18 to 2^19 holes a
+  whole cell's pixels past the room lack their face word. 2^19 overflows the 128 MB binding.
+- **A page closed in the turn before a suspend** may lose an edit: the system's suspend gives
+  the save no window of its own.
+- **The middle distance's look**: where the ground goes flat, and the far zoom's floating
+  boxes, the user's to decide (10-28's floating box, 11-02's one boundary for the effects).
+
 ## P2
 
 - **The vocabulary, cleaned.** Agents have left words with several meanings
