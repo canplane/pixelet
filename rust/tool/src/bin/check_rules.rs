@@ -3,8 +3,8 @@
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, the layers' order, where nothing names
-//! what is above it, across a crate's folders and inside the kernel's heads'
-//! and the view's, the profiler named by the top alone, no renderer under the
+//! what is above it, across a crate's folders and inside the kernel's heads',
+//! the camera's and the view's, the profiler named by the top alone, no renderer under the
 //! kernel's sys/, the layers read by the query alone, the screen's pixels read
 //! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
@@ -111,6 +111,19 @@ const CONTROL_ORDER: [(&str, u8); 7] = [
     ("param", 0),
 ];
 
+/// The camera's own order (domain/control/camera.rs): the camera itself,
+/// the folder's root, under everything, beside a gesture's anchor; what the
+/// controls ask over them; the orbit and the first-person camera, and the
+/// tests' fixture that places them; and over them which controller moves it.
+const CAMERA_ORDER: [(&str, u8); 6] = [
+    ("controller", 3),
+    ("orbit", 2),
+    ("first_person", 2),
+    ("fixture", 2),
+    ("state", 1),
+    ("gesture", 0),
+];
+
 /// The view's own order (domain/view.rs): demand and the lens over the
 /// observation, over the ground under a point and the frame, over the
 /// settings.
@@ -198,7 +211,7 @@ const CONTENT_ORDER: [(&str, u8); 9] = [
 
 /// Every order held. A folder whose root holds only its modules gives its
 /// root's own a level over all of them, so no part reaches back to it.
-const ORDERS: [Order; 6] = [
+const ORDERS: [Order; 7] = [
     Order {
         root: KERNEL,
         path: "crate",
@@ -230,6 +243,14 @@ const ORDERS: [Order; 6] = [
         heads: &[],
         beside: &[],
         own: Some(5),
+    },
+    Order {
+        root: "rust/client/kernel/src/domain/control/camera/",
+        path: "crate::domain::control::camera",
+        levels: &CAMERA_ORDER,
+        heads: &[],
+        beside: &[],
+        own: Some(0),
     },
     Order {
         root: "rust/client/kernel/src/domain/view/",
