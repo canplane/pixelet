@@ -398,43 +398,15 @@ mod tests {
         }
     }
 
-    use crate::cast::{point_at, Node, Ray, REACH, Z_START};
-    use crate::{FRAC_W, HEIGHT_BITS};
+    use crate::cast::tests::reached;
+    use crate::cast::Node;
 
     /// Every node within `REACH` of an origin in the world, at every zoom from 1 to the
     /// finest's coarser, is one a slot may keep, about X's seam and the world's edges alike; no node
     /// at the finest is.
     #[test]
     fn keeps_every_node_within_reach() {
-        let hash = |v: u64| {
-            let mut z = v.wrapping_add(0x9E37_79B9_7F4A_7C15);
-            z = (z ^ z >> 30).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-            z = (z ^ z >> 27).wrapping_mul(0x94D0_49BB_1331_11EB);
-            z ^ z >> 31
-        };
-        let height = 1i64 << (HEIGHT_BITS + FRAC_W);
-        for i in 0..20_000u64 {
-            let h = hash(i);
-            let x = [0, i32::MAX, i32::MIN, (h >> 7) as i32][(h & 3) as usize]
-                .wrapping_add((h >> 9) as i32 >> 12);
-            let y = [i32::MAX, i32::MIN, (h >> 21) as i32][(h >> 3) as usize % 3]
-                .wrapping_sub((h >> 40) as i32 >> 14);
-            // In the world's height, or at its floor or its top.
-            let z = match (h >> 5) % 3 {
-                0 => -(Z_START as i32),
-                1 => (height - i64::from(Z_START) - 1) as i32,
-                _ => ((h >> 24) as i64 % height - i64::from(Z_START)) as i32,
-            };
-            let o = [x, y, z];
-            let g = hash(i ^ 0xA5A5);
-            let d = [g, g >> 21, g >> 42].map(|v| (v & 0x1f_ffff) as f32 / 1_048_576.0 - 1.0);
-            let len = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-            if len < 1e-3 {
-                continue;
-            }
-            let ray = Ray::new([d[0] / len, d[1] / len, d[2] / len], REACH as f32);
-            let t = (g >> 50) as f32 / (1u64 << 14) as f32 * (REACH - 1) as f32;
-            let p = point_at(o, &ray, t);
+        for (o, p) in (0..20_000u64).filter_map(reached) {
             for zoom in 1..=crate::FINEST_ZOOM {
                 let keep = if zoom >= crate::FINEST_ZOOM {
                     u32::MAX

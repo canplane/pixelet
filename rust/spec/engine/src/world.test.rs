@@ -17,6 +17,7 @@ use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
 use crate::SHARD_ZOOM;
 use std::{vec, vec::Vec};
+use xpute_kit::math::rng::mix64;
 
 /// The clip level whose bricks are half held, its east half not yet, the clip
 /// levels over it held whole: the leaves', as decor's column surfaces ask,
@@ -492,12 +493,6 @@ fn cell_answer_takes_no_zooms() {
 /// `cell_answer_takes_no_zooms` over the clip levels `w`: how many of each kind it asked.
 fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
     let mut held = w;
-    let hash = |v: u64| {
-        let mut z = v.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        z = (z ^ z >> 30).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ z >> 27).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ z >> 31
-    };
     let mut asking = Asking { w };
     let (first, _) = w.origin(CELL);
     let mut kinds = [0u32; 3];
@@ -532,12 +527,12 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                     [Cut::NONE; 2],
                 );
                 for trial in 0..12u64 {
-                    let mut r = hash(
+                    let mut r = mix64(
                         (k as u64) << 20 ^ (zoom as u64) << 12 ^ ((dz + 2) as u64) << 8 ^ trial,
                     );
                     let mut take = |n: u32| {
                         let v = (r % u64::from(n)) as u32;
-                        r = hash(r);
+                        r = mix64(r);
                         v
                     };
                     // Every node over it asked at zooms that split it, each its own, as a

@@ -344,6 +344,7 @@ pub fn in_view(
 mod tests {
     use super::*;
     use crate::{FINEST_ZOOM, UNIT_ZOOM};
+    use xpute_kit::math::rng::mix64;
 
     fn node(zoom: Zoom, corner: [u32; 3], roots: [i32; 3]) -> Node {
         let keep = if zoom >= FINEST_ZOOM {
@@ -358,20 +359,13 @@ mod tests {
         }
     }
 
-    fn hash(v: u64) -> u64 {
-        let mut z = v.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        z = (z ^ z >> 30).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ z >> 27).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ z >> 31
-    }
-
     /// Two fresh entries never nest: from any origin, of a node and every node over it, at
     /// most one is fresh, and the node a walk would stop on along a column is fresh.
     #[test]
     fn fresh_never_nests() {
         let range = [4, FINEST_ZOOM];
         for i in 0..2048u64 {
-            let h = hash(i);
+            let h = mix64(i);
             let o = [
                 (h as i32) >> 4,
                 (h >> 16) as i32 >> 10,
