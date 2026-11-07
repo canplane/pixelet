@@ -65,6 +65,14 @@ split's children within its content box. On the real world's test data, 14 cases
   A ray stops at the first thing it meets and walks nothing under the ground; the list takes
   every cell the sweep holds that is not transparent, and the ground is solid as deep as the
   sweep runs.
+- **Without what is hidden, still not cheaper.** The user: the ground under the surface is
+  not to be counted. Left out, on a quarter of the tiles, a cell at the band whose faces toward
+  the light each meet a listed cell: about the eye 6,947 a tile left of 13,579, on a bridge
+  2,647 of 3,503, straight down 3,159 of 11,775. What is left at the band is the surface the
+  tile's rays sweep along, from a low sun hundreds of cells of it, every one with a face toward
+  the light; only what hides it farther along the light leaves it out, which is the walk's own
+  test. What is coarser than the band, 2,300 to 2.3 M a tile, is whole cells and lacks under
+  the ground or past what is held, a neighbor's test at each one's own zoom not taken.
 - **So the rays matter for the light too:** not for its zooms, which it has one of a tile,
   but because only what is seen costs, and the world is a solid volume. 11-06's estimate of a
   list near 100 k cells counted no cell under the surface.
