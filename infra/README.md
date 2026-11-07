@@ -257,7 +257,7 @@ without which the deploy warns and trusts whatever answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`ts/client/src/shell/setting/info/attribution.tsx`). Check the source before
+(`ts/client/src/ui/setting/info/attribution.tsx`). Check the source before
 shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |

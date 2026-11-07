@@ -124,7 +124,7 @@ if fmt_rust:
 cargo("lint-")
 if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in touched:
     task("check-spec")
-if under("ts/client/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-kernel" in touched:
+if under("ts/client/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-core" in touched:
     task("check-build")
 # Each formatted file under ts/, by its config; what lies outside the trees is not formatted.
 formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)$", path)]

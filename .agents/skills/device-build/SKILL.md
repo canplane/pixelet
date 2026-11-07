@@ -7,8 +7,8 @@ description: Build the device app (ts/client) and put it on an iPhone, the iOS s
 
 The device app is `ts/client` (`@pxl/client`), the same Expo app the page is built
 from. Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
-`expo prebuild` and are not committed. Each platform's build builds the kernel,
-`pxl-kernel` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
+`expo prebuild` and are not committed. Each platform's build builds the core,
+`pxl-core` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
 `xpute/ts/native/script/build-core.py`.
 
 After the app moves or pnpm's links are remade (the move from `ts/client/native/`
@@ -68,7 +68,7 @@ xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/p
 xcrun simctl launch booted me.plei.pixelet
 ```
 
-Add `--console` to the launch to stream the app's stdout, where the kernel's
+Add `--console` to the launch to stream the app's stdout, where the core's
 last messages go (`[pxl] …`).
 
 ### An Apple Vision Pro
@@ -125,7 +125,7 @@ adb shell am start -S -n me.plei.pixelet/.MainActivity
 ```
 
 `./gradlew :app:installMobileRelease` builds and installs in one step; a bare
-`installRelease` is ambiguous between the flavors and fails. The kernel's last
+`installRelease` is ambiguous between the flavors and fails. The core's last
 messages and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.
 

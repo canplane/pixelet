@@ -64,7 +64,7 @@ A missing place or division tile is not an error.
 
 The plain `publish.py <kind>` is for a version in the format the deployed
 client reads. A client takes `source` only where every kind is in its own
-format exactly (pxl-kernel `sys/io/source.rs`, `reads_every`), and
+format exactly (pxl-core `sys/io/source.rs`, `reads_every`), and
 `declare_source` judges by the tree's format, not the deployed client's, so it
 lets through a format no deployed client reads. A version in a new format is
 uploaded with `upload` and served with `serve` when the client that reads it
@@ -85,7 +85,7 @@ make bake-earth
 ```bash
 make ingest-asset
 # -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json and
-#    what the spec generates from it (the host's table, the catalog, the pack's layout)
+#    what the spec generates from it (the runtime's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-bucket/asset \

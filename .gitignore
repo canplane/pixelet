@@ -183,11 +183,11 @@ vite.config.ts.timestamp-*
 # Scratch: notes, diffs and logs a session keeps while it works.
 /tmp/
 
-# The guest's module, built from rust/ by ts/client/script/build-wasm.py, and
+# The core's module, built from rust/ by ts/client/script/build-wasm.py, and
 # the page's template made from ts/client/index.html (ts/client/script/web.ts).
-ts/client/public/guest.wasm
+ts/client/public/core.wasm
 ts/client/public/index.html
-ts/client/guest.paths.json
+ts/client/core.paths.json
 # The page's icons and link preview, made from ts/client/brand by each web
 # build (pxl-tool/bin/render_brand.rs).
 ts/client/public/brand/

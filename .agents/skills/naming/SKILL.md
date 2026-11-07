@@ -6,7 +6,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 # Naming
 
 - Use short, plain names, as in UNIX V6 and K&R's C.
-- The system — xpute, the commands' modules, what the kernel asks of its host
+- The system — xpute, the commands' modules, what the core asks of its runtime
   — takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application — the world, its drawing, its map, its UI —
   takes the word its own field uses (graphics, cartography, games). A metaphor
@@ -29,15 +29,29 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `held`, `goes`, `done`), which only the code around it explains (`Stop`, not
   `Held`). A plain word that reads at once (`reach`) is fine. A word in a
   comment is no precedent for a name.
+- Judge a name by what the thing is now: what it holds, does and which boundary
+  it crosses. Where a word came from, or an earlier module that used it, is no
+  reason to keep it.
+- When a name meets one already taken, see whether they share a namespace or a
+  context where both are read, and whether the name already taken is itself the
+  best one.
+- A type alias names a meaning (`pub type Block = (usize, u32)`); add no newtype
+  or guard to enforce it.
 - Mind a loose word where several modules use it for different things.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
-  React shell's own names stay whole (`let cfg: Config`).
+  React UI's own names stay whole (`let cfg: Config`).
 - In TypeScript, a `private` member takes a leading `_` (`private _cap`,
   `private _grow()`), `protected` is for a class that is extended, and no
   field is `#`.
 - Use a plural for a collection, and a unit suffix on a length (`_u` the
   world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
   ground), on the value where a person sees it (`29.0 m`).
+- Name a symmetric pair's part, one side of a base both share, with the base,
+  a dot and its side, as `x.native.ts` marks a variant (`sample.eye.wgsl`,
+  `sample.light.wgsl` beside `sample.wgsl`), and a stand-in that replaces a part
+  at assembly with the part, a dot and what it stands in as
+  (`atmos_eye.unit.wgsl` for `atmos_eye.wgsl` at exposure 1, `palette.none.wgsl`
+  for `palette.wgsl`); the user's decisions of 2026-11-05.
 - Name a new concept the parts share with the user, and use the names already
   chosen with the user:
 
@@ -51,9 +65,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
-  | what the shell asks of the kernel | a command | |
-  | a guest's call into its host, run now or after the turn | a hostcall | system call, hypercall |
-  | the number a frame names at the guest's far side, 0 the host | a port | endpoint, worker id |
+  | what the UI asks of the core      | a command | |
+  | a core's command to its runtime, a frame on the CQ | an import | hostcall, system call, hypercall |
+  | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
   | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
@@ -61,7 +75,16 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a node's name as a number, its morton code | its `id` | subject, morton |
 
   `at` is where a thing is, `to` where it is going.
-- Keep WebGPU's words in xpute's `gpu/`.
+- xpute's names are the mechanism's: the core, the runtime, the UI, a device,
+  the SQ and the CQ. pixelet names its parts by the side of xpute they sit on,
+  the owner given by the prefix (`pxl_core`, `xpute_core`, `Runtime.core`);
+  `core.wasm` is pixelet's build of its core.
+- A file, folder or type name is singular (`service/`, `remote.ts`,
+  `component/`), even where its field's habit is plural; only a value that is
+  a collection (`let cmds`), or a name a tool fixes (cargo's `tests/` and
+  `examples/`), is plural.
+- Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
+  renderer's and a shader's words.
 - Treat a name between the client and a server as protocol, and a name kept in
   storage (a bucket object, a storage key, a baked file's field) as needing a
   version bump to change; a setting's name can change, since storage keeps its

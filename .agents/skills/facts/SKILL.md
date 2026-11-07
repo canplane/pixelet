@@ -50,7 +50,7 @@ Look for:
 Do:
 
 - Find what is really stored, and keep that. Everything else is read from it.
-- Follow the data across languages and generators: the shell, the kernel and the
+- Follow the data across languages and generators: the UI, the core and the
   spec hold one shape, and the generator is changed, not its output.
 - Name what is left for what it is (`naming`).
 - Keep what truly differs: a tap on a cube and on a marker do different things.

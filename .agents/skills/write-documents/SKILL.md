@@ -12,11 +12,11 @@ description: How the documents people read are written and reviewed — README.m
 - **Earn a name before you use it.** Say the need first, then name what meets
   it, in a main clause:
 
-  > On the host side, something has to decide when to ring at all. That is the
-  > **strobe** (`sched/strobe.ts`): one turn on an animation frame, and only
+  > On the runtime side, something has to decide when to ring at all. That is the
+  > **scheduler** (`sched/scheduler.ts`): one turn on an animation frame, and only
   > when something asked for a turn.
 
-  A name this project made needs this (`XTP`, `strobe`), and so does a field's
+  A name this project made needs this (`XTP`, `scheduler`), and so does a field's
   term the reader may not bring (`ring` as io_uring uses it, `doorbell` as NVMe
   does, `handle`). A term used as the field uses it and widely known (`arena`,
   `errno`, `slab`, `golden records`) is used as it is.
@@ -42,8 +42,8 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Checks
 
-- The parts are named the kernel, the shell and the host in pixelet's
-  documents, and the guest, the host and the program in xpute's.
+- The parts are named the core, the UI and the runtime in pixelet's
+  documents, and the core, the runtime and the program in xpute's.
 - What the old version named (paths, identifiers, constants) is still there
   or was cut on purpose, and nothing points at what was cut.
 - No minute under `doc/` is linked.
