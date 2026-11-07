@@ -1,0 +1,103 @@
+// pxl-core/sys/io/demand.spec.rs
+//
+// GENERATED from spec/client/core/sys/io/demand.json
+//
+// A request's vocabulary, the core's and the UI's: what stream it is in, how
+// its run came to an end, and the phases a run reports its time in. The profiler
+// records and reports them by these names (spec/client/core/perf/perf.json).
+
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    non_camel_case_types,
+    dead_code,
+    reason = "generated from the spec"
+)]
+
+pub const STREAM_NAMES: usize = 6;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum StreamName {
+    terrain = 0,
+    place = 1,
+    division = 2,
+    asset = 3,
+    earth = 4,
+    object = 5,
+}
+
+impl StreamName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [StreamName; 6] = [
+        StreamName::terrain,
+        StreamName::place,
+        StreamName::division,
+        StreamName::asset,
+        StreamName::earth,
+        StreamName::object,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<StreamName> {
+        StreamName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}
+
+pub const OUTCOME_NAMES: usize = 3;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum OutcomeName {
+    ok = 0,
+    aborted = 1,
+    err = 2,
+}
+
+impl OutcomeName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::err];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<OutcomeName> {
+        OutcomeName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}
+
+pub const TASK_PHASE_NAMES: usize = 4;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum TaskPhaseName {
+    net_ms = 0,
+    bytes = 1,
+    decode_ms = 2,
+    adopt_ms = 3,
+}
+
+impl TaskPhaseName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [TaskPhaseName; 4] = [
+        TaskPhaseName::net_ms,
+        TaskPhaseName::bytes,
+        TaskPhaseName::decode_ms,
+        TaskPhaseName::adopt_ms,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<TaskPhaseName> {
+        TaskPhaseName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}
+
+/// Timings a run reports at most; past it one is left out.
+pub const TASK_PHASES_MAX: u32 = 6;

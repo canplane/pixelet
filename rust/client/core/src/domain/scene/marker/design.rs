@@ -1,0 +1,238 @@
+// pxl-core/domain/scene/marker/design.rs
+
+//! What a marker paints, each its own design on the one atlas: text on a
+//! pill, a place as Carto draws it, a line said in a bubble. A design is what
+//! is painted and nothing of who shows it, so two that paint alike are one:
+//! measured, given its slot and painted once, and shown only once painted
+//! (`ready`). Which text and colors a source paints are its own
+//! (`place.rs`, `pin.rs` and `line.rs`). Its text is the platform's
+//! (sys/io/text.rs), laid out in a marker's font and drawn at the atlas's
+//! scale (`text_raster`).
+
+use std::rc::Rc;
+
+use fnv::{FnvHashMap, FnvHashSet};
+
+use crate::domain::scene::marker::atlas::atlas;
+use crate::sys::io::text::{text_lines, text_pixels};
+use pxl_render::frame::shelf::{Paint, NO_SLOT};
+use pxl_render::gpu::text::{raster_box, Raster};
+use pxl_render::look::marker::ATLAS_SCALE;
+use pxl_render::look::marker::{
+    bubble_size, pill_size, point_size, Font, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
+};
+use xpute_core::global::Global;
+
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
+
+/// `text` in `font` broken into lines no wider than `max_width` (0 for one
+/// line), each with its width; none where it could not be laid out this turn.
+fn lines(font: Font, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
+    text_lines(font.weight, f64::from(font.px), max_width, text)
+}
+
+/// One line of `text`'s width in `font`.
+fn width(font: Font, text: &str) -> Option<f64> {
+    lines(font, 0.0, text).map(|lines| lines.iter().map(|&(_, w)| w).sum())
+}
+
+/// One line of `text` in `font` and `color`, 0xRRGGBBAA, as the atlas paints
+/// it: drawn at its scale into the line's box (`raster_box`). None where it
+/// could not be drawn this turn; a later turn asks again.
+pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
+    let advance = width(font, text)? as f32;
+    let (size, origin) = raster_box(font, advance);
+    let scale = ATLAS_SCALE as f32;
+    let px = text_pixels(
+        font.weight,
+        f64::from(font.px * scale),
+        color,
+        size,
+        f64::from(origin[0]),
+        text,
+    )?;
+    Some(Raster {
+        px,
+        width: size[0],
+        height: size[1],
+        origin,
+        advance: advance * scale,
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) enum Design {
+    /// Text on a pill in its `fill`, in its `ink`.
+    Pill { text: Rc<str>, fill: u32, ink: u32 },
+    /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
+    /// category's `fill`, and under it its name, where it is named, in its
+    /// category's text color, its `ink`, wrapped at `wrap` pixels
+    /// (`with_spacing`).
+    Point {
+        name: Option<Rc<str>>,
+        wrap: u32,
+        icon: bool,
+        symbol: Option<u16>,
+        fill: u32,
+        ink: u32,
+    },
+    /// A line said in the chat.
+    Bubble { text: Rc<str> },
+}
+
+impl Design {
+    /// As it is laid out where a place keeps `spacing` pixels to itself
+    /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
+    /// (`set.rs`): a place's name wrapped to it, and its region it; any
+    /// other's region its own width (0, which the candidates widen to it).
+    pub(super) fn with_spacing(mut self, spacing: f64) -> (Design, f64) {
+        match &mut self {
+            Design::Point { name, wrap, .. } => {
+                if name.is_some() {
+                    *wrap = spacing as u32;
+                }
+                (self, spacing)
+            }
+            _ => (self, 0.0),
+        }
+    }
+}
+
+/// A sprite: a design as the atlas holds it, its size, laid out once, and
+/// its slot, none until it is asked for (`slot`).
+struct Sprite {
+    size: [f64; 3],
+    /// Its text as it was laid out when sized: the client's layouts are a
+    /// cache it may let go.
+    lines: Vec<String>,
+    slot: i32,
+}
+static SPRITES: Global<FnvHashMap<Design, Sprite>> = Global::new();
+fn sprites() -> &'static mut FnvHashMap<Design, Sprite> {
+    SPRITES.get(FnvHashMap::default)
+}
+
+/// Lets go of every design but `designs`, those no marker shown or waiting
+/// uses, their slots freed; whether any slot was, so a design the atlas had
+/// no room for may have it now.
+pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
+    let mut dropped = false;
+    sprites().retain(|design, b| {
+        if designs.contains(design) {
+            return true;
+        }
+        if b.slot != NO_SLOT {
+            atlas().release(b.slot as u32);
+            dropped = true;
+        }
+        false
+    });
+    // The moment the atlas's live set shrinks, so the moment it may stop being
+    // as large as the densest view made it.
+    if dropped {
+        atlas().compact();
+    }
+    dropped
+}
+
+/// Whether it becomes ready (`ready`) with nothing else moving: its text
+/// asked of the client, answered by a later turn, or its slot given and
+/// painted at render. One the atlas has no room for becomes ready only once
+/// a slot is let go (`retain`), so it asks no turn of its own.
+pub(super) fn coming(design: &Design) -> bool {
+    sprites()
+        .get(design)
+        .is_none_or(|b| b.slot != NO_SLOT && !atlas().is_painted(b.slot as u32))
+}
+
+/// Its width, height and where it stands down from its top; none where its
+/// text could not be laid out this turn.
+pub(super) fn size(design: &Design) -> Option<[f64; 3]> {
+    if let Some(b) = sprites().get(design) {
+        return Some(b.size);
+    }
+    let laid = |font, wrap, text: &str| -> Option<(f64, Vec<String>)> {
+        let laid = lines(font, wrap, text)?;
+        Some((
+            laid.iter().map(|&(_, w)| w).fold(0.0, f64::max),
+            laid.iter().map(|&(l, _)| l.trim().to_owned()).collect(),
+        ))
+    };
+    let (size, lines) = match design {
+        Design::Pill { text, .. } => (pill_size(width(PILL_FONT, text)?.ceil()), Vec::new()),
+        Design::Point {
+            name: None, icon, ..
+        } => (point_size(*icon, None), Vec::new()),
+        Design::Point {
+            name: Some(name),
+            wrap,
+            icon,
+            ..
+        } => {
+            let (w, lines) = laid(POINT_FONT, f64::from(*wrap), name)?;
+            (point_size(*icon, Some((w, lines.len()))), lines)
+        }
+        Design::Bubble { text } => {
+            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, text)?;
+            (bubble_size(w, lines.len()), lines)
+        }
+    };
+    sprites().insert(
+        design.clone(),
+        Sprite {
+            size,
+            lines,
+            slot: NO_SLOT,
+        },
+    );
+    Some(size)
+}
+
+/// Whether the design is laid out and painted, so drawing it shows its
+/// text. It asks the atlas for no slot, which `slot` does.
+pub(super) fn ready(design: &Design) -> bool {
+    size(design).is_some()
+        && sprites()
+            .get(design)
+            .is_some_and(|b| b.slot != NO_SLOT && atlas().is_painted(b.slot as u32))
+}
+
+/// Its design was measured first.
+pub(super) fn slot(design: &Design) -> i32 {
+    let b = sprites().get_mut(design).or_bug(Errno::ENOTRECOVERABLE);
+    if b.slot == NO_SLOT {
+        let [w, h, _] = b.size;
+        b.slot = atlas().add(
+            w * ATLAS_SCALE,
+            h * ATLAS_SCALE,
+            match design {
+                Design::Pill { text, fill, ink } => Paint::Pill {
+                    text: text.to_string(),
+                    fill: *fill,
+                    ink: *ink,
+                    logical_w: w,
+                },
+                Design::Bubble { .. } => Paint::Bubble {
+                    lines: b.lines.clone(),
+                    box_w: w,
+                },
+                &Design::Point {
+                    icon,
+                    symbol,
+                    fill,
+                    ink,
+                    ..
+                } => Paint::Point {
+                    lines: b.lines.clone(),
+                    icon,
+                    symbol,
+                    fill,
+                    ink,
+                    logical_w: w,
+                },
+            },
+        );
+    }
+    b.slot
+}
