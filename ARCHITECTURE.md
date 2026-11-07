@@ -820,12 +820,12 @@ world:
   gives — the surfaces, the position, storage, files, text and the server
   (`ts/client/src/service/`, `port/`, `sys/`, `origin/`);
 - the **runtime**, xpute's, the kernel's VMM, booted once by the client
-  (`ts/client/src/abi/boot.ts`) and kept for the rest of it
+  (`ts/client/src/runtime/boot.ts`) and kept for the rest of it
   (`ts/client/src/runtime/`).
 
 The kernel runs apart from the shell, so a turn holds none of the shell's
 events, and the runtime sits where the kernel's memory is
-(`ts/client/src/service/runtime.ts`, `runtime.native.ts`; both start it as
+(`ts/client/src/runtime/open.ts`, `open.native.ts`; both start it as
 `runtime/start.ts` does). A device runs the kernel on its own thread and the
 runtime on the shell's JavaScript thread. A page runs the kernel and the
 runtime in a worker (`runtime/worker.ts`) with the files, the network, the
@@ -881,16 +881,17 @@ hands over is called directly. An answer comes back as a number, read once by
 names is the runtime breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
-(`ts/client/src/abi/boot.ts`) starts the kernel with `@xpute/runtime`'s `start`
-where the platform runs it (`service/runtime.ts`, `.native.ts`), as the kernel's
-machine declares it (generated into `abi/machine.spec.ts`), which asks for both
+(`ts/client/src/runtime/boot.ts`) starts the kernel with `@xpute/runtime`'s
+`start` where the platform runs it (`runtime/open.ts`, `.native.ts`), as the
+kernel's machine declares it (generated into `abi/machine.spec.ts`), which asks for both
 of xpute's devices, the GPU and the files (`gpu`, `fs`). The config, made where
 the kernel runs (`runtime/start.ts`), holds what backs the files
 (`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`shell_imports`),
 what the kernel places with the shell, the frame pacing and each turn's
-submission (`port/surface.ts` `submit_grant`); `runtime/kernel.ts` keeps the
-runtime's link and the generated stubs bound to it (`kernel`). What differs by platform is a
-file pair in `ts/client/src/service/`, `<x>.ts` the page's beside
+submission (`port/surface.ts` `submit_grant`); `port/kernel.ts` keeps the
+runtime's link and the generated stubs bound to it (`kernel`). What else
+differs by platform is a file pair in `ts/client/src/service/`, `<x>.ts` the
+page's beside
 `<x>.native.ts` the device's, which Metro picks by the platform it bundles for
 (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both share in
 `service/types.ts`: the kernel's module or none on a device (`kernel.ts`), the
