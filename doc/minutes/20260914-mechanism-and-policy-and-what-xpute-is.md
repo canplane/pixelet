@@ -16,7 +16,7 @@ thing possible, a _policy_ is how the device is used.
 ```
 xpute — the execution substrate            pxl — the spatial runtime
   scheduler (budget, yield, resume)          chunk, page, terrain, object,
-  memory: buddy, pool, arena, block/handle,   decor, actor
+  memory: buddy, pool, arena, block/handle,   decor, character
     acquire/release, pressure and refusal    LOD policy, residency policy
   IPC: rings, ports, frames                   world lifecycle, the build
   change journal, wake-ups                     pipeline, the raycast

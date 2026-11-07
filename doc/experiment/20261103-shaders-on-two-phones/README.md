@@ -7,6 +7,17 @@ driver refuses to make pipelines; Safari's WGSL compiler writes Metal that
 does not compile. Neither is ours, and each is worked around here only as far
 as an experiment; what is adopted is the user's.
 
+Closed: after `4a74a51f2` the S23 made every pipeline and Safari every module
+("What made them take it"). The shaders are WGSL by hand since 2026-11-05
+([taking rust-gpu out](../20261104-taking-rust-gpu-out/README.md)); what holds
+of this beyond the generated shaders is
+[shaders the phones take](../../tip/shaders-phones-take.md).
+
+The commits named here are on `original` under other hashes, each the same
+tree: `feee29054` is `cad791eade`, `4a73ebdd0` is `826f4908a9`, `10fe6a7e5` is
+`a60fd30b33`, `64b6734ea` is `c920e687e2`, `f94b0017b` is `b4dc1e14f0` and
+`4a74a51f2` is `4a56b8b526`. main holds them in `dafc5a2322`.
+
 ## How
 
 - **S23** (SM-S911N, Adreno 740 as `adapter.info` says `qualcomm ·
@@ -35,6 +46,11 @@ as an experiment; what is adopted is the user's.
   function), `tools/vecify.py` (`array<u32|i32|f32, 2..4>` as a vector,
   outside the structs a binding reaches). The always-inlined set is
   `pxl-shader-build` with `wgsl_of` made to pick `inlined`.
+- The probe is `ts/tool/shader/probe.html` now (`pnpm probe` there, on :5173,
+  `?only=`, `?bisect=` and `?src=` as here), its console in
+  `ts/tool/shader/.dev-console.log`, Tint's test `ts/tool/shader/shader.test.ts`.
+  The `*.gen.wgsl` modules `tools/descend.py` reads by default went with
+  rust-gpu; it takes a file as its second argument.
 
 ## The S23
 
@@ -183,4 +199,10 @@ What a shader keeps clear of, learned here, is
 - Whether a module the S23 takes computes what the Mac computes: an earlier
   S23 read buffers laid out differently and drew wrong without an error
   (archived minutes of 2026-09-23 and 2026-09-27, on `origin/original`).
-- The native app (wgpu: naga to SPIR-V or Metal) on the same phones.
+- The native app (wgpu: naga to SPIR-V or Metal) on the same phones. The
+  Android app on the S23 is in
+  [the walk on a phone](../20261103-the-walk-on-a-phone/README.md), "The app
+  against the page".
+
+The generated WGSL's cost went with rust-gpu. The S23 has drawn with the shaders by
+hand since 2026-11-05 ([the frame on the S23](../20261105-the-frame-on-the-s23/journal.md)).

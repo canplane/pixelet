@@ -1,6 +1,7 @@
 # Rust and XTP, reconsidered
 
-**2026-11-03** — recorded with the user. Main was at `feee29054`.
+**2026-11-03** — recorded with the user. Main was at `cad791eade`, as `original`
+keeps it.
 
 Nothing was resolved. Every recommendation below is the session's, a proposal
 and no decision; what the user said is under its own heading. No code changed
@@ -249,7 +250,8 @@ The session recommends keeping rust-gpu: nothing mature to move to.
 
 - Whether one source for CPU and GPU (`README.md:26`) must hold. If it may go,
   the session proposes moving one compute entry to Slang and comparing the WGSL's
-  size and Safari's compile.
+  size and Safari's compile. Closed the same day: rust-gpu is to be removed
+  ([rust-gpu goes](./20261103-rust-gpu-goes.md)).
 - Whether xpute is meant for outside use, or a portfolio piece. The first calls
   for the envelope and trailing optionals first, the second for the envelope and
   the dump tool.

@@ -59,9 +59,9 @@ composer never tone-mapped), reversed-Z.
 
 ## B. Hot paths
 
-- ~~**B1**~~ The module says when an actor animates (`Models::tick` returns it,
+- ~~**B1**~~ The module says when a character animates (`Models::tick` returns it,
   folded into the tick's draw bit); the companion no longer asks for frames
-  itself. An actor playing a clip still means a frame a tick — that is what an
+  itself. A character playing a clip still means a frame a tick — that is what an
   animated companion is — but the module decides.
 - ~~**B2**~~ `climb_polar` is memoised on the view, the map center and the page
   table's revision.
@@ -109,7 +109,7 @@ file, at the same path (`script/pair.ts`).
 - ~~**C1**~~ `space/ivec.rs`: `lanes` / `gather` and their XY halves;
   `object::unpack_pos` for the packed position.
 - ~~**C2**~~ `space/constant.rs`: the cell, chunk and page constants once.
-- ~~**C3**~~ `place.wgsl` (`place_up`, `spin_z`) for decor, the actors and the
+- ~~**C3**~~ `place.wgsl` (`place_up`, `spin_z`) for decor, the characters and the
   beacon; `PI` once in grade.wgsl; `faces.wgsl` names the face bits and a naga
   test reads its constants back against the mesher's.
 - ~~**C4**~~ TS: `DRAW_WORDS` / `UNIFORM_FLOATS` / pipeline ids restated in

@@ -1,0 +1,2091 @@
+ID0	0	
+row:1221:lt:9	1221	return v <= 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:eq:73	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) != 1u;
+row:1221:and:16	1221	return v < 256u || ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:add:39	1221	return v < 256u && ((row_word(k, ROW_ON - (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:shr:45	1221	return v < 256u && ((row_word(k, ROW_ON + (v << 5u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:shr:53	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) << (v & 31u)) & 1u) == 1u;
+row:1221:band:58	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v | 31u)) & 1u) == 1u;
+row:1221:band:66	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) | 1u) == 1u;
+row:1221:lit:11	1221	return v < 257u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:lit:48	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 6u)) >> (v & 31u)) & 1u) == 1u;
+row:1221:lit:61	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 32u)) & 1u) == 1u;
+row:1221:lit:69	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 2u) == 1u;
+row:1221:lit:76	1221	return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 2u;
+world:1001:ge:11	1001	if (blocks > CELL_BLOCKS) {
+world:1001:ift:0	1001	if (true) {
+world:1001:iff:0	1001	if (false) {
+world:1002:t:7	1002	return false;
+world:1005:sub:27	1005	let ab = side_mid(side_out) + a;
+world:1008:lit:13	1008	var before = 1u;
+world:1009:lt:19	1009	for (var o = 0u; o <= CELL_BLOCKS && before < blocks; o += 1u) {
+world:1009:lt:43	1009	for (var o = 0u; o < CELL_BLOCKS && before <= blocks; o += 1u) {
+world:1009:and:33	1009	for (var o = 0u; o < CELL_BLOCKS || before < blocks; o += 1u) {
+world:1009:adda:55	1009	for (var o = 0u; o < CELL_BLOCKS && before < blocks; o -= 1u) {
+world:1009:lit:13	1009	for (var o = 1u; o < CELL_BLOCKS && before < blocks; o += 1u) {
+world:1009:lit:58	1009	for (var o = 0u; o < CELL_BLOCKS && before < blocks; o += 2u) {
+world:1011:lt:6	1011	if (k <= mine || (k == mine && o < b)) {
+world:1011:lt:32	1011	if (k < mine || (k == mine && o <= b)) {
+world:1011:eq:19	1011	if (k < mine || (k != mine && o < b)) {
+world:1011:and:27	1011	if (k < mine || (k == mine || o < b)) {
+world:1011:or:13	1011	if (k < mine && (k == mine && o < b)) {
+world:1011:ift:0	1011	if (true) {
+world:1011:iff:0	1011	if (false) {
+world:1012:adda:7	1012	before -= 1u;
+world:1012:lit:10	1012	before += 2u;
+world:1012:del:0	1012	
+world:1015:lt:14	1015	return before <= blocks;
+world:464:shr:28	464	return vec2<i32>((w << 16u) << 16u, w >> 16u);
+world:464:shr:38	464	return vec2<i32>((w << 16u) >> 16u, w << 16u);
+world:464:shl:20	464	return vec2<i32>((w >> 16u) >> 16u, w >> 16u);
+world:464:lit:23	464	return vec2<i32>((w << 17u) >> 16u, w >> 16u);
+world:464:lit:31	464	return vec2<i32>((w << 16u) >> 17u, w >> 16u);
+world:464:lit:41	464	return vec2<i32>((w << 16u) >> 16u, w >> 17u);
+world:522:ge:9	522	while (z > FIRST_CELL) {
+world:524:eq:6	524	if (z != top) {
+world:524:ift:0	524	if (true) {
+world:524:iff:0	524	if (false) {
+world:525:del:0	525	
+world:527:lnot:4	527	if (got.here) {
+world:527:ift:0	527	if (true) {
+world:527:iff:0	527	if (false) {
+world:528:f:35	528	return NodeBound(vec4<i32>(0i), z, true, false, found);
+world:528:f:42	528	return NodeBound(vec4<i32>(0i), z, false, true, found);
+world:528:lit:27	528	return NodeBound(vec4<i32>(1i), z, false, false, found);
+world:530:min:14	530	b = vec4<i32>(max(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w));
+world:530:min:52	530	b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), max(b.z, got.b.z), max(b.w, got.b.w));
+world:530:max:33	530	b = vec4<i32>(min(b.x, got.b.x), min(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w));
+world:530:max:71	530	b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), min(b.w, got.b.w));
+world:530:del:0	530	
+world:531:le:9	531	if ((b.x < UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+world:531:le:62	531	if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip < bottom && got.all)) {
+ID60	0	
+world:531:ge:32	531	if ((b.x <= UNBOUNDED_LO && b.y > UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+world:531:and:25	531	if ((b.x <= UNBOUNDED_LO || b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+world:531:and:72	531	if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom || got.all)) {
+world:531:or:49	531	if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) && (got.clip <= bottom && got.all)) {
+world:531:ift:0	531	if (true) {
+world:531:iff:0	531	if (false) {
+world:532:t:23	532	return NodeBound(b, z, false, true, found);
+world:532:t:29	532	return NodeBound(b, z, true, false, found);
+world:534:sub:12	534	z = got.clip + 1u;
+world:534:lit:15	534	z = got.clip - 2u;
+world:534:del:0	534	
+world:536:t:42	536	return NodeBound(BOUNDS_OPEN, FIRST_CELL, false, true, found);
+world:536:t:48	536	return NodeBound(BOUNDS_OPEN, FIRST_CELL, true, false, found);
+world:501:ge:94	501	let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell > zoom);
+world:501:sub:35	501	let g = select(c >> vec2<u32>((zoom + cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+world:501:sub:72	501	let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell + zoom) & 31u), cell >= zoom);
+world:501:shr:17	501	let g = select(c << vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+world:501:shl:54	501	let g = select(c >> vec2<u32>((zoom - cell) & 31u), c >> vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+world:501:band:43	501	let g = select(c >> vec2<u32>((zoom - cell) | 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+world:501:band:80	501	let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) | 31u), cell >= zoom);
+world:501:sel:0	501	let g = select(c << vec2<u32>((cell - zoom) & 31u), c >> vec2<u32>((zoom - cell) & 31u), cell >= zoom);
+world:501:lit:46	501	let g = select(c >> vec2<u32>((zoom - cell) & 32u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+world:501:lit:83	501	let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 32u), cell >= zoom);
+world:502:gt:9	502	if (cell >= zoom + BRICK_LEVELS) {
+world:502:add:15	502	if (cell > zoom - BRICK_LEVELS) {
+world:502:ift:0	502	if (true) {
+world:502:iff:0	502	if (false) {
+world:503:sub:35	503	return held_of(place, cell, g, cell + zoom - BRICK_LEVELS);
+world:503:sub:42	503	return held_of(place, cell, g, cell - zoom + BRICK_LEVELS);
+world:507:lnot:4	507	if (lookup_here(s.place)) {
+world:507:ift:0	507	if (true) {
+world:507:iff:0	507	if (false) {
+world:508:f:38	508	return NodeBound(vec4<i32>(0i), clip, true, false, s.place);
+world:508:f:45	508	return NodeBound(vec4<i32>(0i), clip, false, true, s.place);
+world:508:lit:27	508	return NodeBound(vec4<i32>(1i), clip, false, false, s.place);
+world:510:lt:37	510	let j = select(0u, clip - zoom, zoom <= clip);
+world:510:sub:23	510	let j = select(0u, clip + zoom, zoom < clip);
+world:510:sel:0	510	let j = select(clip - zoom, 0u, zoom < clip);
+world:510:lit:15	510	let j = select(1u, clip - zoom, zoom < clip);
+world:511:shr:14	511	let at = s.at << vec2<u32>(j);
+world:512:sub:32	512	let level_at = (4u * BRICK_CELLS + ((4u * BRICK_CELLS) >> (2u * j))) / 3u;
+world:512:mul:18	512	let level_at = (4u + BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) / 3u;
+world:512:mul:39	512	let level_at = (4u * BRICK_CELLS - ((4u + BRICK_CELLS) >> (2u * j))) / 3u;
+world:512:mul:61	512	let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u + j))) / 3u;
+world:512:div:68	512	let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) * 3u;
+world:512:shr:55	512	let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) << (2u * j))) / 3u;
+world:512:lit:16	512	let level_at = (5u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) / 3u;
+world:512:lit:37	512	let level_at = (4u * BRICK_CELLS - ((5u * BRICK_CELLS) >> (2u * j))) / 3u;
+world:512:lit:59	512	let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (3u * j))) / 3u;
+world:512:lit:71	512	let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) / 4u;
+world:513:add:42	513	let e = lookup_slot(s.place) * BRICK_WORDS - LEVELS_AT + LEVEL_ENTRY_WORDS * (level_at + cell_id(at));
+world:513:add:54	513	let e = lookup_slot(s.place) * BRICK_WORDS + LEVELS_AT - LEVEL_ENTRY_WORDS * (level_at + cell_id(at));
+world:513:add:86	513	let e = lookup_slot(s.place) * BRICK_WORDS + LEVELS_AT + LEVEL_ENTRY_WORDS * (level_at - cell_id(at));
+world:513:mul:28	513	let e = lookup_slot(s.place) + BRICK_WORDS + LEVELS_AT + LEVEL_ENTRY_WORDS * (level_at + cell_id(at));
+world:513:mul:74	513	let e = lookup_slot(s.place) * BRICK_WORDS + LEVELS_AT + LEVEL_ENTRY_WORDS + (level_at + cell_id(at));
+world:514:add:55	514	return NodeBound(bounds_of(i32(ground[e]), i32(ground[e - 1u])), clip, true, true, s.place);
+world:514:t:71	514	return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, false, true, s.place);
+world:514:t:77	514	return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, false, s.place);
+world:514:lit:58	514	return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 2u])), clip, true, true, s.place);
+world:644:ge:6	644	if (z > t) {
+ID120	0	
+world:644:ift:0	644	if (true) {
+world:644:iff:0	644	if (false) {
+world:647:lt:9	647	if (cell <= LEAF_CELL || palette_idx == VALUE_UNKNOWN) {
+world:647:eq:36	647	if (cell < LEAF_CELL || palette_idx != VALUE_UNKNOWN) {
+world:647:or:21	647	if (cell < LEAF_CELL && palette_idx == VALUE_UNKNOWN) {
+world:647:ift:0	647	if (true) {
+world:647:iff:0	647	if (false) {
+world:652:lit:16	652	var sandstone = 1i;
+world:653:eq:16	653	if (palette_idx != STRATA_SAND || palette_idx == STRATA_BEACH) {
+world:653:eq:46	653	if (palette_idx == STRATA_SAND || palette_idx != STRATA_BEACH) {
+world:653:or:31	653	if (palette_idx == STRATA_SAND && palette_idx == STRATA_BEACH) {
+world:653:ift:0	653	if (true) {
+world:653:iff:0	653	if (false) {
+world:654:del:0	654	
+world:655:del:0	655	
+world:656:eq:23	656	} else if (palette_idx != STRATA_WATER) {
+world:656:ift:0	656	} else if (true) {
+world:656:iff:0	656	} else if (false) {
+world:657:del:0	657	
+world:659:sub:12	659	let face = t + s;
+world:660:sub:17	660	let filled = face + STRATA_FILLER_DEPTH * s;
+world:660:mul:39	660	let filled = face - STRATA_FILLER_DEPTH + s;
+world:661:ge:6	661	if (z > face) {
+world:661:ift:0	661	if (true) {
+world:661:iff:0	661	if (false) {
+world:664:ge:6	664	if (z > filled) {
+world:664:ift:0	664	if (true) {
+world:664:iff:0	664	if (false) {
+world:667:ge:6	667	if (z > filled - sandstone * s) {
+world:667:sub:15	667	if (z >= filled + sandstone * s) {
+world:667:mul:27	667	if (z >= filled - sandstone + s) {
+world:667:ift:0	667	if (true) {
+world:667:iff:0	667	if (false) {
+world:670:ge:45	670	return select(VALUE_UNKNOWN, STRATA_STONE, z > rock(cell, face_height(cell, t)));
+world:670:sel:0	670	return select(STRATA_STONE, VALUE_UNKNOWN, z >= rock(cell, face_height(cell, t)));
+world:1018:le:9	1018	if (zoom < CAVE_PIPE) {
+world:1018:ift:0	1018	if (true) {
+world:1018:iff:0	1018	if (false) {
+world:1020:add:16	1020	var n = h.blocks - h.last * tunnel_blocks(4u);
+world:1020:mul:25	1020	var n = h.blocks + h.last + tunnel_blocks(4u);
+world:1020:lit:42	1020	var n = h.blocks + h.last * tunnel_blocks(5u);
+world:1021:add:36	1021	n += h.tunnels.x * tunnel_blocks(0u) - h.tunnels.y * tunnel_blocks(1u);
+world:1021:mul:16	1021	n += h.tunnels.x + tunnel_blocks(0u) + h.tunnels.y * tunnel_blocks(1u);
+world:1021:mul:50	1021	n += h.tunnels.x * tunnel_blocks(0u) + h.tunnels.y + tunnel_blocks(1u);
+world:1021:adda:2	1021	n -= h.tunnels.x * tunnel_blocks(0u) + h.tunnels.y * tunnel_blocks(1u);
+world:1021:lit:33	1021	n += h.tunnels.x * tunnel_blocks(1u) + h.tunnels.y * tunnel_blocks(1u);
+world:1021:lit:67	1021	n += h.tunnels.x * tunnel_blocks(0u) + h.tunnels.y * tunnel_blocks(2u);
+world:1021:del:0	1021	
+world:1022:add:8	1022	return n - h.tunnels.z * tunnel_blocks(2u) + h.tunnels.w * tunnel_blocks(3u);
+world:1022:add:42	1022	return n + h.tunnels.z * tunnel_blocks(2u) - h.tunnels.w * tunnel_blocks(3u);
+world:1022:mul:22	1022	return n + h.tunnels.z + tunnel_blocks(2u) + h.tunnels.w * tunnel_blocks(3u);
+world:1022:mul:56	1022	return n + h.tunnels.z * tunnel_blocks(2u) + h.tunnels.w + tunnel_blocks(3u);
+world:1022:lit:39	1022	return n + h.tunnels.z * tunnel_blocks(3u) + h.tunnels.w * tunnel_blocks(3u);
+world:1022:lit:73	1022	return n + h.tunnels.z * tunnel_blocks(2u) + h.tunnels.w * tunnel_blocks(4u);
+world:1024:sub:49	1024	let p = cave_holds(CAVE_PIPE, c >> vec3<u32>(zoom + CAVE_PIPE));
+world:1024:shr:32	1024	let p = cave_holds(CAVE_PIPE, c << vec3<u32>(zoom - CAVE_PIPE));
+world:1025:eq:13	1025	if (p.blocks != 0u) {
+world:1025:lit:16	1025	if (p.blocks == 1u) {
+world:1025:ift:0	1025	if (true) {
+world:1025:iff:0	1025	if (false) {
+ID180	0	
+world:1026:lit:7	1026	return 1u;
+world:1028:sub:65	1028	let h = node_seed(CAVE_TAG_BLOCKS, CAVE_PIPE, c >> vec3<u32>(zoom + CAVE_PIPE));
+world:1028:shr:48	1028	let h = node_seed(CAVE_TAG_BLOCKS, CAVE_PIPE, c << vec3<u32>(zoom - CAVE_PIPE));
+world:1029:ge:9	1029	if (zoom > CAVE_BLOCK) {
+world:1029:ift:0	1029	if (true) {
+world:1029:iff:0	1029	if (false) {
+world:1030:sub:38	1030	let lo = vec3<u32>(c >> vec3<u32>(zoom + CAVE_BLOCK)) & vec3<u32>(3u);
+world:1030:shr:21	1030	let lo = vec3<u32>(c << vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(3u);
+world:1030:band:53	1030	let lo = vec3<u32>(c >> vec3<u32>(zoom - CAVE_BLOCK)) | vec3<u32>(3u);
+world:1030:lit:66	1030	let lo = vec3<u32>(c >> vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(4u);
+world:1031:shl:73	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y >> 2u) | (lo.z << 4u)));
+world:1031:shl:88	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y << 2u) | (lo.z >> 4u)));
+world:1031:bor:64	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x & (lo.y << 2u) | (lo.z << 4u)));
+world:1031:bor:79	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y << 2u) & (lo.z << 4u)));
+world:1031:lit:76	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y << 3u) | (lo.z << 4u)));
+world:1031:lit:91	1031	return u32(block_hollow(h, p.blocks, p.side_in, p.side_out, lo.x | (lo.y << 2u) | (lo.z << 5u)));
+world:1033:sub:18	1033	let t = CAVE_BLOCK + zoom;
+world:1034:shl:14	1034	let side = 1u >> t;
+world:1034:lit:11	1034	let side = 2u << t;
+world:1035:shl:21	1035	let lo = vec3<u32>(c >> vec3<u32>(t)) & vec3<u32>(3u);
+world:1035:band:37	1035	let lo = vec3<u32>(c << vec3<u32>(t)) | vec3<u32>(3u);
+world:1035:lit:50	1035	let lo = vec3<u32>(c << vec3<u32>(t)) & vec3<u32>(4u);
+world:1036:lit:8	1036	var n = 1u;
+world:1037:lt:19	1037	for (var b = 0u; b <= side * side * side; b += 1u) {
+world:1037:mul:25	1037	for (var b = 0u; b < side + side * side; b += 1u) {
+world:1037:mul:32	1037	for (var b = 0u; b < side * side + side; b += 1u) {
+world:1037:adda:43	1037	for (var b = 0u; b < side * side * side; b -= 1u) {
+world:1037:lit:13	1037	for (var b = 1u; b < side * side * side; b += 1u) {
+world:1037:lit:46	1037	for (var b = 0u; b < side * side * side; b += 2u) {
+world:1038:sub:28	1038	let at = vec3<u32>(b & (side + 1u), (b >> t) & (side - 1u), b >> (2u * t));
+world:1038:sub:52	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) & (side + 1u), b >> (2u * t));
+world:1038:mul:68	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u + t));
+world:1038:shr:39	1038	let at = vec3<u32>(b & (side - 1u), (b << t) & (side - 1u), b >> (2u * t));
+world:1038:shr:62	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b << (2u * t));
+world:1038:band:20	1038	let at = vec3<u32>(b | (side - 1u), (b >> t) & (side - 1u), b >> (2u * t));
+world:1038:band:44	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) | (side - 1u), b >> (2u * t));
+world:1038:lit:31	1038	let at = vec3<u32>(b & (side - 2u), (b >> t) & (side - 1u), b >> (2u * t));
+world:1038:lit:55	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 2u), b >> (2u * t));
+world:1038:lit:66	1038	let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (3u * t));
+world:1039:add:12	1039	let sum = lo - at;
+world:1040:shl:73	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y >> 2u) | (sum.z << 4u)));
+world:1040:shl:89	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 2u) | (sum.z >> 4u)));
+world:1040:bor:63	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x & (sum.y << 2u) | (sum.z << 4u)));
+world:1040:bor:79	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 2u) & (sum.z << 4u)));
+world:1040:adda:2	1040	n -= u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 2u) | (sum.z << 4u)));
+world:1040:lit:76	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 3u) | (sum.z << 4u)));
+world:1040:lit:92	1040	n += u32(block_hollow(h, p.blocks, p.side_in, p.side_out, sum.x | (sum.y << 2u) | (sum.z << 5u)));
+world:1040:del:0	1040	
+world:926:lit:22	926	var enter = vec3<i32>(1i);
+world:927:lit:22	927	var leave = vec3<i32>(1i);
+world:928:lit:14	928	var side_in = 7u;
+world:929:lit:15	929	var side_out = 7u;
+world:930:lit:13	930	var blocks = 1u;
+world:934:le:9	934	while (z < CAVE_PIPE) {
+world:935:sub:30	935	let here = c >> vec3<u32>(zoom + z);
+world:935:shr:13	935	let here = c << vec3<u32>(zoom - z);
+world:936:sub:9	936	let k = z + CAVE_ROOT;
+world:937:lt:6	937	if (k <= 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:lt:60	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k <= 4u && tunnels[k] > 0u))) {
+world:937:gt:48	937	if (k < 5u && blocks == 0u && ((k == 4u && last >= 0u) || (k < 4u && tunnels[k] > 0u))) {
+ID240	0	
+world:937:gt:79	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] >= 0u))) {
+world:937:eq:21	937	if (k < 5u && blocks != 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:eq:34	937	if (k < 5u && blocks == 0u && ((k != 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:and:11	937	if (k < 5u || blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:and:27	937	if (k < 5u && blocks == 0u || ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:and:40	937	if (k < 5u && blocks == 0u && ((k == 4u || last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:and:65	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u || tunnels[k] > 0u))) {
+world:937:or:54	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) && (k < 4u && tunnels[k] > 0u))) {
+world:937:lit:8	937	if (k < 6u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:lit:24	937	if (k < 5u && blocks == 1u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:lit:37	937	if (k < 5u && blocks == 0u && ((k == 5u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:lit:50	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 1u) || (k < 4u && tunnels[k] > 0u))) {
+world:937:lit:62	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 5u && tunnels[k] > 0u))) {
+world:937:lit:81	937	if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 1u))) {
+world:937:ift:0	937	if (true) {
+world:937:iff:0	937	if (false) {
+world:939:del:0	939	
+world:940:del:0	940	
+world:941:del:0	941	
+world:942:del:0	942	
+world:943:del:0	943	
+world:944:eq:6	944	if (k != 4u) {
+world:944:lit:9	944	if (k == 5u) {
+world:944:ift:0	944	if (true) {
+world:944:iff:0	944	if (false) {
+world:945:suba:5	945	last += 1u;
+world:945:lit:8	945	last -= 2u;
+world:945:del:0	945	
+world:947:suba:11	947	tunnels[k] += 1u;
+world:947:lit:14	947	tunnels[k] -= 2u;
+world:947:del:0	947	
+world:950:eq:64	950	let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w + last != 0u;
+world:950:add:20	950	let none = tunnels.x - tunnels.y + tunnels.z + tunnels.w + last == 0u;
+world:950:add:32	950	let none = tunnels.x + tunnels.y - tunnels.z + tunnels.w + last == 0u;
+world:950:add:44	950	let none = tunnels.x + tunnels.y + tunnels.z - tunnels.w + last == 0u;
+world:950:add:56	950	let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w - last == 0u;
+world:950:lit:67	950	let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w + last == 1u;
+world:951:eq:6	951	if (z != zoom || (blocks == 0u && none)) {
+world:951:eq:25	951	if (z == zoom || (blocks != 0u && none)) {
+world:951:and:31	951	if (z == zoom || (blocks == 0u || none)) {
+world:951:or:14	951	if (z == zoom && (blocks == 0u && none)) {
+world:951:lit:28	951	if (z == zoom || (blocks == 1u && none)) {
+world:951:ift:0	951	if (true) {
+world:951:iff:0	951	if (false) {
+world:954:add:42	954	let i = child_idx(c >> vec3<u32>(zoom - (z - 1u)));
+world:954:sub:37	954	let i = child_idx(c >> vec3<u32>(zoom + (z + 1u)));
+world:954:shr:20	954	let i = child_idx(c << vec3<u32>(zoom - (z + 1u)));
+world:954:lit:45	954	let i = child_idx(c >> vec3<u32>(zoom - (z + 2u)));
+world:955:lit:9	955	var on = 1u;
+world:956:ne:11	956	if (blocks == 0u) {
+world:956:lit:14	956	if (blocks != 1u) {
+world:956:ift:0	956	if (true) {
+world:956:iff:0	956	if (false) {
+world:958:del:0	958	
+world:959:del:0	959	
+world:960:del:0	960	
+world:961:del:0	961	
+world:962:del:0	962	
+world:963:del:0	963	
+world:966:lit:22	966	tunnels_down(z, here, 1u, tunnels.x, on, i),
+ID300	0	
+world:967:lit:22	967	tunnels_down(z, here, 2u, tunnels.y, on, i),
+world:968:lit:22	968	tunnels_down(z, here, 3u, tunnels.z, on, i),
+world:969:lit:22	969	tunnels_down(z, here, 4u, tunnels.w, on, i),
+world:971:lit:29	971	last = tunnels_down(z, here, 5u, last, on, i);
+world:971:del:0	971	
+world:972:adda:2	972	z -= 1u;
+world:972:lit:5	972	z += 2u;
+world:972:del:0	972	
+world:984:add:79	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i - 8i - a;
+world:984:sub:84	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i + a;
+world:984:mul:73	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) + 16i + 8i - a;
+world:984:shr:39	984	let ap = vec3<i32>(i32(b & 3u), i32((b << 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:shr:60	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b << 4u) & 3u)) * 16i + 8i - a;
+world:984:band:24	984	let ap = vec3<i32>(i32(b | 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:band:45	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) | 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:band:66	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) | 3u)) * 16i + 8i - a;
+world:984:lit:27	984	let ap = vec3<i32>(i32(b & 4u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:lit:42	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 3u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:lit:48	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 4u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+world:984:lit:63	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 5u) & 3u)) * 16i + 8i - a;
+world:984:lit:69	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 4u)) * 16i + 8i - a;
+world:984:lit:76	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 17i + 8i - a;
+world:984:lit:82	984	let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 9i - a;
+world:987:eq:26	987	let one = select(l, 1i, l != 0i);
+world:987:sel:0	987	let one = select(1i, l, l == 0i);
+world:987:lit:20	987	let one = select(l, 2i, l == 0i);
+world:987:lit:29	987	let one = select(l, 1i, l == 1i);
+world:988:sub:14	988	var d = pp * l + t * t;
+world:988:mul:10	988	var d = pp + l - t * t;
+world:988:mul:18	988	var d = pp * l - t + t;
+world:989:le:6	989	if (t < 0i) {
+world:989:lit:9	989	if (t <= 1i) {
+world:989:ift:0	989	if (true) {
+world:989:iff:0	989	if (false) {
+world:990:mul:6	990	d = pp + one;
+world:990:del:0	990	
+world:991:ge:13	991	} else if (t > l) {
+world:991:ift:0	991	} else if (true) {
+world:991:iff:0	991	} else if (false) {
+world:992:add:16	992	d = (pp - 2i * t - l) * l;
+world:992:sub:7	992	d = (pp + 2i * t + l) * l;
+world:992:mul:12	992	d = (pp - 2i + t + l) * l;
+world:992:mul:21	992	d = (pp - 2i * t + l) + l;
+world:992:lit:10	992	d = (pp - 3i * t + l) * l;
+world:992:del:0	992	
+world:994:mul:14	994	var n = h ^ (b + 0x9e3779b9u);
+world:994:xor:9	994	var n = h & (b * 0x9e3779b9u);
+world:994:hex:17	994	var n = h ^ (b * 0x9e3779b8u);
+world:995:shr:7	995	n ^= n << 15u;
+world:995:lit:10	995	n ^= n >> 16u;
+world:995:del:0	995	
+world:996:hex:5	996	n *= 0x2c1b3c6cu;
+world:996:del:0	996	
+world:997:shr:7	997	n ^= n << 12u;
+world:997:lit:10	997	n ^= n >> 13u;
+world:997:del:0	997	
+world:998:add:8	998	return d - i32(n % CAVE_NUDGE) * one;
+world:998:mul:30	998	return d + i32(n % CAVE_NUDGE) + one;
+world:998:rem:16	998	return d + i32(n / CAVE_NUDGE) * one;
+world:433:sub:12	433	let s = zoom + clip;
+ID360	0	
+world:434:shr:36	434	return vec2<i32>(wrap_idx(clip, c.x << s), c.y >> s);
+world:434:shr:47	434	return vec2<i32>(wrap_idx(clip, c.x >> s), c.y << s);
+world:415:shl:36	415	return spread(at.x) | (spread(at.y) >> 1u);
+world:415:bor:19	415	return spread(at.x) & (spread(at.y) << 1u);
+world:415:lit:39	415	return spread(at.x) | (spread(at.y) << 2u);
+row:1214:add:18	1214	let at = ROW_SIZES - 3u * variant;
+row:1214:mul:23	1214	let at = ROW_SIZES + 3u + variant;
+row:1214:lit:21	1214	let at = ROW_SIZES + 4u * variant;
+row:1216:add:26	1216	let y = i32(row_word(k, at - 1u));
+row:1216:lit:29	1216	let y = i32(row_word(k, at + 2u));
+row:1217:add:26	1217	let z = i32(row_word(k, at - 2u));
+row:1217:lit:29	1217	let z = i32(row_word(k, at + 3u));
+row:1218:eq:66	1218	return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn & 1u) != 0u);
+row:1218:band:59	1218	return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn | 1u) == 0u);
+row:1218:sel:0	1218	return select(vec3<i32>(x, y, z), vec3<i32>(y, x, z), (turn & 1u) == 0u);
+row:1218:lit:62	1218	return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn & 2u) == 0u);
+row:1218:lit:69	1218	return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn & 1u) == 1u);
+world:249:shl:38	249	return u32((at.x & 1i) | ((at.y & 1i) >> 1u) | ((at.z & 1i) << 2u));
+world:249:shl:60	249	return u32((at.x & 1i) | ((at.y & 1i) << 1u) | ((at.z & 1i) >> 2u));
+world:249:band:16	249	return u32((at.x | 1i) | ((at.y & 1i) << 1u) | ((at.z & 1i) << 2u));
+world:249:band:31	249	return u32((at.x & 1i) | ((at.y | 1i) << 1u) | ((at.z & 1i) << 2u));
+world:249:band:53	249	return u32((at.x & 1i) | ((at.y & 1i) << 1u) | ((at.z | 1i) << 2u));
+world:249:bor:22	249	return u32((at.x & 1i) & ((at.y & 1i) << 1u) | ((at.z & 1i) << 2u));
+world:249:bor:44	249	return u32((at.x & 1i) | ((at.y & 1i) << 1u) & ((at.z & 1i) << 2u));
+world:249:lit:19	249	return u32((at.x & 2i) | ((at.y & 1i) << 1u) | ((at.z & 1i) << 2u));
+world:249:lit:34	249	return u32((at.x & 1i) | ((at.y & 2i) << 1u) | ((at.z & 1i) << 2u));
+world:249:lit:41	249	return u32((at.x & 1i) | ((at.y & 1i) << 2u) | ((at.z & 1i) << 2u));
+world:249:lit:56	249	return u32((at.x & 1i) | ((at.y & 1i) << 1u) | ((at.z & 2i) << 2u));
+world:249:lit:63	249	return u32((at.x & 1i) | ((at.y & 1i) << 1u) | ((at.z & 1i) << 3u));
+record:1177:add:21	1177	return s * HEAD_WORDS - CNT_AT + k;
+record:1177:add:30	1177	return s * HEAD_WORDS + CNT_AT - k;
+record:1177:mul:8	1177	return s + HEAD_WORDS + CNT_AT + k;
+world:176:ift:0	176	if (true) {
+world:176:iff:0	176	if (false) {
+world:177:ge:48	177	return Cover(min(under_fill + over, FULL), over > under_fill);
+world:177:min:13	177	return Cover(max(under_fill + over, FULL), over >= under_fill);
+world:177:add:27	177	return Cover(min(under_fill - over, FULL), over >= under_fill);
+world:179:mul:37	179	let taken = (over / (FULL / EIGHTHS)) + (FULL / EIGHTHS);
+world:179:div:17	179	let taken = (over * (FULL / EIGHTHS)) * (FULL / EIGHTHS);
+world:179:div:25	179	let taken = (over / (FULL * EIGHTHS)) * (FULL / EIGHTHS);
+world:179:div:45	179	let taken = (over / (FULL / EIGHTHS)) * (FULL * EIGHTHS);
+world:180:gt:50	180	return Cover(select(under_fill - taken, 0u, taken >= under_fill), false);
+world:180:sub:30	180	return Cover(select(under_fill + taken, 0u, taken > under_fill), false);
+world:180:f:65	180	return Cover(select(under_fill - taken, 0u, taken > under_fill), true);
+world:180:sel:0	180	return Cover(select(0u, under_fill - taken, taken > under_fill), false);
+world:180:lit:40	180	return Cover(select(under_fill - taken, 1u, taken > under_fill), false);
+world:268:gt:7	268	if (cz >= zoom) {
+world:268:ift:0	268	if (true) {
+world:268:iff:0	268	if (false) {
+world:269:f:7	269	return true;
+world:271:eq:48	271	return all(path(cz, at >> vec3<u32>(zoom - cz)) != path(cz, cut.xyz));
+world:271:sub:40	271	return all(path(cz, at >> vec3<u32>(zoom + cz)) == path(cz, cut.xyz));
+world:271:shr:23	271	return all(path(cz, at << vec3<u32>(zoom - cz)) == path(cz, cut.xyz));
+pose:1323:add:26	1323	let whole = list[THIN_ARGS - 2u];
+pose:1323:lit:29	1323	let whole = list[THIN_ARGS + 3u];
+pose:1324:ge:16	1324	let part = id.z > whole;
+pose:1325:add:30	1325	let pair = list[select(LIST_AT - id.z, LIST_WORDS - 1u - (id.z - whole), part)];
+pose:1325:sub:49	1325	let pair = list[select(LIST_AT + id.z, LIST_WORDS + 1u - (id.z - whole), part)];
+pose:1325:sub:54	1325	let pair = list[select(LIST_AT + id.z, LIST_WORDS - 1u + (id.z - whole), part)];
+pose:1325:sub:62	1325	let pair = list[select(LIST_AT + id.z, LIST_WORDS - 1u - (id.z + whole), part)];
+ID420	0	
+pose:1325:sel:0	1325	let pair = list[select(LIST_WORDS - 1u - (id.z - whole), LIST_AT + id.z, part)];
+pose:1325:lit:52	1325	let pair = list[select(LIST_AT + id.z, LIST_WORDS - 2u - (id.z - whole), part)];
+pose:1326:band:16	1326	let brick = pair | 0xffffu;
+pose:1326:hex:19	1326	let brick = pair & 0xfffeu;
+pose:1327:shr:14	1327	let j = (pair << 16u) & 0xffu;
+pose:1327:band:21	1327	let j = (pair >> 16u) | 0xffu;
+pose:1327:lit:17	1327	let j = (pair >> 17u) & 0xffu;
+pose:1327:hex:24	1327	let j = (pair >> 16u) & 0xfeu;
+pose:1328:ge:9	1328	if (id.x > min(records[cnt_at(brick, j)], decor_cap(j))) {
+pose:1328:min:12	1328	if (id.x >= max(records[cnt_at(brick, j)], decor_cap(j))) {
+pose:1328:ift:0	1328	if (true) {
+pose:1328:iff:0	1328	if (false) {
+pose:1332:add:21	1332	let cell = FIRST_CELL - brick / CLIP_ENTRIES;
+pose:1332:div:29	1332	let cell = FIRST_CELL + brick * CLIP_ENTRIES;
+pose:1333:add:34	1333	let leaf = vec2<i32>(i32(records[r - 1u]), i32(records[r + 2u]));
+pose:1333:add:56	1333	let leaf = vec2<i32>(i32(records[r + 1u]), i32(records[r - 2u]));
+pose:1333:lit:37	1333	let leaf = vec2<i32>(i32(records[r + 2u]), i32(records[r + 2u]));
+pose:1333:lit:59	1333	let leaf = vec2<i32>(i32(records[r + 1u]), i32(records[r + 3u]));
+pose:1334:and:9	1334	if (part || !is_changed(cell, leaf)) {
+pose:1334:lnot:12	1334	if (part && is_changed(cell, leaf)) {
+pose:1334:ift:0	1334	if (true) {
+pose:1334:iff:0	1334	if (false) {
+pose:1338:sub:17	1338	let s = LEAF_CELL + zoom;
+pose:1341:lit:8	1341	var z = 1i;
+pose:1342:lit:12	1342	var z_end = 1i;
+pose:1343:lit:11	1343	var kept = 1u;
+pose:1344:lit:14	1344	var variant = 1u;
+pose:1345:lit:11	1345	var turn = 1u;
+pose:1346:lit:11	1346	var flip = 1u;
+pose:1347:lit:13	1347	var voting = 1i;
+pose:1348:lit:17	1348	var horizontal = 1i;
+pose:1349:lit:15	1349	var vertical = 1i;
+pose:1350:lit:18	1350	var n = vec3<i32>(1i);
+pose:1351:lit:11	1351	var base = 1i;
+pose:1352:lit:10	1352	var ask = 1i;
+pose:1353:f:13	1353	var edited = true;
+pose:1355:eq:7	1355	if (at != AT_COLUMN) {
+pose:1355:ift:0	1355	if (true) {
+pose:1355:iff:0	1355	if (false) {
+pose:1356:sub:69	1356	let f = surface(asked, vec2<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL + asked)), leaf.y >> (LEAF_CELL - asked)));
+pose:1356:sub:101	1356	let f = surface(asked, vec2<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL - asked)), leaf.y >> (LEAF_CELL + asked)));
+pose:1356:shr:56	1356	let f = surface(asked, vec2<i32>(wrap_idx(asked, leaf.x << (LEAF_CELL - asked)), leaf.y >> (LEAF_CELL - asked)));
+pose:1356:shr:88	1356	let f = surface(asked, vec2<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL - asked)), leaf.y << (LEAF_CELL - asked)));
+pose:1357:eq:10	1357	if (f.how != SURFACE_NONE) {
+pose:1357:ift:0	1357	if (true) {
+pose:1357:iff:0	1357	if (false) {
+pose:1358:del:0	1358	
+pose:1361:del:0	1361	
+pose:1362:del:0	1362	
+pose:1363:del:0	1363	
+pose:1364:eq:35	1364	at = select(AT_WALK, AT_MET, f.how != SURFACE_MET);
+pose:1364:sel:0	1364	at = select(AT_MET, AT_WALK, f.how == SURFACE_MET);
+pose:1364:del:0	1364	
+pose:1366:eq:7	1366	if (at != AT_MET) {
+pose:1366:ift:0	1366	if (true) {
+pose:1366:iff:0	1366	if (false) {
+pose:1367:eq:10	1367	if (asked != cell) {
+pose:1367:ift:0	1367	if (true) {
+pose:1367:iff:0	1367	if (false) {
+pose:1368:sub:17	1368	let q = LEAF_CELL + cell;
+ID480	0	
+pose:1369:add:9	1369	records[r - 3u] = u32((z + 1i) * (1i << q));
+pose:1369:add:24	1369	records[r + 3u] = u32((z - 1i) * (1i << q));
+pose:1369:mul:30	1369	records[r + 3u] = u32((z + 1i) + (1i << q));
+pose:1369:shl:37	1369	records[r + 3u] = u32((z + 1i) * (1i >> q));
+pose:1369:lit:12	1369	records[r + 4u] = u32((z + 1i) * (1i << q));
+pose:1369:lit:27	1369	records[r + 3u] = u32((z + 2i) * (1i << q));
+pose:1369:lit:34	1369	records[r + 3u] = u32((z + 1i) * (2i << q));
+pose:1369:del:0	1369	
+pose:1370:add:9	1370	records[r - 4u] = u32(top_short(kept) * f32(1u << (q + FRAC_W)) + 0.5);
+pose:1370:add:52	1370	records[r + 4u] = u32(top_short(kept) * f32(1u << (q - FRAC_W)) + 0.5);
+pose:1370:add:63	1370	records[r + 4u] = u32(top_short(kept) * f32(1u << (q + FRAC_W)) - 0.5);
+pose:1370:mul:37	1370	records[r + 4u] = u32(top_short(kept) + f32(1u << (q + FRAC_W)) + 0.5);
+pose:1370:shl:47	1370	records[r + 4u] = u32(top_short(kept) * f32(1u >> (q + FRAC_W)) + 0.5);
+pose:1370:lit:12	1370	records[r + 5u] = u32(top_short(kept) * f32(1u << (q + FRAC_W)) + 0.5);
+pose:1370:lit:44	1370	records[r + 4u] = u32(top_short(kept) * f32(2u << (q + FRAC_W)) + 0.5);
+pose:1370:del:0	1370	
+pose:1372:ne:10	1372	if (asked == zoom) {
+pose:1372:ift:0	1372	if (true) {
+pose:1372:iff:0	1372	if (false) {
+pose:1373:del:0	1373	
+pose:1374:del:0	1374	
+pose:1375:del:0	1375	
+pose:1377:del:0	1377	
+pose:1378:lit:67	1378	let seed = draw(quad_seed(row_word(j, ROW_SEED), LEAF_CELL, leaf), 2u);
+pose:1379:lit:28	1379	variant = mul_hi(draw(seed, 1u), row_word(j, ROW_VARIANTS));
+pose:1379:del:0	1379	
+pose:1380:eq:33	1380	if (row_word(j, ROW_ORIENTATION) != ALONG_TRANSPORT) {
+pose:1380:ift:0	1380	if (true) {
+pose:1380:iff:0	1380	if (false) {
+pose:1381:shr:22	1381	flip = draw(seed, 1u) << 31u;
+pose:1381:lit:18	1381	flip = draw(seed, 2u) >> 31u;
+pose:1381:lit:25	1381	flip = draw(seed, 1u) >> 32u;
+pose:1381:del:0	1381	
+pose:1382:mul:11	1382	voting = 4i + ALIGN_NEIGHBOR_RADIUS;
+pose:1382:lit:9	1382	voting = 5i * ALIGN_NEIGHBOR_RADIUS;
+pose:1382:del:0	1382	
+pose:1384:sub:29	1384	turn = draw(seed, 1u) >> (32u + TURN_BITS);
+pose:1384:shr:22	1384	turn = draw(seed, 1u) << (32u - TURN_BITS);
+pose:1384:lit:18	1384	turn = draw(seed, 2u) >> (32u - TURN_BITS);
+pose:1384:lit:26	1384	turn = draw(seed, 1u) >> (33u - TURN_BITS);
+pose:1384:del:0	1384	
+pose:1386:del:0	1386	
+pose:1388:lit:18	1388	var c = vec3<i32>(1i);
+pose:1393:shr:26	1393	let foot = vec3<i32>(leaf << vec2<u32>(s), base);
+pose:1394:ge:16	1394	let voted = ask > voting;
+pose:1395:sub:11	1395	let e = ask + voting * i32(voted);
+pose:1395:mul:20	1395	let e = ask - voting + i32(voted);
+pose:1396:eq:7	1396	if (at != AT_WALK) {
+pose:1396:ift:0	1396	if (true) {
+pose:1396:iff:0	1396	if (false) {
+pose:1397:del:0	1397	
+pose:1398:sub:50	1398	c = vec3<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL + asked)), leaf.y >> (LEAF_CELL - asked), z);
+pose:1398:sub:82	1398	c = vec3<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL - asked)), leaf.y >> (LEAF_CELL + asked), z);
+pose:1398:shr:37	1398	c = vec3<i32>(wrap_idx(asked, leaf.x << (LEAF_CELL - asked)), leaf.y >> (LEAF_CELL - asked), z);
+pose:1398:shr:69	1398	c = vec3<i32>(wrap_idx(asked, leaf.x >> (LEAF_CELL - asked)), leaf.y << (LEAF_CELL - asked), z);
+pose:1398:del:0	1398	
+pose:1399:lnot:11	1399	} else if (voted) {
+pose:1399:ift:0	1399	} else if (true) {
+pose:1399:iff:0	1399	} else if (false) {
+pose:1400:add:16	1400	let d = ask / 4i - 1i;
+ID540	0	
+pose:1400:div:11	1400	let d = ask * 4i + 1i;
+pose:1400:lit:14	1400	let d = ask / 5i + 1i;
+pose:1400:lit:19	1400	let d = ask / 4i + 2i;
+pose:1401:eq:37	1401	let along = select(d, -d, (ask & 1i) != 0i);
+pose:1401:band:30	1401	let along = select(d, -d, (ask | 1i) == 0i);
+pose:1401:sel:0	1401	let along = select(-d, d, (ask & 1i) == 0i);
+pose:1401:lit:33	1401	let along = select(d, -d, (ask & 2i) == 0i);
+pose:1401:lit:40	1401	let along = select(d, -d, (ask & 1i) == 1i);
+pose:1402:eq:81	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 0i), (ask & 2i) != 0i);
+pose:1402:add:8	1402	c = foot - select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 0i), (ask & 2i) == 0i);
+pose:1402:band:74	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 0i), (ask | 2i) == 0i);
+pose:1402:sel:0	1402	c = foot + select(vec3<i32>(along, 0i, 0i), vec3<i32>(0i, along, 0i), (ask & 2i) == 0i);
+pose:1402:lit:28	1402	c = foot + select(vec3<i32>(1i, along, 0i), vec3<i32>(along, 0i, 0i), (ask & 2i) == 0i);
+pose:1402:lit:39	1402	c = foot + select(vec3<i32>(0i, along, 1i), vec3<i32>(along, 0i, 0i), (ask & 2i) == 0i);
+pose:1402:lit:61	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 1i, 0i), (ask & 2i) == 0i);
+pose:1402:lit:65	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 1i), (ask & 2i) == 0i);
+pose:1402:lit:77	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 0i), (ask & 3i) == 0i);
+pose:1402:lit:84	1402	c = foot + select(vec3<i32>(0i, along, 0i), vec3<i32>(along, 0i, 0i), (ask & 2i) == 1i);
+pose:1402:del:0	1402	
+pose:1404:eq:6	1404	if (e != 0i && !edited) {
+pose:1404:and:12	1404	if (e == 0i || !edited) {
+pose:1404:lnot:15	1404	if (e == 0i && edited) {
+pose:1404:lit:9	1404	if (e == 1i && !edited) {
+pose:1404:ift:0	1404	if (true) {
+pose:1404:iff:0	1404	if (false) {
+pose:1405:gt:11	1405	if (voting >= 0i) {
+pose:1405:lit:13	1405	if (voting > 1i) {
+pose:1405:ift:0	1405	if (true) {
+pose:1405:iff:0	1405	if (false) {
+pose:1406:gt:22	1406	turn = u32(horizontal >= vertical) + 2u * flip;
+pose:1406:add:33	1406	turn = u32(horizontal > vertical) - 2u * flip;
+pose:1406:mul:38	1406	turn = u32(horizontal > vertical) + 2u + flip;
+pose:1406:lit:36	1406	turn = u32(horizontal > vertical) + 3u * flip;
+pose:1406:del:0	1406	
+pose:1409:shl:14	1409	let side = 1i >> s;
+pose:1409:lit:11	1409	let side = 2i << s;
+pose:1410:add:19	1410	n = (vec3<i32>(leaf - size.xy - 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:add:41	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base - 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:add:54	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side - size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:add:93	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot - 1i;
+pose:1410:sub:29	1410	n = (vec3<i32>(leaf + size.xy + 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:sub:63	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z + 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:sub:86	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) + foot + 1i;
+pose:1410:mul:47	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) + side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:shr:70	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 1i) << vec3<u32>(s)) - foot + 1i;
+pose:1410:lit:32	1410	n = (vec3<i32>(leaf + size.xy - 2i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:lit:44	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 2i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:lit:66	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 2i) >> vec3<u32>(s)) - foot + 1i;
+pose:1410:lit:96	1410	n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 2i;
+pose:1410:del:0	1410	
+pose:1412:ge:6	1412	if (e > n.x * n.y * n.z) {
+pose:1412:mul:12	1412	if (e >= n.x + n.y * n.z) {
+pose:1412:mul:18	1412	if (e >= n.x * n.y + n.z) {
+pose:1412:ift:0	1412	if (true) {
+pose:1412:iff:0	1412	if (false) {
+pose:1413:del:0	1413	
+pose:1415:add:8	1415	c = foot - vec3<i32>((e / n.z) % n.x, e / (n.z * n.x), e % n.z);
+pose:1415:mul:46	1415	c = foot + vec3<i32>((e / n.z) % n.x, e / (n.z + n.x), e % n.z);
+pose:1415:div:23	1415	c = foot + vec3<i32>((e * n.z) % n.x, e / (n.z * n.x), e % n.z);
+pose:1415:div:39	1415	c = foot + vec3<i32>((e / n.z) % n.x, e * (n.z * n.x), e % n.z);
+ID600	0	
+pose:1415:rem:30	1415	c = foot + vec3<i32>((e / n.z) / n.x, e / (n.z * n.x), e % n.z);
+pose:1415:rem:56	1415	c = foot + vec3<i32>((e / n.z) % n.x, e / (n.z * n.x), e / n.z);
+pose:1415:del:0	1415	
+pose:1416:ift:0	1416	if (true) {
+pose:1416:iff:0	1416	if (false) {
+pose:1417:del:0	1417	
+pose:1418:del:0	1418	
+pose:1419:del:0	1419	
+pose:1420:eq:71	1420	if (!cut_holds(carve, zoom, c) && tree_val(PLACED, put, hide, zoom, c) != VALUE_VOID) {
+pose:1420:and:31	1420	if (!cut_holds(carve, zoom, c) || tree_val(PLACED, put, hide, zoom, c) == VALUE_VOID) {
+pose:1420:lnot:4	1420	if (cut_holds(carve, zoom, c) && tree_val(PLACED, put, hide, zoom, c) == VALUE_VOID) {
+pose:1420:ift:0	1420	if (true) {
+pose:1420:iff:0	1420	if (false) {
+pose:1421:f:9	1421	edited = true;
+pose:1421:del:0	1421	
+pose:1422:adda:4	1422	ask -= 1i;
+pose:1422:lit:7	1422	ask += 2i;
+pose:1422:del:0	1422	
+pose:1423:del:0	1423	
+pose:1428:eq:7	1428	if (at != AT_WALK) {
+pose:1428:ift:0	1428	if (true) {
+pose:1428:iff:0	1428	if (false) {
+pose:1429:ift:0	1429	if (true) {
+pose:1429:iff:0	1429	if (false) {
+pose:1430:del:0	1430	
+pose:1431:del:0	1431	
+pose:1433:suba:2	1433	z += 1i;
+pose:1433:lit:5	1433	z -= 2i;
+pose:1433:del:0	1433	
+pose:1434:lt:6	1434	if (z <= z_end) {
+pose:1434:ift:0	1434	if (true) {
+pose:1434:iff:0	1434	if (false) {
+pose:1435:del:0	1435	
+pose:1439:del:0	1439	
+pose:1441:ift:0	1441	if (true) {
+pose:1441:iff:0	1441	if (false) {
+pose:1442:ne:23	1442	if ((v & PLACED_ASSET) == 0u) {
+pose:1442:band:6	1442	if ((v | PLACED_ASSET) != 0u) {
+pose:1442:lit:26	1442	if ((v & PLACED_ASSET) != 1u) {
+pose:1442:ift:0	1442	if (true) {
+pose:1442:iff:0	1442	if (false) {
+pose:1443:del:0	1443	
+pose:1446:f:9	1446	edited = true;
+pose:1446:del:0	1446	
+pose:1447:ift:0	1447	} else if (true) {
+pose:1447:iff:0	1447	} else if (false) {
+pose:1448:eq:16	1448	let under = c.z != base;
+pose:1449:eq:15	1449	if (!(select(v != VALUE_VOID, allows(j, v & VAL_MASK), under))) {
+pose:1449:band:41	1449	if (!(select(v == VALUE_VOID, allows(j, v | VAL_MASK), under))) {
+pose:1449:lnot:4	1449	if ((select(v == VALUE_VOID, allows(j, v & VAL_MASK), under))) {
+pose:1449:sel:0	1449	if (!(select(allows(j, v & VAL_MASK), v == VALUE_VOID, under))) {
+pose:1449:ift:0	1449	if (true) {
+pose:1449:iff:0	1449	if (false) {
+pose:1450:del:0	1450	
+pose:1453:lnot:4	1453	if (under) {
+pose:1453:ift:0	1453	if (true) {
+pose:1453:iff:0	1453	if (false) {
+pose:1454:t:9	1454	edited = false;
+pose:1454:del:0	1454	
+pose:1455:del:0	1455	
+ID660	0	
+pose:1457:le:64	1457	} else if ((v & VAL_MASK) >= TRANSPORTS_FIRST && (v & VAL_MASK) < TRANSPORTS_LAST) {
+pose:1457:ge:26	1457	} else if ((v & VAL_MASK) > TRANSPORTS_FIRST && (v & VAL_MASK) <= TRANSPORTS_LAST) {
+pose:1457:and:46	1457	} else if ((v & VAL_MASK) >= TRANSPORTS_FIRST || (v & VAL_MASK) <= TRANSPORTS_LAST) {
+pose:1457:band:13	1457	} else if ((v | VAL_MASK) >= TRANSPORTS_FIRST && (v & VAL_MASK) <= TRANSPORTS_LAST) {
+pose:1457:band:51	1457	} else if ((v & VAL_MASK) >= TRANSPORTS_FIRST && (v | VAL_MASK) <= TRANSPORTS_LAST) {
+pose:1457:ift:0	1457	} else if (true) {
+pose:1457:iff:0	1457	} else if (false) {
+pose:1458:eq:15	1458	if ((ask & 2i) != 0i) {
+pose:1458:band:8	1458	if ((ask | 2i) == 0i) {
+pose:1458:lit:11	1458	if ((ask & 3i) == 0i) {
+pose:1458:lit:18	1458	if ((ask & 2i) == 1i) {
+pose:1458:ift:0	1458	if (true) {
+pose:1458:iff:0	1458	if (false) {
+pose:1459:adda:11	1459	horizontal -= 1i;
+pose:1459:lit:14	1459	horizontal += 2i;
+pose:1459:del:0	1459	
+pose:1461:adda:9	1461	vertical -= 1i;
+pose:1461:lit:12	1461	vertical += 2i;
+pose:1461:del:0	1461	
+pose:1464:adda:4	1464	ask -= 1i;
+pose:1464:lit:7	1464	ask += 2i;
+pose:1464:del:0	1464	
+pose:1466:add:24	1466	let at_z = i32(records[r - 3u]);
+pose:1466:lit:27	1466	let at_z = i32(records[r + 4u]);
+pose:1467:ift:0	1467	if (true) {
+pose:1467:iff:0	1467	if (false) {
+pose:1468:del:0	1468	
+pose:1470:del:0	1470	
+row:1205:add:20	1205	return seed_mix(seed - n * SEED_SALT, 0u);
+row:1205:mul:24	1205	return seed_mix(seed + n + SEED_SALT, 0u);
+row:1205:lit:38	1205	return seed_mix(seed + n * SEED_SALT, 1u);
+world:169:min:7	169	return max(fill / (FULL / EIGHTHS), EIGHTHS);
+world:169:div:15	169	return min(fill * (FULL / EIGHTHS), EIGHTHS);
+world:169:div:23	169	return min(fill / (FULL * EIGHTHS), EIGHTHS);
+record:1180:add:15	1180	return SLOTS_AT - (s * BRICK_RECORDS + decor_first_record(k) + i) * RECORD_WORDS;
+record:1180:add:36	1180	return SLOTS_AT + (s * BRICK_RECORDS - decor_first_record(k) + i) * RECORD_WORDS;
+record:1180:add:60	1180	return SLOTS_AT + (s * BRICK_RECORDS + decor_first_record(k) - i) * RECORD_WORDS;
+record:1180:mul:20	1180	return SLOTS_AT + (s + BRICK_RECORDS + decor_first_record(k) + i) * RECORD_WORDS;
+record:1180:mul:65	1180	return SLOTS_AT + (s * BRICK_RECORDS + decor_first_record(k) + i) + RECORD_WORDS;
+pose:1315:lt:14	1315	return bitcast<=vec4<i32>>(eye[k / 4u]);
+pose:1315:div:31	1315	return bitcast<vec4<i32>>(eye[k * 4u]);
+pose:1315:lit:34	1315	return bitcast<vec4<i32>>(eye[k / 5u]);
+world:579:ge:9	579	if (cell > LEAF_CELL) {
+world:579:ift:0	579	if (true) {
+world:579:iff:0	579	if (false) {
+world:580:sub:17	580	return t >> (cell + LEAF_CELL);
+world:580:shr:9	580	return t << (cell - LEAF_CELL);
+world:582:sub:22	582	return t << (LEAF_CELL + cell);
+world:582:shl:9	582	return t >> (LEAF_CELL - cell);
+pose:1474:sub:40	1474	let k = (asset >> FILL_SHIFT) & (EIGHTHS + 1u);
+pose:1474:shr:15	1474	let k = (asset << FILL_SHIFT) & (EIGHTHS - 1u);
+pose:1474:band:29	1474	let k = (asset >> FILL_SHIFT) | (EIGHTHS - 1u);
+pose:1474:lit:43	1474	let k = (asset >> FILL_SHIFT) & (EIGHTHS - 2u);
+pose:1475:eq:28	1475	return select(k, EIGHTHS, k != 0u);
+pose:1475:sel:0	1475	return select(EIGHTHS, k, k == 0u);
+pose:1475:lit:31	1475	return select(k, EIGHTHS, k == 1u);
+world:289:ift:0	289	if (true) {
+world:289:iff:0	289	if (false) {
+world:290:shr:27	290	return tree_data(PLACED, s << SLOT_SHIFT) >> 16u;
+world:290:shr:42	290	return tree_data(PLACED, s >> SLOT_SHIFT) << 16u;
+ID720	0	
+world:290:lit:45	290	return tree_data(PLACED, s >> SLOT_SHIFT) >> 17u;
+world:165:band:13	165	let v = asset | VAL_MASK;
+world:166:ne:9	166	return v == VALUE_VOID && v != VALUE_AIR;
+world:166:ne:28	166	return v != VALUE_VOID && v == VALUE_AIR;
+world:166:and:23	166	return v != VALUE_VOID || v != VALUE_AIR;
+world:216:eq:9	216	if (tree != WAYS) {
+world:216:ift:0	216	if (true) {
+world:216:iff:0	216	if (false) {
+world:183:shl:14	183	return v | (v >> 8u) | (v << 16u) | (v << 24u);
+world:183:shl:26	183	return v | (v << 8u) | (v >> 16u) | (v << 24u);
+world:183:shl:39	183	return v | (v << 8u) | (v << 16u) | (v >> 24u);
+world:183:bor:8	183	return v & (v << 8u) | (v << 16u) | (v << 24u);
+world:183:bor:20	183	return v | (v << 8u) & (v << 16u) | (v << 24u);
+world:183:bor:33	183	return v | (v << 8u) | (v << 16u) & (v << 24u);
+world:183:lit:17	183	return v | (v << 9u) | (v << 16u) | (v << 24u);
+world:183:lit:29	183	return v | (v << 8u) | (v << 17u) | (v << 24u);
+world:183:lit:42	183	return v | (v << 8u) | (v << 16u) | (v << 25u);
+world:693:ift:0	693	if (true) {
+world:693:iff:0	693	if (false) {
+world:694:lt:50	694	let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z <= SEA_LEVEL);
+world:694:sel:0	694	let earth = select(VALUE_UNKNOWN, VALUE_VOID, c.z < SEA_LEVEL);
+world:695:lit:47	695	return ground_none(KIND_CELL, vec2<u32>(earth, 1u), LOOKUP_NONE);
+world:697:lt:9	697	if (zoom <= TOP_ZOOM) {
+world:697:ift:0	697	if (true) {
+world:697:iff:0	697	if (false) {
+world:701:lnot:4	701	if (r.here) {
+world:701:ift:0	701	if (true) {
+world:701:iff:0	701	if (false) {
+world:702:lit:53	702	return ground_none(KIND_LACKS, vec2<u32>(VALUE_VOID, 1u), r.place);
+world:706:eq:20	706	if (col.palette_idx != VALUE_UNKNOWN || grounds(col.palette_idx)) {
+world:706:or:37	706	if (col.palette_idx == VALUE_UNKNOWN && grounds(col.palette_idx)) {
+world:706:ift:0	706	if (true) {
+world:706:iff:0	706	if (false) {
+world:707:del:0	707	
+world:709:lit:11	709	var cave = 1u;
+world:710:ne:10	710	if (asset == VALUE_VOID && opens(col, zoom, c.z)) {
+world:710:and:24	710	if (asset != VALUE_VOID || opens(col, zoom, c.z)) {
+world:710:ift:0	710	if (true) {
+world:710:iff:0	710	if (false) {
+world:711:del:0	711	
+world:547:lit:11	547	var fold = 1u;
+world:548:lit:13	548	var column = 1u;
+world:550:ift:0	550	if (true) {
+world:550:iff:0	550	if (false) {
+world:553:mul:15	553	let base = slot + BRICK_WORDS;
+world:554:add:38	554	fold = palette_word(slot * BRICK_CELLS - i);
+world:554:mul:24	554	fold = palette_word(slot + BRICK_CELLS + i);
+world:554:del:0	554	
+world:555:add:20	555	column = ground[base - COLUMNS_AT + i];
+world:555:add:33	555	column = ground[base + COLUMNS_AT - i];
+world:555:del:0	555	
+world:556:add:18	556	own = (ground[base - LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
+world:556:add:28	556	own = (ground[base + LAID_AT - i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
+world:556:mul:53	556	own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u + (i % LAID_CELLS))) & 0xffu;
+world:556:div:32	556	own = (ground[base + LAID_AT + i * LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
+world:556:rem:58	556	own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i / LAID_CELLS))) & 0xffu;
+world:556:shr:47	556	own = (ground[base + LAID_AT + i / LAID_CELLS] << (8u * (i % LAID_CELLS))) & 0xffu;
+world:556:band:74	556	own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) | 0xffu;
+world:556:lit:51	556	own = (ground[base + LAID_AT + i / LAID_CELLS] >> (9u * (i % LAID_CELLS))) & 0xffu;
+world:556:hex:77	556	own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xfeu;
+ID780	0	
+world:556:del:0	556	
+world:558:shr:40	558	let t = top_of(zoom, i32(column << 16u) << 16u);
+world:558:shl:32	558	let t = top_of(zoom, i32(column >> 16u) >> 16u);
+world:558:lit:35	558	let t = top_of(zoom, i32(column << 17u) >> 16u);
+world:558:lit:43	558	let t = top_of(zoom, i32(column << 16u) >> 17u);
+world:559:sel:0	559	return Cell(select(VALUE_UNKNOWN, own, is_wall(shard, zoom, b)), t.cells, t.part, fold);
+world:690:lit:43	690	return GroundCell(kind, asset, VALUE_VOID, 1i, FULL, 0u, place);
+world:690:lit:53	690	return GroundCell(kind, asset, VALUE_VOID, 0i, FULL, 1u, place);
+world:159:le:31	159	return v >= GROUNDS_FIRST && v < GROUNDS_LAST;
+world:159:ge:9	159	return v > GROUNDS_FIRST && v <= GROUNDS_LAST;
+world:159:and:26	159	return v >= GROUNDS_FIRST || v <= GROUNDS_LAST;
+world:759:mul:14	759	let scaled = n + (w >> 16u);
+world:759:shr:20	759	let scaled = n * (w << 16u);
+world:759:lit:23	759	let scaled = n * (w >> 17u);
+world:760:gt:52	760	let part = (scaled >> 16u) + u32((scaled & 0xffffu) >= (w & 0xffffu));
+world:760:add:26	760	let part = (scaled >> 16u) - u32((scaled & 0xffffu) > (w & 0xffffu));
+world:760:shr:19	760	let part = (scaled << 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));
+world:760:band:40	760	let part = (scaled >> 16u) + u32((scaled | 0xffffu) > (w & 0xffffu));
+world:760:band:56	760	let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w | 0xffffu));
+world:760:lit:22	760	let part = (scaled >> 17u) + u32((scaled & 0xffffu) > (w & 0xffffu));
+world:760:hex:43	760	let part = (scaled >> 16u) + u32((scaled & 0xfffeu) > (w & 0xffffu));
+world:760:hex:59	760	let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xfffeu));
+world:761:gt:37	761	let least = select(0u, n - room_1, n >= room_1);
+world:761:sub:24	761	let least = select(0u, n + room_1, n > room_1);
+world:761:sel:0	761	let least = select(n - room_1, 0u, n > room_1);
+world:761:lit:19	761	let least = select(1u, n - room_1, n > room_1);
+world:762:lt:9	762	if (part <= least) {
+world:762:ift:0	762	if (true) {
+world:762:iff:0	762	if (false) {
+world:765:min:7	765	return max(part, min(n, room_0));
+world:765:min:17	765	return min(part, max(n, room_0));
+world:835:add:44	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) - (1i << (CAVE_PIPE - zoom)) / 2i;
+world:835:sub:35	835	let mid = (c << vec3<u32>(CAVE_PIPE + zoom)) + (1i << (CAVE_PIPE - zoom)) / 2i;
+world:835:sub:64	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE + zoom)) / 2i;
+world:835:div:73	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE - zoom)) * 2i;
+world:835:shl:13	835	let mid = (c >> vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE - zoom)) / 2i;
+world:835:shl:51	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i >> (CAVE_PIPE - zoom)) / 2i;
+world:835:lit:48	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (2i << (CAVE_PIPE - zoom)) / 2i;
+world:835:lit:76	835	let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE - zoom)) / 3i;
+world:836:ge:20	836	let u = u32(enter.x > mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
+world:836:ge:45	836	let u = u32(enter.x >= mid.x) | (u32(enter.y > mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
+world:836:ge:77	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z > mid.z) << 2u);
+world:836:shl:55	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) >> 1u) | (u32(enter.z >= mid.z) << 2u);
+world:836:shl:87	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) >> 2u);
+world:836:bor:29	836	let u = u32(enter.x >= mid.x) & (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
+world:836:bor:61	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) & (u32(enter.z >= mid.z) << 2u);
+world:836:lit:58	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 2u) | (u32(enter.z >= mid.z) << 2u);
+world:836:lit:90	836	let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 3u);
+world:837:ge:20	837	let v = u32(leave.x > mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+world:837:ge:45	837	let v = u32(leave.x >= mid.x) | (u32(leave.y > mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+world:837:ge:77	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z > mid.z) << 2u);
+world:837:shl:55	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) >> 1u) | (u32(leave.z >= mid.z) << 2u);
+world:837:shl:87	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) >> 2u);
+world:837:bor:29	837	let v = u32(leave.x >= mid.x) & (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+world:837:bor:61	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) & (u32(leave.z >= mid.z) << 2u);
+world:837:lit:58	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 2u) | (u32(leave.z >= mid.z) << 2u);
+world:837:lit:90	837	let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 3u);
+world:839:xor:9	839	let d = u & v;
+world:840:add:30	840	let n = select(countOneBits(d) - 1u, 4u, is_aside(d, wh));
+world:840:sel:0	840	let n = select(4u, countOneBits(d) + 1u, is_aside(d, wh));
+ID840	0	
+world:840:lit:33	840	let n = select(countOneBits(d) + 2u, 4u, is_aside(d, wh));
+world:840:lit:37	840	let n = select(countOneBits(d) + 1u, 5u, is_aside(d, wh));
+world:841:lit:9	841	var on = 1u;
+world:842:lit:27	842	var want_enter = vec3<i32>(1i);
+world:843:lit:27	843	var want_leave = vec3<i32>(1i);
+world:844:lit:14	844	var want_in = 7u;
+world:845:lit:15	845	var want_out = 7u;
+world:846:lit:9	846	var at = 9u;
+world:847:lit:22	847	var cells = vec4<u32>(1u);
+world:850:lt:19	850	for (var i = 0u; i <= n; i += 1u) {
+world:850:adda:26	850	for (var i = 0u; i < n; i -= 1u) {
+world:850:lit:13	850	for (var i = 1u; i < n; i += 1u) {
+world:850:lit:29	850	for (var i = 0u; i < n; i += 2u) {
+world:852:shl:9	852	on |= 1u >> k;
+world:852:ora:3	852	on &= 1u << k;
+world:852:lit:6	852	on |= 2u << k;
+world:852:del:0	852	
+world:857:lt:11	857	if (i + 1u <= n) {
+world:857:add:5	857	if (i - 1u < n) {
+world:857:lit:8	857	if (i + 2u < n) {
+world:857:ift:0	857	if (true) {
+world:857:iff:0	857	if (false) {
+world:858:sub:28	858	let half = (1i << (CAVE_PIPE + zoom)) / 2i;
+world:858:div:37	858	let half = (1i << (CAVE_PIPE - zoom)) * 2i;
+world:858:shl:15	858	let half = (1i >> (CAVE_PIPE - zoom)) / 2i;
+world:858:lit:12	858	let half = (2i << (CAVE_PIPE - zoom)) / 2i;
+world:858:lit:40	858	let half = (1i << (CAVE_PIPE - zoom)) / 3i;
+world:859:add:43	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) - half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:sub:34	859	let co = (c << vec3<u32>(CAVE_PIPE + zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:mul:50	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half + vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:shr:83	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k << 1u) & 1u), i32(k >> 2u));
+world:859:shr:103	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k << 2u));
+world:859:shl:12	859	let co = (c >> vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:band:68	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k | 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:band:89	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) | 1u), i32(k >> 2u));
+world:859:lit:71	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 2u), i32((k >> 1u) & 1u), i32(k >> 2u));
+world:859:lit:86	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 2u) & 1u), i32(k >> 2u));
+world:859:lit:92	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 2u), i32(k >> 2u));
+world:859:lit:106	859	let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 3u));
+world:860:add:32	860	let next = tunnel_at(u, v, wh, i - 1u);
+world:860:lit:35	860	let next = tunnel_at(u, v, wh, i + 2u);
+world:861:xor:31	861	let axis = countTrailingZeros(k & next);
+world:862:eq:31	862	let up = ((next >> axis) & 1u) != 1u;
+world:862:shr:16	862	let up = ((next << axis) & 1u) == 1u;
+world:862:band:24	862	let up = ((next >> axis) | 1u) == 1u;
+world:862:lit:27	862	let up = ((next >> axis) & 2u) == 1u;
+world:862:lit:34	862	let up = ((next >> axis) & 1u) == 2u;
+world:863:xor:32	863	let h = node_seed(CAVE_TAG_CROSS & i, zoom, c);
+world:864:shr:36	864	let rand = vec3<i32>(vec3<u32>(h, h << 10u, h >> 20u) & vec3<u32>(0x3ffu));
+world:864:shr:46	864	let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h << 20u) & vec3<u32>(0x3ffu));
+world:864:band:53	864	let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) | vec3<u32>(0x3ffu));
+world:864:lit:39	864	let rand = vec3<i32>(vec3<u32>(h, h >> 11u, h >> 20u) & vec3<u32>(0x3ffu));
+world:864:lit:49	864	let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 21u) & vec3<u32>(0x3ffu));
+world:864:hex:66	864	let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3feu));
+world:865:add:14	865	let was = (cur - leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
+world:865:add:28	865	let was = (cur + leave) / 2i - (rand * (half / 2i + 1i)) / 1024i - half / 4i;
+world:865:add:49	865	let was = (cur + leave) / 2i + (rand * (half / 2i - 1i)) / 1024i - half / 4i;
+world:865:sub:64	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i + half / 4i;
+world:865:mul:36	865	let was = (cur + leave) / 2i + (rand + (half / 2i + 1i)) / 1024i - half / 4i;
+world:865:div:23	865	let was = (cur + leave) * 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
+ID900	0	
+world:865:div:44	865	let was = (cur + leave) / 2i + (rand * (half * 2i + 1i)) / 1024i - half / 4i;
+world:865:div:56	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) * 1024i - half / 4i;
+world:865:div:71	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half * 4i;
+world:865:lit:26	865	let was = (cur + leave) / 3i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
+world:865:lit:47	865	let was = (cur + leave) / 2i + (rand * (half / 3i + 1i)) / 1024i - half / 4i;
+world:865:lit:52	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 2i)) / 1024i - half / 4i;
+world:865:lit:59	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1025i - half / 4i;
+world:865:lit:74	865	let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 5i;
+world:866:add:30	866	part_leave = clamp(was, co, co - half - 1i);
+world:866:sub:37	866	part_leave = clamp(was, co, co + half + 1i);
+world:866:lit:40	866	part_leave = clamp(was, co, co + half - 2i);
+world:866:del:0	866	
+world:867:add:44	867	part_leave[axis] = select(co[axis], co[axis] - half - 1i, up);
+world:867:sub:51	867	part_leave[axis] = select(co[axis], co[axis] + half + 1i, up);
+world:867:sel:0	867	part_leave[axis] = select(co[axis] + half - 1i, co[axis], up);
+world:867:lit:54	867	part_leave[axis] = select(co[axis], co[axis] + half - 2i, up);
+world:867:del:0	867	
+world:868:add:20	868	part_out = 2u * axis - u32(up);
+world:868:mul:13	868	part_out = 2u + axis + u32(up);
+world:868:lit:11	868	part_out = 3u * axis + u32(up);
+world:868:del:0	868	
+world:869:del:0	869	
+world:870:adda:10	870	cur[axis] -= select(-1i, 1i, up);
+world:870:sel:0	870	cur[axis] += select(1i, -1i, up);
+world:870:lit:21	870	cur[axis] += select(-2i, 1i, up);
+world:870:lit:25	870	cur[axis] += select(-1i, 2i, up);
+world:870:del:0	870	
+world:871:add:16	871	side = 2u * axis - u32(!up);
+world:871:mul:9	871	side = 2u + axis + u32(!up);
+world:871:lnot:23	871	side = 2u * axis + u32(up);
+world:871:lit:7	871	side = 3u * axis + u32(!up);
+world:871:del:0	871	
+world:873:add:44	873	cells[i] = manhattan(part_enter, part_leave) - 1u;
+world:873:lit:47	873	cells[i] = manhattan(part_enter, part_leave) + 2u;
+world:873:del:0	873	
+world:874:eq:6	874	if (k != want) {
+world:874:ift:0	874	if (true) {
+world:874:iff:0	874	if (false) {
+world:875:del:0	875	
+world:876:del:0	876	
+world:877:del:0	877	
+world:878:del:0	878	
+world:879:del:0	879	
+world:882:lit:18	882	var want_blocks = 1u;
+world:883:add:18	883	var rest = cells.x - cells.y + cells.z + cells.w;
+world:883:add:28	883	var rest = cells.x + cells.y - cells.z + cells.w;
+world:883:add:38	883	var rest = cells.x + cells.y + cells.z - cells.w;
+world:885:lt:19	885	for (var i = 0u; i <= n && i <= at; i += 1u) {
+world:885:le:28	885	for (var i = 0u; i < n && i < at; i += 1u) {
+world:885:and:23	885	for (var i = 0u; i < n || i <= at; i += 1u) {
+world:885:adda:37	885	for (var i = 0u; i < n && i <= at; i -= 1u) {
+world:885:lit:13	885	for (var i = 1u; i < n && i <= at; i += 1u) {
+world:885:lit:40	885	for (var i = 0u; i < n && i <= at; i += 2u) {
+world:887:suba:5	887	rest += cnt;
+world:887:del:0	887	
+world:888:min:13	888	let weight = max((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
+world:888:max:32	888	let weight = min((cnt << 16u) / min(cnt + rest, 1u), 0xffffu);
+world:888:add:39	888	let weight = min((cnt << 16u) / max(cnt - rest, 1u), 0xffffu);
+world:888:div:29	888	let weight = min((cnt << 16u) * max(cnt + rest, 1u), 0xffffu);
+world:888:shl:22	888	let weight = min((cnt >> 16u) / max(cnt + rest, 1u), 0xffffu);
+ID960	0	
+world:888:lit:25	888	let weight = min((cnt << 17u) / max(cnt + rest, 1u), 0xffffu);
+world:888:lit:48	888	let weight = min((cnt << 16u) / max(cnt + rest, 2u), 0xffffu);
+world:888:hex:53	888	let weight = min((cnt << 16u) / max(cnt + rest, 1u), 0xfffeu);
+world:889:add:95	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i - 3u) & 0xffffu));
+world:889:mul:25	889	let got = halve(left, cnt + CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 3u) & 0xffffu));
+world:889:mul:45	889	let got = halve(left, cnt * CELL_BLOCKS, rest + CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 3u) & 0xffffu));
+world:889:mul:91	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u + i + 3u) & 0xffffu));
+world:889:shl:69	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight >> 16u) | (rotl(wh, 7u * i + 3u) & 0xffffu));
+world:889:band:101	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 3u) | 0xffffu));
+world:889:bor:76	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) & (rotl(wh, 7u * i + 3u) & 0xffffu));
+world:889:lit:72	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 17u) | (rotl(wh, 7u * i + 3u) & 0xffffu));
+world:889:lit:89	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 8u * i + 3u) & 0xffffu));
+world:889:lit:98	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 4u) & 0xffffu));
+world:889:hex:104	889	let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 3u) & 0xfffeu));
+world:890:eq:6	890	if (i != at) {
+world:890:ift:0	890	if (true) {
+world:890:iff:0	890	if (false) {
+world:891:del:0	891	
+world:893:suba:5	893	left += got;
+world:893:del:0	893	
+world:479:add:30	479	let origin = clipmap[ORIGIN_AT - cell - FIRST_CELL];
+world:479:sub:37	479	let origin = clipmap[ORIGIN_AT + cell + FIRST_CELL];
+world:480:eq:13	480	if (origin.z != 0i) {
+world:480:lit:16	480	if (origin.z == 1i) {
+world:480:ift:0	480	if (true) {
+world:480:iff:0	480	if (false) {
+world:481:t:37	481	return NodeBound(BOUNDS_EMPTY, cell, false, false, place);
+world:481:f:43	481	return NodeBound(BOUNDS_EMPTY, cell, true, true, place);
+world:483:shr:44	483	let q = vec2<i32>(wrap_idx(cell, g.x), g.y) << vec2<u32>(BRICK_SHIFT);
+world:484:sub:31	484	let d = vec2<i32>(wrap_idx(cell + BRICK_SHIFT, q.x - origin.x), q.y - origin.y);
+world:484:sub:50	484	let d = vec2<i32>(wrap_idx(cell - BRICK_SHIFT, q.x + origin.x), q.y - origin.y);
+world:484:sub:67	484	let d = vec2<i32>(wrap_idx(cell - BRICK_SHIFT, q.x - origin.x), q.y + origin.y);
+world:485:shl:14	485	let side = 1i >> l;
+world:485:lit:11	485	let side = 2i << l;
+world:487:le:49	487	if (d.x >= across || d.y >= across || d.x + side < 0i || d.y + side <= 0i) {
+world:487:le:69	487	if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side < 0i) {
+world:487:ge:8	487	if (d.x > across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
+world:487:ge:25	487	if (d.x >= across || d.y > across || d.x + side <= 0i || d.y + side <= 0i) {
+world:487:or:18	487	if (d.x >= across && d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
+world:487:or:35	487	if (d.x >= across || d.y >= across && d.x + side <= 0i || d.y + side <= 0i) {
+world:487:or:55	487	if (d.x >= across || d.y >= across || d.x + side <= 0i && d.y + side <= 0i) {
+world:487:add:41	487	if (d.x >= across || d.y >= across || d.x - side <= 0i || d.y + side <= 0i) {
+world:487:add:61	487	if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y - side <= 0i) {
+world:487:lit:52	487	if (d.x >= across || d.y >= across || d.x + side <= 1i || d.y + side <= 0i) {
+world:487:lit:72	487	if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 1i) {
+world:487:ift:0	487	if (true) {
+world:487:iff:0	487	if (false) {
+world:488:t:37	488	return NodeBound(BOUNDS_EMPTY, cell, false, false, place);
+world:488:f:43	488	return NodeBound(BOUNDS_EMPTY, cell, true, true, place);
+world:490:min:12	490	let level = max(l, JOINED_LEVELS);
+world:491:sub:39	491	let at = vec2<u32>(q & vec2<i32>(across + 1i)) >> vec2<u32>(level);
+world:491:shr:47	491	let at = vec2<u32>(q & vec2<i32>(across - 1i)) << vec2<u32>(level);
+world:491:band:20	491	let at = vec2<u32>(q | vec2<i32>(across - 1i)) >> vec2<u32>(level);
+world:491:lit:42	491	let at = vec2<u32>(q & vec2<i32>(across - 2i)) >> vec2<u32>(level);
+world:492:sub:28	492	let under = ACROSS >> (level + 1u);
+world:492:shr:19	492	let under = ACROSS << (level - 1u);
+world:492:lit:31	492	let under = ACROSS >> (level - 2u);
+world:493:add:25	493	let e = clipmap[JOINED_AT - (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 3u + cell_id(at)];
+world:493:add:64	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES - (ACROSS * ACROSS - under * under) / 3u + cell_id(at)];
+world:493:add:105	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 3u - cell_id(at)];
+ID1020	0	
+world:493:sub:33	493	let e = clipmap[JOINED_AT + (cell + FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 3u + cell_id(at)];
+world:493:sub:83	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS + under * under) / 3u + cell_id(at)];
+world:493:mul:47	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) + JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 3u + cell_id(at)];
+world:493:mul:74	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS + ACROSS - under * under) / 3u + cell_id(at)];
+world:493:mul:91	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under + under) / 3u + cell_id(at)];
+world:493:div:100	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) * 3u + cell_id(at)];
+world:493:lit:103	493	let e = clipmap[JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + (ACROSS * ACROSS - under * under) / 4u + cell_id(at)];
+world:494:ne:13	494	if (u32(e.x) == (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+world:494:ne:58	494	if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) == (u32(origin.y) ^ 0x80000000u)) {
+world:494:or:46	494	if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) && u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+world:494:xor:30	494	if (u32(e.x) != (u32(origin.x) & 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+world:494:xor:75	494	if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) & 0x80000000u)) {
+world:494:hex:33	494	if (u32(e.x) != (u32(origin.x) ^ 0x80000001u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+world:494:hex:78	494	if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000001u)) {
+world:494:ift:0	494	if (true) {
+world:494:iff:0	494	if (false) {
+world:495:t:36	495	return NodeBound(BOUNDS_OPEN, cell, false, true, place);
+world:495:t:42	495	return NodeBound(BOUNDS_OPEN, cell, true, false, place);
+world:498:le:72	498	return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side < vec2<i32>(across)), place);
+world:498:ge:38	498	return NodeBound(b, cell, true, all(d > vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
+world:498:and:56	498	return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) || all(d + side <= vec2<i32>(across)), place);
+world:498:add:64	498	return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d - side <= vec2<i32>(across)), place);
+world:498:t:26	498	return NodeBound(b, cell, false, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
+world:498:lit:51	498	return NodeBound(b, cell, true, all(d >= vec2<i32>(1i)) && all(d + side <= vec2<i32>(across)), place);
+world:1047:gt:9	1047	if (zoom >= LEAF_CELL) {
+world:1047:ift:0	1047	if (true) {
+world:1047:iff:0	1047	if (false) {
+world:1048:sub:23	1048	c = c >> vec3<u32>(zoom + LEAF_CELL);
+world:1048:shr:6	1048	c = c << vec3<u32>(zoom - LEAF_CELL);
+world:1048:del:0	1048	
+world:1049:del:0	1049	
+world:1052:le:9	1052	if (zoom < CAVE_ROOT) {
+world:1052:ift:0	1052	if (true) {
+world:1052:iff:0	1052	if (false) {
+world:1053:del:0	1053	
+world:1055:del:0	1055	
+world:1057:add:14	1057	let shift = 3i - i32(FULL_BITS) - 3i * i32(LEAF_CELL - zoom);
+world:1057:sub:31	1057	let shift = 3i + i32(FULL_BITS) + 3i * i32(LEAF_CELL - zoom);
+world:1057:sub:52	1057	let shift = 3i + i32(FULL_BITS) - 3i * i32(LEAF_CELL + zoom);
+world:1057:mul:36	1057	let shift = 3i + i32(FULL_BITS) - 3i + i32(LEAF_CELL - zoom);
+world:1057:lit:12	1057	let shift = 4i + i32(FULL_BITS) - 3i * i32(LEAF_CELL - zoom);
+world:1057:lit:34	1057	let shift = 3i + i32(FULL_BITS) - 4i * i32(LEAF_CELL - zoom);
+world:1058:ge:10	1058	if (shift > 0i) {
+world:1058:lit:13	1058	if (shift >= 1i) {
+world:1058:ift:0	1058	if (true) {
+world:1058:iff:0	1058	if (false) {
+world:1059:min:7	1059	return max(n << u32(shift), FULL);
+world:1059:shl:13	1059	return min(n >> u32(shift), FULL);
+world:1061:shr:9	1061	return n << u32(-shift);
+world:805:eq:34	805	return d != 0u && countOneBits(d) != 1u && (h & 1u) == 1u;
+world:805:eq:52	805	return d != 0u && countOneBits(d) == 1u && (h & 1u) != 1u;
+world:805:ne:9	805	return d == 0u && countOneBits(d) == 1u && (h & 1u) == 1u;
+world:805:and:15	805	return d != 0u || countOneBits(d) == 1u && (h & 1u) == 1u;
+world:805:and:40	805	return d != 0u && countOneBits(d) == 1u || (h & 1u) == 1u;
+world:805:band:45	805	return d != 0u && countOneBits(d) == 1u && (h | 1u) == 1u;
+world:805:lit:12	805	return d != 1u && countOneBits(d) == 1u && (h & 1u) == 1u;
+world:805:lit:37	805	return d != 0u && countOneBits(d) == 2u && (h & 1u) == 1u;
+world:805:lit:48	805	return d != 0u && countOneBits(d) == 1u && (h & 2u) == 1u;
+world:805:lit:55	805	return d != 0u && countOneBits(d) == 1u && (h & 1u) == 2u;
+pose:1305:lt:19	1305	for (var k = 0u; k <= boxes; k += 1u) {
+ID1080	0	
+pose:1305:adda:30	1305	for (var k = 0u; k < boxes; k -= 1u) {
+pose:1305:lit:13	1305	for (var k = 1u; k < boxes; k += 1u) {
+pose:1305:lit:33	1305	for (var k = 0u; k < boxes; k += 2u) {
+pose:1306:add:16	1306	let b = BOXES_AT - BOX_WORDS * k;
+pose:1306:mul:28	1306	let b = BOXES_AT + BOX_WORDS + k;
+pose:1307:add:45	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b - 1u]), i32(list[b + 2u]), i32(list[b + 3u]));
+pose:1307:add:64	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b + 1u]), i32(list[b - 2u]), i32(list[b + 3u]));
+pose:1307:add:83	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b + 1u]), i32(list[b + 2u]), i32(list[b - 3u]));
+pose:1307:lit:48	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b + 2u]), i32(list[b + 2u]), i32(list[b + 3u]));
+pose:1307:lit:67	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b + 1u]), i32(list[b + 3u]), i32(list[b + 3u]));
+pose:1307:lit:86	1307	let edit = vec4<i32>(i32(list[b]), i32(list[b + 1u]), i32(list[b + 2u]), i32(list[b + 4u]));
+pose:1308:add:24	1308	if (reaches(edit, list[b - 4u], cell, vec4<i32>(leaf, leaf + 1i))) {
+pose:1308:add:58	1308	if (reaches(edit, list[b + 4u], cell, vec4<i32>(leaf, leaf - 1i))) {
+pose:1308:lit:27	1308	if (reaches(edit, list[b + 5u], cell, vec4<i32>(leaf, leaf + 1i))) {
+pose:1308:lit:61	1308	if (reaches(edit, list[b + 4u], cell, vec4<i32>(leaf, leaf + 2i))) {
+pose:1308:ift:0	1308	if (true) {
+pose:1308:iff:0	1308	if (false) {
+pose:1309:t:7	1309	return false;
+pose:1312:f:7	1312	return true;
+world:228:ne:9	228	return s == SLOT_NOTHING && (s & SLOT_FOLDED) != 0u;
+world:228:ne:46	228	return s != SLOT_NOTHING && (s & SLOT_FOLDED) == 0u;
+world:228:and:25	228	return s != SLOT_NOTHING || (s & SLOT_FOLDED) != 0u;
+world:228:band:30	228	return s != SLOT_NOTHING && (s | SLOT_FOLDED) != 0u;
+world:228:lit:49	228	return s != SLOT_NOTHING && (s & SLOT_FOLDED) != 1u;
+world:385:eq:82	385	return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) != 0u;
+world:385:ne:29	385	return (shard & SHARD_KNOWN) == 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+world:385:and:35	385	return (shard & SHARD_KNOWN) != 0u || ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+world:385:shr:46	385	return (shard & SHARD_KNOWN) != 0u && ((shard << SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+world:385:band:13	385	return (shard | SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+world:385:band:68	385	return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) | SHARD_OWN) == 0u;
+world:385:lit:32	385	return (shard & SHARD_KNOWN) != 1u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+world:385:lit:85	385	return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 1u;
+world:388:shr:19	388	let served = shard << SHARD_SERVED_SHIFT;
+world:389:lt:9	389	if (cell <= LEAF_CELL) {
+world:389:ift:0	389	if (true) {
+world:389:iff:0	389	if (false) {
+world:390:f:7	390	return true;
+world:392:sub:30	392	let leaf = b >> vec2<u32>(cell + LEAF_CELL);
+world:392:shr:13	392	let leaf = b << vec2<u32>(cell - LEAF_CELL);
+world:393:sub:29	393	let own = b >> vec2<u32>(cell + SHARD_ZOOM);
+world:393:shr:12	393	let own = b << vec2<u32>(cell - SHARD_ZOOM);
+world:394:sub:21	394	let shift = LEAF_CELL + SHARD_ZOOM;
+world:395:sub:15	395	let lo = ((leaf + 1i) >> vec2<u32>(shift)) - own;
+world:395:sub:42	395	let lo = ((leaf - 1i) >> vec2<u32>(shift)) + own;
+world:395:shr:22	395	let lo = ((leaf - 1i) << vec2<u32>(shift)) - own;
+world:395:lit:18	395	let lo = ((leaf - 2i) >> vec2<u32>(shift)) - own;
+world:396:add:15	396	let hi = ((leaf - 1i) >> vec2<u32>(shift)) - own;
+world:396:sub:42	396	let hi = ((leaf + 1i) >> vec2<u32>(shift)) + own;
+world:396:shr:22	396	let hi = ((leaf + 1i) << vec2<u32>(shift)) - own;
+world:396:lit:18	396	let hi = ((leaf + 2i) >> vec2<u32>(shift)) - own;
+world:397:add:30	397	let dx = vec2<i32>(lo.x, hi.x) - 1i;
+world:397:lit:33	397	let dx = vec2<i32>(lo.x, hi.x) + 2i;
+world:398:add:30	398	let dy = vec2<i32>(lo.y, hi.y) - 1i;
+world:398:lit:33	398	let dy = vec2<i32>(lo.y, hi.y) + 2i;
+world:399:add:40	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i - dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+world:399:add:58	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i - dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+world:399:add:76	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i - dx.x, dy.y * 3i + dx.y));
+world:399:add:94	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i - dx.y));
+world:399:mul:35	399	let bits = vec4<u32>(vec4<i32>(dy.x + 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+world:399:mul:53	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x + 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+ID1140	0	
+world:399:mul:71	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y + 3i + dx.x, dy.y * 3i + dx.y));
+world:399:mul:89	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y + 3i + dx.y));
+world:399:lit:38	399	let bits = vec4<u32>(vec4<i32>(dy.x * 4i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+world:399:lit:56	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 4i + dx.y, dy.y * 3i + dx.x, dy.y * 3i + dx.y));
+world:399:lit:74	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 4i + dx.x, dy.y * 3i + dx.y));
+world:399:lit:92	399	let bits = vec4<u32>(vec4<i32>(dy.x * 3i + dx.x, dy.x * 3i + dx.y, dy.y * 3i + dx.x, dy.y * 4i + dx.y));
+world:400:eq:57	400	return any(((vec4<u32>(served) >> bits) & vec4<u32>(1u)) != vec4<u32>(0u));
+world:400:shr:31	400	return any(((vec4<u32>(served) << bits) & vec4<u32>(1u)) == vec4<u32>(0u));
+world:400:band:39	400	return any(((vec4<u32>(served) >> bits) | vec4<u32>(1u)) == vec4<u32>(0u));
+world:400:lit:52	400	return any(((vec4<u32>(served) >> bits) & vec4<u32>(2u)) == vec4<u32>(0u));
+world:400:lit:70	400	return any(((vec4<u32>(served) >> bits) & vec4<u32>(1u)) == vec4<u32>(1u));
+world:585:ge:57	585	return select(1i, 1i << ((cell - LEAF_CELL) & 31u), cell > LEAF_CELL);
+world:585:sub:30	585	return select(1i, 1i << ((cell + LEAF_CELL) & 31u), cell >= LEAF_CELL);
+world:585:shl:21	585	return select(1i, 1i >> ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL);
+world:585:band:43	585	return select(1i, 1i << ((cell - LEAF_CELL) | 31u), cell >= LEAF_CELL);
+world:585:sel:0	585	return select(1i << ((cell - LEAF_CELL) & 31u), 1i, cell >= LEAF_CELL);
+world:585:lit:14	585	return select(2i, 1i << ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL);
+world:585:lit:18	585	return select(1i, 2i << ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL);
+world:585:lit:46	585	return select(1i, 1i << ((cell - LEAF_CELL) & 32u), cell >= LEAF_CELL);
+pose:1287:lt:9	1287	while (q <= UNIT_ZOOM && is_folded(s)) {
+pose:1287:and:21	1287	while (q < UNIT_ZOOM || is_folded(s)) {
+pose:1288:adda:2	1288	q -= 1u;
+pose:1288:lit:5	1288	q += 2u;
+pose:1288:del:0	1288	
+pose:1289:sub:53	1289	s = tree_child(PLACED, s, q, c >> vec3<u32>(UNIT_ZOOM + q));
+pose:1289:shr:31	1289	s = tree_child(PLACED, s, q, c << vec3<u32>(UNIT_ZOOM - q));
+pose:1289:del:0	1289	
+pose:1291:eq:6	1291	if (s != SLOT_NOTHING || is_folded(s) || (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
+pose:1291:ne:62	1291	if (s == SLOT_NOTHING || is_folded(s) || (s & SLOT_ZOOM_MASK) == UNIT_ZOOM) {
+pose:1291:or:22	1291	if (s == SLOT_NOTHING && is_folded(s) || (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
+pose:1291:or:38	1291	if (s == SLOT_NOTHING || is_folded(s) && (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
+pose:1291:band:43	1291	if (s == SLOT_NOTHING || is_folded(s) || (s | SLOT_ZOOM_MASK) != UNIT_ZOOM) {
+pose:1291:ift:0	1291	if (true) {
+pose:1291:iff:0	1291	if (false) {
+pose:1292:f:7	1292	return true;
+pose:1294:sub:54	1294	let k = (tree_data(PLACED, s >> SLOT_SHIFT) & 0xffffu) + FIRST_VAL;
+pose:1294:shr:29	1294	let k = (tree_data(PLACED, s << SLOT_SHIFT) & 0xffffu) - FIRST_VAL;
+pose:1294:band:43	1294	let k = (tree_data(PLACED, s >> SLOT_SHIFT) | 0xffffu) - FIRST_VAL;
+pose:1294:hex:46	1294	let k = (tree_data(PLACED, s >> SLOT_SHIFT) & 0xfffeu) - FIRST_VAL;
+pose:1295:ge:6	1295	if (k > DECORS) {
+pose:1295:ift:0	1295	if (true) {
+pose:1295:iff:0	1295	if (false) {
+pose:1296:f:7	1296	return true;
+pose:1299:lit:29	1299	let variant = mul_hi(draw(h, 1u), row_word(k, ROW_VARIANTS));
+pose:1300:sub:52	1300	let box_size = cells(k, variant, draw(h, 1u) >> (32u + TURN_BITS));
+pose:1300:shr:45	1300	let box_size = cells(k, variant, draw(h, 1u) << (32u - TURN_BITS));
+pose:1300:lit:41	1300	let box_size = cells(k, variant, draw(h, 2u) >> (32u - TURN_BITS));
+pose:1300:lit:49	1300	let box_size = cells(k, variant, draw(h, 1u) >> (33u - TURN_BITS));
+pose:1301:lt:13	1301	return all(c <= at + size) && all(at < c + box_size);
+pose:1301:lt:36	1301	return all(c < at + size) && all(at <= c + box_size);
+pose:1301:and:26	1301	return all(c < at + size) || all(at < c + box_size);
+pose:1301:add:17	1301	return all(c < at - size) && all(at < c + box_size);
+pose:1301:add:39	1301	return all(c < at + size) && all(at < c - box_size);
+world:418:shl:13	418	return (cell >> LOOKUP_CELL_SHIFT) | (clip << LOOKUP_FROM_SHIFT) | (u32(here) << LOOKUP_SLOT_BITS) | slot;
+world:418:shl:43	418	return (cell << LOOKUP_CELL_SHIFT) | (clip >> LOOKUP_FROM_SHIFT) | (u32(here) << LOOKUP_SLOT_BITS) | slot;
+world:418:shl:78	418	return (cell << LOOKUP_CELL_SHIFT) | (clip << LOOKUP_FROM_SHIFT) | (u32(here) >> LOOKUP_SLOT_BITS) | slot;
+world:418:bor:34	418	return (cell << LOOKUP_CELL_SHIFT) & (clip << LOOKUP_FROM_SHIFT) | (u32(here) << LOOKUP_SLOT_BITS) | slot;
+world:418:bor:64	418	return (cell << LOOKUP_CELL_SHIFT) | (clip << LOOKUP_FROM_SHIFT) & (u32(here) << LOOKUP_SLOT_BITS) | slot;
+world:418:bor:98	418	return (cell << LOOKUP_CELL_SHIFT) | (clip << LOOKUP_FROM_SHIFT) | (u32(here) << LOOKUP_SLOT_BITS) & slot;
+world:421:shr:9	421	return l << LOOKUP_CELL_SHIFT;
+ID1200	0	
+world:424:sub:52	424	return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) + 1u);
+world:424:shr:10	424	return (l << LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 1u);
+world:424:shl:39	424	return (l >> LOOKUP_FROM_SHIFT) & ((1u >> ZOOM_BITS) - 1u);
+world:424:band:31	424	return (l >> LOOKUP_FROM_SHIFT) | ((1u << ZOOM_BITS) - 1u);
+world:424:lit:36	424	return (l >> LOOKUP_FROM_SHIFT) & ((2u << ZOOM_BITS) - 1u);
+world:424:lit:55	424	return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 2u);
+world:430:ne:38	430	return (l & (1u << LOOKUP_SLOT_BITS)) == 0u;
+world:430:shl:16	430	return (l & (1u >> LOOKUP_SLOT_BITS)) != 0u;
+world:430:band:9	430	return (l | (1u << LOOKUP_SLOT_BITS)) != 0u;
+world:430:lit:13	430	return (l & (2u << LOOKUP_SLOT_BITS)) != 0u;
+world:430:lit:41	430	return (l & (1u << LOOKUP_SLOT_BITS)) != 1u;
+world:427:sub:36	427	return l & ((1u << LOOKUP_SLOT_BITS) + 1u);
+world:427:shl:16	427	return l & ((1u >> LOOKUP_SLOT_BITS) - 1u);
+world:427:band:8	427	return l | ((1u << LOOKUP_SLOT_BITS) - 1u);
+world:427:lit:13	427	return l & ((2u << LOOKUP_SLOT_BITS) - 1u);
+world:427:lit:39	427	return l & ((1u << LOOKUP_SLOT_BITS) - 2u);
+world:831:sub:13	831	let d = abs(a + b);
+world:832:add:14	832	return u32(d.x - d.y + d.z);
+world:832:add:20	832	return u32(d.x + d.y - d.z);
+row:1208:mul:23	1208	let low = (a & 0xffffu) + (b & 0xffffu);
+row:1208:band:12	1208	let low = (a | 0xffffu) * (b & 0xffffu);
+row:1208:band:28	1208	let low = (a & 0xffffu) * (b | 0xffffu);
+row:1208:hex:15	1208	let low = (a & 0xfffeu) * (b & 0xffffu);
+row:1208:hex:31	1208	let low = (a & 0xffffu) * (b & 0xfffeu);
+row:1209:mul:32	1209	let cross = vec2<u32>((a >> 16u) + (b & 0xffffu), (a & 0xffffu) * (b >> 16u));
+row:1209:mul:63	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a & 0xffffu) + (b >> 16u));
+row:1209:shr:25	1209	let cross = vec2<u32>((a << 16u) * (b & 0xffffu), (a & 0xffffu) * (b >> 16u));
+row:1209:shr:69	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a & 0xffffu) * (b << 16u));
+row:1209:band:37	1209	let cross = vec2<u32>((a >> 16u) * (b | 0xffffu), (a & 0xffffu) * (b >> 16u));
+row:1209:band:52	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a | 0xffffu) * (b >> 16u));
+row:1209:lit:28	1209	let cross = vec2<u32>((a >> 17u) * (b & 0xffffu), (a & 0xffffu) * (b >> 16u));
+row:1209:lit:72	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a & 0xffffu) * (b >> 17u));
+row:1209:hex:40	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xfffeu), (a & 0xffffu) * (b >> 16u));
+row:1209:hex:55	1209	let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a & 0xfffeu) * (b >> 16u));
+row:1210:add:24	1210	let carry = (low >> 16u) - (cross.x & 0xffffu) + (cross.y & 0xffffu);
+row:1210:add:46	1210	let carry = (low >> 16u) + (cross.x & 0xffffu) - (cross.y & 0xffffu);
+row:1210:shr:17	1210	let carry = (low << 16u) + (cross.x & 0xffffu) + (cross.y & 0xffffu);
+row:1210:band:35	1210	let carry = (low >> 16u) + (cross.x | 0xffffu) + (cross.y & 0xffffu);
+row:1210:band:57	1210	let carry = (low >> 16u) + (cross.x & 0xffffu) + (cross.y | 0xffffu);
+row:1210:lit:20	1210	let carry = (low >> 17u) + (cross.x & 0xffffu) + (cross.y & 0xffffu);
+row:1210:hex:38	1210	let carry = (low >> 16u) + (cross.x & 0xfffeu) + (cross.y & 0xffffu);
+row:1210:hex:60	1210	let carry = (low >> 16u) + (cross.x & 0xffffu) + (cross.y & 0xfffeu);
+row:1211:add:30	1211	return (a >> 16u) * (b >> 16u) - (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:add:49	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) - (cross.y >> 16u) + (carry >> 16u);
+row:1211:add:68	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) - (carry >> 16u);
+row:1211:mul:17	1211	return (a >> 16u) + (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:shr:10	1211	return (a << 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:shr:23	1211	return (a >> 16u) * (b << 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:shr:42	1211	return (a >> 16u) * (b >> 16u) + (cross.x << 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:shr:61	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y << 16u) + (carry >> 16u);
+row:1211:shr:78	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry << 16u);
+row:1211:lit:13	1211	return (a >> 17u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:lit:26	1211	return (a >> 16u) * (b >> 17u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:lit:45	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 17u) + (cross.y >> 16u) + (carry >> 16u);
+row:1211:lit:64	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 17u) + (carry >> 16u);
+row:1211:lit:81	1211	return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 17u);
+world:677:lt:71	677	let under = top_of(cell, face).cells - leaf_cells(cell) - i32(col.part <= FULL);
+world:677:sub:36	677	let under = top_of(cell, face).cells + leaf_cells(cell) - i32(col.part < FULL);
+world:677:sub:55	677	let under = top_of(cell, face).cells - leaf_cells(cell) + i32(col.part < FULL);
+world:678:lt:45	678	return col.palette_idx != VALUE_UNKNOWN && z <= under && z >= rock(cell, face);
+ID1260	0	
+world:678:ge:58	678	return col.palette_idx != VALUE_UNKNOWN && z < under && z > rock(cell, face);
+world:678:ne:23	678	return col.palette_idx == VALUE_UNKNOWN && z < under && z >= rock(cell, face);
+world:678:and:40	678	return col.palette_idx != VALUE_UNKNOWN || z < under && z >= rock(cell, face);
+world:678:and:53	678	return col.palette_idx != VALUE_UNKNOWN && z < under || z >= rock(cell, face);
+pose:1255:sub:11	1255	let lo = at + CLAIM_EXTENT;
+pose:1256:add:11	1256	let hi = at - size - 1i;
+pose:1256:sub:18	1256	let hi = at + size + 1i;
+pose:1256:lit:21	1256	let hi = at + size - 2i;
+pose:1257:sub:27	1257	let t = vec3<u32>(UNIT_ZOOM + PLACED_FIRST);
+pose:1258:shr:15	1258	let first = lo << t;
+pose:1259:shr:14	1259	let last = hi << t;
+pose:1260:le:26	1260	for (var nz = first.z; nz < last.z; nz += 1i) {
+pose:1260:adda:40	1260	for (var nz = first.z; nz <= last.z; nz -= 1i) {
+pose:1260:lit:43	1260	for (var nz = first.z; nz <= last.z; nz += 2i) {
+pose:1261:le:26	1261	for (var ny = first.y; ny < last.y; ny += 1i) {
+pose:1261:adda:40	1261	for (var ny = first.y; ny <= last.y; ny -= 1i) {
+pose:1261:lit:43	1261	for (var ny = first.y; ny <= last.y; ny += 2i) {
+pose:1262:le:26	1262	for (var nx = first.x; nx < last.x; nx += 1i) {
+pose:1262:adda:40	1262	for (var nx = first.x; nx <= last.x; nx -= 1i) {
+pose:1262:lit:43	1262	for (var nx = first.x; nx <= last.x; nx += 2i) {
+pose:1265:eq:9	1265	if (held != SLOT_NOTHING) {
+pose:1265:ift:0	1265	if (true) {
+pose:1265:iff:0	1265	if (false) {
+pose:1266:del:0	1266	
+pose:1268:max:12	1268	let start = min(lo, node << t);
+pose:1268:shl:25	1268	let start = max(lo, node >> t);
+pose:1269:min:11	1269	let stop = max(hi, ((node + 1i) << t) - 1i);
+pose:1269:add:25	1269	let stop = min(hi, ((node - 1i) << t) - 1i);
+pose:1269:sub:37	1269	let stop = min(hi, ((node + 1i) << t) + 1i);
+pose:1269:shl:32	1269	let stop = min(hi, ((node + 1i) >> t) - 1i);
+pose:1269:lit:28	1269	let stop = min(hi, ((node + 2i) << t) - 1i);
+pose:1269:lit:40	1269	let stop = min(hi, ((node + 1i) << t) - 2i);
+pose:1270:le:24	1270	for (var z = start.z; z < stop.z; z += 1i) {
+pose:1270:adda:37	1270	for (var z = start.z; z <= stop.z; z -= 1i) {
+pose:1270:lit:40	1270	for (var z = start.z; z <= stop.z; z += 2i) {
+pose:1271:le:24	1271	for (var y = start.y; y < stop.y; y += 1i) {
+pose:1271:adda:37	1271	for (var y = start.y; y <= stop.y; y -= 1i) {
+pose:1271:lit:40	1271	for (var y = start.y; y <= stop.y; y += 2i) {
+pose:1272:le:24	1272	for (var x = start.x; x < stop.x; x += 1i) {
+pose:1272:adda:37	1272	for (var x = start.x; x <= stop.x; x -= 1i) {
+pose:1272:lit:40	1272	for (var x = start.x; x <= stop.x; x += 2i) {
+pose:1273:ift:0	1273	if (true) {
+pose:1273:iff:0	1273	if (false) {
+pose:1274:t:7	1274	return false;
+pose:1282:f:7	1282	return true;
+world:145:lit:7	145	return 1u;
+world:246:add:52	246	return vec3<i32>(at.x & i32((1u << zoom) - 1u), at.y - y_start(zoom), at.z + z_start(zoom));
+world:246:add:74	246	return vec3<i32>(at.x & i32((1u << zoom) - 1u), at.y + y_start(zoom), at.z - z_start(zoom));
+world:246:sub:40	246	return vec3<i32>(at.x & i32((1u << zoom) + 1u), at.y + y_start(zoom), at.z + z_start(zoom));
+world:246:shl:32	246	return vec3<i32>(at.x & i32((1u >> zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom));
+world:246:band:21	246	return vec3<i32>(at.x | i32((1u << zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom));
+world:246:lit:29	246	return vec3<i32>(at.x & i32((2u << zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom));
+world:246:lit:43	246	return vec3<i32>(at.x & i32((1u << zoom) - 2u), at.y + y_start(zoom), at.z + z_start(zoom));
+world:295:lnot:4	295	if (is_folded(s)) {
+world:295:ift:0	295	if (true) {
+world:295:iff:0	295	if (false) {
+world:296:lt:32	296	return select(0u, four_of(v), v <= 256u);
+world:296:sel:0	296	return select(four_of(v), 0u, v < 256u);
+world:296:lit:14	296	return select(1u, four_of(v), v < 256u);
+world:296:lit:34	296	return select(0u, four_of(v), v < 257u);
+ID1320	0	
+world:298:shr:33	298	let base = first_child(PLACED, s << SLOT_SHIFT) & ~BRANCH;
+world:298:band:47	298	let base = first_child(PLACED, s >> SLOT_SHIFT) | ~BRANCH;
+world:298:not:50	298	let base = first_child(PLACED, s >> SLOT_SHIFT) & BRANCH;
+world:299:lit:11	299	var word = 1u;
+world:300:lt:19	300	for (var q = 0u; q <= 4u; q += 1u) {
+world:300:adda:27	300	for (var q = 0u; q < 4u; q -= 1u) {
+world:300:lit:13	300	for (var q = 1u; q < 4u; q += 1u) {
+world:300:lit:21	300	for (var q = 0u; q < 5u; q += 1u) {
+world:300:lit:30	300	for (var q = 0u; q < 4u; q += 2u) {
+world:301:add:28	301	let xy = vec2<i32>(2i * at.x - i32(q & 1u), 2i * at.y + i32(q >> 1u));
+world:301:add:53	301	let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y - i32(q >> 1u));
+world:301:mul:21	301	let xy = vec2<i32>(2i + at.x + i32(q & 1u), 2i * at.y + i32(q >> 1u));
+world:301:mul:46	301	let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i + at.y + i32(q >> 1u));
+world:301:shr:62	301	let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y + i32(q << 1u));
+world:301:band:36	301	let xy = vec2<i32>(2i * at.x + i32(q | 1u), 2i * at.y + i32(q >> 1u));
+world:301:lit:19	301	let xy = vec2<i32>(3i * at.x + i32(q & 1u), 2i * at.y + i32(q >> 1u));
+world:301:lit:39	301	let xy = vec2<i32>(2i * at.x + i32(q & 2u), 2i * at.y + i32(q >> 1u));
+world:301:lit:44	301	let xy = vec2<i32>(2i * at.x + i32(q & 1u), 3i * at.y + i32(q >> 1u));
+world:301:lit:65	301	let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y + i32(q >> 2u));
+world:302:add:45	302	var c = tree_val(PLACED, slot_at(PLACED, base - q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:add:49	302	var c = tree_val(PLACED, slot_at(PLACED, base + q - 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:add:60	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom - 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:add:78	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom - 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:add:108	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z - 1i));
+world:302:mul:101	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i + at.z + 1i));
+world:302:lit:52	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 5u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:lit:63	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 2u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:lit:81	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 2u, vec3<i32>(xy, 2i * at.z + 1i));
+world:302:lit:99	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 3i * at.z + 1i));
+world:302:lit:111	302	var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 2i));
+world:303:lnot:4	303	if (fills(c)) {
+world:303:ift:0	303	if (true) {
+world:303:iff:0	303	if (false) {
+world:304:add:41	304	c = tree_val(PLACED, slot_at(PLACED, base - q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
+world:304:add:51	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom - 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
+world:304:add:69	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom - 1u, vec3<i32>(xy, 2i * at.z));
+world:304:mul:92	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i + at.z));
+world:304:lit:54	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 2u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
+world:304:lit:72	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 2u, vec3<i32>(xy, 2i * at.z));
+world:304:lit:90	304	c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 3i * at.z));
+world:304:del:0	304	
+world:305:lnot:4	305	if (fills(c)) {
+world:305:ift:0	305	if (true) {
+world:305:iff:0	305	if (false) {
+world:306:del:0	306	
+world:309:ge:6	309	if (c > 256u) {
+world:309:lit:9	309	if (c >= 257u) {
+world:309:ift:0	309	if (true) {
+world:309:iff:0	309	if (false) {
+world:310:lit:7	310	return 1u;
+world:312:mul:16	312	word |= c << (8u + q);
+world:312:shl:10	312	word |= c >> (8u * q);
+world:312:ora:5	312	word &= c << (8u * q);
+world:312:lit:14	312	word |= c << (9u * q);
+world:312:del:0	312	
+record:1186:lt:26	1186	if (zoom != EVERY && zoom <= cell) {
+record:1186:ne:9	1186	if (zoom == EVERY && zoom < cell) {
+record:1186:and:18	1186	if (zoom != EVERY || zoom < cell) {
+record:1186:ift:0	1186	if (true) {
+record:1186:iff:0	1186	if (false) {
+ID1380	0	
+record:1187:f:7	1187	return true;
+record:1189:eq:44	1189	let s = LEAF_CELL - select(zoom, cell, zoom != EVERY);
+record:1189:sub:17	1189	let s = LEAF_CELL + select(zoom, cell, zoom == EVERY);
+record:1189:sel:0	1189	let s = LEAF_CELL - select(cell, zoom, zoom == EVERY);
+record:1190:shl:19	1190	let r = READ_REACH >> s;
+record:1191:sub:51	1191	let low = ((at.xy >> vec2<u32>(s)) << vec2<u32>(s)) + r;
+record:1191:shr:18	1191	let low = ((at.xy << vec2<u32>(s)) << vec2<u32>(s)) - r;
+record:1191:shl:35	1191	let low = ((at.xy >> vec2<u32>(s)) >> vec2<u32>(s)) - r;
+record:1192:add:43	1192	let high = ((((at.zw - 1i) >> vec2<u32>(s)) - 1i) << vec2<u32>(s)) + r;
+record:1192:add:66	1192	let high = ((((at.zw - 1i) >> vec2<u32>(s)) + 1i) << vec2<u32>(s)) - r;
+record:1192:sub:20	1192	let high = ((((at.zw + 1i) >> vec2<u32>(s)) + 1i) << vec2<u32>(s)) + r;
+record:1192:shr:27	1192	let high = ((((at.zw - 1i) << vec2<u32>(s)) + 1i) << vec2<u32>(s)) + r;
+record:1192:shl:50	1192	let high = ((((at.zw - 1i) >> vec2<u32>(s)) + 1i) >> vec2<u32>(s)) + r;
+record:1192:lit:23	1192	let high = ((((at.zw - 2i) >> vec2<u32>(s)) + 1i) << vec2<u32>(s)) + r;
+record:1192:lit:46	1192	let high = ((((at.zw - 1i) >> vec2<u32>(s)) + 2i) << vec2<u32>(s)) + r;
+record:1193:sub:34	1193	let west = wrap_idx(LEAF_CELL, b.x + low.x);
+record:1194:sub:15	1194	let width = b.z + b.x;
+record:1195:shl:13	1195	let lap = 1i >> LEAF_CELL;
+record:1195:lit:10	1195	let lap = 2i << LEAF_CELL;
+record:1196:lt:35	1196	let across = width >= lap || (west <= high.x - low.x && west + width > 0i) || west + width > lap;
+record:1196:ge:19	1196	let across = width > lap || (west < high.x - low.x && west + width > 0i) || west + width > lap;
+record:1196:gt:68	1196	let across = width >= lap || (west < high.x - low.x && west + width >= 0i) || west + width > lap;
+record:1196:gt:90	1196	let across = width >= lap || (west < high.x - low.x && west + width > 0i) || west + width >= lap;
+record:1196:and:52	1196	let across = width >= lap || (west < high.x - low.x || west + width > 0i) || west + width > lap;
+record:1196:or:26	1196	let across = width >= lap && (west < high.x - low.x && west + width > 0i) || west + width > lap;
+record:1196:or:74	1196	let across = width >= lap || (west < high.x - low.x && west + width > 0i) && west + width > lap;
+record:1196:add:59	1196	let across = width >= lap || (west < high.x - low.x && west - width > 0i) || west + width > lap;
+record:1196:add:81	1196	let across = width >= lap || (west < high.x - low.x && west + width > 0i) || west - width > lap;
+record:1196:sub:43	1196	let across = width >= lap || (west < high.x + low.x && west + width > 0i) || west + width > lap;
+record:1196:lit:70	1196	let across = width >= lap || (west < high.x - low.x && west + width > 1i) || west + width > lap;
+record:1197:lt:21	1197	return across && b.y <= high.y && b.w > low.y;
+record:1197:gt:37	1197	return across && b.y < high.y && b.w >= low.y;
+record:1197:and:14	1197	return across || b.y < high.y && b.w > low.y;
+record:1197:and:30	1197	return across && b.y < high.y || b.w > low.y;
+record:1183:shl:24	1183	return decor | (variant >> 8u) | (turn << TURN_SHIFT) | (cell << CELL_SHIFT);
+record:1183:shl:39	1183	return decor | (variant << 8u) | (turn >> TURN_SHIFT) | (cell << CELL_SHIFT);
+record:1183:shl:62	1183	return decor | (variant << 8u) | (turn << TURN_SHIFT) | (cell >> CELL_SHIFT);
+record:1183:bor:12	1183	return decor & (variant << 8u) | (turn << TURN_SHIFT) | (cell << CELL_SHIFT);
+record:1183:bor:30	1183	return decor | (variant << 8u) & (turn << TURN_SHIFT) | (cell << CELL_SHIFT);
+record:1183:bor:53	1183	return decor | (variant << 8u) | (turn << TURN_SHIFT) & (cell << CELL_SHIFT);
+record:1183:lit:27	1183	return decor | (variant << 9u) | (turn << TURN_SHIFT) | (cell << CELL_SHIFT);
+world:673:min:20	673	return top_of(cell, max(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
+world:673:sub:40	673	return top_of(cell, min(face, SEA_LEVEL) + STRATA_BEDROCK_DEPTH).cells;
+world:756:sub:37	756	return (v << (s & 31u)) | (v >> ((32u + s) & 31u));
+world:756:shr:29	756	return (v << (s & 31u)) | (v << ((32u - s) & 31u));
+world:756:shl:10	756	return (v >> (s & 31u)) | (v >> ((32u - s) & 31u));
+world:756:band:15	756	return (v << (s | 31u)) | (v >> ((32u - s) & 31u));
+world:756:band:42	756	return (v << (s & 31u)) | (v >> ((32u - s) | 31u));
+world:756:bor:23	756	return (v << (s & 31u)) & (v >> ((32u - s) & 31u));
+world:756:lit:18	756	return (v << (s & 32u)) | (v >> ((32u - s) & 31u));
+world:756:lit:34	756	return (v << (s & 31u)) | (v >> ((33u - s) & 31u));
+world:756:lit:45	756	return (v << (s & 31u)) | (v >> ((32u - s) & 32u));
+row:1202:add:25	1202	return rows[k * ROW_WORDS - at];
+row:1202:mul:13	1202	return rows[k + ROW_WORDS + at];
+world:743:add:20	743	var z = (base ^ tag) - SEED_SALT;
+world:743:xor:13	743	var z = (base & tag) + SEED_SALT;
+world:744:mul:20	744	z = (z ^ (z >> 16u)) + MIX_FIRST;
+world:744:shr:12	744	z = (z ^ (z << 16u)) * MIX_FIRST;
+world:744:xor:6	744	z = (z & (z >> 16u)) * MIX_FIRST;
+world:744:lit:15	744	z = (z ^ (z >> 17u)) * MIX_FIRST;
+ID1440	0	
+world:744:del:0	744	
+world:745:mul:20	745	z = (z ^ (z >> 13u)) + MIX_LAST;
+world:745:shr:12	745	z = (z ^ (z << 13u)) * MIX_LAST;
+world:745:xor:6	745	z = (z & (z >> 13u)) * MIX_LAST;
+world:745:lit:15	745	z = (z ^ (z >> 14u)) * MIX_LAST;
+world:745:del:0	745	
+world:746:shr:14	746	return z ^ (z << 16u);
+world:746:xor:8	746	return z & (z >> 16u);
+world:746:lit:17	746	return z ^ (z >> 17u);
+world:373:lt:40	373	if ((shard & SHARD_KNOWN) != 0u || zoom <= SHARD_ZOOM) {
+world:373:ne:26	373	if ((shard & SHARD_KNOWN) == 0u || zoom < SHARD_ZOOM) {
+world:373:or:32	373	if ((shard & SHARD_KNOWN) != 0u && zoom < SHARD_ZOOM) {
+world:373:band:10	373	if ((shard | SHARD_KNOWN) != 0u || zoom < SHARD_ZOOM) {
+world:373:lit:29	373	if ((shard & SHARD_KNOWN) != 1u || zoom < SHARD_ZOOM) {
+world:373:ift:0	373	if (true) {
+world:373:iff:0	373	if (false) {
+world:376:sub:29	376	let own = c >> vec2<u32>(zoom + SHARD_ZOOM);
+world:376:shr:12	376	let own = c << vec2<u32>(zoom - SHARD_ZOOM);
+world:377:lit:11	377	var nine = 1u;
+world:378:lt:25	378	if (own.y >= 0i && own.y <= (1i << SHARD_ZOOM)) {
+world:378:ge:10	378	if (own.y > 0i && own.y < (1i << SHARD_ZOOM)) {
+world:378:and:16	378	if (own.y >= 0i || own.y < (1i << SHARD_ZOOM)) {
+world:378:shl:31	378	if (own.y >= 0i && own.y < (1i >> SHARD_ZOOM)) {
+world:378:lit:13	378	if (own.y >= 1i && own.y < (1i << SHARD_ZOOM)) {
+world:378:lit:28	378	if (own.y >= 0i && own.y < (2i << SHARD_ZOOM)) {
+world:378:ift:0	378	if (true) {
+world:378:iff:0	378	if (false) {
+world:379:sub:63	379	let key = cell_id(vec2<u32>(own) & vec2<u32>((1u << SHARD_ZOOM) + 1u));
+world:379:shl:49	379	let key = cell_id(vec2<u32>(own) & vec2<u32>((1u >> SHARD_ZOOM) - 1u));
+world:379:band:32	379	let key = cell_id(vec2<u32>(own) | vec2<u32>((1u << SHARD_ZOOM) - 1u));
+world:379:lit:46	379	let key = cell_id(vec2<u32>(own) & vec2<u32>((2u << SHARD_ZOOM) - 1u));
+world:379:lit:66	379	let key = cell_id(vec2<u32>(own) & vec2<u32>((1u << SHARD_ZOOM) - 2u));
+world:380:div:17	380	nine = shards[key * 4u][key % 4u];
+world:380:rem:27	380	nine = shards[key / 4u][key / 4u];
+world:380:lit:20	380	nine = shards[key / 5u][key % 4u];
+world:380:lit:30	380	nine = shards[key / 4u][key % 5u];
+world:380:del:0	380	
+world:382:shl:27	382	return SHARD_KNOWN | (nine >> SHARD_SERVED_SHIFT);
+world:382:bor:18	382	return SHARD_KNOWN & (nine << SHARD_SERVED_SHIFT);
+world:977:lit:18	977	var p = vec3<i32>(33i);
+world:978:lt:9	978	if (side <= 6u) {
+world:978:lit:11	978	if (side < 7u) {
+world:978:ift:0	978	if (true) {
+world:978:iff:0	978	if (false) {
+world:979:eq:43	979	p[side / 2u] = select(0i, 64i, (side & 1u) != 1u);
+world:979:div:6	979	p[side * 2u] = select(0i, 64i, (side & 1u) == 1u);
+world:979:band:36	979	p[side / 2u] = select(0i, 64i, (side | 1u) == 1u);
+world:979:sel:0	979	p[side / 2u] = select(64i, 0i, (side & 1u) == 1u);
+world:979:lit:9	979	p[side / 3u] = select(0i, 64i, (side & 1u) == 1u);
+world:979:lit:22	979	p[side / 2u] = select(1i, 64i, (side & 1u) == 1u);
+world:979:lit:26	979	p[side / 2u] = select(0i, 65i, (side & 1u) == 1u);
+world:979:lit:39	979	p[side / 2u] = select(0i, 64i, (side & 2u) == 1u);
+world:979:lit:46	979	p[side / 2u] = select(0i, 64i, (side & 1u) == 2u);
+world:979:del:0	979	
+world:231:ne:28	231	if (first_child(tree, slot) == 0u) {
+world:231:lit:31	231	if (first_child(tree, slot) != 1u) {
+world:231:ift:0	231	if (true) {
+world:231:iff:0	231	if (false) {
+world:232:shl:13	232	return (slot >> SLOT_SHIFT) | SLOT_FOLDED | zoom;
+world:232:bor:27	232	return (slot << SLOT_SHIFT) & SLOT_FOLDED | zoom;
+ID1500	0	
+world:232:bor:41	232	return (slot << SLOT_SHIFT) | SLOT_FOLDED & zoom;
+world:234:eq:26	234	if (tree_data(tree, slot) != VALUE_VOID) {
+world:234:ift:0	234	if (true) {
+world:234:iff:0	234	if (false) {
+world:237:shl:13	237	return (slot >> SLOT_SHIFT) | zoom;
+world:237:bor:27	237	return (slot << SLOT_SHIFT) & zoom;
+world:776:sub:32	776	let o = c << vec3<u32>(CAVE_PIPE + zoom);
+world:776:shl:10	776	let o = c >> vec3<u32>(CAVE_PIPE - zoom);
+world:777:sub:24	777	let s = 1i << (CAVE_PIPE + zoom);
+world:777:shl:11	777	let s = 1i >> (CAVE_PIPE - zoom);
+world:777:lit:8	777	let s = 2i << (CAVE_PIPE - zoom);
+world:779:xor:32	779	let g = node_seed(CAVE_TAG_SPAWN & 1u, zoom, c);
+world:779:lit:35	779	let g = node_seed(CAVE_TAG_SPAWN ^ 2u, zoom, c);
+world:780:lt:6	780	if (s <= 4i) {
+world:780:lit:8	780	if (s < 5i) {
+world:780:ift:0	780	if (true) {
+world:780:iff:0	780	if (false) {
+world:781:shr:41	781	let bits = vec3<i32>(i32(h & 1u), i32((h << 1u) & 1u), i32((h >> 2u) & 1u));
+world:781:shr:62	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h << 2u) & 1u));
+world:781:band:26	781	let bits = vec3<i32>(i32(h | 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u));
+world:781:band:47	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) | 1u), i32((h >> 2u) & 1u));
+world:781:band:68	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) | 1u));
+world:781:lit:29	781	let bits = vec3<i32>(i32(h & 2u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u));
+world:781:lit:44	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 2u) & 1u), i32((h >> 2u) & 1u));
+world:781:lit:50	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 2u), i32((h >> 2u) & 1u));
+world:781:lit:65	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 3u) & 1u));
+world:781:lit:71	781	let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 2u));
+world:782:add:14	782	return Piece(o - bits, o + 1i - bits, 6u, 6u, tunnel_blocks(k), 0u);
+world:782:add:24	782	return Piece(o + bits, o - 1i - bits, 6u, 6u, tunnel_blocks(k), 0u);
+world:782:sub:29	782	return Piece(o + bits, o + 1i + bits, 6u, 6u, tunnel_blocks(k), 0u);
+world:782:lit:27	782	return Piece(o + bits, o + 2i - bits, 6u, 6u, tunnel_blocks(k), 0u);
+world:782:lit:38	782	return Piece(o + bits, o + 1i - bits, 7u, 6u, tunnel_blocks(k), 0u);
+world:782:lit:42	782	return Piece(o + bits, o + 1i - bits, 6u, 7u, tunnel_blocks(k), 0u);
+world:782:lit:64	782	return Piece(o + bits, o + 1i - bits, 6u, 6u, tunnel_blocks(k), 1u);
+world:784:div:9	784	let q = s * 4i;
+world:784:lit:12	784	let q = s / 5i;
+world:786:eq:61	786	let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) != 0u));
+world:786:add:29	786	let ex = i32(((h >> 1u) % qu) - select(3u * qu, 0u, (h & 1u) == 0u));
+world:786:mul:41	786	let ex = i32(((h >> 1u) % qu) + select(3u + qu, 0u, (h & 1u) == 0u));
+world:786:rem:23	786	let ex = i32(((h >> 1u) / qu) + select(3u * qu, 0u, (h & 1u) == 0u));
+world:786:shr:17	786	let ex = i32(((h << 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u));
+world:786:band:54	786	let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h | 1u) == 0u));
+world:786:sel:0	786	let ex = i32(((h >> 1u) % qu) + select(0u, 3u * qu, (h & 1u) == 0u));
+world:786:lit:20	786	let ex = i32(((h >> 2u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u));
+world:786:lit:39	786	let ex = i32(((h >> 1u) % qu) + select(4u * qu, 0u, (h & 1u) == 0u));
+world:786:lit:48	786	let ex = i32(((h >> 1u) % qu) + select(3u * qu, 1u, (h & 1u) == 0u));
+world:786:lit:57	786	let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 2u) == 0u));
+world:786:lit:64	786	let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 1u));
+world:787:eq:69	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) != 0u));
+world:787:add:29	787	let ey = i32(((h >> 9u) % qu) - select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:mul:41	787	let ey = i32(((h >> 9u) % qu) + select(3u + qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:rem:23	787	let ey = i32(((h >> 9u) / qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:shr:17	787	let ey = i32(((h << 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:shr:56	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h << 8u) & 1u) == 0u));
+world:787:band:62	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) | 1u) == 0u));
+world:787:sel:0	787	let ey = i32(((h >> 9u) % qu) + select(0u, 3u * qu, ((h >> 8u) & 1u) == 0u));
+world:787:lit:20	787	let ey = i32(((h >> 10u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:lit:39	787	let ey = i32(((h >> 9u) % qu) + select(4u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+world:787:lit:48	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 1u, ((h >> 8u) & 1u) == 0u));
+world:787:lit:59	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 9u) & 1u) == 0u));
+ID1560	0	
+world:787:lit:65	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 2u) == 0u));
+world:787:lit:72	787	let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 1u));
+world:788:rem:23	788	let ez = i32((h >> 16u) / u32(s));
+world:788:shr:16	788	let ez = i32((h << 16u) % u32(s));
+world:788:lit:19	788	let ez = i32((h >> 17u) % u32(s));
+world:789:add:19	789	let reach = qu / 2u - 1u;
+world:789:div:14	789	let reach = qu * 2u + 1u;
+world:789:lit:17	789	let reach = qu / 3u + 1u;
+world:789:lit:22	789	let reach = qu / 2u + 2u;
+world:790:sub:10	790	let mx = s + 1i - ex;
+world:790:sub:15	790	let mx = s - 1i + ex;
+world:790:lit:13	790	let mx = s - 2i - ex;
+world:791:sub:10	791	let my = s + 1i - ey;
+world:791:sub:15	791	let my = s - 1i + ey;
+world:791:lit:13	791	let my = s - 2i - ey;
+world:792:rem:14	792	let dx = i32(g / reach);
+world:793:rem:22	793	let dy = i32((g >> 8u) / reach);
+world:793:shr:16	793	let dy = i32((g << 8u) % reach);
+world:793:lit:19	793	let dy = i32((g >> 9u) % reach);
+world:795:add:1	795	o - vec3<i32>(ex, ey, ez),
+world:796:add:1	796	o - vec3<i32>(
+world:797:lt:28	797	select(mx - dx, mx + dx, mx <= 2i * q),
+world:797:add:18	797	select(mx - dx, mx - dx, mx < 2i * q),
+world:797:sub:9	797	select(mx + dx, mx + dx, mx < 2i * q),
+world:797:mul:32	797	select(mx - dx, mx + dx, mx < 2i + q),
+world:797:sel:0	797	select(mx + dx, mx - dx, mx < 2i * q),
+world:797:lit:30	797	select(mx - dx, mx + dx, mx < 3i * q),
+world:798:lt:28	798	select(my - dy, my + dy, my <= 2i * q),
+world:798:add:18	798	select(my - dy, my - dy, my < 2i * q),
+world:798:sub:9	798	select(my + dy, my + dy, my < 2i * q),
+world:798:mul:32	798	select(my - dy, my + dy, my < 2i + q),
+world:798:sel:0	798	select(my + dy, my - dy, my < 2i * q),
+world:798:lit:30	798	select(my - dy, my + dy, my < 3i * q),
+world:799:add:8	799	clamp(ez - i32((g >> 16u) % reach) - q / 4i, 0i, s - 1i),
+world:799:sub:34	799	clamp(ez + i32((g >> 16u) % reach) + q / 4i, 0i, s - 1i),
+world:799:sub:50	799	clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s + 1i),
+world:799:div:38	799	clamp(ez + i32((g >> 16u) % reach) - q * 4i, 0i, s - 1i),
+world:799:rem:25	799	clamp(ez + i32((g >> 16u) / reach) - q / 4i, 0i, s - 1i),
+world:799:shr:18	799	clamp(ez + i32((g << 16u) % reach) - q / 4i, 0i, s - 1i),
+world:799:lit:21	799	clamp(ez + i32((g >> 17u) % reach) - q / 4i, 0i, s - 1i),
+world:799:lit:41	799	clamp(ez + i32((g >> 16u) % reach) - q / 5i, 0i, s - 1i),
+world:799:lit:45	799	clamp(ez + i32((g >> 16u) % reach) - q / 4i, 1i, s - 1i),
+world:799:lit:53	799	clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 2i),
+world:801:lit:0	801	7u, 6u, tunnel_blocks(k), 0u,
+world:801:lit:4	801	6u, 7u, tunnel_blocks(k), 0u,
+world:801:lit:26	801	6u, 6u, tunnel_blocks(k), 1u,
+world:409:shl:16	409	var s = (v | (v >> 8u)) & 0x00ff00ffu;
+world:409:band:23	409	var s = (v | (v << 8u)) | 0x00ff00ffu;
+world:409:bor:10	409	var s = (v & (v << 8u)) & 0x00ff00ffu;
+world:409:lit:19	409	var s = (v | (v << 9u)) & 0x00ff00ffu;
+world:409:hex:26	409	var s = (v | (v << 8u)) & 0xff00feu;
+world:410:shl:12	410	s = (s | (s >> 4u)) & 0x0f0f0f0fu;
+world:410:band:19	410	s = (s | (s << 4u)) | 0x0f0f0f0fu;
+world:410:bor:6	410	s = (s & (s << 4u)) & 0x0f0f0f0fu;
+world:410:lit:15	410	s = (s | (s << 5u)) & 0x0f0f0f0fu;
+world:410:hex:22	410	s = (s | (s << 4u)) & 0xf0f0f0eu;
+world:410:del:0	410	
+world:411:shl:12	411	s = (s | (s >> 2u)) & 0x33333333u;
+world:411:band:19	411	s = (s | (s << 2u)) | 0x33333333u;
+world:411:bor:6	411	s = (s & (s << 2u)) & 0x33333333u;
+ID1620	0	
+world:411:lit:15	411	s = (s | (s << 3u)) & 0x33333333u;
+world:411:hex:22	411	s = (s | (s << 2u)) & 0x33333332u;
+world:411:del:0	411	
+world:412:shl:15	412	return (s | (s >> 1u)) & 0x55555555u;
+world:412:band:22	412	return (s | (s << 1u)) | 0x55555555u;
+world:412:bor:9	412	return (s & (s << 1u)) & 0x55555555u;
+world:412:lit:18	412	return (s | (s << 2u)) & 0x55555555u;
+world:412:hex:25	412	return (s | (s << 1u)) & 0x55555554u;
+world:441:ge:41	441	let known = above != LOOKUP_NONE && cell > lookup_from(above);
+world:441:ne:18	441	let known = above == LOOKUP_NONE && cell >= lookup_from(above);
+world:441:and:33	441	let known = above != LOOKUP_NONE || cell >= lookup_from(above);
+world:442:sub:21	442	var stop = FIRST_CELL + 1u;
+world:442:lit:24	442	var stop = FIRST_CELL - 2u;
+world:443:f:37	443	var f = lookup(cell, FIRST_CELL, 0u, true);
+world:443:lit:33	443	var f = lookup(cell, FIRST_CELL, 1u, false);
+world:444:ift:0	444	if (true) {
+world:444:iff:0	444	if (false) {
+world:445:del:0	445	
+world:446:shl:32	446	f = (above & LOOKUP_AT) | (cell >> LOOKUP_CELL_SHIFT);
+world:446:band:10	446	f = (above | LOOKUP_AT) | (cell << LOOKUP_CELL_SHIFT);
+world:446:bor:23	446	f = (above & LOOKUP_AT) & (cell << LOOKUP_CELL_SHIFT);
+world:446:del:0	446	
+world:448:gt:21	448	for (var z = cell; z >= stop; z -= 1u) {
+world:448:suba:31	448	for (var z = cell; z > stop; z += 1u) {
+world:448:lit:34	448	for (var z = cell; z > stop; z -= 2u) {
+world:449:shr:28	449	let q = cell_at(cell, z, g) << vec2<u32>(BRICK_SHIFT);
+world:450:sub:29	450	let m = vec2<i32>(i32(ACROSS) + 1i);
+world:450:lit:32	450	let m = vec2<i32>(i32(ACROSS) - 2i);
+world:451:band:19	451	let e = vec2<u32>(q | m);
+world:452:add:49	452	let row = clipmap[(z - FIRST_CELL) * CLIP_ENTRIES - e.y * ACROSS + e.x];
+world:452:add:64	452	let row = clipmap[(z - FIRST_CELL) * CLIP_ENTRIES + e.y * ACROSS - e.x];
+world:452:sub:20	452	let row = clipmap[(z + FIRST_CELL) * CLIP_ENTRIES + e.y * ACROSS + e.x];
+world:452:mul:34	452	let row = clipmap[(z - FIRST_CELL) + CLIP_ENTRIES + e.y * ACROSS + e.x];
+world:452:mul:55	452	let row = clipmap[(z - FIRST_CELL) * CLIP_ENTRIES + e.y + ACROSS + e.x];
+world:453:eq:25	453	if (row.z != 0i && row.x != q.x && row.y == q.y) {
+world:453:eq:41	453	if (row.z != 0i && row.x == q.x && row.y != q.y) {
+world:453:ne:10	453	if (row.z == 0i && row.x == q.x && row.y == q.y) {
+world:453:and:16	453	if (row.z != 0i || row.x == q.x && row.y == q.y) {
+world:453:and:32	453	if (row.z != 0i && row.x == q.x || row.y == q.y) {
+world:453:lit:13	453	if (row.z != 1i && row.x == q.x && row.y == q.y) {
+world:453:ift:0	453	if (true) {
+world:453:iff:0	453	if (false) {
+world:454:sub:29	454	f = lookup(cell, z, u32(row.z + 1i), true);
+world:454:t:37	454	f = lookup(cell, z, u32(row.z - 1i), false);
+world:454:lit:32	454	f = lookup(cell, z, u32(row.z - 2i), true);
+world:454:del:0	454	
+world:455:del:0	455	
+world:458:sub:80	458	return Step(f, vec2<u32>(cell_at(cell, lookup_from(f), g) & vec2<i32>(i32(BRICK) + 1i)));
+world:458:band:57	458	return Step(f, vec2<u32>(cell_at(cell, lookup_from(f), g) | vec2<i32>(i32(BRICK) - 1i)));
+world:458:lit:83	458	return Step(f, vec2<u32>(cell_at(cell, lookup_from(f), g) & vec2<i32>(i32(BRICK) - 2i)));
+pose:1238:ift:0	1238	if (true) {
+pose:1238:iff:0	1238	if (false) {
+pose:1239:sub:37	1239	return Surface(SURFACE_MET, SEA_LEVEL + 1i, EIGHTHS, 0i);
+pose:1239:lit:40	1239	return Surface(SURFACE_MET, SEA_LEVEL - 2i, EIGHTHS, 0i);
+pose:1239:lit:53	1239	return Surface(SURFACE_MET, SEA_LEVEL - 1i, EIGHTHS, 1i);
+pose:1243:sub:17	1243	let s = LEAF_CELL + zoom;
+pose:1244:lt:10	1244	if (r.b.z <= r.b.w) {
+pose:1244:ift:0	1244	if (true) {
+pose:1244:iff:0	1244	if (false) {
+pose:1245:sub:32	1245	let floor = -(1i << (HEIGHT_BITS + 1u - s));
+ID1680	0	
+pose:1245:sub:37	1245	let floor = -(1i << (HEIGHT_BITS - 1u + s));
+pose:1245:shl:17	1245	let floor = -(1i >> (HEIGHT_BITS - 1u - s));
+pose:1245:lit:14	1245	let floor = -(2i << (HEIGHT_BITS - 1u - s));
+pose:1245:lit:35	1245	let floor = -(1i << (HEIGHT_BITS - 2u - s));
+pose:1246:eq:52	1246	let end = select(floor, r.b.z >> s, col.palette_idx != VALUE_VOID);
+pose:1246:shr:30	1246	let end = select(floor, r.b.z << s, col.palette_idx == VALUE_VOID);
+pose:1246:sel:0	1246	let end = select(r.b.z >> s, floor, col.palette_idx == VALUE_VOID);
+pose:1247:max:29	1247	return Surface(SURFACE_WALK, min((r.b.w - 1i) >> s, col.top - 1i), 0u, end);
+pose:1247:sub:39	1247	return Surface(SURFACE_WALK, max((r.b.w + 1i) >> s, col.top - 1i), 0u, end);
+pose:1247:sub:59	1247	return Surface(SURFACE_WALK, max((r.b.w - 1i) >> s, col.top + 1i), 0u, end);
+pose:1247:shr:46	1247	return Surface(SURFACE_WALK, max((r.b.w - 1i) << s, col.top - 1i), 0u, end);
+pose:1247:lit:42	1247	return Surface(SURFACE_WALK, max((r.b.w - 2i) >> s, col.top - 1i), 0u, end);
+pose:1247:lit:62	1247	return Surface(SURFACE_WALK, max((r.b.w - 1i) >> s, col.top - 2i), 0u, end);
+pose:1247:lit:67	1247	return Surface(SURFACE_WALK, max((r.b.w - 1i) >> s, col.top - 1i), 1u, end);
+pose:1249:eq:20	1249	if (col.palette_idx != VALUE_VOID) {
+pose:1249:ift:0	1249	if (true) {
+pose:1249:iff:0	1249	if (false) {
+pose:1250:lit:29	1250	return Surface(SURFACE_NONE, 1i, 0u, 0i);
+pose:1250:lit:33	1250	return Surface(SURFACE_NONE, 0i, 1u, 0i);
+pose:1250:lit:37	1250	return Surface(SURFACE_NONE, 0i, 0u, 1i);
+pose:1252:sub:35	1252	return Surface(SURFACE_MET, col.top + 1i, eighths(col.part), 0i);
+pose:1252:lit:38	1252	return Surface(SURFACE_MET, col.top - 2i, eighths(col.part), 0i);
+pose:1252:lit:61	1252	return Surface(SURFACE_MET, col.top - 1i, eighths(col.part), 1i);
+world:566:ge:9	566	if (cell > LEAF_CELL) {
+world:566:ift:0	566	if (true) {
+world:566:iff:0	566	if (false) {
+world:567:sub:21	567	return Top(h << (cell + LEAF_CELL), FULL);
+world:567:shl:13	567	return Top(h >> (cell - LEAF_CELL), FULL);
+world:569:sub:17	569	let n = LEAF_CELL + cell;
+world:570:shr:14	570	let cells = h << n;
+world:571:sub:30	571	let rest = u32(h) & ((1u << n) + 1u);
+world:571:shl:25	571	let rest = u32(h) & ((1u >> n) - 1u);
+world:571:band:17	571	let rest = u32(h) | ((1u << n) - 1u);
+world:571:lit:22	571	let rest = u32(h) & ((2u << n) - 1u);
+world:571:lit:33	571	let rest = u32(h) & ((1u << n) - 2u);
+world:572:le:86	572	let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n < FULL_BITS);
+world:572:sub:29	572	let part = select(rest >> ((n + FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+world:572:sub:70	572	let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS + n) & 31u), n <= FULL_BITS);
+world:572:shr:23	572	let part = select(rest << ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+world:572:shl:56	572	let part = select(rest >> ((n - FULL_BITS) & 31u), rest >> ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+world:572:band:42	572	let part = select(rest >> ((n - FULL_BITS) | 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+world:572:band:75	572	let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) | 31u), n <= FULL_BITS);
+world:572:sel:0	572	let part = select(rest << ((FULL_BITS - n) & 31u), rest >> ((n - FULL_BITS) & 31u), n <= FULL_BITS);
+world:572:lit:45	572	let part = select(rest >> ((n - FULL_BITS) & 32u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+world:572:lit:78	572	let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 32u), n <= FULL_BITS);
+world:573:eq:18	573	if (eighths(part) != 0u) {
+world:573:lit:21	573	if (eighths(part) == 1u) {
+world:573:ift:0	573	if (true) {
+world:573:iff:0	573	if (false) {
+world:576:add:16	576	return Top(cells - 1i, part);
+world:576:lit:19	576	return Top(cells + 2i, part);
+world:252:lnot:4	252	if (is_folded(parent)) {
+world:252:ift:0	252	if (true) {
+world:252:iff:0	252	if (false) {
+world:255:add:72	255	return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) & ~BRANCH) - child_idx(at), zoom);
+world:255:shr:47	255	return slot_at(tree, (first_child(tree, parent << SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom);
+world:255:band:61	255	return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) | ~BRANCH) + child_idx(at), zoom);
+world:255:not:64	255	return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) & BRANCH) + child_idx(at), zoom);
+world:222:eq:9	222	if (tree != WAYS) {
+world:222:ift:0	222	if (true) {
+ID1740	0	
+world:222:iff:0	222	if (false) {
+world:223:add:35	223	return pool[arrayLength(&pool) / 2u - slot];
+world:223:div:30	223	return pool[arrayLength(&pool) * 2u + slot];
+world:223:lit:33	223	return pool[arrayLength(&pool) / 3u + slot];
+world:225:add:47	225	return overwrites[arrayLength(&overwrites) / 2u - slot];
+world:225:div:42	225	return overwrites[arrayLength(&overwrites) * 2u + slot];
+world:225:lit:45	225	return overwrites[arrayLength(&overwrites) / 3u + slot];
+world:260:lt:9	260	while (z <= zoom && is_folded(s)) {
+world:260:and:16	260	while (z < zoom || is_folded(s)) {
+world:261:adda:2	261	z -= 1u;
+world:261:lit:5	261	z += 2u;
+world:261:del:0	261	
+world:262:sub:47	262	s = tree_child(tree, s, z, at >> vec3<u32>(zoom + z));
+world:262:shr:30	262	s = tree_child(tree, s, z, at << vec3<u32>(zoom - z));
+world:262:del:0	262	
+world:274:eq:6	274	if (s != SLOT_NOTHING) {
+world:274:ift:0	274	if (true) {
+world:274:iff:0	274	if (false) {
+world:277:shr:29	277	let word = tree_data(tree, s << SLOT_SHIFT);
+world:278:band:12	278	let v = word | 0xffffu;
+world:278:hex:15	278	let v = word & 0xfffeu;
+world:279:ift:0	279	if (true) {
+world:279:iff:0	279	if (false) {
+world:280:eq:18	280	if ((word >> 16u) != 0u) {
+world:280:shr:10	280	if ((word << 16u) == 0u) {
+world:280:lit:13	280	if ((word >> 17u) == 0u) {
+world:280:lit:21	280	if ((word >> 16u) == 1u) {
+world:280:ift:0	280	if (true) {
+world:280:iff:0	280	if (false) {
+world:283:eq:23	283	} else if (u32(hide.w) != (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) {
+world:283:and:47	283	} else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) || cut_holds(hide, zoom, at)) {
+world:283:band:28	283	} else if (u32(hide.w) == (s | SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) {
+world:283:ift:0	283	} else if (true) {
+world:283:iff:0	283	} else if (false) {
+world:286:sel:0	286	return select(v, VALUE_VOID, voxel(v));
+world:808:xor:9	808	let d = u & v;
+world:809:ift:0	809	if (true) {
+world:809:iff:0	809	if (false) {
+world:810:eq:92	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) != 0u);
+world:810:shr:31	810	let b = select(((d << 2u) | (d << 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:shr:61	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d << 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:shr:79	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h << 1u) & 1u) == 0u);
+world:810:shl:19	810	let b = select(((d >> 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:shl:49	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d >> 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:band:38	810	let b = select(((d << 2u) | (d >> 1u)) | 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:band:68	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) | 7u, ((h >> 1u) & 1u) == 0u);
+world:810:band:85	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) | 1u) == 0u);
+world:810:bor:25	810	let b = select(((d << 2u) & (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:bor:55	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) & (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:sel:0	810	let b = select(((d << 1u) | (d >> 2u)) & 7u, ((d << 2u) | (d >> 1u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:22	810	let b = select(((d << 3u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:34	810	let b = select(((d << 2u) | (d >> 2u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:41	810	let b = select(((d << 2u) | (d >> 1u)) & 8u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:52	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 2u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:64	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 3u)) & 7u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:71	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 8u, ((h >> 1u) & 1u) == 0u);
+world:810:lit:82	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 2u) & 1u) == 0u);
+world:810:lit:88	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 2u) == 0u);
+world:810:lit:95	810	let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 1u);
+world:812:lit:5	812	case 1u: { return u; }
+ID1800	0	
+world:813:xor:19	813	case 1u: { return u & b; }
+world:813:lit:5	813	case 2u: { return u ^ b; }
+world:814:xor:19	814	case 2u: { return u & b ^ d; }
+world:814:xor:23	814	case 2u: { return u ^ b & d; }
+world:814:lit:5	814	case 3u: { return u ^ b ^ d; }
+world:818:rem:17	818	let r = (h >> 2u) / 3u;
+world:818:shr:11	818	let r = (h << 2u) % 3u;
+world:818:lit:14	818	let r = (h >> 3u) % 3u;
+world:818:lit:20	818	let r = (h >> 2u) % 4u;
+world:820:lit:14	820	var flipped = 1u;
+world:821:lt:19	821	for (var j = 0u; j <= 3u && flipped < i; j += 1u) {
+world:821:lt:35	821	for (var j = 0u; j < 3u && flipped <= i; j += 1u) {
+world:821:and:24	821	for (var j = 0u; j < 3u || flipped < i; j += 1u) {
+world:821:adda:42	821	for (var j = 0u; j < 3u && flipped < i; j -= 1u) {
+world:821:lit:13	821	for (var j = 1u; j < 3u && flipped < i; j += 1u) {
+world:821:lit:21	821	for (var j = 0u; j < 4u && flipped < i; j += 1u) {
+world:821:lit:45	821	for (var j = 0u; j < 3u && flipped < i; j += 2u) {
+world:822:add:19	822	let bit = 1u << ((j - r) % 3u);
+world:822:rem:24	822	let bit = 1u << ((j + r) / 3u);
+world:822:shl:13	822	let bit = 1u >> ((j + r) % 3u);
+world:822:lit:10	822	let bit = 2u << ((j + r) % 3u);
+world:822:lit:27	822	let bit = 1u << ((j + r) % 4u);
+world:823:ne:14	823	if ((d & bit) == 0u) {
+world:823:band:6	823	if ((d | bit) != 0u) {
+world:823:lit:17	823	if ((d & bit) != 1u) {
+world:823:ift:0	823	if (true) {
+world:823:iff:0	823	if (false) {
+world:824:del:0	824	
+world:825:adda:8	825	flipped -= 1u;
+world:825:lit:11	825	flipped += 2u;
+world:825:del:0	825	
+world:898:eq:12	898	if (tunnels != 0u) {
+world:898:lit:15	898	if (tunnels == 1u) {
+world:898:ift:0	898	if (true) {
+world:898:iff:0	898	if (false) {
+world:899:lit:7	899	return 1u;
+world:901:add:26	901	let class_zoom = CAVE_ROOT - k;
+world:902:add:16	902	let child = zoom - 1u;
+world:902:lit:19	902	let child = zoom + 2u;
+world:903:gt:71	903	let room = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child >= class_zoom);
+world:903:sub:42	903	let room = select(1u << (2u * ((class_zoom + child) & 15u)), 0u, child > class_zoom);
+world:903:mul:27	903	let room = select(1u << (2u + ((class_zoom - child) & 15u)), 0u, child > class_zoom);
+world:903:shl:21	903	let room = select(1u >> (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
+world:903:band:51	903	let room = select(1u << (2u * ((class_zoom - child) | 15u)), 0u, child > class_zoom);
+world:903:sel:0	903	let room = select(0u, 1u << (2u * ((class_zoom - child) & 15u)), child > class_zoom);
+world:903:lit:18	903	let room = select(2u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
+world:903:lit:25	903	let room = select(1u << (3u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
+world:903:lit:54	903	let room = select(1u << (2u * ((class_zoom - child) & 16u)), 0u, child > class_zoom);
+world:903:lit:61	903	let room = select(1u << (2u * ((class_zoom - child) & 15u)), 1u, child > class_zoom);
+world:905:xor:32	905	let h = node_seed(CAVE_TAG_SPLIT & k, zoom, c);
+world:906:band:16	906	var keep = 0xffu | ~on;
+world:906:not:19	906	var keep = 0xffu & on;
+world:906:hex:11	906	var keep = 0xfeu & ~on;
+world:907:lt:25	907	for (var axis = 0u; axis <= 3u && n > 0u; axis += 1u) {
+world:907:gt:35	907	for (var axis = 0u; axis < 3u && n >= 0u; axis += 1u) {
+world:907:and:30	907	for (var axis = 0u; axis < 3u || n > 0u; axis += 1u) {
+world:907:adda:46	907	for (var axis = 0u; axis < 3u && n > 0u; axis -= 1u) {
+world:907:lit:16	907	for (var axis = 1u; axis < 3u && n > 0u; axis += 1u) {
+world:907:lit:27	907	for (var axis = 0u; axis < 4u && n > 0u; axis += 1u) {
+world:907:lit:37	907	for (var axis = 0u; axis < 3u && n > 1u; axis += 1u) {
+ID1860	0	
+world:907:lit:49	907	for (var axis = 0u; axis < 3u && n > 0u; axis += 2u) {
+world:908:eq:45	908	let upper = select(select(0xf0u, 0xccu, axis != 1u), 0xaau, axis == 0u);
+world:908:eq:65	908	let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis != 0u);
+world:908:sel:0	908	let upper = select(0xaau, select(0xf0u, 0xccu, axis == 1u), axis == 0u);
+world:908:sel:1	908	let upper = select(select(0xccu, 0xf0u, axis == 1u), 0xaau, axis == 0u);
+world:908:lit:48	908	let upper = select(select(0xf0u, 0xccu, axis == 2u), 0xaau, axis == 0u);
+world:908:lit:68	908	let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 1u);
+world:908:hex:26	908	let upper = select(select(0xf1u, 0xccu, axis == 1u), 0xaau, axis == 0u);
+world:908:hex:33	908	let upper = select(select(0xf0u, 0xcdu, axis == 1u), 0xaau, axis == 0u);
+world:908:hex:53	908	let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xabu, axis == 0u);
+world:909:add:20	909	let weight = 0x4000u - ((h >> (8u * axis)) & 0xffu) * 0x80u;
+world:909:mul:33	909	let weight = 0x4000u + ((h >> (8u + axis)) & 0xffu) * 0x80u;
+world:909:mul:51	909	let weight = 0x4000u + ((h >> (8u * axis)) & 0xffu) + 0x80u;
+world:909:shr:27	909	let weight = 0x4000u + ((h << (8u * axis)) & 0xffu) * 0x80u;
+world:909:band:42	909	let weight = 0x4000u + ((h >> (8u * axis)) | 0xffu) * 0x80u;
+world:909:lit:31	909	let weight = 0x4000u + ((h >> (9u * axis)) & 0xffu) * 0x80u;
+world:909:hex:13	909	let weight = 0x4001u + ((h >> (8u * axis)) & 0xffu) * 0x80u;
+world:909:hex:45	909	let weight = 0x4000u + ((h >> (8u * axis)) & 0xfeu) * 0x80u;
+world:909:hex:54	909	let weight = 0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x81u;
+world:910:add:45	910	let w = (weight << 16u) | (rotl(h, 11u * axis - 5u) & 0xffffu);
+world:910:mul:38	910	let w = (weight << 16u) | (rotl(h, 11u + axis + 5u) & 0xffffu);
+world:910:shl:16	910	let w = (weight >> 16u) | (rotl(h, 11u * axis + 5u) & 0xffffu);
+world:910:band:51	910	let w = (weight << 16u) | (rotl(h, 11u * axis + 5u) | 0xffffu);
+world:910:bor:23	910	let w = (weight << 16u) & (rotl(h, 11u * axis + 5u) & 0xffffu);
+world:910:lit:19	910	let w = (weight << 17u) | (rotl(h, 11u * axis + 5u) & 0xffffu);
+world:910:lit:35	910	let w = (weight << 16u) | (rotl(h, 12u * axis + 5u) & 0xffffu);
+world:910:lit:48	910	let w = (weight << 16u) | (rotl(h, 11u * axis + 6u) & 0xffffu);
+world:910:hex:54	910	let w = (weight << 16u) | (rotl(h, 11u * axis + 5u) & 0xfffeu);
+world:911:mul:45	911	let lo = halve(n, countOneBits(keep & ~upper) + room, countOneBits(keep & upper) * room, w);
+world:911:mul:80	911	let lo = halve(n, countOneBits(keep & ~upper) * room, countOneBits(keep & upper) + room, w);
+world:911:band:35	911	let lo = halve(n, countOneBits(keep | ~upper) * room, countOneBits(keep & upper) * room, w);
+world:911:band:71	911	let lo = halve(n, countOneBits(keep & ~upper) * room, countOneBits(keep | upper) * room, w);
+world:911:not:38	911	let lo = halve(n, countOneBits(keep & upper) * room, countOneBits(keep & upper) * room, w);
+world:912:eq:31	912	let up = ((want >> axis) & 1u) != 1u;
+world:912:shr:16	912	let up = ((want << axis) & 1u) == 1u;
+world:912:band:24	912	let up = ((want >> axis) | 1u) == 1u;
+world:912:lit:27	912	let up = ((want >> axis) & 2u) == 1u;
+world:912:lit:34	912	let up = ((want >> axis) & 1u) == 2u;
+world:913:sub:16	913	n = select(lo, n + lo, up);
+world:913:sel:0	913	n = select(n - lo, lo, up);
+world:913:del:0	913	
+world:914:anda:5	914	keep |= select(~upper, upper, up);
+world:914:not:15	914	keep &= select(upper, upper, up);
+world:914:sel:0	914	keep &= select(upper, ~upper, up);
+world:914:del:0	914	
+world:162:le:64	162	return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v < OBJECTS_LAST);
+world:162:ge:42	162	return v == VALUE_AIR || grounds(v) || (v > OBJECTS_FIRST && v <= OBJECTS_LAST);
+world:162:eq:9	162	return v != VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+world:162:and:59	162	return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST || v <= OBJECTS_LAST);
+world:162:or:22	162	return v == VALUE_AIR && grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+world:162:or:36	162	return v == VALUE_AIR || grounds(v) && (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+world:362:sub:14	362	let top = cell + BRICK_SHIFT;
+world:363:lt:23	363	if (root == 0u || zoom <= top) {
+world:363:eq:9	363	if (root != 0u || zoom < top) {
+world:363:or:15	363	if (root == 0u && zoom < top) {
+world:363:lit:12	363	if (root == 1u || zoom < top) {
+world:363:ift:0	363	if (true) {
+world:363:iff:0	363	if (false) {
+world:366:sub:22	366	let k = (at.z >> (zoom + top)) - (i32(root) >> ROOT_ID_BITS);
+world:366:sub:30	366	let k = (at.z >> (zoom - top)) + (i32(root) >> ROOT_ID_BITS);
+ID1920	0	
+world:366:shr:14	366	let k = (at.z << (zoom - top)) - (i32(root) >> ROOT_ID_BITS);
+world:366:shr:44	366	let k = (at.z >> (zoom - top)) - (i32(root) << ROOT_ID_BITS);
+world:367:lt:6	367	if (k <= 0i || k >= i32(ROOT_NODES)) {
+world:367:ge:16	367	if (k < 0i || k > i32(ROOT_NODES)) {
+world:367:or:11	367	if (k < 0i && k >= i32(ROOT_NODES)) {
+world:367:lit:8	367	if (k < 1i || k >= i32(ROOT_NODES)) {
+world:367:ift:0	367	if (true) {
+world:367:iff:0	367	if (false) {
+world:370:add:67	370	return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS - 1u)) - u32(k), top, zoom, at);
+world:370:sub:60	370	return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS + 1u)) + u32(k), top, zoom, at);
+world:370:mul:31	370	return tree_down(WAYS, CHILDREN + (root & (POOL_CHILD_GROUPS - 1u)) + u32(k), top, zoom, at);
+world:370:band:39	370	return tree_down(WAYS, CHILDREN * (root | (POOL_CHILD_GROUPS - 1u)) + u32(k), top, zoom, at);
+world:370:lit:63	370	return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS - 2u)) + u32(k), top, zoom, at);
+world:1072:eq:35	1072	if (((place ^ before) & LOOKUP_AT) != 0u) {
+world:1072:band:21	1072	if (((place ^ before) | LOOKUP_AT) == 0u) {
+world:1072:xor:11	1072	if (((place & before) & LOOKUP_AT) == 0u) {
+world:1072:lit:38	1072	if (((place ^ before) & LOOKUP_AT) == 1u) {
+world:1072:ift:0	1072	if (true) {
+world:1072:iff:0	1072	if (false) {
+world:1075:lnot:4	1075	if (lookup_here(place)) {
+world:1075:ift:0	1075	if (true) {
+world:1075:iff:0	1075	if (false) {
+world:1078:add:57	1078	return way_cursor(ground[lookup_slot(place) * BRICK_WORDS - ROOT_AT], lookup_from(place), zoom, c);
+world:1078:mul:43	1078	return way_cursor(ground[lookup_slot(place) + BRICK_WORDS + ROOT_AT], lookup_from(place), zoom, c);
+world:1084:lnot:4	1084	if (cut_holds(carve, zoom, c)) {
+world:1084:ift:0	1084	if (true) {
+world:1084:iff:0	1084	if (false) {
+world:1085:del:0	1085	
+world:1086:del:0	1086	
+world:1088:lit:16	1088	var over_four = 1u;
+world:1089:ne:9	1089	if (over == VALUE_VOID) {
+world:1089:ift:0	1089	if (true) {
+world:1089:iff:0	1089	if (false) {
+world:1090:ift:0	1090	if (true) {
+world:1090:iff:0	1090	if (false) {
+world:1091:del:0	1091	
+world:1093:eq:14	1093	if (over_fill != FULL) {
+world:1093:ift:0	1093	if (true) {
+world:1093:iff:0	1093	if (false) {
+world:1094:bor:47	1094	return Answer(KIND_CELL, vec2<u32>(PLACED_ASSET & over, over_four), vec4<u32>(put, shard, above.z, above.w));
+world:1100:eq:11	1100	if (g.kind != KIND_LACKS && over == VALUE_VOID) {
+world:1100:eq:33	1100	if (g.kind == KIND_LACKS && over != VALUE_VOID) {
+world:1100:and:25	1100	if (g.kind == KIND_LACKS || over == VALUE_VOID) {
+world:1100:ift:0	1100	if (true) {
+world:1100:iff:0	1100	if (false) {
+world:1104:eq:11	1104	if (g.kind != KIND_CELL) {
+world:1104:ift:0	1104	if (true) {
+world:1104:iff:0	1104	if (false) {
+world:1105:del:0	1105	
+world:1107:lit:11	1107	var fill = 1u;
+world:1108:lit:11	1108	var four = 1u;
+world:1109:ift:0	1109	if (true) {
+world:1109:iff:0	1109	if (false) {
+world:1110:eq:37	1110	let share = select(FULL, g.part, c.z != g.top - 1i);
+world:1110:sub:45	1110	let share = select(FULL, g.part, c.z == g.top + 1i);
+world:1110:sel:0	1110	let share = select(g.part, FULL, c.z == g.top - 1i);
+world:1110:lit:48	1110	let share = select(FULL, g.part, c.z == g.top - 2i);
+world:1111:del:0	1111	
+world:1112:ge:41	1112	four = select(g.fold, four_of(val), zoom > LEAF_CELL || val != g.palette_idx);
+world:1112:ne:61	1112	four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val == g.palette_idx);
+ID1980	0	
+world:1112:or:54	1112	four = select(g.fold, four_of(val), zoom >= LEAF_CELL && val != g.palette_idx);
+world:1112:sel:0	1112	four = select(four_of(val), g.fold, zoom >= LEAF_CELL || val != g.palette_idx);
+world:1112:del:0	1112	
+world:1114:eq:11	1114	if (g.kind != KIND_CELL && lookup_here(g.place)) {
+world:1114:and:24	1114	if (g.kind == KIND_CELL || lookup_here(g.place)) {
+world:1114:ift:0	1114	if (true) {
+world:1114:iff:0	1114	if (false) {
+world:1116:ne:8	1116	if (way == VALUE_VOID) {
+world:1116:ift:0	1116	if (true) {
+world:1116:iff:0	1116	if (false) {
+world:1118:or:15	1118	if (got.theirs && !fills(val)) {
+world:1118:lnot:18	1118	if (got.theirs || fills(val)) {
+world:1118:ift:0	1118	if (true) {
+world:1118:iff:0	1118	if (false) {
+world:1119:del:0	1119	
+world:1120:del:0	1120	
+world:1122:del:0	1122	
+world:1125:ne:9	1125	if (over == VALUE_VOID) {
+world:1125:ift:0	1125	if (true) {
+world:1125:iff:0	1125	if (false) {
+world:1127:or:15	1127	if (got.theirs && !fills(val)) {
+world:1127:lnot:18	1127	if (got.theirs || fills(val)) {
+world:1127:ift:0	1127	if (true) {
+world:1127:iff:0	1127	if (false) {
+world:1128:bor:18	1128	val = PLACED_ASSET & over;
+world:1128:del:0	1128	
+world:1129:del:0	1129	
+world:1131:del:0	1131	
+world:1134:eq:11	1134	if (filled != 0u) {
+world:1134:lit:14	1134	if (filled == 1u) {
+world:1134:ift:0	1134	if (true) {
+world:1134:iff:0	1134	if (false) {
+world:1135:eq:11	1135	if (g.kind != KIND_LACKS) {
+world:1135:ift:0	1135	if (true) {
+world:1135:iff:0	1135	if (false) {
+world:1138:eq:85	1138	return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over != VALUE_AIR), 0u), at);
+world:1138:bor:66	1138	return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET & VALUE_AIR, over == VALUE_AIR), 0u), at);
+world:1138:sel:0	1138	return Answer(KIND_CELL, vec2<u32>(select(PLACED_ASSET | VALUE_AIR, VALUE_VOID, over == VALUE_AIR), 0u), at);
+world:1138:lit:100	1138	return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over == VALUE_AIR), 1u), at);
+world:1140:rem:26	1140	let asset = val | ((filled / EIGHTHS) << FILL_SHIFT);
+world:1140:shl:38	1140	let asset = val | ((filled % EIGHTHS) >> FILL_SHIFT);
+world:1140:bor:15	1140	let asset = val & ((filled % EIGHTHS) << FILL_SHIFT);
+world:1065:add:22	1065	let slot = OBJECT_ROOT - child_idx(p >> vec3<u32>(zoom));
+world:1065:shr:37	1065	let slot = OBJECT_ROOT + child_idx(p << vec3<u32>(zoom));
+world:1066:lit:41	1066	return vec4<u32>(tree_down(PLACED, slot, 1u, zoom, p), SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING);
+world:403:eq:9	403	if (zoom != 0u) {
+world:403:lit:12	403	if (zoom == 1u) {
+world:403:ift:0	403	if (true) {
+world:403:iff:0	403	if (false) {
+world:404:lit:7	404	return 1i;
+world:406:sub:17	406	return (x << (32u + zoom)) >> (32u - zoom);
+world:406:sub:34	406	return (x << (32u - zoom)) >> (32u + zoom);
+world:406:shr:27	406	return (x << (32u - zoom)) << (32u - zoom);
+world:406:shl:10	406	return (x >> (32u - zoom)) >> (32u - zoom);
+world:406:lit:14	406	return (x << (33u - zoom)) >> (32u - zoom);
+world:406:lit:31	406	return (x << (32u - zoom)) >> (33u - zoom);
+world:240:eq:55	240	return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom != 0u);
+world:240:sub:30	240	return select(i32(1u << ((zoom + 1u) & 31u)), 0i, zoom == 0u);
+world:240:shl:21	240	return select(i32(1u >> ((zoom - 1u) & 31u)), 0i, zoom == 0u);
+world:240:band:36	240	return select(i32(1u << ((zoom - 1u) | 31u)), 0i, zoom == 0u);
+ID2040	0	
+world:240:sel:0	240	return select(0i, i32(1u << ((zoom - 1u) & 31u)), zoom == 0u);
+world:240:lit:18	240	return select(i32(2u << ((zoom - 1u) & 31u)), 0i, zoom == 0u);
+world:240:lit:33	240	return select(i32(1u << ((zoom - 2u) & 31u)), 0i, zoom == 0u);
+world:240:lit:39	240	return select(i32(1u << ((zoom - 1u) & 32u)), 0i, zoom == 0u);
+world:240:lit:46	240	return select(i32(1u << ((zoom - 1u) & 31u)), 1i, zoom == 0u);
+world:240:lit:58	240	return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom == 1u);
+world:243:le:68	243	return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom < SHARD_ZOOM);
+world:243:sub:30	243	return select(i32(1u << ((zoom + SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:sub:43	243	return select(i32(1u << ((zoom - SHARD_ZOOM + 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:shl:21	243	return select(i32(1u >> ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:band:49	243	return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) | 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:sel:0	243	return select(0i, i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), zoom <= SHARD_ZOOM);
+world:243:lit:18	243	return select(i32(2u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:lit:46	243	return select(i32(1u << ((zoom - SHARD_ZOOM - 2u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+world:243:lit:52	243	return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 32u)), 0i, zoom <= SHARD_ZOOM);
+world:243:lit:59	243	return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 1i, zoom <= SHARD_ZOOM);

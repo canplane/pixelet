@@ -1,14 +1,15 @@
 # pxl-content, pixelet's content beside the engine
 
 **2026-11-02** — recorded with the user, through the coordinating session.
-Main was at `6c20b8ac3`; the commits that carry this record land it.
+Main was at `ca7aa2626d`; the commits that carry this record land it. The
+commits are named as `original` keeps them.
 
 ## What was asked
 
 Split pixelet's content out of pxl-spec-core into a new gpu-portable crate,
 `pxl-content`, behind one trait, so the engine never names content.
 pxl-spec-core kept its name and path for the split; it was renamed to
-pxl-engine separately (`ae87c3014`), and this record uses the new name.
+pxl-engine separately (`283ded8dc2`), and this record uses the new name.
 
 ## What the user decided
 
@@ -32,7 +33,9 @@ pxl-engine separately (`ae87c3014`), and this record uses the new name.
   it was first byte-identity: moving code between crates changes rust-gpu's
   numbering and which functions pxl-shader-build keeps. The split's own
   growth is accepted: a few KB per module, from rustc's copy of each small
-  helper in every crate that calls it.
+  helper in every crate that calls it. Since 2026-11-05 the WGSL is written by
+  hand and held to pxl-engine word for word
+  ([the shaders by hand](./20261105-the-shaders-by-hand-held-to-the-engine.md)).
 - **The decor's scatter, placement and generation and the palette files move
   as files**, no behaviour changed. A refusal of a changed palette id in the
   generator was dropped from scope.
@@ -47,10 +50,9 @@ pxl-engine separately (`ae87c3014`), and this record uses the new name.
   call-or-inline choice make it unreachable for any code that changes crate.
 - Merging identical functions in pxl-shader-build before the call-or-inline
   choice, with or without leaving labels and returns out of `call_shorter`'s
-  count (`content-merge.patch`, beside the worktree): against `a348bd9f0` the
-  merge alone was −37,264 bytes in all but light_slide +1,554 and way_tree
-  +222; with the count fix −50,937 but light +3,531, way_tree +797 and height
-  +34. The kept set is chosen on each function's instruction count before
+  count: against `fcf561cf92` the merge alone was −37,264 bytes in all but
+  light_slide +1,554 and way_tree +222; with the count fix −50,937 but light
+  +3,531, way_tree +797 and height +34. The kept set is chosen on each function's instruction count before
   spirv-opt and the module is taken whole with those boundaries or with
   none, so any change to the counts moves the set and some module grows; two
   fixes that did not converge ended the attempt.

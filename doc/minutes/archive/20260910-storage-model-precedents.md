@@ -11,7 +11,7 @@ Part 1 is the reading, in the same shape as
 [20260906-voxel-engine-industry-comparison.md](./20260906-voxel-engine-industry-comparison.md):
 what the precedent actually does, what pixelet already matches, and where it is
 genuinely different. Part 2 is what falls out of it once the reading is held
-against this project's own constraint — ten thousand actors, ten thousand POI
+against this project's own constraint — ten thousand characters, ten thousand POI
 and ten thousand chat bubbles in one place.
 
 Nothing here is implemented. It is the baseline the next work gets measured
@@ -103,7 +103,7 @@ ms.
 
 **What this means for pixelet.** The cell size should track the _entity's own
 extent_, not a level of the existing hierarchy. An L2 chunk is 121 m and an L1
-cell is 1.89 m; a POI badge or an actor is neither, so quantizing a
+cell is 1.89 m; a POI badge or a character is neither, so quantizing a
 dynamic-point index against a terrain level would be choosing the cell size for
 the wrong reason. The L4 ceiling from the density document bites here too: above
 L4 the lattice has no Z, so a hash key derived from lattice indices cannot be 3D
@@ -345,7 +345,7 @@ a way it is not there — bounded by the regeneration cost, which the ledger
 measures.
 
 **The scene is 2.5D terrain plus a sparse object layer, not a general scene
-graph.** Neither 3D Tiles' octree nor Mass's actor model is quite the shape;
+graph.** Neither 3D Tiles' octree nor Mass's character model is quite the shape;
 terrain is a dense heightfield with channels and objects are a sparse tree, and
 the existing `WorldLayer` contract already composes them into one volume. That
 composition has no precedent among these six.
@@ -390,7 +390,7 @@ each, leaves standing.
 Every mechanism in the engine today is volumetric — cell, voxel, run, box.
 Terrain and placed objects fit it because they occupy space.
 
-POI, chat bubbles and actors do not. They are **points with a screen presence**:
+POI, chat bubbles and characters do not. They are **points with a screen presence**:
 no volume, position that matters, and overlap as the governing problem. That is
 why
 [20260910-asset-identity-and-storage-model.md](./20260910-asset-identity-and-storage-model.md)
@@ -406,14 +406,14 @@ None of the seven precedents puts both in one structure either.
 point equivalent is a flat array per page — which is what POI already is, so
 nothing changes there.
 
-Moving points are the different case. An actor crosses pages, so partitioning it
+Moving points are the different case. A character crosses pages, so partitioning it
 by page means re-bucketing on every step, and that is the index's job rather
 than the store's.
 
 > **The store partitions along the axis that does not move. The index partitions
 > by where things are now.**
 
-Static points (POI) keep their per-page arrays. Dynamic points (actors, chat
+Static points (POI) keep their per-page arrays. Dynamic points (characters, chat
 bubbles) get one structure-of-arrays with a stable id and no spatial partition
 at all.
 
@@ -429,7 +429,7 @@ radius_, since that is the effective extent of the thing being asked about.
 Timestamped rather than cleared, prime table well above the entity count.
 
 It must not quantize against the L hierarchy. An L2 chunk is 121 m and an L1
-cell is 1.89 m; an actor is neither, so picking a level would be choosing the
+cell is 1.89 m; a character is neither, so picking a level would be choosing the
 cell size for the wrong reason. And above L4 the lattice has no Z at all. A hash
 does not need the lattice, which is the point.
 
@@ -467,7 +467,7 @@ exactly supercluster's output, and it is right — for one of the three.
 | :-------------------- | :---------------------------------------------------------------------------- | :---------------------------------------------------------------------- |
 | **POI**, 10k          | individual identity matters less than presence; "47 here" is real information | **cluster**, circle plus count                                          |
 | **chat bubbles**, 10k | the content _is_ the object; merging fifty into "50" destroys all of it       | **priority cut** — the nearest or most recent N, the rest simply absent |
-| **actors**, 10k       | an individual whose position means something; two cannot become "2"           | **representation LOD**, never merged                                    |
+| **characters**, 10k       | an individual whose position means something; two cannot become "2"           | **representation LOD**, never merged                                    |
 
 Chat is the one worth stating explicitly, because it looks like the other two
 and is not. A bubble is a message, not a symbol. MMO chat and floating combat
@@ -499,7 +499,7 @@ tile, and tiles at different distances are already at different zooms.
 3. batch       per-tier cap, preallocated buffer, rewritten in place
 ```
 
-Actors skip step 1 and enter at step 2 with a representation tier. Chat bubbles
+Characters skip step 1 and enter at step 2 with a representation tier. Chat bubbles
 replace step 1 with a recency cut. Steps 2 and 3 are one implementation.
 
 ## Verification, which the density document asked for first
@@ -620,7 +620,7 @@ cap at startup, rewritten in place with `addUpdateRange` and
 
 ```
 static    POI             rebuilt when pages load or unload
-dynamic   actors, bubbles rebuilt every frame
+dynamic   characters, bubbles rebuilt every frame
 ```
 
 Same class, different cadence. Mixing them would rebuild ten thousand static
@@ -664,7 +664,7 @@ What `cell_shift` should be. Teschner sets it from the extent of the indexed
 thing; since the query is "what is within this radius", the extent here is the
 _query radius_.
 
-But the radius differs per consumer — actor interaction, badge selection and
+But the radius differs per consumer — character interaction, badge selection and
 eventual AOI are not the same distance. Either each consumer gets its own index
 with its own cell size, or one index takes the most common radius and the others
 sweep more or fewer cells than they need. Teschner's finding that cell size

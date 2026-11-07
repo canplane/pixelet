@@ -1,0 +1,158 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.15s
+     Running tests/decor.rs (target/session/dd264d10-d7bf-4986-97f1-da00580bf1cd/debug/deps/decor-70b590083297ee7f)
+
+running 1 test
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam: 94409 records in 480 pairs, built in 909.060666ms
+test hand_decor_answers_as_placement has been running for over 60 seconds
+east of the seam, every pair whole: 94409 asked, 102240468 walk visits, 379618 ask visits; 0 differ by hand, 0 generated
+east of the seam: 4625 stood
+east of the seam, a cut over a record: 176 asked, 45466 walk visits, 230 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 117981 walk visits, 467 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 166461 walk visits, 250 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 1140 asked, 1467805 walk visits, 4451 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 522 asked, 545921 walk visits, 1109 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 69120 walk visits, 437 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 149002 walk visits, 395 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 111 asked, 29419 walk visits, 277 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 169 asked, 43426 walk visits, 220 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 52873 walk visits, 368 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 105 asked, 67178 walk visits, 155 ask visits; 0 differ by hand, 0 generated
+east of the seam, a cut over a record: 176 asked, 105577 walk visits, 265 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 176 asked, 117981 walk visits, 467 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1975 asked, 1077453 walk visits, 8076 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 3155 asked, 6363505 walk visits, 13057 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 902 asked, 1899586 walk visits, 5039 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1975 asked, 1077453 walk visits, 8076 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 2096 asked, 4224982 walk visits, 8257 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 902 asked, 1899586 walk visits, 5039 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1975 asked, 1077453 walk visits, 8076 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1050 asked, 2346595 walk visits, 4160 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 902 asked, 1899586 walk visits, 5039 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1440 asked, 2574892 walk visits, 5592 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed decor left out: 1050 asked, 2346595 walk visits, 4160 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 3068 asked, 6399127 walk visits, 12797 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 1908 asked, 81208 walk visits, 7284 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 3634 asked, 3906127 walk visits, 12246 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 2176 asked, 4527832 walk visits, 7822 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 4359 asked, 4295247 walk visits, 15557 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+east of the seam, a placed leaf left out: 3961 asked, 4966470 walk visits, 16330 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 506 asked, 221047 walk visits, 768 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 4505 asked, 5536935 walk visits, 18977 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 1873 asked, 1924070 walk visits, 5347 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 436 asked, 284312 walk visits, 815 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 14606 asked, 20623632 walk visits, 61003 ask visits; 0 differ by hand, 0 generated
+east of the seam, whole and in part: 17215 asked, 22652155 walk visits, 72097 ask visits; 0 differ by hand, 0 generated
+east of the seam: 142.824509833s
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+west of the seam: 84990 records in 452 pairs, built in 908.1005ms
+west of the seam, every pair whole: 84990 asked, 115298901 walk visits, 348076 ask visits; 0 differ by hand, 0 generated
+west of the seam: 4242 stood
+west of the seam, a cut over a record: 229 asked, 21183 walk visits, 265 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 176 asked, 211280 walk visits, 240 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 102 asked, 92880 walk visits, 119 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 2232 asked, 5027391 walk visits, 12298 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 176 asked, 73731 walk visits, 365 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 176 asked, 29610 walk visits, 218 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 176 asked, 33573 walk visits, 280 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 282 asked, 97167 walk visits, 458 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 148 asked, 37014 walk visits, 281 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 1667 asked, 1073268 walk visits, 7004 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 2108 asked, 3940090 walk visits, 10666 ask visits; 0 differ by hand, 0 generated
+west of the seam, a cut over a record: 1667 asked, 1073268 walk visits, 6969 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 122 asked, 54602 walk visits, 390 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 122 asked, 54602 walk visits, 390 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 1667 asked, 1073268 walk visits, 7004 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 1264 asked, 3315189 walk visits, 4726 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 2337 asked, 7974035 walk visits, 10163 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 2337 asked, 7974035 walk visits, 10163 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 2115 asked, 4535134 walk visits, 9497 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 2115 asked, 4535134 walk visits, 9497 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 4431 asked, 13705726 walk visits, 19429 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 987 asked, 1982191 walk visits, 4618 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 122 asked, 54602 walk visits, 390 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed decor left out: 122 asked, 54602 walk visits, 390 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 1269 asked, 1830383 walk visits, 4645 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 503 asked, 377204 walk visits, 2036 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 4287 asked, 7161939 walk visits, 15594 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 2440 asked, 5512533 walk visits, 8567 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 229 asked, 21183 walk visits, 265 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 2487 asked, 6961320 walk visits, 8508 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 0 asked, 0 walk visits, 0 ask visits; 0 differ by hand, 0 generated
+west of the seam, a placed leaf left out: 5148 asked, 7281530 walk visits, 18192 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 1602 asked, 996055 walk visits, 5156 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 3918 asked, 6496085 walk visits, 17275 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 305 asked, 321484 walk visits, 422 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 12280 asked, 19065062 walk visits, 52008 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 10327 asked, 16604589 walk visits, 49773 ask visits; 0 differ by hand, 0 generated
+west of the seam, whole and in part: 11202 asked, 15215049 walk visits, 47288 ask visits; 0 differ by hand, 0 generated
+west of the seam: 108.989152s
+669 bricks held, 99 absent, 2 with ways over 915 child groups
+past the area: 79848 records in 493 pairs, built in 281.430667ms
+past the area, every pair whole: 79848 asked, 2403062 walk visits, 316404 ask visits; 0 differ by hand, 0 generated
+past the area: 0 stood
+past the area: 1.526252209s
+     1704352 ask visits
+        3719 ask: a column not held
+       71666 ask: as edited
+     1632686 ask: of the world unplaced
+          15 box: a column not held takes it
+         119 edit: a cut takes it
+         178 edit: air takes it
+           0 edit: asked over a column not held
+         380 edit: at a coarse zoom
+       59296 edit: no tree there, no ask by hand
+         131 edit: part of its cube
+        7959 edit: something placed takes it
+         538 edit: something placed takes nothing
+         398 edit: under an eighth, or air on a lack
+        2931 generates: a boat
+        1264 generates: a car
+         736 generates: a train
+       12891 generates: a tree
+       11929 generates: at a coarser clip level
+        5893 generates: at the leaves
+        5434 generates: sunk under its corner
+     2454805 hand: cells walked
+       76227 hand: columns walked
+          12 pair: more laid than its room
+      148999 part: not reached, it stands
+        2695 part: reached
+        1042 placed: a decor in reach
+          95 placed: a decor left out still claims
+         256 placed: a decor's box takes it
+         263 placed: something else in reach
+      396502 record: footing, nothing generates
+       17822 record: generates
+        6924 record: no footing
+      421248 records asked
+       58871 surface: a part of its cube
+        2658 surface: a wall
+        1954 surface: a way on a void column
+      504950 surface: columns walked
+        8219 surface: nothing fills
+       40678 surface: over the ground, a way
+      210678 surface: past the area
+      236648 surface: the ground's top
+        8727 surface: under the ground's top, a bore
+        8219 surface: void column, no way
+        1267 vote: across
+         733 vote: along
+        1016 vote: flipped
+   469994480 walk visits
+           0 words differing, by hand
+           0 words differing, generated
+test hand_decor_answers_as_placement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 256.65s
+

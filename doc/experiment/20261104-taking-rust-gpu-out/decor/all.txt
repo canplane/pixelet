@@ -1,0 +1,200 @@
+   Compiling pxl-render v0.0.0 (/Users/sanghoon/git/canplane/pixelet-decor/rust/client/render)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.09s
+     Running tests/decor.rs (target/session/dd264d10-d7bf-4986-97f1-da00580bf1cd/debug/deps/decor-70b590083297ee7f)
+
+running 7 tests
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam, all held, no box: 0 whole, 0 in part
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+test hand_args_answers_as_the_rust ... ok
+east of the seam, as a frame asks: 117636 records, 2243 drawn, 0 at an edge
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam: 94409 records in 480 pairs, built in 919.682458ms
+east of the seam: 900 pairs
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+east of the seam, every entry whole: 508 whole, 0 in part
+east of the seam, first, every entry whole: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the eye moved: 506 pairs, 132 drawn, 0 at an edge
+east of the seam, the placed decor gone, some stale: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, bricks handed: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the placed decor back: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a cut: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a corner left out: 506 pairs, 123 drawn, 0 at an edge
+east of the seam: the Rust's frames in 3.5175485s
+east of the seam, a corner left out: 117636 records, 2243 drawn, 0 at an edge
+east of the seam, the eye on a record: 117636 records, 1 drawn, 0 at an edge
+west of the seam: 856 pairs
+669 bricks held, 99 absent, 2 with ways over 915 child groups
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+east of the seam, some stale: 100 whole, 0 in part
+east of the seam, a far range: 117636 records, 20263 drawn, 0 at an edge
+south: 912 pairs
+thin: 2668 pairs, 220856 laid over both, 660 past where they stand
+test hand_thin_lays_as_scatter ... ok
+east of the seam, a coarse range: 117636 records, 1125 drawn, 0 at an edge
+east of the seam, a little shown: 42 whole, 0 in part
+east of the seam: run 0, by hand true: 0 apart, 7.1746575s
+east of the seam, the model's floor just over its span: 117636 records, 10619 drawn, 0 at an edge
+compact: {"instances laid": 18578, "runs": 96}
+test hand_compact_lays_as_the_rust ... ok
+east of the seam, an edit: 0 whole, 21 in part
+east of the seam, the model's floor just under its span: 117636 records, 10620 drawn, 0 at an edge
+east of the seam, the impostor's floor just over its span: 117636 records, 10619 drawn, 0 at an edge
+east of the seam, a brick filled, every kind: 33 whole, 63 in part
+east of the seam: run 1, by hand true: 0 apart, 5.721291s
+east of the seam, the eye a step short of the leaves' edge: 117636 records, 12585 drawn, 1 at an edge
+east of the seam, round the world: 0 whole, 117 in part
+east of the seam, the eye a step past the leaves' edge: 117636 records, 12584 drawn, 1 at an edge
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam: run 2, by hand true: 0 apart, 2.751578333s
+east of the seam, placed, as a frame asks: 117716 records, 2245 drawn, 0 at an edge
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+west of the seam, all held, no box: 0 whole, 0 in part
+east of the seam, placed, a corner left out: 117716 records, 2245 drawn, 0 at an edge
+east of the seam, placed, the eye on a record: 117716 records, 1 drawn, 0 at an edge
+west of the seam, every entry whole: 480 whole, 0 in part
+east of the seam: run 3, by hand true: 0 apart, 1.555863041s
+east of the seam, placed, a far range: 117716 records, 20331 drawn, 0 at an edge
+west of the seam, some stale: 92 whole, 0 in part
+east of the seam, placed, a coarse range: 117716 records, 1125 drawn, 0 at an edge
+east of the seam, placed, the model's floor just over its span: 117716 records, 10621 drawn, 0 at an edge
+west of the seam, a little shown: 46 whole, 0 in part
+east of the seam: run 4, by hand true: 0 apart, 1.759975791s
+east of the seam, placed, the model's floor just under its span: 117716 records, 10622 drawn, 0 at an edge
+west of the seam, an edit: 0 whole, 17 in part
+east of the seam, placed, the impostor's floor just over its span: 117716 records, 10621 drawn, 0 at an edge
+east of the seam, placed, the eye a step short of the leaves' edge: 117716 records, 12588 drawn, 1 at an edge
+west of the seam, a brick filled, every kind: 41 whole, 52 in part
+east of the seam, placed, the eye a step past the leaves' edge: 117716 records, 12587 drawn, 1 at an edge
+east of the seam: run 5, by hand true: 0 apart, 1.72472225s
+west of the seam, round the world: 0 whole, 106 in part
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+mark: {"pairs in part": 376, "pairs whole": 1342, "runs": 336}
+test hand_mark_lists_as_the_rust ... ok
+west of the seam, as a frame asks: 118218 records, 1509 drawn, 0 at an edge
+west of the seam, a corner left out: 118218 records, 1509 drawn, 0 at an edge
+east of the seam: run 6, by hand true: 0 apart, 1.559526167s
+west of the seam, the eye on a record: 118218 records, 1 drawn, 0 at an edge
+west of the seam, a far range: 118218 records, 21303 drawn, 0 at an edge
+west of the seam, a coarse range: 118218 records, 387 drawn, 0 at an edge
+east of the seam: run 7, by hand true: 0 apart, 1.540138834s
+west of the seam, the model's floor just over its span: 118218 records, 10458 drawn, 0 at an edge
+west of the seam, the model's floor just under its span: 118218 records, 10459 drawn, 0 at an edge
+west of the seam, the impostor's floor just over its span: 118218 records, 10458 drawn, 0 at an edge
+west of the seam, the eye a step short of the leaves' edge: 118218 records, 12155 drawn, 0 at an edge
+east of the seam: run 8, by hand true: 0 apart, 1.581604208s
+west of the seam, the eye a step past the leaves' edge: 118218 records, 12154 drawn, 1 at an edge
+cnt: {"at an edge": 5, "cases with a model": 21, "cases with an impostor": 21, "drawn": 246281, "records sized": 3535700}
+test hand_cnt_sizes_as_the_rust ... ok
+east of the seam: run 9, by hand true: 0 apart, 1.52558275s
+east of the seam: run 10, by hand true: 0 apart, 1.595889709s
+east of the seam: run 11, by hand true: 0 apart, 1.505210792s
+test hand_decor_answers_as_placement has been running for over 60 seconds
+test hand_frames_answer_as_the_rust has been running for over 60 seconds
+east of the seam: run 12, by hand false: 0 apart, 38.606456084s
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+west of the seam, first, every entry whole: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the eye moved: 476 pairs, 105 drawn, 0 at an edge
+west of the seam, the placed decor gone, some stale: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, bricks handed: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the placed decor back: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a cut: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a corner left out: 476 pairs, 108 drawn, 0 at an edge
+west of the seam: the Rust's frames in 3.035525166s
+west of the seam: run 0, by hand true: 0 apart, 25.179985334s
+west of the seam: run 1, by hand true: 0 apart, 1.285856291s
+west of the seam: run 2, by hand true: 0 apart, 1.61081825s
+west of the seam: run 3, by hand true: 0 apart, 29.736765541s
+
+thread 'hand_decor_answers_as_placement' (33513309) panicked at client/render/tests/decor.rs:518:5:
+east of the seam, every pair whole, pairs [(657, 0, false), (657, 1, false), (657, 2, false), (657, 3, false)] generated: not done in 60s: Err(Timeout)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test hand_decor_answers_as_placement ... FAILED
+west of the seam: run 4, by hand true: 0 apart, 31.093775541s
+west of the seam: run 5, by hand true: 0 apart, 1.275276333s
+west of the seam: run 6, by hand true: 0 apart, 1.275341375s
+west of the seam: run 7, by hand true: 0 apart, 1.408057875s
+west of the seam: run 8, by hand true: 0 apart, 1.29287s
+west of the seam: run 9, by hand true: 0 apart, 1.310431542s
+west of the seam: run 10, by hand true: 0 apart, 1.214106792s
+west of the seam: run 11, by hand true: 0 apart, 1.273985959s
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffffffe, 1f13b282, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388606, 2621604]: got [fffffffe, 7921b48a, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388594, 2621616]: got [fffffffe, 56577131, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffffffe, 17a30d5b, 0], want [ff580201, ffffff3c, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388583, 2621552]: got [fffffffe, 5b1a5fe0, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffffffe, 33da898a, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffffffe, 6f95227a, 0], want [ffffffff, 0, 0]
+west of the seam, first, every entry whole, run 12, by hand false: (576, 1) [-8388576, 2621443]: got [fffffffe, e49c14cd, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffffffe, 1f13b282, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388606, 2621604]: got [fffffffe, 7921b48a, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388594, 2621616]: got [fffffffe, 56577131, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffffffe, 17a30d5b, 0], want [ff580201, ffffff3c, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388583, 2621552]: got [fffffffe, 5b1a5fe0, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffffffe, 33da898a, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffffffe, 6f95227a, 0], want [ffffffff, 0, 0]
+west of the seam, the eye moved, run 12, by hand false: (576, 1) [-8388576, 2621443]: got [fffffffe, e49c14cd, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388606, 2621555]: got [fffffffe, 1f13b282, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388606, 2621604]: got [fffffffe, 7921b48a, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388594, 2621616]: got [fffffffe, 56577131, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388588, 2621607]: got [fffffffe, 17a30d5b, 0], want [ff580201, ffffff3c, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388583, 2621552]: got [fffffffe, 5b1a5fe0, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388582, 2621467]: got [fffffffe, 33da898a, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388577, 2621559]: got [fffffffe, 6f95227a, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor gone, some stale, run 12, by hand false: (576, 1) [-8388576, 2621443]: got [fffffffe, e49c14cd, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388323, 2621626]: got [fffffffe, c0f3142c, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388318, 2621590]: got [fffffffe, ef03fafd, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388312, 2621627]: got [fffffffe, 8858ee0, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388297, 2621470]: got [fffffffe, 11ab42b, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388280, 2621639]: got [fffffffe, 1ca0e767, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388272, 2621473]: got [fffffffe, 85e360ac, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388272, 2621595]: got [fffffffe, 17cd90c9, 0], want [ffffffff, 0, 0]
+west of the seam, bricks handed, run 12, by hand false: (577, 1) [-8388270, 2621456]: got [fffffffe, 32fc9116, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388323, 2621626]: got [fffffffe, c0f3142c, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388318, 2621590]: got [fffffffe, ef03fafd, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388312, 2621627]: got [fffffffe, 8858ee0, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388297, 2621470]: got [fffffffe, 11ab42b, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388280, 2621639]: got [fffffffe, 1ca0e767, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388272, 2621473]: got [fffffffe, 85e360ac, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388272, 2621595]: got [fffffffe, 17cd90c9, 0], want [ffffffff, 0, 0]
+west of the seam, the placed decor back, run 12, by hand false: (577, 1) [-8388270, 2621456]: got [fffffffe, 32fc9116, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388323, 2621626]: got [fffffffe, c0f3142c, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388318, 2621590]: got [fffffffe, ef03fafd, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388312, 2621627]: got [fffffffe, 8858ee0, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388297, 2621470]: got [fffffffe, 11ab42b, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388280, 2621639]: got [fffffffe, 1ca0e767, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388272, 2621473]: got [fffffffe, 85e360ac, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388272, 2621595]: got [fffffffe, 17cd90c9, 0], want [ffffffff, 0, 0]
+west of the seam, a cut, run 12, by hand false: (577, 1) [-8388270, 2621456]: got [fffffffe, 32fc9116, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388323, 2621626]: got [fffffffe, c0f3142c, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388318, 2621590]: got [fffffffe, ef03fafd, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388312, 2621627]: got [fffffffe, 8858ee0, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388297, 2621470]: got [fffffffe, 11ab42b, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388280, 2621639]: got [fffffffe, 1ca0e767, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388272, 2621473]: got [fffffffe, 85e360ac, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388272, 2621595]: got [fffffffe, 17cd90c9, 0], want [ffffffff, 0, 0]
+west of the seam, a corner left out, run 12, by hand false: (577, 1) [-8388270, 2621456]: got [fffffffe, 32fc9116, 0], want [ffffffff, 0, 0]
+west of the seam: run 12, by hand false: 218235 apart, 3.975967666s
+west of the seam: run 12, by hand false: 0 apart, 5.546085833s
+           0 apart by hand
+           0 apart generated
+          24 chains by hand
+           2 chains generated
+           3 frame: a record comes back
+           5 frame: a record taken away
+        6974 frame: tiles decor stands on
+test hand_frames_answer_as_the_rust ... ok
+
+failures:
+
+failures:
+    hand_decor_answers_as_placement
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 186.33s
+
+error: test failed, to rerun pass `-p pxl-render --test decor`

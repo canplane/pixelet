@@ -201,7 +201,7 @@ And the files that had only moved:
 
 Four judgments went into it, where the TypeScript did not settle the question:
 
-- **`world/model.rs` has no TypeScript behind it.** Joints, clips and actors
+- **`world/model.rs` has no TypeScript behind it.** Joints, clips and characters
   were three.js's. It went into `gltf_cache`, the one file both the characters
   and the decor load their models through.
 - **A merge that put two things of one name in a file** renamed the kernel's

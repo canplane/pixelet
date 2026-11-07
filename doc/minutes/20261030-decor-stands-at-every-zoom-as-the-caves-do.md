@@ -11,11 +11,11 @@ thinning and the column words is the record of what was.
 
 ## What was asked
 
-Asked how the indicators and the actors take the level of detail decor does,
+Asked how the indicators and the characters take the level of detail decor does,
 the user put the rule as a thing's own size, not the zoom a window is drawn at:
 decor is taken out wholesale where its window is coarser, when it should depend
 on the room it takes. The puck's zone, made of ground cells, hides where the
-ground is drawn coarser than they are; an actor follows the same dynamics by
+ground is drawn coarser than they are; a character follows the same dynamics by
 its size; the ghost needs none, since nothing coarse is picked. Decor folding
 should be what a cube folding is; no smaller mesh is loaded for it, as there is
 none, though one would be used if there were. The user then asked whether the
@@ -59,8 +59,8 @@ which shares the caves' descent and makes no interface ahead of a need for one.
   in at most one of its eight, so the majority of any cube's children is the
   cube: a coarse cave cube is the exact summary of what is under it, handed
   down a descent as a `Cave` (`Cave::child`).
-- **The others.** An actor is seen where its reach spans a camera cell and is
-  drawn whole there, with no impostor (`domain/scene/actor.rs`); the puck's
+- **The others.** A character is seen where its reach spans a camera cell and is
+  drawn whole there, with no impostor (`domain/scene/character.rs`); the puck's
   zone is seen where it spans one, whatever the ground is drawn at
   (`indicator/location_puck.rs`); the ghost has no distance rule.
 
@@ -79,7 +79,7 @@ which shares the caves' descent and makes no interface ahead of a need for one.
 | ---------- | ------------------------------------------------------- | -------------------------------- |
 | decor      | its claimed brick against the window's cell; else folds | model, impostor, nothing         |
 | cumulus    | — (its own frame, the wind's lattice)                   | as decor, as now                 |
-| actor      | its reach against the window's cell                     | as decor; its impostor is open   |
+| character      | its reach against the window's cell                     | as decor; its impostor is open   |
 | puck zone  | hidden where the ground is drawn coarser than a leaf    | —                                |
 | ghost      | — (nothing coarse is picked)                            | —                                |
 
@@ -157,12 +157,12 @@ they share is the descent, not a hash interface:
    > screen the fold is faint: a retained tree is a quarter of the leaves'
    > density a zoom coarser, and three eighths of a z23 cell.
 3. The puck's zone hides where the ground is drawn coarser than a leaf; the
-   actor takes rule 2.
+   character takes rule 2.
 
-   > Built: the puck's zone in `c3685004f`; the actor 2026-10-31, with the
+   > Built: the puck's zone in `c3685004f`; the character 2026-10-31, with the
    > user, who put it as decor's own rule, nothing drawn where it is small.
-   > The actor was drawn at every distance, its pose held under a camera
-   > cell; it now takes decor's edges (pxl-kernel domain/scene/actor.rs):
+   > The character was drawn at every distance, its pose held under a camera
+   > cell; it now takes decor's edges (pxl-kernel domain/scene/character.rs):
    > posed as it plays down to the model's (`decor_model_angle`), its pose
    > held below it, and none under the impostor's (`decor_impostor_angle`).
    > No impostor of its own is baked: the held pose is drawn in its place.
@@ -176,7 +176,7 @@ they share is the descent, not a hash interface:
 - Whether a decor standing as itself at a coarse window is struck, where a
   folded cell is not (ARCHITECTURE.md, the layers); the ghost picks nothing
   coarse either way.
-- The actor between the two floors: the model kept, or an impostor of its
+- The character between the two floors: the model kept, or an impostor of its
   pose. Settled: the model, its pose held (step 3).
 - The cost a screen: the windows are the camera grid's, so the cells
   generated a frame stay about the same however far the eye is; measured,

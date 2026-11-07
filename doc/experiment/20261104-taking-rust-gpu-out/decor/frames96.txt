@@ -1,0 +1,259 @@
+
+running 1 test
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+674 bricks held, 94 absent, 268 with ways over 377019 child groups
+east of the seam, first, every entry whole: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the eye moved: 506 pairs, 132 drawn, 0 at an edge
+east of the seam, the placed decor gone, some stale: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, bricks handed: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, the placed decor back: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a cut: 506 pairs, 123 drawn, 0 at an edge
+east of the seam, a corner left out: 506 pairs, 123 drawn, 0 at an edge
+east of the seam: the Rust's frames in 3.593521041s
+east of the seam: run 0, by hand true: 0 apart, 1.645369333s
+east of the seam: run 1, by hand true: 0 apart, 1.415803708s
+east of the seam: run 2, by hand true: 0 apart, 1.289138458s
+east of the seam: run 3, by hand true: 0 apart, 1.304472791s
+east of the seam: run 4, by hand true: 0 apart, 1.309009042s
+east of the seam: run 5, by hand true: 0 apart, 1.240216459s
+east of the seam: run 6, by hand true: 0 apart, 1.293467292s
+east of the seam: run 7, by hand true: 0 apart, 1.3123005s
+east of the seam: run 8, by hand true: 0 apart, 1.254815542s
+east of the seam: run 9, by hand true: 0 apart, 1.343677167s
+east of the seam: run 10, by hand true: 0 apart, 1.298398459s
+east of the seam: run 11, by hand true: 0 apart, 1.261158667s
+east of the seam: run 12, by hand true: 0 apart, 1.256144625s
+east of the seam: run 13, by hand true: 0 apart, 1.285449125s
+east of the seam: run 14, by hand true: 0 apart, 1.353522375s
+east of the seam: run 15, by hand true: 0 apart, 1.287841834s
+east of the seam: run 16, by hand true: 0 apart, 1.322182917s
+east of the seam: run 17, by hand true: 0 apart, 1.269025s
+east of the seam: run 18, by hand true: 0 apart, 1.335799292s
+east of the seam: run 19, by hand true: 0 apart, 1.269777625s
+east of the seam: run 20, by hand true: 0 apart, 1.310683708s
+east of the seam: run 21, by hand true: 0 apart, 1.267771625s
+east of the seam: run 22, by hand true: 0 apart, 1.31750875s
+east of the seam: run 23, by hand true: 0 apart, 1.365427667s
+east of the seam: run 24, by hand true: 0 apart, 1.511859875s
+east of the seam: run 25, by hand true: 0 apart, 1.821067583s
+east of the seam: run 26, by hand true: 0 apart, 1.630967292s
+east of the seam: run 27, by hand true: 0 apart, 1.757820917s
+east of the seam: run 28, by hand true: 0 apart, 1.930947916s
+east of the seam: run 29, by hand true: 0 apart, 2.529162209s
+east of the seam: run 30, by hand true: 0 apart, 1.556056833s
+east of the seam: run 31, by hand true: 0 apart, 1.409927083s
+east of the seam: run 32, by hand true: 0 apart, 1.416118584s
+east of the seam: run 33, by hand true: 0 apart, 1.416081958s
+east of the seam: run 34, by hand true: 0 apart, 1.345232208s
+east of the seam: run 35, by hand true: 0 apart, 1.381964916s
+east of the seam: run 36, by hand true: 0 apart, 1.443529666s
+east of the seam: run 37, by hand true: 0 apart, 1.36929875s
+test hand_frames_answer_as_the_rust has been running for over 60 seconds
+east of the seam: run 38, by hand true: 0 apart, 1.363010708s
+east of the seam: run 39, by hand true: 0 apart, 1.4040545s
+east of the seam: run 40, by hand true: 0 apart, 1.550858125s
+east of the seam: run 41, by hand true: 0 apart, 1.424843875s
+east of the seam: run 42, by hand true: 0 apart, 1.514568s
+east of the seam: run 43, by hand true: 0 apart, 1.446522959s
+east of the seam: run 44, by hand true: 0 apart, 1.522798s
+east of the seam: run 45, by hand true: 0 apart, 1.485961916s
+east of the seam: run 46, by hand true: 0 apart, 1.639970292s
+east of the seam: run 47, by hand true: 0 apart, 1.502357291s
+east of the seam: run 48, by hand true: 0 apart, 1.441890916s
+east of the seam: run 49, by hand true: 0 apart, 1.38486125s
+east of the seam: run 50, by hand true: 0 apart, 1.345130167s
+east of the seam: run 51, by hand true: 0 apart, 1.292278458s
+east of the seam: run 52, by hand true: 0 apart, 1.300127708s
+east of the seam: run 53, by hand true: 0 apart, 1.337529667s
+east of the seam: run 54, by hand true: 0 apart, 1.37366075s
+east of the seam: run 55, by hand true: 0 apart, 1.312224042s
+east of the seam: run 56, by hand true: 0 apart, 1.3117365s
+east of the seam: run 57, by hand true: 0 apart, 1.300103083s
+east of the seam: run 58, by hand true: 0 apart, 1.286990833s
+east of the seam: run 59, by hand true: 0 apart, 1.290883583s
+east of the seam: run 60, by hand true: 0 apart, 1.341090542s
+east of the seam: run 61, by hand true: 0 apart, 1.248760584s
+east of the seam: run 62, by hand true: 0 apart, 1.26878125s
+east of the seam: run 63, by hand true: 0 apart, 1.269694459s
+east of the seam: run 64, by hand true: 0 apart, 1.308519042s
+east of the seam: run 65, by hand true: 0 apart, 1.256263333s
+east of the seam: run 66, by hand true: 0 apart, 1.553068s
+east of the seam: run 67, by hand true: 0 apart, 1.39815475s
+east of the seam: run 68, by hand true: 0 apart, 1.393663625s
+east of the seam: run 69, by hand true: 0 apart, 1.414495375s
+east of the seam: run 70, by hand true: 0 apart, 1.4249455s
+east of the seam: run 71, by hand true: 0 apart, 1.461349875s
+east of the seam: run 72, by hand true: 0 apart, 1.474295667s
+east of the seam: run 73, by hand true: 0 apart, 1.535161083s
+east of the seam: run 74, by hand true: 0 apart, 1.816363542s
+east of the seam: run 75, by hand true: 0 apart, 1.748797458s
+east of the seam: run 76, by hand true: 0 apart, 1.752606958s
+east of the seam: run 77, by hand true: 0 apart, 1.708036083s
+east of the seam: run 78, by hand true: 0 apart, 1.857529875s
+east of the seam: run 79, by hand true: 0 apart, 1.769870792s
+east of the seam: run 80, by hand true: 0 apart, 1.752467667s
+east of the seam: run 81, by hand true: 0 apart, 1.488021917s
+east of the seam: run 82, by hand true: 0 apart, 1.440738583s
+east of the seam: run 83, by hand true: 0 apart, 1.626150416s
+east of the seam: run 84, by hand true: 0 apart, 1.464772167s
+east of the seam: run 85, by hand true: 0 apart, 1.42807075s
+east of the seam: run 86, by hand true: 0 apart, 1.403963625s
+east of the seam: run 87, by hand true: 0 apart, 1.327213167s
+east of the seam: run 88, by hand true: 0 apart, 1.3158225s
+east of the seam: run 89, by hand true: 0 apart, 1.24293775s
+east of the seam: run 90, by hand true: 0 apart, 1.291221458s
+east of the seam: run 91, by hand true: 0 apart, 1.266540334s
+east of the seam: run 92, by hand true: 0 apart, 1.3133535s
+east of the seam: run 93, by hand true: 0 apart, 1.297800666s
+east of the seam: run 94, by hand true: 0 apart, 1.295439416s
+east of the seam: run 95, by hand true: 0 apart, 1.312654375s
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388606, 2621604]: got [fffdff3d, 220, 6a], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388594, 2621616]: got [fffdff3b, c0, 2f], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388583, 2621552]: got [fffdff43, 358, 0], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, first, every entry whole, run 96, by hand false: (576, 1) [-8388576, 2621443]: got [fffdff53, 238, 2f], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388606, 2621604]: got [fffdff3d, 220, 6a], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388594, 2621616]: got [fffdff3b, c0, 2f], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388583, 2621552]: got [fffdff43, 358, 0], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, the eye moved, run 96, by hand false: (576, 1) [-8388576, 2621443]: got [fffdff53, 238, 2f], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388606, 2621555]: got [fffdff45, 444, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388606, 2621604]: got [fffdff3d, 220, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388594, 2621616]: got [fffdff3b, c0, 2f], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388588, 2621607]: got [fffdff3d, fffffff0, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388583, 2621552]: got [fffdff43, 358, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388582, 2621467]: got [fffdff51, 4, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388577, 2621559]: got [fffdff41, 32c, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor gone, some stale, run 96, by hand false: (576, 1) [-8388576, 2621443]: got [fffdff53, 238, 2f], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388297, 2621470]: got [f0fdfebd, ffffff5c, 0], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388272, 2621473]: got [b0fdfed5, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388270, 2621456]: got [10fdfec1, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388266, 2621539]: got [80fdfecf, ffffff60, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388261, 2621457]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388261, 2621479]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388254, 2621459]: got [30fdfec5, ffffff64, 2f], want [ffffffff, 0, 0]
+east of the seam, bricks handed, run 96, by hand false: (577, 1) [-8388248, 2621459]: got [40fdfec7, ffffff64, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388297, 2621470]: got [f0fdfebd, ffffff5c, 0], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388272, 2621473]: got [b0fdfed5, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388270, 2621456]: got [10fdfec1, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388266, 2621539]: got [80fdfecf, ffffff60, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388261, 2621457]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388261, 2621479]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388254, 2621459]: got [30fdfec5, ffffff64, 2f], want [ffffffff, 0, 0]
+east of the seam, the placed decor back, run 96, by hand false: (577, 1) [-8388248, 2621459]: got [40fdfec7, ffffff64, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388297, 2621470]: got [f0fdfebd, ffffff5c, 0], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388272, 2621473]: got [b0fdfed5, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388270, 2621456]: got [10fdfec1, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388266, 2621539]: got [80fdfecf, ffffff60, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388261, 2621457]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388261, 2621479]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388254, 2621459]: got [30fdfec5, ffffff64, 2f], want [ffffffff, 0, 0]
+east of the seam, a cut, run 96, by hand false: (577, 1) [-8388248, 2621459]: got [40fdfec7, ffffff64, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388297, 2621470]: got [f0fdfebd, ffffff5c, 0], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388272, 2621473]: got [b0fdfed5, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388270, 2621456]: got [10fdfec1, ffffff64, bd], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388266, 2621539]: got [80fdfecf, ffffff60, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388261, 2621457]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388261, 2621479]: got [20fdfec3, ffffff64, 6a], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388254, 2621459]: got [30fdfec5, ffffff64, 2f], want [ffffffff, 0, 0]
+east of the seam, a corner left out, run 96, by hand false: (577, 1) [-8388248, 2621459]: got [40fdfec7, ffffff64, 0], want [ffffffff, 0, 0]
+east of the seam: run 96, by hand false: 199675 apart, 6.152846041s
+east of the seam: run 96, by hand false: 0 apart, 9.012963041s
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+664 bricks held, 104 absent, 255 with ways over 432693 child groups
+west of the seam, first, every entry whole: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the eye moved: 476 pairs, 105 drawn, 0 at an edge
+west of the seam, the placed decor gone, some stale: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, bricks handed: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, the placed decor back: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a cut: 476 pairs, 108 drawn, 0 at an edge
+west of the seam, a corner left out: 476 pairs, 108 drawn, 0 at an edge
+west of the seam: the Rust's frames in 3.218779292s
+west of the seam: run 0, by hand true: 0 apart, 1.543922625s
+west of the seam: run 1, by hand true: 0 apart, 1.391807875s
+west of the seam: run 2, by hand true: 0 apart, 1.335499666s
+west of the seam: run 3, by hand true: 0 apart, 1.266231875s
+west of the seam: run 4, by hand true: 0 apart, 1.321594459s
+west of the seam: run 5, by hand true: 0 apart, 1.280629375s
+west of the seam: run 6, by hand true: 0 apart, 1.285289583s
+west of the seam: run 7, by hand true: 0 apart, 1.255866709s
+west of the seam: run 8, by hand true: 0 apart, 1.272088417s
+west of the seam: run 9, by hand true: 0 apart, 1.277122958s
+west of the seam: run 10, by hand true: 0 apart, 1.280202792s
+west of the seam: run 11, by hand true: 0 apart, 1.39020325s
+west of the seam: run 12, by hand true: 0 apart, 1.270085542s
+west of the seam: run 13, by hand true: 0 apart, 1.32657s
+west of the seam: run 14, by hand true: 0 apart, 1.295315209s
+west of the seam: run 15, by hand true: 0 apart, 1.325958916s
+west of the seam: run 16, by hand true: 0 apart, 1.33089625s
+west of the seam: run 17, by hand true: 0 apart, 1.30884675s
+west of the seam: run 18, by hand true: 0 apart, 1.288690833s
+west of the seam: run 19, by hand true: 0 apart, 1.336611041s
+west of the seam: run 20, by hand true: 0 apart, 1.361776917s
+west of the seam: run 21, by hand true: 0 apart, 1.458148542s
+west of the seam: run 22, by hand true: 0 apart, 1.365513833s
+west of the seam: run 23, by hand true: 0 apart, 1.285084166s
+west of the seam: run 24, by hand true: 0 apart, 1.303421333s
+west of the seam: run 25, by hand true: 0 apart, 1.388523875s
+west of the seam: run 26, by hand true: 0 apart, 1.402809875s
+west of the seam: run 27, by hand true: 0 apart, 1.373339792s
+west of the seam: run 28, by hand true: 0 apart, 1.34583525s
+west of the seam: run 29, by hand true: 0 apart, 1.315311792s
+west of the seam: run 30, by hand true: 0 apart, 1.356982917s
+west of the seam: run 31, by hand true: 0 apart, 1.332708875s
+west of the seam: run 32, by hand true: 0 apart, 1.347921541s
+west of the seam: run 33, by hand true: 0 apart, 1.399843083s
+west of the seam: run 34, by hand true: 0 apart, 1.343045833s
+west of the seam: run 35, by hand true: 0 apart, 1.446999917s
+west of the seam: run 36, by hand true: 0 apart, 1.518753167s
+west of the seam: run 37, by hand true: 0 apart, 2.542161958s
+west of the seam: run 38, by hand true: 0 apart, 3.709731334s
+west of the seam: run 39, by hand true: 0 apart, 3.792828209s
+west of the seam: run 40, by hand true: 0 apart, 2.23016775s
+west of the seam: run 41, by hand true: 0 apart, 1.250304417s
+west of the seam: run 42, by hand true: 0 apart, 1.484195375s
+west of the seam: run 43, by hand true: 0 apart, 1.48924825s
+west of the seam: run 44, by hand true: 0 apart, 1.453748167s
+west of the seam: run 45, by hand true: 0 apart, 1.42446375s
+west of the seam: run 46, by hand true: 0 apart, 1.383137416s
+west of the seam: run 47, by hand true: 0 apart, 1.366695959s
+west of the seam: run 48, by hand true: 0 apart, 1.372524167s
+west of the seam: run 49, by hand true: 0 apart, 1.39098325s
+west of the seam: run 50, by hand true: 0 apart, 1.358353291s
+west of the seam: run 51, by hand true: 0 apart, 1.347608542s
+west of the seam: run 52, by hand true: 0 apart, 1.376827125s
+west of the seam: run 53, by hand true: 0 apart, 1.316820334s
+west of the seam: run 54, by hand true: 0 apart, 1.318007791s
+west of the seam: run 55, by hand true: 0 apart, 1.324487834s
+west of the seam: run 56, by hand true: 0 apart, 1.324783667s
+west of the seam: run 57, by hand true: 0 apart, 1.345959916s
+west of the seam: run 58, by hand true: 0 apart, 1.338530375s
+west of the seam: run 59, by hand true: 0 apart, 1.323003083s
+west of the seam: run 60, by hand true: 0 apart, 1.30906875s
+west of the seam: run 61, by hand true: 0 apart, 1.302039584s
+west of the seam: run 62, by hand true: 0 apart, 1.29857325s
+west of the seam: run 63, by hand true: 0 apart, 1.372289417s
+west of the seam: run 64, by hand true: 0 apart, 1.31061775s
+west of the seam: run 65, by hand true: 0 apart, 1.212229416s
+west of the seam: run 66, by hand true: 0 apart, 1.224740667s
+west of the seam: run 67, by hand true: 0 apart, 1.273571792s
+west of the seam: run 68, by hand true: 0 apart, 1.345665458s
+west of the seam: run 69, by hand true: 0 apart, 1.890416s
+west of the seam: run 70, by hand true: 0 apart, 1.617243292s
+west of the seam: run 71, by hand true: 0 apart, 1.318769792s
+west of the seam: run 72, by hand true: 0 apart, 1.272655375s
+west of the seam: run 73, by hand true: 0 apart, 1.30798375s
+west of the seam: run 74, by hand true: 0 apart, 1.329364458s
+west of the seam: run 75, by hand true: 0 apart, 1.253227708s
+west of the seam: run 76, by hand true: 0 apart, 1.231058375s
+west of the seam: run 77, by hand true: 0 apart, 1.242398958s
+west of the seam: run 78, by hand true: 0 apart, 1.241637958s
+west of the seam: run 79, by hand true: 0 apart, 1.283001125s
+west of the seam: run 80, by hand true: 0 apart, 1.303132125s
+west of the seam: run 81, by hand true: 0 apart, 1.285578583s

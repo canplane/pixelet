@@ -142,8 +142,8 @@ So: things that stand still keep the POI index, things that move get their own
 
 Two more pieces of a second player are already in the tree and unused. The
 billboard field draws sets in a fixed order — `poi`, `chat`, `debug` — and a set
-can follow an actor at a lift; and `io/load.rs` keeps `actors` as a
-`Vec<Option<Actor>>` with slot reuse, so more than one has always been possible.
+can follow a character at a lift; and `io/load.rs` keeps `characters` as a
+`Vec<Option<Character>>` with slot reuse, so more than one has always been possible.
 The companion is the only one standing in it.
 
 Two gaps are real. POI has no click-to-select and no hover state, which a social

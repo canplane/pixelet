@@ -1,0 +1,102 @@
+diff --git a/ts/app/native/babel.config.ts b/ts/app/native/babel.config.ts
+index b66a9590a..176ffe148 100644
+--- a/ts/app/native/babel.config.ts
++++ b/ts/app/native/babel.config.ts
+@@ -23,7 +23,7 @@ export default (api: ConfigAPI): TransformOptions => {
+   api.cache.using(() => process.env.NODE_ENV);
+ 
+   const DEFINE = {
+-    __IS_DEV__: !production,
++    __IS_DEV__: true,
+     __DEV_BUNDLE__: !production,
+     __APP_ENV__: production ? "production" : "development",
+     __DEV_SOURCE__: "delivery",
+diff --git a/ts/app/native/index.ts b/ts/app/native/index.ts
+index d5824a04c..6e2d82c3a 100644
+--- a/ts/app/native/index.ts
++++ b/ts/app/native/index.ts
+@@ -7,9 +7,11 @@ import * as locale from "@pxl/client/shell/locale/i18n.ts";
+ import { boot } from "@pxl/client/abi/boot.ts";
+ import { app } from "./src/bracket.ts";
+ import { App } from "./src/app.tsx";
++import { probe } from "./src/probe.ts";
+ 
+ bracket.set(app);
+ // The shell's words first, then the client, bottom up; the shell reads where it stands.
+ locale.boot();
+ boot();
+ registerRootComponent(App);
++setTimeout(() => void probe().catch((e) => console.error("PROBE failed", String(e))), 500);
+diff --git a/ts/app/native/script/build-native.py b/ts/app/native/script/build-native.py
+index 56314489d..542bce536 100755
+--- a/ts/app/native/script/build-native.py
++++ b/ts/app/native/script/build-native.py
+@@ -134,7 +134,7 @@ def main():
+     profile = "native" if build["published"] else "native-watch"
+ 
+     code = subprocess.run(
+-        [*["cargo", *build["cargo"]], "--profile", profile, "--package", "pxl-native", "--target", build["target"], *(["--no-default-features"] if build["published"] else [])],
++        [*["cargo", *build["cargo"]], "--profile", profile, "--package", "pxl-native", "--target", build["target"], ],
+         cwd=RUST,
+         env=build["env"],
+     ).returncode
+diff --git a/ts/app/native/src/sensor.ts b/ts/app/native/src/sensor.ts
+index 0b2fd8d28..e3d246b2b 100644
+--- a/ts/app/native/src/sensor.ts
++++ b/ts/app/native/src/sensor.ts
+@@ -18,6 +18,20 @@ let heard: SensorHeard;
+ 
+ export function hear(given: SensorHeard): void {
+   heard = given;
++  setTimeout(() => {
++    try {
++      given.permission("geolocation", "granted");
++    } catch (e) {
++      console.log("PROBE geo|" + String(e));
++    }
++    setInterval(() => {
++      try {
++        given.position(128.4656, 38.1193, null, 10, null);
++      } catch (e) {
++        console.log("PROBE geo|" + String(e));
++      }
++    }, 1000);
++  }, 2000);
+ }
+ 
+ function geo_has(): boolean {
+@@ -112,6 +126,7 @@ function geo_start(): void {
+   const watch: Watch = { subscription: null, stopped: false };
+   geolocation = watch;
+   void (async () => {
++    return;
+     if (!(await permitted())) return geo_fail(watch, "denied");
+     const subscription = await Location.watchPositionAsync(
+       {
+@@ -168,6 +183,7 @@ function orient_start(): void {
+   const watch: Watch = { subscription: null, stopped: false };
+   orientation = watch;
+   void (async () => {
++    return;
+     if (!(await permitted())) return orient_fail(watch, true);
+     const subscription = await Location.watchHeadingAsync(
+       (h) => {
+diff --git a/xpute/rust/gpu/src/host/surface.rs b/xpute/rust/gpu/src/host/surface.rs
+index dd0e6589d..a890ae388 100644
+--- a/xpute/rust/gpu/src/host/surface.rs
++++ b/xpute/rust/gpu/src/host/surface.rs
+@@ -144,7 +144,13 @@ impl GpuHost {
+             ]
+             .into_iter()
+             .find(|m| premultiplied && caps.alpha_modes.contains(m))
+-            .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
++            .unwrap_or_else(|| {
++                if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
++                    wgpu::CompositeAlphaMode::Opaque
++                } else {
++                    caps.alpha_modes[0]
++                }
++            });
+             let config = wgpu::SurfaceConfiguration {
+                 usage,
+                 format,

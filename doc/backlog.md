@@ -10,43 +10,46 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-Nothing now.
+- **Faster than the deployed build, on every axis**
+  ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
+  Mac's gate passes, its tick p95 2.20 to 3.00 ms the one axis worse. The S23 at 719 MHz: GPU p50
+  6.1× the deployed build's, p95 5.7× on one pair, the deployed build's p95 reading 437–1282 ms
+  ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
 
 ## P1
 
-Nothing now.
+- **The light by a list and the raster.** Each tile's voxels at its band listed through the
+  query and drawn from the sun, in place of the light's rays and its holes' walk: 11-06's open
+  question ([the frame is what it must draw](./minutes/20261106-the-frame-is-what-it-must-draw.md),
+  [cell raster](./minutes/20261106-cell-raster.md)). The counts put a list near 100 k cells (the
+  journal, 11-08). First `list::light` on the CPU, held to `cast::first`, which measures the
+  real list.
+- **A bright teal wedge beside the character at load.** At 38.1193, 128.4656, by its right arm,
+  since it stands clear of the wall. Read as the location zone on the step's wall, unchecked.
 
 ## P2
 
-- **The stencil and the early depth test on an Android phone.** Answered
-  from the code and the vendors' records (the minutes' "Open"); the Apple
-  GPU's hidden-surface removal for the boxes and the impostors, which
-  discard and write depth, is the one every measurement here ran on (this
-  Mac's Chrome on Metal, the iPhone's GPU family). Left to a phone in hand:
-  what its driver offers (`Device.depth32float_stencil8`), asked of the
-  adapter in its Chrome.
+- **The vocabulary, cleaned.** Agents have left words with several meanings
+  (`level`, `chunk`, `frame`), several words for one thing, and names of what
+  happened. In order: every domain noun listed with what it names (read-only, by
+  area), a glossary decided with the user, conventional names first and cited, put
+  in the naming skill; then the renames by area, one names commit each.
+- **A login screen is to come.** Another kind of `Cover`, over `Starting` or
+  `Loading`, so the world is made while it stands —
+  [20261103-what-stands-over-the-app.md](./minutes/20261103-what-stands-over-the-app.md).
 
 ## Parked, with the reason on file
 
-- **What each reuse buys over a pure ray a pixel.** Each switched off alone at
-  the tip, against the tip and against all of them off; why rays at all is on
-  file, and the 9/26 build is no raster to set them against. Parked by the
-  user (2026-10-28), reframed with them (2026-10-31) —
-  [20261031-why-rays-and-what-makes-them-fast.md](./minutes/20261031-why-rays-and-what-makes-them-fast.md),
-  first asked by commits in
-  [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
-
 - **A query over what is drawn, for an agent to read.** An agent debugging the
   view guesses a pixel's cause from its color in a screenshot. The profiler's
-  half is answered: the console's `pxl.profiler.report()` gives its window as
-  text (`ts/client/src/shell/debug/console.ts`). What a screen point draws is
+  half is answered: the console's `pxl.perf.report()` gives its window as
+  text (`ts/client/src/ui/debug/console.ts`). What a screen point draws is
   not: the block its ray met, with its face, zoom and distance, and where that
   block was read from, asked of the running page and answered as text. The
   answer is the GPU's, the ray's words read back (`pxl-engine ray.rs`), since
-  the CPU's `first_hit` (`pxl-kernel domain/query/ray.rs`) can disagree where
+  the CPU's `first_hit` (`pxl-core domain/query/ray.rs`) can disagree where
   the samples miss a thin face
   ([20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md)).
-  Answering it might be where a language for agents to query the view starts.
   Not urgent: no debugging under way needs it.
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what

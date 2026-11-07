@@ -3,7 +3,7 @@
 On a Galaxy S23, in the device app, the characters and their pets lay on the
 ground — stretched diagonally away from the eye, head far off, feet near — while
 the decor beside them stood, and while an iPhone and Chrome on a Mac drew the
-same actors upright. Nothing reported an error.
+same characters upright. Nothing reported an error.
 
 It was the joint palette. The skinned shader declared it
 
@@ -38,18 +38,18 @@ find a fault that exists only in the real declaration.
 
 |                                                  |                                                                                                                                                             |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the palette never reaching the GPU               | The palette filled with zeros where it had been identity before the first tick: the actors still drew, lying as before. The rewrites land.                  |
+| the palette never reaching the GPU               | The palette filled with zeros where it had been identity before the first tick: the characters still drew, lying as before. The rewrites land.                  |
 | the joints attribute read wrong                  | Colored by joint index: every part its own index, all in range, `y`, `z`, `w` zero.                                                                         |
 | the weights attribute read wrong                 | Colored by weight: (1, 0, 0) everywhere, as the rigid models are.                                                                                           |
 | the matrix blend (`mat * scalar + mat * scalar`) | Blended as four matrix-vector products instead: unchanged.                                                                                                  |
 | the palette the kernel computes                  | Dumped on the device: near identity at rest, the arms turned for the idle clip — right.                                                                     |
-| the palette's memory being overwritten           | Read back at `draw()`, after every tick, against a fresh `global * inverse_bind`: identical, and no actor's range overlapping another's.                    |
+| the palette's memory being overwritten           | Read back at `draw()`, after every tick, against a fresh `global * inverse_bind`: identical, and no character's range overlapping another's.                    |
 | the draw uniform's `scale`                       | Colored by it: 1.4 for the character, 0.2 for the pet, sane.                                                                                                |
 | **the palette as the shader reads it**           | **Drawn without it, the character stood in its bind pose.** Colored by its translation column, the GPU read values of 0.18–0.34 where the memory held zero. |
 
 The last two lines together named the fault: the words in the buffer were right
 and the matrices the shader assembled from them were not. Read as `array<vec4f>`
-and assembled column by column in the shader, the same buffer drew every actor
+and assembled column by column in the shader, the same buffer drew every character
 upright, arms down, in its idle clip.
 
 ## Why it passes everywhere else
@@ -94,7 +94,7 @@ else's to read and stay as they are.
 
 **How a block keeps it.** Thirteen uniforms broke it: `Frame`, `Atmosphere`,
 `Clouds` (a `mat3x3f`, whose columns carry padding), `Sky` (another), `Ao`,
-`Badge`, `Stars`, the `Draw` of decor, debug, the puck and the actors, and the
+`Badge`, `Stars`, the `Draw` of decor, debug, the puck and the characters, and the
 sheet's `Entry`. Each is now bound as what it is on the wire, `vec4` words:
 
 ```wgsl
@@ -146,7 +146,7 @@ the second.
 
 ## Where it stands
 
-Applied. On the S23 the ground, the sky, the decor, the actors and the puck draw
+Applied. On the S23 the ground, the sky, the decor, the characters and the puck draw
 as they should; in Chrome on a Mac the ground, the sky and the decor do. Not yet
-looked at: the actors in Chrome (the tab had no location, so no character stood)
+looked at: the characters in Chrome (the tab had no location, so no character stood)
 and the iPhone.

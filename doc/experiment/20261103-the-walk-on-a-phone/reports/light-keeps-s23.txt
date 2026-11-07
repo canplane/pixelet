@@ -1,0 +1,25 @@
+run 1 f9f66682e exit 0
+run 2 e8d616ba4 exit 0
+run 3 f9f66682e exit 0
+run 4 e8d616ba4 exit 0
+1-f9f66682e fps 2.6 gpu 239.2 1054.1 | cast 72  gated 9   wakes next 75  timer  | view °  azimuth 0.0  azimuth -32.6 | Thermal Status: 0 
+   sample 48 5.4/72.0 beam 49 22.7/67.6 miss 57 3.7/34.7 light_walk 47 282.6/830.8 light_sample 49 30.4/75.8 light_beam 49 28.7/49.7
+   eye casts 7 beam 122778 sample 134675 miss 83933 again 100.00 took 99.36 walked 0.64 each 6.1
+   light casts 7 beam 197234 sample 278225 miss 3033320 again 3.15 took 0.01 walked 3.14 each 23.0
+2-e8d616ba4 fps 7.0 gpu 124.0 370.5 | cast 174  gated 20   wakes next 173  tim | view °  azimuth 0.0  azimuth -10.8 | Thermal Status: 0 
+   sample 111 6.2/66.3 beam 127 16.2/41.0 miss 140 3.7/41.0 light_walk 113 20.5/104.9 light_sample 120 31.7/74.8 light_beam 127 23.3/44.4
+   eye casts 15 beam 83060 sample 123844 miss 45525 again 100.00 took 99.51 walked 0.49 each 4.4
+   light casts 15 beam 191361 sample 225603 miss 90315 again 2.21 took 0.01 walked 2.20 each 1.0
+3-f9f66682e fps 2.2 gpu 331.2 1172.4 | cast 59  gated 9   wakes next 61  timer  | view °  azimuth 0.0   azimuth -6.8 | Thermal Status: 0 
+   sample 37 6.8/107.4 beam 39 27.5/84.7 miss 48 4.2/44.0 light_walk 37 536.2/917.7 light_sample 37 56.3/92.9 light_beam 39 42.0/61.7
+   eye casts 9 beam 143450 sample 178465 miss 82128 again 100.00 took 99.40 walked 0.60 each 6.4
+   light casts 9 beam 223313 sample 316650 miss 3332687 again 3.82 took 0.02 walked 3.80 each 20.9
+4-e8d616ba4 fps 6.6 gpu 131.9 346.3 | cast 171  gated 13   wakes next 173  tim | view °  azimuth 0.0  azimuth -26.6 | Thermal Status: 0 
+   sample 116 6.1/67.2 beam 126 15.7/40.4 miss 134 4.4/33.7 light_walk 114 24.9/111.1 light_sample 123 29.3/70.7 light_beam 127 24.5/43.5
+   eye casts 15 beam 86964 sample 116422 miss 39459 again 100.00 took 99.58 walked 0.42 each 4.4
+   light casts 15 beam 155115 sample 173130 miss 56324 again 1.59 took 0.00 walked 1.59 each 0.8
+rest 1-f9f66682e 3-f9f66682e mean 0.50 over8 0.099% over32 0.012%
+rest 2-e8d616ba4 4-e8d616ba4 mean 0.59 over8 0.281% over32 0.068%
+rest 1-f9f66682e 2-e8d616ba4 mean 0.56 over8 0.155% over32 0.025%
+rest 3-f9f66682e 4-e8d616ba4 mean 0.56 over8 0.251% over32 0.066%
+

@@ -1,8 +1,8 @@
 # The commands by module, and names from the field
 
-**2026-11-01** — recorded with the user. Main was at `0567c0059` when it began
-and at `aca7eea2f` when it closed; the work is `7047c9ad8`, `a7fe7ffae`,
-`95d2934b0` and `3b9c20d20`.
+**2026-11-01** — recorded with the user. Main was at `d40a5bc3f5` when it began
+and at `b671249199` when it closed; the work is `8ddea4eee3`, `eeb122b345`,
+`8e3798a5df` and `de3c5c264b`. The commits are named as `original` keeps them.
 
 ## What was asked
 
@@ -21,7 +21,9 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   `PERF`, `EDIT` and `SHELL`; a sensor's command goes to `SENSOR` and an input's
   to `INPUT` whoever sends it. Every command keeps its major as a prefix. An
   application feature is not a major beside the system's parts (`CHAT` alone
-  was refused).
+  was refused). From 2026-11-04 `SYS`'s, `FS`'s and `GPU`'s commands are xpute's
+  predefined ABI, apart from the app's
+  ([xpute is the core's way out of JavaScript](./20261104-kernel-and-shell-as-an-operating-system-means-them.md)).
 - **Where a name comes from.** A part of the system takes its word from Unix,
   Linux or Wayland; a device outside them keeps its platform's word
   (`SENSOR_PERMISSION`, `INPUT_XR_POSE`); what the program alone does takes a
@@ -34,7 +36,9 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   profiler's `FRAME`). The user: "이름 겹쳐도 됨. CS도 그러잖아." The command a
   drawn frame is begun by is `SURFACE_FRAME`, after `KERNEL_TURN`, `KERNEL_VSYNC`
   and `KERNEL_FRAME` were each tried and left: a turn need not carry one, a vsync
-  is every refresh, and the kernel is not its owner.
+  is every refresh, and the kernel is not its owner. `TURN_GRANT` replaced
+  `SURFACE_FRAME` on 2026-11-04
+  ([xpute is the core's way out of JavaScript](./20261104-kernel-and-shell-as-an-operating-system-means-them.md)).
 - **`space` and `frame` stand side by side**: a frame is the origin and axes
   themselves, which move; a space is where a value measured in one lies. The
   move of `domain/view/frame/` to `space/` was taken back the same day.
@@ -51,6 +55,10 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   a design's `words` as `text`, a marker tap's `Went` as `MarkerHit`.
   `interaction` as `interact` was asked about and not taken: a module is named
   by a noun.
+
+  > Since 2026-11-08, the user: the surface's role `PREVIEW` was not theirs
+  > ("surface role도 내가 승인한거 아냐"). It is `CHARACTER`, as a world surface's
+  > is `WORLD`; preview is the edit's.
 - **Gone**: `WORLD_VIEW`, since the world surface's open and close say the same;
   `INPUT_RECT`, since the view's size is the world surface's (`SURFACE_RESIZE`)
   and a pointer is placed from the canvas's top left.
@@ -85,6 +93,8 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   the same evening without a record of the user's (`e3be4b371` to
   `327465eaf`), beside the base rather than over it, and taken out on
   2026-11-04 (20261104-kernel-and-shell-as-an-operating-system-means-them.md).
+  On 2026-11-07 the user took April's one manifest and its names (`Link`, `on`)
+  ([what xpute answers for](./20261107-what-xpute-answers-for.md)).
 - **Threads.** No use yet; the one candidate the code shows is a glTF's parse,
   unmeasured.
 

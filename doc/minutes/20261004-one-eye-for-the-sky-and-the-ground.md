@@ -68,7 +68,7 @@ which took the diagonal stripes off faces the sun grazes.
 _Now the map is a lighting setting of every build, off by default
 (spec/client/kernel/domain/view/setting/schema.json `shadows`), cast a ray a
 texel through the world's query (pxl-shader sun.rs `sun_cs`); decor and the
-actors are drawn into it depth only, still pushed back by their slope
+characters are drawn into it depth only, still pushed back by their slope
 (`frame/shader/record.rs` `depth_only`, `DEPTH_SLOPE_BIAS`)._
 
 ## What it cost

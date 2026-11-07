@@ -22,6 +22,9 @@ agenda, its minutes and its reports beside its rules.
 - [tip/](./tip/) — what was learned the hard way and holds beyond one
   change, a file a lesson: what to keep clear of and how to check it, each
   pointing at the experiment that showed it.
+- [note/](./note/) — what the user recalls afterward of how something came to
+  be, no meeting's, a file a subject, `YYYYMMDD-topic.md`, with what the history
+  shows beside it: testimony of why, not a decision.
 
 An adopted decision that changes a contract is carried into the document that
 states that contract, and its reasoning stays here. The user's explicit word now

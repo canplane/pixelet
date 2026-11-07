@@ -75,7 +75,7 @@ never ran), every one checked, none differing. The walk off a list is the
 walk `miss_cs` made, from the same start through the same query; which
 thread runs it, and what the pyramid holds when it does, does not change its
 words. A still frame after load on main and on the list's build: 136 of
-1.2M screenshot pixels differ, all in the actor's animation and the
+1.2M screenshot pixels differ, all in the character's animation and the
 profiler's FPS label.
 
 Not tried: resuming a listed pixel from where the reading walk stopped

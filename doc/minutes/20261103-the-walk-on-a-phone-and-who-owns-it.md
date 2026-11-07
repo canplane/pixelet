@@ -1,8 +1,9 @@
 # The walk on a phone, and who owns it
 
 **2026-11-03** — recorded with the user, over two sessions that compared their
-numbers. Main was at `13bef66d6`; what was measured is `d25f5b631`, the page on
-both phones since [the shaders on two phones](../experiment/20261103-shaders-on-two-phones/README.md).
+numbers. Main was at `661f15a75d`, as `original` keeps it; what was measured is
+`d25f5b631`, the page on both phones since
+[the shaders on two phones](../experiment/20261103-shaders-on-two-phones/README.md).
 
 Nothing was resolved. What the user said is under its own heading and is the
 user's view, no order yet. Everything under The sessions' proposal is the

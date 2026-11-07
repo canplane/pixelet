@@ -1,0 +1,443 @@
+L31:33 <= |||   return v >= GROUNDS_FIRST && v <= GROUNDS_LAST; |||   return v >= GROUNDS_FIRST && v < GROUNDS_LAST;
+L31:11 >= |||   return v >= GROUNDS_FIRST && v <= GROUNDS_LAST; |||   return v > GROUNDS_FIRST && v <= GROUNDS_LAST;
+L31:28 && |||   return v >= GROUNDS_FIRST && v <= GROUNDS_LAST; |||   return v >= GROUNDS_FIRST || v <= GROUNDS_LAST;
+L35:66 <= |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v < OBJECTS_LAST);
+L35:44 >= |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v == VALUE_AIR || grounds(v) || (v > OBJECTS_FIRST && v <= OBJECTS_LAST);
+L35:11 == |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v != VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+L35:61 && |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST || v <= OBJECTS_LAST);
+L35:24 \|\| |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v == VALUE_AIR && grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+L35:38 \|\| |||   return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST); |||   return v == VALUE_AIR || grounds(v) && (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+L40:11 != |||   return v != VALUE_VOID && v != VALUE_AIR; |||   return v == VALUE_VOID && v != VALUE_AIR;
+L40:30 != |||   return v != VALUE_VOID && v != VALUE_AIR; |||   return v != VALUE_VOID && v == VALUE_AIR;
+L40:25 && |||   return v != VALUE_VOID && v != VALUE_AIR; |||   return v != VALUE_VOID || v != VALUE_AIR;
+L44:9 \bmin\ |||   return min(fill / (FULL / EIGHTHS), EIGHTHS); |||   return max(fill / (FULL / EIGHTHS), EIGHTHS);
+L55:52 >= |||     return Cover(min(under_fill + over, FULL), over >= under_fill); |||     return Cover(min(under_fill + over, FULL), over > under_fill);
+L55:17 \bmin\ |||     return Cover(min(under_fill + over, FULL), over >= under_fill); |||     return Cover(max(under_fill + over, FULL), over >= under_fill);
+L58:52 (?<![< |||   return Cover(select(under_fill - taken, 0u, taken > under_fill), false); |||   return Cover(select(under_fill - taken, 0u, taken >= under_fill), false);
+L58:15 \bsele |||   return Cover(select(under_fill - taken, 0u, taken > under_fill), false); |||   return Cover(select(0u, under_fill - taken, taken > under_fill), false);
+L68:10 \bmin\ |||   let l = min(lo, vec3<u32>(BOX_STEPS - 1u)); |||   let l = max(lo, vec3<u32>(BOX_STEPS - 1u));
+L68:38 - 1u |||   let l = min(lo, vec3<u32>(BOX_STEPS - 1u)); |||   let l = min(lo, vec3<u32>(BOX_STEPS - 2u));
+L69:59 <= |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u; |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi < l) - 1u;
+L69:17 \bmin\ |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u; |||   let h = select(max(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u;
+L69:50 \+ 1u |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u; |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 2u, hi <= l) - 1u;
+L69:65 - 1u |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u; |||   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 2u;
+L77:15 == |||   return all(b == BOX_NONE); |||   return all(b != BOX_NONE);
+L88:18 \bmin\ |||   return box_word(min(box_first(a), box_first(b)), max(box_past(a), box_past(b))); |||   return box_word(max(box_first(a), box_first(b)), max(box_past(a), box_past(b)));
+L88:51 \bmax\ |||   return box_word(min(box_first(a), box_first(b)), max(box_past(a), box_past(b))); |||   return box_word(min(box_first(a), box_first(b)), min(box_past(a), box_past(b)));
+L93:33 >>  |||   return vec3<u32>(w.x & m, (w.x >> (2u * BOX_BITS)) & m, (w.y >> BOX_BITS) & m); |||   return vec3<u32>(w.x & m, (w.x << (2u * BOX_BITS)) & m, (w.y >> BOX_BITS) & m);
+L93:63 >>  |||   return vec3<u32>(w.x & m, (w.x >> (2u * BOX_BITS)) & m, (w.y >> BOX_BITS) & m); |||   return vec3<u32>(w.x & m, (w.x >> (2u * BOX_BITS)) & m, (w.y << BOX_BITS) & m);
+L98:81 \+ 1u |||   return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 1u; |||   return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 2u;
+L98:24 >>  |||   return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 1u; |||   return vec3<u32>((w.x << BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 1u;
+L98:56 >>  |||   return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y >> (2u * BOX_BITS)) & m) + 1u; |||   return vec3<u32>((w.x >> BOX_BITS) & m, w.y & m, (w.y << (2u * BOX_BITS)) & m) + 1u;
+L121:11 != |||   return s != SLOT_NOTHING && (s & SLOT_FOLDED) != 0u; |||   return s == SLOT_NOTHING && (s & SLOT_FOLDED) != 0u;
+L121:48 != |||   return s != SLOT_NOTHING && (s & SLOT_FOLDED) != 0u; |||   return s != SLOT_NOTHING && (s & SLOT_FOLDED) == 0u;
+L121:27 && |||   return s != SLOT_NOTHING && (s & SLOT_FOLDED) != 0u; |||   return s != SLOT_NOTHING || (s & SLOT_FOLDED) != 0u;
+L126:30 != |||   if (first_child(tree, slot) != 0u) { |||   if (first_child(tree, slot) == 0u) {
+L129:28 == |||   if (tree_data(tree, slot) == VALUE_VOID) { |||   if (tree_data(tree, slot) != VALUE_VOID) {
+L136:57 == |||   return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom == 0u); |||   return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom != 0u);
+L136:33 - 1u |||   return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom == 0u); |||   return select(i32(1u << ((zoom - 2u) & 31u)), 0i, zoom == 0u);
+L140:70 <= |||   return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM); |||   return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom < SHARD_ZOOM);
+L140:46 - 1u |||   return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM); |||   return select(i32(1u << ((zoom - SHARD_ZOOM - 2u) & 31u)), 0i, zoom <= SHARD_ZOOM);
+L145:43 - 1u |||   return vec3<i32>(at.x & i32((1u << zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom)); |||   return vec3<i32>(at.x & i32((1u << zoom) - 2u), at.y + y_start(zoom), at.z + z_start(zoom));
+L157:49 >>  |||   return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom); |||   return slot_at(tree, (first_child(tree, parent << SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom);
+L164:11 (?<![< |||   while (z < zoom && is_folded(s)) { |||   while (z <= zoom && is_folded(s)) {
+L164:18 && |||   while (z < zoom && is_folded(s)) { |||   while (z < zoom || is_folded(s)) {
+L166:34 >>  |||     s = tree_child(tree, s, z, at >> vec3<u32>(zoom - z)); |||     s = tree_child(tree, s, z, at << vec3<u32>(zoom - z));
+L174:9 (?<![< |||   if (cz > zoom) { |||   if (cz >= zoom) {
+L177:50 == |||   return all(path(cz, at >> vec3<u32>(zoom - cz)) == path(cz, cut.xyz)); |||   return all(path(cz, at >> vec3<u32>(zoom - cz)) != path(cz, cut.xyz));
+L177:25 >>  |||   return all(path(cz, at >> vec3<u32>(zoom - cz)) == path(cz, cut.xyz)); |||   return all(path(cz, at << vec3<u32>(zoom - cz)) == path(cz, cut.xyz));
+L185:31 >>  |||   let word = tree_data(tree, s >> SLOT_SHIFT); |||   let word = tree_data(tree, s << SLOT_SHIFT);
+L188:22 == |||     if ((word >> 16u) == 0u) { |||     if ((word >> 16u) != 0u) {
+L188:14 >>  |||     if ((word >> 16u) == 0u) { |||     if ((word << 16u) == 0u) {
+L191:25 == |||   } else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) { |||   } else if (u32(hide.w) != (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) {
+L191:49 && |||   } else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) { |||   } else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) || cut_holds(hide, zoom, at)) {
+L194:9 \bsele |||   return select(VALUE_VOID, v, voxel(v)); |||   return select(v, VALUE_VOID, voxel(v));
+L200:31 >>  |||     return tree_data(PLACED, s >> SLOT_SHIFT) >> 16u; |||     return tree_data(PLACED, s << SLOT_SHIFT) >> 16u;
+L200:46 >>  |||     return tree_data(PLACED, s >> SLOT_SHIFT) >> 16u; |||     return tree_data(PLACED, s >> SLOT_SHIFT) << 16u;
+L209:36 (?<![< |||     return select(0u, four_of(v), v < 256u); |||     return select(0u, four_of(v), v <= 256u);
+L213:21 (?<![< |||   for (var q = 0u; q < 4u; q += 1u) { |||   for (var q = 0u; q <= 4u; q += 1u) {
+L214:66 >>  |||     let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y + i32(q >> 1u)); |||     let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y + i32(q << 1u));
+L216:65 \+ 1u |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i)); |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 2u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+L216:83 \+ 1u |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i)); |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 2u, vec3<i32>(xy, 2i * at.z + 1i));
+L216:113 \+ 1i |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i)); |||     var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 2i));
+L218:58 \+ 1u |||       c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z)); |||       c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 2u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
+L218:76 \+ 1u |||       c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z)); |||       c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 2u, vec3<i32>(xy, 2i * at.z));
+L223:10 >= |||     if (c >= 256u) { |||     if (c > 256u) {
+L242:21 (?<![< |||   for (var k = 0u; k < 8u; k += 1u) { |||   for (var k = 0u; k <= 8u; k += 1u) {
+L243:45 != |||     if (slot_at(PLACED, base + k, zoom + 1u) != SLOT_NOTHING) { |||     if (slot_at(PLACED, base + k, zoom + 1u) == SLOT_NOTHING) {
+L243:39 \+ 1u |||     if (slot_at(PLACED, base + k, zoom + 1u) != SLOT_NOTHING) { |||     if (slot_at(PLACED, base + k, zoom + 2u) != SLOT_NOTHING) {
+L248:19 == |||   if ((low | high) == 0u) { |||   if ((low | high) != 0u) {
+L252:38 >>  |||   let lows = vec3<u32>(low & 1u, (low >> 1u) & 1u, low >> 2u); |||   let lows = vec3<u32>(low & 1u, (low << 1u) & 1u, low >> 2u);
+L252:55 >>  |||   let lows = vec3<u32>(low & 1u, (low >> 1u) & 1u, low >> 2u); |||   let lows = vec3<u32>(low & 1u, (low >> 1u) & 1u, low << 2u);
+L253:41 >>  |||   let highs = vec3<u32>(high & 1u, (high >> 1u) & 1u, high >> 2u); |||   let highs = vec3<u32>(high & 1u, (high << 1u) & 1u, high >> 2u);
+L253:59 >>  |||   let highs = vec3<u32>(high & 1u, (high >> 1u) & 1u, high >> 2u); |||   let highs = vec3<u32>(high & 1u, (high >> 1u) & 1u, high << 2u);
+L254:62 != |||   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u))); |||   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows == vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u)));
+L254:133 != |||   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u))); |||   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs == vec3<u32>(0u)));
+L262:33 >>  |||   let word = tree_data(PLACED, s >> SLOT_SHIFT); |||   let word = tree_data(PLACED, s << SLOT_SHIFT);
+L266:29 \+ 1u |||   let shift = FILL_BITS * (d + 1u); |||   let shift = FILL_BITS * (d + 2u);
+L267:70 <= |||   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS); |||   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift < FULL_BITS);
+L267:28 (?<![< |||   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS); |||   return (word >> 16u) + 2u >= select(0u, FULL >> (shift & 31u), shift <= FULL_BITS);
+L267:15 >>  |||   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS); |||   return (word << 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS);
+L267:46 >>  |||   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS); |||   return (word >> 16u) + 2u > select(0u, FULL << (shift & 31u), shift <= FULL_BITS);
+L276:32 <= |||   if (carve.w == NO_CUT.w || cz <= zoom) { |||   if (carve.w == NO_CUT.w || cz < zoom) {
+L276:14 == |||   if (carve.w == NO_CUT.w || cz <= zoom) { |||   if (carve.w != NO_CUT.w || cz <= zoom) {
+L276:26 \|\| |||   if (carve.w == NO_CUT.w || cz <= zoom) { |||   if (carve.w == NO_CUT.w && cz <= zoom) {
+L279:59 != |||   return any(path(zoom, carve.xyz >> vec3<u32>(cz - zoom)) != path(zoom, at)); |||   return any(path(zoom, carve.xyz >> vec3<u32>(cz - zoom)) == path(zoom, at));
+L279:34 >>  |||   return any(path(zoom, carve.xyz >> vec3<u32>(cz - zoom)) != path(zoom, at)); |||   return any(path(zoom, carve.xyz << vec3<u32>(cz - zoom)) != path(zoom, at));
+L285:25 (?<![< |||   if (root == 0u || zoom < top) { |||   if (root == 0u || zoom <= top) {
+L285:11 == |||   if (root == 0u || zoom < top) { |||   if (root != 0u || zoom < top) {
+L285:17 \|\| |||   if (root == 0u || zoom < top) { |||   if (root == 0u && zoom < top) {
+L288:16 >>  |||   let k = (at.z >> (zoom - top)) - (i32(root) >> ROOT_ID_BITS); |||   let k = (at.z << (zoom - top)) - (i32(root) >> ROOT_ID_BITS);
+L288:46 >>  |||   let k = (at.z >> (zoom - top)) - (i32(root) >> ROOT_ID_BITS); |||   let k = (at.z >> (zoom - top)) - (i32(root) << ROOT_ID_BITS);
+L289:8 (?<![< |||   if (k < 0i || k >= i32(ROOT_NODES)) { |||   if (k <= 0i || k >= i32(ROOT_NODES)) {
+L289:18 >= |||   if (k < 0i || k >= i32(ROOT_NODES)) { |||   if (k < 0i || k > i32(ROOT_NODES)) {
+L289:13 \|\| |||   if (k < 0i || k >= i32(ROOT_NODES)) { |||   if (k < 0i && k >= i32(ROOT_NODES)) {
+L292:63 - 1u |||   return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS - 1u)) + u32(k), top, zoom, at); |||   return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS - 2u)) + u32(k), top, zoom, at);
+L299:42 (?<![< |||   if ((shard & SHARD_KNOWN) != 0u || zoom < SHARD_ZOOM) { |||   if ((shard & SHARD_KNOWN) != 0u || zoom <= SHARD_ZOOM) {
+L299:28 != |||   if ((shard & SHARD_KNOWN) != 0u || zoom < SHARD_ZOOM) { |||   if ((shard & SHARD_KNOWN) == 0u || zoom < SHARD_ZOOM) {
+L299:34 \|\| |||   if ((shard & SHARD_KNOWN) != 0u || zoom < SHARD_ZOOM) { |||   if ((shard & SHARD_KNOWN) != 0u && zoom < SHARD_ZOOM) {
+L302:14 >>  |||   let own = c >> vec2<u32>(zoom - SHARD_ZOOM); |||   let own = c << vec2<u32>(zoom - SHARD_ZOOM);
+L304:27 (?<![< |||   if (own.y >= 0i && own.y < (1i << SHARD_ZOOM)) { |||   if (own.y >= 0i && own.y <= (1i << SHARD_ZOOM)) {
+L304:12 >= |||   if (own.y >= 0i && own.y < (1i << SHARD_ZOOM)) { |||   if (own.y > 0i && own.y < (1i << SHARD_ZOOM)) {
+L304:18 && |||   if (own.y >= 0i && own.y < (1i << SHARD_ZOOM)) { |||   if (own.y >= 0i || own.y < (1i << SHARD_ZOOM)) {
+L305:67 - 1u |||     let key = morton(vec2<u32>(own) & vec2<u32>((1u << SHARD_ZOOM) - 1u)); |||     let key = morton(vec2<u32>(own) & vec2<u32>((1u << SHARD_ZOOM) - 2u));
+L312:84 == |||   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u; |||   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) != 0u;
+L312:31 != |||   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u; |||   return (shard & SHARD_KNOWN) == 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+L312:37 && |||   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u; |||   return (shard & SHARD_KNOWN) != 0u || ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+L312:48 >>  |||   return (shard & SHARD_KNOWN) != 0u && ((shard >> SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u; |||   return (shard & SHARD_KNOWN) != 0u && ((shard << SHARD_SERVED_SHIFT) & SHARD_OWN) == 0u;
+L317:21 >>  |||   let served = shard >> SHARD_SERVED_SHIFT; |||   let served = shard << SHARD_SERVED_SHIFT;
+L318:11 (?<![< |||   if (cell < LEAF_CELL) { |||   if (cell <= LEAF_CELL) {
+L321:15 >>  |||   let leaf = b >> vec2<u32>(cell - LEAF_CELL); |||   let leaf = b << vec2<u32>(cell - LEAF_CELL);
+L322:14 >>  |||   let own = b >> vec2<u32>(cell - SHARD_ZOOM); |||   let own = b << vec2<u32>(cell - SHARD_ZOOM);
+L325:18 - 1i |||   let lo = ((leaf - 1i) >> vec2<u32>(to)) - own; |||   let lo = ((leaf - 2i) >> vec2<u32>(to)) - own;
+L325:24 >>  |||   let lo = ((leaf - 1i) >> vec2<u32>(to)) - own; |||   let lo = ((leaf - 1i) << vec2<u32>(to)) - own;
+L326:18 \+ 1i |||   let hi = ((leaf + 1i) >> vec2<u32>(to)) - own; |||   let hi = ((leaf + 2i) >> vec2<u32>(to)) - own;
+L326:24 >>  |||   let hi = ((leaf + 1i) >> vec2<u32>(to)) - own; |||   let hi = ((leaf + 1i) << vec2<u32>(to)) - own;
+L327:33 \+ 1i |||   let dx = vec2<i32>(lo.x, hi.x) + 1i; |||   let dx = vec2<i32>(lo.x, hi.x) + 2i;
+L328:33 \+ 1i |||   let dy = vec2<i32>(lo.y, hi.y) + 1i; |||   let dy = vec2<i32>(lo.y, hi.y) + 2i;
+L330:57 == |||   return any(((vec4<u32>(served) >> at) & vec4<u32>(1u)) == vec4<u32>(0u)); |||   return any(((vec4<u32>(served) >> at) & vec4<u32>(1u)) != vec4<u32>(0u));
+L330:33 >>  |||   return any(((vec4<u32>(served) >> at) & vec4<u32>(1u)) == vec4<u32>(0u)); |||   return any(((vec4<u32>(served) << at) & vec4<u32>(1u)) == vec4<u32>(0u));
+L335:11 == |||   if (zoom == 0u) { |||   if (zoom != 0u) {
+L338:29 >>  |||   return (x << (32u - zoom)) >> (32u - zoom); |||   return (x << (32u - zoom)) << (32u - zoom);
+L360:11 >>  |||   return l >> LOOKUP_CELL_SHIFT; |||   return l << LOOKUP_CELL_SHIFT;
+L364:55 - 1u |||   return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 1u); |||   return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 2u);
+L364:12 >>  |||   return (l >> LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 1u); |||   return (l << LOOKUP_FROM_SHIFT) & ((1u << ZOOM_BITS) - 1u);
+L368:39 - 1u |||   return l & ((1u << LOOKUP_SLOT_BITS) - 1u); |||   return l & ((1u << LOOKUP_SLOT_BITS) - 2u);
+L372:40 != |||   return (l & (1u << LOOKUP_SLOT_BITS)) != 0u; |||   return (l & (1u << LOOKUP_SLOT_BITS)) == 0u;
+L378:38 >>  |||   return vec2<i32>(wrap_idx(clip, c.x >> s), c.y >> s); |||   return vec2<i32>(wrap_idx(clip, c.x << s), c.y >> s);
+L378:49 >>  |||   return vec2<i32>(wrap_idx(clip, c.x >> s), c.y >> s); |||   return vec2<i32>(wrap_idx(clip, c.x >> s), c.y << s);
+L388:43 >= |||   let known = above != LOOKUP_NONE && cell >= lookup_clip(above); |||   let known = above != LOOKUP_NONE && cell > lookup_clip(above);
+L388:20 != |||   let known = above != LOOKUP_NONE && cell >= lookup_clip(above); |||   let known = above == LOOKUP_NONE && cell >= lookup_clip(above);
+L388:35 && |||   let known = above != LOOKUP_NONE && cell >= lookup_clip(above); |||   let known = above != LOOKUP_NONE || cell >= lookup_clip(above);
+L389:24 - 1u |||   var stop = FIRST_CELL - 1u; |||   var stop = FIRST_CELL - 2u;
+L395:23 (?<![< |||   for (var z = cell; z > stop; z -= 1u) { |||   for (var z = cell; z >= stop; z -= 1u) {
+L396:32 >>  |||     let q = cell_at(cell, z, g) >> vec2<u32>(BRICK_SHIFT); |||     let q = cell_at(cell, z, g) << vec2<u32>(BRICK_SHIFT);
+L397:34 - 1i |||     let m = vec2<i32>(i32(ACROSS) - 1i); |||     let m = vec2<i32>(i32(ACROSS) - 2i);
+L400:29 == |||     if (row.z != 0i && row.x == q.x && row.y == q.y) { |||     if (row.z != 0i && row.x != q.x && row.y == q.y) {
+L400:45 == |||     if (row.z != 0i && row.x == q.x && row.y == q.y) { |||     if (row.z != 0i && row.x == q.x && row.y != q.y) {
+L400:14 != |||     if (row.z != 0i && row.x == q.x && row.y == q.y) { |||     if (row.z == 0i && row.x == q.x && row.y == q.y) {
+L400:20 && |||     if (row.z != 0i && row.x == q.x && row.y == q.y) { |||     if (row.z != 0i || row.x == q.x && row.y == q.y) {
+L400:36 && |||     if (row.z != 0i && row.x == q.x && row.y == q.y) { |||     if (row.z != 0i && row.x == q.x || row.y == q.y) {
+L401:36 - 1i |||       f = lookup(cell, z, u32(row.z - 1i), true); |||       f = lookup(cell, z, u32(row.z - 2i), true);
+L405:83 - 1i |||   return Step(f, vec2<u32>(cell_at(cell, lookup_clip(f), g) & vec2<i32>(i32(BRICK) - 1i))); |||   return Step(f, vec2<u32>(cell_at(cell, lookup_clip(f), g) & vec2<i32>(i32(BRICK) - 2i)));
+L414:30 >>  |||   return vec2<i32>((w << 16u) >> 16u, w >> 16u); |||   return vec2<i32>((w << 16u) << 16u, w >> 16u);
+L414:40 >>  |||   return vec2<i32>((w << 16u) >> 16u, w >> 16u); |||   return vec2<i32>((w << 16u) >> 16u, w << 16u);
+L439:15 == |||   if (origin.z == 0i) { |||   if (origin.z != 0i) {
+L442:46 >>  |||   let q = vec2<i32>(wrap_idx(cell, g.x), g.y) >> vec2<u32>(BRICK_SHIFT); |||   let q = vec2<i32>(wrap_idx(cell, g.x), g.y) << vec2<u32>(BRICK_SHIFT);
+L446:51 <= |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across || d.y >= across || d.x + side < 0i || d.y + side <= 0i) {
+L446:71 <= |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side < 0i) {
+L446:10 >= |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x > across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
+L446:27 >= |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across || d.y > across || d.x + side <= 0i || d.y + side <= 0i) {
+L446:20 \|\| |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across && d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
+L446:37 \|\| |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across || d.y >= across && d.x + side <= 0i || d.y + side <= 0i) {
+L446:57 \|\| |||   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) { |||   if (d.x >= across || d.y >= across || d.x + side <= 0i && d.y + side <= 0i) {
+L449:14 \bmin\ |||   let level = min(l, JOINED_LEVELS); |||   let level = max(l, JOINED_LEVELS);
+L450:42 - 1i |||   let at = vec2<u32>(q & vec2<i32>(across - 1i)) >> vec2<u32>(level); |||   let at = vec2<u32>(q & vec2<i32>(across - 2i)) >> vec2<u32>(level);
+L450:49 >>  |||   let at = vec2<u32>(q & vec2<i32>(across - 1i)) >> vec2<u32>(level); |||   let at = vec2<u32>(q & vec2<i32>(across - 1i)) << vec2<u32>(level);
+L451:31 - 1u |||   let under = ACROSS >> (level - 1u); |||   let under = ACROSS >> (level - 2u);
+L451:21 >>  |||   let under = ACROSS >> (level - 1u); |||   let under = ACROSS << (level - 1u);
+L453:15 != |||   if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) { |||   if (u32(e.x) == (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+L453:60 != |||   if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) { |||   if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) == (u32(origin.y) ^ 0x80000000u)) {
+L453:48 \|\| |||   if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) || u32(e.y) != (u32(origin.y) ^ 0x80000000u)) { |||   if (u32(e.x) != (u32(origin.x) ^ 0x80000000u) && u32(e.y) != (u32(origin.y) ^ 0x80000000u)) {
+L457:10 == |||   if (b.x == UNBOUNDED_LO && b.y == UNBOUNDED_HI) { |||   if (b.x != UNBOUNDED_LO && b.y == UNBOUNDED_HI) {
+L457:33 == |||   if (b.x == UNBOUNDED_LO && b.y == UNBOUNDED_HI) { |||   if (b.x == UNBOUNDED_LO && b.y != UNBOUNDED_HI) {
+L457:26 && |||   if (b.x == UNBOUNDED_LO && b.y == UNBOUNDED_HI) { |||   if (b.x == UNBOUNDED_LO || b.y == UNBOUNDED_HI) {
+L460:74 <= |||   return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place); |||   return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side < vec2<i32>(across)), place);
+L460:40 >= |||   return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place); |||   return NodeBound(b, cell, true, all(d > vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
+L460:58 && |||   return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place); |||   return NodeBound(b, cell, true, all(d >= vec2<i32>(0i)) || all(d + side <= vec2<i32>(across)), place);
+L466:96 >= |||   let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom); |||   let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell > zoom);
+L466:19 >>  |||   let g = select(c >> vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom); |||   let g = select(c << vec2<u32>((zoom - cell) & 31u), c << vec2<u32>((cell - zoom) & 31u), cell >= zoom);
+L467:11 (?<![< |||   if (cell > zoom + BRICK_LEVELS) { |||   if (cell >= zoom + BRICK_LEVELS) {
+L475:39 (?<![< |||   let j = select(0u, clip - zoom, zoom < clip); |||   let j = select(0u, clip - zoom, zoom <= clip);
+L475:10 \bsele |||   let j = select(0u, clip - zoom, zoom < clip); |||   let j = select(clip - zoom, 0u, zoom < clip);
+L476:16 >>  |||   let at = s.at >> vec2<u32>(j); |||   let at = s.at << vec2<u32>(j);
+L477:57 >>  |||   let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) >> (2u * j))) / 3u; |||   let level_at = (4u * BRICK_CELLS - ((4u * BRICK_CELLS) << (2u * j))) / 3u;
+L479:58 \+ 1u |||   return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, true, s.place); |||   return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 2u])), clip, true, true, s.place);
+L489:11 >= |||   while (z >= FIRST_CELL) { |||   while (z > FIRST_CELL) {
+L491:10 == |||     if (z == top) { |||     if (z != top) {
+L497:18 \bmin\ |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w)); |||     b = vec4<i32>(max(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w));
+L497:56 \bmin\ |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w)); |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), max(b.z, got.b.z), max(b.w, got.b.w));
+L497:37 \bmax\ |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w)); |||     b = vec4<i32>(min(b.x, got.b.x), min(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w));
+L497:75 \bmax\ |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), max(b.w, got.b.w)); |||     b = vec4<i32>(min(b.x, got.b.x), max(b.y, got.b.y), min(b.z, got.b.z), min(b.w, got.b.w));
+L498:13 <= |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x < UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+L498:66 <= |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip < bottom && got.all)) {
+L498:36 >= |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x <= UNBOUNDED_LO && b.y > UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+L498:29 && |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x <= UNBOUNDED_LO || b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) {
+L498:76 && |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom || got.all)) {
+L498:53 \|\| |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) || (got.clip <= bottom && got.all)) { |||     if ((b.x <= UNBOUNDED_LO && b.y >= UNBOUNDED_HI) && (got.clip <= bottom && got.all)) {
+L501:17 - 1u |||     z = got.clip - 1u; |||     z = got.clip - 2u;
+L527:51 >>  |||     own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu; |||     own = (ground[base + LAID_AT + i / LAID_CELLS] << (8u * (i % LAID_CELLS))) & 0xffu;
+L529:42 >>  |||   let t = top_of(zoom, i32(column << 16u) >> 16u); |||   let t = top_of(zoom, i32(column << 16u) << 16u);
+L530:14 \bsele |||   return Cell(select(own, VALUE_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold); |||   return Cell(select(VALUE_UNKNOWN, own, is_wall(shard, zoom, b)), t.cells, t.part, fold);
+L546:16 >>  |||   let cells = h >> n; |||   let cells = h << n;
+L547:33 - 1u |||   let rest = u32(h) & ((1u << n) - 1u); |||   let rest = u32(h) & ((1u << n) - 2u);
+L548:88 <= |||   let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS); |||   let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n < FULL_BITS);
+L548:25 >>  |||   let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS); |||   let part = select(rest << ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
+L549:20 == |||   if (eighths(part) == 0u) { |||   if (eighths(part) != 0u) {
+L552:19 \+ 1i |||   return Top(cells + 1i, part); |||   return Top(cells + 2i, part);
+L557:13 >>  |||     return t >> (cell - LEAF_CELL); |||     return t << (cell - LEAF_CELL);
+L563:59 >= |||   return select(1i, 1i << ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL); |||   return select(1i, 1i << ((cell - LEAF_CELL) & 31u), cell > LEAF_CELL);
+L567:9 \bmax\ |||   return max(far, zoom + 1u); |||   return min(far, zoom + 1u);
+L567:23 \+ 1u |||   return max(far, zoom + 1u); |||   return max(far, zoom + 2u);
+L572:61 (?<![< |||   let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM); |||   let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom <= SHARD_ZOOM);
+L572:29 \bmax\ |||   let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM); |||   let hi = select(relief_hi, min(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM);
+L574:38 <= |||   for (var z = coarsest(zoom, far); z <= near; z += 1u) { |||   for (var z = coarsest(zoom, far); z < near; z += 1u) {
+L575:11 \bmax\ |||     over = max(over, face_height(z, top_of(z, hi).cells)); |||     over = min(over, face_height(z, top_of(z, hi).cells));
+L582:10 \bmax\ |||   let e = max(near, LEAF_CELL) - LEAF_CELL; |||   let e = min(near, LEAF_CELL) - LEAF_CELL;
+L585:15 (?<![< |||   return first < (span.y << e) && first + (1i << s) > (span.x << e); |||   return first <= (span.y << e) && first + (1i << s) > (span.x << e);
+L585:52 (?<![< |||   return first < (span.y << e) && first + (1i << s) > (span.x << e); |||   return first < (span.y << e) && first + (1i << s) >= (span.x << e);
+L585:31 && |||   return first < (span.y << e) && first + (1i << s) > (span.x << e); |||   return first < (span.y << e) || first + (1i << s) > (span.x << e);
+L591:102 >= |||   let scaled = select(first << ((BOX_BITS - shift) & 31u), first >> ((shift - BOX_BITS) & 31u), shift >= BOX_BITS); |||   let scaled = select(first << ((BOX_BITS - shift) & 31u), first >> ((shift - BOX_BITS) & 31u), shift > BOX_BITS);
+L591:65 >>  |||   let scaled = select(first << ((BOX_BITS - shift) & 31u), first >> ((shift - BOX_BITS) & 31u), shift >= BOX_BITS); |||   let scaled = select(first << ((BOX_BITS - shift) & 31u), first << ((shift - BOX_BITS) & 31u), shift >= BOX_BITS);
+L597:13 >= |||   if (span.x >= span.y) { |||   if (span.x > span.y) {
+L600:11 >= |||   if (zoom >= LEAF_CELL) { |||   if (zoom > LEAF_CELL) {
+L606:88 >= |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS); |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift > BOX_BITS);
+L606:76 \+ 1i |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS); |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 2i, shift >= BOX_BITS);
+L606:60 - 1i |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS); |||   let past = select(z_step(span.y, z, shift), z_step(span.y - 2i, z, shift) + 1i, shift >= BOX_BITS);
+L607:11 <= |||   if (past <= 0i || first >= i32(BOX_STEPS)) { |||   if (past < 0i || first >= i32(BOX_STEPS)) {
+L607:26 >= |||   if (past <= 0i || first >= i32(BOX_STEPS)) { |||   if (past <= 0i || first > i32(BOX_STEPS)) {
+L607:17 \|\| |||   if (past <= 0i || first >= i32(BOX_STEPS)) { |||   if (past <= 0i && first >= i32(BOX_STEPS)) {
+L610:47 - 1i |||   let lo = u32(clamp(first, 0i, i32(BOX_STEPS) - 1i)); |||   let lo = u32(clamp(first, 0i, i32(BOX_STEPS) - 2i));
+L617:14 >= |||   if (bound.x >= bound.y) { |||   if (bound.x > bound.y) {
+L621:24 <= |||   for (var z = first; z <= near; z += 1u) { |||   for (var z = first; z < near; z += 1u) {
+L623:10 (?<![< |||     if (z < LEAF_CELL) { |||     if (z <= LEAF_CELL) {
+L625:26 - 1u |||       let half = 1i << (k - 1u); |||       let half = 1i << (k - 2u);
+L626:40 >>  |||       got = vec2<i32>(((bound.x + half) >> k) << k, -(((half - bound.y) >> k) << k)); |||       got = vec2<i32>(((bound.x + half) << k) << k, -(((half - bound.y) >> k) << k));
+L626:72 >>  |||       got = vec2<i32>(((bound.x + half) >> k) << k, -(((half - bound.y) >> k) << k)); |||       got = vec2<i32>(((bound.x + half) >> k) << k, -(((half - bound.y) << k) << k));
+L628:21 \bmin\ |||     span = vec2<i32>(min(span.x, got.x), max(span.y, got.y)); |||     span = vec2<i32>(max(span.x, got.x), max(span.y, got.y));
+L628:41 \bmax\ |||     span = vec2<i32>(min(span.x, got.x), max(span.y, got.y)); |||     span = vec2<i32>(min(span.x, got.x), min(span.y, got.y));
+L635:8 >= |||   if (z >= t) { |||   if (z > t) {
+L638:11 (?<![< |||   if (cell < LEAF_CELL || idx == VALUE_UNKNOWN) { |||   if (cell <= LEAF_CELL || idx == VALUE_UNKNOWN) {
+L638:30 == |||   if (cell < LEAF_CELL || idx == VALUE_UNKNOWN) { |||   if (cell < LEAF_CELL || idx != VALUE_UNKNOWN) {
+L638:23 \|\| |||   if (cell < LEAF_CELL || idx == VALUE_UNKNOWN) { |||   if (cell < LEAF_CELL && idx == VALUE_UNKNOWN) {
+L644:10 == |||   if (idx == STRATA_SAND || idx == STRATA_BEACH) { |||   if (idx != STRATA_SAND || idx == STRATA_BEACH) {
+L644:32 == |||   if (idx == STRATA_SAND || idx == STRATA_BEACH) { |||   if (idx == STRATA_SAND || idx != STRATA_BEACH) {
+L644:25 \|\| |||   if (idx == STRATA_SAND || idx == STRATA_BEACH) { |||   if (idx == STRATA_SAND && idx == STRATA_BEACH) {
+L647:17 == |||   } else if (idx == STRATA_WATER) { |||   } else if (idx != STRATA_WATER) {
+L652:8 >= |||   if (z >= face) { |||   if (z > face) {
+L655:8 >= |||   if (z >= filled) { |||   if (z > filled) {
+L658:8 >= |||   if (z >= filled - sandstone * s) { |||   if (z > filled - sandstone * s) {
+L661:47 >= |||   return select(VALUE_UNKNOWN, STRATA_STONE, z >= rock(cell, face_height(cell, t))); |||   return select(VALUE_UNKNOWN, STRATA_STONE, z > rock(cell, face_height(cell, t)));
+L661:9 \bsele |||   return select(VALUE_UNKNOWN, STRATA_STONE, z >= rock(cell, face_height(cell, t))); |||   return select(STRATA_STONE, VALUE_UNKNOWN, z >= rock(cell, face_height(cell, t)));
+L666:22 \bmin\ |||   return top_of(cell, min(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells; |||   return top_of(cell, max(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
+L672:73 (?<![< |||   let under = top_of(cell, face).cells - leaf_cells(cell) - i32(col.part < FULL); |||   let under = top_of(cell, face).cells - leaf_cells(cell) - i32(col.part <= FULL);
+L673:39 (?<![< |||   return col.idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face); |||   return col.idx != VALUE_UNKNOWN && z <= under && z >= rock(cell, face);
+L673:52 >= |||   return col.idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face); |||   return col.idx != VALUE_UNKNOWN && z < under && z > rock(cell, face);
+L673:17 != |||   return col.idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face); |||   return col.idx == VALUE_UNKNOWN && z < under && z >= rock(cell, face);
+L673:34 && |||   return col.idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face); |||   return col.idx != VALUE_UNKNOWN || z < under && z >= rock(cell, face);
+L673:47 && |||   return col.idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face); |||   return col.idx != VALUE_UNKNOWN && z < under || z >= rock(cell, face);
+L695:54 (?<![< |||     let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z < SEA_LEVEL); |||     let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z <= SEA_LEVEL);
+L695:16 \bsele |||     let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z < SEA_LEVEL); |||     let earth = select(VALUE_UNKNOWN, VALUE_VOID, c.z < SEA_LEVEL);
+L707:14 == |||   if (col.idx == VALUE_UNKNOWN || grounds(col.idx)) { |||   if (col.idx != VALUE_UNKNOWN || grounds(col.idx)) {
+L707:31 \|\| |||   if (col.idx == VALUE_UNKNOWN || grounds(col.idx)) { |||   if (col.idx == VALUE_UNKNOWN && grounds(col.idx)) {
+L711:12 != |||   if (asset != VALUE_VOID && opens(col, zoom, c.z)) { |||   if (asset == VALUE_VOID && opens(col, zoom, c.z)) {
+L711:26 && |||   if (asset != VALUE_VOID && opens(col, zoom, c.z)) { |||   if (asset != VALUE_VOID || opens(col, zoom, c.z)) {
+L730:12 >= |||     if (c.z >= SEA_LEVEL && zoom > SHARD_ZOOM) { |||     if (c.z > SEA_LEVEL && zoom > SHARD_ZOOM) {
+L730:33 (?<![< |||     if (c.z >= SEA_LEVEL && zoom > SHARD_ZOOM) { |||     if (c.z >= SEA_LEVEL && zoom >= SHARD_ZOOM) {
+L730:25 && |||     if (c.z >= SEA_LEVEL && zoom > SHARD_ZOOM) { |||     if (c.z >= SEA_LEVEL || zoom > SHARD_ZOOM) {
+L738:28 \bmin\ |||   let r = bound_over(place, min(coarsest(zoom, far), near), near, zoom, c.xy); |||   let r = bound_over(place, max(coarsest(zoom, far), near), near, zoom, c.xy);
+L754:14 >>  |||   z = (z ^ (z >> 16u)) * 0x85ebca6bu; |||   z = (z ^ (z << 16u)) * 0x85ebca6bu;
+L755:14 >>  |||   z = (z ^ (z >> 13u)) * 0xc2b2ae35u; |||   z = (z ^ (z << 13u)) * 0xc2b2ae35u;
+L756:16 >>  |||   return z ^ (z >> 16u); |||   return z ^ (z << 16u);
+L768:31 >>  |||   return (v << (s & 31u)) | (v >> ((32u - s) & 31u)); |||   return (v << (s & 31u)) | (v << ((32u - s) & 31u));
+L773:22 >>  |||   let scaled = n * (w >> 16u); |||   let scaled = n * (w << 16u);
+L774:54 (?<![< |||   let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu)); |||   let part = (scaled >> 16u) + u32((scaled & 0xffffu) >= (w & 0xffffu));
+L774:21 >>  |||   let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu)); |||   let part = (scaled << 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));
+L775:39 (?<![< |||   let least = select(0u, n - room_1, n > room_1); |||   let least = select(0u, n - room_1, n >= room_1);
+L775:14 \bsele |||   let least = select(0u, n - room_1, n > room_1); |||   let least = select(n - room_1, 0u, n > room_1);
+L776:11 (?<![< |||   if (part < least) { |||   if (part <= least) {
+L779:9 \bmin\ |||   return min(part, min(n, room_0)); |||   return max(part, min(n, room_0));
+L779:19 \bmin\ |||   return min(part, min(n, room_0)); |||   return min(part, max(n, room_0));
+L799:8 (?<![< |||   if (s < 4i) { |||   if (s <= 4i) {
+L800:45 >>  |||     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u)); |||     let bits = vec3<i32>(i32(h & 1u), i32((h << 1u) & 1u), i32((h >> 2u) & 1u));
+L800:66 >>  |||     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u)); |||     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h << 2u) & 1u));
+L801:29 \+ 1i |||     return Piece(o + bits, o + 1i - bits, 6u, 6u, tunnel_blocks(k), 0u); |||     return Piece(o + bits, o + 2i - bits, 6u, 6u, tunnel_blocks(k), 0u);
+L805:63 == |||   let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u)); |||   let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) != 0u));
+L805:19 >>  |||   let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u)); |||   let ex = i32(((h << 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u));
+L805:34 \bsele |||   let ex = i32(((h >> 1u) % qu) + select(3u * qu, 0u, (h & 1u) == 0u)); |||   let ex = i32(((h >> 1u) % qu) + select(0u, 3u * qu, (h & 1u) == 0u));
+L806:71 == |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u)); |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) != 0u));
+L806:19 >>  |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u)); |||   let ey = i32(((h << 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u));
+L806:58 >>  |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u)); |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h << 8u) & 1u) == 0u));
+L806:34 \bsele |||   let ey = i32(((h >> 9u) % qu) + select(3u * qu, 0u, ((h >> 8u) & 1u) == 0u)); |||   let ey = i32(((h >> 9u) % qu) + select(0u, 3u * qu, ((h >> 8u) & 1u) == 0u));
+L807:18 >>  |||   let ez = i32((h >> 16u) % u32(s)); |||   let ez = i32((h << 16u) % u32(s));
+L808:22 \+ 1u |||   let reach = qu / 2u + 1u; |||   let reach = qu / 2u + 2u;
+L809:13 - 1i |||   let mx = s - 1i - ex; |||   let mx = s - 2i - ex;
+L810:13 - 1i |||   let my = s - 1i - ey; |||   let my = s - 2i - ey;
+L812:18 >>  |||   let dy = i32((g >> 8u) % reach); |||   let dy = i32((g << 8u) % reach);
+L816:34 (?<![< |||       select(mx - dx, mx + dx, mx < 2i * q), |||       select(mx - dx, mx + dx, mx <= 2i * q),
+L816:6 \bsele |||       select(mx - dx, mx + dx, mx < 2i * q), |||       select(mx + dx, mx - dx, mx < 2i * q),
+L817:34 (?<![< |||       select(my - dy, my + dy, my < 2i * q), |||       select(my - dy, my + dy, my <= 2i * q),
+L817:6 \bsele |||       select(my - dy, my + dy, my < 2i * q), |||       select(my + dy, my - dy, my < 2i * q),
+L818:57 - 1i |||       clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 1i), |||       clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 2i),
+L818:24 >>  |||       clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 1i), |||       clamp(ez + i32((g << 16u) % reach) - q / 4i, 0i, s - 1i),
+L825:36 == |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) == 1u; |||   return d != 0u && countOneBits(d) != 1u && (h & 1u) == 1u;
+L825:54 == |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) == 1u; |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) != 1u;
+L825:11 != |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) == 1u; |||   return d == 0u && countOneBits(d) == 1u && (h & 1u) == 1u;
+L825:17 && |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) == 1u; |||   return d != 0u || countOneBits(d) == 1u && (h & 1u) == 1u;
+L825:42 && |||   return d != 0u && countOneBits(d) == 1u && (h & 1u) == 1u; |||   return d != 0u && countOneBits(d) == 1u || (h & 1u) == 1u;
+L832:96 == |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u); |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) != 0u);
+L832:35 >>  |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u); |||     let b = select(((d << 2u) | (d << 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+L832:65 >>  |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u); |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d << 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
+L832:83 >>  |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u); |||     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h << 1u) & 1u) == 0u);
+L840:13 >>  |||   let r = (h >> 2u) % 3u; |||   let r = (h << 2u) % 3u;
+L843:21 (?<![< |||   for (var j = 0u; j < 3u && flipped < i; j += 1u) { |||   for (var j = 0u; j <= 3u && flipped < i; j += 1u) {
+L843:37 (?<![< |||   for (var j = 0u; j < 3u && flipped < i; j += 1u) { |||   for (var j = 0u; j < 3u && flipped <= i; j += 1u) {
+L843:26 && |||   for (var j = 0u; j < 3u && flipped < i; j += 1u) { |||   for (var j = 0u; j < 3u || flipped < i; j += 1u) {
+L845:18 != |||     if ((d & bit) != 0u) { |||     if ((d & bit) == 0u) {
+L862:22 >= |||   let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u); |||   let u = u32(enter.x > mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
+L862:47 >= |||   let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u); |||   let u = u32(enter.x >= mid.x) | (u32(enter.y > mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
+L862:79 >= |||   let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u); |||   let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z > mid.z) << 2u);
+L863:22 >= |||   let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u); |||   let v = u32(leave.x > mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+L863:47 >= |||   let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u); |||   let v = u32(leave.x >= mid.x) | (u32(leave.y > mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+L863:79 >= |||   let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u); |||   let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z > mid.z) << 2u);
+L866:33 \+ 1u |||   let n = select(countOneBits(d) + 1u, 4u, is_aside(d, wh)); |||   let n = select(countOneBits(d) + 2u, 4u, is_aside(d, wh));
+L876:21 (?<![< |||   for (var i = 0u; i < n; i += 1u) { |||   for (var i = 0u; i <= n; i += 1u) {
+L883:15 (?<![< |||     if (i + 1u < n) { |||     if (i + 1u <= n) {
+L883:10 \+ 1u |||     if (i + 1u < n) { |||     if (i + 2u < n) {
+L885:89 >>  |||       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u)); |||       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k << 1u) & 1u), i32(k >> 2u));
+L885:109 >>  |||       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u)); |||       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k << 2u));
+L886:37 \+ 1u |||       let next = walk_at(u, v, wh, i + 1u); |||       let next = walk_at(u, v, wh, i + 2u);
+L888:37 == |||       let up = ((next >> axis) & 1u) == 1u; |||       let up = ((next >> axis) & 1u) != 1u;
+L888:22 >>  |||       let up = ((next >> axis) & 1u) == 1u; |||       let up = ((next << axis) & 1u) == 1u;
+L890:42 >>  |||       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3ffu)); |||       let rand = vec3<i32>(vec3<u32>(h, h << 10u, h >> 20u) & vec3<u32>(0x3ffu));
+L890:52 >>  |||       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3ffu)); |||       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h << 20u) & vec3<u32>(0x3ffu));
+L891:56 \+ 1i |||       let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i; |||       let was = (cur + leave) / 2i + (rand * (half / 2i + 2i)) / 1024i - half / 4i;
+L892:44 - 1i |||       part_leave = clamp(was, co, co + half - 1i); |||       part_leave = clamp(was, co, co + half - 2i);
+L893:58 - 1i |||       part_leave[axis] = select(co[axis], co[axis] + half - 1i, up); |||       part_leave[axis] = select(co[axis], co[axis] + half - 2i, up);
+L893:25 \bsele |||       part_leave[axis] = select(co[axis], co[axis] + half - 1i, up); |||       part_leave[axis] = select(co[axis] + half - 1i, co[axis], up);
+L896:19 \bsele |||       cur[axis] += select(-1i, 1i, up); |||       cur[axis] += select(1i, -1i, up);
+L899:49 \+ 1u |||     cells[i] = manhattan(part_enter, part_leave) + 1u; |||     cells[i] = manhattan(part_enter, part_leave) + 2u;
+L900:10 == |||     if (k == want) { |||     if (k != want) {
+L912:21 (?<![< |||   for (var i = 0u; i < n && i <= at; i += 1u) { |||   for (var i = 0u; i <= n && i <= at; i += 1u) {
+L912:30 <= |||   for (var i = 0u; i < n && i <= at; i += 1u) { |||   for (var i = 0u; i < n && i < at; i += 1u) {
+L912:25 && |||   for (var i = 0u; i < n && i <= at; i += 1u) { |||   for (var i = 0u; i < n || i <= at; i += 1u) {
+L915:17 \bmin\ |||     let weight = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu); |||     let weight = max((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
+L915:36 \bmax\ |||     let weight = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu); |||     let weight = min((cnt << 16u) / min(cnt + rest, 1u), 0xffffu);
+L917:10 == |||     if (i == at) { |||     if (i != at) {
+L927:14 == |||   if (tunnels == 0u) { |||   if (tunnels != 0u) {
+L931:19 \+ 1u |||   let child = zoom + 1u; |||   let child = zoom + 2u;
+L932:73 (?<![< |||   let room = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom); |||   let room = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child >= class_zoom);
+L936:27 (?<![< |||   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) { |||   for (var axis = 0u; axis <= 3u && n > 0u; axis += 1u) {
+L936:37 (?<![< |||   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) { |||   for (var axis = 0u; axis < 3u && n >= 0u; axis += 1u) {
+L936:32 && |||   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) { |||   for (var axis = 0u; axis < 3u || n > 0u; axis += 1u) {
+L937:49 == |||     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u); |||     let upper = select(select(0xf0u, 0xccu, axis != 1u), 0xaau, axis == 0u);
+L937:69 == |||     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u); |||     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis != 0u);
+L937:23 \bsele |||     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u); |||     let upper = select(select(0xccu, 0xf0u, axis == 1u), 0xaau, axis == 0u);
+L938:31 >>  |||     let weight = 0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x80u; |||     let weight = 0x4000u + ((h << (8u * axis)) & 0xffu) * 0x80u;
+L941:35 == |||     let up = ((want >> axis) & 1u) == 1u; |||     let up = ((want >> axis) & 1u) != 1u;
+L941:20 >>  |||     let up = ((want >> axis) & 1u) == 1u; |||     let up = ((want << axis) & 1u) == 1u;
+L942:8 \bsele |||     n = select(lo, n - lo, up); |||     n = select(n - lo, lo, up);
+L943:12 \bsele |||     keep &= select(~upper, upper, up); |||     keep &= select(upper, ~upper, up);
+L968:11 <= |||   while (z <= CAVE_PIPE) { |||   while (z < CAVE_PIPE) {
+L969:17 >>  |||     let here = c >> vec3<u32>(zoom - z); |||     let here = c << vec3<u32>(zoom - z);
+L971:10 (?<![< |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k <= 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:64 (?<![< |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k <= 4u && tunnels[k] > 0u))) {
+L971:52 (?<![< |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u && last >= 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:83 (?<![< |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] >= 0u))) {
+L971:25 == |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks != 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:38 == |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k != 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:15 && |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u || blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:31 && |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u || ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:44 && |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u || last > 0u) || (k < 4u && tunnels[k] > 0u))) {
+L971:69 && |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u || tunnels[k] > 0u))) {
+L971:58 \|\| |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) || (k < 4u && tunnels[k] > 0u))) { |||     if (k < 5u && blocks == 0u && ((k == 4u && last > 0u) && (k < 4u && tunnels[k] > 0u))) {
+L978:12 == |||       if (k == 4u) { |||       if (k != 4u) {
+L984:68 == |||     let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w + last == 0u; |||     let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w + last != 0u;
+L985:10 == |||     if (z == zoom || (blocks == 0u && none)) { |||     if (z != zoom || (blocks == 0u && none)) {
+L985:29 == |||     if (z == zoom || (blocks == 0u && none)) { |||     if (z == zoom || (blocks != 0u && none)) {
+L985:35 && |||     if (z == zoom || (blocks == 0u && none)) { |||     if (z == zoom || (blocks == 0u || none)) {
+L985:18 \|\| |||     if (z == zoom || (blocks == 0u && none)) { |||     if (z == zoom && (blocks == 0u && none)) {
+L988:47 \+ 1u |||     let i = child_idx(c >> vec3<u32>(zoom - (z + 1u))); |||     let i = child_idx(c >> vec3<u32>(zoom - (z + 2u)));
+L988:24 >>  |||     let i = child_idx(c >> vec3<u32>(zoom - (z + 1u))); |||     let i = child_idx(c << vec3<u32>(zoom - (z + 1u)));
+L990:15 != |||     if (blocks != 0u) { |||     if (blocks == 0u) {
+L1014:11 (?<![< |||   if (side < 6u) { |||   if (side <= 6u) {
+L1015:47 == |||     p[side / 2u] = select(0i, 64i, (side & 1u) == 1u); |||     p[side / 2u] = select(0i, 64i, (side & 1u) != 1u);
+L1015:19 \bsele |||     p[side / 2u] = select(0i, 64i, (side & 1u) == 1u); |||     p[side / 2u] = select(64i, 0i, (side & 1u) == 1u);
+L1022:41 >>  |||   let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a; |||   let ap = vec3<i32>(i32(b & 3u), i32((b << 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a;
+L1022:62 >>  |||   let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b >> 4u) & 3u)) * 16i + 8i - a; |||   let ap = vec3<i32>(i32(b & 3u), i32((b >> 2u) & 3u), i32((b << 4u) & 3u)) * 16i + 8i - a;
+L1025:28 == |||   let one = select(l, 1i, l == 0i); |||   let one = select(l, 1i, l != 0i);
+L1025:12 \bsele |||   let one = select(l, 1i, l == 0i); |||   let one = select(1i, l, l == 0i);
+L1027:8 <= |||   if (t <= 0i) { |||   if (t < 0i) {
+L1029:15 >= |||   } else if (t >= l) { |||   } else if (t > l) {
+L1033:9 >>  |||   n ^= n >> 15u; |||   n ^= n << 15u;
+L1035:9 >>  |||   n ^= n >> 12u; |||   n ^= n << 12u;
+L1041:13 >= |||   if (blocks >= CELL_BLOCKS) { |||   if (blocks > CELL_BLOCKS) {
+L1049:21 (?<![< |||   for (var o = 0u; o < CELL_BLOCKS && before < blocks; o += 1u) { |||   for (var o = 0u; o <= CELL_BLOCKS && before < blocks; o += 1u) {
+L1049:45 (?<![< |||   for (var o = 0u; o < CELL_BLOCKS && before < blocks; o += 1u) { |||   for (var o = 0u; o < CELL_BLOCKS && before <= blocks; o += 1u) {
+L1049:35 && |||   for (var o = 0u; o < CELL_BLOCKS && before < blocks; o += 1u) { |||   for (var o = 0u; o < CELL_BLOCKS || before < blocks; o += 1u) {
+L1051:10 (?<![< |||     if (k < mine || (k == mine && o < b)) { |||     if (k <= mine || (k == mine && o < b)) {
+L1051:36 (?<![< |||     if (k < mine || (k == mine && o < b)) { |||     if (k < mine || (k == mine && o <= b)) {
+L1051:23 == |||     if (k < mine || (k == mine && o < b)) { |||     if (k < mine || (k != mine && o < b)) {
+L1051:31 && |||     if (k < mine || (k == mine && o < b)) { |||     if (k < mine || (k == mine || o < b)) {
+L1051:17 \|\| |||     if (k < mine || (k == mine && o < b)) { |||     if (k < mine && (k == mine && o < b)) {
+L1055:16 (?<![< |||   return before < blocks; |||   return before <= blocks;
+L1060:11 <= |||   if (zoom <= CAVE_PIPE) { |||   if (zoom < CAVE_PIPE) {
+L1066:29 >>  |||   let p = holds(CAVE_PIPE, c >> vec3<u32>(zoom - CAVE_PIPE)); |||   let p = holds(CAVE_PIPE, c << vec3<u32>(zoom - CAVE_PIPE));
+L1067:15 == |||   if (p.blocks == 0u) { |||   if (p.blocks != 0u) {
+L1070:46 >>  |||   let h = node_seed(CAVE_BLOCKS, CAVE_PIPE, c >> vec3<u32>(zoom - CAVE_PIPE)); |||   let h = node_seed(CAVE_BLOCKS, CAVE_PIPE, c << vec3<u32>(zoom - CAVE_PIPE));
+L1071:11 >= |||   if (zoom >= CAVE_BLOCK) { |||   if (zoom > CAVE_BLOCK) {
+L1072:25 >>  |||     let lo = vec3<u32>(c >> vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(3u); |||     let lo = vec3<u32>(c << vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(3u);
+L1079:21 (?<![< |||   for (var b = 0u; b < side * side * side; b += 1u) { |||   for (var b = 0u; b <= side * side * side; b += 1u) {
+L1080:33 - 1u |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u * t)); |||     let at = vec3<u32>(b & (side - 2u), (b >> t) & (side - 1u), b >> (2u * t));
+L1080:57 - 1u |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u * t)); |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 2u), b >> (2u * t));
+L1080:43 >>  |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u * t)); |||     let at = vec3<u32>(b & (side - 1u), (b << t) & (side - 1u), b >> (2u * t));
+L1080:66 >>  |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b >> (2u * t)); |||     let at = vec3<u32>(b & (side - 1u), (b >> t) & (side - 1u), b << (2u * t));
+L1091:11 (?<![< |||   if (zoom > LEAF_CELL) { |||   if (zoom >= LEAF_CELL) {
+L1092:10 >>  |||     c = c >> vec3<u32>(zoom - LEAF_CELL); |||     c = c << vec3<u32>(zoom - LEAF_CELL);
+L1096:11 <= |||   if (zoom <= CAVE_ROOT) { |||   if (zoom < CAVE_ROOT) {
+L1103:12 >= |||   if (shift >= 0i) { |||   if (shift > 0i) {
+L1104:11 \bmin\ |||     return min(n << u32(shift), FULL); |||     return max(n << u32(shift), FULL);
+L1106:11 >>  |||   return n >> u32(-shift); |||   return n << u32(-shift);
+L1115:39 >>  |||   let slot = OBJECT_ROOT + child_idx(p >> vec3<u32>(zoom)); |||   let slot = OBJECT_ROOT + child_idx(p << vec3<u32>(zoom));
+L1127:37 == |||   if (((place ^ before) & LOOKUP_AT) == 0u) { |||   if (((place ^ before) & LOOKUP_AT) != 0u) {
+L1151:18 == |||     if (over_fill == FULL) { |||     if (over_fill != FULL) {
+L1158:13 == |||   if (g.kind == KIND_LACKS && over == VALUE_VOID) { |||   if (g.kind != KIND_LACKS && over == VALUE_VOID) {
+L1158:35 == |||   if (g.kind == KIND_LACKS && over == VALUE_VOID) { |||   if (g.kind == KIND_LACKS && over != VALUE_VOID) {
+L1158:27 && |||   if (g.kind == KIND_LACKS && over == VALUE_VOID) { |||   if (g.kind == KIND_LACKS || over == VALUE_VOID) {
+L1164:13 == |||   if (g.kind == KIND_CELL) { |||   if (g.kind != KIND_CELL) {
+L1170:41 == |||     let share = select(FULL, g.part, c.z == g.top - 1i); |||     let share = select(FULL, g.part, c.z != g.top - 1i);
+L1170:50 - 1i |||     let share = select(FULL, g.part, c.z == g.top - 1i); |||     let share = select(FULL, g.part, c.z == g.top - 2i);
+L1170:16 \bsele |||     let share = select(FULL, g.part, c.z == g.top - 1i); |||     let share = select(g.part, FULL, c.z == g.top - 1i);
+L1172:45 >= |||     four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val != g.idx); |||     four = select(g.fold, four_of(val), zoom > LEAF_CELL || val != g.idx);
+L1172:65 != |||     four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val != g.idx); |||     four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val == g.idx);
+L1172:58 \|\| |||     four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val != g.idx); |||     four = select(g.fold, four_of(val), zoom >= LEAF_CELL && val != g.idx);
+L1174:13 == |||   if (g.kind == KIND_CELL && lookup_here(g.place)) { |||   if (g.kind != KIND_CELL && lookup_here(g.place)) {
+L1174:26 && |||   if (g.kind == KIND_CELL && lookup_here(g.place)) { |||   if (g.kind == KIND_CELL || lookup_here(g.place)) {
+L1176:12 != |||     if (way != VALUE_VOID) { |||     if (way == VALUE_VOID) {
+L1178:21 \|\| |||       if (got.theirs || !fills(val)) { |||       if (got.theirs && !fills(val)) {
+L1187:19 \|\| |||     if (got.theirs || !fills(val)) { |||     if (got.theirs && !fills(val)) {
+L1194:13 == |||   if (filled == 0u) { |||   if (filled != 0u) {
+L1195:15 == |||     if (g.kind == KIND_LACKS) { |||     if (g.kind != KIND_LACKS) {
+L1198:89 == |||     return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over == VALUE_AIR), 0u), at); |||     return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over != VALUE_AIR), 0u), at);
+L1198:39 \bsele |||     return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over == VALUE_AIR), 0u), at); |||     return Answer(KIND_CELL, vec2<u32>(select(PLACED_ASSET | VALUE_AIR, VALUE_VOID, over == VALUE_AIR), 0u), at);
+L1216:50 == |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) { |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind != KIND_CELL && meets(ways, zoom, c.z, near))) {
+L1216:24 != |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) { |||   if (!splits && g.kind == KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) {
+L1216:14 && |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) { |||   if (!splits || g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) {
+L1216:38 && |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) { |||   if (!splits && g.kind != KIND_SPLIT || !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) {
+L1216:63 && |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) { |||   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL || meets(ways, zoom, c.z, near))) {
+L1220:13 == |||   if (g.kind == KIND_SPLIT) { |||   if (g.kind != KIND_SPLIT) {
+L1222:20 == |||   } else if (g.kind == KIND_LACKS) { |||   } else if (g.kind != KIND_LACKS) {
+L1236:11 >= |||   if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) { |||   if (zoom > near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) {
+L1236:28 >= |||   if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) { |||   if (zoom >= near || (zoom > LEAF_CELL && whole(above.x, carve, zoom, c))) {
+L1236:41 && |||   if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) { |||   if (zoom >= near || (zoom >= LEAF_CELL || whole(above.x, carve, zoom, c))) {
+L1236:19 \|\| |||   if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) { |||   if (zoom >= near && (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) {

@@ -225,12 +225,12 @@ not move: it is the palette row's `color`, kept with the type numbering in
 texture-pack-off path read it and a pack only decorates it.
 
 The files themselves left `packages/pxl/shared/src/assets` for a top-level
-`asset/` — `cube/`, `decor/`, `actor/`, by rendering tier — that no code
+`asset/` — `cube/`, `decor/`, `character/`, by rendering tier — that no code
 imports: it is the input of `deno task ingest:asset`
 (`apps/api/src/bake/asset/tools/ingest_asset.ts`), which hashes every file into
 `./out/asset/{glb,png}/<sha256>`, measures each glb's bounds, and regenerates
 `record/ingested.ts`, the table the shipped palette reads. So the hand-typed
-extents are gone; the characters are palette rows too (kind `actor`, groups
+extents are gone; the characters are palette rows too (kind `character`, groups
 `person` and `pet`); the bundle carries no model or texture bytes (13 MB less,
 and `check_bundle` fails the deploy if one comes back); and `deno test` no
 longer has to route around Vite-only imports.
@@ -268,7 +268,7 @@ What moved rather than went:
   `pxl:object:v9`. The id and heading lanes were written and never read.
 
 What went with no replacement: palette ids and their ranges (`CHANNEL_ID_BASE`,
-`MODEL_ID_BASE`, `ACTOR_ID_BASE`, `USER_ID_BASE`), the license and author
+`MODEL_ID_BASE`, `CHARACTER_ID_BASE`, `USER_ID_BASE`), the license and author
 columns, `model_hash`, and the two items this document left open — the scatter
 emitting `Placement` and the ingest route issuing palette rows. Nothing read any
 of them.
