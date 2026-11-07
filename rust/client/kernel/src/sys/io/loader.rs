@@ -29,7 +29,6 @@ use crate::sys::io::file_spec::{root, CATALOG};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind};
-use crate::sys::sched::edge::TaskPriority;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
@@ -289,7 +288,7 @@ fn arrive(kind: LoadKind, load: Load, reading: Reading) {
     // The pool holds a task for each file in flight (sys/load.rs
     // `LOAD_FILES`): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
-    let spawned = task::spawn(arrival(kind, load, reading), TaskPriority::Arrival as u8);
+    let spawned = task::spawn(arrival(kind, load, reading), 0);
     xpute_kit::ensure!(spawned, ENOSPC, load.id());
 }
 

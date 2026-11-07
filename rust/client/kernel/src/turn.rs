@@ -215,9 +215,8 @@ pub fn boot() {
 
 /// No more than the executor's pool (door/executor.rs `TASKS`); a refusal means it holds fewer, and aborts.
 fn world_tasks() {
-    use crate::sys::sched::edge::TaskPriority::*;
     use xpute_core::sched::task::spawn;
-    let spawned = spawn(frame_task(), Frame as u8) && spawn(fetch::fetch_task(), Arrival as u8);
+    let spawned = spawn(frame_task(), 0) && spawn(fetch::fetch_task(), 0);
     if !spawned {
         std::process::abort();
     }

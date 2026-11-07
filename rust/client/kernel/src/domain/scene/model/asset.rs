@@ -37,7 +37,7 @@ use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
 use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
-use crate::sys::sched::edge::{request_world_tick, world_edge, TaskPriority};
+use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset::catalog::{Slot, SLOTS};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -93,10 +93,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
         Some(at) => registered[at].2 = None,
         None => registered.push((file, key, None)),
     }
-    let spawned = task::spawn(
-        registration(file, height_u, gltf),
-        TaskPriority::Arrival as u8,
-    );
+    let spawned = task::spawn(registration(file, height_u, gltf), 0);
     xpute_kit::ensure!(spawned, ENOSPC, file);
     None
 }

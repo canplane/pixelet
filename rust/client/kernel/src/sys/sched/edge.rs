@@ -12,14 +12,6 @@ use xpute_core::sched::task;
 /// once a turn, with room to spare; the kernel runs no more tasks than it.
 pub const TASKS_MOST: usize = 256;
 
-/// The order the kernel's tasks ask of the executor, which may ignore it.
-#[repr(u8)]
-#[derive(Clone, Copy)]
-pub(crate) enum TaskPriority {
-    Frame,
-    Arrival,
-}
-
 static EDGE: Global<Edge<TASKS_MOST>> = Global::new();
 
 pub fn world_edge() -> &'static mut Edge<TASKS_MOST> {

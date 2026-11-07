@@ -2,7 +2,9 @@
 
 //! embassy's raw executor behind xpute's `Executor`, installed at boot. The
 //! pender only records that work is queued: poll is never called from it,
-//! which the executor forbids, and `pending` tells the falling edge.
+//! which the executor forbids, and `pending` tells the falling edge. No
+//! kernel task is ordered before another, so each is spawned at priority 0
+//! and the priority is dropped.
 
 use crate::domain::scene::model::asset::REGISTRATIONS;
 use crate::sys::load::LOAD_FILES;
@@ -54,7 +56,6 @@ async fn run(task: Task) {
 struct Embassy;
 
 impl Executor for Embassy {
-    /// The priority is dropped.
     fn spawn(&self, task: Task, _: Priority) -> bool {
         match run(task) {
             Ok(token) => {
