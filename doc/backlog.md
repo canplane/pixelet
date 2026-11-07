@@ -16,9 +16,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   p95 1.2×; the bar is 2×. The p95 is the light's. On the Mac's drive, 43% of the light's time is
   the box's depth stepping as the eye moves along the light, which casts every tile read
   ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
-- **Safari pins its GPU with shadows on.** Since 9e476eca74 every pipeline compiles on
-  Safari 27; with shadows on the GPU sat at 100%, before the indirect-scope fix
-  (034ddad063) and the rest fixes. Recheck on main.
 - **A split's air children skipped (ESVO's child masks).** A split's answer carries its
   eight children's occupancy, kept with it in the node cache; a walk crosses an air child
   without asking or looking it up, the engine's walk by the same rule. Then sibling
@@ -31,8 +28,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   ([a ray ends in its frame](./minutes/20261107-a-ray-ends-in-its-frame.md)); its floor, 30 Hz,
   is not a measured figure. Its name on the screen, "auto resolution", no longer says what it
   moves.
-- **The character preview does not show.** It did about three days before 11-05; a
-  comparison with that build finds what lost it.
 
 ## P2
 

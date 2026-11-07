@@ -546,3 +546,13 @@ end: none has a band. Dark under the horizon there is the clouds' underside or t
 the limb, in the shots before and after alike. At the earlier count of 5–9 a drive, about one
 frame in three shot, some would have shown. The near end's dark shots are the inside of a
 grass block the camera passes through.
+
+**Safari with shadows on, rechecked (Safari 27.0.1, `measure.mjs`, a watcher to force-quit it).**
+No pin. Shadows off through 120 s of the far zoom and on for 90 s at the default: GPU 79% at
+most, the Mac's other work about 40–50%. Shadows on from the start through 180 s of the far
+zoom, the sky's time moving: 72% at most, the GPU process 310 MB, no page error. The page's
+live bytes read 0: the proxy's counters do not reach the worker's device. No shot was taken in
+Safari, so that it drew is read from the load's end and the utilization moving by phase.
+
+**The character preview shows.** The scene's work found it culled by the world's eye under the
+sea (8671645700). Seen in Chrome: the drawer's Character tab draws the person and the pet.
