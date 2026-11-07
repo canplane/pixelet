@@ -12,7 +12,7 @@ use pxl_engine::clipmap::{
 };
 use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
-use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
+use pxl_spec::bake::tile::terrain::ELE_COLUMN;
 
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_engine::clipmap::SLOTS;
@@ -91,11 +91,9 @@ const BUILD_CHILD_GROUPS: usize = BRICK_CHILD_GROUPS as usize + 1;
 pub const BUILD_WORDS: usize = BUILD_CHILD_GROUPS * CHILD_GROUP_WORDS as usize;
 
 /// The room a fill works in (clipmap.rs `FillScratch`), an array each in order:
-/// a tile's palette indices four a cell, a brick's samples, its lines, the
-/// pairs `brick_lines` lays them with, its spans, its tree as it is built and
+/// a brick's samples, its lines, the pairs `brick_lines` lays them with, its spans, its tree as it is built and
 /// the walk that lays it.
-pub const FILL_ARRAY_BYTES: [u32; 7] = [
-    arr_bytes(PALETTE_COLUMN, 1),
+pub const FILL_ARRAY_BYTES: [u32; 6] = [
     ELE_BYTES,
     arr_bytes(LINES_WORDS as usize, 4),
     arr_bytes(WAYS_BRICK_SEGMENTS as usize, 8),
