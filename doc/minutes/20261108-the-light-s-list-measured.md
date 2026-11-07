@@ -2,7 +2,8 @@
 
 **2026-11-08** — recorded with the user, after the S23's p95 was traced to the light's rays
 and the layers the drawing keeps were checked against the code. The light's list was decided,
-measured at its first step the same day, and set aside: "Measured", at the end.
+measured at its first step the same day, and set aside: "Measured", then "Closed", at the end.
+The structure stays as it is.
 
 ## What the user decided
 
@@ -83,4 +84,17 @@ split's children within its content box. On the real world's test data, 14 cases
 
 **The light keeps its rays.** "Each frame's geometry is found by rays" stands for the eye and
 the light alike.
+
+## Closed
+
+**The eye and the light are one observer, by one rule.** The light sees every kind of thing
+as the eye does, through the query: the ground, its caves, the ways, what is placed. Neither
+is handled apart, and neither takes a path of its own for a kind, as a raster of the ground's
+heights from the clip levels would for the light (weighed and not taken: the caves, the bores
+and what is placed would each need their own caster, and the ground a reader beside the
+query).
+
+**So the structure stays.** The eye and the light alike are rays that find, a raster that
+draws what they found, and a walk where a hole is left (ARCHITECTURE.md, Drawing). What the
+S23's p95 has left is sought within it.
 
