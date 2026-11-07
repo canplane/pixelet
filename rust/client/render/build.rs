@@ -119,10 +119,7 @@ fn main() {
     // The depth a hit's box about the eye
     // is drawn at, short of a lack's 1: finite, as every literal here is.
     {
-        use pxl_engine::raster::{
-            corner, BOX_FACES, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR, STALE,
-            STALE_DEPTH,
-        };
+        use pxl_engine::raster::{corner, EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH};
         let n = word::BOX_VERTICES;
         let bits: Vec<u32> = (0..2 * n)
             .map(|k| corner(k % n, k >= n))
@@ -143,10 +140,9 @@ fn main() {
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_FACES: u32 = {BOX_FACES}u;\nconst RASTER_FACES_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_STALE: u32 = {STALE}u;\nconst RASTER_STALE_DEPTH: f32 = {STALE_DEPTH:?};\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_ID_MASK: u32 = {ID_MASK}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_STALE: u32 = {STALE}u;\nconst RASTER_STALE_DEPTH: f32 = {STALE_DEPTH:?};\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
             corners.len(),
             corners.join(", "),
-            EYED - 1
         );
         std::fs::write(out.join("raster_box.wgsl"), raster).expect("the raster's boxes' shader");
     }
@@ -470,7 +466,7 @@ fn walk_word() -> String {
         ("POOL_CNT", ray::POOL_CNT),
         ("POOL_STATES", ray::POOL_STATES),
         ("POOL_WORDS", ray::POOL_WORDS),
-        ("HITS", beam::HITS),
+        ("STOPS_A_FRAME", ray::STOPS_A_FRAME),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
         ("HIT_NODE", beam::HIT_NODE),
@@ -592,7 +588,8 @@ fn walk_word() -> String {
         ("W_STATE", node_cache::W_STATE),
         ("W_SEEN", node_cache::W_SEEN),
         ("W_FACES", node_cache::W_FACES),
-        ("RECORD_BOXES", record::BOXES),
+        ("RECORD_EYE_DRAWS", record::EYE_DRAWS),
+        ("RECORD_LIGHT_DRAWS", record::LIGHT_DRAWS),
         ("RECORD_DRAW_LANES", record::DRAW_LANES),
         ("RECORD_FACES", record::FACES),
         ("RECORD_ASKED", record::ASKED),

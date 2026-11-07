@@ -1708,7 +1708,8 @@ impl RaysPass {
                     bytes(&[0u32]),
                 );
             }
-            c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
+            c.raster
+                .light_prepare(g, &cast.eye, shadow::SIZE, &light_map.2);
         }
         // No receiver stands where the light casts none: the head's flag the record's draw reads
         // every frame (`light::HEAD_STANDS_WORLD`).

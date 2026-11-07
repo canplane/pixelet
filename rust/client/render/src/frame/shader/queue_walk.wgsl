@@ -136,8 +136,8 @@ fn queue_walk(again: bool) {
     if (w.ends == 4u) {
       park(item, w.t, w.corner, w.zoom, w.roots, w.step);
       list_ask(aim, w, again);
-    } else {
-      finish(item, aim, w);
+    } else if (!finish(item, aim, w)) {
+      park(item, w.t, w.corner, w.zoom, w.roots, w.step);
     }
     item = NONE;
   }

@@ -1623,8 +1623,6 @@ fn marked_answers(
 /// other pixel written.
 #[test]
 fn eye_queue_alone_comes_to_rest_as_cast_walk() {
-    /// The frames the eye's queue may take to owe nothing over its holes.
-    const FRAMES_TO_REST: u32 = 256;
     /// The frame's budget, far less than the holes take over an empty node cache.
     const CAPS: [u32; 2] = [1 << 12, 1 << 7];
     let Some(gpu) = device() else { return };
@@ -1661,164 +1659,12 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     for c in &cases {
-        let name = format!("{}, {}, its queue alone", c.name, s.name);
-        let mut obs = eye_of(c, [0; 3]);
-        for k in 0..2 {
-            obs.eye[eye::JITTER + k] = s.jitter[k].to_bits();
-        }
-        let mut table0 = vec![0u32; node_cache::WORDS as usize];
-        table0[node_cache::FRAME as usize] = FRAME;
-        let table_buf = gpu.buffer(&table0, store_of());
-        let mut words = eye_beams(&gpu, &b, &obs, &table_buf);
-        let table = gpu.read(&table_buf);
-        let Rays::Eye { origin, grid, .. } = &obs.rays else {
-            unreachable!()
-        };
-        let (origin, grid) = (*origin, *grid);
-        let drawn = s.size[0] * s.size[1];
-        let walked = grid.walked_at() as usize;
-        words.resize(walked + ray::holes_words(s.size) as usize, 0);
-        let marked: Vec<u32> = (0..drawn).collect();
-        set_holes(&mut words[walked..], s.size, &marked);
-        let texels = drawn as usize;
-        let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
-            .map(|k| {
-                if k < texels {
-                    UNWALKED
-                } else {
-                    (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2
-                }
-            })
-            .collect();
-        let rays = texture(
-            &gpu.device,
-            &gpu.queue,
-            s.size,
-            ray::WORDS,
-            wgpu::TextureUsages::STORAGE_BINDING,
-            &ray_words,
-        );
-        let view = rays.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
-        // The eye's head, all zero (gpu/ray/cast.rs `eye_head`).
-        let head = gpu.buffer(&vec![0u32; light::HEAD_WORDS], wgpu::BufferUsages::UNIFORM);
-        let beams = gpu.buffer(&words, store_of());
-        let table_buf = gpu.buffer(&table, store_of());
-        let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
-        binds.push((3, wgpu::BindingResource::TextureView(&view)));
-        binds.push((11, head.as_entire_binding()));
-
-        let word = |k: u32| u64::from(k) * 4;
-        let from_at = (walked as u32) + ray::from_at(s.size);
-        let owed = node_cache::owed_at(count::EYE);
-        // The pixels the frame before left owed, the cast's holes before the first.
-        let mut owed_before: BTreeSet<u32> = marked.iter().copied().collect();
-        // Each pixel's words once a walk finished it.
-        let mut finished: BTreeMap<u32, [u32; 4]> = BTreeMap::new();
-        let mut into = 0;
-        let mut frames = 0u32;
-        loop {
-            // As the host sets each frame the eye's queue runs: what it takes, the frame's
-            // work, its owed word and its stops none, and, after the first, a frame of the node
-            // cache's own.
-            let from = if frames == 0 {
-                ray::FROM_WALKED
-            } else {
-                ray::FROM_OWED + into
-            };
-            gpu.queue
-                .write_buffer(&beams, word(from_at), bytes(&[from]));
-            into = ray::owed_into(from);
-            let none = vec![0u32; (owed + 1 - node_cache::VISITED) as usize];
-            gpu.queue
-                .write_buffer(&table_buf, word(node_cache::VISITED), bytes(&none));
-            gpu.queue.write_buffer(
-                &table_buf,
-                word(node_cache::HITS_ARGS),
-                bytes(&[0u32, 1, 1, 0]),
-            );
-            if frames > 0 {
-                let f = gpu.read(&table_buf)[node_cache::FRAME as usize] + 1;
-                gpu.queue
-                    .write_buffer(&table_buf, word(node_cache::FRAME), bytes(&[f]));
-            }
-            let pool = (walked as u32) + ray::pool_at(s.size, into);
-            gpu.holes_within(
-                &binds,
-                &table_buf,
-                true,
-                Some((&beams, pool + ray::POOL_CNT)),
-                CAPS,
-            );
-            frames += 1;
-            // What it left owed: the pixels of its owed bits and of the rays parked in its pool.
-            let now = gpu.read(&beams);
-            let mut listed: Vec<u32> = Vec::new();
-            let owed_bits = walked + ray::owed_bits_at(s.size) as usize;
-            for y in 0..s.size[1] {
-                for x in 0..s.size[0] {
-                    let (w, bit) = ray::hole_bit([x, y], s.size);
-                    if now[owed_bits + w as usize] & 1 << bit != 0 {
-                        listed.push(y * s.size[0] + x);
-                    }
-                }
-            }
-            let cnt = now[(pool + ray::POOL_CNT) as usize].min(ray::PARKED_ROOM);
-            for k in 0..cnt {
-                let at = (pool + ray::POOL_STATES + k * ray::PARK_WORDS) as usize;
-                if now[at + 4] & ray::PARKED != 0 {
-                    let h = now[at + ray::PARK_PX as usize];
-                    listed.push((h >> 16) * s.size[0] + (h & 0xffff));
-                }
-            }
-            let left = listed.len();
-            let owed_now: BTreeSet<u32> = listed.iter().copied().collect();
-            if owed_now.len() != listed.len() {
-                failed.push(format!("frame {frames}: a pixel owed twice"));
-            }
-            if !owed_now.is_subset(&owed_before) {
-                failed.push(format!(
-                    "frame {frames}: a pixel owed that the frame before did not owe"
-                ));
-            }
-            // A pixel finished keeps its words; one finished this frame is kept.
-            let out = read_texture(&gpu.device, &gpu.queue, &rays);
-            let at = |p: u32| [0, 1, 2, 3].map(|l| out[l * texels + p as usize]);
-            for (&p, was) in &finished {
-                if at(p) != *was {
-                    failed.push(format!(
-                        "frame {frames}: pixel {p} finished before was written again"
-                    ));
-                    break;
-                }
-            }
-            for &p in owed_before.difference(&owed_now) {
-                finished.insert(p, at(p));
-            }
-            owed_before = owed_now;
-            if left == 0 || frames >= FRAMES_TO_REST || !failed.is_empty() {
-                break;
-            }
-        }
-        eprintln!("{name}: the eye owed nothing after {frames} frames");
-        if !owed_before.is_empty() {
-            failed.push(format!(
-                "{name}: {} pixels still owed after {frames} frames",
-                owed_before.len()
-            ));
-        }
+        let (frames, _) = queue_alone(&gpu, &b, w, (c, &s), CAPS, &mut kinds, &mut failed);
         if frames < 2 {
-            failed.push(format!("{name}: the budget took the holes in one frame"));
-        }
-        let out = read_texture(&gpu.device, &gpu.queue, &rays);
-        let (same, differ, stepped) =
-            marked_answers(w, &obs, &s, origin, &marked, &out, &name, &mut kinds);
-        eprintln!("{name}: {same} alike, {differ} differ, {stepped} a step over");
-        if differ > 0 {
-            failed.push(format!("{name}: {differ} pixels differ"));
+            failed.push(format!(
+                "{}: the budget took the holes in one frame",
+                c.name
+            ));
         }
     }
     met_each(
@@ -1826,6 +1672,246 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
         &["hit", "past its reach", "at an edge"],
         &mut failed,
     );
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// The eye's holes' queue run alone over every pixel of `s` marked, from the eye of case `c`,
+/// frame after frame under the budget `caps` until it owes nothing (`FRAMES_TO_REST` at most),
+/// held as `eye_queue_alone_comes_to_rest_as_cast_walk` holds it: how many frames it took and
+/// the stops its first frame counted (`node_cache::HITS_CNT`).
+fn queue_alone(
+    gpu: &Gpu,
+    b: &WorldBufs,
+    w: World,
+    (c, s): (&EyeCase, &Screen),
+    caps: [u32; 2],
+    kinds: &mut Kinds,
+    failed: &mut Vec<String>,
+) -> (u32, u32) {
+    /// The frames the eye's queue may take to owe nothing over its holes.
+    const FRAMES_TO_REST: u32 = 256;
+    let mut first_stops = 0;
+    let name = format!("{}, {}, its queue alone", c.name, s.name);
+    let mut obs = eye_of(c, [0; 3]);
+    for k in 0..2 {
+        obs.eye[eye::JITTER + k] = s.jitter[k].to_bits();
+    }
+    let mut table0 = vec![0u32; node_cache::WORDS as usize];
+    table0[node_cache::FRAME as usize] = FRAME;
+    let table_buf = gpu.buffer(&table0, store_of());
+    let mut words = eye_beams(gpu, b, &obs, &table_buf);
+    let table = gpu.read(&table_buf);
+    let Rays::Eye { origin, grid, .. } = &obs.rays else {
+        unreachable!()
+    };
+    let (origin, grid) = (*origin, *grid);
+    let drawn = s.size[0] * s.size[1];
+    let walked = grid.walked_at() as usize;
+    words.resize(walked + ray::holes_words(s.size) as usize, 0);
+    let marked: Vec<u32> = (0..drawn).collect();
+    set_holes(&mut words[walked..], s.size, &marked);
+    let texels = drawn as usize;
+    let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
+        .map(|k| {
+            if k < texels {
+                UNWALKED
+            } else {
+                (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2
+            }
+        })
+        .collect();
+    let rays = texture(
+        &gpu.device,
+        &gpu.queue,
+        s.size,
+        ray::WORDS,
+        wgpu::TextureUsages::STORAGE_BINDING,
+        &ray_words,
+    );
+    let view = rays.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    });
+    let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+    // The eye's head, all zero (gpu/ray/cast.rs `eye_head`).
+    let head = gpu.buffer(&vec![0u32; light::HEAD_WORDS], wgpu::BufferUsages::UNIFORM);
+    let beams = gpu.buffer(&words, store_of());
+    let table_buf = gpu.buffer(&table, store_of());
+    let mut binds = world_binds(b, &eye_buf, &beams, &table_buf);
+    binds.push((3, wgpu::BindingResource::TextureView(&view)));
+    binds.push((11, head.as_entire_binding()));
+
+    let word = |k: u32| u64::from(k) * 4;
+    let from_at = (walked as u32) + ray::from_at(s.size);
+    let owed = node_cache::owed_at(count::EYE);
+    // The pixels the frame before left owed, the cast's holes before the first.
+    let mut owed_before: BTreeSet<u32> = marked.iter().copied().collect();
+    // Each pixel's words once a walk finished it.
+    let mut finished: BTreeMap<u32, [u32; 4]> = BTreeMap::new();
+    let mut into = 0;
+    let mut frames = 0u32;
+    loop {
+        // As the host sets each frame the eye's queue runs: what it takes, the frame's
+        // work, its owed word and its stops none, and, after the first, a frame of the node
+        // cache's own.
+        let from = if frames == 0 {
+            ray::FROM_WALKED
+        } else {
+            ray::FROM_OWED + into
+        };
+        gpu.queue
+            .write_buffer(&beams, word(from_at), bytes(&[from]));
+        into = ray::owed_into(from);
+        let none = vec![0u32; (owed + 1 - node_cache::VISITED) as usize];
+        gpu.queue
+            .write_buffer(&table_buf, word(node_cache::VISITED), bytes(&none));
+        gpu.queue.write_buffer(
+            &table_buf,
+            word(node_cache::HITS_ARGS),
+            bytes(&[0u32, 1, 1, 0]),
+        );
+        if frames > 0 {
+            let f = gpu.read(&table_buf)[node_cache::FRAME as usize] + 1;
+            gpu.queue
+                .write_buffer(&table_buf, word(node_cache::FRAME), bytes(&[f]));
+        }
+        let pool = (walked as u32) + ray::pool_at(s.size, into);
+        gpu.holes_within(
+            &binds,
+            &table_buf,
+            true,
+            Some((&beams, pool + ray::POOL_CNT)),
+            caps,
+        );
+        frames += 1;
+        if frames == 1 {
+            first_stops = gpu.read(&table_buf)[node_cache::HITS_CNT as usize];
+        }
+        // What it left owed: the pixels of its owed bits and of the rays parked in its pool.
+        let now = gpu.read(&beams);
+        let mut listed: Vec<u32> = Vec::new();
+        let owed_bits = walked + ray::owed_bits_at(s.size) as usize;
+        for y in 0..s.size[1] {
+            for x in 0..s.size[0] {
+                let (w, bit) = ray::hole_bit([x, y], s.size);
+                if now[owed_bits + w as usize] & 1 << bit != 0 {
+                    listed.push(y * s.size[0] + x);
+                }
+            }
+        }
+        let cnt = now[(pool + ray::POOL_CNT) as usize].min(ray::PARKED_ROOM);
+        for k in 0..cnt {
+            let at = (pool + ray::POOL_STATES + k * ray::PARK_WORDS) as usize;
+            if now[at + 4] & ray::PARKED != 0 {
+                let h = now[at + ray::PARK_PX as usize];
+                listed.push((h >> 16) * s.size[0] + (h & 0xffff));
+            }
+        }
+        let left = listed.len();
+        let owed_now: BTreeSet<u32> = listed.iter().copied().collect();
+        if owed_now.len() != listed.len() {
+            failed.push(format!("frame {frames}: a pixel owed twice"));
+        }
+        if !owed_now.is_subset(&owed_before) {
+            failed.push(format!(
+                "frame {frames}: a pixel owed that the frame before did not owe"
+            ));
+        }
+        // A pixel finished keeps its words; one finished this frame is kept.
+        let out = read_texture(&gpu.device, &gpu.queue, &rays);
+        let at = |p: u32| [0, 1, 2, 3].map(|l| out[l * texels + p as usize]);
+        for (&p, was) in &finished {
+            if at(p) != *was {
+                failed.push(format!(
+                    "frame {frames}: pixel {p} finished before was written again"
+                ));
+                break;
+            }
+        }
+        for &p in owed_before.difference(&owed_now) {
+            finished.insert(p, at(p));
+        }
+        owed_before = owed_now;
+        if left == 0 || frames >= FRAMES_TO_REST || !failed.is_empty() {
+            break;
+        }
+    }
+    eprintln!("{name}: the eye owed nothing after {frames} frames");
+    if !owed_before.is_empty() {
+        failed.push(format!(
+            "{name}: {} pixels still owed after {frames} frames",
+            owed_before.len()
+        ));
+    }
+    let out = read_texture(&gpu.device, &gpu.queue, &rays);
+    let (same, differ, stepped) = marked_answers(w, &obs, s, origin, &marked, &out, &name, kinds);
+    eprintln!("{name}: {same} alike, {differ} differ, {stepped} a step over");
+    if differ > 0 {
+        failed.push(format!("{name}: {differ} pixels differ"));
+    }
+    (frames, first_stops)
+}
+
+/// The eye's holes' queue run alone over more pixels than a frame's stops hold
+/// (`ray::STOPS_A_FRAME`), its budget of visits and asks past all they take: the first frame
+/// keeps a frame's stops and leaves the rest parked and owed, none dropped, and the frames after
+/// end them, every marked pixel's words then as `cast::walk` from the root answers its ray
+/// (`queue_alone`).
+#[test]
+fn eye_stops_past_a_frame_are_owed() {
+    let Some(gpu) = device() else { return };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let c = EyeCase {
+        name: "the eye, over the ground, near",
+        origin: q8([
+            EYE[0] + 90,
+            EYE[1] + 90,
+            built.top_at([EYE[0] + 90, EYE[1] + 90]) + 30,
+        ]),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        lattice: 1,
+        far: 600.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let s = Screen {
+        name: "more pixels marked than a frame's stops",
+        size: [512, 320],
+        jitter: [0.25, -0.375],
+        marked_in: 1,
+    };
+    assert!(
+        s.size[0] * s.size[1] > ray::STOPS_A_FRAME,
+        "the screen's holes pass a frame's stops"
+    );
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    let (frames, first) = queue_alone(
+        &gpu,
+        &b,
+        w,
+        (&c, &s),
+        [1 << 30, 1 << 30],
+        &mut kinds,
+        &mut failed,
+    );
+    eprintln!(
+        "{}: {first} stops counted in the first of {frames} frames",
+        c.name
+    );
+    if first <= ray::STOPS_A_FRAME {
+        failed.push(format!(
+            "{}: {first} stops in the first frame, not past {}",
+            c.name,
+            ray::STOPS_A_FRAME
+        ));
+    }
+    if frames < 2 {
+        failed.push(format!("{}: every stop kept in one frame", c.name));
+    }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
@@ -1865,8 +1951,15 @@ fn stopped(
     gpu.read(&beams)
 }
 
-/// A box as pxl-engine `raster` has it written (`raster::BOX_WORDS`).
-type BoxWords = [u32; raster::BOX_WORDS as usize];
+/// A box as the raster forms it off its draw word and its entry (pxl-engine `raster`), as the
+/// test lays it: its planes, lowest then highest, f32 bits (`BOX_LO`, `BOX_HI`), its voxel's
+/// number (`BOX_ID`, `raster::id_of`) and its faces with `raster::EYED` (`BOX_FACES`).
+type BoxWords = [u32; BOX_WORDS as usize];
+const BOX_LO: u32 = 0;
+const BOX_HI: u32 = 3;
+const BOX_ID: u32 = 6;
+const BOX_FACES: u32 = 7;
+const BOX_WORDS: u32 = 8;
 
 /// A voxel's key as a sample's words hold it: its node, its zoom, corner and roots from where
 /// its ray starts.
@@ -1934,9 +2027,9 @@ fn boxes_want(
             add("a voxel another sample drew", true);
             add(
                 "a voxel another sample drew, through another side",
-                w[raster::BOX_FACES as usize] >> face & 1 == 0,
+                w[BOX_FACES as usize] >> face & 1 == 0,
             );
-            w[raster::BOX_FACES as usize] |= raster::faces([face]);
+            w[BOX_FACES as usize] |= raster::faces([face]);
             continue;
         }
         let cell = Node {
@@ -1965,13 +2058,13 @@ fn boxes_want(
         }
         let lacks = words[k + beam::SAMPLE_LACKS as usize] != 0;
         let eyed = tan.is_some_and(|t| raster::is_eyed(lo, hi, t));
-        let mut w = [0u32; raster::BOX_WORDS as usize];
+        let mut w = [0u32; BOX_WORDS as usize];
         for a in 0..3 {
-            w[(raster::BOX_LO as usize) + a] = lo[a].to_bits();
-            w[(raster::BOX_HI as usize) + a] = hi[a].to_bits();
+            w[(BOX_LO as usize) + a] = lo[a].to_bits();
+            w[(BOX_HI as usize) + a] = hi[a].to_bits();
         }
-        w[raster::BOX_ID as usize] = if lacks { raster::LACK } else { 0 };
-        w[raster::BOX_FACES as usize] = raster::faces([face]) | if eyed { raster::EYED } else { 0 };
+        w[BOX_ID as usize] = if lacks { raster::LACK } else { 0 };
+        w[BOX_FACES as usize] = raster::faces([face]) | if eyed { raster::EYED } else { 0 };
         add("boxes", true);
         add("boxes, eyed", eyed);
         add("boxes, eyed, a cell", eyed && !lacks);
@@ -2129,6 +2222,164 @@ fn light_record_case(
     if want.is_empty() {
         failed.push(format!("{name}: no voxel to compare"));
     }
+    light_raster_drawn(gpu, obs, &got, kinds, failed);
+}
+
+/// The light's record's draw over the node cache `cache` (record_draw.wgsl
+/// `light_record_draw_cs`), then the raster's draw of its draws from the light, as the renderer
+/// lays the light's view (gpu/ray/raster.rs `light_prepare`), onto the map of `obs`: every
+/// texel that keeps a voxel keeps one whose box, as the cast stops on its node
+/// (`cast::asset_box`), the texel's own ray, from where it starts on the near plane along the
+/// light, enters within its reach, but where the device's rounding may decide it otherwise (a
+/// box grown by its rounding's room); and some texel keeps one.
+fn light_raster_drawn(
+    gpu: &Gpu,
+    obs: &Observed,
+    cache: &[u32],
+    kinds: &mut Kinds,
+    failed: &mut Vec<String>,
+) {
+    use pxl_engine::param::raster::GROWTH;
+    use pxl_render::frame::shader::record::SHADER_RECORD_DRAW;
+    use pxl_render::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
+    let Rays::Light {
+        light: l,
+        starts,
+        size,
+        ..
+    } = &obs.rays
+    else {
+        unreachable!()
+    };
+    let size = *size;
+    // The draw: a word a box, as many as its args count.
+    let mut args = vec![0u32; raster::ARGS_WORDS as usize];
+    args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    let args = gpu.buffer(&args, store_of());
+    let draws = gpu.buffer(&vec![0u32; record::LIGHT_DRAWS as usize], store_of());
+    let table = gpu.buffer(cache, store_of());
+    let eye_buf = gpu.buffer(&obs.eye, wgpu::BufferUsages::UNIFORM);
+    let head_buf = gpu.buffer(&obs.head, wgpu::BufferUsages::UNIFORM);
+    let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "light_record_draw_cs");
+    gpu.dispatch(
+        &draw,
+        &[
+            (0, eye_buf.as_entire_binding()),
+            (9, table.as_entire_binding()),
+            (11, head_buf.as_entire_binding()),
+            (14, draws.as_entire_binding()),
+            (16, args.as_entire_binding()),
+        ],
+        [node_cache::ENTRIES / record::DRAW_LANES, 1, 1],
+    );
+    let cnt = gpu.read(&args)[raster::ARGS_INSTANCES as usize].min(record::LIGHT_DRAWS);
+    let cache = gpu.read(&table);
+    // The light's view, as the renderer lays it.
+    let length = |a: [f32; 3]| (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+    let unit = |a: [f32; 3]| {
+        let n = length(a);
+        [a[0] / n, a[1] / n, a[2] / n]
+    };
+    let (r, d) = (unit(l.across), unit(l.down));
+    let up = [-d[0], -d[1], -d[2]];
+    let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, l.dir));
+    let origin = starts.start(l.corner);
+    let n = size as f32;
+    let view: [u32; RASTER_FLOATS] = [
+        r[0].to_bits(),
+        r[1].to_bits(),
+        r[2].to_bits(),
+        length(l.across).to_bits(),
+        d[0].to_bits(),
+        d[1].to_bits(),
+        d[2].to_bits(),
+        length(l.down).to_bits(),
+        l.dir[0].to_bits(),
+        l.dir[1].to_bits(),
+        l.dir[2].to_bits(),
+        0,
+        turn,
+        1,
+        0,
+        0,
+        (GROWTH * length(l.across)).to_bits(),
+        n.to_bits(),
+        n.to_bits(),
+        l.t_max.to_bits(),
+        0,
+        0,
+        0,
+        0,
+        origin[0] as u32,
+        origin[1] as u32,
+        origin[2] as u32,
+        0,
+    ];
+    let got = render_raster(
+        gpu,
+        &view,
+        (&gpu.read(&draws)[..cnt as usize], &cache),
+        [size; 2],
+    );
+    let (mut kept, mut entered, mut edges, mut wrong) = (0u64, 0u64, 0u64, 0u64);
+    for j in 0..size {
+        for i in 0..size {
+            let id = got[(j * size + i) as usize];
+            if id == 0 {
+                continue;
+            }
+            kept += 1;
+            let e = node_cache::entry_at(raster::voxel_of(id)) as usize;
+            let node = entry_node(&cache, e, origin);
+            let asset = cache[e + node_cache::W_ASSET as usize];
+            let (lo, hi) = cast::asset_box(origin, &node, asset);
+            let o = [0, 1, 2].map(|a| i as f32 * l.across[a] + j as f32 * l.down[a]);
+            let enters = |grow: f32| {
+                let (mut t0, mut t1) = (0.0f32, l.t_max);
+                for a in 0..3 {
+                    let room = grow * (hi[a] - lo[a]).abs().max(o[a].abs()).max(1.0);
+                    let (lo, hi) = (lo[a] - room - o[a], hi[a] + room - o[a]);
+                    let v = l.dir[a];
+                    if v == 0.0 {
+                        if !(lo <= 0.0 && 0.0 < hi) {
+                            return false;
+                        }
+                        continue;
+                    }
+                    let (a0, a1) = if v > 0.0 {
+                        (lo / v, hi / v)
+                    } else {
+                        (hi / v, lo / v)
+                    };
+                    t0 = t0.max(a0);
+                    t1 = t1.min(a1);
+                }
+                t1 > t0
+            };
+            if enters(0.0) {
+                entered += 1;
+            } else if enters(1e-4) {
+                edges += 1;
+            } else {
+                wrong += 1;
+                if wrong <= 3 {
+                    eprintln!(
+                        "DIFFERS {}: texel {i}, {j} keeps slot {}, which its ray does not enter",
+                        obs.name,
+                        raster::voxel_of(id)
+                    );
+                }
+            }
+        }
+    }
+    kinds.count("the light's raster, texels a box's", entered);
+    if kept == 0 || wrong != 0 || !edges_within(edges, kept) {
+        failed.push(format!(
+            "{}: the light's raster's {kept} texels kept, {wrong} by a box their ray does not \
+             enter, {edges} at an edge",
+            obs.name
+        ));
+    }
 }
 
 /// The eye's samples' stops by hand over `words` from `origin`, into the node cache `was` left
@@ -2184,10 +2435,7 @@ fn record_case(
     let beams = gpu.buffer(words, store_of());
     let args = gpu.buffer(&laid_args, store_of());
     let rec_buf = gpu.buffer(&rec, store_of());
-    let boxes = gpu.buffer(
-        &vec![UNWRITTEN; (record::BOXES * raster::BOX_WORDS) as usize],
-        store_of(),
-    );
+    let boxes = gpu.buffer(&vec![UNWRITTEN; record::EYE_DRAWS as usize], store_of());
     let groups = grid.samples.map(|n| n.div_ceil(SQUARE_SIDE));
     gpu.dispatch(
         pass,
@@ -2275,7 +2523,7 @@ fn record_case(
             .filter(|r| (0..node_cache::W_STATE as usize).all(|a| r[e + a] == got[e + a]))
             .map_or(0, |r| r[e + node_cache::W_STATE as usize]);
         // The eye's samples ask about every face they enter (`record::ASKED`).
-        let faces = w[raster::BOX_FACES as usize] & record::FACES;
+        let faces = w[BOX_FACES as usize] & record::FACES;
         let state = state_was
             | faces
             | faces << record::ASKED_SHIFT
@@ -2299,10 +2547,8 @@ fn record_case(
     let cnt = got_args[raster::ARGS_INSTANCES as usize];
     let (mut same, mut differ, mut stale) = (0u64, 0u64, 0u64);
     let mut drawn = BTreeSet::new();
-    for place in 0..cnt as usize {
-        let at = place * raster::BOX_WORDS as usize;
-        let b = &got_boxes[at..at + raster::BOX_WORDS as usize];
-        let slot = raster::voxel_of(b[raster::BOX_ID as usize]);
+    for (place, &b) in got_boxes.iter().enumerate().take(cnt as usize) {
+        let slot = raster::voxel_of(b);
         let e = node_cache::entry_at(slot) as usize;
         let key = key_of(e);
         let Some(w) = want.get(&key) else {
@@ -2317,17 +2563,18 @@ fn record_case(
         let state = got[e + node_cache::W_STATE as usize];
         let fresh = record::fresh(origin, &node_of(&key), state & record::WHOLE != 0, range);
         stale += u64::from(!fresh);
-        let mut w = *w;
-        w[raster::BOX_ID as usize] |= slot + 1;
-        w[raster::BOX_FACES as usize] = record::asked_faces(state)
-            | w[raster::BOX_FACES as usize] & raster::EYED
-            | if fresh { 0 } else { raster::STALE };
-        if b == w {
+        let want_word = raster::draw_word(
+            slot,
+            w[BOX_ID as usize] & raster::LACK != 0,
+            w[BOX_FACES as usize] & raster::EYED != 0,
+            fresh,
+        );
+        if b == want_word {
             same += 1;
         } else {
             differ += 1;
             if differ <= 3 {
-                eprintln!("DIFFERS {name}: box {place} {b:x?}, want {w:x?}");
+                eprintln!("DIFFERS {name}: box {place} {b:x}, want {want_word:x}");
             }
         }
     }
@@ -2345,10 +2592,10 @@ fn record_case(
             continue;
         }
         let b = |k: u32| f32::from_bits(w[k as usize]);
-        let lo = [0, 1, 2].map(|a| b(raster::BOX_LO + a));
-        let hi = [0, 1, 2].map(|a| b(raster::BOX_HI + a));
+        let lo = [0, 1, 2].map(|a| b(BOX_LO + a));
+        let hi = [0, 1, 2].map(|a| b(BOX_HI + a));
         let grown = [tan[0] * 1.001, tan[1] * 1.001];
-        let eyed = w[raster::BOX_FACES as usize] & raster::EYED != 0;
+        let eyed = w[BOX_FACES as usize] & raster::EYED != 0;
         if eyed && !fresh_of(key) {
             kinds.add("boxes, eyed, stale, not drawn", true);
             continue;
@@ -2378,7 +2625,231 @@ fn record_case(
     if same == 0 {
         fail("no box to compare".to_string());
     }
+    let cnt = cnt.min(record::EYE_DRAWS);
+    raster_drawn(
+        gpu,
+        obs,
+        origin,
+        (&got, &got_boxes[..cnt as usize]),
+        kinds,
+        failed,
+    );
     got
+}
+
+/// The raster's draw (raster.wgsl) of `draws` over the node cache `cache` in the view `view`
+/// (`word::RASTER_FLOATS`), onto a target of `size` cleared to none, the nearest kept: each
+/// texel's voxel's number (`raster::id_of`), 0 where it kept none.
+fn render_raster(
+    gpu: &Gpu,
+    view: &[u32],
+    (draws, cache): (&[u32], &[u32]),
+    size: [u32; 2],
+) -> Vec<u32> {
+    use pxl_render::frame::shader::record::SHADER_RASTER;
+    let device = &gpu.device;
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("raster"),
+        source: wgpu::ShaderSource::Wgsl(src(SHADER_RASTER).into()),
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("raster"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vs"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        primitive: Default::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Greater),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: Default::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fs"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::TextureFormat::R32Uint.into())],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+    let view_buf = gpu.buffer(view, wgpu::BufferUsages::UNIFORM);
+    let draws_buf = gpu.buffer(draws, wgpu::BufferUsages::STORAGE);
+    let cache_buf = gpu.buffer(cache, wgpu::BufferUsages::STORAGE);
+    let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: view_buf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: draws_buf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: cache_buf.as_entire_binding(),
+            },
+        ],
+    });
+    let target = texture(
+        device,
+        &gpu.queue,
+        size,
+        1,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+        &vec![0; (size[0] * size[1]) as usize],
+    );
+    let depth = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: target.size(),
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let (target_view, depth_view) = (
+        target.create_view(&Default::default()),
+        depth.create_view(&Default::default()),
+    );
+    let mut e = device.create_command_encoder(&Default::default());
+    {
+        let mut pass = e.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &target_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &group, &[]);
+        pass.draw(0..raster::VERTICES, 0..draws.len() as u32);
+    }
+    gpu.queue.submit([e.finish()]);
+    read_texture(device, &gpu.queue, &target)
+}
+
+/// The raster's draw over `draws`, the record's words a box, and the node cache `cache` it reads
+/// each box's entry off (raster.wgsl), from the eye of `obs` at `origin`, onto a screen of its
+/// own: every pixel that keeps a voxel keeps one whose box, as the cast stops on its node
+/// (`cast::entry`), the pixel's own ray enters, but where the device's rounding may decide it
+/// otherwise (`at_edge`); and some pixel keeps one.
+fn raster_drawn(
+    gpu: &Gpu,
+    obs: &Observed,
+    origin: [i32; 3],
+    (cache, draws): (&[u32], &[u32]),
+    kinds: &mut Kinds,
+    failed: &mut Vec<String>,
+) {
+    use pxl_engine::param::raster::GROWTH;
+    use pxl_render::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
+    let screen = Screen {
+        name: "the raster's",
+        size: [96, 64],
+        jitter: [0.0; 2],
+        marked_in: 0,
+    };
+    let f = |k: usize| f32::from_bits(obs.eye[k]);
+    let v3 = |k: usize| [f(k), f(k + 1), f(k + 2)];
+    let (r, u, fw) = (v3(eye::RIGHT), v3(eye::UP), v3(eye::FORWARD));
+    let tan = [f(eye::TAN), f(eye::TAN + 1)];
+    let [w, h] = screen.size.map(|v| v as f32);
+    let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
+    let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, fw));
+    let view: [u32; RASTER_FLOATS] = [
+        r[0].to_bits(),
+        r[1].to_bits(),
+        r[2].to_bits(),
+        tan[0].to_bits(),
+        u[0].to_bits(),
+        u[1].to_bits(),
+        u[2].to_bits(),
+        tan[1].to_bits(),
+        fw[0].to_bits(),
+        fw[1].to_bits(),
+        fw[2].to_bits(),
+        raster::NEAR.to_bits(),
+        turn,
+        0,
+        0,
+        0,
+        (GROWTH * px).to_bits(),
+        w.to_bits(),
+        h.to_bits(),
+        obs.eye[eye::FAR],
+        0,
+        0,
+        0,
+        0,
+        origin[0] as u32,
+        origin[1] as u32,
+        origin[2] as u32,
+        0,
+    ];
+    let size = screen.size;
+    let got = render_raster(gpu, &view, (draws, cache), size);
+    let (mut kept, mut entered, mut edges, mut wrong) = (0u64, 0u64, 0u64, 0u64);
+    for y in 0..size[1] {
+        for x in 0..size[0] {
+            let id = got[(y * size[0] + x) as usize];
+            if id == 0 {
+                continue;
+            }
+            kept += 1;
+            let e = node_cache::entry_at(raster::voxel_of(id)) as usize;
+            let node = entry_node(cache, e, origin);
+            let asset = cache[e + node_cache::W_ASSET as usize];
+            let (ray, _) = px_aim(obs, &screen, [x, y]);
+            let at = cast::entry_with(origin, &ray, ray.inverse(), &node, asset);
+            if at.enters {
+                entered += 1;
+            } else if at_edge(&at, ray.dir) {
+                edges += 1;
+            } else {
+                wrong += 1;
+                if wrong <= 3 {
+                    eprintln!(
+                        "DIFFERS {}: pixel {x}, {y} keeps slot {}, which its ray does not enter",
+                        obs.name,
+                        raster::voxel_of(id)
+                    );
+                }
+            }
+        }
+    }
+    kinds.count("raster, pixels a box's", entered);
+    if kept == 0 || wrong != 0 || !edges_within(edges, kept) {
+        failed.push(format!(
+            "{}: the raster's {kept} pixels kept, {wrong} by a box their ray does not enter, \
+             {edges} at an edge",
+            obs.name
+        ));
+    }
 }
 
 /// Each sample alike the one across before it, where its node's corner lies on the grid a zoom
@@ -2563,11 +3034,11 @@ fn hand_eye_record_answers_as_raster() {
         let q = (1 << FRAC_W) as f32;
         boxes
             .values()
-            .filter(|w| w[raster::BOX_ID as usize] & raster::LACK == 0)
+            .filter(|w| w[BOX_ID as usize] & raster::LACK == 0)
             .map(|w| {
                 let f = |k: u32| f32::from_bits(w[k as usize]);
-                let mid = |a: u32| (f(raster::BOX_LO + a) + f(raster::BOX_HI + a)) / 2.0;
-                let top = f(raster::BOX_HI + 2);
+                let mid = |a: u32| (f(BOX_LO + a) + f(BOX_HI + a)) / 2.0;
+                let top = f(BOX_HI + 2);
                 let near = mid(0) * mid(0) + mid(1) * mid(1) + top * top;
                 let step = |v: f32| (v * q).round_ties_even() as i32;
                 let at = |z: f32, by: i32| {
@@ -2577,10 +3048,7 @@ fn hand_eye_record_answers_as_raster() {
                         origin[2] + step(z) + by,
                     ]
                 };
-                (
-                    near,
-                    [at(f(raster::BOX_HI + 2), 2), at(f(raster::BOX_LO + 2), -2)],
-                )
+                (near, [at(f(BOX_HI + 2), 2), at(f(BOX_LO + 2), -2)])
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|m| m.1)
@@ -2761,10 +3229,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         let eye_buf = gpu.buffer(&near.eye, wgpu::BufferUsages::UNIFORM);
         let args = gpu.buffer(&laid_args, store_of());
         let rec_buf = gpu.buffer(&rec, store_of());
-        let boxes = gpu.buffer(
-            &vec![UNWRITTEN; (record::BOXES * raster::BOX_WORDS) as usize],
-            store_of(),
-        );
+        let boxes = gpu.buffer(&vec![UNWRITTEN; record::EYE_DRAWS as usize], store_of());
         let size = shadow::SIZE;
         let mut light_head = vec![0u32; light::HEAD_WORDS];
         for (k, v) in light::head_layout(size) {
@@ -2791,14 +3256,12 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         );
         let got_args = gpu.read(&args);
         let got = gpu.read(&boxes);
-        let cnt = got_args[raster::ARGS_CNT as usize].min(record::BOXES) as usize;
+        let cnt = got_args[raster::ARGS_CNT as usize].min(record::EYE_DRAWS) as usize;
         let id = raster::id_of(slot, false);
-        if let Some(b) = (0..cnt).find(|&b| {
-            got[b * raster::BOX_WORDS as usize + raster::BOX_ID as usize] & !raster::LACK == id
-        }) {
-            let faces = got[b * raster::BOX_WORDS as usize + raster::BOX_FACES as usize];
+        if let Some(b) = (0..cnt).find(|&b| got[b] & raster::ID_MASK & !raster::LACK == id) {
+            let word = got[b];
             failed.push(format!(
-                "slot {slot}, zoom {}: a stale box about the eye drawn, faces {faces:#x}",
+                "slot {slot}, zoom {}: a stale box about the eye drawn, its word {word:#x}",
                 node.zoom
             ));
         }

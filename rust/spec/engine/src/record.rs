@@ -115,8 +115,10 @@
 //! pixels walk again.
 
 use crate::cast::{self, Detail, Node, Spacing};
-use crate::light::Light;
+use crate::grid;
+use crate::light::{Light, BEAM, CLAIM_BUDGET, TILE};
 use crate::node_cache::{self, ENTRIES};
+use crate::ray::ASKS_A_FRAME;
 use crate::{Zoom, WORKGROUPS_MOST};
 
 /// The threads of a workgroup of the passes over every slot (pxl-render record_draw.wgsl).
@@ -126,9 +128,65 @@ const _: () = assert!(
     "the passes over every slot take each once in one dimension of one dispatch"
 );
 
+/// The node cache's slots (`node_cache::ENTRIES`): what the table must hold, over its load
+/// (`LOAD_PER_8` eighths of its slots), rounded up to a power of two (`entries_for`).
+///
+/// What it holds: every voxel a view can draw, the eye's and the light's, and the nodes a
+/// frame's asks keep. A node is drawn where it spans at least a camera cell (pxl-engine
+/// grid.rs), so the voxels drawn are bounded by the cells: the eye's at the widest view
+/// (`EYE_CELLS_MOST`) and the light's claimed tiles', a cell a tile (`LIGHT_CELLS_MOST`); the
+/// rolled lattice's offsets find the same nodes in the same cells, so they multiply none. Each
+/// cell's count is grown by `CELL_NODES`' parts. The asks keep `ray::ASKS_A_FRAME` nodes a
+/// frame, kept for the two frames an entry is spared (`ASKS_KEPT`).
+const _: () = assert!(
+    ENTRIES == entries_for(EYE_CELLS_MOST + LIGHT_CELLS_MOST),
+    "the slots are what the table must hold"
+);
+
+/// The nodes a camera cell may draw, by its parts: a node spanning a cell overlaps up to four
+/// cells at their edges (`CELL_OVERLAP`); a place holds a fresh voxel and the stale one it
+/// replaces (`raster::STALE`, `CELL_STALE`); and an entry is spared for two frames after it is
+/// drawn (`drawn`, `CELL_FRAMES`).
+pub const CELL_OVERLAP: u32 = 4;
+pub const CELL_STALE: u32 = 2;
+pub const CELL_FRAMES: u32 = 2;
+pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
+
+/// The nodes the asks keep: a frame's, for the two frames an entry is spared.
+pub const ASKS_KEPT: u32 = CELL_FRAMES * ASKS_A_FRAME;
+
+/// The eye's camera cells at the widest view (`grid::ASPECT_MOST`), the vertical field's
+/// (`grid::HALF_TAN`) across `grid::CELLS_A_RAD`, as `beam::Grid::of` lays them at the cell.
+pub const EYE_CELLS_MOST: u32 = ceil(2.0 * grid::HALF_TAN * grid::ASPECT_MOST * grid::CELLS_A_RAD)
+    * ceil(2.0 * grid::HALF_TAN * grid::CELLS_A_RAD);
+
+/// The light's cells a cast draws: a cell a tile (`light::BEAM` is `light::TILE`) of the most
+/// tiles it claims (`light::CLAIM_BUDGET`).
+pub const LIGHT_CELLS_MOST: u32 = CLAIM_BUDGET;
+const _: () = assert!(BEAM == TILE, "a light's cell a tile");
+
+/// The table's load: the share of its slots held, in eighths, with buckets of `BUCKET`.
+pub const LOAD_PER_8: u32 = 6;
+
+/// The slots for `cells` camera cells, the asks' nodes with them.
+pub const fn entries_for(cells: u32) -> u32 {
+    let held = cells * CELL_NODES + ASKS_KEPT;
+    (held * 8).div_ceil(LOAD_PER_8).next_power_of_two()
+}
+
+const fn ceil(v: f32) -> u32 {
+    let n = v as u32;
+    if (n as f32) < v {
+        n + 1
+    } else {
+        n
+    }
+}
 /// The boxes an observer's draw writes at most, a drawable entry each (pxl-render
-/// record_draw.wgsl; `raster::BOX_WORDS` each).
-pub const BOXES: u32 = 1 << 19;
+/// record_draw.wgsl; a word each, `raster::draw_word`): the voxels it can draw, `CELL_NODES`
+/// a cell of its (`EYE_CELLS_MOST`, `LIGHT_CELLS_MOST`).
+pub const EYE_DRAWS: u32 = EYE_CELLS_MOST * CELL_NODES;
+pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_MOST * CELL_NODES;
 
 /// The state's bits (`node_cache::W_STATE`): a face some ray entered a side
 /// (`raster::faces`), whether some ray stopped on it coarser than it asked, a cell the query

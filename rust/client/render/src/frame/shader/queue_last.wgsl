@@ -88,8 +88,8 @@ fn queue_last_cs() {
     }
     if (w.ends == 4u) {
       unreached(item, w.t, w.corner, w.zoom, w.roots, w.step);
-    } else {
-      finish(item, aim, w);
+    } else if (!finish(item, aim, w)) {
+      unreached(item, w.t, w.corner, w.zoom, w.roots, w.step);
     }
     item = NONE;
   }

@@ -82,8 +82,8 @@ fn light_room() -> u32 {
 }
 
 /// Where the observer's stops lie and their room (hit.wgsl): the eye's past the beam rays'
-/// words (`beam::Grid::hits_at`, `beam::HITS`); the light's past its holes' region, a stop each
-/// of the slots its cast claims (`light::hits_at`, `light::parked_room`).
+/// words (`beam::Grid::hits_at`); the light's past its holes' region (`light::hits_at`); a
+/// frame's stops each (`ray::STOPS_A_FRAME`).
 fn hits_at() -> u32 {
   if (light_run()) {
     return head_word(LIGHT_HEAD_HITS);
@@ -92,7 +92,7 @@ fn hits_at() -> u32 {
 }
 
 fn hits_room() -> u32 {
-  return select(HITS, LIGHT_PARKED_ROOM, light_run());
+  return STOPS_A_FRAME;
 }
 
 /// The light's slot at place `k` of its cast's list (`light::misses_at`), `NONE` past its count.
@@ -264,18 +264,24 @@ fn unpark(hole: u32) {
   }
 }
 
-/// A stop listed for the record, what lies about its face put at its pixel off it (miss_word.wgsl
-/// `hit_put`, record_stops.wgsl): numbered as the walk that ended it numbers them
-/// (`stop_number`), the dispatch over them raised by the number that opens a workgroup, and its
-/// number marked waiting (`beam::HIT_WAITS`); none past its observer's room (`hits_room`).
-fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
+/// A stop's number for the record, as the walk that ends it numbers them (`stop_number`),
+/// the dispatch over them raised by the number that opens a workgroup; `NONE` past its
+/// observer's room (`hits_room`, pxl-engine `ray::STOPS_A_FRAME`).
+fn stop_room() -> u32 {
   let r = stop_number();
   if (r >= hits_room()) {
-    return 0u;
+    return NONE;
   }
   if (r % HIT_LANES == 0u) {
     stop_rows(workgroups(r + 1u, hits_room(), HIT_LANES));
   }
+  return r;
+}
+
+/// Stop `r` listed for the record, what lies about its face put at its pixel off it
+/// (miss_word.wgsl `hit_put`, record_stops.wgsl), and its number marked waiting
+/// (`beam::HIT_WAITS`).
+fn keep_hit(r: u32, w: Walked, face: u32, id: vec2<u32>) -> u32 {
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
@@ -285,27 +291,37 @@ fn keep_hit(w: Walked, face: u32, id: vec2<u32>) -> u32 {
 /// light's alike: a slot's depth; the eye's ray's, what lies about the face it stopped on its
 /// box's for a cell short of its cube (pxl-engine `face::BOX`), a lack's none, a whole cell's
 /// put there off the record once its stop is in (record_stops.wgsl `record_faces_cs`). A
-/// parked ray keeps no stop until it ends.
-fn finish(hole: u32, aim: Aim, w: Walked) {
+/// parked ray keeps no stop until it ends. Whether it ended: a stop past the frame's room
+/// (`stop_room`) leaves the hole as it was, for its walk to park and owe.
+fn finish(hole: u32, aim: Aim, w: Walked) -> bool {
+  let stops = w.ends == 1u || w.ends == 2u;
+  var r = NONE;
+  if (stops) {
+    r = stop_room();
+    if (r == NONE) {
+      return false;
+    }
+  }
   unpark(hole);
   let at = hole_px(hole);
   let face = face_of(aim, w);
   if (light_run()) {
-    if (w.ends == 1u || w.ends == 2u) {
-      _ = keep_hit(w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
+    if (stops) {
+      _ = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
     }
     textureStore(rays, at, 0u, vec4<u32>(walked_word(w), 0u, 0u, 0u));
-    return;
+    return true;
   }
   var faces = 0u;
   // Both of a `select` are taken, so the stop is kept under an `if`.
-  if (w.ends == 1u || w.ends == 2u) {
-    faces = keep_hit(w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
+  if (stops) {
+    faces = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
     if (w.ends == 1u && hit_fill(w) != 0u) {
       faces = FACE_BOX;
     }
   }
   write_ray(at, ray_word(w, face, faces));
+  return true;
 }
 
 /// A hole's ray the frame's budget does not reach, at the node `corner`, `zoom`, `roots`, `t`

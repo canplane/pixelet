@@ -174,9 +174,20 @@ const _: () = assert!(
 /// (`caps`): a hole the budget does not reach stays parked and is owed
 /// (`node_cache::OWED_AT`), a light's slot's tile to the light's next claim, an eye's pixel to
 /// the next frame's queue while the rays stand, as its owed bit or its parked ray.
+///
+/// The lanes are not the device's: WebGPU exposes no count of a GPU's cores or of the threads
+/// it holds at once. They are sized by the budget they walk under instead: every lane may walk
+/// one run of steps past a cap (`OVERRUN`), and the lanes are as many as keep that to
+/// 1/`OVERRUN_PART` of the frame's visits (`QUEUE_GROUPS`), so the runs after the first, which
+/// may each overrun into the shares, take `(count::RUNS - 1) / OVERRUN_PART` of it.
 pub const QUEUE_LANES: u32 = 64;
-pub const QUEUE_GROUPS: u32 = 256;
 pub const QUEUE_STEPS: u32 = 16;
+pub const OVERRUN_PART: u32 = 32;
+pub const QUEUE_GROUPS: u32 = VISITS_A_FRAME / OVERRUN_PART / (QUEUE_LANES * QUEUE_STEPS);
+const _: () = assert!(
+    QUEUE_GROUPS * QUEUE_LANES * QUEUE_STEPS * OVERRUN_PART == VISITS_A_FRAME,
+    "the lanes' overrun is the budget's part exactly"
+);
 
 /// The work a frame's queues may do, every run's together (pxl-render queue_walk.wgsl,
 /// queue_ask.wgsl, queue_last.wgsl): the nodes their walks visit, and the nodes they ask of the
@@ -185,6 +196,12 @@ pub const QUEUE_STEPS: u32 = 16;
 /// of the kernel's harness (pxl-kernel tests/frame) needs to rest within its bound.
 pub const VISITS_A_FRAME: u32 = 1 << 23;
 pub const ASKS_A_FRAME: u32 = 1 << 17;
+
+/// The stops an observer's holes keep for its record a frame (pxl-render queue.wgsl
+/// `stop_room`): its stops' list holds this many (`beam::Grid::hits_at`, `light::hits_at`). A
+/// hole whose ray ends past it keeps its walk's state, parked and owed (`node_cache::OWED_AT`),
+/// as one the visits do not reach, and ends in a frame after it.
+pub const STOPS_A_FRAME: u32 = 1 << 17;
 
 /// The most a walk's lanes visit past a cap: every lane of the dispatch saw the visits under
 /// it and walked one run of steps more. Asks are counted one at a time and pass no cap.

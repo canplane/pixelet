@@ -1,7 +1,9 @@
 // pxl-render/frame/shader/raster.wgsl
 
 // The voxels drawn at the eye's rays' pixels (pxl-engine raster.rs), its record's and the
-// light's (record_draw.wgsl): each box an instance, its three faces turned to the eye, one an
+// light's (record_draw.wgsl): each box an instance, a word naming its entry's slot
+// (`raster::draw_word`), its planes the entry's node's from the observer's origin
+// (record_box.wgsl `entry_box`), its three faces turned to the eye, one an
 // axis, as `corner` winds them, the faces turned away never drawn, each grown in its own
 // plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn pixel. A hit's box
 // draws, of those, the sides some ray entered it through (`raster::faces`, a bit a side), a
@@ -43,10 +45,20 @@ struct Raster {
   // its boxes are laid. The eye's: where each pixel's ray goes through it,
   // off its middle, in drawn pixels (pxl-engine `eye::JITTER`).
   first: vec4f,
+  // Where the boxes are laid from, a Q3 position: the eye's origin, or where box texel
+  // (0, 0)'s ray starts (pxl-engine `light::Starts::start`).
+  origin: vec4i,
 };
 
-@group(0) @binding(0) var<uniform> raster: Raster;
-@group(0) @binding(1) var<storage, read> boxes: array<u32>;
+@group(0) @binding(1) var<uniform> raster: Raster;
+/// The boxes drawn, a word each (pxl-engine `raster::draw_word`).
+@group(0) @binding(2) var<storage, read> draws: array<u32>;
+/// The node cache, whose entries the boxes are (pxl-engine `record`).
+@group(0) @binding(9) var<storage, read> node_cache: array<u32>;
+
+fn node_cache_word(k: u32) -> u32 {
+  return node_cache[k];
+}
 
 // A face's voxel's number; its box's planes; and the axis a pixel's ray
 // must enter it across, `RASTER_ANY` for a box about the eye.
@@ -60,23 +72,25 @@ struct RasterOut {
 
 const RASTER_ANY: u32 = 3u;
 
-fn raster_plane(w: u32) -> f32 {
-  return bitcast<f32>(boxes[w]);
-}
-
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> RasterOut {
-  let w = ii * RASTER_BOX_WORDS;
+  let word = draws[ii];
   var o: RasterOut;
-  o.id = boxes[w + RASTER_BOX_ID];
+  o.id = word & RASTER_ID_MASK;
   // Past the near plane: a corner of a face not drawn.
   o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
-  let word = boxes[w + RASTER_BOX_FACES];
   let lacks = (o.id & RASTER_LACK) != 0u;
-  let lo = vec3f(raster_plane(w + RASTER_BOX_LO), raster_plane(w + RASTER_BOX_LO + 1u), raster_plane(w + RASTER_BOX_LO + 2u));
-  let hi = vec3f(raster_plane(w + RASTER_BOX_HI), raster_plane(w + RASTER_BOX_HI + 1u), raster_plane(w + RASTER_BOX_HI + 2u));
+  let e = entry_at((o.id & ~RASTER_LACK) - 1u);
+  let origin = raster.origin.xyz;
+  let b = entry_box(e, entry_kept(e, origin), origin);
+  let lo = b.lo;
+  let hi = b.hi;
   o.lo = lo;
   o.hi = hi;
+  // The faces drawn, a bit a side: those an eye's ray asked about, every one some ray entered
+  // for the light (pxl-engine `record::ASKED`, `record::FACES`).
+  let state = node_cache_word(e + W_STATE);
+  let faces = select((state & RECORD_ASKED) >> RECORD_ASKED_SHIFT, state & RECORD_FACES, raster.turn.y != 0u);
   // A stale voxel's depth, drawn behind every fresh one's.
   let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);
   if ((word & RASTER_EYED) != 0u) {
@@ -110,7 +124,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   }
   // Drawn where some ray entered the box through that side: the face a ray running up the
   // axis enters is the low one (pxl-engine `ray::face`); a lack's every side.
-  if (!lacks && (((word & RASTER_FACES_MASK) >> (2u * a + 1u - high)) & 1u) == 0u) {
+  if (!lacks && ((faces >> (2u * a + 1u - high)) & 1u) == 0u) {
     return o;
   }
   let c = raster_corner(raster.turn.x + (2u * a + high) * 6u + vi % 6u);

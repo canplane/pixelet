@@ -70,7 +70,8 @@ pub struct Grid {
     /// rays' words, past the lines and how far each hands on (`hand_at`);
     /// then the asks of the drawable entries' faces, a sample's room each (`asks_at`;
     /// the voxels themselves are the node cache's, `record`), the holes' stops
-    /// (`hits_at`) and the asks of the faces they opened (`stop_asks_at`), `HITS` each.
+    /// (`hits_at`) and the asks of the faces they opened (`stop_asks_at`), `ray::STOPS_A_FRAME`
+    /// each.
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
@@ -234,8 +235,8 @@ impl Grid {
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
-        g.stop_asks_at = g.hits_at + HITS * HIT_WORDS;
-        g.corner_states_at = g.stop_asks_at + HITS * ASK_WORDS;
+        g.stop_asks_at = g.hits_at + ray::STOPS_A_FRAME * HIT_WORDS;
+        g.corner_states_at = g.stop_asks_at + ray::STOPS_A_FRAME * ASK_WORDS;
         g
     }
 
@@ -543,25 +544,25 @@ pub const ASK_NONE: u32 = u32::MAX;
 
 /// The stops of the holes' rays (pxl-render miss_word.wgsl `hit_put`, queue.wgsl), every one
 /// whatever it stopped on, which the record takes (`record`, pxl-render record_stops.wgsl),
-/// `HITS` at most, a number each as the walks take them, in words: its node (`NODE_WORDS`),
+/// `ray::STOPS_A_FRAME` at most, a number each as the walks take them, in words: its node (`NODE_WORDS`),
 /// the face its ray entered, `HIT_LACKS` set where it lacks, its pixel, its row over its
 /// column, the asset it stopped at, and the first word of the line its pixel's cell's rays
 /// resumed from, which its face's word is asked off (`ASK_LINE`). A pixel whose stop's face
 /// word is asked holds `HIT_WAITS` and its number in its last ray word until it is put there
 /// off the record (`ray::FACES`, record_stops.wgsl `record_faces_cs`), in the cast's own pass.
-/// A pixel past `HITS` lists none.
+/// A pixel whose ray ends past them stays parked and owed.
 pub const HIT_NODE: u32 = 0;
 pub const HIT_FACE: u32 = NODE_WORDS;
 pub const HIT_PX: u32 = HIT_FACE + 1;
 pub const HIT_ASSET: u32 = HIT_PX + 1;
 pub const HIT_LINE: u32 = HIT_ASSET + 2;
 pub const HIT_WORDS: u32 = HIT_LINE + 1;
-pub const HITS: u32 = 1 << 19;
 pub const HIT_LANES: u32 = 64;
 pub const HIT_LACKS: u32 = 1 << 31;
 pub const HIT_WAITS: u32 = 1 << 31;
 const _: () = assert!(
-    HITS.div_ceil(HIT_LANES) <= WORKGROUPS_MOST && HITS.div_ceil(FACES_LANES) <= WORKGROUPS_MOST,
+    ray::STOPS_A_FRAME.div_ceil(HIT_LANES) <= WORKGROUPS_MOST
+        && ray::STOPS_A_FRAME.div_ceil(FACES_LANES) <= WORKGROUPS_MOST,
     "the kept hits, and their faces' asks, fit one dispatch"
 );
 

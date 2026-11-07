@@ -11,10 +11,9 @@ use pxl_engine::grid;
 
 // ---- the view's knobs, beside pxl-engine grid.rs's ----
 
-/// The tangent of half the vertical field of view, the view's (pxl-kernel
-/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
-/// distance, a field of 53.13° (`fov`).
-pub const HALF_TAN: f64 = 0.5;
+/// The tangent of half the vertical field of view (pxl-engine
+/// `grid::HALF_TAN`), a field of 53.13° (`fov`).
+pub const HALF_TAN: f64 = grid::HALF_TAN as f64;
 
 // ---- derived from the knobs ----
 

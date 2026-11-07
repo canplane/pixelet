@@ -11,7 +11,7 @@ fn hits_at() -> u32 {
 }
 
 fn hits_room() -> u32 {
-  return LIGHT_PARKED_ROOM;
+  return STOPS_A_FRAME;
 }
 
 /// The texel of hit `r`'s slot.

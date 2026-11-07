@@ -1153,7 +1153,7 @@ pub const fn hits_at(size: u32) -> u32 {
 
 /// The light's list, its holes' region and its stops with it: the buffer's words.
 pub const fn buffer_words(size: u32) -> u32 {
-    hits_at(size) + parked_room() * beam::HIT_WORDS
+    hits_at(size) + ray::STOPS_A_FRAME * beam::HIT_WORDS
 }
 
 /// The rings of the box's tiles about its middle, a whole tile wide each: the order a cast

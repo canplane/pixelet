@@ -830,7 +830,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..blended(SHADER_RASTER, CULL_NONE)
             },
             &[],
-            &[&[[0, UNIFORM], [1, STORAGE]]],
+            &[&[[1, UNIFORM], [2, STORAGE], [9, STORAGE]]],
         ),
         // Only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(

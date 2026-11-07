@@ -10,7 +10,7 @@
 // head (`node_cache::HITS_ARGS`; gpu/ray/raster.rs `stops`), as this pass binds the node cache
 // writable, once the queue is done: each finds its node's entry and sets the face it entered,
 // asking that face's word the first time, laid among the asks of the hits
-// (`beam::Grid::stop_asks_at`), `HITS` at most (`record_stops_cs`). Then, once the faces' pass
+// (`beam::Grid::stop_asks_at`), `ray::STOPS_A_FRAME` at most (`record_stops_cs`). Then, once the faces' pass
 // has answered their asks, what lies about each stop's face put at its pixel off its entry
 // (`record_faces_cs`).
 

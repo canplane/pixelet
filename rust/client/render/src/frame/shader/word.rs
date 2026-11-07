@@ -286,7 +286,7 @@ pub const STAR_RECORD_FLOATS: usize = 8;
 
 /// The raster's view's words (gpu/ray/raster.rs, raster.wgsl `Raster`),
 /// which build.rs holds the struct to.
-pub const RASTER_FLOATS: usize = 24;
+pub const RASTER_FLOATS: usize = 28;
 
 /// The workgroups a dispatch takes a dimension at most on every WebGPU device, the limit's
 /// default (WebGPU, "Limits", `maxComputeWorkgroupsPerDimension`): the floor's

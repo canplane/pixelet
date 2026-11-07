@@ -231,8 +231,8 @@ pub const W_SEEN: u32 = W_STATE + 1;
 pub const W_FACES: u32 = W_SEEN + 1;
 pub const ENTRY_WORDS: u32 = W_FACES + 6;
 
-/// The slots: room for many frames of the about 80 thousand nodes a frame at E120 asks and
-/// the cells the eye and the light draw; a power of two, so a key's hash masks to one.
+/// The slots, a power of two, so a key's hash masks to one: what the table must hold, derived
+/// in the record that draws its entries (`record::entries_for`, which asserts it).
 pub const ENTRIES: u32 = 1 << 20;
 pub const ENTRIES_AT: u32 = ROLL_K + ROLL_WORDS;
 /// The buffer's words, whatever is drawn: none of them a pixel's.

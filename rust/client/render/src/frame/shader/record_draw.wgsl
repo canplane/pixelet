@@ -23,44 +23,21 @@ fn node_cache_word(k: u32) -> u32 {
   return node_cache[k];
 }
 
-/// The raster's boxes (pxl-engine `raster::BOX_WORDS`).
-@group(0) @binding(14) var<storage, read_write> boxes: array<u32>;
+/// The raster's draws, a word a box (pxl-engine `raster::draw_word`).
+@group(0) @binding(14) var<storage, read_write> draws: array<u32>;
 /// The raster's args (pxl-engine `raster::ARGS_INSTANCES`, `raster::ARGS_CNT`).
 @group(0) @binding(16) var<storage, read_write> box_args: array<atomic<u32>>;
 
-/// The entry at word `e`'s box from the origin `o`, the cell its asset keeps inset as it
-/// fills (pxl-engine cast.rs `asset_box`).
-fn entry_box(e: u32, k: Kept, o: vec3<i32>) -> Planes {
-  let p = kept_planes(k, o);
-  let eighths = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
-  var lo = p.lo;
-  var hi = p.hi;
-  if (eighths != 0u) {
-    let inset = (hi - lo) * (0.5 * (1.0 - side(eighths)));
-    lo += inset;
-    hi -= inset;
-  }
-  return Planes(lo, hi);
+/// Box `place` of the draw's: slot `slot`'s, a lack where `kind` is, `RASTER_EYED` and
+/// `RASTER_STALE` as `flags` say (pxl-engine `raster::draw_word`).
+fn put_draw(place: u32, slot: u32, kind: u32, flags: u32) {
+  draws[place] = (slot + 1u) | select(0u, RASTER_LACK, kind == KIND_LACKS) | flags;
 }
 
-/// Box `place` of the draw's, the box `b` of slot `slot`, a lack where `kind` is, its faces
-/// word `faces`.
-fn put_box(place: u32, b: Planes, slot: u32, kind: u32, faces: u32) {
-  let at = place * RASTER_BOX_WORDS;
-  boxes[at + RASTER_BOX_LO] = bitcast<u32>(b.lo.x);
-  boxes[at + RASTER_BOX_LO + 1u] = bitcast<u32>(b.lo.y);
-  boxes[at + RASTER_BOX_LO + 2u] = bitcast<u32>(b.lo.z);
-  boxes[at + RASTER_BOX_HI] = bitcast<u32>(b.hi.x);
-  boxes[at + RASTER_BOX_HI + 1u] = bitcast<u32>(b.hi.y);
-  boxes[at + RASTER_BOX_HI + 2u] = bitcast<u32>(b.hi.z);
-  boxes[at + RASTER_BOX_ID] = (slot + 1u) | select(0u, RASTER_LACK, kind == KIND_LACKS);
-  boxes[at + RASTER_BOX_FACES] = faces;
-}
-
-/// A place for a box among the draw's, `NO_ENTRY` past its room, its count raised.
-fn box_place() -> u32 {
+/// A place for a box among the draw's, `NO_ENTRY` past its `room`, its count raised.
+fn box_place(room: u32) -> u32 {
   let place = atomicAdd(&box_args[RASTER_ARGS_CNT], 1u);
-  if (place >= RECORD_BOXES) {
+  if (place >= room) {
     return NO_ENTRY;
   }
   atomicMax(&box_args[RASTER_ARGS_INSTANCES], place + 1u);
@@ -135,12 +112,12 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (near && !fresh) {
     return;
   }
-  let place = box_place();
+  let place = box_place(RECORD_EYE_DRAWS);
   if (place == NO_ENTRY) {
     return;
   }
   mark_drawn(e);
-  put_box(place, b, id.x, kind, faces | select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh));
+  put_draw(place, id.x, kind, select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh));
   if (head_word(LIGHT_HEAD_STANDS_WORLD) != 0u) {
     let t = box_tiles(b.lo, b.hi);
     if (t.got) {
@@ -195,10 +172,10 @@ fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let fresh = band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, tile_band(box_tile((b.lo + b.hi) * 0.5)));
-  let place = box_place();
+  let place = box_place(RECORD_LIGHT_DRAWS);
   if (place == NO_ENTRY) {
     return;
   }
   mark_drawn(e);
-  put_box(place, b, id.x, kind, faces | select(RASTER_STALE, 0u, fresh));
+  put_draw(place, id.x, kind, select(RASTER_STALE, 0u, fresh));
 }

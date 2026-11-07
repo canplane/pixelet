@@ -16,6 +16,16 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 /// angle, so what is observed is the display's pixels' to draw.
 pub const CELLS_A_RAD: f32 = 96.0;
 
+/// The tangent of half the vertical field of view, the view's (pxl-kernel
+/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
+/// distance, a field of 53.13 degrees (pxl-spec space/camera/grid.rs `fov`).
+pub const HALF_TAN: f32 = 0.5;
+
+/// The widest view drawn, its width over its height: an ultrawide display's
+/// 21:9. What is sized by the view's cells (`node_cache::ENTRIES`) holds them
+/// at this aspect or narrower.
+pub const ASPECT_MOST: f32 = 21.0 / 9.0;
+
 /// How many times finer than the view's a grid the bands and clip levels are
 /// sized for (`CLIP_CELLS_A_RAD`, `clipmap::RADIUS`): a clip level holds its
 /// zoom's cells out to `CLIP_MARGIN` times where the view stops drawing them.

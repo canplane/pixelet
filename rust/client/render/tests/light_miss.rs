@@ -963,7 +963,7 @@ fn holes(
         }
         frames.push(gpu.holes(&binds, table, true, None));
         let t = gpu.read(table);
-        let stops = t[node_cache::HITS_CNT as usize].min(light::parked_room());
+        let stops = t[node_cache::HITS_CNT as usize].min(ray::STOPS_A_FRAME);
         let words = gpu.read(list);
         let at = light::hits_at(SIZE) as usize;
         let mut kept = std::collections::BTreeSet::new();

@@ -72,10 +72,11 @@ fn parked_start(item: u32) -> Start {
 }
 
 /// How far the rays about it start (`beam_hand`), its state no longer parked.
-fn finish(item: u32, aim: Aim, w: Walked) {
+fn finish(item: u32, aim: Aim, w: Walked) -> bool {
   let c = corner_of(item);
   beams[corner_state_at(c) + 4u] = 0u;
   beams[beam_hand_at(c)] = bitcast<u32>(beam_hand(w.t));
+  return true;
 }
 
 /// A beam ray the frame's budget does not reach: parked, its hand `HAND_PARKED`, which owes

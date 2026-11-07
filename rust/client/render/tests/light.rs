@@ -1007,11 +1007,11 @@ fn run_marks(
             [(t[0] + grow).min(m), (t[1] + grow).min(m)],
         ]
     };
-    // The raster's draw args as the draw begins, room for the boxes, and the node cache, every
+    // The raster's draw args as the draw begins, room for the draws, and the node cache, every
     // slot free but those the samples' nodes hold.
     let mut raster_args = vec![0u32; raster::ARGS_WORDS as usize];
     raster_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-    let boxes = vec![0u32; (record::BOXES * raster::BOX_WORDS) as usize];
+    let boxes = vec![0u32; record::EYE_DRAWS as usize];
     let mut rec = vec![0u32; node_cache::WORDS as usize];
     match by {
         Marks::Walked => {

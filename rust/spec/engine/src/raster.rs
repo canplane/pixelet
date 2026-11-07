@@ -14,6 +14,8 @@
 //! (`STALE`), leaving its voxel's number (`id_of`): its cell where a hit, and where a lack, a
 //! node it walks itself.
 
+use crate::node_cache::ENTRIES;
+
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
@@ -23,20 +25,21 @@
 /// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`);
 /// then the boxes counted as they are written (`ARGS_CNT`), of which
 /// `ARGS_INSTANCES` is the part the boxes' room holds.
-/// The eye's boxes are the drawable entries in view, `record::BOXES` at most; the
-/// light's a sample's at most, its samples `param::light::SAMPLE` texels apart. The faces'
+/// The eye's boxes are the drawable entries in view, `record::EYE_DRAWS` at most; the
+/// light's those on its box, `record::LIGHT_DRAWS` at most. The faces'
 /// asks are a sample's at most, the samples `param::beam::SAMPLE` a camera grid cell a
 /// side, about 270 thousand on a 16:9 view whatever its pixels; one dispatch's 65535
 /// workgroups hold 4.2M.
 /// The draw's args are its own words alone; the faces' asks', a voxel's face each, laid the
 /// same way at `ASKED_AT`, a storage binding's alignment past them, which the faces' pass binds
 /// alone.
-/// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
-/// eye's origin, lowest then highest, f32 bits, its voxel's number
-/// (`id_of`), and its faces drawn, a bit an axis (`faces`), with `EYED`
-/// where the box lies about the eye (`is_eyed`) and `STALE` where its voxel
-/// is not the node the observer's walk stops on there (`record::fresh`,
-/// `record::light_fresh`).
+/// Then the draws' buffer, a word a box (`draw_word`): its voxel's number (`id_of`), with
+/// `EYED` where the box lies about the eye (`is_eyed`) and `STALE` where its voxel is not the
+/// node the observer's walk stops on there (`record::fresh`, `record::light_fresh`). The box
+/// itself is its entry's, which the raster's vertex stage reads by the voxel's slot: its node's
+/// planes from the observer's origin, the cell its asset keeps inset (`cast::asset_box`), and
+/// its faces drawn, a bit a side (`faces`), those an eye's ray asked about
+/// (`record::ASKED`), every one some ray entered for the light (`record::FACES`).
 pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
@@ -49,13 +52,20 @@ pub const STOP_ASKED_AT: u32 = 2 * crate::STORAGE_ALIGN_WORDS;
 /// The args' words, the draw's and both faces' asks'.
 pub const WORDS: u32 = STOP_ASKED_AT + ARGS_WORDS;
 pub const FACES_LANES: u32 = 64;
-pub const BOX_LO: u32 = 0;
-pub const BOX_HI: u32 = 3;
-pub const BOX_ID: u32 = 6;
-pub const BOX_FACES: u32 = 7;
-pub const BOX_WORDS: u32 = 8;
-pub const EYED: u32 = 1 << 8;
-pub const STALE: u32 = 1 << 9;
+pub const EYED: u32 = 1 << 29;
+pub const STALE: u32 = 1 << 30;
+/// A draw word's voxel's number (`id_of`), past `EYED` and `STALE`.
+pub const ID_MASK: u32 = LACK | (EYED - 1);
+const _: () = assert!(
+    ENTRIES < EYED,
+    "a voxel's number lies under the draw's bits"
+);
+
+/// The word a box is drawn by: voxel `voxel`'s number, a lack's where `lacks`, `EYED` where
+/// `eyed`, `STALE` where not `fresh`.
+pub const fn draw_word(voxel: u32, lacks: bool, eyed: bool, fresh: bool) -> u32 {
+    id_of(voxel, lacks) | if eyed { EYED } else { 0 } | if fresh { 0 } else { STALE }
+}
 const _: () = assert!(
     ARGS_WORDS <= ASKED_AT
         && ASKED_AT + ARGS_WORDS <= STOP_ASKED_AT
@@ -91,7 +101,7 @@ pub const fn id_of(voxel: u32, lacks: bool) -> u32 {
 
 /// The voxel an id names (`id_of`), none for 0.
 pub const fn voxel_of(id: u32) -> u32 {
-    (id & !LACK) - 1
+    (id & ID_MASK & !LACK) - 1
 }
 
 /// The raster's reversed depth: a face at view depth `w` drawn at `NEAR /

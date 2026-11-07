@@ -65,8 +65,9 @@ fn parked_start(item: u32) -> Start {
   return parked_from(beams[at + SAMPLE_PARKED_T], corner, beams[at + SAMPLE_PARKED_STATE]);
 }
 
-fn finish(item: u32, aim: Aim, w: Walked) {
+fn finish(item: u32, aim: Aim, w: Walked) -> bool {
   sample_put(sample_word(sample_of(item)), w);
+  return true;
 }
 
 /// A sample the frame's budget does not reach: parked, and owed as its observer owes it

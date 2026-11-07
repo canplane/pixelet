@@ -186,7 +186,7 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // each sample (`beam::Grid::stop_asks_at`, `asks_at`).
   let asks = args[RASTER_ARGS_ASKS];
   let samples = eye_word(GRID + GRID_SAMPLES) * eye_word(GRID + GRID_SAMPLES + 1u);
-  let room = select(samples, HITS, asks == eye_word(GRID + GRID_STOP_ASKS_AT));
+  let room = select(samples, STOPS_A_FRAME, asks == eye_word(GRID + GRID_STOP_ASKS_AT));
   if (id.x >= in_room(args[RASTER_ARGS_INSTANCES], room)) {
     return;
   }

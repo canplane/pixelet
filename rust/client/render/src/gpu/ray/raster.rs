@@ -142,7 +142,7 @@ const _: () = assert!(
 );
 
 /// The raster's pipelines, made with the cast's; its args, the stops' dispatch and the eye's
-/// boxes, room for `record::BOXES`, made with them; the raster's view, a uniform; its targets
+/// draws, a word a box, room for `record::EYE_DRAWS`, made with them; the raster's view, a uniform; its targets
 /// at the rays' size: a pixel's voxel (r32uint, drawn into as 2D and read as a one-layer
 /// array, `visibility`, the visibility buffer) and the depth it is tested by; and the groups
 /// of the samples' stops, the node cache's drawable entries' drawing, the boxes' drawing and
@@ -175,7 +175,7 @@ pub(super) struct Raster {
     /// The dispatch over the holes' stops, copied out of the node cache's head
     /// (`node_cache::HITS_ARGS`), which the stops bind writable (`stops`).
     stops: u32,
-    boxes: u32,
+    draws: u32,
     uniform: u32,
     visibility: u32,
     visibility_view: u32,
@@ -197,12 +197,13 @@ pub(super) struct Raster {
 /// The light's raster over the node cache's drawable entries (pxl-engine `record`), which its
 /// samples' passes (`light_boxes_built`) and its stops set as the eye's do, its boxes written
 /// off them (record_draw.wgsl `light_record_draw_cs`) and drawn from the light by the same
-/// draw: its boxes, room for `record::BOXES`; their args; its stops' dispatch; its view, a
-/// uniform; its targets at the map's side, in the box's order; the draw's group; and the
-/// drawing's group, made again exactly when what it binds is another (`record_bound`).
+/// draw: its draws, a word a box, room for `record::LIGHT_DRAWS`; their args; its stops'
+/// dispatch; its view, a uniform; its targets at the map's side, in the box's order; and the
+/// draw's group and the drawing's, made again exactly when what they bind is another
+/// (`record_bound`).
 #[derive(Default)]
 pub(super) struct LightRaster {
-    boxes: u32,
+    draws: u32,
     pub(super) args: u32,
     /// The dispatch over its holes' stops, as the eye's (`Raster::stops`).
     stops: u32,
@@ -285,8 +286,8 @@ impl Raster {
                 word_bytes(3),
                 buffer_usage::COPY_DST | buffer_usage::INDIRECT,
             ),
-            boxes: g.buf(
-                word_bytes((record::BOXES * raster::BOX_WORDS) as usize),
+            draws: g.buf(
+                word_bytes(record::EYE_DRAWS as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
             uniform: g.buf(
@@ -378,6 +379,10 @@ impl Raster {
             f32::from_bits(e[eye::JITTER + 1]),
             0.0,
             0.0,
+            f32::from_bits(e[eye::ORIGIN]),
+            f32::from_bits(e[eye::ORIGIN + 1]),
+            f32::from_bits(e[eye::ORIGIN + 2]),
+            0.0,
         ];
         g.write_buf(self.uniform, 0, bytes(&uniform));
         if samples_cast {
@@ -439,7 +444,11 @@ impl Raster {
                 ),
                 g.bind_group(
                     self.draw_built.layouts[0],
-                    &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
+                    &[
+                        buf_entry(1, self.uniform),
+                        buf_entry(2, self.draws),
+                        buf_entry(9, node_cache),
+                    ],
                 ),
                 faces(self.args, word_bytes(raster::ASKED_AT as usize)),
                 // Made over the light's buffers too (`record_group`).
@@ -479,7 +488,7 @@ impl Raster {
             &[
                 buf_entry(0, eye),
                 buf_entry(9, node_cache),
-                buf_entry(14, self.boxes),
+                buf_entry(14, self.draws),
                 buf_entry(16, self.args),
                 buf_entry(super::cast::HEAD_BINDING, head),
                 buf_entry(12, list),
@@ -619,12 +628,9 @@ impl Raster {
     /// they are not; whether they are.
     pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.light;
-        if s.group == 0 {
+        if s.uniform == 0 {
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.boxes = g.buf(
-                word_bytes((record::BOXES * raster::BOX_WORDS) as usize),
-                storage,
-            );
+            s.draws = g.buf(word_bytes(record::LIGHT_DRAWS as usize), storage);
             s.args = g.buf(
                 word_bytes(raster::WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
@@ -643,12 +649,8 @@ impl Raster {
             s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
             s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
-            s.group = g.bind_group(
-                self.draw_built.layouts[0],
-                &[buf_entry(0, s.uniform), buf_entry(1, s.boxes)],
-            );
         }
-        s.group != 0
+        s.uniform != 0
     }
 
     /// The light's buffers and its targets let go, as its shadows go off;
@@ -667,7 +669,7 @@ impl Raster {
             s.uniform,
             s.args,
             s.stops,
-            s.boxes,
+            s.draws,
         ] {
             release(id);
         }
@@ -676,15 +678,18 @@ impl Raster {
     /// The light's view off the eye's words `e` (pxl-engine `light::Light`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared. Its slots and its
     /// stops mark an entry seen by the record's frame, the node cache's, as the eye's do.
-    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32, starts: &light::Starts) {
         let s = &self.light;
-        if s.group == 0 {
+        if s.uniform == 0 {
             return;
         }
         let words: &[u32; eye::LIGHT_WORDS] = e[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .try_into()
             .unwrap_or(&[0; eye::LIGHT_WORDS]);
         let v = light::Light::of_words(words);
+        // Where box texel (0, 0)'s ray starts, which the boxes are laid from
+        // (light_aim.wgsl `texel_start`).
+        let origin = starts.start(light::CORNER.map(|k| words[k] as i32));
         let length = |a: [f32; 3]| libm::sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
         let unit = |a: [f32; 3]| {
             let l = length(a).max(f32::MIN_POSITIVE);
@@ -721,6 +726,10 @@ impl Raster {
             0.0,
             0.0,
             0.0,
+            f32::from_bits(origin[0] as u32),
+            f32::from_bits(origin[1] as u32),
+            f32::from_bits(origin[2] as u32),
+            0.0,
         ];
         g.write_buf(s.uniform, 0, bytes(&uniform));
         let mut args = [0u32; raster::ARGS_WORDS as usize];
@@ -742,16 +751,25 @@ impl Raster {
         let [head, list, args, stood, map] = light;
         let bound = [eye, node_cache, head, list, args, stood, map];
         let s = &mut self.light;
-        if eye == 0 || s.group == 0 || bound == s.record_bound {
+        if eye == 0 || s.uniform == 0 || bound == s.record_bound {
             return;
         }
+        release(s.group);
+        s.group = g.bind_group(
+            self.draw_built.layouts[0],
+            &[
+                buf_entry(1, s.uniform),
+                buf_entry(2, s.draws),
+                buf_entry(9, node_cache),
+            ],
+        );
         release(s.record_group);
         s.record_group = g.bind_group(
             self.light_record_draw_built.layouts[0],
             &[
                 buf_entry(0, eye),
                 buf_entry(9, node_cache),
-                buf_entry(14, s.boxes),
+                buf_entry(14, s.draws),
                 buf_entry(16, s.args),
                 buf_entry(super::cast::HEAD_BINDING, head),
                 buf_entry(12, list),

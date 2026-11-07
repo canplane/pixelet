@@ -676,7 +676,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample_box",
     ],
     // SHADER_RASTER
-    &["raster_box", "px", "raster"],
+    &[
+        "walk_word",
+        "raster_box",
+        "eye_bind",
+        "walk_node",
+        "side",
+        "record",
+        "record_box",
+        "px",
+        "raster",
+    ],
     // SHADER_FACE
     &[
         "walk_word",
@@ -1039,6 +1049,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_node",
         "side",
         "record",
+        "record_box",
         "light_aim",
         "light_box",
         "light_list",
