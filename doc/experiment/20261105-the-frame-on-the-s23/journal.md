@@ -589,3 +589,17 @@ near 100 k cells here, a tenth of the 1 M 11-06 assumed. Its time on the S23 is 
 of 2^18 to 2^19 holes. Three 4K drives held 3 such frames of 1107; 174 passed 2^19, past either
 room. **The save at a suspend, closed.** A hidden page saves at once (door/life.rs) and an edit
 goes with its turn; what is left is a hide in a turn with no write left, which nothing has shown.
+
+**Main at 6b9c4549ab against the deployed build.** The Mac's gate, 2 rounds: pass, GPU 19.27 /
+34.28 to 16.12 / 31.39 ms, first load's longest frame 1041 to 178 ms, tick p95 2.20 to 3.00 ms.
+The S23, fixed resolution, 120 s drives by turns, the report's last 60 s:
+
+| run | clock, MHz | frames a second | GPU p50 / p95 |
+|---|---|---|---|
+| main-1 | 719 | 11.7 | 53.7 / 220.2 |
+| base-1 | 719 | 2.2 | 326.8 / 1246.6 |
+| main-2 | 615, most | 9.9 | 65.9 / 259.1 |
+
+At 719 MHz the p50 is 6.1× the deployed build's and the p95 5.7×. The deployed build's p95 has
+read 437.6 to 1282.1 over its runs, on 60–92 timed frames, so 11-07's 1.2× at 550 MHz and this
+5.7× are one pair each; no pair at 550 MHz was taken again.
