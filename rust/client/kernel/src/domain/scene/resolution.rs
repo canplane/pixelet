@@ -1,4 +1,4 @@
-// pxl-kernel/domain/view/frame/resolution.rs
+// pxl-kernel/domain/scene/resolution.rs
 
 //! Device pixels per CSS pixel a surface is drawn at: the display's, and the
 //! world's as the `resolution` setting says. The world's rays are cast at the
@@ -59,7 +59,7 @@
 //! asks for the frame that draws it; the rate's holds from the next grant.
 //! The `RES_SETTLE_WINDOWS` after any are not judged.
 
-use crate::domain::view::param;
+use crate::domain::scene::param;
 use crate::domain::view::setting::store::{settings_store, ResMode};
 use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};

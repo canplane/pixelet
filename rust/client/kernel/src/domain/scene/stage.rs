@@ -58,9 +58,9 @@ use crate::domain::scene::environment::cloud;
 use crate::domain::scene::marker;
 use crate::domain::scene::model;
 use crate::domain::scene::param;
+use crate::domain::scene::resolution;
+use crate::domain::scene::resolution::{GpuMeasure, Pace};
 use crate::domain::view::frame::pose::{sea_under_eye, view};
-use crate::domain::view::frame::resolution;
-use crate::domain::view::frame::resolution::{GpuMeasure, Pace};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
@@ -138,7 +138,7 @@ pub struct Drawn {
 }
 
 /// `pace` is the frame as the turn paced it, which the world's drawn
-/// resolution is judged by (domain/view/frame/resolution.rs `load`), and
+/// resolution is judged by (domain/scene/resolution.rs `load`), and
 /// `edits` the pointer's preview as the turn hands it, which the rays cut by.
 pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     let lists = draw_list().take();

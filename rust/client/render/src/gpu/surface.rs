@@ -36,7 +36,7 @@ pub struct Surface {
     pub px_h: u32,
     pub dpr: f64,
     /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
-    /// domain/view/frame/resolution.rs): the display's, or under load a share of
+    /// domain/scene/resolution.rs): the display's, or under load a share of
     /// them, the finish bringing them up to the canvas's (`render_px`).
     pub ratio: f64,
     pub configured: bool,

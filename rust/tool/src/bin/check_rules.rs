@@ -141,7 +141,7 @@ const VIEW_ORDER: [(&str, u8); 7] = [
 /// the root, which sequences the parts that draw (`SCENE_OWN`), over the
 /// markers, the characters and the indicators, over what they draw with,
 /// each part keeping its own state.
-const SCENE_ORDER: [(&str, u8); 14] = [
+const SCENE_ORDER: [(&str, u8); 15] = [
     ("stage", 7),
     ("marker", 5),
     ("character", 4),
@@ -155,6 +155,7 @@ const SCENE_ORDER: [(&str, u8); 14] = [
     ("column", 0),
     ("frame", 0),
     ("param", 0),
+    ("resolution", 0),
     ("transform", 0),
 ];
 const SCENE_OWN: u8 = 6;

@@ -533,7 +533,7 @@ The entries are pxl-render's WGSL (`beam.wgsl`, `sample.wgsl`, `raster.wgsl`,
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
 times a scale, its beam rays on a lattice, both of which the `resolution`
-setting picks (`domain/view/frame/resolution.rs`).
+setting picks (`domain/scene/resolution.rs`).
 
 The scale buys back only the work done a drawn pixel at a time: the pixels' cast
 and misses, the boxes drawn into the visibility buffer, the world's passes, its

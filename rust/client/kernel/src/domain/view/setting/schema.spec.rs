@@ -131,7 +131,7 @@ impl AoMode {
 ///           than a sixtieth of a second — and back up, the lattice first and
 ///           the rate last, once the step above would fit, a budget control
 ///           as congestion control is
-///           (rust/client/kernel/src/domain/view/frame/resolution.rs). The
+///           (rust/client/kernel/src/domain/scene/resolution.rs). The
 ///           lattice changes no pixel drawn.
 ///   fixed — the display's, on the cell's lattice at its rate, whatever the
 ///           frames cost.

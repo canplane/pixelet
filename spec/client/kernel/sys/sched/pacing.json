@@ -19,7 +19,7 @@
   "RATE_MIN_HZ": {
     "$val": 30,
     "$doc": [
-      "The slowest rate the kernel's load asks (pxl-kernel domain/view/frame/resolution.rs): past",
+      "The slowest rate the kernel's load asks (pxl-kernel domain/scene/resolution.rs): past",
       "it the pixels give way, not the motion."
     ]
   },

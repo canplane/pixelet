@@ -18,7 +18,7 @@ use crate::domain::layer::terrain::tile::uploads;
 use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
 use crate::domain::preview::RenderEdits;
-use crate::domain::view::frame::resolution;
+use crate::domain::scene::resolution;
 use crate::domain::view::lens;
 use crate::sys::io::source;
 use pxl_render::gpu::api;
@@ -51,7 +51,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 
 /// The eye as the GPU's rays leave it, a ray a drawn pixel, its beam rays
 /// on the lattice the drawn resolution leaves (`lens::gpu_cast`,
-/// domain/view/frame/resolution.rs `lattice`),
+/// domain/scene/resolution.rs `lattice`),
 /// then `edits`, the pointer's preview, as the world answers through it
 /// (domain/query/world.rs `previewing`), its cut to air and its left-out leaf,
 /// each X, Y, Z and the zoom (pxl-engine `eye`). None without a screen.

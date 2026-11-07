@@ -6,7 +6,7 @@ use super::State;
 use super::{ask_turn, or_refuse, refuse_unless};
 use crate::domain::scene::character::preview;
 use crate::domain::scene::marker;
-use crate::domain::view::frame::resolution;
+use crate::domain::scene::resolution;
 use crate::door::cmd as abi;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;

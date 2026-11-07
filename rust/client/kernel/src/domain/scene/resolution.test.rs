@@ -1,4 +1,4 @@
-// pxl-kernel/domain/view/frame/resolution.test.rs
+// pxl-kernel/domain/scene/resolution.test.rs
 
 use super::*;
 

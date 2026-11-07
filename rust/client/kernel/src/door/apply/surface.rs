@@ -6,7 +6,7 @@
 use super::{or_refuse, refuse_unless};
 use crate::domain::control::input::camera_view_resize;
 use crate::domain::control::sensor;
-use crate::domain::view::frame::resolution;
+use crate::domain::scene::resolution;
 use crate::sys::sched::edge::request_world_tick;
 use crate::turn::world_platform;
 use pxl_render::api_spec::surface_role;

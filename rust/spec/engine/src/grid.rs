@@ -50,7 +50,7 @@ pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 /// the cells their starts are found for lie on a lattice of their own, a
 /// power of two of cells a side up to `LATTICE_MAX` (`beam::Grid::of`), the
 /// drawn resolution's second knob (pxl-kernel
-/// domain/view/frame/resolution.rs): the samples are the very rays at every
+/// domain/scene/resolution.rs): the samples are the very rays at every
 /// lattice, so what each screen observes and draws is the cell's alone. The
 /// cell spaced the beam rays too until the lattice came apart from it
 /// (doc/minutes/20261102-auto-judges-the-pixels-and-the-lattice.md).

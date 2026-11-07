@@ -23,7 +23,7 @@
 /// runs a turn every second refresh.
 pub const PACE_HZ: f64 = 60.0;
 
-/// The slowest rate the kernel's load asks (pxl-kernel domain/view/frame/resolution.rs): past
+/// The slowest rate the kernel's load asks (pxl-kernel domain/scene/resolution.rs): past
 /// it the pixels give way, not the motion.
 pub const RATE_MIN_HZ: f64 = 30.0;
 

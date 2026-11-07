@@ -15,7 +15,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
  * runs a turn every second refresh. */
 export const PACE_HZ: f64 = 60 as number;
 
-/** The slowest rate the kernel's load asks (pxl-kernel domain/view/frame/resolution.rs): past
+/** The slowest rate the kernel's load asks (pxl-kernel domain/scene/resolution.rs): past
  * it the pixels give way, not the motion. */
 export const RATE_MIN_HZ: f64 = 30 as number;
 

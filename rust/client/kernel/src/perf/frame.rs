@@ -30,7 +30,7 @@ pub struct GpuSample {
     pub px: f64,
     /// The share of the display's pixels, each way, the world was drawn at,
     /// and the camera grid's lattice its beam rays and cells were laid on,
-    /// in cells a side (pxl-kernel domain/view/frame/resolution.rs).
+    /// in cells a side (pxl-kernel domain/scene/resolution.rs).
     pub scale: f64,
     pub lattice: f64,
     /// The frame's draws and their triangles, every pipeline a draw names
