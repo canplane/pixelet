@@ -34,9 +34,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   happened. In order: every domain noun listed with what it names (read-only, by
   area), a glossary decided with the user, conventional names first and cited, put
   in the naming skill; then the renames by area, one names commit each.
-- **A login screen is to come.** Another kind of `Cover`, over `Starting` or
-  `Loading`, so the world is made while it stands —
-  [20261103-what-stands-over-the-app.md](./minutes/20261103-what-stands-over-the-app.md).
 
 ## Parked, with the reason on file
 
