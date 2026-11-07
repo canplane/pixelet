@@ -15,7 +15,7 @@ fn in_room(cnt: u32, room: u32) -> u32 {
 }
 
 /// The workgroups of `per` threads that take `cnt` of a list that holds `room`, a thread each,
-/// at most the workgroups a dispatch takes a dimension (`MAX_COMPUTE_WORKGROUPS_PER_DIMENSION`).
+/// at most the workgroups a dispatch takes a dimension (`WORKGROUPS_MOST`).
 fn workgroups(cnt: u32, room: u32, per: u32) -> u32 {
-  return min((in_room(cnt, room) + per - 1u) / per, MAX_COMPUTE_WORKGROUPS_PER_DIMENSION);
+  return min((in_room(cnt, room) + per - 1u) / per, WORKGROUPS_MOST);
 }

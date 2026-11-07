@@ -12,11 +12,12 @@ use std::collections::BTreeSet;
 
 use gpu::Gpu;
 use pxl_content::generation::{self, drawn};
-use pxl_engine::{light, screen};
+use pxl_engine::light;
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS,
 };
 use pxl_render::frame::shader::word::frame::EYE;
+use pxl_render::frame::shader::word::screen;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
 use pxl_render::gpu::shadow;
 

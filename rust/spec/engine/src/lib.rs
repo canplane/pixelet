@@ -36,7 +36,6 @@ pub mod param;
 pub mod raster;
 pub mod ray;
 pub mod record;
-pub mod screen;
 pub mod seed;
 pub mod support;
 pub mod value;

@@ -8,7 +8,7 @@ use super::sequence;
 use crate::frame::shader::access::Step;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
-use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, screen, Zoom, LEAF_CELL};
+use pxl_engine::{beam, eye, light, node_cache, overwrite, ray, Zoom, LEAF_CELL, WORKGROUPS_MOST};
 use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -35,7 +35,7 @@ use crate::frame::shader::record::{
     COMPUTE_QUEUE_SAMPLES_PARKED, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY,
     UNIFORM,
 };
-use crate::frame::shader::word::{CELL_SIDE, ROW_LANES, SQUARE_SIDE};
+use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANES, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
@@ -454,8 +454,7 @@ pub const DRAWN_AREA: u32 =
 pub const fn drawn_fits(size: [u32; 2]) -> bool {
     size[0] <= DRAWN_MOST[0]
         && size[1] <= DRAWN_MOST[1]
-        && size[0].div_ceil(screen::TILE) * size[1].div_ceil(screen::TILE)
-            <= floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION
+        && size[0].div_ceil(screen::TILE) * size[1].div_ceil(screen::TILE) <= WORKGROUPS_MOST
         && size[0] * size[1] <= DRAWN_AREA
 }
 const _: () = assert!(

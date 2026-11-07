@@ -11,7 +11,7 @@ use pxl_engine::ground;
 use pxl_engine::lattice;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
-use pxl_engine::screen;
+use pxl_engine::WORKGROUPS_MOST;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use std::path::Path;
 
@@ -28,7 +28,12 @@ mod param;
 )]
 mod part;
 #[path = "src/frame/shader/word.rs"]
+#[expect(
+    dead_code,
+    reason = "the build reads part of what the crate shares with it"
+)]
 mod word;
+use word::screen;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -901,7 +906,7 @@ fn decor_word() -> String {
 
 /// The tiles' uniform as every pass reads it (pxl-engine
 /// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
-/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
+/// read by it as word.rs's `screen::age` and `screen::claimed` read it:
 /// the frames since it changed, wrapping, and claimed while fewer than the
 /// uniform's `claimed_for`. The one rule every pass that reads the tiles
 /// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast_tiles.wgsl).
@@ -996,7 +1001,7 @@ fn words() -> String {
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
-        format!("const MAX_COMPUTE_WORKGROUPS_PER_DIMENSION: u32 = {MAX_COMPUTE_WORKGROUPS_PER_DIMENSION}u;\n"),
+        format!("const WORKGROUPS_MOST: u32 = {WORKGROUPS_MOST}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
         format!("const CELL_SIDE: u32 = {CELL_SIDE}u;\n"),

@@ -17,7 +17,7 @@
 // cover: a tile too many costs, one missing is a failure.
 
 // `Tiles`, `tiles_age` and `tiles_claimed` are tile_word.wgsl's (build.rs,
-// pxl-engine `screen`).
+// word.rs `screen`).
 
 struct Propagate {
   // From the screen's clip, its depth reversed, to units from the eye; and

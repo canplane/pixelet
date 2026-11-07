@@ -5,8 +5,6 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
-use pxl_engine::screen;
-
 /// A draw's uniform (frame/draw.rs `Position`): its position's Q3 in its
 /// first three words, what its pipeline reads past them in the next five,
 /// and its position's remainder in the third vec4.
@@ -281,12 +279,6 @@ pub const STAR_RECORD_FLOATS: usize = 8;
 /// which build.rs holds the struct to.
 pub const RASTER_FLOATS: usize = 28;
 
-/// The workgroups a dispatch takes a dimension at most on every WebGPU device, the limit's
-/// default (WebGPU, "Limits", `maxComputeWorkgroupsPerDimension`): the floor's
-/// (floor.rs), stated here, where build.rs reads it, so every count the GPU writes into a
-/// dispatch is bounded by it (constant.wgsl `workgroups`).
-pub const MAX_COMPUTE_WORKGROUPS_PER_DIMENSION: u32 = 65535;
-
 /// The occlusion's passes' resolution, the screen's over this (gpu/ao.rs):
 /// the downsample keeps one depth of each 2×2 and the apply blends the 2×2
 /// about each pixel (ao_downsample.wgsl, ao_apply.wgsl), so it is two.
@@ -295,10 +287,54 @@ pub const AO_DOWNSCALE: u32 = 2;
 /// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
 pub const AO_NOISE_SIDE: u32 = 128;
 
+/// The screen's tiles, which a frame not drawn whole draws again by, as the
+/// light's map is cast by its own (pxl-engine light.rs): each `TILE` drawn
+/// pixels a side, its word the number of the frame it last changed in
+/// (`changed_at`), as a light tile's names a cast, the GPU's; its age the
+/// frames since (`age`); claimed while its history has not run through the
+/// jitter's `JITTERS` frames (`CLAIMED_FOR`) (gpu/resolve.rs;
+/// doc/minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md).
+pub mod screen {
+    /// A tile's drawn pixels a side.
+    pub const TILE: u32 = 32;
+    /// The threads of a workgroup of the pass that lists the claimed tiles.
+    pub const CAST_TILES_LANES: u32 = 64;
+    /// The frames the jitter's sequence covers a pixel in.
+    pub const JITTERS: u32 = 8;
+
+    /// The frames a tile stays claimed once changed (`claimed_for`): the frame
+    /// it changed in, its color held to its pixels, then `JITTERS - 1` still
+    /// frames, the first taking half of what stands and each after it its even
+    /// share (screen_resolve.wgsl), each frame at its own place of the jitter's
+    /// sequence.
+    pub const CLAIMED_FOR: u32 = JITTERS;
+
+    /// The words of the uniform a pass draws the tiles by: the tiles across and
+    /// down, the frames a tile stays claimed once changed (`claimed_for`, all of
+    /// them where every one is drawn), this frame's number; the target's pixels
+    /// across and down, how far a quad is grown past its tile, and a tile's
+    /// side, f32 bits.
+    pub const TILES_WORDS: usize = 8;
+
+    /// The frames since a tile last changed, by its word `changed_at`, in the
+    /// frame numbered `now`. With `claimed`, the one rule a tile is claimed by:
+    /// build.rs writes it as the passes' `tiles_age` and `tiles_claimed`
+    /// (tile_word.wgsl).
+    pub const fn age(now: u32, changed_at: u32) -> u32 {
+        now.wrapping_sub(changed_at)
+    }
+
+    /// Whether a tile `age` frames old is claimed, where a tile stays claimed
+    /// `claimed_for` frames once changed.
+    pub const fn claimed(age: u32, claimed_for: u32) -> bool {
+        age < claimed_for
+    }
+}
+
 /// A square of the depth's bound the propagation reads, its pixels a side
 /// (gpu/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
 pub const BOUND_STEP: u32 = 4;
-/// A screen tile's squares a side (pxl-engine `screen::TILE`), a thread
+/// A screen tile's squares a side (`screen::TILE`), a thread
 /// each of the workgroup a tile both passes take: every square of a tile is
 /// set and read whatever its side.
 pub const BOUND_SQUARES: u32 = screen::TILE / BOUND_STEP;

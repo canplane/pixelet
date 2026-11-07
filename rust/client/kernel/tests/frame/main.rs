@@ -20,9 +20,9 @@ mod spec;
 mod watch;
 
 use pxl_engine::ray::holes_words;
-use pxl_engine::screen::JITTERS;
 use pxl_engine::SHARD_ZOOM;
 use pxl_render::api_spec::device::FRAME_LATENCY;
+use pxl_render::frame::shader::word::screen::JITTERS;
 use pxl_render::gpu::surface::Surface;
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::space::coord::adapter::epsg4326;

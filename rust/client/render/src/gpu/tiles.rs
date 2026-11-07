@@ -1,7 +1,7 @@
 // pxl-render/gpu/tiles.rs
 
 //! Tiles a frame not drawn whole draws again by, the screen's and the light's
-//! map's alike (pxl-engine `screen`): `side` pixels a side, each a word, the
+//! map's alike (word.rs `screen`): `side` pixels a side, each a word, the
 //! number of the frame it last changed in (`changed_at`), the GPU's, as a
 //! light tile's word names the cast that read it. The CPU hands each frame
 //! at most one mark (`mark_of`), the clouds' sheets on the screen, and a pass
@@ -18,17 +18,16 @@
 //! (`box_args`). A target drawn through its gate numbers its stencil here
 //! (`gate`).
 
-use pxl_engine::screen::{self, TILES_WORDS};
-
 use crate::frame::shader::record::{binds, COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::record::{COMPUTE_BOX_ARGS, COMPUTE_CLAIMED_BOX, COMPUTE_SCREEN_MARK};
+/// The screen's tiles' pixels a side (word.rs `screen::TILE`).
+pub use crate::frame::shader::word::screen::TILE as SIDE;
+use crate::frame::shader::word::screen::{self, TILES_WORDS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-/// The screen's tiles' pixels a side (pxl-engine `screen::TILE`).
-pub use pxl_engine::screen::TILE as SIDE;
 
 /// The pixels a mark is grown by each way on the screen: the resolve's
 /// pixels beside it and a face's growth (pxl-engine param.rs
@@ -405,7 +404,7 @@ impl Tiles {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words (pxl-engine `screen::TILES_WORDS`) for the
+    /// The uniform's words (word.rs `screen::TILES_WORDS`) for the
     /// target, a quad grown by `grow` of its pixels, in this frame, a tile
     /// claimed for `claimed_for` frames once changed,
     /// and a tile's side, as build.rs's `Tiles` reads them (tile_word.wgsl).

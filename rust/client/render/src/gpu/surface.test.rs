@@ -4,7 +4,6 @@ use super::*;
 use crate::frame::shader::floor;
 use crate::gpu::api::word_bytes;
 use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
-use pxl_engine::screen::TILE;
 use pxl_engine::{beam, ray};
 use pxl_spec::space::camera::grid::HALF_TAN;
 
@@ -46,8 +45,7 @@ fn drawn_within_the_floor() {
                 let tiles = [w, h].map(|v| v.div_ceil(TILE) + 1);
                 let area = f64::from(w) * f64::from(h) > 0.99 * f64::from(DRAWN_AREA);
                 assert!(
-                    side || area
-                        || tiles[0] * tiles[1] > floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION,
+                    side || area || tiles[0] * tiles[1] > WORKGROUPS_MOST,
                     "{px:?} at {share}: {w}x{h} short of the most"
                 );
             }

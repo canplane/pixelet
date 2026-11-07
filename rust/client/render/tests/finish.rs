@@ -5,9 +5,9 @@
 mod gpu;
 
 use gpu::{bytes, read_buffer, Gpu};
-/// The screen's tiles' side, in the world's pixels.
-use pxl_engine::screen::TILE as SIDE;
 use pxl_render::frame::shader::record::{src, SHADER_SCREEN_FINISH, SHADER_SCREEN_SHOW};
+/// The screen's tiles' side, in the world's pixels.
+use pxl_render::frame::shader::word::screen::TILE as SIDE;
 use pxl_render::frame::shader::word::{frame, FRAME_FLOATS};
 
 /// The world's pixels and the canvas's: the canvas twice the world, as a share of the

@@ -13,5 +13,5 @@ fn light_mark_draws_open_cs() {
   let stands = min(u32(head[LIGHT_STANDS_AT].x), LIGHT_STANDS);
   let placed = instance_cnt();
   let groups = select(stands, LIGHT_STANDS + workgroups(placed, instance_cap(), ROW_LANES), placed != 0u);
-  draws = array<u32, 3>(min(groups, MAX_COMPUTE_WORKGROUPS_PER_DIMENSION), 1u, 1u);
+  draws = array<u32, 3>(min(groups, WORKGROUPS_MOST), 1u, 1u);
 }

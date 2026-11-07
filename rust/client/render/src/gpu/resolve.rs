@@ -13,7 +13,7 @@
 //! sequence; where it changed this frame, what the frames before left is
 //! moved to where this frame's eye sees it and held within what this
 //! frame's pixels about it hold. A tile is claimed, drawn again, until it
-//! has run through the sequence (pxl-engine `screen::CLAIMED_FOR`,
+//! has run through the sequence (word.rs `screen::CLAIMED_FOR`,
 //! screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
@@ -27,6 +27,7 @@ use pxl_spec::space::coord::world;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
+use crate::frame::shader::word::screen::{CLAIMED_FOR, JITTERS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
     RenderContext,
@@ -35,7 +36,6 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Surface, WORLD_COLOR};
 use crate::gpu::tiles::{Tiles, SIDE};
-use pxl_engine::screen::{CLAIMED_FOR, JITTERS};
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge

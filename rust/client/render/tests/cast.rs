@@ -35,11 +35,11 @@ use pxl_engine::cast::{self, Node, Ray};
 use pxl_engine::overwrite::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, screen, Zoom, LEAF_CELL};
+use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL};
 use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
-use pxl_render::frame::shader::word::SQUARE_SIDE;
+use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
 
 use real_world::{q8, Asking, Built, WorldBufs, FINEST};
 

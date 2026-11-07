@@ -167,7 +167,7 @@ const SCENE_OWN: u8 = 6;
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const ENGINE: &str = "rust/spec/engine/src/";
-const ENGINE_ORDER: [(&str, u8); 26] = [
+const ENGINE_ORDER: [(&str, u8); 25] = [
     ("param", 0),
     ("seed", 0),
     ("content", 0),
@@ -192,7 +192,6 @@ const ENGINE_ORDER: [(&str, u8); 26] = [
     ("record", 3),
     ("ray", 3),
     ("light", 3),
-    ("screen", 3),
     ("face", 3),
 ];
 
