@@ -1350,7 +1350,7 @@ fn list_holes(holes: &mut [u32], size: [u32; 2], marked: &[u32]) {
     let at = ray::holes_at(size) as usize;
     holes[at] = marked.len() as u32;
     for (k, &p) in marked.iter().enumerate() {
-        holes[at + 1 + k] = p % size[0] | (p / size[0]) << 16;
+        holes[at + 1 + k] = (p % size[0]) | ((p / size[0]) << 16);
     }
 }
 

@@ -427,7 +427,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     }
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
-    // A pan moves nothing once the pointer is up, so the companion would not see
+    // A pan moves nothing once the pointer is up, so the characters would not see
     // the release until something else asked for a turn.
     request_world_tick();
     tap_if_still(s, mode)

@@ -23,7 +23,7 @@ pub fn decor_models_step() {
 
 /// `decor`'s `variant`'s model as registered; none while it loads.
 pub fn decor_model(decor: &Decor, variant: usize) -> Option<u32> {
-    registered_model(decor.variants.get(variant)?.model, None).map(|h| h.model)
+    registered_model(decor.variants.get(variant)?.model, None)
 }
 
 /// A variant's skin as the renderer takes it (`load_image`); none while it

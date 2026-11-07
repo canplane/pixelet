@@ -28,14 +28,14 @@ read. It is a decision record, not a rule each change is held to.
   and the shadow map (sun.rs `Map`) are two; an effect more implements those
   and takes the rest (7895fb2ba).
 - **Each effect its own nature.** What the eye records is a pixel's ray; what
-  the sun records is a field a surface, decor, an impostor and an actor all
+  the sun records is a field a surface, decor, an impostor and a character all
   read (pxl-render shadow.wgsl `sun_lit`), so it stays a map, not a ray at
   each of the eye's samples, which only the world's surface would read.
 - **Cast only what a receiver reads.** A receiver marks the tile of the box
   it stands on (`sun::stands_at`): the world where each drawn pixel's ray met
   it (`sun_mark_cs`); decor where each instance placed stands, as decor tells
-  (decor.rs `Instances`), and the actors where each is drawn (pxl-kernel
-  actor.rs `Actor::draw`, pxl-render frame/draw.rs `Lists::stands`), each
+  (decor.rs `Instances`), and the characters where each is drawn (pxl-kernel
+  character.rs `Character::draw`, pxl-render frame/draw.rs `Lists::stands`), each
   the eye sees (`sun_mark_drawn_cs`, `eye::sees`,
   `Sun::ring`). One reach, a tile a thread, reads a tile in the disk a shadow
   fades out by (`Sun::rim`, `Sun::read`) within a tile and its taps of the
@@ -45,7 +45,7 @@ read. It is a decision record, not a rule each change is held to.
   (`Map::needs`; f2e2c6ead, 22818bb97).
 - **What a tile holds, and which tiles are read.** A tile's depth follows the
   eye's place, the light and the world; which tiles are read follows the
-  look, the actors and decor placed again; the host tracks each apart
+  look, the characters and decor placed again; the host tracks each apart
   (`sun_content`, `sun_receivers`). Where only the latter moved, a tile cast
   since the former last did stands, and only tiles read anew are cast: a
   tile's one word names the cast that first read it in the epoch
@@ -81,7 +81,7 @@ read. It is a decision record, not a rule each change is held to.
 - **Reuse keyed by the zoom a slot recorded.** The answer changes where any
   point on the ray's path changes zoom, not only its stop.
 - **A sun ray at each of the eye's samples.** Exact for the world's surface,
-  blind to decor and the actors.
+  blind to decor and the characters.
 
 ## Open
 

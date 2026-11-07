@@ -8,8 +8,7 @@ use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
 use crate::domain::scene::character;
-use crate::domain::scene::character::companion;
-use crate::domain::scene::character::preview;
+use crate::domain::scene::character::Group;
 use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::machine::MACHINE;
@@ -53,18 +52,17 @@ const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MOD
 /// markers'.
 const SINGLE_UPLOADS: usize = 5;
 
-/// An actor's palette, one for each frame that holds one: the companion's
-/// figures and the previews.
-const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
+/// A character's palette, one for each of the companion's: the person and the pet.
+const CHARACTER_UPLOADS: usize = Group::ALL.len();
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
-/// patches within their reach, the actors, the singles), so overflowing the
+/// patches within their reach, the characters, the singles), so overflowing the
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
 pub(crate) const MAX_LIVE_UPLOADS: usize =
-    MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
+    MODELS_MAX + cloud::PATCHES_MAX + CHARACTER_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 3] = [
     fixed::TERRAIN_BYTES,

@@ -20,11 +20,12 @@ pub fn set(boot: BootInfo) {
 /// A test's heap reading, as a runtime's form would hand it.
 #[cfg(test)]
 pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
+    use xpute_core::entry::Form;
     set(BootInfo {
         given: 0,
         call: |_| Errno::ENOSYS as i32,
         heap_stat,
-        form: xpute_core::entry::Form {
+        form: Form {
             data_end: 0,
             now: || 0.0,
             stop_hook: None,

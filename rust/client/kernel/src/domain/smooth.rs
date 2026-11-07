@@ -1,7 +1,7 @@
 // pxl-kernel/domain/smooth.rs
 
 //! One exponential smoothing for everything that eases, the camera's
-//! channels and the companion alike. Within `eps`
+//! channels and the characters alike. Within `eps`
 //! it takes the target whole, so it ends rather than asking for frames
 //! forever on a remainder no screen shows.
 

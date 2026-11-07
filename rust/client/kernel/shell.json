@@ -369,10 +369,10 @@
       "val": 5892,
       "$doc": [
         "What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the",
-        "sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface",
-        "replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL",
-        "where the character's fields are not all given for a character, any is given for the world, or no character is",
-        "named by them."
+        "sensors watched while it shows; or the companion's character of a group alone, as the picker shows it, a second one",
+        "on the same surface replacing the first. EBADF where the surface is not open, EBUSY where it already draws the",
+        "other content, EINVAL where the character's fields are not all given for a character or any is given for the",
+        "world."
       ],
       "pkt": [
         {
@@ -386,11 +386,6 @@
         {
           "name": "group",
           "type": "CharacterGroup",
-          "optional": true
-        },
-        {
-          "name": "number",
-          "type": "u8",
           "optional": true
         },
         {
@@ -706,10 +701,10 @@
     },
     {
       "name": "CharacterGroup",
-      "rs": "pxl_spec::asset::actor::Group",
+      "rs": "pxl_spec::asset::character::Group",
       "repr": "u8",
       "$doc": [
-        "actor.json's group, by its number."
+        "character.json's group, by its number."
       ]
     }
   ],

@@ -47,10 +47,10 @@ export const INPUT_WHEEL = 0x1103;
 /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
 export const INPUT_MOVE = 0x1106;
 /** What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the
- * sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
- * replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
- * where the character's fields are not all given for a character, any is given for the world, or no character is
- * named by them. */
+ * sensors watched while it shows; or the companion's character of a group alone, as the picker shows it, a second one
+ * on the same surface replacing the first. EBADF where the surface is not open, EBUSY where it already draws the
+ * other content, EINVAL where the character's fields are not all given for a character or any is given for the
+ * world. */
 export const SCENE_DRAW = 0x1704;
 /** A setting set from the sheet or the character picker; refused until the kernel has read the
  * kept settings, which would be read over it. */

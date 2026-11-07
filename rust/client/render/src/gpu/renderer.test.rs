@@ -176,7 +176,7 @@ fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
 /// and the diffs over them answered, a turn after another: whether the lists
 /// moved, whether they read the same, whether a draw whose moves draw the
 /// frame whole moved, and every pass's marks. The turns draw first, draw
-/// again as they were, move an actor and its palette, rewrite a cloud's upload, carry the clouds
+/// again as they were, move a character and its palette, rewrite a cloud's upload, carry the clouds
 /// on the wind, move the ghost and empty the zone, let a cloud go and draw a
 /// ghost's decor, turn a cloud blended, add a marker and set the markers in
 /// another order, and fill the zone again.
@@ -184,7 +184,7 @@ fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
 fn kept_draws_answer_as_the_rebuilt_lists_did() {
     let _l = test_lists();
     // In the order the kernel sets them (pxl-kernel domain/scene/stage.rs
-    // `visible_step`): the ghost first, then the actors, the location, the
+    // `visible_step`): the ghost first, then the characters, the location, the
     // gizmos, the clouds and the markers.
     let base = vec![
         spec(4, PIPELINE_GHOST_BOX, [40, 1, 0], [6.0, 6.0, 6.0]),
@@ -207,9 +207,9 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         touched: touched.to_vec(),
         drift,
     };
-    let actor_moved = |s: &mut Vec<Spec>| s[1].at = [1.5, 2.0, 3.0];
+    let character_moved = |s: &mut Vec<Spec>| s[1].at = [1.5, 2.0, 3.0];
     let ghost_moved = |s: &mut Vec<Spec>| {
-        actor_moved(s);
+        character_moved(s);
         s[0].at = [6.0, 7.0, 6.0];
         s[2].words[1] = 0;
     };
@@ -244,9 +244,9 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
     let turns = [
         turn(base.clone(), &[10, 11, 20, 30, 40, 50, 51, 60], 0),
         turn(base.clone(), &[], 0),
-        turn(with(&actor_moved), &[11], 0),
-        turn(with(&actor_moved), &[50], 0),
-        turn(with(&actor_moved), &[], 3),
+        turn(with(&character_moved), &[11], 0),
+        turn(with(&character_moved), &[50], 0),
+        turn(with(&character_moved), &[], 3),
         turn(with(&ghost_moved), &[], 3),
         turn(with(&cloud_gone), &[41, 51], 3),
         turn(with(&blended), &[], 3),

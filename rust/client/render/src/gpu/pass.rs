@@ -1,7 +1,7 @@
 // pxl-render/gpu/pass.rs
 
 //! Passes other than the world: markers, decor and impostors, the location indicator and
-//! actors, the marks of the draws among them that changed, the world gizmo and the
+//! characters, the marks of the draws among them that changed, the world gizmo and the
 //! preview.
 
 pub mod debug;

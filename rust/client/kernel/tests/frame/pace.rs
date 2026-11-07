@@ -1,7 +1,7 @@
 //! The core's clock, the display's, from its boot: each frame's turn reads the time it was
 //! granted at, a refresh after the last, and the clock stands through the turn and between
 //! turns, while the harness waits on the device and rings the shell's calls. What the kernel
-//! steps by its own clock (an actor, the location indicator, a request's age) then steps at
+//! steps by its own clock (a character, the location indicator, a request's age) then steps at
 //! the display's pace whatever the machine takes, loaded or not, and a wake it asks at its own
 //! step reads the same; what it budgets within a turn finds the turn's deadline unspent and runs
 //! to its end.

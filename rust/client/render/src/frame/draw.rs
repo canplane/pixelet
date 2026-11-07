@@ -241,6 +241,35 @@ pub struct DrawId(Cell<Option<(u32, u32)>>);
 /// A draw as the list holds it: its record and its uniform.
 pub type Draw = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
 
+/// A draw's uniform: `at`'s Q3, the five words its pipeline reads past it,
+/// and `at`'s remainder (`Position`).
+fn uniform(at: Position, words: [f32; 5]) -> [f32; DRAW_FLOATS] {
+    let [q0, q1, q2] = at.q_words();
+    let [r0, r1, r2] = at.r;
+    let [w3, w4, w5, w6, w7] = words;
+    [q0, q1, q2, w3, w4, w5, w6, w7, r0, r1, r2, 0.0]
+}
+
+/// The draw `DrawList::draw_scaled` lists, held by no list: its uniform at
+/// slot 0, as a reader that binds it alone reads it (gpu/pass/preview.rs).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+)]
+pub fn scaled_draw(
+    pipeline: u32,
+    handle: u32,
+    a: u32,
+    b: u32,
+    at: Position,
+    fourth: f32,
+    opacity: f32,
+    scale: f32,
+) -> Draw {
+    let words = [fourth, opacity, scale, 0.0, 0.0];
+    ([handle, a, b, 0, pipeline], uniform(at, words))
+}
+
 /// A draw the turn changed: its slot, and what it was as the turn before
 /// left it, none where this turn drew it first. What it is now is the list's
 /// (`Draws::now`), none where this turn let it go.
@@ -678,14 +707,10 @@ impl DrawList {
         stand: Option<Stand>,
     ) {
         self.stand(pipeline, stand);
-        let [q0, q1, q2] = at.q_words();
-        let [r0, r1, r2] = at.r;
-        let [w3, w4, w5, w6, w7] = words;
-        let u = [q0, q1, q2, w3, w4, w5, w6, w7, r0, r1, r2, 0.0];
-        self.set(id, pipeline, record, u);
+        self.set(id, pipeline, record, uniform(at, words));
     }
 
-    /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
+    /// A character's draw: a draw_as whose sixth uniform float is the model's scale.
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -703,8 +728,9 @@ impl DrawList {
         scale: f32,
         stand: Option<Stand>,
     ) {
-        let words = [fourth, opacity, scale, 0.0, 0.0];
-        self.put(id, pipeline, [handle, a, b], at, words, stand);
+        let (d, u) = scaled_draw(pipeline, handle, a, b, at, fourth, opacity, scale);
+        self.stand(pipeline, stand);
+        self.set(id, pipeline, [d[0], d[1], d[2]], u);
     }
 
     #[expect(

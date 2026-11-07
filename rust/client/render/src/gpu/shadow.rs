@@ -9,7 +9,7 @@
 //! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order in the tiles a receiver reads, a quad each
 //! (`PIPELINE_LIGHT_MAP`, `light::LISTED_READ`), the rest cleared to the far plane, and
-//! decor and the actors, which move every frame, drawn over it depth only, from the light's
+//! decor and the characters, which move every frame, drawn over it depth only, from the light's
 //! frame. The lit passes read
 //! the map as a plain light box. At 2048 the world is 16 MiB and the map,
 //! with its stencil, 20; both are made while the shadows are on alone

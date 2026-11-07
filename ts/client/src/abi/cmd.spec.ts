@@ -496,10 +496,9 @@ export function encode_scene_draw(
   surface: u32,
   content: SceneContent,
   group: u32 | null,
-  number: u8 | null,
   bg: u32 | null,
 ): PacketWriter {
-  return to.writer(5).u32(surface).u32(content).u32(group).u8(number).u32(bg);
+  return to.writer(4).u32(surface).u32(content).u32(group).u32(bg);
 }
 
 /** Command.SETTING_SET's packet, written in place into `to`.
@@ -707,11 +706,10 @@ export function shell_exports(runtime: Sender) {
       surface: u32,
       content: SceneContent,
       group: u32 | null,
-      number: u8 | null,
       bg: u32 | null,
     ): void =>
       runtime.send(Command.SCENE_DRAW, (r) =>
-        encode_scene_draw(r, surface, content, group, number, bg),
+        encode_scene_draw(r, surface, content, group, bg),
       ),
     setting_set: (key: u32, value: u32): void =>
       runtime.send(Command.SETTING_SET, (r) =>

@@ -124,7 +124,7 @@ checkpoint's TypeScript second. An item is struck when its fix lands.
   adds one, which is what an assert is for.
 - **H11** ~~`badges.rs:38,291` `SETS` (32) stops drawing sets past it;
   `render/gpu/decor.rs:29,93` `GROUPS` (64) gives groups past it no model;
-  `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's actor undrawn;
+  `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's character undrawn;
   `renderer.rs:149,187-193,271` `Blocks` asserts below 16384 blocks over seven
   fixed-section lanes never given back, and `Scratch::take` (`renderer.rs:132`)
   expects room in the mesh pool.~~ Three of the four are the code's: a billboard
@@ -225,7 +225,7 @@ checkpoint's TypeScript second. An item is struck when its fix lands.
 - **B18** ~~`map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec` nothing
   reads.~~ Gone; the writes beside them already put the ambient intensity in the
   lane.
-- ~~**B19**~~ `character_preview.rs:125` stands the case's actor at
+- ~~**B19**~~ `character_preview.rs:125` stands the case's character at
   `[0, 0, -CASE_DEPTH_U]`; `character_preview.tsx:70-71,95` at the map origin's
   X and Y, its Z less `CASE_DEPTH_U`.
 - ~~**B20**~~ `companion.rs:207` reads `TickState.elapsed_s`, a sum of turn

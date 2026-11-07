@@ -155,7 +155,7 @@ impl Run {
     /// Idle turns, nothing sent, the clock at the display's pace: how many until the kernel
     /// asks for the next frame at once no more, a readback's landing among what it waits on; it
     /// asks none at once over a jitter's sequence of turns past the bound after.
-    /// What moves on its own (the companion standing in view) steps on and wakes it at its own
+    /// What moves on its own (the characters standing in view) steps on and wakes it at its own
     /// steps, later than that.
     fn rest(&mut self) -> u32 {
         let mut asked = 0;

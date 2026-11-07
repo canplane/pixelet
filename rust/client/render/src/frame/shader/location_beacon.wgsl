@@ -1,4 +1,4 @@
-// The beacon lit as an actor is (shade.wgsl), a metal that glows its color,
+// The beacon lit as a character is (shade.wgsl), a metal that glows its color,
 // placed as location_beacon_place.wgsl lays it.
 
 struct VertexOut {

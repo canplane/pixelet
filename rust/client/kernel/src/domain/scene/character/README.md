@@ -1,30 +1,31 @@
-# Characters (the Actor tier)
+# Characters
 
-An **actor** is a model that plays its own clips: each tick advances its clips
-and writes its joint palette into its block (`../actor.rs` `Actor`). That is
-what sets this tier apart from decor, whose population is instances of static
-models, and from the indicators, which have no clips. Actors are few and each is
-distinct. An actor is drawn by decor's tiers, by how much of a camera cell it
-spans: posed down to the model's edge, its pose held down to the impostor's,
-and none below (`../actor.rs` `Actor::tick`).
+A **character** is a person or a pet: a model that plays its own clips, each
+tick advancing them and writing its joint palette into its block
+(`../character.rs` `Character`). That sets it apart from decor, whose
+population is instances of static models, and from the indicators, which have
+no clips. The character kind's catalog lists every one a player can be, by its
+group, the person or the pet, and its row there (`spec/spec/asset/character.json`).
 
-An actor's instance is held by its holder, which stands it where it is (its
-`Transform`) and declares how many it holds. This directory holds every
-holder:
+The two the player chose, a person and a pet, are the **companion**, which
+keeps them by their group's number (`companion.rs` `Companion`). Each is the
+row its setting names, taken once its model and its skin have landed, and let
+go only for another row (`companion_step`). The companion stays while the eye
+is the pivot; it is placed nowhere then.
 
-- the companion, the person and the pet at the pivot, each a figure the walk
-  moves (`companion.rs` `Figure`, `FIGURES`), placed each tick in the
-  interaction phase (`../../../turn.rs` `companion_tick`);
-- the character picker's previews, a character idling in its preview's own
-  canvas (`preview.rs`, `PREVIEWS_MAX`).
+Where a character stands is the kernel's, never the shell's: its walk stands it
+each turn in the interaction phase (`companion.rs` `Walk`, `../../../turn.rs`
+`companion_tick`), the pet at its own place beside the person's, neither
+anchored to the other.
 
-Where an actor stands is the kernel's, never the shell's. Its clips advance in
-the scene's own tick (`../../scene.rs` `animate`).
+Each view draws a character by its own eye. The world draws it where its walk
+stands it, by decor's tiers, by how much of a camera cell it spans: posed down
+to the model's edge, its pose held down to the impostor's, and none below
+(`../character.rs` `Character::tick`, `Character::draw`), and nothing while the
+eye is the pivot. A preview of the character picker draws the companion's
+person or pet as it is, whole, before an eye of its own, whatever the world's
+eye sees of it (`preview.rs`, `companion_preview`, `Character::preview_draw`).
 
-The person's chat line is not an actor. It is a marker the person holds, over
-its head, which the person says shows (`companion.rs` `line_hangs`), laid out
-with the others (`../marker/arrangement.rs`).
-
-The folder is `character/`, not `actors/`, because "Character" is already what a
-user reads: the settings' Character section and the drawer's Character tab
-choose which character the person and the pet are.
+The person's chat line is not a character. It is a marker the person holds,
+over its head, which the person says shows (`companion.rs` `line_hangs`), laid
+out with the others (`../marker/arrangement.rs`).

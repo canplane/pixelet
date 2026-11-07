@@ -1,26 +1,21 @@
 // @pxl/client/port/scene.ts
 
-/** The scene's commands: what a surface the shell lent draws, the world or a
- * character alone, and a line said. */
+/** The scene's commands: what a surface the shell lent draws, the world or
+ * the companion's character of a group alone, and a line said. */
 
-import type { u32, u8 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { encode_scene_chat, SceneContent } from "@/abi/cmd.spec.ts";
 import { kernel, ui } from "@/runtime/kernel.ts";
 
 /** The world drawn into `surface`. */
 export function draw_world(surface: u32): void {
-  kernel.scene_draw(surface, SceneContent.World, null, null, null);
+  kernel.scene_draw(surface, SceneContent.World, null, null);
 }
 
-/** A character drawn alone into `surface`, over `bg`, 0xRRGGBB; a second one
- * replaces it. */
-export function draw_character(
-  surface: u32,
-  group: u32,
-  number: u8,
-  bg: u32,
-): void {
-  kernel.scene_draw(surface, SceneContent.Character, group, number, bg);
+/** The companion's character of `group` drawn alone into `surface` as it is,
+ * over `bg`, 0xRRGGBB; a second one replaces it. */
+export function draw_character(surface: u32, group: u32, bg: u32): void {
+  kernel.scene_draw(surface, SceneContent.Character, group, bg);
 }
 
 export function chat(text: string): void {

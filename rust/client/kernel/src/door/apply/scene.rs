@@ -19,10 +19,11 @@ pub(super) fn chat(s: &mut State, c: abi::SceneChat<'_>) -> Outcome {
     ask_turn(s)
 }
 
-/// What a surface draws until it closes: the world, or a character alone,
-/// which a second replaces. Refused where the surface is not open (EBADF),
-/// already draws the other content (EBUSY), or the character's fields do not
-/// name one or are given for the world (EINVAL).
+/// What a surface draws until it closes: the world, or the companion's
+/// character of a group alone, which a second replaces. Refused where the surface is
+/// not open (EBADF), already draws the other content (EBUSY), or the
+/// character's fields are not all given for a character or are given for
+/// the world (EINVAL).
 pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
     let role = or_refuse(
         surface::surface(c.surface).map(|open| open.role),
@@ -30,10 +31,7 @@ pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
     )?;
     match c.content {
         abi::SceneContent::World => {
-            refuse_unless(
-                c.group.is_none() && c.number.is_none() && c.bg.is_none(),
-                Errno::EINVAL,
-            )?;
+            refuse_unless(c.group.is_none() && c.bg.is_none(), Errno::EINVAL)?;
             refuse_unless(
                 role == surface_role::NONE || role == surface_role::WORLD,
                 Errno::EBUSY,
@@ -44,17 +42,14 @@ pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
             Ok(Some(0))
         }
         abi::SceneContent::Character => {
-            let (Some(group), Some(number), Some(bg)) = (c.group, c.number, c.bg) else {
+            let (Some(group), Some(bg)) = (c.group, c.bg) else {
                 return Err(MarshalError::new(Errno::EINVAL));
             };
             refuse_unless(
                 role == surface_role::NONE || role == surface_role::PREVIEW,
                 Errno::EBUSY,
             )?;
-            refuse_unless(
-                preview::preview_open(c.surface, group, number, bg),
-                Errno::EINVAL,
-            )?;
+            preview::preview_open(c.surface, group, bg);
             if let Some(drawn) = surface::surface(c.surface) {
                 drawn.role = surface_role::PREVIEW;
                 if drawn.px_w != 0 {

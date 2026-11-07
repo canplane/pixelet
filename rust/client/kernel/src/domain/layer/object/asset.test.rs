@@ -31,7 +31,7 @@ fn past_the_catalog() {
         object::air as AssetId,
         shape(Kind::cube, past),
         shape(Kind::decor, past),
-        shape(Kind::actor, 0),
+        shape(Kind::character, 0),
         shape(Kind::sky, 0),
         u32::MAX,
     ] {

@@ -92,7 +92,7 @@ it, so the screen drew wrong (archived minutes
   puts the float at byte 12, the S23's Vulkan read it at 16, every field after
   it one slot along. The terrain did not draw.
 - A `var<storage> array<mat4x4f>`: read with another stride, in the native app
-  (wgpu on Vulkan) as well. Every skinned actor lay on the ground.
+  (wgpu on Vulkan) as well. Every skinned character lay on the ground.
 
 So what a `var<uniform>` or `var<storage>` holds has no room inside it: a
 four-byte scalar, a `vec4` of them, an array of those whose stride is its

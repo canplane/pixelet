@@ -78,6 +78,7 @@ pub struct Model {
     clips: Vec<Clip>,
     /// Joints in an order where a parent comes before its children.
     order: Vec<u32>,
+    /// What it is drawn at to stand the height it was registered at.
     scale: f32,
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
@@ -406,6 +407,16 @@ impl Model {
 
     pub fn handle(&self) -> u32 {
         self.handle
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// One a glTF animation, in file order, so a clip's number is its
+    /// animation's index.
+    pub fn clip_cnt(&self) -> u32 {
+        self.clips.len() as u32
     }
 
     /// A clip's length, where it has one.

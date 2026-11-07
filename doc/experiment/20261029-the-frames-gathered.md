@@ -93,7 +93,7 @@ None of these was explained further.
 
 - Idle, in an earlier, smaller window (its size not recorded), the 9-tap
   resolve before the trim: GPU p50 11.9 ms on :5173 (every frame `standing`,
-  the actor's clip playing), 16.2 on :5184 (every frame `pixels`). The
+  the character's clip playing), 16.2 on :5184 (every frame `pixels`). The
   resolve's p95 was 4.8–5.0 ms.
 - The resolve's neighborhood cut to the pixel and the four beside it: p95
   2.7 ms at 0.84 of 3840×1986 (5.4 M px), 4.8 at 1.00 (7.6 M px), about 0.6 ns
@@ -104,7 +104,7 @@ None of these was explained further.
 - Memory: two rgba16float histories at the world's size, 8 bytes a pixel
   each: 122 MB at 3840×1986.
 
-The page draws every frame whether or not the resolve is there: the actor's
+The page draws every frame whether or not the resolve is there: the character's
 idle clip and the cars move. So the jitter never holds idle, and every idle
 frame casts its pixels again and resolves.
 
@@ -120,7 +120,7 @@ it may move by up to half a pixel while the sequence runs.
 
 ## What was not done
 
-- **Holding the jitter while the view stands.** With the actor or a cloud's
+- **Holding the jitter while the view stands.** With the character or a cloud's
   shadow moving, frames are drawn with the jitter held, and the history
   converges to that one sample in about ten frames (0.2 s). The antialiasing
   goes. Telling apart per pixel what moved needs a second target (MRT) or a

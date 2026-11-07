@@ -48,7 +48,7 @@ pass on the kernel's behalf.
 
 - **A frame's inputs are handed over** (`gpu::renderer::FrameInput`): the draw
   list's lanes, the environment's lane, each decor group's model block and skin,
-  the actors' skins, the picker's cases, the pack sheet as a function asked
+  the characters' skins, the picker's cases, the pack sheet as a function asked
   until it is drawn, the billboard atlas, and whether the device is a phone's.
   What comes back (`FrameOutput`) is whether a surface waits another turn to
   settle and what the frame cost. The kernel's side is
@@ -93,7 +93,7 @@ their barrels.
   and the palette into voxels), `asset` (glTF, the billboards' atlas), `look`
   (LOD, the light, color, the markers' style), `frame` (the draw list, the
   stage, the shaders) and `gpu` (the device, and a pass for each of badges,
-  decor, the puck and actors).
+  decor, the puck and characters).
 
 A file inside a directory that already names its concept lost the prefix it
 carried (`chunk_node` is `world/chunk/node`, `gltf_cache` is `io/load`,

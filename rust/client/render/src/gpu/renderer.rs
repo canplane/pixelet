@@ -18,7 +18,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
-use crate::frame::draw::{drifts, q3_of, uniform_of, Draws, Position};
+use crate::frame::draw::{drifts, q3_of, uniform_of, Draw, Draws, Position};
 use crate::frame::draw::{
     stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_DEBUG, PIPELINE_DECOR,
     PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON,
@@ -111,9 +111,10 @@ pub struct FrameInput<'a> {
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
-    /// Each preview: its surface, its actor's palette, which names its
-    /// draw, the skin, and what it clears to (0xRRGGBB, sRGB).
-    pub previews: &'a [(u32, u32, Image, u32)],
+    /// Each preview: its surface, its character's draw as the preview's eye
+    /// draws it, held by no list (frame/draw.rs `scaled_draw`), the skin, and
+    /// what it clears to (0xRRGGBB, sRGB).
+    pub previews: &'a [(u32, Draw, Image, u32)],
     /// The texture pack's image; none while it loads.
     pub pack: fn() -> Option<Image>,
     pub moon: fn() -> Option<Image>,
@@ -994,7 +995,7 @@ impl Renderer {
     /// A frame in two stages, each standing while what it reads stands:
     /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
     /// everything the world and its light make off those rays, then over it
-    /// what moves on its own — the actors, whose clips play, the clouds,
+    /// what moves on its own — the characters, whose clips play, the clouds,
     /// which the wind carries, the location indicator, the ghosts, the markers, the gizmos
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
     /// it, so the frame draws it again off them.
@@ -1227,7 +1228,7 @@ impl Renderer {
         // decor turned off generates nothing and casts no ray again, yet the
         // frame stands without it.
         read.read(&[u32::from(self.screen.generated().is_some())]);
-        self.prepare_previews(g, &draws, input.previews);
+        self.prepare_previews(g, input.previews);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [TimestampWrites; GPU_SPAN_NAMES] =
@@ -1295,13 +1296,13 @@ impl Renderer {
                 touched: &touched,
                 drift: [drift_at(&self.frame), drift_at(&self.frame_was)],
             };
-            let actors = self.skinned_mesh.prepare_marks(g, &m, b, k);
+            let characters = self.skinned_mesh.prepare_marks(g, &m, b, k);
             let (decor, decor_casts) = self.decor.prepare_marks(g, &m, b, k);
             let impostors = self.impostor.prepare_marks(g, &m, b, k);
             let location = self.location.prepare_marks(g, &m, b, k);
             (
-                actors || decor || impostors || location,
-                actors || decor_casts,
+                characters || decor || impostors || location,
+                characters || decor_casts,
             )
         } else {
             (false, false)
@@ -1440,7 +1441,7 @@ impl Renderer {
         }
         self.screen.dispatch(&mut ctx);
         // The shadow map: the world's depth from the sun in the tiles a receiver reads, where
-        // the rays hold the world it was cast with, then decor's and the actors' drawn over
+        // the rays hold the world it was cast with, then decor's and the characters' drawn over
         // it; through its gate where `map_gated`, its stencil numbered as the
         // world's pass's.
         if let Some(reads) = self.screen.light_reads().filter(|_| map_drawn) {
@@ -1545,7 +1546,7 @@ impl Renderer {
         pass.set_bind_group(0, self.sky_group, &[]);
         pass.draw(3, 1, 0, 0);
         self.stars.draw(&mut pass);
-        // The actors, whose clips play, and the clouds the kernel lists, the
+        // The characters, whose clips play, and the clouds the kernel lists, the
         // cumulus, which the wind carries: drawn over the world against its
         // depth, the occlusion not laid over them.
         let frame_group = self.models.frame;
@@ -1599,10 +1600,9 @@ impl Renderer {
         self.debug_drew =
             self.debug
                 .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
-        self.draw_cases(
+        self.draw_previews(
             &mut ctx,
-            Self::previews(&draws, input.previews),
-            uniforms,
+            Self::previews(input.previews),
             uploads_moved || tables || exposed,
         );
         let written = stamps
@@ -1652,7 +1652,7 @@ impl Renderer {
             self.resolve.on_drawn(gated);
             // The jitter's sequence run through once anything moved, as
             // nothing else asks for those frames while it stands. What
-            // moves on its own (an actor, the clouds, the location indicator) wakes the
+            // moves on its own (a character, the clouds, the location indicator) wakes the
             // turn at its own steps, drawn with the jitter held (`Resolve::asks`), and asks
             // no frame between.
             if self.resolve.asks() && (quiet || !animated) {
@@ -1683,26 +1683,19 @@ impl Renderer {
         (kind, stat)
     }
 
-    /// The previews drawn this frame: a surface still a preview, its actor's model
-    /// and its draw, found by the palette that is the preview's alone, since
-    /// another actor may play the same model.
-    fn previews<'a, 'd>(
-        draws: &'a Draws<'d>,
-        previews: &'a [(u32, u32, Image, u32)],
-    ) -> impl Iterator<Item = (u32, u32, Image, u32, &'d [u32; DRAW_WORDS])> + 'a {
+    /// The previews drawn this frame: each on a surface still a preview.
+    fn previews(
+        previews: &[(u32, Draw, Image, u32)],
+    ) -> impl Iterator<Item = &(u32, Draw, Image, u32)> {
         previews
             .iter()
-            .filter_map(move |&(id, palette, image, bg)| {
-                surface(id).filter(|s| s.role == surface_role::PREVIEW)?;
-                let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
-                Some((id, own[2], image, bg, own))
-            })
+            .filter(|p| surface(p.0).is_some_and(|s| s.role == surface_role::PREVIEW))
     }
 
     /// Each preview's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_previews(&mut self, g: &Gpu, draws: &Draws, previews: &[(u32, u32, Image, u32)]) {
-        for (id, model, image, _, own) in Self::previews(draws, previews) {
+    fn prepare_previews(&mut self, g: &Gpu, previews: &[(u32, Draw, Image, u32)]) {
+        for &(id, (record, _), image, _) in Self::previews(previews) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
@@ -1716,30 +1709,28 @@ impl Renderer {
                 ));
             }
             let preview = self.previews[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-            preview.skinned_mesh.set_skins(&[(model, image)]);
-            preview.skinned_mesh.set_draws(g, self.draws_buf);
+            preview.skinned_mesh.set_skins(&[(record[2], image)]);
             preview
                 .skinned_mesh
-                .prepare(g, core::iter::once(own), uploads());
+                .prepare(g, core::iter::once(&record), uploads());
             preview.set_groups(g, s);
         }
     }
 
     /// Each preview whose picture's makings moved, `moved` what moved without
     /// words: the models' uploads, the air's tables or its exposure.
-    fn draw_cases<'d>(
+    fn draw_previews<'p>(
         &mut self,
         ctx: &mut RenderContext,
-        previews: impl Iterator<Item = (u32, u32, Image, u32, &'d [u32; DRAW_WORDS])>,
-        uniforms: &[f32],
+        previews: impl Iterator<Item = &'p (u32, Draw, Image, u32)>,
         moved: bool,
     ) {
-        for (id, model, image, bg, own) in previews {
-            let Some(s) = surface(id) else { continue };
-            let Some(preview) = self.previews[handle_slot(id) as usize].as_mut() else {
+        for (id, draw, image, bg) in previews {
+            let Some(s) = surface(*id) else { continue };
+            let Some(preview) = self.previews[handle_slot(*id) as usize].as_mut() else {
                 continue;
             };
-            preview.draw(ctx, s, self.frame, own, uniforms, model, image, bg, moved);
+            preview.draw(ctx, s, self.frame, draw, *image, *bg, moved);
         }
     }
 

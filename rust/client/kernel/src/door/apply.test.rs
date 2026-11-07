@@ -5,6 +5,7 @@ use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
 use crate::sys;
+use xpute_core::abi::gpu::GpuSurfaceClose;
 use xpute_kit::wire::xtp::PacketWriter;
 
 fn surface(n: f64) -> Result<u32, Errno> {
@@ -14,7 +15,7 @@ fn surface(n: f64) -> Result<u32, Errno> {
         w.f64(Some(n));
         w.finish().expect("the buffer holds one number")
     };
-    xpute_core::abi::gpu::GpuSurfaceClose::read(&buf[..len as usize])
+    GpuSurfaceClose::read(&buf[..len as usize])
         .map(|p| p.surface)
         .map_err(|e| e.errnum)
 }

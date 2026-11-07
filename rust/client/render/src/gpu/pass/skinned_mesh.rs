@@ -1,8 +1,8 @@
 // pxl-render/gpu/pass/skinned_mesh.rs
 
-//! Actors: each model's mesh upload skinned by each actor's joint palette. A
-//! case of the variant picker draws one actor in a pass of its own. An actor's
-//! vertices read its draw off the list's uniforms at its slot. An actor whose
+//! Characters: each model's mesh upload skinned by each character's joint palette. A
+//! case of the variant picker draws one character in a pass of its own. A character's
+//! vertices read its draw off the list's uniforms at its slot. A character whose
 //! draw changed marks the tiles it covers where it was and where it is
 //! (gpu/pass/mark.rs), its palette the upload it reads.
 
@@ -150,7 +150,7 @@ impl SkinnedPass {
 
     /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
     /// 0 the stage reads: the list's uniforms bound once (`set_draws`), and
-    /// each actor drawn as the instance its slot names, which its vertices
+    /// each character drawn as the instance its slot names, which its vertices
     /// read their draw at (skinned_draw.slot.wgsl), with its own mesh, skin and
     /// palette.
     pub fn draw<'a>(

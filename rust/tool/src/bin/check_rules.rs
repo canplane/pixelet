@@ -130,7 +130,6 @@ const SCENE_ORDER: [(&str, u8); 14] = [
     ("marker", 5),
     ("character", 4),
     ("indicator", 4),
-    ("actor", 3),
     ("environment", 3),
     ("gizmo", 3),
     ("decor", 2),
@@ -140,6 +139,7 @@ const SCENE_ORDER: [(&str, u8); 14] = [
     ("column", 0),
     ("frame", 0),
     ("param", 0),
+    ("transform", 0),
 ];
 const SCENE_OWN: u8 = 6;
 

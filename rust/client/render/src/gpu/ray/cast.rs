@@ -279,7 +279,7 @@ pub(super) struct CastBuffers {
     /// args while the light's cast is not made, which no thread reads, the head saying no
     /// receiver stands (`Raster::record_group`).
     light_idle: [u32; 3],
-    /// Whether the cast draws a receiver past the world's, an actor or decor
+    /// Whether the cast draws a receiver past the world's, a character or decor
     /// (`light_mark_draws_cs`).
     light_draws: bool,
     refold: bool,

@@ -6,7 +6,7 @@ into a native app; it leads, and JavaScript does the I/O and the UI around it.
 No foreign function call is made for each piece of the boundary: the two share
 one memory, and a pair of rings in it carries everything else, in io_uring's
 shape. xpute is that arrangement, both ends of it, and `kit`, the generic code
-underneath. It is not an actor bus.
+underneath. It is not a message bus.
 
 The **core** is a **unikernel** on a virtual machine: the program and xpute's core library,
 its library OS, built as one image, as MirageOS and Unikraft build theirs, and

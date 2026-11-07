@@ -162,7 +162,7 @@ pub const SHADER_LIGHT_GATE: u32 = 63;
 /// Each square of the screen's least and most depth, set in the tiles drawn
 /// (screen_bound.wgsl): its one compute entry.
 pub const SHADER_SCREEN_BOUND: u32 = 64;
-/// An actor where it was and where it is, its fragments marking their screen
+/// A character where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 65;
 /// The tiles of the light's box the box slid onto, or slid into another

@@ -5,7 +5,7 @@
 // and the slide (light_slide.wgsl), before the beam: those in the disk it reads
 // (`Light::read`) within a tile and its taps of a step up the way up from it (`up`, `up_at`:
 // a point that far up lies that many tiles over or one more, its taps a tile either side), as
-// decor stands on its footprint (light_mark_draws.wgsl), the actors on what the eye meets, and
+// decor stands on its footprint (light_mark_draws.wgsl), the characters on what the eye meets, and
 // neither is taller. A tile is listed read by
 // the first thread to swap its mark to the number of the cast the world's receivers were last
 // stood afresh in (`light::HEAD_WORLD`, `light::LISTED_READ`), and stays listed, as the tiles

@@ -1,15 +1,15 @@
 # What moved, drawn alone
 
 **2026-10-29.** What a frame costs while the view stands and only what the
-kernel animates moves (the actors' clips, the puck, the clouds), and what
-drawing again only where they moved buys. Built in `4156f25eb` (an actor's
+kernel animates moves (the characters' clips, the puck, the clouds), and what
+drawing again only where they moved buys. Built in `4156f25eb` (a character's
 clip stepped a seen step at a time), `cd7f62b68` (a frame that draws a region
 alone) and `07d4fa3d8` (the sun's map and the occlusion in such a frame).
 
 ## Why
 
 With the resolve in ([the frames gathered](./20261029-the-frames-gathered.md)),
-the idle page drew every frame as `px`: the actor's idle clip and the cars
+the idle page drew every frame as `px`: the character's idle clip and the cars
 kept the frames coming, each moved the jitter on, and so each cast every
 pixel again and resolved the whole screen. The rule the user set: where only
 what the kernel animates moved, draw again only what it touches, and work
@@ -24,12 +24,12 @@ opens at; settings switched on the port's own origin, never :5173's.
 
 Where the frames kept coming at vsync, each source of wakes was switched off
 in turn on a temporary build (none kept): the resolve's asking for frames,
-the actor's wake, the puck's bob's.
+the character's wake, the puck's bob's.
 
 ## What was seen
 
 **Idle at the display's rate.** Before the region, with the resolve's asking
-off, the actor's wake off or the puck's bob's off, the page still drew about
+off, the character's wake off or the puck's bob's off, the page still drew about
 60 frames a second, nearly every one woken by a timer. No one source held it
 there; every step of anything animated drew the whole screen again.
 
@@ -46,8 +46,8 @@ the screen every frame, so none was taken; the occlusion turned out to read
 nothing the kernel animates (its prepass draws the rays and the grown decor
 alone), and the region stopped growing for it.
 
-Zoomed in about the actor and the puck after they moved and after the actor
-walked: no trace left where they were. An actor half hidden at one point was
+Zoomed in about the character and the puck after they moved and after the character
+walked: no trace left where they were. A character half hidden at one point was
 a block in front of it, as a frame drawn whole showed.
 
 ## What it leaves
@@ -59,7 +59,7 @@ a block in front of it, as a frame drawn whole showed.
   `c636c1738` (below); the marks and the reach still run each frame.
 - The finish encodes the whole canvas every frame: a canvas's texture is a
   new one each frame.
-- The actor's region sphere is what its mesh reaches as skinned at its clip's
+- The character's region sphere is what its mesh reaches as skinned at its clip's
   first key, and as far as the clip moves it; no test holds it to a shipped
   model.
 
@@ -111,7 +111,7 @@ region frames under What was seen were at other views.
 
 Why it was not taken there: the sun. That view at the real hour there, about
 16:30, has the sun about 10° up, and under a sine of 0.25 (about 14.5°)
-`regions` drew the frame whole whenever an actor or the puck moved. With the
+`regions` drew the frame whole whenever a character or the puck moved. With the
 shadows off, 3595 of 3599 frames were `region` (GPU p50 6.5 ms); with them on
 at noon, 3600 of 3600 (14.1 ms).
 
@@ -128,7 +128,7 @@ sun more steeply takes the shadow's end past the region, where it stays until
 a frame is drawn whole. How steep shrinks with the sun: about 10° at the cut,
 7° at 10° up, 3.4° at 5°. It was so before the cut went, steeper at a higher
 sun, and every drop broke it at any height; what the cut did was move the
-slope. Only an actor and the puck report a shadow that moves
+slope. Only a character and the puck report a shadow that moves
 (`region::drawn`), so it takes one of them moving under a standing view, a low
 sun and such a slope, and lasts until the next whole frame: 66 a minute in the
 run above, about 6 at the views before. Bounding a slope instead (the bound
@@ -141,7 +141,7 @@ found on the GPU, which the region, known on the CPU before the frame, is not.
 
 The map was cast from the sun alone and darkened the sun's direct light
 alone: at night, the sun's light none, it was cast for nothing, and a moving
-actor or puck drew every frame whole. Since `d3e4d342e` it is cast from the
+character or puck drew every frame whole. Since `d3e4d342e` it is cast from the
 sun while it reaches the land (under the horizon by the dip at the eye's
 height and its disc's radius, as `sun_transmittance` ends), else from the
 moon while it does, else from neither, the shadows off for the frame; the
@@ -185,14 +185,14 @@ moved caster then shades each square whose world, as a sphere about the box
 it holds, lies behind the caster from the light and within the caster's
 reach of the half-line from it away from the light, grown by a receiver's
 taps (`regions`, `stood`): whatever the ground, slope or drop, ground, decor
-or an actor alike, and however low the light; until it has landed, the frame
+or a character alike, and however low the light; until it has landed, the frame
 is drawn whole. The texels a caster covers in the map are all of it that
 moves while only the casters do, so the light's side needs no more.
 
 A first try kept, per tile of the light's map, the screen pixels its
 receivers stood on, taken by atomic maxima in the mark and read back. The
 drawn receivers' boxes in it were the tallest decor's sphere, which an
-actor standing in its own shadow's tiles carried into every region; near the
+character standing in its own shadow's tiles carried into every region; near the
 eye that covered most of the screen and every frame was drawn whole (3113
 of 3411 frames at noon, the region's share past 0.9). It was taken out.
 
@@ -221,10 +221,10 @@ p95 8.2 ms (12.1 and 17.7 ms on the line before). No leftover seen.
 
 ## The spheres the kernel hands, as drawn
 
-An actor's sphere was as far as its clips reach and move, the one it fades
+A character's sphere was as far as its clips reach and move, the one it fades
 from too: the companion's person, 1 u tall, 2.07 u idle and 6.38 u
 sprinting. It is now as far as its mesh reaches in the pose its palette
-holds as drawn (`Actor::pose_reach`, `Model::reach_of`). The puck's was the
+holds as drawn (`Character::pose_reach`, `Model::reach_of`). The puck's was the
 zone and the beacon together, its state the beacon's bob, so every bob
 moved the zone's footprint; the zone and the beacon are now two, the zone's
 state its place and the night alone. Not run yet.
@@ -253,7 +253,7 @@ words are read apart: where they moved, the region takes where the two
 squares the sheets are drawn on fall on the screen, cut at the eye's plane
 (`sheets_region`, `plane_clip`); none where none is seen. The cumulus, drawn
 as decor is and so a draw no region stood for (`BESIDE`), report each patch
-as a region does an actor, a casting sphere in a state of where the wind has
+as a region does a character, a casting sphere in a state of where the wind has
 it and what it lists, and the renderer takes the turn's reported draws
 (`FrameInput::bounded`) out of what draws a frame whole. Not run yet.
 

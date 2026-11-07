@@ -21,7 +21,7 @@
 // numbers are what crosses and what storage keeps; the names are the
 // shell's alone, for its rows and the locale. A number is given out once;
 // the generator refuses one given twice. An `index` is a place in a list
-// kept elsewhere — the person and the pet are by theirs in actor.json — and
+// kept elsewhere — the person and the pet are by theirs in character.json — and
 // crosses as itself.
 
 export const SETTING = {
@@ -156,7 +156,7 @@ export const SETTING = {
    * rays are, none where neither is up; beams and samples on
    * the node cache, the boxes they stop at drawn and a texel's sample
    * taken, the rest walked (pxl-render queue.wgsl), recast only where what it
-   * reads moves; decor and the actors drawn into it depth only, and a 3x3
+   * reads moves; decor and the characters drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
   shadows: {
     key: 11 as number,
@@ -354,7 +354,7 @@ export const SETTING_PRODUCTION = {
    * rays are, none where neither is up; beams and samples on
    * the node cache, the boxes they stop at drawn and a texel's sample
    * taken, the rest walked (pxl-render queue.wgsl), recast only where what it
-   * reads moves; decor and the actors drawn into it depth only, and a 3x3
+   * reads moves; decor and the characters drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
   shadows: {
     key: 11 as number,

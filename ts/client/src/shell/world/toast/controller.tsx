@@ -26,7 +26,7 @@ type Report =
   | typeof LOCATION
   | typeof ORIENTATION;
 
-/** The ready word: said once, as the first world and its companions are on screen. */
+/** The ready word: said once, as the first world and its companion are on screen. */
 const UNSAID = 0;
 const SAYING = 1;
 const SAID = 2;
@@ -95,7 +95,7 @@ function serverError(stall: Message | null): Said | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
-/** The world's one toast: none there, or it coming, then its companions, then the ready word once. */
+/** The world's one toast: none there, or it coming, then its companion, then the ready word once. */
 function world(
   outside: boolean,
   shown: boolean,

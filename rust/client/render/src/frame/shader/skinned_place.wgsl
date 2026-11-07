@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/skinned_place.wgsl
 
-// An actor's vertices placed: four-joint skinning from the palette, then glTF
+// A character's vertices placed: four-joint skinning from the palette, then glTF
 // Y-up to Z-up, the heading, and placement; what the lit pass (skinned_mesh.wgsl),
 // the depth from the light and the mark (tile_mark.wgsl) all lay alike.
 

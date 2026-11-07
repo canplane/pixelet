@@ -118,8 +118,8 @@ the boundary:
   the tests call.
 
   Then the scene beside the chunks: the hover ghost, the location puck, the
-  billboard sets, the actors, the dev gizmos and the environment's theme and
-  observer (`GHOST_*`, `PUCK_*`, `BILLBOARD_*`, `ACTOR_*`, `DEBUG_UPDATE`,
+  billboard sets, the characters, the dev gizmos and the environment's theme and
+  observer (`GHOST_*`, `PUCK_*`, `BILLBOARD_*`, `CHARACTER_*`, `DEBUG_UPDATE`,
   `ENV_*`). Two things this family decided. A lane of floats — a billboard's
   instances, the puck's zone, the gizmos' vertices, a theme — crosses inside the
   packet, not as an address: the glue's scratch went back to its allocator the

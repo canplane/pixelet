@@ -7,7 +7,7 @@
 //   SCENES    in order, comma-separated (default off,on,drive):
 //               off, on   a 25 s circle with the shadows off / on, its frames' rows, then an 8 s
 //                         window with ray_counts on (`counts off|on` in the log)
-//               walk      the actor walked north 12 s, the camera still (shadows as last set)
+//               walk      the character walked north 12 s, the camera still (shadows as last set)
 //               trace     the profiler's window as a Perfetto trace, after the scene before it
 //               drive     pxl.perf.drive(DRIVE_S)
 //               hold-off, hold-on  a circle of HOLD_S seconds (default 60) with the shadows off / on,

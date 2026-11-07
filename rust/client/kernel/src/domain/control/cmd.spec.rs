@@ -615,10 +615,10 @@ pub enum Command {
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_MOVE = 0x1106,
     /// What a surface the shell opened draws, until its GPU_SURFACE_CLOSE. The world, with the
-    /// sensors watched while it shows; or a character alone, as the picker shows it, a second one on the same surface
-    /// replacing the first. EBADF where the surface is not open, EBUSY where it already draws the other content, EINVAL
-    /// where the character's fields are not all given for a character, any is given for the world, or no character is
-    /// named by them.
+    /// sensors watched while it shows; or the companion's character of a group alone, as the picker shows it, a second one
+    /// on the same surface replacing the first. EBADF where the surface is not open, EBUSY where it already draws the
+    /// other content, EINVAL where the character's fields are not all given for a character or any is given for the
+    /// world.
     SCENE_DRAW = 0x1704,
     /// A setting set from the sheet or the character picker; refused until the kernel has read the
     /// kept settings, which would be read over it.
@@ -1212,8 +1212,7 @@ impl InputMove {
 pub struct SceneDraw {
     pub surface: u32,
     pub content: SceneContent,
-    pub group: Option<pxl_spec::asset::actor::Group>,
-    pub number: Option<u8>,
+    pub group: Option<pxl_spec::asset::character::Group>,
     /// What the character is drawn over, 0xRRGGBB, sRGB.
     pub bg: Option<u32>,
 }
@@ -1227,16 +1226,12 @@ impl SceneDraw {
                 .ok_or_else(|| unknown())?,
             group: match f.at(2)?.opt() {
                 Some(c) => Some(
-                    pxl_spec::asset::actor::Group::of(integer::<u8>(c.get_number()?)?)
+                    pxl_spec::asset::character::Group::of(integer::<u8>(c.get_number()?)?)
                         .ok_or_else(|| unknown())?,
                 ),
                 None => None,
             },
-            number: match f.at(3)?.opt() {
-                Some(c) => Some(integer::<u8>(c.get_number()?)?),
-                None => None,
-            },
-            bg: match f.at(4)?.opt() {
+            bg: match f.at(3)?.opt() {
                 Some(c) => Some(integer::<u32>(c.get_number()?)?),
                 None => None,
             },

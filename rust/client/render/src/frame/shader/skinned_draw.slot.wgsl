@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/skinned_draw.slot.wgsl
 
-// An actor's draw read off the list's uniforms at its slot, which its draw
+// A character's draw read off the list's uniforms at its slot, which its draw
 // names as its first instance (gpu/pass/skinned_mesh.rs `draw`): the list's
 // buffer is bound once a pass, a slot `DRAW_VEC4S` words apart.
 @group(1) @binding(0) var<storage, read> draws: array<vec4f>;

@@ -294,7 +294,7 @@ fn a_draw_set_twice_is_refused() {
 }
 
 /// The draws that read the shadow map are the lit ones: decor, its ghost and impostor, the
-/// actors, the ghost box and the beacon; the zone, the markers and the debug lines read none.
+/// characters, the ghost box and the beacon; the zone, the markers and the debug lines read none.
 #[test]
 fn lit_draws_read_the_map() {
     for p in [

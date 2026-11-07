@@ -96,10 +96,10 @@ scale 0.84 (agent run, 2026-10-29):
 
 Why the region was that large:
 
-- An actor's sphere was as far as its clips reach, the one it fades from too
-  (pxl-kernel actor.rs `Actor::draw`), not its pose: the companion is 1 u
+- A character's sphere was as far as its clips reach, the one it fades from too
+  (pxl-kernel character.rs `Character::draw`), not its pose: the companion is 1 u
   tall and its sphere 2.07 u, its sprint's 6.38 u. **Fixed in `e6b740ab8`**
-  (`Actor::pose_reach`).
+  (`Character::pose_reach`).
 - The puck's was the zone and the beacon together, its state the beacon's
   bob, so every bob moved the zone's 3.3–4.8 u footprint. **Fixed in
   `e6b740ab8`** (the zone and the beacon two).
@@ -153,11 +153,11 @@ gpu/ray/cast.rs), not as the first draft took it:
 - **Whether to cast, on the CPU.** It casts in a frame where what it reads
   moved: what a tile holds (`light_content`: the light's frame and box, the
   eye's place and zooms, the world) or which tiles are read
-  (`light_receivers`: the look, the actors, decor placed again). Where the
+  (`light_receivers`: the look, the characters, decor placed again). Where the
   content moved, an epoch begins and every tile is the cast's again.
 - **Mark.** A receiver writes its tile's word with the cast's number: the
   world where each drawn pixel's ray met it (`light_mark_cs`), decor and the
-  actors where each stands, a thread each, with a ring of tiles about it
+  characters where each stands, a thread each, with a ring of tiles about it
   (`light_mark_drawn_cs`, `Light::ring`).
 - **Reach.** A thread a tile reads the tiles a receiver standing there could
   read, up the way to the tallest decor (`light_reach_cs`, `Light::up`).
@@ -331,7 +331,7 @@ wrong seen in the pictures taken. A dropped frame is not checked.
   makes the words, the stencil and the targets anew. The gathering the
   baseline skipped where its picture was wrong is paid, bounded: a tile is
   claimed for `JITTERS` frames after its change and no longer. A walking
-  actor's claim is its trail over those frames.
+  character's claim is its trail over those frames.
 - **The baseline.** `c4cbb4b64` (step 2) at a fixed scale of 1.00, 3728×2098,
   Chrome on a Mac (Metal 3), [the tiles' baseline](../experiment/20261030-the-tiles-baseline.md).
   Main is no baseline at a scale other than 1: there it draws every frame
@@ -374,7 +374,7 @@ landed first, then these steps on top of it. That line holds: the shadow
 map's machinery renamed sun → light, the map cast from the moon, footprint
 marks as they were and as they are, the depth's bounds read back with a
 light-plane test in `regions`, the finish into a kept picture, cloud
-regions, ages by square in the resolve, the actor's sphere bounded by its
+regions, ages by square in the resolve, the character's sphere bounded by its
 drawn pose, and the puck's beacon apart from its zone: step 4 with it.
 
 That line makes main's failures right, approximately, and keeps the
@@ -429,7 +429,7 @@ directly, step 4 being done.
       made one type (`Tiles`), the map an instance of it, claimed the frame
       it changed alone, as it gathers nothing; its depth carries the gate's
       stencil; a word a tile of the map, set by the casters that changed, as
-      they were and as they are, handed as the actors are; the gate clears the
+      they were and as they are, handed as the characters are; the gate clears the
       claimed tiles' depth and raises their stencil, the world's depth laid
       in as the tiles' quads (it writes its depth, as the rays' screen pass
       does), the casters drawn through the stencil. The map's rectangle and
@@ -454,18 +454,18 @@ directly, step 4 being done.
       (pxl-kernel region.rs); the spheres, `unbounded` and the host's marks
       from them removed. Taken after the screen's side has its numbers.
       Done (2026-10-31): every bounded draw, decor, an impostor and the
-      puck's zone and beacon beside the actors, marks by its drawn self;
+      puck's zone and beacon beside the characters, marks by its drawn self;
       the kernel hands the keys of the draws it bounds and the renderer
-      tells which changed against what it kept, as the actors' did.
+      tells which changed against what it kept, as the characters' did.
    3. **The changed draws drawn as they were and as they are**, their
       vertices as their depth pipelines lay them, through a fragment that
       sets the screen tile's word to the frame's number and keeps the
       frame's number for the read-back, the world's depth attached read
       only; draw by draw, the skinned first, its sphere's mark kept for
-      the rest until each has its own. Done for the actors, part 1 with
+      the rest until each has its own. Done for the characters, part 1 with
       it: alone it claims no less (the claim was the reach's).
    4. **The same from the light** for the casters, setting the map's
-      tiles' words. Done for the actors: their drawn selves set the words
+      tiles' words. Done for the characters: their drawn selves set the words
       the reach reads, about 2 ms under the commit before with the
       companion walking (the baseline's record); the map's gate and lay
       draw a tile of their spheres' rectangles each, the claimed alone
@@ -771,7 +771,7 @@ the relief, the levels' shared list) are reverted to how they stood before
 the closing round. Measured once (S1, 10 s turned and walked, 2056×1113,
 6a6429155 against 30b477576): the GPU's p50 3 to 10 ms more in every
 condition, the light's passes 6.6 → 14.4 ms at noon and 8.9 → 21.9 ms at
-07:00, `shadow` 0.3 → 3.5 ms, decor's and the actors' depth, the marks and
+07:00, `shadow` 0.3 → 3.5 ms, decor's and the characters' depth, the marks and
 the propagation run every frame for every level. The aim, the user's: a
 design symmetric and orthogonal, with fewer states.
 

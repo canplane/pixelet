@@ -55,8 +55,8 @@ pub const RES_TRUST_WINDOWS: u32 = 8;
 /// The most those doublings make the wait, 60 s.
 pub const RES_UP_WINDOWS_MAX: u32 = 120;
 
-/// The picker shows a case at thumbnail size: its buffer's long side, in pixels.
-pub const CASE_LONG_SIDE_MAX: f64 = 256.0;
+/// The picker shows a preview at thumbnail size: its buffer's long side, in pixels.
+pub const PREVIEW_LONG_SIDE_MAX: f64 = 256.0;
 
 // ---- the projection ----
 

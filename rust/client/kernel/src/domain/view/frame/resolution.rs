@@ -384,7 +384,7 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     match role {
         surface_role::WORLD => device * scale(),
         surface_role::PREVIEW => {
-            device.min(param::CASE_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1)))
+            device.min(param::PREVIEW_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1)))
         }
         _ => device,
     }

@@ -24,6 +24,7 @@ use pxl_spec::space::coord::zoom::units;
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
+use crate::domain::scene::transform::Transform;
 use crate::domain::view::setting::store::settings_store;
 use xpute_core::global::Global;
 
@@ -72,14 +73,6 @@ pub fn ghost_set(draw: &mut DrawList, ghost: &Ghost) -> bool {
 /// The ghost into the frame's list (`GhostDraw::draw`).
 pub fn ghost_draw(draw: &mut DrawList) {
     shown().draw(draw);
-}
-
-/// Where a decor instance's base stands, its turn and its scale.
-#[derive(Clone, Copy)]
-struct Transform {
-    at: V3,
-    rot: f32,
-    scale: f32,
 }
 
 impl GhostDraw {

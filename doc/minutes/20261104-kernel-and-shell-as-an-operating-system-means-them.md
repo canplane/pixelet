@@ -198,7 +198,7 @@ them as standing:
   turns; a turn renders as one span, `run(quota) = wake`.
 - **Tauri** as the native host. Its IPC does not give the zero copy the user
   wants, and it does not run a core in a page.
-- **A general worker or thread abstraction, M:N placement, an actor runtime.**
+- **A general worker or thread abstraction, M:N placement, a character runtime.**
   None is wanted now; what is kept is that nothing in the contract fixes where
   the core runs.
 

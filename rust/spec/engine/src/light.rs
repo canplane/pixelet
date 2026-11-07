@@ -7,7 +7,7 @@
 //! asked at its tile's band, the zoom the eye's rays ask as near as the
 //! tile's column comes to the eye (`Light::band`); and the depth it leaves,
 //! as a raster caster's would be (pxl-render gpu/shadow.rs, where the decor
-//! and the actors are drawn into the same map).
+//! and the characters are drawn into the same map).
 //!
 //! The world's depth is a clipmap: the light box's texels lie on a grid
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
@@ -474,7 +474,7 @@ pub const HEAD_FOOTPRINT: usize = 6;
 /// second vec4's last word.
 pub const HEAD_HOLES: usize = 7;
 /// Where a pass finds the list's words and the args' marks, and how many a row, as
-/// `head_layout` lays them for the map's side: words of their own past the actors.
+/// `head_layout` lays them for the map's side: words of their own past the characters.
 pub const HEAD_CELLS: usize = 4 * (STANDS_AT + 1 + 2 * STANDS);
 pub const HEAD_CELLS_ACROSS: usize = HEAD_CELLS + 1;
 pub const HEAD_SAMPLES: usize = HEAD_CELLS + 2;
@@ -1325,7 +1325,7 @@ mod tests {
         let [i, j] = slope([0.0, 0.0, 1.0], across, down, deep);
         assert!((i - 4.0 / 2048.0 / 8.0).abs() < 1e-9 && j == 0.0, "{i} {j}");
         // A step along any plane, back down its slope, is on it again: any
-        // normal, as decor's and the actors' are.
+        // normal, as decor's and the characters' are.
         let n = [0.3, -0.5, 0.81];
         let [i, j] = slope(n, across, down, deep);
         let step = [

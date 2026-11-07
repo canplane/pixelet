@@ -7,9 +7,9 @@
 // asset is drawn and struck as, and what its metadata is: a cube a cell the rays meet,
 // with none, decor a model with a variant, heading and scale, a marker drawn
 // flat to the camera from a design, as the pin someone puts up at a place,
-// an actor a person or a pet, a model with clips, and sky what hangs in the
+// a character a person or a pet, a model with clips, and sky what hangs in the
 // sky, the clouds. What stands in a cell of the world's grid is stored
-// as its asset's id (pxl-spec object.rs); an actor or the sky stands in
+// as its asset's id (pxl-spec object.rs); a character or the sky stands in
 // no cell, so no cell ever holds either.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";

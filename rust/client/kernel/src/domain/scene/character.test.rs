@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/actor.test.rs
+// pxl-kernel/domain/scene/character.test.rs
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -28,30 +28,30 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
     let mut draw = DrawList::default();
     let mut models = Models::default();
     let model = models.add(&mut draw, swaying());
-    let mut actor = Actor::new(&mut draw, &models, model).unwrap();
-    actor.play(0, 0.0);
+    let mut character = Character::new(&mut draw, &models, model, Group::person, 0).unwrap();
+    character.play(&models, 0, 0.0);
     let frame = Frame {
         camera: [dist, 0.0, 0.0],
         px_per_unit: PX_PER_UNIT,
         delta_s: 1.0 / 60.0,
         ..Frame::default()
     };
-    let transform = Transform {
+    character.transform = Some(Transform {
         at: [0.0; 3],
-        rot_z: 0.0,
+        rot: 0.0,
         scale: 1.0,
-    };
+    });
     clock::set(wall_ms);
     animation::take();
     let ticks = (1..=120)
         .map(|k| {
             WALL_MS.store((f64::from(k) * 1000.0 / 60.0).to_bits(), Ordering::Relaxed);
-            let asks = actor.tick(&mut draw, &models, &frame, &transform);
+            let asks = character.tick(&mut draw, &models, &frame, false);
             (asks, animation::take())
         })
         .collect();
     clock::set(|| 0.0);
-    actor.free(&mut draw);
+    character.free(&mut draw);
     ticks
 }
 

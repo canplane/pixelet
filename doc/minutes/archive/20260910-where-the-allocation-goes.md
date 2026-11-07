@@ -592,7 +592,7 @@ so the `WebGLBuffer` count stops tracking the chunk count. Both were rejected on
 An atlas is a decision about how billboards are batched. Pooling geometry is a
 decision about how a chunk's residency is expressed. Both are answers to the
 question that is actually open — what happens at ten thousand billboards, ten
-thousand chat bubbles, or ten thousand actors in one small space — and answering
+thousand chat bubbles, or ten thousand characters in one small space — and answering
 it in two subsystems separately, ahead of the model, is how the answers end up
 disagreeing.
 

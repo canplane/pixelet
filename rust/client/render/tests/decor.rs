@@ -2821,7 +2821,7 @@ impl Chain<'_> {
         // The tiles the decor compacted stands on, as the light's mark reads its lanes: the
         // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs), the
         // world's receivers stood in an earlier cast, none of their tiles marked; its
-        // workgroups as its one thread opens them, the placed decor's past the actors'.
+        // workgroups as its one thread opens them, the placed decor's past the characters'.
         let mut head = vec![0u32; light::HEAD_WORDS];
         head[light::HEAD_CAST] = CAST_NUMBER;
         head[light::HEAD_WORLD] = CAST_NUMBER - 1;

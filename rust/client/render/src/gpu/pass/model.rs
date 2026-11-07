@@ -1,6 +1,6 @@
 // pxl-render/gpu/pass/model.rs
 
-//! What the model passes (decor, impostors, actors) share: group 0, per-draw
+//! What the model passes (decor, impostors, characters) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
 use xpute_core::global::Global;

@@ -139,7 +139,7 @@
       "pin": "Pins"
     },
     "character": {
-      "person_label": "Character",
+      "person_label": "Person",
       "female_label": "Female",
       "male_label": "Male",
       "pet_label": "Pet"

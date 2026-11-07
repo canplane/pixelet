@@ -1,17 +1,20 @@
 // pxl-render/gpu/pass/preview.rs
 
-//! A variant picker's preview: its actor in a frame of its own, over the flat
-//! color the shell asks for, drawn at one sample with no shadow, a blank map
-//! bound and no strength to read it by.
+//! A character picker's preview: the scene's character in a frame of its
+//! own, over the flat color the shell asks for, drawn at one sample with no
+//! shadow, a blank map bound and no strength to read it by. Its draw is
+//! handed to it whole, held by none of the world's lists, so what the
+//! world's eye sees of the character moves nothing here: its uniform at
+//! slot 0 of a buffer of its own (frame/draw.rs `scaled_draw`).
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::frame::draw::{uniform_of, Position, DRAW_WORDS};
+use crate::frame::draw::{Draw, Position};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, DRIFT_Q, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
-use crate::frame::shader::word::FRAME_FLOATS;
+use crate::frame::shader::word::{DRAW_FLOATS, FRAME_FLOATS};
 use crate::gpu::api::{
     buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
     TrackedRenderPass,
@@ -31,20 +34,22 @@ use crate::look::color::linear_rgb;
 
 pub struct Preview {
     frame_buf: u32,
+    /// Its draw's uniform, the one slot its skinned pass binds.
+    draw_buf: u32,
     frames: FrameGroups,
     pub skinned_mesh: SkinnedPass,
     finish: Finish,
     /// What its picture is made of as last drawn: its frame words, its
-    /// actor's draw and uniform, its skin and its surface; it stands, and
-    /// its surface keeps its picture, while they do.
+    /// draw, its skin and its surface; it stands, and its surface keeps its
+    /// picture, while they do.
     pub(crate) read: Read,
 }
 
-const CASE_EYE: V3 = [0.0, -2.2, 0.9];
-const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
-const CASE_FOV_DEG: f64 = 35.0;
+const PREVIEW_EYE: V3 = [0.0, -2.2, 0.9];
+const PREVIEW_TARGET: V3 = [0.0, 0.0, 0.55];
+const PREVIEW_FOV_DEG: f64 = 35.0;
 /// The preview's near plane: a room of its own, a model a unit tall in it.
-const CASE_NEAR: f64 = 0.1;
+const PREVIEW_NEAR: f64 = 0.1;
 
 /// What the world's color is cleared to for `bg` (0xRRGGBB, sRGB): linear, as
 /// the finish encodes it back, and whole.
@@ -65,11 +70,18 @@ impl Preview {
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
+        let draw_buf = g.buf(
+            word_bytes(DRAW_FLOATS),
+            buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         let layout = frame_layout(g, pipelines);
+        let mut skinned_mesh = SkinnedPass::new(g, pipelines, align);
+        skinned_mesh.set_draws(g, draw_buf);
         Preview {
             frame_buf,
+            draw_buf,
             frames: FrameGroups::new(g, layout, frame_buf, shadow.blank_entries(1), air),
-            skinned_mesh: SkinnedPass::new(g, pipelines, align),
+            skinned_mesh,
             finish: Finish::new(g, pipelines),
             read: Read::default(),
         }
@@ -84,13 +96,14 @@ impl Preview {
     pub fn release(self) {
         self.frames.release();
         release(self.frame_buf);
+        release(self.draw_buf);
         self.skinned_mesh.release();
         self.finish.release();
     }
 
-    /// Its actor's draw `own` into `s` over `bg` (0xRRGGBB, sRGB), the
-    /// world's `frame` aimed at the actor; nothing where its picture's makings
-    /// stand, `moved` what moved without words.
+    /// `draw`, the character's, into `s` over `bg` (0xRRGGBB, sRGB), the
+    /// world's `frame` aimed at the character; nothing where its picture's
+    /// makings stand, `moved` what moved without words.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
@@ -100,19 +113,17 @@ impl Preview {
         ctx: &mut RenderContext,
         s: &Surface,
         mut frame: [f32; FRAME_FLOATS],
-        own: &[u32; DRAW_WORDS],
-        uniforms: &[f32],
-        model: u32,
+        (record, uniform): &Draw,
         image: Image,
         bg: u32,
         moved: bool,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::preview);
-        // The case's eye stands at the actor's Q3, so the actor is its
+        // Its eye stands at the character's Q3, so the character is its
         // remainder from it.
-        let at = Position::in_uniform(uniform_of(uniforms, own));
-        let actor = at.r.map(f64::from);
+        let at = Position::in_uniform(uniform);
+        let character = at.r.map(f64::from);
         let u = &mut frame;
         for k in 0..3 {
             u[EYE + k] = f32::from_bits(at.q[k] as u32);
@@ -126,18 +137,18 @@ impl Preview {
         );
         mat4::perspective(
             &mut proj,
-            CASE_FOV_DEG.to_radians(),
+            PREVIEW_FOV_DEG.to_radians(),
             s.width as f64 / s.height as f64,
-            CASE_NEAR,
+            PREVIEW_NEAR,
         );
-        mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
-        mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
+        mat4::look_at(&mut view, PREVIEW_EYE, PREVIEW_TARGET, [0.0, 0.0, 1.0]);
+        mat4::translation(&mut t, -character[0], -character[1], -character[2]);
         mat4::mul(&mut n, &proj, &view);
         mat4::mul(&mut m, &n, &t);
         put_mat(u, VIEW_PROJ, &m);
-        u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
-        u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
-        u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
+        u[CAMERA_POS] = (PREVIEW_EYE[0] + character[0]) as f32;
+        u[CAMERA_POS + 1] = (PREVIEW_EYE[1] + character[1]) as f32;
+        u[CAMERA_POS + 2] = (PREVIEW_EYE[2] + character[2]) as f32;
         u[VIEWPORT] = s.width as f32;
         u[VIEWPORT + 1] = s.height as f32;
         u[SCREEN] = s.screen.0 as f32;
@@ -147,19 +158,20 @@ impl Preview {
         // Drawn at one sample a pixel, its frames gathered by none.
         u[JITTER] = 0.0;
         u[JITTER + 1] = 0.0;
-        // An actor drifts with no wind.
+        // A character drifts with no wind.
         u[DRIFT_Q..DRIFT_Q + 4].fill(0.0);
         let r = &mut self.read;
         r.begin();
         r.read(&frame);
-        r.read(own);
-        r.read(uniform_of(uniforms, own));
-        r.read(&[model, image.0, s.width, s.height, s.depth, bg]);
+        r.read(record);
+        r.read(uniform);
+        r.read(&[image.0, s.width, s.height, s.depth, bg]);
         r.mark(moved);
         if r.end() {
             return;
         }
         g.write_buf(self.frame_buf, 0, bytes(&frame));
+        g.write_buf(self.draw_buf, 0, bytes(uniform));
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -175,7 +187,7 @@ impl Preview {
         let mut pass = TrackedRenderPass::new(g, pass);
         self.skinned_mesh.draw(
             &mut pass,
-            core::iter::once(own),
+            core::iter::once(record),
             uploads(),
             Stage::Lit,
             self.frames.frame,

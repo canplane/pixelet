@@ -44,22 +44,13 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct ModelHandle {
-    pub model: u32,
-    /// One per animation in file order, so a clip's number is its animation's index.
-    pub clip_cnt: u32,
-    /// What it is drawn at to stand the height it was registered at.
-    pub scale: f32,
-}
-
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
 ];
 
-/// None while its task runs, then the model as registered, or as the heap
-/// refused it room.
-type Registration = Option<Result<ModelHandle, Refusal>>;
+/// None while its task runs, then the model as registered, by its number,
+/// or as the heap refused it room.
+type Registration = Option<Result<u32, Refusal>>;
 
 /// Each file, by its number below the asset root, by the height it was
 /// asked at, its bits.
@@ -72,12 +63,12 @@ type Parse = Result<Rc<Gltf>, MarshalError>;
 static PARSED: Global<Vec<(u32, Parse)>> = Global::new();
 
 /// The file `slot` names registered `height_u` units tall, or at its own
-/// size when None, once: two slots naming one file reach one. None while it
-/// loads or registers, while the heap refuses it room, and for good where
-/// its bytes do not parse: a refusal is a wait, not a failure, asked again
-/// once the heap gives some back. No more than `REGISTRATIONS` run at once;
-/// past them a model waits its turn here.
-pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
+/// size when None, once, by its model's number: two slots naming one file
+/// reach one. None while it loads or registers, while the heap refuses it
+/// room, and for good where its bytes do not parse: a refusal is a wait, not
+/// a failure, asked again once the heap gives some back. No more than
+/// `REGISTRATIONS` run at once; past them a model waits its turn here.
+pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let load = load_of(slot)?;
     let file = load.id();
     let key = height_u.map(f64::to_bits);
@@ -86,7 +77,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
         .iter()
         .position(|(a, h, _)| *a == file && *h == key);
     match at.map(|at| &registered[at].2) {
-        Some(Some(Ok(handle))) => return Some(handle.clone()),
+        Some(Some(Ok(model))) => return Some(*model),
         Some(None) => return None,
         Some(Some(Err(refused))) if !refused.over() => return None,
         _ => {}
@@ -136,14 +127,14 @@ fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
 /// `slot`'s model as `model_of` registered it at `height_u`, asking
 /// nothing: what a reader that must not load, such as the query, finds;
 /// none while it is not registered.
-pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
+pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let file = load_of(slot)?.id();
     let key = height_u.map(f64::to_bits);
     REGISTRY
         .get(Vec::new)
         .iter()
         .find(|(a, h, _)| *a == file && *h == key)
-        .and_then(|(_, _, entry)| entry.clone()?.ok())
+        .and_then(|(_, _, entry)| (*entry)?.ok())
 }
 
 /// The file numbered `file`'s model, `gltf`, registered at `height_u`, its
@@ -257,13 +248,14 @@ fn lay_out(
     }
 }
 
-/// At its own size when `height_u` is None; None when it has no mesh or the
-/// heap refused. Awaits `pause` first and between units.
+/// Its model's number, at its own size when `height_u` is None; None when
+/// it has no mesh or the heap refused. Awaits `pause` first and between
+/// units.
 async fn register_model<P: Future<Output = ()>>(
     gltf: &Gltf,
     height_u: Option<f64>,
     pause: impl Fn() -> P,
-) -> Option<ModelHandle> {
+) -> Option<u32> {
     pause().await;
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);
@@ -449,10 +441,5 @@ async fn register_model<P: Future<Output = ()>>(
     };
     // SAFETY: every vertex and index of the block written above.
     unsafe { m.seal(scale, &pause).await };
-    let model = model::models().add(model::draw_list(), m);
-    Some(ModelHandle {
-        model,
-        clip_cnt: gltf.animations.len() as u32,
-        scale,
-    })
+    Some(model::models().add(model::draw_list(), m))
 }

@@ -14,7 +14,6 @@ export const STEP_NAMES = [
   "ghost",
   "environment",
   "companion",
-  "preview",
   "demand",
   "scene",
 ] as const;

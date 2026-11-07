@@ -178,7 +178,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass, environment: &[f32;
     c.seen = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
-            *slot = model_of(file, None).map(|h| h.model);
+            *slot = model_of(file, None);
         }
     }
     let Some(eye) = eye() else { return };

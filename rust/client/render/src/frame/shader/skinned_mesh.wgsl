@@ -1,4 +1,4 @@
-// Actors lit, placed as skinned_place.wgsl lays them; the fragment is
+// Characters lit, placed as skinned_place.wgsl lays them; the fragment is
 // decor's.
 
 @group(2) @binding(0) var skin: texture_2d<f32>;

@@ -1,12 +1,12 @@
 // pxl-kernel/domain/scene/character/param.rs
 
-//! The companion's tuned numbers: where the pet keeps, how the two catch up
-//! and settle, and where a line hangs over them.
+//! The person's and the pet's tuned numbers: where the pet keeps, how the
+//! two catch up and settle, and where a line hangs over them.
 
 /// Arbitrary, so the pet does not share the person's footprint.
 pub const PET_OFF: [f64; 2] = [-0.6, -0.6];
 
-/// A fixed duration, not a fixed speed (domain/scene/character/path.rs
+/// A fixed duration, not a fixed speed (domain/scene/character/companion.rs
 /// `WalkPlan`).
 pub const CATCHUP_DURATION_S: f64 = 0.6;
 

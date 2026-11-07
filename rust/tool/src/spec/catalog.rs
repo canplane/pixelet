@@ -3,7 +3,7 @@
 //! The catalog: every file reference the asset specs make, a slot each,
 //! numbered in the kinds' order (id.json `KIND`). First the cube kind's pack,
 //! then each decor variant's model and skin, then each `file` leaf of
-//! actor.json and of sky.json in its document order. The Rust names each
+//! character.json and of sky.json in its document order. The Rust names each
 //! slot; the catalog fills them with the file each names, by its number below
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
 //! layout). The runtime serves it, as hex in TypeScript.
@@ -17,7 +17,7 @@ pub(crate) const FILE: &str = "file";
 
 pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
 pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json";
-const ACTOR_JSON: &str = "spec/spec/asset/actor.json";
+const CHARACTER_JSON: &str = "spec/spec/asset/character.json";
 const SKY_JSON: &str = "spec/spec/asset/sky.json";
 
 /// Every slot's path, each spec's run of them in the kinds' order.
@@ -49,7 +49,7 @@ fn runs() -> Result<Vec<(&'static str, Vec<String>)>, String> {
         }
     }
     let mut out = vec![(CUBE_JSON, vec![pack]), (DECOR_JSON, decor)];
-    for json in [ACTOR_JSON, SKY_JSON] {
+    for json in [CHARACTER_JSON, SKY_JSON] {
         let mut paths = Vec::new();
         leaves(&read(json)?, None, &mut paths);
         out.push((json, paths));

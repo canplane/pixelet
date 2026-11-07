@@ -339,7 +339,7 @@ impl LocationIndicator {
     }
 
     /// Whether the beacon slides and wants frames. The location indicator is
-    /// drawn where an actor would be (domain/scene/actor.rs `tick`): in the frustum and
+    /// drawn where a character would be (domain/scene/character.rs `tick`): in the frustum and
     /// spanning a camera cell at its distance; its zone only where the ground
     /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
     /// target, a frame a step, only where the slide spans one. Its bob and

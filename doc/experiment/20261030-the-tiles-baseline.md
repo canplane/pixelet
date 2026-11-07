@@ -56,12 +56,12 @@ edits, at a 2400×2138 canvas, noon, shadows on, every frame a region frame:
 |---|---|---|
 | as it is | 5.8 | 6.8 |
 | the puck's spheres a point | 6.2 | 7.7 |
-| the actor's sphere a point (and its shadow with it) | 4.9 | 7.0 |
+| the character's sphere a point (and its shadow with it) | 4.9 | 7.0 |
 | the squares still gathering left out | 5.8 | 7.5 |
 | the shadow's squares left out | 5.0 | 7.1 |
 | the cumulus patches' spheres a point | 6.0 | 7.5 |
 
-Runs of the same build differ by about 0.4 ms at the p50, so only the actor
+Runs of the same build differ by about 0.4 ms at the p50, so only the character
 and its shadow stand out: about 0.9 ms, nearly all of it the squares its
 shadow is taken to fall on. The puck, the cumulus at this view and the
 squares still gathering add nothing seen. Most of a region frame's 5.8 ms is
@@ -427,7 +427,7 @@ reach's share is the changed less the host's.
 
 **Another GPU application ran** from about 20:42 to 20:47 KST, the user
 said; the runs before it stand. In it fell two probes of step 6.3, its
-marks where the actors were left out (4.1 ms) and drawn with the palette
+marks where the characters were left out (4.1 ms) and drawn with the palette
 as it is (5.8), which so say nothing. Step 6.3 against the commit before
 it, noon, 3728×2226, the companion walking (the kernel waking some 250
 frames a minute) and then standing (every frame woken by the timer):
@@ -442,7 +442,7 @@ frames a minute) and then standing (every frame woken by the timer):
 
 - With the companion walking, step 6.3 costs about 1 ms more: its marks
   claim more than its sphere did (`resolve`, `finish`, `world` up), not
-  less. Why is not yet found; the actors' marks where they were, drawn off
+  less. Why is not yet found; the characters' marks where they were, drawn off
   the palette copied the frame before, are the first suspect, not checked.
 - With it standing, the two are alike, 4 ms: little changes.
 
@@ -452,10 +452,10 @@ changing each turn (`px` 0.4–0.46):
 | build | GPU p50 | p95 | `world` | `finish` | `px` | `mark` |
 |---|---|---|---|---|---|---|
 | step 6.3 | 7.1 | 8.2 | 2.36 | 1.84 | 0.46 | 0.66 |
-| step 6.3, no marks where the actors were (a probe) | 7.1 | 8.3 | 2.23 | 1.90 | 0.46 | 0.66 |
+| step 6.3, no marks where the characters were (a probe) | 7.1 | 8.3 | 2.23 | 1.90 | 0.46 | 0.66 |
 | before it (`0fa704375`) | 6.8 | 8.0 | 2.23 | 1.77 | 0.39 | 0.52 |
 
-- The marks where the actors were are not the cost: without them the
+- The marks where the characters were are not the cost: without them the
   frame costs the same.
 - Step 6.3 costs some 0.3 ms over the commit before, its marks' pass
   (`mark` 0.14) and a little more shading; the 1 ms seen at 20:35–20:40
@@ -464,9 +464,9 @@ changing each turn (`px` 0.4–0.46):
   map's tiles the casters' spheres mark (part 3's record), which step 6.4
   would take from the drawn casters instead.
 
-**Step 6.4, the actors' shadows marking the map's tiles by their drawn
+**Step 6.4, the characters' shadows marking the map's tiles by their drawn
 selves**, drawn from the light as where they were and are, through the
-same mark, the map's tiles' words set by their fragments; the actors'
+same mark, the map's tiles' words set by their fragments; the characters'
 spheres' rectangles kept for the map's gate and lay alone (`Tiles::mark`'s
 `beside`). The same window, noon, 3728×2226, the companion walking (the
 kernel waking some 280 frames a minute):
@@ -478,7 +478,7 @@ kernel waking some 280 frames a minute):
 | steps 6.3 and 6.4, again (the view moved: cast 138) | gated 3388 | 5.7 | 7.7 | 1.51 | 1.05 | 0.20 | 0.26 | 0.66 |
 
 - About 2 ms under the commit before at the p50: the shadows' claim is
-  now where the actors' shadows change, not where their spheres' map
+  now where the characters' shadows change, not where their spheres' map
   rectangles reach, and the world's pass, the finish and the resolve fall
   with it. The marks' passes cost 0.14 ms.
 - Picture right at noon, no error.
@@ -494,7 +494,7 @@ kernel waking some 280 frames a minute):
 | step 2 | region 3559, 2190 timed | 4.8 | 6.6 | 1.6 | 1.3 | 2.3 | 1.1 | 1.2 | — |
 
 - Main is about 0.9 ms over the baseline at the p50: the `mark` span
-  (the marks, the actors' marks from the eye and the light, the reach)
+  (the marks, the characters' marks from the eye and the light, the reach)
   and the world's pass.
 - The two time different frames: the baseline's reads time some 62 % of
   its frames, main's all of them.
@@ -505,7 +505,7 @@ step 2 already holds step 4's gain, so the plan's start is the line to
 measure against (the plan's steps in one window, below).
 
 **The map drawn in its claimed tiles alone** (21:40–21:47): the map's
-gate and lay draw the actors' spheres' rectangles a tile each, the
+gate and lay draw the characters' spheres' rectangles a tile each, the
 unclaimed collapsed (screen_tiles.wgsl `mark_clip`, `Tiles::beside`), in
 place of a quad each. One window, noon, 3728×2338, gated frames all:
 
@@ -515,7 +515,7 @@ place of a quad each. One window, noon, 3728×2338, gated frames all:
 | main (`fc60c28ca`) | 5.6 | 6.9 | 0.3 | 1.1 |
 | the change, again | 5.6 | 6.6 | 0.3 | 1.0 |
 
-- No cost either way: the actors' rectangles hold a few hundred of the
+- No cost either way: the characters' rectangles hold a few hundred of the
   map's tiles. The picture at 7 o'clock the same.
 
 **The `mark` span taken apart** (22:10), its passes stamped to spans no
@@ -524,15 +524,15 @@ gated frame at noon runs (a probe, reverted), noon, 3728×2226:
 | pass | frames | p50 | p95 |
 |---|---|---|---|
 | the marks (screen and map, compute) | 343 | 0.07 | 0.20 |
-| the actors' marks from the eye | 3353 | 0.13 | 0.26 |
-| the actors' marks from the light | 3196 | 0.07 | 0.20 |
+| the characters' marks from the eye | 3353 | 0.13 | 0.26 |
+| the characters' marks from the light | 3196 | 0.07 | 0.20 |
 | the reach | 3377 | 0.46 | 0.66 |
 
 The timestamps step by some 0.066 ms here. Within the reach, by probes:
 returning once the square's bound is read leaves nothing of it; dropping
 the per-pixel fallback alone takes some 0.26 ms off.
 
-*Read with what came after:* the actors' marks are render passes, whose
+*Read with what came after:* the characters' marks are render passes, whose
 spans take in what they overlap (the finish's probes, below); the reach's,
 a compute pass, stands.
 
@@ -550,7 +550,7 @@ its own box or its pixels. The same window, gated frames, noon:
 | the change, again | 0.33 | 0.72 | 6.2 | 8.1 |
 
 - The reach falls from some 0.4 ms to under 0.1; the rest of `mark` is
-  the actors' marks. The frame's total moves with the scene more than by
+  the characters' marks. The frame's total moves with the scene more than by
   this (the last run's `world` and `finish` p95 2.5).
 - The picture at 7 o'clock as before, no error.
 
@@ -576,7 +576,7 @@ overstates a frame where render passes overlap (`gpu_busy_ms`, below); and
 against the plan's start rather than step 2, see the plan's steps in one
 window, below.
 
-**The actors' marks' passes** (23:02), a probe (reverted): the eye's pass
+**The characters' marks' passes** (23:02), a probe (reverted): the eye's pass
 with its attachment and no draw takes one step of the timestamps (0.066
 ms) at the p50, against 0.13 with its draws; the light's, with its draws,
 one step. What attaching the world's depth costs is under a step: a
@@ -770,7 +770,7 @@ orbit's interval is the frame's end to end.
 | `5553036df` | the plan's start: one rectangle | 13.6 | 16.8 | 119 | 25 | 31 | 35.4 |
 | `e6b740ab8` | the spheres tightened (step 4) | 7.4* | 14.7* | 1164* | 29 | 33 | 36.1 |
 | `e5f614ff3` | the screen's tiles (steps 3–5) | 8.3 | 11.1 | 45 | 29 | 34 | 40.2 |
-| `fc60c28ca` | the actors' drawn marks (6.3, 6.4) | 5.4 | 6.6 | 107 | 29 | 34 | 35.5 |
+| `fc60c28ca` | the characters' drawn marks (6.3, 6.4) | 5.4 | 6.6 | 107 | 29 | 34 | 35.5 |
 | `46f776afa` | the reach's box | 5.2 | 7.3 | 0 | 29 | 34 | 35.8 |
 | `6f84e6fb8` | the light held, its marks read once | 5.5 | 7.4 | 108 | 25 | 30 | 31.5 |
 

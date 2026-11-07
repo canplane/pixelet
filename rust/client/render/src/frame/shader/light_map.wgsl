@@ -1,5 +1,5 @@
 // The world's depth from the light laid into the light's shadow map in the tiles a receiver
-// reads, before the decor and the actors are drawn into it (gpu/shadow.rs): a quad a tile
+// reads, before the decor and the characters are drawn into it (gpu/shadow.rs): a quad a tile
 // listed read (pxl-engine `light::LISTED_READ`), an instance each, as many as the light's
 // cast opened (`light::ARGS_LAY`), its fragment the depth the world's cast left
 // (light_lay.wgsl); the rest of the map cleared to the far plane, which no receiver reads.

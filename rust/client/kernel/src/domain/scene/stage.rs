@@ -6,7 +6,8 @@
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
-use pxl_render::frame::shader::word::DECOR_GROUPS;
+use pxl_render::frame::draw::DRAW_WORDS;
+use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::ray::{Cast, Filled, GroundBricks};
@@ -47,7 +48,6 @@ pub fn is_screen_drawn() -> bool {
 /// season; the earth layer's, under its version.
 const EARTH: Load = Load::Sphere;
 
-use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene;
 use crate::domain::scene::animation;
@@ -165,7 +165,7 @@ pub fn stage_render(pace: Pace) -> Drawn {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut previews = [(0u32, 0u32, none, 0u32); SURFACES];
+    let mut previews = [(0u32, ([0; DRAW_WORDS], [0.0; DRAW_FLOATS]), none, 0u32); SURFACES];
     let mut preview_cnt = 0;
     for (slot, row) in previews.iter_mut().zip(preview_rows()) {
         *slot = row;
@@ -284,18 +284,8 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         scene::draw(list, models);
         animating
     });
-    {
-        let edits = preview::cur();
-        // Decor's records leave out only a decor: hidden, anything else is
-        // the rays' to cut, and its walk is kept.
-        let hide = edits.hide.filter(|&at| {
-            crate::domain::query::World::now()
-                .entry_at(at)
-                .is_some_and(|e| e.asset().decor().is_some())
-        });
-        gpu::step(frame.eye, hide, edits.scattered_cell);
-        cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
-    }
+    gpu::step(frame.eye);
+    cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
     marker::step(ctx, &frame);
     marker::draw(draw_list());
     if draw {

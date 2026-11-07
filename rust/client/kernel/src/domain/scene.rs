@@ -4,7 +4,6 @@
 //! own state and lists itself into the draw list (domain/scene/model.rs
 //! `draw_list`), in the order here.
 
-pub mod actor;
 pub mod animation;
 pub mod cast;
 pub mod character;
@@ -18,11 +17,12 @@ pub mod marker;
 pub mod model;
 pub mod param;
 pub mod stage;
+pub mod transform;
 
 use pxl_render::frame::draw::DrawList;
 
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
-use crate::domain::scene::character::preview::{preview_animate, preview_draw};
+use crate::domain::scene::character::preview::preview_shows;
 use crate::domain::scene::environment::environment_animate;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_draw;
@@ -33,8 +33,7 @@ use crate::domain::scene::model::registry::Models;
 
 /// Advances what animates; whether anything did.
 pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-    companion_animate(list, models, frame)
-        | preview_animate(list, models, frame)
+    companion_animate(list, models, frame, preview_shows())
         | location_animate(frame)
         | environment_animate(frame)
 }
@@ -43,7 +42,6 @@ pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
 pub fn draw(list: &mut DrawList, models: &Models) {
     ghost_draw(list);
     companion_draw(list, models);
-    preview_draw(list, models);
     location_draw(list);
     frame_gizmo_draw(list);
     coverage_gizmo_draw(list);

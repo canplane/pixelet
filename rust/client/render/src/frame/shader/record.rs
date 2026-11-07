@@ -212,7 +212,7 @@ pub const PIPELINE_MARKER_REGION: u32 = 24;
 pub const PIPELINE_DEBUG_FACE: u32 = 25;
 /// The eye's rays, opaque at their depth (pxl-engine ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 26;
-/// Decor's and the actors' depth from the light, and the world's laid in
+/// Decor's and the characters' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
 pub const PIPELINE_DECOR_DEPTH: u32 = 27;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 28;
@@ -242,7 +242,7 @@ pub const PIPELINE_RASTER_GATE: u32 = 36;
 /// casters that changed moved: the world's depth laid in the claimed tiles,
 /// their stencil raised (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_GATE: u32 = 37;
-/// An actor drawn where it was and where it is, its fragments setting their
+/// A character drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 38;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
@@ -561,12 +561,12 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
-/// The list's uniforms by slot, read only, which an actor's draw and the
+/// The list's uniforms by slot, read only, which a character's draw and the
 /// beacon's read at the slot their first instance names (skinned_draw.slot.wgsl,
 /// location.slot.wgsl): one group a pass (gpu/pass/skinned_mesh.rs
 /// `SkinnedPass::set_draws`, gpu/pass/location.rs `LocationPass::set_draws`).
 const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
-/// An actor's, lit and its depth from the light, as a model's but its draw
+/// A character's, lit and its depth from the light, as a model's but its draw
 /// read off the list's uniforms (`DRAWS`).
 const SKINNED_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAWS, &SKIN, &UPLOAD];
 const SKINNED_DEPTH_GROUPS: [Group; 4] = [FRAME, &DRAWS, &SKIN, &UPLOAD];

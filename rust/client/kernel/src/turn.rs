@@ -39,9 +39,7 @@ use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::changes;
-use crate::domain::scene::character::companion;
-use crate::domain::scene::character::companion::{companion_step, CompanionProps};
-use crate::domain::scene::character::preview::preview_step;
+use crate::domain::scene::character::companion::{self, companion_step, Camera};
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
@@ -84,8 +82,9 @@ pub struct Platform {
     pub orient: OrientationPlatform,
 }
 
-/// None while the eye is the pivot: then the character is the one looking.
-fn companion_props() -> Option<CompanionProps> {
+/// The camera as the companion's walk reads it; none while the eye is the
+/// pivot, when the person is the one looking.
+fn companion_camera() -> Option<Camera> {
     if controller::dist() == 0.0 {
         return None;
     }
@@ -93,7 +92,7 @@ fn companion_props() -> Option<CompanionProps> {
     let goal = controller::pivot_to().or_else(controller::pivot)?;
     let eye = coord::world_to_canonical(&controller::eye_world()?);
     let at = coord::to_world(&goal);
-    Some(CompanionProps {
+    Some(Camera {
         pivot: [at[0], at[1]],
         floor: companion::pivot_floor(goal, |w| support::floor_at(w, &goal)),
         azimuth: controller::azimuth(),
@@ -123,7 +122,7 @@ fn ghost_tick(_: &mut TickContext) {
 }
 
 fn companion_tick(ctx: &mut TickContext) {
-    companion_step(ctx, companion_props());
+    companion_step(ctx, companion_camera());
 }
 
 /// Each pyramid layer's tiles, from the live eye.
@@ -215,7 +214,6 @@ pub fn boot() {
         companion_tick,
         StepName::companion as u32,
     );
-    on_tick(Phase::interaction, preview_step, StepName::preview as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, scene_tick, StepName::scene as u32);
     world_tasks();

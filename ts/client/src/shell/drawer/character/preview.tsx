@@ -39,12 +39,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
             setSurface(surface);
-            scene.draw_character(
-              surface,
-              character.group,
-              character.number,
-              BACKDROP,
-            );
+            scene.draw_character(surface, character.group, BACKDROP);
             return () => {};
           }}
         />

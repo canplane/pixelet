@@ -66,7 +66,7 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   descendants answer), so the restart went and beam's visits are main's.
 - **A world change casts again only the light tiles it reaches** (aa2ee5efef):
   `light_hit` p95 17 to 5.2–5.4, `light_walk` 25–28 to 11.5–15, busy p95 112 to
-  80–88, an actor walking under the circle. Replaces the 11-02 minute by the user's
+  80–88, a character walking under the circle. Replaces the 11-02 minute by the user's
   word. No stale or missing tile seen at phone size.
 - **One module for miss and miss_list** (c83fd6f67b): 84 modules, 977 KB, where 85
   were 1,036 KB; the Tint test and the probe make all 88 pipelines (they made only a
@@ -104,7 +104,7 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   words, 2.1 M atomic stores serialized.
 
 - **The receivers' stands once a tile a workgroup** (repeats.patch on c83fd6f67b, the
-  shelf, the S23 hot, ×2 alternating): `light_receivers` 14.4 to 4.4 ms with an actor
+  shelf, the S23 hot, ×2 alternating): `light_receivers` 14.4 to 4.4 ms with a character
   walking, busy −10 ms; shadow edges and exposure the same. A root line shared by
   every beam ray bought nothing (`beam_hit` even) and goes.
 - **The page's GPU memory, read from the code** (main 417494fe4a): 437 MiB on the Mac
@@ -141,7 +141,7 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   frame at 60 Hz (world 4.6); driving, gated frames carry 10.2 s of GPU against cast
   frames' 2.0, with `mark` at 6.2 ms. One world query is ~0.1–0.2 ms p50 and 15–25% of
   an asking pass's p95. So neither the kernel's cast rate nor the world's rules are
-  the next lever. The camera follows the actor, so "actor walking, camera still" were
+  the next lever. The camera follows the character, so "character walking, camera still" were
   full casts: map-gate's no gain on receivers-only casts is unproven either way.
 
 - **Safari's page memory measured, every phase** (af434aad6e, the shelf, each pass in
@@ -158,7 +158,7 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   vertical drag. Fixed in collision.rs with a test, and drive.ts tilts to just over
   the horizon. So every drive figure above is ~6 s of casts plus ~14 s of one standing
   close-up: its cast frames' and passes' tails compare only with each other, its fps
-  and gated share mean nothing, and `mark` 6.2 ms is the actor's fragments up close.
+  and gated share mean nothing, and `mark` 6.2 ms is the character's fragments up close.
   The honest drive's baseline (one run): 326 frames all cast, fps 16.4, busy 52/115,
   `light_walk` p95 39, `miss` 27, `light_sample` 18.5, `sample` 17.
 - **The atomics, second round** (patch held for the Mac's GPU tests): a slot's key
@@ -256,7 +256,7 @@ The largest moves: `light_hit`/`light_walk` tails −90%, `light_receivers` −5
   which puts the weight on the single large command buffer. submits.patch's Safari run
   waits for a force-quit.
 
-- **`light_receivers`** 6.9–8.1 ms every frame with an actor walking, the largest
+- **`light_receivers`** 6.9–8.1 ms every frame with a character walking, the largest
   light cost now; receivers.patch is being measured.
 - **Lighting not run under decor** (a depth-only screen draw, decor clearing a
   stencil bit): not built. The 8 stencil bits are the gate's numbers, so a coverage

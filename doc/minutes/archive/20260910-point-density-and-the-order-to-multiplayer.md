@@ -4,7 +4,7 @@
 "should character models move to R2" (see
 [20260910-asset-identity-and-storage-model.md](./20260910-asset-identity-and-storage-model.md))
 and ended somewhere else: the question that actually decides the storage model
-is what happens at ten thousand billboards, or ten thousand actors, in a small
+is what happens at ten thousand billboards, or ten thousand characters, in a small
 space. Nothing here is built. This records the shape of the problem and the
 order the pieces have to arrive in, so the next pass does not re-derive it.
 
@@ -23,7 +23,7 @@ fails differently: a dense grid costs cells whether or not anything is in them.
 For sparse, moving, three-dimensional points the convention is a **spatial
 hash** — quantize the position, hash it, bucket the entity — which is
 insensitive to both density and emptiness and makes re-insertion on movement
-cheap. Actors move every frame; that last property is not optional.
+cheap. Characters move every frame; that last property is not optional.
 
 ## Three dimensions, not two and a half
 
@@ -80,7 +80,7 @@ The structural point under all of it:
 
 Engines that collapse store and index break when density changes. pixelet
 collapses them for placed objects today and gets away with it because objects
-are cell-quantized and static. Billboards and actors are neither.
+are cell-quantized and static. Billboards and characters are neither.
 
 ## The order, and why this is not the moment
 

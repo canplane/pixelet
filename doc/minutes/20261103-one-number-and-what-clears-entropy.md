@@ -41,7 +41,7 @@ Three enums name the kinds, each saying something else: `Kind` the number's bits
   shell checks before keeping what it chose.
 
 The protocol's `Tool` (`ActiveTool` before; the user took the name, and `Item` for what is
-held: an asset may be an actor or the sky, which nothing holds) is the pointer, the eraser
+held: an asset may be a character or the sky, which nothing holds) is the pointer, the eraser
 or an item, whose id says its kind. In the kernel `Tool` is an enum: only an item has a
 scale, and it keeps no size to remember.
 The shell's dock store keeps the tool, the id and the scale, and the snapshot gives only

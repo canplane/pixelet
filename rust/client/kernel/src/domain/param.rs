@@ -4,5 +4,5 @@
 //! their own, and the one they share is here, the lowest place both read.
 
 /// The rate a position eases at (approach.rs), the camera's and the
-/// companion's alike.
+/// characters' alike.
 pub const POS_DAMP: f64 = 10.0;

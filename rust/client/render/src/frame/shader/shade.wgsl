@@ -1,4 +1,4 @@
-// The shading every lit pass shares, so the screen's cells, decor and an actor cannot be lit differently.
+// The shading every lit pass shares, so the screen's cells, decor and a character cannot be lit differently.
 
 // How much a face brightens where it turns from the eye, as a share of its own
 // light.

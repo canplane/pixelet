@@ -1,14 +1,14 @@
-// @pxl/client/shell/catalog/asset/actor.spec.ts
+// @pxl/client/shell/catalog/asset/character.spec.ts
 //
-// GENERATED from spec/spec/asset/actor.json
+// GENERATED from spec/spec/asset/character.json
 //
-// The actor kind (id.json): a person or a pet, a model with clips, the
+// The character kind (id.json): a person or a pet, a model with clips, the
 // characters a player can be. Each group's models by their path under
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
-import * as Group from "./actor/group.spec.ts";
-import * as GENDER from "./actor/gender.spec.ts";
+import * as Group from "./character/group.spec.ts";
+import * as GENDER from "./character/gender.spec.ts";
 
 /** The groups a character is of, each numbered, and in each its variants,
  * each numbered by its row, row for row with its models, the colormap its pack

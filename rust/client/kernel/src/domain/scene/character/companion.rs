@@ -1,43 +1,37 @@
 // pxl-kernel/domain/scene/character/companion.rs
 
-//! A companion (person + pet) at pivot. When pivot comes to rest it
-//! makes a fixed-duration catch-up walk there; in follow mode, where
-//! pivot is a ~1 Hz GPS stream that never rests, or steered by the keys,
-//! it instead glides at the world-scroll rate so the two cancel and it
-//! holds at screen center.
-//!
-//! The person and the pet are each a figure the walk moves (`Figure`), a
-//! holder of its actor's instance, which it stands where it is; the
-//! person's holds its chat line too, a marker over its head, and says
-//! whether it shows (`line_hangs`). Neither instance is anchored to the
-//! other.
+//! The companion: the person and the pet the player chose, which it keeps,
+//! and how each walks to the pivot. When the pivot comes
+//! to rest each makes a fixed-duration catch-up walk there; in follow mode,
+//! where the pivot is a ~1 Hz GPS stream that never rests, or steered by
+//! the keys, each instead glides at the world-scroll rate so the two cancel
+//! and it holds at screen center. Neither is anchored to the other: the pet
+//! walks to its own place beside the person's. While the eye is the pivot
+//! neither is placed, and each is placed again at its target once the eye
+//! leaves it.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::param;
 use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
-use crate::domain::scene::actor::{Actor, Transform};
 use crate::domain::scene::character::param::{
     CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
 };
-use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::model;
-use crate::domain::scene::model::asset::{model_of, ModelHandle};
-use crate::domain::scene::model::draw_list;
 use crate::domain::scene::model::registry::Models;
+use crate::domain::scene::model::{draw_list, models};
+use crate::domain::scene::transform::Transform;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::io::loader::{load_image, load_of};
-use crate::sys::mem::section;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::tick::TickContext;
-use pxl_render::frame::draw::DrawList;
-use pxl_spec::asset::actor::IDLE_CLIP;
+use pxl_render::frame::draw::{Draw, DrawList};
+use pxl_render::gpu::api::Image;
+use pxl_spec::asset::character::IDLE_CLIP;
 use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -46,10 +40,6 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::clock;
 use xpute_core::global::Global;
-
-/// The figures the companion holds, the person and the pet, each one
-/// actor's instance.
-pub const FIGURES: usize = Group::ALL.len();
 
 // The world scroll's own rate: the two cancel, holding the character at
 // screen center, so this is the only position smoothing while following.
@@ -63,21 +53,216 @@ fn back_to_camera(azimuth: f64) -> f64 {
     FOLLOW_FACING - azimuth
 }
 
-struct ActorModel {
-    actor: Actor,
-    model: ModelHandle,
+/// Radians, 0 = +x.
+pub fn heading_to(from: [f64; 2], to: [f64; 2]) -> f64 {
+    libm::atan2(to[1] - from[1], to[0] - from[0])
 }
 
-/// A person or a pet: a figure the walk moves, holding its actor's
-/// instance once its model and skin have landed.
-struct Figure {
-    character: Character,
-    actor: Option<ActorModel>,
-    /// Where its actor stands, once held and placed.
-    transform: Option<Transform>,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WalkPlan {
+    pub start: [f64; 2],
+    pub target: [f64; 2],
+    pub start_time: f64,
+    pub duration: f64,
+}
+
+impl WalkPlan {
+    /// Where it is at `now`, and its heading, none once arrived. It takes
+    /// `duration` whatever the distance, so the person and the pet catch up
+    /// on the same beat after a pan of 1 unit or 1000.
+    pub fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
+        let frac = if self.duration > 0.0 {
+            ((now - self.start_time) / self.duration).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let at = std::array::from_fn(|k| self.start[k] + (self.target[k] - self.start[k]) * frac);
+        (
+            at,
+            (frac < 1.0).then(|| heading_to(self.start, self.target)),
+        )
+    }
+}
+
+/// Settles when the target stops changing, whatever moved it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SettleTracker {
+    pub last_seen: [f64; 2],
+    pub last_change_time: f64,
+    pub settled_at: [f64; 2],
+}
+
+impl SettleTracker {
+    pub fn new(at: [f64; 2], now: f64) -> SettleTracker {
+        SettleTracker {
+            last_seen: at,
+            last_change_time: now,
+            settled_at: at,
+        }
+    }
+
+    /// Whether it settled just now.
+    pub fn update(&mut self, target: [f64; 2], now: f64, delay: f64) -> bool {
+        if target != self.last_seen {
+            (self.last_seen, self.last_change_time) = (target, now);
+        }
+        let settles = now - self.last_change_time >= delay && self.last_seen != self.settled_at;
+        if settles {
+            self.settled_at = self.last_seen;
+        }
+        settles
+    }
+}
+
+/// What the companion's walk reads of the camera each turn, in the world's
+/// doubles.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Camera {
+    /// Where its pivot is going.
+    pub pivot: [f64; 2],
+    /// The top of the floor the pivot is drawn on; none while nothing is
+    /// known there, when the person and the pet hold where they are.
+    pub floor: Option<f64>,
+    /// The camera's heading, which the person and the pet turn their backs to.
+    pub azimuth: f64,
+    /// Whether the camera is being dragged, whose release ends a catch-up.
+    pub dragging: bool,
+    /// Whether the keys steer it, and whether the map follows the device.
+    pub steered: bool,
+    pub following: bool,
+    /// The eye, which decides whether it walks or the world is a map, and
+    /// what it is drawn standing on.
+    pub eye: Q3,
+}
+
+#[derive(Default)]
+struct Companion {
+    /// Its person and its pet, by their group's number, each once it has
+    /// landed.
+    characters: [Option<Character>; Group::ALL.len()],
+    /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
+    pivot_floor: Memo<Q3, Option<f64>>,
+    /// The pet's floor beside the person, walked to from the person's: of
+    /// the pivot and its floor, the pet's target and whether the eye sees a
+    /// walk there (`walks`).
+    pet_floor: Memo<([f64; 2], f64, [f64; 2], bool), f64>,
+}
+
+static COMPANION: Global<Companion> = Global::new();
+
+fn companion() -> &'static mut Companion {
+    COMPANION.get(Companion::default)
+}
+
+/// The floor the pivot `goal` is drawn on: `ask`'s of the world, kept while
+/// the pivot stands and no change touched what it read (`Memo`), as the
+/// companion's own floors are.
+pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
+    let c = companion();
+    c.pivot_floor.forget_touched();
+    c.pivot_floor.of(World::now(), goal, ask)
+}
+
+/// The companion's person and pet, each the row its setting names, a
+/// character of another row let go for it; each walked to the pivot, or
+/// none placed while the eye is the pivot (`camera` none).
+pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
+    let s = companion();
+    s.pet_floor.forget_touched();
+    // Looked at each frame turn, a pivot not asked of this one too.
+    s.pivot_floor.forget_touched();
+    let settings = settings_store();
+    for (slot, (group, number)) in s
+        .characters
+        .iter_mut()
+        .zip([(Group::person, settings.person), (Group::pet, settings.pet)])
+    {
+        if slot.as_ref().is_some_and(|c| c.number != number) {
+            if let Some(c) = slot.take() {
+                c.free(draw_list());
+            }
+        }
+        if slot.is_none() {
+            *slot = Character::of(group, number);
+        }
+        if let Some(c) = slot {
+            c.walk.floor.forget_touched();
+        }
+    }
+    let [person, pet] = &mut s.characters;
+    let Some(camera) = camera else {
+        for c in [person, pet].into_iter().flatten() {
+            (c.transform, c.walk) = (None, Walk::new(c.walk.at));
+        }
+        return;
+    };
+    // While nothing is known under the pivot each holds where it is, and
+    // the rest of it steps on.
+    let hold = |c: &Character| c.walk.stands_z.map(|z| (c.walk.at, z));
+    if let Some(person) = person {
+        if let Some((target, z)) = camera
+            .floor
+            .map(|z| (camera.pivot, z))
+            .or_else(|| hold(person))
+        {
+            person.step(ctx, target, z, &camera);
+        }
+    }
+    let Some(pet) = pet else { return };
+    let target = [camera.pivot[0] + PET_OFF[0], camera.pivot[1] + PET_OFF[1]];
+    // Its own floor beside the person, walked to from the person.
+    let reached = |(beside, _): &([f64; 2], f64)| {
+        libm::hypot(beside[0] - target[0], beside[1] - target[1]) <= WALK_EPS
+    };
+    let from = |floor: f64| world_to_canonical(&[camera.pivot[0], camera.pivot[1], over(floor)]);
+    let pet_floor = &mut s.pet_floor;
+    let mut walked = |floor: f64| {
+        let of = (
+            camera.pivot,
+            floor,
+            target,
+            walks(&from(floor), &camera.eye),
+        );
+        pet_floor.of(World::now(), of, |world| {
+            walk_to(world, camera.pivot, floor, target, &camera)
+                .filter(reached)
+                .map_or(floor, |(_, z)| z)
+        })
+    };
+    if let Some((target, z)) = camera
+        .floor
+        .map(|z| (target, walked(z)))
+        .or_else(|| hold(pet))
+    {
+        pet.step(ctx, target, z, &camera);
+    }
+}
+
+impl Character {
+    /// Walked toward `target`, standing at `arrive_z` there, and stood where
+    /// its walk ends, playing its walk clip while it walks; a walk begun
+    /// afresh where it stood nowhere.
+    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, camera: &Camera) {
+        if self.transform.is_none() {
+            self.walk = Walk::new(target);
+        }
+        let (at, rot, walking) = self.walk.step(ctx, target, arrive_z, camera);
+        // Its model as registered, the character's height tall.
+        self.transform = Some(Transform {
+            at,
+            rot,
+            scale: 1.0,
+        });
+        let clip = if walking { self.move_clip() } else { IDLE_CLIP };
+        self.play(models(), clip, CLIP_FADE_S);
+    }
+}
+
+/// A character's walk: where it is, its heading, its plan and the floor it
+/// stands on.
+pub struct Walk {
     at: [f64; 2],
     heading: f64,
-    actor_clip: Option<u32>,
     was_following: bool,
     walk_plan: Option<WalkPlan>,
     /// Its falling edge, a gesture's end, fixes the destination.
@@ -91,15 +276,12 @@ struct Figure {
     floor: Memo<([f64; 2], f64, Zoom), f64>,
 }
 
-impl Figure {
-    fn new(character: &Character, target: [f64; 2]) -> Figure {
-        Figure {
-            character: *character,
-            actor: None,
-            transform: None,
-            at: [0.0; 2],
+impl Walk {
+    /// At `target`, standing nowhere yet.
+    pub fn new(target: [f64; 2]) -> Walk {
+        Walk {
+            at: target,
             heading: 0.0,
-            actor_clip: None,
             was_following: false,
             walk_plan: None,
             was_dragging: false,
@@ -111,49 +293,22 @@ impl Figure {
         }
     }
 
-    /// Placed at the target on creation.
-    fn acquire(&mut self, target: [f64; 2]) {
-        let character = self.character;
-        if self.actor.is_some() {
-            return;
-        }
-        let (Some(model), Some(_)) = (
-            model_of(character.model, Some(character.height_u)),
-            load_of(character.skin).and_then(load_image),
-        ) else {
-            return;
-        };
-        let Some(Some(actor)) =
-            section::map().map(|_| Actor::new(draw_list(), model::models(), model.model))
-        else {
-            return;
-        };
-        self.actor = Some(ActorModel { actor, model });
-        self.at = target;
-    }
-
-    fn release(&mut self) {
-        self.transform = None;
-        if let Some(held) = self.actor.take() {
-            if section::map().is_some() {
-                held.actor.free(draw_list());
-            }
-        }
-    }
-
-    /// `follows`: the target is followed as it moves, by a fix or by the keys,
-    /// rather than walked to once it settles; a steered one faces its way.
-    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, p: &CompanionProps) {
-        let (follows, steered) = (p.following || p.steered, p.steered);
-        let character = self.character;
-        self.acquire(target);
-        if self.actor.is_none() {
-            return;
-        }
+    /// Toward `target`, standing at `arrive_z` there: where it stands, its
+    /// turn about Z and whether it walks. `follows`: the target is followed
+    /// as it moves, by a fix or by the keys, rather than walked to once it
+    /// settles; a steered one faces its way.
+    fn step(
+        &mut self,
+        ctx: &TickContext,
+        target: [f64; 2],
+        arrive_z: f64,
+        camera: &Camera,
+    ) -> ([f64; 3], f32, bool) {
+        let (follows, steered) = (camera.following || camera.steered, camera.steered);
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
         let now = clock::now() / 1000.0;
-        let dragging = p.dragging;
+        let dragging = camera.dragging;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
@@ -164,7 +319,7 @@ impl Figure {
             let a = smoothing_factor(FOLLOW_LERP_K, ctx.delta);
             at = std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a);
             if !steered {
-                self.heading = back_to_camera(p.azimuth);
+                self.heading = back_to_camera(camera.azimuth);
             } else if gap(target, self.at) > WALK_EPS {
                 self.heading = heading_to(self.at, target) + core::f64::consts::PI / 2.0;
             }
@@ -222,11 +377,11 @@ impl Figure {
             at = step;
             is_walking = heading.is_some();
 
-            // The actor's Y-up to Z-up turn maps the model's forward to +Y, hence +PI/2.
+            // The character's Y-up to Z-up turn maps the model's forward to +Y, hence +PI/2.
             if let Some(heading) = heading {
                 self.heading = heading + core::f64::consts::PI / 2.0;
             } else if !self.init_facing_done {
-                self.heading = back_to_camera(p.azimuth);
+                self.heading = back_to_camera(camera.azimuth);
                 self.init_facing_done = true;
             }
         }
@@ -243,7 +398,7 @@ impl Figure {
             *stands = arrive_z;
         } else if moved {
             // Where the leaf under it, or a map's `to`, is not held, it goes on at its height.
-            if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, p) {
+            if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, camera) {
                 (at, *stands) = if follows && gap(to, at) > WALK_EPS {
                     (target, arrive_z)
                 } else {
@@ -252,220 +407,17 @@ impl Figure {
             }
         }
         self.at = at;
-
-        let Some(held) = &mut self.actor else { return };
-        self.transform = Some(Transform {
-            at: [at[0], at[1], drawn_floor(&mut self.floor, at, *stands, p)],
-            rot_z: self.heading as f32,
-            scale: held.model.scale,
-        });
-        let clip = if is_walking {
-            character.move_clip
-        } else {
-            IDLE_CLIP
-        };
-        if self.actor_clip != Some(clip) {
-            if clip < held.model.clip_cnt {
-                held.actor.play(
-                    clip,
-                    if self.actor_clip.is_none() {
-                        0.0
-                    } else {
-                        CLIP_FADE_S
-                    },
-                );
-            }
-            self.actor_clip = Some(clip);
-        }
+        let stands = *stands;
+        (
+            [
+                at[0],
+                at[1],
+                drawn_floor(&mut self.floor, at, stands, camera),
+            ],
+            self.heading as f32,
+            is_walking,
+        )
     }
-
-    /// Its actor and where it stands, once both are.
-    fn drawn(&mut self) -> Option<(&mut Actor, Transform)> {
-        Some((&mut self.actor.as_mut()?.actor, self.transform?))
-    }
-}
-
-struct Companion {
-    person: Option<Figure>,
-    pet: Option<Figure>,
-    /// The pet's floor beside the person, walked to from the person's: of
-    /// the person's place and floor, the pet's target and whether the eye
-    /// sees a walk there (`walks`).
-    beside: Memo<([f64; 2], f64, [f64; 2], bool), f64>,
-    /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
-    floor: Memo<Q3, Option<f64>>,
-    /// Whether the character is the one looking, the eye at the pivot: no
-    /// figure is drawn, so none is loading.
-    looking: bool,
-}
-
-static COMPANION: Global<Companion> = Global::new();
-
-fn companion() -> &'static mut Companion {
-    COMPANION.get(|| Companion {
-        person: None,
-        pet: None,
-        beside: Memo::NONE,
-        floor: Memo::NONE,
-        looking: false,
-    })
-}
-
-/// In the world's doubles.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CompanionProps {
-    pub pivot: [f64; 2],
-    /// The top of the floor the pivot is drawn on; none while nothing is
-    /// known there, when the figures hold where they are.
-    pub floor: Option<f64>,
-    /// The camera's heading, which the companion turns its back to.
-    pub azimuth: f64,
-    /// Whether the camera is being dragged, whose release ends a catch-up.
-    pub dragging: bool,
-    /// Whether the keys steer it, and whether the map follows the device.
-    pub steered: bool,
-    pub following: bool,
-    /// The eye, which decides whether it walks or the world is a map, and
-    /// what it is drawn standing on.
-    pub eye: Q3,
-}
-
-/// The floor the pivot `goal` is drawn on: `ask`'s of the world, kept while
-/// the pivot stands and no change touched what it read (`Memo`), as the
-/// figures' own floors are.
-pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
-    let c = companion();
-    c.floor.forget_touched();
-    c.floor.of(World::now(), goal, ask)
-}
-
-fn figure_for<'a>(
-    slot: &'a mut Option<Figure>,
-    character: &Character,
-    target: [f64; 2],
-) -> &'a mut Figure {
-    if slot
-        .as_ref()
-        .is_some_and(|w| w.character.number != character.number)
-    {
-        if let Some(mut old) = slot.take() {
-            old.release();
-        }
-    }
-    slot.get_or_insert_with(|| Figure::new(character, target))
-}
-
-pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
-    let c = companion();
-    c.beside.forget_touched();
-    // Looked at each frame turn, a pivot not asked of this one too.
-    c.floor.forget_touched();
-    for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
-        f.floor.forget_touched();
-    }
-    c.looking = props.is_none();
-    let Some(p) = props else {
-        for slot in [&mut c.person, &mut c.pet] {
-            if let Some(mut w) = slot.take() {
-                w.release();
-            }
-        }
-        return;
-    };
-    let settings = settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (
-        Character::of(Group::person, settings.person),
-        Character::of(Group::pet, settings.pet),
-    ) else {
-        return;
-    };
-    let (person_variant, pet_variant) = (&person_variant, &pet_variant);
-    let person_target = p.pivot;
-    let person = figure_for(&mut c.person, person_variant, person_target);
-    // While nothing is known under the pivot each figure holds where it is,
-    // and the rest of it steps on.
-    let hold = |f: &Figure| f.stands_z.map(|z| (f.at, z));
-    if let Some((target, z)) = p.floor.map(|z| (person_target, z)).or_else(|| hold(person)) {
-        person.step(ctx, target, z, &p);
-    }
-
-    let pet_target = [p.pivot[0] + PET_OFF[0], p.pivot[1] + PET_OFF[1]];
-    let pet = figure_for(&mut c.pet, pet_variant, pet_target);
-    // Its own floor beside the person, walked to from the person.
-    let reached = |(beside, _): &([f64; 2], f64)| {
-        libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS
-    };
-    let from = |floor: f64| world_to_canonical(&[p.pivot[0], p.pivot[1], over(floor)]);
-    let mut walked = |floor: f64| {
-        let of = (p.pivot, floor, pet_target, walks(&from(floor), &p.eye));
-        c.beside.of(World::now(), of, |w| {
-            walk_to(w, p.pivot, floor, pet_target, &p)
-                .filter(reached)
-                .map_or(floor, |(_, z)| z)
-        })
-    };
-    if let Some((target, z)) = p
-        .floor
-        .map(|z| (pet_target, walked(z)))
-        .or_else(|| hold(pet))
-    {
-        pet.step(ctx, target, z, &p);
-    }
-}
-
-/// Each figure's actor advanced where it stands; whether one the eye can
-/// see moved (`Actor::tick`).
-pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-    let c = companion();
-    let mut moved = false;
-    for (actor, transform) in [&mut c.person, &mut c.pet]
-        .into_iter()
-        .flatten()
-        .filter_map(Figure::drawn)
-    {
-        moved |= actor.tick(draw, models, frame, &transform);
-    }
-    moved
-}
-
-/// Each figure's actor into the frame's list, where it stands.
-pub fn companion_draw(draw: &mut DrawList, models: &Models) {
-    let c = companion();
-    for (actor, transform) in [&mut c.person, &mut c.pet]
-        .into_iter()
-        .flatten()
-        .filter_map(Figure::drawn)
-    {
-        actor.draw(draw, models, &transform);
-    }
-}
-
-/// Where the person's line hangs, over its head, while the person shows it,
-/// seen from `eye`: while the person is drawn (its transform is set
-/// only while it holds its actor), and where the camera grid's cell at its
-/// feet is one a marker shows at (`marker_shows`), so a line reads where
-/// the markers about it do.
-pub fn line_hangs(eye: V3) -> Option<Q3> {
-    let person = companion().person.as_ref()?;
-    let feet = person.transform?.at;
-    let over = [
-        feet[0],
-        feet[1],
-        feet[2] + person.character.height_u + HEAD_CLEARANCE_U,
-    ];
-    marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
-}
-
-/// (model, image handle) for the shell's skinned pass: the image as the
-/// loader has it now, which a lost device takes back until it lands again.
-pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
-    let c: &'static _ = companion();
-    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| {
-        Some((
-            w.actor.as_ref()?.model.model,
-            load_of(w.character.skin).and_then(load_image)?,
-        ))
-    })
 }
 
 /// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:
@@ -476,10 +428,10 @@ fn walk_to(
     from: [f64; 2],
     stands: f64,
     to: [f64; 2],
-    p: &CompanionProps,
+    camera: &Camera,
 ) -> Option<([f64; 2], f64)> {
     let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
-    let at = to_world(&world.step_slide(&a, &b, &p.eye, true, true)?);
+    let at = to_world(&world.step_slide(&a, &b, &camera.eye, true, true)?);
     Some(([at[0], at[1]], under(at[2])))
 }
 
@@ -491,28 +443,81 @@ fn drawn_floor(
     asked: &mut Memo<([f64; 2], f64, Zoom), f64>,
     at: [f64; 2],
     stands: f64,
-    p: &CompanionProps,
+    camera: &Camera,
 ) -> f64 {
     let center = [at[0], at[1], over(stands)];
-    let eye = to_world(&p.eye);
+    let eye = to_world(&camera.eye);
     let r2 = (0..3)
         .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
         .sum();
     let zoom = GROUND.z_at(r2);
-    asked.of(World::now(), (at, stands, zoom), |w| {
-        w.floor_under(&world_to_canonical(&center), zoom)
+    asked.of(World::now(), (at, stands, zoom), |world| {
+        world
+            .floor_under(&world_to_canonical(&center), zoom)
             .val()
             .flatten()
             .unwrap_or(stands)
     })
 }
 
-/// Whether the person, then the pet, has loaded, for the loading toast: a
-/// figure holds its actor once its model and skin have arrived, and a fresh
-/// one holds none; while the character is the one looking none is drawn,
-/// so none is loading.
+/// Where the person's line hangs, over its head, while the person shows it,
+/// seen from `eye`: while the walk stands it, and where the camera grid's
+/// cell at its feet is one a marker shows at (`marker_shows`), so a line
+/// reads where the markers about it do.
+pub fn line_hangs(eye: V3) -> Option<Q3> {
+    let person = companion().characters[Group::person as usize].as_ref()?;
+    let feet = person.transform?.at;
+    let over = [
+        feet[0],
+        feet[1],
+        feet[2] + person.height_u() + HEAD_CLEARANCE_U,
+    ];
+    marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
+}
+
+/// (model, image handle) for the world's skinned pass: the image as the
+/// loader has it now, which a lost device takes back until it lands again.
+pub fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
+    let c: &'static _ = companion();
+    c.characters
+        .iter()
+        .flatten()
+        .filter_map(|c| Some((c.model, c.skin()?)))
+}
+
+/// Whether the person, then the pet, has landed, for the loading toast.
 pub fn companion_ready() -> [bool; 2] {
-    let c = companion();
-    let looking = c.looking;
-    [&c.person, &c.pet].map(|f| looking || f.as_ref().is_some_and(|f| f.actor.is_some()))
+    companion().characters.each_ref().map(Option::is_some)
+}
+
+/// Each of its characters advanced; whether one a view can see moved
+/// (`Character::tick`), a preview showing the person, the pet or both
+/// (`previewed`, by their group's number).
+pub fn companion_animate(
+    draw: &mut DrawList,
+    models: &Models,
+    frame: &Frame,
+    previewed: [bool; 2],
+) -> bool {
+    let mut moved = false;
+    for (c, previewed) in companion().characters.iter_mut().zip(previewed) {
+        if let Some(c) = c {
+            moved |= c.tick(draw, models, frame, previewed);
+        }
+    }
+    moved
+}
+
+/// Each of its characters into the world's list (`Character::draw`).
+pub fn companion_draw(draw: &mut DrawList, models: &Models) {
+    for c in companion().characters.iter().flatten() {
+        c.draw(draw, models);
+    }
+}
+
+/// Its character of `group` as a preview draws it, and its skin, the image
+/// as the loader has it now; none while either is not in.
+pub fn companion_preview(group: Group) -> Option<(Draw, Image)> {
+    let c = companion().characters[group as usize].as_ref()?;
+    Some((c.preview_draw(models())?, c.skin()?))
 }

@@ -4,7 +4,7 @@
 host, role by role, for one job done by more than one mechanism, or a shared
 mechanism left with a single user. Found, not fixed; each line says the one
 mechanism it should be. Items already being changed elsewhere (the markers'
-labels, the actors' table, the chunk rung, the clouds' definition, the texture
+labels, the characters' table, the chunk rung, the clouds' definition, the texture
 pack's load number, `variant.json`) are left out.
 
 ## Found

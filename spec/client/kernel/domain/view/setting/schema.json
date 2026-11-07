@@ -19,7 +19,7 @@
     "numbers are what crosses and what storage keeps; the names are the",
     "shell's alone, for its rows and the locale. A number is given out once;",
     "the generator refuses one given twice. An `index` is a place in a list",
-    "kept elsewhere — the person and the pet are by theirs in actor.json — and",
+    "kept elsewhere — the person and the pet are by theirs in character.json — and",
     "crosses as itself."
   ],
   "RES_MODES": {
@@ -259,7 +259,7 @@
         "rays are, none where neither is up; beams and samples on",
         "the node cache, the boxes they stop at drawn and a texel's sample",
         "taken, the rest walked (pxl-render queue.wgsl), recast only where what it",
-        "reads moves; decor and the actors drawn into it depth only, and a 3x3",
+        "reads moves; decor and the characters drawn into it depth only, and a 3x3",
         "compare per fragment; 16 MB of map."
       ],
       "kind": "toggle",
@@ -306,8 +306,8 @@
       "default": false,
       "section": "debug"
     },
-    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
-    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in character.json's person keys."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in character.json's pet keys."] }, "section": "character" },
     "ray_counts": {
       "number": 20,
       "$doc": [

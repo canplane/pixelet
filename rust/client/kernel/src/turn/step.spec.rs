@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const STEP_NAMES: usize = 10;
+pub const STEP_NAMES: usize = 9;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -28,14 +28,13 @@ pub enum StepName {
     ghost = 4,
     environment = 5,
     companion = 6,
-    preview = 7,
-    demand = 8,
-    scene = 9,
+    demand = 7,
+    scene = 8,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 10] = [
+    pub const ALL: [StepName; 9] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
@@ -43,7 +42,6 @@ impl StepName {
         StepName::ghost,
         StepName::environment,
         StepName::companion,
-        StepName::preview,
         StepName::demand,
         StepName::scene,
     ];

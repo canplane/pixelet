@@ -1,11 +1,11 @@
 // @pxl/client/shell/drawer/character/character.ts
 
-/** The playable characters from actor.json. Persons are split by gender for the picker. */
+/** The playable characters from character.json. Persons are split by gender for the picker. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/shell/setting/schema.ts";
-import { GENDER, Group, groups } from "@/shell/catalog/asset/actor.spec.ts";
+import { GENDER, Group, groups } from "@/shell/catalog/asset/character.spec.ts";
 
 export interface Character {
   group: u32;
@@ -28,7 +28,7 @@ export const PETS: readonly Pet[] = groups.pet.label.map((label, number) => ({
   label,
 }));
 
-/** A person's gender (actor.spec.ts `GENDER`). */
+/** A person's gender (character.spec.ts `GENDER`). */
 export type Gender = number;
 export const GENDERS: readonly Gender[] = [GENDER.female, GENDER.male];
 

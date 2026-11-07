@@ -324,7 +324,7 @@ const LIGHT_STOPS_BINDS: Group = Group {
 /// The render pipelines each render pass with an indirect draw draws, whose groups are all the
 /// pass sets: the eye's raster (ray/raster.rs `Raster::draw`) and the light's
 /// (`Raster::light_draw`); the shadow map's pass (gpu/shadow.rs `Shadow::begin`, then the
-/// decor's and the actors' depth, gpu/renderer.rs `frame`); and the world's lit pass, from its
+/// decor's and the characters' depth, gpu/renderer.rs `frame`); and the world's lit pass, from its
 /// gate to the ghosts (gpu/renderer.rs `frame`).
 pub const RASTER_PASS: &[u32] = &[PIPELINE_RASTER_GATE, PIPELINE_RASTER];
 pub const LIGHT_RASTER_PASS: &[u32] = &[PIPELINE_RASTER];

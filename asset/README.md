@@ -15,14 +15,14 @@ from. Data, not code — nothing in the repository imports a file from here.
 ```
 asset/
 ├── content/
-│   ├── actor/   character and companion models (Kenney)
-│   ├── cube/    the texture pack's tiles: terrain/ and object/ at 256²
-│   ├── decor/   trees, boats, cars, trains (Kenney)
-│   └── sky/     the Moon's near side (NASA), cloud/: the cumulus (Quaternius, CC0)
+│   ├── character/  the people and the pets a player can be (Kenney)
+│   ├── cube/       the texture pack's tiles: terrain/ and object/ at 256²
+│   ├── decor/      trees, boats, cars, trains (Kenney)
+│   └── sky/        the Moon's near side (NASA), cloud/: the cumulus (Quaternius, CC0)
 └── raw/
-    ├── cube/    the pack's manifest and its originals at source size
-    ├── place/   symbol/: the place icons (openstreetmap-carto `symbols/`, CC0), drawn into code
-    └── sky/     moon/, star/: NASA's map and CDS's catalog, as fetched
+    ├── cube/       the pack's manifest and its originals at source size
+    ├── place/      symbol/: the place icons (openstreetmap-carto `symbols/`, CC0), drawn into code
+    └── sky/        moon/, star/: NASA's map and CDS's catalog, as fetched
 ```
 
 ## What to run, and when

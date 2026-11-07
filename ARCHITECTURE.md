@@ -597,7 +597,7 @@ It casts only what a receiver reads:
   the world, each voxel's box of the eye  ┐
     and each pixel it walked apart        │
   decor, where it is placed               ├─▶ lists the tiles it stands on,
-  an actor, the beacon, where drawn       ┘   within the effects' reach,
+  a character, the beacon, where drawn    ┘   within the effects' reach,
                                               and its footprint
                                               (record_draw_cs, light_mark_walked_cs,
                                                light_mark_draws_cs)
@@ -631,9 +631,9 @@ tile: the box follows the eye a tile at a time, and what the cast read moves
 with it; a tile the box slid onto, or slid into another band, is read anew, the
 rest stand (`light_slide_cs`, `light.rs` `Light::keeps`).
 
-Decor and the actors, which move, are drawn into the map each frame, their depth
-only. A receiver compares nine taps, each moved by its own plane's slope, and
-casters are pushed by the same formula, so a plane does not shadow itself
+Decor and the characters, which move, are drawn into the map each frame, their
+depth only. A receiver compares nine taps, each moved by its own plane's slope,
+and casters are pushed by the same formula, so a plane does not shadow itself
 (`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
 outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 (`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
@@ -642,11 +642,14 @@ outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 
 Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged
 by the pipeline that draws them, each with its mesh and uniform, for what the
-kernel decides to draw beside the world — the cumulus clouds, the actors, the
-location indicator that shows where the device is, an edit's ghost box, the
-markers and the debug lines. An actor's draw also records where it stands
+kernel decides to draw beside the world — the cumulus clouds, the characters,
+the location indicator that shows where the device is, an edit's ghost box, the
+markers and the debug lines. A character's draw also records where it stands
 (`DrawList::stand`), for the shadow map. The rays and the generated decor are
-not in it.
+not in it, nor a preview's character: a preview of the character picker draws
+the companion's person or pet by an eye of its own, its draw handed to it
+apart from the list, so what the world's eye sees of the character moves
+nothing there (`gpu/pass/preview.rs`).
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
 (`gpu/renderer.rs` `render_frame`), which draws every open surface, the world
@@ -662,7 +665,7 @@ world pass  generated decor → rays at their depth → generated impostors,
             each toned into the world's color, linear → the occlusion's
             half-resolution map brought to each pixel and multiplied into
             the color, as the claimed tiles' quads →
-            sky and stars at the far plane → listed actors, cumulus,
+            sky and stars at the far plane → listed characters, cumulus,
             impostors → high cloud planes → location indicator, ghosts
 occlusion   N8AO found at half resolution off the depth the world pass laid
             before its map, where what it reads moved: the pass ends there
@@ -1327,7 +1330,7 @@ them.
 | Kasten and Young; Ballesteros                                                                                                          | `pxl-render frame/shader/star.wgsl`, `gpu/star.rs`                                      | Airmass at the horizon; a star's color from B−V                                                                                          |
 | Duffett-Smith                                                                                                                          | `pxl-kernel domain/scene/environment/celestial.rs`                                      | The sun's, the moon's and the stars' positions                                                                                           |
 | Stöckli et al. (Blue Marble)                                                                                                           | `pxl-geo-bake bin/bake_earth.rs`                                                        | The imagery's bytes read back as reflectance                                                                                             |
-| three.js                                                                                                                               | `pxl-kernel domain/scene/actor.rs`, `pxl-render frame/shader/atmos_view.wgsl`           | A clip's cross-fade; Lambert as its standard material                                                                                    |
+| three.js                                                                                                                               | `pxl-kernel domain/scene/character.rs`, `pxl-render frame/shader/atmos_view.wgsl`           | A clip's cross-fade; Lambert as its standard material                                                                                    |
 | Howard Hinnant's date algorithm                                                                                                        | `pxl-geo-bake util.rs`                                                                  | A civil date from a day count                                                                                                            |
 | Figma                                                                                                                                  | `pxl-kernel`                                                                            | A compiled engine in the page over one memory                                                                                            |
 | iOS's interface guidelines, Material's motion, SF Symbols                                                                              | `ts/client/src/shell/ui/theme.ts`, `shell/ui/motion/transition.ts`, `shell/ui/icon.tsx` | Touch targets and type scale, easing, the icons' names                                                                                   |

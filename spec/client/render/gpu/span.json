@@ -53,7 +53,7 @@
     "footprint",
     "world"
   ],
-  "$LIGHT_MOVED": "Why the light's map cast, a bit each, bit k the k-th (pxl-render gpu/ray/cast.rs `light_moved`): what it reads moved, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the actors' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).",
+  "$LIGHT_MOVED": "Why the light's map cast, a bit each, bit k the k-th (pxl-render gpu/ray/cast.rs `light_moved`): what it reads moved, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the characters' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).",
   "FRAME_KINDS": [
     "none",
     "unready",
