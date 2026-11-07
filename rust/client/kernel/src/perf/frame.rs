@@ -9,7 +9,7 @@ use pxl_engine::count;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
 use crate::perf::word::{as_words, as_words_mut, words, zeroed, Words};
-use crate::sys::sched::tick;
+use crate::sys::sched::param;
 use crate::turn::spec;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
@@ -265,7 +265,7 @@ pub fn is_missed(f: &FrameSample) -> bool {
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
-    f.tick_ms > f.budget_ms + tick::HARD_SLACK_MS
+    f.tick_ms > f.budget_ms + param::HARD_SLACK_MS
 }
 
 /// What the interval's turns ran past it.

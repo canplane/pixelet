@@ -23,8 +23,6 @@ pub const POLICY: TickPolicy = TickPolicy {
     held_back: &HELD_BACK,
 };
 
-pub const HARD_SLACK_MS: f64 = POLICY.hard_slack_ms;
-
 /// With room to spare.
 const STEPS: usize = 32;
 

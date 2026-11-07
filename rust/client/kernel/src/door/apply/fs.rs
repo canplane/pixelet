@@ -22,7 +22,8 @@ pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
     Ok(Some(0))
 }
 
-pub(super) fn changed(c: FsChanged<'_>) -> Outcome {
+/// A file changed under the kernel (FS_CHANGED).
+pub(in crate::door) fn changed(c: FsChanged<'_>) -> Outcome {
     match c.root {
         root::STORAGE => {
             let file = or_refuse(

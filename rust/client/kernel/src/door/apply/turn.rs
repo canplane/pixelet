@@ -23,8 +23,9 @@ pub(super) fn grant(c: abi::TurnGrant) -> Outcome {
     Ok(Some(0))
 }
 
-/// The turn granted: refused where nothing was submitted for it.
-pub(super) fn turn(c: SysTurn) -> Outcome {
+/// A turn the runtime's policy grants, and the clock (SYS_TURN): refused
+/// where nothing was submitted for it.
+pub(in crate::door) fn turn(c: SysTurn) -> Outcome {
     refuse_unless(c.unix_ms.is_finite(), Errno::EINVAL)?;
     let Some(g) = GRANT.get(|| None).take() else {
         return refuse_unless(false, Errno::EINVAL).map(|()| None);

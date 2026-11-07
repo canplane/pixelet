@@ -168,9 +168,9 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     }
     door().receive(|submission| match submission {
         Submission::Life(l) => life::apply(s, l),
-        Submission::Turn(t) => apply::on_turn(t),
+        Submission::Turn(t) => apply::turn::turn(t),
         Submission::Surface(c) => apply::on_surface(c),
-        Submission::Changed(c) => apply::on_changed(c),
+        Submission::Changed(c) => apply::fs::changed(c),
         Submission::GpuReady => {
             gpu_ready();
             Ok(Some(0))

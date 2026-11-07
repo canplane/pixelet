@@ -2,25 +2,24 @@
 
 //! The shell's commands, applied: the kernel's answer to each command the
 //! shell's protocol carries, each major's by its own module beside; and
-//! xpute's that the door hands over as what they mean, a surface lent, a turn's
-//! pacing and a file changed (`on_surface`, `on_turn`, `on_changed`).
+//! xpute's that the door hands over as what they mean, a surface lent
+//! (`on_surface`), a turn's pacing (turn.rs `turn`) and a file changed (fs.rs
+//! `changed`).
 
 mod camera;
 mod edit;
-mod fs;
+pub(super) mod fs;
 mod input;
 mod perf;
 mod scene;
 mod sensor;
 mod setting;
 mod surface;
-mod turn;
+pub(super) mod turn;
 
 use super::State;
 use crate::door::cmd::{self as abi, shell};
 use crate::sys::sched::edge;
-use xpute_core::abi::fs::FsChanged;
-use xpute_core::abi::sys::SysTurn;
 use xpute_core::ipc::door::{Outcome, Surface};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -60,16 +59,6 @@ pub(super) fn on_surface(c: Surface) -> Outcome {
         Surface::Resize(c) => surface::resize(c),
         Surface::Close(c) => surface::close(c),
     }
-}
-
-/// A turn the runtime's policy grants, and the clock (SYS_TURN).
-pub(super) fn on_turn(c: SysTurn) -> Outcome {
-    turn::turn(c)
-}
-
-/// A file changed under the kernel (FS_CHANGED).
-pub(super) fn on_changed(c: FsChanged<'_>) -> Outcome {
-    fs::changed(c)
 }
 
 impl shell::Exports for State {
