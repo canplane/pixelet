@@ -158,8 +158,8 @@ const _: () = assert!(ROLL_SIDE.is_power_of_two(), "the offsets halve the spacin
 /// (`words`): `s`, `keep`, `radius` and `radius_tan` as f32 bits, then
 /// `past`, `span`, `corners` and `samples`, across then up, the words where
 /// the cells' starts, the samples' hits, the boxes' asks and the holes' stops start, `lattice`, and where the list the walk over
-/// the node cache alone leaves starts, the corners', and where the walked
-/// pixels' lists lie past the grid's words (`walked_at`, `ray::walked_words`); then the reciprocal of `s`
+/// the node cache alone leaves starts, the corners', and where the eye's
+/// holes lie past the grid's words (`walked_at`, `ray::holes_words`); then the reciprocal of `s`
 /// (`s_inverse`) and the slope of the screen's sides across and up
 /// (`slope`), f32 bits, each rounded once by the host; then where how far each
 /// beam ray hands on starts (`hand_at`), where the asks the hits' stops opened start
@@ -440,8 +440,9 @@ impl Grid {
         self.asks_at + place * ASK_WORDS
     }
 
-    /// Where the eye's walked pixels' lists lie among the beam rays' words (`ray::walked_words`):
-    /// past the grid's, as many as the pixels drawn take, which the buffer holds beyond `size`.
+    /// Where the eye's holes lie among the beam rays' words (`ray::holes_words`): past the
+    /// grid's, a bit a pixel drawn and a pool of parked rays, which the buffer holds beyond
+    /// `size`.
     pub fn walked_at(&self) -> u32 {
         self.size()
     }

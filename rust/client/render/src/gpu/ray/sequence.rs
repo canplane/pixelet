@@ -13,7 +13,7 @@ use super::cast::{
     LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_CLAIM_GROUP, LIGHT_GROUP,
     LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP, LIGHT_MARK_DRAWS_GROUP,
     LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP, LIGHT_SLIDE_GROUP,
-    QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, ROLL_GROUP, WORLD_GROUP,
+    PARKED_TILES_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, ROLL_GROUP, WORLD_GROUP,
 };
 use super::raster::{
     FACE_GROUP, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP,
@@ -157,6 +157,10 @@ const SAMPLES_ASK_BINDS: Group = Group {
 };
 const LATTICE_LAST_BINDS: Group = Group {
     layout: &LATTICE_LAST_GROUP,
+    binds: &[bind(9, NODE_CACHE)],
+};
+const PARKED_TILES_BINDS: Group = Group {
+    layout: &PARKED_TILES_GROUP,
     binds: &[bind(9, NODE_CACHE)],
 };
 const ROLL_BINDS: Group = Group {
@@ -427,12 +431,11 @@ pub const GENERATE: Step = Step::dispatch_off(
     (GENERATION_LIST, generation::GENERATE_ARGS),
 );
 /// The light's cast (ray/cast.rs `RaysPass::dispatch`).
-pub const LIGHT_MARK_WALKED: Step = Step::dispatch_off(
+pub const LIGHT_MARK_WALKED: Step = Step::dispatch(
     "light_mark_walked",
     IN_LIGHT,
     COMPUTE_LIGHT_MARK_WALKED,
     &[&LIGHT_MARK_BINDS],
-    (MARKS, ray::MISS_ARGS_LIST),
 );
 pub const LIGHT_MARK_DRAWS: Step = Step::dispatch_off(
     "light_mark_draws",
@@ -690,16 +693,13 @@ pub const READ_COUNT_BACK: Step = Step::copy(
     at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
 );
-pub const MARKS_COUNT: Step = Step::copy(
-    "marks_count",
-    IN_EYE,
-    at(MARKS, ray::MISS_ARGS_CNT, 1),
-    NO_RANGE,
-);
-pub const EYE_OWED: Step = Step::copy(
-    "eye_owed",
+/// The eye's rays its holes' walks over the node cache parked, copied into its run's pool,
+/// where the last walk and the runs after read it (ray/cast.rs `walk_run`, pxl-engine
+/// `ray::POOL_CNT`).
+pub const EYE_PARKED: Step = Step::copy(
+    "eye_parked",
     IN_EYE_HOLES,
-    at(NODE_CACHE, node_cache::owed_at(count::EYE), 1),
+    head(ray::QUEUE_EYE_HOLES, ray::QUEUE_PARKED, 1),
     NO_RANGE,
 );
 /// Each observer's owed work copied out of the node cache's head into a word of its own where
@@ -1000,7 +1000,6 @@ pub const FRAME: Frame = Frame {
             &[&CAST_TILES_OF_BINDS],
         ),
         PX,
-        MARKS_COUNT,
         // The eye's holes walked, their stops into the record, and its owed counted.
         Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &[&WALK_BINDS]),
         Step::dispatch(
@@ -1022,6 +1021,7 @@ pub const FRAME: Frame = Frame {
             &[&WALK_ASK_BINDS],
         ),
         HITS,
+        EYE_PARKED,
         Step::dispatch(
             "queue_last",
             IN_EYE_HOLES,
@@ -1032,7 +1032,13 @@ pub const FRAME: Frame = Frame {
         STOPS,
         STOP_FACES,
         STOP_FACES_PUT,
-        EYE_OWED,
+        // What the eye's holes leave owed, counted (parked_tiles.wgsl).
+        Step::dispatch(
+            "parked_tiles",
+            IN_EYE_HOLES,
+            COMPUTE_PARKED_TILES,
+            &[&PARKED_TILES_BINDS],
+        ),
         // The eye's close: its rolled lattice's offset counted or held where its samples were
         // cast, else its lattice owed alone (roll.wgsl).
         Step::dispatch("roll", IN_EYE_CLOSE, COMPUTE_ROLL, &[&ROLL_BINDS]).one_of(5),

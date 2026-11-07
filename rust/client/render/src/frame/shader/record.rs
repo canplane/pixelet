@@ -40,8 +40,8 @@ pub const COMPUTE_LIGHT: u32 = 21;
 pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 22;
 pub const COMPUTE_SAMPLE_BOX: u32 = 23;
 pub const COMPUTE_FACE: u32 = 24;
-/// The pixels the eye's cast walked apart, stood on off their list (pxl-engine
-/// `ray::WALKED_LIST`; light_mark.wgsl).
+/// The pixels the eye's cast walked apart, stood on off their walked bits (pxl-engine
+/// `ray::hole_bit`; light_mark.wgsl).
 pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 25;
 pub const COMPUTE_LIGHT_MARK_DRAWS: u32 = 26;
 pub const COMPUTE_LIGHT_PROPAGATE: u32 = 27;

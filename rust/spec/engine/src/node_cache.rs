@@ -23,9 +23,7 @@
 //! - the entries, a slot each (`ENTRIES_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
-//! listed past the camera grid's words
-//! (`ray::walked_words`) by plain writes, their count kept apart (`ray::MISS_ARGS_CNT`) and
-//! copied in after (`ray::WALKED_CNT`).
+//! marked past the camera grid's words, a bit a pixel (`ray::holes_words`).
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass, and the zooms it keeps the node at (`key_zooms`) — then the
@@ -131,7 +129,8 @@ pub const ASKED: u32 = VISITED + 1;
 /// `ROLL_DONE`). Set to none with the frame's work.
 pub const LATTICE_LEFT: u32 = ASKED + 1;
 /// Each observer's work its last cast or queue leaves owed, `count::OBSERVERS` words (`owed_at`):
-/// the eye's, the pixels its last walk left parked (pxl-render queue_last.wgsl `unreached`);
+/// the eye's, its holes its run left owed, an owed bit or a ray parked in the run's pool
+/// (pxl-render parked_tiles.wgsl);
 /// the light's, the tiles it wanted and left unclaimed, copied in from its args after the claim
 /// (`light::ARGS_LEFT`), and the slots its last walk left parked, which add to it. None where
 /// nothing is owed. Kept apart each frame the observer's queue runs, as a later frame's head
@@ -140,13 +139,7 @@ pub const OWED_AT: u32 = LATTICE_LEFT + 1;
 /// Each kind of run's caps it counts the frame's work to, the visits' and the asks'
 /// (`ray::caps`), two words a kind (`caps_at`): the host's each frame a run of it runs.
 pub const CAPS_AT: u32 = OWED_AT + count::OBSERVERS;
-/// Whether the eye's cast keeps the states its holes were parked in, 1 or 0, the host's each
-/// frame the eye casts: where its rays are those its last cast walked, the view, the jitter,
-/// the world and the drawn size as they were, so a parked hole names the same ray and goes on
-/// from where it was parked (pxl-render cast.wgsl, queue_walk.wgsl); else every pixel the cast
-/// takes is set to no parked ray.
-pub const RESUMES: u32 = CAPS_AT + 2 * count::RUNS;
-pub const HEAD_WORDS: u32 = RESUMES + 1;
+pub const HEAD_WORDS: u32 = CAPS_AT + 2 * count::RUNS;
 /// The frame the eye's draw last ran, written by it (pxl-render record_draw.wgsl
 /// `record_draw_cs`): the boxes the raster draws until it runs again name the entries it
 /// marked seen then (`record::drawn`). Past the head the host writes each frame.

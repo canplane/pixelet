@@ -4,16 +4,14 @@
 // drawable entry of the node cache (pxl-engine `raster`, `record::fresh`; gpu/ray/raster.rs),
 // or the sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as light.wgsl takes a
 // slot's (visible.wgsl), with what lies about its face, the voxel's. Any other pixel, a hole,
-// takes no walk here: it is listed for the holes' queue (walked.wgsl, list.wgsl `enlist`;
-// queue.wgsl), in a list with room for every pixel drawn, each listed once a cast, and its
-// words are what was drawn there until the queue ends its ray: the visible voxel, fresh or
-// stale, at its box's entry, or the zero of a ray that met nothing. So the pixel never waits
-// on its walk, and shows nothing no entry draws. Every pixel the cast takes is set to no
-// parked ray, but a hole where the rays stand (`node_cache::RESUMES`), whose parked state the
-// queue goes on from.
+// takes no walk here: its walked and owed bits are set for the holes' queue (walked.wgsl;
+// queue.wgsl), a workgroup's square of pixels writing its words whole, and its words are what
+// was drawn there until the queue ends its ray: the visible voxel, fresh or stale, at its box's entry, or the
+// zero of a ray that met nothing. So the pixel never waits on its walk, and shows nothing no
+// entry draws.
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
-/// The beam rays' words, the walked pixels' list past the grid's (walked.wgsl).
+/// The beam rays' words, the holes' bits past the grid's (walked.wgsl).
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 
@@ -49,21 +47,14 @@ fn write_ray(p: vec2<u32>, w: vec4<u32>) {
   }
 }
 
-/// Pixel `p`'s parked state, of a target `size`, set to no parked ray.
-fn unpark_px(p: vec2<u32>, size: vec2<u32>) {
-  let at = eye_state_at(p, size, arrayLength(&beams)) + STATE_WORDS - 1u;
-  if (at < arrayLength(&beams)) {
-    beams[at] = 0u;
-  }
-}
+/// The workgroup's square's walked bits (`ray::SQUARE_WORDS`), as its pixels mark them.
+var<workgroup> marked: array<atomic<u32>, SQUARE_WORDS>;
 
-@compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
-fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
-  let tile = claimed.at[w.x];
-  let p = vec2<u32>(tile & 0xffffu, tile >> 16u) * SCREEN_TILE + w.yz * CAST_SIDE + l.xy;
-  let size = textureDimensions(rays);
+/// Pixel `p`'s ray, of a target `size`, off its visible voxel or the sky; whether it is a hole,
+/// none where it lies past the target.
+fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   if (p.x >= size.x || p.y >= size.y) {
-    return;
+    return false;
   }
   let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
   let px = px_tan(p, size.xy);
@@ -95,8 +86,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
       if ((visible & VISIBLE_LACK) == 0u && entry.enters && fresh) {
         add_cnt(on, COUNT_REUSED);
         write_ray(p, drew);
-        unpark_px(p, size.xy);
-        return;
+        return false;
       }
     }
   }
@@ -108,22 +98,37 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
     if (went_on(k) && went_on(sample_word(s + vec2<u32>(1u, 0u))) && went_on(sample_word(s + vec2<u32>(0u, 1u))) && went_on(sample_word(s + vec2<u32>(1u)))) {
       add_cnt(on, COUNT_SKY);
       write_ray(p, vec4<u32>(0u));
-      unpark_px(p, size.xy);
-      return;
+      return false;
     }
   }
-  // Neither: what was drawn, and listed for the holes' queue (queue.wgsl), which reads
-  // and writes the node cache. The list holds a place for every pixel drawn, and a pixel is
-  // listed once.
+  // Neither: what was drawn, and marked for the holes' queue (queue.wgsl), which reads and
+  // writes the node cache.
   add_cnt(on, COUNT_WALKED);
   write_ray(p, drew);
-  if (node_cache[RESUMES] == 0u) {
-    unpark_px(p, size.xy);
+  return true;
+}
+
+@compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
+fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
+  let tile = claimed.at[w.x];
+  let corner = vec2<u32>(tile & 0xffffu, tile >> 16u) * SCREEN_TILE + w.yz * CAST_SIDE;
+  let size = textureDimensions(rays).xy;
+  let p = corner + l.xy;
+  if (cast_px(p, size)) {
+    let b = hole_bit(p, size);
+    atomicOr(&marked[b.x % SQUARE_WORDS], 1u << b.y);
   }
-  let drawn = size.x * size.y;
-  let at = enlist(drawn);
-  let place = walked_list_at(at);
-  if (at < drawn && place < arrayLength(&beams)) {
-    beams[place] = (p.y << 16u) | p.x;
+  workgroupBarrier();
+  // The square's words whole, a thread a word, walked and owed alike: the cast's run takes its
+  // holes as the cast marked them.
+  let k = l.y * CAST_SIDE + l.x;
+  if (k < SQUARE_WORDS && corner.x < size.x && corner.y < size.y) {
+    let at = walked_at() + hole_bit(corner, size).x + k;
+    let owed = at + hole_words(size);
+    if (owed < arrayLength(&beams)) {
+      let bits = atomicLoad(&marked[k]);
+      beams[at] = bits;
+      beams[owed] = bits;
+    }
   }
 }

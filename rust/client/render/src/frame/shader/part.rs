@@ -45,8 +45,8 @@ pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
 pub const SHADER_MARKER_REGION: u32 = 23;
 /// The eye's rays drawn at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
-/// Each drawn pixel's ray off the visible voxel or the sky, the rest marked and listed
-/// for their walk again, by hand (cast.wgsl): its one compute entry.
+/// Each drawn pixel's ray off the visible voxel or the sky, the rest marked a bit each for
+/// their walk again, by hand (cast.wgsl): its one compute entry.
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
 /// pxl-engine's `fill::level` and `clipmap::join` by hand (bound.wgsl): its
@@ -554,6 +554,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.eye",
         "corners",
+        "listed",
         "queue_walk",
     ],
     // SHADER_CELL
@@ -617,6 +618,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.eye",
         "samples",
+        "listed",
         "queue_last",
     ],
     // SHADER_LIGHT
@@ -837,6 +839,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.light",
         "corners",
+        "listed",
         "queue_walk",
     ],
     // SHADER_LIGHT_CELL
@@ -877,6 +880,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.light",
         "samples",
+        "listed",
         "queue_last",
     ],
     // SHADER_LIGHT_SAMPLE_BOX
@@ -912,6 +916,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.eye",
         "samples",
+        "listed",
         "queue_walk",
     ],
     // SHADER_QUEUE
@@ -959,6 +964,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.eye",
         "corners",
+        "listed",
         "queue_last",
     ],
     // SHADER_QUEUE_LIGHT_SAMPLES
@@ -979,6 +985,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.light",
         "samples",
+        "listed",
         "queue_walk",
     ],
     // SHADER_QUEUE_LAST_LIGHT_CORNERS
@@ -1007,6 +1014,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.light",
         "corners",
+        "listed",
         "queue_last",
     ],
     // SHADER_CAST_TILES

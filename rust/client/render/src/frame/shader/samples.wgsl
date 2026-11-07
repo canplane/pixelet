@@ -10,10 +10,12 @@ fn sample_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
+/// The items listed (listed.wgsl).
 fn item_count() -> u32 {
   return samples_listed();
 }
 
+/// The item at place `k` of the list (listed.wgsl).
 fn item_at(k: u32) -> u32 {
   let s = sample_queued(k);
   return s.x | (s.y << 16u);

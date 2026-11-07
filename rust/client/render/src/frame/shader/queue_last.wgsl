@@ -4,10 +4,21 @@
 // for the holes): over the rays the walks over the node cache left parked, from the state each
 // was parked in, asking the world where no slot keeps a node. The lanes as the walks before
 // (queue_walk.wgsl): each takes the next item when its own ray ends, off a word of the node
-// cache's head the asks before it set back (`node_cache::LAST_TAKEN`), an item not parked
-// passed. A run counts against the frame's budget where the runs before it left it, up to its
-// kind's caps (`node_cache::VISITED`, `node_cache::caps_at`): a ray the budget does not reach
-// stays parked, as its kind's module leaves it (`unreached`).
+// cache's head the asks before it set back (`node_cache::LAST_TAKEN`), as its kind's module
+// hands it (`next_last`), an item not parked passed. A run counts against the frame's budget
+// where the runs before it left it, up to its kind's caps (`node_cache::VISITED`,
+// `node_cache::caps_at`): a ray the budget does not reach stays parked, as its kind's module
+// leaves it (`unreached`).
+
+/// The next number off the node cache's counter at `word` (`node_cache::LAST_TAKEN`), and the
+/// count it holds: the counters a kind's module takes its items by (`next_last`).
+fn take(word: u32) -> u32 {
+  return atomicAdd(&node_cache[word], 1u);
+}
+
+fn held(word: u32) -> u32 {
+  return atomicLoad(&node_cache[word]);
+}
 
 /// The next stop's number, as this walk numbers the stops its items keep for the record
 /// (queue.wgsl `keep_hit`), on from the walks over the node cache's (`node_cache::HITS_CNT`),
@@ -28,7 +39,6 @@ fn may_ask() -> bool {
 
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_last_cs() {
-  let n = item_count();
   var item = NONE;
   var t = 0.0;
   var corner = vec3<u32>(0u);
@@ -41,11 +51,10 @@ fn queue_last_cs() {
   var visits = 0u;
   loop {
     if (item == NONE) {
-      let k = atomicAdd(&node_cache[LAST_TAKEN], 1u);
-      if (k >= n) {
+      let h = next_last();
+      if (h == NONE) {
         break;
       }
-      let h = item_at(k);
       if (!parked(h)) {
         continue;
       }

@@ -9,7 +9,10 @@ use xpute_core::global::Global;
 use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;
+use crate::frame::shader::floor;
 use crate::gpu::api::Format;
+use crate::gpu::ray::{drawn_fits, DRAWN_MOST};
+use pxl_engine::screen;
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
@@ -110,12 +113,25 @@ impl Surface {
 
     /// The world's pixels: the canvas's at the kernel's share of them
     /// (`ratio` over the display's), which the finish brings up to the
-    /// canvas.
+    /// canvas, and no more than every device draws (ray/cast.rs
+    /// `drawn_fits`), the canvas's shape kept: its share brought down until
+    /// they fit.
     pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let k = self.ratio / dpr;
-        (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)
+        let most = f64::from(DRAWN_MOST[0].min(DRAWN_MOST[1]));
+        let mut k = (self.ratio / dpr).min(most / w.max(h));
+        loop {
+            let size = [w, h].map(|v| round(v * k).clamp(1.0, most) as u32);
+            if drawn_fits(size) {
+                return (size[0], size[1]);
+            }
+            // The tiles past the dispatch's side: the share a side brought down by their root,
+            // and a step more, so each turn takes some off.
+            let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(screen::TILE)));
+            let limit = f64::from(floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION);
+            k *= libm::sqrt(limit / (tiles[0] * tiles[1])) * (1.0 - 1.0 / most);
+        }
     }
 }
 
@@ -195,3 +211,7 @@ pub fn on_surfaces_lost() {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "surface.test.rs"]
+mod test;

@@ -961,7 +961,7 @@ fn holes(
             words[at + 1..at + 1 + slots.len()].copy_from_slice(&slots);
             gpu.queue.write_buffer(list, 0, bytes(&words));
         }
-        frames.push(gpu.holes(&binds, table, true));
+        frames.push(gpu.holes(&binds, table, true, None));
         let t = gpu.read(table);
         let stops = t[node_cache::HITS_CNT as usize].min(light::parked_room());
         let words = gpu.read(list);

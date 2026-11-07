@@ -55,8 +55,8 @@ struct Turn {
 /// The schedule, the readback, and what the device holds beside them: each observer's owed
 /// work as its last run that was not dropped kept it, the owed work the copy out holds, and
 /// whether each observer's last run left work owed (`truth`), as count.test.rs's `World`;
-/// each region's parked state; the regions each of the eye's two owed lists names; the owed
-/// list the last eye run that was not dropped filled; the jitter the rays were last cast
+/// each region's parked state; the regions each of the eye's two pools, with the owed bits,
+/// leaves owed; the pool the last eye run that was not dropped filled; the jitter the rays were last cast
 /// at, the view's own; whether the node cache forgot anything since the light last cast; and
 /// the offsets of the rolled lattice the device counted (pxl-engine `node_cache::ROLL_DONE`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -169,12 +169,9 @@ impl World {
         {
             return Err("the eye's lattice owed and not cast");
         }
-        // The jitter moved alone: the pixels are cast again, no parked ray resumed.
-        if t.same && read && t.jitter != jitter && (!p.casts() || p.resumes) {
+        // The jitter moved alone: the pixels are cast again.
+        if t.same && read && t.jitter != jitter && !p.casts() {
             return Err("the jitter moved and the pixels not cast afresh");
-        }
-        if p.casts() && p.resumes && !(t.same && read) {
-            return Err("a cast resumed across a change");
         }
         // Owed work, where its observer may run, runs this frame.
         if owed[E] && !p.eye_runs() {
@@ -215,9 +212,9 @@ impl World {
         let ran = [p.eye_runs(), p.light.is_some()];
         let mut owe = [0u32; 2];
         if !stood && !t.dropped {
-            // The eye's walks: every pixel a cast takes is walked; a cast that resumes goes on
-            // from its parked ray, any other sets it to none; the queue leaves it parked or
-            // ends it. The queue alone walks the list the last run filled.
+            // The eye's walks: every pixel a cast takes is walked from its cell's start, no ray
+            // parked before taken; the queue leaves it owed or ends it. The queue alone walks
+            // what the last run left owed.
             let mut listed = [false; REGIONS];
             if p.casts() {
                 let taken: [bool; REGIONS] =
@@ -225,9 +222,6 @@ impl World {
                 for k in 0..REGIONS {
                     if !taken[k] {
                         continue;
-                    }
-                    if p.resumes && self.parked[k] == Park::Gone {
-                        return Err("a parked eye ray resumed across a change");
                     }
                     self.parked[k] = if t.parks { Park::Now } else { Park::No };
                     listed[k] = t.parks;
@@ -263,7 +257,7 @@ impl World {
                 }
             }
             if ran[E] {
-                let f = self.s.owed_list();
+                let f = self.s.pool();
                 self.lists[f as usize] = listed;
                 self.filled = Some(f);
                 owe[E] = u32::from(listed.contains(&true));

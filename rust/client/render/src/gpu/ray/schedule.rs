@@ -77,7 +77,7 @@ pub(super) struct Light {
     /// The eye's zooms the cast before was cast under (`light::HEAD_RANGE_WAS`).
     pub range_was: [u32; 2],
     /// Whether the world's receivers stand in this cast (`light::HEAD_STANDS_WORLD`); whether
-    /// they are added to those that stand, the walked list holding the claimed tiles' alone,
+    /// they are added to those that stand, the walked bits holding the claimed tiles' alone,
     /// else stood afresh.
     pub world: bool,
     pub adds: bool,
@@ -97,12 +97,10 @@ pub(super) struct Plan {
     /// at is the GPU's (roll.wgsl).
     pub lays: bool,
     /// Whether every pixel is cast whole though only the claimed tiles' moved, the world's
-    /// receivers standing afresh off its walked list.
+    /// receivers standing afresh off its walked bits.
     pub ungated: bool,
-    /// Whether the cast keeps the states its holes were parked in (`node_cache::RESUMES`);
-    /// whether the eye's queue runs alone, casting nothing; and the list its queue takes where
-    /// it runs (`ray::holes_from_at`).
-    pub resumes: bool,
+    /// Whether the eye's queue runs alone, casting nothing; and what its queue takes where it
+    /// runs (`ray::from_at`).
     pub queue: bool,
     pub from: Option<u32>,
     /// The light's cast, where it casts.
@@ -114,7 +112,6 @@ impl Plan {
         kind: FrameKind::plain,
         lays: false,
         ungated: false,
-        resumes: false,
         queue: false,
         from: None,
         light: None,
@@ -145,16 +142,12 @@ pub(super) struct Schedule {
     jitter: [u32; 2],
     /// Whether the samples' raster is drawn through its gate, in the claimed tiles alone.
     gated: bool,
-    /// Whether the eye's walked pixels' list holds every drawn pixel's walk: its last pixels'
+    /// Whether the eye's walked bits hold every drawn pixel's walk: its last pixels'
     /// cast cast them all.
     walked_whole: bool,
-    /// Whether a pixel the last casts did not take may hold a parked ray of rays no longer
-    /// cast: a cast that resumed nothing took the claimed tiles alone. Until a cast that
-    /// resumes nothing takes every pixel, no cast resumes.
-    parked_stale: bool,
-    /// The owed list the eye's queue last filled, which a queue run alone takes
+    /// The pool the eye's queue last parked its rays in, which a queue run alone takes
     /// (`ray::owed_into`).
-    owed_list: u32,
+    pool: u32,
     /// Whether the light's content as last read is what its tiles hold: read by the last
     /// frame, which was not dropped, with the light's cast made.
     content: bool,
@@ -183,8 +176,7 @@ impl Schedule {
             jitter: [0; 2],
             gated: false,
             walked_whole: false,
-            parked_stale: false,
-            owed_list: 0,
+            pool: 0,
             content: false,
             corner: [0; 2],
             range: [0; 2],
@@ -250,10 +242,10 @@ impl Schedule {
         let footprint_owed = rolled || (self.footprint_owed && stands);
         // The world's receivers stand afresh where the light's content or the box moved, and a
         // stand afresh takes every pixel's walk; so do the footprints owed, which the pixels
-        // the walked list leaves out owe. Where the walked pixels' list would hold the claimed
+        // the walked bits leave out owe. Where the walked bits would hold the claimed
         // tiles' alone, as the last pixels' cast or this frame's is gated, every pixel is cast
-        // again now, whole (`ungated`), so the list holds every walk. The one condition the
-        // stand follows is then the list's (`walked_whole`): afresh where it holds every walk;
+        // again now, whole (`ungated`), so the bits hold every walk. The one condition the
+        // stand follows is then the bits' (`walked_whole`): afresh where they hold every walk;
         // else added to those that stand, the light and the box as they were.
         let partial = if casts_px(kind) {
             r.gated && kind == FrameKind::px
@@ -267,12 +259,10 @@ impl Schedule {
         let casts = casts_px(kind);
         let walked_whole = !partial || ungated;
         // The eye's rays stand where the view, the jitter, the world and the drawn size are
-        // those its last cast walked: a cast then keeps the states its holes were parked in,
-        // where every pixel's is of these rays, and a frame that casts nothing runs the eye's
-        // queue alone over them where the eye is owed. Any other cast sets every pixel it takes
-        // to no parked ray.
+        // those its last cast walked: a frame that casts nothing then runs the eye's queue alone
+        // over what its runs left owed, where the eye is owed. A cast's run takes its own holes
+        // alone, each from its cell's start, and no ray a run before it parked.
         let rays_stand = stands && !jittered;
-        let resumes = casts && rays_stand && !self.parked_stale;
         let queue = kind == FrameKind::standing && rays_stand && r.owed[EYE as usize];
         let moved = LightMoved::ALL
             .into_iter()
@@ -297,7 +287,7 @@ impl Schedule {
         let light = (light_on && moved != 0).then(|| {
             let corner_was = core::mem::replace(&mut self.corner, r.corner);
             let range_was = core::mem::replace(&mut self.range, r.range);
-            // Added to those that stand where the walked list holds the claimed tiles' alone,
+            // Added to those that stand where the walked bits hold the claimed tiles' alone,
             // which only a cast within the epoch and under the same box takes.
             let adds = !walked_whole;
             xpute_kit::ensure!(!adds || (held && !slid), ENOTRECOVERABLE);
@@ -322,29 +312,25 @@ impl Schedule {
                 footprint: stands,
             }
         });
-        // The list the eye's queue takes: its cast's walked pixels, or, run alone, the pixels
-        // the queue before left parked; and the owed list it fills in turn.
+        // What the eye's queue takes: its cast's holes, or, run alone, what the runs before left
+        // owed, the rays the last parked among it; and the pool it parks in in turn.
         let from = (casts || queue).then(|| {
             let from = if casts {
                 ray::FROM_WALKED
             } else {
-                ray::FROM_OWED + self.owed_list
+                ray::FROM_OWED + self.pool
             };
-            self.owed_list = ray::owed_into(from);
+            self.pool = ray::owed_into(from);
             from
         });
         self.gated = r.gated && kind == FrameKind::px && !ungated;
         if casts {
             self.walked_whole = !self.gated;
-            if !resumes {
-                self.parked_stale = self.gated;
-            }
         }
         self.plan = Plan {
             kind,
             lays,
             ungated,
-            resumes,
             queue,
             from,
             light,
@@ -352,15 +338,12 @@ impl Schedule {
         self.plan
     }
 
-    /// The frame draws whole after all: its samples' raster drawn whole, and its walked list
+    /// The frame draws whole after all: its samples' raster drawn whole, and its walked bits
     /// holds every pixel's walk where it casts.
     pub fn whole(&mut self) {
         self.gated = false;
         if self.plan.casts() {
             self.walked_whole = true;
-            if !self.plan.resumes {
-                self.parked_stale = false;
-            }
         }
     }
 
@@ -400,9 +383,9 @@ impl Schedule {
         self.rolls < beam::ROLLS || self.lattice_owed
     }
 
-    /// The owed list the eye's queue fills, the last run's.
-    pub fn owed_list(&self) -> u32 {
-        self.owed_list
+    /// The pool the eye's queue parks its rays in, the last run's.
+    pub fn pool(&self) -> u32 {
+        self.pool
     }
 
     /// Whether each observer may run, the eye and the light (count.rs `Readback::wants_frame`).

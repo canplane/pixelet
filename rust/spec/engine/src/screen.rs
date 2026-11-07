@@ -12,6 +12,9 @@
 pub const TILE: u32 = 32;
 /// The threads of a workgroup of the pass that lists the claimed tiles.
 pub const CAST_TILES_LANES: u32 = 64;
+/// The workgroups a row of the pass over what the eye's holes leave owed, its bits and its
+/// pool (pxl-render parked_tiles.wgsl), so its rows stay within a dispatch's side.
+pub const PARKED_TILES_ACROSS: u32 = 256;
 
 /// The frames the jitter's sequence covers a pixel in.
 pub const JITTERS: u32 = 8;

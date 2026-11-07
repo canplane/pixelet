@@ -905,9 +905,8 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// (pxl-render queue.wgsl) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are, by the same listing
 /// (pxl-render list.wgsl `enlist`, `ray::MISS_ARGS_WORDS`). Past the samples: how many,
-/// copied in once the slots are done, as the eye's count is (`ray::WALKED_CNT`), then a slot
-/// each, its X and its Y over 16 bits; a slot listed once a cast, and only a claimed tile's
-/// slots are cast, so `parked_room` of them.
+/// copied in once the slots are done, then a slot each, its X and its Y over 16 bits; a slot
+/// listed once a cast, and only a claimed tile's slots are cast, so `parked_room` of them.
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
@@ -1022,8 +1021,8 @@ impl Light {
 /// laid in (`LISTED_READ`; light_propagate.wgsl, gpu/shadow.rs `Shadow::begin`); and the tiles
 /// a receiver reads that no cast of the epoch claimed, or owed (`READ_OWED`), which the claim
 /// takes nearest first (`LISTED_WANTED`, `claims`). Each list's
-/// count, then its entries, the count copied in once propagation is done (`ARGS_COUNTS`), as
-/// the eye's is (`ray::WALKED_CNT`); and a word for every place of each, in the args'
+/// count, then its entries, the count copied in once propagation is done (`ARGS_COUNTS`); and
+/// a word for every place of each, in the args'
 /// buffer (`listed_marks_at`): the last cast that listed it, so each is listed once a cast,
 /// but the stood list's and the read list's, which name the cast the world's receivers were
 /// last stood afresh in (`HEAD_WORLD`): a tile stood on, the world's receivers' or a drawn

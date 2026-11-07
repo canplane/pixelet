@@ -13,10 +13,12 @@ fn corner_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
+/// The items listed (listed.wgsl).
 fn item_count() -> u32 {
   return corners_listed();
 }
 
+/// The item at place `k` of the list (listed.wgsl).
 fn item_at(k: u32) -> u32 {
   let c = corner_queued(k);
   return c.x | (c.y << 16u);

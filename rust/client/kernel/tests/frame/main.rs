@@ -20,9 +20,11 @@ mod spec;
 mod watch;
 
 use pxl_engine::beam::ROLLS;
+use pxl_engine::ray::holes_words;
 use pxl_engine::screen::JITTERS;
 use pxl_engine::SHARD_ZOOM;
 use pxl_render::api_spec::device::FRAME_LATENCY;
+use pxl_render::gpu::surface::Surface;
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
@@ -39,6 +41,10 @@ const CREDITS: f64 = 6.0;
 
 /// The surface's size in pixels, a phone's at a device pixel ratio of 1.
 const SIZE: [f64; 2] = [390.0, 844.0];
+
+/// The surface's size the frames are drawn at last, an 8K display's at a device pixel ratio of
+/// 1.
+const LARGE: [u32; 2] = [7680, 4320];
 
 /// The wall clock the frames start at: noon at the place, 2026-06-21T03:00Z, so the sun
 /// stands high and the shadows cast.
@@ -241,19 +247,25 @@ fn frames() {
     let surface = run.call("SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));
-    run.runtime.send(
-        "SURFACE_RESIZE",
-        &[
-            ("surface", surface.clone()),
-            ("width", V::Num(SIZE[0])),
-            ("height", V::Num(SIZE[1])),
-            ("device_pixel_ratio", V::Num(1.0)),
-        ],
-    );
+    let resize = |run: &mut Run, [w, h]: [f64; 2]| {
+        run.runtime.send(
+            "SURFACE_RESIZE",
+            &[
+                ("surface", surface.clone()),
+                ("width", V::Num(w)),
+                ("height", V::Num(h)),
+                ("device_pixel_ratio", V::Num(1.0)),
+            ],
+        );
+    };
+    resize(&mut run, SIZE);
     let world = run.runtime.shell.member("SceneContent", "World");
     run.call(
         "SCENE_DRAW",
-        &[("surface", surface), ("content", V::Num(world.into()))],
+        &[
+            ("surface", surface.clone()),
+            ("content", V::Num(world.into())),
+        ],
     );
     let mut made = 0;
     while run.runtime.shown.renderer_progress < 1.0 {
@@ -307,5 +319,26 @@ fn frames() {
         "{} frames: the pipelines made in {made}, the owed work at rest {rested} idle turns \
          after the last input",
         run.frames
+    );
+
+    // The surface an 8K display's, the view cast again over it, and its owed work at rest.
+    resize(&mut run, LARGE.map(f64::from));
+    run.frames(ROLLS + JITTERS);
+    let rested = run.rest();
+    // Drawn whole, the most the resolution's rule draws it at (pxl-render gpu/surface.rs
+    // `render_px`), and what the eye's holes take there (pxl-engine `ray::holes_words`).
+    let whole = Surface {
+        px_w: LARGE[0],
+        px_h: LARGE[1],
+        dpr: 1.0,
+        ratio: 1.0,
+        ..Surface::default()
+    };
+    let (w, h) = whole.render_px();
+    let bytes = 4 * u64::from(holes_words([w, h]));
+    eprintln!(
+        "{LARGE:?}: drawn whole at {w}x{h}, the eye's holes {bytes} bytes, {:.3} bytes a drawn \
+         pixel; the owed work at rest {rested} idle turns after",
+        bytes as f64 / f64::from(w * h),
     );
 }

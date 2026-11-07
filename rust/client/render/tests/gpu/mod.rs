@@ -191,8 +191,9 @@ impl Gpu {
     /// The holes' queue as the cast runs it over one observer's holes (pxl-render
     /// gpu/ray/cast.rs `walk_run`): its words empty, its caps in the node cache's head
     /// (`table`), the two walks over the node cache alone and the asks after each, which fold
-    /// each walk's visits into the frame's there, where `hits` the eye's hits copied into
-    /// `table` as the cast copies them, and the last walk. `all` binds what any of its passes
+    /// each walk's visits into the frame's there, where `hits` the hits copied into `table` as
+    /// the cast copies them, where `pool` the eye's parked rays' count copied into its pool's
+    /// count, a buffer and its word (pxl-engine `ray::POOL_CNT`), and the last walk. `all` binds what any of its passes
     /// reads but the queue's words: the eye at 0, the world's at 1, 2 and 4 to 7, the rays or
     /// the map at 3, the observer's list, its holes' region last, at 8, the node cache at 9, the
     /// observer's head at 11; each pass takes those its entry reads. The queue counts to the
@@ -203,8 +204,9 @@ impl Gpu {
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
         hits: bool,
+        pool: Option<(&wgpu::Buffer, u32)>,
     ) -> Vec<u32> {
-        self.holes_within(all, table, hits, ray::caps(0))
+        self.holes_within(all, table, hits, pool, ray::caps(0))
     }
 
     /// `holes`, the queue counting the frame's visits and asks to `caps`
@@ -214,6 +216,7 @@ impl Gpu {
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
         hits: bool,
+        pool: Option<(&wgpu::Buffer, u32)>,
         caps: [u32; 2],
     ) -> Vec<u32> {
         // Either observer's holes' caps, the walks taking their own by the head they are handed.
@@ -238,6 +241,7 @@ impl Gpu {
             table,
             None,
             hits,
+            pool,
         )
     }
 
@@ -339,7 +343,7 @@ impl Gpu {
         let walk = [&[0, 8, 9, 10][..], head].concat();
         let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], head].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
-        self.run(ids, keep, all, table, asked, false)
+        self.run(ids, keep, all, table, asked, false, None)
     }
 
     /// A run's passes `ids` (its walk, its asks, its walk again, their asks and its last walk)
@@ -347,6 +351,10 @@ impl Gpu {
     /// the bindings `keep` names for it, the last walk's node cache `asked` where given; where
     /// `hits`, the stops its walks over the node cache listed copied into `table` as the cast
     /// copies them. The frame's work its passes did.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a run's passes, their groups and buffers, and the two copies the host makes between them"
+    )]
     fn run(
         &self,
         [walk_id, ask_id, walk_parked_id, ask_parked_id, last_id]: [u32; 5],
@@ -355,6 +363,7 @@ impl Gpu {
         table: &wgpu::Buffer,
         asked: Option<&wgpu::Buffer>,
         hits: bool,
+        pool: Option<(&wgpu::Buffer, u32)>,
     ) -> Vec<u32> {
         // Each run a frame of its own: its work starts at none, and the last walk's first taken,
         // as the host's head and the asks set them each frame it casts.
@@ -403,6 +412,11 @@ impl Gpu {
             let h = ray::QUEUE_HITS as usize;
             let at = u64::from(node_cache::HITS_ARGS) * 4;
             self.queue.write_buffer(table, at, bytes(&q[h..h + 4]));
+        }
+        if let Some((buf, word)) = pool {
+            let p = ray::QUEUE_PARKED as usize;
+            self.queue
+                .write_buffer(buf, u64::from(word) * 4, bytes(&q[p..p + 1]));
         }
         self.dispatch(&last, &last_binds, groups);
         let done = self.read(asked.unwrap_or(table));

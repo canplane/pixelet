@@ -1109,10 +1109,10 @@ fn hand_stale_voxel_is_a_hole() {
             let listed = gpu.read(&list)[0];
             let table_buf = gpu.buffer(&cast.table, store());
             let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
-            // Room past the grid's words for this screen's walked list and holes' states.
+            // Room past the grid's words for this screen's holes.
             let mut padded = cast.beams.clone();
-            let walked_at = (g.walked_at() + ray::WALKED_LIST) as usize;
-            padded.resize(walked_at.max(padded.len()) + texels * 17 + 64, 0);
+            let walked_at = g.walked_at() as usize;
+            padded.resize(walked_at + ray::holes_words([wd, ht]) as usize, 0);
             let beams = gpu.buffer(&padded, store());
             gpu.dispatch(
                 &cast_p,
@@ -1127,13 +1127,11 @@ fn hand_stale_voxel_is_a_hole() {
                 ],
                 [listed, per_tile, per_tile],
             );
-            let cnt = gpu.read(&marks)[3];
             let words = gpu.read(&beams);
-            let at = (g.walked_at() + ray::WALKED_LIST) as usize;
-            let walked: std::collections::BTreeSet<u32> = words[at..at + cnt.min(wd * ht) as usize]
-                .iter()
-                .copied()
-                .collect();
+            let walked = |px: [u32; 2]| {
+                let (w, bit) = ray::hole_bit(px, [wd, ht]);
+                words[walked_at + w as usize] & 1 << bit != 0
+            };
             for (p, &v) in visible.iter().enumerate() {
                 if v == 0 {
                     continue;
@@ -1154,7 +1152,7 @@ fn hand_stale_voxel_is_a_hole() {
                 }
                 stale_entered += 1;
                 let px = [p as u32 % wd, p as u32 / wd];
-                if !walked.contains(&((px[1] << 16) | px[0])) {
+                if !walked(px) {
                     stale_taken += 1;
                 }
             }

@@ -765,7 +765,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 /// pxl-engine's one rule gives (`Light::box_tiles`, the footprint where the head asks it), each
 /// listed once (`light::LISTED_STOOD`), the count in the stood list's args
 /// (`light::STOOD_CNT`), over the real world of tests/real_world: the pixels the eye walked
-/// apart, off their list past the grid's words (`light_mark_walked_cs`, `ray::walked_words`),
+/// apart, off their walked bits past the grid's words (`light_mark_walked_cs`, `ray::hole_bit`),
 /// each hit a box of one point; and every box the eye's draw writes, a held voxel in
 /// view each, its planes as `cast::asset_box` lays them, stood as it is written, where the head
 /// says the world's receivers stand (record_draw.wgsl `record_draw_cs`,
@@ -989,8 +989,7 @@ fn run_marks(
     let grid = beam::Grid::of(c.tan, 1);
     eye_words[eye::GRID..eye::GRID + beam::GRID_WORDS].copy_from_slice(&grid.words());
     let walked_at = grid.walked_at() as usize;
-    let drawn = wd * ht;
-    let mut beams = vec![0u32; walked_at + ray::walked_words(drawn) as usize];
+    let mut beams = vec![0u32; walked_at + ray::holes_words([wd, ht]) as usize];
 
     // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
     // some meeting nothing, some walked apart and listed.
@@ -1059,9 +1058,9 @@ fn run_marks(
                 }
             }
             kinds.count("pixels walked apart", walked.len() as u64);
-            beams[walked_at + ray::WALKED_CNT as usize] = walked.len() as u32;
-            for (e, &p) in walked.iter().enumerate() {
-                beams[walked_at + (ray::WALKED_LIST + e as u32) as usize] = p;
+            for &p in &walked {
+                let (w, bit) = ray::hole_bit([p & 0xffff, p >> 16], [wd, ht]);
+                beams[walked_at + w as usize] |= 1 << bit;
             }
         }
         Marks::Voxels => {
@@ -1187,9 +1186,9 @@ fn run_marks(
         Marks::Walked => {
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             binds.push((23, beams_buf.as_entire_binding()));
-            let cnt = beams[walked_at + ray::WALKED_CNT as usize];
+            let words = ray::hole_words([wd, ht]);
             let per = ray::MISS_LANES * ray::MISS_ACROSS;
-            (&pipes[0], [ray::MISS_ACROSS, cnt.div_ceil(per).max(1), 1])
+            (&pipes[0], [ray::MISS_ACROSS, words.div_ceil(per).max(1), 1])
         }
         Marks::Voxels => {
             binds.push((14, boxes_buf.as_entire_binding()));

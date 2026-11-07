@@ -462,9 +462,14 @@ fn walk_word() -> String {
         ("W_INHERITANCE", node_cache::W_INHERITANCE),
         ("MISS_ACROSS", ray::MISS_ACROSS),
         ("MISS_LANES", ray::MISS_LANES),
-        ("WALKED_CNT", ray::WALKED_CNT),
-        ("WALKED_LIST", ray::WALKED_LIST),
+        ("SQUARE_WORDS", ray::SQUARE_WORDS),
         ("FROM_OWED", ray::FROM_OWED),
+        ("PARKED_ROOM", ray::PARKED_ROOM),
+        ("PARK_PX", ray::PARK_PX),
+        ("PARK_WORDS", ray::PARK_WORDS),
+        ("POOL_CNT", ray::POOL_CNT),
+        ("POOL_STATES", ray::POOL_STATES),
+        ("POOL_WORDS", ray::POOL_WORDS),
         ("HITS", beam::HITS),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
@@ -482,6 +487,8 @@ fn walk_word() -> String {
         ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
         ("QUEUE_VISITED", ray::QUEUE_VISITED),
         ("QUEUE_HITS", ray::QUEUE_HITS),
+        ("QUEUE_SQUARES", ray::QUEUE_SQUARES),
+        ("QUEUE_PARKED", ray::QUEUE_PARKED),
         (
             "EYE_CORNERS_RECORDS_AT",
             ray::queue_records_at(ray::QUEUE_EYE_CORNERS),
@@ -523,7 +530,6 @@ fn walk_word() -> String {
         ("LIGHT_HOLES_CAPS", node_cache::caps_at(count::LIGHT_HOLES)),
         ("EYE_OWED", node_cache::owed_at(count::EYE)),
         ("LIGHT_OWED", node_cache::owed_at(count::LIGHT)),
-        ("RESUMES", node_cache::RESUMES),
         ("HIT_ASSET", beam::HIT_ASSET),
         ("HIT_LINE", beam::HIT_LINE),
         ("FACE_BOX", face::BOX),
@@ -1047,11 +1053,13 @@ fn tile_word() -> String {
     format!(
         concat!(
             "const CAST_TILES_LANES: u32 = {}u;\n",
+            "const PARKED_TILES_ACROSS: u32 = {}u;\n",
             "struct Tiles {{ count: vec4u, size: vec4f, }};\n",
             "fn tiles_age(t: Tiles, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
             "fn tiles_claimed(t: Tiles, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
         ),
-        screen::CAST_TILES_LANES
+        screen::CAST_TILES_LANES,
+        screen::PARKED_TILES_ACROSS
     )
 }
 

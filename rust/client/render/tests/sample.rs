@@ -1328,8 +1328,8 @@ fn hand_light_samples_answer_as_cast_walk() {
 }
 
 /// A screen's pixels the cast marked missed, their rays as the walks again take them: how many
-/// across and down, the eye's jitter, and one in so many marked, every one listed, as the
-/// walked pixels' list has room for every pixel drawn (pxl-engine `ray::walked_words`).
+/// across and down, the eye's jitter, and one in so many marked, its walked and owed bits set
+/// (pxl-engine `ray::hole_bit`).
 struct Screen {
     name: &'static str,
     size: [u32; 2],
@@ -1343,6 +1343,17 @@ fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
     let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
     [ndc_x * tan[0], ndc_y * tan[1]]
+}
+
+/// The walked and the owed bits of the eye's holes `holes`, from their first word, of pixels
+/// `marked` of a target `size`, each its row times the width and its column.
+fn set_holes(holes: &mut [u32], size: [u32; 2], marked: &[u32]) {
+    let owed = ray::owed_bits_at(size) as usize;
+    for &p in marked {
+        let (w, bit) = ray::hole_bit([p % size[0], p / size[0]], size);
+        holes[w as usize] |= 1 << bit;
+        holes[owed + w as usize] |= 1 << bit;
+    }
 }
 
 /// Pixel `p`'s ray and the zooms it asks.
@@ -1445,28 +1456,16 @@ fn hand_missed_pixels_answer_as_cast_walk() {
                 unreachable!()
             };
             let (origin, grid) = (*origin, *grid);
-            // The walked pixels' list past the grid's words, room for every pixel drawn, and the
-            // holes' region last, a state a pixel.
-            let drawn = s.size[0] * s.size[1];
+            // The eye's holes past the grid's words, a cast's run's (`ray::FROM_WALKED`).
             let walked = grid.walked_at() as usize;
-            words.resize(
-                walked + (ray::walked_words(drawn) + ray::region_words(drawn)) as usize,
-                0,
-            );
+            words.resize(walked + ray::holes_words(s.size) as usize, 0);
 
-            // The pixels the cast marked, and those it listed, in an order of their own as its
-            // atomics take them.
+            // The pixels the cast marked, their walked and owed bits set.
             let [wd, ht] = s.size;
             let texels = (wd * ht) as usize;
             let mark = |p: u32| (p.wrapping_mul(0x9e37_79b9) >> 7).is_multiple_of(s.marked_in);
-            let mut marked: Vec<u32> = (0..wd * ht).filter(|&p| mark(p)).collect();
-            marked.sort_by_key(|&p| p.wrapping_mul(0x85eb_ca77).rotate_left(13));
-            let listed = marked.len();
-            words[walked + ray::WALKED_CNT as usize] = listed as u32;
-            for (k, &p) in marked.iter().enumerate() {
-                words[walked + (ray::WALKED_LIST + k as u32) as usize] =
-                    ((p / wd) << 16) | (p % wd);
-            }
+            let marked: Vec<u32> = (0..wd * ht).filter(|&p| mark(p)).collect();
+            set_holes(&mut words[walked..], s.size, &marked);
             let mut ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
                 .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
                 .collect();
@@ -1495,7 +1494,8 @@ fn hand_missed_pixels_answer_as_cast_walk() {
             let mut binds = world_binds(&b, &eye_buf, &beams, &table_buf);
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             binds.push((11, head.as_entire_binding()));
-            gpu.holes(&binds, &table_buf, true);
+            let pool = (walked as u32) + ray::pool_at(s.size, 0) + ray::POOL_CNT;
+            gpu.holes(&binds, &table_buf, true, Some((&beams, pool)));
             let out = read_texture(&gpu.device, &gpu.queue, &rays);
 
             // Each marked pixel's stop as `cast::walk` from the root answers its ray.
@@ -1610,12 +1610,13 @@ fn marked_answers(
 
 /// The eye's holes' queue run alone frame after frame while its rays stand, as the host runs it
 /// where the eye is owed (gpu/ray/cast.rs `eye_queue`), each frame's budget of visits and asks
-/// far less than its holes take (`node_cache::caps_at`): the first frame over the cast's walked
-/// pixels, each after over the owed list the one before filled (`ray::holes_from_at`,
-/// `ray::owed_list_at`), its count the eye's owed word (`node_cache::OWED_AT`), the node
-/// cache's frame numbered on and the frame's work set to none each frame. Each frame's owed
-/// list holds each pixel once, every one parked and owed by the frame before, so a pixel a
-/// walk finished is never walked again, and its words then stand; the eye owes nothing within
+/// far less than its holes take (`node_cache::caps_at`): the first frame over the cast's holes,
+/// each after over the owed bits and the pool the one before left (`ray::from_at`,
+/// `ray::pool_at`), its pool's count copied in as the host copies it, the node cache's frame
+/// numbered on and the frame's work set to none each frame. What a frame leaves owed, its owed
+/// bits and its pool's parked rays, holds each pixel once, every one owed by the frame before,
+/// so a pixel a walk finished is never walked again, and its words then stand; the eye owes
+/// nothing within
 /// `FRAMES_TO_REST` frames, more than one of them; and every marked pixel's words are then as
 /// `cast::walk` from the root answers its ray, a ray at an edge between two axes' planes across
 /// either face as the device's rounding of the ray takes it (`edge_axes`), one such ray met, no
@@ -1676,16 +1677,9 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
         let (origin, grid) = (*origin, *grid);
         let drawn = s.size[0] * s.size[1];
         let walked = grid.walked_at() as usize;
-        words.resize(
-            walked + (ray::walked_words(drawn) + ray::region_words(drawn)) as usize,
-            0,
-        );
+        words.resize(walked + ray::holes_words(s.size) as usize, 0);
         let marked: Vec<u32> = (0..drawn).collect();
-        words[walked + ray::WALKED_CNT as usize] = drawn;
-        for &p in &marked {
-            words[walked + (ray::WALKED_LIST + p) as usize] =
-                ((p / s.size[0]) << 16) | (p % s.size[0]);
-        }
+        set_holes(&mut words[walked..], s.size, &marked);
         let texels = drawn as usize;
         let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
             .map(|k| {
@@ -1718,16 +1712,16 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
         binds.push((11, head.as_entire_binding()));
 
         let word = |k: u32| u64::from(k) * 4;
-        let from_at = (walked as u32) + ray::holes_from_at(drawn);
+        let from_at = (walked as u32) + ray::from_at(s.size);
         let owed = node_cache::owed_at(count::EYE);
-        // The pixels the frame before left owed, the cast's walked pixels before the first.
+        // The pixels the frame before left owed, the cast's holes before the first.
         let mut owed_before: BTreeSet<u32> = marked.iter().copied().collect();
         // Each pixel's words once a walk finished it.
         let mut finished: BTreeMap<u32, [u32; 4]> = BTreeMap::new();
         let mut into = 0;
         let mut frames = 0u32;
         loop {
-            // As the host sets each frame the eye's queue runs: the list it takes, the frame's
+            // As the host sets each frame the eye's queue runs: what it takes, the frame's
             // work, its owed word and its stops none, and, after the first, a frame of the node
             // cache's own.
             let from = if frames == 0 {
@@ -1751,18 +1745,36 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
                 gpu.queue
                     .write_buffer(&table_buf, word(node_cache::FRAME), bytes(&[f]));
             }
-            gpu.holes_within(&binds, &table_buf, true, CAPS);
+            let pool = (walked as u32) + ray::pool_at(s.size, into);
+            gpu.holes_within(
+                &binds,
+                &table_buf,
+                true,
+                Some((&beams, pool + ray::POOL_CNT)),
+                CAPS,
+            );
             frames += 1;
-            // The owed list's count, as the host copies it in.
-            let left = gpu.read(&table_buf)[owed as usize];
-            let list_at = walked + ray::owed_list_at(drawn, into) as usize;
-            gpu.queue
-                .write_buffer(&beams, word(list_at as u32), bytes(&[left]));
+            // What it left owed: the pixels of its owed bits and of the rays parked in its pool.
             let now = gpu.read(&beams);
-            let listed: Vec<u32> = now[list_at + 1..list_at + 1 + left as usize]
-                .iter()
-                .map(|&h| (h >> 16) * s.size[0] + (h & 0xffff))
-                .collect();
+            let mut listed: Vec<u32> = Vec::new();
+            let owed_bits = walked + ray::owed_bits_at(s.size) as usize;
+            for y in 0..s.size[1] {
+                for x in 0..s.size[0] {
+                    let (w, bit) = ray::hole_bit([x, y], s.size);
+                    if now[owed_bits + w as usize] & 1 << bit != 0 {
+                        listed.push(y * s.size[0] + x);
+                    }
+                }
+            }
+            let cnt = now[(pool + ray::POOL_CNT) as usize].min(ray::PARKED_ROOM);
+            for k in 0..cnt {
+                let at = (pool + ray::POOL_STATES + k * ray::PARK_WORDS) as usize;
+                if now[at + 4] & ray::PARKED != 0 {
+                    let h = now[at + ray::PARK_PX as usize];
+                    listed.push((h >> 16) * s.size[0] + (h & 0xffff));
+                }
+            }
+            let left = listed.len();
             let owed_now: BTreeSet<u32> = listed.iter().copied().collect();
             if owed_now.len() != listed.len() {
                 failed.push(format!("frame {frames}: a pixel owed twice"));
@@ -1771,15 +1783,6 @@ fn eye_queue_alone_comes_to_rest_as_cast_walk() {
                 failed.push(format!(
                     "frame {frames}: a pixel owed that the frame before did not owe"
                 ));
-            }
-            let parked_all = owed_now.iter().all(|&p| {
-                let at = walked
-                    + ray::walked_words(drawn) as usize
-                    + (p * ray::STATE_WORDS + ray::STATE_WORDS - 1) as usize;
-                now[at] & ray::PARKED != 0
-            });
-            if !parked_all {
-                failed.push(format!("frame {frames}: a pixel owed not parked"));
             }
             // A pixel finished keeps its words; one finished this frame is kept.
             let out = read_texture(&gpu.device, &gpu.queue, &rays);

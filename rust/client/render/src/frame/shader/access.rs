@@ -359,6 +359,10 @@ pub const TOUCHES: &[Touch] = {
     }
     const QUEUE_HITS: [u32; 2] = [ray::QUEUE_HITS, 4];
     const QUEUE_VISITED: [u32; 2] = [ray::QUEUE_VISITED, 1];
+    /// The eye's next word of owed bits its first walk takes, and the rays its walks parked
+    /// (queue.wgsl `next_item`, `park`).
+    const QUEUE_SQUARES: [u32; 2] = [ray::QUEUE_SQUARES, 1];
+    const QUEUE_PARKED: [u32; 2] = [ray::QUEUE_PARKED, 1];
     /// The frame's runs' work so far in the node cache's head, and every run's caps.
     const WORK_DONE: [u32; 2] = [node_cache::VISITED, 2];
     const VISITS_DONE: [u32; 2] = [node_cache::VISITED, 1];
@@ -511,19 +515,19 @@ pub const TOUCHES: &[Touch] = {
             writes: &[STOOD],
             reads: &[STOOD],
         },
-        // The node cache's head: the stops' dispatch and count the last walk adds to, and each
-        // observer's owed counted (queue_last.wgsl).
+        // The node cache's head: the stops' dispatch and count the last walk adds to, and the
+        // light's owed counted (queue_last.wgsl, queue.wgsl `unreached`).
         Touch {
             compute: COMPUTE_QUEUE_LAST,
             binding: 9,
             writes: &[
                 [node_cache::HITS_ARGS, 4],
-                [node_cache::OWED_AT, count::OBSERVERS],
+                [node_cache::OWED_AT + count::LIGHT, 1],
                 WORK_DONE,
             ],
             reads: &[
                 [node_cache::HITS_ARGS, 4],
-                [node_cache::OWED_AT, count::OBSERVERS],
+                [node_cache::OWED_AT + count::LIGHT, 1],
                 WORK_DONE,
                 CAPS,
             ],
@@ -535,14 +539,14 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_QUEUE,
             binding: 10,
-            writes: &[QUEUE_HITS, QUEUE_VISITED],
-            reads: &[QUEUE_HITS, QUEUE_VISITED],
+            writes: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_SQUARES, QUEUE_PARKED],
+            reads: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_SQUARES, QUEUE_PARKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_PARKED,
             binding: 10,
             writes: &[QUEUE_HITS, QUEUE_VISITED],
-            reads: &[QUEUE_HITS, QUEUE_VISITED],
+            reads: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_PARKED],
         },
         Touch {
             compute: COMPUTE_QUEUE,
@@ -810,6 +814,13 @@ pub const TOUCHES: &[Touch] = {
             binding: 9,
             writes: &[ROLL, EYE_OWED],
             reads: &[ROLL, LATTICE_LEFT, EYE_OWED],
+        },
+        // What the eye's holes leave owed, counted in its owed word (parked_tiles.wgsl).
+        Touch {
+            compute: COMPUTE_PARKED_TILES,
+            binding: 9,
+            writes: &[EYE_OWED],
+            reads: &[EYE_OWED],
         },
         Touch {
             compute: COMPUTE_ROLL_OWED,

@@ -4,7 +4,8 @@
 // module names, their rays, starts and ends (queue.wgsl for the holes): the first over the
 // run's items, an item parked before on from its parked state, the second over the rays the
 // first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next item
-// off the queue's words when its own ray ends or is parked, walks it `QUEUE_STEPS` steps at a
+// its kind's module hands it (`next_item`), off the queue's words, when its own ray ends or is
+// parked, walks it `QUEUE_STEPS` steps at a
 // time, and holds its state between them, so a lane whose ray ends early walks another while
 // the long ones go on. A ray that meets a node no slot keeps is parked in the state its walk
 // left, and the node listed for the asks (queue_ask.wgsl), with what was handed its parent
@@ -15,6 +16,16 @@
 /// The run's queue's words, its head first (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`), the
 /// asks' records every queue shares past the heads (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
+
+/// The next number off the queue's counter at `word`, and the count it holds: the counters a
+/// kind's module takes its items by (`next_item`) and numbers its parked rays by.
+fn take(word: u32) -> u32 {
+  return atomicAdd(&queue[word], 1u);
+}
+
+fn held(word: u32) -> u32 {
+  return atomicLoad(&queue[word]);
+}
 
 /// The next stop's number, as these walks number the stops their items keep for the record
 /// (queue.wgsl `keep_hit`), and the dispatch over them raised to `rows`: in the queue's words
@@ -73,8 +84,6 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
 /// takes every item the run holds, so every item's state is written in this run before the
 /// second reads it: parked, or not.
 fn queue_walk(again: bool) {
-  let n = item_count();
-  let next = select(QUEUE_TAKEN, QUEUE_TAKEN_AGAIN, again);
   var item = NONE;
   var t = 0.0;
   var corner = vec3<u32>(0u);
@@ -83,11 +92,10 @@ fn queue_walk(again: bool) {
   var step = 0u;
   loop {
     if (item == NONE) {
-      let k = atomicAdd(&queue[next], 1u);
-      if (k >= n) {
+      let h = next_item(again, spent());
+      if (h == NONE) {
         break;
       }
-      let h = item_at(k);
       let how = taken(h, again);
       if (how == TAKEN_NONE) {
         continue;

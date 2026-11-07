@@ -21,7 +21,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
-pub use cast::{Cast, LightReads, Overwrites};
+pub use cast::{drawn_fits, Cast, LightReads, Overwrites, DRAWN_MOST};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 pub use ground::{
     BrickFill, CellsBack, Filled, GroundBricks, OnFilled, TerrainUpload, TerrainWrite,

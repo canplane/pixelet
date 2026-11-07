@@ -53,51 +53,99 @@ pub const MISS_ARGS_COUNT: u32 = 4;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_COUNT + count::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 0, 0];
 
-/// The eye's walked pixels, past the camera grid's words in the beam rays' buffer
-/// (`beam::Grid::walked_at`), room for every pixel drawn, so no list of them is ever full: the
-/// pixels the reading walk marked (`MISS`), its row over its column, a word each
-/// (`WALKED_LIST`), after their count, copied in from the walk's dispatch (`MISS_ARGS_CNT`)
-/// once the reading walk is done (`WALKED_CNT`). A pixel is listed once a cast, so the list
-/// holds at most the pixels drawn. `drawn` is the rays' pixels, across times down; each place
-/// is a word from `Grid::walked_at`.
-///
-/// Then which list the eye's holes' queue takes this frame (`holes_from_at`), the host's each
-/// frame it runs: the walked list (`FROM_WALKED`), or one of the two lists of what the queue
-/// before left owed (`FROM_OWED` + the list's number); and those two lists (`owed_list_at`),
-/// each a count then the pixels, room for every pixel drawn. The queue's last walk lists every
-/// pixel it leaves parked in the owed list it does not take (pxl-render queue_last.wgsl
-/// `unreached`), its count the eye's owed word (`node_cache::OWED_AT`), copied in after it; a
-/// frame that runs the eye's queue alone takes that list, so it walks only what is owed, and a
-/// pixel its walk finished is never listed again.
-pub const WALKED_CNT: u32 = 0;
-pub const WALKED_LIST: u32 = 1;
+/// The eye's holes, past the camera grid's words in the beam rays' buffer
+/// (`beam::Grid::walked_at`): a bit a drawn pixel, and no other word any pixel takes. The
+/// pixels lie in squares of `CAST_SIDE`, one workgroup of the pixels' cast each (pxl-render
+/// cast.wgsl `cast_cs`), `SQUARE_WORDS` words a square, the squares row by row, and a pixel's bit
+/// within its square is its row over its column (`hole_bit`). First the walked bits, the pixels
+/// the last cast marked, which only a cast writes and the light's receivers read
+/// (light_mark.wgsl); then the owed bits (`owed_bits_at`), the holes no ray of the queue holds:
+/// a cast's run takes them as the walked bits are, and the queue's first walk clears each as
+/// it takes it (pxl-render queue.wgsl); then the word saying what the queue's run takes
+/// (`from_at`), and the two pools its rays are parked in (`pool_at`).
+pub const SQUARE_WORDS: u32 = CAST_SIDE * CAST_SIDE / 32;
+const _: () = assert!(
+    (CAST_SIDE * CAST_SIDE).is_multiple_of(32),
+    "a square of pixels is whole words"
+);
+
+/// The squares of a target `size` drawn pixels each way, across and down.
+pub const fn squares(size: [u32; 2]) -> [u32; 2] {
+    [size[0].div_ceil(CAST_SIDE), size[1].div_ceil(CAST_SIDE)]
+}
+
+/// The words of one set of the holes' bits of a target `size`.
+pub const fn hole_words(size: [u32; 2]) -> u32 {
+    let [across, down] = squares(size);
+    across * down * SQUARE_WORDS
+}
+
+/// Pixel `p`'s word among one set of the holes' bits of a target `size`, and its bit in it.
+pub const fn hole_bit(p: [u32; 2], size: [u32; 2]) -> (u32, u32) {
+    let across = squares(size)[0];
+    let square = (p[1] / CAST_SIDE) * across + p[0] / CAST_SIDE;
+    let bit = (p[1] % CAST_SIDE) * CAST_SIDE + p[0] % CAST_SIDE;
+    (square * SQUARE_WORDS + bit / 32, bit % 32)
+}
+
+/// The owed bits' first word, from the walked bits'.
+pub const fn owed_bits_at(size: [u32; 2]) -> u32 {
+    hole_words(size)
+}
+
+/// The word saying what the eye's queue takes this run, from the walked bits' first word, the
+/// host's each frame it runs: a cast's run, the owed bits as its cast set them and no ray
+/// parked (`FROM_WALKED`); a run alone, the owed bits the runs before left and the rays the run
+/// before parked, in pool `from - FROM_OWED` (`FROM_OWED`). The run parks its rays in the other
+/// pool (`owed_into`).
+pub const fn from_at(size: [u32; 2]) -> u32 {
+    owed_bits_at(size) + hole_words(size)
+}
 pub const FROM_WALKED: u32 = 0;
 pub const FROM_OWED: u32 = 1;
 
-pub const fn walked_words(drawn: u32) -> u32 {
-    owed_list_at(drawn, 2)
-}
-
-/// The word saying which list the eye's queue takes, of a target `drawn` pixels, from the
-/// walked list's first word.
-pub const fn holes_from_at(drawn: u32) -> u32 {
-    WALKED_LIST + drawn
-}
-
-/// The first word, its count, of owed list `k` (0 or 1), of a target `drawn` pixels, from the
-/// walked list's first word.
-pub const fn owed_list_at(drawn: u32, k: u32) -> u32 {
-    holes_from_at(drawn) + 1 + k * (WALKED_LIST + drawn)
-}
-
-/// The owed list the eye's queue lists what it leaves parked in, where it takes list `from`
-/// (`holes_from_at`): the one it does not take.
+/// The pool a run parks its rays in, where it takes `from`: the one it does not take.
 pub const fn owed_into(from: u32) -> u32 {
     if from == FROM_OWED {
         1
     } else {
         0
     }
+}
+
+/// The eye's rays a run keeps parked, a pool's room: the queue's lanes, each parking a ray
+/// `PARK_ROUNDS` times over. The first walk takes another hole only while every lane could still
+/// park its ray within the room (pxl-render queue.wgsl `takes_more`), and the frame's budget
+/// (`VISITS_A_FRAME`) bounds the walks the parked rays take. A hole no lane took keeps its owed
+/// bit, and its ray starts from its cell's start when a later run takes it.
+pub const PARK_ROUNDS: u32 = 16;
+pub const PARKED_ROOM: u32 = QUEUE_GROUPS * QUEUE_LANES * PARK_ROUNDS;
+const _: () = assert!(
+    PARKED_ROOM > QUEUE_GROUPS * QUEUE_LANES,
+    "a pool holds a ray of every lane"
+);
+
+/// A parked ray as a pool keeps it: its state (`STATE_WORDS`), then its pixel, its column under
+/// its row (`PARK_PX`).
+pub const PARK_PX: u32 = STATE_WORDS;
+pub const PARK_WORDS: u32 = STATE_WORDS + 1;
+
+/// A pool: how many rays its run parked in it (`POOL_CNT`), copied in from the queue's words
+/// (`QUEUE_PARKED`) once the run's walks over the node cache are done, then `PARKED_ROOM` parked
+/// rays from `POOL_STATES`.
+pub const POOL_CNT: u32 = 0;
+pub const POOL_STATES: u32 = 1;
+pub const POOL_WORDS: u32 = POOL_STATES + PARKED_ROOM * PARK_WORDS;
+
+/// Pool `k`'s first word, from the walked bits' first word.
+pub const fn pool_at(size: [u32; 2], k: u32) -> u32 {
+    from_at(size) + 1 + k * POOL_WORDS
+}
+
+/// The eye's holes' words of a target `size`: its two sets of bits, a bit each a pixel, then
+/// the word of what its run takes and its two pools, which no pixel sizes.
+pub const fn holes_words(size: [u32; 2]) -> u32 {
+    pool_at(size, 2)
 }
 
 /// A list's dispatch and count as a frame starts (pxl-render list.wgsl `enlist`): laid as
@@ -118,14 +166,14 @@ const _: () = assert!(
 ///
 /// In turn: the first walk, over the node cache alone, over the observer's holes, a hole parked
 /// before going on from its state (a light's slot of an owed tile, `light::READ_OWED`; an
-/// eye's pixel while the rays stand, `node_cache::RESUMES`); the asks, a lane a node a walk was
+/// eye's ray the run before parked, `PARKED_ROOM`); the asks, a lane a node a walk was
 /// parked at, once a node; the second walk, over the node cache alone, over the rays the first
 /// parked, from the state each was parked in; the asks again; and the last walk, which asks
 /// the world where no slot keeps a node, over the rays the second parked. Every run counts its
 /// work against the frame's budget (`VISITS_A_FRAME`, `ASKS_A_FRAME`) up to its kind's caps
 /// (`caps`): a hole the budget does not reach stays parked and is owed
 /// (`node_cache::OWED_AT`), a light's slot's tile to the light's next claim, an eye's pixel to
-/// the next frame's queue while the rays stand.
+/// the next frame's queue while the rays stand, as its owed bit or its parked ray.
 pub const QUEUE_LANES: u32 = 64;
 pub const QUEUE_GROUPS: u32 = 256;
 pub const QUEUE_STEPS: u32 = 16;
@@ -174,15 +222,19 @@ const _: () = assert!(
 /// (`QUEUE_TAKEN_AGAIN`); the nodes each walk was parked at, listed for the asks (`QUEUE_ASKS`,
 /// `QUEUE_ASKS_AGAIN`); the nodes the walk over the node cache last run visited, which it counts
 /// against its budget beside the frame's (`node_cache::VISITED`) and the asks after it fold into
-/// the frame's (`QUEUE_VISITED`); and the stops the two walks listed, as `node_cache::HITS_ARGS`
-/// lays them (`QUEUE_HITS`). Each run's start is `QUEUE_EMPTY`.
+/// the frame's (`QUEUE_VISITED`); the stops the two walks listed, as `node_cache::HITS_ARGS`
+/// lays them (`QUEUE_HITS`); and the eye's holes' next word of owed bits the first walk takes
+/// after the rays the run before parked (`QUEUE_SQUARES`), and the rays its walks parked in the
+/// run's pool (`QUEUE_PARKED`, `POOL_CNT`). Each run's start is `QUEUE_EMPTY`.
 pub const QUEUE_TAKEN: u32 = 0;
 pub const QUEUE_TAKEN_AGAIN: u32 = 1;
 pub const QUEUE_ASKS: u32 = 2;
 pub const QUEUE_ASKS_AGAIN: u32 = 3;
 pub const QUEUE_VISITED: u32 = 4;
 pub const QUEUE_HITS: u32 = 5;
-pub const QUEUE_HEAD_WORDS: u32 = 9;
+pub const QUEUE_SQUARES: u32 = 9;
+pub const QUEUE_PARKED: u32 = 10;
+pub const QUEUE_HEAD_WORDS: u32 = 11;
 /// The runs' queues, a head each: the eye's beam rays', its samples' and its holes'; the
 /// light's alike.
 pub const QUEUE_EYE_CORNERS: u32 = 0;
@@ -218,17 +270,14 @@ pub const QUEUE_RECORD_WORDS: u32 = 10;
 /// listed past it is asked by the last walk instead.
 pub const QUEUE_RECORDS_ROOM: u32 = ASKS_A_FRAME;
 pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECORDS_ROOM * QUEUE_RECORD_WORDS;
-pub const QUEUE_EMPTY: [u32; QUEUE_HEAD_WORDS as usize] = [0, 0, 0, 0, 0, 0, 1, 1, 0];
+pub const QUEUE_EMPTY: [u32; QUEUE_HEAD_WORDS as usize] = [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0];
 
-/// The holes' region, the last words of an observer's list, which every walk of the queue binds
-/// (pxl-render queue.wgsl `state_at`), a state for each of the most holes a cast lists,
-/// `room`: the eye's drawn pixels, a pixel listed once a cast (cast.wgsl, a thread a pixel), by
-/// its pixel's index, its holes in its walked list (`WALKED_LIST`); and the light's slots of the
-/// tiles a cast claims (light.wgsl, a thread a slot), by its tile's place and its slot within
-/// the tile, a cast's and the one before's (`light::region_words`). A state is `STATE_WORDS`:
+/// A parked ray's state, the queue's (pxl-render queue.wgsl `park`), every item kind's alike:
 /// its distance's bits, its node's corner, and its zoom, roots and steps taken packed under
-/// `PARKED`, which says the ray is parked there (pxl-render queue.wgsl `park`). Every hole can be
-/// parked; none is left out.
+/// `PARKED`, which says the ray is parked there. The eye's holes keep theirs in a pool, its pixel
+/// beside it (`PARK_WORDS`); the light's holes in its region (`region_words`), a state each of
+/// the slots of the tiles a cast claims (light.wgsl, a thread a slot), by its tile's place and
+/// its slot within the tile, a cast's and the one before's (`light::region_words`).
 ///
 /// A light's slot whose ray is not parked in a tile its claim carries over from the cast before
 /// (pxl-render light_propagate.wgsl `claim`, `light::HEAD_CARRIES`) holds `KEPT` alone: that
