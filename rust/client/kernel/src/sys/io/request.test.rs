@@ -5,9 +5,12 @@
 // giving the server up after its second.
 
 use super::*;
+use xpute_core::mem::heap::HeapStat;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys;
+use crate::sys::boot::set_heap_stat;
+use crate::sys::boot::test::{heap_release, set_counted_heap};
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{Ended, Failure};
 
@@ -57,6 +60,17 @@ fn unseen(near: f64) -> Order {
     Order { seen: false, near }
 }
 
+/// A scheduler with one terrain want, 1, declared and started: it, and the
+/// key started.
+fn one_out() -> (RequestScheduler<BySeen>, u64) {
+    let mut l = scheduler();
+    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
+    l.pump(0.0);
+    let (starts, _) = taken(&mut l);
+    assert_eq!(starts.len(), 1);
+    (l, starts[0])
+}
+
 /// The keys started and stopped since last taken, every event taken.
 fn taken<S: Serve>(l: &mut RequestScheduler<S>) -> (Vec<u64>, Vec<u64>) {
     let (mut starts, mut stops) = (Vec::new(), Vec::new());
@@ -89,13 +103,9 @@ fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, a
 
 #[test]
 fn same_set_no_change() {
-    let mut l = scheduler();
-    let want = [(1u64, seen(0.0))];
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    assert_eq!(taken(&mut l).0.len(), 1);
+    let (mut l, _) = one_out();
     for _ in 0..5 {
-        l.declare(Stream::terrain, &want, 0.0);
+        l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
         l.pump(0.0);
         assert!(
             taken(&mut l).0.is_empty(),
@@ -106,10 +116,7 @@ fn same_set_no_change() {
 
 #[test]
 fn answer_asked_once() {
-    let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-    l.pump(0.0);
-    let key = taken(&mut l).0[0];
+    let (mut l, key) = one_out();
     ok(&mut l, key, 0.0);
     l.pump(0.0);
     let (starts, stops) = taken(&mut l);
@@ -123,10 +130,7 @@ fn answer_asked_once() {
 
 #[test]
 fn failure_backs_off() {
-    let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-    l.pump(0.0);
-    let key = taken(&mut l).0[0];
+    let (mut l, key) = one_out();
     failed(&mut l, key, 0.0);
     // A failure is not a withdrawal.
     for t in 0..5 {
@@ -178,27 +182,16 @@ fn failed_object_dropped() {
 
 #[test]
 fn heap_refusal_waits_release() {
-    use crate::sys::boot::set_heap_stat;
-    use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_core::mem::heap::HeapStat;
-    static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
-    set_heap_stat(|| HeapStat {
-        releases: RELEASES.load(Ordering::Relaxed),
-        ..HeapStat::default()
-    });
-    let mut l = scheduler();
-    let want = [(1u64, seen(0.0))];
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    let key = taken(&mut l).0[0];
+    set_counted_heap();
+    let (mut l, key) = one_out();
     l.settle(key, Ended::Refused(Refusal::now()), None, 0.0);
     for t in 0..5 {
-        l.declare(Stream::terrain, &want, t as f64 * 10_000.0);
+        l.declare(Stream::terrain, &[(1, seen(0.0))], t as f64 * 10_000.0);
         l.pump(t as f64 * 10_000.0);
         assert!(taken(&mut l).0.is_empty(), "no time ends a heap's refusal");
     }
-    let both = [want[0], (2, seen(0.0))];
+    let both = [(1, seen(0.0)), (2, seen(0.0))];
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
     assert_eq!(
@@ -206,7 +199,7 @@ fn heap_refusal_waits_release() {
         1,
         "and the server is not held for it"
     );
-    RELEASES.fetch_add(1, Ordering::Relaxed);
+    heap_release();
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
     assert_eq!(
@@ -219,25 +212,14 @@ fn heap_refusal_waits_release() {
 
 #[test]
 fn early_release_not_rewaited() {
-    use crate::sys::boot::set_heap_stat;
-    use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_core::mem::heap::HeapStat;
-    static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
-    set_heap_stat(|| HeapStat {
-        releases: RELEASES.load(Ordering::Relaxed),
-        ..HeapStat::default()
-    });
-    let mut l = scheduler();
-    let want = [(1u64, seen(0.0))];
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    let key = taken(&mut l).0[0];
+    set_counted_heap();
+    let (mut l, key) = one_out();
     // Refused, then room given back before the refusal is settled.
     let refused = Refusal::now();
-    RELEASES.fetch_add(1, Ordering::Relaxed);
+    heap_release();
     l.settle(key, Ended::Refused(refused), None, 0.0);
-    l.declare(Stream::terrain, &want, 0.0);
+    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
     l.pump(0.0);
     assert_eq!(
         taken(&mut l).0.len(),
@@ -415,11 +397,7 @@ fn asset_shares_credits() {
 
 #[test]
 fn failed_want_reported() {
-    let mut l = scheduler();
-    let want = [(1u64, seen(0.0))];
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    let key = taken(&mut l).0[0];
+    let (mut l, key) = one_out();
     assert!(!l.has_object_failed(Stream::terrain, 1));
     failed_with(&mut l, key, Errno::EBADMSG, 0.0);
     assert!(

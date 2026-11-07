@@ -23,6 +23,19 @@ fn near(a: V3, b: V3, tol: f64) -> bool {
     (0..3).all(|k| (a[k] - b[k]).abs() <= tol * a[k].abs().max(1.0))
 }
 
+/// A pose drawn from `rng` about the world's middle, placed: its pivot.
+fn placed(rng: &mut Rng) -> V3 {
+    let at = [
+        rng.unit() * 2_000.0 - 1_000.0,
+        rng.unit() * 2_000.0 - 1_000.0,
+        rng.unit() * 40.0,
+    ];
+    let dist = param::MIN_DIST + rng.unit() * 2_000.0;
+    let polar = rng.unit() * core::f64::consts::PI;
+    place(at, dist, polar, rng.unit() * 6.0 - 3.0);
+    at
+}
+
 fn third_person() {
     tracked_end();
     controllers().base = CameraMode::orbit;
@@ -36,17 +49,7 @@ fn pivot_along_facing() {
     third_person();
     let mut rng = Rng(0x5eed);
     for n in 0..200 {
-        let at = [
-            rng.unit() * 2_000.0 - 1_000.0,
-            rng.unit() * 2_000.0 - 1_000.0,
-            rng.unit() * 40.0,
-        ];
-        let (dist, polar, azimuth) = (
-            param::MIN_DIST + rng.unit() * 2_000.0,
-            rng.unit() * core::f64::consts::PI,
-            rng.unit() * 6.0 - 3.0,
-        );
-        place(at, dist, polar, azimuth);
+        let at = placed(&mut rng);
         assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
         controllers().base = CameraMode::first_person;
         assert!(
@@ -68,17 +71,7 @@ fn person_change_keeps_pivot() {
     let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
     let mut rng = Rng(0xc0de);
     for n in 0..100 {
-        let at = [
-            rng.unit() * 2_000.0 - 1_000.0,
-            rng.unit() * 2_000.0 - 1_000.0,
-            rng.unit() * 40.0,
-        ];
-        let (dist, polar, azimuth) = (
-            param::MIN_DIST + rng.unit() * 2_000.0,
-            rng.unit() * core::f64::consts::PI,
-            rng.unit() * 6.0 - 3.0,
-        );
-        place(at, dist, polar, azimuth);
+        let at = placed(&mut rng);
         let mut first: Option<V3> = None;
         for mode in [
             CameraMode::first_person,

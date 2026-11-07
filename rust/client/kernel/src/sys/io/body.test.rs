@@ -2,8 +2,11 @@
 
 use super::*;
 use crate::sys;
+use crate::sys::boot::set_heap_stat;
+use crate::sys::boot::test::{heap_release, set_counted_heap};
 use crate::sys::io::room::Refusal;
 use xpute_core::mem;
+use xpute_core::mem::heap::HeapStat;
 
 fn runs() -> usize {
     slot_table().runs.len()
@@ -132,21 +135,14 @@ fn slot_cheaper_than_block() {
 
 #[test]
 fn slot_refusal_waits_slots() {
-    use crate::sys::boot::set_heap_stat;
-    use core::sync::atomic::{AtomicU32, Ordering};
-    use xpute_core::mem::heap::HeapStat;
-    static RELEASES: AtomicU32 = AtomicU32::new(0);
     let _g = sys::serial();
-    set_heap_stat(|| HeapStat {
-        releases: RELEASES.load(Ordering::Relaxed),
-        ..HeapStat::default()
-    });
+    set_counted_heap();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), longest).unwrap())
         .collect();
     let refused = take(Some(Stream::terrain), longest).unwrap_err();
-    RELEASES.fetch_add(1, Ordering::Relaxed);
+    heap_release();
     assert!(!refused.over(), "the heap's pages given back give no slot");
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };

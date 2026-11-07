@@ -27,14 +27,28 @@ fn pose(pivot: V3, dist: f64, polar: f64) -> ViewPose {
     }
 }
 
+/// Level with `pivot`, the eye `dist` east of it.
+fn east(pivot: V3, dist: f64) -> ViewPose {
+    ViewPose {
+        pivot,
+        dist,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    }
+}
+
+/// A red cube at `at`, a cell at the objects' coarsest.
+fn cube_at(store: &mut Store, at: V3) {
+    write(store, at, OBJECT_COARSEST, cube::Object::red as AssetId);
+}
+
 /// The ground at five, a roof's underside `roof` over it where there is
 /// one, and the pivot standing on the ground under it.
 fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     if let Some(roof) = roof {
-        let red = cube::Object::red as AssetId;
-        write(&mut store, [x, y, 5.0 + roof], OBJECT_COARSEST, red);
+        cube_at(&mut store, [x, y, 5.0 + roof]);
     }
     (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
 }
@@ -125,23 +139,11 @@ fn zoom_out_does_not_go_through() {
 fn climb_or_dive_or_stop() {
     let _g = serial();
     let wall = |store: &mut Store, pivot: V3, top: f64| {
-        let red = cube::Object::red as AssetId;
         for dy in -3..=3 {
             for z in [5.0, 6.0].into_iter().filter(|&z| z < top) {
-                write(
-                    store,
-                    [pivot[0] + 3.0, pivot[1] + f64::from(dy), z],
-                    OBJECT_COARSEST,
-                    red,
-                );
+                cube_at(store, [pivot[0] + 3.0, pivot[1] + f64::from(dy), z]);
             }
         }
-    };
-    let east = |pivot: V3, dist: f64| ViewPose {
-        pivot,
-        dist,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
     };
 
     let (tile_cache, mut store, pivot) = roofed(None);
@@ -224,12 +226,10 @@ fn open_ground_keeps_a_cell() {
 fn nearest_turns_through() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for dx in [-2.5, -1.5, 1.5, 2.5] {
         for dy in [-2.5, -1.5, -0.5, 0.5, 1.5] {
             for z in [5.0, 6.0, 7.0] {
-                let at = [pivot[0] + dx, pivot[1] + dy, z];
-                write(&mut store, at, OBJECT_COARSEST, red);
+                cube_at(&mut store, [pivot[0] + dx, pivot[1] + dy, z]);
             }
         }
     }
@@ -238,21 +238,15 @@ fn nearest_turns_through() {
     for polar in [0.4, 1.0, core::f64::consts::FRAC_PI_2] {
         for azimuth in [-core::f64::consts::FRAC_PI_2, core::f64::consts::FRAC_PI_2] {
             let at = ViewPose {
-                pivot,
-                dist: MIN_DIST,
                 polar,
                 azimuth,
+                ..east(pivot, MIN_DIST)
             };
             let climbed = climb_pose(at, &access);
             assert_eq!(climbed, at);
         }
     }
-    let at = ViewPose {
-        pivot,
-        dist: 3.0,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
+    let at = east(pivot, 3.0);
     assert!(in_solid(&at, &access));
     assert!(climb_pose(at, &access).polar < at.polar);
     // The nearest counts out to `NEAREST_DIST`, and no farther.
@@ -315,21 +309,14 @@ fn the_nearest_under_the_level_is_no_trap() {
 fn stop_goes_straight() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for dy in -3..=3 {
-        let at = [pivot[0] + 3.0, pivot[1] + f64::from(dy), 5.0];
-        write(&mut store, at, OBJECT_COARSEST, red);
+        cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + f64::from(dy), 5.0]);
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let east = |dist: f64| ViewPose {
-        pivot,
-        dist,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
     let dist_at = |from: f64, to: f64| {
-        way_hit(&east(from), &east(to), |at| *at, &access).map(|t| from + (to - from) * t)
+        way_hit(&east(pivot, from), &east(pivot, to), |at| *at, &access)
+            .map(|t| from + (to - from) * t)
     };
     assert!(dist_at(2.3, 6.0).unwrap() < 3.0);
     assert!(dist_at(6.0, 2.8).unwrap() > 3.0);
@@ -341,7 +328,6 @@ fn stop_goes_straight() {
 fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
     for dz in 0..thick {
         for dx in -3..=3 {
             for dy in -3..=3 {
@@ -350,7 +336,7 @@ fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
                     y + f64::from(dy),
                     5.0 + roof + f64::from(dz),
                 ];
-                write(&mut store, at, OBJECT_COARSEST, red);
+                cube_at(&mut store, at);
             }
         }
     }
@@ -389,28 +375,17 @@ fn climb_fails_under_roof() {
 fn climb_clears_block() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     // About the cell east of the pivot where the eye stands level with it 3 off.
     for dx in [1.5, 2.5, 3.5] {
         for dy in [-1.5, -0.5, 0.5] {
             for z in [5.0, 6.0, 7.0] {
-                write(
-                    &mut store,
-                    [pivot[0] + dx, pivot[1] + dy, z],
-                    OBJECT_COARSEST,
-                    red,
-                );
+                cube_at(&mut store, [pivot[0] + dx, pivot[1] + dy, z]);
             }
         }
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let at = ViewPose {
-        pivot,
-        dist: 3.0,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
+    let at = east(pivot, 3.0);
     let climbed = climb_pose(at, &access);
     assert!(climbed.polar < at.polar, "{climbed:?}");
     assert!(!in_solid(&climbed, &access), "{climbed:?}");
@@ -422,23 +397,12 @@ fn climb_clears_block() {
 fn climbs_out_of_wall_with_room() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for dy in [-1.5, -0.5, 0.5, 1.5] {
-        write(
-            &mut store,
-            [pivot[0] + 3.0, pivot[1] + dy, 5.0],
-            OBJECT_COARSEST,
-            red,
-        );
+        cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + dy, 5.0]);
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let at = ViewPose {
-        pivot,
-        dist: 3.0,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
+    let at = east(pivot, 3.0);
     assert!(in_solid(&at, &access));
     let climbed = climb_pose(at, &access);
     assert!(climbed.polar < at.polar, "{climbed:?}");
@@ -451,25 +415,14 @@ fn climbs_out_of_wall_with_room() {
 fn climb_rises_under_eye() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = tunnel(3.0, 1);
-    let red = cube::Object::red as AssetId;
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         for z in [5.0, 6.0, 7.0] {
-            write(
-                &mut store,
-                [pivot[0] + 3.0, pivot[1] + dy, z],
-                OBJECT_COARSEST,
-                red,
-            );
+            cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + dy, z]);
         }
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let at = ViewPose {
-        pivot,
-        dist: 3.0,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
+    let at = east(pivot, 3.0);
     assert!(in_solid(&at, &access));
     let rise = climb_rise(&at, &access).expect("a rise under the eye");
     assert!(rise > 0.0, "{rise}");
@@ -484,26 +437,16 @@ fn climb_rises_under_eye() {
 fn slope_keeps_pitch_climbed() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     // From 20 cells east to 40, a column 60 less its distance high.
     for dx in 20..=40 {
         for z in 0..60 - dx {
-            write(
-                &mut store,
-                [pivot[0] + f64::from(dx), pivot[1] - 0.5, 5.0 + f64::from(z)],
-                OBJECT_COARSEST,
-                red,
-            );
+            let at = [pivot[0] + f64::from(dx), pivot[1] - 0.5, 5.0 + f64::from(z)];
+            cube_at(&mut store, at);
         }
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let at = ViewPose {
-        pivot,
-        dist: 40.0,
-        polar: core::f64::consts::FRAC_PI_2,
-        azimuth: -core::f64::consts::FRAC_PI_2,
-    };
+    let at = east(pivot, 40.0);
     assert!(in_solid(&at, &access));
     let climbed = climb_pose(at, &access);
     assert!(climbed.polar < at.polar, "{climbed:?}");
@@ -517,14 +460,8 @@ fn slope_keeps_pitch_climbed() {
 fn a_cave_is_not_climbed_out_of() {
     let _g = serial();
     let (tile_cache, mut store, ground) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for z in (0..10).chain([12]) {
-        write(
-            &mut store,
-            [ground[0], ground[1], 5.0 + f64::from(z)],
-            OBJECT_COARSEST,
-            red,
-        );
+        cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
@@ -553,7 +490,6 @@ fn a_cave_is_not_climbed_out_of() {
 fn a_hollow_in_a_hill() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for dx in 8..=40 {
         for dy in -6..=6 {
             for z in (0..12).filter(|z| !((18..=30).contains(&dx) && (3..=7).contains(z))) {
@@ -562,38 +498,37 @@ fn a_hollow_in_a_hill() {
                     pivot[1] + f64::from(dy),
                     5.0 + f64::from(z),
                 ];
-                write(&mut store, at, OBJECT_COARSEST, red);
+                cube_at(&mut store, at);
             }
         }
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);
-    let east = |pivot: V3, dist: f64| ViewPose {
-        pivot,
-        dist,
+    // East, a little over the pivot's level.
+    let raised = |pivot: V3, dist: f64| ViewPose {
         polar: 1.45,
-        azimuth: -core::f64::consts::FRAC_PI_2,
+        ..east(pivot, dist)
     };
     let over_hill = |dist: f64| {
-        let e = eye(&climb_pose(east(pivot, dist), &access)).0;
+        let e = eye(&climb_pose(raised(pivot, dist), &access)).0;
         let x = e[0] - pivot[0];
         assert!(!(8.5..40.0).contains(&x) || e[2] >= 17.0, "{dist} {e:?}");
     };
     let mut d: f64 = 6.0;
     while d < 60.0 {
-        let to = east(pivot, d * 1.1);
-        assert_eq!(climb_step(&to, &east(pivot, d), &access), to);
+        let to = raised(pivot, d * 1.1);
+        assert_eq!(climb_step(&to, &raised(pivot, d), &access), to);
         over_hill(to.dist);
         d = to.dist;
     }
     while d > 6.0 {
-        let to = east(pivot, d / 1.1);
-        assert_eq!(climb_step(&to, &east(pivot, d), &access), to);
+        let to = raised(pivot, d / 1.1);
+        assert_eq!(climb_step(&to, &raised(pivot, d), &access), to);
         over_hill(to.dist);
         d = to.dist;
     }
     let inside = [pivot[0] + 22.0, pivot[1], over(8.0)];
-    let at = east(inside, 4.0);
+    let at = raised(inside, 4.0);
     assert!(!in_solid(&at, &access));
     assert!(eye(&climb_pose(at, &access)).0[2] < 13.0);
 }
@@ -605,14 +540,8 @@ fn a_hollow_in_a_hill() {
 fn climbs_past_level() {
     let _g = serial();
     let (tile_cache, mut store, ground) = roofed(None);
-    let red = cube::Object::red as AssetId;
     for z in 0..10 {
-        write(
-            &mut store,
-            [ground[0], ground[1], 5.0 + f64::from(z)],
-            OBJECT_COARSEST,
-            red,
-        );
+        cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }
     let world = World::new(&tile_cache, &store);
     let access = Ground::of(&world);

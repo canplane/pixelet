@@ -48,3 +48,7 @@ pub fn admit_frame() -> Admit {
         .and_then(|b| b.form.admit_frame)
         .unwrap_or(admit::every)
 }
+
+#[cfg(test)]
+#[path = "boot.test.rs"]
+pub mod test;
